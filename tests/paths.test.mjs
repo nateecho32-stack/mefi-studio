@@ -4,7 +4,7 @@ import test from "node:test";
 import studioPaths from "../scripts/paths.cjs";
 import { plan } from "../scripts/updater.mjs";
 
-const { resolveStudioPaths } = studioPaths;
+const { resolveStudioPaths, resolveStylerRoot } = studioPaths;
 const studioRoot = path.resolve("fixtures", "Mefi's Studio AI+");
 const packagedDir = path.join(studioRoot, "dist", "Mefi Studio AI+");
 const payloadRoot = path.join(packagedDir, "resources", "app");
@@ -51,6 +51,13 @@ test("a sibling game is optional and cannot change the builder workspace", () =>
   assert.equal(result.repoRoot, studioRoot);
 });
 
+test("the current hyphenated sibling game checkout is detected", () => {
+  const gameRoot = path.join(path.dirname(studioRoot), "2d-Trippy-Hell");
+  const result = resolveStudioPaths({ studioRoot, env: {}, exists: hasFiles(gameFiles(gameRoot)) });
+  assert.equal(result.gameRoot, gameRoot);
+  assert.equal(result.repoRoot, studioRoot);
+});
+
 test("an explicit game root wins without changing the selected workspace", () => {
   const gameRoot = path.resolve("fixtures", "game-elsewhere");
   const workspace = path.resolve("fixtures", "other-workspace");
@@ -66,6 +73,25 @@ test("an existing game selected as workspace remains usable by the launcher", ()
   assert.equal(result.gameRoot, gameRoot);
   assert.equal(result.repoRoot, gameRoot);
   assert.equal(result.sourceRoot, studioRoot);
+});
+
+test("Server Styler uses its sibling checkout independently of the selected project", () => {
+  const sibling = path.resolve(studioRoot, "..", "discord-server-styler");
+  assert.equal(resolveStylerRoot({
+    sourceRoot: studioRoot,
+    gameRoot: path.resolve("fixtures", "game"),
+    env: { MEFI_STUDIO_REPO: path.resolve("fixtures", "other-workspace") },
+    exists: hasFiles([path.join(sibling, "package.json")]),
+  }), sibling);
+});
+
+test("Server Styler honors an explicit location and supports the former game folder", () => {
+  const gameRoot = path.resolve("fixtures", "game");
+  const legacy = path.join(gameRoot, "Discord Bot");
+  const configured = path.resolve("fixtures", "bot-elsewhere");
+  const exists = hasFiles([path.join(legacy, "package.json")]);
+  assert.equal(resolveStylerRoot({ sourceRoot: studioRoot, gameRoot, env: {}, exists }), legacy);
+  assert.equal(resolveStylerRoot({ sourceRoot: studioRoot, gameRoot, env: { MEFI_STYLER_ROOT: configured }, exists }), configured);
 });
 
 test("path changes restart the app before applying related modules or styles", () => {

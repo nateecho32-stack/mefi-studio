@@ -102,6 +102,20 @@ class MefiStudioLauncherTests(unittest.TestCase):
         self.assertTrue((GAME_ROOT / "Run Dev Tool (LOVE2D).cmd").is_file())
         self.assertTrue((GAME_ROOT / "dev" / "dev_tool_love_project" / "main.lua").is_file())
 
+    def test_server_styler_desktop_wiring(self):
+        template = (STUDIO / "renderer" / "booklet.template.html").read_text(encoding="utf-8")
+        self.assertIn("resolveStylerRoot", self.main)
+        self.assertIn("MEFI_STYLER_ROOT", (STUDIO / "scripts" / "paths.cjs").read_text(encoding="utf-8"))
+        for channel in ("styler:status", "styler:start", "styler:open", "styler:folder", "styler:stop"):
+            with self.subTest(channel=channel):
+                self.assertIn(f'ipcMain.handle("{channel}"', self.main)
+                self.assertIn(f'ipcRenderer.invoke("{channel}"', self.preload)
+        self.assertIn('id="server-styler-status"', template)
+        for action in ("start", "open", "folder", "stop"):
+            self.assertIn(f'data-styler-action="{action}"', template)
+        self.assertIn("serverStylerStatus()", self.booklet_js)
+        self.assertIn("/api/bootstrap", self.main)
+
     def test_electron_smoke_boots_when_installed(self):
         if not ELECTRON.is_file():
             self.skipTest("Electron not installed (npm ci in the Studio repository)")

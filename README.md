@@ -156,11 +156,27 @@ npm run audit            # renderer/template contract audit
 
 ## Optional: Ruins Runner
 
-Studio can launch the author's LÖVE game from Settings › Integrations when a checkout is found (`MEFI_STUDIO_GAME_ROOT`, or a sibling `2d Trippy Hell` folder). A fresh clone works without it.
+Studio can launch the author's LÖVE game from Settings › Integrations when a checkout is found (`MEFI_STUDIO_GAME_ROOT`, or a sibling `2d-Trippy-Hell` or `2d Trippy Hell` folder). A fresh clone works without it.
 
 ## Contributing
 
 Issues and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); the pull-request template lists the three gates. Bug reports are most useful with the version, the install kind, the selected route and builder, and the task state you saw.
+
+## Discord Server Styler
+
+The Studio tab starts the separate Server Styler project and opens its local
+dashboard. **Start Server Styler** installs dependencies and builds the web app
+when needed, then runs the dashboard and bot. **Stop** ends a process started by
+Mefi. The status line reports when the bot is online or still needs setup.
+
+Keep Server Styler in a sibling `discord-server-styler/` checkout. Set
+`MEFI_STYLER_ROOT` to its absolute path if it lives elsewhere. Studio can still
+find the former `Discord Bot/` directory under the optional game checkout.
+Bot credentials stay in Server Styler's ignored `.env`, outside this repository.
+Create that file from `.env.example`, set `DASHBOARD_PASSWORD`, then use the
+dashboard's Discord sign-in and setup wizard to connect the bot to a server.
+Rebuild the portable desktop app with `npm run package` after Studio source
+changes.
 
 ## License
 

@@ -5481,7 +5481,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         </details>
       </div>
       <details class="settings-optional settings-card" id="settings-integrations"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Integrations</b><span>Optional: Ruins Runner and Love2D</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Requires a separate game project and its LÖVE runtime. This integration is optional for Studio.</p><div class="row studio-actions" id="studio-actions"><button data-action="launch">Launch Love2D studio</button><button data-action="smoke">Run smoke</button><button data-action="game">Launch Ruins Runner</button><button data-action="stop">Stop game</button></div><p class="muted" id="studio-hint"></p></details>
-      <details class="settings-optional settings-card" id="settings-log"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-legend"/></svg></span><span class="settings-summary-text"><b>Connection & tool log</b><span>What Studio tried and what answered</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><pre class="log" id="studio-log" aria-label="Connection and tool log">No activity yet.</pre></details>
+      <details class="settings-optional settings-card" id="settings-styler" open><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Discord Server Styler</b><span>Bot and local dashboard</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Run the bot and its local dashboard from this desktop. Bot credentials stay in the separate Server Styler project's <code>.env</code>.</p><div class="row studio-actions" id="server-styler-actions"><button class="primary" data-styler-action="start">Start Server Styler</button><button data-styler-action="open">Open dashboard</button><button data-styler-action="folder">Open bot folder</button><button data-styler-action="stop">Stop</button></div><p class="eyes-status" id="server-styler-status" role="status">Checking Server Styler…</p></details>
+      <details class="settings-optional settings-card" id="settings-log"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-legend"/></svg></span><span class="settings-summary-text"><b>Connection &amp; tool log</b><span>What Studio tried and what answered</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><pre class="log" id="studio-log" aria-label="Connection and tool log">No activity yet.</pre></details>
         </div>
       </div>
     </div>
@@ -39849,12 +39850,59 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     if (!window.mefiStudio?.launchStudio) {
       hint.textContent = "Open the desktop app to connect providers or use the optional game launcher.";
       actions.querySelectorAll("button").forEach((b) => (b.disabled = true));
+      document.querySelectorAll("#server-styler-actions button").forEach((b) => (b.disabled = true));
+      document.getElementById("server-styler-status").textContent = "Server Styler controls are available in the Mefi desktop app.";
       document.getElementById("studio-desktop").hidden = true;
       return;
     }
     hint.textContent = "Uses the separate game project's cached LÖVE runtime and documented smoke-test script when available.";
     window.mefiStudio.onStudioLog((line) => studioLog(line));
     document.getElementById("settings-log")?.addEventListener("toggle", () => { if (studioLogStale) paintStudioLog(); });
+
+    const stylerActions = document.getElementById("server-styler-actions");
+    const stylerStatus = document.getElementById("server-styler-status");
+    function paintStylerStatus(status) {
+      stylerStatus.textContent = status?.message ?? "Server Styler status is unavailable.";
+      stylerStatus.dataset.state = status?.state ?? "error";
+      if (typeof stylerActions.querySelector !== "function") return;
+      stylerActions.querySelector('[data-styler-action="start"]').disabled = ["starting", "online", "setup"].includes(status?.state);
+      stylerActions.querySelector('[data-styler-action="open"]').disabled = !["online", "setup"].includes(status?.state);
+      stylerActions.querySelector('[data-styler-action="folder"]').disabled = status?.state === "missing";
+    }
+    async function refreshStylerStatus() {
+      if (typeof window.mefiStudio.serverStylerStatus !== "function") return;
+      try {
+        paintStylerStatus(await window.mefiStudio.serverStylerStatus());
+      } catch (error) {
+        paintStylerStatus({ state: "error", message: `Could not check Server Styler: ${error.message}` });
+      }
+    }
+    void refreshStylerStatus();
+    if (typeof setInterval === "function") setInterval(() => {
+      if (!document.getElementById("tab-studio").hidden) void refreshStylerStatus();
+    }, 5000);
+    stylerActions.addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-styler-action]");
+      if (!button || button.disabled) return;
+      const action = button.dataset.stylerAction;
+      button.disabled = true;
+      try {
+        const method = {
+          start: "serverStylerStart",
+          open: "serverStylerOpen",
+          folder: "serverStylerFolder",
+          stop: "serverStylerStop",
+        }[action];
+        const result = await window.mefiStudio[method]();
+        if (result?.message) studioLog(`[Server Styler] ${result.message}`);
+        if (result?.error) studioLog(`[Server Styler] ${result.error}`);
+        if (result?.state) paintStylerStatus(result);
+      } catch (error) {
+        studioLog(`[Server Styler] ${error.message}`);
+      } finally {
+        await refreshStylerStatus();
+      }
+    });
 
     const speedModel = document.getElementById("speed-model");
     updateSpeedModels();

@@ -283,7 +283,7 @@ automatically a layout bug.
 
 The Python suite skips Node-dependent checks when Node is unavailable. A hidden Electron smoke runs on Windows when the installed Electron binary exists; its subprocess timeout is 120 seconds. It boots a temporary copy with only the catalog data, isolated Electron profile and board database, and process cleanup disabled in the resource manager. The user's live app state is not used. Install dependencies with `npm ci` before checking or packaging the app.
 
-Ruins Runner is an optional separate checkout. The launcher integration contract uses `MEFI_STUDIO_GAME_ROOT` when set, otherwise the sibling `2d Trippy Hell` folder, and skips when no game checkout is available. It only checks prerequisite files; it does not launch LOVE. Any actual game smoke or game test must follow that checkout's own `TESTRUNS.md` and gated test pipeline. No game runtime or game test tools are required for a clean Studio checkout.
+Ruins Runner is an optional separate checkout. The launcher integration contract uses `MEFI_STUDIO_GAME_ROOT` when set, otherwise a sibling `2d-Trippy-Hell` or `2d Trippy Hell` folder, and skips when no game checkout is available. It only checks prerequisite files; it does not launch LOVE. Any actual game smoke or game test must follow that checkout's own `TESTRUNS.md` and gated test pipeline. No game runtime or game test tools are required for a clean Studio checkout.
 
 When adding a Python contract, register its path below and ensure it matches `sets.dev.pythonInclude` in `tools/test_sets.json`. The app auditor checks that registration. Node behavioral tests are discovered from `tests/**/*.test.mjs` by `npm test`.
 
@@ -1245,7 +1245,7 @@ From the repository root, `npm start` opens Electron and `npm run start:web` ope
 
 A-Eyes reads the live OpenCode session store read-only (`~/.local/share/opencode/opencode.db` via `node:sqlite`) for its change feed, diffs, PNG evidence pins, log tail, and 3D task-tree rail. The automated Electron smoke uses a temporary home directory instead of that live store.
 
-`tests/paths.test.mjs` exercises standalone, packaged, selected-workspace, and optional-game path resolution, plus the live-update restart behavior of the root resolver.
+`tests/paths.test.mjs` exercises standalone, packaged, selected-workspace, optional-game, and Server Styler path resolution, plus the live-update restart behavior of the root resolver. The Server Styler cases check the sibling checkout, explicit `MEFI_STYLER_ROOT`, and former game-folder fallback without contacting Discord or starting a bot. `tools/test_mefi_studio_launcher.py` also checks the desktop IPC, preload, and renderer controls.
 
 ## Agent loop, Jev and startup regressions
 

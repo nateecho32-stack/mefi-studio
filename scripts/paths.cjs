@@ -20,11 +20,27 @@ function resolveStudioPaths({ studioRoot, isPackaged, executablePath, env = proc
   }
   const repoRoot = env.MEFI_STUDIO_REPO ? path.resolve(env.MEFI_STUDIO_REPO) : sourceRoot;
   const isGameRoot = (root) => exists(path.join(root, "main.lua")) && exists(path.join(root, "Run Game (LOVE2D).cmd"));
-  const candidates = [repoRoot, path.join(path.dirname(sourceRoot), "2d Trippy Hell")];
+  const candidates = [
+    repoRoot,
+    path.join(path.dirname(sourceRoot), "2d-Trippy-Hell"),
+    path.join(path.dirname(sourceRoot), "2d Trippy Hell"),
+  ];
   const gameRoot = env.MEFI_STUDIO_GAME_ROOT
     ? path.resolve(env.MEFI_STUDIO_GAME_ROOT)
     : candidates.find(isGameRoot) ?? null;
   return { sourceRoot, repoRoot, gameRoot };
 }
 
-module.exports = { resolveStudioPaths };
+function resolveStylerRoot({ sourceRoot, gameRoot, env = process.env, exists = existsSync }) {
+  const configured = env.MEFI_STYLER_ROOT?.trim();
+  if (configured) return path.resolve(configured);
+  const sibling = path.resolve(sourceRoot, "..", "discord-server-styler");
+  if (exists(path.join(sibling, "package.json"))) return sibling;
+  if (gameRoot) {
+    const legacy = path.join(gameRoot, "Discord Bot");
+    if (exists(path.join(legacy, "package.json"))) return legacy;
+  }
+  return sibling;
+}
+
+module.exports = { resolveStudioPaths, resolveStylerRoot };
