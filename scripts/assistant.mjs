@@ -2772,18 +2772,24 @@ export function parseExecutorResult(line, mark = "MEFI_RESULT:") {
 // caller parks the card instead of scheduling the same unproven run forever.
 export const VERIFY_MAX_ATTEMPTS = 3;
 
-const reportedCheckFailure = (parts) => /(^|\s|[:;,-])(fail(ed|ure)?|error|broken)(\s|$|[:;,-])/i.test(`${parts?.tests ?? ""} ${parts?.audit ?? ""}`);
+const checkReports = (parts) => [parts?.tests, parts?.ran, parts?.verified, parts?.audit].map((value) => str(value).trim()).filter(Boolean);
+const reportedCheckFailure = (parts) => checkReports(parts).some((text) => /\b(?:fail(?:ed|ures?)?|errors?|broken)\b/i.test(
+  text.replace(/\b(?:0|zero|no)\s+(?:fail(?:ed|ures?)?|errors?)\b/gi, ""),
+));
+const noRemainingWork = (text) => /^(?:none|nothing|nil|n\/a|no (?:remaining|outstanding) (?:work|tasks?|items?|obligations?))[.!\s]*$/i.test(text);
+const namesCheck = (text) => !/^(?:none|nothing|n\/a|not (?:run|tested)|skipped|unavailable|pending|passed|ok|done)[.!\s]*$/i.test(text)
+  && !/\b(?:not run|not tested|did not run|didn't run|could not run|couldn't run|unable to run|skipped)\b/i.test(text);
 
 export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSession = false, remaining = [], resultNote = null, priorAttempts = 0 } = {}) {
   const parts = (resultNote && isObject(resultNote) ? resultNote.parts : null) ?? {};
-  const checksText = str(parts.tests || parts.ran || parts.verified || parts.audit);
+  const namedChecks = checkReports(parts).some(namesCheck);
   const remainingText = str(parts.remaining);
-  const outstanding = remainingText.length > 0 || asArray(remaining).length > 0;
+  const outstanding = (remainingText.length > 0 && !noRemainingWork(remainingText)) || asArray(remaining).length > 0;
   const evidence = {
     verdictOk: verdictOk === true,
     changedFiles: Math.max(0, Number(changedFiles) || 0),
     hasSession: hasSession === true,
-    namedChecks: checksText.length > 0,
+    namedChecks,
     outstanding,
   };
   const fail = (reason) => {
@@ -3311,14 +3317,24 @@ export function suggestWork({ sessions = null, tasks = null, ideas = null, reque
 
 // What the executor is doing, as one line. facts.executor is null when the
 // autopilot snapshot was not gathered, so the line only appears with data.
-function executorLine(executor) {
+function executorLine(executor, readiness = null) {
   const source = isObject(executor) ? executor : null;
   if (!source) return null;
-  const running = asArray(source.running).filter(isObject);
-  if (running.length) return `Building ${plural(running.length, "job")}: ${running.slice(0, 3).map((job) => `"${clip(job.title, 40)}"`).join(", ")}.`;
-  if (source.enabled === false) return "Executor off — nothing is being built until it is switched back on.";
-  if (str(source.waiting)) return `Executor waiting: ${clip(source.waiting, 60)}.`;
-  return `Executor idle${num(source.queued, 0) ? ` · ${plural(num(source.queued), "request")} queued` : ""}.`;
+  const running = asArray(source.running).filter((job) => isObject(job) && !job.finished);
+  const lines = [running.length
+    ? `Building now (${running.length}/${Math.max(running.length, num(source.parallel, 1))} worker slots): ${running.slice(0, 3).map((job) => `"${clip(job.title, 40)}"`).join(", ")}.`
+    : "No build worker is running."];
+  const counts = isObject(readiness?.counts) ? readiness.counts : null;
+  if (counts) {
+    lines.push(`${plural(num(counts.readyTasks, 0), "task")} and ${plural(num(counts.readyRequests, 0), "request")} ready in one ranked queue.`);
+    const holds = [["review", "awaiting verification"], ["waiting", "waiting for prerequisites"], ["blocked", "need review"], ["cooling", "cooling down"]]
+      .filter(([key]) => num(counts[key], 0) > 0).map(([key, label]) => `${num(counts[key], 0)} ${label}`);
+    if (holds.length) lines.push(`Other saved work: ${holds.join("; ")}.`);
+  } else if (num(source.queued, 0)) lines.push(`${plural(num(source.queued), "work item")} queued; detailed readiness is unavailable.`);
+  if (readiness?.paused || source.enabled === false) lines.push(`New workers are paused${running.length ? "; current workers can finish" : ""}.`);
+  else if (str(readiness?.waiting || source.waiting)) lines.push(`Dispatch waiting: ${clip(str(readiness?.waiting || source.waiting), 140)}.`);
+  else if (!running.length && num(counts?.ready, num(source.queued, 0)) > 0) lines.push("Ready work is waiting for the dispatcher; a worker start has not been confirmed.");
+  return lines.join(" ");
 }
 
 function activityLogRows(log, limit = 6) {
@@ -3631,7 +3647,7 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
       }
       if (audit) lines.push(num(audit.errors, 0) || num(audit.warnings, 0) ? `Audit: ${plural(num(audit.errors, 0), "error")}, ${plural(num(audit.warnings, 0), "warning")}.` : "Audit clean.");
       if (update?.phase === "held") lines.push(`Live update held${update.reason ? `: ${clip(update.reason, 80)}` : ""}.`);
-      const executing = executorLine(executor);
+      const executing = executorLine(executor, source.backlog);
       if (executing) lines.push(executing);
       const activity = activityLogLine(log ?? source.log, 3);
       if (activity) lines.push(activity);
@@ -3710,7 +3726,7 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
       if (fresh.length) lines.push(`Never run: ${fresh.join(", ")}.`);
       const intel = intelLines(current, now, { limit: 3 });
       if (intel.length) lines.push(`Reported home: ${intel.join("; ")}.`);
-      const executing = executorLine(executor);
+      const executing = executorLine(executor, source.backlog);
       if (executing) lines.push(executing);
       lines.push("A work instruction queues it and sends the roster out with it.");
       break;
@@ -3770,12 +3786,9 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
     }
     case "compact": {
       actions.push("compact");
-      const inbox = asArray(requests).filter((request) => request.status !== "running").length;
-      const depth = Math.max(inbox, num(executor?.queued, 0));
-      lines.push(
-        `Compacting the queue now${depth ? ` — ${plural(depth, "request")} under review` : ""}: duplicates collapse, asks already on the board fold in, stale auto-filed ones expire, the cap cuts the lowest-worth entries, and the foreman takes the next pick right after.`,
-      );
-      lines.push("Jobs already running are left alone — the pass stops new duplicates from starting rather than killing work in flight.");
+      lines.push("Reviewing the task board and request inbox for duplicate or already represented work. Eligible tasks and requests share one ranked queue; dispatch is requested when new workers are enabled.");
+      const executing = executorLine(executor, source.backlog);
+      if (executing) lines.push(executing);
       break;
     }
     case "tidy": {
@@ -3849,7 +3862,7 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
       lines.push(activity || "The activity log is empty so far.");
       const feedLog = asArray(executor?.history).filter((entry) => isObject(entry) && str(entry.text));
       if (feedLog.length) lines.push(`Builder feed: ${feedLog.slice(0, 4).map((entry) => clip(str(entry.text), 70)).join("; ")}.`);
-      const executing = executorLine(executor);
+      const executing = executorLine(executor, source.backlog);
       if (executing) lines.push(executing);
       const live = current?.thinking?.text ? clip(str(current.thinking.text), 80) : null;
       if (live) lines.push(`Thinking: ${live}.`);
@@ -3907,22 +3920,14 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
         lines.push("Could not read the Auto Builder state.");
         break;
       }
-      const running = asArray(executor.running);
-      lines.push(
-        running.length
-          ? `Building now (${running.length} of ${plural(Math.max(running.length, num(executor.parallel, running.length)), "slot")}): ${running.map((job) => `"${clip(str(job.title), 44)}"${num(job.minutes, 0) >= 1 ? ` · ${Math.round(num(job.minutes))}m in` : ""}`).join(", ")}.`
-          : "Nothing building at the moment.",
-      );
-      lines.push(`${plural(num(executor.queued, 0), "request")} in the inbox${executor.waiting ? ` · held: ${clip(str(executor.waiting), 40)}` : ""}${executor.enabled === false ? " · the executor is off" : ""}.`);
+      lines.push(executorLine(executor, source.backlog));
       const feedLog = asArray(executor.history).filter((entry) => isObject(entry) && str(entry.text));
       if (feedLog.length) lines.push(`Feed log: ${feedLog.slice(0, 4).map((entry) => clip(str(entry.text), 70)).join("; ")}.`);
-      const openTasks = (tasks ?? []).filter((task) => task.status === "open" || task.status === "active").length;
-      if (openTasks) lines.push(`${plural(openTasks, "open task")} on the board behind the queue.`);
       if (cleans) {
         actions.push("compact");
-        lines.push("Compacting now: duplicates collapse, asks already on the board fold in, the cap cuts the lowest-worth entries, and the foreman takes the next pick.");
+        lines.push("Reviewing duplicate and already represented work now. This requests a dispatch check; it does not confirm that a worker has started.");
       } else {
-        lines.push('Say "clean up the builder" and I compact the queue and send the foreman back out.');
+        lines.push('The Live work panel shows confirmed worker starts. Say "clean up the builder" to review the queue.');
       }
       break;
     }
@@ -4036,7 +4041,7 @@ export function summarizeForTree(state, now = Date.now()) {
 
 // The facts shape localReply reads, from the raw store rows. main.cjs builds
 // the same shape (each source guarded, null when unreadable); the CLI uses it.
-export function buildFacts({ sessions = null, todos = null, collisions = null, presence = null, uncommitted = null, tasks = null, ideas = null, requests = null, executor = null, machine = null, audit = null, briefing = null, update = null, work = null, resumed = null, focus = null, nodeFolders = null, lessons = null, log = null, query = "", now = Date.now() } = {}) {
+export function buildFacts({ sessions = null, todos = null, collisions = null, presence = null, uncommitted = null, tasks = null, ideas = null, requests = null, executor = null, backlog = null, machine = null, audit = null, briefing = null, update = null, work = null, resumed = null, focus = null, nodeFolders = null, lessons = null, log = null, query = "", now = Date.now() } = {}) {
   const todoRows = asArray(todos).filter((todo) => isObject(todo) && typeof todo.sessionId === "string");
   const focusRow = normalizeFocus(focus);
   const folderKey = focusRow ? nodeKeyOf(focusRow) : null;
@@ -4120,6 +4125,7 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
     tasks: Array.isArray(tasks)
       ? tasks
           .filter(isObject)
+          .slice(0, 40)
           .map((task) => ({
             id: str(task.id),
             title: str(task.title),
@@ -4137,6 +4143,12 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
           .slice(0, 40)
           .map((request) => ({ title: str(request.title) || clip(str(request.prompt), 60), source: str(request.source, "manual"), status: str(request.status), at: num(request.at, 0), pinned: Boolean(request.pin) }))
       : null,
+    backlog: isObject(backlog) && isObject(backlog.counts) ? {
+      counts: Object.fromEntries(["ready", "readyTasks", "readyRequests", "running", "review", "waiting", "blocked", "cooling", "done"].map((key) => [key, Math.max(0, Math.floor(num(backlog.counts[key], 0)))])),
+      paused: backlog.paused === true, waiting: clip(str(backlog.waiting), 180) || null,
+      totalTasks: Math.max(0, Math.floor(num(backlog.totalTasks, 0))), totalRequests: Math.max(0, Math.floor(num(backlog.totalRequests, 0))),
+      next: asArray(backlog.next).filter(isObject).slice(0, 3).map((row) => ({ title: clip(str(row.title), 100), kind: str(row.kind) })),
+    } : null,
     executor: isObject(executor)
       ? {
           enabled: bool(executor.enabled, true),
@@ -4408,7 +4420,7 @@ function selfTest() {
   expect(JSON.stringify(result.intents) === JSON.stringify(wanted), `intents ${JSON.stringify(result.intents)}`);
   const reply = (index) => result.replies[index].text;
   expect(reply(0).includes("6 sessions") && reply(0).includes("1 collision") && reply(0).includes("tick 41"), `status reply: ${reply(0)}`);
-  expect(reply(0).includes('Building 1 job: "Fix the ipc handler"'), `status names the executor job: ${reply(0)}`);
+  expect(reply(0).includes('Building now (1/1 worker slots): "Fix the ipc handler"'), `status names the executor job: ${reply(0)}`);
   expect(reply(12).includes("put on the task board") && result.replies[12].actions.includes("queue-request"), `request reply: ${reply(12)}`);
   expect(reply(13).includes("Crafting bench recipes") || reply(13).includes("crafting.lua"), `related facts: ${reply(13)}`);
   expect(reply(11).includes("tidy") && reply(11).includes("pause"), `help reply: ${reply(11)}`);

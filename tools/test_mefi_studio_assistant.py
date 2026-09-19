@@ -444,12 +444,13 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertEqual(len(declarations), 1, "machineParallelDefault must be declared exactly once (duplicate = merge corruption)")
         machine = _function_body(self.main, "machineParallelDefault")
         self.assertIn("os.cpus()", machine, "the width derives from the host's core count")
-        self.assertIn("EXECUTOR_PARALLEL_MAX", machine, "the width is clamped into the executor's 1-12 band")
+        self.assertIn("Math.min(2, Math.max(1, cores))", machine, "new installations default to two workers on multicore hosts")
+        self.assertIn("EXECUTOR_PARALLEL_CAP = 3", self.main, "worker processes have a separate small cap")
         self.assertIn("Math.min(EXECUTOR_PARALLEL_MAX", self.main)
         self.assertIn("EXECUTOR_PARALLEL_MAX = 12", self.main)
         boot = _function_body(self.main, "bootAutopilot")
-        self.assertIn("machineParallelDefault()", boot, "a missing or legacy-default width uses the machine")
-        self.assertIn("savedWidth >= 1", boot, "a saved width — narrow included — is the operator's setting; only an unset one uses the machine default")
+        self.assertIn("savedExecutorParallel(saved)", boot, "saved settings pass through the bounded worker setting")
+        self.assertIn("Number.isFinite(width) && width >= 1 ? Math.min(EXECUTOR_PARALLEL_CAP, width) : machineParallelDefault()", self.main, "a saved width — narrow included — remains the operator's setting")
         # _function_body misreads `setAutopilot(prefs = {})`, so assert the
         # clamp line itself.
         self.assertRegex(self.main, r"prefs\.parallel !== undefined\)[^\n]*Math\.min\(EXECUTOR_PARALLEL_MAX, Math\.max\(1", "a manual patch is clamped into the 1-12 band too")
@@ -1224,7 +1225,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         for piece in ("6 sessions", "3 active", "Fix the crafting bench", "1 collision", "crafting.lua", "1 open task", "2 unread ideas", "Machine busy", "Audit: 1 error", "tick 41", "next in 2m", "AI offline (HTTP 401 unauthorized)"):
             with self.subTest(piece=piece):
                 self.assertIn(piece, status)
-        self.assertIn('Building 1 job: "Fix ipc handler"', status, "the status reply names what the executor is building")
+        self.assertIn('Building now (1/1 worker slots): "Fix ipc handler"', status, "the status reply names the worker and its occupied slot")
         self.assertEqual([], replies["Status?"]["actions"])
         self.assertIn('"Crafting bench recipes"', replies["Any open tasks"]["text"])
         self.assertIn("2 done, 0 archived", replies["Any open tasks"]["text"])
@@ -1276,7 +1277,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn("work on", suggest["text"])
         agents = replies["what are the agents doing"]
         self.assertEqual([], agents["actions"], "a roster question dispatches nothing")
-        for piece in ("watcher", "briefer", "HTTP 429", "Building 1 job"):
+        for piece in ("watcher", "briefer", "HTTP 429", "Building now (1/1 worker slots)"):
             with self.subTest(agents_piece=piece):
                 self.assertIn(piece, agents["text"])
         overseer = replies["oversee the assistant"]

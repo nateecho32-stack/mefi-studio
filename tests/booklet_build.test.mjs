@@ -34,6 +34,7 @@ const INLINE_SCRIPTS = [
   "eyes.js",
   "boot.js",
   "workspace.js",
+  "music.js",
   "booklet.js",
 ];
 
@@ -66,6 +67,7 @@ async function makeFixtureRoot() {
   await mkdir(path.join(root, "data"), { recursive: true });
   await copyFile(path.join(RENDERER, "booklet.template.html"), path.join(renderer, "booklet.template.html"));
   await copyFile(path.join(RENDERER, "styles.css"), path.join(renderer, "styles.css"));
+  await copyFile(path.join(RENDERER, "music.css"), path.join(renderer, "music.css"));
   for (const name of INLINE_SCRIPTS) {
     await copyFile(path.join(RENDERER, name), path.join(renderer, name));
   }

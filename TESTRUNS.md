@@ -58,6 +58,14 @@ pagination, search beyond the first page, atomic idea promotion, queue priority,
 run/pause controls, and short desktop layouts. Screenshots and the report are written to ignored
 `tools/logs/workspace-ui/`. It never opens either live data store or saved keys.
 
+For Command, run `python tools/verify_command.py`. The isolated Electron fixture
+contains four sessions, 66 tasks, 105 ideas, queued work, and synthetic worker and
+agent status. It checks layout at 1920×1200, 1463×943, 1280×720, and 900×900;
+current task and stage, graph search, details, navigation, disclosures, and music
+settings. Network and child processes are blocked; no worker or audio capture is
+started. Screenshots and the report go to ignored `tools/logs/command-ui/final/`.
+Use `--baseline --source PATH` to capture an earlier source snapshot separately.
+
 The Node runner also discovers `tests/projects.test.mjs`,
 `tests/task_history.test.mjs`, `tests/tasks_ui.test.mjs`, and
 `tests/workspace_ui.test.mjs`. These cover captured project roots and storage,
@@ -83,6 +91,30 @@ A-Eyes reads the live OpenCode session store read-only (`~/.local/share/opencode
 `tests/paths.test.mjs` exercises standalone, packaged, selected-workspace, and optional-game path resolution, plus the live-update restart behavior of the root resolver.
 
 ## Agent loop, Jev and startup regressions
+
+Command and music regressions are covered by `tests/command_activity.test.mjs`,
+`tests/command_graph.test.mjs`, `tests/music.test.mjs` and
+`tests/music_recommendations.test.mjs`. They exercise truthful current work,
+active-only agents, label placement, physical-frequency audio response, capture
+cleanup, local queue transport, safe Spotify URLs, theme persistence and the
+read-only recommendation route. Follow checks cover task-first selection,
+completion handoffs, bounded rotation, current-step framing and manual control.
+`tests/executor_continuation.test.mjs` covers
+verification-before-dispatch, per-attempt evidence-read failures, retry budgets,
+completion reports and finished-worker status.
+
+`tests/executor_parallel.test.mjs` covers worker-only snapshot configuration,
+parallel dispatch with file claims, saved capacity and completed edit evidence.
+`tests/assistant_readiness_reply.test.mjs` checks whole-board readiness counts,
+paused and active worker replies, and truthful compactor dispatch reports.
+
+`python tools/verify_command.py` checks the real Electron UI at four window sizes,
+music/theme navigation, synthesized WAV transport and the direct audio analyser,
+recommendation errors/results, task deep links, parallel capacity, task-follow
+handoffs and wheel cancellation. It blocks external requests
+and worker processes and uses a disposable profile and board. Add `--interactive`
+for a visible disposable window suitable for computer-use checks. Live Spotify
+streaming, authentication and paid AI recommendations are not exercised here.
 
 The Node runner discovers these automatically; they use controlled timers,
 fixture stores and fake transport rather than live user state or model calls.

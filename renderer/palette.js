@@ -263,6 +263,7 @@
     el.overlay.hidden = true;
     el.input.setAttribute("aria-expanded", "false");
     el.input.removeAttribute("aria-activedescendant");
+    el.list.removeAttribute("aria-activedescendant");
     window.MefiNav?.release?.("palette");
     restoreOpener();
   }

@@ -270,6 +270,10 @@
     return ["running", "queued", "error", "done"].includes(agent.status) ? agent.status : "idle";
   }
 
+  function activeAgentRoster() {
+    return agentRoster().filter((agent) => agentStateOf(agent) === "running");
+  }
+
   // Keeps the assistant node's tone and the agents' statuses in step between
   // rebuilds. A roster whose roles changed needs the layout redone.
   function syncAssistantNode() {
@@ -279,7 +283,7 @@
     node.state = summary.tone;
     node.tone = summary.tone;
     node.sublabel = summary.sublabel;
-    const roster = agentRoster();
+    const roster = activeAgentRoster();
     const satellites = nodes.filter((entry) => entry.kind === "agent");
     if (roster.length !== satellites.length || roster.some((agent) => !satellites.some((entry) => entry.role === agent.role))) return true;
     for (const agent of roster) {
@@ -829,8 +833,9 @@
     };
     nodes.push(assistantNode);
     edges.push({ a: rootNode, b: assistantNode, assistant: true });
-    // The pool's agents ring the assistant, one satellite per role.
-    const roster = agentRoster();
+    // Only agents doing work orbit the assistant. Idle, queued and completed
+    // roles stay in the activity/history views instead of looking busy here.
+    const roster = activeAgentRoster();
     roster.forEach((agent, index) => {
       const spin = (index / Math.max(1, roster.length)) * Math.PI * 2;
       // The overseer is the R&D layer above the assistant, not a worker in the

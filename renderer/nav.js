@@ -55,6 +55,7 @@
   const registry = [
     {
       id: "workspace", label: "Your workspace", short: "Workspace", kind: "view", layer: null,
+      commandPrimary: true,
       group: "surfaces", key: "H", glyph: "g-command", badge: null,
       desc: "Projects, your companion, and work from idea to done",
       showIn: showIn({ dock: true, palette: true, help: true, footer: true }),
@@ -139,6 +140,7 @@
     },
     {
       id: "explorer",
+      commandPrimary: true,
       label: "Session explorer",
       short: "Explorer",
       kind: "overlay",
@@ -158,6 +160,7 @@
     },
     {
       id: "tasks",
+      commandPrimary: true,
       label: "Tasks",
       short: "Tasks",
       kind: "overlay",
@@ -176,6 +179,7 @@
     },
     {
       id: "ideas",
+      commandPrimary: true,
       label: "Feature ideas",
       short: "Ideas",
       kind: "overlay",
@@ -230,6 +234,7 @@
     },
     {
       id: "palette",
+      commandPrimary: true,
       label: "Command palette",
       short: "Palette",
       kind: "overlay",
@@ -246,6 +251,15 @@
       open: () => window.MefiPalette?.open?.(),
       close: () => window.MefiPalette?.close?.(),
       isOpen: () => overlayOpen("palette-overlay"),
+    },
+    {
+      id: "music", label: "Music & themes", short: "Music", kind: "overlay", layer: "sheet",
+      group: "tools", glyph: "g-music", badge: null, commandPrimary: true,
+      desc: "Local music, Spotify links, AI suggestions, and Studio themes",
+      showIn: showIn({ dock: true, palette: true, help: true }),
+      element: "music-overlay", focus: "#music-close",
+      open: (params) => window.MefiMusic?.open?.(params), close: () => window.MefiMusic?.close?.(),
+      isOpen: () => overlayOpen("music-overlay"),
     },
     {
       id: "help",
@@ -719,14 +733,20 @@
     const element = target ?? document.getElementById("cmd-dock");
     if (!element) return;
     element.textContent = "";
-    let previous = false;
-    for (const group of ["surfaces", "tools", "system"]) {
-      const items = list({ showIn: "dock" }).filter((dest) => dest.group === group);
-      if (!items.length) continue;
-      if (previous) element.append(separator("dock-sep"));
-      previous = true;
-      for (const dest of items) element.append(navButton(dest, "dock-item"));
-    }
+    const destinations = list({ showIn: "dock" });
+    for (const dest of destinations.filter((item) => item.commandPrimary)) element.append(navButton(dest, "dock-item"));
+    element.append(separator("dock-sep"));
+    const more = document.createElement("details");
+    more.id = "cmd-more-tools";
+    more.className = "cmd-more-tools";
+    const summary = document.createElement("summary");
+    summary.className = "dock-item";
+    summary.textContent = "More tools";
+    const links = document.createElement("div");
+    links.className = "cmd-more-links";
+    for (const dest of destinations.filter((item) => !item.commandPrimary)) links.append(navButton(dest, "dock-item"));
+    more.append(summary, links);
+    element.append(more);
     paintBadges(element);
   }
 
@@ -910,6 +930,8 @@
   // ---- input -------------------------------------------------------------
 
   document.addEventListener("click", (event) => {
+    const more = document.getElementById("cmd-more-tools");
+    if (more?.open && !more.contains(event.target)) more.open = false;
     const button = event.target?.closest?.("[data-nav], [data-nav-close]");
     if (!button) return;
     const closeId = button.dataset.navClose;
@@ -961,6 +983,13 @@
   }
 
   function handleKey(event) {
+    const more = document.getElementById("cmd-more-tools");
+    if (event.key === "Escape" && more?.open) {
+      event.preventDefault();
+      more.open = false;
+      more.querySelector("summary")?.focus();
+      return;
+    }
     // 1. the palette works from inside any field, and the capture tour
     //    dispatches this on window, so event.target may not be an element.
     if ((event.ctrlKey || event.metaKey) && event.key?.toLowerCase?.() === "k") {
@@ -991,6 +1020,8 @@
     }
     if (state.transient === "palette") return;
     if (state.transient === "help" && event.key !== "?") return;
+    // Native controls own their activation keys even while the canvas is open.
+    if ((event.key === "Enter" || event.key === " ") && event.target?.closest?.("button, summary, a, [role=button]")) return;
     if (idleActive() && state.sheet === null && window.MefiIdle?.handleKey?.(event)) {
       event.preventDefault();
       return;

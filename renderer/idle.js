@@ -70,23 +70,23 @@
     {
       key: "agent",
       sw: agentSwatch(),
-      label: "an agent of the assistant — role colour while working, green done · amber error · dim queued; it flies back to the assistant when the job ends",
+      label: "active assistant agent — colour identifies its role; finished and waiting agents stay in the activity history",
     },
   ];
   const AGENT_STATES = new Set(["running", "queued", "error", "done"]);
 
-  const LABEL_FONT = '600 12px system-ui, "Segoe UI", sans-serif'; // sessions
-  const LABEL_FONT_TASK = '600 11px system-ui, "Segoe UI", sans-serif'; // task nodes
-  const LABEL_FONT_TODO = '11px system-ui, "Segoe UI", sans-serif'; // todos
-  const LABEL_FONT_ROOT = '600 10.5px system-ui, "Segoe UI", sans-serif'; // root
-  const LABEL_FONT_AGENT = '9.5px system-ui, "Segoe UI", sans-serif'; // the assistant's agents
+  const LABEL_FONT = '600 13px system-ui, "Segoe UI", sans-serif'; // sessions
+  const LABEL_FONT_TASK = '600 12px system-ui, "Segoe UI", sans-serif'; // task nodes
+  const LABEL_FONT_TODO = '12px system-ui, "Segoe UI", sans-serif'; // todos
+  const LABEL_FONT_ROOT = '600 11px system-ui, "Segoe UI", sans-serif'; // root
+  const LABEL_FONT_AGENT = '11px system-ui, "Segoe UI", sans-serif'; // the assistant's agents
   const BUILDER_ORBIT = 15; // how far a running builder circles the node it is building
   const BUILDER_FIELD = 78; // and how far out it sits when that work is not on the board
-  const LABEL_MAX_PX = 180; // measureText clamp
+  const LABEL_MAX_PX = 230; // measureText clamp
   const LABEL_CANDIDATES = 60; // most nodes considered per frame
   const LABEL_BUDGET = 40; // most labels drawn per frame
   const LABEL_PAD = 5; // rect padding used for collision tests
-  const LABEL_HEIGHT = 13; // tallest label line box
+  const LABEL_HEIGHT = 16; // tallest label line box
   const LABEL_SLOTS = ["right", "left", "below", "above"];
   const LABEL_CACHE_MAX = 400;
 
@@ -140,6 +140,15 @@
     reactive: readStore("mefiStudio.zenReactive") === "1",
     audioSource: readStore("mefiStudio.zenSource") === "mic" ? "mic" : "desktop",
     bands: { bass: 0, mid: 0, treble: 0 },
+    music: null,
+    spectrumBuffer: null,
+    inputSource: null,
+    inputError: null,
+    inputGeneration: 0,
+    captureArmed: false, // OS capture starts only after an explicit control gesture in this visit.
+    musicUiAt: 0,
+    localAudio: null,
+    mediaElements: new WeakMap(),
     nodes: [],
     edges: [],
     angle: 0.5,
@@ -196,6 +205,8 @@
     labelWidths: new Map(),
     hudRects: [],
     hudRectsAt: 0,
+    graphArea: null,
+    graphAreaAt: 0,
     tipNode: null,
     emptyVariant: null,
     treeStatus: "ok",
@@ -212,6 +223,10 @@
     agentSeq: {},
     feed: [],
     feedDirty: true,
+    backlog: null,
+    backlogReadAt: 0,
+    backlogReadPending: false,
+    backlogRevision: 0,
     feedSeen: new Set(), // autopilot-history keys already mirrored into the feed
     builderSignature: null, // which executor jobs the builder nodes were built from
     // Per-node life-cycle, keyed by node id (task:<id>, builder:<key>): bornAt
@@ -230,6 +245,11 @@
     briefing: null,
     view: readStore("mefiStudio.cmdView") === "2d" ? "2d" : "3d",
     camMode: CAM_MODES.includes(readStore("mefiStudio.cmdCam")) ? readStore("mefiStudio.cmdCam") : "orbit",
+    follow: null,
+    followReadAt: 0,
+    followZoomTarget: null,
+    followStatusKey: "",
+    completedTaskIds: new Set(),
     // Resolves when an enter()'s first tasks+graph build has settled; the
     // boot sequence waits on it before its fade reveals the constellation.
     readyPromise: null,
@@ -272,7 +292,8 @@
       state.bus = state.audio.createGain();
       state.bus.gain.value = 0.9;
       state.analyser = state.audio.createAnalyser();
-      state.analyser.fftSize = 512;
+      state.analyser.fftSize = 2048;
+      state.analyser.smoothingTimeConstant = 0.15;
       state.bus.connect(state.analyser);
       state.analyser.connect(state.audio.destination);
     } catch {
@@ -290,21 +311,39 @@
     // inputStream only lands when the request resolves; inputPending holds the
     // source kind in flight so a same-source caller cannot double-request while
     // a source switch can still supersede a stale pending request.
+    if (!state.reactive || !state.active) return;
     const mic = state.audioSource === "mic";
     const kind = mic ? "mic" : "desktop";
-    if (!state.audio || state.inputStream || state.inputPending === kind) return;
-    const request = mic
-      ? navigator.mediaDevices?.getUserMedia?.({ audio: true })
-      : navigator.mediaDevices?.getDisplayMedia?.({ video: true, audio: true });
-    if (!request) return;
+    // Imported tracks can feed the analyser directly, without a second audio
+    // capture request. Spotify stays external because its frame is isolated.
+    const localElement = !mic ? localMusicElement() : null;
+    if (state.audio && localElement) { useLocalMusicInput(localElement); return; }
+    if (!state.audio || !state.captureArmed || state.inputStream || state.inputPending === kind || state.inputError) return;
+    const generation = ++state.inputGeneration;
+    let request;
+    try {
+      request = mic
+        ? navigator.mediaDevices?.getUserMedia?.({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
+        : navigator.mediaDevices?.getDisplayMedia?.({ video: true, audio: true });
+    } catch (error) {
+      state.inputError = String(error?.message ?? "Audio access unavailable");
+      renderMusicStatus(true);
+      return;
+    }
+    if (!request) {
+      state.inputError = "Audio capture is unavailable in this window";
+      renderMusicStatus(true);
+      return;
+    }
     state.inputPending = kind;
+    renderMusicStatus(true);
     Promise.resolve(request)
       .then((stream) => {
-        if (state.inputPending === kind) state.inputPending = null;
+        if (generation === state.inputGeneration) state.inputPending = null;
         // The request can resolve after the switch went off, after the view
         // was left, or after the source select moved on: hand the device
         // straight back instead of glowing to a source nobody asked for.
-        if (!state.reactive || !state.active || state.audioSource !== kind) {
+        if (generation !== state.inputGeneration || !state.reactive || !state.active || state.audioSource !== kind) {
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
@@ -314,17 +353,33 @@
         if (!mic) stream.getVideoTracks().forEach((track) => track.stop());
         if (!stream.getAudioTracks().length) {
           stream.getTracks().forEach((track) => track.stop());
+          state.inputError = "No audio was shared. Choose a source with audio enabled";
+          renderMusicStatus(true);
           return;
         }
         state.inputStream = stream;
         const source = state.audio.createMediaStreamSource(stream);
         const inputAnalyser = state.audio.createAnalyser();
-        inputAnalyser.fftSize = 512;
+        inputAnalyser.fftSize = 2048;
+        inputAnalyser.smoothingTimeConstant = 0.15;
         source.connect(inputAnalyser);
+        state.inputSource = source;
         state.analyser = inputAnalyser;
+        state.music = null;
+        for (const track of stream.getAudioTracks()) track.addEventListener?.("ended", () => {
+          if (state.inputStream !== stream) return;
+          releaseReactiveInput();
+          state.inputError = "Audio source disconnected. Turn music off and on to reconnect";
+          renderMusicStatus(true);
+        }, { once: true });
+        renderMusicStatus(true);
       })
-      .catch(() => {
-        if (state.inputPending === kind) state.inputPending = null;
+      .catch((error) => {
+        if (generation !== state.inputGeneration) return;
+        state.inputPending = null;
+        if (state.inputStream) releaseReactiveInput();
+        state.inputError = error?.name === "NotAllowedError" ? "Audio access was not allowed. Turn music off and on to try again" : String(error?.message ?? "Audio capture could not start");
+        renderMusicStatus(true);
       });
   }
 
@@ -334,29 +389,116 @@
     useReactiveInput();
   }
 
+  function localMusicElement() {
+    const player = window.MefiMusic?.status?.();
+    if (player?.source !== "local" || !(player.queueLength > 0)) return null;
+    const element = window.MefiMusic?.getAudioElement?.();
+    return element && (element.getAttribute?.("src") || element.src || element.currentSrc) ? element : null;
+  }
+
+  function useLocalMusicInput(element) {
+    if (state.localAudio?.element === element) return true;
+    try {
+      if (state.inputStream || state.inputPending) releaseReactiveInput();
+      let record = state.mediaElements.get(element);
+      if (!record) {
+        const source = state.audio.createMediaElementSource(element);
+        source.connect(state.audio.destination);
+        const analyser = state.audio.createAnalyser();
+        analyser.fftSize = 2048;
+        analyser.smoothingTimeConstant = 0.15;
+        // This output stays connected after leaving Command. Turning off the
+        // visualizer must never mute a track that the player is still playing.
+        record = { element, source, analyser, connected: false };
+        state.mediaElements.set(element, record);
+      }
+      if (!record.connected) { record.source.connect(record.analyser); record.connected = true; }
+      state.localAudio = record;
+      state.analyser = record.analyser;
+      state.inputError = null;
+      state.music = null;
+      renderMusicStatus(true);
+      return true;
+    } catch (error) {
+      state.inputError = String(error?.message ?? "This track could not connect to the visualizer");
+      renderMusicStatus(true);
+      return false;
+    }
+  }
+
   // Stopping the tracks is what clears the OS capture/recording indicator;
   // dropping the handle lets useReactiveInput() acquire again later, and the
   // glow goes back to the bell bus instead of reading a dead analyser.
   function releaseReactiveInput() {
-    if (!state.inputStream) return;
-    state.inputStream.getTracks().forEach((track) => track.stop());
+    state.inputGeneration += 1;
+    state.captureArmed = false;
+    state.inputPending = null;
+    const stream = state.inputStream;
+    const local = state.localAudio;
+    state.localAudio = null;
+    if (local?.connected) { local.source.disconnect(local.analyser); local.connected = false; }
     state.inputStream = null;
+    stream?.getTracks().forEach((track) => track.stop());
+    state.inputSource?.disconnect();
+    state.inputSource = null;
+    state.music = null;
+    state.bands = { bass: 0, mid: 0, treble: 0 };
+    if (!stream && !local) { renderMusicStatus(true); return; }
     if (!state.audio || !state.bus) return;
     state.bus.disconnect();
     state.analyser = state.audio.createAnalyser();
-    state.analyser.fftSize = 512;
+    state.analyser.fftSize = 2048;
+    state.analyser.smoothingTimeConstant = 0.15;
     state.bus.connect(state.analyser);
     state.analyser.connect(state.audio.destination);
+    renderMusicStatus(true);
   }
 
   function setAudioSource(source) {
     const next = source === "mic" ? "mic" : "desktop";
     if (next === state.audioSource) return;
     state.audioSource = next;
+    state.inputError = null;
     writeStore("mefiStudio.zenSource", next);
     if (state.reactive && state.active) {
       releaseReactiveInput();
+      state.captureArmed = true;
       ensureReactiveInput();
+    }
+    renderMusicStatus(true);
+  }
+
+  function setMusicReactive(enabled) {
+    state.reactive = Boolean(enabled);
+    state.captureArmed = state.reactive;
+    state.inputError = null;
+    writeStore("mefiStudio.zenReactive", state.reactive ? "1" : "0");
+    if (el.reactive) el.reactive.checked = state.reactive;
+    if (el.source) el.source.disabled = !state.reactive;
+    if (state.reactive && state.active) ensureReactiveInput();
+    else releaseReactiveInput();
+    renderMusicStatus(true);
+  }
+
+  function renderMusicStatus(force = false) {
+    const now = Date.now();
+    if (!force && now - state.musicUiAt < 100) return;
+    state.musicUiAt = now;
+    const listening = Boolean(state.inputStream || state.localAudio);
+    const source = state.audioSource === "mic" ? "Mic" : state.localAudio ? "Track" : "Music";
+    const text = !state.reactive ? "Music off" : state.inputError ? "Audio unavailable" : state.inputPending ? "Connecting audio…" : listening ? (state.music?.energy > 0.035 ? `${source} linked` : "Listening · quiet") : "Connect audio";
+    if (el.musicStatus) el.musicStatus.textContent = text;
+    if (el.musicToggle) {
+      el.musicToggle.setAttribute("aria-pressed", String(Boolean(state.reactive && (listening || state.inputPending))));
+      el.musicToggle.dataset.state = state.inputError ? "error" : listening ? "listening" : state.inputPending ? "pending" : "off";
+      el.musicToggle.title = state.inputError || (state.reactive && listening ? `Following ${state.audioSource === "mic" ? "microphone" : state.localAudio ? "the Studio player" : "desktop audio"}. Click to stop listening. Change source in Ambience.` : "React to the Studio player or desktop music. Audio stays on this device. Click to connect; change source in Ambience.");
+    }
+    if (el.musicLevel) {
+      el.musicLevel.style.setProperty("--music-level", String(listening && !noMotion() ? state.music?.energy ?? 0 : 0));
+      for (const [index, band] of ["bass", "mid", "treble"].entries()) {
+        const bar = el.musicLevel.children[index];
+        if (bar) bar.style.setProperty("--band-level", String(listening && !noMotion() ? state.bands[band] : 0));
+      }
     }
   }
 
@@ -395,41 +537,72 @@
     }
   }
 
-  // The analyser spectrum is split into bass / mid / treble so the glow can
-  // answer each part of the mix differently: bass swells pulses and nodes,
-  // mids light the work paths, treble makes the starfield shimmer. Bands are
-  // bin slices, not physical Hz — at fftSize 512 each bin is ~94 Hz, so the
-  // first few bins are kick/bass weight and the tail is sparkle.
+  // Pure spectrum response: physical frequency bands keep 44.1/48 kHz inputs
+  // consistent. Fast attacks follow notes, slower releases avoid flicker, and
+  // an adaptive bass onset follows beats without interpreting silence as one.
+  function analyzeMusicSpectrum(buffer, sampleRate, fftSize, previous, now) {
+    const clamp = (value) => Math.max(0, Math.min(1, value));
+    const prior = previous ?? { at: now - 33, bass: 0, mid: 0, treble: 0, energy: 0, beat: 0, bassMean: 0, bassRaw: 0, lastBeat: -1000, peak: 0.3 };
+    const dt = Math.max(1, Math.min(100, now - prior.at));
+    const hzPerBin = (Number(sampleRate) || 48000) / (Number(fftSize) || buffer.length * 2 || 2048);
+    const band = (fromHz, toHz) => {
+      const from = Math.max(1, Math.ceil(fromHz / hzPerBin));
+      const to = Math.min(buffer.length, Math.ceil(toHz / hzPerBin));
+      let squares = 0;
+      let peak = 0;
+      for (let index = from; index < to; index += 1) {
+        const value = clamp((Number(buffer[index]) || 0) / 255);
+        squares += value * value;
+        peak = Math.max(peak, value);
+      }
+      return clamp((Math.sqrt(squares / Math.max(1, to - from)) * 0.7 + peak * 0.3 - 0.04) / 0.96);
+    };
+    const raw = { bass: band(35, 250), mid: band(250, 4000), treble: band(4000, 14000) };
+    const level = raw.bass * 0.5 + raw.mid * 0.35 + raw.treble * 0.15;
+    const peak = Math.max(0.25, level, prior.peak * Math.exp(-dt / 4000));
+    const gain = Math.min(2, 0.8 / peak);
+    const envelope = (old, target, attack = 65, release = 300) => old + (target - old) * (1 - Math.exp(-dt / (target > old ? attack : release)));
+    const bassMean = prior.bassMean + (raw.bass - prior.bassMean) * (1 - Math.exp(-dt / 650));
+    const onset = raw.bass > 0.13 && raw.bass - prior.bassRaw > 0.075 && raw.bass > prior.bassMean * 1.35 + 0.025 && now - prior.lastBeat > 190;
+    return {
+      at: now,
+      bass: envelope(prior.bass, clamp(raw.bass * gain)),
+      mid: envelope(prior.mid, clamp(raw.mid * gain * 1.12)),
+      treble: envelope(prior.treble, clamp(raw.treble * gain * 1.3), 45, 220),
+      energy: envelope(prior.energy, clamp(level * gain), 90, 420),
+      beat: onset ? Math.max(0.45, clamp(raw.bass * gain)) : prior.beat * Math.exp(-dt / 230),
+      bassMean, bassRaw: raw.bass, lastBeat: onset ? now : prior.lastBeat, peak,
+    };
+  }
+
   function audioEnergy() {
-    if (!state.analyser) {
-      state.energy = 0.4;
+    if (!state.analyser || state.reactive && !state.inputStream && !state.localAudio) {
+      state.energy = state.reactive ? 0 : 0.25;
       state.bands.bass = state.bands.mid = state.bands.treble = 0;
+      state.music = null;
+      renderMusicStatus();
       return state.energy;
     }
-    const buffer = new Uint8Array(state.analyser.frequencyBinCount);
-    state.analyser.getByteFrequencyData(buffer);
-    const bins = buffer.length;
-    const band = (from, to) => {
-      let sum = 0;
-      for (let index = from; index < to; index += 1) sum += buffer[index];
-      return sum / Math.max(1, to - from) / 255;
-    };
-    const bassEnd = Math.max(2, Math.ceil(bins * 0.02));
-    const midEnd = Math.max(bassEnd + 1, Math.ceil(bins * 0.25));
-    const bass = band(1, bassEnd);
-    const mid = band(bassEnd, midEnd);
-    const treble = band(midEnd, bins);
-    // Music spectrum falls off with frequency, so each band gets its own gain
-    // to land in the same usable range.
-    state.bands.bass = Math.min(1, bass * 1.6);
-    state.bands.mid = Math.min(1, mid * 2.2);
-    state.bands.treble = Math.min(1, treble * 3);
-    const level = bass * 0.5 + mid * 0.35 + treble * 0.15;
-    state.energy = Math.max(0.15, Math.min(1, level * 2.4));
+    if (state.spectrumBuffer?.length !== state.analyser.frequencyBinCount) state.spectrumBuffer = new Uint8Array(state.analyser.frequencyBinCount);
+    state.analyser.getByteFrequencyData(state.spectrumBuffer);
+    state.music = analyzeMusicSpectrum(state.spectrumBuffer, state.audio?.sampleRate, state.analyser.fftSize, state.music, Date.now());
+    state.bands.bass = state.music.bass;
+    state.bands.mid = state.music.mid;
+    state.bands.treble = state.music.treble;
+    state.energy = state.music.energy;
+    renderMusicStatus();
     return state.energy;
   }
 
   // ---------- layout / projection ----------
+  function visibleGraphSnapshot(snapshot, candidates = snapshot.nodes) {
+    const nodes = candidates.filter((node) => node.kind !== "agent" || node.status === "running");
+    const indices = new Map(nodes.map((node, index) => [node.id, index]));
+    const edges = snapshot.edges.map((edge) => ({ ...edge, a: indices.get(snapshot.nodes[edge.a]?.id), b: indices.get(snapshot.nodes[edge.b]?.id) }))
+      .filter((edge) => edge.a != null && edge.b != null);
+    return { nodes, edges };
+  }
+
   function refreshGraph() {
     const snapshot = window.MefiTree?.snapshot?.();
     if (!snapshot) return;
@@ -448,9 +621,9 @@
     // The finished-sessions cluster is done work like any other: fold it into
     // the root before the graph maps — filtering the snapshot keeps every
     // edge index true.
-    const snapshotNodes = absorbFoldedCluster(snapshot.nodes);
-    state.nodes = snapshotNodes.map((node) => ({ ...node, bx: node.x, by: node.y, bz: node.z }));
-    state.edges = snapshot.edges.map((edge) => ({ ...edge }));
+    const visible = visibleGraphSnapshot(snapshot, absorbFoldedCluster(snapshot.nodes));
+    state.nodes = visible.nodes.map((node) => ({ ...node, bx: node.x, by: node.y, bz: node.z }));
+    state.edges = visible.edges;
     // The tree summary and the autopilot status share this one slot, and both
     // carry a `running` — a roster COUNT in the summary, the list of build jobs
     // in the status. A plain replace let the count win on every rebuild, so
@@ -469,6 +642,7 @@
         rosterQueued: summary.queued,
       };
     }
+    appendMusicNode();
     appendTaskNodes();
     appendDoneHoldNodes();
     appendBuilderNodes();
@@ -510,15 +684,52 @@
     else if (state.camMode === "follow" && state.active) applyCamMode();
   }
 
+  function musicNodeDetails() {
+    const player = window.MefiMusic?.status?.();
+    if (!player) return null;
+    const title = String(player.title || "Music player");
+    return {
+      music: player,
+      label: player.source === "spotify" ? "Spotify · open player" : player.playing ? `Playing · ${title}` : player.queueLength ? `Music · ${title}` : "Music · add tracks",
+      state: player.playing ? "active" : "music",
+    };
+  }
+
+  function appendMusicNode() {
+    const details = musicNodeDetails();
+    if (!details) return;
+    state.nodes.push({ id: "__music__", kind: "music", ...details, r: 7, x: 150, y: -100, z: -65, bx: 150, by: -100, bz: -65 });
+  }
+
+  function syncMusicNode() {
+    const details = musicNodeDetails();
+    const node = state.nodes.find((entry) => entry.kind === "music");
+    if (node && details) Object.assign(node, details);
+    else if (details && state.active) refreshGraph();
+    if (details?.music.playing && state.audio?.state === "suspended") state.audio.resume().catch(() => {});
+    if (!state.reactive || !state.active) return;
+    const element = localMusicElement();
+    if (element && state.audioSource !== "mic") {
+      state.inputError = null;
+      ensureReactiveInput();
+    } else if (state.localAudio) {
+      releaseReactiveInput();
+    }
+    renderMusicStatus(true);
+  }
+
   // Open/active tasks join the constellation: anchored to a matching session
   // when the title overlaps it, otherwise spread on an outer ring. With a long
-  // backlog the graph drowns in task nodes, so only the 12 most recently
-  // updated render — the rest still count in the meta line and the dock pill.
+  // backlog the graph drowns in task nodes. Show active and explicitly pinned
+  // work before the latest tasks; the full board stays available in Tasks.
   function appendTaskNodes() {
     const keys = (text) => new Set((String(text).toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).slice(0, 8));
+    const runningTasks = new Set(autopilotJobs(state.assistant).map((job) => job.taskId).filter(Boolean));
+    const rank = (task) => runningTasks.has(task.id) ? 0 : task.status === "active" ? 1 : task.workPin || task.pinnedAt ? 2 : 3;
     const tasks = [...(state.tasks ?? [])]
-      .sort((a, b) => (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0))
+      .sort((a, b) => rank(a) - rank(b) || (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0))
       .slice(0, 12);
+    const anchorSlots = new Map();
     tasks.forEach((task, index) => {
       const taskKeys = keys(`${task.title} ${task.prompt ?? ""}`);
       let anchor = null;
@@ -537,9 +748,13 @@
       // Unanchored work rides its own outer shell, past the todo rings (which
       // reach ~166 from the root), so the constellation reads in bands:
       // sessions and their todos, then the workbench of loose tasks.
-      const bx = anchor ? anchor.x + Math.cos(ring) * 40 : Math.cos(ring) * 205;
-      const by = anchor ? anchor.y + 46 : 74 + Math.sin(index * 2.1) * 18;
-      const bz = anchor ? anchor.z + Math.sin(ring) * 40 : Math.sin(ring) * 205;
+      const slot = anchor ? anchorSlots.get(anchor.id) ?? 0 : index;
+      if (anchor) anchorSlots.set(anchor.id, slot + 1);
+      const taskAngle = anchor ? slot * 2.399963 : ring;
+      const taskRadius = anchor ? 78 + Math.floor(slot / 4) * 32 : 215;
+      const bx = (anchor?.x ?? 0) + Math.cos(taskAngle) * taskRadius;
+      const by = (anchor?.y ?? 0) + 48 + (slot % 3) * 34;
+      const bz = (anchor?.z ?? 0) + Math.sin(taskAngle) * taskRadius;
       const node = {
         id: `task:${task.id}`,
         kind: "task",
@@ -549,7 +764,7 @@
         // arrow keys and the branch highlight all need it, and `sessionId`
         // must stay "this node belongs to that session".
         anchorSessionId: anchor ? anchor.id : null,
-        color: task.color ?? "#e6c98d",
+        color: task.color ?? null,
         state: task.status === "active" ? "active" : "task",
         r: 7,
         x: bx,
@@ -810,7 +1025,7 @@
         label: task?.title ?? "task",
         task,
         anchorSessionId: fx.anchorId ?? null,
-        color: task?.color ?? "#e6c98d",
+        color: task?.color ?? null,
         state: "done",
         doneHold: true,
         r: 7,
@@ -1004,6 +1219,7 @@
     }
     state.tasksSeeded = true;
     state.tasks = open;
+    state.completedTaskIds = new Set(all.filter((task) => task.status === "done" || task.status === "archived").map((task) => task.id));
   }
 
   const read = (method) => window.MefiBoot?.read ? window.MefiBoot.read(method) : Promise.resolve().then(() => window.mefiStudio?.[method]?.());
@@ -1181,6 +1397,25 @@
     container.scrollTop = pinned ? container.scrollHeight : top;
   }
 
+  function commandChatActivity(full, jobs = [], backlog = null) {
+    const active = (Array.isArray(full?.agents) ? full.agents : []).filter((agent) => agent?.status === "running");
+    const agents = active.length;
+    const builds = jobs.length;
+    const paused = full?.status === "paused" || backlog?.paused;
+    const review = Number(backlog?.counts?.review) || 0;
+    const parts = [];
+    if (agents) parts.push(`${agents} agent${agents === 1 ? "" : "s"}`);
+    if (builds) parts.push(`${builds} build${builds === 1 ? "" : "s"}`);
+    const line = parts.join(" · ") || (paused ? "Paused" : review ? `${review} awaiting verification` : backlog?.waiting ? "Waiting" : "Idle");
+    const detail = [
+      ...active.map((agent) => `${agent.role || "Agent"}: ${agent.text || "working"}`),
+      ...jobs.map((job) => `Build: ${job.title || "Untitled task"}`),
+      paused ? "New scheduling is paused; current work can finish." : backlog?.waiting,
+      review ? `${review} finished attempt${review === 1 ? " is" : "s are"} awaiting verification.` : "",
+    ].filter(Boolean).join("\n");
+    return { agents, builds, running: agents + builds, line, detail };
+  }
+
   // The right-side chat log: the thread, the quick asks and a composer docked
   // beside the node card, so the assistant's side of every exchange — every
   // task ask, every "work on it", every reply — stays on screen while the
@@ -1190,20 +1425,21 @@
     const full = assistantFull();
     const summary = assistantSummary();
     const bridge = Boolean(window.mefiStudio?.assistantMessage);
-    const agents = (Array.isArray(full?.agents) ? full.agents : []).filter((agent) => agent?.status === "running").length;
-    const builders = autopilotJobs(state.assistant).length;
-    const running = agents + builders;
+    const activity = commandChatActivity(full, autopilotJobs(state.assistant), state.backlog);
+    const running = activity.running;
     el.chatLog.dataset.running = String(running);
+    el.chatLog.dataset.agents = String(activity.agents);
+    el.chatLog.dataset.builds = String(activity.builds);
     if (el.chatLogState) {
-      // Collapsed header keeps this line, so the tab itself shows how many
-      // agents are in flight (roster + executor) instead of hiding behind +.
-      const line = !bridge ? "desktop app only" : full?.status === "paused" ? "paused" : running ? `${running} running` : summary.sublabel ?? "idle";
+      // Service agents and code builds are different kinds of concurrent
+      // work. Keep both counts visible rather than collapsing them to one.
+      const line = !bridge ? "desktop app only" : activity.line;
       el.chatLogState.textContent = line;
-      el.chatLogState.title = summary.detail ?? line;
+      el.chatLogState.title = activity.detail || summary.detail || line;
     }
     if (el.chatLogDot) {
       el.chatLogDot.dataset.state =
-        full?.status === "paused" ? "" : running ? "running" : summary.tone === "warn" || summary.tone === "offline" ? "bad" : "running";
+        running ? "running" : summary.tone === "warn" || summary.tone === "offline" ? "bad" : "off";
     }
     fillThread(el.chatLogThread, full);
     if (el.chatLogInput) {
@@ -1303,30 +1539,127 @@
   }
   const matchesIdSet = (node, ids) => Boolean(node) && ids.size > 0 && (ids.has(String(node.id ?? "")) || ids.has(String(node.sessionId ?? "")) || ids.has(String(node.task?.id ?? "")));
 
-  // Where the work currently sits, for follow camera: the newest executor
-  // job's node — the opencode session it spawned or the task it is building —
-  // or, with nothing in flight, the session the activity stream touched last.
-  // Null when the board is quiet, so the camera holds instead of wandering.
-  function workNode() {
-    const jobs = autopilotJobs(state.assistant);
-    for (let index = jobs.length - 1; index >= 0; index -= 1) {
-      const job = jobs[index];
-      const node =
-        nodeForSession(job.sessionId) ??
-        state.nodes.find((entry) => entry.kind === "task" && (entry.id === `task:${job.taskId}` || entry.task?.id === job.taskId));
-      if (node) return node;
+  // Follow resolves the actual worker's task before its session. Activity can
+  // move attention between workers, but never redirects it to an unrelated
+  // maintenance session merely because that session reported most recently.
+  function followCandidates(nodes, jobs, touches, now, completedTaskIds = new Set()) {
+    const candidates = [];
+    const seen = new Set();
+    const at = (id) => id ? Number(touches.get(id)?.at) || 0 : 0;
+    for (const job of jobs) {
+      if (job.taskId && completedTaskIds.has(job.taskId)) continue;
+      const task = nodes.find((node) => node.kind === "task" && (job.taskId && (node.task?.id === job.taskId || node.id === `task:${job.taskId}`) || job.sessionId && node.task?.run?.sessionId === job.sessionId));
+      if (task && (task.dying || ["done", "archived"].includes(task.task?.status))) continue;
+      const session = job.sessionId ? nodes.find((node) => node.kind === "session" && (node.id === job.sessionId || node.sessionId === job.sessionId)) : null;
+      const builder = nodes.find((node) => node.builder && !node.dying && (job.taskId && node.job?.taskId === job.taskId || job.sessionId && node.job?.sessionId === job.sessionId || !job.taskId && !job.sessionId && node.job === job));
+      const node = task ?? session ?? builder;
+      if (!node || seen.has(node.id)) continue;
+      seen.add(node.id);
+      const todo = session ? nodes.find((entry) => entry.kind === "todo" && entry.sessionId === session.id && (entry.status === "in_progress" || entry.state === "active")) : null;
+      const context = [node, session, todo].filter((entry, index, list) => entry && !entry.dying && list.indexOf(entry) === index);
+      candidates.push({
+        key: node.id, node, context,
+        title: task?.task?.title ?? job.title ?? node.label ?? "Current task",
+        sessionId: session?.id ?? job.sessionId ?? null,
+        taskId: task?.task?.id ?? job.taskId ?? null,
+        activityAt: Math.max(at(node.id), at(task?.task?.id), at(job.sessionId)),
+        startedAt: Number(job.startedAt) || 0,
+        pinned: Boolean(task?.task?.workPin || task?.task?.pinnedAt),
+        stage: job.phase === "verifying" || job.stage === "verifying" ? "Verifying" : todo?.label ? String(todo.label) : "Working",
+      });
     }
-    let best = null;
-    let bestAt = -1;
-    for (const node of state.nodes) {
-      if (node.kind !== "session") continue;
-      const at = state.touches.get(node.sessionId)?.at ?? 0;
-      if (at > bestAt) {
-        bestAt = at;
-        best = node;
+    if (!candidates.length && !jobs.length) {
+      const recent = nodes.filter((node) => node.kind === "session" && !node.dying && now - at(node.id) < 90000 && at(node.id) > 0)
+        .sort((a, b) => at(b.id) - at(a.id))[0];
+      if (recent) candidates.push({ key: recent.id, node: recent, context: [recent], title: recent.label, activityAt: at(recent.id), startedAt: 0, stage: "Recent activity", sessionId: recent.id, taskId: null });
+    }
+    return candidates.sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.activityAt - a.activityAt || a.startedAt - b.startedAt || a.key.localeCompare(b.key));
+  }
+
+  function chooseFollowTarget(candidates, previous, now, { reducedMotion = false, preferredId = null } = {}) {
+    if (!candidates.length) return null;
+    const current = candidates.find((candidate) => candidate.key === previous?.key);
+    const selected = !previous && preferredId ? candidates.find((candidate) => candidate.context.some((node) => node.id === preferredId)) : null;
+    let target = current ?? selected ?? candidates[0];
+    let reason = current ? previous.reason : previous ? "Next active task" : selected ? "Selected task" : target.pinned ? "Prioritized task" : "Active task";
+    const dwell = now - (previous?.since ?? now);
+    if (current && candidates.length > 1 && dwell >= 8000) {
+      const fresh = candidates.find((candidate) => candidate.key !== current.key && candidate.activityAt > Math.max(current.activityAt + 1000, previous.since));
+      if (fresh) { target = fresh; reason = "Latest work activity"; }
+      else if (!reducedMotion && dwell >= 18000 && !current.pinned) {
+        const stable = [...candidates].sort((a, b) => a.startedAt - b.startedAt || a.key.localeCompare(b.key));
+        target = stable[(stable.findIndex((candidate) => candidate.key === current.key) + 1) % stable.length];
+        reason = "Next active worker";
       }
     }
-    return best;
+    return { ...target, since: target.key === previous?.key ? previous.since : now, reason };
+  }
+
+  // Fit stable task/session/todo anchors. Orbiting worker positions are omitted
+  // from the bounds, so their animation cannot pump the camera's zoom.
+  function followFrame(target, area, { view, angle, pitch, fit }) {
+    const points = target.context.length ? target.context : [target.node];
+    const bounds = (axis) => [Math.min(...points.map((node) => node[axis] || 0)), Math.max(...points.map((node) => node[axis] || 0))];
+    const center = {};
+    for (const axis of ["x", "y", "z"]) {
+      const [low, high] = bounds(axis);
+      center[axis] = (target.node[axis] || 0) * 0.6 + (low + high) * 0.2;
+    }
+    let reachX = 48;
+    let reachY = 38;
+    const tilt = Math.sin(angle * 0.37) * 0.35 + pitch;
+    for (const node of points) {
+      const x = (node.x || 0) - center.x;
+      const y = (node.y || 0) - center.y;
+      const z = (node.z || 0) - center.z;
+      const rx = view === "2d" ? x : x * Math.cos(angle) - z * Math.sin(angle);
+      const ry = view === "2d" ? z : y * Math.cos(tilt) - (x * Math.sin(angle) + z * Math.cos(angle)) * Math.sin(tilt) * 0.4;
+      reachX = Math.max(reachX, Math.abs(rx) + 26);
+      reachY = Math.max(reachY, Math.abs(ry) + 26);
+    }
+    const scale = Math.min(Math.max(100, area.w - 180) / (reachX * 2.5), Math.max(90, area.h - 120) / (reachY * 2.5));
+    return { x: -center.x, y: -center.y, z: -center.z, zoom: Math.max(0.65, Math.min(2.35, scale / Math.max(0.1, fit))) };
+  }
+
+  function updateFollowCamera(now = Date.now(), force = false) {
+    if (!state.active || state.camMode !== "follow" || state.panning || state.rotating) return;
+    if (!force && now - state.followReadAt < 250) return;
+    state.followReadAt = now;
+    const candidates = followCandidates(state.nodes, autopilotJobs(state.assistant), state.touches, now, state.completedTaskIds);
+    const next = chooseFollowTarget(candidates, state.follow, now, { reducedMotion: noMotion(), preferredId: state.selected?.id });
+    state.follow = next;
+    if (next) {
+      const frame = followFrame(next, usableArea(), state);
+      state.camera.tx = frame.x;
+      state.camera.ty = frame.y;
+      state.camera.tz = frame.z;
+      if (state.followZoomTarget == null || Math.abs(frame.zoom - state.followZoomTarget) > 0.055) state.followZoomTarget = frame.zoom;
+      if (noMotion()) {
+        state.camera.x = frame.x; state.camera.y = frame.y; state.camera.z = frame.z;
+        setZoom(state.followZoomTarget);
+      }
+    } else state.followZoomTarget = null;
+    renderFollowStatus();
+  }
+
+  function renderFollowStatus() {
+    const active = state.camMode === "follow";
+    const title = state.follow?.title ?? "Waiting for active work";
+    const stage = state.follow?.stage ?? "Camera holds while the board is quiet";
+    const key = `${active}|${title}|${stage}|${state.follow?.reason ?? ""}`;
+    if (key === state.followStatusKey) return;
+    state.followStatusKey = key;
+    if (el.followStatus) {
+      el.followStatus.hidden = !active;
+      el.followStatus.textContent = `${title} · ${stage}`;
+      el.followStatus.title = state.follow?.reason ?? stage;
+    }
+    if (el.camFollowBtn) el.camFollowBtn.title = active ? `Following ${title} · ${stage}. ${state.follow?.reason ?? "Waiting for actual activity"}. Click to hold this view.` : "Follow active tasks and their current work (C)";
+    if (active) renderHint();
+  }
+
+  function workNode() {
+    return followCandidates(state.nodes, autopilotJobs(state.assistant), state.touches, Date.now(), state.completedTaskIds)[0]?.node ?? null;
   }
 
   function refreshAssistantCache() {
@@ -1771,20 +2104,26 @@
     else if (state.selected?.kind === "assistant") text = "Enter sends · ↓ focuses the composer · Esc clears";
     else if (state.selected?.kind === "folded") text = "Enter lists them in the Explorer · ← → sessions · Esc clears";
     else if (state.selected) text = "Enter opens it in the Explorer · ↑ ↓ move · Esc clears";
-    else if (state.camMode === "follow") text = "following the current work · C cycles camera modes · F fits";
+    else if (state.camMode === "follow") text = state.follow ? `Following ${state.follow.title} · drag or zoom to hold your own view` : "Waiting for active work · the camera holds here";
     else if (state.orbit === "paused") text = "orbit paused · Space resumes · click a node · F fits";
     el.hint.textContent = text;
   }
 
-  // The A-Eyes feed docks on the left; nudge the constellation right so it does
-  // not slide under the panel. Half the panel width (~170 px) reads centered.
+  // The graph lives in the space left by the actual panels, including shorter
+  // windows and an expanded conversation. Cache measurements between frames.
   function feedVisible() {
     // offsetWidth collapses to 0 when the ≤900px media query hides the panel
     return state.active && !!el.feed && !el.feed.hidden && el.feed.offsetWidth > 0;
   }
 
   function centerX() {
-    return el.width / 2 + (feedVisible() ? 170 : 0);
+    const area = usableArea();
+    return area.x + area.w / 2;
+  }
+
+  function centerY() {
+    const area = usableArea();
+    return area.y + area.h / 2;
   }
 
   function project(node) {
@@ -1793,7 +2132,7 @@
       // flat top-down map: x → screen x, z → screen y, no rotation or depth
       return {
         x: centerX() + (node.x + state.camera.x) * scale,
-        y: el.height / 2 + (node.z + state.camera.z) * scale,
+        y: centerY() + (node.z + state.camera.z) * scale,
         k: 1,
         depth: 500,
       };
@@ -1813,12 +2152,41 @@
     const distance = 900 * Math.max(1, scale / 1.6);
     const raw = rz + distance;
     const k = distance / Math.max(distance * 0.2, raw);
-    return { x: centerX() + rx * k, y: el.height / 2 + ry * k, k, depth: (raw * 900) / distance };
+    return { x: centerX() + rx * k, y: centerY() + ry * k, k, depth: (raw * 900) / distance };
   }
 
   // The HUD owns the top and bottom strips; fit against what is left.
   function usableArea() {
-    return { w: Math.max(240, el.width - 40), h: Math.max(240, el.height - 160) };
+    const now = Date.now();
+    if (state.graphArea && now - state.graphAreaAt < 250) return state.graphArea;
+    const visibleBox = (node) => {
+      if (!node || node.hidden) return null;
+      const box = node.getBoundingClientRect();
+      return box.width > 0 && box.height > 0 ? box : null;
+    };
+    let left = 28;
+    let right = el.width - 28;
+    let top = 110;
+    let bottom = el.height - 86;
+    const header = visibleBox(el.top);
+    const dock = visibleBox(el.bottom);
+    const feed = visibleBox(el.feed);
+    const chat = state.chatLogOpen ? visibleBox(el.chatLog) : null;
+    if (header) top = Math.max(top, header.bottom + 20);
+    if (dock) bottom = Math.min(bottom, dock.top - 24);
+    if (feed && feed.left < el.width / 2) left = Math.max(left, feed.right + 28);
+    if (chat && chat.left > el.width / 2) right = Math.min(right, chat.left - 28);
+    // At compact widths CSS can put the feed above the map. Only reserve a
+    // side panel if it leaves enough room for an actual interactive graph.
+    if (right - left < 220) {
+      left = 24;
+      right = el.width - 24;
+      if (feed && feed.height < el.height * 0.48) top = Math.max(top, feed.bottom + 20);
+    }
+    if (bottom - top < 160) top = Math.max(20, bottom - 160);
+    state.graphArea = { x: left, y: top, w: Math.max(160, right - left), h: Math.max(160, bottom - top) };
+    state.graphAreaAt = now;
+    return state.graphArea;
   }
 
   function autoFit() {
@@ -1841,9 +2209,11 @@
     }
     const area = usableArea();
     // 1.3: perspective magnifies the near side (k up to ~1.25) and halos need air.
-    const fitX = area.w / (reach * 2 * 1.3);
-    const fitY = area.h / (maxY * 2 * 1.6);
-    state.fit = Math.max(0.7, Math.min(2.4, Math.min(fitX, fitY)));
+    const fitX = Math.max(120, area.w - 96) / (reach * 2 * 1.3);
+    const fitY = Math.max(100, area.h - 60) / (maxY * 2 * 1.6);
+    const visibleScale = state.fit * state.zoom;
+    state.fit = Math.max(0.24, Math.min(2.4, Math.min(fitX, fitY)));
+    if (state.camMode === "follow") state.zoom = Math.max(0.45, Math.min(2.6, visibleScale / state.fit));
   }
 
   function setZoom(value) {
@@ -1872,6 +2242,7 @@
   }
 
   function colorOf(node) {
+    if (node.kind === "music") return NODE_RGB.warm;
     if (node.kind === "assistant") return NODE_RGB.assistant;
     if (node.kind === "folded") return NODE_RGB.done;
     if (node.kind === "agent") {
@@ -1885,6 +2256,7 @@
     if (node.state === "stale") return NODE_RGB.stale;
     if (node.state === "done") return NODE_RGB.done;
     if (node.state === "active") return NODE_RGB.warm;
+    if (node.kind === "task") return NODE_RGB.task;
     if (node.kind === "todo") return NODE_RGB.pending;
     return NODE_RGB.session;
   }
@@ -1924,6 +2296,27 @@
     const value = String(hex).replace("#", "");
     const int = parseInt(value.length === 3 ? value.split("").map((char) => char + char).join("") : value, 16);
     return [(int >> 16) & 255, (int >> 8) & 255, int & 255];
+  }
+
+  function syncGraphTheme() {
+    const style = window.getComputedStyle?.(document.documentElement);
+    if (!style) return;
+    const color = (name, fallback) => {
+      const value = style.getPropertyValue(name).trim();
+      return /^#[\da-f]{3}(?:[\da-f]{3})?$/i.test(value) ? hexToRgb(value) : fallback;
+    };
+    NODE_RGB.warm = color("--gold-bright", NODE_RGB.warm);
+    NODE_RGB.task = [...NODE_RGB.warm];
+    NODE_RGB.assistant = [...NODE_RGB.warm];
+    NODE_RGB.session = color("--ivory", NODE_RGB.session);
+    NODE_RGB.pending = color("--muted", NODE_RGB.pending);
+    NODE_RGB.stale = color("--dim", NODE_RGB.stale);
+    state.canvasAccent = NODE_RGB.warm.join(",");
+    for (const key of ["active", "task", "checkpoint", "focus", "assistant"]) {
+      const entry = LEGEND.find((item) => item.key === key);
+      if (entry) entry.sw = rgb(NODE_RGB.warm);
+      el.legendList?.querySelector(`[data-sw="${key}"]`)?.style.setProperty("--sw", rgb(NODE_RGB.warm));
+    }
   }
 
   // The role colours live in the tree's palette (window.MefiTree.agentColor) so
@@ -2137,6 +2530,116 @@
     return { fix: "FIX", collision: "COLLIDE", duplicate: "DUP", improver: "IMPROVE", grow: "GROW", expand: "EXPAND", audit: "AUDIT" }[source] ?? "REQ";
   }
 
+  // Readiness comes from the same scheduler snapshot as the board. Reading it
+  // is observational: opening Command never starts or reprioritizes a job.
+  async function refreshCommandBacklog() {
+    if (!state.active || !window.mefiStudio?.backlogStatus || state.backlogReadPending || Date.now() - state.backlogReadAt < 3500) return;
+    const revision = state.backlogRevision;
+    state.backlogReadPending = true;
+    state.backlogReadAt = Date.now();
+    try {
+      const result = await window.mefiStudio.backlogStatus();
+      if (revision !== state.backlogRevision) return;
+      state.backlog = result?.ok ? result : null;
+    } catch {
+      if (revision === state.backlogRevision) state.backlog = null;
+    } finally {
+      state.backlogReadPending = false;
+      state.feedDirty = true;
+      if (state.active) renderFeed();
+    }
+  }
+
+  function elapsedLabel(at, now = Date.now()) {
+    if (!Number.isFinite(Number(at)) || Number(at) <= 0) return "Time unavailable";
+    const seconds = Math.max(0, Math.floor((now - Number(at)) / 1000));
+    if (seconds < 60) return `${seconds}s elapsed`;
+    const minutes = Math.floor(seconds / 60);
+    return minutes < 60 ? `${minutes}m ${seconds % 60}s elapsed` : `${Math.floor(minutes / 60)}h ${minutes % 60}m elapsed`;
+  }
+
+  function commandJobDetail(job, nodes = []) {
+    const current = job.sessionId && nodes.find((node) => node.kind === "todo" && node.sessionId === job.sessionId && node.status === "in_progress");
+    const progress = typeof job.progress === "number" && Number.isFinite(job.progress) ? Math.max(0, Math.min(1, job.progress)) : null;
+    return {
+      title: String(job.title || "Untitled task"),
+      stage: current?.label ? String(current.label) : progress === 1 ? "Reported steps complete · finishing the run" : "Worker is running · waiting for its next update",
+      progress,
+      elapsed: elapsedLabel(job.startedAt),
+    };
+  }
+
+  function commandQueue(assistant, requests, backlog) {
+    const jobs = autopilotJobs(assistant);
+    const runningTitles = new Set(jobs.map((job) => String(job.title ?? "").trim().toLowerCase()).filter(Boolean));
+    if (Array.isArray(backlog?.next)) return backlog.next.filter((item) => !runningTitles.has(String(item.title ?? "").trim().toLowerCase()));
+    return (Array.isArray(requests) ? requests : []).filter((request) => request &&
+      (!request.status || ["open", "pending", "queued"].includes(request.status)) &&
+      !runningTitles.has(String(request.title ?? request.prompt ?? "").trim().toLowerCase())
+    ).map((request) => ({ ...request, kind: "request", stage: "queued", title: request.title || request.prompt || "Queued request" }));
+  }
+
+  function currentWorkCard(job) {
+    const detail = commandJobDetail(job, state.nodes);
+    const card = document.createElement("article");
+    card.className = "feed-current-card";
+    const head = document.createElement("div");
+    head.className = "feed-current-head";
+    const badge = document.createElement("span");
+    badge.className = "feed-current-label";
+    badge.textContent = "Working now";
+    const time = document.createElement("span");
+    time.className = "feed-current-time";
+    time.textContent = detail.elapsed;
+    state.currentJobTimes.push({ element: time, startedAt: job.startedAt });
+    head.append(badge, time);
+    const title = document.createElement(job.taskId || job.sessionId ? "button" : "strong");
+    title.className = "feed-current-title";
+    title.textContent = detail.title;
+    if (job.taskId) title.addEventListener("click", () => nav("tasks", { taskId: job.taskId, filter: "all" }));
+    else if (job.sessionId) title.addEventListener("click", () => nav("explorer", { sessionId: job.sessionId }));
+    const stage = document.createElement("p");
+    stage.className = "feed-current-stage";
+    stage.textContent = detail.stage;
+    card.append(head, title, stage);
+    if (detail.progress != null) {
+      const progress = document.createElement("progress");
+      progress.className = "feed-current-progress";
+      progress.max = 1;
+      progress.value = detail.progress;
+      progress.setAttribute("aria-label", "Worker-reported steps completed");
+      const caption = document.createElement("span");
+      caption.className = "feed-progress-caption";
+      caption.textContent = `${Math.round(detail.progress * 100)}% of reported steps · verification follows`;
+      card.append(progress, caption);
+    }
+    return card;
+  }
+
+  function renderParallelControl() {
+    if (!el.feedParallel) return;
+    const known = Number.isFinite(Number(state.assistant?.parallel)) && Number(state.assistant.parallel) >= 1;
+    el.feedParallel.disabled = Boolean(state.parallelSaving) || !known || !window.mefiStudio?.assistantAutopilot;
+    if (!state.parallelSaving) el.feedParallel.value = String(Math.max(1, Math.min(3, Math.round(Number(state.assistant?.parallel) || 2))));
+    el.feedParallel.setAttribute("aria-busy", String(Boolean(state.parallelSaving)));
+  }
+
+  async function changeBuildParallel(value) {
+    if (state.parallelSaving) return false;
+    const parallel = Number(value);
+    if (!Number.isInteger(parallel) || parallel < 1 || parallel > 3) { renderParallelControl(); return false; }
+    state.parallelSaving = true;
+    renderParallelControl();
+    try {
+      // Choosing capacity never turns scheduling on or changes a pause.
+      const result = await autopilotPrefs({ parallel }, "Parallel builds");
+      return Boolean(result);
+    } finally {
+      state.parallelSaving = false;
+      renderParallelControl();
+    }
+  }
+
   function renderFeed() {
     if (!el.feed || !state.feedDirty) return;
     state.feedDirty = false;
@@ -2146,6 +2649,8 @@
     const jobs = autopilotJobs(assistant);
     const enabled = Boolean(assistant?.enabled);
     const recentPass = Boolean(assistant?.lastPassAt) && Date.now() - assistant.lastPassAt < 10 * 60 * 1000;
+    refreshCommandBacklog();
+    renderParallelControl();
 
     let dot = "off";
     let text = "…";
@@ -2177,77 +2682,108 @@
     if (el.feedDot) el.feedDot.dataset.state = dot;
     if (el.feedState) el.feedState.textContent = text;
 
-    if (el.feedNow) {
-      let nowText;
-      if (jobs.length) {
-        const oldest = jobs.reduce((min, job) => Math.min(min, job.startedAt ?? Date.now()), Date.now());
-        const elapsed = Math.max(0, Date.now() - oldest);
-        const minutes = Math.floor(elapsed / 60000);
-        const titles = jobs.slice(0, 2).map((job) => job.title ?? "task").join(" · ");
-        nowText = `running${jobs.length > 1 ? ` ×${jobs.length}` : ""}: ${titles}${jobs.length > 2 ? ` +${jobs.length - 2}` : ""} · ${minutes >= 1 ? `${minutes}m` : `${Math.floor(elapsed / 1000)}s`}`;
-      } else {
-        nowText = assistant?.history?.[0]?.text
-          ?? assistant?.lastError
-          ?? state.briefing?.summary
-          ?? (state.feed.length ? feedLine(state.feed[0]) : null)
-          ?? (bridge ? "watching for activity" : "the feed needs the desktop app");
+    const activeAgent = (full?.agents ?? []).find((agent) => agent?.status === "running");
+    const workSignature = JSON.stringify(jobs.length
+      ? jobs.map((job) => { const detail = commandJobDetail(job, state.nodes); return [job.taskId, job.sessionId, job.startedAt, detail.title, detail.stage, detail.progress]; })
+      : [activeAgent?.role, activeAgent?.text, assistant?.execute, full?.status, state.backlog?.waiting, state.backlog?.summary, assistant?.waiting, assistant?.lastError, bridge]);
+    if (el.feedNow && state.currentWorkSignature !== workSignature) {
+      state.currentWorkSignature = workSignature;
+      state.currentJobTimes = [];
+      el.feedNow.textContent = "";
+      for (const job of jobs) el.feedNow.append(currentWorkCard(job));
+      if (!jobs.length) {
+        const card = document.createElement("article");
+        card.className = "feed-current-card quiet";
+        const label = document.createElement("span");
+        label.className = "feed-current-label";
+        label.textContent = activeAgent ? "Assistant activity" : "Current work";
+        const title = document.createElement("strong");
+        title.className = "feed-current-title";
+        title.textContent = activeAgent ? `${activeAgent.role} is working` : assistant?.execute === false || full?.status === "paused" ? "New work is paused" : "No worker running";
+        const note = document.createElement("p");
+        note.className = "feed-current-note";
+        note.textContent = activeAgent?.text || state.backlog?.waiting || state.backlog?.summary || assistant?.waiting || assistant?.lastError || (bridge ? "Watching the queue for the next task." : "Live work is available in the desktop app.");
+        card.append(label, title, note);
+        el.feedNow.append(card);
       }
-      el.feedNow.textContent = String(nowText);
-      el.feedNow.title = String(nowText);
+    }
+    // Frequent log pushes should update the clock without replacing a
+    // focused task-details button underneath the reader.
+    for (const clock of state.currentJobTimes ?? []) clock.element.textContent = elapsedLabel(clock.startedAt);
+
+    const metricSignature = JSON.stringify(state.backlog?.counts ?? null);
+    if (el.feedMetrics && state.feedMetricSignature !== metricSignature) {
+      state.feedMetricSignature = metricSignature;
+      el.feedMetrics.textContent = "";
+      const counts = state.backlog?.counts;
+      if (counts) {
+        for (const [kind, value, label, filter] of [["ready", counts.ready, "Ready", "open"], ["review", counts.review, "Verifying", "review"], ["blocked", (counts.blocked ?? 0) + (counts.waiting ?? 0) + (counts.cooling ?? 0), "Waiting", "all"]]) {
+          const metric = document.createElement("button");
+          metric.className = "feed-metric";
+          metric.dataset.state = kind;
+          const number = document.createElement("strong");
+          number.textContent = String(value ?? 0);
+          const name = document.createElement("span");
+          name.textContent = label;
+          metric.append(number, name);
+          metric.title = kind === "blocked" ? "Open the board to inspect prerequisites, retry holds and blocked tasks" : "Open the task board";
+          metric.addEventListener("click", () => nav("tasks", { filter }));
+          el.feedMetrics.append(metric);
+        }
+      }
+      el.feedMetrics.hidden = !counts;
     }
 
-    if (el.feedQueue || el.feedDrop) {
-      const queueRow = (tagText, tagClass, title, hint) => {
+    const queued = commandQueue(assistant, state.requests, state.backlog);
+    const nextCount = state.backlog?.counts?.ready ?? queued.length;
+    const queueSignature = JSON.stringify([queued, nextCount, state.feedMenuOpen, Boolean(state.backlog)]);
+    if ((el.feedQueue || el.feedDrop) && state.feedQueueSignature !== queueSignature) {
+      state.feedQueueSignature = queueSignature;
+      const queueRow = (item, index) => {
         const li = document.createElement("li");
         const tag = document.createElement("span");
-        tag.className = tagClass;
-        tag.textContent = tagText;
-        const name = document.createElement("span");
+        tag.className = "feed-queue-rank";
+        tag.textContent = String(index + 1).padStart(2, "0");
+        const name = document.createElement("button");
         name.className = "qt";
-        name.textContent = title;
-        li.title = hint;
+        name.textContent = item.title;
+        name.addEventListener("click", () => item.kind === "task" ? nav("tasks", { taskId: item.id, filter: "all" }) : nav("explorer", { assistant: true }));
+        li.title = item.reason || item.prompt || item.title;
+        li.dataset.kind = item.kind;
         li.append(tag, name);
         return li;
       };
-      // Jobs in flight stay visible at the top of the queue — they are still
-      // queued work, just already claimed.
-      const jobRow = (job) => queueRow("RUNNING", "src-tag running-chip", job.title ?? "task", job.title ?? "");
-      const reqRow = (request) => queueRow(requestTag(request.source), `src-tag ${request.source ?? "manual"}`, request.title ?? request.prompt ?? "request", request.prompt ?? request.title ?? "");
-      const runningTitles = new Set(jobs.map((job) => String(job.title ?? "").trim().toLowerCase()).filter(Boolean));
-      const queued = state.requests.filter(
-        (request) =>
-          request &&
-          request.status !== "running" &&
-          request.status !== "done" &&
-          !runningTitles.has(String(request.title ?? request.prompt ?? "").trim().toLowerCase())
-      );
+      if (el.feedQueueCount) el.feedQueueCount.textContent = String(nextCount);
+      if (el.feedMenu) {
+        el.feedMenu.hidden = queued.length <= 3;
+        el.feedMenu.textContent = state.feedMenuOpen ? "Show less" : `Show ${Math.min(5, queued.length - 3)} more`;
+      }
       if (el.feedQueue) {
         el.feedQueue.textContent = "";
-        for (const job of jobs) el.feedQueue.append(jobRow(job));
-        for (const request of queued.slice(0, 4)) el.feedQueue.append(reqRow(request));
-        if (queued.length > 4) {
+        for (const [index, item] of queued.slice(0, 3).entries()) el.feedQueue.append(queueRow(item, index));
+        if (!queued.length) {
           const li = document.createElement("li");
           li.className = "more";
-          const link = document.createElement("button");
-          link.className = "more-link";
-          link.textContent = `${queued.length - 4} more queued`;
-          link.title = "Show the full queue";
-          link.addEventListener("click", () => setFeedMenu(true));
-          li.append(link);
+          li.textContent = state.backlog ? "No ready tasks waiting" : "No requests waiting";
           el.feedQueue.append(li);
         }
       }
       if (el.feedDrop) {
-        // The header dropdown lists every queued request, not the rail's cap.
+        // The disclosure continues the list; it never repeats running work
+        // or the three entries already visible above it.
         el.feedDrop.textContent = "";
-        for (const job of jobs) el.feedDrop.append(jobRow(job));
-        for (const request of queued) el.feedDrop.append(reqRow(request));
-        if (!jobs.length && !queued.length) {
+        for (const [index, item] of queued.slice(3, 8).entries()) el.feedDrop.append(queueRow(item, index + 3));
+        if (nextCount > 8) {
           const li = document.createElement("li");
           li.className = "more";
-          li.textContent = "queue empty";
+          const link = document.createElement("button");
+          link.className = "more-link";
+          link.textContent = "Open full task board";
+          link.addEventListener("click", () => nav("tasks", { filter: "all" }));
+          li.append(link);
           el.feedDrop.append(li);
         }
+        el.feedDrop.hidden = !state.feedMenuOpen || queued.length <= 3;
       }
     }
 
@@ -2258,6 +2794,12 @@
       const roster = (Array.isArray(full?.agents) ? full.agents : [])
         .slice()
         .sort((a, b) => (rank[a?.status] ?? 5) - (rank[b?.status] ?? 5));
+      if (el.feedAgentsCount) {
+        const active = roster.filter((agent) => agent?.status === "running").length;
+        const problems = roster.filter((agent) => agent?.status === "error").length;
+        el.feedAgentsCount.textContent = problems ? `${problems} need attention` : active ? `${active} working` : "Quiet";
+        el.feedAgentsCount.dataset.state = problems ? "error" : active ? "running" : "idle";
+      }
       el.feedAgents.textContent = "";
       el.feedAgents.hidden = !roster.length;
       for (const agent of roster) {
@@ -2273,10 +2815,10 @@
         if (status !== "error") name.style.color = agentHex(agent.role);
         const text = document.createElement("span");
         text.className = "text";
-        text.textContent = String((status === "error" && agent.error) || agent.text || "");
+        text.textContent = String((status === "error" && agent.error) || agent.text || "").replace(new RegExp(`^${String(agent.role ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} (?:done|running|queued|error)\\s*[·:]?\\s*`, "i"), "");
         const when = document.createElement("span");
         when.className = "when";
-        when.textContent = status === "running" ? `since ${agoShort(agent.since)}` : agent.lastRunAt ? agoShort(agent.lastRunAt) : "never";
+        when.textContent = status === "running" ? elapsedLabel(agent.since) : agent.lastRunAt ? agoShort(agent.lastRunAt) : "Not run yet";
         li.title = `${agent.role} · ${status}${text.textContent ? ` — ${text.textContent}` : ""}`;
         li.append(tag, name, text, when);
         el.feedAgents.append(li);
@@ -2314,13 +2856,9 @@
     }
 
     if (el.feedMeta) {
-      // state.tasks is already filtered to open/active by takeTasks().
-      // The assistant manages this queue, so the meta line names what it last
-      // did with it rather than only counting what is left.
-      const foreman = assistant?.foreman;
-      const dispatch = foreman?.reason ? ` · assistant: ${foreman.reason}` : foreman?.runs ? ` · assistant dispatched ${foreman.runs}×` : "";
-      el.feedMeta.textContent =
-        `queue ${state.requests.length} · tasks ${state.tasks.length} open · jobs ${jobs.length}/${assistant?.parallel ?? 1}${dispatch}`;
+      el.feedMeta.textContent = state.backlog?.waiting || (jobs.length
+        ? `${jobs.length} of ${assistant?.parallel ?? 1} worker slots in use${assistant?.execute === false ? " · new work paused" : ""}`
+        : state.backlog?.summary || assistant?.waiting || "The board keeps task results and verification details.");
     }
 
     if (el.autopilotToggle) {
@@ -2499,13 +3037,11 @@
       pushFeed({ id: item.id, at: item.time, kind: "tool", tool: item.tool, file: basename(item.file), sessionId: item.sessionId });
       const session = nodeForSession(item.sessionId);
       if (!session) continue;
-      const touch = state.touches.get(item.sessionId) ?? { count: 0, at: now };
+      const touch = state.touches.get(item.sessionId) ?? { count: 0, at: 0 };
       touch.count += 1;
-      touch.at = now;
+      touch.at = Math.max(touch.at || 0, Number(item.time) > 0 ? Math.min(now, Number(item.time)) : now);
       state.touches.set(item.sessionId, touch);
       state.lastTouch = now;
-      // Only follow mode chases live activity; orbit and free keep their frame.
-      if (state.camMode === "follow") focusOn(session);
 
       if (TASK_TOOLS.has(item.tool)) {
         const target = state.nodes.find((node) => node.sessionId === item.sessionId && node.kind === "todo") ?? session;
@@ -2519,6 +3055,7 @@
       }
     }
     if (data.todos) refreshGraph();
+    else if (state.camMode === "follow") updateFollowCamera(now, true);
   }
 
   function spawnParticles(node, count, { gold = false, tint = null } = {}) {
@@ -2633,6 +3170,7 @@
 
   // ---------- render ----------
   function orbitTarget(energy) {
+    if (state.camMode === "follow") return 0; // the working branch stays readable while its agents move.
     if (state.view === "2d") return 0; // the flat map does not revolve
     if (noMotion() || state.orbit === "paused") return 0;
     // Only a real gesture holds the orbit: a drag in progress, a selection or
@@ -2640,7 +3178,7 @@
     if (state.panning || state.rotating) return 0;
     if (state.selected || state.query) return 0;
     if (Date.now() < state.settleUntil) return 0;
-    return ORBIT_BASE + energy * ORBIT_ENERGY;
+    return ORBIT_BASE + (state.reactive ? 0 : energy) * ORBIT_ENERGY;
   }
 
   function computeBranch() {
@@ -2659,6 +3197,10 @@
   // branch is not about.
   function emphasis(node) {
     if (state.query) return state.matchSet.has(node.id) ? 1 : 0.25;
+    if (state.camMode === "follow" && state.follow) {
+      const focused = state.follow.context.some((entry) => entry.id === node.id) || node.hostId === state.follow.key || node.targetId === state.follow.key;
+      return focused ? 1 : node.kind === "music" || node.kind === "assistant" ? 0.85 : 0.5;
+    }
     if (!state.branch) return 1;
     const sid = node.sessionId ?? node.anchorSessionId ?? node.id;
     if (sid === state.branch) return node.kind === "todo" ? 1.15 : 1;
@@ -2703,10 +3245,20 @@
   function drawFrame(time) {
     if (!state.lastFrame) state.lastFrame = time;
     const still = noMotion();
-    const energy = audioEnergy();
+    const measuredEnergy = audioEnergy();
+    const energy = still ? 0 : measuredEnergy;
+    const musicBands = still ? { bass: 0, mid: 0, treble: 0 } : state.bands;
+    const musicBeat = still || !state.reactive || !state.inputStream && !state.localAudio ? 0 : state.music?.beat ?? 0;
     // Nodes the assistant has been told to work on (Work on it): pinned board
     // tasks plus pinned, still-queued inbox requests. One set per frame.
     const pinnedIds = workPinIds();
+    const graphArea = usableArea();
+    const graphFrameKey = `${graphArea.x},${graphArea.y},${graphArea.w},${graphArea.h}`;
+    if (state.graphFrameKey !== graphFrameKey) {
+      state.graphFrameKey = graphFrameKey;
+      if (state.camMode === "orbit" || state.camMode === "follow") autoFit();
+    }
+    updateFollowCamera(Date.now());
     const target = orbitTarget(energy);
     state.orbitVel += (target - state.orbitVel) * ORBIT_EASE;
     if (still) state.orbitVel = 0;
@@ -2720,6 +3272,7 @@
       state.camera.y += (state.camera.ty - state.camera.y) * CAMERA_EASE;
       state.camera.z += (state.camera.tz - state.camera.z) * CAMERA_EASE;
     }
+    if (state.camMode === "follow" && state.followZoomTarget != null && !still) state.zoom += (state.followZoomTarget - state.zoom) * 0.065;
 
     const { ctx } = el;
     ctx.clearRect(0, 0, el.width, el.height);
@@ -2765,9 +3318,9 @@
         const twinkle = still
           ? layer.alpha * (0.35 + 0.5 * Math.abs(Math.sin(index * 1.31)))
           : layer.alpha * (0.3 + 0.7 * Math.abs(Math.sin(time / layer.tempo + index * 1.31)));
-        ctx.globalAlpha = Math.min(1, twinkle * (0.55 + energy * 0.3 + state.bands.treble * 0.5));
+        ctx.globalAlpha = Math.min(1, twinkle * (0.5 + energy * 0.15 + musicBands.treble * 0.7));
         const tone = Math.sin(seed * 3.3);
-        ctx.fillStyle = tone > 0.55 ? "#aebfff" : tone < -0.82 ? "#f0d9a8" : "#ece5d8";
+          ctx.fillStyle = tone > 0.55 ? rgb(NODE_RGB.dust) : tone < -0.82 ? rgb(NODE_RGB.warm) : rgb(NODE_RGB.session);
         const size = layer.size * (0.8 + 0.4 * Math.abs(Math.sin(seed * 5.1)));
         ctx.fillRect(x, y, size, size);
         if (layer.flare) {
@@ -2784,8 +3337,8 @@
     const core = project({ x: 0, y: -10, z: 0 });
     const coreR = diagonal * 0.42;
     const coreGlow = ctx.createRadialGradient(core.x, core.y, 0, core.x, core.y, coreR);
-    coreGlow.addColorStop(0, `rgba(201,168,106,${0.05 + energy * 0.02 + state.bands.bass * 0.02})`);
-    coreGlow.addColorStop(0.45, "rgba(130,112,84,0.022)");
+    coreGlow.addColorStop(0, rgba(NODE_RGB.warm, 0.025 + energy * 0.015 + musicBands.bass * 0.03 + musicBeat * 0.02));
+    coreGlow.addColorStop(0.45, rgba(NODE_RGB.warm, 0.015));
     coreGlow.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = coreGlow;
     ctx.fillRect(core.x - coreR, core.y - coreR, coreR * 2, coreR * 2);
@@ -2797,6 +3350,15 @@
     vignette.addColorStop(1, "rgba(2,2,6,0.6)");
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, el.width, el.height);
+
+    // A followed branch can be zoomed past the rest of the constellation.
+    // Keep those distant nodes from drawing through the header and work rails.
+    ctx.save();
+    if (state.camMode === "follow") {
+      ctx.beginPath();
+      ctx.rect(graphArea.x, graphArea.y, graphArea.w, graphArea.h);
+      ctx.clip();
+    }
 
     syncAgentMotion(Date.now());
     stepFx(Date.now());
@@ -2811,14 +3373,14 @@
       const root = rootNode();
       if (root) {
         traceRing(ctx, root, 120, 40); // session y wobbles ±30 around y=0
-        ctx.strokeStyle = `rgba(201,168,106,${0.08 * (state.query ? 0.5 : 1)})`;
+        ctx.strokeStyle = rgba(NODE_RGB.warm, 0.08 * (state.query ? 0.5 : 1));
         ctx.lineWidth = 1;
         ctx.stroke();
       }
       const hub = assistantNode();
       if (hub && state.nodes.some((node) => node.kind === "agent")) {
         traceRing(ctx, hub, 34);
-        ctx.strokeStyle = `rgba(230,201,141,${0.12 * emphasis(hub)})`;
+        ctx.strokeStyle = rgba(NODE_RGB.warm, 0.12 * emphasis(hub));
         ctx.stroke();
       }
       for (const { node } of projected) {
@@ -2826,7 +3388,7 @@
         if (!state.nodes.some((entry) => entry.kind === "todo" && entry.sessionId === node.id)) continue;
         const { fresh } = nodeState(node);
         traceRing(ctx, node, 46, 34);
-        ctx.strokeStyle = `rgba(201,168,106,${(0.08 + fresh * 0.12) * emphasis(node)})`;
+        ctx.strokeStyle = rgba(NODE_RGB.warm, (0.08 + fresh * 0.12) * emphasis(node));
         ctx.stroke();
       }
     }
@@ -2844,7 +3406,7 @@
       // The far side of the orbit fades — depth runs ~500 near to ~1300 far.
       const depthFade = 1 - Math.min(1, Math.max(0, ((a.p.depth + b.p.depth) / 2 - 640) / 700)) * 0.42;
       const trunk = b.node.kind === "session" || b.node.kind === "assistant" || b.node.kind === "folded";
-      const base = (0.19 + energy * 0.05 + state.bands.mid * 0.09 + (state.view === "2d" ? 0.05 : 0)) * factor * depthFade * (trunk ? 1.2 : 1);
+      const base = (0.17 + energy * 0.04 + musicBands.mid * 0.19 + (state.view === "2d" ? 0.05 : 0)) * factor * depthFade * (trunk ? 1.2 : 1);
       const glow = fresh * Math.min(1, (touch?.count ?? 0) / 4) * 0.8 * factor;
       // A selection lights its branch through state.branch; a hover does the
       // same through the hovered node's own session so edges answer the cursor.
@@ -2857,8 +3419,8 @@
       gradient.addColorStop(
         1,
         inBranch
-          ? `rgba(230,201,141,${Math.min(1, base + glow + 0.32)})`
-          : `rgba(${fresh > 0.4 ? "230,201,141" : "180,170,150"},${base + glow})`
+          ? rgba(NODE_RGB.warm, Math.min(1, base + glow + 0.32))
+          : rgba(fresh > 0.4 ? NODE_RGB.warm : NODE_RGB.pending, base + glow)
       );
       ctx.strokeStyle = gradient;
       ctx.lineWidth = (trunk ? 1.4 : 1) + glow * 2.2;
@@ -2950,7 +3512,7 @@
         ctx.stroke();
       }
       ctx.beginPath();
-      ctx.arc(x, y, pulse.small ? 2.4 : 4 + energy * 3 + state.bands.bass * 5, 0, Math.PI * 2);
+      ctx.arc(x, y, pulse.small ? 2.4 : 4 + energy * 2 + musicBands.bass * 3, 0, Math.PI * 2);
       ctx.fillStyle = pulse.color ?? "#a9ffcd";
       if (!still) {
         ctx.shadowColor = pulse.glow ?? "#57ff9a";
@@ -3002,33 +3564,50 @@
       if (isSession) {
         // hubs warm from ivory toward gold as they are touched
         const warm = Math.min(1, fresh * 0.8 + (touch?.count ?? 0) * 0.12);
-        red = Math.round(236 + (230 - 236) * warm);
-        green = Math.round(229 + (201 - 229) * warm);
-        blue = Math.round(216 + (141 - 216) * warm);
+        [red, green, blue] = NODE_RGB.session.map((value, index) => Math.round(value + (NODE_RGB.warm[index] - value) * warm));
       }
       const factor = emphasis(node);
       const boost = 1 + Math.min(0.9, (touch?.count ?? 0) * 0.16) * fresh;
       const softness = Math.min(1, Math.max(0, (p.depth - 420) / 620));
-      const baseR = (node.kind === "root" ? 2.9 : node.kind === "task" || isAssistant || isFolded ? 2.6 : isSession ? 2.5 : isAgent && node.status === "running" ? 2.2 : 1.9) * node.r * p.k;
+      const important = isAssistant || node.state === "active" || isAgent && node.status === "running";
+      const baseR = Math.min(important ? 19 : 14, (node.kind === "root" ? 1.9 : isAssistant ? 2.1 : node.kind === "task" || isFolded ? 1.55 : isSession ? 1.8 : isAgent && node.status === "running" ? 1.7 : 1.25) * node.r * p.k);
       // A running agent swells like an in-progress todo.
       const agentBeat = isAgent && node.status === "running" && !still ? 1 + Math.sin(time / 260) * 0.14 : 1;
       // A finished task under its grace breathes on its own rhythm.
       const doneBeat = hold && !hold.ackedAt && !still ? 1 + Math.sin(time / 300) * 0.12 : 1;
       // Audio and touch swell the hub gently: at full energy the old factors
       // doubled the halo and the cluster fused into one bloom.
-      const radius = Math.max(0.4, baseR * boost * (1 + energy * 0.08 + state.bands.bass * 0.12) * agentBeat * doneBeat * nodeScale);
+      const radius = Math.max(0.4, baseR * boost * (1 + energy * 0.05 + musicBands.bass * 0.17 + musicBeat * (important ? 0.12 : 0.07)) * agentBeat * doneBeat * nodeScale);
       // A stale session is still there, at less than half strength; an agent is
       // as bright as its status.
       const agentGlow = !isAgent ? 1 : node.status === "running" ? 1 : node.status === "error" ? 0.9 : node.status === "queued" ? 0.7 : node.status === "done" ? 0.55 : 0.45;
       const alpha = (0.45 + 0.4 * Math.min(1, (isAssistant ? 1 : fresh) + 0.25)) * (1 - softness * 0.42) * factor * (node.stale ? 0.5 : 1) * agentGlow * (node._fade ?? 1);
       glowNode(ctx, p.x, p.y, radius, `${red},${green},${blue}`, {
         alpha,
-        spread: (state.view === "2d" ? 3.1 : 3.4) + softness * 0.8,
-        white: (isAssistant ? 0.9 : isSession ? 0.75 : node.kind === "task" || isFolded ? 0.6 : isAgent ? 0.4 * agentGlow : 0.45) * (factor < 1 || node.stale ? 0.4 : 1),
+        spread: (important ? 2.8 : 2.1) + softness * 0.3 + musicBeat * 0.6,
+        white: (isAssistant ? 0.7 : isSession ? 0.5 : node.kind === "task" || isFolded ? 0.35 : isAgent ? 0.3 * agentGlow : 0.3) * (factor < 1 || node.stale ? 0.4 : 1),
       });
       node._px = p.x;
       node._py = p.y;
       node._pr = radius;
+      if (node.kind === "music") {
+        ctx.save();
+        ctx.font = '600 17px system-ui, "Segoe UI", sans-serif';
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = rgb(NODE_RGB.session);
+        ctx.fillText("♪", p.x, p.y);
+        ctx.restore();
+      }
+      // Beat rings are decorative only: they never move the hit target or
+      // pretend a task has progressed. Work status keeps its own ring colour.
+      if (musicBeat > 0.08 && (isAssistant || isSession || node.state === "active")) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, radius + 6 + (1 - musicBeat) * 22, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(${red},${green},${blue},${musicBeat * 0.3 * factor})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
       // A hairline rim in the node's own colour separates the hub from its
       // halo, so the ring language (task colour, selection, focus) sits on a
       // crisp edge instead of dissolving into glow.
@@ -3083,7 +3662,7 @@
         ctx.arc(p.x, p.y, radius + 3.5, 0, Math.PI * 2);
         // the ring carries the status too: an active task wears it bright, an
         // open one waits dimmer, finished work turns the whole node green
-        ctx.strokeStyle = `${node.color}${node.task?.status === "active" ? "cc" : "77"}`;
+        ctx.strokeStyle = rgba(node.color ? hexToRgb(node.color) : NODE_RGB.task, node.task?.status === "active" ? 0.8 : 0.46);
         ctx.lineWidth = 1.2;
         ctx.stroke();
       }
@@ -3181,12 +3760,6 @@
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.lineDashOffset = 0;
-        if (node.kind === "session" && runningIds.has(node.id)) {
-          ctx.font = LABEL_FONT_ROOT;
-          ctx.textAlign = "center";
-          ctx.fillStyle = "rgba(230,201,141,0.7)";
-          ctx.fillText("A-EYES", p.x, p.y - radius - 14);
-        }
       }
       // Work on it: a blue circle with a comet trail looping the node. Slow
       // drift while the ask sits queued, quick loop once the executor holds
@@ -3195,6 +3768,8 @@
       const nodeIds = [String(node.id ?? ""), String(node.sessionId ?? ""), String(node.task?.id ?? "")].filter(Boolean);
       const pinQueued = nodeIds.some((id) => pinnedIds.has(id));
       const pinRunning = !pinQueued && nodeIds.some((id) => runningIds.has(id)) && nodeIds.some((id) => state.workPinSeen?.has(id));
+      const runningLabel = node.kind === "todo" ? node.status === "in_progress" : nodeIds.some((id) => runningIds.has(id));
+      node._workLabel = runningLabel ? "Running" : pinQueued ? "Next" : null;
       if (pinQueued || pinRunning) {
         const ringRadius = radius + 13;
         ctx.beginPath();
@@ -3215,12 +3790,6 @@
           ctx.strokeStyle = `rgba(125,178,255,${0.9 - i * 0.27})`;
           ctx.lineWidth = 2.6 - i * 0.6;
           ctx.stroke();
-        }
-        if (node.kind !== "task" || state.labels !== "none") {
-          ctx.font = LABEL_FONT_ROOT;
-          ctx.textAlign = "center";
-          ctx.fillStyle = "rgba(125,178,255,0.8)";
-          ctx.fillText("NEXT", p.x, p.y - ringRadius - 6);
         }
       }
       // Work-left meter: a slim bar under anything with a known fraction —
@@ -3265,7 +3834,7 @@
       for (const { node, p } of projected) {
         if (!state.collisionSessions.has(node.sessionId)) continue;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, 22 + energy * 8 + state.bands.bass * 8, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, 22 + energy * 4 + musicBands.bass * 4, 0, Math.PI * 2);
         ctx.strokeStyle = "rgba(255,212,121,0.22)";
         ctx.lineWidth = 1.2;
         ctx.stroke();
@@ -3287,6 +3856,7 @@
     }
 
     drawLabels(projected);
+    ctx.restore();
   }
 
   // ---------- labels ----------
@@ -3303,7 +3873,7 @@
   }
 
   function fontFor(node) {
-    if (node.kind === "session" || node.kind === "assistant") return LABEL_FONT;
+    if (node.kind === "session" || node.kind === "assistant" || node.kind === "music") return LABEL_FONT;
     if (node.kind === "task" || node.kind === "folded") return LABEL_FONT_TASK;
     if (node.kind === "root") return LABEL_FONT_ROOT;
     if (node.kind === "agent") return LABEL_FONT_AGENT;
@@ -3311,8 +3881,9 @@
   }
 
   function labelColour(node, alpha) {
+    if (node.kind === "music") return rgba(NODE_RGB.warm, alpha);
     if (node.kind === "session") return `rgba(236,229,216,${node.stale ? alpha * 0.6 : alpha})`;
-    if (node.kind === "root") return `rgba(201,168,106,${alpha})`;
+    if (node.kind === "root") return rgba(NODE_RGB.warm, alpha);
     if (node.kind === "assistant") return rgba(NODE_RGB.assistant, alpha);
     if (node.kind === "folded") return rgba(NODE_RGB.done, alpha * 0.85);
     if (node.kind === "agent") return rgba(colorOf(node), node.status === "running" || node.status === "error" ? alpha : alpha * 0.7);
@@ -3325,13 +3896,14 @@
 
   function labelText(ctx, node, font) {
     // a travelling agent's label carries its target ("reference · Crafting bench recipes")
-    const cap = node.kind === "session" ? 28 : node.kind === "task" ? 30 : node.kind === "root" ? 12 : node.kind === "assistant" ? 16 : node.kind === "folded" ? 20 : node.kind === "agent" ? (node.targetNode ? 30 : 12) : 34;
+    const cap = node.kind === "session" || node.kind === "task" ? 44 : node.kind === "root" ? 12 : node.kind === "assistant" ? 16 : node.kind === "folded" ? 20 : node.kind === "agent" ? (node.targetNode ? 36 : 14) : 34;
     let text = String(node.label ?? "").trim();
     if (!text) return "";
     if (node.kind === "root") text = text.toUpperCase();
+    else if (node._workLabel && node.kind !== "agent") text = `${node._workLabel} · ${text}`;
     let clipped = text.length > cap;
     if (clipped) text = text.slice(0, cap);
-    while (text.length > 1 && measure(ctx, font, text) > LABEL_MAX_PX) {
+    while (text.length > 1 && measure(ctx, font, `${text}${clipped ? "…" : ""}`) > LABEL_MAX_PX) {
       text = text.slice(0, -1);
       clipped = true;
     }
@@ -3348,15 +3920,19 @@
       let priority = -1;
       if (node.id === selectedId) priority = 0;
       else if (state.hoverNode === node) priority = 1;
+      else if (state.camMode === "follow" && state.follow?.key === node.id) priority = 1.5;
       else if (state.query && state.matchSet.has(node.id)) priority = 2;
       else if (mode !== "none") {
-        if (node.kind === "assistant") priority = 2.5; // always named, ahead of every session
+        if (node._workLabel === "Running" || node.kind === "task" && node.state === "active" || node.builder && node.status === "running") priority = 2.2;
+        else if (node._workLabel === "Next") priority = 2.4;
+        else if (node.kind === "assistant") priority = 2.5; // always named, ahead of every session
+        else if (node.kind === "music") priority = 2.7;
         else if (node.kind === "session") priority = 3;
         else if (node.kind === "task" || node.kind === "folded") priority = 4;
         else if (node.kind === "root") priority = 5;
         else if (node.kind === "todo" && node.status === "in_progress") priority = 6;
         else if (node.kind === "todo" && state.branch && node.sessionId === state.branch) priority = 7;
-        else if (node.kind === "agent") priority = mode === "all" ? 9 : node.targetNode ? 4.5 : node.status === "running" ? 5.5 : -1; // an agent at work names what it is on
+        else if (node.kind === "agent") priority = node.status === "running" ? 2.8 : node.targetNode ? 4.5 : mode === "all" ? 9 : -1;
         else if (mode === "all") priority = 8;
       }
       if (priority < 0) continue;
@@ -3397,6 +3973,11 @@
   }
 
   function blocked(rect, excluded) {
+    if (rect.x < 12 || rect.y < 12 || rect.x + rect.w > el.width - 12 || rect.y + rect.h > el.height - 12) return true;
+    if (state.camMode === "follow") {
+      const area = usableArea();
+      if (rect.x < area.x + 5 || rect.y < area.y + 5 || rect.x + rect.w > area.x + area.w - 5 || rect.y + rect.h > area.y + area.h - 5) return true;
+    }
     for (const placed of state.labelRects) if (overlaps(rect, placed)) return true;
     for (const zone of excluded) if (overlaps(rect, zone)) return true;
     return false;
@@ -3415,6 +3996,7 @@
       if (box.width > 0 && box.height > 0) rects.push({ x: box.left, y: box.top, w: box.width, h: box.height });
     };
     push(el.top);
+    push(el.followStatus);
     push(el.bottom);
     push(el.info);
     push(el.feed);
@@ -3433,6 +4015,10 @@
     state.labelRects.length = 0;
     const excluded = hudRects();
     const candidates = labelCandidates(projected);
+    const nodeRects = projected.filter(({ node }) => !node.dying && !node._absorbed).map(({ node, p }) => {
+      const radius = Math.max(5, node._pr ?? 4) + 3;
+      return { node, x: p.x - radius, y: p.y - radius, w: radius * 2, h: radius * 2 };
+    });
     let drawn = 0;
     for (const { node, p, priority } of candidates) {
       if (drawn >= LABEL_BUDGET) break;
@@ -3442,26 +4028,28 @@
       const width = measure(ctx, font, text);
       const radius = node._pr ?? 4;
       let rect = null;
-      for (const slot of LABEL_SLOTS) {
-        const candidate = slotRect(slot, p, radius, width);
-        if (!blocked(candidate, excluded)) {
-          rect = candidate;
-          break;
+      for (const distance of [0, 18, 36]) {
+        for (const slot of LABEL_SLOTS) {
+          const candidate = slotRect(slot, p, radius + distance, width);
+          if (!blocked(candidate, excluded) && !nodeRects.some((zone) => zone.node !== node && overlaps(candidate, zone))) {
+            rect = candidate;
+            break;
+          }
         }
+        if (rect) break;
       }
-      if (!rect) {
-        if (priority > 2) continue; // crowded frame: only the important ones force a slot
-        rect = slotRect("right", p, radius, width);
-      }
+      // Selected nodes still have their readable detail card. Never force a
+      // name over another label or an opaque control just to hit a budget.
+      if (!rect) continue;
       // Depth runs ~500 (nearest) to ~1300 (farthest) around the 900 pivot. Fading
       // from 700 keeps the front half of the orbit at full strength; the old 420
       // origin left mid-depth labels under half alpha, which read as muddy.
       const softness = Math.min(1, Math.max(0, (p.depth - 700) / 700));
-      const alpha = priority <= 2 ? 1 : Math.max(0.32, Math.min(1, (0.96 - softness * 0.5) * emphasis(node)));
+      const alpha = priority <= 2.8 ? 1 : Math.max(0.5, Math.min(1, (0.98 - softness * 0.3) * emphasis(node)));
       ctx.font = font;
       ctx.textBaseline = "alphabetic";
       ctx.textAlign = rect.align;
-      if (priority <= 2) {
+      if (priority <= 2.8) {
         // the chip carries the node's colour on its border so a selected or
         // matched label reads as "that node", not just "highlighted"
         const [cr, cg, cb] = colorOf(node);
@@ -3472,6 +4060,11 @@
         ctx.roundRect(rect.x - 5, rect.y - 3, rect.w + 10, rect.h + 6, 6);
         ctx.fill();
         ctx.stroke();
+      } else {
+        ctx.fillStyle = "rgba(7,10,15,0.72)";
+        ctx.beginPath();
+        ctx.roundRect(rect.x - 3, rect.y - 2, rect.w + 6, rect.h + 4, 4);
+        ctx.fill();
       }
       ctx.lineJoin = "round";
       ctx.lineWidth = 3;
@@ -3568,6 +4161,10 @@
 
   // ---------- interaction ----------
   function nodeAt(x, y) {
+    if (state.camMode === "follow") {
+      const area = usableArea();
+      if (x < area.x || y < area.y || x > area.x + area.w || y > area.y + area.h) return null;
+    }
     let best = null;
     for (const node of state.nodes) {
       if (node._px == null || node.dying || node._absorbed) continue;
@@ -3633,6 +4230,11 @@
   }
 
   function selectNode(node, options = {}) {
+    if (node?.kind === "music") {
+      window.MefiMusic?.open?.();
+      bumpHud();
+      return;
+    }
     // Clearing empties the card: focus on one of its buttons (the close button,
     // Done, or a card whose node just left the graph) would fall to <body>.
     const focusInCard = !node && Boolean(el.info?.contains(document.activeElement));
@@ -4234,7 +4836,7 @@
         };
         stepper("Parallel agents", "parallel", 1, 12, () => full?.prefs?.parallel, assistantPrefs);
         stepper("AI in parallel", "aiParallel", 1, 6, () => full?.prefs?.aiParallel, assistantPrefs);
-        stepper("Autopilot jobs", "parallel", 1, 12, () => state.assistant?.parallel, autopilotPrefs);
+        stepper("Parallel builds", "parallel", 1, state.assistant?.parallelLimit ?? 3, () => state.assistant?.parallel, autopilotPrefs);
         info.append(steppers);
       }
 
@@ -4606,8 +5208,8 @@
       const on = state.camMode === "follow";
       el.camFollowBtn.setAttribute("aria-pressed", on ? "true" : "false");
       el.camFollowBtn.title = on
-        ? "Camera: follow — tracking the current work · click for a free camera (C cycles orbit / follow / free)"
-        : "Camera: follow — track the agent's current work (C)";
+        ? `Following ${state.follow?.title ?? "active tasks"}. Click to hold this view.`
+        : "Follow active tasks and their current work (C)";
     }
     if (el.viewBtn) {
       el.viewBtn.dataset.view = state.view;
@@ -4650,16 +5252,27 @@
   // and the user's view wins until a mode is picked again.
   function applyCamMode() {
     if (state.camMode === "orbit") fitAll();
-    else if (state.camMode === "follow") {
-      const node = workNode();
-      if (node) focusOn(node);
-    }
+    else if (state.camMode === "follow") updateFollowCamera(Date.now(), true);
+    renderFollowStatus();
   }
 
   function setCamMode(mode, options = {}) {
     const next = CAM_MODES.includes(mode) ? mode : "orbit";
     const changed = next !== state.camMode;
     state.camMode = next;
+    if (changed && next === "follow") {
+      state.follow = null;
+      state.followReadAt = 0;
+      state.followZoomTarget = null;
+      state.orbitVel = 0;
+    } else if (changed) {
+      state.followZoomTarget = null;
+      if (next === "free") {
+        state.camera.tx = state.camera.x;
+        state.camera.ty = state.camera.y;
+        state.camera.tz = state.camera.z;
+      }
+    }
     // Quiet + unchanged (a wheel tick in free mode, say) skips the DOM churn;
     // an explicit mode click always re-syncs and re-applies.
     if (!options.quiet || changed) {
@@ -5082,7 +5695,8 @@
     state.popups = [];
     state.particles = [];
     state.pulses = [];
-    if (state.audio?.state === "running") state.audio.suspend().catch(() => {});
+    const playerAudio = window.MefiMusic?.getAudioElement?.();
+    if (state.audio?.state === "running" && !(playerAudio && state.mediaElements.has(playerAudio))) state.audio.suspend().catch(() => {});
     // Leaving Command hands the capture back: suspending the context alone
     // leaves the OS recording indicator lit for the rest of the session.
     releaseReactiveInput();
@@ -5098,6 +5712,7 @@
     if (!state.active) return;
     if (document.body.dataset.sheet) return; // a sheet covers Command: do no work
     if (document.hidden) return; // hidden app: make no fetch; the visibilitychange listener snaps the view back on show
+    refreshCommandBacklog();
     refreshGraph();
     checkCollisions();
     updateTelemetry();
@@ -5137,6 +5752,7 @@
     el.height = height;
     state.labelWidths.clear();
     state.hudRectsAt = 0;
+    state.graphAreaAt = 0;
     if (state.camMode === "orbit") autoFit(); // a new window still shows every node
   }
 
@@ -5214,6 +5830,7 @@
       el.width = window.innerWidth;
       el.height = window.innerHeight;
     }
+    syncGraphTheme();
     el.info = document.getElementById("idle-info");
     el.chatLog = document.getElementById("cmd-chat");
     el.chatLogDot = document.getElementById("cmd-chat-dot");
@@ -5230,6 +5847,9 @@
     el.home = document.getElementById("idle-home");
     el.zen = document.getElementById("idle-zen");
     el.reactive = document.getElementById("idle-reactive");
+    el.musicToggle = document.getElementById("idle-music-toggle");
+    el.musicStatus = document.getElementById("idle-music-status");
+    el.musicLevel = document.getElementById("idle-music-level");
     el.source = document.getElementById("idle-source");
     el.profile = document.getElementById("idle-profile");
     el.exitBtn = document.getElementById("idle-exit");
@@ -5239,6 +5859,7 @@
     el.orbitBtn = document.getElementById("idle-orbit");
     el.camOrbitBtn = document.getElementById("idle-cam-orbit");
     el.camFollowBtn = document.getElementById("idle-cam-follow");
+    el.followStatus = document.getElementById("idle-follow-status");
     el.zoomIn = document.getElementById("idle-zoom-in");
     el.zoomOut = document.getElementById("idle-zoom-out");
     el.labelsBtn = document.getElementById("idle-labels");
@@ -5246,9 +5867,13 @@
     el.feed = document.getElementById("idle-feed");
     el.feedDot = document.getElementById("idle-feed-dot");
     el.feedState = document.getElementById("idle-feed-state");
+    el.feedParallel = document.getElementById("idle-feed-parallel");
     el.feedNow = document.getElementById("idle-feed-now");
+    el.feedMetrics = document.getElementById("idle-feed-metrics");
     el.feedQueue = document.getElementById("idle-feed-queue");
+    el.feedQueueCount = document.getElementById("idle-feed-queue-count");
     el.feedAgents = document.getElementById("idle-feed-agents");
+    el.feedAgentsCount = document.getElementById("idle-feed-agents-count");
     el.feedMenu = document.getElementById("idle-feed-menu");
     el.feedDrop = document.getElementById("idle-feed-drop");
     el.feedMeta = document.getElementById("idle-feed-meta");
@@ -5296,22 +5921,15 @@
         state.zen = el.zen.checked;
         writeStore("mefiStudio.zen", state.zen ? "1" : "0");
         if (state.zen) bell({ long: true, low: true });
-        else if (state.audio?.state === "running") state.audio.suspend().catch(() => {});
+        else if (state.audio?.state === "running" && !state.reactive && !state.mediaElements.has(window.MefiMusic?.getAudioElement?.())) state.audio.suspend().catch(() => {});
       });
     }
     if (el.reactive) {
       el.reactive.checked = state.reactive;
-      el.reactive.addEventListener("change", () => {
-        state.reactive = el.reactive.checked;
-        writeStore("mefiStudio.zenReactive", state.reactive ? "1" : "0");
-        if (el.source) el.source.disabled = !state.reactive;
-        if (state.reactive) {
-          ensureReactiveInput();
-        } else {
-          releaseReactiveInput();
-        }
-      });
+      el.reactive.addEventListener("change", () => setMusicReactive(el.reactive.checked));
     }
+    el.musicToggle?.addEventListener("click", () => setMusicReactive(!state.reactive || !state.inputStream && !state.localAudio && !state.inputPending));
+    renderMusicStatus(true);
     if (el.source) {
       el.source.value = state.audioSource;
       el.source.disabled = !state.reactive;
@@ -5428,7 +6046,15 @@
     el.ambienceBtn?.addEventListener("click", toggleAmbience);
     el.legendToggle?.addEventListener("click", () => setLegend(!state.legendOpen));
     el.feedMenu?.addEventListener("click", () => setFeedMenu(!state.feedMenuOpen));
+    el.feedParallel?.addEventListener("change", () => void changeBuildParallel(el.feedParallel.value));
     setFeedMenu(state.feedMenuOpen);
+    window.addEventListener("mefi:project-changed", () => {
+      state.backlogRevision += 1;
+      state.backlogReadAt = 0;
+      state.backlog = null;
+      state.feedDirty = true;
+      if (state.active) renderFeed();
+    });
     el.emptyRetry?.addEventListener("click", async () => {
       if (el.emptyRetry.disabled) return;
       el.emptyRetry.disabled = true;
@@ -5483,7 +6109,7 @@
       // An agent is part of the assistant: its click lands on the hub.
       const hit = nodeAt(x, y);
       const node = hit && hit.kind === "agent" ? assistantNode() ?? hit : hit;
-      state.panning = { x: event.clientX, y: event.clientY, cam: { ...state.camera }, moved: false, node };
+      state.panning = { x: event.clientX, y: event.clientY, cam: { ...state.camera, tx: state.camera.x, ty: state.camera.y, tz: state.camera.z }, moved: false, node };
     });
     el.canvas.addEventListener("dblclick", (event) => {
       const rect = el.canvas.getBoundingClientRect();
@@ -5754,6 +6380,9 @@
     )
   );
 
+  window.addEventListener("mefi-music-change", syncMusicNode);
+  window.addEventListener("mefi-theme-change", syncGraphTheme);
+
   window.MefiIdle = {
     init,
     enter,
@@ -5761,7 +6390,10 @@
     simulate,
     profiles: PROFILES,
     selectFirst,
-    debugNodes: () => state.nodes.map((node) => ({ id: node.id, kind: node.kind, label: node.label, x: node._px, y: node._py })),
+    debugNodes: () => state.nodes.map((node) => ({ id: node.id, kind: node.kind, label: node.label, x: node._px, y: node._py, radius: node._pr, labelRect: node._label ? { ...node._label } : null })),
+    graphViewport: () => ({ ...usableArea() }),
+    followStatus: () => ({ mode: state.camMode, taskId: state.follow?.taskId ?? null, nodeId: state.follow?.key ?? null, title: state.follow?.title ?? null, stage: state.follow?.stage ?? null, reason: state.follow?.reason ?? null, since: state.follow?.since ?? null, zoom: state.zoom, targetZoom: state.followZoomTarget }),
+    audioStatus: () => ({ reactive: state.reactive, source: state.localAudio ? "local" : state.audioSource, listening: Boolean(state.inputStream || state.localAudio), pending: Boolean(state.inputPending), error: state.inputError, bands: { ...state.bands }, energy: state.music?.energy ?? 0, beat: state.music?.beat ?? 0 }),
     isActive: () => state.active,
     escape,
     handleKey,

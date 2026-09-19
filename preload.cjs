@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   backlogControl: (payload) => ipcRenderer.invoke("assistant:backlog-control", payload ?? {}),
   assistantState: () => ipcRenderer.invoke("assistant:state"),
   assistantMessage: (text, projectId) => ipcRenderer.invoke("assistant:message", { text, projectId }),
+  musicRecommend: (payload) => ipcRenderer.invoke("music:recommend", payload ?? {}),
   assistantWorkOn: (target) => ipcRenderer.invoke("assistant:work-on", target ?? {}),
   assistantFocus: (target) => ipcRenderer.invoke("assistant:focus", target ?? null),
   assistantNodeContext: (payload) => ipcRenderer.invoke("assistant:node-context", payload ?? {}),

@@ -2,10 +2,11 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'self' file:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'self' file:; frame-src https://open.spotify.com;">
 <title>Mefi's Studio AI+ · Your workspace</title>
 <style id="booklet-styles">__BOOKLET_STYLES__</style>
 <svg id="nav-glyphs" class="glyph-sprite" aria-hidden="true" focusable="false" width="0" height="0">
+  <symbol id="g-music" viewBox="0 0 16 16"><path d="M6 12V4l7-2v8M6 6l7-2"/><ellipse cx="3.7" cy="12.7" rx="2.3" ry="1.7"/><ellipse cx="10.7" cy="10.7" rx="2.3" ry="1.7"/></symbol>
   <symbol id="g-command" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M6.3 6.5 3.9 4.6M9.9 6.9l2.3-1.8M9.3 9.8l1.6 2.3"/><circle cx="3.2" cy="4" r="1" fill="currentColor" stroke="none"/><circle cx="12.9" cy="4.5" r="1" fill="currentColor" stroke="none"/><circle cx="11.4" cy="12.9" r="1" fill="currentColor" stroke="none"/></symbol>
   <symbol id="g-booklet" viewBox="0 0 16 16"><path d="M4 2.5h8.5v11H4.75A1.75 1.75 0 0 1 3 11.75V3.5a1 1 0 0 1 1-1z"/><path d="M3 11.75A1.75 1.75 0 0 1 4.75 10h7.75"/><path d="M6 5.5h4"/></symbol>
   <symbol id="g-graph" viewBox="0 0 16 16"><path d="M2.5 2.5v11h11"/><circle cx="6" cy="9.5" r="1.2"/><circle cx="9.6" cy="5.9" r="1.6"/><circle cx="12.2" cy="10.2" r="0.9" fill="currentColor" stroke="none"/></symbol>
@@ -49,7 +50,8 @@
     <div class="ws-sidebar-bottom">
       <details class="ws-tools" id="workspace-tools"><summary><svg class="glyph" aria-hidden="true"><use href="#g-overhead"/></svg>Studio tools<span>⌄</span></summary><div id="workspace-tool-links"></div></details>
       <button class="ghost ws-settings" data-nav="studio"><svg class="glyph" aria-hidden="true"><use href="#g-ambience"/></svg>Settings & connections</button>
-      <details class="ws-personal"><summary>Make yourself at home <span>✧</span></summary><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Accent<select id="workspace-accent"><option value="gold">Warm gold</option><option value="sage">Garden sage</option><option value="violet">Soft violet</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></details>
+      <button class="ghost ws-settings" data-nav="music"><svg class="glyph" aria-hidden="true"><use href="#g-music"/></svg>Music & themes</button>
+      <details class="ws-personal"><summary>Make yourself at home <span>✧</span></summary><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Studio theme<select id="workspace-accent"><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></details>
       <span class="ws-local-note"><i></i> A little studio. A lot of possibility.</span>
     </div>
   </aside>
@@ -352,7 +354,8 @@
     <div class="cmd-brand">
       <div class="monogram small" aria-hidden="true">M+</div>
       <div class="cmd-brand-text">
-        <span class="eyebrow">Command</span>
+        <span class="eyebrow">Mefi's Studio</span>
+        <h1 class="cmd-heading">Command center</h1>
         <div id="idle-telemetry" class="cmd-tele" role="group" aria-label="Live status">
           <button class="pill" data-tele="sessions" title="Fit the whole constellation"><b class="num">0</b><span class="unit">sessions</span></button>
           <button class="pill" data-tele="progress" title="Jump to the next in-progress todo" hidden><i class="dot live" aria-hidden="true"></i><b class="num">0</b><span class="unit">in progress</span></button>
@@ -386,6 +389,7 @@
       <button id="idle-view" class="ghost" data-view="3d" title="View: 3D orbit (V toggles 2D)" aria-label="Toggle 2D map view"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plane"/></svg><span class="label">3D</span></button>
       <button id="idle-labels" class="ghost" data-labels="auto" title="Node labels: auto (L cycles auto / all / none)" aria-label="Node labels"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-labels"/></svg><span class="label">auto</span></button>
       <span class="tools-sep" aria-hidden="true"></span>
+      <button id="idle-music-toggle" class="ghost cmd-music" aria-pressed="false" title="React to music using the audio source in Ambience" aria-label="React to music"><span id="idle-music-level" class="cmd-music-level" aria-hidden="true"><i></i><i></i><i></i></span><span id="idle-music-status" class="label">Music off</span></button>
       <button id="idle-ambience" class="ghost icon" aria-haspopup="dialog" aria-expanded="false" aria-controls="idle-ambience-pop" title="Ambience and startup" aria-label="Ambience and startup"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-ambience"/></svg></button>
       <button id="idle-exit" class="ghost icon" title="Leave Command (Esc / D)" aria-label="Leave Command"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-exit"/></svg></button>
     </div>
@@ -401,6 +405,7 @@
     <label class="switch pop-row" title="Open your project workspace on launch"><span class="grow">Open Workspace on launch</span><input type="checkbox" id="idle-home"><span class="track"></span></label>
   </div>
   <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" aria-live="polite" hidden></aside>
+  <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
   <aside id="cmd-chat" class="cmd-chat" role="region" aria-label="Assistant chat log">
     <header class="chat-log-head">
       <i id="cmd-chat-dot" class="feed-dot" aria-hidden="true"></i>
@@ -422,20 +427,25 @@
       </div>
     </div>
   </aside>
-  <aside id="idle-feed" class="cmd-feed" role="region" aria-label="Auto Builder assistant">
+  <aside id="idle-feed" class="cmd-feed" role="region" aria-label="Live work">
     <header class="feed-head">
       <i id="idle-feed-dot" class="feed-dot" aria-hidden="true"></i>
-      <button id="idle-feed-menu" class="feed-title feed-menu" aria-expanded="false" aria-controls="idle-feed-drop" title="Auto Builder: queued requests"><span class="label">Auto Builder</span><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></button>
+      <h2 class="feed-title">Live work</h2>
       <span id="idle-feed-state" class="feed-state">idle</span>
       <label class="switch mini" title="Autopilot: queue and run Auto Builder requests"><input type="checkbox" id="idle-autopilot"><span class="track"></span></label>
     </header>
-    <ul id="idle-feed-drop" class="feed-queue feed-drop" aria-label="Queued requests" hidden></ul>
-    <p id="idle-feed-now" class="feed-now" aria-live="polite"></p>
+    <div id="idle-feed-metrics" class="feed-metrics" aria-label="Work readiness"></div>
+    <label class="feed-capacity">Parallel builds <select id="idle-feed-parallel" aria-label="Maximum concurrent builds"><option value="1">1 worker</option><option value="2">2 workers</option><option value="3">3 workers</option></select></label>
+    <div id="idle-feed-now" class="feed-now" aria-live="polite"></div>
     <div id="idle-feed-activity" class="feed-activity">
-      <ul id="idle-feed-queue" class="feed-queue"></ul>
-      <ul id="idle-feed-agents" class="pin-list assistant-activity assistant-roster feed-agents" aria-label="Agent roster"></ul>
+      <section class="feed-upnext" aria-label="Queued work">
+        <div class="feed-section-head"><h3>Up next <span id="idle-feed-queue-count"></span></h3><button id="idle-feed-menu" class="ghost mini feed-menu" aria-expanded="false" aria-controls="idle-feed-drop" title="Show more queued work"><span class="label">Show more</span><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></button></div>
+        <ul id="idle-feed-queue" class="feed-queue"></ul>
+        <ul id="idle-feed-drop" class="feed-queue feed-drop" aria-label="More queued work" hidden></ul>
+      </section>
+      <details id="idle-feed-agent-section" class="feed-section"><summary>Agent activity <span id="idle-feed-agents-count"></span></summary><ul id="idle-feed-agents" class="pin-list assistant-activity assistant-roster feed-agents" aria-label="Agent roster"></ul></details>
+      <details id="idle-feed-log-section" class="feed-section feed-technical"><summary>Technical log</summary><ul id="idle-feed-list" class="feed-list"></ul></details>
       <p id="idle-feed-meta" class="feed-meta"></p>
-      <ul id="idle-feed-list" class="feed-list"></ul>
     </div>
     <div id="idle-feed-chat" class="feed-chat" hidden>
       <p id="idle-chat-status" class="eyes-status assistant-service" role="status">assistant</p>

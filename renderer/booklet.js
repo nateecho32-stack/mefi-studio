@@ -565,6 +565,7 @@
   const wantCommand = !capture && !smoke && readStore("mefiStudio.commandHome") !== "0";
 
   initStudio();
+  window.MefiMusic?.init();
   window.MefiTree?.init();
   showTab(readStore("mefiStudio.tab") ?? "booklet");
 

@@ -10,7 +10,6 @@ import { fileURLToPath } from "node:url";
 import studioPaths from "./paths.cjs";
 
 const STUDIO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const RENDERER = path.join(STUDIO, "renderer");
 
 // Test registration belongs to Studio's source, even when MEFI_STUDIO_REPO
 // selects another workspace for the assistant to monitor and build.
@@ -38,14 +37,15 @@ function matchAll(text, pattern) {
   return results;
 }
 
-export async function audit() {
+export async function audit({ root = STUDIO } = {}) {
   const findings = [];
   const add = (level, area, message) => findings.push({ level, area, message });
+  const RENDERER = path.join(root, "renderer");
 
-  const packageText = await readIfExists(path.join(STUDIO, "package.json"));
-  const buildText = await readIfExists(path.join(STUDIO, "scripts", "build-booklet.mjs")) ?? "";
-  const mainText = await readIfExists(path.join(STUDIO, "main.cjs")) ?? "";
-  const preloadText = await readIfExists(path.join(STUDIO, "preload.cjs")) ?? "";
+  const packageText = await readIfExists(path.join(root, "package.json"));
+  const buildText = await readIfExists(path.join(root, "scripts", "build-booklet.mjs")) ?? "";
+  const mainText = await readIfExists(path.join(root, "main.cjs")) ?? "";
+  const preloadText = await readIfExists(path.join(root, "preload.cjs")) ?? "";
   const templateText = await readIfExists(path.join(RENDERER, "booklet.template.html")) ?? "";
   const rendererFiles = ((await readdirOrNull(RENDERER)) ?? []).filter((name) => name.endsWith(".js"));
 
@@ -71,23 +71,24 @@ export async function audit() {
     if (!invokeChannels.has(channel)) add("info", "ipc", `main.cjs handles "${channel}" but no preload method invokes it`);
   }
 
-  // 3. getElementById targets must exist in the template
+  // 3. getElementById targets must exist in the template or in renderer-built UI.
   const templateIds = new Set(matchAll(templateText, /id="([\w-]+)"/g));
   const scriptText = (await Promise.all(rendererFiles.map((name) => readIfExists(path.join(RENDERER, name))))).join("\n");
+  for (const id of matchAll(scriptText, /\.id\s*=\s*"([\w-]+)"/g)) templateIds.add(id);
   const usedIds = new Set(matchAll(scriptText, /getElementById\("([\w-]+)"\)/g));
   for (const id of usedIds) {
     if (!templateIds.has(id)) add("error", "dom", `renderer looks up #${id} but the template has no such id`);
   }
 
   // 4. repo test registration (the project's own rule: TESTRUNS.md + test_sets.json)
-  const root = SOURCE_ROOT;
-  const guide = (await readIfExists(path.join(root, "TESTRUNS.md"))) ?? "";
-  const sets = JSON.parse((await readIfExists(path.join(root, "tools", "test_sets.json"))) ?? "{}");
-  const toolFiles = await readdirOrNull(path.join(root, "tools"));
+  const testRoot = SOURCE_ROOT;
+  const guide = (await readIfExists(path.join(testRoot, "TESTRUNS.md"))) ?? "";
+  const sets = JSON.parse((await readIfExists(path.join(testRoot, "tools", "test_sets.json"))) ?? "{}");
+  const toolFiles = await readdirOrNull(path.join(testRoot, "tools"));
   const studioTests = (toolFiles ?? []).filter(
     (name) => name.startsWith("test_mefi_studio_") && name.endsWith(".py")
   );
-  if (toolFiles === null) add("warn", "tests", `repo tools/ not reachable from ${root} — registration check skipped`);
+  if (toolFiles === null) add("warn", "tests", `repo tools/ not reachable from ${testRoot} — registration check skipped`);
   const includePatterns = sets?.sets?.dev?.pythonInclude ?? [];
   for (const test of studioTests) {
     if (!guide.includes(`\`tools/${test}\``)) add("error", "tests", `tools/${test} is missing from TESTRUNS.md`);
@@ -101,7 +102,7 @@ export async function audit() {
     const scripts = JSON.parse(packageText).scripts ?? {};
     for (const [name, command] of Object.entries(scripts)) {
       for (const file of matchAll(command, /(?:node )([\w./-]+\.(?:mjs|cjs|js))/g)) {
-        if (!(await readIfExists(path.join(STUDIO, file)))) add("error", "scripts", `npm script "${name}" targets missing ${file}`);
+        if (!(await readIfExists(path.join(root, file)))) add("error", "scripts", `npm script "${name}" targets missing ${file}`);
       }
     }
   }
@@ -109,7 +110,7 @@ export async function audit() {
   // 6. stale markers
   const markers = [];
   for (const file of [...rendererFiles, "main.cjs", "preload.cjs"]) {
-    const text = await readIfExists(path.join(RENDERER, file)) ?? (await readIfExists(path.join(STUDIO, file))) ?? "";
+    const text = await readIfExists(path.join(RENDERER, file)) ?? (await readIfExists(path.join(root, file))) ?? "";
     for (const match of text.matchAll(/\b(TODO|FIXME|XXX)\b[^\n]*/g)) {
       markers.push({ file, text: match[0].slice(0, 100) });
     }
@@ -118,7 +119,7 @@ export async function audit() {
 
   // 7. data files must parse
   for (const dataFile of ["curated.json", "models.json"]) {
-    const text = await readIfExists(path.join(STUDIO, "data", dataFile));
+    const text = await readIfExists(path.join(root, "data", dataFile));
     try {
       JSON.parse(text ?? "null");
     } catch {

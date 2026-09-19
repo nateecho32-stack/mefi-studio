@@ -13,6 +13,7 @@ const { createProjects } = require("./scripts/projects.cjs");
 const backlog = require("./scripts/backlog.cjs");
 const taskContext = require("./scripts/task-context.cjs");
 const { applyIdeaAction } = require("./scripts/idea-actions.cjs");
+const { createMusicRecommender } = require("./scripts/music-recommendations.cjs");
 const electron = require("electron");
 
 if (typeof electron === "string" || !electron.app) {
@@ -990,6 +991,25 @@ async function zaiOpencodeEnv() {
   return { OPENCODE_CONFIG_CONTENT: JSON.stringify(zaiProviderConfig()), MEFI_ZAI_API_KEY: key };
 }
 
+// Studio workers share session history but do not contend for OpenCode's
+// snapshot git index. This per-process override never edits personal config.
+function executorOpencodeEnv(extra = {}) {
+  const parse = (text) => {
+    if (!text) return {};
+    try {
+      const value = JSON.parse(text);
+      if (value && typeof value === "object" && !Array.isArray(value)) return value;
+    } catch {}
+    throw new Error("Studio worker configuration must be a JSON object. Check OPENCODE_CONFIG_CONTENT.");
+  };
+  const object = (value) => value && typeof value === "object" && !Array.isArray(value);
+  const merge = (left, right) => Object.fromEntries([...new Set([...Object.keys(left), ...Object.keys(right)])].map((key) => [key,
+    Object.hasOwn(right, key) ? object(left[key]) && object(right[key]) ? merge(left[key], right[key]) : right[key] : left[key],
+  ]));
+  const config = merge(parse(process.env.OPENCODE_CONFIG_CONTENT), parse(extra.OPENCODE_CONFIG_CONTENT));
+  return { ...extra, OPENCODE_CONFIG_CONTENT: JSON.stringify({ ...config, snapshot: false }) };
+}
+
 // Which route an autopilot `opencode run` takes. auto + a saved z.ai key rides
 // mefi-zai (the coding plan, never the OpenCode balance); "opencode" stays on
 // OpenCode's own account; "zai" with no key fails loudly instead of billing
@@ -1019,13 +1039,13 @@ async function executorRunEnv() {
   // z.ai key is saved. Computed once and reused as the grok fallback route.
   const opencodeRoute = async () => {
     const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
-    if (provider === "opencode") return { cli: "opencode", env: {}, modelArgs: "", via: "opencode default" };
+    if (provider === "opencode") return { cli: "opencode", env: executorOpencodeEnv(), modelArgs: "", via: "opencode default" };
     const zaiEnv = await zaiOpencodeEnv();
     // Queue-draining builders always ride glm-5.3-flash on the coding plan.
     // glm-5.3 (heavy) is the overseer/improve route, not a 24/7 worker.
-    if (zaiEnv) return { cli: "opencode", env: zaiEnv, modelArgs: ` --model mefi-zai/${ZAI_MODEL_ROUTINE}`, via: `mefi-zai/${ZAI_MODEL_ROUTINE}` };
+    if (zaiEnv) return { cli: "opencode", env: executorOpencodeEnv(zaiEnv), modelArgs: ` --model mefi-zai/${ZAI_MODEL_ROUTINE}`, via: `mefi-zai/${ZAI_MODEL_ROUTINE}` };
     if (provider === "zai") return { error: "AI routing is z.ai-only but no z.ai key is saved" };
-    return { cli: "opencode", env: {}, modelArgs: "", via: "opencode default" };
+    return { cli: "opencode", env: executorOpencodeEnv(), modelArgs: "", via: "opencode default" };
   };
   if (settings.executorCli === "grok") {
     const buildModel = String(settings.executorModel ?? "").trim().slice(0, 120);
@@ -1812,14 +1832,10 @@ function assistantSetProblems(kinds, list) {
 // (which returns a new state), then the true pool counts are written back:
 // the roster has one row per role, but several responders may run at once.
 const EXECUTOR_PARALLEL_MAX = 12;
-// Hard cap while opencode's snapshot store cannot take concurrent writers.
-// Every `opencode run` snapshots the tree into ONE shared git worktree
-// (~/.local/share/opencode/snapshot); concurrent startups collide on that
-// worktree's git index and wedge silently before printing a line, and a
-// watchdog kill leaves the lock stale for every run after. On 2026-09-18,
-// 117 consecutive concurrent runs wedged this way while every solo run
-// finished. Raise this only when opencode serializes that store itself.
-const EXECUTOR_PARALLEL_CAP = 1;
+// A small worker pool alongside the lightweight assistant roster. Worker
+// snapshots are disabled in executorOpencodeEnv; file claims still serialize
+// overlapping edits, and startup recovery may narrow the pool back to one.
+const EXECUTOR_PARALLEL_CAP = 3;
 const AI_PARALLEL_MAX = 6;
 function assistantPoolCounts() {
   if (!assistantState) return;
@@ -2433,11 +2449,16 @@ async function assistantAuditorJob() {
 // choosing what runs is the assistant's job, so every "start something" in this
 // file goes through here rather than reaching into the executor directly.
 async function assistantForemanJob(now, entry) {
+  // Settle finished attempts and recover lost claims before picking more work
+  // in either mode. Otherwise the ordinary queue waited for the five-minute
+  // auto-builder pass, even though the foreman was already visiting it.
+  if (assistantState?.status !== "paused") {
+    await autopilotHousekeeping();
+    await promoteRequestsToTasks();
+  }
   // Admission is bounded by the ready/running/review buffer. A large ideas
   // collection must not turn into an equally large batch of new workers.
   if (assistantState?.prefs?.backlogMode && autopilot.execute && assistantState.status !== "paused") {
-    await autopilotHousekeeping();
-    await promoteRequestsToTasks();
     await admitBacklogIdeas();
   }
   // No early return on `!autopilot.execute`: the cooldown re-arm lives inside
@@ -2548,14 +2569,15 @@ async function assistantThinkerJob(now, entry) {
 // foreman is a roster job, so the dispatch is visible, queued behind the pool,
 // and attributable to the assistant like every other decision it makes.
 function assistantAskForWork(reason) {
-  if (SMOKE || CAPTURE || CLI_MODE) return;
-  if (assistantState?.status === "paused") return;
+  if (SMOKE || CAPTURE || CLI_MODE) return false;
+  if (assistantState?.status === "paused") return false;
   // The reason rides into the Auto Builder panel, so the card says why the
   // assistant reached for work rather than leaving the executor's state
   // unexplained.
   autopilot.lastAsk = { reason: reason ?? null, at: Date.now() };
   assistantEnqueueRole("foreman", ASSISTANT_PRIORITY.demand);
   if (reason) logLine(`[assistant] foreman asked to hand out work (${reason})`);
+  return true;
 }
 
 // What the assistant is doing about the build queue, for the Auto Builder card.
@@ -2592,7 +2614,11 @@ async function assistantCompactorJob(now, entry) {
           return rest;
         })
       : out.tasks;
-    return { requests: out.requests, tasks, ideas: out.ideas, report: out.report, runnable: out.report?.runnable ?? 0, plans: out.report?.plans ?? [] };
+    const readiness = backlog.summarizeBacklog({ tasks, requests: out.requests, ideas: out.ideas, jobs: autopilot.jobs, compare: compareWork, now });
+    const report = { ...out.report, runnable: readiness.counts.ready,
+      text: String(out.report?.text ?? "Backlog reviewed").replace(/\d+ jobs? runnable/g, `${readiness.counts.ready} work item${readiness.counts.ready === 1 ? "" : "s"} ready`),
+      reviewed: { ...out.report?.reviewed, next: readiness.next[0]?.title ?? null } };
+    return { requests: out.requests, tasks, ideas: out.ideas, report, runnable: report.runnable, plans: report.plans ?? [] };
   });
   const { report } = result;
   // Every pass is a review, changed or not: the feed names what the backlog
@@ -2605,9 +2631,9 @@ async function assistantCompactorJob(now, entry) {
   for (const title of report.plans ?? []) assistantLog("brief", `folded ideas into a plan: ${assistantClip(title, 90)}`);
   // Hand the shaped queue to the foreman. The compactor decides what is worth
   // running; the foreman decides what actually starts, and reports it.
-  if (report.runnable) assistantAskForWork("compacted");
-  await assistantHop(entry, ROOT_NODE, { progress: 1, label: report.runnable ? `${report.runnable} runnable` : "queue clear" });
-  const held = !autopilot.execute ? " · executor off" : report.runnable ? " · handed to the foreman" : "";
+  const requested = Boolean(report.runnable && autopilot.execute && assistantAskForWork("compacted"));
+  await assistantHop(entry, ROOT_NODE, { progress: 1, label: report.runnable ? `${report.runnable} ready` : "no eligible work" });
+  const held = assistantState?.status === "paused" || !autopilot.execute ? " · new workers paused" : requested ? " · dispatch requested; worker start is not yet confirmed" : "";
   return { ok: true, text: `${report.text}${held}${next}`, intel: { queued: report.reviewed?.queued ?? 0, runnable: report.runnable ?? 0, plans: (report.plans ?? []).length } };
 }
 
@@ -3629,9 +3655,9 @@ async function assistantMessageFacts(now, query = "") {
     (async () => {
       const eyes = await getEyes();
       await Promise.allSettled([
-        eyes.readJson(TASKS_PATH, []).then((rows) => { raw.tasks = rows.slice(0, 40); }),
+        eyes.readJson(TASKS_PATH, []).then((rows) => { raw.tasks = rows; }),
         eyes.readJson(IDEAS_PATH, []).then((rows) => { raw.ideas = rows.slice(0, 40); }),
-        eyes.readJson(REQUESTS_PATH, []).then((rows) => { raw.requests = rows.slice(0, 30); }),
+        eyes.readJson(REQUESTS_PATH, []).then((rows) => { raw.requests = rows; }),
         eyes.readJson(BRIEFING_PATH, null).then((briefing) => {
           if (briefing?.summary) raw.briefing = { summary: briefing.summary, generatedAt: briefing.generatedAt, alerts: (briefing.alerts ?? []).slice(0, 6) };
         }),
@@ -3673,12 +3699,19 @@ async function assistantMessageFacts(now, query = "") {
       waiting: autopilot.waiting ?? null,
       parallel: Math.max(1, Math.floor(Number(autopilot.parallel) || 1)),
       lastAsk: autopilot.lastAsk?.reason ?? null,
-      running: (autopilot.jobs ?? []).map((job) => ({ title: job.title, minutes: Math.max(0, (now - (job.startedAt ?? now)) / 60000) })),
+      running: (autopilot.jobs ?? []).filter((job) => !job.finished).map((job) => ({ title: job.title, minutes: Math.max(0, (now - (job.startedAt ?? now)) / 60000) })),
       history: (autopilot.history ?? []).slice(0, 8).map((entry) => ({ kind: entry.kind, text: entry.text, at: entry.at })),
     };
   } catch {}
   try {
     const assistant = await getAssistant();
+    if (Array.isArray(raw.tasks) && Array.isArray(raw.requests)) {
+      const readiness = backlog.summarizeBacklog({ tasks: raw.tasks, requests: raw.requests, jobs: (autopilot.jobs ?? []).filter((job) => !job.finished), now, compare: compareWork,
+        paused: assistantState.status === "paused" || !autopilot.execute, waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil });
+      const readyTasks = readiness.taskStates.filter((task) => task.stage === "ready").length;
+      raw.backlog = { counts: { ...readiness.counts, readyTasks, readyRequests: readiness.counts.ready - readyTasks }, paused: readiness.paused,
+        waiting: readiness.waiting, next: readiness.next.slice(0, 3), totalTasks: raw.tasks.length, totalRequests: raw.requests.length };
+    }
     const facts = assistant.buildFacts({ ...raw, query, lessons: assistantState?.overseer?.lessons });
     // Ranked next-work picks ride the facts so a reply — local or AI — can
     // offer real work instead of summarising the board flatly.
@@ -3781,11 +3814,11 @@ async function assistantRespond(user, entry = null) {
           // A chat instruction should start now, not wait for the foreman's
           // own cadence. The assistant still decides whether it can.
           if (created) assistantAskForWork("chat instruction");
-          const executorNote = autopilot.execute
-            ? "put it on the task board as the next piece of work and kicked the executor"
+          const executorNote = autopilot.execute && assistantState.status !== "paused"
+            ? "put it on the task board and requested dispatch; the next eligible worker will pick it up"
             : autopilot.parkedUntil
               ? `put it on the task board (executor parked until ~${new Date(autopilot.parkedUntil).toLocaleTimeString()}: ${assistantClip(autopilot.lastError ?? "opencode is not starting", 90)})`
-              : "put it on the task board (the autopilot executor is off)";
+              : "put it on the task board (new workers are paused)";
           done.push(created ? executorNote : "it is already on the task board");
         } else if (action === "compact") {
           // "Clean up the builder / the queue": one compactor pass on demand —
@@ -4114,7 +4147,7 @@ const autopilot = {
   enabled: true, // evaluate on a timer (was "proactive")
   execute: true, // run queued requests via opencode
   minutes: 5,
-  parallel: 8, // how many `opencode run` jobs may be in flight at once (1–12); boot replaces this with the machine default
+  parallel: 2, // worker processes; a bounded pool separate from the assistant roster
   jobs: [], // in-flight runs: {id, kind, title, source, ref, child, pid, startedAt, sessionId, taskId, finished}
   consecutiveFailures: 0,
   infraFailures: 0, // spawn errors / instant exits — 3 in a row parks the executor for a cooldown
@@ -4259,10 +4292,11 @@ function autopilotStatus() {
     execute: autopilot.execute,
     minutes: autopilot.minutes,
     parallel: autopilot.parallel,
+    parallelLimit: EXECUTOR_PARALLEL_CAP,
     // Pids stay main-side: the renderer gets labels, not handles. `progress`
     // is the run's own todo fraction (null until the session reports todos),
     // what the builder meters on the constellation show.
-    running: autopilot.jobs.map((entry) => ({
+    running: autopilot.jobs.filter((entry) => !entry.finished).map((entry) => ({
       title: entry.title,
       projectId: entry.projectId,
       projectPath: entry.projectPath,
@@ -4270,7 +4304,7 @@ function autopilotStatus() {
       startedAt: entry.startedAt,
       sessionId: entry.sessionId ?? null,
       ...(entry.taskId ? { taskId: entry.taskId } : {}),
-      ...(typeof entry.progress === "number" ? { progress: entry.progress } : {}),
+      ...(Number.isFinite(entry.progress) ? { progress: Math.max(0, Math.min(1, entry.progress)) } : {}),
     })),
     lastPassAt: autopilot.lastPassAt,
     lastAdded: autopilot.lastAdded,
@@ -5983,11 +6017,10 @@ async function spawnNextJob() {
       // The machine just said it cannot start this many CLI agents at once.
       // Narrow the pool (and persist it) instead of refilling every slot
       // into the same stampede — a wedged start is a width signal, not a
-      // task problem. The floor is EXECUTOR_PARALLEL_CAP: even two
-      // concurrent startups collide on the shared snapshot store's git
-      // index (observed 21:27), so only a serialized pool completes.
-      if (autopilot.parallel > EXECUTOR_PARALLEL_CAP) {
-        const narrowed = Math.max(EXECUTOR_PARALLEL_CAP, autopilot.parallel - 2);
+      // task problem. Recovery can serialize the pool without removing the
+      // user's ability to increase the bounded width after fixing the cause.
+      if (autopilot.parallel > 1) {
+        const narrowed = Math.max(1, autopilot.parallel - 1);
         autopilot.parallel = narrowed;
         pushAutopilotHistory("narrowed", `pool narrowed to ${narrowed} — wedged start under load`);
         logLine(`[autopilot] pool narrowed to ${narrowed} after a wedged start`);
@@ -6145,13 +6178,27 @@ async function autopilotHousekeeping() {
     // bounded (verifyAttempts) so an unprovable job cannot loop forever.
     let changedByVerify = false;
     const verifyNotes = [];
+    const attemptChanges = (attempt, title) => {
+      if (!attempt.sessionId) return [];
+      try {
+        const files = eyes.listChanges({ sessionId: attempt.sessionId, limit: 50 });
+        if (!Array.isArray(files)) throw new Error("session changes are unavailable");
+        return files.filter((file) => file?.status === "completed" && (file.file || file.files?.length));
+      } catch (error) {
+        // An unavailable evidence reader is not a failed attempt. Leave this
+        // row in review without consuming its budget and settle other work.
+        verifyNotes.push(`verification waiting for "${assistantClip(title, 60)}" — ${String(error?.message ?? error).slice(0, 160)}`);
+        return null;
+      }
+    };
     if (typeof verify === "function") {
       const tasks = [...board.tasks];
       for (const task of tasks) {
         if (task?.status !== "awaiting_verification") continue;
         const attempt = task.lastAttempt ?? {};
-        if (!attempt.at || now - attempt.at < VERIFY_DWELL_MS) continue;
-        const files = attempt.sessionId ? eyes.listChanges({ sessionId: attempt.sessionId, limit: 50 }) : [];
+        if (Number(attempt.at) > 0 && now - Number(attempt.at) < VERIFY_DWELL_MS) continue;
+        const files = attemptChanges(attempt, task.title);
+        if (files === null) continue;
         const verdict = verify({
           verdictOk: attempt.sawDone === true || attempt.code === 0,
           changedFiles: Array.isArray(files) ? files.length : 0,
@@ -6225,8 +6272,9 @@ async function autopilotHousekeeping() {
       for (const request of requests) {
         if (request?.status !== "verifying") continue;
         const attempt = request.lastAttempt ?? {};
-        if (!attempt.at || now - attempt.at < VERIFY_DWELL_MS) continue;
-        const files = attempt.sessionId ? eyes.listChanges({ sessionId: attempt.sessionId, limit: 50 }) : [];
+        if (Number(attempt.at) > 0 && now - Number(attempt.at) < VERIFY_DWELL_MS) continue;
+        const files = attemptChanges(attempt, request.title);
+        if (files === null) continue;
         const verdict = verify({
           verdictOk: attempt.sawDone === true || attempt.code === 0,
           changedFiles: Array.isArray(files) ? files.length : 0,
@@ -6376,9 +6424,7 @@ async function setAutopilot(prefs = {}) {
   }
   if (prefs.minutes !== undefined) autopilot.minutes = Math.max(1, Number(prefs.minutes) || autopilot.minutes);
   if (prefs.parallel !== undefined) autopilot.parallel = Math.min(EXECUTOR_PARALLEL_MAX, Math.max(1, Math.round(Number(prefs.parallel) || autopilot.parallel)));
-  // Machine cap (see EXECUTOR_PARALLEL_CAP): a saved 8 or the 4-core floor
-  // still collapses into the snapshot-lock wedge on this setup, so the cap
-  // applies to every width source, saved preference included.
+  // The same bound applies to saved settings and interactive controls.
   autopilot.parallel = Math.min(autopilot.parallel, EXECUTOR_PARALLEL_CAP);
   const settings = await readSettings();
   settings.ui = {
@@ -6407,12 +6453,16 @@ function setProactive(enabled, minutes = 5) {
   return setAutopilot({ enabled, minutes });
 }
 
-// How many build agents the machine can carry at once: one per logical core,
-// at least 4, capped at EXECUTOR_PARALLEL_MAX. The old default of 3 was a
-// throttle; we want the queue draining as wide as the host can take.
+// Two workers by default on multicore hosts; users may choose one to three.
 function machineParallelDefault() {
   const cores = Number.isFinite(os?.cpus?.()?.length) && os.cpus().length > 0 ? os.cpus().length : 8;
-  return Math.min(EXECUTOR_PARALLEL_MAX, Math.max(4, cores));
+  return Math.min(2, Math.max(1, cores));
+}
+
+function savedExecutorParallel(saved = {}) {
+  const width = Math.round(Number(saved.parallel));
+  // An explicit narrow pool remains the operator's choice across updates.
+  return Number.isFinite(width) && width >= 1 ? Math.min(EXECUTOR_PARALLEL_CAP, width) : machineParallelDefault();
 }
 
 // Settings may override the defaults (on/on/5m); the first pass runs ~15s
@@ -6424,12 +6474,11 @@ async function bootAutopilot() {
     getPolicyModule().then(warmPolicyBaseline).catch(() => {});
     const settings = await readSettings();
     const saved = settings.ui?.autopilot ?? {};
-    const savedWidth = Math.round(Number(saved.parallel));
     await setAutopilot({
       enabled: saved.enabled ?? true,
       execute: saved.execute ?? true,
       minutes: saved.minutes ?? autopilot.minutes,
-      parallel: Number.isFinite(savedWidth) && savedWidth >= 1 ? savedWidth : machineParallelDefault(),
+      parallel: savedExecutorParallel(saved),
     });
     setTimeout(() => projects.run(projects.active(), () => autopilotPass()), 15000).unref?.();
     // A previous session's kills may have left stale snapshot locks; clear
@@ -7211,6 +7260,8 @@ function registerIpc() {
     if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Send your message again in its intended project." };
     return assistantMessage(text);
   });
+  const recommendMusic = createMusicRecommender({ resolveRoute: resolveAiRoute, complete: httpAssistantCall });
+  ipcMain.handle("music:recommend", (_event, payload) => recommendMusic(payload));
   // Work on it: the node becomes the assistant's next piece of work — pinned,
   // threaded, and dispatched on the spot.
   ipcMain.handle("assistant:work-on", async (_event, target) => assistantWorkOn(target ?? {}));

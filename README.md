@@ -43,6 +43,39 @@ session explorer, model booklet, value graphs, ideas, and diagnostics. API keys,
 Jev, coding providers, and the optional Ruins Runner launcher live in **Settings
 & connections**. Press **H** to return home or **Ctrl K** to find a tool.
 
+**Command center** puts the current worker and its reported step in **Live work**,
+with readiness counts and a ranked queue underneath. Agent details and technical
+logs expand when needed. Only actively running agents appear around the Assistant;
+role colors distinguish their work. Verification and claim recovery run before
+the next dispatch, including ordinary automatic work outside backlog mode.
+**Parallel builds** chooses one to three coding workers. Independent file claims
+can run together; overlapping work waits. The separate assistant agent and AI
+limits remain available on the Assistant's detail card. Studio worker processes
+disable OpenCode's shared filesystem snapshots to avoid concurrent snapshot
+index locks; their tool-change evidence, conversations and Studio task history
+remain available. OpenCode filesystem undo is unavailable for those worker runs.
+
+**Follow** frames the active task with its current step. It follows meaningful
+activity and moves between parallel jobs after a short dwell, then leaves a
+finished task for the next active one. Panning, zooming or selecting something
+manually takes control; choose Follow again to resume. A quiet board holds its
+last view, and reduced motion disables timed cycling between workers.
+
+Open **Music & themes** from the sidebar, Command dock, or the tree's music node.
+Add local audio files to a queue with play/pause, previous/next, seeking and volume.
+The queue lasts for the current app session; choose the files again after restart.
+Local playback needs no account. The **Spotify** tab accepts song, album and
+playlist links and remembers six recent links for switching. It uses Spotify's
+official embedded player; Spotify controls available playback, previews and sign-in.
+AI music suggestions use Studio's configured AI provider only when requested;
+suggestions offer Spotify searches and cannot create tasks or control agents.
+
+Choose **Studio gold**, **Midnight**, **Forest**, **Violet** or **Ember** to recolor
+Studio and the node tree. The tree's music toggle follows local tracks directly.
+Desktop or microphone audio is optional and starts only after an explicit control
+gesture. Bass, mids, treble and beat envelopes affect the scene without speeding
+up its orbit or moving labels; reduced-motion preferences remain respected.
+
 Project state stays under the application's ignored `data/projects/` folders;
 the original project's existing files stay in place. Source and portable builds
 retain their separate existing data stores. This update does not merge them or

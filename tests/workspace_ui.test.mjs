@@ -63,7 +63,7 @@ async function environment() {
   };
   const context = vm.createContext({
     window: {
-      mefiStudio: bridge, dispatchEvent() {},
+      mefiStudio: bridge, dispatchEvent() {}, addEventListener() {},
       MefiNav: { list: () => [], go() {} }, MefiIdle: { exit() {} }, MefiBoot: { pollStart() {} },
       MefiTasks: { describe: (task) => ({ stage: task.status === "done" ? "done" : task.status === "awaiting_verification" ? "review" : "open", label: task.status, summary: task.prompt || "" }) },
     },

@@ -103,7 +103,10 @@ class MefiStudioIdleTests(unittest.TestCase):
         for marker in (
             'readStore("mefiStudio.zenSource") === "mic" ? "mic" : "desktop"',
             "getDisplayMedia?.({ video: true, audio: true })",
-            "getUserMedia?.({ audio: true })",
+            # The mic path asks for the raw signal: the usual phone-call
+            # processing (echo cancellation, noise suppression, AGC) would
+            # flatten exactly the dynamics the reactive glow listens to.
+            "getUserMedia?.({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } })",
             "useReactiveInput",
             "releaseReactiveInput",
             "setAudioSource",
@@ -150,7 +153,9 @@ class MefiStudioIdleTests(unittest.TestCase):
         self.assertIn(".cmd-chat.collapsed .feed-state {", styles)
         chat = self.idle[self.idle.index("function renderChatLog()") : self.idle.index("function paintChatLog()")]
         self.assertIn("autopilotJobs(state.assistant)", chat)
-        self.assertIn("`${running} running`", chat)
+        self.assertIn("commandChatActivity(full, autopilotJobs(state.assistant), state.backlog)", chat)
+        self.assertIn("el.chatLog.dataset.agents", chat)
+        self.assertIn("el.chatLog.dataset.builds", chat)
         self.assertIn("el.chatLog.dataset.running", chat)
 
     def test_assistant_console_lives_in_the_feed_rail(self):
@@ -232,7 +237,9 @@ class MefiStudioIdleTests(unittest.TestCase):
         self.assertIn("EXECUTOR_PROGRESS_POLL_MS", self.main)
         self.assertIn("eyes.listTodos({ sessionId: entry.sessionId })", self.main)
         self.assertIn("watchJobProgress(eyes, entry);", self.main)
-        self.assertIn('typeof entry.progress === "number"', self.main)
+        self.assertIn("Number.isFinite(entry.progress)", self.main)
+        self.assertIn("Math.max(0, Math.min(1, entry.progress))", self.main)
+        self.assertIn("autopilot.jobs.filter((entry) => !entry.finished)", self.main)
         self.assertIn("progress: null, // the run's own todo fraction", self.main)
         # Renderer side: builder nodes wear the fraction so the work-left
         # meter shows under a building agent, and a push carrying the same

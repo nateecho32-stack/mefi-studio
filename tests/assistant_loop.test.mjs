@@ -305,6 +305,7 @@ test("idle foreman does not spin the compactor on a recently reviewed unrunnable
   const autopilot = { execute: true, jobs: [], parallel: 1 };
   const env = host(section("async function assistantForemanJob(", "// The thinker: the assistant itself."), {
     autopilot, executeNextRequest: async () => {}, assistantState: state, assistantCache: {},
+    autopilotHousekeeping: async () => {}, promoteRequestsToTasks: async () => {},
     MINUTE_MS: 60000, ASSISTANT_PRIORITY: { demand: 2 },
     assistantEnqueueRole: (role) => queued.push(role),
   });

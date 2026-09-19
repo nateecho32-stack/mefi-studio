@@ -372,7 +372,20 @@
       try { const paused = state.assistant.status === "paused" || state.assistant.prefs?.paused; const result = guard(await api().assistantControl(paused ? "resume" : "pause")); state.assistant = result.state; renderCompanion(); scheduleBacklogRead(); feedback(paused ? "New work can start again." : "New work paused. Running jobs finish normally."); }
       catch (error) { feedback(error.message, true); } finally { controls(); }
     });
-    for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "gold"]]) { $(id).value = storage.get(key, fallback); $(id).addEventListener("input", () => { storage.set(key, $(id).value); personalize(); }); }
+    for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "gold"]]) {
+      $(id).value = storage.get(key, fallback);
+      $(id).addEventListener("input", () => {
+        storage.set(key, $(id).value);
+        if (id === "accent") window.MefiMusic?.applyTheme?.($(id).value === "sage" ? "forest" : $(id).value);
+        personalize();
+      });
+    }
+    const syncThemeChoice = () => {
+      const theme = window.MefiMusic?.status?.().theme;
+      if (theme) $("accent").value = theme === "forest" ? "sage" : theme;
+    };
+    window.addEventListener("mefi-theme-change", syncThemeChoice);
+    syncThemeChoice();
     $("motion").checked = storage.get("motion", "1") !== "0";
     $("motion").addEventListener("change", () => { storage.set("motion", $("motion").checked ? "1" : "0"); personalize(); });
     for (const dest of window.MefiNav?.list?.() || []) {
