@@ -1,0 +1,39 @@
+# CI gate for the spec-naming convention (CONTRIBUTING.md "Test file
+# conventions"): fails when two spec files share a basename across tools/ and
+# tests/, or when a tools/test_*.py contract is unreachable by the npm-test
+# discovery pattern. scripts/spec-collisions.mjs is the checker;
+# tests/spec_collisions.test.mjs guards it with synthetic fixtures.
+name: Studio checks
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  spec-collisions:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: Build the shipped renderer
+        run: npm run build-booklet
+      - name: Ensure the committed renderer is current
+        run: git diff --exit-code -- renderer/booklet.html
+      - name: Audit spec basenames and discovery reachability
+        run: npm run check:specs
+      - name: Guard tests for the audit
+        run: node --test tests/spec_collisions.test.mjs
+      - name: Full check gate (targets + syntax)
+        run: npm run check
+      - name: Behavioral and isolated desktop checks
+        run: npm test
+      - name: Application audit
+        run: npm run audit
