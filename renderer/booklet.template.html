@@ -214,6 +214,14 @@
           <span class="muted" id="key-status">checking…</span>
         </div>
         <div class="row">
+          <input type="password" id="jev-key" placeholder="Jev gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev gateway API key">
+          <button id="save-jev-key">Save Jev key</button>
+          <button id="test-jev">Test Jev connection</button>
+          <label class="switch"><input type="checkbox" id="jev-enabled"><span class="track"></span><span>Jev classification</span></label>
+        </div>
+        <p class="muted" id="jev-status" role="status">Checking Jev…</p>
+        <p class="muted">Jev compares incoming work with existing tasks and records suggestions for the assistant. Your chat and coding models remain selected below.</p>
+        <div class="row">
           <label class="muted">AI routing
             <select id="ai-provider">
               <option value="auto">Auto — prefer z.ai GLM; OpenCode only when it is the only key</option>

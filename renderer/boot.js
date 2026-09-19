@@ -26,10 +26,10 @@
   const PULSE_MS = 120;
   const CLEAN_MS = 160;
   const LANES = 5; // agents reading in parallel
-  const ORGANISE_MS = 280; // the "organising the node tree" beat
-  const HOLD_MS = 180; // the "ready" beat before the fade starts
+  const ORGANISE_MS = 80; // a brief handoff once the real graph is ready
+  const HOLD_MS = 80; // the "ready" beat before the fade starts
   const FADE_MS = 480; // the CSS fade into the constellation
-  const MIN_SHOW_MS = 900; // legibility floor — never a strobe
+  const MIN_SHOW_MS = 450; // legibility floor — never a strobe
   const MAX_SHOW_MS = 5200; // a slow store must not hold the launch hostage
   const MAX_CHAT_NODES = 8; // mirrors the tree's capped roots
   const LABEL_MAX_PX = 170;
@@ -65,7 +65,6 @@
     timings: null,
   };
 
-  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const ease = (k) => 1 - Math.pow(1 - Math.min(1, Math.max(0, k)), 3);
   const lerp = (a, b, k) => a + (b - a) * k;
 
@@ -86,45 +85,55 @@
     return Promise.race([Promise.resolve(promise).catch(() => null), timeout]).finally(() => clearTimeout(timer));
   }
 
+  // Several surfaces open together. Share only their concurrent, read-only
+  // IPC requests; release settled promises so later opens see current data.
+  // Writes (including task edits) always use the bridge directly.
+  const reads = new Map();
+  const readMethods = new Set(["assistantStatus", "assistantState", "eyesState", "tasksList", "ideasList", "eyesRequestsRead", "eyesBriefingRead", "eyesCheckpointsRead", "prefsGet"]);
+  function read(method) {
+    if (!readMethods.has(method)) return Promise.reject(new Error(`Not a shared read: ${method}`));
+    if (reads.has(method)) return reads.get(method);
+    const pending = Promise.resolve().then(() => window.mefiStudio?.[method]?.());
+    reads.set(method, pending);
+    const release = () => {
+      if (reads.get(method) === pending) reads.delete(method);
+    };
+    pending.then(release, release);
+    return pending;
+  }
+
   // ---------- the reads ----------
 
-  // The assistant first (it is the boot's own heartbeat), then every source
-  // the Command tree is built from, each enqueueing its reader nodes as it
-  // answers so the animation shows real arrivals, never a fake checklist.
+  // Start every independent read together. The readers still arrive as their
+  // data lands, but an assistant read no longer delays the session store.
   async function gather() {
     const bridge = window.mefiStudio;
     if (!bridge) {
       // Browser-only fallback (npm run start:web): no store to read.
       boot.assistantLine = "browser mode";
-      await wait(noMotion() ? 100 : 700);
       return;
     }
-    const [status, state] = await Promise.all([guard(bridge.assistantStatus?.()), guard(bridge.assistantState?.())]);
-    boot.assistantLine = state?.state?.prefs?.paused ? "paused" : "listening";
-    boot.assistantStatus = status?.status ?? null;
-    await wait(noMotion() ? 40 : 220); // a beat where the assistant is alone
     await Promise.all([
-      readChats(bridge),
-      readSource(bridge.tasksList?.(), "the task board", (result) =>
+      guard(read("assistantState")).then((state) => {
+        boot.assistantLine = state?.state?.prefs?.paused ? "paused" : "listening";
+      }),
+      readChats(),
+      readSource(read("tasksList"), "the task board", (result) =>
         (Array.isArray(result?.tasks) ? result.tasks : []).filter((task) => task?.status === "open" || task?.status === "active").length
       ),
-      readSource(bridge.ideasList?.(), "feature ideas", (result) =>
+      readSource(read("ideasList"), "feature ideas", (result) =>
         (Array.isArray(result?.ideas) ? result.ideas : []).filter((idea) => !idea?.read).length
       ),
-      readSource(bridge.eyesRequestsRead?.(), "the request inbox", (result) => (Array.isArray(result?.requests) ? result.requests.length : 0)),
-      readSource(bridge.eyesBriefingRead?.(), "the latest briefing", (result) => (result?.briefing ? 1 : 0)),
-      readSource(bridge.eyesCheckpointsRead?.(), "checkpoints", (result) => Object.keys(result?.checkpoints ?? {}).length),
-      readSource(bridge.machineStatus?.(), "machine status", (result) => {
-        const runs = result?.status?.runs;
-        return Array.isArray(runs) ? runs.length : 0;
-      }),
+      readSource(read("eyesRequestsRead"), "the request inbox", (result) => (Array.isArray(result?.requests) ? result.requests.length : 0)),
+      readSource(read("eyesBriefingRead"), "the latest briefing", (result) => (result?.briefing ? 1 : 0)),
+      readSource(read("eyesCheckpointsRead"), "checkpoints", (result) => Object.keys(result?.checkpoints ?? {}).length),
     ]);
   }
 
   // Other chats, going on or happened: each becomes its own green reader node
   // named after the chat; anything past the cap folds into one summary node.
-  async function readChats(bridge) {
-    const result = await guard(bridge.eyesState?.());
+  async function readChats() {
+    const result = await guard(read("eyesState"));
     const sessions = Array.isArray(result?.sessions) ? result.sessions : [];
     const now = Date.now();
     const chats = sessions.filter((session) => session?.id);
@@ -197,7 +206,9 @@
   function makeStars() {
     boot.stars = Array.from({ length: 70 }, (_, index) => {
       const seed = index * 2654435761;
-      const rand = (n) => ((seed >> n) % 1000) / 1000;
+      // Unsigned shifts keep the seeded values in [0, 1). A signed shift
+      // creates negative star radii and aborts the boot's first canvas frame.
+      const rand = (n) => ((seed >>> n) % 1000) / 1000;
       return { x: rand(3), y: rand(7), size: 0.5 + rand(11) * 1.3, phase: rand(5) * Math.PI * 2, drift: 0.002 + rand(13) * 0.004 };
     });
   }
@@ -214,10 +225,12 @@
   }
 
   function truncate(ctx, reader) {
-    if (reader.labelWidth && reader.labelWidth <= LABEL_MAX_PX) return reader.label;
+    if (reader.displayLabel != null) return reader.displayLabel;
     let text = reader.label;
     while (text.length > 4 && ctx.measureText(`${text}…`).width > LABEL_MAX_PX) text = text.slice(0, -1);
-    return text.length === reader.label.length ? text : `${text}…`;
+    reader.displayLabel = text.length === reader.label.length ? text : `${text}…`;
+    reader.labelWidth = ctx.measureText(reader.displayLabel).width;
+    return reader.displayLabel;
   }
 
   function draw(now) {
@@ -307,7 +320,7 @@
     // the label names the chat or thing being read
     ctx.font = LABEL_FONT;
     const text = truncate(ctx, reader);
-    const flip = reader.x + 14 + ctx.measureText(text).width > boot.w - 12;
+    const flip = reader.x + 14 + reader.labelWidth > boot.w - 12;
     ctx.textAlign = flip ? "right" : "start";
     const tx = flip ? reader.x - 12 : reader.x + 12;
     ctx.fillStyle = rgba(color, 0.9 * alpha);
@@ -358,23 +371,23 @@
 
   function stepGate(now) {
     const age = now - boot.startedAt;
-    const drained = boot.dataDone && boot.idleDone && !boot.queue.length && !boot.lanes.length;
+    const minimum = noMotion() ? 0 : MIN_SHOW_MS;
     if (boot.phase === "reading") {
       // Command's first graph is already up: leftover theatrical readers
       // must not hold the fade after the tree is ready.
-      if (boot.idleDone && boot.dataDone && age > MIN_SHOW_MS) {
+      if (boot.idleDone && boot.dataDone && age >= minimum) {
         boot.queue = [];
         boot.lanes = [];
         boot.phase = "organising";
         boot.phaseAt = now;
-      } else if ((drained && age > MIN_SHOW_MS) || age > MAX_SHOW_MS) {
+      } else if (age > MAX_SHOW_MS) {
         boot.phase = "organising";
         boot.phaseAt = now;
       }
-    } else if (boot.phase === "organising" && now - boot.phaseAt > ORGANISE_MS) {
+    } else if (boot.phase === "organising" && now - boot.phaseAt >= (noMotion() ? 0 : ORGANISE_MS)) {
       boot.phase = "ready";
       boot.phaseAt = now;
-    } else if (boot.phase === "ready" && now - boot.phaseAt > HOLD_MS) {
+    } else if (boot.phase === "ready" && now - boot.phaseAt >= (noMotion() ? 0 : HOLD_MS)) {
       boot.phase = "fading";
       fade();
     }
@@ -382,7 +395,7 @@
 
   function fade() {
     el.layer.classList.add("done");
-    boot.timers.push(setTimeout(teardown, FADE_MS + 80));
+    boot.timers.push(setTimeout(teardown, noMotion() ? 0 : FADE_MS + 80));
   }
 
   // ---------- lifecycle ----------
@@ -431,6 +444,8 @@
     boot.slot = 0;
     boot.readsDone = 0;
     boot.readsTotal = 0;
+    boot.dataDone = false;
+    boot.idleDone = false;
     boot.current = "";
     boot.title = "";
     boot.count = "";
@@ -455,16 +470,18 @@
 
     // Hand the launch to the Command view at once: its first graph build
     // overlaps the reads, so the fade lands on a tree that is already there.
-    boot.timers.push(
-      setTimeout(() => {
-        if (typeof openHome === "function") openHome();
-        Promise.resolve(window.MefiIdle?.ready?.())
-          .catch(() => {})
-          .then(() => {
-            boot.idleDone = true;
-          });
-      }, 140)
-    );
+    const launchHome = () => {
+      if (typeof openHome === "function") openHome();
+      Promise.resolve(window.MefiIdle?.ready?.())
+        .catch(() => {})
+        .then(() => {
+          boot.idleDone = true;
+        });
+    };
+    // idle.js wires its canvas at DOMContentLoaded. Join that event instead
+    // of sleeping 140ms and hoping the DOM has finished by then.
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", launchHome, { once: true });
+    else launchHome();
 
     gather()
       .catch(() => {})
@@ -522,5 +539,5 @@
     }
   });
 
-  window.MefiBoot = { run, cancel, isActive: () => boot.active, pollStart, pollStop, pollActive: (key) => Boolean(polls.get(key)?.timer) };
+  window.MefiBoot = { run, cancel, read, isActive: () => boot.active, pollStart, pollStop, pollActive: (key) => Boolean(polls.get(key)?.timer) };
 })();

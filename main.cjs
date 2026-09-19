@@ -138,6 +138,24 @@ const MACHINE_DEFAULTS = { autoKill: true, idleSeconds: 240, maxAgeMinutes: 20, 
 let machineTimer = null;
 let machinePreviousCpu = new Map();
 const machineEvents = [];
+let machineReadInFlight = null;
+let machineReadCache = null;
+
+// UI readers share a scan and may reuse a two-second snapshot. Resource
+// enforcement bypasses this cache and always gets fresh process information.
+function readMachineStatus({ kill = false } = {}) {
+  if (kill) {
+    machineReadCache = null;
+    return resourcePass({ kill: true, reason: "manual" });
+  }
+  if (machineReadInFlight) return machineReadInFlight;
+  if (machineReadCache && Date.now() - machineReadCache.at < 2000) return Promise.resolve(machineReadCache.status);
+  machineReadInFlight = resourcePass({ kill: false, reason: "manual" }).then((status) => {
+    machineReadCache = { at: Date.now(), status };
+    return status;
+  }).finally(() => { machineReadInFlight = null; });
+  return machineReadInFlight;
+}
 
 // Resource manager: watches LOVE test runs, kills strays/hangs/over-age
 // processes, and tells the agents through the inbox + briefing facts.
@@ -460,120 +478,125 @@ async function queueRequests(additions) {
     );
     if (!fresh.length) return { added: 0 };
     board.requests = [...fresh, ...board.requests].slice(0, 200);
-    return { requests: board.requests, added: fresh.length };
+    return { requests: board.requests, added: fresh.length, accepted: fresh };
   });
   // Jev shadow intake: classify what landed against the closest existing
   // work and RECORD the proposal. Fire-and-forget — admission never waits
   // on a classifier, and a failure here changes nothing on the board.
-  jevShadowIntake(additions);
+  jevShadowIntake(patch.accepted);
   return patch.added ?? 0;
 }
 
-// ---- the Jev shadow intake (System One, observation-only) ------------------------
-// The advisory's first wiring: fresh inbox admissions are classified against
-// the closest existing work (retrieval first, then ONE batched evaluation
-// call) and each proposal is appended to the experience store as a
-// "jev-proposal" event. The proposal is a record, not an instruction: nothing
-// here suppresses work, merges tasks, spawns agents, or touches ownership —
-// admission already happened. The Policy Lab can later score the proposals
-// against what actually happened (did same_obligation calls correlate with
-// real duplicates?).
-//
-// Guards: settings.jevShadow === false is the operator's kill switch;
-// SMOKE/CAPTURE/CLI never call; at most one intake in flight, one per two
-// minutes, three proposals per pass; two consecutive failures back the
-// shadow off for an hour; every spend is charged to the improvement budget.
-const JEV_SHADOW_MIN_INTERVAL_MS = 2 * 60 * 1000;
-const JEV_SHADOW_MAX_PROPOSALS = 3;
-const JEV_SHADOW_BACKOFF_MS = 60 * 60 * 1000;
-let jevShadowLastAt = 0;
-let jevShadowFailures = 0;
-let jevShadowBackedOffUntil = 0;
-let jevShadowInFlight = null;
+// Jev classifies admitted observations without delaying or changing board work.
+// The bounded queue retains arrivals during cooldown/in-flight calls, retries
+// transient failures, and excludes the observation itself from retrieval.
+let jevQueuePromise = null;
+let jevProbeInFlight = null;
+const jevPendingCharges = [];
+let jevChargeFlush = null;
+function getJevQueue() {
+  if (!jevQueuePromise) {
+    jevQueuePromise = loadModule("scripts/jev-loop.mjs")
+      .then(({ createJevQueue }) => createJevQueue({ runBatch: runJevIntake }))
+      .catch((error) => { jevQueuePromise = null; throw error; });
+  }
+  return jevQueuePromise;
+}
 
 function jevShadowIntake(additions) {
   if (SMOKE || CAPTURE || CLI_MODE) return;
-  if (!Array.isArray(additions) || !additions.length || jevShadowInFlight) return;
-  const now = Date.now();
-  if (now - jevShadowLastAt < JEV_SHADOW_MIN_INTERVAL_MS || now < jevShadowBackedOffUntil) return;
-  jevShadowInFlight = (async () => {
-    jevShadowLastAt = Date.now();
-    try {
-      const settings = await readSettings();
-      if (settings.jevShadow === false) return;
-      const client = await loadModule("scripts/decision-client.mjs");
-      const resolved = client.resolveApiKey({ settings, decrypt: decryptKey });
-      if (!resolved) return;
-      const classification = await loadModule("scripts/work-classification.mjs");
-      const experience = await getExperienceModule();
-      const eyes = await getEyes();
-      const [requests, tasks] = await Promise.all([eyes.readJson(REQUESTS_PATH, []), eyes.readJson(TASKS_PATH, [])]);
-      // Only what actually landed (the dedupe may have absorbed some) is
-      // worth classifying, and only against work still outstanding.
-      const queuedKeys = new Set(requests.map((item) => (item?.title ? workTitleKey(item.title) : null)).filter(Boolean));
-      const fresh = additions.filter((addition) => addition?.title && queuedKeys.has(workTitleKey(addition.title))).slice(0, 12);
-      const live = [
-        ...requests.filter((item) => item && item.status !== "running" && item.status !== "verifying").map((item) => ({ kind: "request", title: item.title, source: item.source })),
-        ...tasks.filter((item) => item && item.status !== "done" && item.status !== "archived").map((item) => ({ kind: "task", title: item.title, source: item.source })),
-      ];
-      const comparisons = [];
-      for (const addition of fresh) {
-        if (comparisons.length >= JEV_SHADOW_MAX_PROPOSALS) break;
-        const hit = classification.retrieveCandidate({ title: addition.title, existing: live });
-        if (hit) comparisons.push({ addition, hit });
-      }
-      if (!comparisons.length) return;
-      // One batched call: each question is self-contained (names both sides),
-      // with unique ids so the wire's answer map stays unambiguous.
-      const questions = comparisons.map(({ addition, hit }, index) => {
-        const built = classification.relationshipQuestion({
-          observation: { text: addition.title, source: addition.source },
-          candidate: { title: hit.item.title, status: hit.item.kind },
-        });
-        return { ...built.question, id: `rel_${index}` };
-      });
-      const stateContext = comparisons.map(({ addition, hit }) => `observation "${assistantClip(addition.title, 200)}" — candidate ${hit.item.kind} "${assistantClip(hit.item.title, 200)}"`).join("\n");
-      const result = await client.classify({ questions, state: stateContext, apiKey: resolved.key });
-      const tokens = result.ok ? (result.usage.promptTokens ?? 0) + (result.usage.completionTokens ?? 0) : 0;
-      experience
-        .spendBudget(POLICY_BUDGET_PATH, {
-          purpose: "jev-shadow-intake",
-          modelCalls: result.ok ? 1 : 0,
-          tokens,
-          note: `intake classification · ${comparisons.length} comparison(s) · ${result.ok ? result.model : "failed"}`,
-        })
-        .catch(() => {});
-      if (!result.ok) throw new Error(result.error);
-      jevShadowFailures = 0;
-      const at = Date.now();
-      for (let index = 0; index < comparisons.length; index += 1) {
-        const { addition, hit } = comparisons[index];
-        const answer = result.answers[`rel_${index}`]?.choice ?? "no-answer";
-        const proposal = classification.interpretRelationship({ choice: answer });
-        policyRecord("jev-proposal", {
-          proposalId: `jev_${at}_${index}`,
-          observation: { title: assistantClip(addition.title, 160), source: assistantClip(addition.source ?? "", 40) },
-          candidate: { kind: hit.item.kind, title: assistantClip(hit.item.title, 160) },
-          question: "observation_relationship",
-          answer,
-          proposedAction: proposal.action,
-          retrieval: { overlapTokens: hit.overlap },
-          model: result.model,
-          elapsedMs: result.elapsedMs,
-        });
-      }
-      logLine(`[jev] shadow: ${comparisons.length} intake proposal(s) recorded (observation-only)`);
-    } catch (error) {
-      jevShadowFailures += 1;
-      if (jevShadowFailures >= 2) {
-        jevShadowBackedOffUntil = Date.now() + JEV_SHADOW_BACKOFF_MS;
-        jevShadowFailures = 0;
-        logLine(`[jev] shadow backed off for an hour after repeated failures: ${assistantClip(error.message, 120)}`);
-      }
-    } finally {
-      jevShadowInFlight = null;
+  if (!additions?.length) return;
+  getJevQueue().then((queue) => queue.enqueue(additions)).catch((error) => logLine(`[jev] queue unavailable: ${error.message}`));
+}
+
+function flushJevCharges() {
+  if (jevChargeFlush) return jevChargeFlush;
+  if (!jevPendingCharges.length) return Promise.resolve();
+  jevChargeFlush = (async () => {
+    const experience = await getExperienceModule();
+    while (jevPendingCharges.length) {
+      await experience.spendBudget(POLICY_BUDGET_PATH, jevPendingCharges[0]);
+      jevPendingCharges.shift();
     }
-  })();
+  })().finally(() => { jevChargeFlush = null; });
+  return jevChargeFlush;
+}
+
+async function chargeJevCall(result, purpose) {
+  if (!result.usage?.modelCalls) return;
+  jevPendingCharges.push({
+    purpose,
+    modelCalls: result.usage.modelCalls,
+    tokens: (result.usage?.promptTokens ?? 0) + (result.usage?.completionTokens ?? 0),
+    note: `${result.ok ? "completed" : "failed"} · ${result.model ?? "Jev"}`,
+  });
+  // Retain a paid result when accounting fails. Future calls flush this debt
+  // first, so retrying a ledger write never repeats a paid classification.
+  await flushJevCharges().catch((error) => logLine(`[jev] accounting pending: ${error.message}`));
+}
+
+async function runJevIntake(additions) {
+  const settings = await readSettings();
+  if (settings.jevShadow === false) return { ok: true, defer: true, reason: "disabled" };
+  const [client, loop, classification, eyes] = await Promise.all([
+    loadModule("scripts/decision-client.mjs"), loadModule("scripts/jev-loop.mjs"),
+    loadModule("scripts/work-classification.mjs"), getEyes(),
+  ]);
+  const resolved = client.resolveApiKey({ settings, decrypt: decryptKey });
+  if (!resolved) return { ok: true, defer: true, reason: "no-key" };
+  try { await flushJevCharges(); }
+  catch { return { ok: true, defer: true, reason: "accounting-pending" }; }
+  const [requests, tasks] = await Promise.all([eyes.readJson(REQUESTS_PATH, []), eyes.readJson(TASKS_PATH, [])]);
+  const { comparisons, questions, state } = loop.planIntake(additions, { requests, tasks });
+  if (!comparisons.length) return { ok: true, attempted: false, proposals: 0 };
+  const result = await client.classify({ questions, state, apiKey: resolved.key });
+  await chargeJevCall(result, "jev-shadow-intake");
+  if (!result.ok) {
+    logLine(`[jev] classification unavailable: ${assistantClip(result.error, 160)}`);
+    return { ok: false, attempted: Boolean(result.usage?.modelCalls), error: result.error };
+  }
+  const at = Date.now();
+  for (let index = 0; index < comparisons.length; index += 1) {
+    const { addition, hit } = comparisons[index];
+    const answer = result.answers[`rel_${index}`].choice;
+    const proposal = classification.interpretRelationship({ choice: answer });
+    policyRecord("jev-proposal", {
+      proposalId: `jev_${at}_${index}`,
+      observation: { title: assistantClip(addition.title, 160), source: assistantClip(addition.source ?? "", 40) },
+      candidate: { kind: hit.item.kind, title: assistantClip(hit.item.title, 160) },
+      question: "observation_relationship", answer, proposedAction: proposal.action,
+      retrieval: { overlapTokens: hit.overlap }, model: result.model, elapsedMs: result.elapsedMs,
+    });
+  }
+  logLine(`[jev] ${comparisons.length} intake proposal(s) recorded in ${result.elapsedMs}ms`);
+  return { ok: true, attempted: true, proposals: comparisons.length };
+}
+
+async function jevStatus() {
+  const [settings, client, queue] = await Promise.all([readSettings(), loadModule("scripts/decision-client.mjs"), getJevQueue()]);
+  const resolved = client.resolveApiKey({ settings, decrypt: decryptKey });
+  return { configured: Boolean(resolved), enabled: settings.jevShadow !== false,
+    model: client.gatewayConfig().model, accountingPending: jevPendingCharges.length, ...queue.status() };
+}
+
+function probeJev() {
+  if (jevProbeInFlight) return jevProbeInFlight;
+  jevProbeInFlight = (async () => {
+    const [settings, client] = await Promise.all([readSettings(), loadModule("scripts/decision-client.mjs")]);
+    const resolved = client.resolveApiKey({ settings, decrypt: decryptKey });
+    if (!resolved) return { ok: false, error: "Save a Jev gateway key first." };
+    try { await flushJevCharges(); }
+    catch { return { ok: false, error: "Jev is waiting for its usage ledger to become writable. No additional call was made." }; }
+    const result = await client.classify({
+      questions: [{ id: "connection", type: "choice", prompt: "Choose ready if the state says ready, otherwise unavailable.", options: ["ready", "unavailable"] }],
+      state: "ready", apiKey: resolved.key,
+    });
+    await chargeJevCall(result, "jev-connection-check");
+    if (!result.ok) return { ok: false, error: result.error };
+    if (result.answers.connection.choice !== "ready") return { ok: false, error: "Jev answered, but the connection check returned an unexpected result." };
+    return { ok: true, model: result.model, elapsedMs: result.elapsedMs };
+  })().finally(() => { jevProbeInFlight = null; });
+  return jevProbeInFlight;
 }
 
 const PINS_PATH = path.join(STUDIO_ROOT, "data", "eyes-pins.json");
@@ -1276,8 +1299,8 @@ const ASSISTANT_WORK_STALE_MS = 10 * 60000;
 // wedged and supervise reaps it. Must sit past EXECUTOR_KILL_MS or a live
 // run is flagged while it is still allowed to work.
 const ASSISTANT_JOB_WEDGED_MS = EXECUTOR_KILL_MS + 90 * 1000;
-// Where an agent works, as the tree names its nodes; hops are spaced so a
-// role never emits more than ~3 target changes a second.
+// Where an agent works, as the tree names its nodes. Cosmetic target updates
+// are throttled; they must never hold a worker slot or delay its result.
 const ASSISTANT_NODE = { kind: "assistant", id: "__assistant__" };
 const ROOT_NODE = { kind: "root", id: "__root__" };
 const FOLDED_NODE = { kind: "folded", id: "__folded__" };
@@ -1299,12 +1322,13 @@ const ASSISTANT_ROLE_VERBS = {
   reference: "gathering for",
 };
 const ASSISTANT_STOP_WORDS = new Set(["what", "with", "that", "this", "please", "about", "from", "have", "into", "your", "there", "then", "than", "they", "them", "will", "would", "could", "should", "check", "make", "tell", "show", "look", "working", "assistant"]);
-const assistantSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let assistantState = null;
 let assistantLoading = null;
 let assistantLoop = false;
 let assistantTimer = null;
+let assistantTickInFlight = null;
+let assistantTickDemand = null;
 let assistantBlocker = null;
 let assistantSavedAt = 0;
 let assistantSaveTimer = null;
@@ -1313,6 +1337,7 @@ let assistantEmitPending = null;
 let assistantFirstTickResolve = null;
 const assistantFirstTick = new Promise((resolve) => (assistantFirstTickResolve = resolve));
 const assistantCache = { store: null, storeError: null, machine: null, audit: null, chats: [], chatsAt: 0, porcelain: "", porcelainAt: 0 };
+let assistantStoreReadInFlight = null;
 // How much of every agent's conversation the overseer may look at. Chats are
 // the earliest place a stuck or confused run shows up, so it reads them all —
 // bounded, because they share the 14k fact budget with everything else.
@@ -1539,11 +1564,10 @@ function assistantWorkLabel(job) {
 // One hop: the agent's current target changes and a `running` event says so.
 async function assistantHop(entry, target, { progress = null, label = null } = {}) {
   if (entry.settled) return;
-  const wait = ASSISTANT_HOP_MS - (Date.now() - (entry.lastHopAt || 0));
-  if (wait > 0) await assistantSleep(wait);
-  if (entry.settled) return;
   entry.target = target;
   entry.progress = progress;
+  assistantRowTargets(entry.role, { target, targets: entry.targets, progress });
+  if (progress !== 1 && Date.now() - (entry.lastHopAt || 0) < ASSISTANT_HOP_MS) return;
   entry.lastHopAt = Date.now();
   const text = `${entry.role} · ${label ?? `at ${target.kind} ${target.id}`}`;
   assistantApply({ role: entry.role, status: "running", at: entry.startedAt, text });
@@ -1551,14 +1575,14 @@ async function assistantHop(entry, target, { progress = null, label = null } = {
   assistantAgentEvent(entry.role, "running", text, { target, targets: entry.targets, progress });
 }
 
-// Visit each target in turn, dwelling on it so the hop is visible.
-async function assistantVisit(entry, targets, label = () => null, dwellMs = ASSISTANT_HOP_MS) {
+// Record the targets already visited by a local pass, without charging its
+// pool slot a presentation delay for each node. The final target is emitted.
+async function assistantVisit(entry, targets, label = () => null) {
   const list = targets.slice(0, 12);
   if (!list.length) return;
   entry.targets = list;
   for (const [index, target] of list.entries()) {
     await assistantHop(entry, target, { progress: (index + 1) / list.length, label: label(target, index, list.length) });
-    await assistantSleep(dwellMs);
   }
 }
 
@@ -1566,16 +1590,27 @@ async function assistantVisit(entry, targets, label = () => null, dwellMs = ASSI
 // active sessions), then hand back the call's result.
 async function assistantVisitWhile(entry, promise, targets, label = () => null) {
   let settled = false;
-  const outcome = promise.finally(() => (settled = true));
   const list = targets.slice(0, 12);
   entry.targets = list;
   let index = 0;
-  while (!settled && list.length && !entry.settled) {
+  let timer = null;
+  const visit = async () => {
+    if (settled || !list.length || entry.settled) return;
     const target = list[index % list.length];
     await assistantHop(entry, target, { progress: null, label: label(target, index % list.length, list.length) });
     index += 1;
-    await assistantSleep(900);
-  }
+    if (!settled && !entry.settled) {
+      timer = setTimeout(() => visit().catch(() => {}), ASSISTANT_HOP_MS);
+      timer.unref?.();
+    }
+  };
+  // Install the rejection handler immediately; animation never delays either
+  // a fulfilled result or a failure and cannot leave a timer behind afterward.
+  const outcome = Promise.resolve(promise).finally(() => {
+    settled = true;
+    if (timer) clearTimeout(timer);
+  });
+  visit().catch(() => {});
   return outcome;
 }
 
@@ -2019,40 +2054,48 @@ function readPorcelain(eyes) {
 }
 
 async function assistantReadStore() {
-  const eyes = await getEyes();
-  const sessions = eyes.listSessions({ limit: 40 });
-  const porcelain = readPorcelain(eyes);
-  const store = {
-    sessions,
-    todos: eyes.listTodos(),
-    collisions: eyes.collisions({ root: REPO_ROOT }),
-    presence: eyes.filePresence({ root: REPO_ROOT }),
-    uncommitted: eyes.uncommittedOnly({
-      porcelain,
+  // Watcher, overseer and chat often arrive together. Share only the read in
+  // progress; the next completed-read boundary always sees fresh store data.
+  if (assistantStoreReadInFlight) return assistantStoreReadInFlight;
+  assistantStoreReadInFlight = (async () => {
+    const eyes = await getEyes();
+    const sessions = eyes.listSessions({ limit: 40 });
+    const porcelain = readPorcelain(eyes);
+    const store = {
       sessions,
-      changes: eyes.listChanges({ limit: 80 }),
-      root: REPO_ROOT,
-    }),
-    at: Date.now(),
-  };
-  assistantCache.store = store;
-  assistantCache.storeError = null;
-  // Every agent's recent conversation, refreshed at most once a minute — the
-  // overseer reads these, and re-querying the store on every watcher pass would
-  // cost more than the freshness is worth.
-  if (Date.now() - assistantCache.chatsAt > MINUTE_MS) {
-    try {
-      assistantCache.chats = eyes
-        .listChatTexts({ since: Date.now() - OVERSEER_CHAT_WINDOW_MS, limit: 400 })
-        .slice(0, OVERSEER_CHAT_LIMIT)
-        .map((row) => ({ sessionId: row.sessionId, at: row.at, text: String(row.text).slice(0, 200) }));
-      assistantCache.chatsAt = Date.now();
-    } catch (error) {
-      assistantCache.chats = [];
-      assistantCache.chatsAt = Date.now();
+      todos: eyes.listTodos(),
+      collisions: eyes.collisions({ root: REPO_ROOT }),
+      presence: eyes.filePresence({ root: REPO_ROOT }),
+      uncommitted: eyes.uncommittedOnly({
+        porcelain,
+        sessions,
+        changes: eyes.listChanges({ limit: 80 }),
+        root: REPO_ROOT,
+      }),
+      at: Date.now(),
+    };
+    assistantCache.store = store;
+    assistantCache.storeError = null;
+    // Every agent's recent conversation, refreshed at most once a minute — the
+    // overseer reads these, and re-querying the store on every watcher pass would
+    // cost more than the freshness is worth.
+    if (Date.now() - assistantCache.chatsAt > MINUTE_MS) {
+      try {
+        assistantCache.chats = eyes
+          .listChatTexts({ since: Date.now() - OVERSEER_CHAT_WINDOW_MS, limit: 400 })
+          .slice(0, OVERSEER_CHAT_LIMIT)
+          .map((row) => ({ sessionId: row.sessionId, at: row.at, text: String(row.text).slice(0, 200) }));
+        assistantCache.chatsAt = Date.now();
+      } catch (error) {
+        assistantCache.chats = [];
+        assistantCache.chatsAt = Date.now();
+      }
     }
-  }
-  return store;
+    return store;
+  })().finally(() => {
+    assistantStoreReadInFlight = null;
+  });
+  return assistantStoreReadInFlight;
 }
 
 async function assistantOrganize(now, store = assistantCache.store) {
@@ -2370,8 +2413,11 @@ async function assistantForemanJob(now, entry) {
   // asks for work again when a plan is runnable); the ideas agent tops the
   // inbox up from recent chats when its last scan has gone cold. The role
   // queue keeps either from stacking while a pass is still out.
-  if (!started.length && !autopilot.jobs.length && !autopilot.waiting) {
-    assistantEnqueueRole("compactor", ASSISTANT_PRIORITY.demand);
+  if (autopilot.execute && !started.length && !autopilot.jobs.length && !autopilot.waiting) {
+    // A route failure can leave runnable work without starting a child. Do
+    // not bounce foreman -> compactor -> foreman forever on that same queue.
+    const compactor = assistantState?.agents?.find((agent) => agent?.role === "compactor");
+    if (!compactor?.lastRunAt || now - compactor.lastRunAt >= MINUTE_MS) assistantEnqueueRole("compactor", ASSISTANT_PRIORITY.demand);
     // The ideas pass re-runs when cold — but a quiet store stays quiet: if the
     // last scan saw no new material, give it a half-hour before asking again.
     // Re-scanning old chats to fill slots is not progress; with the ingestion
@@ -3302,60 +3348,81 @@ function assistantSchedule(ms = assistantState?.intervalMs ?? 30000) {
 // at once; the pool does the work. Anything but the timer queues every
 // cadence role.
 async function assistantTick(reason = "timer") {
-  await ensureAssistant();
-  const now = Date.now();
-  assistantState.tickCount += 1;
-  assistantState.heartbeatAt = now;
-  assistantState.ai.keyPresent = await assistantKeyPresent();
-  const first = assistantState.tickCount === 1 || !assistantFirstTickResolve.done;
-  let roles = [];
-  try {
-    roles = reason === "timer" ? (await getAssistant()).dueRoles(assistantState, now, assistantState.prefs) : [...ASSISTANT_CADENCE_ROLES];
-  } catch (error) {
-    assistantLog("error", `cadence check failed: ${error.message}`);
-    roles = reason === "timer" ? [] : [...ASSISTANT_CADENCE_ROLES];
+  if (assistantTickInFlight) {
+    if (reason === "timer") return assistantTickInFlight;
+    // Keep an explicit run-once request that arrives during a timer pass.
+    // Repeated clicks share one follow-up rather than overlapping the tick.
+    if (!assistantTickDemand) {
+      assistantTickDemand = assistantTickInFlight.catch(() => {}).then(() => {
+        assistantTickDemand = null;
+        return assistantTick(reason);
+      });
+    }
+    return assistantTickDemand;
   }
-  // The briefer and the two build roles wait for the proactive switch and a
-  // usable key — they each spend a call. The overseer never does: it reviews on
-  // every cadence around the clock, keyless if it has to, and pause is its only
-  // off switch. (dueRoles already applies this on a timer tick; the filter is
-  // what keeps a forced tick from firing them keyless.)
-  roles = roles.filter((role) => !ASSISTANT_AI_ROLES.has(role) || assistantBrieferAllowed());
-  for (const role of roles) assistantEnqueueRole(role, reason === "timer" ? ASSISTANT_PRIORITY.cadence : ASSISTANT_PRIORITY.demand);
-  try {
-    assistantStaleWork(now);
-  } catch (error) {
-    assistantLog("error", `stale check failed: ${error.message}`);
-  }
-  try {
-    assistantSuperviseJobs(now);
-  } catch (error) {
-    assistantLog("error", `job supervision failed: ${error.message}`);
-  }
-  const hidden = !window || window.isDestroyed() || window.isMinimized() || !window.isVisible();
-  assistantState.intervalMs = hidden ? 120000 : 30000;
-  assistantState.nextTickAt = assistantLoop && assistantState.status === "running" ? now + assistantState.intervalMs : 0;
-  const counts = assistantState.organization?.counts ?? {};
-  const problems = assistantState.problems.length;
-  // The tick line is the one thing a human reads to know the loop is alive, so
-  // it carries what is actually being built, not just what the roster is doing.
-  const building = (autopilot.jobs ?? []).length;
-  const jobs = building
-    ? `building ${building}: ${autopilot.jobs.slice(0, 2).map((job) => assistantClip(job.title, 30)).join(", ")}`
-    : autopilot.execute
-      ? `executor idle (${autopilot.queueDepth ?? 0} queued)`
-      : "executor off";
-  const text =
-    `tick ${assistantState.tickCount} · ${counts.sessions ?? 0} sessions · ${counts.folded ?? 0} folded · ${problems ? `${problems} problem(s)` : "no problems"}` +
-    ` · ${jobs} · ${roles.length ? `queued ${roles.join(", ")}` : "nothing due"}`;
-  assistantLog("tick", text);
-  await saveAssistant();
-  if (assistantLoop) assistantSchedule();
-  if (first) {
-    assistantFirstTickResolve.done = true;
-    assistantDrain().then(() => assistantFirstTickResolve());
-  }
-  return { tick: assistantState.tickCount, reason, text, queued: roles, problems: assistantState.problems.map((problem) => problem.kind) };
+  assistantTickInFlight = (async () => {
+    await ensureAssistant();
+    if (reason === "timer" && assistantState.status !== "running") return { skipped: "paused", queued: [] };
+    const now = Date.now();
+    assistantState.tickCount += 1;
+    assistantState.heartbeatAt = now;
+    assistantState.ai.keyPresent = await assistantKeyPresent();
+    const first = assistantState.tickCount === 1 || !assistantFirstTickResolve.done;
+    let roles = [];
+    try {
+      roles = reason === "timer" ? (await getAssistant()).dueRoles(assistantState, now, assistantState.prefs) : [...ASSISTANT_CADENCE_ROLES];
+    } catch (error) {
+      assistantLog("error", `cadence check failed: ${error.message}`);
+      roles = reason === "timer" ? [] : [...ASSISTANT_CADENCE_ROLES];
+    }
+    // A pause can land while loading settings or the cadence module. It wins
+    // over a timer already in flight, just as it does over the next timer.
+    if (reason === "timer" && assistantState.status !== "running") return { skipped: "paused", queued: [] };
+    // The briefer and the two build roles wait for the proactive switch and a
+    // usable key — they each spend a call. The overseer never does: it reviews on
+    // every cadence around the clock, keyless if it has to, and pause is its only
+    // off switch. (dueRoles already applies this on a timer tick; the filter is
+    // what keeps a forced tick from firing them keyless.)
+    roles = roles.filter((role) => !ASSISTANT_AI_ROLES.has(role) || assistantBrieferAllowed());
+    for (const role of roles) assistantEnqueueRole(role, reason === "timer" ? ASSISTANT_PRIORITY.cadence : ASSISTANT_PRIORITY.demand);
+    try {
+      assistantStaleWork(now);
+    } catch (error) {
+      assistantLog("error", `stale check failed: ${error.message}`);
+    }
+    try {
+      assistantSuperviseJobs(now);
+    } catch (error) {
+      assistantLog("error", `job supervision failed: ${error.message}`);
+    }
+    const hidden = !window || window.isDestroyed() || window.isMinimized() || !window.isVisible();
+    assistantState.intervalMs = hidden ? 120000 : 30000;
+    assistantState.nextTickAt = assistantLoop && assistantState.status === "running" ? now + assistantState.intervalMs : 0;
+    const counts = assistantState.organization?.counts ?? {};
+    const problems = assistantState.problems.length;
+    // The tick line is the one thing a human reads to know the loop is alive, so
+    // it carries what is actually being built, not just what the roster is doing.
+    const building = (autopilot.jobs ?? []).length;
+    const jobs = building
+      ? `building ${building}: ${autopilot.jobs.slice(0, 2).map((job) => assistantClip(job.title, 30)).join(", ")}`
+      : autopilot.execute
+        ? `executor idle (${autopilot.queueDepth ?? 0} queued)`
+        : "executor off";
+    const text =
+      `tick ${assistantState.tickCount} · ${counts.sessions ?? 0} sessions · ${counts.folded ?? 0} folded · ${problems ? `${problems} problem(s)` : "no problems"}` +
+      ` · ${jobs} · ${roles.length ? `queued ${roles.join(", ")}` : "nothing due"}`;
+    assistantLog("tick", text);
+    await saveAssistant();
+    if (assistantLoop) assistantSchedule();
+    if (first) {
+      assistantFirstTickResolve.done = true;
+      assistantDrain().then(() => assistantFirstTickResolve());
+    }
+    return { tick: assistantState.tickCount, reason, text, queued: roles, problems: assistantState.problems.map((problem) => problem.kind) };
+  })().finally(() => {
+    assistantTickInFlight = null;
+  });
+  return assistantTickInFlight;
 }
 
 async function startAssistant() {
@@ -3488,30 +3555,37 @@ function refreshTray() {
 // shaped by the module's own builder.
 async function assistantMessageFacts(now, query = "") {
   const raw = { sessions: null, todos: null, collisions: null, presence: null, uncommitted: null, tasks: null, ideas: null, machine: null, audit: null, briefing: null, update: null, now };
-  try {
-    const store = await assistantReadStore();
-    Object.assign(raw, { sessions: store.sessions, todos: store.todos, collisions: store.collisions, presence: store.presence, uncommitted: store.uncommitted });
-  } catch {}
-  try {
-    const eyes = await getEyes();
-    raw.tasks = (await eyes.readJson(TASKS_PATH, [])).slice(0, 40);
-    raw.ideas = (await eyes.readJson(IDEAS_PATH, [])).slice(0, 40);
-    raw.requests = (await eyes.readJson(REQUESTS_PATH, [])).slice(0, 30);
-    const briefing = await eyes.readJson(BRIEFING_PATH, null);
-    if (briefing?.summary) raw.briefing = { summary: briefing.summary, generatedAt: briefing.generatedAt, alerts: (briefing.alerts ?? []).slice(0, 6) };
-  } catch {}
-  try {
-    const status = assistantCache.machine ?? (await resourcePass({ kill: false, reason: "assistant", withProcesses: false }));
-    raw.machine = {
-      wait: Boolean(status.wait),
-      lines: String(status.lines ?? "").split(" · ").filter(Boolean),
-      running: (status.running ?? []).map((entry) => ({ pid: entry.pid, status: entry.status, ageMinutes: entry.ageMinutes })),
-    };
-  } catch {}
-  try {
-    const audit = assistantCache.audit ?? (await (await getAuditor()).audit());
-    raw.audit = { errors: audit.errors, warnings: audit.warnings, findings: audit.findings.slice(0, 12) };
-  } catch {}
+  // Independent sources run together. A slow audit or unavailable OpenCode
+  // store must neither serialize all the other reads nor discard their facts.
+  await Promise.allSettled([
+    (async () => {
+      const store = await assistantReadStore();
+      Object.assign(raw, { sessions: store.sessions, todos: store.todos, collisions: store.collisions, presence: store.presence, uncommitted: store.uncommitted });
+    })(),
+    (async () => {
+      const eyes = await getEyes();
+      await Promise.allSettled([
+        eyes.readJson(TASKS_PATH, []).then((rows) => { raw.tasks = rows.slice(0, 40); }),
+        eyes.readJson(IDEAS_PATH, []).then((rows) => { raw.ideas = rows.slice(0, 40); }),
+        eyes.readJson(REQUESTS_PATH, []).then((rows) => { raw.requests = rows.slice(0, 30); }),
+        eyes.readJson(BRIEFING_PATH, null).then((briefing) => {
+          if (briefing?.summary) raw.briefing = { summary: briefing.summary, generatedAt: briefing.generatedAt, alerts: (briefing.alerts ?? []).slice(0, 6) };
+        }),
+      ]);
+    })(),
+    (async () => {
+      const status = assistantCache.machine ?? (await resourcePass({ kill: false, reason: "assistant", withProcesses: false }));
+      raw.machine = {
+        wait: Boolean(status.wait),
+        lines: String(status.lines ?? "").split(" · ").filter(Boolean),
+        running: (status.running ?? []).map((entry) => ({ pid: entry.pid, status: entry.status, ageMinutes: entry.ageMinutes })),
+      };
+    })(),
+    (async () => {
+      const audit = assistantCache.audit ?? (await (await getAuditor()).audit());
+      raw.audit = { errors: audit.errors, warnings: audit.warnings, findings: audit.findings.slice(0, 12) };
+    })(),
+  ]);
   try {
     const status = updater?.status();
     if (status) raw.update = { phase: status.phase, reason: status.reason ?? null };
@@ -4520,7 +4594,9 @@ async function executeNextRequest() {
       // shared OpenCode store and its snapshot repo, and every run in the
       // sweep can wedge before it prints a line. A few seconds between
       // spawns costs nothing and keeps startup collisions from compounding.
-      await new Promise((resolve) => setTimeout(resolve, EXECUTOR_STAGGER_MS));
+      if (autopilot.execute && autopilot.jobs.length < Math.max(1, autopilot.parallel)) {
+        await new Promise((resolve) => setTimeout(resolve, EXECUTOR_STAGGER_MS));
+      }
     }
     setAutopilotWaiting(
       stop === "busy" ? "machine busy" : stop === "cooldown" ? "tasks cooling down" : stop === "deferred" ? "waiting on live editors" : null
@@ -5842,39 +5918,46 @@ async function autopilotHousekeeping() {
 // One autopilot tick: proactive pass (brief + audit + collision/fix
 // requests), periodic grow/improve expansion, housekeeping, request->task
 // promotion, then the executor. A failing pass logs and the timer lives on.
+let autopilotPassInFlight = null;
 async function autopilotPass() {
-  if (SMOKE || CAPTURE || CLI_MODE) return;
-  try {
-    const eyes = await getEyes();
-    autopilotTicks += 1;
-    let added = 0;
-    const pass = await autopilotProactivePass({ useAi: true });
-    added += pass?.added ?? 0;
-    if (autopilotTicks % 6 === 0) {
-      const result = await runAssistant("grow", null);
-      if (result.ok) added += await queueRequests(requestsFromExpand(result.briefing, await eyes.readJson(REQUESTS_PATH, []), "grow"));
+  if (SMOKE || CAPTURE || CLI_MODE || !autopilot.enabled) return;
+  if (autopilotPassInFlight) return autopilotPassInFlight;
+  autopilotPassInFlight = (async () => {
+    try {
+      const eyes = await getEyes();
+      autopilotTicks += 1;
+      let added = 0;
+      const pass = await autopilotProactivePass({ useAi: true });
+      added += pass?.added ?? 0;
+      if (autopilotTicks % 6 === 0) {
+        const result = await runAssistant("grow", null);
+        if (result.ok) added += await queueRequests(requestsFromExpand(result.briefing, await eyes.readJson(REQUESTS_PATH, []), "grow"));
+      }
+      if (autopilotTicks % 12 === 0) {
+        const result = await runAssistant("improve", null);
+        if (result.ok) added += await queueRequests(requestsFromExpand(result.briefing, await eyes.readJson(REQUESTS_PATH, []), "improver"));
+      }
+      await autopilotHousekeeping();
+      await promoteRequestsToTasks();
+      const tasks = await eyes.readJson(TASKS_PATH, []);
+      autopilot.tasksManaged = tasks.filter((task) => task?.source === "a-eyes").length;
+      await refreshAutopilotQueue(eyes);
+      autopilot.lastPassAt = Date.now();
+      autopilot.lastAdded = added;
+      autopilot.lastError = pass?.aiError ?? null;
+      pushAutopilotHistory("pass", `${added} queued`);
+      emitAutopilot();
+      // The pass files requests; the assistant is what hands them out.
+      assistantAskForWork("auto builder pass");
+    } catch (error) {
+      autopilot.lastError = String(error.message ?? error);
+      logLine(`[autopilot] pass failed: ${autopilot.lastError}`);
+      emitAutopilot();
     }
-    if (autopilotTicks % 12 === 0) {
-      const result = await runAssistant("improve", null);
-      if (result.ok) added += await queueRequests(requestsFromExpand(result.briefing, await eyes.readJson(REQUESTS_PATH, []), "improver"));
-    }
-    await autopilotHousekeeping();
-    await promoteRequestsToTasks();
-    const tasks = await eyes.readJson(TASKS_PATH, []);
-    autopilot.tasksManaged = tasks.filter((task) => task?.source === "a-eyes").length;
-    await refreshAutopilotQueue(eyes);
-    autopilot.lastPassAt = Date.now();
-    autopilot.lastAdded = added;
-    autopilot.lastError = pass?.aiError ?? null;
-    pushAutopilotHistory("pass", `${added} queued`);
-    emitAutopilot();
-    // The pass files requests; the assistant is what hands them out.
-    assistantAskForWork("auto builder pass");
-  } catch (error) {
-    autopilot.lastError = String(error.message ?? error);
-    logLine(`[autopilot] pass failed: ${autopilot.lastError}`);
-    emitAutopilot();
-  }
+  })().finally(() => {
+    autopilotPassInFlight = null;
+  });
+  return autopilotPassInFlight;
 }
 
 async function setAutopilot(prefs = {}) {
@@ -6416,7 +6499,18 @@ function registerIpc() {
     else if (safeStorage.isEncryptionAvailable()) settings[field] = safeStorage.encryptString(apiKey).toString("base64");
     else return { ok: false, error: "OS encryption unavailable" };
     await writeSettings(settings);
+    if (which === "gateway") (await getJevQueue()).wake();
     return { ok: true };
+  });
+
+  ipcMain.handle("jev:status", () => jevStatus());
+  ipcMain.handle("jev:probe", () => probeJev());
+  ipcMain.handle("jev:set-enabled", async (_event, enabled) => {
+    const settings = await readSettings();
+    settings.jevShadow = enabled === true;
+    await writeSettings(settings);
+    (await getJevQueue()).wake();
+    return jevStatus();
   });
 
   ipcMain.handle("settings:get-ai-routing", async () => {
@@ -6779,7 +6873,7 @@ function registerIpc() {
   });
 
   // ---- machine coordination + resource manager ----------------------------
-  ipcMain.handle("machine:status", async (_event, { kill = false } = {}) => ({ ok: true, status: await resourcePass({ kill, reason: "manual" }) }));
+  ipcMain.handle("machine:status", async (_event, { kill = false } = {}) => ({ ok: true, status: await readMachineStatus({ kill }) }));
   ipcMain.handle("machine:watch", async (_event, { running } = {}) => (running === false ? stopMachineWatch() : startMachineWatch()));
   ipcMain.handle("machine:set", async (_event, prefs) => {
     const settings = await readSettings();
@@ -7278,6 +7372,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   app.isQuitting = true;
+  jevQueuePromise?.then((queue) => queue.stop()).catch(() => {});
   stopAssistant();
 });
 

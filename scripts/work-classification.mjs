@@ -38,8 +38,8 @@ export function retrieveCandidate({ title, existing = [] } = {}) {
   let best = null;
   for (const item of Array.isArray(existing) ? existing : []) {
     if (!item?.title) continue;
-    const words = tokensOf(item.title);
-    const overlap = words.filter((word) => wanted.has(word)).length;
+    const words = new Set(tokensOf(item.title));
+    const overlap = [...words].filter((word) => wanted.has(word)).length;
     if (overlap < 2) continue;
     if (!best || overlap > best.overlap) best = { item, overlap };
   }
@@ -65,7 +65,7 @@ export function relationshipQuestion({ observation = {}, candidate = {} } = {}) 
   const observed = clip(observation.text ?? observation.title, 400);
   const existing = clip(candidate.title, 200);
   const status = clip(candidate.status, 40) || "unknown";
-  const owed = Array.isArray(candidate.remaining) ? candidate.remaining.map((item) => clip(item, 120)) : [];
+  const owed = Array.isArray(candidate.remaining) ? candidate.remaining.slice(0, 8).map((item) => clip(item, 120)) : [];
   const prompt = [
     `A NEW OBSERVATION arrived from ${clip(observation.source, 40) || "an unknown source"}: "${observed}".`,
     `An EXISTING work item is already tracked: "${existing}" (status: ${status}${owed.length ? `, still owed: ${owed.join("; ")}` : ""}).`,

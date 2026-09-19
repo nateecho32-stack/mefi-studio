@@ -441,9 +441,13 @@ itself evidence. The first job is wired **shadow-mode**: every inbox
 admission (`queueRequests`) is retrieved against the closest existing work by
 title-key overlap and classified in one batched evaluation call, and the
 answer lands in the experience store as a `jev-proposal` event — a record,
-never an instruction. Admission never waits on a classifier (fire-and-forget,
-one per two minutes, three proposals per pass, an hour's backoff after two
-consecutive failures, every call charged to the improvement budget), and
+never an instruction. Admission never waits on a classifier. A bounded queue
+retains up to 48 observations arriving during a call or its cooldown, compares
+up to three at once, and excludes each new request from its own candidates.
+Calls are spaced two minutes apart; two consecutive failures trigger an hour's
+backoff, and an observation gets at most three attempts. Failed calls count
+toward recorded usage. If a usage-ledger write fails, its charge is retried
+before another paid call; the completed classification is kept.
 `settings.jevShadow === false` is the operator's kill switch. The
 message-kind builders (`progress` / `claimed_resolution` / …) ship tested but
 unwired — the next shadow surface, not a live one. No classification can
@@ -451,6 +455,20 @@ suppress work, merge tasks, or spawn agents. Model id
 `typesafe-ai/jev` is pinned (override with `MEFI_JEV_MODEL`); `npm run
 jev:status` / `jev:models` / `jev:probe` check the route through the stored
 key without printing it.
+
+The **Studio** tab has a Jev key field, classification switch, queue status,
+and **Test Jev connection** button. Keys are encrypted using the OS key store;
+only connection status crosses into the renderer. `AI_GATEWAY_API_KEY` or
+`MEFI_STUDIO_GATEWAY_KEY` can supply the key through the environment. Ordinary
+tests are offline; the optional live test requires both `MEFI_JEV_LIVE_TEST=1`
+and `AI_GATEWAY_API_KEY`.
+
+**Loop responsiveness.** Animation no longer delays short agent jobs or a
+finished model call. Independent message facts load in parallel, overlapping
+readers share the same pending read, and overlapping ticks and proactive calls
+share one running pass. A manual tick arriving during a timer pass still runs
+after it. The executor releases its fill lock immediately after the last slot.
+See [PERFORMANCE.md](PERFORMANCE.md) for startup measurements and reproduction.
 
 **The overseer.** Above the assistant sits the **overseer** — the R&D layer
 that never does the assistant's jobs but reviews how they are done. Before it
@@ -567,7 +585,7 @@ read lands. The real constellation builds underneath the whole time; when
 every read is done and the tree reports ready, the layer breathes
 "organising the node tree" → "ready" and fades away into the finished
 constellation. A key or click skips the wait, a slow store is capped at
-~8.5 s, and live-update reloads (which restore saved state) never show it.
+~6 s, and live-update reloads (which restore saved state) never show it.
 Nodes are labelled, the **Legend** pill explains the
 colours and rings, hovering one shows its kind, status, agent, model and age,
 and the search box finds a session, todo or task and rings the matches. Walk

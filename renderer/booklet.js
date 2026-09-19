@@ -340,6 +340,43 @@
       loadAiRouting();
     });
 
+    const jevStatus = document.getElementById("jev-status");
+    const jevEnabled = document.getElementById("jev-enabled");
+    const jevTest = document.getElementById("test-jev");
+    async function refreshJev() {
+      try {
+        const status = await window.mefiStudio.jevStatus();
+        jevEnabled.checked = status.enabled;
+        jevTest.disabled = !status.configured;
+        const route = !status.configured ? "Save a gateway key to connect Jev" : !status.enabled ? "Jev classification paused" : status.accountingPending ? "Jev waiting for the usage ledger" : `Jev configured · ${status.model}`;
+        const queue = status.pending ? ` · ${status.pending} waiting` : "";
+        jevStatus.textContent = `${route}${queue}${status.lastError ? ` · ${status.lastError}` : ""}`;
+      } catch { jevStatus.textContent = "Jev status unavailable"; }
+    }
+    document.getElementById("save-jev-key").addEventListener("click", async () => {
+      const input = document.getElementById("jev-key");
+      try {
+        const result = await window.mefiStudio.setApiKey(input.value.trim(), "gateway");
+        input.value = "";
+        if (!result?.ok) { jevStatus.textContent = `Save failed: ${result?.error ?? "unknown"}`; return; }
+        await refreshJev();
+      } catch { input.value = ""; jevStatus.textContent = "Could not save Jev key"; }
+    });
+    jevEnabled.addEventListener("change", async () => {
+      try { await window.mefiStudio.jevSetEnabled(jevEnabled.checked); await refreshJev(); }
+      catch { jevStatus.textContent = "Could not change Jev setting"; }
+    });
+    jevTest.addEventListener("click", async () => {
+      jevTest.disabled = true;
+      jevStatus.textContent = "Connecting to Jev…";
+      try {
+        const result = await window.mefiStudio.jevProbe();
+        jevStatus.textContent = result?.ok ? `Connected · ${result.model} · ${result.elapsedMs} ms` : `Connection failed: ${result?.error ?? "unknown"}`;
+      } catch { jevStatus.textContent = "Jev connection check failed"; }
+      finally { jevTest.disabled = false; }
+    });
+    refreshJev();
+
     // AI routing: who pays for assistant calls. Auto prefers the z.ai plan;
     // the OpenCode fallback switch exists so nothing bills OpenCode by surprise.
     // The model fields make the assistant's own model a choice: free-text ids

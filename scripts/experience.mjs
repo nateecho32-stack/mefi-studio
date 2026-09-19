@@ -16,7 +16,8 @@
 // Pure module: file appends are serialized per path, reads tolerate a torn
 // tail line, and no function here mutates the board stores.
 
-import { appendFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { canonicalHash, intentKeyOf } from "./policy.mjs";
 import { receiptsByAttempt, receiptTrust } from "./receipts.mjs";
@@ -317,6 +318,11 @@ export function exportDataset(events, receipts = []) {
 
 export const BUDGET_SCHEMA = 1;
 
+// Live updates re-import this module under a versioned URL. Keep one queue
+// registry across those instances until their outstanding writes have drained.
+const budgetChainsKey = Symbol.for("mefi-studio.experience.budgetChains");
+const budgetChains = globalThis[budgetChainsKey] ??= new Map();
+
 export async function readBudget(file) {
   try {
     const parsed = JSON.parse(await readFile(file, "utf8"));
@@ -326,7 +332,8 @@ export async function readBudget(file) {
 }
 
 export async function spendBudget(file, { purpose = "", modelCalls = 0, tokens = 0, providerCost = 0, note = "", now = 0 } = {}) {
-  const budget = await readBudget(file);
+  const resolved = path.resolve(file);
+  const key = process.platform === "win32" ? resolved.toLowerCase() : resolved;
   const entry = {
     at: intOrZero(now) || Date.now(),
     purpose: clipText(purpose, 80),
@@ -335,6 +342,19 @@ export async function spendBudget(file, { purpose = "", modelCalls = 0, tokens =
     providerCost: Number(providerCost) || 0,
     note: clipText(note, 160),
   };
+  // Intake, manual probes, and the Policy Lab can finish concurrently. Keep
+  // the entire read/modify/write inside the same per-file queue so each spend
+  // observes the previous one. A rejected write must not poison later work.
+  const prior = budgetChains.get(key) ?? Promise.resolve();
+  const run = prior.then(() => writeBudgetSpend(resolved, entry));
+  const release = () => { if (budgetChains.get(key) === settled) budgetChains.delete(key); };
+  const settled = run.then(release, release);
+  budgetChains.set(key, settled);
+  return run;
+}
+
+async function writeBudgetSpend(file, entry) {
+  const budget = await readBudget(file);
   const next = {
     schema: BUDGET_SCHEMA,
     spent: {
@@ -345,12 +365,19 @@ export async function spendBudget(file, { purpose = "", modelCalls = 0, tokens =
     entries: [...(Array.isArray(budget.entries) ? budget.entries : []).slice(-199), entry],
   };
   await mkdir(path.dirname(file), { recursive: true });
-  const tmp = `${file}.tmp-${process.pid}`;
-  await writeFile(tmp, JSON.stringify(next, null, 2));
+  // Unique temp files prevent staging collisions; this queue coordinates
+  // writers in one process, not independent OS processes.
+  const tmp = `${file}.tmp-${process.pid}-${randomUUID()}`;
+  const json = JSON.stringify(next, null, 2);
   try {
-    await rename(tmp, file);
-  } catch {
-    await writeFile(file, JSON.stringify(next, null, 2));
+    await writeFile(tmp, json);
+    try {
+      await rename(tmp, file);
+    } catch {
+      await writeFile(file, json);
+    }
+  } finally {
+    await rm(tmp, { force: true }).catch(() => {});
   }
   return next;
 }

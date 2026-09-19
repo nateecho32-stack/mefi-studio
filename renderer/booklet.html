@@ -2335,6 +2335,14 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
           <span class="muted" id="key-status">checking…</span>
         </div>
         <div class="row">
+          <input type="password" id="jev-key" placeholder="Jev gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev gateway API key">
+          <button id="save-jev-key">Save Jev key</button>
+          <button id="test-jev">Test Jev connection</button>
+          <label class="switch"><input type="checkbox" id="jev-enabled"><span class="track"></span><span>Jev classification</span></label>
+        </div>
+        <p class="muted" id="jev-status" role="status">Checking Jev…</p>
+        <p class="muted">Jev compares incoming work with existing tasks and records suggestions for the assistant. Your chat and coding models remain selected below.</p>
+        <div class="row">
           <label class="muted">AI routing
             <select id="ai-provider">
               <option value="auto">Auto — prefer z.ai GLM; OpenCode only when it is the only key</option>
@@ -7001,18 +7009,15 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
     if (now - lastBadgeRefresh < BADGE_THROTTLE_MS) return badges;
     lastBadgeRefresh = now;
     const patch = {};
-    try {
-      const tasks = await window.mefiStudio?.tasksList?.();
-      if (tasks?.tasks) patch.tasks = openTasks(tasks.tasks);
-    } catch {
-      /* no bridge, or the store is busy — keep the last count */
-    }
-    try {
-      const ideas = await window.mefiStudio?.ideasList?.();
-      if (ideas?.ideas) patch.ideas = unreadIdeas(ideas.ideas);
-    } catch {
-      /* as above */
-    }
+    const read = (method) => window.MefiBoot?.read ? window.MefiBoot.read(method) : Promise.resolve().then(() => window.mefiStudio?.[method]?.());
+    const [tasks, ideas] = await Promise.all([
+      read("tasksList").catch(() => null),
+      read("ideasList").catch(() => null),
+    ]);
+    // Failed reads retain the last count; one slow store cannot delay the
+    // other request from starting.
+    if (tasks?.tasks) patch.tasks = openTasks(tasks.tasks);
+    if (ideas?.ideas) patch.ideas = unreadIdeas(ideas.ideas);
     // No machineStatus() here: that IPC runs a full PowerShell process scan, and
     // onMachineStatus (init) already receives every watcher pass for free.
     Object.assign(patch, treeCounts());
@@ -8317,6 +8322,8 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
   let activeSessionId = null;
   let checkpoints = {};
   let initialized = false;
+  let readyPromise = null;
+  const read = (method) => window.MefiBoot?.read ? window.MefiBoot.read(method) : Promise.resolve().then(() => window.mefiStudio?.[method]?.());
   // What the store told us last, for the Command view's empty state.
   let status = window.mefiStudio?.eyesState ? "ok" : "desktop-only";
   let statusText = "no session yet";
@@ -8893,8 +8900,8 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
     }
   }
 
-  // Runs every frame before the draw check, so the flight goes on while the
-  // Command view (which reads agentPositions()) is the surface on screen.
+  // Both canvases advance time-based flights before reading their positions.
+  // The rail's frame cadence does not control Command's animation cadence.
   function advanceMotion(now) {
     const still = noMotion();
     for (const node of nodes) {
@@ -9587,14 +9594,13 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
 
   let lastDraw = 0;
   function loop(time) {
-    if (!noMotion()) angle += 0.0016;
-    // The flights advance whether or not this canvas draws: the Command view
-    // reads the positions every frame of its own.
-    advanceMotion(performance.now());
     // The rail is always on screen; 30fps is plenty for an ambient tree and
-    // halves the canvas cost. Hidden windows skip entirely.
+    // halves both its animation updates and canvas cost. Hidden windows skip
+    // all animation work; time-based flights catch up when they are shown.
     if (!document.hidden && time - lastDraw >= 33) {
+      if (!noMotion()) angle += 0.0016 * Math.min(3, (time - lastDraw) / 16.67);
       lastDraw = time;
+      advanceMotion(time);
       draw(time);
     }
     requestAnimationFrame(loop);
@@ -9845,11 +9851,15 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
       buildGraph([], [], { status: "desktop-only", text: "desktop mode only", stats: "desktop mode only" });
       return;
     }
-    const result = await window.mefiStudio.eyesState();
-    if (!result.ok) {
+    const result = await read("eyesState");
+    loadResult(result);
+  }
+
+  function loadResult(result) {
+    if (!result?.ok) {
       buildGraph([], [], {
         status: "unavailable",
-        text: result.error ? `store unavailable · ${result.error}` : "store unavailable",
+        text: result?.error ? `store unavailable · ${result.error}` : "store unavailable",
         stats: "store offline",
       });
       return;
@@ -9881,7 +9891,7 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
   }
 
   async function init() {
-    if (initialized || !canvas) return;
+    if (initialized || !canvas) return readyPromise;
     initialized = true;
     resize();
     seedStars();
@@ -9913,13 +9923,14 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
     rail.append(kbdProxy);
     canvas.setAttribute("aria-owns", "tree-kbd-item");
     requestAnimationFrame(loop);
-    // The first graph should already be organised: read the service state
-    // before the store, and never let a refused read stop the rail.
-    if (window.mefiStudio?.assistantState) {
-      try {
-        const result = await window.mefiStudio.assistantState();
-        if (result?.ok && result.state) assistant.state = result.state;
-      } catch {}
+    // Fetch organisation and sessions together, then build once with both.
+    // Command waits for this promise before taking its initial snapshot.
+    const checkpointRead = read("eyesCheckpointsRead").catch(() => null);
+    readyPromise = Promise.all([
+      read("assistantState").catch(() => null),
+      read("eyesState").catch((error) => ({ ok: false, error: String(error?.message ?? error) })),
+    ]).then(([result, sessions]) => {
+      if (result?.ok && result.state) assistant.state = result.state;
       // The service restarted what the last close interrupted: say so once,
       // while the resume is fresh (the thread carries the same line).
       const resumed = assistant.state?.resumed ?? null;
@@ -9927,12 +9938,12 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
       if (jobs > 0 && resumed?.at && Date.now() - resumed.at < 120000) {
         window.MefiToast?.(`Restarted ${plural(jobs, "interrupted job")}`, "info");
       }
-    }
-    try {
-      await load();
-    } catch (error) {
+      if (window.mefiStudio?.eyesState) loadResult(sessions);
+      else buildGraph([], [], { status: "desktop-only", text: "desktop mode only", stats: "desktop mode only" });
+    }).catch((error) => {
       buildGraph([], [], { status: "unavailable", text: `store unavailable · ${String(error?.message ?? error)}`, stats: "store offline" });
-    }
+    });
+    await readyPromise;
     window.mefiStudio?.onCheckpoints?.((data) => {
       checkpoints = data ?? {};
     });
@@ -9942,7 +9953,7 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
     });
     window.mefiStudio?.onAssistant?.((payload) => applyAssistant(payload));
     try {
-      const checkpointResult = await window.mefiStudio?.eyesCheckpointsRead?.();
+      const checkpointResult = await checkpointRead;
       checkpoints = checkpointResult?.checkpoints ?? {};
     } catch {
       checkpoints = {};
@@ -9951,6 +9962,7 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
 
   window.MefiTree = {
     init,
+    ready: () => readyPromise ?? Promise.resolve(),
     reload: load,
     debugNodes: () =>
       nodes
@@ -11050,9 +11062,13 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
     state.tasks = open;
   }
 
-  async function refreshTasks() {
+  const read = (method) => window.MefiBoot?.read ? window.MefiBoot.read(method) : Promise.resolve().then(() => window.mefiStudio?.[method]?.());
+
+  async function refreshTasks(shared = false) {
     try {
-      const result = await window.mefiStudio?.tasksList?.();
+      // Only the initial view shares reads. A refresh following a write must
+      // fetch after that write, even if an older startup request is pending.
+      const result = await (shared ? read("tasksList") : window.mefiStudio?.tasksList?.());
       takeTasks(result?.tasks);
     } catch {}
   }
@@ -12644,7 +12660,7 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
   // ---------- evidence popups ----------
   async function loadPngs() {
     try {
-      const result = await window.mefiStudio?.eyesState?.();
+      const result = await read("eyesState");
       state.pngs = result?.pngs?.map((png) => png.path) ?? [];
     } catch {
       state.pngs = [];
@@ -12719,10 +12735,11 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
   }
 
   let lastFrameAt = 0;
+  let frameRequest = 0;
   function frame(time) {
     if (!state.active) return;
     if (document.body.dataset.sheet) {
-      requestAnimationFrame(frame);
+      frameRequest = requestAnimationFrame(frame);
       return;
     }
     if (!document.hidden && time - lastFrameAt >= 33) {
@@ -12736,7 +12753,7 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
         }
       }
     }
-    requestAnimationFrame(frame);
+    frameRequest = requestAnimationFrame(frame);
   }
 
   function drawFrame(time) {
@@ -15013,7 +15030,7 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
     setCamMode(state.camMode, { quiet: true }); // a saved follow/orbit mode resumes where it left off
     // The first build as a promise: the boot sequence holds its fade until
     // this settles, so the constellation is already populated when it shows.
-    state.readyPromise = refreshTasks()
+    state.readyPromise = Promise.all([refreshTasks(true), window.MefiTree?.ready?.()])
       .catch(() => {})
       .then(() => {
         refreshGraph();
@@ -15025,16 +15042,16 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
       .then(() => {});
     loadPngs();
     updateTelemetry(true);
-    window.mefiStudio?.prefsGet?.().then((result) => {
+    read("prefsGet").then((result) => {
       if (result?.ok && el.home) el.home.checked = result.prefs.commandHome !== false;
       if (result?.ok) writeStore("mefiStudio.commandHome", result.prefs.commandHome === false ? "0" : "1");
     });
-    window.mefiStudio?.eyesCheckpointsRead?.().then((result) => {
+    read("eyesCheckpointsRead").then((result) => {
       state.checkpoints = result?.checkpoints ?? {};
     });
     // The feed panel never opens cold: seed it from the store's recent
     // changes, then layer the live queue, briefing and autopilot status on top.
-    window.mefiStudio?.eyesState?.().then((result) => {
+    read("eyesState").then((result) => {
       const cutoff = Date.now() - 24 * 60 * 60 * 1000;
       const changes = (Array.isArray(result?.changes) ? result.changes : [])
         .filter((change) => (change.time ?? 0) >= cutoff)
@@ -15050,17 +15067,17 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
         });
       }
     }).catch(() => {});
-    window.mefiStudio?.eyesRequestsRead?.().then((result) => {
+    read("eyesRequestsRead").then((result) => {
       state.requests = Array.isArray(result?.requests) ? result.requests : [];
       state.feedDirty = true;
       if (state.active) renderFeed();
     }).catch(() => {});
-    window.mefiStudio?.eyesBriefingRead?.().then((result) => {
+    read("eyesBriefingRead").then((result) => {
       state.briefing = result?.briefing ?? null;
       state.feedDirty = true;
       if (state.active) renderFeed();
     }).catch(() => {});
-    window.mefiStudio?.assistantStatus?.().then((result) => {
+    read("assistantStatus").then((result) => {
       state.assistant = result?.status ?? result ?? null;
       state.feedDirty = true;
       if (state.active) renderFeed();
@@ -15080,7 +15097,7 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
     // can leave this pending — the input listener below retries on the first
     // real key/click.
     if (state.reactive) ensureReactiveInput();
-    requestAnimationFrame(frame);
+    frameRequest = requestAnimationFrame(frame);
     state.timers.refresh = setInterval(tick, 4000);
     // A sheet may already cover the constellation (the quiet clock can open it
     // underneath one); stealing focus would break that dialog.
@@ -15091,6 +15108,8 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
   function exit() {
     if (!state.active) return;
     state.active = false;
+    cancelAnimationFrame(frameRequest);
+    frameRequest = 0;
     closeAmbience();
     hideTip();
     clearSearch();
@@ -19907,10 +19926,10 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
   const PULSE_MS = 120;
   const CLEAN_MS = 160;
   const LANES = 5; // agents reading in parallel
-  const ORGANISE_MS = 280; // the "organising the node tree" beat
-  const HOLD_MS = 180; // the "ready" beat before the fade starts
+  const ORGANISE_MS = 80; // a brief handoff once the real graph is ready
+  const HOLD_MS = 80; // the "ready" beat before the fade starts
   const FADE_MS = 480; // the CSS fade into the constellation
-  const MIN_SHOW_MS = 900; // legibility floor — never a strobe
+  const MIN_SHOW_MS = 450; // legibility floor — never a strobe
   const MAX_SHOW_MS = 5200; // a slow store must not hold the launch hostage
   const MAX_CHAT_NODES = 8; // mirrors the tree's capped roots
   const LABEL_MAX_PX = 170;
@@ -19946,7 +19965,6 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
     timings: null,
   };
 
-  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const ease = (k) => 1 - Math.pow(1 - Math.min(1, Math.max(0, k)), 3);
   const lerp = (a, b, k) => a + (b - a) * k;
 
@@ -19967,45 +19985,55 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
     return Promise.race([Promise.resolve(promise).catch(() => null), timeout]).finally(() => clearTimeout(timer));
   }
 
+  // Several surfaces open together. Share only their concurrent, read-only
+  // IPC requests; release settled promises so later opens see current data.
+  // Writes (including task edits) always use the bridge directly.
+  const reads = new Map();
+  const readMethods = new Set(["assistantStatus", "assistantState", "eyesState", "tasksList", "ideasList", "eyesRequestsRead", "eyesBriefingRead", "eyesCheckpointsRead", "prefsGet"]);
+  function read(method) {
+    if (!readMethods.has(method)) return Promise.reject(new Error(`Not a shared read: ${method}`));
+    if (reads.has(method)) return reads.get(method);
+    const pending = Promise.resolve().then(() => window.mefiStudio?.[method]?.());
+    reads.set(method, pending);
+    const release = () => {
+      if (reads.get(method) === pending) reads.delete(method);
+    };
+    pending.then(release, release);
+    return pending;
+  }
+
   // ---------- the reads ----------
 
-  // The assistant first (it is the boot's own heartbeat), then every source
-  // the Command tree is built from, each enqueueing its reader nodes as it
-  // answers so the animation shows real arrivals, never a fake checklist.
+  // Start every independent read together. The readers still arrive as their
+  // data lands, but an assistant read no longer delays the session store.
   async function gather() {
     const bridge = window.mefiStudio;
     if (!bridge) {
       // Browser-only fallback (npm run start:web): no store to read.
       boot.assistantLine = "browser mode";
-      await wait(noMotion() ? 100 : 700);
       return;
     }
-    const [status, state] = await Promise.all([guard(bridge.assistantStatus?.()), guard(bridge.assistantState?.())]);
-    boot.assistantLine = state?.state?.prefs?.paused ? "paused" : "listening";
-    boot.assistantStatus = status?.status ?? null;
-    await wait(noMotion() ? 40 : 220); // a beat where the assistant is alone
     await Promise.all([
-      readChats(bridge),
-      readSource(bridge.tasksList?.(), "the task board", (result) =>
+      guard(read("assistantState")).then((state) => {
+        boot.assistantLine = state?.state?.prefs?.paused ? "paused" : "listening";
+      }),
+      readChats(),
+      readSource(read("tasksList"), "the task board", (result) =>
         (Array.isArray(result?.tasks) ? result.tasks : []).filter((task) => task?.status === "open" || task?.status === "active").length
       ),
-      readSource(bridge.ideasList?.(), "feature ideas", (result) =>
+      readSource(read("ideasList"), "feature ideas", (result) =>
         (Array.isArray(result?.ideas) ? result.ideas : []).filter((idea) => !idea?.read).length
       ),
-      readSource(bridge.eyesRequestsRead?.(), "the request inbox", (result) => (Array.isArray(result?.requests) ? result.requests.length : 0)),
-      readSource(bridge.eyesBriefingRead?.(), "the latest briefing", (result) => (result?.briefing ? 1 : 0)),
-      readSource(bridge.eyesCheckpointsRead?.(), "checkpoints", (result) => Object.keys(result?.checkpoints ?? {}).length),
-      readSource(bridge.machineStatus?.(), "machine status", (result) => {
-        const runs = result?.status?.runs;
-        return Array.isArray(runs) ? runs.length : 0;
-      }),
+      readSource(read("eyesRequestsRead"), "the request inbox", (result) => (Array.isArray(result?.requests) ? result.requests.length : 0)),
+      readSource(read("eyesBriefingRead"), "the latest briefing", (result) => (result?.briefing ? 1 : 0)),
+      readSource(read("eyesCheckpointsRead"), "checkpoints", (result) => Object.keys(result?.checkpoints ?? {}).length),
     ]);
   }
 
   // Other chats, going on or happened: each becomes its own green reader node
   // named after the chat; anything past the cap folds into one summary node.
-  async function readChats(bridge) {
-    const result = await guard(bridge.eyesState?.());
+  async function readChats() {
+    const result = await guard(read("eyesState"));
     const sessions = Array.isArray(result?.sessions) ? result.sessions : [];
     const now = Date.now();
     const chats = sessions.filter((session) => session?.id);
@@ -20078,7 +20106,9 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
   function makeStars() {
     boot.stars = Array.from({ length: 70 }, (_, index) => {
       const seed = index * 2654435761;
-      const rand = (n) => ((seed >> n) % 1000) / 1000;
+      // Unsigned shifts keep the seeded values in [0, 1). A signed shift
+      // creates negative star radii and aborts the boot's first canvas frame.
+      const rand = (n) => ((seed >>> n) % 1000) / 1000;
       return { x: rand(3), y: rand(7), size: 0.5 + rand(11) * 1.3, phase: rand(5) * Math.PI * 2, drift: 0.002 + rand(13) * 0.004 };
     });
   }
@@ -20095,10 +20125,12 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
   }
 
   function truncate(ctx, reader) {
-    if (reader.labelWidth && reader.labelWidth <= LABEL_MAX_PX) return reader.label;
+    if (reader.displayLabel != null) return reader.displayLabel;
     let text = reader.label;
     while (text.length > 4 && ctx.measureText(`${text}…`).width > LABEL_MAX_PX) text = text.slice(0, -1);
-    return text.length === reader.label.length ? text : `${text}…`;
+    reader.displayLabel = text.length === reader.label.length ? text : `${text}…`;
+    reader.labelWidth = ctx.measureText(reader.displayLabel).width;
+    return reader.displayLabel;
   }
 
   function draw(now) {
@@ -20188,7 +20220,7 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
     // the label names the chat or thing being read
     ctx.font = LABEL_FONT;
     const text = truncate(ctx, reader);
-    const flip = reader.x + 14 + ctx.measureText(text).width > boot.w - 12;
+    const flip = reader.x + 14 + reader.labelWidth > boot.w - 12;
     ctx.textAlign = flip ? "right" : "start";
     const tx = flip ? reader.x - 12 : reader.x + 12;
     ctx.fillStyle = rgba(color, 0.9 * alpha);
@@ -20239,23 +20271,23 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
 
   function stepGate(now) {
     const age = now - boot.startedAt;
-    const drained = boot.dataDone && boot.idleDone && !boot.queue.length && !boot.lanes.length;
+    const minimum = noMotion() ? 0 : MIN_SHOW_MS;
     if (boot.phase === "reading") {
       // Command's first graph is already up: leftover theatrical readers
       // must not hold the fade after the tree is ready.
-      if (boot.idleDone && boot.dataDone && age > MIN_SHOW_MS) {
+      if (boot.idleDone && boot.dataDone && age >= minimum) {
         boot.queue = [];
         boot.lanes = [];
         boot.phase = "organising";
         boot.phaseAt = now;
-      } else if ((drained && age > MIN_SHOW_MS) || age > MAX_SHOW_MS) {
+      } else if (age > MAX_SHOW_MS) {
         boot.phase = "organising";
         boot.phaseAt = now;
       }
-    } else if (boot.phase === "organising" && now - boot.phaseAt > ORGANISE_MS) {
+    } else if (boot.phase === "organising" && now - boot.phaseAt >= (noMotion() ? 0 : ORGANISE_MS)) {
       boot.phase = "ready";
       boot.phaseAt = now;
-    } else if (boot.phase === "ready" && now - boot.phaseAt > HOLD_MS) {
+    } else if (boot.phase === "ready" && now - boot.phaseAt >= (noMotion() ? 0 : HOLD_MS)) {
       boot.phase = "fading";
       fade();
     }
@@ -20263,7 +20295,7 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
 
   function fade() {
     el.layer.classList.add("done");
-    boot.timers.push(setTimeout(teardown, FADE_MS + 80));
+    boot.timers.push(setTimeout(teardown, noMotion() ? 0 : FADE_MS + 80));
   }
 
   // ---------- lifecycle ----------
@@ -20312,6 +20344,8 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
     boot.slot = 0;
     boot.readsDone = 0;
     boot.readsTotal = 0;
+    boot.dataDone = false;
+    boot.idleDone = false;
     boot.current = "";
     boot.title = "";
     boot.count = "";
@@ -20336,16 +20370,18 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
 
     // Hand the launch to the Command view at once: its first graph build
     // overlaps the reads, so the fade lands on a tree that is already there.
-    boot.timers.push(
-      setTimeout(() => {
-        if (typeof openHome === "function") openHome();
-        Promise.resolve(window.MefiIdle?.ready?.())
-          .catch(() => {})
-          .then(() => {
-            boot.idleDone = true;
-          });
-      }, 140)
-    );
+    const launchHome = () => {
+      if (typeof openHome === "function") openHome();
+      Promise.resolve(window.MefiIdle?.ready?.())
+        .catch(() => {})
+        .then(() => {
+          boot.idleDone = true;
+        });
+    };
+    // idle.js wires its canvas at DOMContentLoaded. Join that event instead
+    // of sleeping 140ms and hoping the DOM has finished by then.
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", launchHome, { once: true });
+    else launchHome();
 
     gather()
       .catch(() => {})
@@ -20403,7 +20439,7 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
     }
   });
 
-  window.MefiBoot = { run, cancel, isActive: () => boot.active, pollStart, pollStop, pollActive: (key) => Boolean(polls.get(key)?.timer) };
+  window.MefiBoot = { run, cancel, read, isActive: () => boot.active, pollStart, pollStop, pollActive: (key) => Boolean(polls.get(key)?.timer) };
 })();
 
 // Mefi's Studio AI+ — booklet renderer, filters, refresh-on-open, studio launcher UI.
@@ -20747,6 +20783,43 @@ body.no-motion #boot-layer { transition: opacity 0.18s linear; }
       document.getElementById("zai-key").value = "";
       loadAiRouting();
     });
+
+    const jevStatus = document.getElementById("jev-status");
+    const jevEnabled = document.getElementById("jev-enabled");
+    const jevTest = document.getElementById("test-jev");
+    async function refreshJev() {
+      try {
+        const status = await window.mefiStudio.jevStatus();
+        jevEnabled.checked = status.enabled;
+        jevTest.disabled = !status.configured;
+        const route = !status.configured ? "Save a gateway key to connect Jev" : !status.enabled ? "Jev classification paused" : status.accountingPending ? "Jev waiting for the usage ledger" : `Jev configured · ${status.model}`;
+        const queue = status.pending ? ` · ${status.pending} waiting` : "";
+        jevStatus.textContent = `${route}${queue}${status.lastError ? ` · ${status.lastError}` : ""}`;
+      } catch { jevStatus.textContent = "Jev status unavailable"; }
+    }
+    document.getElementById("save-jev-key").addEventListener("click", async () => {
+      const input = document.getElementById("jev-key");
+      try {
+        const result = await window.mefiStudio.setApiKey(input.value.trim(), "gateway");
+        input.value = "";
+        if (!result?.ok) { jevStatus.textContent = `Save failed: ${result?.error ?? "unknown"}`; return; }
+        await refreshJev();
+      } catch { input.value = ""; jevStatus.textContent = "Could not save Jev key"; }
+    });
+    jevEnabled.addEventListener("change", async () => {
+      try { await window.mefiStudio.jevSetEnabled(jevEnabled.checked); await refreshJev(); }
+      catch { jevStatus.textContent = "Could not change Jev setting"; }
+    });
+    jevTest.addEventListener("click", async () => {
+      jevTest.disabled = true;
+      jevStatus.textContent = "Connecting to Jev…";
+      try {
+        const result = await window.mefiStudio.jevProbe();
+        jevStatus.textContent = result?.ok ? `Connected · ${result.model} · ${result.elapsedMs} ms` : `Connection failed: ${result?.error ?? "unknown"}`;
+      } catch { jevStatus.textContent = "Jev connection check failed"; }
+      finally { jevTest.disabled = false; }
+    });
+    refreshJev();
 
     // AI routing: who pays for assistant calls. Auto prefers the z.ai plan;
     // the OpenCode fallback switch exists so nothing bills OpenCode by surprise.

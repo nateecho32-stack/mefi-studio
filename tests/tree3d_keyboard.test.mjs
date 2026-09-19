@@ -76,6 +76,9 @@ test("tree rail: arrows move the focus, Enter/Space activate, ARIA follows", asy
     { sessionId: "s1", position: 0, content: "first thing", status: "in_progress" },
     { sessionId: "s2", position: 0, content: "second thing", status: "pending" },
   ];
+  let finishAssistant;
+  const assistantRead = new Promise((resolve) => { finishAssistant = resolve; });
+  let sessionReads = 0;
 
   globalThis.window = {
     addEventListener(type, fn) {
@@ -89,8 +92,8 @@ test("tree rail: arrows move the focus, Enter/Space activate, ARIA follows", asy
     },
     matchMedia: () => ({ matches: false }),
     mefiStudio: {
-      eyesState: async () => ({ ok: true, sessions, todos }),
-      assistantState: async () => ({ ok: false }),
+      eyesState: async () => { sessionReads += 1; return { ok: true, sessions, todos }; },
+      assistantState: () => assistantRead,
       assistantFocus: () => null,
       onCheckpoints: () => {},
       onEyesActivity: () => {},
@@ -117,7 +120,18 @@ test("tree rail: arrows move the focus, Enter/Space activate, ARIA follows", asy
   const tree = globalThis.window.MefiTree;
   assert.ok(tree, "tree3d.js must expose window.MefiTree");
 
-  await tree.init();
+  const initializing = tree.init();
+  let ready = false;
+  tree.ready().then(() => { ready = true; });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(sessionReads, 1, "session reads start while assistant organisation is still loading");
+  assert.equal(ready, false, "Command must wait for the first organised graph");
+  finishAssistant({ ok: false });
+  await initializing;
+  await tree.ready();
+  assert.equal(ready, true);
+  assert.ok(tree.snapshot().nodes.some((node) => node.id === "s1"), "ready includes the populated graph");
   await tree.reload();
 
   // the container is a labelled, focusable tree owning the hidden treeitem

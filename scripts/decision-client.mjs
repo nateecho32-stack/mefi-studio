@@ -14,9 +14,9 @@
 // Invalid or missing answers are errors, never guesses ("type-safe does not
 // mean correct").
 //
-// Dependency-free on purpose: the gateway speaks the OpenAI chat-completions
-// shape, so plain `fetch` replaces the `ai` SDK here. The key is resolved from
-// AI_GATEWAY_API_KEY (headless/CLI) or the DPAPI-encrypted settings field
+// Dependency-free on purpose: plain `fetch` implements the gateway's
+// evaluation protocol below. The key is resolved from AI_GATEWAY_API_KEY
+// or MEFI_STUDIO_GATEWAY_KEY (headless/CLI), or the DPAPI-encrypted settings field
 // (`gatewayApiKeyEncrypted`, set with `electron . --set-gateway-key`) — the
 // key itself is never logged, never stored in a tracked file, and never sent
 // anywhere but the configured gateway endpoint.
@@ -35,7 +35,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const JEVC_CLIENT_VERSION = 1;
+export const JEVC_CLIENT_VERSION = 2;
 export const DEFAULT_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh/v1";
 export const DEFAULT_JEV_MODEL = "typesafe-ai/jev";
 export const JEV_DOC_MODEL = "jev-1.13.0";
@@ -83,6 +83,7 @@ export function gatewayConfig({ env = process.env } = {}) {
 }
 
 function clampNumber(value, min, max, fallback) {
+  if (value == null || (typeof value === "string" && !value.trim())) return fallback;
   const num = Number(value);
   if (!Number.isFinite(num)) return fallback;
   return Math.min(max, Math.max(min, Math.round(num)));
@@ -93,12 +94,16 @@ function clampNumber(value, min, max, fallback) {
 // (main.cjs passes its safeStorage-backed decryptKey). Returns null when no
 // key is configured — callers decide whether that is an error.
 export function resolveApiKey({ env = process.env, settings = null, decrypt = null } = {}) {
-  const fromEnv = clipText(env.AI_GATEWAY_API_KEY, 200);
+  const fromEnv = String(env.AI_GATEWAY_API_KEY ?? "").trim() || String(env.MEFI_STUDIO_GATEWAY_KEY ?? "").trim();
   if (fromEnv) return { key: fromEnv, via: "env" };
   const encrypted = settings?.gatewayApiKeyEncrypted;
   if (encrypted && typeof decrypt === "function") {
-    const key = decrypt(settings, "gatewayApiKeyEncrypted");
-    if (key) return { key, via: "settings" };
+    try {
+      const key = decrypt(settings, "gatewayApiKeyEncrypted");
+      if (typeof key === "string" && key.trim()) return { key: key.trim(), via: "settings" };
+    } catch {
+      // An unreadable OS keystore means unconfigured, never an app-loop crash.
+    }
   }
   return null;
 }
@@ -110,17 +115,32 @@ export function resolveApiKey({ env = process.env, settings = null, decrypt = nu
 
 export function validateQuestionSpec(question) {
   const errors = [];
-  if (!question || typeof question !== "object") return { ok: false, errors: ["question must be an object"] };
-  if (!clipText(question.id, 60)) errors.push("id required");
-  if (!clipText(question.prompt, 4000)) errors.push("prompt required (self-contained: the model never sees the id)");
+  if (!question || typeof question !== "object" || Array.isArray(question)) return { ok: false, errors: ["question must be an object"] };
+  const boundedString = (value, max) => typeof value === "string" && value.trim().length > 0 && value === value.trim() && value.length <= max;
+  if (!boundedString(question.id, 60)) errors.push("id must be a nonempty string of at most 60 characters, without outer whitespace");
+  if (!boundedString(question.prompt, 4000)) errors.push("prompt required, at most 4000 characters (self-contained: the model never sees the id)");
   if (!QUESTION_TYPES.includes(question.type)) errors.push(`type must be one of ${QUESTION_TYPES.join(", ")}`);
   if (question.type === "choice") {
-    const options = (Array.isArray(question.options) ? question.options : []).map((option) => clipText(option, 60)).filter(Boolean);
+    const options = Array.isArray(question.options) ? question.options : [];
     if (options.length < 2) errors.push("choice questions need at least two options");
+    if (options.length > 255) errors.push("choice questions allow at most 255 options");
+    if (options.some((option) => !boundedString(option, 60))) errors.push("choice options must be nonempty strings of at most 60 characters, without outer whitespace");
     if (options.length !== new Set(options).size) errors.push("choice options must be unique");
   }
-  if (question.type === "score" && !clipText(question.levels, 1000)) errors.push("score questions need a levels description");
+  if (question.type === "score" && !boundedString(question.levels, 1000)) errors.push("score questions need a levels description");
   return { ok: errors.length === 0, errors };
+}
+
+function validateQuestions(questions) {
+  if (!Array.isArray(questions) || !questions.length) throw new Error("classify: at least one question is required");
+  const ids = new Set();
+  for (const question of questions) {
+    const check = validateQuestionSpec(question);
+    if (!check.ok) throw new Error(`invalid question spec: ${check.errors.join("; ")}`);
+    if (ids.has(question.id)) throw new Error(`duplicate question id: "${question.id}"`);
+    ids.add(question.id);
+  }
+  return questions;
 }
 
 // ---- the request -----------------------------------------------------------------
@@ -141,8 +161,9 @@ export function evaluationUrl(baseUrl) {
 }
 
 export function buildEvaluationRequest({ config, questions, state }) {
+  validateQuestions(questions);
   const flatState = clipText(typeof state === "string" ? state : JSON.stringify(state), config.maxStateChars);
-  const wireQuestions = {};
+  const wireQuestions = Object.create(null);
   for (const question of questions) {
     if (question.type === "choice") {
       wireQuestions[question.id] = {
@@ -168,7 +189,7 @@ export function buildEvaluationRequest({ config, questions, state }) {
       "ai-model-id": config.model,
       "user-agent": `mefi-studio/${JEVC_CLIENT_VERSION} (jev decision client)`,
     },
-    body: { state: flatState, questions: wireQuestions },
+    body: { state: flatState, questions: Object.fromEntries(Object.entries(wireQuestions)) },
   };
 }
 
@@ -183,7 +204,7 @@ export function buildEvaluationRequest({ config, questions, state }) {
 export function validateWireAnswers(answers, questions) {
   if (!answers || typeof answers !== "object" || Array.isArray(answers)) return { ok: false, errors: ["reply missing an answers object"] };
   const specs = new Map(questions.map((question) => [question.id, question]));
-  const out = {};
+  const out = Object.create(null);
   const errors = [];
   for (const [id, value] of Object.entries(answers)) {
     if (!specs.has(id)) {
@@ -196,8 +217,8 @@ export function validateWireAnswers(answers, questions) {
         errors.push(`"${id}": expected a choice answer`);
         continue;
       }
-      const choice = clipText(value.choice, 60);
-      if (!spec.options.includes(choice)) {
+      const choice = value.choice;
+      if (typeof choice !== "string" || !spec.options.includes(choice)) {
         errors.push(`"${id}": choice "${choice || "(empty)"}" is not one of ${spec.options.join(" | ")}`);
         continue;
       }
@@ -207,8 +228,8 @@ export function validateWireAnswers(answers, questions) {
         errors.push(`"${id}": expected a boolean (probability) answer`);
         continue;
       }
-      const probability = Number(value.probability);
-      if (!Number.isFinite(probability) || probability < 0 || probability > 1) {
+      const probability = value.probability;
+      if (typeof probability !== "number" || !Number.isFinite(probability) || probability < 0 || probability > 1) {
         errors.push(`"${id}": probability must be 0-1`);
         continue;
       }
@@ -220,7 +241,7 @@ export function validateWireAnswers(answers, questions) {
   for (const question of questions) {
     if (!out[question.id]) errors.push(`"${question.id}": no answer given`);
   }
-  return { ok: errors.length === 0, answers: out, errors };
+  return { ok: errors.length === 0, answers: Object.fromEntries(Object.entries(out)), errors };
 }
 
 export function parseAnswers(rawText, questions) {
@@ -232,12 +253,12 @@ export function parseAnswers(rawText, questions) {
   try {
     parsed = JSON.parse(text.slice(start, end + 1));
   } catch (error) {
-    return { ok: false, errors: `reply JSON did not parse: ${clipText(error.message, 120)}` };
+    return { ok: false, errors: [`reply JSON did not parse: ${clipText(error.message, 120)}`] };
   }
   const answers = parsed?.answers;
   if (!answers || typeof answers !== "object" || Array.isArray(answers)) return { ok: false, errors: ['reply missing an "answers" object'] };
   const specs = new Map(questions.map((question) => [question.id, question]));
-  const out = {};
+  const out = Object.create(null);
   const errors = [];
   for (const [id, value] of Object.entries(answers)) {
     if (!specs.has(id)) {
@@ -246,22 +267,22 @@ export function parseAnswers(rawText, questions) {
     }
     const spec = specs.get(id);
     if (spec.type === "choice") {
-      const choice = clipText(value?.choice, 60);
-      if (!spec.options.includes(choice)) {
+      const choice = value?.choice;
+      if (typeof choice !== "string" || !spec.options.includes(choice)) {
         errors.push(`"${id}": choice "${choice || "(empty)"}" is not one of ${spec.options.join(" | ")}`);
         continue;
       }
       out[id] = { choice };
     } else if (spec.type === "score") {
-      const score = Number(value?.score);
-      if (!Number.isFinite(score) || score < 0 || score > 100) {
+      const score = value?.score;
+      if (typeof score !== "number" || !Number.isFinite(score) || score < 0 || score > 100) {
         errors.push(`"${id}": score must be a number 0-100`);
         continue;
       }
       out[id] = { score: Math.round(score) };
     } else {
-      const probability = Number(value?.noul);
-      if (!Number.isFinite(probability) || probability < 0 || probability > 1) {
+      const probability = value?.noul;
+      if (typeof probability !== "number" || !Number.isFinite(probability) || probability < 0 || probability > 1) {
         errors.push(`"${id}": noul must be a probability 0-1`);
         continue;
       }
@@ -271,90 +292,117 @@ export function parseAnswers(rawText, questions) {
   for (const question of questions) {
     if (!out[question.id]) errors.push(`"${question.id}": no answer given`);
   }
-  return { ok: errors.length === 0, answers: out, errors };
+  return { ok: errors.length === 0, answers: Object.fromEntries(Object.entries(out)), errors };
 }
 
 // ---- the call ---------------------------------------------------------------------
 // One HTTP call, hard timeout, no automatic retries (re-asking is cheap and
 // explicit). Returns { ok, answers, usage, model, elapsedMs } or
-// { ok: false, error, status? }. usage.modelCalls is always 1 on success so
-// callers can charge the improvement budget ledger directly.
+// { ok: false, error, status?, usage? }. Every attempted network call reports
+// modelCalls: 1, including timeouts and invalid answers: rejected answers may
+// still have consumed tokens and must not bypass the caller's budget.
+
+const safeDiagnostic = (value, apiKey, max = 300) => {
+  const text = String(value ?? "");
+  return clipText(apiKey ? text.split(apiKey).join("[redacted]") : text, max);
+};
+
+function usageOf(usage = {}) {
+  const token = (...fields) => {
+    for (const field of fields) {
+      const value = usage?.[field];
+      if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) return value;
+    }
+    return null;
+  };
+  return {
+    modelCalls: 1,
+    promptTokens: token("inputTokens", "promptTokens", "prompt_tokens", "input_tokens"),
+    completionTokens: token("outputTokens", "completionTokens", "completion_tokens", "output_tokens"),
+  };
+}
+
+// The deadline covers both headers and body. Promise.race also settles when
+// a custom transport ignores abort; fetch receives abort to release its socket.
+async function withDeadline(timeoutMs, operation) {
+  const ms = clampNumber(timeoutMs, 1, 60000, 15000);
+  const controller = new AbortController();
+  let timer;
+  const deadline = new Promise((resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`timed out after ${ms}ms`));
+      controller.abort();
+    }, ms);
+  });
+  try {
+    return await Promise.race([Promise.resolve().then(() => operation(controller.signal)), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readGatewayResponse(response, apiKey) {
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    return { ok: false, error: `gateway HTTP ${response.status}: ${safeDiagnostic(body, apiKey)}`, status: response.status };
+  }
+  try {
+    return { ok: true, payload: await response.json() };
+  } catch (error) {
+    return { ok: false, error: `gateway reply was not JSON: ${safeDiagnostic(error?.message, apiKey, 120)}` };
+  }
+}
 
 export async function classify({ questions, state, apiKey, config = null, env = process.env, fetchImpl = globalThis.fetch } = {}) {
-  const cfg = config ?? gatewayConfig({ env });
+  const cfg = { ...gatewayConfig({ env }), ...config };
   try {
     assertJevOnly(cfg);
   } catch (error) {
     return { ok: false, error: error.message, refused: "jev-only" };
   }
-  const specs = (Array.isArray(questions) ? questions : []).map((question) => {
-    const check = validateQuestionSpec(question);
-    if (!check.ok) throw new Error(`invalid question spec: ${check.errors.join("; ")}`);
-    return question;
-  });
-  if (!specs.length) throw new Error("classify: at least one question is required");
   if (!apiKey) return { ok: false, error: "no AI gateway key configured (set AI_GATEWAY_API_KEY, or run: electron . --set-gateway-key)" };
   let request;
   try {
-    request = buildEvaluationRequest({ config: { ...cfg, apiKey }, questions: specs, state });
+    request = buildEvaluationRequest({ config: { ...cfg, apiKey }, questions, state });
   } catch (error) {
     return { ok: false, error: error.message, elapsedMs: 0, model: cfg.model };
   }
   const started = Date.now();
-  const controller = typeof AbortController === "function" ? new AbortController() : null;
-  const timer = controller ? setTimeout(() => controller.abort(), cfg.timeoutMs) : null;
   let response;
+  let attempted = false;
   try {
-    response = await fetchImpl(request.url, {
-      method: "POST",
-      headers: request.headers,
-      body: JSON.stringify(request.body),
-      signal: controller?.signal,
+    response = await withDeadline(cfg.timeoutMs, async (signal) => {
+      attempted = true;
+      const raw = await fetchImpl(request.url, {
+        method: "POST",
+        headers: request.headers,
+        body: JSON.stringify(request.body),
+        signal,
+      });
+      return readGatewayResponse(raw, apiKey);
     });
   } catch (error) {
-    return { ok: false, error: `gateway request failed: ${clipText(error.message, 160)}`, elapsedMs: Date.now() - started, model: cfg.model };
-  } finally {
-    if (timer) clearTimeout(timer);
+    return { ok: false, error: `gateway request failed: ${safeDiagnostic(error?.message, apiKey, 160)}`, elapsedMs: Date.now() - started, model: cfg.model, ...(attempted ? { usage: usageOf() } : {}) };
   }
   const elapsedMs = Date.now() - started;
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    // The body may echo the request; clip hard and never include the header.
-    return { ok: false, error: `gateway HTTP ${response.status}: ${clipText(body, 300)}`, status: response.status, elapsedMs, model: cfg.model };
-  }
-  let payload;
-  try {
-    payload = await response.json();
-  } catch (error) {
-    return { ok: false, error: `gateway reply was not JSON: ${clipText(error.message, 120)}`, elapsedMs, model: cfg.model };
-  }
-  const parsed = validateWireAnswers(payload?.answers, specs);
-  if (!parsed.ok) return { ok: false, error: `unusable reply: ${parsed.errors.join("; ")}`, raw: clipText(JSON.stringify(payload?.answers ?? payload), 400), elapsedMs, model: cfg.model };
-  const usage = payload?.usage ?? {};
-  const token = (...fields) => {
-    for (const field of fields) {
-      const value = Number(usage?.[field]);
-      if (Number.isFinite(value)) return value;
-    }
-    return null;
-  };
+  if (!response.ok) return { ...response, elapsedMs, model: cfg.model, usage: usageOf() };
+  const { payload } = response;
+  const usage = usageOf(payload?.usage);
+  const parsed = validateWireAnswers(payload?.answers, questions);
+  if (!parsed.ok) return { ok: false, error: `unusable reply: ${safeDiagnostic(parsed.errors.join("; "), apiKey, 400)}`, elapsedMs, model: cfg.model, usage };
   return {
     ok: true,
     answers: parsed.answers,
     model: cfg.model,
     elapsedMs,
-    usage: {
-      modelCalls: 1,
-      promptTokens: token("promptTokens", "prompt_tokens", "inputTokens", "input_tokens"),
-      completionTokens: token("completionTokens", "completion_tokens", "outputTokens", "output_tokens"),
-    },
+    usage,
   };
 }
 
 // ---- the gateway's model list (read-only, no tokens spent) ------------------------
 
 export async function listModels({ apiKey, config = null, env = process.env, fetchImpl = globalThis.fetch } = {}) {
-  const cfg = config ?? gatewayConfig({ env });
+  const cfg = { ...gatewayConfig({ env }), ...config };
   try {
     assertJevOnly(cfg);
   } catch (error) {
@@ -363,23 +411,23 @@ export async function listModels({ apiKey, config = null, env = process.env, fet
   if (!apiKey) return { ok: false, error: "no AI gateway key configured" };
   let response;
   try {
-    response = await fetchImpl(`${cfg.baseUrl}/models`, {
-      headers: { authorization: `Bearer ${apiKey}`, "user-agent": `mefi-studio/${JEVC_CLIENT_VERSION} (jev decision client)` },
+    response = await withDeadline(cfg.timeoutMs, async (signal) => {
+      const raw = await fetchImpl(`${cfg.baseUrl}/models`, {
+        headers: { authorization: `Bearer ${apiKey}`, "user-agent": `mefi-studio/${JEVC_CLIENT_VERSION} (jev decision client)` },
+        signal,
+      });
+      return readGatewayResponse(raw, apiKey);
     });
   } catch (error) {
-    return { ok: false, error: `gateway request failed: ${clipText(error.message, 160)}` };
+    return { ok: false, error: `gateway request failed: ${safeDiagnostic(error?.message, apiKey, 160)}` };
   }
-  if (!response.ok) return { ok: false, error: `gateway HTTP ${response.status}`, status: response.status };
-  const payload = await response.json().catch(() => null);
-  const ids = (Array.isArray(payload?.data) ? payload.data : []).map((row) => row?.id).filter((id) => typeof id === "string");
-  return { ok: true, models: ids, jevCandidates: ids.filter((id) => /jev/i.test(id)) };
+  if (!response.ok) return response;
+  if (!Array.isArray(response.payload?.data)) return { ok: false, error: "gateway model catalog is missing a data array" };
+  const ids = [...new Set(response.payload.data.map((row) => row?.id).filter((id) => typeof id === "string" && id.trim()))];
+  return { ok: true, models: ids, jevCandidates: ids.filter(isJevModel) };
 }
 
 // ---- CLI ---------------------------------------------------------------------------
-
-function maskKey(key) {
-  return key.length > 12 ? `${key.slice(0, 4)}…${key.slice(-4)} (${key.length} chars)` : "(short key)";
-}
 
 export async function cli(argv = process.argv.slice(2), { env = process.env, settings = null, decrypt = null, fetchImpl = globalThis.fetch } = {}) {
   const config = gatewayConfig({ env });
@@ -393,7 +441,7 @@ export async function cli(argv = process.argv.slice(2), { env = process.env, set
   console.log(`[jev] model: ${config.model} (pinned; override with MEFI_JEV_MODEL)`);
   console.log("[jev] scope: this key talks to Jev ONLY (System One) — chat and build work ride the studio's own routes");
   if (!isJevModel(config.model)) console.error(`[jev] WARNING: "${config.model}" is not a Jev model — --models/--probe will refuse it`);
-  console.log(`[jev] key: ${resolved ? `configured via ${resolved.via} — ${maskKey(resolved.key)}` : "NOT CONFIGURED"}`);
+  console.log(`[jev] key: ${resolved ? `configured via ${resolved.via}` : "NOT CONFIGURED"}`);
   if (!resolved) return 1;
   if (wants("--status")) return 0;
   if (wants("--models")) {

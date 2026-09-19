@@ -26,6 +26,8 @@
   let activeSessionId = null;
   let checkpoints = {};
   let initialized = false;
+  let readyPromise = null;
+  const read = (method) => window.MefiBoot?.read ? window.MefiBoot.read(method) : Promise.resolve().then(() => window.mefiStudio?.[method]?.());
   // What the store told us last, for the Command view's empty state.
   let status = window.mefiStudio?.eyesState ? "ok" : "desktop-only";
   let statusText = "no session yet";
@@ -602,8 +604,8 @@
     }
   }
 
-  // Runs every frame before the draw check, so the flight goes on while the
-  // Command view (which reads agentPositions()) is the surface on screen.
+  // Both canvases advance time-based flights before reading their positions.
+  // The rail's frame cadence does not control Command's animation cadence.
   function advanceMotion(now) {
     const still = noMotion();
     for (const node of nodes) {
@@ -1296,14 +1298,13 @@
 
   let lastDraw = 0;
   function loop(time) {
-    if (!noMotion()) angle += 0.0016;
-    // The flights advance whether or not this canvas draws: the Command view
-    // reads the positions every frame of its own.
-    advanceMotion(performance.now());
     // The rail is always on screen; 30fps is plenty for an ambient tree and
-    // halves the canvas cost. Hidden windows skip entirely.
+    // halves both its animation updates and canvas cost. Hidden windows skip
+    // all animation work; time-based flights catch up when they are shown.
     if (!document.hidden && time - lastDraw >= 33) {
+      if (!noMotion()) angle += 0.0016 * Math.min(3, (time - lastDraw) / 16.67);
       lastDraw = time;
+      advanceMotion(time);
       draw(time);
     }
     requestAnimationFrame(loop);
@@ -1554,11 +1555,15 @@
       buildGraph([], [], { status: "desktop-only", text: "desktop mode only", stats: "desktop mode only" });
       return;
     }
-    const result = await window.mefiStudio.eyesState();
-    if (!result.ok) {
+    const result = await read("eyesState");
+    loadResult(result);
+  }
+
+  function loadResult(result) {
+    if (!result?.ok) {
       buildGraph([], [], {
         status: "unavailable",
-        text: result.error ? `store unavailable · ${result.error}` : "store unavailable",
+        text: result?.error ? `store unavailable · ${result.error}` : "store unavailable",
         stats: "store offline",
       });
       return;
@@ -1590,7 +1595,7 @@
   }
 
   async function init() {
-    if (initialized || !canvas) return;
+    if (initialized || !canvas) return readyPromise;
     initialized = true;
     resize();
     seedStars();
@@ -1622,13 +1627,14 @@
     rail.append(kbdProxy);
     canvas.setAttribute("aria-owns", "tree-kbd-item");
     requestAnimationFrame(loop);
-    // The first graph should already be organised: read the service state
-    // before the store, and never let a refused read stop the rail.
-    if (window.mefiStudio?.assistantState) {
-      try {
-        const result = await window.mefiStudio.assistantState();
-        if (result?.ok && result.state) assistant.state = result.state;
-      } catch {}
+    // Fetch organisation and sessions together, then build once with both.
+    // Command waits for this promise before taking its initial snapshot.
+    const checkpointRead = read("eyesCheckpointsRead").catch(() => null);
+    readyPromise = Promise.all([
+      read("assistantState").catch(() => null),
+      read("eyesState").catch((error) => ({ ok: false, error: String(error?.message ?? error) })),
+    ]).then(([result, sessions]) => {
+      if (result?.ok && result.state) assistant.state = result.state;
       // The service restarted what the last close interrupted: say so once,
       // while the resume is fresh (the thread carries the same line).
       const resumed = assistant.state?.resumed ?? null;
@@ -1636,12 +1642,12 @@
       if (jobs > 0 && resumed?.at && Date.now() - resumed.at < 120000) {
         window.MefiToast?.(`Restarted ${plural(jobs, "interrupted job")}`, "info");
       }
-    }
-    try {
-      await load();
-    } catch (error) {
+      if (window.mefiStudio?.eyesState) loadResult(sessions);
+      else buildGraph([], [], { status: "desktop-only", text: "desktop mode only", stats: "desktop mode only" });
+    }).catch((error) => {
       buildGraph([], [], { status: "unavailable", text: `store unavailable · ${String(error?.message ?? error)}`, stats: "store offline" });
-    }
+    });
+    await readyPromise;
     window.mefiStudio?.onCheckpoints?.((data) => {
       checkpoints = data ?? {};
     });
@@ -1651,7 +1657,7 @@
     });
     window.mefiStudio?.onAssistant?.((payload) => applyAssistant(payload));
     try {
-      const checkpointResult = await window.mefiStudio?.eyesCheckpointsRead?.();
+      const checkpointResult = await checkpointRead;
       checkpoints = checkpointResult?.checkpoints ?? {};
     } catch {
       checkpoints = {};
@@ -1660,6 +1666,7 @@
 
   window.MefiTree = {
     init,
+    ready: () => readyPromise ?? Promise.resolve(),
     reload: load,
     debugNodes: () =>
       nodes

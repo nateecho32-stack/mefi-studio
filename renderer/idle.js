@@ -1006,9 +1006,13 @@
     state.tasks = open;
   }
 
-  async function refreshTasks() {
+  const read = (method) => window.MefiBoot?.read ? window.MefiBoot.read(method) : Promise.resolve().then(() => window.mefiStudio?.[method]?.());
+
+  async function refreshTasks(shared = false) {
     try {
-      const result = await window.mefiStudio?.tasksList?.();
+      // Only the initial view shares reads. A refresh following a write must
+      // fetch after that write, even if an older startup request is pending.
+      const result = await (shared ? read("tasksList") : window.mefiStudio?.tasksList?.());
       takeTasks(result?.tasks);
     } catch {}
   }
@@ -2600,7 +2604,7 @@
   // ---------- evidence popups ----------
   async function loadPngs() {
     try {
-      const result = await window.mefiStudio?.eyesState?.();
+      const result = await read("eyesState");
       state.pngs = result?.pngs?.map((png) => png.path) ?? [];
     } catch {
       state.pngs = [];
@@ -2675,10 +2679,11 @@
   }
 
   let lastFrameAt = 0;
+  let frameRequest = 0;
   function frame(time) {
     if (!state.active) return;
     if (document.body.dataset.sheet) {
-      requestAnimationFrame(frame);
+      frameRequest = requestAnimationFrame(frame);
       return;
     }
     if (!document.hidden && time - lastFrameAt >= 33) {
@@ -2692,7 +2697,7 @@
         }
       }
     }
-    requestAnimationFrame(frame);
+    frameRequest = requestAnimationFrame(frame);
   }
 
   function drawFrame(time) {
@@ -4969,7 +4974,7 @@
     setCamMode(state.camMode, { quiet: true }); // a saved follow/orbit mode resumes where it left off
     // The first build as a promise: the boot sequence holds its fade until
     // this settles, so the constellation is already populated when it shows.
-    state.readyPromise = refreshTasks()
+    state.readyPromise = Promise.all([refreshTasks(true), window.MefiTree?.ready?.()])
       .catch(() => {})
       .then(() => {
         refreshGraph();
@@ -4981,16 +4986,16 @@
       .then(() => {});
     loadPngs();
     updateTelemetry(true);
-    window.mefiStudio?.prefsGet?.().then((result) => {
+    read("prefsGet").then((result) => {
       if (result?.ok && el.home) el.home.checked = result.prefs.commandHome !== false;
       if (result?.ok) writeStore("mefiStudio.commandHome", result.prefs.commandHome === false ? "0" : "1");
     });
-    window.mefiStudio?.eyesCheckpointsRead?.().then((result) => {
+    read("eyesCheckpointsRead").then((result) => {
       state.checkpoints = result?.checkpoints ?? {};
     });
     // The feed panel never opens cold: seed it from the store's recent
     // changes, then layer the live queue, briefing and autopilot status on top.
-    window.mefiStudio?.eyesState?.().then((result) => {
+    read("eyesState").then((result) => {
       const cutoff = Date.now() - 24 * 60 * 60 * 1000;
       const changes = (Array.isArray(result?.changes) ? result.changes : [])
         .filter((change) => (change.time ?? 0) >= cutoff)
@@ -5006,17 +5011,17 @@
         });
       }
     }).catch(() => {});
-    window.mefiStudio?.eyesRequestsRead?.().then((result) => {
+    read("eyesRequestsRead").then((result) => {
       state.requests = Array.isArray(result?.requests) ? result.requests : [];
       state.feedDirty = true;
       if (state.active) renderFeed();
     }).catch(() => {});
-    window.mefiStudio?.eyesBriefingRead?.().then((result) => {
+    read("eyesBriefingRead").then((result) => {
       state.briefing = result?.briefing ?? null;
       state.feedDirty = true;
       if (state.active) renderFeed();
     }).catch(() => {});
-    window.mefiStudio?.assistantStatus?.().then((result) => {
+    read("assistantStatus").then((result) => {
       state.assistant = result?.status ?? result ?? null;
       state.feedDirty = true;
       if (state.active) renderFeed();
@@ -5036,7 +5041,7 @@
     // can leave this pending — the input listener below retries on the first
     // real key/click.
     if (state.reactive) ensureReactiveInput();
-    requestAnimationFrame(frame);
+    frameRequest = requestAnimationFrame(frame);
     state.timers.refresh = setInterval(tick, 4000);
     // A sheet may already cover the constellation (the quiet clock can open it
     // underneath one); stealing focus would break that dialog.
@@ -5047,6 +5052,8 @@
   function exit() {
     if (!state.active) return;
     state.active = false;
+    cancelAnimationFrame(frameRequest);
+    frameRequest = 0;
     closeAmbience();
     hideTip();
     clearSearch();

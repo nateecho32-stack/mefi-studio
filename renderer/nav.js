@@ -592,18 +592,15 @@
     if (now - lastBadgeRefresh < BADGE_THROTTLE_MS) return badges;
     lastBadgeRefresh = now;
     const patch = {};
-    try {
-      const tasks = await window.mefiStudio?.tasksList?.();
-      if (tasks?.tasks) patch.tasks = openTasks(tasks.tasks);
-    } catch {
-      /* no bridge, or the store is busy — keep the last count */
-    }
-    try {
-      const ideas = await window.mefiStudio?.ideasList?.();
-      if (ideas?.ideas) patch.ideas = unreadIdeas(ideas.ideas);
-    } catch {
-      /* as above */
-    }
+    const read = (method) => window.MefiBoot?.read ? window.MefiBoot.read(method) : Promise.resolve().then(() => window.mefiStudio?.[method]?.());
+    const [tasks, ideas] = await Promise.all([
+      read("tasksList").catch(() => null),
+      read("ideasList").catch(() => null),
+    ]);
+    // Failed reads retain the last count; one slow store cannot delay the
+    // other request from starting.
+    if (tasks?.tasks) patch.tasks = openTasks(tasks.tasks);
+    if (ideas?.ideas) patch.ideas = unreadIdeas(ideas.ideas);
     // No machineStatus() here: that IPC runs a full PowerShell process scan, and
     // onMachineStatus (init) already receives every watcher pass for free.
     Object.assign(patch, treeCounts());

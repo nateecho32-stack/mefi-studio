@@ -3,7 +3,7 @@
 // (Jev is an evaluation model — chat/completions is the wrong surface),
 // strict answer validation (an out-of-contract reply is an error, never a
 // guess), conservative interpretation (ambiguity keeps work separate), and a
-// live half that only runs when AI_GATEWAY_API_KEY is exported.
+// live half that requires MEFI_JEV_LIVE_TEST=1 and AI_GATEWAY_API_KEY.
 //
 // Run: node --test tests/   (or npm test)
 
@@ -47,6 +47,7 @@ test("gateway config: defaults, env overrides, clamps", () => {
   assert.equal(overridden.model, "typesafe-ai/jev-next");
   assert.equal(overridden.baseUrl, "https://proxy.example/v1", "trailing slash stripped");
   assert.equal(overridden.timeoutMs, 1000, "timeout clamps to its floor, never zero");
+  assert.equal(gatewayConfig({ env: { MEFI_JEV_TIMEOUT_MS: "", MEFI_JEV_MAX_STATE_CHARS: " " } }).timeoutMs, 15000, "empty shell overrides retain defaults");
 });
 
 test("evaluationUrl resolves against the gateway origin (v4/ai/evaluation-model)", () => {
@@ -61,6 +62,11 @@ test("key resolution: env wins, then the encrypted settings field, then null", (
   assert.equal(resolveApiKey({ env: {}, settings: null, decrypt }), null);
   // no decrypt injected (plain-node CLI): the settings path is unusable, not a crash
   assert.equal(resolveApiKey({ env: {}, settings: { gatewayApiKeyEncrypted: "x" } }), null);
+  assert.deepEqual(resolveApiKey({ env: { MEFI_STUDIO_GATEWAY_KEY: " studio-key " } }), { key: "studio-key", via: "env" });
+  assert.deepEqual(resolveApiKey({ env: { AI_GATEWAY_API_KEY: "api-key", MEFI_STUDIO_GATEWAY_KEY: "studio-key" } }), { key: "api-key", via: "env" });
+  assert.equal(resolveApiKey({ env: {}, settings: { gatewayApiKeyEncrypted: "x" }, decrypt: () => { throw new Error("keystore locked"); } }), null);
+  const longKey = "x".repeat(400);
+  assert.equal(resolveApiKey({ env: { AI_GATEWAY_API_KEY: longKey } }).key, longKey, "credentials are never truncated");
 });
 
 // ---- question specs ---------------------------------------------------------------
@@ -95,7 +101,7 @@ test("buildEvaluationRequest: id-keyed questions, criteria maps, noul becomes bo
   assert.deepEqual(request.body.questions.worth, { type: "boolean", instructions: "Is it blocked?" });
   assert.equal(Object.keys(request.body).sort().join(","), "questions,state", "no model, no temperature — just state and questions");
   // oversized state is clipped instead of shipping the world
-  const clipped = buildEvaluationRequest({ config: { ...config, maxStateChars: 100 }, questions: [], state: "x".repeat(5000) });
+  const clipped = buildEvaluationRequest({ config: { ...config, maxStateChars: 100 }, questions: SPEC_ONE, state: "x".repeat(5000) });
   assert.ok(clipped.body.state.length <= 100);
   // score has no wire mapping yet — a clear error, not a mangled question
   assert.throws(
@@ -137,6 +143,55 @@ test("parseAnswers still validates the prose JSON contract (language-model fallb
   assert.equal(parseAnswers('{"answers": {"rel": {"choice": "vibes"}}}', SPEC).ok, false, "out-of-option choices are refused, not clamped");
 });
 
+test("strict validation never converts missing values or strings into decisions", () => {
+  const probabilitySpec = [{ id: "p", type: "noul", prompt: "Does the evidence prove completion?" }];
+  for (const probability of [null, false, true, "0.5", "", [], {}, undefined, NaN, Infinity]) {
+    assert.equal(validateWireAnswers({ p: { type: "boolean", probability } }, probabilitySpec).ok, false);
+    assert.equal(parseAnswers(JSON.stringify({ answers: { p: { noul: probability } } }), probabilitySpec).ok, false);
+  }
+  for (const choice of [" same_obligation", "same_obligation ", null, 1]) {
+    assert.equal(validateWireAnswers({ rel: { type: "choice", choice } }, SPEC_ONE).ok, false);
+  }
+  const scoreSpec = [{ id: "score", type: "score", prompt: "Assess relevance", levels: "0 absent; 100 certain" }];
+  assert.equal(parseAnswers('{"answers":{"score":{"score":null}}}', scoreSpec).ok, false);
+  assert.ok(Array.isArray(parseAnswers("{invalid json}", SPEC_ONE).errors));
+});
+
+test("invalid specs and duplicate ids are refused before spending a request", async () => {
+  let calls = 0;
+  const fetchImpl = async () => { calls += 1; throw new Error("must not call"); };
+  for (const questions of [
+    [],
+    [SPEC_ONE[0], SPEC_ONE[0]],
+    [{ ...SPEC_ONE[0], id: 123 }],
+    [{ ...SPEC_ONE[0], prompt: {} }],
+    [{ ...SPEC_ONE[0], options: [1, 2] }],
+    [{ ...SPEC_ONE[0], options: ["yes", "no", ""] }],
+    [{ ...SPEC_ONE[0], options: [" yes", "no"] }],
+    [{ ...SPEC_ONE[0], options: ["x".repeat(61), "no"] }],
+  ]) {
+    const result = await classify({ questions, state: "s", apiKey: KEY, fetchImpl });
+    assert.equal(result.ok, false);
+    assert.equal(result.usage, undefined);
+  }
+  assert.equal(calls, 0);
+});
+
+test("question ids that match object properties round-trip without inherited answers", async () => {
+  const questions = ["__proto__", "constructor", "toString"].map((id) => ({ ...SPEC_ONE[0], id }));
+  const answers = Object.fromEntries(questions.map(({ id }) => [id, { type: "choice", choice: "unrelated" }]));
+  const result = await classify({
+    questions, state: "s", apiKey: KEY,
+    fetchImpl: async (url, options) => {
+      assert.deepEqual(Object.keys(JSON.parse(options.body).questions), questions.map(({ id }) => id));
+      return jevReply(answers);
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(Object.keys(result.answers), questions.map(({ id }) => id));
+  assert.equal(validateWireAnswers({}, questions).ok, false);
+});
+
 // ---- classify against stub fetch -----------------------------------------------------
 
 test("classify: happy path hits the evaluation endpoint and returns chargeable usage", async () => {
@@ -173,14 +228,55 @@ test("classify: transport, HTTP, and unusable-reply failures never invent answer
 });
 
 test("classify: the timeout aborts the request", async () => {
+  let observedSignal;
   const slow = (url, options) =>
     new Promise((resolve, reject) => {
+      observedSignal = options.signal;
       options.signal.addEventListener("abort", () => reject(new Error("This operation was aborted")));
-      setTimeout(() => resolve(jevReply({})), 5000);
     });
   const result = await classify({ questions: SPEC_ONE, state: "s", apiKey: KEY, config: { ...gatewayConfig({ env: {} }), timeoutMs: 50 }, fetchImpl: slow });
   assert.equal(result.ok, false);
   assert.ok(result.error.includes("gateway request failed"));
+  assert.equal(observedSignal.aborted, true);
+  assert.equal(result.usage.modelCalls, 1, "a timed-out attempt still consumes the call budget");
+});
+
+test("deadlines include stuck response bodies and transports that ignore abort", { timeout: 3000 }, async () => {
+  for (const fetchImpl of [
+    async () => new Promise(() => {}),
+    async () => ({ ok: true, json: () => new Promise(() => {}) }),
+    async () => ({ ok: false, status: 503, text: () => new Promise(() => {}) }),
+  ]) {
+    const result = await classify({ questions: SPEC_ONE, state: "s", apiKey: KEY, config: { timeoutMs: 20 }, fetchImpl });
+    assert.equal(result.ok, false);
+    assert.match(result.error, /timed out/);
+    assert.equal(result.usage.modelCalls, 1);
+    const catalog = await listModels({ apiKey: KEY, config: { timeoutMs: 20 }, fetchImpl });
+    assert.equal(catalog.ok, false);
+    assert.match(catalog.error, /timed out/);
+  }
+});
+
+test("token usage follows the evaluation protocol and survives invalid answers", async () => {
+  const result = await classify({ questions: SPEC_ONE, state: "s", apiKey: KEY, fetchImpl: async () => jevReply({}, { inputTokens: 120, outputTokens: 8 }) });
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.usage, { modelCalls: 1, promptTokens: 120, completionTokens: 8 });
+  const missing = await classify({ questions: SPEC_ONE, state: "s", apiKey: KEY, fetchImpl: async () => jevReply({ rel: { type: "choice", choice: "unrelated" } }, { inputTokens: null, outputTokens: -2 }) });
+  assert.deepEqual(missing.usage, { modelCalls: 1, promptTokens: null, completionTokens: null }, "missing/invalid counts stay unknown, never zero or negative");
+});
+
+test("gateway diagnostics redact credentials and do not return raw response bodies", async () => {
+  for (const fetchImpl of [
+    async () => { throw new Error(`network error ${KEY}`); },
+    async () => ({ ok: false, status: 403, text: async () => `denied: ${KEY}` }),
+    async () => ({ ok: true, json: async () => { throw new Error(`bad body ${KEY}`); } }),
+    async () => jevReply({ rel: { type: "choice", choice: KEY } }),
+  ]) {
+    const result = await classify({ questions: SPEC_ONE, state: "s", apiKey: KEY, fetchImpl });
+    assert.equal(result.ok, false);
+    assert.equal(JSON.stringify(result).includes(KEY), false);
+    assert.equal(result.raw, undefined);
+  }
 });
 
 test("listModels reads the gateway catalog and flags jev-shaped ids", async () => {
@@ -192,6 +288,15 @@ test("listModels reads the gateway catalog and flags jev-shaped ids", async () =
   const result = await listModels({ apiKey: KEY, fetchImpl });
   assert.equal(result.ok, true);
   assert.deepEqual(result.jevCandidates, ["typesafe-ai/jev"]);
+});
+
+test("listModels refuses malformed catalogs and flags only allowed Jev model ids", async () => {
+  for (const body of [null, {}, { data: "invalid" }]) {
+    assert.equal((await listModels({ apiKey: KEY, fetchImpl: async () => okResponse(body) })).ok, false);
+  }
+  const result = await listModels({ apiKey: KEY, fetchImpl: async () => okResponse({ data: [{ id: "typesafe-ai/jev" }, { id: "typesafe-ai/jev" }, { id: "other/jevish" }, {}] }) });
+  assert.deepEqual(result.jevCandidates, ["typesafe-ai/jev"]);
+  assert.deepEqual(result.models, ["typesafe-ai/jev", "other/jevish"]);
 });
 
 const SPEC_ONE = [{ id: "rel", type: "choice", prompt: "Compare A to B", options: ["same_obligation", "unrelated"] }];
@@ -262,6 +367,7 @@ test("retrieveCandidate picks the best overlap and refuses near-zero-overlap com
   assert.equal(best.item.title, "Restore tar torch catalog descriptions now");
   assert.equal(retrieveCandidate({ title: "", existing }), null);
   assert.equal(retrieveCandidate({ title: "Fix the auditor", existing: "not-a-list" }), null);
+  assert.equal(retrieveCandidate({ title: "Fix scheduler startup", existing: [{ title: "scheduler scheduler scheduler" }] }), null, "repeated words cannot inflate overlap into a paid comparison");
 });
 
 test("interpretation is conservative: only exact matches attach; ambiguity holds for review", () => {
@@ -300,32 +406,31 @@ test("the gateway key follows the studio's keystore contract", async () => {
 
 // ---- shadow intake: proposals are recorded, never acted on -------------------------
 
-test("the shadow intake is observation-only: fire-and-forget, kill-switched, capped, budget-charged", async () => {
+test("the shadow intake stays observation-only and charges the constrained client", async () => {
   const { readFile } = await import("node:fs/promises");
   const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
   // hooked at the single admission point, after the gateway mutation, never awaited
-  assert.match(source, /jevShadowIntake\(additions\);/);
+  assert.match(source, /jevShadowIntake\(patch\.accepted\);/);
   assert.doesNotMatch(source, /await jevShadowIntake/);
   // operator kill switch and smoke silence
   assert.match(source, /settings\.jevShadow === false/);
-  const intake = source.slice(source.indexOf("function jevShadowIntake"), source.indexOf("function policyActionDescriptor"));
-  assert.match(intake, /if \(SMOKE \|\| CAPTURE \|\| CLI_MODE\) return;/);
-  // rate limiting, per-pass cap, failure backoff
-  assert.match(intake, /JEV_SHADOW_MIN_INTERVAL_MS/);
-  assert.match(intake, /comparisons\.length >= JEV_SHADOW_MAX_PROPOSALS/);
-  assert.match(intake, /jevShadowBackedOffUntil = Date\.now\(\) \+ JEV_SHADOW_BACKOFF_MS/);
-  // retrieval before any call; one batched call; recorded as experience events
-  assert.match(intake, /retrieveCandidate\(/);
-  assert.match(intake, /client\.classify\(\{ questions, state: stateContext/);
+  const hook = source.slice(source.indexOf("function jevShadowIntake"), source.indexOf("async function chargeJevCall"));
+  assert.match(hook, /if \(SMOKE \|\| CAPTURE \|\| CLI_MODE\) return;/);
+  assert.match(hook, /queue\.enqueue\(additions\)/);
+  // Queue rate limits/retry behavior and retrieval are exercised in jev_loop.test.mjs.
+  const intake = source.slice(source.indexOf("async function runJevIntake"), source.indexOf("async function jevStatus"));
+  assert.match(intake, /loop\.planIntake\(additions/);
+  assert.match(intake, /client\.classify\(\{ questions, state,/);
   assert.match(intake, /policyRecord\("jev-proposal"/);
+  assert.doesNotMatch(intake, /mutateBoard|spawn\(/, "a classification proposal cannot modify or start work");
   // every call is charged to the global improvement budget
-  assert.match(intake, /purpose: "jev-shadow-intake"/);
+  assert.match(intake, /chargeJevCall\(result, "jev-shadow-intake"\)/);
 });
 
 // ---- live half: only with an exported key, skipped otherwise ------------------------
 
 const liveKey = process.env.AI_GATEWAY_API_KEY;
-const liveTest = liveKey ? test : test.skip;
+const liveTest = process.env.MEFI_JEV_LIVE_TEST === "1" && liveKey ? test : test.skip;
 
 liveTest("live: the gateway resolves the pinned Jev model (no card = a named billing error)", async () => {
   const result = await classify({
