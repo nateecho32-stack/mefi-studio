@@ -1,0 +1,85 @@
+// Builds a portable desktop app: copies the cached Electron runtime next to a
+// resources/app payload. Double-click "Mefi Studio AI+.exe" to run; the app
+// resolves REPO_ROOT from its own location (dist/<app>/ -> repo).
+//
+//   node scripts/package-portable.mjs [--clean]
+import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const STUDIO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const ELECTRON_DIST = path.join(STUDIO, "node_modules", "electron", "dist");
+const OUT_DIR = path.join(STUDIO, "dist", "Mefi Studio AI+");
+const APP_DIR = path.join(OUT_DIR, "resources", "app");
+const EXE_NAME = "Mefi Studio AI+.exe";
+const clean = process.argv.includes("--clean");
+
+if (!existsSync(ELECTRON_DIST)) {
+  console.error("electron dist missing - run: npm install (then node node_modules/electron/install.js)");
+  process.exit(1);
+}
+// --clean wipes the old build, but the payload's data/ holds the user's live state:
+// carry it across the wipe instead of deleting it with everything else.
+const LIVE_DATA = path.join(APP_DIR, "data");
+let stash = null;
+if (clean) {
+  if (existsSync(LIVE_DATA)) {
+    stash = await mkdtemp(path.join(os.tmpdir(), "mefi-studio-data-"));
+    await cp(LIVE_DATA, stash, { recursive: true });
+  }
+  await rm(OUT_DIR, { recursive: true, force: true });
+}
+await mkdir(APP_DIR, { recursive: true });
+if (stash) {
+  await cp(stash, LIVE_DATA, { recursive: true });
+  await rm(stash, { recursive: true, force: true });
+}
+
+// 1. electron runtime
+await cp(ELECTRON_DIST, OUT_DIR, { recursive: true });
+await rename(path.join(OUT_DIR, "electron.exe"), path.join(OUT_DIR, EXE_NAME));
+
+// 2. app payload
+for (const entry of ["main.cjs", "preload.cjs", "README.md"]) {
+  await cp(path.join(STUDIO, entry), path.join(APP_DIR, entry));
+}
+for (const dir of ["renderer", "scripts", "assets"]) {
+  if (existsSync(path.join(STUDIO, dir))) await cp(path.join(STUDIO, dir), path.join(APP_DIR, dir), { recursive: true });
+}
+
+// data/ is split in two. The catalog (curated overrides, the generated models,
+// the fetch cache) ships with the build and is always refreshed.
+// Everything else is LIVE state the packaged app writes while it runs: tasks,
+// ideas, checkpoints, pins, requests, briefings, machine status. A rebuild must
+// seed those on a first install and never overwrite them afterwards, the same
+// rule the live updater follows (scripts/updater.mjs never syncs data/).
+const CATALOG = new Set(["curated.json", "models.json", "cache"]);
+const dataSource = path.join(STUDIO, "data");
+const dataTarget = path.join(APP_DIR, "data");
+let kept = 0;
+if (existsSync(dataSource)) {
+  await mkdir(dataTarget, { recursive: true });
+  for (const entry of await readdir(dataSource)) {
+    const target = path.join(dataTarget, entry);
+    if (!CATALOG.has(entry) && existsSync(target)) {
+      kept += 1;
+      continue;
+    }
+    await cp(path.join(dataSource, entry), target, { recursive: true });
+  }
+}
+const pkg = JSON.parse(await readFile(path.join(STUDIO, "package.json"), "utf8"));
+const appPkg = {
+  name: pkg.name,
+  productName: pkg.productName,
+  version: pkg.version,
+  description: pkg.description,
+  main: pkg.main,
+};
+await writeFile(path.join(APP_DIR, "package.json"), JSON.stringify(appPkg, null, 2) + "\n");
+
+console.log(`portable app ready: ${path.relative(STUDIO, path.join(OUT_DIR, EXE_NAME))}`);
+console.log(`payload: ${path.relative(STUDIO, APP_DIR)}`);
+if (kept) console.log(`live state kept: ${kept} data file${kept === 1 ? "" : "s"} already in the payload were left untouched`);

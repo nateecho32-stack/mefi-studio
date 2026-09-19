@@ -1,0 +1,34 @@
+# Dependencies and generated portable application
+node_modules/
+dist/
+
+# Only the model catalog belongs in source control. Keep tasks, conversations,
+# assistant state, databases, caches and atomic-write leftovers local.
+# Explicit sensitive-state rules also protect these if the catalog allowlist grows.
+data/eyes-assistant.json
+data/machine-status.json
+data/resource-manager.json
+data/*
+!data/curated.json
+!data/models.json
+tools/logs/
+.local-migration/
+
+# Local credentials, environment and editor/runtime output
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.log
+*.db
+*.db-shm
+*.db-wal
+*.tmp-*
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+*.lnk

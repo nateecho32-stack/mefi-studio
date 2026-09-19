@@ -1,0 +1,32 @@
+{
+  "name": "mefi-studio",
+  "productName": "Mefi's Studio AI+",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mefi's Studio AI+ - OpenCode Go model booklet, value graphs, and the Ruins Runner Love2D studio launcher.",
+  "main": "main.cjs",
+  "type": "module",
+  "scripts": {
+    "start": "electron .",
+    "start:web": "node scripts/serve.mjs",
+    "serve": "node scripts/serve.mjs",
+    "data": "node scripts/refresh-models.mjs",
+    "data:offline": "node scripts/refresh-models.mjs --offline",
+    "build-booklet": "node scripts/build-booklet.mjs",
+    "check:targets": "node scripts/check-targets.mjs",
+    "check": "node scripts/check-targets.mjs && node --check main.cjs && node --check scripts/paths.cjs && node --check scripts/refresh-models.mjs && node --check scripts/build-booklet.mjs && node --check scripts/serve.mjs && node --check scripts/measure-speed.mjs && node --check scripts/eyes.mjs && node --check scripts/auditor.mjs && node --check scripts/analyzer.mjs && node --check scripts/reference.mjs && node --check scripts/updater.mjs && node --check scripts/assistant.mjs && node --check scripts/reconcile-board.mjs && node --check scripts/policy.mjs && node --check scripts/receipts.mjs && node --check scripts/experience.mjs && node --check scripts/replay.mjs && node --check scripts/policy-gates.mjs && node --check scripts/policy-lab.mjs && node --check scripts/decision-client.mjs && node --check scripts/work-classification.mjs && node --check scripts/machine.mjs && node --check scripts/salvage-smoke.mjs && node --check scripts/make-icon.mjs && node --check scripts/package-portable.mjs && node --check scripts/_dump_sessions.mjs && node --check scripts/check-targets.mjs && node --check renderer/nav.js && node --check renderer/booklet.js && node --check renderer/graph.js && node --check renderer/eyes.js && node --check renderer/tree3d.js && node --check renderer/explorer.js && node --check renderer/idle.js && node --check renderer/analyzer.js && node --check renderer/tasks.js && node --check renderer/ideas.js && node --check renderer/overhead.js && node --check renderer/palette.js && node --check renderer/boot.js",
+    "reconcile-board": "node scripts/reconcile-board.mjs",
+    "policy-lab": "node scripts/policy-lab.mjs",
+    "jev:status": "electron . --jev-status",
+    "jev:models": "electron . --jev-models",
+    "jev:probe": "electron . --jev-probe",
+    "capture": "electron . --capture",
+    "audit": "node scripts/auditor.mjs",
+    "icon": "node scripts/make-icon.mjs",
+    "test": "node --test \"tests/**/*.test.mjs\" && python -m unittest discover -s tools -p \"test_mefi_studio_*.py\"",
+    "package": "node scripts/package-portable.mjs"
+  },
+  "devDependencies": {
+    "electron": "44.4.1"
+  }
+}

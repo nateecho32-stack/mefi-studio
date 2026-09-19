@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'self' file:;">
+<title>Mefi's Studio AI+ · OpenCode Go Booklet</title>
+<style id="booklet-styles">__BOOKLET_STYLES__</style>
+<svg id="nav-glyphs" class="glyph-sprite" aria-hidden="true" focusable="false" width="0" height="0">
+  <symbol id="g-command" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M6.3 6.5 3.9 4.6M9.9 6.9l2.3-1.8M9.3 9.8l1.6 2.3"/><circle cx="3.2" cy="4" r="1" fill="currentColor" stroke="none"/><circle cx="12.9" cy="4.5" r="1" fill="currentColor" stroke="none"/><circle cx="11.4" cy="12.9" r="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="g-booklet" viewBox="0 0 16 16"><path d="M4 2.5h8.5v11H4.75A1.75 1.75 0 0 1 3 11.75V3.5a1 1 0 0 1 1-1z"/><path d="M3 11.75A1.75 1.75 0 0 1 4.75 10h7.75"/><path d="M6 5.5h4"/></symbol>
+  <symbol id="g-graph" viewBox="0 0 16 16"><path d="M2.5 2.5v11h11"/><circle cx="6" cy="9.5" r="1.2"/><circle cx="9.6" cy="5.9" r="1.6"/><circle cx="12.2" cy="10.2" r="0.9" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="g-eyes" viewBox="0 0 16 16"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></symbol>
+  <symbol id="g-studio" viewBox="0 0 16 16"><rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M6.75 5.75v4.5L10.5 8z"/></symbol>
+  <symbol id="g-explorer" viewBox="0 0 16 16"><circle cx="3.5" cy="2.75" r="1"/><path d="M3.5 3.75V12h3M3.5 7.25h3"/><rect x="8" y="5.5" width="5.5" height="3.5" rx="1"/><rect x="8" y="10.25" width="5.5" height="3.5" rx="1"/></symbol>
+  <symbol id="g-tasks" viewBox="0 0 16 16"><path d="M2.5 4.5 4 6l2.5-3"/><path d="M8.5 4.5h5"/><path d="M2.5 11 4 12.5l2.5-3"/><path d="M8.5 11h5"/></symbol>
+  <symbol id="g-ideas" viewBox="0 0 16 16"><path d="M5.5 10.5a4 4 0 1 1 5 0c-.5.5-.75 1-.75 1.75h-3.5c0-.75-.25-1.25-.75-1.75z"/><path d="M6.5 14.25h3"/></symbol>
+  <symbol id="g-overhead" viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><path d="M9 11.5h5M11.5 9v5"/></symbol>
+  <symbol id="g-analyzer" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14"/><path d="M5.25 8.5V7.25M7 8.5v-3M8.75 8.5V6.5"/></symbol>
+  <symbol id="g-palette" viewBox="0 0 16 16"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="2"/><path d="M4.5 6.5 6.5 8l-2 1.5M8.5 10h3"/></symbol>
+  <symbol id="g-help" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M6.25 6.25a1.75 1.75 0 1 1 2.6 1.53c-.55.32-.85.72-.85 1.35"/><circle cx="8" cy="11.4" r="0.7" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="g-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14"/></symbol>
+  <symbol id="g-refresh" viewBox="0 0 16 16"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.5 2.5v3h-3"/></symbol>
+  <symbol id="g-pin" viewBox="0 0 16 16"><path d="M9.5 2 14 6.5 12 7 9.5 9.5l-.25 3L3.5 6.75l3-.25L9 4z"/><path d="M6.25 9.75 2.5 13.5"/></symbol>
+  <symbol id="g-print" viewBox="0 0 16 16"><path d="M4.5 6V2.5h7V6"/><rect x="2" y="6" width="12" height="5.5" rx="1.25"/><path d="M4.5 9.5h7v4h-7z"/></symbol>
+  <symbol id="g-close" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
+  <symbol id="g-back" viewBox="0 0 16 16"><path d="M7 3.5 2.5 8 7 12.5M2.5 8h11"/></symbol>
+  <symbol id="g-exit" viewBox="0 0 16 16"><path d="M6.5 2.5h-3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3"/><path d="M10 5l3 3-3 3M13 8H6"/></symbol>
+  <symbol id="g-fit" viewBox="0 0 16 16"><path d="M2.5 6V3.5a1 1 0 0 1 1-1H6M10 2.5h2.5a1 1 0 0 1 1 1V6M13.5 10v2.5a1 1 0 0 1-1 1H10M6 13.5H3.5a1 1 0 0 1-1-1V10"/><circle cx="8" cy="8" r="1.5"/></symbol>
+  <symbol id="g-orbit" viewBox="0 0 16 16"><ellipse cx="8" cy="8" rx="6.25" ry="2.75" transform="rotate(-20 8 8)"/><circle cx="8" cy="8" r="1.75"/></symbol>
+  <symbol id="g-target" viewBox="0 0 16 16"><circle cx="8" cy="8" r="4.25"/><circle cx="8" cy="8" r="1.1" fill="currentColor" stroke="none"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2"/></symbol>
+  <symbol id="g-zoom-in" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14M5 7h4M7 5v4"/></symbol>
+  <symbol id="g-zoom-out" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"/><path d="M10.4 10.4 14 14M5 7h4"/></symbol>
+  <symbol id="g-labels" viewBox="0 0 16 16"><path d="M2.5 3.5a1 1 0 0 1 1-1h4.1a1 1 0 0 1 .7.3l5 5a1 1 0 0 1 0 1.4l-4.1 4.1a1 1 0 0 1-1.4 0l-5-5a1 1 0 0 1-.3-.7z"/><circle cx="5.5" cy="5.5" r="0.9" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="g-ambience" viewBox="0 0 16 16"><path d="M3 4.5h5M11 4.5h2M3 11.5h2M8 11.5h5"/><circle cx="9.5" cy="4.5" r="1.5"/><circle cx="6.5" cy="11.5" r="1.5"/></symbol>
+  <symbol id="g-legend" viewBox="0 0 16 16"><circle cx="3.5" cy="4" r="1" fill="currentColor" stroke="none"/><circle cx="3.5" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1" fill="currentColor" stroke="none"/><path d="M7 4h6.5M7 8h6.5M7 12h6.5"/></symbol>
+  <symbol id="g-add" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="g-external" viewBox="0 0 16 16"><path d="M6.5 3.5h-3v9h9v-3"/><path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5"/></symbol>
+  <symbol id="g-update" viewBox="0 0 16 16"><path d="M8 2.5v7M5 6.5l3 3 3-3"/><path d="M3 11.5v1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1"/></symbol>
+  <symbol id="g-plane" viewBox="0 0 16 16"><path d="M8 2.6 13.8 6v4L8 13.4 2.2 10V6z"/><path d="M2.2 6 8 9.2 13.8 6M8 9.2v4.2"/></symbol>
+  <symbol id="g-chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
+</svg>
+<header>
+  <div class="brand">
+    <div class="monogram" aria-hidden="true">M+</div>
+    <div>
+      <div class="eyebrow">Mefi's Studio AI+</div>
+      <h1>OpenCode Go — Model Booklet</h1>
+      <p class="sub" id="status">Loading catalog…</p>
+    </div>
+  </div>
+  <div class="head-actions">
+    <button id="update-pill" class="pill update-pill" data-nav="studio" data-state="watching" title="Live update: watching the source tree" hidden><i class="dot" aria-hidden="true"></i><span class="label">Live update</span></button>
+    <label class="switch" title="Toggle animations"><input type="checkbox" id="motion-toggle" checked><span class="track"></span><span>Motion</span></label>
+    <button id="refresh-btn" class="ghost" title="Re-read data/models.json (R)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-refresh"/></svg><span class="label">Refresh</span><kbd class="key">R</kbd></button>
+    <button id="print-btn" class="ghost" title="Print / PDF"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-print"/></svg><span class="label">Print / PDF</span></button>
+    <button id="help-btn" class="ghost icon" title="Shortcuts (?)" aria-label="Shortcuts"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg></button>
+    <a class="link" href="https://opencode.ai/go" target="_blank" rel="noreferrer">opencode.ai/go<svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-external"/></svg></a>
+  </div>
+</header>
+<nav class="tabs" id="tabs" aria-label="Surfaces and tools">
+  <button id="nav-command" class="home-tab" data-nav="command" data-return-label="Back to Command" title="Command view (D)"><svg class="glyph glyph-home" aria-hidden="true" focusable="false"><use href="#g-command"/></svg><svg class="glyph glyph-back" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span><kbd class="key">D</kbd><span class="dot live" data-badge="progress" data-badge-mode="dot" hidden></span></button>
+  <span class="tabs-sep" aria-hidden="true"></span>
+  <button class="tab active" data-tab="booklet" title="Booklet (1)"><span class="label">Booklet</span><kbd class="key">1</kbd></button>
+  <button class="tab" data-tab="graph" title="Graph (2)"><span class="label">Graph</span><kbd class="key">2</kbd></button>
+  <button class="tab" data-tab="eyes" title="A-Eyes (3)"><span class="label">A-Eyes</span><kbd class="key">3</kbd></button>
+  <button class="tab" data-tab="studio" title="Studio (4)"><span class="label">Studio</span><kbd class="key">4</kbd></button>
+  <span class="spacer" aria-hidden="true"></span>
+  <div id="nav-tools" class="tools-cluster" role="group" aria-label="Tools"></div>
+</nav>
+<div id="banner" class="banner" hidden></div>
+<main>
+  <section id="tab-booklet">
+    <div class="plan-strip" id="plan-strip"></div>
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Search model, vendor, tag… (press /)" autocomplete="off">
+      <div class="chips" id="chips"></div>
+      <label class="muted">Sort <select id="sort">
+        <option value="quality">Quality (AA)</option>
+        <option value="cost">Cheapest / request</option>
+        <option value="speed">Most requests / 5h</option>
+        <option value="context">Largest context</option>
+        <option value="name">Name</option>
+        <option value="pool">Monthly pool</option>
+      </select></label>
+    </div>
+    <div id="cards" class="cards"></div>
+    <p id="count" class="muted"></p>
+  </section>
+  <section id="tab-graph" hidden>
+    <div class="graph-grid">
+      <section class="panel">
+        <h2>Value map</h2>
+        <p class="muted">X = typical request cost, Y = published quality (AA Intelligence Index). Bubble = requests per 5h. Hover a bubble.</p>
+        <canvas id="map" height="460"></canvas>
+        <div id="map-tip" class="tip" hidden></div>
+      </section>
+      <aside class="panel">
+        <h2>Where should I use it?</h2>
+        <p class="muted" id="task-desc"></p>
+        <label class="muted">Task <select id="task-select"></select></label>
+        <ol id="rank"></ol>
+      </aside>
+    </div>
+    <section class="panel">
+      <h2>Task fit heatmap</h2>
+      <p class="muted">Top models by combined fit across every task. Brighter = better fit for that task.</p>
+      <canvas id="heat" height="420"></canvas>
+    </section>
+    <section class="panel">
+      <h2>Pools &amp; throughput</h2>
+      <p class="muted">Requests per month per model (log scale). Bars show how long each pool actually lasts.</p>
+      <canvas id="pools" height="560"></canvas>
+    </section>
+    <section class="panel">
+      <h2>All numbers</h2>
+      <div class="tablewrap">
+        <table id="table">
+          <thead><tr>
+            <th data-k="name">Model</th><th data-k="vendor">Vendor</th>
+            <th data-k="typicalCostUSD" class="num">$/req</th>
+            <th data-k="quality" class="num">AA</th>
+            <th data-k="requests5h" class="num">req/5h</th>
+            <th data-k="monthlyCapUSD" class="num">pool $</th>
+            <th data-k="context" class="num">ctx</th>
+            <th data-k="priceIn" class="num">$/in</th><th data-k="priceOut" class="num">$/out</th>
+            <th data-k="privacy">privacy</th><th data-k="endpoint">endpoint</th>
+          </tr></thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+  <section id="tab-eyes" hidden>
+    <div class="eyes-grid">
+      <div class="eyes-col">
+        <div class="panel">
+          <h2>Change feed</h2>
+          <div class="row">
+            <select id="eyes-session" class="grow"></select>
+            <button id="eyes-refresh" class="ghost" title="Reload from the OpenCode database">Refresh</button>
+            <button id="analyzer-open" class="ghost" title="Analyzer: drop files or ideas (A)">Analyzer</button>
+          </div>
+          <div class="row">
+            <select id="eyes-agent" title="Filter by agent"><option value="">all agents</option></select>
+            <select id="eyes-window" title="Time window">
+              <option value="">all time</option>
+              <option value="900000">last 15m</option>
+              <option value="3600000">last 1h</option>
+              <option value="86400000">last 24h</option>
+            </select>
+          </div>
+          <ul class="feed" id="eyes-feed"></ul>
+          <p class="eyes-status" id="eyes-summary"></p>
+          <p class="eyes-status" id="eyes-status">Connecting to the OpenCode session store…</p>
+        </div>
+      </div>
+      <div class="eyes-col">
+        <div class="panel">
+          <div class="mode-row">
+            <button class="chip on" data-mode="png">PNG</button>
+            <button class="chip" data-mode="diff">Diff</button>
+            <button class="chip" data-mode="log">Log</button>
+            <span class="spacer"></span>
+            <select id="eyes-png-select" title="Newest PNGs from tools/logs"></select>
+            <button id="eyes-png-open" class="ghost" title="Open any PNG file">Open…</button>
+          </div>
+          <div class="viewer">
+            <div id="eyes-mode-png">
+              <p class="muted" id="eyes-png-empty">No PNG selected yet. Newest evidence from tools/logs appears here; click the image to drop a pin.</p>
+              <div class="png-wrap">
+                <img id="eyes-png" alt="Selected evidence PNG" hidden>
+                <canvas id="eyes-pins-layer"></canvas>
+              </div>
+            </div>
+            <div id="eyes-mode-diff" hidden><div class="diff-view" id="eyes-diff">Select a change in the feed to see its diff.</div></div>
+            <div id="eyes-mode-log" hidden><pre class="log" id="eyes-log">log tail</pre></div>
+          </div>
+        </div>
+      </div>
+      <div class="eyes-col">
+        <div class="panel">
+          <h2>Inspector</h2>
+          <div class="inspector-kv" id="eyes-inspector"></div>
+          <div class="row">
+            <button id="eyes-reveal" class="ghost" disabled>Reveal file</button>
+            <button id="eyes-copy" class="ghost" disabled>Copy path</button>
+          </div>
+          <h2 class="mt">Pins</h2>
+          <p class="muted" id="eyes-pin-hint">Click the PNG to drop a pin.</p>
+          <ul class="pin-list" id="eyes-pins"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section id="tab-studio" hidden>
+    <div class="panel">
+      <h2>Love2D Studio</h2>
+      <p class="muted">Launches <code>dev/dev_tool_love_project</code> on the cached LÖVE 11.5 runtime — exactly what <code>Run Dev Tool (LOVE2D).cmd</code> does. Smoke runs the sanctioned <code>--smoke</code> console session.</p>
+      <div class="row studio-actions" id="studio-actions">
+        <button class="primary" data-action="launch">Launch Love2D studio</button>
+        <button data-action="smoke">Run smoke</button>
+        <button data-action="game">Launch Ruins Runner</button>
+        <button data-action="stop">Stop</button>
+      </div>
+      <div id="studio-desktop">
+        <div class="row">
+          <input type="password" id="zai-key" placeholder="z.ai Coding Plan API key — GLM 5.3 / 5.3 Flash (stored encrypted)" autocomplete="off">
+          <button id="save-zai-key">Save key</button>
+          <span class="muted" id="zai-key-status">checking…</span>
+        </div>
+        <div class="row">
+          <input type="password" id="api-key" placeholder="OpenCode Go API key (stored encrypted)" autocomplete="off">
+          <button id="save-key">Save key</button>
+          <span class="muted" id="key-status">checking…</span>
+        </div>
+        <div class="row">
+          <label class="muted">AI routing
+            <select id="ai-provider">
+              <option value="auto">Auto — prefer z.ai GLM; OpenCode only when it is the only key</option>
+              <option value="zai">z.ai only — never bill OpenCode</option>
+              <option value="opencode">OpenCode Go only</option>
+              <option value="grok">Grok CLI — the assistant answers through the grok CLI's own login</option>
+            </select>
+          </label>
+          <label class="muted">Assistant model
+            <input type="text" id="ai-model-routine" placeholder="routine (default)" spellcheck="false" autocomplete="off" title="Model id for the routine passes (replies, briefs, chat). Empty = route default." style="width: 15em">
+          </label>
+          <label class="muted">Heavy model
+            <input type="text" id="ai-model-heavy" placeholder="heavy (default)" spellcheck="false" autocomplete="off" title="Model id for the heavy passes (overseer, improver, analyzer read). Empty = route default." style="width: 15em">
+          </label>
+          <label class="switch" title="Off by default: when z.ai fails, retry once on OpenCode Go (this bills OpenCode)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>OpenCode fallback on z.ai failure</span></label>
+        </div>
+        <div class="row">
+          <label class="muted">Builders run on
+            <select id="executor-cli">
+              <option value="opencode">OpenCode run</option>
+              <option value="grok">Grok CLI — grok builds every queued job on its own login</option>
+            </select>
+          </label>
+          <label class="muted">Builder model
+            <input type="text" id="executor-model" placeholder="grok default" spellcheck="false" autocomplete="off" title="Model id the builder CLI runs with (grok -m). Empty = CLI default." style="width: 15em">
+          </label>
+        </div>
+        <div class="row">
+          <span class="muted">Coding CLIs</span>
+          <button class="ghost" data-cli="opencode" title="Open the OpenCode TUI in the repo; carries the Studio mefi-zai provider (your z.ai plan) when a key is saved">OpenCode</button>
+          <button class="ghost" data-cli="grok" title="Open the Grok CLI in the repo on its own login">Grok</button>
+          <button class="ghost" data-cli="codex" title="Open Codex CLI in the repo on its own account">Codex</button>
+          <button class="ghost" data-cli="claude" title="Open Claude Code in the repo on its own account">Claude Code</button>
+          <button class="ghost" id="cli-test-zai" title="Verify OpenCode sees the Studio-managed mefi-zai GLM provider">Test z.ai link</button>
+          <span class="muted" id="cli-status">checking…</span>
+        </div>
+        <div class="row">
+          <label class="muted">Speed probe <select id="speed-model"></select></label>
+          <button id="speed-go">Measure tokens/s</button>
+          <span class="muted">one small request; results land in the log</span>
+        </div>
+        <div class="update-block" data-update-block>
+          <h3 class="mt">App updates</h3>
+          <p class="muted">Edits to the source tree apply themselves: <code>styles.css</code> is restyled in place, <code>scripts/*.mjs</code> modules are swapped inside the running app, renderer and <code>preload.cjs</code> edits reload the page once you pause (what you typed, your scroll and your selection come back), and only a <code>main.cjs</code> edit restarts the app — after a pause, with the window where it was.</p>
+          <div class="row tight update-row">
+            <label class="switch" title="Apply updates on their own: in place at once, or after a pause when the page must reload (renderer, preload) or the app must restart (main.cjs)"><input type="checkbox" id="update-auto" checked><span class="track"></span><span>Apply updates automatically</span></label>
+            <button id="update-apply" class="ghost" disabled>Apply update</button>
+            <span class="eyes-status" id="update-status" role="status">not watching</span>
+          </div>
+        </div>
+      </div>
+      <p class="muted" id="studio-hint"></p>
+      <pre class="log" id="studio-log">studio log</pre>
+    </div>
+  </section>
+</main>
+<aside id="tree-rail" aria-label="Node tree">
+  <span class="rail-label">Node tree<span class="dot live rail-dot" data-badge="progress" data-badge-mode="dot" hidden></span></span>
+  <div class="rail-head">
+    <span class="rail-title">Node tree</span>
+    <div class="rail-actions">
+      <button id="idle-open" class="ghost mini" data-nav="command" title="Command view (D)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-command"/></svg><span class="label">Command</span></button>
+      <button id="tree-explore" class="ghost mini" title="Open the session explorer (E)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-explorer"/></svg><span class="label">Explorer</span></button>
+      <button id="tree-pin" class="ghost mini" aria-pressed="false" title="Pin the rail open (G)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-pin"/></svg><span class="label">Pin</span></button>
+    </div>
+  </div>
+  <canvas id="tree-canvas" tabindex="0" role="tree" aria-label="Session tree"></canvas>
+  <div class="rail-stats" id="tree-stats">no session yet</div>
+</aside>
+<div id="boot-layer" role="status" aria-label="Mefi's Studio is starting" hidden>
+  <canvas id="boot-canvas" aria-hidden="true"></canvas>
+  <div class="boot-copy" aria-hidden="true">
+    <p class="eyebrow">Mefi's Studio AI+</p>
+    <p id="boot-title" class="boot-title">waking the assistant</p>
+    <p id="boot-count" class="boot-count"></p>
+  </div>
+</div>
+<canvas id="idle-layer" tabindex="0" role="application" aria-label="Command constellation" hidden></canvas>
+<div id="idle-hud" hidden>
+  <div class="cmd-top">
+    <div class="cmd-brand">
+      <div class="monogram small" aria-hidden="true">M+</div>
+      <div class="cmd-brand-text">
+        <span class="eyebrow">Command</span>
+        <div id="idle-telemetry" class="cmd-tele" role="group" aria-label="Live status">
+          <button class="pill" data-tele="sessions" title="Fit the whole constellation"><b class="num">0</b><span class="unit">sessions</span></button>
+          <button class="pill" data-tele="progress" title="Jump to the next in-progress todo" hidden><i class="dot live" aria-hidden="true"></i><b class="num">0</b><span class="unit">in progress</span></button>
+          <button class="pill" data-tele="tasks" data-nav="tasks" title="Open Tasks (T)" hidden><b class="num">0</b><span class="unit">open tasks</span></button>
+          <button class="pill" data-tele="ideas" data-nav="ideas" title="Open Feature ideas (I)" hidden><b class="num">0</b><span class="unit">unread ideas</span></button>
+          <button class="pill" data-tele="machine" data-nav="machine" title="Machine status (opens the Explorer)" hidden><i class="dot" aria-hidden="true"></i><span class="unit">machine · busy</span></button>
+          <button class="pill" id="idle-pill-assistant" data-tele="assistant" data-tone="ok" title="Select the assistant (M)" hidden><i class="dot" aria-hidden="true"></i><span class="unit">assistant</span></button>
+          <span class="pill quiet" data-tele="offline" hidden>store offline</span>
+        </div>
+      </div>
+    </div>
+    <div class="cmd-center">
+      <div class="cmd-composer" role="group" aria-label="Add a task">
+        <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-add"/></svg>
+        <input id="idle-task-input" type="text" placeholder="Add a task… (Enter)" aria-label="New task" autocomplete="off" spellcheck="false">
+        <button id="idle-task-add" class="primary mini">Add</button>
+      </div>
+      <div class="cmd-search" role="search">
+        <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-search"/></svg>
+        <input id="idle-search" type="text" placeholder="Find a session, todo or task…" aria-label="Find a node" aria-describedby="idle-search-count" autocomplete="off" spellcheck="false">
+        <span class="hint" id="idle-search-count" aria-live="polite"></span>
+      </div>
+    </div>
+    <div class="cmd-tools" role="toolbar" aria-label="View controls">
+      <button id="idle-fit" class="ghost icon" title="Fit all (F)" aria-label="Fit all"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-fit"/></svg></button>
+      <button id="idle-orbit" class="ghost icon" aria-pressed="true" title="Orbit on · Space pauses" aria-label="Orbit"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg></button>
+      <button id="idle-cam-orbit" class="ghost" data-cam="orbit" aria-pressed="true" title="Camera: orbit — keep the whole tree framed (C cycles orbit / follow / free)" aria-label="Camera: orbit"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-fit"/></svg><span class="label">Orbit</span></button>
+      <button id="idle-cam-follow" class="ghost" data-cam="follow" aria-pressed="false" title="Camera: follow — track the agent's current work (C cycles orbit / follow / free)" aria-label="Camera: follow"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-target"/></svg><span class="label">Follow</span></button>
+      <button id="idle-zoom-out" class="ghost icon" title="Zoom out" aria-label="Zoom out"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-zoom-out"/></svg></button>
+      <button id="idle-zoom-in" class="ghost icon" title="Zoom in" aria-label="Zoom in"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-zoom-in"/></svg></button>
+      <button id="idle-view" class="ghost" data-view="3d" title="View: 3D orbit (V toggles 2D)" aria-label="Toggle 2D map view"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plane"/></svg><span class="label">3D</span></button>
+      <button id="idle-labels" class="ghost" data-labels="auto" title="Node labels: auto (L cycles auto / all / none)" aria-label="Node labels"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-labels"/></svg><span class="label">auto</span></button>
+      <span class="tools-sep" aria-hidden="true"></span>
+      <button id="idle-ambience" class="ghost icon" aria-haspopup="dialog" aria-expanded="false" aria-controls="idle-ambience-pop" title="Ambience and startup" aria-label="Ambience and startup"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-ambience"/></svg></button>
+      <button id="idle-exit" class="ghost icon" title="Leave Command (Esc / D)" aria-label="Leave Command"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-exit"/></svg></button>
+    </div>
+  </div>
+  <div id="idle-ambience-pop" class="pop" role="dialog" aria-label="Ambience and startup" hidden>
+    <div class="eyebrow">Ambience</div>
+    <label class="switch pop-row" title="Dynamic bells keyed to agent tempo"><span class="grow">Zen bells</span><input type="checkbox" id="idle-zen"><span class="track"></span></label>
+    <label class="pop-row" title="Audio profile"><span class="grow">Profile</span><select id="idle-profile"></select></label>
+    <label class="switch pop-row" title="Drive the glow from desktop audio or the microphone"><span class="grow">Reactive glow</span><input type="checkbox" id="idle-reactive"><span class="track"></span></label>
+    <label class="pop-row" title="What reactive glow listens to"><span class="grow">Listen to</span><select id="idle-source"><option value="desktop">Desktop audio</option><option value="mic">Microphone</option></select></label>
+    <hr class="pop-sep">
+    <div class="eyebrow">Startup</div>
+    <label class="switch pop-row" title="Open the Command view on launch"><span class="grow">Open Command on launch</span><input type="checkbox" id="idle-home"><span class="track"></span></label>
+  </div>
+  <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" aria-live="polite" hidden></aside>
+  <aside id="cmd-chat" class="cmd-chat" role="region" aria-label="Assistant chat log">
+    <header class="chat-log-head">
+      <i id="cmd-chat-dot" class="feed-dot" aria-hidden="true"></i>
+      <button id="cmd-chat-jump" class="chat-log-title" title="Select the assistant (M)">Assistant</button>
+      <span id="cmd-chat-state" class="feed-state">idle</span>
+      <button id="cmd-chat-toggle" class="ghost mini" aria-expanded="true" title="Collapse the chat log">&ndash;</button>
+    </header>
+    <div id="cmd-chat-body" class="chat-log-body">
+      <div id="cmd-chat-thread" class="assistant-thread chat-log-thread" aria-live="polite"></div>
+      <div class="chat-chips" aria-label="Quick asks">
+        <button class="ghost mini" data-cmdchat-msg="status">Status</button>
+        <button class="ghost mini" data-cmdchat-msg="what should I work on">What next?</button>
+        <button class="ghost mini" data-cmdchat-msg="read the log">Log</button>
+        <button class="ghost mini" data-cmdchat-msg="what is the auto builder doing">Builder</button>
+      </div>
+      <div class="assistant-composer chat-log-composer">
+        <textarea id="cmd-chat-input" class="grow" rows="1" placeholder="Message the assistant… (Enter)" aria-label="Message the assistant" autocomplete="off" spellcheck="false"></textarea>
+        <button id="cmd-chat-send" class="primary mini">Send</button>
+      </div>
+    </div>
+  </aside>
+  <aside id="idle-feed" class="cmd-feed" role="region" aria-label="Auto Builder assistant">
+    <header class="feed-head">
+      <i id="idle-feed-dot" class="feed-dot" aria-hidden="true"></i>
+      <button id="idle-feed-menu" class="feed-title feed-menu" aria-expanded="false" aria-controls="idle-feed-drop" title="Auto Builder: queued requests"><span class="label">Auto Builder</span><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></button>
+      <span id="idle-feed-state" class="feed-state">idle</span>
+      <label class="switch mini" title="Autopilot: queue and run Auto Builder requests"><input type="checkbox" id="idle-autopilot"><span class="track"></span></label>
+    </header>
+    <ul id="idle-feed-drop" class="feed-queue feed-drop" aria-label="Queued requests" hidden></ul>
+    <p id="idle-feed-now" class="feed-now" aria-live="polite"></p>
+    <div id="idle-feed-activity" class="feed-activity">
+      <ul id="idle-feed-queue" class="feed-queue"></ul>
+      <ul id="idle-feed-agents" class="pin-list assistant-activity assistant-roster feed-agents" aria-label="Agent roster"></ul>
+      <p id="idle-feed-meta" class="feed-meta"></p>
+      <ul id="idle-feed-list" class="feed-list"></ul>
+    </div>
+    <div id="idle-feed-chat" class="feed-chat" hidden>
+      <p id="idle-chat-status" class="eyes-status assistant-service" role="status">assistant</p>
+      <div id="idle-chat-thread" class="assistant-thread feed-chat-thread" aria-live="polite" aria-label="Assistant thread"></div>
+      <ul id="idle-chat-work" class="pin-list assistant-activity feed-chat-work"></ul>
+      <div id="idle-chat-chips" class="chat-chips" aria-label="Quick asks">
+        <button class="ghost mini" data-msg="status">Status</button>
+        <button class="ghost mini" data-msg="what should I work on">What next?</button>
+        <button class="ghost mini" data-msg="read the log">Log</button>
+        <button class="ghost mini" data-msg="help">Help</button>
+      </div>
+      <div class="assistant-composer feed-chat-composer">
+        <textarea id="idle-chat-input" class="grow" rows="1" placeholder="Message the assistant… (Enter)" aria-label="Message the assistant" autocomplete="off" spellcheck="false"></textarea>
+        <button id="idle-chat-send" class="primary mini">Send</button>
+      </div>
+      <div class="feed-chat-actions">
+        <button id="idle-chat-overseer" class="ghost mini" title="The overseer reviews the assistant's own work, tunes prefs and files upgrades">Oversee</button>
+        <button id="idle-chat-tidy" class="ghost mini" title="Archive done tasks, prune finished ideas, clear resolved requests">Tidy</button>
+        <button id="idle-chat-fix" class="ghost mini" title="Repair the catalog and data files, check the live update">Fix</button>
+        <button id="idle-chat-pause" class="ghost mini" title="Pause or resume the assistant service">Pause</button>
+        <button id="idle-chat-explorer" class="ghost mini" title="The full assistant surface in the Session explorer (E)">Explorer</button>
+      </div>
+    </div>
+  </aside>
+  <div id="cmd-legend" class="cmd-legend">
+    <button id="idle-legend-toggle" class="pill" aria-expanded="false" aria-controls="cmd-legend-list" title="What the colours and rings mean"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-legend"/></svg><span class="label">Legend</span></button>
+    <ul id="cmd-legend-list" class="legend-list" hidden></ul>
+  </div>
+  <div id="cmd-empty" class="cmd-empty" data-variant="desktop-only" role="status" hidden>
+    <div class="eyebrow">Command</div>
+    <h3 id="cmd-empty-title">No live constellation</h3>
+    <p class="muted" id="cmd-empty-copy">Sessions, todos and tasks are read from the OpenCode store, which is only reachable from the desktop app. Run <code>npm start</code> inside mefi-studio.</p>
+    <div class="row cmd-empty-actions">
+      <button class="primary" data-nav="booklet" data-variant="desktop-only">Open the Booklet</button>
+      <button class="ghost" data-nav="help" data-variant="desktop-only">Shortcuts</button>
+      <button id="cmd-empty-retry" class="primary" data-variant="store">Retry</button>
+      <button class="ghost" data-nav="tasks" data-variant="store">Open Tasks</button>
+      <button id="cmd-empty-assistant" class="ghost" title="Select the assistant node and focus its composer (M)" hidden>Message the assistant</button>
+    </div>
+  </div>
+  <div id="cmd-tip" class="cmd-tip tree-tip" role="tooltip" hidden><b class="tip-title"></b><span class="tip-meta"></span></div>
+  <div class="cmd-bottom">
+    <p id="cmd-hint" class="cmd-hint">click a node to zoom in · drag to pan · wheel to zoom · V 2D/3D · Esc leaves</p>
+    <nav id="cmd-dock" class="cmd-dock" aria-label="Command menu"></nav>
+  </div>
+</div>
+<div class="overlay" id="palette-overlay" hidden>
+  <div class="palette-sheet" role="dialog" aria-modal="true" aria-label="Command palette">
+    <input id="palette-input" type="text" placeholder="Jump to a surface, tool, action, task, node or model…" aria-label="Command palette" aria-controls="palette-list" autocomplete="off" spellcheck="false">
+    <ul id="palette-list" role="listbox" aria-label="Results"></ul>
+  </div>
+</div>
+<div class="overlay explorer" id="tasks-overlay" hidden>
+  <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="tasks-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="tasks" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">A-Eyes</div>
+        <h2 id="tasks-heading">Tasks</h2>
+      </div>
+      <div class="sheet-links" data-sheet-links="tasks" role="group" aria-label="Other tools"></div>
+      <div class="sheet-actions">
+        <button id="tasks-overhead" class="ghost" title="Overhead view of the node tree with task boxes">Overhead map</button>
+        <button id="tasks-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="explorer-grid">
+      <aside class="explorer-col">
+        <h3>Board</h3>
+        <div class="row tight">
+          <input id="task-new" type="text" class="grow" placeholder="New task — the assistant picks it up…" autocomplete="off">
+          <button id="task-add" class="primary">Add</button>
+        </div>
+        <div class="row tight">
+          <input id="task-search" type="search" class="grow" placeholder="Search tasks…" aria-label="Search tasks" autocomplete="off">
+        </div>
+        <div class="chips" id="task-filters" role="group" aria-label="Filter tasks">
+          <button class="chip on" id="task-filter-all" data-filter="all" type="button">All</button>
+          <button class="chip" id="task-filter-open" data-filter="open" type="button">Open</button>
+          <button class="chip" id="task-filter-done" data-filter="done" type="button">Done</button>
+        </div>
+        <ul id="task-list" class="pin-list"></ul>
+      </aside>
+      <section class="explorer-col">
+        <h3 id="task-title">Select a task</h3>
+        <div class="row tight" id="task-status-row"></div>
+        <div id="task-detail"><p class="muted">Pick a task on the left, or add one — reference gathering can attach exact context automatically.</p></div>
+      </section>
+      <aside class="explorer-col">
+        <h3>Reference</h3>
+        <div class="row tight">
+          <label class="switch" title="Gather references for the selected task"><input type="checkbox" id="pref-reference" checked><span class="track"></span><span>Use reference</span></label>
+          <label class="switch" title="Include live web results (DuckDuckGo)"><input type="checkbox" id="pref-web"><span class="track"></span><span>Web</span></label>
+          <label class="switch" title="Include node-tree history and recent chats"><input type="checkbox" id="pref-tree" checked><span class="track"></span><span>Node history</span></label>
+          <label class="switch" title="Blur the background behind menus"><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur menu</span></label>
+          <label class="switch" title="Gather references automatically when a task is created"><input type="checkbox" id="pref-auto" checked><span class="track"></span><span>Auto</span></label>
+        </div>
+        <div class="row tight">
+          <button id="reference-run" class="primary">Gather references</button>
+          <span class="eyes-status" id="reference-status">idle</span>
+        </div>
+        <div id="reference-out"><p class="muted">References: code hits, node-tree sessions, chats, PNG evidence, web and matching ideas appear here.</p></div>
+      </aside>
+    </div>
+  </div>
+</div>
+<div class="overlay explorer" id="ideas-overlay" hidden>
+  <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="ideas-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="ideas" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">A-Eyes</div>
+        <h2 id="ideas-heading">Feature ideas</h2>
+      </div>
+      <div class="sheet-links" data-sheet-links="ideas" role="group" aria-label="Other tools"></div>
+      <div class="sheet-actions">
+        <button id="ideas-view" class="ghost" title="Toggle list / feature graph">Graph view</button>
+        <button id="ideas-scan" class="ghost" title="Scan recent chats for ideas">Scan chats</button>
+        <button id="ideas-ai" class="ghost" title="AI review of scanned ideas (needs a key)">AI review</button>
+        <button id="ideas-clean" class="ghost" title="Remove done/accepted ideas from the list">Clean done</button>
+        <button id="ideas-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="explorer-grid">
+      <aside class="explorer-col">
+        <h3>Unread <span class="badge premium" id="ideas-unread">0</span></h3>
+        <ul id="ideas-list" class="pin-list"></ul>
+      </aside>
+      <section class="explorer-col" id="ideas-graph-col">
+        <h3 id="ideas-title">Feature graph</h3>
+        <canvas id="ideas-canvas" height="420"></canvas>
+        <p class="muted" id="ideas-hint">Similar ideas cluster together; click a cluster node to dive into it.</p>
+      </section>
+      <aside class="explorer-col">
+        <h3>Selected idea</h3>
+        <div id="ideas-detail"><p class="muted">Select an idea to read it, keep it, or mark it done.</p></div>
+      </aside>
+    </div>
+  </div>
+</div>
+<div class="overlay explorer" id="overhead-overlay" hidden>
+  <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="overhead-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="overhead" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">A-Eyes</div>
+        <h2 id="overhead-heading">Overhead</h2>
+      </div>
+      <div class="sheet-links" data-sheet-links="overhead" role="group" aria-label="Other tools"></div>
+      <div class="sheet-actions">
+        <label class="switch" title="Cycle the highlight through active tasks"><input type="checkbox" id="overhead-overview"><span class="track"></span><span>Overview mode</span></label>
+        <button id="overhead-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="explorer-grid two-col">
+      <section class="explorer-col">
+        <canvas id="overhead-canvas" height="560"></canvas>
+      </section>
+      <aside class="explorer-col">
+        <h3>Active tasks</h3>
+        <ul id="overhead-legend" class="pin-list"></ul>
+      </aside>
+    </div>
+  </div>
+</div>
+<div class="overlay explorer" id="analyzer-overlay" hidden>
+  <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="analyzer-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="analyzer" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">A-Eyes</div>
+        <h2 id="analyzer-heading">Analyzer</h2>
+      </div>
+      <div class="sheet-links" data-sheet-links="analyzer" role="group" aria-label="Other tools"></div>
+      <div class="sheet-actions">
+        <button id="analyzer-file" class="ghost">Open file…</button>
+        <button id="analyzer-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="explorer-grid">
+      <aside class="explorer-col">
+        <h3>Intake</h3>
+        <div id="analyzer-drop" class="drop-zone">Drop a file here<span class="muted"> · or paste an idea below</span></div>
+        <textarea id="analyzer-idea" class="fill mt-sm" rows="5" placeholder="Paste an idea… e.g. &quot;fishing rod charge cast with rarity glow and fish-brewed potions&quot;"></textarea>
+        <div class="row tight">
+          <button id="analyzer-idea-run" class="primary">Analyze idea</button>
+          <label class="switch" title="Ask DeepSeek V4.1 Flash for a deep read (needs a key)"><input type="checkbox" id="analyzer-ai"><span class="track"></span><span>AI deep read</span></label>
+        </div>
+        <p class="eyes-status" id="analyzer-status">idle</p>
+      </aside>
+      <section class="explorer-col">
+        <h3 id="analyzer-title">Findings</h3>
+        <div id="analyzer-findings"><p class="muted">Nothing analyzed yet. Drop a file or paste an idea — analysis runs in read time, no key needed.</p></div>
+      </section>
+      <aside class="explorer-col">
+        <h3>Evidence</h3>
+        <ul id="analyzer-evidence" class="pin-list"></ul>
+        <div id="analyzer-ai-out"></div>
+      </aside>
+    </div>
+  </div>
+</div>
+<div class="overlay explorer" id="explorer-overlay" hidden>
+  <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="explorer-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="explorer" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">A-Eyes</div>
+        <h2 id="explorer-heading">Session explorer</h2>
+      </div>
+      <div class="sheet-links" role="group" aria-label="Other tools">
+        <button id="tasks-open" class="dock-item small" title="Tasks (T)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg><span class="label">Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
+        <button id="ideas-open" class="dock-item small" title="Feature ideas (I)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-ideas"/></svg><span class="label">Ideas</span><span class="count" id="ideas-badge" data-badge="ideas" hidden>0</span></button>
+        <button id="overhead-open" class="dock-item small" title="Overhead (O)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-overhead"/></svg><span class="label">Overhead</span></button>
+        <button class="dock-item small" data-nav="analyzer" title="Analyzer (A)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-analyzer"/></svg><span class="label">Analyzer</span></button>
+      </div>
+      <div class="sheet-actions">
+        <label class="switch" title="Let the always-on assistant add an AI brief every 5 minutes (needs a key); tidy, fix and organise run either way"><input type="checkbox" id="proactive-mode" checked><span class="track"></span><span>Proactive</span></label>
+        <button id="brief-run" class="primary">Brief me</button>
+        <button id="improve-run" class="ghost" title="Ask the assistant to propose improvements for this app">Improve</button>
+        <button id="grow-run" class="ghost" title="Explore old sessions and draft follow-up requests">Grow</button>
+        <button id="explorer-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="explorer-grid">
+      <aside class="explorer-col">
+        <h3>Tree</h3>
+        <ul id="explorer-tree" class="explorer-tree"></ul>
+      </aside>
+      <section class="explorer-col">
+        <h3 id="explorer-title">Select a session</h3>
+        <div id="explorer-detail" class="explorer-detail"><p class="muted">Pick a session on the left, or a node in the rail behind this sheet.</p></div>
+      </section>
+      <aside class="explorer-col">
+        <h3>Assistant <span class="badge premium" id="assistant-model">deepseek-v4.1-flash</span></h3>
+        <p class="eyes-status" id="assistant-status">idle</p>
+        <p class="eyes-status assistant-service" id="assistant-service" role="status">service starting…</p>
+        <div id="assistant-thread" class="assistant-thread" aria-live="polite" aria-label="Assistant thread"></div>
+        <div class="assistant-composer">
+          <textarea id="assistant-input" class="grow" rows="1" placeholder="Message the assistant… (Enter)" aria-label="Message the assistant" autocomplete="off" spellcheck="false"></textarea>
+          <button id="assistant-send" class="primary">Send</button>
+        </div>
+        <div id="assistant-chips" class="chat-chips" aria-label="Quick asks">
+          <button class="ghost mini" data-msg="status">Status</button>
+          <button class="ghost mini" data-msg="what should I work on">What next?</button>
+          <button class="ghost mini" data-msg="read the log">Log</button>
+          <button class="ghost mini" data-msg="help">Help</button>
+        </div>
+        <div class="row tight">
+          <button id="assistant-overseer" class="ghost mini" title="The overseer reviews the assistant's own work, tunes prefs and files upgrades">Oversee</button>
+          <button id="assistant-tidy" class="ghost mini" title="Archive done tasks, prune finished ideas, clear resolved requests">Tidy now</button>
+          <button id="assistant-fix" class="ghost mini" title="Repair the catalog and data files, check the live update">Fix now</button>
+          <button id="assistant-pause" class="ghost mini" title="Pause or resume the assistant service">Pause</button>
+        </div>
+        <h4>Working on</h4>
+        <ul id="assistant-work" class="pin-list assistant-activity assistant-work"></ul>
+        <h4 class="mt">Agents</h4>
+        <ul id="assistant-agents" class="pin-list assistant-activity assistant-roster"></ul>
+        <h4 class="mt">Activity</h4>
+        <ul id="assistant-activity" class="pin-list assistant-activity"></ul>
+        <p class="eyes-status" id="assistant-housekeeping">no housekeeping yet</p>
+        <h4 class="mt">Briefing</h4>
+        <div id="assistant-brief" class="assistant-brief"></div>
+        <h3 class="mt">Collateral watch</h3>
+        <p class="eyes-status">Live editors and file collisions — steer around another session's work.</p>
+        <ul id="collision-list" class="pin-list"></ul>
+        <h3 class="mt">Auditor</h3>
+        <div class="row tight">
+          <button id="audit-run" class="ghost">Audit now</button>
+          <span class="eyes-status" id="audit-status">idle</span>
+        </div>
+        <ul id="audit-findings" class="pin-list"></ul>
+        <h3 class="mt">Machine <span class="badge" id="machine-badge">idle</span></h3>
+        <p class="eyes-status" id="machine-lines">scanning…</p>
+        <label class="switch" title="Kill strays, hangs and over-age test runs automatically"><input type="checkbox" id="machine-auto" checked><span class="track"></span><span>Auto-kill</span></label>
+        <ul id="machine-list" class="pin-list"></ul>
+        <ul id="machine-events" class="pin-list"></ul>
+        <h3 class="mt">Request inbox</h3>
+        <div class="row tight">
+          <input id="request-input" type="text" class="grow" placeholder="Add a request…" autocomplete="off">
+          <button id="request-add" class="primary">Add</button>
+        </div>
+        <ul id="request-list" class="pin-list"></ul>
+      </aside>
+    </div>
+  </div>
+</div>
+<div class="overlay" id="help-overlay" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="help-heading" tabindex="-1">
+    <header class="sheet-head plain">
+      <div class="sheet-title">
+        <div class="eyebrow">Mefi's Studio AI+</div>
+        <h2 id="help-heading">Shortcuts</h2>
+      </div>
+      <div class="sheet-actions">
+        <button class="ghost sheet-close" data-nav-close="help" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="shortcut-grid" id="help-grid"></div>
+  </div>
+</div>
+<div id="toast-host" role="status" aria-live="polite"></div>
+<footer>
+  <span>Sources: opencode.ai/zen/go · models.dev · dev.opencode.ai/docs/go</span>
+  <span id="footer-keys">D Command · 1–4 tabs · E T I O A tools · ⌃K jump · ? shortcuts</span>
+  <span id="footer-meta"></span>
+</footer>
+<script id="booklet-data" type="application/json">__BOOKLET_DATA__</script>
+<script>__BOOKLET_CODE__</script>
+</html>

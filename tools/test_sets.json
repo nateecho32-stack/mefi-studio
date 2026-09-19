@@ -1,0 +1,9 @@
+{
+  "sets": {
+    "dev": {
+      "pythonInclude": [
+        "test_mefi_studio_*"
+      ]
+    }
+  }
+}

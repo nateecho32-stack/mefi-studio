@@ -1,0 +1,1980 @@
+{
+  "schemaVersion": 1,
+  "plan": {
+    "name": "OpenCode Go",
+    "priceUSDMonth": 10,
+    "window5hUSD": 12,
+    "weekUSD": 30,
+    "monthUSD": 60,
+    "windowFractionOfMonthly": {
+      "5h": 0.2,
+      "week": 0.5,
+      "month": 1
+    },
+    "sources": {
+      "docs": "https://dev.opencode.ai/docs/go",
+      "site": "https://opencode.ai/go",
+      "roster": "https://opencode.ai/zen/go/v1/models",
+      "catalog": "https://models.dev/api.json",
+      "seedDate": "2026-09-16"
+    },
+    "notes": [
+      "Usage limits are dollar-based: $12 per 5 hours, $30 per week, $60 per month across the plan.",
+      "Each model also has its own monthly pool; 5h = 20% of it and week = 50% of it.",
+      "DeepSeek V4.x runs peak/off-peak pricing; peak is 01:00-04:00 and 06:00-10:00 UTC Mon-Fri.",
+      "When a limit is reached you can keep using free models, or fall back to a Zen balance if enabled."
+    ]
+  },
+  "taskPresets": [
+    {
+      "id": "everyday",
+      "name": "Everyday driver",
+      "description": "Routine edits, feature work, agent loops where cost and throughput matter but quality must stay good.",
+      "weights": {
+        "cost": 0.35,
+        "speed": 0.25,
+        "quality": 0.25,
+        "context": 0.1,
+        "privacy": 0.05
+      },
+      "short": "Everyday"
+    },
+    {
+      "id": "hard",
+      "name": "Hard problem / architecture",
+      "description": "Design work, gnarly refactors, debugging where a wrong answer costs more than tokens.",
+      "weights": {
+        "quality": 0.5,
+        "context": 0.2,
+        "speed": 0.1,
+        "cost": 0.15,
+        "privacy": 0.05
+      },
+      "short": "Hard"
+    },
+    {
+      "id": "bulk",
+      "name": "Bulk edits & test fixes",
+      "description": "Mechanical changes across many files; volume beats brilliance.",
+      "weights": {
+        "cost": 0.4,
+        "speed": 0.3,
+        "quality": 0.2,
+        "context": 0.1
+      },
+      "short": "Bulk"
+    },
+    {
+      "id": "longctx",
+      "name": "Long-context work",
+      "description": "Whole-repo reads, long transcripts, multi-file audits.",
+      "weights": {
+        "context": 0.4,
+        "quality": 0.25,
+        "cost": 0.25,
+        "speed": 0.1
+      },
+      "short": "Long ctx"
+    },
+    {
+      "id": "vision",
+      "name": "Vision / screenshots",
+      "description": "Screenshot-driven UI work and image input; only models accepting image input qualify.",
+      "requiresModality": "image",
+      "weights": {
+        "quality": 0.4,
+        "cost": 0.3,
+        "speed": 0.2,
+        "context": 0.1
+      },
+      "short": "Vision"
+    },
+    {
+      "id": "chat",
+      "name": "Quick chat / small asks",
+      "description": "One-off questions, commit messages, tiny scripts.",
+      "weights": {
+        "cost": 0.45,
+        "speed": 0.35,
+        "quality": 0.2
+      },
+      "short": "Chat"
+    }
+  ],
+  "privacyScores": {
+    "no-train-0day": 1,
+    "no-train-30day": 0.75,
+    "trains": 0.25,
+    "unknown": 0.5
+  },
+  "endpoints": {
+    "openai": {
+      "label": "OpenAI Responses API",
+      "path": "https://opencode.ai/zen/go/v1/responses",
+      "sdk": "@ai-sdk/openai"
+    },
+    "anthropic": {
+      "label": "Anthropic Messages API",
+      "path": "https://opencode.ai/zen/go/v1/messages",
+      "sdk": "@ai-sdk/anthropic"
+    },
+    "compat": {
+      "label": "OpenAI Chat Completions",
+      "path": "https://opencode.ai/zen/go/v1/chat/completions",
+      "sdk": "@ai-sdk/openai-compatible"
+    }
+  },
+  "endpointMap": {
+    "openai": [
+      "grok-4.6",
+      "gpt-5.6-luna",
+      "muse-spark-1.3-contributor",
+      "muse-spark-1.2-contributor"
+    ],
+    "anthropic": [
+      "minimax-m3",
+      "minimax-m2.7",
+      "minimax-m2.5",
+      "qwen3.8-max",
+      "qwen3.8-flash",
+      "qwen3.7-max",
+      "qwen3.7-plus",
+      "qwen3.6-plus",
+      "union-alpha"
+    ],
+    "compat": [
+      "glm-5.3-flash",
+      "glm-5.3",
+      "glm-5.2",
+      "glm-5.1",
+      "glm-5",
+      "kimi-k3",
+      "kimi-k2.7-code",
+      "kimi-k2.6",
+      "kimi-k2.5",
+      "longcat-2.0",
+      "deepseek-v4.1-flash",
+      "deepseek-v4-pro",
+      "deepseek-v4-flash",
+      "deepseek-v4-flash-vision-exp",
+      "deepseek-flash",
+      "mimo-v2.5",
+      "mimo-v2.5-pro",
+      "mimo-v2-pro",
+      "mimo-v2-omni",
+      "hy4-preview",
+      "hy3",
+      "hy3-preview"
+    ]
+  },
+  "models": {
+    "glm-5.3-flash": {
+      "docsName": "GLM-5.3-Flash",
+      "vendor": "Zhipu",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": {
+        "h5": 6320,
+        "week": 15790,
+        "month": 31580
+      },
+      "pricing": {
+        "default": {
+          "input": 0.15,
+          "output": 0.5,
+          "cacheRead": 0.03,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 1000,
+        "cached": 55000,
+        "output": 200
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 57,
+        "declared": "AA",
+        "benchmarks": [
+          "Terminal-Bench 2.1 84.3 · DeepSWE v1.1 63.4",
+          "GDPval-AA v2 Elo 1773",
+          "Toolathlon 78.4 · AutomationBench 48.8"
+        ],
+        "indexVersion": "v4.1.1"
+      },
+      "tags": [
+        "flash",
+        "promo-2x"
+      ],
+      "verdict": "The volume workhorse: cheapest GLM, 2x usage promo, ~6.3k requests per 5h.",
+      "useFor": [
+        "routine edits",
+        "long agent loops",
+        "refactors you can verify with tests"
+      ],
+      "avoidFor": [
+        "hardest architecture calls"
+      ]
+    },
+    "glm-5.3": {
+      "docsName": "GLM-5.3",
+      "vendor": "Zhipu",
+      "listed": true,
+      "monthlyCapUSD": 15,
+      "premium": true,
+      "requests": {
+        "h5": 220,
+        "week": 540,
+        "month": 1080
+      },
+      "pricing": {
+        "default": {
+          "input": 1.4,
+          "output": 4.4,
+          "cacheRead": 0.26,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 700,
+        "cached": 52000,
+        "output": 150
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 60,
+        "declared": "AA",
+        "benchmarks": [
+          "max effort"
+        ],
+        "indexVersion": "v4.1.1"
+      },
+      "tags": [
+        "premium-cap"
+      ],
+      "verdict": "Newest GLM with a small $15 pool - save it for hard problems.",
+      "useFor": [
+        "hard problems",
+        "careful refactors"
+      ],
+      "avoidFor": [
+        "bulk work at 1.4k req/month"
+      ]
+    },
+    "glm-5.2": {
+      "docsName": "GLM-5.2",
+      "vendor": "Zhipu",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": {
+        "h5": 880,
+        "week": 2150,
+        "month": 4300
+      },
+      "pricing": {
+        "default": {
+          "input": 1.4,
+          "output": 4.4,
+          "cacheRead": 0.26,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 700,
+        "cached": 52000,
+        "output": 150
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 51,
+        "declared": "AA",
+        "benchmarks": [
+          "swe-pro 62.1",
+          "term-bench 82.7",
+          "frontierswe 74.4"
+        ],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "top-quality"
+      ],
+      "verdict": "Highest-scoring GLM on Go with a full $60 pool; 51 AA index and strong SWE/terminal scores.",
+      "useFor": [
+        "hard debugging",
+        "big refactors",
+        "architecture"
+      ],
+      "avoidFor": [
+        "throwaway bulk edits"
+      ]
+    },
+    "glm-5.1": {
+      "docsName": "GLM-5.1",
+      "vendor": "Zhipu",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": {
+        "h5": 880,
+        "week": 2150,
+        "month": 4300
+      },
+      "pricing": {
+        "default": {
+          "input": 1.4,
+          "output": 4.4,
+          "cacheRead": 0.26,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 700,
+        "cached": 52000,
+        "output": 150
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 40,
+        "declared": "AA",
+        "benchmarks": [
+          "swe-pro 19.8",
+          "term-bench 65.1"
+        ],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "legacy-tier"
+      ],
+      "verdict": "Older GLM at the same price as 5.2 - pick 5.2 unless 5.1 behaves better for you.",
+      "useFor": [
+        "fallback when 5.2 misbehaves"
+      ],
+      "avoidFor": [
+        "value picks"
+      ]
+    },
+    "kimi-k3": {
+      "docsName": "Kimi K3",
+      "vendor": "Moonshot",
+      "listed": true,
+      "monthlyCapUSD": 15,
+      "premium": true,
+      "requests": {
+        "h5": 110,
+        "week": 250,
+        "month": 490
+      },
+      "pricing": {
+        "default": {
+          "input": 3,
+          "output": 15,
+          "cacheRead": 0.3,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 1050,
+        "cached": 76500,
+        "output": 300
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 57,
+        "declared": "AA",
+        "benchmarks": [
+          "#3 on AA Intelligence Index (seed date)",
+          "AA-Briefcase Elo 1543"
+        ],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "frontier",
+        "video-in",
+        "premium-cap"
+      ],
+      "verdict": "Frontier quality on Go - top-3 AA index, video input, 1M ctx - but only ~110 req/5h.",
+      "useFor": [
+        "hardest problems",
+        "long multi-file reasoning",
+        "video/image input"
+      ],
+      "avoidFor": [
+        "everyday looping"
+      ]
+    },
+    "kimi-k2.7-code": {
+      "docsName": "Kimi K2.7 Code",
+      "vendor": "Moonshot",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": {
+        "h5": 1350,
+        "week": 3380,
+        "month": 6750
+      },
+      "pricing": {
+        "default": {
+          "input": 0.95,
+          "output": 4,
+          "cacheRead": 0.19,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 870,
+        "cached": 55000,
+        "output": 200
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 42,
+        "declared": "AA",
+        "benchmarks": [
+          "kimi-code-bench 62",
+          "program-bench 53.6"
+        ],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "coding-tuned",
+        "video-in"
+      ],
+      "verdict": "Coding-tuned Kimi with a $60 pool and 262k output - a solid step above cheap flashes.",
+      "useFor": [
+        "serious coding sessions",
+        "large diffs",
+        "review-heavy work"
+      ],
+      "avoidFor": [
+        "pure volume grinding"
+      ]
+    },
+    "kimi-k2.6": {
+      "docsName": "Kimi K2.6",
+      "vendor": "Moonshot",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": {
+        "h5": 1150,
+        "week": 2880,
+        "month": 5750
+      },
+      "pricing": {
+        "default": {
+          "input": 0.95,
+          "output": 4,
+          "cacheRead": 0.16,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 870,
+        "cached": 55000,
+        "output": 200
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 44,
+        "declared": "AA",
+        "benchmarks": [
+          "swe-pro 27.3",
+          "term-bench 64.3"
+        ],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "video-in"
+      ],
+      "verdict": "Higher AA index than K2.7 Code and cheaper cached reads; the safer general Kimi pick.",
+      "useFor": [
+        "general coding",
+        "long sessions",
+        "image/video input"
+      ],
+      "avoidFor": [
+        "anything you'd rather spend K3's tiny pool on"
+      ]
+    },
+    "longcat-2.0": {
+      "docsName": "LongCat-2.0",
+      "vendor": "Meituan",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": {
+        "h5": 11400,
+        "week": 28600,
+        "month": 57200
+      },
+      "pricing": {
+        "default": {
+          "input": 0.3,
+          "output": 1.2,
+          "cacheRead": 0.006,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 920,
+        "cached": 88900,
+        "output": 200
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 34,
+        "declared": "AA",
+        "benchmarks": [
+          "Terminal-Bench 2.1 70.8 / SWE-bench Pro 59.5 (vendor)",
+          "26 estimated under v4.2"
+        ],
+        "indexVersion": "v4.1.1"
+      },
+      "tags": [
+        "cheap-cache",
+        "high-volume"
+      ],
+      "verdict": "Cache-read at $0.006/1M and 11.4k req/5h - built for very long cached sessions.",
+      "useFor": [
+        "long agent loops",
+        "repetitive tasks with big cached context"
+      ],
+      "avoidFor": [
+        "quality-critical reasoning (no published index)"
+      ]
+    },
+    "mimo-v2.5": {
+      "docsName": "MiMo-V2.5",
+      "vendor": "Xiaomi",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": {
+        "h5": 30100,
+        "week": 75200,
+        "month": 150400
+      },
+      "pricing": {
+        "default": {
+          "input": 0.14,
+          "output": 0.28,
+          "cacheRead": 0.0028,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 830,
+        "cached": 71500,
+        "output": 295
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 37,
+        "declared": "AA",
+        "benchmarks": [],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "cheapest",
+        "omni-input",
+        "high-volume"
+      ],
+      "verdict": "Cheapest model in the catalog and the volume king: ~30k requests per 5h window.",
+      "useFor": [
+        "bulk edits",
+        "throwaway questions",
+        "image/audio/video input on the cheap"
+      ],
+      "avoidFor": [
+        "hard reasoning"
+      ]
+    },
+    "mimo-v2.5-pro": {
+      "docsName": "MiMo-V2.5-Pro",
+      "vendor": "Xiaomi",
+      "listed": true,
+      "monthlyCapUSD": 15,
+      "premium": true,
+      "requests": {
+        "h5": 3250,
+        "week": 8150,
+        "month": 16300
+      },
+      "pricing": {
+        "default": {
+          "input": 0.435,
+          "output": 0.87,
+          "cacheRead": 0.003625,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 790,
+        "cached": 86000,
+        "output": 305
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 42,
+        "declared": "AA",
+        "benchmarks": [
+          "swe-pro 57.2",
+          "swe-verified 78.9"
+        ],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "cheap-cache",
+        "premium-cap"
+      ],
+      "verdict": "42 AA index at flash prices, but the $15 pool caps it at ~16k req/month.",
+      "useFor": [
+        "quality work in bursts",
+        "large cached contexts cheaply"
+      ],
+      "avoidFor": [
+        "all-day driving (pool drains fast)"
+      ]
+    },
+    "minimax-m3": {
+      "docsName": "MiniMax M3",
+      "vendor": "MiniMax",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": {
+        "h5": 3200,
+        "week": 8000,
+        "month": 16000
+      },
+      "pricing": {
+        "default": {
+          "input": 0.3,
+          "output": 1.2,
+          "cacheRead": 0.06,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 510,
+        "cached": 56000,
+        "output": 190
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 44,
+        "declared": "AA",
+        "benchmarks": [
+          "swe-pro 59",
+          "term-bench 66"
+        ],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "multimodal",
+        "anthropic-api"
+      ],
+      "verdict": "Multimodal flagship with a strong 44 index and full $60 pool - the balanced pick.",
+      "useFor": [
+        "general agent work",
+        "image input",
+        "tool-heavy tasks"
+      ],
+      "avoidFor": [
+        "pure cheapest bulk"
+      ]
+    },
+    "minimax-m2.7": {
+      "docsName": "MiniMax M2.7",
+      "vendor": "MiniMax",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": {
+        "h5": 3400,
+        "week": 8500,
+        "month": 17000
+      },
+      "pricing": {
+        "default": {
+          "input": 0.3,
+          "output": 1.2,
+          "cacheRead": 0.06,
+          "cacheWrite": 0.375,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 300,
+        "cached": 55000,
+        "output": 125
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 38,
+        "declared": "AA",
+        "benchmarks": [
+          "swe-pro 56.2",
+          "term-bench 51.1"
+        ],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "anthropic-api"
+      ],
+      "verdict": "Slightly cheaper typical request than M3, lower quality - the budget MiniMax.",
+      "useFor": [
+        "bulk work",
+        "fallbacks"
+      ],
+      "avoidFor": [
+        "hard problems"
+      ]
+    },
+    "minimax-m2.5": {
+      "docsName": "MiniMax M2.5",
+      "vendor": "MiniMax",
+      "listed": false,
+      "legacy": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": null,
+      "pricing": {
+        "default": {
+          "input": 0.3,
+          "output": 1.2,
+          "cacheRead": 0.06,
+          "cacheWrite": 0.375,
+          "condition": "all requests"
+        }
+      },
+      "typical": null,
+      "privacy": null,
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "tags": [
+        "legacy"
+      ],
+      "verdict": "Legacy MiniMax still served on the roster; pricing is identical to M2.7.",
+      "useFor": [
+        "compatibility with older sessions"
+      ],
+      "avoidFor": [
+        "new work"
+      ]
+    },
+    "muse-spark-1.3-contributor": {
+      "docsName": "Muse Spark 1.3 Contributor",
+      "vendor": "Meta",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": {
+        "h5": 45300,
+        "week": 113300,
+        "month": 226600
+      },
+      "pricing": {
+        "default": {
+          "input": 0.1,
+          "output": 0.2,
+          "cacheRead": 0.002,
+          "cacheWrite": null,
+          "condition": "contributor tier"
+        }
+      },
+      "typical": {
+        "input": 620,
+        "cached": 71400,
+        "output": 300
+      },
+      "privacy": {
+        "training": true,
+        "retentionDays": null,
+        "note": "Contributor tier: prompts and completions are used to train Meta models. Region-limited (Meta Geographic Use Policy)."
+      },
+      "quality": {
+        "index": 61,
+        "declared": "AA",
+        "benchmarks": [
+          "xhigh; max reasoning 62 in limited preview",
+          "190-230 t/s, token-efficient"
+        ],
+        "indexVersion": "v4.1.1"
+      },
+      "tags": [
+        "trains-on-data",
+        "region-limited",
+        "high-volume"
+      ],
+      "verdict": "Absurd value (~45k req/5h) but it trains on your prompts and is region-limited.",
+      "useFor": [
+        "throwaway ideas",
+        "non-sensitive bulk work"
+      ],
+      "avoidFor": [
+        "work code",
+        "anything private"
+      ]
+    },
+    "muse-spark-1.2-contributor": {
+      "docsName": "Muse Spark 1.2 Contributor",
+      "vendor": "Meta",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": {
+        "h5": 45300,
+        "week": 113300,
+        "month": 226600
+      },
+      "pricing": {
+        "default": {
+          "input": 0.1,
+          "output": 0.2,
+          "cacheRead": 0.002,
+          "cacheWrite": null,
+          "condition": "contributor tier"
+        }
+      },
+      "typical": {
+        "input": 620,
+        "cached": 71400,
+        "output": 300
+      },
+      "privacy": {
+        "training": true,
+        "retentionDays": null,
+        "note": "Contributor tier: prompts and completions train Meta models. Region-limited."
+      },
+      "quality": {
+        "index": 57,
+        "declared": "AA",
+        "benchmarks": [
+          "August 2026 release; +2.7 pts with v4.1.1"
+        ],
+        "indexVersion": "v4.1.1"
+      },
+      "tags": [
+        "trains-on-data",
+        "region-limited",
+        "high-volume"
+      ],
+      "verdict": "Previous Muse Spark at the same contributor terms; pick 1.3 unless you have a reason.",
+      "useFor": [
+        "non-sensitive volume"
+      ],
+      "avoidFor": [
+        "private code"
+      ]
+    },
+    "qwen3.8-max": {
+      "docsName": "Qwen3.8 Max",
+      "vendor": "Alibaba",
+      "listed": true,
+      "monthlyCapUSD": 15,
+      "premium": true,
+      "requests": {
+        "h5": 160,
+        "week": 400,
+        "month": 810
+      },
+      "pricing": {
+        "default": {
+          "input": 2,
+          "output": 6,
+          "cacheRead": 0.25,
+          "cacheWrite": 2.5,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 420,
+        "cached": 66000,
+        "output": 200
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 58,
+        "declared": "AA",
+        "benchmarks": [
+          "Agentic Index 58 (tied with Opus 5 xhigh)",
+          "GDPval-AA v2 Elo 1739",
+          "Terminal-Bench 2.1 86.6 / SWE-bench Pro 67.7 (vendor)"
+        ],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "annual-flagship",
+        "premium-cap",
+        "anthropic-api"
+      ],
+      "verdict": "New Qwen flagship - $15 pool and only ~810 requests per month; the scarcest pool on Go.",
+      "useFor": [
+        "the occasional hardest Qwen-shaped problem"
+      ],
+      "avoidFor": [
+        "anything else"
+      ]
+    },
+    "qwen3.8-flash": {
+      "docsName": "Qwen3.8 Flash",
+      "vendor": "Alibaba",
+      "listed": true,
+      "monthlyCapUSD": 30,
+      "premium": false,
+      "requests": {
+        "h5": 5400,
+        "week": 13500,
+        "month": 27000
+      },
+      "pricing": {
+        "default": {
+          "input": 0.15,
+          "output": 0.47,
+          "cacheRead": 0.016,
+          "cacheWrite": 0.2,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 600,
+        "cached": 58000,
+        "output": 200
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 56,
+        "declared": "AA",
+        "benchmarks": [
+          "served as Qwen3.8-Flash-Next",
+          "SWE-bench Pro 62.5 · DeepSWE 58.7 (vendor)",
+          "some v4.2 comparisons list 46 (est.)"
+        ],
+        "indexVersion": "v4.2 (est.)"
+      },
+      "tags": [
+        "flash",
+        "anthropic-api"
+      ],
+      "verdict": "Go serves Qwen3.8-Flash-Next here: cheap multimodal workhorse with a 27k/month pool.",
+      "useFor": [
+        "everyday coding",
+        "image/video input on a budget"
+      ],
+      "avoidFor": [
+        "work that needs a published quality index"
+      ]
+    },
+    "qwen3.7-max": {
+      "docsName": "Qwen3.7 Max",
+      "vendor": "Alibaba",
+      "listed": true,
+      "monthlyCapUSD": 30,
+      "premium": true,
+      "requests": {
+        "h5": 170,
+        "week": 420,
+        "month": 840
+      },
+      "pricing": {
+        "default": {
+          "input": 2.5,
+          "output": 7.5,
+          "cacheRead": 0.5,
+          "cacheWrite": 3.125,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 420,
+        "cached": 66000,
+        "output": 200
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 46,
+        "declared": "AA",
+        "benchmarks": [
+          "swe-pro 60.6",
+          "term-bench 69.7"
+        ],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "premium-cap",
+        "anthropic-api",
+        "top-quality"
+      ],
+      "verdict": "46 AA index with strong SWE scores, but ~840 requests/month means it is a scalp tool.",
+      "useFor": [
+        "hard problems",
+        "final reviews"
+      ],
+      "avoidFor": [
+        "loops"
+      ]
+    },
+    "qwen3.7-plus": {
+      "docsName": "Qwen3.7 Plus",
+      "vendor": "Alibaba",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": {
+        "h5": 4300,
+        "week": 10800,
+        "month": 21600
+      },
+      "pricing": {
+        "default": {
+          "input": 0.4,
+          "output": 1.6,
+          "cacheRead": 0.04,
+          "cacheWrite": 0.5,
+          "condition": "<= 256K tokens"
+        },
+        "variants": [
+          {
+            "condition": "> 256K tokens",
+            "input": 1.2,
+            "output": 4.8,
+            "cacheRead": 0.12,
+            "cacheWrite": 1.5
+          }
+        ]
+      },
+      "typical": {
+        "input": 500,
+        "cached": 57000,
+        "output": 190
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 39,
+        "declared": "AA",
+        "benchmarks": [],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "multimodal",
+        "anthropic-api"
+      ],
+      "verdict": "39 AA index with image+video input and 21.6k req/month - a dependable mid pick.",
+      "useFor": [
+        "day-to-day coding",
+        "multimodal work"
+      ],
+      "avoidFor": [
+        "hardest problems"
+      ]
+    },
+    "qwen3.6-plus": {
+      "docsName": "Qwen3.6 Plus",
+      "vendor": "Alibaba",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": {
+        "h5": 3300,
+        "week": 8200,
+        "month": 16300
+      },
+      "pricing": {
+        "default": {
+          "input": 0.5,
+          "output": 3,
+          "cacheRead": 0.05,
+          "cacheWrite": 0.625,
+          "condition": "<= 256K tokens"
+        },
+        "variants": [
+          {
+            "condition": "> 256K tokens",
+            "input": 2,
+            "output": 6,
+            "cacheRead": 0.2,
+            "cacheWrite": 2.5
+          }
+        ]
+      },
+      "typical": {
+        "input": 500,
+        "cached": 57000,
+        "output": 190
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 40,
+        "declared": "AA",
+        "benchmarks": [],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "multimodal",
+        "anthropic-api"
+      ],
+      "verdict": "One point under 3.7 Plus on AA index with output 3.00/1M - the budget Qwen Plus.",
+      "useFor": [
+        "bulk agent work",
+        "image/video input"
+      ],
+      "avoidFor": [
+        "premium-cap tasks"
+      ]
+    },
+    "deepseek-v4.1-flash": {
+      "docsName": "DeepSeek V4.1 Flash",
+      "vendor": "DeepSeek",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "monthlyCapBaseUSD": 15,
+      "promo": "4x usage until 2026-09-20",
+      "premium": false,
+      "requests": {
+        "h5": 26000,
+        "week": 65000,
+        "month": 130000,
+        "baseH5": 6500,
+        "baseWeek": 16250,
+        "baseMonth": 32500
+      },
+      "pricing": {
+        "default": {
+          "input": 0.15,
+          "output": 0.6,
+          "cacheRead": 0.003,
+          "cacheWrite": null,
+          "condition": "off-peak (not 01-04 or 06-10 UTC Mon-Fri)"
+        },
+        "variants": [
+          {
+            "condition": "peak (01-04, 06-10 UTC Mon-Fri)",
+            "input": 0.3,
+            "output": 1.2,
+            "cacheRead": 0.006,
+            "cacheWrite": null
+          }
+        ]
+      },
+      "typical": {
+        "input": 410,
+        "cached": 71300,
+        "output": 310
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0,
+        "note": "ZDR agreement renewed monthly; current term valid through 2026-09-30."
+      },
+      "quality": {
+        "index": 40,
+        "declared": "AA",
+        "benchmarks": [
+          "max effort; 552B MoE, 16B active",
+          "~195-210 t/s"
+        ],
+        "indexVersion": "v4.3"
+      },
+      "tags": [
+        "new",
+        "promo-4x",
+        "peak-pricing"
+      ],
+      "verdict": "Brand-new V4.1 with a 4x pool ($60 effective, ends Sep 20) before it settles at $15.",
+      "useFor": [
+        "current daily driving while the promo lasts"
+      ],
+      "avoidFor": [
+        "planning around the promo pool after Sep 20"
+      ]
+    },
+    "deepseek-v4-pro": {
+      "docsName": "DeepSeek V4 Pro",
+      "vendor": "DeepSeek",
+      "listed": true,
+      "monthlyCapUSD": 15,
+      "premium": true,
+      "requests": {
+        "h5": 1050,
+        "week": 2600,
+        "month": 5200
+      },
+      "pricing": {
+        "default": {
+          "input": 0.66,
+          "output": 1.98,
+          "cacheRead": 0.022,
+          "cacheWrite": null,
+          "condition": "off-peak"
+        },
+        "variants": [
+          {
+            "condition": "peak (01-04, 06-10 UTC Mon-Fri)",
+            "input": 1.32,
+            "output": 3.96,
+            "cacheRead": 0.044,
+            "cacheWrite": null
+          }
+        ]
+      },
+      "typical": {
+        "input": 750,
+        "cached": 82000,
+        "output": 290
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0,
+        "note": "ZDR renewed monthly; current term valid through 2026-09-30."
+      },
+      "quality": {
+        "index": 44,
+        "declared": "AA",
+        "benchmarks": [
+          "historical V4 Pro evaluation",
+          "requests route to V4.1-Flash (AA 40) since 2026-09-14 until V4.1-Pro"
+        ],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "peak-pricing",
+        "premium-cap"
+      ],
+      "verdict": "44 AA index historically, but requests have served V4.1-Flash (AA 40) since Sep 14, 2026 until V4.1-Pro launches.",
+      "useFor": [
+        "hard problems in off-peak hours"
+      ],
+      "avoidFor": [
+        "peak-hour bulk work"
+      ]
+    },
+    "deepseek-v4-flash": {
+      "docsName": "DeepSeek V4 Flash",
+      "vendor": "DeepSeek",
+      "listed": true,
+      "monthlyCapUSD": 30,
+      "premium": false,
+      "requests": {
+        "h5": 13000,
+        "week": 32500,
+        "month": 65000
+      },
+      "pricing": {
+        "default": {
+          "input": 0.15,
+          "output": 0.6,
+          "cacheRead": 0.003,
+          "cacheWrite": null,
+          "condition": "off-peak"
+        },
+        "variants": [
+          {
+            "condition": "peak (01-04, 06-10 UTC Mon-Fri)",
+            "input": 0.3,
+            "output": 1.2,
+            "cacheRead": 0.006,
+            "cacheWrite": null
+          }
+        ]
+      },
+      "typical": {
+        "input": 410,
+        "cached": 71300,
+        "output": 310
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0,
+        "note": "ZDR renewed monthly; current term valid through 2026-09-30."
+      },
+      "quality": {
+        "index": 40,
+        "declared": "AA",
+        "benchmarks": [
+          "id retired 2026-09-10; upstream routes to V4.1-Flash (AA 40)"
+        ],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "cheap-cache",
+        "peak-pricing",
+        "high-volume"
+      ],
+      "verdict": "Retired upstream 2026-09-10 and served by V4.1-Flash; the id stays 13k req/5h with near-free cached reads.",
+      "useFor": [
+        "everyday driving",
+        "long cached sessions",
+        "bulk edits with real quality"
+      ],
+      "avoidFor": [
+        "frontier-tier calls"
+      ]
+    },
+    "deepseek-v4-flash-vision-exp": {
+      "docsName": "DeepSeek V4 Flash Vision Exp",
+      "vendor": "DeepSeek",
+      "listed": true,
+      "monthlyCapUSD": 15,
+      "premium": false,
+      "experimental": true,
+      "requests": {
+        "h5": 6500,
+        "week": 16250,
+        "month": 32500
+      },
+      "pricing": {
+        "default": {
+          "input": 0.15,
+          "output": 0.6,
+          "cacheRead": 0.003,
+          "cacheWrite": null,
+          "condition": "off-peak"
+        },
+        "variants": [
+          {
+            "condition": "peak (01-04, 06-10 UTC Mon-Fri)",
+            "input": 0.3,
+            "output": 1.2,
+            "cacheRead": 0.006,
+            "cacheWrite": null
+          }
+        ]
+      },
+      "typical": {
+        "input": 410,
+        "cached": 71300,
+        "output": 310
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0,
+        "note": "Images are billed as input tokens by dimension."
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": [
+          "id retired 2026-09-10; upstream routes to V4.1-Flash"
+        ],
+        "indexVersion": null
+      },
+      "tags": [
+        "vision",
+        "experimental",
+        "peak-pricing"
+      ],
+      "verdict": "Experimental vision id retired upstream; requests now route to V4.1-Flash (image input included).",
+      "useFor": [
+        "screenshot work",
+        "image input on the cheap"
+      ],
+      "avoidFor": [
+        "production pipelines (experimental)"
+      ]
+    },
+    "hy4-preview": {
+      "docsName": "Hy4 preview",
+      "vendor": "Tencent",
+      "listed": true,
+      "monthlyCapUSD": 30,
+      "premium": false,
+      "experimental": true,
+      "requests": {
+        "h5": 1350,
+        "week": 3380,
+        "month": 6770
+      },
+      "pricing": {
+        "default": {
+          "input": 0.834,
+          "output": 2.501,
+          "cacheRead": 0.042,
+          "cacheWrite": null,
+          "condition": "preview"
+        }
+      },
+      "typical": {
+        "input": 830,
+        "cached": 71500,
+        "output": 295
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "tags": [
+        "preview",
+        "experimental"
+      ],
+      "verdict": "Preview of the next Hy with a mid-size pool; unproven until benchmarks exist.",
+      "useFor": [
+        "early impressions"
+      ],
+      "avoidFor": [
+        "relying on it"
+      ]
+    },
+    "hy3": {
+      "docsName": "Hy3",
+      "vendor": "Tencent",
+      "listed": true,
+      "monthlyCapUSD": 60,
+      "premium": false,
+      "requests": {
+        "h5": 4300,
+        "week": 10750,
+        "month": 21500
+      },
+      "pricing": {
+        "default": {
+          "input": 0.14,
+          "output": 0.58,
+          "cacheRead": 0.035,
+          "cacheWrite": null,
+          "condition": "all requests"
+        }
+      },
+      "typical": {
+        "input": 830,
+        "cached": 71500,
+        "output": 295
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": 41,
+        "declared": "AA",
+        "benchmarks": [],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "cheap",
+        "high-volume"
+      ],
+      "verdict": "41 AA index at flash prices with a full $60 pool - quietly one of the best values.",
+      "useFor": [
+        "everyday driving",
+        "bulk work with quality"
+      ],
+      "avoidFor": [
+        "frontier reasoning"
+      ]
+    },
+    "union-alpha": {
+      "docsName": "Union Alpha",
+      "vendor": "Union",
+      "listed": true,
+      "monthlyCapUSD": "unlimited",
+      "premium": false,
+      "experimental": true,
+      "requests": {
+        "h5": "unlimited",
+        "week": "unlimited",
+        "month": "unlimited"
+      },
+      "pricing": {
+        "default": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": null,
+          "condition": "free, limited time"
+        }
+      },
+      "typical": null,
+      "privacy": {
+        "training": false,
+        "retentionDays": 0
+      },
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "tags": [
+        "free",
+        "limited-time",
+        "anthropic-api",
+        "stealth"
+      ],
+      "verdict": "Limited-time free/unlimited stealth model for agentic coding (released 2026-09-16, 256K ctx, image input).",
+      "useFor": [
+        "free experimenting while it lasts"
+      ],
+      "avoidFor": [
+        "anything you need repeatability on"
+      ]
+    },
+    "grok-4.6": {
+      "docsName": "Grok 4.6",
+      "vendor": "xAI",
+      "listed": true,
+      "monthlyCapUSD": 15,
+      "premium": true,
+      "requests": {
+        "h5": 169,
+        "week": 423,
+        "month": 845
+      },
+      "pricing": {
+        "default": {
+          "input": 2,
+          "output": 6,
+          "cacheRead": 0.5,
+          "cacheWrite": null,
+          "condition": "<= 200K tokens"
+        },
+        "variants": [
+          {
+            "condition": "> 200K tokens",
+            "input": 4,
+            "output": 12,
+            "cacheRead": 1,
+            "cacheWrite": null
+          }
+        ]
+      },
+      "typical": {
+        "input": 390,
+        "cached": 32500,
+        "output": 120
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 30,
+        "note": "ZDR would disable stateful Responses features; Go uses 30-day retention."
+      },
+      "quality": {
+        "index": 61,
+        "declared": "AA",
+        "benchmarks": [
+          "high effort; GDPval-AA v2 Elo 1753",
+          "Terminal-Bench 2.1 88.4% · τ³-Banking 50.7%",
+          "$0.84 per AA task · AA-Briefcase Elo 1577"
+        ],
+        "indexVersion": "v4.1.1"
+      },
+      "tags": [
+        "premium-cap",
+        "responses-api"
+      ],
+      "verdict": "xAI flagship with a ~845 req/month pool and 30-day retention - a scalp tool.",
+      "useFor": [
+        "hard problems now and then"
+      ],
+      "avoidFor": [
+        "daily volume",
+        "privacy-sensitive work"
+      ]
+    },
+    "gpt-5.6-luna": {
+      "docsName": "GPT 5.6 Luna",
+      "vendor": "OpenAI",
+      "listed": true,
+      "monthlyCapUSD": 15,
+      "premium": true,
+      "requests": {
+        "h5": 2050,
+        "week": 5100,
+        "month": 10250
+      },
+      "pricing": {
+        "default": {
+          "input": 0.2,
+          "output": 1.2,
+          "cacheRead": 0.02,
+          "cacheWrite": 0.25,
+          "condition": "<= 272K tokens"
+        },
+        "variants": [
+          {
+            "condition": "> 272K tokens",
+            "input": 0.4,
+            "output": 1.8,
+            "cacheRead": 0.04,
+            "cacheWrite": 0.5
+          }
+        ]
+      },
+      "typical": {
+        "input": 1000,
+        "cached": 50000,
+        "output": 220
+      },
+      "privacy": {
+        "training": false,
+        "retentionDays": 30,
+        "note": "Abuse-monitoring logs retained up to 30 days."
+      },
+      "quality": {
+        "index": 51,
+        "declared": "AA",
+        "benchmarks": [
+          "max effort; Coding Agent Index 75",
+          "~$0.21 per AA task · ~125 t/s"
+        ],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "premium-cap",
+        "responses-api"
+      ],
+      "verdict": "OpenAI's Go entry at flash-ish prices but a $15 pool (~10k req/month).",
+      "useFor": [
+        "tasks where the OpenAI house style wins"
+      ],
+      "avoidFor": [
+        "bulk volume"
+      ]
+    },
+    "kimi-k2.5": {
+      "docsName": "Kimi K2.5",
+      "vendor": "Moonshot",
+      "listed": false,
+      "legacy": true,
+      "requests": null,
+      "pricing": null,
+      "typical": null,
+      "privacy": null,
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "tags": [
+        "legacy",
+        "roster-only"
+      ],
+      "verdict": "Legacy Kimi still on the roster (deprecated on the Zen side Aug 5, 2026).",
+      "useFor": [
+        "old sessions"
+      ],
+      "avoidFor": [
+        "new work"
+      ]
+    },
+    "glm-5": {
+      "docsName": "GLM-5",
+      "vendor": "Zhipu",
+      "listed": false,
+      "legacy": true,
+      "requests": null,
+      "pricing": null,
+      "typical": null,
+      "privacy": null,
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "tags": [
+        "legacy",
+        "roster-only"
+      ],
+      "verdict": "GLM-5 base, retained on the roster; GLM-5.2 is strictly newer.",
+      "useFor": [
+        "compatibility"
+      ],
+      "avoidFor": [
+        "new work"
+      ]
+    },
+    "deepseek-flash": {
+      "docsName": "DeepSeek Flash",
+      "vendor": "DeepSeek",
+      "listed": false,
+      "legacy": true,
+      "requests": null,
+      "pricing": null,
+      "typical": null,
+      "privacy": null,
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "tags": [
+        "legacy",
+        "roster-only"
+      ],
+      "verdict": "Older DeepSeek Flash id served on the roster; metadata not published.",
+      "useFor": [
+        "compatibility"
+      ],
+      "avoidFor": [
+        "new work"
+      ]
+    },
+    "qwen3.5-plus": {
+      "docsName": "Qwen3.5 Plus",
+      "vendor": "Alibaba",
+      "listed": false,
+      "legacy": true,
+      "requests": null,
+      "pricing": null,
+      "typical": null,
+      "privacy": null,
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "tags": [
+        "legacy",
+        "roster-only"
+      ],
+      "verdict": "Previous-generation Qwen Plus; no AA data and not in the main list.",
+      "useFor": [
+        "compatibility"
+      ],
+      "avoidFor": [
+        "new work"
+      ]
+    },
+    "mimo-v2-pro": {
+      "docsName": "MiMo V2 Pro",
+      "vendor": "Xiaomi",
+      "listed": false,
+      "requests": null,
+      "pricing": null,
+      "typical": null,
+      "privacy": null,
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "tags": [
+        "roster-only"
+      ],
+      "verdict": "Live-roster model with no published docs row; no AA data.",
+      "useFor": [
+        "experimentation"
+      ],
+      "avoidFor": [
+        "planning"
+      ]
+    },
+    "mimo-v2-omni": {
+      "docsName": "MiMo V2 Omni",
+      "vendor": "Xiaomi",
+      "listed": false,
+      "requests": null,
+      "pricing": null,
+      "typical": null,
+      "privacy": null,
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "tags": [
+        "roster-only",
+        "omni-input"
+      ],
+      "verdict": "Omni-input roster model: text+image+audio+video+pdf, no docs row yet.",
+      "useFor": [
+        "odd modalities"
+      ],
+      "avoidFor": [
+        "planning"
+      ]
+    },
+    "hy3-preview": {
+      "docsName": "Hy3 preview",
+      "vendor": "Tencent",
+      "listed": false,
+      "experimental": true,
+      "requests": null,
+      "pricing": null,
+      "typical": null,
+      "privacy": null,
+      "quality": {
+        "index": 34,
+        "declared": "AA",
+        "benchmarks": [],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "preview",
+        "roster-only"
+      ],
+      "verdict": "Hy3 preview iteration; AA index 34 from the seed snapshot.",
+      "useFor": [
+        "comparison"
+      ],
+      "avoidFor": [
+        "production"
+      ]
+    },
+    "grok-4.5": {
+      "docsName": "Grok 4.5",
+      "vendor": "xAI",
+      "listed": false,
+      "legacy": true,
+      "requests": null,
+      "pricing": null,
+      "typical": null,
+      "privacy": null,
+      "quality": {
+        "index": 54,
+        "declared": "AA",
+        "benchmarks": [
+          "swe-pro 64.7",
+          "term-bench 83.3",
+          "deepswe 62"
+        ],
+        "indexVersion": "v4.1"
+      },
+      "tags": [
+        "legacy",
+        "roster-only"
+      ],
+      "verdict": "Previous Grok flagship still served; strong scores but 4.6 is the current one.",
+      "useFor": [
+        "compatibility with old evals"
+      ],
+      "avoidFor": [
+        "new work"
+      ]
+    },
+    "omen-alpha": {
+      "docsName": "Omen Alpha",
+      "vendor": "Unknown",
+      "listed": false,
+      "requests": null,
+      "pricing": null,
+      "typical": null,
+      "privacy": null,
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "tags": [
+        "roster-only"
+      ],
+      "verdict": "Stealth/named roster model with no docs row and no benchmark data.",
+      "useFor": [
+        "novelty"
+      ],
+      "avoidFor": [
+        "planning"
+      ]
+    },
+    "ox-alpha-free": {
+      "docsName": "Ox Alpha Free (Unlimited)",
+      "vendor": "Unknown",
+      "listed": false,
+      "experimental": true,
+      "requests": {
+        "h5": "unlimited",
+        "week": "unlimited",
+        "month": "unlimited"
+      },
+      "pricing": {
+        "default": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": null,
+          "condition": "free"
+        }
+      },
+      "typical": null,
+      "privacy": null,
+      "quality": {
+        "index": null,
+        "declared": "none",
+        "benchmarks": []
+      },
+      "tags": [
+        "free",
+        "catalog-only"
+      ],
+      "verdict": "Older free/unlimited catalog entry; Union Alpha is the current stealth model on the roster.",
+      "useFor": [
+        "free experiments"
+      ],
+      "avoidFor": [
+        "repeatability"
+      ]
+    }
+  }
+}
