@@ -10,6 +10,9 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { resolveStudioPaths } = require("./scripts/paths.cjs");
 const { createProjects } = require("./scripts/projects.cjs");
+const backlog = require("./scripts/backlog.cjs");
+const taskContext = require("./scripts/task-context.cjs");
+const { applyIdeaAction } = require("./scripts/idea-actions.cjs");
 const electron = require("electron");
 
 if (typeof electron === "string" || !electron.app) {
@@ -510,7 +513,7 @@ async function queueRequests(additions) {
         )
     );
     if (!fresh.length) return { added: 0 };
-    board.requests = [...fresh, ...board.requests].slice(0, 200);
+    board.requests = [...fresh, ...board.requests];
     return { requests: board.requests, added: fresh.length, accepted: fresh };
   });
   // Jev shadow intake: classify what landed against the closest existing
@@ -1286,7 +1289,7 @@ const EXECUTOR_MAX_HANDOFFS = 3; // per run — a job cannot flood the queue
 const EXECUTOR_MAX_DEPTH = 3; // how far a chain may run before it has to stop
 // Total prompt budget for one run. The tail (handoff + sentinel) is reserved
 // out of this first; only the task's own text is trimmed to fit.
-const EXECUTOR_PROMPT_MAX = 1600;
+const EXECUTOR_PROMPT_MAX = 24000;
 // The budget the run is told it has, and the hard kill that backs it up. A job
 // killed at the deadline can never report the sentinel, so it is always filed
 // as a failure however much it achieved — an agent that knows its budget can
@@ -2430,6 +2433,13 @@ async function assistantAuditorJob() {
 // choosing what runs is the assistant's job, so every "start something" in this
 // file goes through here rather than reaching into the executor directly.
 async function assistantForemanJob(now, entry) {
+  // Admission is bounded by the ready/running/review buffer. A large ideas
+  // collection must not turn into an equally large batch of new workers.
+  if (assistantState?.prefs?.backlogMode && autopilot.execute && assistantState.status !== "paused") {
+    await autopilotHousekeeping();
+    await promoteRequestsToTasks();
+    await admitBacklogIdeas();
+  }
   // No early return on `!autopilot.execute`: the cooldown re-arm lives inside
   // executeNextRequest, so a foreman that skipped the call also skipped every
   // recovery — a parked executor stayed parked until an unrelated code path
@@ -2471,7 +2481,7 @@ async function assistantForemanJob(now, entry) {
     const ingest = assistantCache.ingest;
     const scanCold = !ideasRow?.lastRunAt || now - ideasRow.lastRunAt > 15 * 60000;
     const materialPlausible = !ingest || ingest.newMaterial !== false || now - (ingest.at ?? 0) > 30 * 60000;
-    if (scanCold && materialPlausible) assistantEnqueueRole("ideas", ASSISTANT_PRIORITY.demand);
+    if (scanCold && materialPlausible && !assistantState?.prefs?.backlogMode) assistantEnqueueRole("ideas", ASSISTANT_PRIORITY.demand);
   }
   const text = !autopilot.execute
     ? "executor off · nothing handed out"
@@ -2539,6 +2549,7 @@ async function assistantThinkerJob(now, entry) {
 // and attributable to the assistant like every other decision it makes.
 function assistantAskForWork(reason) {
   if (SMOKE || CAPTURE || CLI_MODE) return;
+  if (assistantState?.status === "paused") return;
   // The reason rides into the Auto Builder panel, so the card says why the
   // assistant reached for work rather than leaving the executor's state
   // unexplained.
@@ -2571,7 +2582,7 @@ async function assistantCompactorJob(now, entry) {
   const heldTasks = new Set(autopilot.jobs.map((job) => job.taskId).filter(Boolean));
   const result = await mutateBoard((board) => {
     const stamped = board.tasks.map((task) => (task && heldTasks.has(task.id) ? { ...task, runId: task.runId ?? "live" } : task));
-    const out = assistant.compact({ requests: board.requests, tasks: stamped, ideas: board.ideas, collisions: assistantCache.store?.collisions, now });
+    const out = assistant.compact({ requests: board.requests, tasks: stamped, ideas: board.ideas, collisions: assistantCache.store?.collisions, now, promoteIdeas: !assistantState?.prefs?.backlogMode });
     // Strip the view-only stamp from tasks that were held but carry no real
     // run id (their claim write had not landed when the board was read).
     const tasks = heldTasks.size
@@ -2677,6 +2688,7 @@ function same(a, b) {
 // briefer: the AI brief and its fix requests, hovering over the active
 // sessions while the call runs; failures back off.
 async function assistantBrieferJob(now, entry) {
+  if (assistantState?.prefs?.backlogMode) return { ok: true, text: "Existing backlog first; new planning is held" };
   if (assistantCache.storeError) return { ok: true, text: "skipped · store unavailable" };
   const result = await assistantBriefCall(entry, "brief", null, null);
   if (!result.ok) {
@@ -2700,6 +2712,7 @@ async function assistantBrieferJob(now, entry) {
 // (and kicking the executor) is what closes the loop — before this, both modes
 // only ever ran from the autopilot's own timer, off-roster and unattributed.
 async function assistantBuildJob(role, mode, entry) {
+  if (assistantState?.prefs?.backlogMode) return { ok: true, text: "Working through existing tasks and ideas before creating more" };
   if (assistantCache.storeError) return { ok: true, text: "skipped · store unavailable" };
   const result = await assistantBriefCall(entry, mode, null, null);
   if (!result.ok) {
@@ -2722,7 +2735,9 @@ async function assistantBuildJob(role, mode, entry) {
 const assistantImproverJob = (now, entry) => assistantBuildJob("improver", "improve", entry);
 const assistantGrowerJob = (now, entry) => assistantBuildJob("grower", "grow", entry);
 // The ideas scan is keyless-capable, so it runs on cadence either way.
-const assistantIdeasJob = (now, entry) => scanIdeasInternal(assistantAiUsable(), entry);
+const assistantIdeasJob = (now, entry) => assistantState?.prefs?.backlogMode
+  ? Promise.resolve({ ok: true, text: "Existing ideas first; automatic scanning is held" })
+  : scanIdeasInternal(assistantAiUsable(), entry);
 
 // What the overseer sends the model: the module's digest plus the playbook it
 // keeps between passes and a recent-log tail for texture.
@@ -2969,7 +2984,7 @@ async function assistantOverseerJob(now, entry) {
       {
         // The overseer proposes changes to Studio's own implementation. Its
         // maintenance requests must never be dispatched into another project.
-        expand: (isStudioProject() ? review.upgrades ?? [] : []).map((upgrade) => ({
+        expand: (isStudioProject() && !assistantState?.prefs?.backlogMode ? review.upgrades ?? [] : []).map((upgrade) => ({
           title: `Overseer: ${String(upgrade?.title ?? "").slice(0, 60)}`,
           prompt: `A-Eyes overseer directive — ${String(upgrade?.prompt ?? upgrade?.title ?? "")}`,
         })),
@@ -3066,6 +3081,7 @@ const ASSISTANT_ROLE_JOBS = {
 };
 
 function assistantEnqueueRole(role, priority = ASSISTANT_PRIORITY.cadence) {
+  if (assistantState?.prefs?.backlogMode && ["briefer", "improver", "grower", "ideas"].includes(role)) return Promise.resolve({ ok: true, text: "Existing backlog first" });
   const job = ASSISTANT_ROLE_JOBS[role];
   if (!job) return Promise.resolve(null);
   // The overseer counts against the AI pool when it plans to spend a call;
@@ -3902,15 +3918,21 @@ async function assistantWorkOn(raw) {
     const pinned = await mutateBoard((board) => {
       const task = board.tasks.find((item) => item && item.id === id);
       if (!task) return { hit: false };
+      if (task.absorbedInto) return { hit: true, grouped: true };
+      const readiness = backlog.workState(task, Date.now(), { tasks: board.tasks });
+      if (readiness.blockedBy === "dependencies") return { hit: true, dependencyError: readiness.reason };
       const wasFinished = task.status === "done" || task.status === "archived";
+      const wasHeld = task.status === "open" && ["blocked", "cooling"].includes(backlog.workState(task).stage);
       // An explicit ask re-arms a task the autopilot had cooled down or given
       // up on — the same fresh start a manual reopen gets.
-      if (wasFinished) {
+      if (wasFinished || wasHeld) {
         delete task.doneAt;
         delete task.runFailures;
         delete task.nextRunAt;
         delete task.lastRunError;
         delete task.verification;
+        delete task.verifyAttempts;
+        delete task.verificationReceiptId;
         task.status = "open";
       }
       task.pin = true;
@@ -3920,6 +3942,8 @@ async function assistantWorkOn(raw) {
       return { tasks: board.tasks, hit: true, wasFinished };
     });
     if (pinned.hit) {
+      if (pinned.grouped) return { ok: false, error: "This task belongs to a live group. Open its plan to continue that work." };
+      if (pinned.dependencyError) return { ok: false, error: pinned.dependencyError };
       where = pinned.wasFinished ? `reopened and pinned "${label}" to the front of the board` : `pinned "${label}" to the front of the board`;
     } else {
       where = await assistantQueuePinnedWork({ kind, id, label, now });
@@ -4283,9 +4307,279 @@ function setAutopilotWaiting(reason) {
 // board, so a depth that only counted requests reported "idle, 0 queued"
 // while the executor had real work sitting in front of it.
 function queuedWorkCount(requests, tasks) {
-  const waiting = (Array.isArray(requests) ? requests : []).filter((item) => item && item.status !== "running" && item.status !== "verifying").length;
-  const open = (Array.isArray(tasks) ? tasks : []).filter((task) => task && task.status === "open").length;
+  const board = Array.isArray(tasks) ? tasks : [];
+  const represented = new Set(board.filter((task) => task && task.status !== "archived").map((task) => workTitleKey(task.title)).filter(Boolean));
+  const waiting = (Array.isArray(requests) ? requests : []).filter((item) => {
+    if (!item || !["ready", "cooling"].includes(backlog.workState(item, Date.now(), { tasks: board }).stage)) return false;
+    const key = workTitleKey(item.title || item.prompt);
+    if (key && represented.has(key)) return false;
+    if (key) represented.add(key);
+    return true;
+  }).length;
+  const open = board.filter((task) => task && task.status === "open" && ["ready", "cooling"].includes(backlog.workState(task, Date.now(), { tasks: board }).stage)).length;
   return waiting + open;
+}
+
+async function backlogStatus() {
+  await ensureAssistant();
+  const assistant = await getAssistant();
+  const board = await withBoardLock(async () => {
+    const eyes = await getEyes();
+    const [tasks, requests, ideas] = await Promise.all([eyes.readJson(TASKS_PATH, []), eyes.readJson(REQUESTS_PATH, []), eyes.readJson(IDEAS_PATH, [])]);
+    return { tasks, requests, ideas };
+  });
+  const snapshot = backlog.summarizeBacklog({ ...board, jobs: autopilot.jobs, compare: compareWork, ideaEligible: assistant.backlogIdeaEligible,
+    paused: assistantState.status === "paused" || !autopilot.execute,
+    draining: Boolean(assistantState.prefs?.backlogMode), waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil });
+  return { ok: true, projectId: projects.current().id, ...snapshot };
+}
+
+async function admitBacklogIdeas({ ideaIds = null } = {}) {
+  const assistant = await getAssistant();
+  if (typeof assistant.promoteIdeaBacklog !== "function") return { ok: false, error: "Idea admission is unavailable. Restart after updating Studio." };
+  const result = await mutateBoard((board) => {
+    const explicit = Array.isArray(ideaIds) && ideaIds.length > 0;
+    const summary = backlog.summarizeBacklog({ ...board, jobs: autopilot.jobs });
+    const occupied = summary.counts.ready + summary.counts.running + summary.counts.review + summary.counts.cooling + summary.counts.waiting;
+    const limit = explicit ? 1 : Math.max(0, 3 - occupied);
+    if (!limit || (!explicit && (assistantState?.status === "paused" || !autopilot.execute))) return { promoted: 0, taskIds: [] };
+    const promoted = assistant.promoteIdeaBacklog({ tasks: board.tasks, ideas: board.ideas, now: Date.now(), limit, ideaIds });
+    // The helper is pure and project agnostic; stamp only its new tasks here.
+    for (const task of promoted.tasks) if (promoted.taskIds.includes(task.id) && !task.projectId) Object.assign(task, { projectId: projects.current().id, projectPath: projectRoot() });
+    return promoted;
+  });
+  if (result.promoted) assistantLog("brief", `${result.promoted} existing idea(s) moved onto the task board`);
+  return { ok: true, promoted: result.promoted ?? 0, taskIds: result.taskIds ?? [] };
+}
+
+async function backlogControl({ action, taskId, ideaId, projectId } = {}) {
+  if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Reload its backlog before continuing." };
+  if (!["run", "pause", "retry", "prioritize", "promote"].includes(action)) return { ok: false, error: "Choose run, pause, retry, prioritize, or promote." };
+  await ensureAssistant();
+  let result = { ok: true };
+  if (action === "pause") {
+    // Explicit pause clears a timed breaker as well, so it cannot re-arm
+    // itself later and undo the user's decision.
+    autopilot.parkedUntil = 0;
+    await setAutopilot({ execute: false });
+    await assistantPause();
+  } else if (action === "run") {
+    assistantState.prefs.backlogMode = true;
+    await assistantResume();
+    await setAutopilot({ execute: true });
+    await autopilotHousekeeping();
+    await promoteRequestsToTasks();
+    result = await admitBacklogIdeas();
+    assistantLog("control", "Working through this project's existing tasks and ideas; new idea generation is held.");
+    assistantAskForWork("work through the backlog");
+  } else if (action === "promote") {
+    if (typeof ideaId !== "string" || !ideaId) return { ok: false, error: "Choose an idea first." };
+    result = await admitBacklogIdeas({ ideaIds: [ideaId] });
+    if (!result.taskIds?.length) return { ok: false, error: "That idea is no longer available to promote. Refresh the backlog." };
+    assistantAskForWork("an idea was promoted");
+  } else {
+    if (typeof taskId !== "string" || !taskId) return { ok: false, error: "Choose a task first." };
+    const changed = await mutateBoard((board) => {
+      const index = board.tasks.findIndex((task) => task?.id === taskId);
+      if (index < 0) return { ok: false, error: "This task is no longer on the board." };
+      const task = board.tasks[index];
+      const state = backlog.workState(task, Date.now(), { tasks: board.tasks });
+      if (state.stage === "grouped") return { ok: false, error: "This task belongs to a group. Open its plan; retrying this member separately could duplicate the work." };
+      if (state.blockedBy === "dependencies") return { ok: false, error: state.reason };
+      if (state.stage === "running" || autopilot.jobs.some((job) => job.taskId === taskId)) return { ok: false, error: "This task already has a worker. Let it finish before changing its queue position." };
+      if (state.stage === "review") return { ok: false, error: "This attempt is still being verified. Review its result before starting another run." };
+      if (action === "retry") board.tasks[index] = backlog.retryTask(task);
+      else {
+        if (state.stage === "done") return { ok: false, error: "This task is completed. Use Retry if you want to reopen it." };
+        if (state.stage === "blocked") return { ok: false, error: "Review the failure, then choose Retry to re-arm this task." };
+        task.pin = true;
+        task.pinAt = task.updatedAt = Date.now();
+      }
+      return { ok: true, taskId };
+    });
+    if (!changed.ok) return { ok: false, error: changed.error };
+    result = { ok: true, taskId };
+    assistantAskForWork(action === "retry" ? "a task was explicitly retried" : "a task was moved next");
+  }
+  await refreshAutopilotQueue();
+  emitAutopilot();
+  return { ...result, backlog: await backlogStatus() };
+}
+
+function taskProjectError(projectId) {
+  return projectId && projectId !== projects.current().id ? "The selected project changed. Reload the task before continuing." : null;
+}
+
+function taskView(task) {
+  if (!task || typeof task !== "object") return task;
+  const { contextHistory, ...view } = task;
+  view.contextVersion = contextHistory?.entries?.at(-1)?.revision ?? 0;
+  return view;
+}
+
+async function setTaskDependencies({ taskId, dependsOn, projectId } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  const result = await mutateBoard((board) => {
+    const task = board.tasks.find((item) => item?.id === taskId);
+    if (!task) return { ok: false, error: "Task not found in this project." };
+    if (task.runId || ["active", "running", "awaiting_verification", "verifying", "done", "archived", "absorbed"].includes(task.status) || autopilot.jobs.some((job) => job.taskId === taskId)) return { ok: false, error: "Prerequisites can be changed on an open task without a worker. Finish the current run or reopen completed work first." };
+    const valid = backlog.validateDependencies(board.tasks, taskId, dependsOn);
+    if (!valid.ok) return valid;
+    task.dependsOn = valid.dependsOn;
+    task.updatedAt = Date.now();
+    return { ok: true, revisionKind: "dependencies", revisionNote: "Task prerequisites updated" };
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  await refreshAutopilotQueue();
+  assistantAskForWork("task prerequisites changed");
+  return { ok: true, task: taskView(result.tasks.find((task) => task.id === taskId)), backlog: await backlogStatus() };
+}
+
+async function readTaskContext({ taskId, projectId, before = null } = {}, kind = "history") {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  return withBoardLock(async () => {
+    const eyes = await getEyes();
+    const tasks = await eyes.readJson(TASKS_PATH, []);
+    const task = tasks.find((item) => item?.id === taskId);
+    if (!task) return { ok: false, error: "Task not found in this project." };
+    if (kind === "handoff") return { ok: true, text: taskContext.buildTaskHandoff(task, { tasks }) };
+    return { ok: true, ...taskContext.taskHistory(task, { before }) };
+  });
+}
+
+async function restoreTaskContext({ taskId, revisionId, projectId } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  const result = await mutateBoard((board) => {
+    const index = board.tasks.findIndex((item) => item?.id === taskId);
+    if (index < 0) return { ok: false, error: "Task not found in this project." };
+    if (autopilot.jobs.some((job) => job.taskId === taskId) || board.tasks[index].absorbedInto) return { ok: false, error: "This task is held by a worker or a group. Wait before restoring its brief." };
+    const restored = taskContext.restoreTaskRevision(board.tasks[index], revisionId);
+    if (!restored.ok) return restored;
+    const valid = backlog.validateDependencies(board.tasks, taskId, restored.task.dependsOn ?? []);
+    if (!valid.ok) return valid;
+    board.tasks[index] = restored.task;
+    return { ok: true, revisionNote: `Restored brief ${revisionId}. Files and run results were not changed.` };
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  await refreshAutopilotQueue();
+  return { ok: true, task: taskView(result.tasks.find((task) => task.id === taskId)), backlog: await backlogStatus() };
+}
+
+async function deleteTask({ taskId, projectId } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  const result = await mutateBoard((board) => {
+    const task = board.tasks.find((item) => item?.id === taskId);
+    if (!task) return { ok: false, error: "Task not found in this project." };
+    if (task.runId || ["active", "running", "awaiting_verification", "verifying", "absorbed"].includes(task.status) || autopilot.jobs.some((job) => job.taskId === taskId)) return { ok: false, error: "Wait for the worker or its group to finish before deleting this task." };
+    const dependents = board.tasks.filter((item) => backlog.dependencyIds(item).includes(taskId));
+    if (dependents.length) return { ok: false, error: "Other tasks depend on this one. Remove their prerequisite links before deleting it." };
+    return { ok: true, tasks: board.tasks.filter((item) => item.id !== taskId) };
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  await refreshAutopilotQueue();
+  return { ok: true, tasks: result.tasks.map(taskView), backlog: await backlogStatus() };
+}
+
+async function taskAction({ taskId, projectId, action, status, title } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  if (action === "delete") return deleteTask({ taskId, projectId });
+  if (action === "retry") {
+    const result = await backlogControl({ action: "retry", taskId, projectId });
+    if (!result.ok) return result;
+    const eyes = await getEyes();
+    const tasks = await eyes.readJson(TASKS_PATH, []);
+    return { ...result, task: taskView(tasks.find((task) => task.id === taskId)) };
+  }
+  if (!["status", "rename"].includes(action)) return { ok: false, error: "Choose a task action." };
+  const result = await mutateBoard((board) => {
+    const index = board.tasks.findIndex((task) => task?.id === taskId);
+    if (index < 0) return { ok: false, error: "Task not found in this project." };
+    const task = board.tasks[index];
+    if (autopilot.jobs.some((job) => job.taskId === taskId) || (task.runId && !["awaiting_verification", "verifying"].includes(task.status))) return { ok: false, error: "This task has a worker. Let it finish before changing its status or title." };
+    if (task.absorbedInto) return { ok: false, error: "This task belongs to a group. Work with the group's plan until it releases the member." };
+    const now = Date.now();
+    if (action === "rename") {
+      const clean = String(title ?? "").trim().slice(0, 90);
+      if (!clean) return { ok: false, error: "Give the task a title." };
+      task.title = clean;
+      task.updatedAt = now;
+      return { ok: true, revisionKind: "renamed", revisionNote: "Task title updated" };
+    }
+    if (status === "active") return { ok: false, error: "Use Do next to request a worker. Working status is set only when a worker actually claims the task." };
+    if (!["open", "done", "archived"].includes(status)) return { ok: false, error: "Choose open, done, or archived." };
+    const readiness = backlog.workState(task, now, { tasks: board.tasks });
+    if (["open", "active", "done"].includes(status) && readiness.blockedBy === "dependencies") return { ok: false, error: readiness.reason };
+    if (["awaiting_verification", "verifying"].includes(task.status) && status !== "done") return { ok: false, error: "Let verification finish, or confirm the completed work explicitly." };
+    if (status === "archived" && !backlog.completedTask(task)) return { ok: false, error: "Only completed work can be archived. Keep unfinished work on the board." };
+    if (status === "open") board.tasks[index] = backlog.retryTask(task, now);
+    else {
+      task.status = status;
+      task.updatedAt = now;
+      if (status === "done") {
+        task.doneAt = now;
+        task.verification = { state: "manual", at: now, reason: "Marked done by you" };
+        delete task.runId;
+        delete task.lease;
+        delete task.nextRunAt;
+        delete task.lastRunError;
+      }
+      task.logs = [...(Array.isArray(task.logs) ? task.logs : []), { at: now, kind: "status", text: status === "done" ? "Completion confirmed by you" : `Task marked ${status}` }].slice(-40);
+    }
+    return { ok: true, revisionKind: "status", revisionNote: `Task marked ${status}` };
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  await refreshAutopilotQueue();
+  if (status === "done" || status === "open") assistantAskForWork(status === "done" ? "a prerequisite was completed" : "task reopened");
+  return { ok: true, task: taskView(result.tasks.find((task) => task.id === taskId)), backlog: await backlogStatus() };
+}
+
+async function saveTaskEdits(rows) {
+  const next = Array.isArray(rows) ? rows : [];
+  if (next.some((row) => row?.projectId && row.projectId !== projects.current().id)) return { ok: false, error: "These tasks belong to another project. Reload the task board before saving." };
+  const result = await mutateBoard((board) => {
+    const existing = new Map(board.tasks.map((task) => [task.id, task]));
+    const incoming = new Set();
+    const merged = [];
+    const fields = ["title", "prompt", "color", "refs", "ideas", "logs", "note", "notes", "context", "handoff", "description", "details", "files", "file"];
+    const equal = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+    for (const row of next.filter((task) => task?.id)) {
+      if (incoming.has(row.id)) continue;
+      incoming.add(row.id);
+      const { contextHistory: _untrustedHistory, contextVersion: _viewVersion, ...editable } = row;
+      const current = existing.get(row.id);
+      if (!current) {
+        // Rows returned by tasks:list always carry a contextVersion, including
+        // legacy cards at version zero. Their absence now means they were
+        // deleted while the form was open, never an instruction to recreate.
+        if (Object.hasOwn(row, "contextVersion")) continue;
+        merged.push({ ...editable, projectId: projects.current().id, projectPath: projectRoot(), dependsOn: [] });
+        continue;
+      }
+      const currentVersion = current.contextHistory?.entries?.at(-1)?.revision ?? 0;
+      const oldVersion = Number(row.contextVersion) || 0;
+      const baseline = currentVersion === oldVersion ? current : current.contextHistory?.entries?.find((entry) => entry.revision === oldVersion || (!oldVersion && entry.kind === "saved"))?.snapshot;
+      if (!baseline) return { ok: false, error: "A task changed while these details were open. Reload the board before saving." };
+      const task = { ...current };
+      for (const field of fields) {
+        if (equal(editable[field], baseline[field])) continue;
+        if (current.runId || ["active", "running", "awaiting_verification", "verifying"].includes(current.status)) return { ok: false, error: "This task has a worker or is being verified. Reload after it finishes before editing its details." };
+        if (!equal(current[field], baseline[field]) && !equal(current[field], editable[field])) return { ok: false, error: "The same task details changed elsewhere. Reload the board to keep the newest context." };
+        if (editable[field] === undefined) delete task[field]; else task[field] = editable[field];
+      }
+      // Status, prerequisites, claims, results and history remain main-owned.
+      // Those controls have identity-based APIs; absence in this old form is
+      // never permission to undo a completion or delete a new backlog item.
+      merged.push(task);
+    }
+    for (const task of board.tasks) if (!incoming.has(task.id)) merged.push(task);
+    return { tasks: merged, ok: true, revisionKind: "edited", revisionNote: "Task details updated" };
+  });
+  return result.ok ? { ok: true, tasks: result.tasks.map(taskView) } : { ok: false, error: result.error };
 }
 
 function workTitleKey(value) {
@@ -4458,18 +4752,24 @@ async function promoteRequestsToTasks() {
     const now = Date.now();
     const rows = created.map((request) => {
       const title = String(request.title).slice(0, 90);
+      // Promotion changes the surface, not the attempt budget or obligations.
+      // Losing nextRunAt/verifyAttempts here silently restarted failed work.
+      const { status: _status, runId: _runId, lease: _lease, runningAt: _runningAt, ...retained } = request;
       return {
+        ...retained,
+        projectId: projects.current().id,
+        projectPath: projectRoot(),
         id: "task_" + crypto.randomBytes(8).toString("hex"),
         title,
         prompt: request.prompt ?? "",
         status: "open",
         color: "#e6c98d",
-        source: request.source === "collision" ? "collision" : "a-eyes",
-        createdAt: now,
+        source: request.source === "collision" ? "collision" : request.source === "chat" ? "chat" : "a-eyes",
+        createdAt: Number(request.createdAt ?? request.at) || now,
         updatedAt: now,
-        logs: [{ at: now, kind: "status", text: "task created by A-Eyes" }],
-        ideas: [],
-        refs: [],
+        logs: [...(Array.isArray(request.logs) ? request.logs : []), { at: now, kind: "status", text: "task created by A-Eyes" }].slice(-40),
+        ideas: Array.isArray(request.ideas) ? request.ideas : [],
+        refs: Array.isArray(request.refs) ? request.refs : [],
         // A handed-on request keeps its place in the chain through promotion, so
         // the depth guard still bites once it runs as a task.
         ...(Number(request.depth) ? { depth: Number(request.depth) } : {}),
@@ -4609,6 +4909,7 @@ function watchJobProgress(eyes, entry) {
 let executorFillInFlight = null;
 async function executeNextRequest() {
   if (SMOKE || CAPTURE || CLI_MODE) return;
+  if (assistantState?.status === "paused") return;
   if (executorFillInFlight) return executorFillInFlight;
   executorFillInFlight = (async () => {
     if (!autopilot.execute) {
@@ -4630,7 +4931,7 @@ async function executeNextRequest() {
     }
     let stop = "empty";
     let lostTries = 0;
-    while (autopilot.jobs.length < Math.max(1, autopilot.parallel)) {
+    while (autopilot.execute && assistantState?.status !== "paused" && autopilot.jobs.length < Math.max(1, autopilot.parallel)) {
       // Sequential awaits: each pick re-reads the store with the previous job's
       // claim already on it, so parallel slots can never grab the same work.
       try {
@@ -4656,7 +4957,7 @@ async function executeNextRequest() {
       }
     }
     setAutopilotWaiting(
-      stop === "busy" ? "machine busy" : stop === "cooldown" ? "tasks cooling down" : stop === "deferred" ? "waiting on live editors" : null
+      stop === "busy" ? "machine busy" : stop === "cooldown" ? "tasks cooling down" : stop === "prerequisites" ? "waiting for task prerequisites" : stop === "review" ? "tasks need review before retry" : stop === "deferred" ? "waiting on live editors" : null
     );
   })().finally(() => {
     executorFillInFlight = null;
@@ -4755,6 +5056,22 @@ const isThenable = (value) => Boolean(value) && typeof value.then === "function"
 async function mutateBoard(mutator) {
   const eyes = await getEyes();
   return withBoardLock(async () => {
+    const cloneTask = (task) => {
+      if (!task || typeof task !== "object") return task;
+      const { contextHistory, ...body } = task;
+      return { ...structuredClone(body), ...(contextHistory ? { contextHistory } : {}) };
+    };
+    const applyMutation = (board) => {
+      const previous = new Map(board.tasks.filter(Boolean).map((task) => [task.id, cloneTask(task)]));
+      const returned = mutator(board, eyes);
+      if (isThenable(returned)) throw new TypeError("mutateBoard: mutator must be synchronous — await inputs before the gateway, not inside it");
+      const patch = returned ?? {};
+      if (patch.ok === false) return patch;
+      const tasks = (patch.tasks ?? board.tasks).map((task) => taskContext.recordTaskRevision(task, {
+        previous: previous.get(task?.id), kind: patch.revisionKind ?? "updated", note: patch.revisionNote ?? "", now: Date.now(),
+      }));
+      return { ...patch, tasks };
+    };
     // Preferred path: the SQLite authority. boardMutate runs the read, the
     // mutator (on a working copy), the change detection, and the writes inside
     // one BEGIN IMMEDIATE transaction, then refreshes the JSON views. Its
@@ -4763,9 +5080,9 @@ async function mutateBoard(mutator) {
     // Promise, and broadcasting off `result.written` before resolution sent
     // no mutation events at all.
     if (typeof eyes.boardMutate === "function" && eyes.boardEnabled()) {
-      const result = await eyes.boardMutate((board) => mutator(board, eyes));
+      const result = await eyes.boardMutate(applyMutation);
       const events = { requests: "eyes:requests", tasks: "eyes:tasks", ideas: "eyes:ideas" };
-      for (const key of result.written ?? []) send(events[key], result[key]);
+      for (const key of result.written ?? []) send(events[key], key === "tasks" ? result[key].map(taskView) : result[key]);
       return result;
     }
     // File fallback (database unavailable): same contract, plain files. The
@@ -4778,8 +5095,8 @@ async function mutateBoard(mutator) {
       tasks: Array.isArray(tasks) ? tasks : [],
       ideas: Array.isArray(ideas) ? ideas : [],
     };
-    const board = structuredClone(original);
-    const returned = mutator(board, eyes);
+    const board = { requests: structuredClone(original.requests), tasks: original.tasks.map(cloneTask), ideas: structuredClone(original.ideas) };
+    const returned = applyMutation(board);
     if (isThenable(returned)) {
       throw new TypeError("mutateBoard: mutator must be synchronous — await inputs before the gateway, not inside it");
     }
@@ -4799,7 +5116,7 @@ async function mutateBoard(mutator) {
       // skip the write and broadcast.
       if (JSON.stringify(result[key]) === JSON.stringify(original[key])) continue;
       await eyes.writeJson(file, result[key]);
-      send(event, result[key]);
+      send(event, key === "tasks" ? result[key].map(taskView) : result[key]);
       written.push(key);
     }
     return { ...patch, requests: result.requests, tasks: result.tasks, ideas: result.ideas, written };
@@ -4846,7 +5163,7 @@ async function spawnNextJob() {
   const runRoot = runProject.path;
   // The pause can land mid-fill (an infra breaker tripped on a sibling job),
   // so re-check instead of trusting the dispatcher's one-time gate.
-  if (projectSwitching || !autopilot.execute) return "empty";
+  if (projectSwitching || !autopilot.execute || assistantState?.status === "paused") return "empty";
   let leases = null;
   try {
     const machine = await getMachine();
@@ -4892,6 +5209,7 @@ async function spawnNextJob() {
   const waiting = requests.filter((item) => {
     if (!item || item.status === "running" || item.status === "verifying") return false;
     if ((item.runFailures ?? 0) >= 5) return false;
+    if (backlog.workState(item, Date.now(), { tasks }).stage !== "ready") return false;
     if (item.nextRunAt && item.nextRunAt > Date.now()) return false;
     const key = workTitleKey(item.title) || workTitleKey(item.prompt);
     if (key && liveKeys.has(key)) return false;
@@ -4905,7 +5223,7 @@ async function spawnNextJob() {
   const open = tasks
     .filter((task) => task && task.status === "open" && !liveTaskIds.has(task.id) && !liveKeys.has(workTitleKey(task.title)) && !conflictsWithLiveFix(eyes, task))
     .sort((a, b) => (a.createdAt ?? a.updatedAt ?? 0) - (b.createdAt ?? b.updatedAt ?? 0));
-  const runnable = open.filter((task) => (task.runFailures ?? 0) < 5 && !(task.nextRunAt && task.nextRunAt > now));
+  const runnable = open.filter((task) => (task.runFailures ?? 0) < 5 && backlog.workState(task, now, { tasks }).stage === "ready" && !(task.nextRunAt && task.nextRunAt > now));
   // Pick by what the job is FOR, not just who filed it. Preferring
   // source === "a-eyes" meant the overseer's own upkeep chores ("Stamp digest
   // schema version", "Tag log errors by role") took every slot the moment it
@@ -4916,10 +5234,11 @@ async function spawnNextJob() {
     ...runnable.map((ref) => ({ kind: "task", ref })),
   ].sort((a, b) => compareWork(a.ref, b.ref));
   if (!ranked.length) {
-    const cooling =
-      open.length > runnable.length ||
-      requests.some((item) => item && item.status !== "running" && (item.nextRunAt > now || (item.runFailures ?? 0) >= 5));
-    return cooling || open.length ? "cooldown" : "empty";
+    const states = [...open, ...requests.filter((item) => item && item.status !== "running" && item.status !== "verifying")].map((item) => backlog.workState(item, now, { tasks }));
+    if (states.some((item) => item.stage === "cooling")) return "cooldown";
+    if (states.some((item) => item.blockedBy === "dependencies")) return "prerequisites";
+    if (states.some((item) => item.stage === "blocked")) return "review";
+    return "empty";
   }
   let job = null;
   let claim = null;
@@ -5051,10 +5370,11 @@ async function spawnNextJob() {
     // check atomic. The lease ({ pid, at }) rides the claim so housekeeping
     // can tell our own dead runs from another process's live ones.
     await mutateBoard((board) => {
+      if (!autopilot.execute || assistantState?.status === "paused") return null;
       if (job.kind === "request") {
         const same = (item) => item && item.at === job.ref.at && item.prompt === job.ref.prompt;
         const current = board.requests.find(same);
-        if (!current || current.status === "running" || current.status === "verifying" || (current.runId && current.runId !== entry.id)) return null;
+        if (!current || current.status === "running" || current.status === "verifying" || backlog.workState(current, Date.now(), { tasks: board.tasks }).stage !== "ready" || (current.runId && current.runId !== entry.id)) return null;
         current.status = "running";
         current.runId = entry.id;
         current.runningAt = startedAt;
@@ -5064,7 +5384,7 @@ async function spawnNextJob() {
         return {};
       }
       const current = board.tasks.find((item) => item && item.id === job.ref.id);
-      if (!current || current.status !== "open" || (current.runId && current.runId !== entry.id)) return null;
+      if (!current || current.status !== "open" || backlog.workState(current, Date.now(), { tasks: board.tasks }).stage !== "ready" || (current.runId && current.runId !== entry.id)) return null;
       current.status = "active";
       current.runId = entry.id;
       current.updatedAt = startedAt;
@@ -5095,6 +5415,11 @@ async function spawnNextJob() {
     await releaseExecutorClaim(eyes, job, entry).catch(() => {});
     autopilot.jobs = autopilot.jobs.filter((item) => item !== entry);
     return "busy";
+  }
+  if (!autopilot.execute || assistantState?.status === "paused") {
+    await releaseExecutorClaim(eyes, job, entry).catch(() => {});
+    autopilot.jobs = autopilot.jobs.filter((item) => item !== entry);
+    return "empty";
   }
   // Policy Lab PR1 — the attempt's identity: handoff lineage, the claim, the
   // route and the acceptance baseline it will be judged against. The prompt
@@ -5188,7 +5513,13 @@ async function spawnNextJob() {
     240,
     EXECUTOR_PROMPT_MAX - tailFlat.length - instructions.length - titleBit.length - failFlat.length - memoryFlat.length - collabFlat.length - 8,
   );
-  const body = String(job.prompt ?? "").replace(/["\r\n]+/g, " ").slice(0, promptBudget);
+  // The durable brief carries prior findings and successful prerequisite
+  // outputs into the next worker instead of restarting from a short title.
+  if (job.kind === "task") {
+    const recovery = `Full saved task context: read ${JSON.stringify(projectDataPath(TASKS_PATH))}, find task id ${JSON.stringify(job.ref.id)}. Read that record and its members whenever the brief is excerpted or grouped; contextHistory contains earlier requirements and attempts. Do not rewrite Studio's task store from the worker.\n\n`;
+    job.prompt = recovery + taskContext.buildTaskHandoff(job.ref, { tasks, maxChars: Math.max(1000, promptBudget - recovery.length) });
+  }
+  const body = String(job.prompt ?? "").slice(0, promptBudget);
   const head = `${titleBit}${body}${failFlat}${memoryFlat}${collabFlat}${instructions}`;
   const prompt = `${head}${tailFlat}`;
   // finish() sits above the spawn so a synchronous spawn failure (argument
@@ -5350,14 +5681,13 @@ async function spawnNextJob() {
       if (ok) {
         // Not "done" — the run SAID it finished. The card goes to
         // awaiting_verification with the attempt's structured evidence
-        // attached; the housekeeping verification pass settles it. A fresh
-        // attempt restarts the bounded verification budget.
+        // attached; the housekeeping verification pass settles it. Preserve
+        // the verification budget across attempts until success or manual retry.
         task.status = "awaiting_verification";
         delete task.lastRunError;
         delete task.runFailures;
         delete task.nextRunAt;
         delete task.verification;
-        delete task.verifyAttempts;
         task.lastAttempt = attempt;
         // Follow-ups this run handed on are remaining obligations, kept
         // visible on the card; they are queued as requests right after
@@ -5772,7 +6102,7 @@ async function runExecutorHandoffs(entry, job) {
 // applied under the board lock, then awaiting_verification cards get their
 // completion evidence checked. Each store is written (and broadcast) only when
 // it changed.
-const VERIFY_DWELL_MS = 10 * 60 * 1000; // let the dust settle before judging an attempt
+const VERIFY_DWELL_MS = 30 * 1000; // allow the finished session's evidence to flush before checking it
 const LEASE_REFRESH_MS = 10 * 60 * 1000; // how often a live owner re-stamps its claims
 async function autopilotHousekeeping() {
   const historyModule = await loadModule("scripts/task-history.mjs");
@@ -5988,6 +6318,7 @@ async function autopilotHousekeeping() {
 let autopilotPassInFlight = null;
 async function autopilotPass() {
   if (projectSwitching) return { ok: true, skipped: "switching project" };
+  if (assistantState?.status === "paused") return { ok: true, skipped: "paused" };
   if (SMOKE || CAPTURE || CLI_MODE || !autopilot.enabled) return;
   if (autopilotPassInFlight) return autopilotPassInFlight;
   autopilotPassInFlight = (async () => {
@@ -5995,18 +6326,20 @@ async function autopilotPass() {
       const eyes = await getEyes();
       autopilotTicks += 1;
       let added = 0;
-      const pass = await autopilotProactivePass({ useAi: true });
+      const draining = Boolean(assistantState?.prefs?.backlogMode);
+      const pass = draining ? { added: 0 } : await autopilotProactivePass({ useAi: true });
       added += pass?.added ?? 0;
-      if (autopilotTicks % 6 === 0) {
+      if (!draining && autopilotTicks % 6 === 0) {
         const result = await runAssistant("grow", null);
         if (result.ok) added += await queueRequests(requestsFromExpand(result.briefing, await eyes.readJson(REQUESTS_PATH, []), "grow"));
       }
-      if (autopilotTicks % 12 === 0) {
+      if (!draining && autopilotTicks % 12 === 0) {
         const result = await runAssistant("improve", null);
         if (result.ok) added += await queueRequests(requestsFromExpand(result.briefing, await eyes.readJson(REQUESTS_PATH, []), "improver"));
       }
       await autopilotHousekeeping();
       await promoteRequestsToTasks();
+      if (draining && assistantState.status !== "paused" && autopilot.execute) await admitBacklogIdeas();
       const tasks = await eyes.readJson(TASKS_PATH, []);
       autopilot.tasksManaged = tasks.filter((task) => task?.source === "a-eyes").length;
       await refreshAutopilotQueue(eyes);
@@ -6275,7 +6608,7 @@ async function scanIdeasInternal(ai = false, entry = null) {
   if (!newMaterial && !ai) {
     const store = await eyes.readJson(IDEAS_PATH, []);
     if (listError) return { ok: false, error: listError, added: 0, aiError: null, scanned: 0, ideas: store };
-    return { ok: true, added: 0, aiError: null, scanned: 0, newMaterial: false, ideas: store.slice(0, 400), text: "no new chat material since the last scan" };
+    return { ok: true, added: 0, aiError: null, scanned: 0, newMaterial: false, ideas: store, text: "no new chat material since the last scan" };
   }
   const found = listError ? [] : reference.scanIdeas(chats);
   // The model sees the existing registry (titles), so it can suppress
@@ -6348,7 +6681,7 @@ async function scanIdeasInternal(ai = false, entry = null) {
     if (ai && assistantModule?.compact) {
       const heldTasks = new Set(autopilot.jobs.map((job) => job.taskId).filter(Boolean));
       const stamped = board.tasks.map((task) => (task && heldTasks.has(task.id) ? { ...task, runId: task.runId ?? "live" } : task));
-      const out = assistantModule.compact({ requests: board.requests, tasks: stamped, ideas: board.ideas, collisions: assistantCache.store?.collisions, now: Date.now(), taskGroups });
+      const out = assistantModule.compact({ requests: board.requests, tasks: stamped, ideas: board.ideas, collisions: assistantCache.store?.collisions, now: Date.now(), taskGroups, promoteIdeas: !assistantState?.prefs?.backlogMode });
       board.requests = out.requests;
       board.ideas = out.ideas;
       // Strip the view-only stamp from tasks that were held but carry no real
@@ -6398,7 +6731,7 @@ async function scanIdeasInternal(ai = false, entry = null) {
       : "no new chat material since the last scan";
   const reportText = result.report?.text ?? null;
   const text = ai && reportText ? `${ingestText} · board: ${reportText}` : ingestText;
-  return { ok: true, added, aiError, scanned: found.length, newMaterial, ideas: store.slice(0, 400), text };
+  return { ok: true, added, aiError, scanned: found.length, newMaterial, ideas: store, text };
 }
 
 async function analyzerAi(kind, payload) {
@@ -6481,7 +6814,7 @@ async function selectProject(id) {
     const eyes = await getEyes();
     const [tasks, requests, ideas] = await Promise.all([eyes.readJson(TASKS_PATH, []), eyes.readJson(REQUESTS_PATH, []), eyes.readJson(IDEAS_PATH, [])]);
     send("projects:changed", projects.list());
-    send("eyes:tasks", tasks);
+    send("eyes:tasks", tasks.map(taskView));
     send("eyes:requests", requests);
     send("eyes:ideas", ideas);
     send("eyes:assistant", { state: assistantState, event: { kind: "project", text: `Ready in ${next.name}.`, projectId: next.id } });
@@ -6520,7 +6853,7 @@ function registerIpc() {
     const tasks = await eyes.readJson(TASKS_PATH, []);
     if (!task) return { ok: false, error: "An unfinished task with this title already exists.", tasks, projectId: projects.current().id };
     assistantAskForWork("you added a task");
-    return { ok: true, task, tasks, projectId: projects.current().id };
+    return { ok: true, task: taskView(task), tasks: tasks.map(taskView), projectId: projects.current().id };
   });
   ipcMain.handle("catalog:read", async () => {
     const dataDir = path.join(STUDIO_ROOT, "data");
@@ -6869,6 +7202,8 @@ function registerIpc() {
     return status;
   });
   ipcMain.handle("assistant:status", () => ({ ok: true, status: autopilotStatus() }));
+  ipcMain.handle("assistant:backlog", () => backlogStatus());
+  ipcMain.handle("assistant:backlog-control", (_event, payload) => backlogControl(payload ?? {}));
 
   // ---- the assistant service: state, thread, controls, prefs ---------------
   ipcMain.handle("assistant:state", async () => ({ ok: true, state: await ensureAssistant() }));
@@ -6987,21 +7322,25 @@ function registerIpc() {
   // ---- tasks, feature ideas, references, preferences -----------------------
   ipcMain.handle("tasks:list", async () => {
     const eyes = await getEyes();
-    return { ok: true, tasks: await eyes.readJson(TASKS_PATH, []), projectId: projects.current().id };
+    return { ok: true, tasks: (await eyes.readJson(TASKS_PATH, [])).map(taskView), projectId: projects.current().id };
   });
+  ipcMain.handle("tasks:dependencies", (_event, payload) => setTaskDependencies(payload ?? {}));
+  ipcMain.handle("tasks:history", (_event, payload) => readTaskContext(payload ?? {}, "history"));
+  ipcMain.handle("tasks:handoff", (_event, payload) => readTaskContext(payload ?? {}, "handoff"));
+  ipcMain.handle("tasks:restore", (_event, payload) => restoreTaskContext(payload ?? {}));
+  ipcMain.handle("tasks:delete", (_event, payload) => deleteTask(payload ?? {}));
+  ipcMain.handle("tasks:action", (_event, payload) => taskAction(payload ?? {}));
   ipcMain.handle("tasks:save", async (_event, tasks) => {
-    const next = Array.isArray(tasks) ? tasks : [];
-    if (next.some((row) => row?.projectId && row.projectId !== projects.current().id)) return { ok: false, error: "These tasks belong to another project. Reload the task board before saving." };
-    await withBoardLock(async () => {
-      const eyes = await getEyes();
-      await eyes.writeJson(TASKS_PATH, next);
-    });
-    send("eyes:tasks", next);
-    return { ok: true };
+    return saveTaskEdits(tasks);
   });
   ipcMain.handle("ideas:list", async () => {
     const eyes = await getEyes();
-    return { ok: true, ideas: await eyes.readJson(IDEAS_PATH, []) };
+    return { ok: true, ideas: await eyes.readJson(IDEAS_PATH, []), projectId: projects.current().id };
+  });
+  ipcMain.handle("ideas:action", async (_event, payload = {}) => {
+    if (!payload.projectId || payload.projectId !== projects.current().id) return { ok: false, error: "Reload this project's ideas before changing them." };
+    const result = await mutateBoard((board) => applyIdeaAction(board.ideas, payload));
+    return { ok: result.ok, error: result.error, projectId: projects.current().id, ideas: result.ideas };
   });
   ipcMain.handle("ideas:save", async (_event, ideas) => {
     const next = Array.isArray(ideas) ? ideas : [];

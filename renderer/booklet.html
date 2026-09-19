@@ -2183,14 +2183,14 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-topbar .ws-kicker { margin: 0; font-size: 9px; }
 .ws-project-heading strong { font-weight: 450; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 .ws-top-actions { display: flex; gap: 9px; flex-shrink: 0; }
-.ws-top-actions button { font-size: 10px; }
+.ws-top-actions button { font-size: 11px; }
 .ws-heading { display: flex; justify-content: space-between; align-items: center; gap: 15px; padding: 30px 0 24px; flex-shrink: 0; }
 .ws-heading h1 { color: #ece8da; font: 400 clamp(30px, 3vw, 43px)/1.15 Georgia, serif; letter-spacing: -.9px; margin: 0 0 10px; }
-.ws-project-path { margin: 0; color: #7e8578; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 48vw; }
-.ws-connection { font-size: 10px; color: #b4c6a3; white-space: nowrap; border: 1px solid #36402e; background: #20281c; border-radius: 20px; padding: 6px 10px; }
+.ws-project-path { margin: 0; color: #99a08f; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 48vw; }
+.ws-connection { font-size: 11px; color: #c2d1b3; white-space: nowrap; border: 1px solid #414b38; background: #20281c; border-radius: 20px; padding: 7px 11px; }
 .ws-connection::before { content: ""; display: inline-block; width: 5px; height: 5px; background: #aabd97; border-radius: 50%; margin: 0 6px 1px 0; }
 .ws-connection.working::before { box-shadow: 0 0 8px #aabd97; }
-.ws-columns { display: grid; grid-template-columns: minmax(0,1fr) minmax(285px,32%); gap: 27px; flex: 1; min-height: 0; padding-bottom: 18px; }
+.ws-columns { display: grid; grid-template-columns: minmax(0,1fr) minmax(310px,34%); gap: 27px; flex: 1; min-height: 0; padding-bottom: 18px; }
 .ws-conversation { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .ws-companion-bar { display: flex; align-items: center; gap: 17px; padding: 8px 0 16px; flex-shrink: 0; border-bottom: 1px solid #30332a; min-height: 99px; }
 .ws-companion-track { width: 150px; height: 74px; flex-shrink: 0; position: relative; }
@@ -2200,15 +2200,17 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-track-labels { position: absolute; bottom: 1px; width: 100%; display: flex; justify-content: space-between; font-size: 8px; color: #92997f; padding: 0 10px; }
 .ws-buddy { position: absolute; left: 0; top: 7px; width: 45px; height: 45px; transition: transform 1.2s cubic-bezier(.25,.8,.25,1); }
 [data-station="make"] .ws-buddy { transform: translateX(53px); } [data-station="review"] .ws-buddy { transform: translateX(106px); }
-.ws-buddy-face { position: absolute; inset: 6px; border-radius: 45% 45% 43% 43%; background: radial-gradient(circle at 35% 20%,#5c5b41,#303625 70%); border: 1px solid var(--ws-accent); box-shadow: 0 0 13px rgba(var(--ws-accent-rgb),.16); display: flex; justify-content: center; align-items: center; gap: 6px; animation: ws-float 5s ease-in-out infinite; }
-.ws-buddy-face i { width: 3px; height: 8px; background: #f3e7b8; border-radius: 4px; animation: ws-blink 7s infinite; }
+.ws-buddy-face { position: absolute; inset: 6px; border-radius: 45% 45% 43% 43%; background: radial-gradient(circle at 35% 20%,#5c5b41,#303625 70%); border: 1px solid var(--ws-accent); box-shadow: 0 0 13px rgba(var(--ws-accent-rgb),.16); display: flex; justify-content: center; align-items: center; gap: 6px; }
+.ws-buddy-face i { width: 3px; height: 8px; background: #f3e7b8; border-radius: 4px; }
 .ws-buddy-orbit { position: absolute; inset: 0; border: 1px solid rgba(var(--ws-accent-rgb),.5); border-radius: 50%; transform: rotate(-28deg) scaleY(.46); }
 .ws-buddy-spark { position: absolute; color: var(--ws-accent); right: -3px; top: -3px; font-size: 12px; }
 .ws-companion-track.busy .ws-buddy-spark { animation: ws-spark 2s infinite; }
+.ws-companion-track.busy .ws-buddy-face { animation: ws-float 3s ease-in-out infinite; }
+.ws-companion-track.busy .ws-buddy-face i { animation: ws-blink 7s infinite; }
 .ws-companion-copy { flex: 1; min-width: 0; }
 .ws-companion-copy strong { display: block; color: #dbdccb; font-size: 12px; font-weight: 550; }
-.ws-companion-copy p { color: #949d88; font-size: 11px; line-height: 1.6; margin: 5px 0 0; max-height: 53px; overflow-y: auto; }
-.ws-companion-bar button { font-size: 10px; }
+.ws-companion-copy p { color: #b0b7a5; font-size: 12px; line-height: 1.65; margin: 5px 0 0; max-height: 60px; overflow-y: auto; overflow-wrap: anywhere; }
+.ws-companion-bar button { font-size: 11px; }
 .ws-thread { flex: 1; min-height: 100px; overflow-y: auto; padding: 20px 8px 20px 0; overscroll-behavior: contain; }
 .ws-welcome { max-width: 490px; margin: auto; padding: clamp(24px,5vh,70px) 12px 32px; }
 .ws-welcome-star { display: block; font: 48px Georgia,serif; color: var(--ws-accent); margin-bottom: 16px; }
@@ -2220,22 +2222,22 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-message.user { padding: 13px 16px; background: #22271f; border-radius: 10px; border: 1px solid #343c2d; margin-left: 34px; }
 .ws-message-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 7px; }
 .ws-message-head strong { color: var(--ws-accent); font-size: 11px; font-weight: 550; }
-.ws-message-head time { color: #777f6c; font-size: 9px; }
+.ws-message-head time { color: #9ca48e; font-size: 10px; }
 .ws-message-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; font-size: 13px; color: #cbd0c2; }
 .ws-composer { border: 1px solid #424936; border-radius: 13px; background: #1b2018; flex-shrink: 0; box-shadow: 0 4px 24px #0002; overflow: hidden; }
 .ws-compose-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 11px 12px 0; }
 .ws-modes { display: flex; gap: 3px; padding: 3px; border-radius: 7px; background: #11170f; }
-.ws-modes button { font-size: 10px; border: 0; color: #959e88; background: transparent; padding: 6px 9px; border-radius: 5px; min-height: 0; }
+.ws-modes button { font-size: 11px; border: 0; color: #b0b9a3; background: transparent; padding: 7px 9px; border-radius: 5px; min-height: 0; }
 .ws-modes button[aria-pressed="true"] { background: #3b4330; color: #e6e5d5; }
 #workspace-composer-context { color: #8d997e; font-size: 9px; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.workspace textarea { border: 0; border-radius: 0; resize: vertical; background: transparent; min-height: 89px; max-height: 24vh; color: #e7e9dd; font-size: 12px; width: 100%; padding: 15px 16px 8px; box-shadow: none; outline: none; line-height: 1.65; }
-.workspace textarea::placeholder { color: #818d75; }
+.workspace textarea { border: 0; border-radius: 0; resize: vertical; background: transparent; min-height: 89px; max-height: 24vh; color: #e7e9dd; font-size: 13px; width: 100%; padding: 15px 16px 8px; box-shadow: none; outline: none; line-height: 1.65; }
+.workspace textarea::placeholder { color: #a0ab93; }
 .ws-composer:focus-within { border-color: var(--ws-accent); }
 .ws-compose-bottom { padding: 3px 12px 12px 16px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.ws-compose-bottom > span { color: #7e8a72; font-size: 9px; }
+.ws-compose-bottom > span { color: #a1ad95; font-size: 10px; }
 .ws-compose-bottom button { font-size: 11px; border-radius: 7px; padding: 8px 13px; min-height: 33px; flex-shrink: 0; }
 .ws-compose-bottom button span { padding-left: 8px; }
-.ws-feedback { font-size: 10px; color: #a5b692; margin: 8px 2px 0; min-height: 16px; flex-shrink: 0; }
+.ws-feedback { font-size: 11px; line-height: 1.55; color: #bbcaac; margin: 8px 2px 0; min-height: 17px; flex-shrink: 0; overflow-wrap: anywhere; }
 .ws-feedback.error { color: #efb5a0; }
 .ws-feedback-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
 .ws-feedback-row button { font-size: 10px; margin-top: 6px; }
@@ -2243,33 +2245,77 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-work-heading { display: flex; justify-content: space-between; align-items: center; padding: 13px 0 16px; gap: 7px; }
 .ws-work-heading h2 { font: 400 24px Georgia,serif; margin: 0; color: #e3dfd0; }
 .ws-work-heading .ws-kicker { font-size: 8px; margin-bottom: 6px; }
-.ws-work-heading button { font-size: 9px; padding-inline: 8px; }
-.ws-work-tabs { display: flex; gap: 0; border-bottom: 1px solid #303729; padding-bottom: 10px; margin-bottom: 16px; }
-.ws-work-tabs button { flex: 1; padding: 7px 4px; color: #8c9880; font-size: 10px; background: transparent; border: 1px solid transparent; border-radius: 6px; white-space: nowrap; }
+.ws-work-heading button { font-size: 11px; padding-inline: 8px; }
+.ws-backlog { flex-shrink: 0; border: 1px solid #424b35; border-radius: 10px; padding: 13px; margin-bottom: 15px; background: radial-gradient(ellipse at 100% 0,rgba(var(--ws-accent-rgb),.07),transparent 70%),#1d2219; }
+.ws-backlog-heading { display: flex; align-items: center; gap: 7px; }
+.ws-backlog-light { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: #9baa81; }
+.ws-backlog[data-state="running"] .ws-backlog-light { background: var(--ws-accent); box-shadow: 0 0 8px rgba(var(--ws-accent-rgb),.4); }
+.ws-backlog h3, #workspace-backlog-title { color: #e4e7d9; font: 550 13px/1.5 var(--font-ui); margin: 0 0 5px; }
+#workspace-backlog-summary { color: #b6c0a6; font-size: 11px; line-height: 1.65; margin: 0; overflow-wrap: anywhere; }
+#workspace-backlog-metrics { display: flex; gap: 7px 14px; align-items: center; flex-wrap: wrap; margin: 11px 0; color: #aab69a; font-size: 10px; line-height: 1.6; }
+#workspace-backlog-metrics > * { white-space: nowrap; }
+#workspace-backlog-metrics strong { color: #e3e7d6; font-size: 15px; font-weight: 550; margin-right: 3px; font-variant-numeric: tabular-nums; }
+#workspace-run-backlog { width: 100%; min-height: 34px; border-radius: 6px; padding: 7px 10px; font-size: 12px; }
+#workspace-run-backlog:disabled { opacity: .55; }
+#workspace-backlog-next { color: #a5b195; font-size: 10px; line-height: 1.6; margin: 9px 0 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.ws-work-search { display: flex; align-items: center; gap: 7px; flex-shrink: 0; width: 100%; min-width: 0; margin: 0 0 10px; border: 1px solid #39432f; border-radius: 7px; background: #171c14; color: #a8b596; padding: 0 10px; min-height: 35px; }
+.ws-work-search .glyph { flex-shrink: 0; width: 14px; height: 14px; }
+.workspace .ws-work-search input { width: 100%; min-width: 0; padding: 9px 0; border: 0; border-radius: 0; outline: none; box-shadow: none; background: transparent; color: #e2e7d7; font-size: 12px; }
+.ws-work-search input::placeholder { color: #9ba98b; }
+.ws-work-search:focus-within { outline: 1px solid var(--ws-accent); border-color: var(--ws-accent); }
+.ws-work-tabs { display: flex; gap: 3px; border-bottom: 1px solid #303729; padding-bottom: 10px; margin-bottom: 11px; flex-shrink: 0; }
+.ws-work-tabs button { flex: 1; min-width: 0; padding: 8px 3px; color: #aab79a; font-size: 11px; background: transparent; border: 1px solid transparent; border-radius: 6px; white-space: nowrap; }
 .ws-work-tabs button[aria-pressed="true"] { color: #d8dccb; background: #2b3324; border-color: #3d472f; }
-.ws-work-tabs button span { font-size: 9px; padding: 1px 4px; color: #bcc6a9; background: #161e12; border-radius: 3px; margin-left: 3px; }
-.ws-work-list { overflow-y: auto; min-height: 90px; flex: 1; padding-right: 3px; }
-.ws-work-card { width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: stretch; white-space: normal; text-align: left; background: #1c2119; border: 1px solid #333c2b; border-radius: 10px; padding: 16px; gap: 9px; margin-bottom: 11px; }
+.ws-work-tabs button span { font-size: 10px; padding: 1px 4px; color: #ccd6ba; background: #161e12; border-radius: 3px; margin-left: 3px; font-variant-numeric: tabular-nums; }
+.ws-work-list { overflow-y: auto; min-height: 90px; flex: 1; padding: 2px 5px 2px 2px; overscroll-behavior: contain; scrollbar-gutter: stable; scroll-padding-block: 4px; }
+.ws-work-card { width: 100%; min-width: 0; display: flex; flex-direction: column; align-items: stretch; white-space: normal; text-align: left; background: #1b2018; border: 1px solid #35402d; border-left: 3px solid #536146; border-radius: 9px; padding: 12px 13px; gap: 6px; margin-bottom: 9px; }
 .ws-work-card > * { max-width: 100%; min-width: 0; }
 .ws-work-card:hover { border-color: #737e55; background: #242b1e; }
-.ws-work-status { font-size: 9px; color: #d5c38d; letter-spacing: .3px; }
-.ws-work-card.done .ws-work-status { color: #b3c49b; }
-.ws-work-card.review .ws-work-status { color: #d8bc88; }
-.ws-work-title { color: #d7ddca; font-size: 12px; font-weight: 500; line-height: 1.55; overflow-wrap: anywhere; }
-.ws-work-summary { font-size: 10px; color: #96a186; line-height: 1.75; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; }
-.ws-work-time { color: #7f8e6e; font-size: 9px; margin-top: 5px; }
+.workspace .ws-work-open { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0; width: 100%; padding: 0; border: 0; border-radius: 3px; background: none; color: inherit; text-align: left; white-space: normal; box-shadow: none; }
+.ws-work-open > * { min-width: 0; max-width: 100%; }
+.workspace .ws-work-open:hover { background: none; color: inherit; }
+.ws-card-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 5px; }
+.workspace .ws-card-actions button { font-size: 10px; line-height: 1.4; border-radius: 5px; min-height: 28px; padding: 5px 8px; white-space: normal; }
+.ws-rank { display: inline-flex; align-items: center; justify-content: center; min-width: 19px; height: 19px; margin-left: 7px; padding: 0 5px; border: 1px solid #4a553b; border-radius: 4px; font-size: 10px; line-height: 1; color: #c9d3b7; font-variant-numeric: tabular-nums; }
+.ws-work-card progress { width: 100%; height: 4px; appearance: none; border: 0; border-radius: 2px; overflow: hidden; background: #30382a; accent-color: var(--ws-accent); }
+.ws-work-card progress::-webkit-progress-bar { background: #30382a; }
+.ws-work-card progress::-webkit-progress-value { background: var(--ws-accent); }
+.ws-work-card[data-stage="running"] { border-left-color: var(--ws-accent); background: #24271c; }
+.ws-work-card[data-stage="running"] .ws-work-status { color: var(--ws-accent); }
+.ws-work-card[data-stage="blocked"] { border-left-color: #c1846c; }
+.ws-work-card[data-stage="blocked"] .ws-work-status { color: #e0ae96; }
+.ws-work-card[data-stage="cooling"] { border-left-color: #91a4b9; }
+.ws-work-card[data-stage="cooling"] .ws-work-status { color: #b6c7da; }
+.ws-work-card[data-stage="review"] { border-left-color: #d4b574; }
+.ws-work-card[data-stage="done"] { border-left-color: #8fae7e; }
+.ws-idea-card { border-left-color: #a49bbb; background: #1e201e; }
+.ws-idea-card .ws-work-status { color: #c4bbd6; }
+#workspace-show-more { flex-shrink: 0; margin-top: 7px; width: 100%; min-height: 33px; font-size: 11px; border-radius: 6px; }
+.ws-work-status { align-self: flex-start; font-size: 10px; line-height: 1.5; color: #c0cbb1; letter-spacing: .1px; }
+.ws-work-card.done { border-left-color: #8fae7e; }
+.ws-work-card.done .ws-work-status { color: #b9d3a6; }
+.ws-work-card.review { border-left-color: #d4b574; }
+.ws-work-card.review .ws-work-status { color: #e0c695; }
+.ws-work-card[data-status="active"], .ws-work-card[data-status="running"] { border-left-color: var(--ws-accent); background: #24271c; }
+.ws-work-card[data-status="active"] .ws-work-status, .ws-work-card[data-status="running"] .ws-work-status { color: var(--ws-accent); }
+.ws-work-card[data-status="blocked"], .ws-work-card[data-status="failed"] { border-left-color: #c1846c; }
+.ws-work-card[data-status="blocked"] .ws-work-status, .ws-work-card[data-status="failed"] .ws-work-status { color: #e0ae96; }
+.ws-work-title { color: #e3e8d9; font-size: 13px; font-weight: 550; line-height: 1.5; overflow-wrap: anywhere; }
+.ws-work-summary { font-size: 11px; color: #abb69b; line-height: 1.6; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.ws-work-card[data-stage="ready"] .ws-work-summary { -webkit-line-clamp: 1; }
+.ws-work-time { color: #9da98b; font-size: 10px; line-height: 1.5; margin-top: 3px; }
 .ws-work-empty { text-align: center; padding: 34px 15px; }
 .ws-empty-symbol { font-size: 32px; color: #829d63; }
 .ws-work-empty h3 { font: 400 18px Georgia,serif; color: #c8d1ba; margin: 18px 0 10px; }
 .ws-work-empty p { color: #8b997c; font-size: 11px; line-height: 1.8; }
 .ws-work-empty button { margin-top: 11px; font-size: 10px; }
 .ws-activity { border-top: 1px solid #2d3525; margin-top: 14px; flex-shrink: 0; }
-.ws-activity summary { cursor: pointer; color: #a0ac91; font-size: 11px; padding: 14px 0; }
+.ws-activity summary { cursor: pointer; color: #bcc8ac; font-size: 11px; padding: 12px 0; }
 .ws-activity summary span { float: right; color: #728261; }
 .ws-activity ol { margin: 0; padding: 0; list-style: none; max-height: 170px; overflow-y: auto; }
-.ws-activity li { display: grid; gap: 4px; margin-bottom: 13px; font-size: 10px; color: #9eac8d; line-height: 1.6; }
-.ws-activity li time { font-size: 8px; color: #6e7d5e; }
-.ws-jeV { font-size: 9px; color: #7c8a6c; padding: 9px 0 3px; }
+.ws-activity li { display: grid; gap: 4px; margin-bottom: 13px; font-size: 11px; color: #b2bfa1; line-height: 1.6; overflow-wrap: anywhere; }
+.ws-activity li time { font-size: 10px; color: #96a782; }
+.ws-jeV { font-size: 10px; color: #a6b392; padding: 9px 0 3px; }
 .studio-more { position: relative; }
 .studio-more > summary { cursor: pointer; font-size: 12px; color: var(--muted); padding: 9px 12px; border: 1px solid var(--hairline); border-radius: 8px; }
 .studio-more > .tools-cluster, .studio-more-links { position: absolute; z-index: 95; top: calc(100% + 6px); right: 0; display: grid; min-width: 190px; border: 1px solid #4a4737; padding: 8px; background: #171813; box-shadow: 0 12px 28px #0008; border-radius: 10px; }
@@ -2281,6 +2327,22 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 @keyframes ws-spark { 50% { opacity: .3; transform: rotate(60deg); } }
 .ws-still *, .motion-off .workspace * { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .workspace * { animation: none !important; transition: none !important; } }
+@media (max-height: 800px) and (min-width: 961px) {
+  .ws-topbar { height: 48px; }
+  .ws-heading { padding: 13px 0 12px; }
+  .ws-heading h1 { font-size: 32px; margin-bottom: 0; }
+  .ws-heading .ws-kicker { display: none; }
+  .ws-heading .ws-project-path { display: none; }
+  .ws-companion-bar { min-height: 86px; padding-bottom: 10px; }
+  .ws-work-heading { padding: 9px 0 11px; }
+  .ws-backlog { padding: 10px 12px; margin-bottom: 10px; }
+  #workspace-backlog-metrics { margin: 7px 0; }
+  #workspace-backlog-next { margin: 5px 0; -webkit-line-clamp: 1; }
+  .ws-activity { margin-top: 8px; }
+  .ws-activity summary { padding: 9px 0; }
+  .ws-welcome { padding: 20px 12px; }
+  .ws-work-summary { -webkit-line-clamp: 1; }
+}
 @media (min-width: 1750px) { .ws-main { padding: 0 max(45px,calc((100vw - 1580px)/2)); }.ws-columns { gap: 40px; }.ws-work { padding-left: 35px; }.ws-heading { padding: 40px 0 30px; } }
 @media (max-width: 1150px) { .workspace { grid-template-columns: 200px minmax(0,1fr); }.ws-sidebar { padding-inline: 12px; }.ws-main { padding-inline: 23px; }.ws-columns { gap: 18px; grid-template-columns: minmax(0,1fr) 265px; }.ws-work { padding-left: 18px; }.ws-companion-track { width: 96px; }.ws-track-dot.middle { left: 46px; }[data-station="make"] .ws-buddy { transform: translateX(26px); }[data-station="review"] .ws-buddy { transform: translateX(52px); }.ws-track-labels { padding: 0; font-size: 7px; }.ws-companion-bar { gap: 8px; }.ws-connection { font-size: 9px; }.ws-heading h1 { font-size: 32px; }.ws-compose-bottom > span { max-width: 140px; } }
 @media (max-width: 960px) { .workspace { grid-template-columns: 176px minmax(0,1fr); }.ws-brand { font-size: 14px; gap: 7px; margin-inline: 0; }.ws-brand small { font-size: 6px; letter-spacing: 1px; }.ws-main { overflow-y: auto; }.ws-columns { display: flex; flex-direction: column; flex: none; }.ws-conversation { min-height: 550px; height: calc(100vh - 220px); }.ws-work { padding: 18px 0 8px; border-left: 0; border-top: 1px solid #343b2c; min-height: 300px; flex-shrink: 0; }.ws-work-list { max-height: 400px; }.ws-top-actions button:first-child { display: none; }.ws-topbar .ws-kicker { display: none; }.ws-heading { align-items: flex-start; }.ws-connection { max-width: 132px; white-space: normal; text-align: center; }.ws-companion-track { width: 150px; }.ws-track-dot.middle { left: 73px; }[data-station="make"] .ws-buddy { transform: translateX(53px); }[data-station="review"] .ws-buddy { transform: translateX(106px); }.ws-track-labels { padding: 0 10px; font-size: 8px; }.ws-companion-bar { gap: 15px; }.ws-local-note { line-height: 1.8; } }
@@ -2288,8 +2350,35 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 @media print { .workspace { display: none !important; } body.workspace-active > main,body.workspace-active > header { visibility: visible; } }
 @media (max-width: 650px) { .ws-section-label { display: flex; padding: 2px 6px 6px; } }
 #tasks-overlay .explorer-grid { grid-template-columns: minmax(270px,31%) minmax(0,1fr); }
+#task-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
+#task-filters .chip { flex: 0 0 auto; white-space: nowrap; margin: 0; padding: 7px 10px; min-height: 32px; font-size: 12px; }
+.task-row .src-tag[data-readiness="waiting"], .task-row .src-tag[data-readiness="cooling"] { color: #b3c8e2; background: #243343; }
+.task-row .src-tag[data-readiness="ready"] { color: #c5d7ab; background: #2c3921; }
+.task-row .src-tag[data-readiness="blocked"] { color: #e7b79d; background: #442d22; }
+.task-row .src-tag[data-readiness="grouped"] { color: #c7b8df; background: #352b43; }
+.task-row .src-tag[data-readiness="running"] { color: #f1d49a; background: #463d27; }
 .task-reference-drawer { margin-top: 28px; border-top: 1px solid var(--hairline); padding-top: 14px; }
 .task-reference-drawer summary { cursor: pointer; color: var(--muted); margin-bottom: 14px; }
+.task-readiness { border-left: 3px solid #adba8d; padding: 10px 13px; background: #22271c; color: #d8dfc8; border-radius: 0 7px 7px 0; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.task-readiness[data-task-readiness="waiting"] { border-left-color: #91a9c3; color: #c8d7e8; background: #1e252b; }
+.task-readiness[data-task-readiness="blocked"] { border-left-color: #cd9274; color: #ebc2aa; background: #2a221d; }
+.task-context-section { margin: 13px 0; border: 1px solid #3e4335; border-radius: 8px; padding: 0 14px; background: #191d17; }
+.task-context-section > summary { cursor: pointer; padding: 13px 0; color: #dfdecf; font-size: 13px; font-weight: 550; }
+.task-context-section > summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.task-context-section[open] { padding-bottom: 13px; }
+.task-context-hint { font-size: 12px; line-height: 1.65; color: #aeb6a1; margin: 0 0 11px; overflow-wrap: anywhere; }
+.task-dependency-options { display: grid; gap: 4px; max-height: 210px; overflow-y: auto; padding: 3px; margin: 0 -3px 12px; overscroll-behavior: contain; }
+.task-dependency-option { display: flex; gap: 9px; align-items: center; padding: 7px 8px; border-radius: 5px; color: #d2dac5; cursor: pointer; }
+.task-dependency-option:hover { background: #292f23; }
+.task-dependency-option input { width: 15px; height: 15px; flex: 0 0 15px; accent-color: var(--gold); }
+.task-dependency-option > span { min-width: 0; overflow-wrap: anywhere; font-size: 12px; line-height: 1.5; }
+.task-dependency-option small { font-size: 10px; color: #a3b28e; margin-left: auto; flex-shrink: 0; }
+.task-handoff-text { white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.75 var(--font-ui); color: #cbd4be; max-height: 320px; overflow-y: auto; background: #121710; border: 1px solid #343c2a; padding: 12px; border-radius: 6px; }
+.task-history-entry { padding: 13px 0; border-top: 1px solid #353e2b; }
+.task-history-entry > strong { display: block; color: #d4d8c5; font-size: 12px; line-height: 1.6; margin-bottom: 7px; }
+.task-history-preview { white-space: pre-wrap; overflow-wrap: anywhere; color: #b5c0a4; font-size: 12px; line-height: 1.65; max-height: 160px; overflow-y: auto; }
+.task-context-feedback { font-size: 12px; line-height: 1.6; color: #bed1a7; }
+.task-context-feedback.error { color: #edb698; }
 @media (max-width: 740px) { #tasks-overlay .explorer-grid { grid-template-columns: 1fr; overflow-y: auto; }#tasks-overlay .explorer-col { overflow: visible; } }
 </style>
 <svg id="nav-glyphs" class="glyph-sprite" aria-hidden="true" focusable="false" width="0" height="0">
@@ -2354,7 +2443,21 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
         </form>
         <div class="ws-feedback-row"><p id="workspace-feedback" class="ws-feedback" role="status"></p><button id="workspace-retry" class="ghost mini" type="button" hidden>Retry loading</button></div>
       </section>
-      <aside class="ws-work" aria-label="Project work and results"><div class="ws-work-heading"><div><p class="ws-kicker">FROM IDEA TO DONE</p><h2>Your work</h2></div><button class="ghost mini" data-nav="tasks" title="Open full task board">View board ↗</button></div><div class="ws-work-tabs" role="group" aria-label="Filter work"><button id="workspace-open" data-work-filter="open" aria-pressed="true">In progress <span>0</span></button><button id="workspace-review" data-work-filter="review" aria-pressed="false">Review <span>0</span></button><button id="workspace-done" data-work-filter="done" aria-pressed="false">Done <span>0</span></button></div><div id="workspace-work-list" class="ws-work-list"></div><details class="ws-activity"><summary>Behind the scenes <span id="workspace-activity-count"></span></summary><ol id="workspace-activity-list"></ol></details><div class="ws-jeV" id="workspace-jev">Jev · checking connection</div></aside>
+      <aside class="ws-work" aria-label="Project work and results">
+        <div class="ws-work-heading"><div><p class="ws-kicker">FROM IDEA TO DONE</p><h2>Your work</h2></div><button class="ghost mini" data-nav="tasks" title="Open full task board">View board ↗</button></div>
+        <section class="ws-backlog" aria-label="Backlog controls">
+          <div class="ws-backlog-heading"><span class="ws-backlog-light" aria-hidden="true"></span><strong id="workspace-backlog-title">A little progress, every pass</strong></div>
+          <p id="workspace-backlog-summary">Checking your project's backlog…</p>
+          <div id="workspace-backlog-metrics" class="ws-backlog-metrics" aria-label="Backlog counts"></div>
+          <p id="workspace-backlog-next" class="ws-backlog-next"></p>
+          <button id="workspace-run-backlog" class="primary" type="button">Work through backlog <span aria-hidden="true">↗</span></button>
+        </section>
+        <div class="ws-work-tabs" role="group" aria-label="Filter work"><button id="workspace-open" data-work-filter="open" aria-pressed="true">Queue <span>0</span></button><button id="workspace-ideas" data-work-filter="ideas" aria-pressed="false">Ideas <span>0</span></button><button id="workspace-review" data-work-filter="review" aria-pressed="false" title="Finished runs and tasks needing attention">Review <span>0</span></button><button id="workspace-done" data-work-filter="done" aria-pressed="false">Done <span>0</span></button></div>
+        <label class="ws-work-search"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><input id="workspace-work-search" type="search" placeholder="Find a task or idea…" aria-label="Search work and ideas"></label>
+        <div id="workspace-work-list" class="ws-work-list"></div>
+        <button id="workspace-show-more" class="ghost mini ws-show-more" type="button" hidden>Show more</button>
+        <details class="ws-activity"><summary>Behind the scenes <span id="workspace-activity-count"></span></summary><ol id="workspace-activity-list"></ol></details><div class="ws-jeV" id="workspace-jev">Jev · checking connection</div>
+      </aside>
     </div>
   </div>
 </section>
@@ -17734,6 +17837,16 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
   let hydrated = false;
   let hydrating = null;
   let taskRevision = 0;
+  const dependencyDrafts = new Map();
+  const contextReads = new Map();
+  const detailExpanded = new Map();
+  const detailMessages = new Map();
+  const entryDrafts = new Map();
+  const entryPending = new Set();
+  let detailBusy = null;
+  let backlogRead = 0;
+  const taskKey = (task) => `${task?.projectId || state.backlog?.projectId || ""}/${task?.id || ""}`;
+  const node = (tag, className, text) => Object.assign(document.createElement(tag), { className, textContent: text ?? "" });
 
   const base = (file) => (file ? file.split(/[\\/]/).pop() : "(unknown)");
   const status = (text, isError) => {
@@ -17742,13 +17855,15 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     els.status.style.color = isError ? "var(--bad)" : "";
   };
   // Resolves false when nothing reached the store.
-  const save = async () => {
-    if (!hydrated) return false;
+  const save = async (onError) => {
+    if (!hydrated) { onError?.("The task store has not loaded yet."); return false; }
     taskRevision += 1;
     try {
       const result = await window.mefiStudio?.tasksSave?.(state.tasks);
+      if (result?.ok !== true) onError?.(result?.error || "The task store could not be written.");
       return result?.ok === true;
-    } catch {
+    } catch (error) {
+      onError?.(error.message || "The task store could not be written.");
       return false;
     }
   };
@@ -17900,7 +18015,10 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
       awaiting_verification: "improver",
     };
     dot.className = `src-tag ${STATUS_TAG[task.status] ?? "collision"}`;
-    dot.textContent = needsReview(task) ? "REVIEW" : String(task.status ?? "open").toUpperCase();
+    const scheduled = state.backlog?.taskStates?.find((item) => item.id === task.id);
+    const readinessLabels = { ready: "READY", waiting: "WAITING", running: "RUNNING", review: "VERIFYING", blocked: "BLOCKED", grouped: "IN PLAN", cooling: "RETRY LATER", done: task.status === "archived" ? "ARCHIVED" : "DONE" };
+    dot.textContent = readinessLabels[scheduled?.stage] || (needsReview(task) ? "REVIEW" : String(task.status ?? "open").toUpperCase());
+    if (scheduled) { dot.dataset.readiness = scheduled.stage; dot.title = scheduled.reason || ""; li.dataset.readiness = scheduled.stage; }
     const text = document.createElement("span");
     text.className = "task-name";
     text.textContent = ` ${task.title}`;
@@ -17963,6 +18081,12 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     const now = Date.now();
     const finished = state.tasks.filter((task) => task.status === "done");
     if (!finished.length) return;
+    if (window.mefiStudio?.tasksAction) {
+      let archived = 0;
+      for (const task of finished) if (await runTaskAction(task, "status", { status: "archived" })) archived += 1;
+      if (archived) window.MefiToast?.(`Archived ${archived} finished task${archived === 1 ? "" : "s"}`, "good");
+      return;
+    }
     for (const task of finished) {
       task.status = "archived";
       task.logs = pushLog(task, now, "archived");
@@ -18023,11 +18147,12 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 
   async function load(options = {}) {
     const revision = taskRevision;
-    const [tasks, prefs] = await Promise.all([window.mefiStudio?.tasksList?.(), window.mefiStudio?.prefsGet?.()]);
+    const [tasks, prefs, backlog] = await Promise.all([window.mefiStudio?.tasksList?.(), window.mefiStudio?.prefsGet?.(), Promise.resolve(window.mefiStudio?.backlogStatus?.()).catch(() => null)]);
     if (tasks?.ok === false || !Array.isArray(tasks?.tasks)) throw new Error(tasks?.error || "Task store unavailable");
     // A completion broadcast may arrive while preferences are still loading.
     // Never replace that newer board with the earlier read's snapshot.
     if (revision === taskRevision) state.tasks = tasks.tasks;
+    if (backlog?.ok && revision === taskRevision) state.backlog = backlog;
     hydrated = true;
     if (prefs?.ok) state.prefs = { ...state.prefs, ...prefs.prefs };
     state.filter = FILTERS.includes(options.filter) ? options.filter : revision === taskRevision && FILTERS.includes(prefs?.prefs?.taskFilter) ? prefs.prefs.taskFilter : state.filter;
@@ -18090,6 +18215,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
   // One writer for every status move (board rows and the detail buttons), so a
   // finish always stamps doneAt and a reopen always re-arms the autopilot.
   function setTaskStatus(task, value) {
+    if (window.mefiStudio?.tasksAction) return runTaskAction(task, "status", { status: value });
     const now = Date.now();
     const wasDone = isDone(task);
     if (value === "done" && task.status !== "done") {
@@ -18137,14 +18263,17 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     syncBadge();
     renderList();
     renderDetail();
-    save().then((ok) => {
-      if (!ok) {
+    const removal = window.mefiStudio?.tasksDelete
+      ? Promise.resolve(window.mefiStudio.tasksDelete({ taskId: task.id, projectId: task.projectId || state.backlog?.projectId })).catch((error) => ({ ok: false, error: error.message }))
+      : save().then((ok) => ({ ok }));
+    removal.then((result) => {
+      if (!result?.ok) {
         // Put it back rather than pretend the delete landed.
         state.tasks.splice(Math.min(Math.max(index, 0), state.tasks.length), 0, task);
         syncBadge();
         renderList();
         renderDetail();
-        window.MefiToast?.("Task not deleted · the task store could not be written", "bad");
+        window.MefiToast?.(`Task not deleted · ${result?.error || "the task store could not be written"}`, "bad");
         return;
       }
       window.MefiToast?.(`Task deleted · ${task.title}`, "good");
@@ -18180,12 +18309,13 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     } else {
       actions.push({ label: needsReview(task) ? "Confirm done" : "Mark done", className: "primary", title: "Mark this task complete after reviewing its result", run: () => setTaskStatus(task, "done") });
     }
-    if (needsReview(task)) actions.push({ label: "Retry", className: "ghost", title: "Return this task to the queue for another attempt", run: () => {
+    if (needsReview(task)) actions.push({ label: "Retry", className: "ghost", title: "Return this task to the queue for another attempt", disabled: ["verifying", "awaiting_verification"].includes(task.status), run: () => {
+      if (window.mefiStudio?.tasksAction) return runTaskAction(task, "retry");
       delete task.verification;
       delete task.verifyAttempts;
       setTaskStatus(task, "open");
     } });
-    if (task.status === "open") actions.push({ label: "Activate", className: "ghost", title: "Set active — the executor treats it as current work", run: () => setTaskStatus(task, "active") });
+    if (task.status === "open" && window.mefiStudio?.backlogControl) actions.push({ label: "Do next", className: "ghost", title: "Prioritize this task when its prerequisites and a worker are ready", run: () => runTaskAction(task, "prioritize") });
     if (task.status === "active") actions.push({ label: "Back to open", className: "ghost", title: "Release the active claim", run: () => setTaskStatus(task, "open") });
     if (task.status === "absorbed") actions.push({ label: "Restore", className: "ghost", title: "Pull this task out of the grouped plan and back onto the open board", run: () => setTaskStatus(task, "open") });
     if (task.status === "done") actions.push({ label: "Archive", className: "ghost", title: "Shelve the finished task", run: () => setTaskStatus(task, "archived") });
@@ -18233,9 +18363,12 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
       state.renaming = false;
       const value = input.value.trim();
       if (apply && value && value !== task.title) {
-        task.title = value.slice(0, 90);
-        task.updatedAt = Date.now();
-        save();
+        if (window.mefiStudio?.tasksAction) runTaskAction(task, "rename", { title: value.slice(0, 90) });
+        else {
+          task.title = value.slice(0, 90);
+          task.updatedAt = Date.now();
+          save();
+        }
       }
       renderTitle(task);
       renderList();
@@ -18248,6 +18381,204 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     els.title.append(input);
     input.focus();
     input.select();
+  }
+
+  async function runTaskAction(task, action, patch = {}) {
+    if (detailBusy) return false;
+    const key = taskKey(task), projectId = task.projectId || state.backlog?.projectId;
+    detailBusy = key; renderDetail();
+    try {
+      const result = await window.mefiStudio[action === "prioritize" ? "backlogControl" : "tasksAction"]({ taskId: task.id, projectId, action, ...patch });
+      if (!result?.ok) throw new Error(result?.error || "The task change could not be saved.");
+      if (projectId && state.backlog?.projectId && state.backlog.projectId !== projectId) return true;
+      if (result.task) state.tasks = state.tasks.map((item) => item.id === task.id ? result.task : item);
+      if (result.backlog) state.backlog = result.backlog;
+      contextReads.delete(key);
+      detailMessages.delete(key);
+      const selected = selectedTask();
+      if (selected && state.filter !== "all" && taskStage(selected) !== state.filter) state.filter = taskStage(selected);
+      syncBadge(); renderList();
+      return true;
+    } catch (error) {
+      detailMessages.set(key, { text: error.message, error: true });
+      window.MefiToast?.(error.message, "bad");
+      return false;
+    } finally {
+      detailBusy = null; renderDetail();
+    }
+  }
+
+  function detailFold(task, id, title) {
+    const fold = node("details", `task-context-section task-${id}`, "");
+    fold.dataset.taskPanel = id;
+    fold.open = detailExpanded.get(`${taskKey(task)}/${id}`) === true;
+    const heading = node("summary", "", title);
+    heading.addEventListener("click", (event) => {
+      event.preventDefault(); fold.open = !fold.open;
+      detailExpanded.set(`${taskKey(task)}/${id}`, fold.open);
+    });
+    fold.append(heading);
+    return fold;
+  }
+
+  function requestTaskContext(task) {
+    const api = window.mefiStudio;
+    if (!api?.tasksHistory && !api?.tasksHandoff) return null;
+    const key = taskKey(task);
+    const signature = JSON.stringify([task.updatedAt, task.contextVersion, task.contextHistory, task.lastAttempt, task.verification, taskRevision]);
+    const prior = contextReads.get(key);
+    if (prior?.signature === signature) return prior;
+    const record = { signature, loading: true, entries: [], text: "" };
+    contextReads.set(key, record);
+    const payload = { taskId: task.id, projectId: task.projectId || state.backlog?.projectId };
+    Promise.allSettled([api.tasksHistory?.(payload), api.tasksHandoff?.(payload)]).then((results) => {
+      if (contextReads.get(key) !== record) return;
+      record.loading = false;
+      const history = results[0].status === "fulfilled" ? results[0].value : null;
+      const handoff = results[1].status === "fulfilled" ? results[1].value : null;
+      record.entries = history?.ok ? history.entries || [] : [];
+      record.nextBefore = history?.nextBefore;
+      record.hasMore = history?.hasMore === true;
+      record.text = handoff?.ok ? handoff.text || "" : "";
+      record.error = history?.error || handoff?.error || (results.some((result) => result.status === "rejected") ? "The saved context could not be loaded." : "");
+      if (!els.overlay.hidden && taskKey(selectedTask()) === key) renderDetail();
+    });
+    return record;
+  }
+
+  async function taskDetailAction(task, action, payload = {}) {
+    const api = window.mefiStudio;
+    const method = action === "dependencies" ? "tasksDependencies" : "tasksRestore";
+    if (!api?.[method] || detailBusy) return;
+    const key = taskKey(task), projectId = task.projectId || state.backlog?.projectId;
+    detailBusy = key;
+    detailMessages.set(key, { text: action === "dependencies" ? "Saving prerequisites…" : "Restoring this brief…" });
+    renderDetail();
+    try {
+      const result = await api[method]({ taskId: task.id, projectId, ...payload });
+      if (!result?.ok) throw new Error(result?.error || "The change could not be saved. Try again.");
+      if (taskKey(selectedTask()) !== key) return;
+      if (result.task) state.tasks = state.tasks.map((item) => item.id === task.id ? result.task : item);
+      if (result.backlog) state.backlog = result.backlog;
+      dependencyDrafts.delete(key);
+      contextReads.delete(key);
+      detailMessages.set(key, { text: action === "dependencies" ? "Prerequisites saved. The queue will wait for them to finish." : "Earlier brief restored. Files, task status, and completion evidence are unchanged." });
+      renderList();
+    } catch (error) {
+      detailMessages.set(key, { text: error.message, error: true });
+    } finally {
+      detailBusy = null;
+      if (taskKey(selectedTask()) === key) renderDetail();
+    }
+  }
+
+  function renderTaskContext(task) {
+    const key = taskKey(task), api = window.mefiStudio;
+    const scheduled = state.backlog?.taskStates?.find((item) => item.id === task.id);
+    const readiness = node("p", "task-readiness", scheduled?.reason || (isDone(task) ? "This task is complete." : "Readiness will refresh with the project queue."));
+    readiness.dataset.taskReadiness = scheduled?.stage || "unknown";
+    els.detail.append(readiness);
+    const message = detailMessages.get(key);
+    if (message) {
+      const feedback = node("p", `task-context-feedback${message.error ? " error" : ""}`, message.text);
+      feedback.setAttribute("role", "status"); els.detail.append(feedback);
+    }
+
+    const dependencies = detailFold(task, "dependencies", `Prerequisites · ${(task.dependsOn || []).length}`);
+    const dependencyLocked = Boolean(task.runId) || ["active", "running", "awaiting_verification", "verifying", "done", "archived", "completed", "absorbed"].includes(task.status);
+    dependencies.append(node("p", "task-context-hint", dependencyLocked ? "Prerequisites can be changed when this task is open and has no worker. Finish the current run or reopen completed work first." : "Choose the tasks that must finish before this one can start."));
+    const choices = node("div", "task-dependency-options", "");
+    const chosen = dependencyDrafts.get(key) || new Set(task.dependsOn || []);
+    const candidates = state.tasks.filter((item) => item.id !== task.id && (!item.projectId || !task.projectId || item.projectId === task.projectId));
+    for (const id of chosen) if (!candidates.some((item) => item.id === id)) candidates.push({ id, title: `Unavailable task · ${id}`, status: "Missing" });
+    for (const candidate of candidates) {
+      const label = node("label", "task-dependency-option", "");
+      const check = node("input", "", ""); check.type = "checkbox"; check.value = candidate.id; check.checked = chosen.has(candidate.id); check.dataset.dependencyId = candidate.id;
+      check.disabled = Boolean(detailBusy) || dependencyLocked || !api?.tasksDependencies;
+      check.addEventListener("change", () => {
+        const draft = new Set(dependencyDrafts.get(key) || task.dependsOn || []);
+        check.checked ? draft.add(candidate.id) : draft.delete(candidate.id);
+        dependencyDrafts.set(key, draft);
+      });
+      label.append(check, node("span", "", candidate.title || candidate.id), node("small", "", isDone(candidate) ? "Done" : candidate.status || "Open"));
+      choices.append(label);
+    }
+    if (!candidates.length) choices.append(node("p", "task-context-hint", "Add another task to this project to set a prerequisite."));
+    const saveDependencies = node("button", "ghost mini", "Save prerequisites");
+    saveDependencies.type = "button"; saveDependencies.dataset.taskAction = "dependencies";
+    saveDependencies.disabled = Boolean(detailBusy) || dependencyLocked || !api?.tasksDependencies;
+    saveDependencies.addEventListener("click", () => taskDetailAction(task, "dependencies", { dependsOn: [...(dependencyDrafts.get(key) || new Set(task.dependsOn || []))] }));
+    dependencies.append(choices, saveDependencies);
+    els.detail.append(dependencies);
+
+    const context = requestTaskContext(task);
+    const handoff = detailFold(task, "handoff", "Handoff for the next worker");
+    handoff.append(node("p", "task-context-hint", "The saved brief, earlier attempts, remaining work, and prerequisite results travel with this task."));
+    if (context?.text) {
+      handoff.append(node("pre", "task-handoff-text", context.text));
+      const copy = node("button", "ghost mini", "Copy handoff");
+      copy.disabled = !api?.shellCopy;
+      copy.addEventListener("click", async () => { try { await api.shellCopy(context.text); copy.textContent = "Copied"; } catch { copy.textContent = "Could not copy"; } });
+      handoff.append(copy);
+    } else handoff.append(node("p", "task-context-hint", context?.loading ? "Loading saved context…" : context?.error || "No handoff is available yet."));
+    els.detail.append(handoff);
+
+    const history = detailFold(task, "history", `Brief history${context?.entries.length ? ` · ${context.entries.length}${context.hasMore ? "+" : ""}` : ""}`);
+    history.append(node("p", "task-context-hint", "Restore an earlier brief, references, and prerequisites. This does not change files, task status, or completion evidence."));
+    for (const entry of context?.entries || []) {
+      const row = node("article", "task-history-entry", ""); row.dataset.revisionId = entry.id;
+      const stamp = Number.isFinite(new Date(entry.at).getTime()) ? new Date(entry.at).toLocaleString() : "Saved earlier";
+      row.append(node("strong", "", `${entry.kind || "Saved brief"} · ${stamp}`));
+      if (entry.note) row.append(node("p", "task-context-hint", entry.note));
+      row.append(node("p", "task-history-preview", entry.snapshot?.prompt || entry.snapshot?.title || "No brief text in this revision."));
+      const restore = node("button", "ghost mini", "Restore this brief");
+      const restoreLocked = Boolean(task.runId || task.absorbedInto) || ["active", "running", "verifying", "awaiting_verification"].includes(task.status);
+      restore.dataset.taskAction = "restore"; restore.disabled = Boolean(detailBusy) || restoreLocked || !api?.tasksRestore;
+      if (restoreLocked) restore.title = "Wait for the current worker or grouped task to finish before restoring its brief.";
+      restore.addEventListener("click", () => taskDetailAction(task, "restore", { revisionId: entry.id }));
+      row.append(restore); history.append(row);
+    }
+    if (!context?.entries.length) history.append(node("p", "task-context-hint", context?.loading ? "Loading earlier briefs…" : context?.error || "Saved changes to this task will appear here."));
+    if (context?.hasMore) {
+      const more = node("button", "ghost mini", "Load earlier briefs");
+      more.addEventListener("click", async () => {
+        more.disabled = true;
+        try {
+          const result = await api.tasksHistory({ taskId: task.id, projectId: task.projectId || state.backlog?.projectId, before: context.nextBefore });
+          if (!result?.ok) throw new Error(result?.error || "Earlier briefs could not be loaded.");
+          context.entries.push(...(result.entries || [])); context.hasMore = result.hasMore === true; context.nextBefore = result.nextBefore;
+          if (taskKey(selectedTask()) === key) renderDetail();
+        } catch (error) { more.textContent = error.message; more.disabled = false; }
+      });
+      history.append(more);
+    }
+    els.detail.append(history);
+  }
+
+  async function appendTaskEntry(task, field, input) {
+    const text = input.value.trim(), key = taskKey(task), draftKey = `${key}/${field}`;
+    if (!text || entryPending.has(key)) return;
+    entryDrafts.set(draftKey, input.value);
+    const draft = input.value, previous = task[field], previousUpdate = task.updatedAt;
+    const added = [...(task[field] || []), { at: Date.now(), ...(field === "logs" ? { kind: "note" } : {}), text }];
+    task[field] = added; task.updatedAt = Date.now();
+    entryPending.add(key);
+    let error = "The task store could not be written.";
+    const ok = await save((message) => { error = message; });
+    entryPending.delete(key);
+    if (ok) {
+      if (entryDrafts.get(draftKey) === draft) entryDrafts.delete(draftKey);
+      detailMessages.delete(key);
+    } else {
+      // A newer broadcast owns its own state. Undo only this still-local edit.
+      const current = state.tasks.find((item) => item.id === task.id);
+      if (current === task && current[field] === added) { current[field] = previous; current.updatedAt = previousUpdate; }
+      const message = `${field === "logs" ? "Note" : "Idea"} not saved · ${error} Your draft is still here.`;
+      detailMessages.set(key, { text: message, error: true });
+      window.MefiToast?.(message, "bad");
+    }
+    renderList();
+    if (taskKey(selectedTask()) === key) renderDetail();
   }
 
   function renderDetail() {
@@ -18277,6 +18608,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
       button.className = action.className;
       button.textContent = action.label;
       button.title = action.title ?? "";
+      button.disabled = Boolean(detailBusy) || Boolean(action.disabled) || Boolean(task.runId && !["Rename"].includes(action.label));
       button.addEventListener("click", action.run);
       els.statusRow.append(button);
     }
@@ -18313,6 +18645,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     prompt.className = "muted";
     prompt.textContent = task.prompt ?? "";
     els.detail.append(prompt);
+    renderTaskContext(task);
 
     const section = (heading) => {
       const h = document.createElement("h4");
@@ -18359,38 +18692,30 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     const logInput = document.createElement("input");
     logInput.placeholder = "Log a note…";
     logInput.className = "grow";
+    logInput.value = entryDrafts.get(`${taskKey(task)}/logs`) || "";
+    logInput.addEventListener("input", () => entryDrafts.set(`${taskKey(task)}/logs`, logInput.value));
     const logAdd = document.createElement("button");
     logAdd.className = "ghost";
     logAdd.textContent = "Log";
-    logAdd.addEventListener("click", () => {
-      if (!logInput.value.trim()) return;
-      task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "note", text: logInput.value.trim() }];
-      task.updatedAt = Date.now();
-      logInput.value = "";
-      save();
-      renderDetail();
-    });
+    logAdd.disabled = entryPending.has(taskKey(task));
+    logAdd.addEventListener("click", () => appendTaskEntry(task, "logs", logInput));
     logRow.append(logInput, logAdd);
     els.detail.append(logRow);
 
     section(`Thoughts / ideas (${(task.ideas ?? []).length})`);
-    entryList(task.ideas ?? [], (idea) => Object.assign(document.createElement("li"), { textContent: `[${new Date(idea.at).toLocaleTimeString()}] ${idea.text}` }));
+    entryList(task.ideas ?? [], (idea) => Object.assign(document.createElement("li"), { textContent: typeof idea === "string" ? `Linked idea: ${idea}` : `[${new Date(idea.at).toLocaleTimeString()}] ${idea.text}` }));
     const ideaRow = document.createElement("div");
     ideaRow.className = "row tight";
     const ideaInput = document.createElement("input");
     ideaInput.placeholder = "Capture an idea for this task…";
     ideaInput.className = "grow";
+    ideaInput.value = entryDrafts.get(`${taskKey(task)}/ideas`) || "";
+    ideaInput.addEventListener("input", () => entryDrafts.set(`${taskKey(task)}/ideas`, ideaInput.value));
     const ideaAdd = document.createElement("button");
     ideaAdd.className = "ghost";
     ideaAdd.textContent = "Add idea";
-    ideaAdd.addEventListener("click", () => {
-      if (!ideaInput.value.trim()) return;
-      task.ideas = [...(task.ideas ?? []), { at: Date.now(), text: ideaInput.value.trim() }];
-      task.updatedAt = Date.now();
-      ideaInput.value = "";
-      save();
-      renderDetail();
-    });
+    ideaAdd.disabled = entryPending.has(taskKey(task));
+    ideaAdd.addEventListener("click", () => appendTaskEntry(task, "ideas", ideaInput));
     ideaRow.append(ideaInput, ideaAdd);
     els.detail.append(ideaRow);
 
@@ -18502,6 +18827,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     // the task instead of trusting a reference captured before the awaits.
     const task = taskId ? state.tasks.find((item) => item.id === taskId) : null;
     if (task) {
+      const previous = { refs: task.refs, logs: task.logs, updatedAt: task.updatedAt };
       task.refs = [
         ...(task.refs ?? []),
         ...(result.references.files ?? []).slice(0, 6).map((file) => ({ kind: "file", title: file, detail: "work tree" })),
@@ -18510,7 +18836,18 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
       ].slice(-40);
       task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "reference", text: `gathered ${result.references.code.length} code hits, ${result.references.sessions.length} sessions, ${result.references.chats.length} chats` }];
       task.updatedAt = Date.now();
-      await save();
+      const addedRefs = task.refs, addedLogs = task.logs;
+      let error = "The task store could not be written.";
+      if (!(await save((message) => { error = message; }))) {
+        const current = state.tasks.find((item) => item.id === taskId);
+        if (current === task && current.refs === addedRefs && current.logs === addedLogs) Object.assign(current, previous);
+        const message = `References found, but not saved to the task · ${error}`;
+        status(message, true);
+        detailMessages.set(taskKey(task), { text: message, error: true });
+        window.MefiToast?.(message, "bad");
+        renderList(); renderDetail();
+        return;
+      }
       renderList();
       renderDetail();
     }
@@ -18681,6 +19018,12 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
         }
         renderList();
         renderDetail();
+        const read = ++backlogRead;
+        Promise.resolve(window.mefiStudio?.backlogStatus?.()).then((result) => {
+          if (read !== backlogRead || !result?.ok) return;
+          state.backlog = result;
+          if (!els.overlay.hidden) { renderList(); renderDetail(); }
+        }).catch(() => {});
       }
     });
     // A quiet backstop poll: the onTasks push above carries live updates in
@@ -18730,9 +19073,10 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 (function () {
   "use strict";
 
-  const state = { ideas: [], selected: null, view: "graph", clusterFilter: null };
+  const state = { ideas: [], selected: null, view: "graph", clusterFilter: null, projectId: null };
   const el = {};
   let initialized = false;
+  let ideaRevision = 0;
 
   const unreadCount = () => state.ideas.filter((idea) => !idea.read).length;
   // #ideas-open binds straight to open(), so arg 0 can be a click Event.
@@ -18754,19 +19098,41 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     window.MefiNav?.setBadge?.("ideas", unread);
   }
 
-  async function load() {
-    const result = await window.mefiStudio?.ideasList?.();
-    state.ideas = result?.ideas ?? [];
+  function renderAll() {
     updateBadge();
     renderList();
     renderDetail();
     drawGraph();
   }
 
+  async function load() {
+    const revision = ++ideaRevision;
+    try {
+      const result = await window.mefiStudio?.ideasList?.();
+      if (revision !== ideaRevision) return;
+      if (!result?.ok || !Array.isArray(result.ideas)) throw new Error(result?.error || "Couldn't load saved ideas.");
+      state.projectId = result.projectId || state.projectId;
+      state.ideas = result.ideas;
+      renderAll();
+    } catch (error) { if (revision === ideaRevision) el.status.textContent = error.message; }
+  }
+
+  async function act(action, payload = {}) {
+    if (!window.mefiStudio?.ideasAction) return false;
+    const projectId = state.projectId;
+    try {
+      const result = await window.mefiStudio.ideasAction({ action, ...payload, projectId });
+      if (projectId !== state.projectId) return false;
+      if (!result?.ok) throw new Error(result?.error || "Couldn't save the idea.");
+      await load();
+      return true;
+    } catch (error) { if (projectId === state.projectId) window.MefiToast?.(error.message, "bad"); return false; }
+  }
+
   function statusTag(idea) {
     const tag = document.createElement("span");
     tag.className = `src-tag ${idea.status === "done" ? "improver" : idea.status === "accepted" ? "" : idea.status === "keep" ? "collision" : ""}`;
-    tag.textContent = idea.status.toUpperCase();
+    tag.textContent = String(idea.status || "new").toUpperCase();
     return tag;
   }
 
@@ -18810,8 +19176,8 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     if (!idea) return;
     state.selected = id;
     if (!idea.read) {
-      idea.read = true;
-      save();
+      if (window.mefiStudio?.ideasAction) act("read", { ideaId: id });
+      else { idea.read = true; save(); }
     }
     renderList();
     renderDetail();
@@ -18854,19 +19220,33 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
       actions.append(button);
     };
     action("Keep", () => {
+      if (window.mefiStudio?.ideasAction) { act("keep", { ideaId: idea.id }); return; }
       idea.status = "keep";
       save();
       renderDetail();
     });
     action("Done", () => {
+      if (window.mefiStudio?.ideasAction) { act("done", { ideaId: idea.id }); return; }
       idea.status = "done";
       idea.read = true;
       save();
       renderDetail();
     });
-    action("Make task", async (event) => {
+    if (idea.taskId) action("View task ↗", () => window.MefiNav?.go("tasks", { taskId: idea.taskId }));
+    else if (idea.status !== "done") action("Make task", async (event) => {
       const button = event.currentTarget;
       button.disabled = true;
+      if (window.mefiStudio?.backlogControl) {
+        try {
+          const result = await window.mefiStudio.backlogControl({ action: "promote", ideaId: idea.id, projectId: state.projectId || idea.projectId });
+          if (!result?.ok) throw new Error(result?.error || "The idea could not be turned into a task.");
+          await load();
+          window.MefiToast?.("Idea linked to its task", "good");
+        } catch (error) {
+          window.MefiToast?.(error.message, "bad");
+        } finally { button.disabled = false; }
+        return;
+      }
       const created = await window.MefiTasks?.addTask(idea.detail ?? idea.title);
       // Only a saved task accepts the idea, and an ideas broadcast during the
       // await replaces state.ideas, so mark the live entry, not the captured one.
@@ -18880,6 +19260,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
       renderDetail();
     });
     action("Delete", () => {
+      if (window.mefiStudio?.ideasAction) { act("delete", { ideaId: idea.id }); return; }
       state.ideas = state.ideas.filter((item) => item.id !== idea.id);
       state.selected = null;
       save();
@@ -19074,10 +19455,14 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     });
     el.scan?.addEventListener("click", () => scan(false));
     el.ai?.addEventListener("click", () => scan(true));
-    el.clean?.addEventListener("click", () => {
-      state.ideas = state.ideas.filter((idea) => idea.status !== "done" && idea.status !== "accepted");
+    el.clean?.addEventListener("click", async () => {
+      if (window.mefiStudio?.ideasAction) {
+        if (await act("clean", { ideaIds: state.ideas.filter((idea) => idea.status === "done").map((idea) => idea.id) })) el.status.textContent = "Removed finished ideas; accepted work stays available.";
+        return;
+      }
+      state.ideas = state.ideas.filter((idea) => idea.status !== "done");
       save();
-      el.status.textContent = "cleaned done/accepted ideas";
+      el.status.textContent = "Removed finished ideas; accepted work stays available.";
     });
     el.view?.addEventListener("click", () => {
       state.view = state.view === "graph" ? "list" : "graph";
@@ -19087,12 +19472,20 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
       drawGraph();
     });
     window.mefiStudio?.onIdeas?.((ideas) => {
+      ideaRevision += 1;
       state.ideas = Array.isArray(ideas) ? ideas : [];
       updateBadge();
       if (!el.overlay.hidden) {
         renderList();
+        renderDetail();
         drawGraph();
       }
+    });
+    window.mefiStudio?.onProjects?.((result) => {
+      if (!result?.activeId || result.activeId === state.projectId) return;
+      ideaRevision += 1;
+      state.projectId = result.activeId; state.ideas = []; state.selected = null;
+      if (!el.overlay.hidden) load();
     });
   }
 
@@ -20791,13 +21184,14 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
   "use strict";
   const $ = (id) => document.getElementById(`workspace-${id}`);
   const api = () => window.mefiStudio;
-  const state = { projects: [], activeId: null, tasks: [], assistant: {}, status: {}, filter: "open", mode: "chat", pending: false, switching: false, epoch: 0 };
+  const state = { projects: [], activeId: null, tasks: [], ideas: [], backlog: null, assistant: {}, status: {}, filter: "open", query: "", limit: 20, mode: "chat", pending: false, busyAction: null, switching: false, epoch: 0 };
   let initialized = false;
   let refreshFlight = null;
   let threadSignature = "";
   let workSignature = "";
   const signatures = new Map();
-  const revisions = { tasks: 0, assistant: 0, status: 0 };
+  const revisions = { tasks: 0, ideas: 0, backlog: 0, assistant: 0, status: 0 };
+  let backlogTimer = null;
   let readSequence = 0;
   let readFailure = false;
   const storage = {
@@ -20818,11 +21212,15 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     const unavailable = !api()?.projectsList || !state.activeId;
     $("send").disabled = state.pending || state.switching || unavailable;
     $("send").firstChild.textContent = state.pending ? "Sending… " : state.mode === "work" ? "Create task " : "Send message ";
-    $("add-project").disabled = state.pending || state.switching || !api()?.projectsAdd;
-    for (const button of $("projects").querySelectorAll("button")) button.disabled = state.pending || state.switching;
+    $("add-project").disabled = state.pending || Boolean(state.busyAction) || state.switching || !api()?.projectsAdd;
+    for (const button of $("projects").querySelectorAll("button")) button.disabled = state.pending || Boolean(state.busyAction) || state.switching;
     $("mode-chat").disabled = $("mode-work").disabled = state.pending;
     $("pause").disabled = !api()?.assistantControl || state.switching;
     $("reveal").disabled = !project()?.path || !api()?.shellReveal;
+    $("run-backlog").disabled = !state.activeId || !state.backlog || state.backlogUnavailable || !api()?.backlogControl || state.switching || Boolean(state.busyAction);
+    for (const button of $("work-list").querySelectorAll("button")) {
+      if (button.dataset.backlogAction) button.disabled = !api()?.backlogControl || state.switching || Boolean(state.busyAction);
+    }
   }
   function personalize() {
     const hour = new Date().getHours();
@@ -20864,19 +21262,21 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     if (oldId !== state.activeId) {
       if (oldId) storage.set(`draft.${oldId}`, $("input").value);
       state.epoch += 1;
-      state.tasks = []; state.assistant = {}; state.status = {};
-      state.filter = "open";
+      state.tasks = []; state.ideas = []; state.backlog = null; state.backlogUnavailable = false; state.assistant = {}; state.status = {};
+      state.filter = "open"; state.query = ""; state.limit = 20;
+      $("work-search").value = "";
       $("input").value = storage.get(`draft.${state.activeId}`);
       threadSignature = ""; workSignature = "";
-      renderThread(); renderWork(); renderCompanion();
+      renderThread(); renderWork(); renderCompanion(); renderBacklog();
       window.dispatchEvent(new CustomEvent("mefi:project-changed", { detail: { projectId: state.activeId } }));
     }
     renderProjects();
   }
   async function selectProject(id) {
-    if (state.pending || state.switching || id === state.activeId) return;
+    if (state.pending || state.busyAction || state.switching || id === state.activeId) return;
     state.switching = true; controls(); feedback("Opening project…");
     try {
+      if (refreshFlight) await refreshFlight;
       adoptProjects(guard(await api().projectsSelect(id)));
       if (await refresh(true)) feedback(`You're in ${project()?.name || "your project"}.`);
     } catch (error) { feedback(error.message, true); }
@@ -20884,7 +21284,8 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
   }
   function renderThread() {
     const messages = (state.assistant.messages || []).filter((message) => ["user", "assistant"].includes(message.role) && (!message.projectId || message.projectId === state.activeId)).slice(-80);
-    const signature = JSON.stringify([messages, state.activeId, companion(), person()]);
+    const hasBacklog = state.tasks.some((task) => !done(task)) || state.ideas.some((idea) => idea.status !== "done");
+    const signature = JSON.stringify([messages, state.activeId, companion(), person(), !messages.length && hasBacklog]);
     if (signature === threadSignature) return;
     threadSignature = signature;
     const list = $("thread");
@@ -20893,7 +21294,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     list.replaceChildren();
     if (!messages.length) {
       const welcome = text("div", "ws-welcome", "");
-      welcome.append(text("span", "ws-welcome-star", "✳"), text("h2", "", `A little room for big ideas.`), text("p", "", `I'm ${companion()}. We can think something through together, or give a task its own place on the board.`));
+      welcome.append(text("span", "ws-welcome-star", "✳"), text("h2", "", hasBacklog ? "Let's make a little headway." : "A little room for big ideas."), text("p", "", hasBacklog ? `I'm ${companion()}. Your tasks and ideas are here. We can work through the backlog together, or choose one small thing to do next.` : `I'm ${companion()}. We can think something through together, or give a task its own place on the board.`));
       const suggestions = text("div", "ws-suggestions", "");
       for (const [label, prompt] of [["Where are we?", "Give me a brief status of this project."], ["Find a next step", "What should we work on next in this project?"]]) {
         const button = text("button", "ghost", `${label} ↗`);
@@ -20912,47 +21313,137 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     }
     list.scrollTop = pinned ? list.scrollHeight : oldTop;
   }
+  const scoped = (rows) => rows.filter((row) => !row.projectId || row.projectId === state.activeId);
+  function taskView(task) {
+    const description = describe(task);
+    const scheduled = state.backlog?.taskStates?.find((item) => item.id === task.id);
+    const stage = done(task) ? "done" : task.status === "active" ? "running" : scheduled?.stage || (description.stage === "review" ? "review" : "ready");
+    const filter = stage === "done" ? "done" : ["review", "blocked"].includes(stage) ? "review" : "open";
+    const labels = { ready: "Ready", running: "Working", review: "Awaiting verification", blocked: "Needs attention", cooling: "Retry scheduled", waiting: "Waiting on prerequisites", grouped: "Included in a plan", done: "Done" };
+    return { stage, filter, label: labels[stage] || description.label, summary: stage === "ready" ? task.prompt || description.summary || scheduled?.reason : scheduled?.reason || description.summary, retryAt: scheduled?.retryAt, groupId: scheduled?.groupId, dependencies: scheduled?.dependencies, canRetry: scheduled?.canRetry };
+  }
+  function cardAction(label, action, payload) {
+    const button = text("button", "ghost mini", label);
+    button.dataset.backlogAction = action;
+    button.addEventListener("click", () => controlBacklog(action, payload));
+    return button;
+  }
   function renderWork() {
-    const tasks = state.tasks.filter((task) => !task.projectId || task.projectId === state.activeId);
-    const counts = { open: 0, review: 0, done: 0 };
-    for (const task of tasks) counts[describe(task).stage] += 1;
+    const tasks = scoped(state.tasks), ideas = scoped(state.ideas);
+    const counts = { open: 0, review: 0, done: 0, ideas: ideas.length };
+    for (const task of tasks) counts[taskView(task).filter] += 1;
     for (const button of $("layer").querySelectorAll("[data-work-filter]")) {
       button.setAttribute("aria-pressed", String(button.dataset.workFilter === state.filter));
-      button.querySelector("span").textContent = counts[button.dataset.workFilter];
+      button.querySelector("span").textContent = counts[button.dataset.workFilter] || 0;
     }
-    const visible = tasks.filter((task) => describe(task).stage === state.filter).sort((a, b) => state.filter === "open" ? Number(b.status === "active") - Number(a.status === "active") || (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0) : (b.doneAt || b.updatedAt || b.createdAt || 0) - (a.doneAt || a.updatedAt || a.createdAt || 0));
-    const signature = JSON.stringify([visible, state.filter]);
+    const ranks = new Map((state.backlog?.next || []).map((item, index) => [item.id, index]));
+    const matches = (row) => !state.query || `${row.title || ""} ${row.prompt || ""} ${row.detail || ""} ${(row.tags || []).join(" ")}`.toLowerCase().includes(state.query);
+    const visible = (state.filter === "ideas"
+      ? ideas.filter(matches).sort((a, b) => Number(a.status === "done") - Number(b.status === "done") || Number(Boolean(a.taskId)) - Number(Boolean(b.taskId)) || (a.at || 0) - (b.at || 0))
+      : tasks.filter((task) => taskView(task).filter === state.filter && matches(task)).sort((a, b) => state.filter === "open" ? Number(b.status === "active") - Number(a.status === "active") || (ranks.get(a.id) ?? 99999) - (ranks.get(b.id) ?? 99999) || (a.createdAt || 0) - (b.createdAt || 0) : (b.doneAt || b.updatedAt || b.createdAt || 0) - (a.doneAt || a.updatedAt || a.createdAt || 0)));
+    const page = visible.slice(0, state.limit);
+    const signature = JSON.stringify([page, state.filter, state.query, state.limit, state.backlog?.taskStates, state.backlog?.next, state.status.running, companion()]);
+    $("show-more").hidden = visible.length <= state.limit;
+    $("show-more").textContent = `Show ${Math.min(20, Math.max(0, visible.length - state.limit))} more · ${Math.max(0, visible.length - state.limit)} remaining`;
     if (signature === workSignature) return;
     workSignature = signature;
+    const top = $("work-list").scrollTop;
     $("work-list").replaceChildren();
-    for (const task of visible) {
-      const description = describe(task);
-      const row = text("button", `ws-work-card ${description.stage}`, "");
-      row.dataset.taskId = task.id;
-      row.append(text("span", "ws-work-status", `${description.stage === "done" ? "✓ " : task.status === "active" ? "◌ " : ""}${description.label}`), text("strong", "ws-work-title", task.title || task.prompt || "Untitled task"));
-      if (description.summary) row.append(text("span", "ws-work-summary", description.summary));
-      const stamp = when(task.doneAt || task.updatedAt || task.createdAt);
-      row.append(text("span", "ws-work-time", `${stamp}${stamp ? " · " : ""}Open details ↗`));
-      row.addEventListener("click", () => window.MefiNav?.go("tasks", { taskId: task.id, filter: state.filter === "open" ? "open" : state.filter }));
+    for (const item of page) {
+      const isIdea = state.filter === "ideas";
+      const view = isIdea ? { stage: item.status === "done" ? "done" : "idea", filter: "ideas", label: item.status === "done" ? "Idea completed" : item.taskId ? "Linked to a task" : "Ready to shape", summary: item.detail || "" } : taskView(item);
+      const row = text("article", `ws-work-card ${view.filter}${isIdea ? " ws-idea-card" : ""}`, "");
+      row.dataset.stage = view.stage; row.dataset.status = view.stage;
+      const opener = text("button", "ws-work-open", "");
+      if (isIdea) opener.dataset.ideaId = item.id; else opener.dataset.taskId = item.id;
+      const label = text("span", "ws-work-status", `${view.stage === "done" ? "✓ " : view.stage === "running" ? "◌ " : ""}${view.label}`);
+      if (!isIdea && ranks.has(item.id) && view.stage === "ready") label.append(text("span", "ws-rank", ranks.get(item.id) === 0 ? "Up next" : `#${ranks.get(item.id) + 1}`));
+      opener.append(label, text("strong", "ws-work-title", item.title || item.prompt || "Untitled idea"));
+      if (view.summary) opener.append(text("span", "ws-work-summary", view.summary));
+      const run = !isIdea && (state.status.running || []).find((job) => job.taskId === item.id);
+      if (run && Number.isFinite(run.progress)) {
+        const progress = document.createElement("progress"); progress.max = 1; progress.value = Math.max(0, Math.min(1, run.progress)); progress.className = "ws-task-progress"; progress.setAttribute("aria-label", `Reported task progress: ${Math.round(progress.value * 100)} percent`); opener.append(progress);
+      }
+      const stamp = when(view.retryAt || item.doneAt || item.updatedAt || item.createdAt || item.at);
+      opener.append(text("span", "ws-work-time", `${view.retryAt ? "Next retry: " : ""}${stamp}${stamp ? " · " : ""}Open ${isIdea ? "idea" : "details"} ↗`));
+      opener.addEventListener("click", () => window.MefiNav?.go(isIdea ? "ideas" : "tasks", isIdea ? { ideaId: item.id } : { taskId: item.id, filter: view.filter === "review" ? "all" : view.filter }));
+      row.append(opener);
+      const actions = text("div", "ws-card-actions", "");
+      if (isIdea && item.status !== "done") {
+        if (item.taskId && tasks.some((task) => task.id === item.taskId)) {
+          const linked = text("button", "ghost mini", "View task ↗"); linked.addEventListener("click", () => window.MefiNav?.go("tasks", { taskId: item.taskId })); actions.append(linked);
+        } else actions.append(cardAction("Turn into task ↗", "promote", { ideaId: item.id }));
+      } else if (view.stage === "ready") actions.append(cardAction(item.pin ? "Prioritized" : "Do next", "prioritize", { taskId: item.id }));
+      else if (view.stage === "blocked" && view.canRetry !== false && !view.dependencies?.some((dependency) => !dependency.done)) actions.append(cardAction("Try again", "retry", { taskId: item.id }));
+      else if (view.stage === "grouped" && tasks.some((task) => task.id === view.groupId)) {
+        const plan = text("button", "ghost mini", "View plan ↗"); plan.addEventListener("click", () => window.MefiNav?.go("tasks", { taskId: view.groupId, filter: "all" })); actions.append(plan);
+      }
+      if (actions.children.length) row.append(actions);
       $("work-list").append(row);
     }
     if (!visible.length) {
       const empty = text("div", "ws-work-empty", "");
-      empty.append(text("span", "ws-empty-symbol", state.filter === "done" ? "✓" : state.filter === "review" ? "◇" : "＋"), text("h3", "", state.filter === "done" ? "A home for finished work" : state.filter === "review" ? "Nothing waiting for review" : "Give your next idea a place"), text("p", "", state.filter === "done" ? "Verified and archived tasks stay here, with their results. Runs awaiting verification appear in Review." : state.filter === "review" ? "Finished runs awaiting verification appear here before they move to Done." : "Use Give a task to put work on this project's board. You'll see its progress and result here."));
-      if (state.filter === "open") { const button = text("button", "ghost", "Create your first task ↗"); button.addEventListener("click", () => { setMode("work"); $("input").focus(); }); empty.append(button); }
+      const headings = { done: "A home for finished work", review: "Nothing waiting for review", ideas: "Space for your next idea", open: "A clear runway" };
+      const hints = { done: "Verified and archived tasks stay here. Finished runs awaiting checks appear in Review.", review: "Finished runs and tasks needing your attention will appear here.", ideas: "Collected ideas stay here until you turn them into tasks. Older ideas are kept, too.", open: "Your queue is clear. Start with an idea, or use Give a task to add something new." };
+      empty.append(text("span", "ws-empty-symbol", state.filter === "done" ? "✓" : "◇"), text("h3", "", state.query ? "No matches in this view" : headings[state.filter]), text("p", "", state.query ? "Try another search or switch to a different view." : hints[state.filter]));
+      if (state.query) { const clear = text("button", "ghost", "Clear search"); clear.addEventListener("click", () => { state.query = ""; $("work-search").value = ""; renderWork(); }); empty.append(clear); }
+      else if (state.filter === "open") { const button = text("button", "ghost", "Give a task ↗"); button.addEventListener("click", () => { setMode("work"); $("input").focus(); }); empty.append(button); }
       $("work-list").append(empty);
     }
+    $("work-list").scrollTop = top;
+    controls();
+  }
+  function renderBacklog() {
+    const backlog = state.backlog;
+    const counts = backlog?.counts || {};
+    const paused = backlog?.paused || state.assistant.status === "paused";
+    const draining = Boolean(backlog?.draining && !paused);
+    $("run-backlog").textContent = state.busyAction === "run" ? "Preparing the backlog…" : state.busyAction === "pause" ? "Pausing…" : draining ? "Pause backlog" : "Work through backlog ↗";
+    $("backlog-title").textContent = state.backlogUnavailable ? "Backlog status unavailable" : paused ? "Ready when you are" : draining ? "One step closer" : "A little progress, every pass";
+    $("backlog-summary").textContent = state.backlogUnavailable ? "Couldn't refresh the queue. Use Retry loading below the conversation." : backlog?.summary || (backlog ? paused ? "New work is paused. Running jobs finish normally." : "Work through existing tasks and ideas in small batches." : api()?.backlogStatus ? "Checking your project's backlog…" : "Open the updated desktop app to manage the backlog.");
+    $("backlog-metrics").replaceChildren();
+    for (const [key, label] of [["ready", "ready"], ["running", "working"], ["waiting", "waiting"], ["blocked", "need attention"]]) {
+      if (key === "waiting" && !counts.waiting) continue;
+      const item = text("span", `ws-backlog-metric ${key}`, "");
+      if (key === "ready" && counts.requests) item.title = "Includes tasks and requests in this project's inbox";
+      item.append(text("strong", "", counts[key] ?? "—"), text("span", "", label)); $("backlog-metrics").append(item);
+    }
+    const next = backlog?.next?.[0];
+    const hold = typeof backlog?.waiting === "string" ? backlog.waiting : backlog?.waiting?.text || backlog?.waiting?.reason;
+    $("backlog-next").textContent = hold && hold !== backlog?.summary ? hold : next ? `Up next: ${next.title}` : counts.cooling ? `Retry scheduled${backlog.nextRetryAt ? ` · ${when(backlog.nextRetryAt)}` : ""}` : counts.eligibleIdeas ? `${counts.eligibleIdeas} idea${counts.eligibleIdeas === 1 ? "" : "s"} waiting to become work.` : counts.waiting ? "Prerequisites must finish before these tasks can start." : "";
+    $("backlog-title").parentElement?.parentElement?.setAttribute("data-state", paused ? "paused" : counts.running ? "running" : counts.blocked ? "blocked" : "ready");
+    controls();
+  }
+  async function controlBacklog(action, payload = {}) {
+    if (!api()?.backlogControl || !state.activeId || state.switching || state.busyAction) return;
+    const id = state.activeId;
+    state.busyAction = action; controls(); renderBacklog();
+    feedback(action === "run" ? "Preparing existing tasks and ideas…" : "Updating your backlog…");
+    try {
+      const result = guard(await api().backlogControl({ action, ...payload, projectId: id }));
+      if (id !== state.activeId) return;
+      if (result.backlog) state.backlog = result.backlog;
+      if (action === "promote") { state.filter = "open"; state.query = ""; $("work-search").value = ""; state.limit = 20; }
+      if (await refresh(true)) feedback(result.message || ({ run: "Backlog mode is on. The queue shows the next step and anything holding it up.", pause: "Backlog paused. Running jobs finish normally.", retry: "Task returned to the queue for another attempt.", promote: "Idea linked to a task. Follow it in the queue.", prioritize: "Moved ahead of other waiting work." }[action]));
+    } catch (error) { feedback(error.message, true); }
+    finally { state.busyAction = null; renderBacklog(); controls(); }
+  }
+  function scheduleBacklogRead() {
+    revisions.backlog += 1;
+    if (backlogTimer || !active() || document.hidden) return;
+    backlogTimer = setTimeout(() => { backlogTimer = null; if (active() && !document.hidden) refresh(); }, 300);
   }
   function renderCompanion() {
     const assistant = state.assistant;
     const paused = assistant.status === "paused" || assistant.prefs?.paused;
     const running = state.status.running || [];
     const working = running.length > 0;
-    const reviewing = state.tasks.some((task) => describe(task).stage === "review");
+    const reviewing = state.tasks.some((task) => taskView(task).filter === "review");
     const nickname = companion();
     $("companion-name").textContent = paused ? `${nickname} is taking a breath` : working ? `${nickname} is making progress` : `${nickname} is here`;
     const action = assistant.action;
-    const narration = working ? `Working on ${running[0].title || "your task"}${running.length > 1 ? ` · ${running.length} jobs running` : ""}.` : paused ? "New work is paused. Any running jobs will finish normally." : state.pending ? "I'm listening. Your message is on its way." : state.status.lastError ? String(state.status.lastError.text || state.status.lastError) : state.status.waiting ? String(state.status.waiting.text || state.status.waiting.reason || "Work is queued and waiting for an available worker.") : reviewing ? "There's a finished run ready for review. You can inspect its result on the right." : action?.text && !["idle", "listening"].includes(action.text) ? action.text : "Tell me what you have in mind. We can take it one step at a time.";
+    const waiting = state.backlog?.waiting || state.status.waiting;
+    const narration = working ? `Working on ${running[0].title || "your task"}${running.length > 1 ? ` · ${running.length} jobs running` : ""}.` : paused ? "New work is paused. Any running jobs will finish normally." : state.pending ? "I'm listening. Your message is on its way." : waiting ? (typeof waiting === "string" ? waiting : waiting.text || waiting.reason || "Work is queued and waiting for an available worker.") : state.backlog?.draining && state.backlog?.next?.length ? `Next I'll pick up ${state.backlog.next[0].title}.` : reviewing ? "There's work that needs a closer look. Open Review to see results and blockers." : action?.text && !["idle", "listening"].includes(action.text) ? action.text : "Tell me what you have in mind. We can take it one step at a time.";
     $("narration").textContent = narration;
     $("companion-track").dataset.station = working ? "make" : reviewing ? "review" : "listen";
     $("companion-track").classList.toggle("busy", working || state.pending);
@@ -21010,14 +21501,19 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     const sequence = ++readSequence;
     const before = { ...revisions };
     const belongs = (value) => !value?.projectId || value.projectId === state.activeId;
-    const run = Promise.allSettled([api().tasksList?.(), api().assistantState?.(), api().assistantStatus?.(), api().jevStatus?.()]).then((results) => {
+    const run = Promise.allSettled([api().tasksList?.(), api().assistantState?.(), api().assistantStatus?.(), api().jevStatus?.(), api().ideasList?.(), api().backlogStatus?.()]).then((results) => {
       if (epoch !== state.epoch || sequence !== readSequence) return;
       if (before.tasks === revisions.tasks && results[0].status === "fulfilled" && results[0].value?.tasks && belongs(results[0].value)) state.tasks = results[0].value.tasks;
       if (before.assistant === revisions.assistant && results[1].status === "fulfilled" && results[1].value?.state && belongs(results[1].value.state)) state.assistant = results[1].value.state;
       if (before.status === revisions.status && results[2].status === "fulfilled" && results[2].value?.status && belongs(results[2].value.status)) state.status = results[2].value.status;
+      if (before.ideas === revisions.ideas && results[4].status === "fulfilled" && results[4].value?.ideas && belongs(results[4].value)) state.ideas = results[4].value.ideas;
+      if (before.backlog === revisions.backlog && results[5].status === "fulfilled" && results[5].value?.ok && belongs(results[5].value)) state.backlog = results[5].value;
+      state.backlogUnavailable = Boolean(api().backlogStatus && (results[5].status === "rejected" || !results[5].value?.ok));
       renderJev(results[3].status === "fulfilled" ? results[3].value : null);
-      renderWork(); renderThread(); renderCompanion();
+      renderWork(); renderThread(); renderCompanion(); renderBacklog();
       const failures = results.slice(0, 3).flatMap((result, index) => result.status === "rejected" || result.value?.ok === false || !result.value ? [["work", "conversation", "activity"][index]] : []);
+      if (api().ideasList && (results[4].status === "rejected" || !results[4].value?.ok)) failures.push("ideas");
+      if (state.backlogUnavailable) failures.push("backlog");
       $("retry").hidden = !failures.length;
       if (failures.length) feedback(`Couldn't refresh ${failures.join(" and ")}. Your last loaded information is still here.`, true, "read");
       else if (readFailure) feedback("");
@@ -21040,9 +21536,12 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     $("input").addEventListener("input", saveDraft);
     $("input").addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); submit(); } });
     $("mode-chat").addEventListener("click", () => setMode("chat")); $("mode-work").addEventListener("click", () => setMode("work"));
-    for (const button of $("layer").querySelectorAll("[data-work-filter]")) button.addEventListener("click", () => { state.filter = button.dataset.workFilter; renderWork(); });
+    for (const button of $("layer").querySelectorAll("[data-work-filter]")) button.addEventListener("click", () => { state.filter = button.dataset.workFilter; state.limit = 20; $("work-list").scrollTop = 0; renderWork(); });
+    $("work-search").addEventListener("input", () => { state.query = $("work-search").value.trim().toLowerCase(); state.limit = 20; $("work-list").scrollTop = 0; renderWork(); });
+    $("show-more").addEventListener("click", () => { state.limit += 20; renderWork(); });
+    $("run-backlog").addEventListener("click", () => controlBacklog(state.backlog?.draining && !state.backlog?.paused ? "pause" : "run"));
     $("add-project").addEventListener("click", async () => {
-      if (state.pending || state.switching) return;
+      if (state.pending || state.busyAction || state.switching) return;
       state.switching = true; controls();
       try { const result = await api().projectsAdd(); if (result?.canceled || result?.cancelled) return; adoptProjects(guard(result)); await refresh(true); feedback("Project added. Select it in the sidebar to start working."); }
       catch (error) { feedback(error.message, true); } finally { state.switching = false; controls(); }
@@ -21050,7 +21549,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
     $("reveal").addEventListener("click", () => api()?.shellReveal(project()?.path));
     $("pause").addEventListener("click", async () => {
       $("pause").disabled = true;
-      try { const paused = state.assistant.status === "paused" || state.assistant.prefs?.paused; const result = guard(await api().assistantControl(paused ? "resume" : "pause")); state.assistant = result.state; renderCompanion(); feedback(paused ? "New work can start again." : "New work paused. Running jobs finish normally."); }
+      try { const paused = state.assistant.status === "paused" || state.assistant.prefs?.paused; const result = guard(await api().assistantControl(paused ? "resume" : "pause")); state.assistant = result.state; renderCompanion(); scheduleBacklogRead(); feedback(paused ? "New work can start again." : "New work paused. Running jobs finish normally."); }
       catch (error) { feedback(error.message, true); } finally { controls(); }
     });
     for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "gold"]]) { $(id).value = storage.get(key, fallback); $(id).addEventListener("input", () => { storage.set(key, $(id).value); personalize(); }); }
@@ -21061,10 +21560,11 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
       const button = text("button", "ghost", ""); button.dataset.nav = dest.id; button.append(text("span", "", dest.short), text("kbd", "", dest.key || "")); $("tool-links").append(button);
     }
     api()?.onProjects?.((result) => { adoptProjects(result); refresh(true); });
-    api()?.onTasks?.((tasks) => { if (tasks?.some((task) => task.projectId && task.projectId !== state.activeId)) return; revisions.tasks += 1; state.tasks = tasks || []; if (active()) { renderWork(); renderCompanion(); } });
+    api()?.onTasks?.((tasks) => { if (tasks?.some((task) => task.projectId && task.projectId !== state.activeId)) return; revisions.tasks += 1; state.tasks = tasks || []; if (active()) { renderWork(); renderCompanion(); } scheduleBacklogRead(); });
+    api()?.onIdeas?.((ideas) => { if (ideas?.some((idea) => idea.projectId && idea.projectId !== state.activeId)) return; revisions.ideas += 1; state.ideas = ideas || []; if (active()) renderWork(); scheduleBacklogRead(); });
     api()?.onAssistant?.((payload) => { if (payload?.state?.projectId && payload.state.projectId !== state.activeId) return; revisions.assistant += 1; if (payload?.state) state.assistant = payload.state; if (active()) { renderThread(); renderCompanion(); } });
-    api()?.onAssistantStatus?.((status) => { if (status?.projectId && status.projectId !== state.activeId) return; revisions.status += 1; state.status = status || {}; if (active()) renderCompanion(); });
-    personalize(); renderProjects(); renderWork();
+    api()?.onAssistantStatus?.((status) => { if (status?.projectId && status.projectId !== state.activeId) return; revisions.status += 1; state.status = status || {}; if (active()) { renderCompanion(); renderWork(); } scheduleBacklogRead(); });
+    personalize(); renderProjects(); renderWork(); renderBacklog();
     api()?.projectsList?.().then((result) => { adoptProjects(guard(result)); return refresh(true); }).catch((error) => feedback(error.message, true));
     if (!api()) $("jev").textContent = "Desktop app connects your tools";
     window.MefiBoot?.pollStart?.("workspace.refresh", () => { if (!document.hidden && active()) refresh(); }, 15000);

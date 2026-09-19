@@ -34,7 +34,7 @@ function timers() {
   };
 }
 function host(code, globals = {}) {
-  const context = vm.createContext({ console, projectSwitching: false, projectRoot: () => globals.REPO_ROOT ?? "/fixture", projects: { active: () => ({ id: "fixture" }), run: (_project, fn) => fn() }, ...globals });
+  const context = vm.createContext({ console, assistantState: null, projectSwitching: false, projectRoot: () => globals.REPO_ROOT ?? "/fixture", projects: { active: () => ({ id: "fixture" }), run: (_project, fn) => fn() }, ...globals });
   vm.runInContext(code, context, { filename: "main.cjs:loop-test" });
   return context;
 }

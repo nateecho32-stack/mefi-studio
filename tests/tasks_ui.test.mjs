@@ -31,7 +31,7 @@ class Element {
   click() { for (const fn of this.listeners.click ?? []) fn({ target: this, stopPropagation() {}, preventDefault() {} }); }
 }
 
-function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = null } = {}) {
+function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = null, bridge = {} } = {}) {
   const els = new Map();
   const get = (id) => { if (!els.has(id)) els.set(id, new Element()); return els.get(id); };
   for (const filter of ["all", "open", "done"]) {
@@ -47,6 +47,7 @@ function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = nu
         prefsGet: async () => { if (prefsWait) await prefsWait; return { ok: true, prefs }; },
         prefsSet: async (patch) => { Object.assign(prefs, patch); return { ok: true, prefs }; },
         onTasks: (fn) => { onTasks = fn; },
+        ...bridge,
       },
       MefiNav: { setBadge() {}, claim() {}, release() {} },
       MefiBoot: { pollStart() {} }, MefiToast: (text) => notifications.push(text),
@@ -140,4 +141,151 @@ test("an in-flight board load cannot overwrite a newer completion broadcast", as
   await opening;
   assert.equal(env.api.state.tasks[0].status, "done");
   assert.equal(env.api.summary().done, 1);
+});
+
+const descendants = (element) => element.children.flatMap((child) => [child, ...descendants(child)]);
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test("prerequisites exclude self and other projects, preserve a draft during broadcasts, and save a targeted delta", async () => {
+  const child = { id: "child", projectId: "p", title: "Add export", status: "open", dependsOn: ["parent"] };
+  const parent = { id: "parent", projectId: "p", title: "Define the data model", status: "done" };
+  const foreign = { id: "foreign", projectId: "q", title: "Other project", status: "open" };
+  const calls = [];
+  const backlog = { ok: true, projectId: "p", taskStates: [{ id: "child", stage: "ready", reason: "All prerequisites are complete" }] };
+  const env = environment({ tasks: [child, parent, foreign], bridge: {
+    backlogStatus: async () => backlog,
+    tasksDependencies: async (payload) => { calls.push(payload); return { ok: true, task: { ...child, dependsOn: payload.dependsOn }, backlog }; },
+  } });
+  await env.api.open({ taskId: "child" });
+  const options = () => descendants(env.get("task-detail")).filter((element) => element.dataset.dependencyId);
+  assert.deepEqual(options().map((element) => element.dataset.dependencyId), ["parent"]);
+  assert.match(env.get("task-detail").textContent, /All prerequisites are complete/);
+  options()[0].checked = false; options()[0].listeners.change[0]();
+  env.broadcast([child, parent, foreign]);
+  await settle();
+  assert.equal(options()[0].checked, false, "live status does not erase an unsaved prerequisite choice");
+  descendants(env.get("task-detail")).find((element) => element.dataset.taskAction === "dependencies").click();
+  await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ taskId: "child", projectId: "p", dependsOn: [] }]);
+  assert.equal(env.saved.length, 0, "prerequisites do not overwrite a stale whole-board snapshot");
+  assert.match(env.get("task-detail").textContent, /Prerequisites saved/);
+});
+
+test("a missing prerequisite can be removed and a rejected save retains the edit with its real error", async () => {
+  const child = { id: "child", projectId: "p", title: "Add export", status: "open", dependsOn: ["deleted-task"] };
+  const env = environment({ tasks: [child], bridge: {
+    tasksDependencies: async () => ({ ok: false, error: "This task has a live worker. Wait for it to finish." }),
+  } });
+  await env.api.open({ taskId: "child" });
+  const option = descendants(env.get("task-detail")).find((element) => element.dataset.dependencyId === "deleted-task");
+  assert(option, "deleted prerequisite remains visible for removal");
+  option.checked = false; option.listeners.change[0]();
+  descendants(env.get("task-detail")).find((element) => element.dataset.taskAction === "dependencies").click();
+  await settle();
+  assert.match(env.get("task-detail").textContent, /live worker/);
+  assert.equal(env.api.state.tasks[0].dependsOn[0], "deleted-task", "failed mutation never reports saved dependencies");
+  assert.equal(env.saved.length, 0);
+});
+
+test("history restore requests an exact saved revision and retains completed task evidence", async () => {
+  const task = { id: "finished", projectId: "p", title: "Current brief", prompt: "Current requirements", status: "done", verification: { state: "verified", reason: "Checks passed" } };
+  const calls = [];
+  const env = environment({ tasks: [task], bridge: {
+    tasksHistory: async () => ({ ok: true, entries: [{ id: "revision_old", kind: "saved", at: 100, snapshot: { prompt: "The earlier requirements" } }] }),
+    tasksHandoff: async () => ({ ok: true, text: "Prior worker checked the export. Remaining: document the format." }),
+    tasksRestore: async (payload) => { calls.push(payload); return { ok: true, task: { ...task, prompt: "The earlier requirements" } }; },
+  } });
+  await env.api.open({ taskId: "finished" }); await settle();
+  assert.match(env.get("task-detail").textContent, /Prior worker checked the export/);
+  descendants(env.get("task-detail")).find((element) => element.dataset.taskAction === "restore").click();
+  await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ taskId: "finished", projectId: "p", revisionId: "revision_old" }]);
+  assert.equal(env.api.state.tasks[0].status, "done");
+  assert.equal(env.api.state.tasks[0].verification.state, "verified");
+  assert.equal(env.api.state.tasks[0].prompt, "The earlier requirements");
+  assert.match(env.get("task-detail").textContent, /Files, task status, and completion evidence are unchanged/);
+});
+
+test("a late handoff read never replaces the newly selected task's context", async () => {
+  let resolveOld;
+  const oldRead = new Promise((resolve) => { resolveOld = resolve; });
+  const env = environment({ tasks: [{ id: "old", title: "Old task", status: "open" }, { id: "new", title: "New task", status: "open" }], bridge: {
+    tasksHistory: async () => ({ ok: true, entries: [] }),
+    tasksHandoff: async ({ taskId }) => taskId === "old" ? oldRead : { ok: true, text: "Context for the new task" },
+  } });
+  await env.api.open({ taskId: "old" });
+  await env.api.open({ taskId: "new" }); await settle();
+  resolveOld({ ok: true, text: "Old context should stay out" }); await settle();
+  assert.match(env.get("task-detail").textContent, /Context for the new task/);
+  assert.doesNotMatch(env.get("task-detail").textContent, /Old context should stay out/);
+});
+
+test("Retry and Confirm done use targeted actions and never change evidence before the server saves", async () => {
+  const task = { id: "review", projectId: "p", title: "Review the export", status: "open", runFailures: 5, verification: { state: "failed", reason: "Checks did not pass" } };
+  const calls = []; let finish;
+  const pending = new Promise((resolve) => { finish = resolve; });
+  const env = environment({ tasks: [task], bridge: { tasksAction: async (payload) => {
+    calls.push(payload);
+    return payload.action === "retry" ? { ok: false, error: "The previous verification must finish first." } : pending;
+  } } });
+  await env.api.open({ taskId: "review" });
+  env.get("task-status-row").children.find((element) => element.textContent === "Retry").click();
+  await settle();
+  assert.equal(env.api.state.tasks[0].verification.state, "failed");
+  assert.equal(env.api.state.tasks[0].runFailures, 5);
+  assert.match(env.get("task-detail").textContent, /previous verification must finish/);
+  env.get("task-status-row").children.find((element) => element.textContent === "Confirm done").click();
+  assert.equal(env.api.state.tasks[0].status, "open", "pending action is not a fake completion");
+  finish({ ok: true, task: { ...task, status: "done", verification: { state: "manual", reason: "Marked done by you" } } });
+  await settle();
+  assert.equal(env.api.state.tasks[0].status, "done");
+  assert.equal(env.api.state.tasks[0].verification.state, "manual");
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ taskId: "review", projectId: "p", action: "retry" }, { taskId: "review", projectId: "p", action: "status", status: "done" }]);
+  assert.equal(env.saved.length, 0);
+});
+
+test("Do next prioritizes through the scheduler instead of fabricating an active worker", async () => {
+  const task = { id: "queued", projectId: "p", title: "Queued work", status: "open" };
+  const calls = [];
+  const env = environment({ tasks: [task], bridge: { backlogControl: async (payload) => { calls.push(payload); return { ok: true }; } } });
+  await env.api.open({ taskId: "queued" });
+  assert(!env.get("task-status-row").children.some((element) => element.textContent === "Activate"));
+  env.get("task-status-row").children.find((element) => element.textContent === "Do next").click();
+  await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ taskId: "queued", projectId: "p", action: "prioritize" }]);
+  assert.equal(env.api.state.tasks[0].status, "open");
+  assert.equal(env.saved.length, 0);
+});
+
+test("rejected note and idea saves roll back the unsaved entry and retain drafts across task refreshes", async () => {
+  for (const [field, placeholder, buttonText] of [["logs", "Log a note…", "Log"], ["ideas", "Capture an idea for this task…", "Add idea"]]) {
+    const task = { id: "busy", projectId: "p", title: "Work in progress", status: "open", logs: [], ideas: ["idea_saved"] };
+    const env = environment({ tasks: [task], bridge: { tasksSave: async () => ({ ok: false, error: "The task changed. Refresh before saving." }) } });
+    await env.api.open({ taskId: "busy" });
+    const input = descendants(env.get("task-detail")).find((element) => element.placeholder === placeholder);
+    input.value = "Keep this useful context";
+    descendants(env.get("task-detail")).find((element) => element.tagName === "button" && element.textContent === buttonText).click();
+    await settle();
+    assert.deepEqual(JSON.parse(JSON.stringify(env.api.state.tasks[0][field])), task[field], "unsaved entry is not displayed as a durable change");
+    assert.equal(descendants(env.get("task-detail")).find((element) => element.placeholder === placeholder).value, "Keep this useful context");
+    assert.match(env.notifications.at(-1), /not saved.*task changed/);
+    env.broadcast([structuredClone(task)]); await settle();
+    assert.equal(descendants(env.get("task-detail")).find((element) => element.placeholder === placeholder).value, "Keep this useful context", "a follow-up broadcast cannot erase the rejected draft");
+    assert.match(env.get("task-detail").textContent, /Linked idea: idea_saved/);
+    assert.doesNotMatch(env.get("task-detail").textContent, /Invalid Date|undefined/);
+  }
+});
+
+test("failed reference attachment preserves the old task and explains that found references were not saved", async () => {
+  const task = { id: "task", title: "Find context", status: "open", refs: [], logs: [] };
+  const env = environment({ tasks: [task], saveOk: false, bridge: {
+    referenceGather: async () => ({ ok: true, references: { verdict: "Useful", coverage: 10, files: ["README.md"], code: [], sessions: [], chats: [], pngs: [], web: [], ideas: [] } }),
+  } });
+  await env.api.open({ taskId: "task" });
+  env.get("reference-run").click(); await settle();
+  assert.equal(env.api.state.tasks[0].refs.length, 0);
+  assert.equal(env.api.state.tasks[0].logs.length, 0);
+  assert.match(env.get("reference-status").textContent, /found, but not saved/);
+  assert.match(env.notifications.at(-1), /found, but not saved/);
+  assert(!env.notifications.some((message) => /^References gathered/.test(message)));
 });

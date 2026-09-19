@@ -22,6 +22,16 @@
   let hydrated = false;
   let hydrating = null;
   let taskRevision = 0;
+  const dependencyDrafts = new Map();
+  const contextReads = new Map();
+  const detailExpanded = new Map();
+  const detailMessages = new Map();
+  const entryDrafts = new Map();
+  const entryPending = new Set();
+  let detailBusy = null;
+  let backlogRead = 0;
+  const taskKey = (task) => `${task?.projectId || state.backlog?.projectId || ""}/${task?.id || ""}`;
+  const node = (tag, className, text) => Object.assign(document.createElement(tag), { className, textContent: text ?? "" });
 
   const base = (file) => (file ? file.split(/[\\/]/).pop() : "(unknown)");
   const status = (text, isError) => {
@@ -30,13 +40,15 @@
     els.status.style.color = isError ? "var(--bad)" : "";
   };
   // Resolves false when nothing reached the store.
-  const save = async () => {
-    if (!hydrated) return false;
+  const save = async (onError) => {
+    if (!hydrated) { onError?.("The task store has not loaded yet."); return false; }
     taskRevision += 1;
     try {
       const result = await window.mefiStudio?.tasksSave?.(state.tasks);
+      if (result?.ok !== true) onError?.(result?.error || "The task store could not be written.");
       return result?.ok === true;
-    } catch {
+    } catch (error) {
+      onError?.(error.message || "The task store could not be written.");
       return false;
     }
   };
@@ -188,7 +200,10 @@
       awaiting_verification: "improver",
     };
     dot.className = `src-tag ${STATUS_TAG[task.status] ?? "collision"}`;
-    dot.textContent = needsReview(task) ? "REVIEW" : String(task.status ?? "open").toUpperCase();
+    const scheduled = state.backlog?.taskStates?.find((item) => item.id === task.id);
+    const readinessLabels = { ready: "READY", waiting: "WAITING", running: "RUNNING", review: "VERIFYING", blocked: "BLOCKED", grouped: "IN PLAN", cooling: "RETRY LATER", done: task.status === "archived" ? "ARCHIVED" : "DONE" };
+    dot.textContent = readinessLabels[scheduled?.stage] || (needsReview(task) ? "REVIEW" : String(task.status ?? "open").toUpperCase());
+    if (scheduled) { dot.dataset.readiness = scheduled.stage; dot.title = scheduled.reason || ""; li.dataset.readiness = scheduled.stage; }
     const text = document.createElement("span");
     text.className = "task-name";
     text.textContent = ` ${task.title}`;
@@ -251,6 +266,12 @@
     const now = Date.now();
     const finished = state.tasks.filter((task) => task.status === "done");
     if (!finished.length) return;
+    if (window.mefiStudio?.tasksAction) {
+      let archived = 0;
+      for (const task of finished) if (await runTaskAction(task, "status", { status: "archived" })) archived += 1;
+      if (archived) window.MefiToast?.(`Archived ${archived} finished task${archived === 1 ? "" : "s"}`, "good");
+      return;
+    }
     for (const task of finished) {
       task.status = "archived";
       task.logs = pushLog(task, now, "archived");
@@ -311,11 +332,12 @@
 
   async function load(options = {}) {
     const revision = taskRevision;
-    const [tasks, prefs] = await Promise.all([window.mefiStudio?.tasksList?.(), window.mefiStudio?.prefsGet?.()]);
+    const [tasks, prefs, backlog] = await Promise.all([window.mefiStudio?.tasksList?.(), window.mefiStudio?.prefsGet?.(), Promise.resolve(window.mefiStudio?.backlogStatus?.()).catch(() => null)]);
     if (tasks?.ok === false || !Array.isArray(tasks?.tasks)) throw new Error(tasks?.error || "Task store unavailable");
     // A completion broadcast may arrive while preferences are still loading.
     // Never replace that newer board with the earlier read's snapshot.
     if (revision === taskRevision) state.tasks = tasks.tasks;
+    if (backlog?.ok && revision === taskRevision) state.backlog = backlog;
     hydrated = true;
     if (prefs?.ok) state.prefs = { ...state.prefs, ...prefs.prefs };
     state.filter = FILTERS.includes(options.filter) ? options.filter : revision === taskRevision && FILTERS.includes(prefs?.prefs?.taskFilter) ? prefs.prefs.taskFilter : state.filter;
@@ -378,6 +400,7 @@
   // One writer for every status move (board rows and the detail buttons), so a
   // finish always stamps doneAt and a reopen always re-arms the autopilot.
   function setTaskStatus(task, value) {
+    if (window.mefiStudio?.tasksAction) return runTaskAction(task, "status", { status: value });
     const now = Date.now();
     const wasDone = isDone(task);
     if (value === "done" && task.status !== "done") {
@@ -425,14 +448,17 @@
     syncBadge();
     renderList();
     renderDetail();
-    save().then((ok) => {
-      if (!ok) {
+    const removal = window.mefiStudio?.tasksDelete
+      ? Promise.resolve(window.mefiStudio.tasksDelete({ taskId: task.id, projectId: task.projectId || state.backlog?.projectId })).catch((error) => ({ ok: false, error: error.message }))
+      : save().then((ok) => ({ ok }));
+    removal.then((result) => {
+      if (!result?.ok) {
         // Put it back rather than pretend the delete landed.
         state.tasks.splice(Math.min(Math.max(index, 0), state.tasks.length), 0, task);
         syncBadge();
         renderList();
         renderDetail();
-        window.MefiToast?.("Task not deleted · the task store could not be written", "bad");
+        window.MefiToast?.(`Task not deleted · ${result?.error || "the task store could not be written"}`, "bad");
         return;
       }
       window.MefiToast?.(`Task deleted · ${task.title}`, "good");
@@ -468,12 +494,13 @@
     } else {
       actions.push({ label: needsReview(task) ? "Confirm done" : "Mark done", className: "primary", title: "Mark this task complete after reviewing its result", run: () => setTaskStatus(task, "done") });
     }
-    if (needsReview(task)) actions.push({ label: "Retry", className: "ghost", title: "Return this task to the queue for another attempt", run: () => {
+    if (needsReview(task)) actions.push({ label: "Retry", className: "ghost", title: "Return this task to the queue for another attempt", disabled: ["verifying", "awaiting_verification"].includes(task.status), run: () => {
+      if (window.mefiStudio?.tasksAction) return runTaskAction(task, "retry");
       delete task.verification;
       delete task.verifyAttempts;
       setTaskStatus(task, "open");
     } });
-    if (task.status === "open") actions.push({ label: "Activate", className: "ghost", title: "Set active — the executor treats it as current work", run: () => setTaskStatus(task, "active") });
+    if (task.status === "open" && window.mefiStudio?.backlogControl) actions.push({ label: "Do next", className: "ghost", title: "Prioritize this task when its prerequisites and a worker are ready", run: () => runTaskAction(task, "prioritize") });
     if (task.status === "active") actions.push({ label: "Back to open", className: "ghost", title: "Release the active claim", run: () => setTaskStatus(task, "open") });
     if (task.status === "absorbed") actions.push({ label: "Restore", className: "ghost", title: "Pull this task out of the grouped plan and back onto the open board", run: () => setTaskStatus(task, "open") });
     if (task.status === "done") actions.push({ label: "Archive", className: "ghost", title: "Shelve the finished task", run: () => setTaskStatus(task, "archived") });
@@ -521,9 +548,12 @@
       state.renaming = false;
       const value = input.value.trim();
       if (apply && value && value !== task.title) {
-        task.title = value.slice(0, 90);
-        task.updatedAt = Date.now();
-        save();
+        if (window.mefiStudio?.tasksAction) runTaskAction(task, "rename", { title: value.slice(0, 90) });
+        else {
+          task.title = value.slice(0, 90);
+          task.updatedAt = Date.now();
+          save();
+        }
       }
       renderTitle(task);
       renderList();
@@ -536,6 +566,204 @@
     els.title.append(input);
     input.focus();
     input.select();
+  }
+
+  async function runTaskAction(task, action, patch = {}) {
+    if (detailBusy) return false;
+    const key = taskKey(task), projectId = task.projectId || state.backlog?.projectId;
+    detailBusy = key; renderDetail();
+    try {
+      const result = await window.mefiStudio[action === "prioritize" ? "backlogControl" : "tasksAction"]({ taskId: task.id, projectId, action, ...patch });
+      if (!result?.ok) throw new Error(result?.error || "The task change could not be saved.");
+      if (projectId && state.backlog?.projectId && state.backlog.projectId !== projectId) return true;
+      if (result.task) state.tasks = state.tasks.map((item) => item.id === task.id ? result.task : item);
+      if (result.backlog) state.backlog = result.backlog;
+      contextReads.delete(key);
+      detailMessages.delete(key);
+      const selected = selectedTask();
+      if (selected && state.filter !== "all" && taskStage(selected) !== state.filter) state.filter = taskStage(selected);
+      syncBadge(); renderList();
+      return true;
+    } catch (error) {
+      detailMessages.set(key, { text: error.message, error: true });
+      window.MefiToast?.(error.message, "bad");
+      return false;
+    } finally {
+      detailBusy = null; renderDetail();
+    }
+  }
+
+  function detailFold(task, id, title) {
+    const fold = node("details", `task-context-section task-${id}`, "");
+    fold.dataset.taskPanel = id;
+    fold.open = detailExpanded.get(`${taskKey(task)}/${id}`) === true;
+    const heading = node("summary", "", title);
+    heading.addEventListener("click", (event) => {
+      event.preventDefault(); fold.open = !fold.open;
+      detailExpanded.set(`${taskKey(task)}/${id}`, fold.open);
+    });
+    fold.append(heading);
+    return fold;
+  }
+
+  function requestTaskContext(task) {
+    const api = window.mefiStudio;
+    if (!api?.tasksHistory && !api?.tasksHandoff) return null;
+    const key = taskKey(task);
+    const signature = JSON.stringify([task.updatedAt, task.contextVersion, task.contextHistory, task.lastAttempt, task.verification, taskRevision]);
+    const prior = contextReads.get(key);
+    if (prior?.signature === signature) return prior;
+    const record = { signature, loading: true, entries: [], text: "" };
+    contextReads.set(key, record);
+    const payload = { taskId: task.id, projectId: task.projectId || state.backlog?.projectId };
+    Promise.allSettled([api.tasksHistory?.(payload), api.tasksHandoff?.(payload)]).then((results) => {
+      if (contextReads.get(key) !== record) return;
+      record.loading = false;
+      const history = results[0].status === "fulfilled" ? results[0].value : null;
+      const handoff = results[1].status === "fulfilled" ? results[1].value : null;
+      record.entries = history?.ok ? history.entries || [] : [];
+      record.nextBefore = history?.nextBefore;
+      record.hasMore = history?.hasMore === true;
+      record.text = handoff?.ok ? handoff.text || "" : "";
+      record.error = history?.error || handoff?.error || (results.some((result) => result.status === "rejected") ? "The saved context could not be loaded." : "");
+      if (!els.overlay.hidden && taskKey(selectedTask()) === key) renderDetail();
+    });
+    return record;
+  }
+
+  async function taskDetailAction(task, action, payload = {}) {
+    const api = window.mefiStudio;
+    const method = action === "dependencies" ? "tasksDependencies" : "tasksRestore";
+    if (!api?.[method] || detailBusy) return;
+    const key = taskKey(task), projectId = task.projectId || state.backlog?.projectId;
+    detailBusy = key;
+    detailMessages.set(key, { text: action === "dependencies" ? "Saving prerequisites…" : "Restoring this brief…" });
+    renderDetail();
+    try {
+      const result = await api[method]({ taskId: task.id, projectId, ...payload });
+      if (!result?.ok) throw new Error(result?.error || "The change could not be saved. Try again.");
+      if (taskKey(selectedTask()) !== key) return;
+      if (result.task) state.tasks = state.tasks.map((item) => item.id === task.id ? result.task : item);
+      if (result.backlog) state.backlog = result.backlog;
+      dependencyDrafts.delete(key);
+      contextReads.delete(key);
+      detailMessages.set(key, { text: action === "dependencies" ? "Prerequisites saved. The queue will wait for them to finish." : "Earlier brief restored. Files, task status, and completion evidence are unchanged." });
+      renderList();
+    } catch (error) {
+      detailMessages.set(key, { text: error.message, error: true });
+    } finally {
+      detailBusy = null;
+      if (taskKey(selectedTask()) === key) renderDetail();
+    }
+  }
+
+  function renderTaskContext(task) {
+    const key = taskKey(task), api = window.mefiStudio;
+    const scheduled = state.backlog?.taskStates?.find((item) => item.id === task.id);
+    const readiness = node("p", "task-readiness", scheduled?.reason || (isDone(task) ? "This task is complete." : "Readiness will refresh with the project queue."));
+    readiness.dataset.taskReadiness = scheduled?.stage || "unknown";
+    els.detail.append(readiness);
+    const message = detailMessages.get(key);
+    if (message) {
+      const feedback = node("p", `task-context-feedback${message.error ? " error" : ""}`, message.text);
+      feedback.setAttribute("role", "status"); els.detail.append(feedback);
+    }
+
+    const dependencies = detailFold(task, "dependencies", `Prerequisites · ${(task.dependsOn || []).length}`);
+    const dependencyLocked = Boolean(task.runId) || ["active", "running", "awaiting_verification", "verifying", "done", "archived", "completed", "absorbed"].includes(task.status);
+    dependencies.append(node("p", "task-context-hint", dependencyLocked ? "Prerequisites can be changed when this task is open and has no worker. Finish the current run or reopen completed work first." : "Choose the tasks that must finish before this one can start."));
+    const choices = node("div", "task-dependency-options", "");
+    const chosen = dependencyDrafts.get(key) || new Set(task.dependsOn || []);
+    const candidates = state.tasks.filter((item) => item.id !== task.id && (!item.projectId || !task.projectId || item.projectId === task.projectId));
+    for (const id of chosen) if (!candidates.some((item) => item.id === id)) candidates.push({ id, title: `Unavailable task · ${id}`, status: "Missing" });
+    for (const candidate of candidates) {
+      const label = node("label", "task-dependency-option", "");
+      const check = node("input", "", ""); check.type = "checkbox"; check.value = candidate.id; check.checked = chosen.has(candidate.id); check.dataset.dependencyId = candidate.id;
+      check.disabled = Boolean(detailBusy) || dependencyLocked || !api?.tasksDependencies;
+      check.addEventListener("change", () => {
+        const draft = new Set(dependencyDrafts.get(key) || task.dependsOn || []);
+        check.checked ? draft.add(candidate.id) : draft.delete(candidate.id);
+        dependencyDrafts.set(key, draft);
+      });
+      label.append(check, node("span", "", candidate.title || candidate.id), node("small", "", isDone(candidate) ? "Done" : candidate.status || "Open"));
+      choices.append(label);
+    }
+    if (!candidates.length) choices.append(node("p", "task-context-hint", "Add another task to this project to set a prerequisite."));
+    const saveDependencies = node("button", "ghost mini", "Save prerequisites");
+    saveDependencies.type = "button"; saveDependencies.dataset.taskAction = "dependencies";
+    saveDependencies.disabled = Boolean(detailBusy) || dependencyLocked || !api?.tasksDependencies;
+    saveDependencies.addEventListener("click", () => taskDetailAction(task, "dependencies", { dependsOn: [...(dependencyDrafts.get(key) || new Set(task.dependsOn || []))] }));
+    dependencies.append(choices, saveDependencies);
+    els.detail.append(dependencies);
+
+    const context = requestTaskContext(task);
+    const handoff = detailFold(task, "handoff", "Handoff for the next worker");
+    handoff.append(node("p", "task-context-hint", "The saved brief, earlier attempts, remaining work, and prerequisite results travel with this task."));
+    if (context?.text) {
+      handoff.append(node("pre", "task-handoff-text", context.text));
+      const copy = node("button", "ghost mini", "Copy handoff");
+      copy.disabled = !api?.shellCopy;
+      copy.addEventListener("click", async () => { try { await api.shellCopy(context.text); copy.textContent = "Copied"; } catch { copy.textContent = "Could not copy"; } });
+      handoff.append(copy);
+    } else handoff.append(node("p", "task-context-hint", context?.loading ? "Loading saved context…" : context?.error || "No handoff is available yet."));
+    els.detail.append(handoff);
+
+    const history = detailFold(task, "history", `Brief history${context?.entries.length ? ` · ${context.entries.length}${context.hasMore ? "+" : ""}` : ""}`);
+    history.append(node("p", "task-context-hint", "Restore an earlier brief, references, and prerequisites. This does not change files, task status, or completion evidence."));
+    for (const entry of context?.entries || []) {
+      const row = node("article", "task-history-entry", ""); row.dataset.revisionId = entry.id;
+      const stamp = Number.isFinite(new Date(entry.at).getTime()) ? new Date(entry.at).toLocaleString() : "Saved earlier";
+      row.append(node("strong", "", `${entry.kind || "Saved brief"} · ${stamp}`));
+      if (entry.note) row.append(node("p", "task-context-hint", entry.note));
+      row.append(node("p", "task-history-preview", entry.snapshot?.prompt || entry.snapshot?.title || "No brief text in this revision."));
+      const restore = node("button", "ghost mini", "Restore this brief");
+      const restoreLocked = Boolean(task.runId || task.absorbedInto) || ["active", "running", "verifying", "awaiting_verification"].includes(task.status);
+      restore.dataset.taskAction = "restore"; restore.disabled = Boolean(detailBusy) || restoreLocked || !api?.tasksRestore;
+      if (restoreLocked) restore.title = "Wait for the current worker or grouped task to finish before restoring its brief.";
+      restore.addEventListener("click", () => taskDetailAction(task, "restore", { revisionId: entry.id }));
+      row.append(restore); history.append(row);
+    }
+    if (!context?.entries.length) history.append(node("p", "task-context-hint", context?.loading ? "Loading earlier briefs…" : context?.error || "Saved changes to this task will appear here."));
+    if (context?.hasMore) {
+      const more = node("button", "ghost mini", "Load earlier briefs");
+      more.addEventListener("click", async () => {
+        more.disabled = true;
+        try {
+          const result = await api.tasksHistory({ taskId: task.id, projectId: task.projectId || state.backlog?.projectId, before: context.nextBefore });
+          if (!result?.ok) throw new Error(result?.error || "Earlier briefs could not be loaded.");
+          context.entries.push(...(result.entries || [])); context.hasMore = result.hasMore === true; context.nextBefore = result.nextBefore;
+          if (taskKey(selectedTask()) === key) renderDetail();
+        } catch (error) { more.textContent = error.message; more.disabled = false; }
+      });
+      history.append(more);
+    }
+    els.detail.append(history);
+  }
+
+  async function appendTaskEntry(task, field, input) {
+    const text = input.value.trim(), key = taskKey(task), draftKey = `${key}/${field}`;
+    if (!text || entryPending.has(key)) return;
+    entryDrafts.set(draftKey, input.value);
+    const draft = input.value, previous = task[field], previousUpdate = task.updatedAt;
+    const added = [...(task[field] || []), { at: Date.now(), ...(field === "logs" ? { kind: "note" } : {}), text }];
+    task[field] = added; task.updatedAt = Date.now();
+    entryPending.add(key);
+    let error = "The task store could not be written.";
+    const ok = await save((message) => { error = message; });
+    entryPending.delete(key);
+    if (ok) {
+      if (entryDrafts.get(draftKey) === draft) entryDrafts.delete(draftKey);
+      detailMessages.delete(key);
+    } else {
+      // A newer broadcast owns its own state. Undo only this still-local edit.
+      const current = state.tasks.find((item) => item.id === task.id);
+      if (current === task && current[field] === added) { current[field] = previous; current.updatedAt = previousUpdate; }
+      const message = `${field === "logs" ? "Note" : "Idea"} not saved · ${error} Your draft is still here.`;
+      detailMessages.set(key, { text: message, error: true });
+      window.MefiToast?.(message, "bad");
+    }
+    renderList();
+    if (taskKey(selectedTask()) === key) renderDetail();
   }
 
   function renderDetail() {
@@ -565,6 +793,7 @@
       button.className = action.className;
       button.textContent = action.label;
       button.title = action.title ?? "";
+      button.disabled = Boolean(detailBusy) || Boolean(action.disabled) || Boolean(task.runId && !["Rename"].includes(action.label));
       button.addEventListener("click", action.run);
       els.statusRow.append(button);
     }
@@ -601,6 +830,7 @@
     prompt.className = "muted";
     prompt.textContent = task.prompt ?? "";
     els.detail.append(prompt);
+    renderTaskContext(task);
 
     const section = (heading) => {
       const h = document.createElement("h4");
@@ -647,38 +877,30 @@
     const logInput = document.createElement("input");
     logInput.placeholder = "Log a note…";
     logInput.className = "grow";
+    logInput.value = entryDrafts.get(`${taskKey(task)}/logs`) || "";
+    logInput.addEventListener("input", () => entryDrafts.set(`${taskKey(task)}/logs`, logInput.value));
     const logAdd = document.createElement("button");
     logAdd.className = "ghost";
     logAdd.textContent = "Log";
-    logAdd.addEventListener("click", () => {
-      if (!logInput.value.trim()) return;
-      task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "note", text: logInput.value.trim() }];
-      task.updatedAt = Date.now();
-      logInput.value = "";
-      save();
-      renderDetail();
-    });
+    logAdd.disabled = entryPending.has(taskKey(task));
+    logAdd.addEventListener("click", () => appendTaskEntry(task, "logs", logInput));
     logRow.append(logInput, logAdd);
     els.detail.append(logRow);
 
     section(`Thoughts / ideas (${(task.ideas ?? []).length})`);
-    entryList(task.ideas ?? [], (idea) => Object.assign(document.createElement("li"), { textContent: `[${new Date(idea.at).toLocaleTimeString()}] ${idea.text}` }));
+    entryList(task.ideas ?? [], (idea) => Object.assign(document.createElement("li"), { textContent: typeof idea === "string" ? `Linked idea: ${idea}` : `[${new Date(idea.at).toLocaleTimeString()}] ${idea.text}` }));
     const ideaRow = document.createElement("div");
     ideaRow.className = "row tight";
     const ideaInput = document.createElement("input");
     ideaInput.placeholder = "Capture an idea for this task…";
     ideaInput.className = "grow";
+    ideaInput.value = entryDrafts.get(`${taskKey(task)}/ideas`) || "";
+    ideaInput.addEventListener("input", () => entryDrafts.set(`${taskKey(task)}/ideas`, ideaInput.value));
     const ideaAdd = document.createElement("button");
     ideaAdd.className = "ghost";
     ideaAdd.textContent = "Add idea";
-    ideaAdd.addEventListener("click", () => {
-      if (!ideaInput.value.trim()) return;
-      task.ideas = [...(task.ideas ?? []), { at: Date.now(), text: ideaInput.value.trim() }];
-      task.updatedAt = Date.now();
-      ideaInput.value = "";
-      save();
-      renderDetail();
-    });
+    ideaAdd.disabled = entryPending.has(taskKey(task));
+    ideaAdd.addEventListener("click", () => appendTaskEntry(task, "ideas", ideaInput));
     ideaRow.append(ideaInput, ideaAdd);
     els.detail.append(ideaRow);
 
@@ -790,6 +1012,7 @@
     // the task instead of trusting a reference captured before the awaits.
     const task = taskId ? state.tasks.find((item) => item.id === taskId) : null;
     if (task) {
+      const previous = { refs: task.refs, logs: task.logs, updatedAt: task.updatedAt };
       task.refs = [
         ...(task.refs ?? []),
         ...(result.references.files ?? []).slice(0, 6).map((file) => ({ kind: "file", title: file, detail: "work tree" })),
@@ -798,7 +1021,18 @@
       ].slice(-40);
       task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "reference", text: `gathered ${result.references.code.length} code hits, ${result.references.sessions.length} sessions, ${result.references.chats.length} chats` }];
       task.updatedAt = Date.now();
-      await save();
+      const addedRefs = task.refs, addedLogs = task.logs;
+      let error = "The task store could not be written.";
+      if (!(await save((message) => { error = message; }))) {
+        const current = state.tasks.find((item) => item.id === taskId);
+        if (current === task && current.refs === addedRefs && current.logs === addedLogs) Object.assign(current, previous);
+        const message = `References found, but not saved to the task · ${error}`;
+        status(message, true);
+        detailMessages.set(taskKey(task), { text: message, error: true });
+        window.MefiToast?.(message, "bad");
+        renderList(); renderDetail();
+        return;
+      }
       renderList();
       renderDetail();
     }
@@ -969,6 +1203,12 @@
         }
         renderList();
         renderDetail();
+        const read = ++backlogRead;
+        Promise.resolve(window.mefiStudio?.backlogStatus?.()).then((result) => {
+          if (read !== backlogRead || !result?.ok) return;
+          state.backlog = result;
+          if (!els.overlay.hidden) { renderList(); renderDetail(); }
+        }).catch(() => {});
       }
     });
     // A quiet backstop poll: the onTasks push above carries live updates in

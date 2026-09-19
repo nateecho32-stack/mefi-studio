@@ -67,7 +67,21 @@
         </form>
         <div class="ws-feedback-row"><p id="workspace-feedback" class="ws-feedback" role="status"></p><button id="workspace-retry" class="ghost mini" type="button" hidden>Retry loading</button></div>
       </section>
-      <aside class="ws-work" aria-label="Project work and results"><div class="ws-work-heading"><div><p class="ws-kicker">FROM IDEA TO DONE</p><h2>Your work</h2></div><button class="ghost mini" data-nav="tasks" title="Open full task board">View board ↗</button></div><div class="ws-work-tabs" role="group" aria-label="Filter work"><button id="workspace-open" data-work-filter="open" aria-pressed="true">In progress <span>0</span></button><button id="workspace-review" data-work-filter="review" aria-pressed="false">Review <span>0</span></button><button id="workspace-done" data-work-filter="done" aria-pressed="false">Done <span>0</span></button></div><div id="workspace-work-list" class="ws-work-list"></div><details class="ws-activity"><summary>Behind the scenes <span id="workspace-activity-count"></span></summary><ol id="workspace-activity-list"></ol></details><div class="ws-jeV" id="workspace-jev">Jev · checking connection</div></aside>
+      <aside class="ws-work" aria-label="Project work and results">
+        <div class="ws-work-heading"><div><p class="ws-kicker">FROM IDEA TO DONE</p><h2>Your work</h2></div><button class="ghost mini" data-nav="tasks" title="Open full task board">View board ↗</button></div>
+        <section class="ws-backlog" aria-label="Backlog controls">
+          <div class="ws-backlog-heading"><span class="ws-backlog-light" aria-hidden="true"></span><strong id="workspace-backlog-title">A little progress, every pass</strong></div>
+          <p id="workspace-backlog-summary">Checking your project's backlog…</p>
+          <div id="workspace-backlog-metrics" class="ws-backlog-metrics" aria-label="Backlog counts"></div>
+          <p id="workspace-backlog-next" class="ws-backlog-next"></p>
+          <button id="workspace-run-backlog" class="primary" type="button">Work through backlog <span aria-hidden="true">↗</span></button>
+        </section>
+        <div class="ws-work-tabs" role="group" aria-label="Filter work"><button id="workspace-open" data-work-filter="open" aria-pressed="true">Queue <span>0</span></button><button id="workspace-ideas" data-work-filter="ideas" aria-pressed="false">Ideas <span>0</span></button><button id="workspace-review" data-work-filter="review" aria-pressed="false" title="Finished runs and tasks needing attention">Review <span>0</span></button><button id="workspace-done" data-work-filter="done" aria-pressed="false">Done <span>0</span></button></div>
+        <label class="ws-work-search"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><input id="workspace-work-search" type="search" placeholder="Find a task or idea…" aria-label="Search work and ideas"></label>
+        <div id="workspace-work-list" class="ws-work-list"></div>
+        <button id="workspace-show-more" class="ghost mini ws-show-more" type="button" hidden>Show more</button>
+        <details class="ws-activity"><summary>Behind the scenes <span id="workspace-activity-count"></span></summary><ol id="workspace-activity-list"></ol></details><div class="ws-jeV" id="workspace-jev">Jev · checking connection</div>
+      </aside>
     </div>
   </div>
 </section>

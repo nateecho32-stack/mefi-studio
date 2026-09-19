@@ -17,6 +17,26 @@ evidence, and follow-up controls. Archived completions remain visible. Verified
 direct inbox requests now become durable Done entries instead of disappearing.
 An older successful worker exit alone is not proof that verification passed.
 
+**Work through backlog** gives the assistant the project's existing work first.
+It keeps a small buffer of up to three runnable tasks when admitting saved
+ideas, taking the oldest eligible ideas first and refilling as work settles.
+While this mode is on, automatic idea scans and new improvement plans wait.
+Pause stops new scheduling while current workers finish. Search covers the
+entire saved task or idea list; **Show more** expands the displayed page.
+Use **Do next** to prioritize a ready task or **Turn into task** to admit an
+idea explicitly. Raw chat notes need this explicit action (or **Keep**) before
+automatic admission. Failed work stays available for review and explicit retry;
+repeated attempts cannot silently reset their failure budget.
+
+The existing task board holds prerequisites, handoff context, and task history.
+These features run in Studio using local project storage, with no additional
+package, terminal, account, or hosted database. Coding still uses the configured
+worker connection. A prerequisite must finish before dependent work can start;
+missing prerequisites and dependency cycles need correction on the board.
+Task history records changes from this version forward and preserves earlier
+context when you recover a brief. Recovering a brief adds a revision without
+rolling back project files or marking work complete.
+
 Use **Make yourself at home** to set your name, companion name, accent, and
 movement preference. **Studio tools** holds the constellation, full task board,
 session explorer, model booklet, value graphs, ideas, and diagnostics. API keys,
@@ -75,7 +95,8 @@ harnesses set it), main.cjs refuses to start with the fix printed.
 On Windows, double-click `Run Mefi's Studio AI+.cmd`. It starts the portable
 build when available, otherwise the development install. Run `npm run package`
 to refresh `dist/Mefi Studio AI+/Mefi Studio AI+.exe` while preserving that
-build's existing local data.
+build's existing local data. Code-only rebuilds reuse identical Electron
+runtime files, so an open app does not block packaging on locked DLLs.
 
 This is an independent repository. Studio uses its own root as the default
 working repository; set `MEFI_STUDIO_REPO` to monitor or work in another checkout.
@@ -196,9 +217,9 @@ Auditor (every five minutes), a **fix pass** — rewrite a missing
 `data/models.json` from the snapshot, quarantine an unparseable
 `data/eyes-*.json` as `*.broken-<epoch>.json` and rewrite its fallback, flag a
 held live update — a **tidy pass** every ten minutes (tasks done for 24 h are
-archived, done/accepted ideas older than a day pruned, audit and collision
+archived and retained in Done, ideas retained until explicitly removed, audit and collision
 requests whose finding is gone dropped along with auto-sourced requests older
-than three days, duplicates merged, lists capped; manual requests are never
+than three days, duplicates merged; unimplemented ideas, board history, and manual requests are never
 touched), and, with Proactive on and a key saved, an AI brief that backs off
 5 → 10 → 20 → 40 → 60 minutes while the model is unreachable. Every step is
 guarded on its own: one failure is logged and the tick carries on.
@@ -596,11 +617,11 @@ review) into an unread inbox; reading an idea marks it read, Keep/Done/Make
 task manage it, Clean done prunes finished items, and the **feature graph**
 clusters related ideas into a self-building map you can dive into.
 
-### Command view (`D`, the home surface)
+### Command view (`D`, the constellation)
 
-The constellation is the home surface and the main menu: it opens on launch
-(toggle **Open Command on launch** in its ambience popover to change that) and
-after five idle minutes. A cold launch opens through the **boot menu**: one
+The project workspace is the default home. Open the constellation through
+**Studio tools** or `D`; its ambience settings control its optional startup
+and idle behavior. The optional **boot menu** starts with one
 gold assistant node alone on black, then its agents fly out and spawn a green
 reader node per chat and source the tree is built from — each node names the
 chat or thing it is reading — and clean each node away again in red once its

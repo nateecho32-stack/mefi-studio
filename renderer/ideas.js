@@ -2,9 +2,10 @@
 (function () {
   "use strict";
 
-  const state = { ideas: [], selected: null, view: "graph", clusterFilter: null };
+  const state = { ideas: [], selected: null, view: "graph", clusterFilter: null, projectId: null };
   const el = {};
   let initialized = false;
+  let ideaRevision = 0;
 
   const unreadCount = () => state.ideas.filter((idea) => !idea.read).length;
   // #ideas-open binds straight to open(), so arg 0 can be a click Event.
@@ -26,19 +27,41 @@
     window.MefiNav?.setBadge?.("ideas", unread);
   }
 
-  async function load() {
-    const result = await window.mefiStudio?.ideasList?.();
-    state.ideas = result?.ideas ?? [];
+  function renderAll() {
     updateBadge();
     renderList();
     renderDetail();
     drawGraph();
   }
 
+  async function load() {
+    const revision = ++ideaRevision;
+    try {
+      const result = await window.mefiStudio?.ideasList?.();
+      if (revision !== ideaRevision) return;
+      if (!result?.ok || !Array.isArray(result.ideas)) throw new Error(result?.error || "Couldn't load saved ideas.");
+      state.projectId = result.projectId || state.projectId;
+      state.ideas = result.ideas;
+      renderAll();
+    } catch (error) { if (revision === ideaRevision) el.status.textContent = error.message; }
+  }
+
+  async function act(action, payload = {}) {
+    if (!window.mefiStudio?.ideasAction) return false;
+    const projectId = state.projectId;
+    try {
+      const result = await window.mefiStudio.ideasAction({ action, ...payload, projectId });
+      if (projectId !== state.projectId) return false;
+      if (!result?.ok) throw new Error(result?.error || "Couldn't save the idea.");
+      await load();
+      return true;
+    } catch (error) { if (projectId === state.projectId) window.MefiToast?.(error.message, "bad"); return false; }
+  }
+
   function statusTag(idea) {
     const tag = document.createElement("span");
     tag.className = `src-tag ${idea.status === "done" ? "improver" : idea.status === "accepted" ? "" : idea.status === "keep" ? "collision" : ""}`;
-    tag.textContent = idea.status.toUpperCase();
+    tag.textContent = String(idea.status || "new").toUpperCase();
     return tag;
   }
 
@@ -82,8 +105,8 @@
     if (!idea) return;
     state.selected = id;
     if (!idea.read) {
-      idea.read = true;
-      save();
+      if (window.mefiStudio?.ideasAction) act("read", { ideaId: id });
+      else { idea.read = true; save(); }
     }
     renderList();
     renderDetail();
@@ -126,19 +149,33 @@
       actions.append(button);
     };
     action("Keep", () => {
+      if (window.mefiStudio?.ideasAction) { act("keep", { ideaId: idea.id }); return; }
       idea.status = "keep";
       save();
       renderDetail();
     });
     action("Done", () => {
+      if (window.mefiStudio?.ideasAction) { act("done", { ideaId: idea.id }); return; }
       idea.status = "done";
       idea.read = true;
       save();
       renderDetail();
     });
-    action("Make task", async (event) => {
+    if (idea.taskId) action("View task ↗", () => window.MefiNav?.go("tasks", { taskId: idea.taskId }));
+    else if (idea.status !== "done") action("Make task", async (event) => {
       const button = event.currentTarget;
       button.disabled = true;
+      if (window.mefiStudio?.backlogControl) {
+        try {
+          const result = await window.mefiStudio.backlogControl({ action: "promote", ideaId: idea.id, projectId: state.projectId || idea.projectId });
+          if (!result?.ok) throw new Error(result?.error || "The idea could not be turned into a task.");
+          await load();
+          window.MefiToast?.("Idea linked to its task", "good");
+        } catch (error) {
+          window.MefiToast?.(error.message, "bad");
+        } finally { button.disabled = false; }
+        return;
+      }
       const created = await window.MefiTasks?.addTask(idea.detail ?? idea.title);
       // Only a saved task accepts the idea, and an ideas broadcast during the
       // await replaces state.ideas, so mark the live entry, not the captured one.
@@ -152,6 +189,7 @@
       renderDetail();
     });
     action("Delete", () => {
+      if (window.mefiStudio?.ideasAction) { act("delete", { ideaId: idea.id }); return; }
       state.ideas = state.ideas.filter((item) => item.id !== idea.id);
       state.selected = null;
       save();
@@ -346,10 +384,14 @@
     });
     el.scan?.addEventListener("click", () => scan(false));
     el.ai?.addEventListener("click", () => scan(true));
-    el.clean?.addEventListener("click", () => {
-      state.ideas = state.ideas.filter((idea) => idea.status !== "done" && idea.status !== "accepted");
+    el.clean?.addEventListener("click", async () => {
+      if (window.mefiStudio?.ideasAction) {
+        if (await act("clean", { ideaIds: state.ideas.filter((idea) => idea.status === "done").map((idea) => idea.id) })) el.status.textContent = "Removed finished ideas; accepted work stays available.";
+        return;
+      }
+      state.ideas = state.ideas.filter((idea) => idea.status !== "done");
       save();
-      el.status.textContent = "cleaned done/accepted ideas";
+      el.status.textContent = "Removed finished ideas; accepted work stays available.";
     });
     el.view?.addEventListener("click", () => {
       state.view = state.view === "graph" ? "list" : "graph";
@@ -359,12 +401,20 @@
       drawGraph();
     });
     window.mefiStudio?.onIdeas?.((ideas) => {
+      ideaRevision += 1;
       state.ideas = Array.isArray(ideas) ? ideas : [];
       updateBadge();
       if (!el.overlay.hidden) {
         renderList();
+        renderDetail();
         drawGraph();
       }
+    });
+    window.mefiStudio?.onProjects?.((result) => {
+      if (!result?.activeId || result.activeId === state.projectId) return;
+      ideaRevision += 1;
+      state.projectId = result.activeId; state.ideas = []; state.selected = null;
+      if (!el.overlay.hidden) load();
     });
   }
 

@@ -123,7 +123,7 @@ test("real host refuses a project change during a live build and keeps its ident
     pool: { running: new Map(), queue: [] }, assistantTickInFlight: null, assistantTickDemand: null,
     autopilotPassInFlight: null, executorFillInFlight: null, assistantWriting: null, assistantLoading: null, machineReadInFlight: null,
   });
-  vm.runInContext(section("function projectBusyReason()", "function registerIpc()"), context);
+  vm.runInContext(section("function taskView(", "async function setTaskDependencies(") + "\n" + section("function projectBusyReason()", "function registerIpc()"), context);
   const result = await context.selectProject(f.secondary.id);
   assert.equal(result.ok, false);
   assert.match(result.error, /running build/);
@@ -172,7 +172,7 @@ test("normal background mode switches between cadence ticks and reloads its own 
     getEyes: async () => f.projects.eyes(f.eyes), send: (name, data) => sends.push([name, data]),
     emitAutopilot() {}, assistantSchedule: () => scheduled.push(f.projects.current().id),
   });
-  vm.runInContext(section("function projectBusyReason()", "function registerIpc()"), context);
+  vm.runInContext(section("function taskView(", "async function setTaskDependencies(") + "\n" + section("function projectBusyReason()", "function registerIpc()"), context);
   assert.equal(context.projectBusyReason(), null, "a pending cadence timer does not lock the project selector");
   const result = await context.selectProject(f.secondary.id);
   assert.equal(result.ok, true);

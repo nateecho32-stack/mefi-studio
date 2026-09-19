@@ -3,8 +3,9 @@
 // resolves REPO_ROOT from its own location (dist/<app>/ -> repo).
 //
 //   node scripts/package-portable.mjs [--clean]
-import { cp, mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createReadStream, existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,9 +38,28 @@ if (stash) {
   await rm(stash, { recursive: true, force: true });
 }
 
-// 1. electron runtime
-await cp(ELECTRON_DIST, OUT_DIR, { recursive: true });
-await rename(path.join(OUT_DIR, "electron.exe"), path.join(OUT_DIR, EXE_NAME));
+// 1. Electron runtime. An open app locks its DLLs on Windows. Reuse byte-
+// identical files so a code-only rebuild needs neither a shutdown nor a
+// second runtime copy. A changed runtime still requires the app to close.
+async function fileDigest(file) {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(file)) hash.update(chunk);
+  return hash.digest("hex");
+}
+async function copyRuntime(source, target) {
+  await mkdir(target, { recursive: true });
+  for (const entry of await readdir(source, { withFileTypes: true })) {
+    const from = path.join(source, entry.name);
+    const to = path.join(target, source === ELECTRON_DIST && entry.name === "electron.exe" ? EXE_NAME : entry.name);
+    if (entry.isDirectory()) { await copyRuntime(from, to); continue; }
+    if (existsSync(to)) {
+      const [before, after] = await Promise.all([fileDigest(from), fileDigest(to)]);
+      if (before === after) continue;
+    }
+    await cp(from, to);
+  }
+}
+await copyRuntime(ELECTRON_DIST, OUT_DIR);
 
 // 2. app payload
 for (const entry of ["main.cjs", "preload.cjs", "README.md"]) {

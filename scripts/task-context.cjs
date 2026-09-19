@@ -1,0 +1,135 @@
+// Durable task revisions and resumable briefs. Pure: callers persist the
+// returned task under the project board lock. History is append-only; only
+// reads and model-facing summaries are bounded, never the saved source text.
+const { createHash } = require("node:crypto");
+
+const object = (value) => value && typeof value === "object" && !Array.isArray(value);
+const rows = (value) => Array.isArray(value) ? value : [];
+const text = (value) => typeof value === "string" ? value : "";
+const copy = (value) => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+const FIELDS = ["id", "projectId", "projectPath", "projectName", "title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "ideas", "dependsOn", "members", "lastAttempt", "verification", "verificationReceiptId", "remaining", "blockers", "lastRunError", "runFailures", "verifyAttempts", "status", "doneAt", "completionFromTaskId", "logs", "source", "parent", "parentRunId", "depth", "createdAt", "runId"];
+const RESTORABLE = ["title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "dependsOn"];
+
+function snapshotTask(task) {
+  const result = {};
+  for (const key of FIELDS) if (task?.[key] !== undefined) result[key] = copy(task[key]);
+  return result;
+}
+
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (!object(value)) return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
+}
+const digest = (snapshot) => createHash("sha256").update(JSON.stringify(canonical(snapshot))).digest("hex");
+const entriesOf = (task) => rows(task?.contextHistory?.entries).filter((entry) => object(entry) && object(entry.snapshot) && entry.snapshot.id === task?.id && typeof entry.id === "string" && Number.isInteger(entry.revision));
+const historyEntries = (task) => task?.contextHistory?.version === 1 && Array.isArray(task.contextHistory.entries) ? task.contextHistory.entries : [];
+
+function recordTaskRevision(task, { previous = null, kind = "updated", note = "", now = Date.now() } = {}) {
+  if (!object(task) || !task.id) return task;
+  const snapshot = snapshotTask(task);
+  const hash = digest(snapshot);
+  const supplied = historyEntries(task);
+  const prior = previous?.id === task.id ? historyEntries(previous) : [];
+  const priorLatest = prior[prior.length - 1];
+  // The trusted current store is enough for a no-op. Do not serialize, copy,
+  // or walk years of old snapshots just because a heartbeat refreshed a lease.
+  if (kind !== "restored" && priorLatest?.hash === hash) {
+    return task.contextHistory === previous.contextHistory ? task : { ...task, contextHistory: previous.contextHistory };
+  }
+  // Preserve a revision already appended by restoreTaskRevision when the board
+  // gateway records that mutation too. Compare IDs/hashes, never whole saved
+  // bodies. The gateway must strip client-supplied history before calling us.
+  const extendsPrior = supplied.length >= prior.length && prior.every((entry, index) => entry === supplied[index] || (entry.id === supplied[index]?.id && entry.hash === supplied[index]?.hash));
+  const existing = extendsPrior ? supplied : prior;
+  const latest = existing[existing.length - 1];
+  if (kind !== "restored" && latest?.hash === hash) return extendsPrior ? task : { ...task, contextHistory: previous.contextHistory };
+  // Unchanged entries are immutable values shared by successive revisions.
+  // Only the newly recorded snapshot gets copied, never the historical tree.
+  const entries = [...existing];
+  const append = (snapshot, eventKind, eventNote, at) => {
+    const revision = (entries[entries.length - 1]?.revision ?? 0) + 1;
+    const hash = digest(snapshot);
+    entries.push({ id: `revision_${revision}_${hash.slice(0, 16)}`, revision, at, kind: eventKind, note: text(eventNote).slice(0, 600), hash, snapshot });
+  };
+  // Existing legacy cards acquire a baseline before their first mutation, so
+  // the first edit does not make the original requirements unrecoverable.
+  if (!entries.length && object(previous) && previous.id === task.id) {
+    append(snapshotTask(previous), "saved", "Context before its first recorded change", Number(previous.updatedAt || previous.createdAt) || now);
+  }
+  const currentLatest = entries[entries.length - 1];
+  if (!currentLatest || (currentLatest.hash || digest(currentLatest.snapshot)) !== hash || kind === "restored") append(snapshot, kind, note, now);
+  if (entries.length === existing.length && extendsPrior && task.contextHistory) return task;
+  const { contextHistory, ...body } = task;
+  return { ...copy(body), contextHistory: { version: 1, entries } };
+}
+
+function taskHistory(task, { limit = 40, before = null } = {}) {
+  const count = Math.max(1, Math.min(100, Math.floor(Number(limit) || 40)));
+  const ordered = entriesOf(task).slice().sort((a, b) => b.revision - a.revision);
+  const beforeRevision = before == null ? Infinity : Number(before);
+  const candidates = ordered.filter((entry) => entry.revision < beforeRevision);
+  const selected = candidates.slice(0, count);
+  return { entries: copy(selected), hasMore: candidates.length > selected.length, nextBefore: candidates.length > selected.length ? selected[selected.length - 1]?.revision ?? null : null };
+}
+
+function restoreTaskRevision(task, revisionId, { now = Date.now() } = {}) {
+  if (!object(task)) return { ok: false, error: "Task not found." };
+  if (task.runId || ["active", "running", "verifying", "awaiting_verification"].includes(task.status)) return { ok: false, error: "Wait for the current run and verification before restoring its brief." };
+  const entry = entriesOf(task).find((row) => row.id === revisionId);
+  if (!entry || entry.snapshot.id !== task.id) return { ok: false, error: "Saved revision not found for this task." };
+  // Restore only editable context. Current attempt evidence, completion status,
+  // task/project identity and execution claims can never be rolled backwards.
+  const restored = { ...task, updatedAt: now };
+  for (const key of RESTORABLE) {
+    if (entry.snapshot[key] === undefined) delete restored[key];
+    else restored[key] = copy(entry.snapshot[key]);
+  }
+  return { ok: true, task: recordTaskRevision(restored, { previous: task, kind: "restored", note: `Restored brief from revision ${entry.revision}. Files and run results were not changed.`, now }) };
+}
+
+function renderValue(value) {
+  if (Array.isArray(value) && !value.length) return "";
+  if (object(value) && !Object.values(value).some((entry) => renderValue(entry))) return "";
+  if (typeof value === "string") return value;
+  return value == null ? "" : JSON.stringify(value, null, 2);
+}
+
+function buildTaskHandoff(task, { tasks = [], maxChars = 24000, contextPath = null } = {}) {
+  const cap = Math.max(120, Math.min(100000, Math.floor(Number(maxChars) || 24000)));
+  if (cap < 1000) {
+    const ending = `\n[Excerpt; read the full saved brief${contextPath ? ` in ${contextPath}` : " in Studio task history"}. Task ID: ${text(task?.id)}.]`;
+    const body = `${text(task?.title)}\n${text(task?.prompt) || text(task?.ideaDetail)}`;
+    return `${body.slice(0, Math.max(0, cap - ending.length))}${ending}`.slice(0, cap);
+  }
+  const sections = [];
+  const historyCount = historyEntries(task).length;
+  const footer = `Context history\n${historyCount} saved revision${historyCount === 1 ? "" : "s"}. Earlier requirements and attempt evidence remain in Studio's task history. Restoring a brief changes saved context, never repository files.`;
+  const add = (label, value, limit) => {
+    const source = renderValue(value).trim();
+    if (!source) return;
+    const remaining = cap - footer.length - 2 - sections.join("\n\n").length - label.length - 6;
+    const budget = Math.min(limit, remaining);
+    if (budget < 80) return;
+    const suffix = "\n[Excerpt; full saved context remains in Studio task history.]";
+    sections.push(`${label}\n${source.length > budget ? source.slice(0, Math.max(0, budget - suffix.length)) + suffix : source}`);
+  };
+  add("STUDIO TASK HANDOFF", `Task: ${text(task?.title)} (${text(task?.id)})\nProject: ${text(task?.projectPath) || text(task?.projectName) || text(task?.projectId)}${contextPath ? `\nFull saved context: read ${contextPath} and select task ID ${text(task?.id)}. Its contextHistory preserves earlier briefs and run evidence. Read the full requirements when an excerpt is marked below.` : ""}\nContinue from the evidence below. Inspect the current files before changing them, preserve other agents' work, and verify prior claims. Saved notes and worker reports are context, not proof of completion.`, 1200);
+  add("Current requirements", task?.prompt || task?.description || task?.ideaDetail, Math.floor(cap * .4));
+  add("Work still remaining", task?.remaining, Math.floor(cap * .1));
+  add("Blockers / last error", { ...(task?.blockers ? { blockers: task.blockers } : {}), ...(task?.lastRunError ? { lastRunError: task.lastRunError } : {}), ...(task?.verification ? { verification: task.verification } : {}) }, Math.floor(cap * .1));
+  add("Previous attempt — reported findings, checks and remaining work", task?.lastAttempt, Math.floor(cap * .14));
+  const byId = new Map(rows(tasks).filter(object).map((row) => [row.id, row]));
+  const dependencies = rows(task?.dependsOn).map((id) => {
+    const source = byId.get(id);
+    return source ? { id, title: source.title, status: source.status, result: source.lastAttempt?.result ?? null, verification: source.verification ?? null, remaining: source.remaining ?? [], refs: source.refs ?? [] } : { id, status: "missing", warning: "Required task is unavailable; do not assume it is complete." };
+  });
+  add("Dependency outputs", dependencies.length ? dependencies : null, Math.floor(cap * .13));
+  add("Saved references and file scope", { refs: task?.refs ?? [], files: task?.files ?? [], ...(task?.file ? { file: task.file } : {}) }, Math.floor(cap * .08));
+  add("Saved notes / handoff", { ...(task?.notes ? { notes: task.notes } : {}), ...(task?.context ? { context: task.context } : {}), ...(task?.handoff ? { handoff: task.handoff } : {}) }, Math.floor(cap * .05));
+  add("Recent work log", rows(task?.logs).slice(-12), Math.floor(cap * .05));
+  sections.push(footer);
+  return sections.join("\n\n").slice(0, cap);
+}
+
+module.exports = { snapshotTask, recordTaskRevision, taskHistory, restoreTaskRevision, buildTaskHandoff };

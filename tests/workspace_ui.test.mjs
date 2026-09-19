@@ -38,8 +38,8 @@ async function environment() {
   const elements = new Map(); const storage = new Map(); const events = {};
   const get = (id) => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   const el = (name) => get(`workspace-${name}`);
-  for (const stage of ["open", "review", "done"]) {
-    const button = new Element("button"); button.dataset.workFilter = stage; button.append(new Element("span")); el("layer").append(button);
+  for (const stage of ["open", "review", "done", "ideas"]) {
+    const button = new Element("button"); button.dataset.workFilter = stage; button.append(new Element("span")); el("layer").append(button); elements.set(`workspace-${stage}`, button);
   }
   const currentProject = { id: "project-a", name: "Project A", path: "C:/projects/a" };
   const projects = { ok: true, activeId: currentProject.id, projects: [currentProject, { id: "project-b", name: "Project B", path: "C:/projects/b" }] };
@@ -52,8 +52,12 @@ async function environment() {
     jevStatus: async () => ({ configured: true, enabled: true, phase: "idle", lastSuccessAt: 1 }),
     assistantMessage: async () => ({ ok: false, error: "Connection unavailable" }),
     tasksCreate: async () => ({ ok: true }),
+    ideasList: async () => ({ ok: true, ideas: [] }),
+    backlogStatus: async () => ({ ok: true, projectId: "project-a", counts: { ready: 1, running: 0, blocked: 0 }, taskStates: [], next: [], paused: false, draining: false }),
+    backlogControl: async () => ({ ok: true }),
     onProjects: (fn) => { events.projects = fn; },
     onTasks: (fn) => { events.tasks = fn; },
+    onIdeas: (fn) => { events.ideas = fn; },
     onAssistant: (fn) => { events.assistant = fn; },
     onAssistantStatus: (fn) => { events.status = fn; },
   };
@@ -154,4 +158,99 @@ test("failed refresh preserves known work and offers a retry instead of an empty
   await env.el("retry").trigger("click");
   assert.equal(env.el("retry").hidden, true);
   assert.equal(env.el("feedback").textContent, "");
+});
+
+test("a large idea backlog is searchable past the initial page and promotes by durable project identity", async () => {
+  const env = await environment();
+  const ideas = Array.from({ length: 100 }, (_, i) => ({ id: `idea-${i + 1}`, title: `Garden idea ${i + 1}`, detail: i === 99 ? "unusual orchid" : "some detail", at: i + 1, status: "new", projectId: "project-a" }));
+  env.bridge.ideasList = async () => ({ ok: true, ideas });
+  await env.workspace.refresh(true);
+  await env.el("ideas").trigger("click");
+  assert.equal(env.el("work-list").children.length, 20);
+  assert.match(env.el("show-more").textContent, /80 remaining/);
+  await env.el("show-more").trigger("click");
+  assert.equal(env.el("work-list").children.length, 40);
+  env.el("work-search").value = "unusual orchid";
+  await env.el("work-search").trigger("input");
+  assert.equal(env.el("work-list").children.length, 1);
+  assert.match(env.el("work-list").textContent, /Garden idea 100/);
+  let payload;
+  env.bridge.backlogControl = async (value) => { payload = value; return { ok: true }; };
+  const promote = env.el("work-list").querySelectorAll("button").find((button) => button.dataset.backlogAction === "promote");
+  await promote.trigger("click");
+  assert.equal(payload.action, "promote");
+  assert.equal(payload.ideaId, "idea-100");
+  assert.equal(payload.projectId, "project-a");
+  assert.equal(env.el("work-search").value, "");
+  assert.match(env.el("feedback").textContent, /Idea linked/);
+});
+
+test("exhausted tasks expose their blocker and explicit retry in Review", async () => {
+  const env = await environment();
+  env.bridge.backlogStatus = async () => ({ ok: true, projectId: "project-a", counts: { ready: 0, running: 0, blocked: 1 }, taskStates: [{ id: "original", stage: "blocked", reason: "Verification limit reached; inspect before retrying." }], next: [], draining: false, paused: false });
+  await env.workspace.refresh(true);
+  await env.el("review").trigger("click");
+  assert.match(env.el("work-list").textContent, /Verification limit reached/);
+  let payload;
+  env.bridge.backlogControl = async (value) => { payload = value; return { ok: true }; };
+  const retry = env.el("work-list").querySelectorAll("button").find((button) => button.dataset.backlogAction === "retry");
+  assert.ok(retry);
+  await retry.trigger("click");
+  assert.equal(payload.taskId, "original");
+  assert.equal(payload.projectId, "project-a");
+});
+
+test("backlog mode starts once, reports failure honestly and can pause without pretending a task finished", async () => {
+  const env = await environment();
+  const pending = deferred(); const calls = [];
+  env.bridge.backlogControl = (value) => { calls.push(value); return pending.promise; };
+  const first = env.el("run-backlog").trigger("click");
+  await env.el("run-backlog").trigger("click");
+  assert.equal(calls.length, 1);
+  assert.equal(env.el("run-backlog").disabled, true);
+  pending.resolve({ ok: false, error: "Finish the active project switch first." });
+  await first;
+  assert.match(env.el("feedback").textContent, /Finish the active project switch/);
+  assert.equal(env.el("run-backlog").disabled, false);
+  env.bridge.backlogStatus = async () => ({ ok: true, projectId: "project-a", draining: true, paused: false, counts: { ready: 1, running: 0, blocked: 0 }, taskStates: [], next: [] });
+  await env.workspace.refresh(true);
+  assert.equal(env.el("run-backlog").textContent, "Pause backlog");
+  env.bridge.backlogControl = async (value) => { calls.push(value); return { ok: true }; };
+  await env.el("run-backlog").trigger("click");
+  assert.equal(calls.at(-1).action, "pause");
+  assert.match(env.el("feedback").textContent, /Running jobs finish normally/);
+});
+
+test("a foreign or failed backlog snapshot never replaces the project's work plan", async () => {
+  const env = await environment();
+  env.bridge.backlogStatus = async () => ({ ok: true, projectId: "project-b", counts: { ready: 999 }, next: [{ title: "Foreign task" }] });
+  await env.workspace.refresh(true);
+  assert.doesNotMatch(env.el("backlog-next").textContent, /Foreign task/);
+  env.bridge.backlogStatus = async () => { throw new Error("Backlog offline"); };
+  await env.workspace.refresh(true);
+  assert.match(env.el("backlog-title").textContent, /unavailable/i);
+  assert.match(env.el("feedback").textContent, /backlog/);
+  assert.equal(env.el("run-backlog").disabled, true);
+});
+
+test("dependency waits and grouped work remain visible without offering an unsafe retry", async () => {
+  const env = await environment();
+  env.bridge.tasksList = async () => ({ ok: true, projectId: "project-a", tasks: [
+    { id: "waiting", status: "open", title: "Publish the gallery" },
+    { id: "grouped", status: "absorbed", title: "Resize thumbnails" },
+    { id: "plan", status: "open", title: "Gallery plan" },
+  ] });
+  env.bridge.backlogStatus = async () => ({ ok: true, projectId: "project-a", counts: { ready: 1, waiting: 1, grouped: 1 }, taskStates: [
+    { id: "waiting", stage: "waiting", reason: "Waiting for Gallery plan", dependencies: [{ id: "plan", done: false }] },
+    { id: "grouped", stage: "grouped", reason: "Included in Gallery plan", groupId: "plan" },
+    { id: "plan", stage: "ready" },
+  ], next: [{ title: "Gallery plan" }], paused: true, summary: "Paused. Current workers can finish; new work will wait.", waiting: "Paused. Current workers can finish; new work will wait." });
+  await env.workspace.refresh(true);
+  assert.match(env.el("work-list").textContent, /Waiting on prerequisites/);
+  assert.match(env.el("work-list").textContent, /Waiting for Gallery plan/);
+  assert.match(env.el("work-list").textContent, /Included in a plan/);
+  assert.match(env.el("work-list").textContent, /View plan/);
+  assert.doesNotMatch(env.el("work-list").textContent, /Try again/);
+  assert.match(env.el("backlog-metrics").textContent, /1waiting/);
+  assert.equal(env.el("backlog-next").textContent, "Up next: Gallery plan");
 });

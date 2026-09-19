@@ -121,7 +121,7 @@ test("same-theme plans merge into one task with every obligation represented", (
   assert.ok(out.ideas.every((idea) => !idea.taskId || survivingIds.has(idea.taskId)), "no dangling plan links");
 });
 
-test("plan expiration relinks its ideas instead of stranding them", () => {
+test("explicit plan expiration relinks its ideas instead of stranding them", () => {
   const now = Date.now();
   const ideaRows = [
     ide("a", "World smoke for torch", "smoke the torch", ["world"], { status: "planned", taskId: "plan_old", read: true }),
@@ -133,7 +133,7 @@ test("plan expiration relinks its ideas instead of stranding them", () => {
     updatedAt: now - 24 * HOUR,
     ideas: ["a", "b", "c"],
   });
-  const first = compact({ requests: [], tasks: [stalePlan], ideas: ideaRows, collisions: null, now });
+  const first = compact({ requests: [], tasks: [stalePlan], ideas: ideaRows, collisions: null, now, limits: { stalePlanHours: 12 } });
   assert.equal(first.report.plansDropped, 1, "stale plan dropped");
   const relinked = first.ideas.filter((idea) => ["a", "b", "c"].includes(idea.id));
   for (const idea of relinked) {
@@ -158,6 +158,7 @@ test("plan expiration relinks its ideas instead of stranding them", () => {
     ideas: second.ideas,
     collisions: null,
     now: thirdInputNow,
+    limits: { stalePlanHours: 12 },
   });
   assert.equal(third.report.plansDropped, 1);
   const afterThird = compact({ requests: [], tasks: [], ideas: third.ideas, collisions: null, now: thirdInputNow + HOUR });
@@ -294,7 +295,7 @@ test("a task group absorbs at most planTaskCap members", () => {
   assert.equal(out.tasks.filter((item) => item.status === "open" && !String(item.id).startsWith("task_plan_")).length, 2, "the overflow stays on the board");
 });
 
-test("an unclaimed task-fold plan expires and relinks its ideas like an idea-fold plan", () => {
+test("an explicitly expired task-fold plan relinks its ideas like an idea-fold plan", () => {
   const now = Date.now();
   const old = now - 13 * HOUR;
   const tasks = [
@@ -302,7 +303,7 @@ test("an unclaimed task-fold plan expires and relinks its ideas like an idea-fol
     task("fresh", "Fresh work"),
   ];
   const ideas = [ide("i1", "Collision queue", "queue edits", [], { status: "planned", taskId: "tp", read: true })];
-  const out = compact({ requests: [], tasks, ideas, collisions: null, now });
+  const out = compact({ requests: [], tasks, ideas, collisions: null, now, limits: { stalePlanHours: 12 } });
   assert.ok(!out.tasks.some((item) => item.id === "tp"), "the leftover task plan leaves the board");
   assert.ok(out.tasks.some((item) => item.id === "fresh"));
   assert.equal(out.report.plansDropped, 1);
@@ -398,7 +399,7 @@ test("housekeepingSweep: stuck claims requeue, owner requests never age out", ()
   assert.equal(t1.status, "open");
   assert.equal(t1.runId, undefined);
   assert.equal(out.tasks.find((t) => t.id === "t2")?.status, "active");
-  assert.ok(!out.tasks.some((t) => t.id === "done1"), "aged done task dropped");
+  assert.equal(out.tasks.find((t) => t.id === "done1")?.status, "archived", "aged completion remains visible in history");
 });
 
 test("housekeepingSweep: claimed copies win title collapse; two claims both stay", () => {
@@ -565,7 +566,7 @@ test("an AI task grouping keeps every obligation through its own expiry", () => 
   assert.ok(plan.prompt.includes(longPrompt), "the builder sees the obligation in full");
   // The plan sits unclaimed past the stale horizon — nothing claimed it.
   const later = now + 13 * HOUR;
-  const expired = compact({ requests: [], tasks: folded.tasks, ideas: folded.ideas, collisions: null, now: later });
+  const expired = compact({ requests: [], tasks: folded.tasks, ideas: folded.ideas, collisions: null, now: later, limits: { stalePlanHours: 12 } });
   assert.ok(!expired.tasks.some((item) => String(item.id).startsWith("task_plan_")), "the expired grouping leaves the board");
   const restored1 = expired.tasks.find((item) => item.id === "t1");
   const restored2 = expired.tasks.find((item) => item.id === "t2");

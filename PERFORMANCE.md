@@ -36,6 +36,20 @@ and advanced visualizations may still load afterward. The harness now checks
 that the workspace composer is enabled with a selected project, and retains
 the original overlay/card readiness criterion for older revisions.
 
+With backlog search, queue controls, and task-context panels added, another
+three isolated launches reached a usable workspace in a median **947 ms**
+(900–1114 ms); smoke completion was 2701 ms. This is a small observed startup
+regression from the previous workspace measurement, not a claimed speedup.
+The readings were taken while development checks were running on the same
+machine. The backlog renders 20 cards initially and searches the full saved
+list; history details are loaded for the selected task rather than mounted
+for every card.
+
+Finished attempts can enter local verification after 30 seconds instead of
+the former ten-minute minimum wait. This changes scheduling latency only;
+the evidence required for completion is unchanged. Backlog mode also avoids
+spending worker time on new idea generation while existing work remains.
+
 Other verified improvements:
 
 - Short agent passes no longer wait 900 milliseconds between target updates;

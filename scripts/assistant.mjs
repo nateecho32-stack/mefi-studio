@@ -23,7 +23,7 @@ export const CAPS = { messages: 200, log: 300, fixes: 100, work: 40 };
 export const DEFAULT_POLICY = { foldAfterMinutes: 60, staleAfterHours: 24, maxSessions: 8, maxTodosPerSession: 14 };
 export const PARALLEL_MAX = 12;
 export const AI_PARALLEL_MAX = 6;
-export const DEFAULT_PREFS = { proactive: true, keepAwake: true, background: true, foldAfterMinutes: 60, staleAfterHours: 24, tidyDoneAfterHours: 24, parallel: 8, aiParallel: 4 };
+export const DEFAULT_PREFS = { proactive: true, keepAwake: true, background: true, backlogMode: false, foldAfterMinutes: 60, staleAfterHours: 24, tidyDoneAfterHours: 24, parallel: 8, aiParallel: 4 };
 const PREF_RANGES = { parallel: [1, PARALLEL_MAX], aiParallel: [1, AI_PARALLEL_MAX] }; // integer prefs clamped into a range
 export const INTENTS = ["status", "tasks", "ideas", "collisions", "machine", "agents", "suggest", "tidy", "fix", "organize", "pause", "resume", "resume-work", "help", "request", "chat", "overseer", "compact", "builder", "log"];
 export const ACTION_KINDS = ["idle", "tick", "audit", "brief", "fix", "tidy", "organize", "message", "overseer"];
@@ -1228,29 +1228,16 @@ function tidyTasks(tasks, now, hours, report) {
     if (!updatedAt || updatedAt >= cutoff) return task; // no timestamp at all: age unknown, leave it
     touched = true;
     report.tasksArchived += 1;
-    return { ...task, status: "archived", logs: [...asArray(task.logs), { at: now, kind: "status", text: "archived by the assistant" }] };
+    return { ...task, status: "archived", doneAt: num(task.doneAt, 0) || updatedAt || num(task.createdAt, now) || now, logs: [...asArray(task.logs), { at: now, kind: "status", text: "archived by the assistant" }] };
   });
   return touched ? next : tasks;
 }
 
 function tidyIdeas(ideas, now, report) {
-  const cutoff = now - TIDY_LIMITS.doneIdeaHours * HOUR;
-  let kept = ideas.filter((idea) => {
-    if (!isObject(idea) || (idea.status !== "done" && idea.status !== "accepted")) return true;
-    const stamp = stampOf(idea);
-    if (!stamp || stamp >= cutoff) return true;
-    report.ideasPruned += 1;
-    return false;
-  });
-  // Plain unread ideas (status new, not kept/accepted/done by the owner) are
-  // the only ones that can pile up: keep the newest 120.
-  const unread = kept.filter((idea) => isObject(idea) && !idea.read && (idea.status === "new" || idea.status == null));
-  if (unread.length > TIDY_LIMITS.unreadIdeas) {
-    const drop = new Set(unread.slice().sort((a, b) => stampOf(b) - stampOf(a)).slice(TIDY_LIMITS.unreadIdeas));
-    kept = kept.filter((idea) => !drop.has(idea));
-    report.ideasPruned += drop.size;
-  }
-  return report.ideasPruned ? kept : ideas;
+  // Ideas are durable work and history. Age, read state, and queue size are
+  // not evidence that a note was implemented; only an explicit delete removes
+  // it. Bound admission to the builder instead of truncating the saved inbox.
+  return ideas;
 }
 
 function sessionIdsOf(value) {
@@ -1318,7 +1305,7 @@ function tidyRequests(requests, { now, collisions, audit, duplicates }, report) 
     ? new Set(duplicates.findings.map((row) => (isObject(row) ? row.file : row)).filter((file) => typeof file === "string"))
     : null;
   const cutoff = now - TIDY_LIMITS.autoRequestDays * DAY;
-  const protectedRequest = (request) => !isObject(request) || !AUTO_SOURCES.has(request.source);
+  const protectedRequest = (request) => !isObject(request) || request.source === "chat" || !AUTO_SOURCES.has(request.source) || request.status === "running" || request.status === "verifying";
   let removed = 0;
   let kept = requests.filter((request) => {
     if (protectedRequest(request)) return true;
@@ -1347,17 +1334,6 @@ function tidyRequests(requests, { now, collisions, audit, duplicates }, report) 
   });
   removed += kept.length - deduped.length;
   kept = deduped;
-  if (kept.length > TIDY_LIMITS.requests) {
-    const overflow = kept.length - TIDY_LIMITS.requests;
-    const oldestAuto = kept
-      .map((request, index) => ({ request, index }))
-      .filter(({ request }) => !protectedRequest(request))
-      .sort((a, b) => num(a.request.at, 0) - num(b.request.at, 0) || b.index - a.index)
-      .slice(0, overflow);
-    const drop = new Set(oldestAuto.map(({ request }) => request));
-    kept = kept.filter((request) => !drop.has(request));
-    removed += drop.size;
-  }
   report.requestsCleared += removed;
   return removed ? kept : requests;
 }
@@ -1397,9 +1373,9 @@ function tidyCheckpoints(checkpoints, sessions, now, report) {
 // be picked up. It never deletes anything a human asked for that is not a
 // duplicate, and it never touches a running claim.
 export const COMPACT_LIMITS = {
-  reviveAfterHours: 6, // a task at the failure cap gets another go this long after its last try
+  reviveAfterHours: 6, // legacy setting; exhausted attempts now need an explicit retry
   maxFailures: 5, // matches the executor's own skip threshold
-  keepRequests: 60, // the queue is a work list, not an archive
+  keepRequests: 60, // legacy display budget; never truncates persisted work
   // An auto-filed request is a snapshot of a problem the filing pass re-checks
   // every tick — unclaimed this long, the snapshot moved on. The pass files it
   // again if the problem is still there, so expiring loses nothing and keeps
@@ -1407,10 +1383,9 @@ export const COMPACT_LIMITS = {
   // A missing `at` is already stale: resume/overseer snapshots that never got
   // a clock would otherwise sit forever.
   staleRequestHours: 12,
-  // Unclaimed idea-fold plans are a snapshot of a theme at fold time. If nobody
-  // picked them up this long, they are leftover — drop them. The ideas pass
-  // re-folds what is still new. A claimed plan is never a casualty.
-  stalePlanHours: 12,
+  // Accepted plans do not expire while waiting in the backlog. A caller may
+  // explicitly dissolve old groups with a finite limit; their work is restored.
+  stalePlanHours: Infinity,
   // Ideas pile up faster than anyone reads them (51 unread was normal), so the
   // compactor folds them into plans: a tag shared by this many new ideas is a
   // theme worth one task, not N notes nobody will open.
@@ -1418,10 +1393,7 @@ export const COMPACT_LIMITS = {
   maxPlansPerPass: 2, // a burst of ideas becomes a couple of plans, not twenty tasks
   planIdeaCap: 8, // how many ideas one plan carries into its prompt
   planTaskCap: 8, // how many open tasks one AI-review plan may absorb
-  // The overseer files upkeep chores about the assistant's own plumbing faster
-  // than they can be built (20 of 34 open tasks, at one point). They are real
-  // work, so they are capped rather than dropped: the oldest few stay, the rest
-  // wait until the backlog clears.
+  // Legacy scheduling budget. Overflow remains saved; execution owns admission.
   maxSelfMaintenance: 6,
 };
 
@@ -1758,6 +1730,19 @@ const compactWeight = (item) => asArray(item?.logs).length * 2 + asArray(item?.r
 const isLiveTask = (task) => task?.status === "open" || task?.status === "active" || task?.status === "awaiting_verification";
 const isFinishedTask = (task) => task?.status === "done" || task?.status === "archived";
 
+// Dependencies name stable task IDs. A title/theme match cannot authorize
+// deleting either an edge's source or its target; grouping would also change
+// the prerequisites of the runnable work unless those edges were rewritten.
+function dependencyProtectedIds(tasks) {
+  const protectedIds = new Set();
+  for (const task of asArray(tasks)) {
+    const dependencies = asArray(task?.dependsOn).map(str).filter(Boolean);
+    if (dependencies.length && task?.id) protectedIds.add(str(task.id));
+    for (const id of dependencies) protectedIds.add(id);
+  }
+  return protectedIds;
+}
+
 // Idea-fold plans are titled "Plan: <theme> — N ideas"; the AI review folds
 // open tasks the same way, as "Plan: <theme> — N tasks". The count is how many
 // notes were scooped that pass, not a different job, so "Plan: catalog — 6 ideas"
@@ -1837,7 +1822,7 @@ function rebuildPlanPrompt(task, ideasById) {
   for (const id of asArray(task.ideas).map(str)) {
     const idea = ideasById.get(id);
     if (!idea) continue;
-    lines.push(`${lines.length + 1}. ${clip(idea.title, 80)}${idea.detail ? ` — ${clip(idea.detail, 110)}` : ""}`);
+    lines.push(`${lines.length + 1}. ${str(idea.title)}${idea.detail ? ` — ${str(idea.detail)}` : ""}`);
   }
   if (lines.length < 2) return null;
   const theme = planThemeKey(task.title) ?? "collected";
@@ -1896,14 +1881,11 @@ function applyRelink(ideas, relink, { keepPlanned = false, at = Date.now() } = {
 // whole mutation (see compact).
 function planIdeas(ideas, tasks, now, rules, excludeIds = new Set(), allocateId = null) {
   // Chat-source notes are session dumps, not a theme to plan.
-  const staleIdeaCutoff = now - rules.stalePlanHours * HOUR;
   const candidates = ideas.filter((idea) => {
     if (idea.status !== "new" || idea.taskId || !str(idea.title)) return false;
     if (idea.source === "chat") return false;
     if (excludeIds.has(str(idea.id))) return false;
     if (num(idea.foldAttempts, 0) >= 2) return false;
-    const at = Math.max(num(idea.at, 0), num(idea.reopenedAt, 0));
-    if (at && at < staleIdeaCutoff) return false;
     return true;
   });
   if (candidates.length < rules.planMinIdeas) return { plans: [], ideas, promoted: 0 };
@@ -1927,22 +1909,22 @@ function planIdeas(ideas, tasks, now, rules, excludeIds = new Set(), allocateId 
       byTag.get(key).ideas.push(idea);
     }
   }
-  // Biggest themes first; a tie goes to the tag whose ideas are newest, so a
-  // burst that just landed is planned ahead of a long-cold pile.
+  // Oldest themes and members first: a stream of new suggestions must not
+  // keep work that was already waiting at the back of the queue forever.
   const themes = [...byTag.values()]
     .filter((group) => group.ideas.length >= rules.planMinIdeas)
-    .sort((a, b) => b.ideas.length - a.ideas.length || Math.max(...b.ideas.map((idea) => num(idea.at, 0))) - Math.max(...a.ideas.map((idea) => num(idea.at, 0))));
+    .sort((a, b) => Math.min(...a.ideas.map((idea) => num(idea.at, 0))) - Math.min(...b.ideas.map((idea) => num(idea.at, 0))) || b.ideas.length - a.ideas.length);
 
   const plans = [];
   const stamped = new Map(); // idea id -> plan id, so one idea joins one plan only
   for (const theme of themes) {
     if (plans.length >= rules.maxPlansPerPass) break;
-    const members = theme.ideas.filter((idea) => !stamped.has(idea.id)).slice(0, rules.planIdeaCap);
+    const members = theme.ideas.filter((idea) => !stamped.has(idea.id)).sort((a, b) => num(a.at, 0) - num(b.at, 0)).slice(0, rules.planIdeaCap);
     if (members.length < rules.planMinIdeas) continue;
     const title = `Plan: ${theme.tag} — ${plural(members.length, "idea")}`;
     if (taken.has(compactKey(title)) || taken.has(compactKey(theme.tag))) continue;
     const id = allocateId ? allocateId() : `task_plan_${now.toString(36)}_${plans.length}`;
-    const lines = members.map((idea, index) => `${index + 1}. ${clip(idea.title, 80)}${idea.detail ? ` — ${clip(idea.detail, 120)}` : ""}`);
+    const lines = members.map((idea, index) => `${index + 1}. ${str(idea.title)}${idea.detail ? ` — ${str(idea.detail)}` : ""}`);
     plans.push({
       id,
       title,
@@ -1992,6 +1974,8 @@ function obligationSnapshot(task) {
     prompt: str(task.prompt),
     refs: asArray(task.refs),
     ideas: uniqueStrings(asArray(task.ideas).map(str)),
+    ...(asArray(task.dependsOn).length ? { dependsOn: asArray(task.dependsOn).map(str) } : {}),
+    ...(task.contextHistory ? { contextHistory: task.contextHistory } : {}),
     ...(task.color ? { color: str(task.color) } : {}),
     ...(task.source ? { source: str(task.source) } : {}),
     ...(task.file ? { file: str(task.file) } : {}),
@@ -2010,8 +1994,9 @@ function obligationSnapshot(task) {
 
 function planTaskGroups(tasks, ideas, groups, now, rules, allocateId = null) {
   const foldable = new Map();
+  const protectedIds = dependencyProtectedIds(tasks);
   for (const task of asArray(tasks)) {
-    if (!task || task.status !== "open" || task.runId || str(task.id).startsWith("task_plan_")) continue;
+    if (!task || task.status !== "open" || task.runId || str(task.id).startsWith("task_plan_") || protectedIds.has(str(task.id))) continue;
     const key = compactKey(task.title);
     if (key) foldable.set(key, task);
   }
@@ -2091,11 +2076,12 @@ function planTaskGroups(tasks, ideas, groups, now, rules, allocateId = null) {
   };
 }
 
-export function compact({ requests = [], tasks = [], ideas = [], collisions = null, now = Date.now(), limits = {}, taskGroups = null, allocateId = null } = {}) {
+export function compact({ requests = [], tasks = [], ideas = [], collisions = null, now = Date.now(), limits = {}, taskGroups = null, allocateId = null, promoteIdeas = true } = {}) {
   const rules = { ...COMPACT_LIMITS, ...(isObject(limits) ? limits : {}) };
   const inRequests = asArray(requests).filter(isObject);
   const inTasks = asArray(tasks).filter(isObject);
   const inIdeas = asArray(ideas).filter(isObject);
+  const protectedIds = dependencyProtectedIds(inTasks);
   const report = { duplicateRequests: 0, duplicateTasks: 0, duplicateIdeas: 0, absorbed: 0, revived: 0, unblocked: 0, stale: 0, resolved: 0, trimmed: 0, planned: 0, plans: [], taskPlanned: 0, taskPlans: [], choresDropped: 0, plansDropped: 0, relinked: 0, runnable: 0, reviewed: null };
   const ideasById = new Map(inIdeas.filter((idea) => str(idea.id)).map((idea) => [idea.id, idea]));
   // The ideas store evolves alongside the tasks in this pass (dedupe, plan
@@ -2126,6 +2112,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   }
   const survivors = new Set(liveByKey.values());
   let outTasks = inTasks.filter((task) => {
+    if (protectedIds.has(str(task.id))) return true;
     if (!isLiveTask(task) || !compactKey(task.title) || survivors.has(task)) return true;
     return bothClaimed.has(compactKey(task.title));
   });
@@ -2148,7 +2135,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
     }
     const keepFinished = new Set(finishedByKey.values());
     const before = outTasks.length;
-    outTasks = outTasks.filter((task) => !isFinishedTask(task) || !compactKey(task.title) || keepFinished.has(task));
+    outTasks = outTasks.filter((task) => protectedIds.has(str(task.id)) || !isFinishedTask(task) || !compactKey(task.title) || keepFinished.has(task));
     report.duplicateTasks += before - outTasks.length;
   }
 
@@ -2165,7 +2152,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   {
     const groups = new Map();
     for (const task of outTasks) {
-      if (!isLiveTask(task) || task.runId) continue;
+      if (!isLiveTask(task) || task.runId || protectedIds.has(str(task.id))) continue;
       const theme = planThemeKey(task.title);
       if (!theme) continue;
       const members = groups.get(theme);
@@ -2237,7 +2224,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
     const groups = new Map();
     const drop = new Set();
     for (const task of outTasks) {
-      if (!isLiveTask(task) || task.runId || !isFixTicket(task)) continue;
+      if (!isLiveTask(task) || task.runId || !isFixTicket(task) || protectedIds.has(str(task.id))) continue;
       const theme = fixThemeKey(task);
       if (!theme) continue;
       if (claimedThemes.has(theme)) {
@@ -2261,17 +2248,11 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
     if (drop.size) outTasks = outTasks.filter((task) => !drop.has(task));
   }
 
-  // 2. Unpark what is ready: an elapsed backoff is not a reason to sit still,
-  //    and a task that hit the failure cap long enough ago earns another run.
+  // 2. Unpark transient backoffs. Exhausted or failed verification attempts
+  //    need an explicit retry; a clock must not restart a paid failure loop.
   outTasks = outTasks.map((task) => {
     if (task.status !== "open") return task;
-    const failures = num(task.runFailures, 0);
-    const lastTry = num(task.updatedAt, num(task.nextRunAt, 0));
-    if (failures >= rules.maxFailures && lastTry && now - lastTry >= rules.reviveAfterHours * HOUR) {
-      report.revived += 1;
-      const { runFailures, nextRunAt, lastRunError, ...rest } = task;
-      return { ...rest, updatedAt: now };
-    }
+    if (exhaustedAttempts(task, rules.maxFailures)) return task;
     if (task.nextRunAt && task.nextRunAt <= now) {
       report.unblocked += 1;
       const { nextRunAt, ...rest } = task;
@@ -2280,26 +2261,10 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
     return task;
   });
 
-  // 3. Cap the assistant's own upkeep backlog. Over the cap, the newest chores
-  //    are dropped (the oldest have waited longest and are likeliest to matter);
-  //    anything running or already claimed is untouchable.
-  {
-    const chores = outTasks.filter((task) => task.status === "open" && isSelfMaintenance(task) && !task.runId);
-    if (chores.length > rules.maxSelfMaintenance) {
-      const keep = new Set(
-        chores
-          .slice()
-          .sort((a, b) => num(a.createdAt, num(a.updatedAt, 0)) - num(b.createdAt, num(b.updatedAt, 0)))
-          .slice(0, rules.maxSelfMaintenance)
-      );
-      const before = outTasks.length;
-      outTasks = outTasks.filter((task) => !chores.includes(task) || keep.has(task));
-      report.choresDropped = before - outTasks.length;
-    }
-  }
+  // 3. Keep queued upkeep tasks. Scheduling limits control how many run;
+  //    deleting overflow hid unfinished obligations with no way to recover.
 
-  // 3b. Unclaimed plans (idea folds and AI task groups alike) this old are
-  //     leftover snapshots, not open work. Expiring a grouping DISSOLVES it,
+  // 3b. Explicitly requested expiry of old, unclaimed groups DISSOLVES them,
   //     never erases it: idea plans relink their ideas back to visible "new"
   //     (with the dead plan id kept as reopenOf, foldAttempts capping the
   //     re-fold); task-group plans restore their members — the absorbed rows
@@ -2314,7 +2279,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
     const expired = [];
     const before = outTasks.length;
     outTasks = outTasks.filter((task) => {
-      if (!isLiveTask(task) || task.runId || !planThemeKey(task.title)) return true;
+      if (!isLiveTask(task) || task.runId || !planThemeKey(task.title) || protectedIds.has(str(task.id))) return true;
       const stamp = num(task.createdAt, num(task.updatedAt, 0));
       if (!stamp || stamp >= cutoff) return true;
       expired.push(task);
@@ -2410,7 +2375,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   const ideaSeen = new Set();
   const dedupedIdeas = [];
   for (const idea of outIdeas) {
-    const key = compactKey(idea.title);
+    const key = `${compactKey(idea.title)}|${compactKey(idea.detail)}`;
     if (key && ideaSeen.has(key) && idea.status === "new" && !idea.taskId) {
       report.duplicateIdeas += 1;
       continue;
@@ -2439,7 +2404,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
           planIdTaken.add(id);
           return id;
         };
-  const planned = planIdeas(outIdeas, outTasks, now, rules, reopenedThisPass, nextPlanId);
+  const planned = promoteIdeas ? planIdeas(outIdeas, outTasks, now, rules, reopenedThisPass, nextPlanId) : { plans: [], ideas: outIdeas, promoted: 0 };
   if (planned.plans.length) {
     outTasks = [...planned.plans, ...outTasks];
     outIdeas = planned.ideas;
@@ -2599,26 +2564,8 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   });
   report.stale = outRequests.length - fresh.length;
 
-  // The cap cuts by worth, not position: positional slicing threw away
-  // whatever waited longest, which was usually the request somebody asked for
-  // by hand. A running or verifying claim always survives; a tie goes to the
-  // newest.
-  let capped = fresh;
-  if (fresh.length > rules.keepRequests) {
-    const keep = new Set(
-      fresh
-        .slice()
-        .sort(
-          (a, b) =>
-            Number(b.status === "running" || b.status === "verifying") - Number(a.status === "running" || a.status === "verifying") ||
-            taskPriority(b) - taskPriority(a) ||
-            num(b.at, 0) - num(a.at, 0)
-        )
-        .slice(0, rules.keepRequests)
-    );
-    capped = fresh.filter((request) => keep.has(request));
-  }
-  report.trimmed = fresh.length - capped.length;
+  // Bound runnable admissions rather than destroying requests over a cap.
+  const capped = fresh;
 
   // 7. What could start right now, if the executor had a free slot — and the
   //    pick it would take, so the pass reports the review it just did.
@@ -2627,9 +2574,9 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
       request.status !== "running" &&
       request.status !== "verifying" &&
       !(request.nextRunAt && request.nextRunAt > now) &&
-      num(request.runFailures, 0) < rules.maxFailures,
+      !exhaustedAttempts(request, rules.maxFailures),
   );
-  const open = outTasks.filter((task) => task.status === "open" && !(task.nextRunAt && task.nextRunAt > now) && num(task.runFailures, 0) < rules.maxFailures);
+  const open = outTasks.filter((task) => task.status === "open" && !task.runId && !(task.nextRunAt && task.nextRunAt > now) && !exhaustedAttempts(task, rules.maxFailures));
   report.runnable = waiting.length + open.length;
   const top = [...waiting, ...open].sort((a, b) => taskPriority(b) - taskPriority(a))[0];
   report.reviewed = { queued: waiting.length, open: open.length, next: top ? clip(str(top.title) || str(top.prompt), 70) || null : null };
@@ -2706,7 +2653,71 @@ export function mergeIdeas(existing, additions, { cap = 400 } = {}) {
     fresh.push(addition);
   }
   if (!fresh.length) return { ideas: current, added: 0 };
-  return { ideas: [...fresh, ...current].slice(0, cap), added: fresh.length };
+  // `cap` remains accepted for old callers, but ingestion must never evict
+  // existing obligations or pretend an accepted addition was saved when it
+  // was sliced off. Builder admission, not storage, is bounded.
+  return { ideas: [...fresh, ...current], added: fresh.length };
+}
+
+export function exhaustedAttempts(item, maxFailures = 5) {
+  return num(item?.runFailures, 0) >= maxFailures || num(item?.verifyAttempts, 0) >= VERIFY_MAX_ATTEMPTS || item?.verification?.state === "failed";
+}
+
+export function backlogIdeaEligible(idea, { explicit = false } = {}) {
+  return isObject(idea) && Boolean(str(idea.id).trim()) && Boolean(str(idea.title).trim()) && !idea.taskId &&
+    (idea.status == null || idea.status === "new" || idea.status === "keep" || (explicit && ["accepted", "planned"].includes(idea.status))) &&
+    (explicit || idea.source !== "chat" || idea.status === "keep");
+}
+
+// Admit a few durable, standalone tasks when the user asks to drain ideas.
+// Old notes and twice-expired folds remain actionable. Every body and reference
+// is retained, and repeat passes are idempotent through both directions of the
+// task/idea link. Call under the board gateway so those links persist together.
+export function promoteIdeaBacklog({ tasks = [], ideas = [], now = Date.now(), limit = 3, ideaIds = null } = {}) {
+  let outTasks = asArray(tasks).filter(isObject).map((task) => ({ ...task }));
+  const current = asArray(ideas).filter(isObject);
+  const requested = Array.isArray(ideaIds) ? new Set(ideaIds.map(String)) : null;
+  const count = Math.max(0, Math.min(20, Math.floor(Number.isFinite(limit) ? limit : 3)));
+  const candidates = current.filter((idea) => backlogIdeaEligible(idea, { explicit: Boolean(requested) }) && (!requested || requested.has(str(idea.id))))
+    .sort((a, b) => num(a.at, num(a.createdAt, 0)) - num(b.at, num(b.createdAt, 0)) || str(a.id).localeCompare(str(b.id)));
+  const changes = new Map();
+  const taskIds = [];
+  const usedIds = new Set(outTasks.map((task) => str(task.id)));
+  let serial = 0;
+  for (const idea of candidates) {
+    if (changes.size >= count) break;
+    const body = str(idea.detail).trim() || str(idea.title).trim();
+    const same = outTasks.find((task) => asArray(task.ideas).includes(idea.id) ||
+      (compactKey(task.title) === compactKey(idea.title) && compactKey(task.ideaDetail ?? task.prompt) === compactKey(body)));
+    let target = same;
+    if (!target) {
+      let id;
+      do { id = `task_idea_${now.toString(36)}_${serial++}`; } while (usedIds.has(id));
+      usedIds.add(id);
+      // A similar title alone is not authority to discard a different idea.
+      // Distinguish the card so legacy title-based queue guards preserve it.
+      const collision = outTasks.some((task) => isLiveTask(task) && compactKey(task.title) === compactKey(idea.title));
+      target = {
+        id, title: `${str(idea.title).trim()}${collision ? ` (idea ${str(idea.id)})` : ""}`,
+        prompt: `Work on this saved idea in the selected project. Check existing work first, implement the applicable requirements, and report checks plus anything still remaining.\n\n${str(idea.title).trim()}\n${body}`,
+        ideaDetail: body, status: "open", source: "idea", color: "#e6c98d",
+        createdAt: now, updatedAt: now, backlogAt: num(idea.at, num(idea.createdAt, now)),
+        ideas: [idea.id], refs: asArray(idea.refs),
+        ...(idea.projectId ? { projectId: idea.projectId } : {}),
+        ...(idea.projectPath ? { projectPath: idea.projectPath } : {}),
+        ...(idea.file ? { file: idea.file } : {}),
+        ...(Array.isArray(idea.files) ? { files: [...idea.files] } : {}),
+        logs: [{ at: now, kind: "status", text: "Saved idea added to the work queue" }],
+      };
+      outTasks = [...outTasks, target];
+    } else if (!asArray(target.ideas).includes(idea.id)) {
+      target = { ...target, ideas: [...asArray(target.ideas), idea.id] };
+      outTasks = outTasks.map((task) => task.id === target.id ? target : task);
+    }
+    changes.set(idea.id, { ...idea, status: isFinishedTask(target) ? "done" : "planned", taskId: target.id, read: true, updatedAt: now });
+    taskIds.push(target.id);
+  }
+  return { tasks: outTasks, ideas: current.map((idea) => changes.get(idea.id) ?? idea), promoted: changes.size, taskIds: uniqueStrings(taskIds), changed: changes.size > 0 };
 }
 
 // ---- the executor's result protocol ---------------------------------------------
@@ -2828,8 +2839,8 @@ export function advanceCursor(rows, cursor = { at: 0, id: "" }) {
 
 // ---- the autopilot housekeeping sweep ------------------------------------------
 // The pure core of the executor's housekeeping pass (main.cjs persists the
-// result): claims whose run is gone go back on the pile, finished tasks age
-// out, the a-eyes backlog is capped by worth, and same-title copies collapse.
+// result): claims whose run is gone go back on the pile, finished tasks move
+// to the archive, and same-title live copies collapse.
 // Every rule here spares a live claim — a task or request a run still holds
 // is never pruned, capped, or deduped away.
 //
@@ -2882,7 +2893,7 @@ export function housekeepingSweep({ requests = [], tasks = [], liveRuns = new Se
   // Tasks: a stuck "active" (no live run behind the runId) reopens. Manually
   // activated tasks carry no runId and are never touched. A fresh foreign
   // lease blocks the reopen the same way it blocks request requeues.
-  let outTasks = asArray(tasks).filter(isObject);
+  let outTasks = asArray(tasks).filter(isObject).map((task) => ({ ...task }));
   for (const task of outTasks) {
     if (task.status !== "active" || !task.runId || liveRuns.has(task.runId)) continue;
     if (leaseHeldElsewhere(task, { pid, now, leaseStaleMs })) continue;
@@ -2919,6 +2930,9 @@ export function housekeepingSweep({ requests = [], tasks = [], liveRuns = new Se
       } else {
         task.status = "archived";
         task.updatedAt = now;
+        task.doneAt = num(plan.doneAt, num(plan.updatedAt, now));
+        task.completionFromTaskId = str(plan.id);
+        if (plan.verification) task.verification = { ...plan.verification, inheritedFromTaskId: str(plan.id) };
         delete task.absorbedInto;
         task.logs = [...asArray(task.logs), { at: now, kind: "status", text: `grouping ${str(plan.id)} finished — archived with it` }].slice(-40);
         report.absorbedArchived += 1;
@@ -2926,26 +2940,16 @@ export function housekeepingSweep({ requests = [], tasks = [], liveRuns = new Se
     }
   }
 
-  // Done tasks older than the tidy horizon drop — but a card mid-verification
-  // or with a live claim is never a casualty of its own timestamp.
+  // Completed work moves to the archive while retaining results and evidence.
+  // A card mid-verification or with a live claim never ages out.
   const doneCutoff = now - rules.tidyDoneAfterHours * HOUR;
-  const beforeDone = outTasks.length;
-  outTasks = outTasks.filter((task) => {
-    if (task.status !== "done" || task.runId) return true;
-    return !((task.updatedAt ?? 0) < doneCutoff);
+  outTasks = outTasks.map((task) => {
+    const stamp = num(task.updatedAt, num(task.doneAt, num(task.createdAt, 0)));
+    if (task.status !== "done" || task.runId || !stamp || stamp >= doneCutoff) return task;
+    report.tasksArchived += 1;
+    return { ...task, status: "archived", doneAt: num(task.doneAt, 0) || stamp || now };
   });
-  report.tasksArchived = beforeDone - outTasks.length;
-
-  // The a-eyes backlog cap cuts by worth, recency as tie-break; a claimed or
-  // verifying task is exempt.
-  const aEyesOpen = outTasks
-    .filter((task) => task?.source === "a-eyes" && task.status === "open" && !task.runId)
-    .sort((a, b) => taskPriority(b) - taskPriority(a) || num(b.updatedAt, 0) - num(a.updatedAt, 0));
-  const excess = new Set(aEyesOpen.slice(25).map((task) => task.id));
-  if (excess.size) {
-    outTasks = outTasks.filter((task) => !excess.has(task.id));
-    report.backlogCapped = excess.size;
-  }
+  // No queue-length truncation: all accepted backlog tasks remain available.
 
   // Same-title copies collapse to the keeper. A claimed row is never dropped
   // (it is live work); when a claimed copy shares a title with unclaimed
@@ -2953,9 +2957,11 @@ export function housekeepingSweep({ requests = [], tasks = [], liveRuns = new Se
   // claimed copies of one title — two live attempts, which the executor's
   // title guard resolves — are left entirely alone.
   const beforeDedup = outTasks.length;
+  const protectedIds = dependencyProtectedIds(outTasks);
   const byTitle = new Map();
   const claimCount = new Map();
   for (const task of outTasks) {
+    if (!isLiveTask(task)) continue;
     const key = compactKey(task?.title);
     if (!key) continue;
     if (task.runId) {
@@ -2966,6 +2972,8 @@ export function housekeepingSweep({ requests = [], tasks = [], liveRuns = new Se
     if (!existing || num(task.updatedAt, 0) > num(existing.updatedAt, 0)) byTitle.set(key, task);
   }
   outTasks = outTasks.filter((task) => {
+    if (protectedIds.has(str(task.id))) return true;
+    if (!isLiveTask(task)) return true;
     const key = compactKey(task?.title);
     if (!key) return true;
     if (task.runId) return true; // a live claim is never housekept away
@@ -3290,7 +3298,7 @@ export function suggestWork({ sessions = null, tasks = null, ideas = null, reque
   const rankTask = (task) =>
     SELF_MAINTENANCE_TITLE.test(str(task.title)) ? 10 : str(task.source) === "chat" ? 65 : String(task.id).startsWith("task_plan_") ? 55 : str(task.source) === "a-eyes" ? 45 : 35;
   const open = asArray(tasks)
-    .filter((task) => isObject(task) && task.status === "open" && !(num(task.nextRunAt, 0) > now) && num(task.runFailures, 0) < 5)
+    .filter((task) => isObject(task) && task.status === "open" && !(num(task.nextRunAt, 0) > now) && !exhaustedAttempts(task))
     .sort((a, b) => rankTask(b) - rankTask(a) || num(a.createdAt, num(a.updatedAt, 0)) - num(b.createdAt, num(b.updatedAt, 0)));
   for (const task of open.slice(0, 3)) {
     const rank = rankTask(task);
@@ -3774,7 +3782,7 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
       actions.push("tidy");
       const hours = num(current?.prefs?.tidyDoneAfterHours, DEFAULT_PREFS.tidyDoneAfterHours);
       const last = str(current?.housekeeping?.lastText);
-      lines.push(`Running a tidy pass now: done tasks older than ${hours} h are archived, finished ideas pruned, resolved audit and collision requests cleared, old checkpoints dropped.`);
+      lines.push(`Running a tidy pass now: done tasks older than ${hours} h are archived, saved ideas kept, resolved audit and collision requests cleared, old checkpoints dropped.`);
       lines.push(`Last pass: ${last || "none yet"}.`);
       break;
     }
@@ -4389,8 +4397,8 @@ function selfTest() {
   expect(org.staleQuietMin === 30 * 60, `staleQuietMin ${org.staleQuietMin}`);
   const report = result.tidy.report;
   expect(report.tasksArchived === 1 && result.tidy.tasks[0].status === "archived" && result.tidy.tasks[1].status === "done", `tasks ${JSON.stringify(report)}`);
-  expect(report.ideasPruned === 1 && result.tidy.ideas.length === 3, `ideas ${JSON.stringify(report)}`);
-  expect(report.requestsCleared === 4 && result.tidy.requests.length === 4, `requests ${JSON.stringify(report)} ${result.tidy.requests.length}`);
+  expect(report.ideasPruned === 0 && result.tidy.ideas.length === 4, `ideas ${JSON.stringify(report)}`);
+  expect(report.requestsCleared === 3 && result.tidy.requests.length === 5, `requests ${JSON.stringify(report)} ${result.tidy.requests.length}`);
   expect(result.tidy.requests.some((request) => request.source === "manual"), "manual request kept");
   expect(report.checkpointsDropped === 12 && !result.tidy.checkpoints.ses_gone_old && result.tidy.checkpoints.ses_working.length === 50, `checkpoints ${JSON.stringify(report)}`);
   expect(result.tidy.changed === true, "changed");
@@ -4472,13 +4480,13 @@ function selfTest() {
     expect(!compacted.tasks.find((task) => task.id === "t5").nextRunAt, "an elapsed backoff is cleared");
     expect(compacted.tasks.find((task) => task.id === "t7").nextRunAt === at + MINUTE, "a live backoff is left alone");
     const revived = compacted.tasks.find((task) => task.id === "t6");
-    expect(revived.runFailures === undefined && revived.nextRunAt === undefined, `a burnt-out task is revived ${JSON.stringify(revived)}`);
+    expect(revived.runFailures === 5, `an exhausted task waits for explicit retry ${JSON.stringify(revived)}`);
     const titles = compacted.requests.map((request) => request.title);
     expect(!titles.includes("Wire the ideas panel"), "a request already on the board is absorbed");
     expect(titles.filter((title) => title.toLowerCase() === "something new").length === 1, `duplicate requests collapse ${JSON.stringify(titles)}`);
     expect(titles.includes("Running already"), "a request in flight is never dropped");
     expect(compacted.report.duplicateTasks === 2 && compacted.report.absorbed === 1 && compacted.report.duplicateRequests === 1, `compact report ${JSON.stringify(compacted.report)}`);
-    expect(compacted.report.revived === 1 && compacted.report.unblocked === 1, `revive/unblock ${JSON.stringify(compacted.report)}`);
+    expect(compacted.report.revived === 0 && compacted.report.unblocked === 1, `revive/unblock ${JSON.stringify(compacted.report)}`);
     expect(compacted.requestsChanged && compacted.tasksChanged, "a pass that changed both stores says so");
     // the review: an unclaimed auto request expires (the filing pass re-files
     // it while the problem lasts), chat and manual asks never do, and the
@@ -4515,7 +4523,7 @@ function selfTest() {
     });
     const pileTitles = pile.requests.map((request) => request.title);
     expect(pileTitles.includes("old hand ask"), `worth beats position: the chat ask survives ${JSON.stringify(pileTitles)}`);
-    expect(pileTitles.length === 3 && pile.report.trimmed === 1, `the cap still holds ${JSON.stringify(pile.report)}`);
+    expect(pileTitles.length === 4 && pile.report.trimmed === 0, `backlog requests survive admission caps ${JSON.stringify(pile.report)}`);
     // ideas fold into plans: the shared tag is the theme, promoted ideas stop
     // being loose, and a second pass has nothing left to do with them
     const idea = (id, title, tags, status) => ({ id, title, detail: `${title} detail`, tags, at, status: status ?? "new" });
@@ -4563,7 +4571,7 @@ function selfTest() {
       limits: { maxSelfMaintenance: 3 },
     });
     const keptIds = capped.tasks.map((task) => task.id);
-    expect(capped.report.choresDropped === 4, `over the cap is shelved ${JSON.stringify(capped.report)}`);
+    expect(capped.report.choresDropped === 0 && capped.tasks.length === 9, `overflow chores remain in the backlog ${JSON.stringify(capped.report)}`);
     expect(keptIds.includes("c1") && keptIds.includes("c2") && keptIds.includes("c3"), `the oldest chores stay ${JSON.stringify(keptIds)}`);
     expect(keptIds.includes("c8"), "a claimed chore is never shelved, cap or not");
     expect(keptIds.includes("real"), "app work is not upkeep and is never capped");
@@ -4691,12 +4699,12 @@ function selfTest() {
       requests: [],
     });
     const leftoverIds = leftover.tasks.map((task) => task.id);
-    expect(!leftoverIds.includes("oldplan"), `a leftover plan is dropped ${JSON.stringify(leftoverIds)}`);
+    expect(leftoverIds.includes("oldplan"), `a waiting plan is durable ${JSON.stringify(leftoverIds)}`);
     expect(leftoverIds.includes("freshplan") && leftover.tasks.find((task) => task.id === "freshplan").status === "open", "a fresh plan stays open");
     expect(leftover.tasks.find((task) => task.id === "heldplan")?.status === "open", "a claimed plan is never dropped");
     expect(leftover.tasks.find((task) => task.id === "human")?.status === "open", "human work is not an idea-fold plan");
-    expect(!leftover.tasks.some((task) => /^Plan: (queue|catalog)/.test(task.title)), `chat dumps and old notes do not mint a plan ${JSON.stringify(leftover.tasks.map((task) => task.title))}`);
-    expect(leftover.report.plansDropped === 1, `plansDropped ${JSON.stringify(leftover.report)}`);
+    expect(!leftover.tasks.some((task) => /^Plan: queue/.test(task.title)), `chat dumps do not mint a plan ${JSON.stringify(leftover.tasks.map((task) => task.title))}`);
+    expect(leftover.report.plansDropped === 0, `plansDropped ${JSON.stringify(leftover.report)}`);
     const resolved = compact({
       now: at,
       collisions: [{ file: "C:/repo/live.lua", files: ["C:/repo/live.lua"], sessions: ["ses_a", "ses_b"] }],

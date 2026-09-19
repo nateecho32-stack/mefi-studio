@@ -721,7 +721,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn("conflictsWithLiveFix", self.main, "a live Fix: job holds its subsystem so a twin cannot spawn")
         self.assertIn("function collisionRequestLive", self.module, "tidy keeps a grouped collision by file or session pair")
         self.assertIn("files: uniqueStrings(collisionFiles(entry))", self.module, "AI facts keep the grouped file list")
-        for marker in ("compactor: assistantCompactorJob", "async function assistantCompactorJob", "assistant.compact({ requests: board.requests, tasks: stamped, ideas: board.ideas, collisions: assistantCache.store?.collisions, now })"):
+        for marker in ("compactor: assistantCompactorJob", "async function assistantCompactorJob", "assistant.compact({ requests: board.requests, tasks: stamped, ideas: board.ideas, collisions: assistantCache.store?.collisions, now"):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.main)
         body = _function_body(self.main, "assistantCompactorJob")
@@ -853,7 +853,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         # behaviorally in tests/); the host applies them under the
         # board lock. _function_body cannot parse the destructured signature,
         # so these pin the sweep-unique lines in the module source.
-        self.assertIn("taskPriority(b) - taskPriority(a) || num(b.updatedAt, 0) - num(a.updatedAt, 0)", self.module, "the cap takes the least valuable first")
+        self.assertIn("No queue-length truncation", self.module, "bounded scheduling retains all accepted work")
         self.assertIn("if (task.runId) return true", self.module, "never cut a task a run is holding")
         self.assertIn("assistant.housekeepingSweep(", _function_body(self.main, "autopilotHousekeeping"), "the host applies the pure sweep under the board lock")
 
@@ -1049,11 +1049,11 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertEqual("done", by_id["task_fresh_done"]["status"], "done tasks younger than tidyDoneAfterHours stay")
         self.assertEqual("open", by_id["task_open"]["status"], "open tasks are never touched")
         self.assertEqual(NOW - 30 * HOUR, by_id["task_old_done"]["updatedAt"], "only status and logs change")
-        self.assertEqual(1, report["ideasPruned"])
-        self.assertEqual(["idea_done_fresh", "idea_new", "idea_keep"], [idea["id"] for idea in tidy["ideas"]])
-        self.assertEqual(4, report["requestsCleared"])
+        self.assertEqual(0, report["ideasPruned"])
+        self.assertEqual(["idea_accepted_old", "idea_done_fresh", "idea_new", "idea_keep"], [idea["id"] for idea in tidy["ideas"]])
+        self.assertEqual(3, report["requestsCleared"])
         titles = [request["title"] for request in tidy["requests"]]
-        self.assertEqual(["Audit: ipc", "Resolve collision: crafting.lua", "Owner note", "Fix: dup"], titles)
+        self.assertEqual(["Audit: ipc", "Resolve collision: crafting.lua", "Owner note", "Old chat", "Fix: dup"], titles)
         self.assertEqual(NOW - 2 * HOUR, next(request["at"] for request in tidy["requests"] if request["title"] == "Fix: dup"), "duplicates keep the newest")
         self.assertEqual(12, report["checkpointsDropped"])
         self.assertNotIn("ses_gone_old", tidy["checkpoints"])
@@ -1061,7 +1061,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertEqual(50, len(tidy["checkpoints"]["ses_working"]))
         self.assertEqual("note 0", tidy["checkpoints"]["ses_working"][0]["note"], "the newest notes survive the cap")
         self.assertEqual(1, len(tidy["checkpoints"]["ses_active"]))
-        for piece in ("archived 1 done task", "pruned 1 idea", "cleared 4 requests", "dropped 12 checkpoints"):
+        for piece in ("archived 1 done task", "cleared 3 requests", "dropped 12 checkpoints"):
             with self.subTest(piece=piece):
                 self.assertIn(piece, report["text"])
 
@@ -1090,7 +1090,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         titles = [request["title"] for request in tidy["requests"]]
         self.assertIn("Audit: dom", titles, "without an audit result audit requests are kept")
         self.assertIn("Resolve collision: old.lua", titles, "without a collision list collision requests are kept")
-        self.assertNotIn("Old chat", titles, "age still applies to auto requests")
+        self.assertIn("Old chat", titles, "operator work must never expire on a housekeeping clock")
         self.assertIn("ses_gone_old", tidy["checkpoints"], "without a session list no checkpoint key is dropped")
         self.assertEqual(50, len(tidy["checkpoints"]["ses_working"]), "the per-session cap still applies")
 
@@ -1404,7 +1404,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertEqual([], state["messages"], "a non-list becomes an empty thread")
         self.assertEqual([{"at": 0, "kind": "tick", "text": "tick 40"}], state["log"], "junk log entries are dropped, valid ones kept")
         self.assertNotIn("junk", state)
-        self.assertEqual({"proactive": True, "keepAwake": True, "background": True, "foldAfterMinutes": 60, "staleAfterHours": 24, "tidyDoneAfterHours": 24, "parallel": 12, "aiParallel": 1}, state["prefs"], "parallel 99 clamps to 12, aiParallel 0 to 1")
+        self.assertEqual({"proactive": True, "keepAwake": True, "background": True, "backlogMode": False, "foldAfterMinutes": 60, "staleAfterHours": 24, "tidyDoneAfterHours": 24, "parallel": 12, "aiParallel": 1}, state["prefs"], "parallel 99 clamps to 12, aiParallel 0 to 1")
         self.assertEqual("deepseek-v4.1-flash", state["ai"]["model"])
         self.assertEqual(2, state["ai"]["failures"])
         self.assertEqual("HTTP 401 unauthorized", state["ai"]["lastError"])

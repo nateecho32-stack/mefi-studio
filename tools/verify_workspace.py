@@ -111,6 +111,9 @@ class VerifiedWindow extends NativeWindow {
     return this.run(`const selector = ${JSON.stringify(selector)}; const el = document.querySelector(selector); if (!el) throw new Error('Missing control: ' + selector); if (el.disabled) throw new Error('Disabled control: ' + selector); el.scrollIntoView({block:'nearest'}); const rect = el.getBoundingClientRect(); if (!rect.width || !rect.height || getComputedStyle(el).visibility === 'hidden') throw new Error('Hidden control: ' + selector); const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2); if (!hit || !el.contains(hit)) throw new Error('Obscured control: ' + selector); el.click();`);
   }
   async capture(name) {
+    // Hidden offscreen windows can retain the constellation's last canvas
+    // frame after navigation even though DOM hit testing is already current.
+    this.webContents.invalidate();
     await sleep(200);
     const image = await this.webContents.capturePage();
     assert(!image.isEmpty(), `${name} screenshot must contain pixels`);
@@ -122,9 +125,37 @@ class VerifiedWindow extends NativeWindow {
   async verify() {
     await this.until("window.MefiWorkspace?.isActive?.() && document.getElementById('boot-layer')?.hidden", "workspace is the default home");
     await this.until("document.querySelectorAll('#workspace-projects button').length >= 2", "saved projects appear");
+    await this.until("document.querySelector('#workspace-ideas span').textContent === '100' && !document.getElementById('workspace-run-backlog').disabled", "the entire seeded backlog loads");
     assert.equal(await this.run("return (await window.mefiStudio.projectsList()).activeId;"), config.alpha.id);
+    assert.equal((await this.run("return (await window.mefiStudio.tasksList()).tasks;")).length, 30, "all thirty fixture tasks survive loading");
     this.check("Workspace opens as home with saved projects");
     await this.capture("01-workspace-home");
+
+    await this.click("#workspace-ideas");
+    const firstIdeaPage = await this.run("return document.querySelectorAll('#workspace-work-list .ws-idea-card').length;");
+    assert.equal(firstIdeaPage, 20, "large idea inbox renders a bounded initial page");
+    assert.equal(await this.run("return document.getElementById('workspace-show-more').hidden;"), false);
+    await this.click("#workspace-show-more");
+    assert.equal(await this.run("return document.querySelectorAll('#workspace-work-list .ws-idea-card').length;"), 40, "show more reveals older ideas without dropping them");
+    await this.run("const input = document.getElementById('workspace-work-search'); input.value = 'Moonlight'; input.dispatchEvent(new Event('input', {bubbles:true}));");
+    await this.until("document.querySelectorAll('#workspace-work-list .ws-idea-card').length === 1 && document.getElementById('workspace-work-list').textContent.includes('Moonlight watering reminders')", "search finds an idea beyond the first page");
+    assert.equal(await this.run("return document.getElementById('workspace-show-more').hidden;"), true);
+    await this.capture("08-idea-search");
+    await this.click('#workspace-work-list [data-backlog-action="promote"]');
+    await this.until("(async () => Boolean((await window.mefiStudio.ideasList()).ideas.find(idea => idea.id === 'fixture_idea_099')?.taskId))()", "explicit idea promotion saves a task link");
+    await this.until("!document.getElementById('workspace-run-backlog').disabled", "idea promotion settles");
+    const promotedIdea = await this.run("return (await window.mefiStudio.ideasList()).ideas.find(idea => idea.id === 'fixture_idea_099');");
+    const ideaTask = await this.run(`return (await window.mefiStudio.tasksList()).tasks.find(task => task.id === ${JSON.stringify(promotedIdea.taskId)});`);
+    assert(ideaTask && ideaTask.title.includes("Moonlight"), "promoted idea is a durable task");
+    assert.equal(ideaTask.projectId, config.alpha.id, "promoted idea task belongs to selected project");
+    assert(fs.readFileSync(path.join(config.appRoot, "data", "eyes-feature-ideas.json"), "utf8").includes(promotedIdea.taskId), "idea linkage is persisted");
+    await this.run("const input = document.getElementById('workspace-work-search'); input.value = 'Moonlight'; input.dispatchEvent(new Event('input', {bubbles:true}));");
+    await this.click('#workspace-work-list [data-backlog-action="prioritize"]');
+    await this.until(`(async () => (await window.mefiStudio.backlogStatus()).next[0]?.id === ${JSON.stringify(ideaTask.id)})()`, "Do next moves chosen task ahead of waiting work");
+    await this.until("!document.getElementById('workspace-run-backlog').disabled", "prioritization settles");
+    await this.run("const input = document.getElementById('workspace-work-search'); input.value = ''; input.dispatchEvent(new Event('input', {bubbles:true}));");
+    await this.capture("09-prioritized-backlog");
+    this.check("A hundred ideas remain searchable, paginated, and explicitly promotable into prioritized project work");
 
     await this.click("#workspace-add-project");
     await this.until("!document.getElementById('workspace-add-project').disabled", "canceled folder picker settles");
@@ -184,6 +215,39 @@ class VerifiedWindow extends NativeWindow {
     await this.click("#tasks-close");
     this.check("Completed work is visible and opens its result detail");
 
+    await this.run("window.MefiNav.go('tasks', {taskId:'fixture_open'});");
+    await this.until("document.getElementById('task-title').textContent.includes('Plan a planting calendar') && document.querySelector('[data-task-panel=dependencies]')", "task planning details appear");
+    await this.click('[data-task-panel="dependencies"] > summary');
+    assert.equal(await this.run("return Boolean(document.querySelector('[data-dependency-id=fixture_open]'));"), false, "a task cannot depend on itself");
+    await this.click('[data-dependency-id="fixture_backlog_08"]');
+    await this.click('[data-task-action="dependencies"]');
+    await this.until("(async () => (await window.mefiStudio.tasksList()).tasks.find(task => task.id === 'fixture_open').dependsOn?.includes('fixture_backlog_08'))()", "saved prerequisite survives a real store read");
+    await this.until("document.querySelector('[data-task-readiness=waiting]')", "task shows the actual dependency hold");
+    await this.until("document.querySelector('#task-list li.selected [data-readiness=waiting]')", "board row agrees with the prerequisite hold in task details");
+    await this.click('[data-task-panel="handoff"] > summary');
+    await this.until("document.querySelector('.task-handoff-text')?.textContent.includes('Plan a planting calendar')", "handoff carries saved task context");
+    await this.capture("13-task-prerequisites");
+    const baseline = await this.run("return (await window.mefiStudio.tasksHistory({taskId:'fixture_open'})).entries.find(entry => !entry.snapshot.dependsOn?.length);");
+    assert(baseline?.id, "legacy task obtains a recoverable baseline before its first context change");
+    const revisedBrief = "Add seasonal dates, export reminders, and preserve the planting notes.";
+    await this.run(`const tasks = (await window.mefiStudio.tasksList()).tasks; const task = tasks.find(task => task.id === 'fixture_open'); task.prompt = ${JSON.stringify(revisedBrief)}; task.updatedAt = Date.now(); const result = await window.mefiStudio.tasksSave(tasks); if (!result.ok) throw new Error(result.error || 'Fixture brief edit failed');`);
+    await this.until(`document.getElementById('task-detail').textContent.includes(${JSON.stringify(revisedBrief)})`, "updated brief appears in the selected detail");
+    await this.click('[data-task-panel="history"] > summary');
+    await this.until(`document.querySelector('[data-revision-id="${baseline.id}"] [data-task-action=restore]')`, "older brief is available to restore");
+    await this.click('[data-task-panel="dependencies"] > summary');
+    await this.click('[data-task-panel="handoff"] > summary');
+    await this.run("document.querySelector('[data-task-panel=history]').scrollIntoView({block:'start'});");
+    await this.capture("14-task-history");
+    await this.click(`[data-revision-id="${baseline.id}"] [data-task-action="restore"]`);
+    await this.until("(async () => (await window.mefiStudio.tasksList()).tasks.find(task => task.id === 'fixture_open').prompt === 'Add dates for the next planting season.')()", "restoring history recovers earlier requirements");
+    await this.until("document.getElementById('task-detail').textContent.includes('Earlier brief restored')", "restore reports the saved result");
+    const restoredTask = await this.run("return (await window.mefiStudio.tasksList()).tasks.find(task => task.id === 'fixture_open');");
+    assert.equal(restoredTask.status, "open", "restoring a brief never rewinds task status");
+    assert.equal(restoredTask.dependsOn?.length || 0, 0, "restored prerequisite context matches the chosen earlier brief");
+    assert(fs.readFileSync(path.join(config.alpha.path, "README.md"), "utf8").includes("Disposable UI verification project"), "restoring a brief never changes project files");
+    await this.click("#tasks-close");
+    this.check("Prerequisites hold work, saved handoffs retain context, and earlier briefs restore without changing project files or task status");
+
     await this.click("#workspace-review");
     await this.until("document.getElementById('workspace-work-list').textContent.includes('Review the seed importer')", "review filter shows unverified work");
     this.check("Awaiting review is separate from completed work");
@@ -193,6 +257,7 @@ class VerifiedWindow extends NativeWindow {
     await this.until("document.getElementById('workspace-project-name').textContent.includes('Pocket Weather')", "second project heading");
     const betaTasks = await this.run("return (await window.mefiStudio.tasksList()).tasks;");
     assert(!betaTasks.some(t => t.title === title || t.id === "fixture_done"), "first project's board must not leak to second project");
+    assert(!(await this.run("return (await window.mefiStudio.ideasList()).ideas;")).some(idea => idea.id === "fixture_idea_099"), "first project's idea backlog must not leak to second project");
     assert(!(await this.run("return document.getElementById('workspace-thread').textContent.includes('Hello, Mefi.');")), "conversation must not leak across projects");
     assert.equal(await this.run("return document.getElementById('workspace-input').value;"), "", "first project's draft must not leak across projects");
     await this.click("#workspace-mode-work");
@@ -211,6 +276,23 @@ class VerifiedWindow extends NativeWindow {
     assert.equal(await this.run("return document.getElementById('workspace-input').value;"), "A draft just for Garden Notes", "first project's draft survives switching");
     this.check("Project switching keeps tasks and conversation isolated and durable");
 
+    await this.click("#workspace-pause");
+    await this.until("(async () => (await window.mefiStudio.assistantState()).state.status === 'paused')()", "pause control updates service");
+    await this.click("#workspace-pause");
+    await this.until("(async () => (await window.mefiStudio.assistantState()).state.status === 'running')()", "resume control updates service");
+    this.check("Pause and resume use the real assistant service");
+
+    await this.until("!document.getElementById('workspace-run-backlog').disabled", "backlog controls are ready");
+    await this.click("#workspace-run-backlog");
+    await this.until("(async () => { const backlog = await window.mefiStudio.backlogStatus(); return backlog.draining && !backlog.paused; })()", "run backlog enables existing work mode");
+    await this.until("document.getElementById('workspace-run-backlog').textContent.includes('Pause backlog') && !document.getElementById('workspace-run-backlog').disabled", "backlog action exposes pause after starting");
+    await this.capture("10-backlog-enabled");
+    await this.click("#workspace-run-backlog");
+    await this.until("(async () => (await window.mefiStudio.backlogStatus()).paused)()", "pause backlog prevents new scheduling");
+    await this.until("!document.getElementById('workspace-run-backlog').disabled", "backlog pause settles");
+    assert.equal((await this.run("return await window.mefiStudio.backlogStatus();")).counts.running, 0, "isolated smoke must not launch paid workers");
+    this.check("Work through backlog and Pause update the real scheduling state without paid workers");
+
     await this.click("#workspace-tools > summary");
     await this.until("document.querySelector('#workspace-tool-links [data-nav=command]')", "advanced tools are discoverable");
     await this.capture("06-tools-menu");
@@ -219,12 +301,6 @@ class VerifiedWindow extends NativeWindow {
     await this.run("window.MefiNav.go('workspace');");
     await this.until("window.MefiWorkspace.isActive() && !window.MefiIdle.isActive()", "workspace returns from constellation");
     this.check("Grouped tools navigate out and back without overlapping views");
-
-    await this.click("#workspace-pause");
-    await this.until("(async () => (await window.mefiStudio.assistantState()).state.status === 'paused')()", "pause control updates service");
-    await this.click("#workspace-pause");
-    await this.until("(async () => (await window.mefiStudio.assistantState()).state.status === 'running')()", "resume control updates service");
-    this.check("Pause and resume use the real assistant service");
 
     await this.click("#workspace-mode-chat");
     failNextMessage = true;
@@ -254,7 +330,24 @@ class VerifiedWindow extends NativeWindow {
     assert(narrow.input.width > 180, "composer remains usable in narrow layout");
     assert(narrow.input.right <= narrow.width + 2, "composer fits narrow viewport");
     await this.capture("07-narrow-workspace");
+    await this.click("#workspace-ideas");
+    await this.run("const input = document.getElementById('workspace-work-search'); input.value = 'LongUnbrokenIdeaReference'; input.dispatchEvent(new Event('input', {bubbles:true})); document.getElementById('workspace-work-list').scrollIntoView({block:'center'});");
+    const narrowBacklog = await this.run("const list = document.getElementById('workspace-work-list'); const card = list.querySelector('.ws-work-card'); return {width:innerWidth,scroll:document.documentElement.scrollWidth,listWidth:list.clientWidth,listScroll:list.scrollWidth,cardWidth:card?.clientWidth,cardScroll:card?.scrollWidth};");
+    assert(narrowBacklog.cardWidth > 180, "long idea card remains usable on narrow window");
+    assert(narrowBacklog.listScroll <= narrowBacklog.listWidth + 2 && narrowBacklog.cardScroll <= narrowBacklog.cardWidth + 2, "long idea references wrap inside narrow cards");
+    await this.capture("11-narrow-backlog");
+    this.setContentSize(1280, 720);
+    await this.run("document.querySelector('.ws-main').scrollTop = 0; const input = document.getElementById('workspace-work-search'); input.value = ''; input.dispatchEvent(new Event('input', {bubbles:true}));");
+    await sleep(250);
+    const shortLayout = await this.run("const list = document.getElementById('workspace-work-list').getBoundingClientRect(); const input = document.getElementById('workspace-input').getBoundingClientRect(); const run = document.getElementById('workspace-run-backlog').getBoundingClientRect(); return {height:innerHeight,width:innerWidth,scroll:document.documentElement.scrollWidth,list:list.toJSON(),input:input.toJSON(),run:run.toJSON()};");
+    assert(shortLayout.scroll <= shortLayout.width + 2, "short desktop layout must not overflow horizontally");
+    assert(shortLayout.list.height >= 110, "short desktop leaves usable scrolling room for backlog cards");
+    assert(shortLayout.input.bottom < shortLayout.height && shortLayout.run.bottom < shortLayout.height, "composer and backlog action stay visible at 720 pixels tall");
+    await this.capture("12-short-desktop");
+    report.narrowBacklog = narrowBacklog;
+    report.shortDesktop = shortLayout;
     this.check("Narrow layout keeps conversation and composer usable");
+    this.check("Dense backlog and long idea references fit narrow and short desktop layouts");
     report.createdTaskId = created.id;
     assert.equal(report.networkAttempts.length, 0, "UI flow must not attempt external network calls");
     const serious = report.consoleErrors.filter(line => !/ERR_FILE_NOT_FOUND/.test(line));
@@ -307,11 +400,34 @@ def verify(source, output):
             "ui": {"useWeb": False, "autoReference": False, "autopilot": {"enabled": False, "execute": False}},
         })
         now = int(time.time() * 1000)
-        write_json(app_root / "data" / "eyes-tasks.json", [
+        tasks = [
             {"id": "fixture_done", "title": "Finish the garden planner", "prompt": "Save the garden planner layout.", "status": "done", "createdAt": now - 7200000, "updatedAt": now - 600000, "doneAt": now - 600000, "logs": [{"at": now - 600000, "kind": "result", "text": "Added a weekly garden view and verified the keyboard controls."}], "refs": [], "ideas": []},
             {"id": "fixture_review", "title": "Review the seed importer", "prompt": "Check the seed importer output.", "status": "awaiting_verification", "createdAt": now - 3600000, "updatedAt": now - 300000, "logs": [{"at": now - 300000, "kind": "result", "text": "Importer run finished; verification is still pending."}], "refs": [], "ideas": []},
             {"id": "fixture_open", "title": "Plan a planting calendar", "prompt": "Add dates for the next planting season.", "status": "open", "createdAt": now - 1800000, "updatedAt": now - 1800000, "logs": [], "refs": [], "ideas": []},
-        ])
+        ]
+        # A real backlog must remain usable, not just the three-card empty-state
+        # demo. The long tokens deliberately catch hidden horizontal overflow.
+        topics = ["watering schedule", "seed inventory", "harvest journal", "soil readings", "bed layout", "weather alerts", "plant profiles", "garden sharing", "season archive"]
+        for index in range(27):
+            status = "done" if index < 5 else "awaiting_verification" if index < 8 else "open"
+            tasks.append({
+                "id": f"fixture_backlog_{index:02d}",
+                "title": f"Improve {topics[index % len(topics)]} — pass {index + 1}",
+                "prompt": "Keep the next step small, preserve existing entries, and verify keyboard navigation. " + ("VeryLongRepositoryReference" * 6 if index == 9 else ""),
+                "status": status, "createdAt": now - (index + 20) * 3600000,
+                "updatedAt": now - (index + 20) * 1800000,
+                "logs": [{"at": now - (index + 20) * 1800000, "kind": "result", "text": "Saved the update and checked the documented flow."}] if status == "done" else [],
+                "refs": [], "ideas": [],
+            })
+        write_json(app_root / "data" / "eyes-tasks.json", tasks)
+        ideas = [{
+            "id": f"fixture_idea_{index:03d}",
+            "title": "Moonlight watering reminders" if index == 99 else f"Garden notebook idea {index + 1}: {topics[index % len(topics)]}",
+            "detail": "Add a quiet reminder for the evening watering round with an editable time." if index == 99 else f"Explore {topics[index % len(topics)]} with a clear preview and an undoable first step. " + ("LongUnbrokenIdeaReference" * 6 if index == 98 else ""),
+            "tags": ["garden", "backlog"], "source": "chat", "at": now - (index + 1) * 60000,
+            "status": "keep" if index % 10 == 0 else "new", "read": index % 2 == 0,
+        } for index in range(100)]
+        write_json(app_root / "data" / "eyes-feature-ideas.json", ideas)
         package = json.loads((source / "package.json").read_text(encoding="utf-8"))
         package["main"] = "workspace-verify-entry.cjs"
         write_json(app_root / "package.json", package)
