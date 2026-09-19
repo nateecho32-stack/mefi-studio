@@ -1015,10 +1015,10 @@ export function listChatTexts({ dbPath = DEFAULT_DB, after = { at: 0, id: "" }, 
   return rows.map((row) => ({ id: row.id, sessionId: row.session_id, at: row.time_created, text: row.text }));
 }
 
-export function assistantFacts({ dbPath = DEFAULT_DB, sessionLimit = 10, changeLimit = 60, todoLimitPerSession = 12, root = null, now = Date.now(), porcelain = null } = {}) {
-  const sessions = listSessions({ dbPath, limit: sessionLimit });
-  const changes = listChanges({ dbPath, limit: changeLimit });
-  const todos = listTodos({ dbPath });
+export function assistantFacts({ dbPath = DEFAULT_DB, sessionLimit = 10, changeLimit = 60, todoLimitPerSession = 12, root = null, now = Date.now(), porcelain = null, sessions: scopedSessions = null, changes: scopedChanges = null, todos: scopedTodos = null } = {}) {
+  const sessions = scopedSessions ?? listSessions({ dbPath, limit: sessionLimit });
+  const changes = scopedChanges ?? listChanges({ dbPath, limit: changeLimit });
+  const todos = scopedTodos ?? listTodos({ dbPath });
   const dirtyText = porcelain != null ? porcelain : gitPorcelain({ root });
   const bySession = changes.reduce((map, change) => {
     const entry = map.get(change.sessionId) ?? { files: new Set(), additions: 0, deletions: 0, samples: [] };

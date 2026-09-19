@@ -27,6 +27,15 @@ routes, and waits for the real loading overlay to disappear with model cards
 present. A 45-second process budget bounds each run. It does not open the live
 app profile, mutate the user's board, or use saved API keys.
 
+The project workspace update removes the startup overlay from the default
+home. In three fresh isolated launches, the selected project's composer became
+usable in a median **822 ms** (735–1143 ms); the assistant smoke completed in
+2652 ms. This measures the new usable home, compared with the prior 1992 ms
+constellation home; it is not a like-for-like rendering benchmark. The catalog
+and advanced visualizations may still load afterward. The harness now checks
+that the workspace composer is enabled with a selected project, and retains
+the original overlay/card readiness criterion for older revisions.
+
 Other verified improvements:
 
 - Short agent passes no longer wait 900 milliseconds between target updates;

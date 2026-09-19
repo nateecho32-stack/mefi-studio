@@ -3,7 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'self' file:;">
-<title>Mefi's Studio AI+ · OpenCode Go Booklet</title>
+<title>Mefi's Studio AI+ · Your workspace</title>
 <style id="booklet-styles">__BOOKLET_STYLES__</style>
 <svg id="nav-glyphs" class="glyph-sprite" aria-hidden="true" focusable="false" width="0" height="0">
   <symbol id="g-command" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M6.3 6.5 3.9 4.6M9.9 6.9l2.3-1.8M9.3 9.8l1.6 2.3"/><circle cx="3.2" cy="4" r="1" fill="currentColor" stroke="none"/><circle cx="12.9" cy="4.5" r="1" fill="currentColor" stroke="none"/><circle cx="11.4" cy="12.9" r="1" fill="currentColor" stroke="none"/></symbol>
@@ -39,12 +39,44 @@
   <symbol id="g-plane" viewBox="0 0 16 16"><path d="M8 2.6 13.8 6v4L8 13.4 2.2 10V6z"/><path d="M2.2 6 8 9.2 13.8 6M8 9.2v4.2"/></symbol>
   <symbol id="g-chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
 </svg>
+<section id="workspace-layer" class="workspace" aria-label="Your project workspace" hidden tabindex="-1">
+  <aside class="ws-sidebar" aria-label="Projects and tools">
+    <a class="ws-brand" href="#" data-nav="workspace"><span class="ws-brand-mark">m<span>+</span></span><span>Mefi's Studio<small>MAKE SOMETHING YOURS</small></span></a>
+    <button class="ws-home" data-nav="workspace"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg>Your workspace <kbd>H</kbd></button>
+    <div class="ws-section-label"><span>PROJECTS</span><button id="workspace-add-project" class="ghost mini" title="Add an existing project folder" aria-label="Add project">+</button></div>
+    <div id="workspace-projects" class="ws-projects" aria-label="Choose a project"></div>
+    <p class="ws-sidebar-note">One space for each idea.<br>Its own work, its own conversation.</p>
+    <div class="ws-sidebar-bottom">
+      <details class="ws-tools" id="workspace-tools"><summary><svg class="glyph" aria-hidden="true"><use href="#g-overhead"/></svg>Studio tools<span>⌄</span></summary><div id="workspace-tool-links"></div></details>
+      <button class="ghost ws-settings" data-nav="studio"><svg class="glyph" aria-hidden="true"><use href="#g-ambience"/></svg>Settings & connections</button>
+      <details class="ws-personal"><summary>Make yourself at home <span>✧</span></summary><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Accent<select id="workspace-accent"><option value="gold">Warm gold</option><option value="sage">Garden sage</option><option value="violet">Soft violet</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></details>
+      <span class="ws-local-note"><i></i> A little studio. A lot of possibility.</span>
+    </div>
+  </aside>
+  <div class="ws-main">
+    <div class="ws-topbar"><div class="ws-project-heading"><span class="ws-kicker">WORKSPACE /</span><strong id="workspace-project-name">Opening your project…</strong></div><div class="ws-top-actions"><button id="workspace-reveal" class="ghost mini" title="Show the project folder">Open folder ↗</button><button class="ghost mini" data-nav="palette" aria-label="Find a tool or command">Search <kbd>Ctrl K</kbd></button></div></div>
+    <div class="ws-heading"><div><p class="ws-kicker" id="workspace-greeting">YOUR SPACE TO CREATE</p><h1>What are we making?</h1><p id="workspace-project-path" class="ws-project-path"></p></div><span id="workspace-connection" class="ws-connection">Connecting…</span></div>
+    <div class="ws-columns">
+      <section class="ws-conversation" aria-label="Conversation with your companion">
+        <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div><button id="workspace-pause" class="ghost mini" title="Pause new work. Running jobs finish normally.">Pause</button></div>
+        <div id="workspace-thread" class="ws-thread" role="log" aria-label="Project conversation" aria-live="polite" aria-relevant="additions"></div>
+        <form id="workspace-form" class="ws-composer">
+          <div class="ws-compose-top"><div class="ws-modes" role="group" aria-label="Message purpose"><button type="button" id="workspace-mode-chat" aria-pressed="true">Talk together</button><button type="button" id="workspace-mode-work" aria-pressed="false">Give a task</button></div><span id="workspace-composer-context"></span></div>
+          <label class="sr-only" for="workspace-input">Message or task for this project</label><textarea id="workspace-input" rows="3" placeholder="Ask a question, think through an idea, or tell me where you're stuck…"></textarea>
+          <div class="ws-compose-bottom"><span id="workspace-compose-hint">Enter to send · Shift + Enter for a new line</span><button id="workspace-send" class="primary" type="submit">Send message <span aria-hidden="true">↗</span></button></div>
+        </form>
+        <div class="ws-feedback-row"><p id="workspace-feedback" class="ws-feedback" role="status"></p><button id="workspace-retry" class="ghost mini" type="button" hidden>Retry loading</button></div>
+      </section>
+      <aside class="ws-work" aria-label="Project work and results"><div class="ws-work-heading"><div><p class="ws-kicker">FROM IDEA TO DONE</p><h2>Your work</h2></div><button class="ghost mini" data-nav="tasks" title="Open full task board">View board ↗</button></div><div class="ws-work-tabs" role="group" aria-label="Filter work"><button id="workspace-open" data-work-filter="open" aria-pressed="true">In progress <span>0</span></button><button id="workspace-review" data-work-filter="review" aria-pressed="false">Review <span>0</span></button><button id="workspace-done" data-work-filter="done" aria-pressed="false">Done <span>0</span></button></div><div id="workspace-work-list" class="ws-work-list"></div><details class="ws-activity"><summary>Behind the scenes <span id="workspace-activity-count"></span></summary><ol id="workspace-activity-list"></ol></details><div class="ws-jeV" id="workspace-jev">Jev · checking connection</div></aside>
+    </div>
+  </div>
+</section>
 <header>
   <div class="brand">
     <div class="monogram" aria-hidden="true">M+</div>
     <div>
       <div class="eyebrow">Mefi's Studio AI+</div>
-      <h1>OpenCode Go — Model Booklet</h1>
+      <h1>Studio tools</h1>
       <p class="sub" id="status">Loading catalog…</p>
     </div>
   </div>
@@ -58,6 +90,7 @@
   </div>
 </header>
 <nav class="tabs" id="tabs" aria-label="Surfaces and tools">
+  <button class="home-tab" data-nav="workspace" title="Your workspace (H)">← Workspace</button>
   <button id="nav-command" class="home-tab" data-nav="command" data-return-label="Back to Command" title="Command view (D)"><svg class="glyph glyph-home" aria-hidden="true" focusable="false"><use href="#g-command"/></svg><svg class="glyph glyph-back" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span><kbd class="key">D</kbd><span class="dot live" data-badge="progress" data-badge-mode="dot" hidden></span></button>
   <span class="tabs-sep" aria-hidden="true"></span>
   <button class="tab active" data-tab="booklet" title="Booklet (1)"><span class="label">Booklet</span><kbd class="key">1</kbd></button>
@@ -65,7 +98,7 @@
   <button class="tab" data-tab="eyes" title="A-Eyes (3)"><span class="label">A-Eyes</span><kbd class="key">3</kbd></button>
   <button class="tab" data-tab="studio" title="Studio (4)"><span class="label">Studio</span><kbd class="key">4</kbd></button>
   <span class="spacer" aria-hidden="true"></span>
-  <div id="nav-tools" class="tools-cluster" role="group" aria-label="Tools"></div>
+  <details class="studio-more"><summary>More tools</summary><div id="nav-tools" class="tools-cluster" role="group" aria-label="Tools"></div></details>
 </nav>
 <div id="banner" class="banner" hidden></div>
 <main>
@@ -351,7 +384,7 @@
     <label class="pop-row" title="What reactive glow listens to"><span class="grow">Listen to</span><select id="idle-source"><option value="desktop">Desktop audio</option><option value="mic">Microphone</option></select></label>
     <hr class="pop-sep">
     <div class="eyebrow">Startup</div>
-    <label class="switch pop-row" title="Open the Command view on launch"><span class="grow">Open Command on launch</span><input type="checkbox" id="idle-home"><span class="track"></span></label>
+    <label class="switch pop-row" title="Open your project workspace on launch"><span class="grow">Open Workspace on launch</span><input type="checkbox" id="idle-home"><span class="track"></span></label>
   </div>
   <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" aria-live="polite" hidden></aside>
   <aside id="cmd-chat" class="cmd-chat" role="region" aria-label="Assistant chat log">
@@ -476,9 +509,7 @@
         <h3 id="task-title">Select a task</h3>
         <div class="row tight" id="task-status-row"></div>
         <div id="task-detail"><p class="muted">Pick a task on the left, or add one — reference gathering can attach exact context automatically.</p></div>
-      </section>
-      <aside class="explorer-col">
-        <h3>Reference</h3>
+        <details class="task-reference-drawer"><summary>Context & references</summary>
         <div class="row tight">
           <label class="switch" title="Gather references for the selected task"><input type="checkbox" id="pref-reference" checked><span class="track"></span><span>Use reference</span></label>
           <label class="switch" title="Include live web results (DuckDuckGo)"><input type="checkbox" id="pref-web"><span class="track"></span><span>Web</span></label>
@@ -491,7 +522,8 @@
           <span class="eyes-status" id="reference-status">idle</span>
         </div>
         <div id="reference-out"><p class="muted">References: code hits, node-tree sessions, chats, PNG evidence, web and matching ideas appear here.</p></div>
-      </aside>
+        </details>
+      </section>
     </div>
   </div>
 </div>

@@ -2,13 +2,14 @@
 // Window + IPC for the catalog, the LÖVE launcher, and the optional speed probe.
 
 const { spawn } = require("node:child_process");
-const { existsSync, readFileSync, renameSync, rmSync, writeFileSync } = require("node:fs");
+const { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } = require("node:fs");
 const { appendFile, copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } = require("node:fs/promises");
 const os = require("node:os");
 const crypto = require("node:crypto");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { resolveStudioPaths } = require("./scripts/paths.cjs");
+const { createProjects } = require("./scripts/projects.cjs");
 const electron = require("electron");
 
 if (typeof electron === "string" || !electron.app) {
@@ -47,6 +48,32 @@ const LOVE_DIR = GAME_ROOT && path.join(GAME_ROOT, "build", "cache", "love-11.5-
 const LOVE_EXE = LOVE_DIR && path.join(LOVE_DIR, "love.exe");
 const DEV_PROJECT = GAME_ROOT && path.join(GAME_ROOT, "dev", "dev_tool_love_project");
 const SETTINGS_PATH = path.join(app.getPath("userData"), "settings.json");
+const projects = createProjects({
+  defaultRoot: REPO_ROOT,
+  studioRoot: STUDIO_ROOT,
+  preferredRoot: process.env.MEFI_STUDIO_REPO ? REPO_ROOT : null,
+  saved: (() => { try { return JSON.parse(readFileSync(SETTINGS_PATH, "utf8")).projects; } catch { return {}; } })(),
+  isDirectory: (root) => { try { return statSync(root).isDirectory(); } catch { return false; } },
+});
+const projectRoot = () => projects.current().path;
+const projectDataPath = (file) => projects.dataPath(file);
+const isStudioProject = () => path.resolve(projectRoot()).toLowerCase() === path.resolve(SOURCE_ROOT).toLowerCase();
+let projectSwitching = false;
+let projectOperations = 0;
+let projectBoardWrites = 0;
+let projectAgentJobs = 0;
+const originalIpcHandle = ipcMain.handle.bind(ipcMain);
+
+function handleProjectIpc(channel, handler) {
+  if (channel.startsWith("projects:")) return originalIpcHandle(channel, handler);
+  originalIpcHandle(channel, (_event, ...args) => {
+    if (projectSwitching) return { ok: false, error: "Switching projects. Try again in a moment." };
+    const project = projects.active();
+    projectOperations += 1;
+    return projects.run(project, () => Promise.resolve().then(() => handler(_event, ...args)).finally(() => { projectOperations -= 1; }));
+  });
+}
+ipcMain.handle = handleProjectIpc;
 
 app.setName("Mefi's Studio AI+");
 
@@ -82,6 +109,7 @@ function invalidateModules(rels) {
 }
 
 async function getEyes() {
+  const project = projects.current();
   // NOTE: the board's SQLite authority (enableBoardStore) is intentionally
   // NOT activated yet — the patch is still half-landed: boardRowSlots()
   // returns 10/11 slots for tasks/ideas against an 11-placeholder insert,
@@ -90,11 +118,15 @@ async function getEyes() {
   // so enabling today makes every board read fail to an empty list. When
   // the store passes a read/write round trip, activate it here:
   //   eyes.enableBoardStore(eyes.defaultBoardConfig(STUDIO_ROOT));
-  return loadModule("scripts/eyes.mjs");
+  return projects.eyes(await loadModule("scripts/eyes.mjs"), project);
 }
 
 async function getAuditor() {
-  return loadModule("scripts/auditor.mjs");
+  const auditor = await loadModule("scripts/auditor.mjs");
+  if (isStudioProject()) return auditor;
+  // Studio's wiring audit is specific to Studio. Never file its findings as
+  // work for an unrelated project merely because that folder is selected.
+  return { ...auditor, audit: async () => ({ ok: true, skipped: true, errors: 0, warnings: 0, findings: [], checkedAt: Date.now(), text: "Studio wiring audit applies to the Studio project. Use this project's own checks." }), auditRequests: () => [] };
 }
 
 async function getAnalyzer() {
@@ -166,7 +198,7 @@ async function resourcePass({ kill = true, reason = "poll", withProcesses = true
   const eyes = await getEyes();
   const settings = await readSettings();
   const limits = { ...MACHINE_DEFAULTS, ...(settings.machine ?? {}) };
-  const leases = await machine.leaseStatus({ repoRoot: REPO_ROOT });
+  const leases = await machine.leaseStatus({ repoRoot: projectRoot() });
   const processes = withProcesses ? await machine.processSnapshot() : [];
   const { verdicts } = withProcesses ? machine.classify({ processes, previousCpu: machinePreviousCpu, limits }) : { verdicts: [] };
   if (withProcesses) machinePreviousCpu = new Map(processes.map((row) => [row.pid, row.cpuMs]));
@@ -222,7 +254,7 @@ function startMachineWatch() {
     let leases = { busy: false };
     try {
       const machine = await getMachine();
-      leases = await machine.leaseStatus({ repoRoot: REPO_ROOT });
+      leases = await machine.leaseStatus({ repoRoot: projectRoot() });
     } catch {}
     const hidden = window && (window.isMinimized() || !window.isVisible());
     // PowerShell process scan only when tests are running or every 30s as a
@@ -234,9 +266,9 @@ function startMachineWatch() {
     } catch (error) {
       logLine(`[machine] scan failed: ${error.message}`);
     }
-    machineTimer = setTimeout(tick, hidden ? 20000 : leases.busy ? 5000 : 10000);
+    machineTimer = setTimeout(() => projects.run(projects.active(), tick), hidden ? 20000 : leases.busy ? 5000 : 10000);
   };
-  machineTimer = setTimeout(tick, 1500);
+  machineTimer = setTimeout(() => projects.run(projects.active(), tick), 1500);
   machineTimer.unref?.();
   return { ok: true, running: true };
 }
@@ -467,6 +499,7 @@ async function queueRequests(additions) {
   // two filing passes can no longer both see "absent" and queue the same
   // request twice. The title key catches a refiling under a lightly different
   // wording; the exact source+prompt pair remains for identical snapshots.
+  additions = additions.map((row) => projects.stamp(row));
   const patch = await mutateBoard((board) => {
     const fresh = additions.filter(
       (request) =>
@@ -491,14 +524,18 @@ async function queueRequests(additions) {
 // The bounded queue retains arrivals during cooldown/in-flight calls, retries
 // transient failures, and excludes the observation itself from retrieval.
 let jevQueuePromise = null;
+const jevProjectQueues = new Map();
 let jevProbeInFlight = null;
 const jevPendingCharges = [];
 let jevChargeFlush = null;
 function getJevQueue() {
+  const project = projects.current();
+  jevQueuePromise = jevProjectQueues.get(project.id) ?? null;
   if (!jevQueuePromise) {
     jevQueuePromise = loadModule("scripts/jev-loop.mjs")
-      .then(({ createJevQueue }) => createJevQueue({ runBatch: runJevIntake }))
-      .catch((error) => { jevQueuePromise = null; throw error; });
+      .then(({ createJevQueue }) => createJevQueue({ runBatch: (additions) => projects.run(project, () => runJevIntake(additions)) }))
+      .catch((error) => { jevProjectQueues.delete(project.id); jevQueuePromise = null; throw error; });
+    jevProjectQueues.set(project.id, jevQueuePromise);
   }
   return jevQueuePromise;
 }
@@ -652,7 +689,7 @@ const ASSISTANT_GROW_SYSTEM = [
 ].join(" ");
 
 const ASSISTANT_IMPROVE_SYSTEM = [
-  "You are A-Eyes, the resident improver for a desktop app called Mefi's Studio AI+ (Electron main + dependency-free canvas/HTML renderer, self-contained built booklet, Python contract tests).",
+  "You are Mefi, the resident assistant improving the selected project whose file inventory and check commands are provided. Infer its technology from these facts; do not assume it is Studio itself.",
   "You receive the app file inventory (paths and line counts), package scripts, recent agent sessions, and file collisions.",
   'Reply with STRICT minified JSON only: {"summary":"<=40 words","alerts":[],"checkpoints":[],"expand":[{"title":"<=8 words","prompt":"<=60 words"}]}',
   "expand must contain 2-5 concrete improvements to THIS app, each naming the exact file(s) to touch and the acceptance check. Prefer dead-code removal, harder tests, keyboard/accessibility gaps, poll performance, and renderer polish. Never propose speculative rewrites or new dependencies.",
@@ -664,7 +701,7 @@ function startEyesWatch() {
   const tick = async () => {
     // Hidden or minimized windows need no live feed; skip the DB query.
     if (window && (window.isMinimized() || !window.isVisible())) {
-      eyesTimer = setTimeout(tick, 5000);
+      eyesTimer = setTimeout(() => projects.run(projects.active(), tick), 5000);
       return;
     }
     try {
@@ -682,9 +719,9 @@ function startEyesWatch() {
       send("eyes:error", String(error.message ?? error));
     }
     // Back off to 5s when the machine has been quiet for two minutes.
-    eyesTimer = setTimeout(tick, idleTicks > 60 ? 5000 : 2000);
+    eyesTimer = setTimeout(() => projects.run(projects.active(), tick), idleTicks > 60 ? 5000 : 2000);
   };
-  eyesTimer = setTimeout(tick, 500);
+  eyesTimer = setTimeout(() => projects.run(projects.active(), tick), 500);
   eyesTimer.unref?.();
   return { ok: true, running: true };
 }
@@ -712,16 +749,16 @@ async function improveFacts(eyes) {
       else if (/\.(mjs|cjs|js|css|html|json|md)$/.test(entry.name)) {
         try {
           const text = await readFile(full, "utf8");
-          if (text.length < 250000) files.push({ path: path.relative(STUDIO_ROOT, full).replace(/\\/g, "/"), lines: text.split("\n").length });
+          if (text.length < 250000) files.push({ path: path.relative(projectRoot(), full).replace(/\\/g, "/"), lines: text.split("\n").length });
         } catch {}
       }
     }
   }
-  await walk(STUDIO_ROOT, 0);
-  const facts = eyes.assistantFacts({ sessionLimit: 6, changeLimit: 30, root: REPO_ROOT });
+  await walk(projectRoot(), 0);
+  const facts = eyes.assistantFacts({ sessionLimit: 6, changeLimit: 30, root: projectRoot() });
   let packageScripts = {};
   try {
-    packageScripts = JSON.parse(await readFile(path.join(STUDIO_ROOT, "package.json"), "utf8")).scripts ?? {};
+    packageScripts = JSON.parse(await readFile(path.join(projectRoot(), "package.json"), "utf8")).scripts ?? {};
   } catch {}
   return {
     generatedAt: new Date().toISOString(),
@@ -847,9 +884,9 @@ async function resolveAiRoute(role = "routine", { allowGrok = true } = {}) {
 }
 
 async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = null } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120000);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 120000);
     const headers = {
       "content-type": "application/json",
       authorization: `Bearer ${apiKey}`,
@@ -862,7 +899,6 @@ async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = n
       headers,
       body: JSON.stringify(body),
     });
-    clearTimeout(timer);
     if (!response.ok) return { ok: false, error: `assistant HTTP ${response.status}: ${(await response.text()).slice(0, 200)}` };
     const payload = await response.json();
     const choice = payload.choices?.[0] ?? {};
@@ -875,6 +911,8 @@ async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = n
     return { ok: true, text, reasoning, finish: choice.finish_reason, model: body.model };
   } catch (error) {
     return { ok: false, error: `assistant call failed: ${error.message}` };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -889,7 +927,7 @@ async function grokCompletion(system, user, model, { timeoutMs = 180000 } = {}) 
     const args = ["--prompt-file", tmp, "--output-format", "plain", "--permission-mode", "dontAsk"];
     if (model) args.push("-m", model);
     return await new Promise((resolve) => {
-      const child = spawn("grok", args, { cwd: REPO_ROOT, windowsHide: true });
+      const child = spawn("grok", args, { cwd: projectRoot(), windowsHide: true });
       let text = "";
       let err = "";
       const timer = setTimeout(() => {
@@ -1013,7 +1051,7 @@ async function assistantFetch(system, user, maxTokens = 6000, { role = "routine"
   if (route.provider === "grok") {
     const grok = await grokCompletion(system, user, route.model);
     if (grok.ok) {
-      if (assistantState?.ai) assistantState.ai.model = grok.model;
+      if (assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = grok.model;
       return grok;
     }
     const http = await resolveAiRoute(role, { allowGrok: false });
@@ -1051,14 +1089,14 @@ async function httpAssistantCall(route, system, user, maxTokens) {
   const primary = await chatCompletion(route.endpoint, route.apiKey, route.model, body, { sessionHeader });
   if (primary.ok) {
     // The status panel shows the route that actually answered, not a static label.
-    if (assistantState?.ai) assistantState.ai.model = primary.model;
+    if (assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = primary.model;
     return primary;
   }
   if (!route.fallback) return primary;
   const fallbackBody = { ...body, model: route.fallback.model, reasoning_effort: "low" };
   delete fallbackBody.thinking;
   const retried = await chatCompletion(route.fallback.endpoint, route.fallback.apiKey, route.fallback.model, fallbackBody, { sessionHeader: await assistantSessionId() });
-  if (retried.ok && assistantState?.ai) assistantState.ai.model = retried.model;
+  if (retried.ok && assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = retried.model;
   return retried;
 }
 
@@ -1101,7 +1139,7 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
       inventory: inventory.slice(0, 90),
     };
   } else if (mode === "explore" || mode === "expand") {
-    const base = eyes.assistantFacts({ root: REPO_ROOT });
+    const base = eyes.assistantFacts({ root: projectRoot() });
     const session = base.sessions.find((item) => item.id === sessionId) ?? null;
     facts = {
       generatedAt: base.generatedAt,
@@ -1112,7 +1150,7 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
         .map((change) => ({ tool: change.tool, file: change.file, additions: change.additions, deletions: change.deletions })),
     };
   } else if (mode === "grow") {
-    const base = eyes.assistantFacts({ root: REPO_ROOT });
+    const base = eyes.assistantFacts({ root: projectRoot() });
     facts = {
       generatedAt: base.generatedAt,
       recentTitles: base.sessions.slice(0, 6).map((session) => session.title),
@@ -1123,7 +1161,7 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
         .map((session) => ({ id: session.id, title: session.title, agent: session.agent })),
     };
   } else {
-    facts = eyes.assistantFacts({ sessionLimit: 8, changeLimit: 40, todoLimitPerSession: 8, root: REPO_ROOT });
+    facts = eyes.assistantFacts({ sessionLimit: 8, changeLimit: 40, todoLimitPerSession: 8, root: projectRoot() });
     if (mode === "checkpoint" && sessionId) {
       facts = { ...facts, sessions: facts.sessions.filter((session) => session.id === sessionId) };
     }
@@ -1173,7 +1211,7 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
     await eyes.writeJson(BRIEFING_PATH, briefing);
     if (Array.isArray(result.checkpoints) && result.checkpoints.length) {
       const store = await eyes.readJson(CHECKPOINTS_PATH, {});
-      const latestPngs = await eyes.listPngs({ roots: [path.join(REPO_ROOT, "tools", "logs")], limit: 1 });
+      const latestPngs = await eyes.listPngs({ roots: [path.join(projectRoot(), "tools", "logs")], limit: 1 });
       const latestPng = latestPngs[0]?.path ?? null;
       const filesFor = (checkpointSessionId) =>
         facts.sessions?.find((session) => session.id === checkpointSessionId)?.changed?.files ?? [];
@@ -1407,7 +1445,7 @@ async function loadAssistant() {
   const now = Date.now();
   let raw = null;
   try {
-    raw = JSON.parse(await readFile(ASSISTANT_PATH, "utf8"));
+    raw = JSON.parse(await readFile(projectDataPath(ASSISTANT_PATH), "utf8"));
   } catch {}
   let moduleError = null;
   try {
@@ -1434,6 +1472,8 @@ async function loadAssistant() {
   assistantState.ai.model = assistantState.ai.model || ASSISTANT_MODEL;
   assistantState.ai.keyPresent = await assistantKeyPresent();
   assistantState.action = { kind: "idle", text: "idle", since: now };
+  assistantState.projectId = projects.current().id;
+  assistantState.projectPath = projectRoot();
   assistantPoolCounts();
   if (moduleError) assistantLog("error", `assistant logic unavailable: ${moduleError.message}`);
   return assistantState;
@@ -1643,11 +1683,12 @@ function assistantFocusSubject(facts) {
 
 function saveAssistantSync() {
   if (!assistantState || CLI_MODE) return;
-  const tmp = `${ASSISTANT_PATH}.tmp-${process.pid}`;
+  const target = projectDataPath(ASSISTANT_PATH);
+  const tmp = `${target}.tmp-${process.pid}`;
   try {
     // Atomic like assistantWrite: a crash mid-write used to tear the store.
     writeFileSync(tmp, JSON.stringify(assistantState, null, 2));
-    renameSync(tmp, ASSISTANT_PATH);
+    renameSync(tmp, target);
   } catch {
     rmSync(tmp, { force: true });
   }
@@ -1895,6 +1936,7 @@ function enqueue(role, job, { ai = false, priority = ASSISTANT_PRIORITY.cadence,
   const journal = work ? { attempts: 1, ...work, id: work.id ?? assistantJobId(), role, text: work.text ?? "", target: where[0] ?? null, targets: where } : null;
   const entry = {
     id: ++pool.seq,
+    project: projects.current(),
     role,
     key,
     ai,
@@ -1925,7 +1967,7 @@ function enqueue(role, job, { ai = false, priority = ASSISTANT_PRIORITY.cadence,
 // a reply is never blocked by a tick or a briefing). The foreman is the same
 // — handing out work is the heartbeat; watcher/auditor ticks must not starve it.
 function assistantPump() {
-  if (!assistantState) return;
+  if (!assistantState || projectSwitching) return;
   const parallel = assistantParallel(assistantState.prefs?.parallel, EXECUTOR_PARALLEL_MAX, 8);
   const aiParallel = assistantParallel(assistantState.prefs?.aiParallel, AI_PARALLEL_MAX, 4);
   pool.queue.sort((a, b) => b.priority - a.priority || a.id - b.id);
@@ -1966,7 +2008,9 @@ function assistantStart(entry) {
   const timeout = new Promise((resolve) => {
     timer = setTimeout(() => resolve({ timedOut: true }), ASSISTANT_JOB_TIMEOUT_MS);
   });
-  Promise.race([Promise.resolve().then(() => entry.job(entry)), timeout])
+  projectAgentJobs += 1;
+  const work = projects.run(entry.project, () => Promise.resolve().then(() => entry.job(entry)).finally(() => { projectAgentJobs -= 1; }));
+  Promise.race([work, timeout])
     .then(
       (result) => assistantSettle(entry, result?.timedOut ? { error: "timed out" } : { result }),
       (error) => assistantSettle(entry, { error })
@@ -2047,7 +2091,7 @@ function readPorcelain(eyes) {
   if (assistantCache.porcelainAt && now - assistantCache.porcelainAt < 30_000 && typeof assistantCache.porcelain === "string") {
     return assistantCache.porcelain;
   }
-  const text = typeof eyes.gitPorcelain === "function" ? eyes.gitPorcelain({ root: REPO_ROOT }) : "";
+  const text = typeof eyes.gitPorcelain === "function" ? eyes.gitPorcelain({ root: projectRoot() }) : "";
   assistantCache.porcelain = text;
   assistantCache.porcelainAt = now;
   return text;
@@ -2064,13 +2108,13 @@ async function assistantReadStore() {
     const store = {
       sessions,
       todos: eyes.listTodos(),
-      collisions: eyes.collisions({ root: REPO_ROOT }),
-      presence: eyes.filePresence({ root: REPO_ROOT }),
+      collisions: eyes.collisions({ root: projectRoot() }),
+      presence: eyes.filePresence({ root: projectRoot() }),
       uncommitted: eyes.uncommittedOnly({
         porcelain,
         sessions,
         changes: eyes.listChanges({ limit: 80 }),
-        root: REPO_ROOT,
+        root: projectRoot(),
       }),
       at: Date.now(),
     };
@@ -2115,16 +2159,16 @@ async function assistantOrganize(now, store = assistantCache.store) {
 // name, so a live session's patch is caught before a second copy is written.
 async function executorScanFiles(store) {
   const files = new Set([
-    path.join(STUDIO_ROOT, "main.cjs"),
-    path.join(STUDIO_ROOT, "preload.cjs"),
+    path.join(projectRoot(), "main.cjs"),
+    path.join(projectRoot(), "preload.cjs"),
   ]);
   // Uncommitted feature code is rarely only the host set: every helper module
   // and renderer script carries top-level bindings a second patch can double.
   for (const dir of ["scripts", "renderer"]) {
     try {
-      for (const entry of await readdir(path.join(STUDIO_ROOT, dir))) {
+      for (const entry of await readdir(path.join(projectRoot(), dir))) {
         if (!/\.(?:js|mjs|cjs)$/i.test(entry)) continue;
-        files.add(path.join(STUDIO_ROOT, dir, entry));
+        files.add(path.join(projectRoot(), dir, entry));
       }
     } catch {
       // A missing directory just means fewer files to scan.
@@ -2285,7 +2329,7 @@ function salvageJson(text, fallback) {
 // a held live update is reported (the updater retries on its own).
 async function assistantFixPass() {
   const eyes = await getEyes();
-  const dataDir = path.join(STUDIO_ROOT, "data");
+  const dataDir = path.dirname(projectDataPath(TASKS_PATH));
   let count = 0;
   for (const [name, fallback] of Object.entries(ASSISTANT_DATA_FALLBACKS)) {
     const file = path.join(dataDir, name);
@@ -2354,6 +2398,7 @@ async function assistantAuditorJob() {
   const auditor = await getAuditor();
   const eyes = await getEyes();
   const result = await auditor.audit();
+  if (result.skipped) return { ok: true, text: result.text };
   assistantCache.audit = result;
   const queued = await queueRequests(auditor.auditRequests(result, await requestBaseline(eyes)));
   assistantLog("audit", `audit: ${result.errors} error(s), ${result.warnings} warning(s)${queued ? ` · ${queued} request(s) queued` : ""}`);
@@ -2922,7 +2967,9 @@ async function assistantOverseerJob(now, entry) {
     const eyes = await getEyes();
     const additions = requestsFromExpand(
       {
-        expand: (review.upgrades ?? []).map((upgrade) => ({
+        // The overseer proposes changes to Studio's own implementation. Its
+        // maintenance requests must never be dispatched into another project.
+        expand: (isStudioProject() ? review.upgrades ?? [] : []).map((upgrade) => ({
           title: `Overseer: ${String(upgrade?.title ?? "").slice(0, 60)}`,
           prompt: `A-Eyes overseer directive — ${String(upgrade?.prompt ?? upgrade?.title ?? "")}`,
         })),
@@ -3337,7 +3384,7 @@ function assistantSchedule(ms = assistantState?.intervalMs ?? 30000) {
   assistantTimer = null;
   if (!assistantLoop || assistantState?.status !== "running") return;
   assistantTimer = setTimeout(() => {
-    assistantTick("timer").catch((error) => {
+    projects.run(projects.active(), () => assistantTick("timer")).catch((error) => {
       logLine(`[assistant] tick failed: ${error?.message ?? error}`);
       assistantSchedule();
     });
@@ -3348,6 +3395,7 @@ function assistantSchedule(ms = assistantState?.intervalMs ?? 30000) {
 // at once; the pool does the work. Anything but the timer queues every
 // cadence role.
 async function assistantTick(reason = "timer") {
+  if (projectSwitching) return { skipped: "switching project", queued: [] };
   if (assistantTickInFlight) {
     if (reason === "timer") return assistantTickInFlight;
     // Keep an explicit run-once request that arrives during a timer pass.
@@ -3630,7 +3678,7 @@ function assistantMessageId() {
 }
 
 function assistantAppendReply(text, via, intent) {
-  const entry = { id: assistantMessageId(), at: Date.now(), role: "assistant", text, via, intent };
+  const entry = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "assistant", text, via, intent };
   assistantState.messages.push(entry);
   assistantTrim(assistantState.messages, assistantCaps().messages);
   assistantState.unread += 1;
@@ -3814,7 +3862,7 @@ async function assistantMessage(raw) {
   const text = String(raw ?? "").trim();
   if (!text) return { ok: false, error: "empty" };
   await ensureAssistant();
-  const user = { id: assistantMessageId(), at: Date.now(), role: "user", text: text.slice(0, 2000), via: "local", intent: "chat" };
+  const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text: text.slice(0, 2000), via: "local", intent: "chat" };
   assistantState.messages.push(user);
   assistantTrim(assistantState.messages, assistantCaps().messages);
   assistantLog("message", user.text.slice(0, 160));
@@ -4075,7 +4123,8 @@ function pushAutopilotHistory(kind, text) {
 // die with the window. Logging never breaks a run: a failed append is dropped.
 async function executorLog(record) {
   try {
-    await appendFile(EXECUTOR_LOG_PATH, `${JSON.stringify({ at: Date.now(), ...record })}\n`, "utf8");
+    await mkdir(path.dirname(projectDataPath(EXECUTOR_LOG_PATH)), { recursive: true });
+    await appendFile(projectDataPath(EXECUTOR_LOG_PATH), `${JSON.stringify({ at: Date.now(), ...record })}\n`, "utf8");
   } catch {}
 }
 
@@ -4191,6 +4240,8 @@ function autopilotStatus() {
     // what the builder meters on the constellation show.
     running: autopilot.jobs.map((entry) => ({
       title: entry.title,
+      projectId: entry.projectId,
+      projectPath: entry.projectPath,
       source: entry.source,
       startedAt: entry.startedAt,
       sessionId: entry.sessionId ?? null,
@@ -4327,8 +4378,8 @@ async function autopilotProactivePass({ useAi = true } = {}) {
   }
   const known = await requestBaseline(eyes);
   const store = {
-    collisions: eyes.collisions({ root: REPO_ROOT }),
-    presence: eyes.filePresence({ root: REPO_ROOT }),
+    collisions: eyes.collisions({ root: projectRoot() }),
+    presence: eyes.filePresence({ root: projectRoot() }),
   };
   const additions = [
     ...eyes.requestsFromCollisions(store.collisions, known),
@@ -4452,6 +4503,8 @@ async function assistantCreateTask({ title, prompt = "", source = "chat", focuse
   const key = workTitleKey(cleanTitle);
   const now = Date.now();
   const task = {
+    projectId: projects.current().id,
+    projectPath: projectRoot(),
     id: "task_" + crypto.randomBytes(8).toString("hex"),
     title: cleanTitle,
     prompt: String(prompt ?? cleanTitle).slice(0, 1400),
@@ -4481,6 +4534,10 @@ async function assistantCreateTask({ title, prompt = "", source = "chat", focuse
     return { tasks: board.tasks, created: task };
   });
   if (!created.created) return null;
+  // Explicit work can enter straight through the task composer or chat,
+  // bypassing the request inbox. Classify that admission once, without
+  // delaying its task card or dispatch; request promotion has its own intake.
+  jevShadowIntake([{ ...created.created, kind: "task", at: created.created.createdAt }]);
   await refreshAutopilotQueue();
   if (target?.kind && target?.id) assistantNodeContext(target, "note", `queued "${cleanTitle}" on the task board`, "assistant");
   assistantLog("control", `chat work on the board: "${cleanTitle}"${pin ? " (pinned next)" : ""}`);
@@ -4669,7 +4726,10 @@ function compareWork(a, b) {
 // or "empty" (no pending work).
 let boardWriteChain = Promise.resolve();
 function withBoardLock(fn) {
-  const run = boardWriteChain.then(fn, fn);
+  projectBoardWrites += 1;
+  const project = projects.current();
+  const scoped = () => projects.run(project, fn);
+  const run = boardWriteChain.then(scoped, scoped).finally(() => { projectBoardWrites -= 1; });
   boardWriteChain = run.then(
     () => {},
     () => {},
@@ -4782,13 +4842,15 @@ async function releaseExecutorClaim(eyes, job, entry) {
 }
 
 async function spawnNextJob() {
+  const runProject = projects.current();
+  const runRoot = runProject.path;
   // The pause can land mid-fill (an infra breaker tripped on a sibling job),
   // so re-check instead of trusting the dispatcher's one-time gate.
-  if (!autopilot.execute) return "empty";
+  if (projectSwitching || !autopilot.execute) return "empty";
   let leases = null;
   try {
     const machine = await getMachine();
-    leases = await machine.leaseStatus({ repoRoot: REPO_ROOT });
+    leases = await machine.leaseStatus({ repoRoot: projectRoot() });
   } catch {}
   // An exclusive lease means another agent owns the machine; stay parked.
   // leaseStatus only — a full resourcePass wrote two JSON files per slot fill
@@ -4947,6 +5009,8 @@ async function spawnNextJob() {
   if (!job) return deferred ? "deferred" : "empty";
   const startedAt = Date.now();
   const entry = {
+    projectId: runProject.id,
+    projectPath: runRoot,
     id: `run_${startedAt}_${(autopilotJobSeq += 1)}`,
     kind: job.kind,
     title: job.title,
@@ -5025,7 +5089,7 @@ async function spawnNextJob() {
   // launching a child.
   try {
     const machine = await getMachine();
-    leases = await machine.leaseStatus({ repoRoot: REPO_ROOT });
+    leases = await machine.leaseStatus({ repoRoot: projectRoot() });
   } catch {}
   if (leases?.exclusive) {
     await releaseExecutorClaim(eyes, job, entry).catch(() => {});
@@ -5519,7 +5583,7 @@ async function spawnNextJob() {
       if (route.model) grokArgs.push("-m", route.model);
       grokArgs.push(prompt);
       return spawn("grok", grokArgs, {
-        cwd: REPO_ROOT,
+        cwd: runRoot,
         env: { ...process.env, ...route.env },
         windowsHide: true,
         stdio: ["ignore", "pipe", "pipe"],
@@ -5535,7 +5599,7 @@ async function spawnNextJob() {
     // the positional entirely — the CLI then prints help and exits 1.
     // Write + end gives a clean prompt and a clean EOF, no wedge, no mangling.
     const child = spawn("cmd.exe", ["/d", "/s", "/c", `opencode run --auto${route.modelArgs}`], {
-      cwd: REPO_ROOT,
+      cwd: runRoot,
       env: { ...process.env, ...route.env },
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
@@ -5711,6 +5775,7 @@ async function runExecutorHandoffs(entry, job) {
 const VERIFY_DWELL_MS = 10 * 60 * 1000; // let the dust settle before judging an attempt
 const LEASE_REFRESH_MS = 10 * 60 * 1000; // how often a live owner re-stamps its claims
 async function autopilotHousekeeping() {
+  const historyModule = await loadModule("scripts/task-history.mjs");
   const now = Date.now();
   const assistant = await getAssistant();
   const eyes = await getEyes();
@@ -5856,7 +5921,7 @@ async function autopilotHousekeeping() {
             })
           : null;
         if (requestReceipt) policyReceipts.push(requestReceipt);
-        settled.push({ request, verdict });
+        settled.push({ request, verdict, changedFiles: Array.isArray(files) ? files.length : 0, receiptId: requestReceipt?.id });
       }
       if (settled.length) {
         patch.requests = requests.filter((request) => {
@@ -5864,6 +5929,8 @@ async function autopilotHousekeeping() {
           if (!hit) return true;
           const { request: item, verdict } = hit;
           if (verdict.state === "verified") {
+            const completed = historyModule.completedRequestTask(item, verdict, { now, changedFiles: hit.changedFiles, receiptId: hit.receiptId });
+            if (completed && !tasks.some((task) => task.id === completed.id || (task.lastAttempt?.runId && task.lastAttempt.runId === completed.lastAttempt?.runId))) tasks.push(completed);
             verifyNotes.push(`verified request "${assistantClip(item.title, 60)}"`);
             return false; // evidenced: the inbox row has done its job
           }
@@ -5920,6 +5987,7 @@ async function autopilotHousekeeping() {
 // promotion, then the executor. A failing pass logs and the timer lives on.
 let autopilotPassInFlight = null;
 async function autopilotPass() {
+  if (projectSwitching) return { ok: true, skipped: "switching project" };
   if (SMOKE || CAPTURE || CLI_MODE || !autopilot.enabled) return;
   if (autopilotPassInFlight) return autopilotPassInFlight;
   autopilotPassInFlight = (async () => {
@@ -5988,7 +6056,7 @@ async function setAutopilot(prefs = {}) {
   if (proactiveTimer) clearInterval(proactiveTimer);
   proactiveTimer = null;
   if (autopilot.enabled) {
-    proactiveTimer = setInterval(() => autopilotPass(), autopilot.minutes * 60000);
+    proactiveTimer = setInterval(() => projects.run(projects.active(), () => autopilotPass()), autopilot.minutes * 60000);
     proactiveTimer.unref?.();
   }
   emitAutopilot();
@@ -6030,7 +6098,7 @@ async function bootAutopilot() {
       minutes: saved.minutes ?? autopilot.minutes,
       parallel: Number.isFinite(savedWidth) && savedWidth >= 1 ? savedWidth : machineParallelDefault(),
     });
-    setTimeout(() => autopilotPass(), 15000).unref?.();
+    setTimeout(() => projects.run(projects.active(), () => autopilotPass()), 15000).unref?.();
     // A previous session's kills may have left stale snapshot locks; clear
     // aged-out ones before the first run of this session reaches the store.
     sweepSnapshotLocks().catch(() => {});
@@ -6050,7 +6118,7 @@ async function readSettings() {
 async function writeSettings(next) {
   await mkdir(path.dirname(SETTINGS_PATH), { recursive: true });
   // Atomic rename so a reader never sees a torn settings document.
-  const payload = JSON.stringify(next, null, 2);
+  const payload = JSON.stringify({ ...next, projects: projects.saved() }, null, 2);
   const tmp = `${SETTINGS_PATH}.tmp-${process.pid}`;
   try {
     await writeFile(tmp, payload);
@@ -6065,6 +6133,7 @@ async function writeSettings(next) {
 }
 
 function send(channel, payload) {
+  if (projects.current().id !== projects.active().id && (channel.startsWith("eyes:") || channel === "assistant:status")) return;
   if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
 }
 
@@ -6350,10 +6419,10 @@ async function gatherReferences({ text, useWeb = false, useTree = true, useIdeas
     const eyes = await getEyes();
     const analyzer = await getAnalyzer();
     const reference = await getReference();
-    const analysis = await analyzer.verifyIdea(text);
+    const analysis = await analyzer.verifyIdea(text, { root: projectRoot() });
     const sessions = eyes.listSessions();
     const chats = useTree ? eyes.listChatTexts({ limit: 200 }) : [];
-    const pngs = await eyes.listPngs({ roots: [path.join(REPO_ROOT, "tools", "logs")], limit: 10 });
+    const pngs = await eyes.listPngs({ roots: [path.join(projectRoot(), "tools", "logs")], limit: 10 });
     const web = useWeb ? await reference.webSearch(text) : [];
     const ideas = useIdeas ? await eyes.readJson(IDEAS_PATH, []) : [];
     const references = reference.referencesFor({ text, analysis, sessions, chats, pngs, web, ideas });
@@ -6363,7 +6432,96 @@ async function gatherReferences({ text, useWeb = false, useTree = true, useIdeas
   }
 }
 
+function projectBusyReason() {
+  if (projectSwitching) return "A project switch is already in progress.";
+  if (autopilot.jobs.length) return `Finish or stop the ${autopilot.jobs.length} running build(s) before switching projects.`;
+  if (projectOperations || projectAgentJobs || pool.running.size || pool.queue.length || assistantTickInFlight || assistantTickDemand || autopilotPassInFlight || executorFillInFlight) return "The assistant is finishing work in this project. Pause it, let the current work finish, then switch.";
+  if (projectBoardWrites || assistantWriting || assistantLoading || machineReadInFlight) return "Saving this project's work. Try switching again in a moment.";
+  return null;
+}
+
+async function selectProject(id) {
+  if (id === projects.active().id) return projects.list();
+  const busy = projectBusyReason();
+  if (busy) return { ...projects.list(), ok: false, error: busy };
+  const next = projects.find(id);
+  if (!next) return { ...projects.list(), ok: false, error: "Choose a project from your project list." };
+  try { if (!statSync(next.path).isDirectory()) throw new Error(); }
+  catch { return { ...projects.list(), ok: false, error: "That project folder is unavailable. Reconnect it before switching." }; }
+  projectSwitching = true;
+  const previous = projects.active();
+  const previousState = assistantState;
+  try {
+    if (assistantTimer) clearTimeout(assistantTimer);
+    if (assistantSaveTimer) clearTimeout(assistantSaveTimer);
+    if (assistantEmitTimer) clearTimeout(assistantEmitTimer);
+    assistantTimer = assistantSaveTimer = assistantEmitTimer = null;
+    assistantEmitPending = null;
+    if (assistantState) await projects.run(previous, () => assistantWrite());
+    await mkdir(path.dirname(projects.dataPath(TASKS_PATH, next)), { recursive: true });
+    projects.select(id);
+    assistantState = null;
+    assistantPending = null;
+    assistantSavedAt = 0;
+    machineReadCache = null;
+    eyesLastTs = Date.now();
+    for (const key of Object.keys(assistantCache)) delete assistantCache[key];
+    Object.assign(assistantCache, { store: null, storeError: null, machine: null, audit: null, chats: [], chatsAt: 0, porcelain: "", porcelainAt: 0 });
+    await projects.run(next, () => ensureAssistant());
+    assistantState.projectId = next.id;
+    assistantState.projectPath = next.path;
+    autopilot.queueDepth = 0;
+    autopilot.tasksManaged = 0;
+    autopilot.history = [];
+    autopilot.lastAsk = null;
+    autopilot.waiting = null;
+    autopilot.lastError = null;
+    autopilot.consecutiveFailures = autopilot.infraFailures = autopilot.parkedUntil = 0;
+    await writeSettings(await readSettings());
+    const eyes = await getEyes();
+    const [tasks, requests, ideas] = await Promise.all([eyes.readJson(TASKS_PATH, []), eyes.readJson(REQUESTS_PATH, []), eyes.readJson(IDEAS_PATH, [])]);
+    send("projects:changed", projects.list());
+    send("eyes:tasks", tasks);
+    send("eyes:requests", requests);
+    send("eyes:ideas", ideas);
+    send("eyes:assistant", { state: assistantState, event: { kind: "project", text: `Ready in ${next.name}.`, projectId: next.id } });
+    emitAutopilot();
+    return projects.list();
+  } catch (error) {
+    projects.select(previous.id);
+    assistantState = previousState;
+    return { ...projects.list(), ok: false, error: `Could not switch projects: ${error.message}` };
+  } finally {
+    projectSwitching = false;
+    if (assistantLoop) projects.run(projects.active(), () => assistantSchedule());
+  }
+}
+
 function registerIpc() {
+  ipcMain.handle("projects:list", () => projects.list());
+  ipcMain.handle("projects:add", async () => {
+    try {
+      const picked = await dialog.showOpenDialog(window, { title: "Add a project folder", properties: ["openDirectory"] });
+      if (picked.canceled || !picked.filePaths?.[0]) return { ...projects.list(), canceled: true };
+      const added = projects.add(picked.filePaths[0]);
+      await writeSettings(await readSettings());
+      const result = { ...projects.list(), addedId: added.id };
+      send("projects:changed", result);
+      return result;
+    } catch (error) { return { ...projects.list(), ok: false, error: error.message }; }
+  });
+  ipcMain.handle("projects:select", (_event, id) => selectProject(id));
+  ipcMain.handle("tasks:create", async (_event, { title, prompt, projectId } = {}) => {
+    if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Add this task again in its intended project." };
+    if (!String(title ?? "").trim()) return { ok: false, error: "Give your task a title." };
+    await ensureAssistant();
+    const task = await assistantCreateTask({ title, prompt: prompt ?? title, source: "chat", pin: true });
+    const eyes = await getEyes();
+    const tasks = await eyes.readJson(TASKS_PATH, []);
+    if (!task) return { ok: false, error: "An unfinished task with this title already exists.", tasks, projectId: projects.current().id };
+    assistantAskForWork("you added a task");
+    return { ok: true, task, tasks, projectId: projects.current().id };
+  });
   ipcMain.handle("catalog:read", async () => {
     const dataDir = path.join(STUDIO_ROOT, "data");
     // The catalog is committed, so a fresh clone already has it. If it is ever
@@ -6441,7 +6599,7 @@ function registerIpc() {
       }
     }
     const child = spawn("cmd.exe", ["/d", "/s", "/c", "start", `Mefi ${cli.name}`, "cmd", "/k", cli.cmd], {
-      cwd: REPO_ROOT,
+      cwd: projectRoot(),
       env,
       windowsHide: false,
       detached: true,
@@ -6449,7 +6607,7 @@ function registerIpc() {
     });
     child.on("error", (error) => logLine(`[${cli.id}] launch failed: ${error.message}`));
     child.unref();
-    logLine(`[${cli.id}] opened in a new terminal window (${REPO_ROOT})`);
+    logLine(`[${cli.id}] opened in a new terminal window (${projectRoot()})`);
     return { ok: true };
   });
 
@@ -6461,7 +6619,7 @@ function registerIpc() {
     }
     const output = await new Promise((resolve) => {
       const child = spawn("cmd.exe", ["/d", "/s", "/c", "opencode models mefi-zai"], {
-        cwd: REPO_ROOT,
+        cwd: projectRoot(),
         env: { ...process.env, ...zaiEnv },
         windowsHide: true,
       });
@@ -6594,7 +6752,7 @@ function registerIpc() {
       const sessions = eyes.listSessions();
       const changes = eyes.listChanges({ sessionId, limit: 300 });
       const todos = eyes.listTodos();
-      const pngs = await eyes.listPngs({ roots: [path.join(REPO_ROOT, "tools", "logs")] });
+      const pngs = await eyes.listPngs({ roots: [path.join(projectRoot(), "tools", "logs")] });
       return { ok: true, sessions, changes, todos, pngs };
     } catch (error) {
       return { ok: false, error: String(error.message ?? error) };
@@ -6655,6 +6813,7 @@ function registerIpc() {
   });
   ipcMain.handle("eyes:requests-write", async (_event, requests) => {
     const next = Array.isArray(requests) ? requests : [];
+    if (next.some((row) => row?.projectId && row.projectId !== projects.current().id)) return { ok: false, error: "These requests belong to another project. Reload before saving." };
     // Serialized with every other board writer so a renderer save cannot
     // land between a claim's read and write on the host side.
     await withBoardLock(async () => {
@@ -6677,10 +6836,10 @@ function registerIpc() {
       const eyes = await getEyes();
       return {
         ok: true,
-        collisions: eyes.collisions({ root: REPO_ROOT }),
+        collisions: eyes.collisions({ root: projectRoot() }),
         // Solo live editors sit beside collisions so the collateral watch can
         // steer around a file before a second session turns it into a clash.
-        presence: eyes.filePresence({ root: REPO_ROOT }),
+        presence: eyes.filePresence({ root: projectRoot() }),
       };
     } catch (error) {
       return { ok: false, error: String(error.message ?? error) };
@@ -6713,7 +6872,10 @@ function registerIpc() {
 
   // ---- the assistant service: state, thread, controls, prefs ---------------
   ipcMain.handle("assistant:state", async () => ({ ok: true, state: await ensureAssistant() }));
-  ipcMain.handle("assistant:message", async (_event, { text } = {}) => assistantMessage(text));
+  ipcMain.handle("assistant:message", async (_event, { text, projectId } = {}) => {
+    if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Send your message again in its intended project." };
+    return assistantMessage(text);
+  });
   // Work on it: the node becomes the assistant's next piece of work — pinned,
   // threaded, and dispatched on the spot.
   ipcMain.handle("assistant:work-on", async (_event, target) => assistantWorkOn(target ?? {}));
@@ -6779,7 +6941,7 @@ function registerIpc() {
     const eyes = await getEyes();
     const store = await eyes.readJson(CHECKPOINTS_PATH, {});
     const list = store[sessionId] ?? [];
-    const pngs = await eyes.listPngs({ roots: [path.join(REPO_ROOT, "tools", "logs")], limit: 1 });
+    const pngs = await eyes.listPngs({ roots: [path.join(projectRoot(), "tools", "logs")], limit: 1 });
     const files = eyes
       .listChanges({ sessionId, limit: 6 })
       .map((change) => change.file)
@@ -6800,8 +6962,8 @@ function registerIpc() {
   ipcMain.handle("analyzer:run", async (_event, { kind, path: filePath, text } = {}) => {
     try {
       const analyzer = await getAnalyzer();
-      if (kind === "file" && filePath) return { ok: true, result: await analyzer.analyzeFile(filePath) };
-      if (kind === "idea" && text) return { ok: true, result: await analyzer.verifyIdea(text) };
+      if (kind === "file" && filePath) return { ok: true, result: await analyzer.analyzeFile(filePath, { root: projectRoot() }) };
+      if (kind === "idea" && text) return { ok: true, result: await analyzer.verifyIdea(text, { root: projectRoot() }) };
       return { ok: false, error: "kind must be file|idea with path/text" };
     } catch (error) {
       return { ok: false, error: String(error.message ?? error) };
@@ -6825,10 +6987,11 @@ function registerIpc() {
   // ---- tasks, feature ideas, references, preferences -----------------------
   ipcMain.handle("tasks:list", async () => {
     const eyes = await getEyes();
-    return { ok: true, tasks: await eyes.readJson(TASKS_PATH, []) };
+    return { ok: true, tasks: await eyes.readJson(TASKS_PATH, []), projectId: projects.current().id };
   });
   ipcMain.handle("tasks:save", async (_event, tasks) => {
     const next = Array.isArray(tasks) ? tasks : [];
+    if (next.some((row) => row?.projectId && row.projectId !== projects.current().id)) return { ok: false, error: "These tasks belong to another project. Reload the task board before saving." };
     await withBoardLock(async () => {
       const eyes = await getEyes();
       await eyes.writeJson(TASKS_PATH, next);
@@ -6842,6 +7005,7 @@ function registerIpc() {
   });
   ipcMain.handle("ideas:save", async (_event, ideas) => {
     const next = Array.isArray(ideas) ? ideas : [];
+    if (next.some((row) => row?.projectId && row.projectId !== projects.current().id)) return { ok: false, error: "These ideas belong to another project. Reload before saving." };
     await withBoardLock(async () => {
       const eyes = await getEyes();
       await eyes.writeJson(IDEAS_PATH, next);
@@ -7372,7 +7536,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   app.isQuitting = true;
-  jevQueuePromise?.then((queue) => queue.stop()).catch(() => {});
+  for (const pending of jevProjectQueues.values()) pending.then((queue) => queue.stop()).catch(() => {});
   stopAssistant();
 });
 

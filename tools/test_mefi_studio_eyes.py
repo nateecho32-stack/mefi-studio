@@ -1040,8 +1040,8 @@ class MefiStudioEyesTests(unittest.TestCase):
     def test_live_store_and_executor_carry_presence_owners(self):
         # assistantFacts already names owners; the live path used to drop
         # presence, so a single editor never reached collaborate / local replies.
-        self.assertIn("eyes.filePresence({ root: REPO_ROOT })", self.main)
-        self.assertIn("assistantFacts({ sessionLimit: 8, changeLimit: 40, todoLimitPerSession: 8, root: REPO_ROOT })", self.main)
+        self.assertIn("eyes.filePresence({ root: projectRoot() })", self.main)
+        self.assertIn("assistantFacts({ sessionLimit: 8, changeLimit: 40, todoLimitPerSession: 8, root: projectRoot() })", self.main)
         self.assertIn("eyes.uncommittedOnly", self.main)
         self.assertIn("uncommitted: assistantCache.store?.uncommitted ?? []", self.main)
         self.assertIn("presence: store.presence", self.main)

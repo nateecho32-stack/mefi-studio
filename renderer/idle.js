@@ -5321,7 +5321,7 @@
     el.home?.addEventListener("change", () => {
       window.mefiStudio?.prefsSet?.({ commandHome: el.home.checked });
       writeStore("mefiStudio.commandHome", el.home.checked ? "1" : "0");
-      window.MefiToast?.(`Command view ${el.home.checked ? "opens" : "stays off"} on launch`, "info");
+      window.MefiToast?.(`Workspace ${el.home.checked ? "opens" : "stays off"} on launch`, "info");
     });
 
     const addTaskFromComposer = async () => {

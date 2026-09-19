@@ -68,9 +68,10 @@ test("tree rail: arrows move the focus, Enter/Space activate, ARIA follows", asy
   const registry = { "tree-canvas": canvas, "tree-rail": rail, "tree-stats": stats };
   const listeners = {};
   const dispatched = [];
+  const updatedAt = Date.now();
   const sessions = [
-    { id: "s1", title: "Alpha session", timeUpdated: Date.now(), parentId: null },
-    { id: "s2", title: "Beta session", timeUpdated: Date.now(), parentId: null },
+    { id: "s1", title: "Alpha session", timeUpdated: updatedAt, parentId: null },
+    { id: "s2", title: "Beta session", timeUpdated: updatedAt - 1, parentId: null },
   ];
   const todos = [
     { sessionId: "s1", position: 0, content: "first thing", status: "in_progress" },

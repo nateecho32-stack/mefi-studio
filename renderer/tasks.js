@@ -3,7 +3,7 @@
   "use strict";
 
   const COLORS = ["#e6c98d", "#9db7ff", "#57ff9a", "#f2a2e8", "#ffb38a", "#86d1d6", "#c9a8ff", "#ffd479"];
-  const FILTERS = ["all", "open", "done"];
+  const FILTERS = ["all", "open", "review", "done"];
   // A row that just finished pulses green for a few seconds — the board's
   // echo of the constellation's done pulse — before it settles under the mark.
   const DONE_PULSE_MS = 15000;
@@ -12,7 +12,7 @@
   // shows, and the tick bails while hidden or while the sheet is closed, so a
   // hidden app issues no store reads.
   const TASKS_POLL_MS = 15000;
-  const state = { tasks: [], selected: null, filter: "all", query: "", doneCollapsed: true, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
+  const state = { tasks: [], selected: null, filter: "all", query: "", doneCollapsed: false, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
   // Two-step delete: the id of the task whose Delete button is armed right now.
   let deleteArmed = null;
   const els = {};
@@ -21,6 +21,7 @@
   // list it has not read: nothing saves until a load (or a broadcast) landed.
   let hydrated = false;
   let hydrating = null;
+  let taskRevision = 0;
 
   const base = (file) => (file ? file.split(/[\\/]/).pop() : "(unknown)");
   const status = (text, isError) => {
@@ -31,9 +32,10 @@
   // Resolves false when nothing reached the store.
   const save = async () => {
     if (!hydrated) return false;
+    taskRevision += 1;
     try {
-      await window.mefiStudio?.tasksSave?.(state.tasks);
-      return true;
+      const result = await window.mefiStudio?.tasksSave?.(state.tasks);
+      return result?.ok === true;
     } catch {
       return false;
     }
@@ -46,10 +48,20 @@
   const openTaskCount = () => state.tasks.filter((task) => task.status === "open" || task.status === "active").length;
   const syncBadge = () => window.MefiNav?.setBadge?.("tasks", openTaskCount());
   const revealSelected = () => els.list?.querySelector("li.selected")?.scrollIntoView({ block: "nearest" });
-  const isDone = (task) => task?.status === "done" || task?.status === "archived";
+  const isDone = (task) => ["done", "archived", "completed", "resolved"].includes(task?.status);
+  const needsReview = (task) => !isDone(task) && task?.status !== "active" && (
+    task?.status === "awaiting_verification" || task?.status === "verifying" ||
+    ["unverified", "failed"].includes(task?.verification?.state) || (task?.runFailures ?? 0) >= 5
+  );
+  const taskStage = (task) => isDone(task) ? "done" : needsReview(task) ? "review" : "open";
+  const summary = (tasks = state.tasks) => (Array.isArray(tasks) ? tasks : []).reduce((counts, task) => {
+    counts.all += 1;
+    counts[taskStage(task)] += 1;
+    return counts;
+  }, { all: 0, open: 0, review: 0, done: 0 });
   // doneAt is stamped when a task is finished; older done tasks fall back to
   // their last update so they still get a sensible finish date.
-  const doneStamp = (task) => task?.doneAt ?? task?.updatedAt ?? task?.createdAt ?? 0;
+  const doneStamp = (task) => task?.doneAt ?? task?.verification?.at ?? task?.updatedAt ?? task?.createdAt ?? 0;
   const pushLog = (task, at, text) => [...(task.logs ?? []), { at, kind: "status", text }].slice(-40);
   // Search narrows every filter (title + prompt); an empty box means no filter.
   const matchesQuery = (task) => {
@@ -79,6 +91,10 @@
   // invented — finish time, duration, last log lines, idea and ref counts.
   function doneSummary(task) {
     const parts = [];
+    const result = task?.lastAttempt?.result?.parts ?? task?.lastAttempt?.result;
+    const completed = Array.isArray(result?.done) ? result.done : typeof result?.done === "string" ? [result.done] : [];
+    if (completed.length) parts.push(completed.map((item) => clipText(item, 140)).filter(Boolean).join("; "));
+    if (task.verification?.reason) parts.push(clipText(task.verification.reason, 180));
     const took = span(doneStamp(task) - (task.createdAt ?? 0));
     if (took) parts.push(`took ${took}`);
     // Status churn (created / marked done / archived / reopened) is bookkeeping,
@@ -105,14 +121,24 @@
     return `finished ${relTime(doneStamp(task))}${parts.length ? ` · ${parts.join(" · ")}` : ""}`;
   }
 
+  function describe(task) {
+    const stage = taskStage(task);
+    if (stage === "done") return { stage, label: task.status === "archived" ? "Archived" : "Done", summary: doneSummary(task) };
+    if (task?.status === "awaiting_verification" || task?.status === "verifying") {
+      return { stage, label: "Checking completion", summary: "The worker finished. Completion checks are pending; this work is not marked done yet." };
+    }
+    if (stage === "review") return { stage, label: "Needs review", summary: task?.verification?.reason || task?.lastRunError || "The last attempt could not be confirmed. Review its result before retrying or marking it done." };
+    return { stage, label: task?.status === "active" ? "Working" : "Open", summary: task?.lastRunError || task?.prompt || "Ready for the assistant." };
+  }
+
   function renderFilters() {
     if (!els.filters) return;
-    const open = state.tasks.filter((task) => !isDone(task)).length;
-    const counts = { all: state.tasks.length, open, done: state.tasks.length - open };
+    const counts = summary();
     for (const chip of els.filters.querySelectorAll("[data-filter]")) {
       const which = chip.dataset.filter;
       chip.classList.toggle("on", which === state.filter);
-      chip.textContent = `${which[0].toUpperCase()}${which.slice(1)} · ${counts[which] ?? 0}`;
+      chip.textContent = `${which === "review" ? "Review" : which[0].toUpperCase() + which.slice(1)} · ${counts[which] ?? 0}`;
+      chip.setAttribute("aria-pressed", String(which === state.filter));
     }
   }
 
@@ -126,11 +152,12 @@
   function emptyListMessage(finishedCount) {
     if (state.query.trim()) return `No tasks match “${state.query.trim()}”.`;
     if (state.filter === "open") return "No open tasks.";
+    if (state.filter === "review") return "No work needs review. Finished tasks stay in Done.";
     if (state.filter === "all")
       return finishedCount
         ? "No open tasks — finished work sits under the Done mark above."
         : "No tasks yet. Add one above — auto reference will attach context.";
-    return "Nothing finished yet — done and archived tasks land here.";
+    return "No confirmed completions in this project's board yet. Finished tasks stay here, including archived work.";
   }
 
   function rowButton(label, title, run) {
@@ -161,7 +188,7 @@
       awaiting_verification: "improver",
     };
     dot.className = `src-tag ${STATUS_TAG[task.status] ?? "collision"}`;
-    dot.textContent = task.status === "awaiting_verification" ? "VERIFY" : task.status.toUpperCase();
+    dot.textContent = needsReview(task) ? "REVIEW" : String(task.status ?? "open").toUpperCase();
     const text = document.createElement("span");
     text.className = "task-name";
     text.textContent = ` ${task.title}`;
@@ -174,10 +201,10 @@
     li.append(dot, text, actions);
     // The brief rides under the title in the Done view — the same digest the
     // detail pane shows, so the list answers "what got done" at a glance.
-    if (isDone(task) && state.filter === "done") {
+    if (isDone(task) || needsReview(task)) {
       const brief = document.createElement("div");
       brief.className = "who done-brief";
-      brief.textContent = doneSummary(task);
+      brief.textContent = describe(task).summary;
       brief.title = task.prompt ?? task.title;
       li.append(brief);
     }
@@ -241,7 +268,7 @@
     const selected = selectedTask();
     if (selected && isDone(selected)) state.doneCollapsed = false;
     const visible = state.tasks.filter(matchesQuery);
-    const open = visible.filter((task) => !isDone(task)).sort((a, b) => b.updatedAt - a.updatedAt);
+    const open = visible.filter((task) => !isDone(task) && (state.filter === "all" || taskStage(task) === state.filter)).sort((a, b) => b.updatedAt - a.updatedAt);
     const done = visible.filter(isDone).sort((a, b) => doneStamp(b) - doneStamp(a));
 
     if (state.filter === "done") {
@@ -259,6 +286,13 @@
         summary.append(archive);
       }
       els.list.append(summary);
+      const reviewCount = state.tasks.filter(needsReview).length;
+      if (reviewCount) {
+        const review = document.createElement("li");
+        review.className = "summary-row";
+        review.append(rowButton(`Review ${reviewCount} attempt${reviewCount === 1 ? "" : "s"}`, "See completion checks and attempts needing attention", () => selectFilter("review")));
+        els.list.append(review);
+      }
       if (!done.length) {
         els.list.append(mutedLi(emptyListMessage(0)));
         return;
@@ -275,12 +309,23 @@
     if (!open.length) els.list.append(mutedLi(emptyListMessage(done.length)));
   }
 
-  async function load() {
+  async function load(options = {}) {
+    const revision = taskRevision;
     const [tasks, prefs] = await Promise.all([window.mefiStudio?.tasksList?.(), window.mefiStudio?.prefsGet?.()]);
-    state.tasks = tasks?.tasks ?? [];
+    if (tasks?.ok === false || !Array.isArray(tasks?.tasks)) throw new Error(tasks?.error || "Task store unavailable");
+    // A completion broadcast may arrive while preferences are still loading.
+    // Never replace that newer board with the earlier read's snapshot.
+    if (revision === taskRevision) state.tasks = tasks.tasks;
     hydrated = true;
     if (prefs?.ok) state.prefs = { ...state.prefs, ...prefs.prefs };
-    state.filter = FILTERS.includes(prefs?.prefs?.taskFilter) ? prefs.prefs.taskFilter : "all";
+    state.filter = FILTERS.includes(options.filter) ? options.filter : revision === taskRevision && FILTERS.includes(prefs?.prefs?.taskFilter) ? prefs.prefs.taskFilter : state.filter;
+    if (options.taskId) {
+      const task = selectedTask();
+      if (task && state.filter !== "all" && taskStage(task) !== state.filter) state.filter = taskStage(task);
+      state.query = "";
+      if (els.search) els.search.value = "";
+    }
+    if (FILTERS.includes(options.filter) || options.taskId) setPref("taskFilter", state.filter);
     syncBadge();
     renderFilters();
     renderList();
@@ -315,7 +360,19 @@
 
   function setPref(key, value) {
     state.prefs[key] = value;
-    window.mefiStudio?.prefsSet?.({ [key]: value }).then(applyPrefs);
+    Promise.resolve(window.mefiStudio?.prefsSet?.({ [key]: value })).then(applyPrefs).catch(() => {});
+  }
+
+  function selectFilter(filter) {
+    if (!FILTERS.includes(filter)) return;
+    state.filter = filter;
+    // A selected task outside this view must not leave unrelated details on
+    // screen while the list says there are no results.
+    const task = selectedTask();
+    if (filter !== "all" && task && taskStage(task) !== filter) state.selected = null;
+    setPref("taskFilter", state.filter);
+    renderList();
+    renderDetail();
   }
 
   // One writer for every status move (board rows and the detail buttons), so a
@@ -325,6 +382,7 @@
     const wasDone = isDone(task);
     if (value === "done" && task.status !== "done") {
       task.doneAt = now;
+      task.verification = { state: "manual", at: now, reason: "Marked done by you" };
       task.logs = pushLog(task, now, "marked done");
     } else if (value === "open" || value === "active") {
       // A manual reopen re-arms a task the autopilot cooled down or gave up
@@ -405,11 +463,16 @@
   // button, and the rarer moves sit beside it as ghosts.
   function statusActions(task) {
     const actions = [];
-    if (task.status === "done" || task.status === "archived") {
+    if (isDone(task)) {
       actions.push({ label: "Reopen", className: "primary", title: "Put this task back on the open board", run: () => setTaskStatus(task, "open") });
     } else {
-      actions.push({ label: "Mark done", className: "primary", title: "Move this task under the Done mark", run: () => setTaskStatus(task, "done") });
+      actions.push({ label: needsReview(task) ? "Confirm done" : "Mark done", className: "primary", title: "Mark this task complete after reviewing its result", run: () => setTaskStatus(task, "done") });
     }
+    if (needsReview(task)) actions.push({ label: "Retry", className: "ghost", title: "Return this task to the queue for another attempt", run: () => {
+      delete task.verification;
+      delete task.verifyAttempts;
+      setTaskStatus(task, "open");
+    } });
     if (task.status === "open") actions.push({ label: "Activate", className: "ghost", title: "Set active — the executor treats it as current work", run: () => setTaskStatus(task, "active") });
     if (task.status === "active") actions.push({ label: "Back to open", className: "ghost", title: "Release the active claim", run: () => setTaskStatus(task, "open") });
     if (task.status === "absorbed") actions.push({ label: "Restore", className: "ghost", title: "Pull this task out of the grouped plan and back onto the open board", run: () => setTaskStatus(task, "open") });
@@ -491,6 +554,12 @@
     meta.className = "muted who task-meta";
     meta.textContent = metaLine(task);
     els.detail.append(meta);
+    if (needsReview(task)) {
+      const review = document.createElement("p");
+      review.className = "finding";
+      review.textContent = `${describe(task).label}: ${describe(task).summary}`;
+      els.detail.append(review);
+    }
     for (const action of statusActions(task)) {
       const button = document.createElement("button");
       button.className = action.className;
@@ -549,6 +618,28 @@
       for (const item of items) ul.append(render(item));
       els.detail.append(ul);
     };
+    if (task.lastAttempt || task.verification) {
+      section("Result & completion checks");
+      const attempt = task.lastAttempt ?? {};
+      const evidence = task.verification;
+      const outcome = document.createElement("p");
+      outcome.className = "muted";
+      outcome.textContent = evidence?.state === "manual" ? "You marked this task done." : evidence?.state === "verified" ? `Completion accepted: ${evidence.reason || "checks passed"}` : describe(task).summary;
+      els.detail.append(outcome);
+      const parts = attempt.result?.parts ?? attempt.result;
+      const resultLines = parts && typeof parts === "object" ? Object.entries(parts).filter(([key]) => key !== "raw").map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join("; ") : String(value)}`) : [];
+      if (resultLines.length) entryList(resultLines, (line) => Object.assign(document.createElement("li"), { textContent: `Worker reported — ${line}` }));
+      if (Number.isFinite(evidence?.changedFiles)) {
+        const files = document.createElement("p");
+        files.className = "who";
+        files.textContent = `${evidence.changedFiles} changed file${evidence.changedFiles === 1 ? "" : "s"} observed${attempt.sessionId ? " in the worker's session" : ""}.`;
+        els.detail.append(files);
+      }
+      if (Array.isArray(task.remaining) && task.remaining.length) {
+        section("Follow-up work");
+        entryList(task.remaining, (line) => Object.assign(document.createElement("li"), { textContent: String(line) }));
+      }
+    }
     section(`Log (${(task.logs ?? []).length})`);
     entryList(task.logs ?? [], (log) => Object.assign(document.createElement("li"), { textContent: `[${new Date(log.at).toLocaleTimeString()}] ${log.text}` }));
     const logRow = document.createElement("div");
@@ -763,7 +854,7 @@
     els.overlay.hidden = false;
     // Set the selection before load() so the first render already shows it.
     if (typeof params.taskId === "string" && params.taskId) state.selected = params.taskId;
-    load()
+    return load(params)
       .then(() => {
         revealSelected();
         if (params.gather) gather();
@@ -803,6 +894,15 @@
       filters: "task-filters",
     })) {
       els[key] = document.getElementById(id);
+    }
+    if (els.filters && !els.filters.querySelector('[data-filter="review"]')) {
+      const review = document.createElement("button");
+      review.id = "task-filter-review";
+      review.className = "chip";
+      review.dataset.filter = "review";
+      review.textContent = "Review · 0";
+      review.title = "Finished runs awaiting checks and attempts needing attention";
+      els.filters.insertBefore(review, els.filters.querySelector('[data-filter="done"]'));
     }
     els.openButton?.addEventListener("click", open);
     els.close?.addEventListener("click", close);
@@ -845,10 +945,7 @@
     els.filters?.addEventListener("click", (event) => {
       const chip = event.target.closest("[data-filter]");
       if (!chip || !FILTERS.includes(chip.dataset.filter)) return;
-      state.filter = chip.dataset.filter;
-      setPref("taskFilter", state.filter);
-      renderFilters();
-      renderList();
+      selectFilter(chip.dataset.filter);
     });
     // The single owner of #tasks-overhead; overhead.js no longer binds it too.
     els.overhead?.addEventListener("click", () => {
@@ -859,10 +956,17 @@
       element?.addEventListener("change", () => setPref(key, element.checked));
     }
     window.mefiStudio?.onTasks?.((tasks) => {
-      state.tasks = Array.isArray(tasks) ? tasks : [];
+      if (!Array.isArray(tasks)) return;
+      taskRevision += 1;
+      state.tasks = tasks;
       hydrated = true;
       syncBadge();
       if (!els.overlay.hidden) {
+        const task = selectedTask();
+        if (task && state.filter !== "all" && taskStage(task) !== state.filter) {
+          state.filter = taskStage(task);
+          setPref("taskFilter", state.filter);
+        }
         renderList();
         renderDetail();
       }
@@ -891,10 +995,16 @@
     addTask,
     gather,
     state,
+    describe,
+    summary,
     // What a live-update reload hands back to open(): the task on screen.
-    saveState: () => ({ taskId: state.selected ?? null }),
+    saveState: () => ({ taskId: state.selected ?? null, filter: state.filter }),
     selectTask: (id) => {
       state.selected = id;
+      const task = selectedTask();
+      if (task && state.filter !== "all" && taskStage(task) !== state.filter) state.filter = taskStage(task);
+      state.query = "";
+      if (els.search) els.search.value = "";
       renderList();
       renderDetail();
       revealSelected();

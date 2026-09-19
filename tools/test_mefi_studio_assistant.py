@@ -489,7 +489,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn("async function duplicateDeclarationRequests", self.main)
         self.assertIn("scanDuplicateDeclarations", self.main)
         self.assertIn("requestsFromDuplicates", self.main)
-        self.assertIn('path.join(STUDIO_ROOT, "main.cjs")', _function_body(self.main, "executorScanFiles"))
+        self.assertIn('path.join(projectRoot(), "main.cjs")', _function_body(self.main, "executorScanFiles"))
         watcher = _function_body(self.main, "assistantWatcherJob")
         self.assertIn("duplicateDeclarationRequests", watcher, "the watcher queues merge-corruption fixes even when there is no collision")
         self.assertIn("assistantCache.duplicateScan", self.main, "the keeper tidies resolved duplicate requests from the last scan")

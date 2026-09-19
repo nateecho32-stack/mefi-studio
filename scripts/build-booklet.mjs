@@ -18,7 +18,7 @@ export async function build({ root = ROOT } = {}) {
   const catalog = await readFile(path.join(root, "data", "models.json"), "utf8");
   const parsed = JSON.parse(catalog);
 
-  const [styles, nav, graph, tree, idle, explorer, analyzer, tasks, ideas, overhead, palette, eyes, boot, booklet] = await Promise.all([
+  const [styles, nav, graph, tree, idle, explorer, analyzer, tasks, ideas, overhead, palette, eyes, boot, workspace, booklet] = await Promise.all([
     readFile(path.join(RENDERER, "styles.css"), "utf8"),
     readFile(path.join(RENDERER, "nav.js"), "utf8"),
     readFile(path.join(RENDERER, "graph.js"), "utf8"),
@@ -32,13 +32,14 @@ export async function build({ root = ROOT } = {}) {
     readFile(path.join(RENDERER, "palette.js"), "utf8"),
     readFile(path.join(RENDERER, "eyes.js"), "utf8"),
     readFile(path.join(RENDERER, "boot.js"), "utf8"),
+    readFile(path.join(RENDERER, "workspace.js"), "utf8"),
     readFile(path.join(RENDERER, "booklet.js"), "utf8"),
   ]);
 
   const html = template
     .replace("__BOOKLET_DATA__", () => catalog.trim())
     .replace("__BOOKLET_STYLES__", () => styles)
-    .replace("__BOOKLET_CODE__", () => [nav, graph, tree, idle, explorer, analyzer, tasks, ideas, overhead, palette, eyes, boot, booklet].join("\n"));
+    .replace("__BOOKLET_CODE__", () => [nav, graph, tree, idle, explorer, analyzer, tasks, ideas, overhead, palette, eyes, boot, workspace, booklet].join("\n"));
 
   const out = path.join(RENDERER, "booklet.html");
   let previous = null;

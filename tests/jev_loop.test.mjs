@@ -21,6 +21,18 @@ test("intake ignores removed admissions and closed work; carries real remaining 
   assert.match(plan.questions[0].prompt, /status: running/);
 });
 
+test("direct task intake excludes its own task batch and ignores removed task identities", () => {
+  const first = { ...request("Improve scheduler startup delay"), id: "task-first", kind: "task", createdAt: 10, at: 10 };
+  const second = { ...request("Improve scheduler startup loading"), id: "task-second", kind: "task" };
+  assert.equal(planIntake([first, second], { tasks: [first, second] }).questions.length, 0);
+  const existing = { ...request("Reduce scheduler startup delay"), id: "older-task" };
+  const plan = planIntake([first], { tasks: [first, existing] });
+  assert.equal(plan.comparisons.length, 1);
+  assert.equal(plan.comparisons[0].hit.item.id, existing.id);
+  assert.equal(planIntake([first], { tasks: [existing, { ...first, id: "replacement" }] }).questions.length, 0);
+  assert.equal(planIntake([first], { tasks: [{ ...first, status: "done" }, existing] }).questions.length, 0);
+});
+
 function fixture(runBatch, options = {}) {
   let time = 1000;
   const timers = new Map();

@@ -2131,13 +2131,19 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   });
   report.duplicateTasks = inTasks.length - outTasks.length;
 
-  // Finished copies of the same title collapse too — five "done" stamps of one
-  // job is clutter, not history. Live tasks stay; only done/archived dupes drop.
+  // Duplicate completion stamps collapse, but separate completed attempts are
+  // history: repeating a task's title must not erase an earlier result.
   {
+    const finishedKey = (task) => {
+      const title = compactKey(task.title);
+      if (task.lastAttempt?.runId) return `${title}|attempt:${task.lastAttempt.runId}`;
+      if (task.id) return `${title}|record:${task.id}`;
+      return title;
+    };
     const finishedByKey = new Map();
     for (const task of outTasks) {
       if (!isFinishedTask(task) || !compactKey(task.title)) continue;
-      const key = compactKey(task.title);
+      const key = finishedKey(task);
       finishedByKey.set(key, pickRicherTask(task, finishedByKey.get(key)));
     }
     const keepFinished = new Set(finishedByKey.values());
@@ -4582,7 +4588,7 @@ function selfTest() {
       ],
       requests: [],
     });
-    expect(dupDone.tasks.length === 1 && dupDone.tasks[0].id === "d2", `finished duplicates collapse to the newest ${JSON.stringify(dupDone.tasks.map((task) => task.id))}`);
+    expect(dupDone.tasks.length === 3, `separate manually finished records retain their history ${JSON.stringify(dupDone.tasks.map((task) => task.id))}`);
     const noStamp = compact({
       now: at,
       tasks: [],

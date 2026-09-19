@@ -574,8 +574,7 @@
     refresh("open");
   };
 
-  // Command is the first paint on a cold launch: the booklet catalog can wait
-  // until idle so the constellation is not competing with a card grid.
+  // The workspace paints first. Build the model catalog when the browser is idle.
   if (wantCommand) {
     if (typeof requestIdleCallback === "function") requestIdleCallback(paintCatalog, { timeout: 1600 });
     else setTimeout(paintCatalog, 400);
@@ -583,30 +582,20 @@
     paintCatalog();
   }
 
-  // A live-update reload/restart restores what was open; otherwise the Command
-  // view (interactive constellation) is the home surface. `commandHome` is the
-  // opt-out pref, cached to localStorage by idle.js so an opted-out launch
-  // never flashes Command; with no cache it opens optimistically and the async
-  // prefs read backs it out only when the user really turned it off — a failed
-  // or slow read must not strand the launch on the booklet.
+  // Live updates restore the current surface. The workspace is home; keep the
+  // existing commandHome preference key so established launch choices survive.
   if (!capture && !smoke) {
     if (!window.MefiNav?.resume?.() && wantCommand) {
-      const openHome = () => window.MefiIdle?.enter?.(true);
-      // A cold launch runs the boot menu: the assistant reads every chat and
-      // source with its agents (green adds, red cleanups), the tree builds
-      // underneath, and the layer fades away into the ready constellation.
-      if (window.MefiBoot?.run) window.MefiBoot.run(openHome);
-      else {
-        // Pre-boot bundle (stale build): the old blind timers still open home.
-        setTimeout(openHome, 800);
-        setTimeout(openHome, 2400);
-      }
+      const openHome = () => window.MefiWorkspace?.enter?.();
+      // Workspace paints immediately. Store reads populate it independently;
+      // an unavailable service never blocks the composer behind a boot movie.
+      openHome();
       window.mefiStudio
         ?.prefsGet?.()
         .then((result) => {
           if (result?.ok && result.prefs?.commandHome === false) {
             window.MefiBoot?.cancel?.();
-            if (window.MefiIdle?.isActive?.()) window.MefiIdle.exit();
+            if (window.MefiWorkspace?.isActive?.()) window.MefiWorkspace.exit();
           }
         })
         .catch(() => {});

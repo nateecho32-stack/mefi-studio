@@ -1,10 +1,32 @@
 # Mefi's Studio AI+
 
-Desktop companion for the OpenCode Go plan and a z.ai GLM Coding Plan: a self-refreshing model booklet, a
-value/recommendation graph, **A-Eyes** (live model activity: diffs, PNG evidence
-with pins, log tail, 3D task-tree rail), and a launcher for the Ruins Runner
-Love2D studio. Styled Club Blackout: champagne gold on near-black, glass tabs,
-serif display headings.
+A personal desktop workspace for working with your assistant across projects.
+Pick a project, talk an idea through, or choose **Give a task** to create real
+work on its board. The companion moves between Listen, Make, and Review as
+actual work changes; its narration and activity drawer show what is happening.
+
+**Projects** keeps each folder's tasks, conversations, drafts, references, and
+work logs together. Use **+** in the sidebar to add an existing folder. Running
+work must finish before changing projects; **Pause** stops new scheduling while
+current jobs finish. The selected folder is captured by jobs and store writes,
+so a project switch cannot redirect work into a different checkout.
+
+**Your work** separates open work, finished attempts needing **Review**, and
+verified or manually confirmed **Done** tasks. Click a card for its result,
+evidence, and follow-up controls. Archived completions remain visible. Verified
+direct inbox requests now become durable Done entries instead of disappearing.
+An older successful worker exit alone is not proof that verification passed.
+
+Use **Make yourself at home** to set your name, companion name, accent, and
+movement preference. **Studio tools** holds the constellation, full task board,
+session explorer, model booklet, value graphs, ideas, and diagnostics. API keys,
+Jev, coding providers, and the optional Ruins Runner launcher live in **Settings
+& connections**. Press **H** to return home or **Ctrl K** to find a tool.
+
+Project state stays under the application's ignored `data/projects/` folders;
+the original project's existing files stay in place. Source and portable builds
+retain their separate existing data stores. This update does not merge them or
+invent completion records for old runs with no verification evidence.
 
 ```text
 Mefi's Studio AI+/
@@ -19,7 +41,8 @@ Mefi's Studio AI+/
     booklet.js              cards, filters, refresh-on-open, tabs, help sheet, studio panel
     graph.js                value map, task-fit heatmap, pools, recommendation engine
     eyes.js                 A-Eyes: change feed, diffs, PNG pins, log tail, inspector
-    boot.js                 the startup menu: the assistant reads every chat with its agents, then fades into Command
+    workspace.js            project home, companion conversation, explicit tasks, review and completion results
+    boot.js                 shared visibility-aware polling and optional constellation startup animation
     tree3d.js               3D task-tree rail (starfield, green activity lights, pulses)
   scripts/
     refresh-models.mjs      live roster + models.dev + curated -> data/models.json

@@ -4,15 +4,17 @@ import { retrieveCandidate, relationshipQuestion } from "./work-classification.m
 
 export function planIntake(additions, { requests = [], tasks = [], limit = 3 } = {}) {
   const keyOf = (item) => intentKeyOf(item?.title ?? "");
+  const closed = new Set(["done", "archived", "cancelled", "resolved"]);
   const admitted = new Set(requests.map(keyOf));
-  const fresh = additions.filter((item) => keyOf(item) && admitted.has(keyOf(item)));
+  const admittedTasks = new Set(tasks.filter((item) => item && !closed.has(item.status)).map((item) => item.id).filter(Boolean));
+  const fresh = additions.filter((item) => keyOf(item) && (item.kind === "task" ? item.id && admittedTasks.has(item.id) : admitted.has(keyOf(item))));
   // An observation cannot be its own comparison. Exclude the whole incoming
   // batch from requests, while still allowing an existing task with its title.
-  const incoming = new Set(additions.map(keyOf));
-  const closed = new Set(["done", "archived", "cancelled", "resolved"]);
+  const incoming = new Set(additions.filter((item) => item.kind !== "task").map(keyOf));
+  const incomingTasks = new Set(additions.filter((item) => item.kind === "task").map((item) => item.id));
   const candidates = [
     ...requests.filter((item) => item && !incoming.has(keyOf(item)) && !closed.has(item.status)).map((item) => ({ ...item, kind: "request" })),
-    ...tasks.filter((item) => item && !closed.has(item.status)).map((item) => ({ ...item, kind: "task" })),
+    ...tasks.filter((item) => item && !incomingTasks.has(item.id) && !closed.has(item.status)).map((item) => ({ ...item, kind: "task" })),
   ];
   const comparisons = [];
   for (const addition of fresh) {
@@ -46,7 +48,7 @@ export function createJevQueue({ runBatch, minIntervalMs = 120000, backoffMs = 3
     if (stopped) return status();
     for (const item of items ?? []) {
       if (!item?.title) continue;
-      const key = `${item.source ?? ""}:${intentKeyOf(item.title)}`;
+      const key = item.kind === "task" && item.id ? `task:${item.id}` : `${item.source ?? ""}:${intentKeyOf(item.title)}`;
       if (pending.has(key)) continue;
       if (pending.size >= maxPending) { last.skipped += 1; continue; }
       pending.set(key, { item, attempts: 0 });

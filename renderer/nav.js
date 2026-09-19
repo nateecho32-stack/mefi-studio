@@ -54,6 +54,14 @@
 
   const registry = [
     {
+      id: "workspace", label: "Your workspace", short: "Workspace", kind: "view", layer: null,
+      group: "surfaces", key: "H", glyph: "g-command", badge: null,
+      desc: "Projects, your companion, and work from idea to done",
+      showIn: showIn({ dock: true, palette: true, help: true, footer: true }),
+      open: () => window.MefiWorkspace?.enter?.(), close: () => window.MefiWorkspace?.exit?.(),
+      isOpen: () => Boolean(window.MefiWorkspace?.isActive?.()),
+    },
+    {
       id: "command",
       label: "Command view",
       short: "Command",
@@ -421,9 +429,16 @@
       state.transient = id;
     }
     if (!state.focusReturn[dest.layer]) state.focusReturn[dest.layer] = document.activeElement;
-    state.returnTo = idleActive() ? "command" : null;
+    state.returnTo = idleActive() ? "command" : window.MefiWorkspace?.isActive?.() ? "workspace" : null;
     const root = dest.element ? document.getElementById(dest.element) : null;
-    root?.classList.toggle("from-command", state.returnTo === "command");
+    root?.classList.toggle("from-command", Boolean(state.returnTo));
+    const back = root?.querySelector(".sheet-back");
+    if (back) {
+      const label = state.returnTo === "workspace" ? "Workspace" : "Command";
+      back.title = `Back to ${label} (Esc)`;
+      const copy = back.querySelector(".label");
+      if (copy) copy.textContent = label;
+    }
     const sheet = dialogRoot(dest);
     if (sheet) {
       sheet.setAttribute("role", "dialog");
@@ -448,7 +463,9 @@
       if (dest?.element) document.getElementById(dest.element)?.classList.remove("from-command");
     }
     if (state.transient === id) state.transient = null;
-    const saved = layer ? state.focusReturn[layer] : null;
+    let saved = layer ? state.focusReturn[layer] : null;
+    const closedMenu = saved?.closest?.("details:not([open])");
+    if (closedMenu) saved = closedMenu.querySelector("summary");
     // <body> passes every visibility test but cannot take focus, so an overlay
     // opened with nothing focused would otherwise close to nowhere.
     const usable = Boolean(saved && saved !== document.body && saved.isConnected && !saved.hidden && !saved.closest?.("[hidden]"));
@@ -460,6 +477,8 @@
     } else if (state.sheet) {
       // A transient closed over a sheet that stays open: stay inside that dialog.
       dialogRoot(get(state.sheet))?.focus?.();
+    } else if (window.MefiWorkspace?.isActive?.()) {
+      document.getElementById("workspace-layer")?.focus?.({ preventScroll: true });
     } else {
       (document.querySelector(".tab.active") ?? document.getElementById("nav-command"))?.focus?.();
     }
@@ -504,6 +523,8 @@
     }
     if (dest.kind === "view") {
       closeAll();
+      if (id !== "workspace") window.MefiWorkspace?.exit?.();
+      if (id !== "command" && idleActive()) window.MefiIdle?.exit?.();
       state.returnTo = null;
       navCommand?.classList.remove("return");
       dest.open?.(params);
@@ -512,6 +533,7 @@
     }
     if (dest.kind === "tab") {
       closeAll();
+      window.MefiWorkspace?.exit?.();
       if (idleActive()) {
         window.MefiIdle?.exit?.();
         state.returnTo = "command";
@@ -758,10 +780,19 @@
       const self = selfId ?? container.dataset?.sheetLinks;
       if (!self) continue;
       container.textContent = "";
+      const menu = document.createElement("details");
+      menu.className = "studio-more";
+      const summary = document.createElement("summary");
+      summary.textContent = "More tools";
+      menu.append(summary);
+      const links = document.createElement("div");
+      links.className = "studio-more-links";
       for (const dest of list({ showIn: "tools" })) {
         if (dest.layer !== "sheet" || dest.id === self) continue;
-        container.append(navButton(dest, "dock-item small", { key: false }));
+        links.append(navButton(dest, "dock-item small", { key: false }));
       }
+      menu.append(links);
+      container.append(menu);
       paintBadges(container);
     }
   }
@@ -896,6 +927,7 @@
       }
     }
     go(button.dataset.nav, params);
+    button.closest("details")?.removeAttribute("open");
   });
 
   function keyContext(dest, event) {
@@ -913,7 +945,8 @@
       return;
     }
     if (dest.kind === "view") {
-      toggle(dest.id);
+      if (dest.id === "workspace") go(dest.id);
+      else toggle(dest.id);
       return;
     }
     if (dest.isOpen?.()) {
@@ -1298,6 +1331,7 @@
     const payload = {
       // truthy when the Command view was up; then also its selection and zoom
       command: commandActive ? { active: true, ...(window.MefiIdle?.saveState?.() ?? {}) } : false,
+      workspace: Boolean(window.MefiWorkspace?.isActive?.()),
       sheet: state.sheet ?? null,
       tab: readStore("mefiStudio.tab") ?? "booklet",
       at: Date.now(),
@@ -1355,6 +1389,7 @@
     if (!saved || typeof saved.at !== "number" || Date.now() - saved.at > 60000) return false;
     if (saved.tab && saved.tab !== readStore("mefiStudio.tab")) window.MefiBooklet?.showTab?.(saved.tab);
     const commandState = saved.command && typeof saved.command === "object" ? saved.command : {};
+    if (saved.workspace) window.MefiWorkspace?.enter?.();
     if (saved.command) setTimeout(() => window.MefiIdle?.enter?.(true, commandState), 1200);
     if (saved.sheet && get(saved.sheet)) {
       const sheetState = saved.sheet === "explorer" ? saved.explorer : saved.sheet === "tasks" ? saved.tasks : null;
@@ -1364,7 +1399,7 @@
     // Command view, which open on the timers above.
     requestAnimationFrame(() => setTimeout(() => restoreDetails(saved), 300));
     setTimeout(() => restoreDetails(saved), 1600);
-    return Boolean(saved.command || saved.sheet);
+    return Boolean(saved.workspace || saved.command || saved.sheet);
   }
 
   // ---- boot --------------------------------------------------------------

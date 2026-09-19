@@ -46,7 +46,7 @@ process.on("unhandledRejection", (error) => { console.error(error?.stack || erro
 const started = performance.now();
 let finishReady;
 const ready = new Promise((resolve) => { finishReady = resolve; });
-global.__MefiMeasuredExit = () => ready.then((result) => electron.app.exit(result?.cards > 0 ? 0 : 1));
+global.__MefiMeasuredExit = () => ready.then((result) => electron.app.exit(result?.workspaceReady || result?.cards > 0 ? 0 : 1));
 electron.app.setPath("userData", PROFILE);
 electron.app.setPath("sessionData", PROFILE + "/session");
 const RealWindow = electron.BrowserWindow;
@@ -62,8 +62,10 @@ class MeasuredWindow extends RealWindow {
           const end = performance.now() + 15000;
           const poll = () => {
             const boot = document.getElementById('boot-layer');
-            if (boot && boot.hidden) {
-              resolve({ readyMs: Math.round(performance.now()), cards: document.querySelectorAll('.card').length });
+            const workspaceReady = Boolean(window.MefiWorkspace?.isActive?.() && document.getElementById('workspace-send')?.disabled === false);
+            const cards = document.querySelectorAll('.card').length;
+            if (workspaceReady || (!window.MefiWorkspace && boot && boot.hidden && cards > 0)) {
+              resolve({ readyMs: Math.round(performance.now()), cards, workspaceReady });
             } else if (performance.now() > end) reject(new Error('boot never became ready'));
             else setTimeout(poll, 10);
           }; poll();

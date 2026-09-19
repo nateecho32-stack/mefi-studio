@@ -33,6 +33,7 @@ const INLINE_SCRIPTS = [
   "palette.js",
   "eyes.js",
   "boot.js",
+  "workspace.js",
   "booklet.js",
 ];
 

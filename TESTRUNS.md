@@ -47,6 +47,20 @@ When adding a Python contract, register its path below and ensure it matches `se
 
 ## App commands and captures
 
+For the project workspace, run `python tools/verify_workspace.py`. It copies
+sources into a disposable Electron app and profile, seeds two fixture projects,
+blocks external network traffic, and exercises real IPC: explicit task creation,
+chat, completed details, review separation, project isolation, draft recovery,
+canceled folder selection, pause/resume, menus, personalization, reload, and a
+narrow viewport. Screenshots and the report are written to ignored
+`tools/logs/workspace-ui/`. It never opens either live data store or saved keys.
+
+The Node runner also discovers `tests/projects.test.mjs`,
+`tests/task_history.test.mjs`, `tests/tasks_ui.test.mjs`, and
+`tests/workspace_ui.test.mjs`. These cover captured project roots and storage,
+busy-switch safety, durable verified-request history, completion evidence,
+async UI ordering, project mismatch rejection, and draft retention on errors.
+
 From the repository root, `npm start` opens Electron and `npm run start:web` opens the browser fallback. Use `npm run data` or `npm run data:offline` to refresh the catalog and `npm run build-booklet` to rebuild `renderer/booklet.html`. `npm run capture` creates the screenshot tour in `tools/logs/mefi_studio_captures/`.
 
 A-Eyes reads the live OpenCode session store read-only (`~/.local/share/opencode/opencode.db` via `node:sqlite`) for its change feed, diffs, PNG evidence pins, log tail, and 3D task-tree rail. The automated Electron smoke uses a temporary home directory instead of that live store.

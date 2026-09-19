@@ -2,6 +2,10 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("mefiStudio", {
+  projectsList: () => ipcRenderer.invoke("projects:list"),
+  projectsAdd: () => ipcRenderer.invoke("projects:add"),
+  projectsSelect: (id) => ipcRenderer.invoke("projects:select", id),
+  onProjects: (callback) => ipcRenderer.on("projects:changed", (_event, data) => callback(data)),
   readCatalog: () => ipcRenderer.invoke("catalog:read"),
   refreshCatalog: () => ipcRenderer.invoke("catalog:refresh"),
   launchStudio: () => ipcRenderer.invoke("studio:launch"),
@@ -41,7 +45,7 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   assistantAutopilot: (prefs) => ipcRenderer.invoke("assistant:autopilot", prefs),
   assistantStatus: () => ipcRenderer.invoke("assistant:status"),
   assistantState: () => ipcRenderer.invoke("assistant:state"),
-  assistantMessage: (text) => ipcRenderer.invoke("assistant:message", { text }),
+  assistantMessage: (text, projectId) => ipcRenderer.invoke("assistant:message", { text, projectId }),
   assistantWorkOn: (target) => ipcRenderer.invoke("assistant:work-on", target ?? {}),
   assistantFocus: (target) => ipcRenderer.invoke("assistant:focus", target ?? null),
   assistantNodeContext: (payload) => ipcRenderer.invoke("assistant:node-context", payload ?? {}),
@@ -53,6 +57,7 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   analyzerPick: () => ipcRenderer.invoke("analyzer:pick"),
   analyzerAi: (kind, payload) => ipcRenderer.invoke("analyzer:ai", { kind, payload }),
   tasksList: () => ipcRenderer.invoke("tasks:list"),
+  tasksCreate: (task) => ipcRenderer.invoke("tasks:create", task),
   tasksSave: (tasks) => ipcRenderer.invoke("tasks:save", tasks),
   ideasList: () => ipcRenderer.invoke("ideas:list"),
   ideasSave: (ideas) => ipcRenderer.invoke("ideas:save", ideas),

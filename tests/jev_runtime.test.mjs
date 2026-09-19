@@ -40,6 +40,7 @@ function host({ settings = { gatewayApiKeyEncrypted: "fixture-encrypted" }, requ
   const queue = { enqueue: (items) => enqueued.push(items), status: () => ({ pending: 0, phase: "idle" }) };
   const experience = { spendBudget: async (file, entry) => { charges.push({ file, ...entry }); } };
   const context = vm.createContext({
+    projects: { current: () => ({ id: "fixture" }), run: (_project, fn) => fn(), stamp: (row) => row },
     console, SMOKE: false, CAPTURE: false, CLI_MODE: false,
     REQUESTS_PATH: "requests", TASKS_PATH: "tasks", POLICY_BUDGET_PATH: "budget",
     readSettings: async () => settings,
@@ -69,6 +70,7 @@ test("request admission sends only accepted records to Jev and never awaits the 
   const queued = [], board = { requests: [incoming] };
   const added = { title: "Repair launch settings", prompt: "Restore missing settings", source: "audit" };
   const context = vm.createContext({
+    projects: { stamp: (row) => row },
     workTitleKey: (title) => String(title).toLowerCase().trim(),
     mutateBoard: async (mutate) => mutate(board),
     jevShadowIntake: (items) => { queued.push(items); return new Promise(() => {}); },
@@ -79,6 +81,43 @@ test("request admission sends only accepted records to Jev and never awaits the 
   assert.deepEqual(plain(board.requests), [added, incoming]);
   assert.equal(await context.queueRequests([incoming]), 0);
   assert.equal(queued[1], undefined, "a fully absorbed admission provides no records to classify");
+});
+
+test("explicit task admission reaches Jev once after persistence without waiting, while duplicate and smoke work stay silent", async () => {
+  const { context, calls, enqueued } = host();
+  const board = { tasks: [] };
+  let serial = 0, finished = false;
+  Object.assign(context, {
+    crypto: { randomBytes: () => ({ toString: () => String(++serial) }) },
+    projectRoot: () => "/fixture-project",
+    workTitleKey: (title) => String(title).trim().toLowerCase(),
+    mutateBoard: async (mutate) => mutate(board),
+    refreshAutopilotQueue: async () => {}, assistantLog() {},
+    getJevQueue: async () => ({ enqueue: (items) => { enqueued.push(items); return new Promise(() => {}); } }),
+  });
+  vm.runInContext(section("async function assistantCreateTask(", "// The `opencode run` child"), context);
+  const pending = context.assistantCreateTask({ title: "Improve scheduler startup delay" }).then((value) => { finished = true; return value; });
+  await flush();
+  assert.equal(finished, true, "a pending classifier cannot delay the admitted task");
+  const task = await pending;
+  assert.equal(board.tasks[0].id, task.id);
+  assert.equal(enqueued.length, 1);
+  assert.equal(enqueued[0][0].id, task.id);
+  assert.equal(enqueued[0][0].kind, "task");
+  assert.equal(enqueued[0][0].at, task.createdAt, "intake retains the admission's stable timestamp");
+  assert.equal(await context.assistantCreateTask({ title: task.title }), null);
+  assert.equal(await context.assistantCreateTask({ title: " " }), null);
+  assert.equal(enqueued.length, 1, "rejected or repeated admissions are never reclassified");
+  const admit = context.mutateBoard;
+  context.mutateBoard = async () => { throw new Error("fixture persistence failure"); };
+  await assert.rejects(context.assistantCreateTask({ title: "A task that could not be saved" }), /persistence failure/);
+  context.mutateBoard = admit;
+  assert.equal(enqueued.length, 1, "unsaved work never reaches Jev");
+  context.SMOKE = true;
+  assert.ok(await context.assistantCreateTask({ title: "Improve another project task" }));
+  await flush();
+  assert.equal(enqueued.length, 1, "smoke tasks never reach the classifier queue");
+  assert.equal(calls.length, 0);
 });
 
 test("smoke, capture, and CLI hosts suppress Jev queue admission", async () => {
