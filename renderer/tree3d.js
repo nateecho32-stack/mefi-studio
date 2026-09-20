@@ -124,6 +124,7 @@
   const cache = { sessions: [], todos: [], fallback: null };
   let sessionSlots = new Map();
   let agentSlots = new Map();
+  let projectId = null; // the folder the stored sessions belong to
 
   function stableNodeSlots(ids, previous = new Map()) {
     const slots = new Map();
@@ -1696,13 +1697,19 @@
     return Promise.resolve();
   }
 
-  async function load() {
-    if (!window.mefiStudio?.eyesState) {
-      buildGraph([], [], { status: "desktop-only", text: "desktop mode only", stats: "desktop mode only" });
-      return;
-    }
-    const result = await read("eyesState");
-    loadResult(result);
+  function load() {
+    // The store is project-scoped, and a reload can race a caller (a project
+    // switch, an organize tick, a retry). ready() tracks the latest read, so
+    // awaiting it never hands back the previous folder's graph.
+    readyPromise = (async () => {
+      if (!window.mefiStudio?.eyesState) {
+        buildGraph([], [], { status: "desktop-only", text: "desktop mode only", stats: "desktop mode only" });
+        return;
+      }
+      const result = await read("eyesState");
+      loadResult(result);
+    })();
+    return readyPromise;
   }
 
   function loadResult(result) {
@@ -1757,6 +1764,21 @@
     window.addEventListener("resize", () => resize());
     document.addEventListener?.("visibilitychange", syncAnimation);
     window.addEventListener("mefi:nav", syncAnimation);
+    // Sessions and todos belong to the selected folder: a project switch must
+    // rebuild the rail from the new project's store instead of leaving the
+    // previous folder's nodes on it. The first project event is the startup
+    // adoption, which the initial load already reflects.
+    window.addEventListener("mefi:project-changed", (event) => {
+      const next = event.detail?.projectId ?? null;
+      const switched = Boolean(projectId && next && next !== projectId);
+      projectId = next;
+      if (!switched) return;
+      hover = null;
+      setKbdFocus(null);
+      activeSessionId = null;
+      sessionSlots = new Map();
+      load().catch(() => {});
+    });
     if (typeof MutationObserver !== "undefined") {
       new MutationObserver(syncAnimation).observe(document.body, { attributes: true, attributeFilter: ["class"] });
     }

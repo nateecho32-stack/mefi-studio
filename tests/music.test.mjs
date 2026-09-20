@@ -98,7 +98,7 @@ test("Spotify links are canonical and reject foreign, credentialed or malformed 
 test("Saved music preferences are bounded and never contain local files or transient Blob URLs", () => {
   const link = "https://open.spotify.com/playlist/37i9dQZF1DX7zqr9q1MPG7";
   const value = helpers.safePreferences({ theme: "untrusted", volume: 8, spotify: [link, link, "blob:private", "https://evil.test"], tracks: ["C:/private.mp3"], selected: "blob:private" });
-  assert.equal(value.theme, "gold"); assert.equal(value.volume, 1);
+  assert.equal(value.theme, "aurora"); assert.equal(value.volume, 1);
   assert.deepEqual(Array.from(value.spotify), [link]);
   assert.deepEqual(Object.keys(value).sort(), ["customColors", "extraGlow", "nodeLayout", "nodeStyle", "orbitTrails", "spotify", "theme", "volume"]);
   assert.equal(helpers.safePreferences(null).volume, .7);

@@ -74,7 +74,7 @@
       <button class="ghost ws-settings" data-nav="studio"><svg class="glyph" aria-hidden="true"><use href="#g-ambience"/></svg>Settings & connections</button>
       <button class="ghost ws-settings" data-nav="music"><svg class="glyph" aria-hidden="true"><use href="#g-music"/></svg>Music & themes</button>
       <button class="ghost ws-settings" data-nav="onboarding"><svg class="glyph" aria-hidden="true"><use href="#g-help"/></svg>Start here</button>
-      <details class="ws-personal"><summary>Make yourself at home <span>✧</span></summary><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Studio theme<select id="workspace-accent"><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></details>
+      <details class="ws-personal"><summary>Make yourself at home <span>✧</span></summary><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Studio theme<select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></details>
       <span class="ws-local-note"><i></i> A little studio. A lot of possibility.</span>
     </div>
   </aside>
@@ -86,7 +86,7 @@
     <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">A little guidance for your first project.</strong><p>Choose a project, connect your tools, create work and follow it through review.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start walkthrough</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk with me</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays in the sidebar">Not now</button></div></section>
     <div class="ws-columns">
       <section class="ws-conversation" aria-label="Conversation with your companion">
-        <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div><button id="workspace-pause" class="ghost mini" title="Pause new work. Running jobs finish normally.">Pause</button></div>
+        <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div><button id="workspace-stop-all" class="ghost mini" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button><button id="workspace-restart" class="ghost mini" title="Stop every agent, save progress, and restart Studio.">Restart</button><button id="workspace-pause" class="ghost mini" title="Pause new work. Running jobs finish normally.">Pause</button></div>
         <div id="workspace-thread" class="ws-thread" role="log" aria-label="Project conversation" aria-live="polite" aria-relevant="additions"></div>
         <form id="workspace-form" class="ws-composer">
           <div class="ws-compose-top"><div class="ws-modes" role="group" aria-label="Message purpose"><button type="button" id="workspace-mode-chat" aria-pressed="true">Talk together</button><button type="button" id="workspace-mode-work" aria-pressed="false">Give a task</button></div><span id="workspace-composer-context"></span></div>
@@ -529,9 +529,10 @@
   </div>
   <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" aria-live="polite" hidden></aside>
   <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
-  <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, assistant, done and questions">
+  <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, settings, assistant, done and questions">
     <header class="rail-tabs" role="tablist" aria-label="Panel views">
       <button id="cmd-rail-tab-work" class="rail-tab" role="tab" aria-selected="true" aria-controls="idle-feed" data-rail-view="work">Work<span id="cmd-rail-work-badge" class="count" hidden></span></button>
+      <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings">Settings</button>
       <button id="cmd-rail-tab-assistant" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-chat" tabindex="-1" data-rail-view="assistant">Assistant<span id="cmd-rail-assistant-badge" class="count" hidden></span></button>
       <button id="cmd-rail-tab-done" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-done" tabindex="-1" data-rail-view="done">Done</button>
       <button id="cmd-rail-tab-ask" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-asks" tabindex="-1" data-rail-view="ask">Ask<span id="cmd-rail-ask-badge" class="count warn" hidden></span></button>
@@ -570,28 +571,11 @@
     </header>
     <div id="idle-feed-content" class="feed-content">
     <div id="idle-feed-metrics" class="feed-metrics" aria-label="Work readiness"></div>
-    <div class="feed-controls">
-      <label class="switch mini feed-autopilot" title="Autopilot: queue and run Auto Builder requests"><input type="checkbox" id="idle-autopilot" aria-describedby="idle-autopilot-help"><span class="track"></span><span>Autopilot</span></label>
-      <label class="feed-capacity">Parallel builds <select id="idle-feed-parallel" aria-label="Build scheduling capacity" aria-describedby="idle-feed-parallel-help"><option value="machine">Machine managed</option><option value="1">Manual: 1 worker</option><option value="2">Manual: 2 workers</option><option value="3">Manual: 3 workers</option></select></label>
-      <label class="feed-capacity">Build mode <select id="idle-feed-build-mode" aria-label="Build approval mode" aria-describedby="idle-feed-build-mode-help"><option value="auto">Auto build</option><option value="verify">Verify first</option></select></label>
-    </div>
-    <details id="idle-controls-help" class="feed-help">
-      <summary>How these controls work</summary>
-      <dl class="feed-help-list">
-        <dt id="idle-autopilot-help">Autopilot</dt>
-        <dd>Autopilot is the master switch for the assistant's queue. On each pass the assistant looks for ready tasks, starts them while a worker slot is free, and verifies what came back. Turning it off stops new work from starting; jobs already running finish normally.</dd>
-        <dt id="idle-feed-parallel-help">Parallel builds</dt>
-        <dd>How many builds may run at the same time. <b>Machine managed</b> starts work while the app stays responsive and backs off when the machine is busy. A manual limit (1–3) caps concurrent builds but never starts or pauses anything by itself.</dd>
-        <dt id="idle-feed-build-mode-help">Build mode</dt>
-        <dd><b>Auto build</b> starts eligible tasks as soon as a worker is free. <b>Verify first</b> holds every new or changed brief for your approval, so you decide what gets built. Switching never interrupts a running job.</dd>
-        <dt id="idle-feed-agent-mode-help">Agent mode</dt>
-        <dd>How agents coordinate. <b>Swarm</b> works across all ready tasks and their subtasks; <b>Cluster</b> focuses every agent on one shared task until it is done. Both plan, delegate and review results; current work finishes when you switch.</dd>
-        <dt>New work</dt>
-        <dd>The master switch for starting anything new — queued tasks, builds and work the assistant suggests. Off pauses admission; running jobs, replies and your answers to questions still work.</dd>
-      </dl>
-    </details>
+    <section id="idle-feed-agent-section" class="feed-section feed-agents-section" aria-label="Agents">
+      <div class="feed-section-head"><h3>Agents <span id="idle-feed-agents-count" class="feed-agents-count" data-state="idle"></span></h3></div>
+      <ul id="idle-feed-agents" class="pin-list assistant-activity assistant-roster feed-agents" aria-label="Agent roster"></ul>
+    </section>
     <div id="idle-feed-scroll" class="feed-scroll" tabindex="0" role="region" aria-label="Current work and queue">
-    <p id="idle-feed-agent-mode-note" class="feed-mode-note" role="status">Both modes collaborate and delegate subtasks. Swarm works across the queue; Cluster focuses on one shared task.</p>
     <section class="feed-current" aria-label="Current work">
       <div class="feed-section-head"><h3>Current work</h3></div>
       <div id="idle-feed-now" class="feed-now" aria-live="polite"></div>
@@ -603,7 +587,6 @@
         <ul id="idle-feed-queue" class="feed-queue"></ul>
         <ul id="idle-feed-drop" class="feed-queue feed-drop" aria-label="More queued work" hidden></ul>
       </section>
-      <details id="idle-feed-agent-section" class="feed-section"><summary>Agent activity <span id="idle-feed-agents-count"></span></summary><ul id="idle-feed-agents" class="pin-list assistant-activity assistant-roster feed-agents" aria-label="Agent roster"></ul></details>
       <details id="idle-feed-log-section" class="feed-section feed-technical"><summary>Technical log</summary><ul id="idle-feed-list" class="feed-list"></ul></details>
       <p id="idle-feed-meta" class="feed-meta"></p>
     </div>
@@ -632,6 +615,41 @@
     </div>
     </div>
   </aside>
+  <section id="cmd-settings" class="cmd-settings" role="tabpanel" aria-labelledby="cmd-rail-tab-settings" hidden>
+    <div class="rail-view-head">
+      <h2 class="rail-view-title">Work settings</h2>
+      <span id="cmd-settings-state" class="feed-state" role="status" aria-live="polite"></span>
+    </div>
+    <p class="rail-view-note">How the agent queue runs. Changes apply to every project and never interrupt work already in progress.</p>
+    <div class="settings-scroll">
+      <div class="feed-controls">
+        <label class="switch mini feed-autopilot" title="Autopilot: queue and run Auto Builder requests"><input type="checkbox" id="idle-autopilot" aria-describedby="idle-autopilot-help"><span class="track"></span><span>Autopilot</span></label>
+        <label class="feed-capacity">Parallel builds <select id="idle-feed-parallel" aria-label="Build scheduling capacity" aria-describedby="idle-feed-parallel-help"><option value="machine">Machine managed</option><option value="1">Manual: 1 worker</option><option value="2">Manual: 2 workers</option><option value="3">Manual: 3 workers</option></select></label>
+        <label class="feed-capacity">Build mode <select id="idle-feed-build-mode" aria-label="Build approval mode" aria-describedby="idle-feed-build-mode-help"><option value="auto">Auto build</option><option value="verify">Verify first</option></select></label>
+      </div>
+      <p id="idle-feed-agent-mode-note" class="feed-mode-note" role="status">Both modes collaborate and delegate subtasks. Swarm works across the queue; Cluster focuses on one shared task.</p>
+      <div class="feed-controls feed-stop-row">
+        <button id="idle-stop-all" class="ghost mini" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button>
+        <button id="idle-restart" class="ghost mini" title="Stop every agent, save progress, and restart Studio.">Restart Studio</button>
+        <span id="idle-stop-state" class="feed-state" role="status" aria-live="polite"></span>
+      </div>
+      <details id="idle-controls-help" class="feed-help">
+        <summary>How these controls work</summary>
+        <dl class="feed-help-list">
+          <dt id="idle-autopilot-help">Autopilot</dt>
+          <dd>Autopilot is the master switch for the assistant's queue. On each pass the assistant looks for ready tasks, starts them while a worker slot is free, and verifies what came back. Turning it off stops new work from starting; jobs already running finish normally.</dd>
+          <dt id="idle-feed-parallel-help">Parallel builds</dt>
+          <dd>How many builds may run at the same time. <b>Machine managed</b> starts work while the app stays responsive and backs off when the machine is busy. A manual limit (1–3) caps concurrent builds but never starts or pauses anything by itself.</dd>
+          <dt id="idle-feed-build-mode-help">Build mode</dt>
+          <dd><b>Auto build</b> starts eligible tasks as soon as a worker is free. <b>Verify first</b> holds every new or changed brief for your approval, so you decide what gets built. Switching never interrupts a running job.</dd>
+          <dt id="idle-feed-agent-mode-help">Agent mode</dt>
+          <dd>How agents coordinate. <b>Swarm</b> works across all ready tasks and their subtasks; <b>Cluster</b> focuses every agent on one shared task until it is done. Both plan, delegate and review results; current work finishes when you switch. The selector sits in the node tree toolbar under <b>Agents</b>.</dd>
+          <dt>New work</dt>
+          <dd>The master switch for starting anything new — queued tasks, builds and work the assistant suggests — lives with the Assistant. Off pauses admission; running jobs, replies and your answers to questions still work.</dd>
+        </dl>
+      </details>
+    </div>
+  </section>
   <section id="cmd-done" class="cmd-done" role="tabpanel" aria-labelledby="cmd-rail-tab-done" hidden>
     <div class="rail-view-head">
       <h2 class="rail-view-title">Done log</h2>
@@ -946,6 +964,8 @@
           <button id="assistant-overseer" class="ghost mini" title="The overseer reviews the assistant's own work, tunes prefs and files upgrades">Oversee</button>
           <button id="assistant-tidy" class="ghost mini" title="Archive done tasks, prune finished ideas, clear resolved requests">Tidy now</button>
           <button id="assistant-fix" class="ghost mini" title="Repair the catalog and data files, check the live update">Fix now</button>
+          <button id="assistant-stop-all" class="ghost mini" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button>
+          <button id="assistant-restart" class="ghost mini" title="Stop every agent, save progress, and restart Studio.">Restart</button>
           <button id="assistant-pause" class="ghost mini" title="Pause or resume the assistant service">Pause</button>
         </div>
         <h4>Working on</h4>

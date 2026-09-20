@@ -12,6 +12,7 @@
     aurora: { name: "Aurora", accent: "#71cbb7", bright: "#a7f3da", rgb: "113,203,183", bg: "#050d13", panel: "#101f29", muted: "#abc4c9", text: "#e7f5ee" },
     rose: { name: "Rose", accent: "#dc96af", bright: "#ffbed3", rgb: "220,150,175", bg: "#10080f", panel: "#23141e", muted: "#c6aebc", text: "#f7e5ea" },
   };
+  const DEFAULT_THEME = "aurora";
   const NODE_STYLES = {
     orbs: { name: "Classic orbs", detail: "Luminous circles" },
     glass: { name: "Soft glass", detail: "Translucent surfaces" },
@@ -48,7 +49,7 @@
   }
   function resolvePalette(theme, customColors) {
     const custom = safeCustomColors(customColors);
-    const base = theme === "custom" ? { accent: custom.accent, bright: mixColor(custom.accent, "#FFFFFF", .3), bg: custom.background, panel: custom.surface, text: custom.text } : THEMES[theme] || THEMES.gold;
+    const base = theme === "custom" ? { accent: custom.accent, bright: mixColor(custom.accent, "#FFFFFF", .3), bg: custom.background, panel: custom.surface, text: custom.text } : THEMES[theme] || THEMES[DEFAULT_THEME];
     const text = readableColor(base.text || "#ece5d8", base.panel);
     const bright = readableColor(base.bright, base.panel, 3);
     const muted = readableColor(base.muted || mixColor(text, base.panel, .32), base.panel);
@@ -80,7 +81,7 @@
     const raw = value && typeof value === "object" ? value : {};
     const volume = Number(raw.volume);
     const spotify = [...new Set((Array.isArray(raw.spotify) ? raw.spotify : []).map((item) => spotifyLink(item)?.url).filter(Boolean))].slice(0, 6);
-    return { theme: raw.theme === "custom" || Object.hasOwn(THEMES, raw.theme) ? raw.theme : "gold", customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, spotify,
+    return { theme: raw.theme === "custom" || Object.hasOwn(THEMES, raw.theme) ? raw.theme : DEFAULT_THEME, customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, spotify,
       nodeStyle: Object.hasOwn(NODE_STYLES, raw.nodeStyle) ? raw.nodeStyle : "orbs",
       nodeLayout: Object.hasOwn(NODE_LAYOUTS, raw.nodeLayout) ? raw.nodeLayout : "constellation",
       orbitTrails: raw.orbitTrails === true, extraGlow: raw.extraGlow === true };
@@ -121,7 +122,7 @@
     if (els.notice) { els.notice.textContent = state.notice; els.notice.dataset.error = String(error); }
   }
   function applyTheme(theme, save = true) {
-    const key = theme === "custom" || Object.hasOwn(THEMES, theme) ? theme : "gold";
+    const key = theme === "custom" || Object.hasOwn(THEMES, theme) ? theme : DEFAULT_THEME;
     const palette = resolvePalette(key, prefs.customColors);
     prefs.theme = key;
     const tokens = { "--gold": palette.accent, "--gold-bright": palette.bright, "--gold-dim": `rgba(${palette.rgb},.32)`, "--hairline": `rgba(${channels(palette.border).join(",")},.5)`, "--hairline-strong": palette.border, "--tint-gold-1": `rgba(${palette.rgb},.06)`, "--tint-gold-2": `rgba(${palette.rgb},.09)`, "--tint-gold-3": `rgba(${palette.rgb},.14)`, "--ring": `0 0 0 3px rgba(${palette.rgb},.15)`, "--glow-gold": `0 0 14px rgba(${palette.rgb},.3)`, "--bg": palette.background, "--bg-deep": palette.background, "--cmd-bg": palette.background, "--panel-solid": palette.surface, "--panel": `rgba(${palette.surfaceRgb},.85)`, "--glass": `rgba(${palette.surfaceRgb},.76)`, "--glass-hard": `rgba(${palette.surfaceRgb},.94)`, "--glass-soft": `rgba(${palette.surfaceRgb},.7)`, "--ivory": palette.text, "--muted": palette.muted, "--dim": palette.dim, "--ink": palette.onAccent };

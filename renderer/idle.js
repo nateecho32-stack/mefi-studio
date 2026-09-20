@@ -186,6 +186,7 @@
     taskGroups: [],
     expandedTaskGroups: new Set(),
     taskLayout: new Map(),
+    projectId: null, // the folder the command view is showing; a change reloads the tree
     telemetryAt: 0,
     telemetry: "",
     selected: null,
@@ -213,7 +214,7 @@
     legendOpen: readStore("mefiStudio.cmdLegend") === "1",
     feedMenuOpen: readStore("mefiStudio.cmdFeedMenu") === "1",
     feedCollapsed: readStore("mefiStudio.cmdFeedCollapsed") === "1",
-    railTab: ["work", "assistant", "done", "ask"].includes(readStore("mefiStudio.cmdRailTab")) ? readStore("mefiStudio.cmdRailTab") : "work",
+    railTab: ["work", "settings", "assistant", "done", "ask"].includes(readStore("mefiStudio.cmdRailTab")) ? readStore("mefiStudio.cmdRailTab") : "work",
     railCollapsed: false,
     doneEntries: null,
     doneAt: 0,
@@ -905,10 +906,19 @@
     return { entries, layout };
   }
 
+  // Chores the assistant filed on its own — A-Eyes alerts, overseer upgrades,
+  // audits, collisions, ideas, grow work — are not the user's asks. They fold
+  // into the hub that filed them instead of earning a node and a label each.
+  // A pin is the user pointing at one: pinned work always keeps its node.
+  const AGENT_FILED_SOURCES = new Set(["a-eyes", "overseer", "audit", "collision", "duplicate", "fix", "improver", "grow", "idea", "agent", "uncommitted"]);
+  const agentFiledTask = (task) => AGENT_FILED_SOURCES.has(String(task?.source ?? "")) && !task?.pin && !task?.pinnedAt && !task?.workPin;
+  const FILED_LIMIT = 12;
+
   // Open/active tasks join the constellation: anchored to a matching session
   // when the title overlaps it, otherwise spread on an outer ring. With a long
   // backlog the graph drowns in task nodes. Show active and explicitly pinned
   // work before the latest tasks; the full board stays available in Tasks.
+  // The assistant's own chores ride the hub (see drawFiledWork and the card).
   function appendTaskNodes() {
     const runningTasks = new Set(autopilotJobs(state.assistant).map((job) => job.taskId).filter(Boolean));
     const rank = (task) => runningTasks.has(task.id) ? 0 : task.status === "active" ? 1 : task.workPin || task.pinnedAt ? 2 : 3;
@@ -917,7 +927,21 @@
       .slice(0, 12).map((task) => ({ task }));
     const metadata = new Map(entries.map((entry) => [entry.task.id, entry]));
     const retained = new Set([...(state.allTasks ?? state.tasks ?? []).map((task) => task.id), ...state.taskGroups.map((group) => group.id), ...state.taskGroups.flatMap((group) => group.members.map((member) => member.id))]);
-    const placed = taskPlacements(entries.map((entry) => entry.task), state.nodes, autopilotJobs(state.assistant), state.taskLayout, retained);
+    // The hub is where the assistant's chores land. Their slots go to work the
+    // user actually owns. Without a hub on the board they keep their nodes —
+    // filed work must never leave the view just because the hub is folded.
+    const hub = state.nodes.find((node) => node.kind === "assistant") ?? null;
+    const filed = new Map();
+    if (hub) {
+      const grouped = new Set(state.taskGroups.flatMap((group) => [String(group.id), ...group.members.map((member) => String(member.id))]));
+      const chores = (state.tasks ?? [])
+        .filter((task) => agentFiledTask(task) && !grouped.has(String(task.id)))
+        .sort((a, b) => rank(a) - rank(b) || (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0))
+        .slice(0, FILED_LIMIT);
+      for (const task of chores) filed.set(String(task.id), task);
+      hub.filedWork = chores;
+    }
+    const placed = taskPlacements(entries.filter((entry) => !filed.has(String(entry.task.id))).map((entry) => entry.task), state.nodes, autopilotJobs(state.assistant), state.taskLayout, retained);
     state.taskLayout = placed.layout;
     placed.entries.forEach(({ task, anchor, x: bx, y: by, z: bz }) => {
       const entry = metadata.get(task.id);
@@ -980,6 +1004,18 @@
       fx.seen = true;
       fx.wasRendered = true;
     });
+    // A folded chore still gets its life-cycle entry: it never renders a node,
+    // and when it finishes it sinks into the hub's absorbed list instead of
+    // vanishing without a trace.
+    for (const [id, task] of filed) {
+      const fx = ensureFx(`task:${id}`);
+      fx.task = task;
+      fx.builder = false;
+      fx.anchorId = hub.id;
+      fx.seen = true;
+      fx.wasRendered = false;
+      fx.filed = true;
+    }
   }
 
   function toggleTaskGroup(node) {
@@ -1253,6 +1289,9 @@
       // Work on it finished: it folds into the node it was pinned to instead of
       // parking a finished node beside it.
       if (targetHostNode(task?.target)) { state.doneHold.delete(id); markAbsorb(id); continue; }
+      // A chore the assistant filed has no node of its own to hold: it sinks
+      // straight into the hub's absorbed list.
+      if (fx.filed) { state.doneHold.delete(id); markAbsorb(id); continue; }
       const host = fx.anchorId ? state.nodes.find((node) => node.id === fx.anchorId && !node.dying) : null;
       const sx = fx.lastX ?? host?.x ?? 190;
       const sy = fx.lastY ?? host?.y ?? 46;
@@ -1473,6 +1512,36 @@
   }
 
   const read = (method) => window.MefiBoot?.read ? window.MefiBoot.read(method) : Promise.resolve().then(() => window.mefiStudio?.[method]?.());
+
+  // A project switch re-scopes everything the board draws: tree3d reloads the
+  // folder's session store on this same event, the task push carries the new
+  // folder's tasks, and the layout caches must not keep the previous project's
+  // positions. The first event is the startup adoption, which the initial
+  // reads already reflect, so only a real switch takes a fresh snapshot.
+  function projectChanged(event) {
+    const nextProject = event.detail?.projectId ?? null;
+    const switched = Boolean(state.projectId && nextProject && nextProject !== state.projectId);
+    state.projectId = nextProject;
+    state.screenLayout = null;
+    state.agentLayout.clear();
+    state.agentSeq = {};
+    state.taskLayout = new Map();
+    state.graphSeeded = false;
+    state.backlogRevision += 1;
+    state.backlogReadAt = 0;
+    state.backlog = null;
+    state.backlogError = null;
+    state.feedDirty = true;
+    if (switched) {
+      state.readyPromise = Promise.resolve(window.MefiTree?.ready?.())
+        .then(() => {
+          refreshGraph();
+          updateTelemetry(true);
+        })
+        .catch(() => {});
+    }
+    if (state.active) renderFeed();
+  }
 
   async function refreshTasks(shared = false) {
     try {
@@ -1732,11 +1801,12 @@
     state.hudRectsAt = 0;
   }
 
-  // ---- the right rail: Work · Assistant · Done · Ask ------------------------
-  // The live-work feed and the assistant chat share one docked panel. Each view
-  // keeps its own head and collapse control; the rail only decides which view
-  // is on screen and whether the panel shrinks to its header.
-  const RAIL_VIEWS = ["work", "assistant", "done", "ask"];
+  // ---- the right rail: Work · Settings · Assistant · Done · Ask ------------
+  // The live-work feed, the work settings and the assistant chat share one
+  // docked panel. Each view keeps its own head and collapse control; the rail
+  // only decides which view is on screen and whether the panel shrinks to its
+  // header.
+  const RAIL_VIEWS = ["work", "settings", "assistant", "done", "ask"];
 
   function applyRailCollapsed() {
     const collapsed = state.railTab === "work" ? state.feedCollapsed
@@ -1757,11 +1827,13 @@
       if (selected && focus) button.focus();
     }
     if (el.feed) el.feed.hidden = view !== "work";
+    if (el.settings) el.settings.hidden = view !== "settings";
     if (el.chatLog) el.chatLog.hidden = view !== "assistant";
     if (el.done) el.done.hidden = view !== "done";
     if (el.asks) el.asks.hidden = view !== "ask";
     if (save) writeStore("mefiStudio.cmdRailTab", view);
     applyRailCollapsed();
+    if (view === "settings") renderSettingsPanel();
     if (view === "done") void loadDoneLog();
     if (view === "ask") renderAsks();
     state.graphAreaAt = 0;
@@ -2520,11 +2592,56 @@
         window.MefiToast?.(overseer?.lastSummary ? `overseer · ${overseer.lastSummary}` : "overseer review queued", overseer?.health === "poor" ? "bad" : overseer?.health === "fair" ? "info" : "good");
       } else if (action === "start-work") window.MefiToast?.("new work is on · queued work can start when ready", "good");
       else if (action === "pause") window.MefiToast?.("new work is off · current jobs can finish", "info");
+      else if (action === "stop-all") {
+        const stopped = Number(result.stopped) || 0;
+        window.MefiToast?.(stopped ? `stopped ${stopped} agent(s) · progress saved, work stays queued` : "no agents were running · new work is off", stopped ? "good" : "info");
+      }
       else window.MefiToast?.(`assistant ${full?.status ?? action}`, "info");
       return result;
     } catch (error) {
       window.MefiToast?.(`${label} failed · ${String(error?.message ?? error)}`, "bad");
       return null;
+    }
+  }
+
+  // The brake: every running agent stops now, each run's progress is
+  // checkpointed, and new dispatch parks until the operator resumes.
+  async function stopAllAgents() {
+    if (state.stopAllBusy) return null;
+    state.stopAllBusy = true;
+    if (el.stopState) el.stopState.textContent = "stopping…";
+    try {
+      const result = await assistantControl("stop-all", "stop all agents");
+      state.feedDirty = true;
+      if (state.active) renderFeed();
+      return result;
+    } finally {
+      state.stopAllBusy = false;
+      if (el.stopState) el.stopState.textContent = "";
+    }
+  }
+
+  // Restart Studio with the agents stopped first, so running builds cannot
+  // defer the relaunch. The app comes back paused; Resume starts work again.
+  async function restartStudio() {
+    if (!window.mefiStudio?.appRestart) {
+      window.MefiToast?.("restart runs in the desktop app only", "info");
+      return null;
+    }
+    if (state.restartBusy) return null;
+    state.restartBusy = true;
+    if (el.stopState) el.stopState.textContent = "stopping agents…";
+    try {
+      const result = await window.mefiStudio.appRestart({ stopAgents: true });
+      if (result?.deferred) window.MefiToast?.(`restart deferred · ${result.reason ?? "work is still running"}`, "info");
+      else if (result?.ok === false) window.MefiToast?.(`restart failed · ${result.error ?? "unknown error"}`, "bad");
+      return result;
+    } catch (error) {
+      window.MefiToast?.(`restart failed · ${String(error?.message ?? error)}`, "bad");
+      return null;
+    } finally {
+      state.restartBusy = false;
+      if (el.stopState) el.stopState.textContent = "";
     }
   }
 
@@ -3149,6 +3266,54 @@
     }
     ctx.restore();
     node._orbitTrail = { drawn: true, animated: !still, segments: 3, phase, radius: ring };
+  }
+
+  // The chores the assistant filed for itself park as pips under the hub — one
+  // per open chore, the running one spinning a small ring — instead of a node
+  // and a label each. The ledger on the hub card names them.
+  const FILED_PIP_MAX = 6;
+  const FILED_PIP_RING = 12; // how far the hub's filed pips hang from its rim
+  function drawFiledWork(ctx, node, p, radius, runningIds, time, still) {
+    node._filedPips = null;
+    if (node.kind !== "assistant") return;
+    const filed = node.filedWork;
+    if (!filed?.length || node._absorbed || (node._fade ?? 1) <= 0.02) return;
+    const shown = filed.slice(0, FILED_PIP_MAX);
+    // Clear of the hub's progress meter (radius + 5): a pip row is a second,
+    // separate readout, not a tick on that bar.
+    const spread = 0.3;
+    const ring = radius + FILED_PIP_RING;
+    const angleOf = (index) => Math.PI / 2 + (index - (shown.length - 1) / 2) * spread;
+    ctx.save();
+    ctx.globalAlpha = (node._fade ?? 1) * emphasis(node);
+    shown.forEach((task, index) => {
+      const angle = angleOf(index);
+      const x = p.x + Math.cos(angle) * ring;
+      const y = p.y + Math.sin(angle) * ring;
+      const verifying = task.status === "awaiting_verification";
+      const running = runningIds.has(task.id);
+      ctx.beginPath();
+      ctx.arc(x, y, running ? 2.1 : 1.6, 0, Math.PI * 2);
+      ctx.fillStyle = verifying ? rgba(NODE_RGB.verify, 0.9) : rgba(NODE_RGB.task, running ? 0.95 : 0.55);
+      ctx.fill();
+      if (running) {
+        const phase = still ? 0 : time / 420;
+        ctx.beginPath();
+        ctx.arc(x, y, 3.6, phase, phase + Math.PI * 1.25);
+        ctx.strokeStyle = rgba(NODE_RGB.task, 0.85);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    });
+    if (filed.length > shown.length) {
+      const angle = angleOf(shown.length);
+      ctx.font = '600 8px system-ui, "Segoe UI", sans-serif';
+      ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillStyle = rgba(NODE_RGB.task, 0.7);
+      ctx.fillText(`+${filed.length - shown.length}`, p.x + Math.cos(angle) * ring + 4, p.y + Math.sin(angle) * ring);
+    }
+    ctx.restore();
+    node._filedPips = { drawn: true, count: filed.length };
   }
 
   function graphLayoutSeeds(projected, area, layout, parentIds, slots, fixed = new Map()) {
@@ -4115,6 +4280,25 @@
       : "Cluster · the Assistant and builders share one task, delegate independent subtasks, then combine the results.";
   }
 
+  // Settings live in their own rail view. The same renderers also run on every
+  // work-feed pass, so the two views can never disagree about saved state.
+  function renderSettingsPanel() {
+    renderParallelControl();
+    renderBuildModeControl();
+    renderAgentModeControl();
+    if (el.autopilotToggle) {
+      el.autopilotToggle.checked = Boolean(state.assistant?.enabled);
+      el.autopilotToggle.disabled = state.treeStatus !== "ok";
+      const wrap = el.autopilotToggle.closest(".switch");
+      if (wrap) wrap.hidden = !window.mefiStudio;
+    }
+    if (el.settingsState) {
+      el.settingsState.textContent = !window.mefiStudio ? "desktop only"
+        : !state.assistant ? "…"
+        : state.assistant.enabled ? "autopilot on" : "autopilot off";
+    }
+  }
+
   async function changeAgentMode(mode) {
     if (state.agentModeSaving) return false;
     if (!["swarm", "cluster"].includes(mode)) { renderAgentModeControl(); return false; }
@@ -4272,15 +4456,16 @@
     const bridge = Boolean(window.mefiStudio);
     const assistant = state.assistant;
     const full = assistantFull();
+    // Selected-assistant chat swaps the activity stream for the console; the
+    // roster band belongs to the work view and hides with it.
+    const chatting = chatMode();
     const jobs = autopilotJobs(assistant);
     const preparingCount = jobs.filter((job) => job.phase === "preparing").length;
     const buildingCount = jobs.length - preparingCount;
     const enabled = Boolean(assistant?.enabled);
     const recentPass = Boolean(assistant?.lastPassAt) && Date.now() - assistant.lastPassAt < 10 * 60 * 1000;
     refreshCommandBacklog();
-    renderParallelControl();
-    renderBuildModeControl();
-    renderAgentModeControl();
+    renderSettingsPanel();
     renderCommandAttention();
     const activeAgent = commandAgentRoster(assistant, full).find((agent) => agent?.status === "running");
 
@@ -4439,25 +4624,32 @@
       }
       el.feedAgents.textContent = "";
       el.feedAgents.hidden = !roster.length;
+      if (el.feedAgentsSection) el.feedAgentsSection.hidden = !roster.length || chatting;
       for (const agent of roster) {
         const status = agent.status ?? "idle";
         const li = document.createElement("li");
         li.className = `agent-${status}`;
         li.style.borderLeftColor = agentHex(agent.role);
+        // Two lines per agent: status, name and elapsed on the first, what the
+        // agent is doing (or why it failed) wrapping on the second.
+        const head = document.createElement("span");
+        head.className = "agent-row-head";
         const tag = document.createElement("span");
         tag.className = `src-tag ${status === "error" ? "fix" : status === "running" ? "running-chip" : status === "queued" ? "improver" : "stale"}`;
         tag.textContent = status.toUpperCase();
         const name = document.createElement("b");
         name.textContent = agent.label || agent.role;
         if (status !== "error") name.style.color = agentHex(agent.role);
-        const text = document.createElement("span");
-        text.className = "text";
-        text.textContent = String((status === "error" && agent.error) || agent.text || "").replace(new RegExp(`^${String(agent.role ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} (?:done|running|queued|error)\\s*[·:]?\\s*`, "i"), "");
         const when = document.createElement("span");
         when.className = "when";
         when.textContent = agent.cluster ? agent.status === "running" && agent.since ? elapsedLabel(agent.since) : "" : status === "running" ? elapsedLabel(agent.since) : agent.lastRunAt ? agoShort(agent.lastRunAt) : "Not run yet";
+        const text = document.createElement("span");
+        text.className = "text";
+        text.textContent = String((status === "error" && agent.error) || agent.text || "").replace(new RegExp(`^${String(agent.role ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} (?:done|running|queued|error)\\s*[·:]?\\s*`, "i"), "");
+        head.append(tag, name, when);
         li.title = `${agent.role} · ${status}${text.textContent ? ` — ${text.textContent}` : ""}`;
-        li.append(tag, name, text, when);
+        li.append(head);
+        if (text.textContent) li.append(text);
         el.feedAgents.append(li);
       }
     }
@@ -4505,17 +4697,9 @@
         : state.backlog?.summary || assistant?.waiting || "The board keeps task results and verification details.");
     }
 
-    if (el.autopilotToggle) {
-      el.autopilotToggle.checked = enabled;
-      el.autopilotToggle.disabled = state.treeStatus !== "ok";
-      const wrap = el.autopilotToggle.closest(".switch");
-      if (wrap) wrap.hidden = !bridge;
-    }
-
     // With the assistant node selected the rail swaps the activity stream for
     // the chat console; anything else brings the feed back. The right-side
     // chat log mirrors the thread whatever is selected.
-    const chatting = chatMode();
     if (el.feedActivity) el.feedActivity.hidden = chatting;
     if (el.feedChat) {
       el.feedChat.hidden = !chatting;
@@ -5381,6 +5565,7 @@
       node._px = p.x; node._py = p.y; node._pr = radius;
       drawNodeSurface(ctx, node, p, radius, tint, { selected: Boolean(selected), active, alpha: Math.max(0.35, visual.alpha * factor) });
       drawWorkOrbit(ctx, node, p, radius, time, still);
+      drawFiledWork(ctx, node, p, radius, runningIds, time, still);
       // Work-left meter: only a known worker fraction, never inferred activity.
       if ((active || selected) && typeof node.progress === "number" && Number.isFinite(node.progress)) {
         const fraction = Math.max(0, Math.min(1, node.progress));
@@ -5713,7 +5898,9 @@
       if (!lines[0]) continue;
       let height = workStatus ? 33 + (lines.length - 1) * 16 : LABEL_HEIGHT;
       let width = Math.max(...lines.map((line) => measure(ctx, font, line)), workStatus ? 72 : 0);
-      const radius = node._orbitTrail?.radius ?? node._pr ?? 4;
+      // The hub's filed pips hang below its rim: give its label the extra ring
+      // so the chip cannot park on top of them.
+      const radius = (node._orbitTrail?.radius ?? node._pr ?? 4) + (node.kind === "assistant" && node.filedWork?.length ? FILED_PIP_RING : 0);
       let rect = null, paint = null;
       const needsName = priority <= 2.15 || node.kind === "task" && node._workLabel === "Running";
       const placeNearby = () => {
@@ -5847,6 +6034,12 @@
       parts.push(summary.sublabel);
       const unread = Number(assistantFull()?.unread) || 0;
       if (unread) parts.push(`${unread} unread`);
+      const filed = Array.isArray(node.filedWork) ? node.filedWork : [];
+      if (filed.length) {
+        const busy = autopilotBusyIds(state.assistant);
+        const running = filed.find((task) => busy.has(task.id));
+        parts.push(`${filed.length} filed${running ? ` · running ${String(running.title ?? "").slice(0, 48)}` : ""}`);
+      }
       const absorbed = state.absorbed.get(node.id)?.length ?? 0;
       if (absorbed) parts.push(`${absorbed} absorbed`);
       return parts.filter(Boolean).join(" · ");
@@ -6458,6 +6651,30 @@
       }
       info.append(kv);
 
+      // The chores the assistant filed for itself live here instead of on the
+      // ring: one row per chore, running ones first.
+      const filed = Array.isArray(node.filedWork) ? node.filedWork : [];
+      if (filed.length) {
+        const details = document.createElement("details");
+        details.className = "card-cps";
+        details.open = filed.length <= 3;
+        const summary = document.createElement("summary");
+        summary.textContent = `Filed by the assistant (${filed.length})`;
+        details.append(summary);
+        const busy = autopilotBusyIds(state.assistant);
+        for (const task of filed.slice(0, 8)) {
+          const item = document.createElement("div");
+          item.className = "cp-note checkpoint-note";
+          const status = busy.has(task.id) ? "running" : String(task.status ?? "open").replace("_", " ");
+          item.textContent = `${task.title ?? "task"} · ${status}`;
+          item.title = task.prompt ?? task.title ?? "";
+          item.style.cursor = "pointer";
+          item.addEventListener("click", () => nav("tasks", { taskId: task.id, filter: "all" }));
+          details.append(item);
+        }
+        info.append(details);
+      }
+
       const thread = document.createElement("div");
       thread.className = "assistant-thread";
       info.append(thread);
@@ -6911,7 +7128,7 @@
       if (node.kind === "session") fields.push(node.agent, node.model, node.stale ? "stale" : null);
       else if (node.kind === "task") fields.push(node.task?.prompt, node.task?.status);
       else if (node.kind === "todo") fields.push(node.status);
-      else if (node.kind === "assistant") fields.push("assistant", node.sublabel, node.tone);
+      else if (node.kind === "assistant") fields.push("assistant", node.sublabel, node.tone, ...(node.filedWork ?? []).map((task) => task?.title));
       else if (node.kind === "folded") fields.push("finished", "folded", ...(node.titles ?? []));
       else if (node.kind === "agent") fields.push(node.role);
       return fields.some((field) => field && String(field).toLowerCase().includes(query));
@@ -7754,6 +7971,8 @@
     el.railWorkBadge = document.getElementById("cmd-rail-work-badge");
     el.railAssistantBadge = document.getElementById("cmd-rail-assistant-badge");
     el.railAskBadge = document.getElementById("cmd-rail-ask-badge");
+    el.settings = document.getElementById("cmd-settings");
+    el.settingsState = document.getElementById("cmd-settings-state");
     el.done = document.getElementById("cmd-done");
     el.doneList = document.getElementById("cmd-done-list");
     el.doneState = document.getElementById("cmd-done-state");
@@ -7796,6 +8015,9 @@
     el.feedBuildMode = document.getElementById("idle-feed-build-mode");
     el.feedAgentMode = document.getElementById("idle-feed-agent-mode");
     el.feedAgentModeNote = document.getElementById("idle-feed-agent-mode-note");
+    el.stopAll = document.getElementById("idle-stop-all");
+    el.restart = document.getElementById("idle-restart");
+    el.stopState = document.getElementById("idle-stop-state");
     el.feedNow = document.getElementById("idle-feed-now");
     el.feedMetrics = document.getElementById("idle-feed-metrics");
     el.feedQueue = document.getElementById("idle-feed-queue");
@@ -7803,6 +8025,7 @@
     el.feedQueueCount = document.getElementById("idle-feed-queue-count");
     el.feedAgents = document.getElementById("idle-feed-agents");
     el.feedAgentsCount = document.getElementById("idle-feed-agents-count");
+    el.feedAgentsSection = document.getElementById("idle-feed-agent-section");
     el.feedMenu = document.getElementById("idle-feed-menu");
     el.feedDrop = document.getElementById("idle-feed-drop");
     el.feedMeta = document.getElementById("idle-feed-meta");
@@ -8005,20 +8228,10 @@
     el.feedParallel?.addEventListener("change", () => void changeBuildParallel(el.feedParallel.value));
     el.feedBuildMode?.addEventListener("change", () => void changeBuildMode(el.feedBuildMode.value));
     el.feedAgentMode?.addEventListener("change", () => void changeAgentMode(el.feedAgentMode.value));
+    el.stopAll?.addEventListener("click", () => void stopAllAgents());
+    el.restart?.addEventListener("click", () => void restartStudio());
     setFeedMenu(state.feedMenuOpen);
-    window.addEventListener("mefi:project-changed", () => {
-      state.screenLayout = null;
-      state.agentLayout.clear();
-      state.agentSeq = {};
-      state.taskLayout = new Map();
-      state.graphSeeded = false;
-      state.backlogRevision += 1;
-      state.backlogReadAt = 0;
-      state.backlog = null;
-      state.backlogError = null;
-      state.feedDirty = true;
-      if (state.active) renderFeed();
-    });
+    window.addEventListener("mefi:project-changed", projectChanged);
     el.emptyRetry?.addEventListener("click", async () => {
       if (el.emptyRetry.disabled) return;
       el.emptyRetry.disabled = true;
@@ -8363,7 +8576,7 @@
       opacity: node._absorbed ? 0 : node._fade ?? node.opacity ?? 1,
       world: { x: node.x, y: node.y, z: node.z }, screen: { x: node._px, y: node._py },
     })),
-    debugNodes: () => state.nodes.map((node) => ({ id: node.id, kind: node.kind, label: node.label, workStatus: node._workLabel, x: node._px, y: node._py, radius: node._pr, layoutAnchor: node._layoutAnchor ? { ...node._layoutAnchor } : null, labelRect: node._label ? { ...node._label } : null, labelLines: [...(node._labelLines ?? [])], cardRect: node._cardRect ? { ...node._cardRect } : null, bubbleRect: node._bubblePaint ? { ...node._bubblePaint } : null, bubbleHitRect: node._bubble ? { x: node._bubble.x, y: node._bubble.y, w: node._bubble.w, h: node._bubble.h } : null, shape: nodeVisualProfile(node).shape, visualStyle: state.nodeStyle, audioResponse: node._audioResponse ? { ...node._audioResponse } : null, orbitTrail: node._orbitTrail ? { ...node._orbitTrail } : null, extraGlow: node._extraGlow === true })),
+    debugNodes: () => state.nodes.map((node) => ({ id: node.id, kind: node.kind, label: node.label, workStatus: node._workLabel, filedWork: (node.filedWork ?? []).map((task) => task.id), x: node._px, y: node._py, radius: node._pr, layoutAnchor: node._layoutAnchor ? { ...node._layoutAnchor } : null, labelRect: node._label ? { ...node._label } : null, labelLines: [...(node._labelLines ?? [])], cardRect: node._cardRect ? { ...node._cardRect } : null, bubbleRect: node._bubblePaint ? { ...node._bubblePaint } : null, bubbleHitRect: node._bubble ? { x: node._bubble.x, y: node._bubble.y, w: node._bubble.w, h: node._bubble.h } : null, shape: nodeVisualProfile(node).shape, visualStyle: state.nodeStyle, audioResponse: node._audioResponse ? { ...node._audioResponse } : null, orbitTrail: node._orbitTrail ? { ...node._orbitTrail } : null, extraGlow: node._extraGlow === true })),
     graphViewport: () => ({ ...usableArea() }),
     geometryStatus: () => ({ view: state.view, angle: state.angle, pitch: state.pitch, links: state.edges.map(({ a, b }) => ({ from: state.nodes[a]?.id ?? null, to: state.nodes[b]?.id ?? null })), nodes: state.nodes.map((node) => ({ id: node.id, anchor: node._layoutAnchor ? { ...node._layoutAnchor } : null, world: { x: node.x, y: node.y, z: node.z }, projected: project(node._layoutAnchor ?? node) })) }),
     setSettingsPreview,

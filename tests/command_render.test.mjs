@@ -63,6 +63,7 @@ const runFixture = async () => {
     assert.deepEqual(report.newWork.actions, ["start-work", "pause", "start-work", "pause"]);
     assert.deepEqual(report.newWork.saving, [true, true]);
     assert.equal(report.newWork.layouts.length, 2);
+    assert.deepEqual(report.chatPanel, { chat: true, activity: true, roster: true, rosterRows: 1, tab: "work" });
     for (const [index, width] of [1280, 600].entries()) assert.ok(Math.abs(report.newWork.layouts[index].width - width) <= 1, "toggle layouts cover desktop and narrow windows across display scaling");
     assert.ok(report.newWork.before.controls.every((control) => !control.checked && !control.disabled && control.role === "switch"));
     const beforeWork = report.newWork.before;

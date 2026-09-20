@@ -52,6 +52,7 @@ app.whenReady().then(async () => {
     eyesState: { ok: true, sessions: [{ id: "command_render_session", title: "Renderer fixture session", directory: root, timeCreated: now - 5000, timeUpdated: now }], todos: [{ id: "command_render_todo", sessionId: "command_render_session", content: "Verify canvas startup", status: "in_progress" }], changes: [], pngs: [] },
     tasksList: { ok: true, tasks: [
       { id: "command_render_task", title: "Verify real node painting", status: "open", createdAt: now, updatedAt: now },
+      { id: "filed_fixture", title: "A-Eyes: repair the store", status: "open", source: "a-eyes", createdAt: now, updatedAt: now },
       { id: "group_fixture", title: "Renderer task group", status: "open", members: [{ id: "group_saved", title: "Saved requirement", prompt: "Retain this full requirement", logs: [{ text: "Earlier work is preserved" }] }, { id: "group_verify", title: "Verify grouped work" }] },
       { id: "group_saved", title: "Saved requirement", status: "absorbed", absorbedInto: "group_fixture" },
       { id: "group_verify", title: "Verify grouped work", status: "awaiting_verification", absorbedInto: "group_fixture" },
@@ -279,6 +280,26 @@ app.whenReady().then(async () => {
   await assertGraphClear("expanded Live work and chat");
   await setPanels(false, false);
   const collapsed = await assertGraphClear("collapsed panel headers");
+  // Chores the assistant filed for itself ride the hub instead of the ring:
+  // no node, a ledger on the hub card, and the card row opens the task.
+  report.filed = await run(`
+    const nodes=window.MefiIdle.debugNodes();
+    if(nodes.some(node=>node.id==='task:filed_fixture'))throw new Error('A chore filed by the assistant must not become a graph node');
+    const hub=nodes.find(node=>node.kind==='assistant');
+    if(!hub||!hub.filedWork.includes('filed_fixture'))throw new Error('The hub must carry the filed chore: '+JSON.stringify(hub&&hub.filedWork));
+    window.MefiIdle.select(hub.id);
+    const card=document.getElementById('idle-info');
+    if(card.hidden||!card.textContent.includes('Filed by the assistant'))throw new Error('The hub card must list filed work');
+    if(!card.textContent.includes('A-Eyes: repair the store'))throw new Error('Filed chore title missing from the hub card');
+    return {ledger:hub.filedWork};
+  `);
+  assert.deepEqual(report.filed.ledger, ["filed_fixture"], "the hub ledger names the filed chore without a node of its own");
+  if (process.env.MEFI_FILED_CAPTURE && path.isAbsolute(process.env.MEFI_FILED_CAPTURE)) {
+    await sleep(260);
+    fs.mkdirSync(path.dirname(process.env.MEFI_FILED_CAPTURE), { recursive: true });
+    fs.writeFileSync(process.env.MEFI_FILED_CAPTURE, (await contents.capturePage()).toPNG());
+  }
+  await run("window.MefiIdle.select(null);");
   await setPanels(false, false, "task:command_render_task");
   await assertGraphClear("open task details beside collapsed chat");
   await setPanels(true, true);
@@ -779,7 +800,7 @@ app.whenReady().then(async () => {
   // The New work switch uses actual rendered controls and the isolated bridge.
   // Its synthetic worker remains present while pausing admission of new work.
   await run(`
-    window.commandFixture.publishAssistant({status:'paused',messages:[],prefs:{proactive:false,backlogMode:false},work:[],agents:[]});
+    window.commandFixture.publishAssistant({status:'paused',messages:[],prefs:{proactive:false,backlogMode:false},work:[],agents:[{role:'watcher',status:'running',text:'watching the rail split'}]});
     window.commandFixture.publishStatus({enabled:false,execute:false,mode:'cluster',autoBuild:false,parallel:2,adaptiveParallel:false,running:[{id:'toggle-live-worker',taskId:'command_render_task',title:'Synthetic worker already running',startedAt:Date.now()-1000,pid:987}],history:[]});
     window.MefiNav.go('command');await window.MefiIdle.ready();
   `);
@@ -790,6 +811,18 @@ app.whenReady().then(async () => {
     window.MefiIdle.select(assistant.id);
   `);
   await until("!document.getElementById('cmd-chat-new-work').disabled && !document.getElementById('cmd-chat-new-work').checked", "New work loads paused and workers off");
+  // The readable roster band belongs to the work view: selecting the assistant
+  // swaps the rail to its tab, and returning to Work shows the console in the
+  // feed's place. The roster band hides with the activity stream there, even
+  // with a running agent in the roster.
+  await run(`
+    document.getElementById('cmd-rail-tab-work').click();
+    window.commandFixture.publishStatus(window.commandFixture.status());
+  `);
+  await until("!document.getElementById('idle-feed-chat').hidden && document.getElementById('idle-feed-activity').hidden", "returning to Work shows the console in the feed's place");
+  report.chatPanel = await run("return {chat:!document.getElementById('idle-feed-chat').hidden,activity:document.getElementById('idle-feed-activity').hidden,roster:document.getElementById('idle-feed-agent-section').hidden,rosterRows:document.getElementById('idle-feed-agents').children.length,tab:document.querySelector('.rail-tab[aria-selected=\"true\"]')?.dataset.railView};");
+  assert.deepEqual(report.chatPanel, { chat: true, activity: true, roster: true, rosterRows: 1, tab: "work" }, "chat mode hides the agent roster band with the activity stream");
+  await run("document.getElementById('cmd-rail-tab-assistant').click();");
   const toggleState = () => run(`
     const controls=['cmd-chat-new-work','idle-chat-pause'].map(id=>{
       const input=document.getElementById(id),label=input.closest('.new-work-toggle');

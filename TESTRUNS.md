@@ -10,6 +10,20 @@ boundaries for projects, grouped tasks, scope, negation, paths and closed work.
 execution while retaining explicit instructions, mixed question/work messages, and offer follow-ups bound to their pick's full title and identity.
 These checks use no live stores, coding workers or paid provider calls.
 
+The right rail splits **Work** from **Settings**: Work keeps the live view with a
+standing agent roster (status chip, role, elapsed time and the wrapped task
+line) above the shared work scroller, and Settings owns autopilot, parallel
+builds, build mode, the agent-mode note, the safety stops and the control
+explanations. The real Electron `tests/command_render.test.mjs` fixture checks
+that the roster band stays visible in Work and hides with the activity stream
+when the assistant console takes the feed's place.
+
+Validated on 2026-09-20: booklet rebuilt; `npm run check`, `npm test` (1,419
+Node tests with one opt-in skip, 227 Python contracts and the normalized-path
+checks) and `npm run audit` (zero findings) passed. An isolated Electron preview
+with synthetic state and no workers also confirmed the five tabs fit one row at
+1280px and the roster band stays readable at 600px.
+
 Worker-start feedback coverage in `tests/assistant_work_on.test.mjs` reproduces
 repeated **Work on it** clicks after a session request has been promoted and its
 inbox entry removed. It checks existing-worker reuse, preparation versus process

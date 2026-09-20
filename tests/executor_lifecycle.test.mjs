@@ -138,7 +138,7 @@ function finishHost({ kind = "task", owner = "run_100_1", missing = false, failW
   const effects = [], timers = [], logs = [], records = [], roles = [];
   let mutations = 0;
   const env = vm.createContext({
-    Date, console, entry, autopilot, job: { kind, title: ref.title, prompt: ref.prompt, source: "chat", ref: structuredClone(ref) }, assistantModule: assistant, taskHandoffs, queueExecutorCheckpoint() {},
+    Date, console, entry, autopilot, executorResume, job: { kind, title: ref.title, prompt: ref.prompt, source: "chat", ref: structuredClone(ref) }, assistantModule: assistant, taskHandoffs, queueExecutorCheckpoint() {},
     eyes: { findRunSession: () => ({ id: "own-session" }), readJson: async (key) => key === "history" ? [] : {}, writeJson: async (key, value) => records.push([key, structuredClone(value)]) },
     releaseFiles: () => effects.push("release"), discardEntry: () => { autopilot.jobs = autopilot.jobs.filter((item) => item !== entry); effects.push("release"); },
     executorLog: async () => effects.push("exit-fact"), policyRecord: () => effects.push("policy-fact"), workTitleKey: (text) => String(text),
@@ -231,6 +231,32 @@ test("failed attempts retain their latest evidence and stop at the existing fift
     assert.equal(row.lastAttempt.tail, "new failure context");
     assert.equal(row.verifyAttempts, 2);
     assert.ok(!host.effects.includes("handoff"));
+  }
+});
+
+test("an operator stop saves progress and returns the card to the queue without spending an attempt", async () => {
+  for (const kind of ["task", "request"]) {
+    const host = finishHost({ kind });
+    host.entry.stopUser = true;
+    host.entry.outputTail = ["edits landed; tests still running"];
+    await host.finish(1, "stopped by user");
+    const row = host.board()[kind === "task" ? "tasks" : "requests"][0];
+    assert.equal(row.status, kind === "task" ? "open" : undefined, "an intentional stop returns the work to its queue");
+    assert.equal(row.runId, undefined);
+    assert.equal(row.lease, undefined);
+    assert.equal(row.runFailures, 4, "the operator's choice charges no failure");
+    assert.equal(row.nextRunAt, undefined);
+    assert.equal(row.lastAttempt, undefined, "a stopped run is not filed as failure evidence");
+    assert.equal(row.runProgress.pending, true);
+    assert.deepEqual(row.runProgress.outputTail, ["edits landed; tests still running"]);
+    assert.equal(row.interruptedAttempt.pending, true);
+    assert.equal(host.autopilot.consecutiveFailures, 0);
+    assert.equal(host.autopilot.infraFailures, 0);
+    assert.ok(!host.effects.includes("heard"), "a stop is not announced as a failure");
+    assert.ok(!host.effects.includes("handoff"));
+    assert.ok(host.effects.includes("history:stopped"));
+    assert.equal(host.logs.filter((line) => /stopped on request/.test(line)).length, 1);
+    assert.equal(host.mutations(), 1);
   }
 });
 

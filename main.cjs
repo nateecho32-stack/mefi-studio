@@ -3027,7 +3027,7 @@ function assistantStart(entry) {
   assistantThink(label, entry.role);
   const timer = setTimeout(() => assistantTimeout(entry), ASSISTANT_JOB_TIMEOUT_MS);
   projectAgentJobs += 1;
-  const work = projects.run(entry.project, () => Promise.resolve().then(() => entry.job(entry)).finally(() => { projectAgentJobs -= 1; }));
+  const work = projects.run(entry.project, () => Promise.resolve().then(() => entry.job(entry)).finally(() => { if (!entry.abandoned) projectAgentJobs -= 1; }));
   work
     .then(
       (result) => assistantSettle(entry, { result }),
@@ -3128,6 +3128,12 @@ function assistantClearQueue({ abandonRunning = false, text = "dropped" } = {}) 
   if (abandonRunning) {
     for (const entry of pool.running.values()) {
       entry.settled = true;
+      // An abandoned operation no longer owns project work: its journal entry
+      // is the continuation, and its late result is fenced out by `settled`.
+      if (!entry.abandoned) {
+        entry.abandoned = true;
+        projectAgentJobs = Math.max(0, projectAgentJobs - 1);
+      }
       assistantApply({ role: entry.role, status: "idle", text });
       assistantRowTargets(entry.role);
       entry.resolve({ ok: false, error: text });
@@ -5290,6 +5296,11 @@ async function assistantControl(action) {
   await ensureAssistant();
   try {
     if (action === "pause") await assistantPause();
+    else if (action === "stop-all") {
+      // The brake: kill the builders, save every run's progress, park dispatch.
+      const stopped = await stopAllAgents({ reason: "stopped by user", pauseAssistant: true, pauseExecutor: true });
+      return { ok: true, state: assistantState, autopilot: stopped.autopilot ?? autopilotStatus(), stopped: stopped.stopped ?? 0, idle: stopped.idle !== false };
+    }
     else if (action === "resume") await assistantResume();
     else if (action === "start-work") {
       await setAutopilot({ execute: true });
@@ -7550,6 +7561,10 @@ async function spawnNextJob() {
   let startWatchdog = null;
   const finish = async (code, errorMessage = null) => {
     if (entry.finished) return;
+    // An operator stop (Stop all, project switch, restart) is an intentional
+    // pause, not a failure: progress is checkpointed and the card returns to
+    // the queue without spending an attempt.
+    const userStop = entry.stopUser === true;
     // Fast workers may end before the first polling interval. Bind only the
     // exact dispatch identity before freezing the attempt's evidence.
     attributeRunSession(eyes, entry);
@@ -7567,7 +7582,7 @@ async function spawnNextJob() {
     // awaiting_verification, and only the evidence-checked verification pass
     // (autopilotHousekeeping) marks it done.
     const ok = errorMessage == null && (entry.sawDone || code === 0);
-    if (!ok && errorMessage) autopilot.lastError = errorMessage;
+    if (!ok && errorMessage && !userStop) autopilot.lastError = errorMessage;
     // The durable record: what ran, how it ended, and the tail of what it
     // said — the work log that survives the app.
     executorLog({
@@ -7579,6 +7594,7 @@ async function spawnNextJob() {
       ok,
       code: code ?? null,
       error: errorMessage ? String(errorMessage).slice(0, 200) : null,
+      stopped: userStop || undefined,
       sawDone: entry.sawDone === true,
       spoke: entry.spoke === true,
       startKilled: entry.startKilled === true,
@@ -7589,7 +7605,7 @@ async function spawnNextJob() {
     }).catch(() => {});
     // A build that failed twice becomes a question instead of another silent
     // retry. Guarded for the vm test slices that do not carry the question host.
-    if (!ok && job.kind === "task" && job.ref?.id && typeof assistantBuildFailureQuestion === "function") {
+    if (!ok && !userStop && job.kind === "task" && job.ref?.id && typeof assistantBuildFailureQuestion === "function") {
       try {
         assistantBuildFailureQuestion(job, Math.max(1, Math.floor(Number(job.ref.runFailures) || 0) + 1));
       } catch {}
@@ -7679,6 +7695,23 @@ async function spawnNextJob() {
             else delete next.remaining;
             return next;
           });
+        } else if (userStop) {
+          // Stopped on purpose: release the claim but keep the checkpointed
+          // progress, and charge no failure so the next dispatch resumes here.
+          const progress = executorResume.checkpoint(entry);
+          progress.pending = true;
+          progress.interruptedAt = Date.now();
+          board.requests = board.requests.map((item) => {
+            if (item !== owned) return item;
+            const next = { ...item };
+            delete next.status;
+            delete next.runId;
+            delete next.runningAt;
+            delete next.lease;
+            next.runProgress = progress;
+            next.interruptedAttempt = progress;
+            return next;
+          });
         } else {
           // A failed request used to vanish, so unique handoffs (source
           // "agent") were gone forever. Restore it with the same backoff
@@ -7713,7 +7746,7 @@ async function spawnNextJob() {
         return null;
       }
       task.updatedAt = Date.now();
-      task.lastAttempt = attempt;
+      if (!userStop) task.lastAttempt = attempt;
       delete task.runProgress;
       // Apply the stale-scope heal computed above: the card's saved files/file
       // must name files that exist. Unresolvable entries stay as saved (and
@@ -7750,6 +7783,20 @@ async function spawnNextJob() {
         if (entry.resultNote?.raw) {
           task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "result", text: String(entry.resultNote.raw).slice(0, 300) }].slice(-40);
         }
+      } else if (userStop) {
+        // Stopped on purpose: the claim goes back to the queue with its saved
+        // progress, and the operator's choice charges no failure. The next
+        // dispatch continues from the checkpoint instead of starting over.
+        const progress = executorResume.checkpoint(entry);
+        progress.pending = true;
+        progress.interruptedAt = Date.now();
+        task.status = "open";
+        delete task.runId;
+        delete task.lease;
+        delete task.doneAt;
+        task.runProgress = progress;
+        task.interruptedAttempt = progress;
+        task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "status", text: `stopped on request (${entry.sawDone ? "run had reported done" : "unfinished"}) — progress saved; ready to resume` }].slice(-40);
       } else {
         // Failure isolation: the task cools down on its own backoff
         // (10m, 20m, 40m… capped at 2h) while the pool keeps running —
@@ -7810,10 +7857,13 @@ async function spawnNextJob() {
     // ownership-fenced commit. A stale worker may log its exit, but cannot
     // announce success or create a new branch of work for another attempt.
     let heard = null;
-    try { heard = assistantHearBuilder(entry, job, ok, errorMessage, code ?? null); }
-    catch (error) { logLine(`[assistant] builder report failed: ${error.message}`); }
+    if (!userStop) {
+      try { heard = assistantHearBuilder(entry, job, ok, errorMessage, code ?? null); }
+      catch (error) { logLine(`[assistant] builder report failed: ${error.message}`); }
+    }
     if (job.kind === "task") {
-      try { assistantNodeContext(taskTarget(job.ref.id), "run", `autopilot "${assistantClip(job.title, 60)}" — ${ok ? "finished, verifying" : "failed"} (exit ${code ?? "?"})`, "executor"); }
+      const outcome = userStop ? "stopped on request — progress saved" : ok ? "finished, verifying" : "failed";
+      try { assistantNodeContext(taskTarget(job.ref.id), "run", `autopilot "${assistantClip(job.title, 60)}" — ${outcome} (exit ${code ?? "?"})`, "executor"); }
       catch (error) { logLine(`[autopilot] task context update failed: ${error.message}`); }
     }
     // History and checkpoints are not board stores: they update serialized by
@@ -7881,13 +7931,17 @@ async function spawnNextJob() {
     // died inside 15s *without saying anything*, means opencode itself cannot
     // start. A run that talked is not an infra failure however it exited —
     // that false positive is what used to park the executor on a healthy CLI.
-    const infraFail = errorMessage != null || (!ok && !entry.spoke && Date.now() - entry.startedAt < 15000);
+    const infraFail = !userStop && (errorMessage != null || (!ok && !entry.spoke && Date.now() - entry.startedAt < 15000));
     if (ok) {
       autopilot.consecutiveFailures = 0;
       autopilot.infraFailures = 0;
       autopilot.lastError = null;
       pushAutopilotHistory("review", `finished, awaiting verification: ${job.title}`);
       await runExecutorHandoffs(entry, job).catch((error) => logLine(`[autopilot] handoff failed: ${error.message}`));
+    } else if (userStop) {
+      // The operator's stop is not the task's or the infrastructure's fault.
+      pushAutopilotHistory("stopped", `stopped on request: ${job.title} · progress saved`);
+      logLine(`[autopilot] stopped on request: "${assistantClip(job.title, 60)}" — progress saved`);
     } else {
       autopilot.consecutiveFailures += 1;
       // The last output line usually says what actually went wrong — keep it
@@ -8760,6 +8814,103 @@ function setProactive(enabled, minutes = 5) {
   return setAutopilot({ enabled, minutes });
 }
 
+// ---- the operator's stop-everything brake ----------------------------------
+// "Stop all agents" is not the same as Pause. Pause stops admission and lets
+// every live worker run to its own end; this kills the builder children now,
+// checkpoints what each run had reached, saves the roster's journals, and (by
+// default) parks new dispatch so nothing replaces the agents just stopped.
+// Work returns to its project's queue, so Resume picks up where it stopped
+// instead of starting over.
+
+function executorIdle() {
+  return !(autopilot.jobs ?? []).some((job) => !job.finished || job.settlementPending);
+}
+
+// Resolves true once no builder owns a project claim; false on timeout.
+function waitForExecutorIdle(timeoutMs = 20000) {
+  if (executorIdle()) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const startedAt = Date.now();
+    const poll = () => {
+      if (executorIdle()) return resolve(true);
+      if (Date.now() - startedAt >= timeoutMs) return resolve(false);
+      setTimeout(poll, 250).unref?.();
+    };
+    poll();
+  });
+}
+
+// The project gate needs a moment after a stop: a tick or a fill pass already
+// in flight still holds its counter. Poll until the gate reads clear.
+async function waitForProjectIdle(timeoutMs = 10000) {
+  const startedAt = Date.now();
+  for (;;) {
+    const busy = projectBusyReason();
+    if (!busy || Date.now() - startedAt >= timeoutMs) return busy;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+}
+
+let stopAllPromise = null;
+
+async function stopAllAgents({ reason = "stopped by user", pauseAssistant = true, pauseExecutor = true, waitMs = 20000 } = {}) {
+  if (stopAllPromise) return stopAllPromise;
+  stopAllPromise = (async () => {
+    const stopped = [];
+    // 1. No new dispatch while the brake is on. Persisting execute=false keeps
+    //    the stop durable across a restart; the project-switch path leaves the
+    //    operator's execute preference alone and only stops what is running.
+    if (pauseExecutor) await setAutopilot({ execute: false });
+    else {
+      autopilot.waiting = null;
+      autopilot.clusterCancel?.("Agents stopped");
+    }
+    // 2. Kill every builder child. `stopUser` turns its settlement into an
+    //    intentional stop: progress is checkpointed and the card returns to
+    //    the queue without spending a failure. A job that has not spawned yet
+    //    has no `stop`; its reaper drops the claim instead.
+    for (const job of [...(autopilot.jobs ?? [])]) {
+      if (job.finished && !job.settlementPending) continue;
+      job.stopUser = true;
+      try {
+        queueExecutorCheckpoint(job, { force: true });
+      } catch {}
+      try {
+        if (job.child && typeof job.stop === "function") job.stop(reason);
+        else if (typeof job.reap === "function") Promise.resolve(job.reap(1, reason)).catch(() => {});
+        else continue;
+        stopped.push(job.id);
+      } catch (error) {
+        logLine(`[autopilot] could not stop ${job.id}: ${error.message}`);
+      }
+    }
+    // 3. The roster: save every journal entry, release the slots. A provider
+    //    call already on the wire may still finish; its late result is fenced
+    //    out by `settled`, and its saved journal is the continuation.
+    if (assistantState) {
+      assistantClearQueue({ abandonRunning: true, text: `abandoned · ${reason}` });
+      if (pauseAssistant) await assistantPause();
+      else if (!CLI_MODE) await saveAssistant({ force: true }).catch(() => {});
+    }
+    const idle = await waitForExecutorIdle(waitMs);
+    emitAutopilot();
+    return { ok: true, reason, stopped: stopped.length, idle, state: assistantState, autopilot: autopilotStatus() };
+  })().finally(() => { stopAllPromise = null; });
+  return stopAllPromise;
+}
+
+// Manual "restart Studio": stop the agents first so running builds cannot
+// defer the relaunch, then hand off to the same restart path the updater uses.
+// Love2D still wins — never shoot the user's running game.
+async function restartStudio({ stopAgents = true, reason = "restarting" } = {}) {
+  if (activeChild && activeChild.exitCode === null) return { deferred: true, reason: "Love2D is running" };
+  if (stopAgents) {
+    const stopped = await stopAllAgents({ reason, pauseAssistant: true, pauseExecutor: true });
+    if (stopped?.ok === false) return stopped;
+  }
+  return applyRestart([], { counted: false });
+}
+
 // Retained manual-mode default; automatic mode uses measured resources.
 function machineParallelDefault() {
   const cores = Number.isFinite(os?.cpus?.()?.length) && os.cpus().length > 0 ? os.cpus().length : 8;
@@ -9263,14 +9414,34 @@ function projectBusyReason() {
   return null;
 }
 
-async function selectProject(id) {
+async function selectProject(id, { saveProgress = false } = {}) {
   if (id === projects.active().id) return projects.list();
-  const busy = projectBusyReason();
-  if (busy) return { ...projects.list(), ok: false, error: busy };
+  let busy = projectBusyReason();
+  let savedAgents = 0;
+  if (busy && !saveProgress) return { ...projects.list(), ok: false, error: busy, busy: true };
   const next = projects.find(id);
   if (!next) return { ...projects.list(), ok: false, error: "Choose a project from your project list." };
   try { if (!statSync(next.path).isDirectory()) throw new Error(); }
   catch { return { ...projects.list(), ok: false, error: "That project folder is unavailable. Reconnect it before switching." }; }
+  if (busy && saveProgress) {
+    // Save progress on the way out: stop every running agent, keep each run's
+    // checkpoint and each roster journal entry, wait for claims to clear, then
+    // switch. Late results are fenced out, so the switch cannot strand work.
+    // The switch gate is raised first: without it the assistant could start
+    // new work in the old project while this stop is still settling.
+    projectSwitching = true;
+    try {
+      const stopped = await stopAllAgents({ reason: "switching projects", pauseAssistant: false, pauseExecutor: false });
+      savedAgents = Number(stopped?.stopped) || 0;
+      busy = await waitForProjectIdle();
+    } catch (error) {
+      busy = `Could not stop the agents: ${String(error?.message ?? error)}`;
+    }
+  }
+  if (busy) {
+    projectSwitching = false;
+    return { ...projects.list(), ok: false, error: busy, busy: true };
+  }
   projectSwitching = true;
   const previous = projects.active();
   const previousState = assistantState;
@@ -9312,7 +9483,7 @@ async function selectProject(id) {
     send("eyes:ideas", ideas);
     send("eyes:assistant", { state: assistantState, event: { kind: "project", text: `Ready in ${next.name}.`, projectId: next.id } });
     emitAutopilot();
-    return projects.list();
+    return { ...projects.list(), saved: savedAgents };
   } catch (error) {
     projects.select(previous.id);
     assistantState = previousState;
@@ -9404,7 +9575,10 @@ function registerIpc() {
       return result;
     } catch (error) { return { ...projects.list(), ok: false, error: error.message }; }
   });
-  ipcMain.handle("projects:select", (_event, id) => selectProject(id));
+  ipcMain.handle("projects:select", (_event, payload) => {
+    if (typeof payload === "string") return selectProject(payload);
+    return selectProject(payload?.id, { saveProgress: payload?.saveProgress === true });
+  });
   ipcMain.handle("planning:list", (_event, payload) => planningRequest("list", payload));
   ipcMain.handle("planning:action", (_event, payload) => planningRequest("action", payload));
   ipcMain.handle("planning:assist", (_event, payload) => planningRequest("assist", payload));
@@ -10155,6 +10329,11 @@ function registerIpc() {
     }
     return { ok: result.ok !== false, ...result, status: updater.status() };
   });
+
+  // The manual restart with the agents stopped: running builders are killed
+  // and their progress is saved before the relaunch, so a restart never has to
+  // wait for builds and never loses an unfinished run.
+  ipcMain.handle("app:restart", (_event, options) => restartStudio(options ?? {}));
 
   // ---- GitHub release updates ---------------------------------------------
   ipcMain.handle("release:status", () => ({ ok: true, status: releaseStatus() }));

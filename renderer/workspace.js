@@ -58,7 +58,9 @@
     $("mode-chat").disabled = $("mode-work").disabled = state.pending;
     if ($("task-outline")) $("task-outline").disabled = state.pending || state.switching || unavailable;
     if ($("plan-idea")) $("plan-idea").disabled = state.pending || state.switching || unavailable;
-    $("pause").disabled = !api()?.assistantControl || state.switching;
+    if ($("pause")) $("pause").disabled = !api()?.assistantControl || state.switching;
+    if ($("stop-all")) $("stop-all").disabled = !api()?.assistantControl || state.switching || Boolean(state.busyAction);
+    if ($("restart")) $("restart").disabled = !api()?.appRestart || state.switching || Boolean(state.busyAction);
     if ($("auto-build")) $("auto-build").disabled = !api()?.assistantAutopilot || !buildMode().loaded || buildModeSaving || state.switching;
     if ($("agent-mode")) $("agent-mode").disabled = !api()?.assistantAutopilot || !agentMode().loaded || agentModeSaving || state.switching;
     $("reveal").disabled = !project()?.path || !api()?.shellReveal;
@@ -70,10 +72,10 @@
   function personalize() {
     const hour = new Date().getHours();
     $("greeting").textContent = `GOOD ${hour < 12 ? "MORNING" : hour < 18 ? "AFTERNOON" : "EVENING"}${person() ? `, ${person()}` : ""}`;
-    $("layer").dataset.accent = storage.get("accent", "gold");
+    $("layer").dataset.accent = storage.get("accent", "aurora");
     $("layer").classList.toggle("ws-still", storage.get("motion", "1") === "0");
     if ($("sidebar")) {
-      $("sidebar").dataset.accent = storage.get("accent", "gold");
+      $("sidebar").dataset.accent = storage.get("accent", "aurora");
       $("sidebar").classList.toggle("ws-still", storage.get("motion", "1") === "0");
     }
     threadSignature = "";
@@ -130,8 +132,24 @@
     state.switching = true; controls(); feedback("Opening project…", false, "sidebar");
     try {
       if (refreshFlight) await refreshFlight;
-      adoptProjects(guard(await api().projectsSelect(id)));
-      if (await refresh(true)) feedback(`You're in ${project()?.name || "your project"}.`, false, "sidebar");
+      let result = await api().projectsSelect(id);
+      if (result?.ok === false) {
+        // Agents are still working. Offer the operator the progress-saving
+        // path: stop them, checkpoint every run, then switch. Declining keeps
+        // the current project and lets its work finish. Any other failure
+        // (an unavailable folder, a switch already in flight) stays as-is.
+        const target = state.projects.find((item) => item.id === id);
+        const saveable = result.busy === true && !/already in progress/i.test(String(result.error ?? ""));
+        if (!saveable) throw new Error(result.error || "The project could not be opened.");
+        const question = `Agents are still working in ${project()?.name || "this project"}. Save their progress, stop them, and switch to ${target?.name || "the other project"}?`;
+        const approved = typeof window.confirm === "function" ? window.confirm(question) : false;
+        if (!approved) throw new Error(result.error || "Project switch canceled.");
+        feedback("Saving agent progress, then switching…", false, "sidebar");
+        result = await api().projectsSelect(id, { saveProgress: true });
+      }
+      adoptProjects(guard(result));
+      const saved = Number(result?.saved) || 0;
+      if (await refresh(true)) feedback(saved ? `Saved ${saved} agent(s), then switched to ${project()?.name || "your project"}.` : `You're in ${project()?.name || "your project"}.`, false, "sidebar");
     } catch (error) { feedback(error.message, true, "sidebar"); }
     finally { state.switching = false; controls(); }
   }
@@ -390,6 +408,33 @@
     if (backlogTimer || !active() || document.hidden) return;
     backlogTimer = setTimeout(() => { backlogTimer = null; if (active() && !document.hidden) refresh(); }, 300);
   }
+  // The brake: stop every running agent now, save each run's progress, and
+  // park new dispatch until the operator resumes.
+  async function stopAllAgents() {
+    if (!api()?.assistantControl || state.switching || state.busyAction) return;
+    state.busyAction = "stop-all"; controls();
+    feedback("Stopping every agent and saving progress…");
+    try {
+      const result = guard(await api().assistantControl("stop-all"));
+      const stopped = Number(result.stopped) || 0;
+      feedback(stopped ? `Stopped ${stopped} agent(s). Progress saved; their work stays queued.` : "No agents were running. New work is off.");
+      await refresh(true);
+    } catch (error) { feedback(error.message, true); }
+    finally { state.busyAction = null; controls(); }
+  }
+  // Restart with the agents stopped first, so a running build cannot defer the
+  // relaunch. Studio comes back paused; Resume starts work again.
+  async function restartStudio() {
+    if (!api()?.appRestart || state.switching || state.busyAction) return;
+    state.busyAction = "restart"; controls();
+    feedback("Stopping agents, then restarting Studio…");
+    try {
+      const result = await api().appRestart({ stopAgents: true });
+      if (result?.deferred) feedback(`Restart deferred · ${result.reason ?? "work is still running"}`);
+      else if (result?.ok === false) feedback(result.error || "Restart failed.", true);
+    } catch (error) { feedback(String(error?.message ?? error), true); }
+    finally { state.busyAction = null; controls(); }
+  }
   function renderCompanion() {
     const assistant = state.assistant;
     const paused = assistant.status === "paused" || assistant.prefs?.paused;
@@ -589,12 +634,14 @@
       catch (error) { feedback(error.message, true, "sidebar"); } finally { state.switching = false; controls(); }
     });
     $("reveal").addEventListener("click", () => api()?.shellReveal(project()?.path));
+    $("stop-all")?.addEventListener("click", () => void stopAllAgents());
+    $("restart")?.addEventListener("click", () => void restartStudio());
     $("pause").addEventListener("click", async () => {
       $("pause").disabled = true;
       try { const paused = state.assistant.status === "paused" || state.assistant.prefs?.paused; const result = guard(await api().assistantControl(paused ? "resume" : "pause")); state.assistant = result.state; renderCompanion(); scheduleBacklogRead(); feedback(paused ? "New work can start again." : "New work paused. Running jobs finish normally."); }
       catch (error) { feedback(error.message, true); } finally { controls(); }
     });
-    for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "gold"]]) {
+    for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "aurora"]]) {
       $(id).value = storage.get(key, fallback);
       $(id).addEventListener("input", () => {
         storage.set(key, $(id).value);

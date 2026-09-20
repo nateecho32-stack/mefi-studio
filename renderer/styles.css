@@ -15,20 +15,20 @@
   color-scheme: dark;
 
   /* ---- surfaces & ink ---- */
-  --bg: #050507;
-  --bg-deep: #030304;
-  --glass: rgba(13, 14, 18, 0.72);
-  --glass-hard: rgba(10, 11, 14, 0.9);
-  --panel: rgba(16, 17, 22, 0.66);
-  --panel-solid: #0d0e12;
-  --gold: #c9a86a;
-  --gold-bright: #e6c98d;
-  --gold-dim: rgba(201, 168, 106, 0.32);
-  --hairline: rgba(201, 168, 106, 0.16);
-  --hairline-strong: rgba(201, 168, 106, 0.38);
-  --ivory: #ece5d8;
-  --muted: #9a8f7d;
-  --dim: #6c6455;
+  --bg: #050d13;
+  --bg-deep: #050d13;
+  --glass: rgba(16, 31, 41, 0.76);
+  --glass-hard: rgba(16, 31, 41, 0.94);
+  --panel: rgba(16, 31, 41, 0.85);
+  --panel-solid: #101f29;
+  --gold: #71cbb7;
+  --gold-bright: #a7f3da;
+  --gold-dim: rgba(113, 203, 183, 0.32);
+  --hairline: rgba(70, 112, 110, 0.5);
+  --hairline-strong: #46706e;
+  --ivory: #e7f5ee;
+  --muted: #abc4c9;
+  --dim: #7c8a8c;
   --live: #57ff9a;
   --live-dim: rgba(87, 255, 154, 0.18);
   --warn: #ffd479;
@@ -36,12 +36,12 @@
   --info: #9db7ff;
 
   /* ---- new surfaces ---- */
-  --glass-soft: rgba(11, 12, 16, 0.55);   /* dock, view-control strip: the constellation shows through */
-  --cmd-bg: #030304;                       /* canvas fallback; idle.js repaints this exact colour */
-  --ink: #171307;                          /* text on a gold fill */
-  --tint-gold-1: rgba(201, 168, 106, 0.06);
-  --tint-gold-2: rgba(201, 168, 106, 0.09);
-  --tint-gold-3: rgba(201, 168, 106, 0.14);
+  --glass-soft: rgba(16, 31, 41, 0.7);   /* dock, view-control strip: the constellation shows through */
+  --cmd-bg: #050d13;                       /* canvas fallback; idle.js repaints this exact colour */
+  --ink: #000000;                          /* text on a gold fill */
+  --tint-gold-1: rgba(113, 203, 183, 0.06);
+  --tint-gold-2: rgba(113, 203, 183, 0.09);
+  --tint-gold-3: rgba(113, 203, 183, 0.14);
 
   /* ---- spacing ---- */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s7: 32px;
@@ -71,8 +71,8 @@
   --shadow-2: 0 18px 40px rgba(0, 0, 0, 0.45);
   --shadow-3: 0 40px 90px rgba(0, 0, 0, 0.7);
   --inset-hi: inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  --ring: 0 0 0 3px rgba(201, 168, 106, 0.12);
-  --glow-gold: 0 0 14px rgba(230, 201, 141, 0.35);
+  --ring: 0 0 0 3px rgba(113, 203, 183, 0.15);
+  --glow-gold: 0 0 14px rgba(113, 203, 183, 0.3);
   --glow-live: 0 0 6px rgba(87, 255, 154, 0.6);
   --blur: blur(14px) saturate(1.05);
   --blur-hard: blur(18px) saturate(1.1);
@@ -2618,6 +2618,8 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .feed-metric[data-state="blocked"][data-empty="false"] { border-color: color-mix(in srgb, var(--warn) 48%, var(--cmd-edge)); background: color-mix(in srgb, var(--warn) 7%, var(--cmd-surface)); }
 #idle-hud .feed-metric[data-state="blocked"][data-empty="false"] strong { color: var(--warn); }
 #idle-hud .feed-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; flex: none; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--hairline); }
+#idle-hud .feed-controls.feed-stop-row { justify-content: flex-start; gap: 8px; margin-top: -6px; border-bottom: none; padding-bottom: 0; }
+#idle-hud .feed-stop-row .feed-state { margin-left: auto; }
 #idle-hud .feed-autopilot { font-size: 11px; gap: 7px; }
 #idle-hud .feed-autopilot:has(input:focus-visible) { outline: 2px solid var(--gold-bright); outline-offset: 4px; border-radius: 3px; }
 #idle-hud .feed-capacity { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; flex: none; font-size: 10px; color: var(--muted); margin: 0; }
@@ -2661,8 +2663,19 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .feed-section { flex: none; border-top: 1px solid var(--hairline); padding-top: 10px; }
 #idle-hud .feed-section summary { display: list-item; cursor: pointer; color: var(--muted); font-size: 12px; padding: 2px 0 6px; }
 #idle-hud .feed-section summary span { float: right; color: var(--dim); font-size: 11px; }
-#idle-hud .feed-agents { max-height: 200px; margin: 6px 0 0; overflow-y: auto; }
-#idle-hud .feed-agents li { padding: 7px 5px; gap: 6px; font-size: 11px; }
+#idle-hud .feed-agents-section { flex: none; border-top: 0; padding-top: 0; margin-bottom: 12px; }
+#idle-hud .feed-agents { max-height: 168px; margin: 6px 0 0; gap: 6px; overflow-y: auto; }
+#idle-hud .feed-agents li { display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 8px 9px; border: 1px solid var(--cmd-edge); border-left: 3px solid var(--gold-dim); border-radius: 8px; background: var(--cmd-raised); font-size: 11px; }
+#idle-hud .feed-agents li.agent-idle { background: transparent; border-color: var(--hairline); }
+#idle-hud .feed-agents li.agent-error { border-color: color-mix(in srgb, var(--bad) 45%, var(--cmd-edge)); }
+#idle-hud .feed-agents .agent-row-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
+#idle-hud .feed-agents .agent-row-head .src-tag { flex: none; }
+#idle-hud .feed-agents .agent-row-head b { flex: none; font-size: 12px; }
+#idle-hud .feed-agents .agent-row-head .when { margin-left: auto; flex: none; }
+#idle-hud .feed-agents .text { flex: none; white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.5; }
+#idle-hud .feed-agents-section .feed-section-head { margin-bottom: 0; }
+#idle-hud .feed-agents-count[data-state="running"] { color: var(--live); }
+#idle-hud .feed-agents-count[data-state="error"] { color: var(--warn); }
 #idle-hud .feed-list { flex: none; max-height: 180px; margin-top: 6px; overflow-y: auto; }
 #idle-hud .feed-row { font-size: 11px; line-height: 1.5; padding: 5px 0; }
 #idle-hud .feed-meta { margin: 0; padding-top: 6px; white-space: normal; font-size: 10px; line-height: 1.6; color: var(--dim); }
@@ -3039,12 +3052,12 @@ body.command-active .walkthrough-coach { right: 392px; }
 }
 #idle-hud .cmd-rail.rail-collapsed { bottom: auto; }
 #idle-hud .rail-tabs {
-  display: flex; align-items: center; gap: 3px; flex: none;
+  display: flex; align-items: center; flex-wrap: wrap; row-gap: 4px; gap: 3px; flex: none;
   padding: 0 0 10px; margin-bottom: 10px; border-bottom: 1px solid var(--hairline);
 }
 #idle-hud .rail-tab {
   position: relative; display: inline-flex; align-items: center; gap: 5px;
-  min-height: 30px; padding: 0 9px;
+  min-height: 30px; padding: 0 7px;
   border: 1px solid transparent; border-radius: 7px;
   background: transparent; color: var(--muted);
   font: 500 12px/1.3 var(--font-ui); letter-spacing: .01em; box-shadow: none;
@@ -3060,6 +3073,7 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .rail-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 #idle-hud .cmd-rail .cmd-feed,
 #idle-hud .cmd-rail .cmd-chat,
+#idle-hud .cmd-rail .cmd-settings,
 #idle-hud .cmd-rail .cmd-done,
 #idle-hud .cmd-rail .cmd-asks {
   position: static; inset: auto; width: auto; max-width: none; max-height: none; min-height: 0;
@@ -3069,6 +3083,7 @@ body.command-active .walkthrough-coach { right: 392px; }
 }
 #idle-hud .cmd-rail .cmd-feed[hidden],
 #idle-hud .cmd-rail .cmd-chat[hidden],
+#idle-hud .cmd-rail .cmd-settings[hidden],
 #idle-hud .cmd-rail .cmd-done[hidden],
 #idle-hud .cmd-rail .cmd-asks[hidden] { display: none; }
 #idle-hud .cmd-rail .cmd-feed.collapsed,
@@ -3087,6 +3102,11 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .rail-view-head .feed-state { flex: 1; min-width: 0; font-size: 10px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #idle-hud .rail-view-head button { flex: none; min-height: 26px; padding: 3px 8px; font-size: 11px; }
 #idle-hud .rail-view-note { flex: none; margin: 0 0 10px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+
+/* the settings view: queue controls and safety stops, on their own tab */
+#idle-hud .cmd-settings .settings-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; overscroll-behavior-y: contain; padding: 2px 7px 4px 2px; }
+#idle-hud .cmd-settings .feed-controls { justify-content: flex-start; }
+#idle-hud .cmd-settings .feed-stop-row { margin-top: 0; padding-top: 12px; border-top: 1px solid var(--hairline); }
 
 /* visible explanations for the queue controls */
 #idle-hud .control-help { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }

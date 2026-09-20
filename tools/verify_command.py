@@ -402,6 +402,19 @@ VERIFY_METHOD = r'''
     assert.deepEqual(report.parallelRequests, [{adaptiveParallel:false,parallel:2},{adaptiveParallel:false,parallel:3}], "capacity changes never toggle enable or execute");
     assert.equal(config.fixture.autopilot.execute, true);
     assert.equal(config.fixture.autopilot.enabled, true);
+    // Capacity, build approval and the safety stops live on their own Settings
+    // tab now; the Work tab keeps the live view. Check both sides of the split.
+    await this.click('#cmd-rail-tab-settings');
+    await this.until("!document.getElementById('cmd-settings').hidden && document.getElementById('idle-feed').hidden", 'Settings tab shows the queue controls alone');
+    const settings=await this.run("const select=document.getElementById('idle-feed-parallel'),build=document.getElementById('idle-feed-build-mode'),panel=document.getElementById('cmd-settings'),box=select.getBoundingClientRect(),stop=document.getElementById('idle-stop-all').getBoundingClientRect();return {panel:panel.getBoundingClientRect().toJSON(),box:box.toJSON(),build:build.getBoundingClientRect().toJSON(),stop:stop.toJSON(),mode:document.getElementById('idle-feed-agent-mode-note').textContent,help:document.getElementById('idle-controls-help').textContent.includes('Machine managed')};");
+    assert(settings.box.width>70 && settings.box.height>=28 && settings.box.top>=settings.panel.top && settings.box.bottom<=settings.panel.bottom+1, 'capacity stays a readable control inside the Settings view');
+    assert(settings.build.width>70 && settings.stop.width>40, 'approval mode and the safety stop share the Settings view');
+    assert(settings.help, 'the Settings view keeps the control explanations');
+    assert(/Swarm|Cluster/.test(settings.mode), 'the Settings view names the active agent mode');
+    await this.capture('07c1-settings-tab');
+    await this.click('#cmd-rail-tab-work');
+    await this.until("!document.getElementById('idle-feed').hidden && document.getElementById('cmd-settings').hidden", 'Work tab returns after the settings check');
+    report.settingsLayout=settings;
     // Workers are synthetic; use real open tasks instead of trying to set
     // host-owned active status through the task editor's save route.
     const titles = await this.run("const tasks=(await window.mefiStudio.tasksList()).tasks;const selected=tasks.filter(task=>['command_task_16','command_task_17'].includes(task.id));if(selected.length!==2 || selected.some(task=>task.status!=='open'))throw new Error('Parallel fixture requires two open tasks');return selected.map(task=>({id:task.id,title:task.title}));");
@@ -411,28 +424,27 @@ VERIFY_METHOD = r'''
     await this.until("['command_task_00','command_task_16','command_task_17'].every(id=>window.MefiIdle.debugNodes().some(node=>node.id==='task:'+id))", "each synthetic builder owns a real task node");
     this.setContentSize(1280,720); await sleep(250);
     await this.run("document.getElementById('idle-feed-scroll').scrollTop=0;");
-    const cards = await this.run("const rail=document.getElementById('idle-feed-now'),worklist=document.getElementById('idle-feed-scroll'),panel=document.getElementById('idle-feed');return {panel:panel.getBoundingClientRect().toJSON(),worklist:worklist.getBoundingClientRect().toJSON(),scroll:worklist.scrollHeight,client:worklist.clientHeight,scrollWidth:worklist.scrollWidth,clientWidth:worklist.clientWidth,overflow:getComputedStyle(worklist).overflowY,currentOverflow:getComputedStyle(rail).overflowY,activityOverflow:getComputedStyle(document.getElementById('idle-feed-activity')).overflowY,titles:[...rail.querySelectorAll('.feed-current-title')].map(el=>el.textContent),metrics:document.getElementById('idle-feed-metrics').getBoundingClientRect().toJSON(),capacity:document.getElementById('idle-feed-parallel').getBoundingClientRect().toJSON()};");
+    const cards = await this.run("const rail=document.getElementById('idle-feed-now'),worklist=document.getElementById('idle-feed-scroll'),panel=document.getElementById('idle-feed');return {panel:panel.getBoundingClientRect().toJSON(),worklist:worklist.getBoundingClientRect().toJSON(),scroll:worklist.scrollHeight,client:worklist.clientHeight,scrollWidth:worklist.scrollWidth,clientWidth:worklist.clientWidth,overflow:getComputedStyle(worklist).overflowY,currentOverflow:getComputedStyle(rail).overflowY,activityOverflow:getComputedStyle(document.getElementById('idle-feed-activity')).overflowY,titles:[...rail.querySelectorAll('.feed-current-title')].map(el=>el.textContent),metrics:document.getElementById('idle-feed-metrics').getBoundingClientRect().toJSON()};");
     assert.equal(cards.titles.length,3);
     for (const task of titles) assert(cards.titles.includes(task.title), "each concurrent build keeps its own title");
     assert(cards.worklist.height>=140 && cards.worklist.bottom<=cards.panel.bottom+1, "the shared work list keeps a usable bounded scroll area");
     assert.equal(cards.overflow,'auto');
     assert.equal(cards.currentOverflow,'visible', "current builds do not create a nested scroller");
-    assert.equal(cards.activityOverflow,'visible', "attention and queue share the current-work scroller");
+    assert.equal(cards.activityOverflow,'visible', "attention, roster and queue share the current-work scroller");
     assert(cards.scroll>cards.client, "additional builders and queue entries scroll in one work list");
     assert(cards.scrollWidth<=cards.clientWidth+1, "the shared work list never scrolls horizontally");
-    assert(cards.metrics.bottom<=cards.worklist.top && cards.capacity.bottom<=cards.worklist.top, "readiness and worker controls remain above the scrolling work list");
+    assert(cards.metrics.bottom<=cards.worklist.top, "readiness stays above the scrolling work list");
     await this.capture('07c-parallel-builds');
-    const later = await this.run("const worklist=document.getElementById('idle-feed-scroll'),title=document.querySelector('#idle-feed-now .feed-current-card:last-child .feed-current-title');worklist.scrollTop+=title.getBoundingClientRect().top-worklist.getBoundingClientRect().top;const box=worklist.getBoundingClientRect(),target=title.getBoundingClientRect();return {visible:target.top>=box.top-1&&target.bottom<=box.bottom+1,scrollTop:worklist.scrollTop,metrics:document.getElementById('idle-feed-metrics').getBoundingClientRect().toJSON(),capacity:document.getElementById('idle-feed-parallel').getBoundingClientRect().toJSON()};");
+    const later = await this.run("const worklist=document.getElementById('idle-feed-scroll'),title=document.querySelector('#idle-feed-now .feed-current-card:last-child .feed-current-title');worklist.scrollTop+=title.getBoundingClientRect().top-worklist.getBoundingClientRect().top;const box=worklist.getBoundingClientRect(),target=title.getBoundingClientRect();return {visible:target.top>=box.top-1&&target.bottom<=box.bottom+1,scrollTop:worklist.scrollTop,metrics:document.getElementById('idle-feed-metrics').getBoundingClientRect().toJSON()};");
     assert(later.scrollTop>0 && later.visible, "scrolling the shared work list reaches the last builder's title");
     assert.equal(later.metrics.top,cards.metrics.top,"readiness metrics stay fixed while work scrolls");
-    assert.equal(later.capacity.top,cards.capacity.top,"worker controls stay fixed while work scrolls");
     await this.capture('07d-parallel-builds-scrolled');
     const queue = await this.run("const worklist=document.getElementById('idle-feed-scroll'),queue=document.querySelector('.feed-upnext');worklist.scrollTop+=queue.getBoundingClientRect().top-worklist.getBoundingClientRect().top;const box=worklist.getBoundingClientRect(),target=queue.getBoundingClientRect();return {visible:target.top<box.bottom&&target.bottom>box.top,scrollTop:worklist.scrollTop};");
     assert(queue.visible && queue.scrollTop>0,"the same scroll area reaches queued work after all builders");
     await this.run("document.getElementById('idle-feed-scroll').scrollTop=0;");
     this.setContentSize(1463,943); await sleep(150);
     report.parallelLayout=cards;
-    this.check("Parallel capacity saves only worker count; three named builders share one scroll area with queued work while readiness and worker controls stay fixed");
+    this.check("Parallel capacity saves only worker count from its own Settings tab; three named builders share one scroll area with queued work while readiness stays fixed");
   }
   async verifyReadiness() {
     await this.until("document.querySelector('#idle-feed-metrics [data-state=blocked] strong')?.textContent === '3'", "blocked attempts have their own attention count");
@@ -1382,19 +1394,20 @@ VERIFY_METHOD = r'''
     this.setContentSize(1463,943);
     await sleep(200);
     if (!config.baseline) {
-      assert.equal(await this.run("return document.getElementById('idle-feed-log-section')?.open;"), false, "technical log is closed by default");
-      assert.equal(await this.run("return document.getElementById('idle-feed-agent-section')?.open;"), false, "full roster is closed by default");
-      const current = await this.run("return document.getElementById('idle-feed-now').textContent;");
-      assert(current.includes('Refine the project switcher'), "current work names the real job");
-      assert(current.includes('Checking keyboard navigation'), "current stage names the worker's actual todo");
-      await this.click('#idle-feed-log-section > summary');
-      await this.capture('05-work-log');
-      assert.equal(await this.run("return document.getElementById('idle-feed-log-section').open;"), true);
-      await this.click('#idle-feed-log-section > summary');
-      await this.click('#idle-feed-agent-section > summary');
-      await this.capture('06-agent-details');
-      await this.click('#idle-feed-agent-section > summary');
-      this.check("Named current work and actual stage stay primary while roster and technical log are disclosures");
+        assert.equal(await this.run("return document.getElementById('idle-feed-log-section')?.open;"), false, "technical log is closed by default");
+        const roster=await this.run("const section=document.getElementById('idle-feed-agent-section'),list=document.getElementById('idle-feed-agents');return {tag:section?.tagName,rows:list.querySelectorAll('li').length,heads:list.querySelectorAll('.agent-row-head').length,lines:[...list.querySelectorAll('.agent-row-head')].map(head=>head.textContent.trim()),summary:section.querySelector('.feed-section-head h3')?.textContent};");
+        assert.equal(roster.tag, 'SECTION', "the agent roster is a standing section, not a disclosure");
+        assert(roster.rows>0 && roster.heads===roster.rows, "every agent row names its status, role and age on one line");
+        assert(/Agents\s+\S/.test(roster.summary), "the roster heading carries the live count");
+        const current = await this.run("return document.getElementById('idle-feed-now').textContent;");
+        assert(current.includes('Refine the project switcher'), "current work names the real job");
+        assert(current.includes('Checking keyboard navigation'), "current stage names the worker's actual todo");
+        await this.click('#idle-feed-log-section > summary');
+        await this.capture('05-work-log');
+        assert.equal(await this.run("return document.getElementById('idle-feed-log-section').open;"), true);
+        await this.click('#idle-feed-log-section > summary');
+        await this.capture('06-agent-roster');
+        this.check("Named current work and actual stage stay primary while the readable roster stays visible and the technical log is a disclosure");
       if (await this.run("return Boolean(document.getElementById('cmd-more-tools'));")) {
         this.webContents.focus();
         await this.run("window.__commandKeys = []; for (const type of ['keydown','keypress','keyup']) window.addEventListener(type,event=>window.__commandKeys.push({type,key:event.key,target:event.target.tagName,prevented:event.defaultPrevented})); document.querySelector('#cmd-more-tools > summary').focus();");

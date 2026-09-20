@@ -652,7 +652,7 @@
       growArea(els.input);
     }
     if (els.send) els.send.disabled = !bridge;
-    for (const button of [els.tidy, els.fix, els.pause]) if (button) button.disabled = !bridge;
+    for (const button of [els.tidy, els.fix, els.pause, els.stopAll, els.restart]) if (button) button.disabled = !bridge;
     if (els.pause) els.pause.textContent = service?.status === "paused" ? "Resume" : "Pause";
     if (els.proactive) {
       els.proactive.disabled = !bridge;
@@ -843,9 +843,29 @@
       } else if (action === "overseer") {
         const overseer = service.overseer;
         status(overseer?.lastSummary ? `overseer · ${overseer.lastSummary}` : "overseer review queued");
+      } else if (action === "stop-all") {
+        const stopped = Number(result.stopped) || 0;
+        status(stopped ? `stopped ${stopped} agent(s) · progress saved, work stays queued` : "no agents were running · new work is off");
       } else status(`assistant ${service.status ?? action}`);
     } catch (error) {
       status(`${action} failed · ${String(error?.message ?? error)}`, true);
+    }
+  }
+
+  // Restart with the agents stopped first, so a running build cannot defer the
+  // relaunch. Studio comes back paused; Resume starts work again.
+  async function restartStudio() {
+    if (!window.mefiStudio?.appRestart) {
+      status("desktop app only", true);
+      return;
+    }
+    status("stopping agents, then restarting…");
+    try {
+      const result = await window.mefiStudio.appRestart({ stopAgents: true });
+      if (result?.deferred) status(`restart deferred · ${result.reason ?? "work is still running"}`);
+      else if (result?.ok === false) status(result.error ?? "restart failed", true);
+    } catch (error) {
+      status(`restart failed · ${String(error?.message ?? error)}`, true);
     }
   }
 
@@ -1206,6 +1226,8 @@
       fix: "assistant-fix",
       pause: "assistant-pause",
       overseer: "assistant-overseer",
+      stopAll: "assistant-stop-all",
+      restart: "assistant-restart",
     })) {
       els[key] = document.getElementById(id);
     }
@@ -1225,6 +1247,8 @@
     els.fix?.addEventListener("click", () => control("fix"));
     els.overseer?.addEventListener("click", () => control("overseer"));
     els.pause?.addEventListener("click", () => control(state.assistant?.status === "paused" ? "resume" : "pause"));
+    els.stopAll?.addEventListener("click", () => control("stop-all"));
+    els.restart?.addEventListener("click", () => restartStudio());
     window.mefiStudio?.onAssistant?.((payload) => {
       window.MefiTree?.applyAssistant?.(payload);
       if (payload?.state) state.assistant = payload.state;

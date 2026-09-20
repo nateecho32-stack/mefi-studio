@@ -280,6 +280,18 @@ for (const manual of [false, true]) test(`${manual ? "manual" : "cadence"} repai
   assert.match(result.directives[0].text, /paused by operator/);
 });
 
+test("abandoned running operations release their project ownership without a late double release", async () => {
+  const h = poolHost({ parallel: 1 });
+  const job = h.add("briefer", "long provider call");
+  await flush();
+  assert.equal(h.env.projectAgentJobs, 1);
+  h.env.assistantClearQueue({ abandonRunning: true, text: "stopped" });
+  assert.equal(h.env.projectAgentJobs, 0, "an abandoned operation no longer blocks a project switch");
+  job.resolve({ ok: true });
+  await flush();
+  assert.equal(h.env.projectAgentJobs, 0, "a late result cannot release the same ownership twice");
+});
+
 test("a never-settling operation reports its deadline but retains its slot and durable journal through Pause", async () => {
   const h = poolHost({ parallel: 1 });
   const stuck = h.add("briefer", "stuck", { ai: true, work: { id: "stuck", kind: "brief", text: "long provider request" } });

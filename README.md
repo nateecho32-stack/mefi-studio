@@ -130,9 +130,11 @@ project's ignored local `planning.json`.
 
 ### Command center and the node tree
 
-- **Live work** shows the current worker and step, readiness counts and a ranked
-  queue; **Agents** chooses how the roster shares work between **Swarm** (across
-  the queue) and **Cluster** (one goal at a time).
+- **Live work** shows the current worker and step, readiness counts, the
+  readable agent roster (each role's status, name, elapsed time and current
+  task) and a ranked queue; **Settings** holds the queue controls, while
+  **Agents** in the toolbar chooses how the roster shares work between
+  **Swarm** (across the queue) and **Cluster** (one goal at a time).
 - **Parallel builds** defaults to **Machine managed**: admission follows
   measured app responsiveness, with optional manual limits of one to three
   workers. High CPU alone never limits builds.

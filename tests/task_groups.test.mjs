@@ -127,3 +127,29 @@ test("a task pinned to a board node works on that node instead of a node of its 
   scope.appendTaskNodes();
   assert.equal(state.nodes.some((node) => node.id === "task:work"), true, "the task keeps its own node when its target is not on the board");
 });
+
+test("chores the assistant filed fold into the hub instead of a node of their own", async () => {
+  const idle = await readFile(new URL("../renderer/idle.js", import.meta.url), "utf8");
+  const hub = { id: "__assistant__", kind: "assistant", label: "Assistant", x: 0, y: 0, z: 0 };
+  const session = { id: "session", kind: "session", x: 40, y: 0, z: 0 };
+  const state = { nodes: [session, hub], edges: [], tasks: [], allTasks: [], taskGroups: [], expandedTaskGroups: new Set(), taskLayout: new Map(), fx: new Map(), doneHold: new Map() };
+  const window = { MefiTaskGroups: env.window.MefiTaskGroups };
+  const scope = vm.createContext({ state, window, Date, Math, Map, Set, DONE_FRESH_MS: 1000, markAbsorb: (id) => { state.fx.get(id).absorbAt = 1; }, autopilotJobs: () => [{ taskId: "chore", sessionId: "session" }], ensureFx: (id) => { if (!state.fx.has(id)) state.fx.set(id, {}); return state.fx.get(id); }, absorbFallback: () => null });
+  vm.runInContext(idle.slice(idle.indexOf("function taskPlacements("), idle.indexOf("// Loose words from a title")), scope);
+  vm.runInContext(idle.slice(idle.indexOf("function takeTasks("), idle.indexOf("  const read =", idle.indexOf("function takeTasks("))), scope);
+  const tasks = [
+    { id: "chore", status: "open", title: "Overseer: Resolve store unavailable", source: "a-eyes" },
+    { id: "pinned", status: "open", title: "Resolve collision: main.cjs", source: "collision", pin: true },
+    { id: "ask", status: "open", title: "Add night mode", source: "chat" },
+  ];
+  scope.takeTasks(tasks); scope.appendTaskNodes();
+  assert.equal(state.nodes.some((node) => node.task?.id === "chore"), false, "a filed chore adds no node");
+  assert.deepEqual(Array.from(hub.filedWork, (task) => task.id), ["chore"], "the hub carries the filed ledger");
+  assert.equal(state.nodes.some((node) => node.task?.id === "pinned"), true, "a pinned chore keeps its node");
+  assert.equal(state.nodes.some((node) => node.task?.id === "ask"), true, "the user's ask keeps its node");
+  const fx = state.fx.get("task:chore");
+  assert.equal(fx.filed, true); assert.equal(fx.wasRendered, false); assert.equal(fx.anchorId, "__assistant__");
+  state.nodes = [session]; state.edges = [];
+  scope.appendTaskNodes();
+  assert.equal(state.nodes.some((node) => node.task?.id === "chore"), true, "without a hub on the board the chore keeps its node");
+});
