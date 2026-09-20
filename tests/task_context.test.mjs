@@ -30,6 +30,16 @@ test("heartbeat-only changes do not flood history and stale clients cannot remov
   assert.equal(taskHistory(stale).entries[1].snapshot.prompt, "New brief");
 });
 
+test("interrupted progress is retained in task history while streaming checkpoints do not flood revisions", () => {
+  const saved = recordTaskRevision(original, { now: 1 });
+  const streaming = recordTaskRevision({ ...saved, runProgress: { progress: .5, outputTail: ["Edits saved"] } }, { previous: saved, now: 2 });
+  assert.equal(streaming.contextHistory, saved.contextHistory);
+  const interruptedAttempt = { runId: "lost-run", progress: .5, todos: [{ content: "Run checks", status: "pending" }] };
+  const resumed = recordTaskRevision({ ...streaming, interruptedAttempt }, { previous: streaming, now: 3 });
+  assert.deepEqual(taskHistory(resumed).entries[0].snapshot.interruptedAttempt, interruptedAttempt);
+  assert.match(buildTaskHandoff({ ...resumed, prompt: "Finish the integration" }), /Interrupted attempt — saved progress, not completion evidence/);
+});
+
 test("recording a change shares old immutable entries without serializing their saved bodies", () => {
   const saved = recordTaskRevision(original, { now: 1 });
   const oldEntry = saved.contextHistory.entries[0];

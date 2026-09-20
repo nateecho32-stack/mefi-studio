@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import * as assistant from "../scripts/assistant.mjs";
+import executorResume from "../scripts/executor-resume.cjs";
 
 // Exercise host handoffs with the real assistant rules and controlled I/O.
 // These fixtures never open a store, start a worker, or call a model.
@@ -25,6 +26,7 @@ test("overseer reads live runs inside the board transaction before recovering or
   const board = { tasks: [{ id: "new-task", status: "open" }, { id: "orphan", status: "active", runId: "old-run" }], requests: [] };
   const autopilot = { jobs: [], execute: true, enabled: true };
   const env = vm.createContext({
+    process, executorResume, executorProcessAlive: () => false,
     assistantState: { status: "running", prefs: {} }, autopilot,
     getEyes: async () => ({}),
     mutateBoard: async (mutator) => { await lock.promise; const patch = mutator(board); Object.assign(board, patch); return patch; },
@@ -49,21 +51,25 @@ test("overseer reads live runs inside the board transaction before recovering or
   assert.equal(board.tasks[1].status, "open", "an actual orphan still recovers");
 });
 
-test("overseer recovery preserves fresh foreign leases while releasing stale and owned dead claims", async () => {
+test("overseer recovery preserves live owner or worker processes and restores dead claims with their saved progress", async () => {
   const now = 4000000;
   const specs = [
     { id: "foreign-fresh", lease: { pid: process.pid + 1, at: now - 1000 }, held: true },
-    { id: "foreign-stale", lease: { pid: process.pid + 1, at: now - 30 * 60000 }, held: false },
+    { id: "foreign-stale", lease: { pid: process.pid + 2, at: now - 30 * 60000 }, held: false },
+    { id: "foreign-live-stale", lease: { pid: process.pid + 1, at: 1 }, held: true },
+    { id: "foreign-dead-fresh", lease: { pid: process.pid + 2, at: now - 1000 }, held: false },
+    { id: "worker-still-alive", lease: { pid: process.pid + 2, at: 1 }, workerPid: process.pid + 4, held: true },
     { id: "owned-dead", lease: { pid: process.pid, at: now - 1000 }, held: false },
     { id: "legacy", held: false },
     { id: "live-local", lease: { pid: process.pid, at: 1 }, held: true },
   ];
   for (const manual of [false, true]) {
     const board = {
-      tasks: specs.map((row) => ({ id: row.id, status: "active", runId: row.id, lease: row.lease })),
-      requests: specs.map((row) => ({ title: row.id, status: "running", runId: row.id, lease: row.lease })),
+      tasks: specs.map((row) => ({ id: row.id, status: "active", runId: row.id, lease: row.lease, runProgress: { runId: row.id, workerPid: row.workerPid, outputTail: ["saved changes"] } })),
+      requests: specs.map((row) => ({ title: row.id, status: "running", runId: row.id, lease: row.lease, runProgress: { runId: row.id, workerPid: row.workerPid, outputTail: ["saved changes"] } })),
     };
     const env = vm.createContext({
+      process, executorResume, executorProcessAlive: (pid) => [process.pid + 1, process.pid + 4].includes(pid),
       assistantState: { status: "running", prefs: {} }, autopilot: { jobs: [{ id: "live-local" }], execute: true, enabled: true },
       getEyes: async () => ({}),
       mutateBoard: async (mutator) => { const patch = mutator(board); Object.assign(board, patch); return patch; },
@@ -78,6 +84,10 @@ test("overseer recovery preserves fresh foreign leases while releasing stale and
     for (const [index, spec] of specs.entries()) {
       assert.equal(board.tasks[index].status, spec.held ? "active" : "open", `${spec.id}: manual=${manual}`);
       assert.equal(board.requests[index].status, spec.held ? "running" : undefined, `${spec.id}: manual=${manual}`);
+      if (!spec.held) {
+        assert.equal(board.tasks[index].runProgress.pending, true);
+        assert.deepEqual(board.requests[index].runProgress.outputTail, ["saved changes"]);
+      }
       if (spec.held) {
         assert.deepEqual(board.tasks[index].lease, spec.lease);
         assert.deepEqual(board.requests[index].lease, spec.lease);
@@ -99,6 +109,7 @@ for (const pause of [false, true]) test(`overseer findings ${pause ? "wait after
   const env = vm.createContext({
     assistantState: state, getAssistant: async () => assistant, overseerManualUntil: 0,
     assistantOverseerRepair: async () => ({ fixed: [], directives: [], rescued: 0, staleCount: 0 }),
+    growthBoardFacts: async () => ({ outstanding: 0, growthHeld: false, existingWork: [] }),
     SMOKE: false, assistantAiUsable: () => true,
     assistantFetch: () => response.promise, ASSISTANT_OVERSEER_SYSTEM: "fixture", overseerFacts: () => ({}),
     assistantAiOk() {}, assistantSetProblems() {}, assistantSetPrefs: async () => {},
@@ -143,7 +154,7 @@ test("builder failure reports use the reporting run's error and wake recovery th
   const env = vm.createContext({
     assistantState: assistant.emptyState(1000), assistantModule: assistant,
     autopilot: { lastError: "unrelated parallel job error" }, EXECUTOR_DONE_MARK: "DONE",
-    assistantClip: clip, logLine() {}, assistantEmit() {}, assistantLog() {}, assistantAppendReply() {},
+    assistantClip: clip, logLine() {}, logError() {}, assistantEmit() {}, assistantLog() {}, assistantAppendReply() {},
     saveAssistant: async () => {},
   });
   vm.runInContext(section("function assistantHearBuilder(", "// A context entry lands"), env);

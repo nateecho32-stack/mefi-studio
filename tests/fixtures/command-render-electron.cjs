@@ -58,6 +58,7 @@ app.whenReady().then(async () => {
       ...Array.from({ length: 8 }, (_, index) => ({ id: `panel_fixture_${index}`, title: `Panel clearance task ${index + 1}`, status: "open", createdAt: now, updatedAt: now })),
     ] },
     ideasList: { ok: true, ideas: [] },
+    projectsList: { ok: true, activeId: "command-fixture", projects: [{ id: "command-fixture", name: "Command fixture", path: root }] },
     prefsGet: { ok: true, prefs: { commandHome: false } },
     assistantState: { ok: true, state: { status: "paused", agents: [], messages: [], prefs: {}, work: [] } },
     assistantStatus: { ok: true, status: { enabled: false, execute: false, parallel: 1, running: [], history: [] } },
@@ -73,13 +74,35 @@ app.whenReady().then(async () => {
   fs.writeFileSync(preload, `const {contextBridge}=require("electron");
     const responses=${JSON.stringify(responses)};
     const listeners={onAssistant:[],onAssistantStatus:[]};
+    const modePatches=[],assistantActions=[];
     contextBridge.exposeInMainWorld("mefiStudio",{
       ...Object.fromEntries(Object.keys(responses).map(key=>[key,async()=>{if(key==='eyesCollisions')await new Promise(resolve=>setTimeout(resolve,5000));return responses[key];}])),
-      ...Object.fromEntries(Object.keys(listeners).map(key=>[key,callback=>{listeners[key].push(callback);return()=>{};}]))
+      ...Object.fromEntries(Object.keys(listeners).map(key=>[key,callback=>{listeners[key].push(callback);return()=>{};}])),
+      assistantAutopilot:async patch=>{
+        modePatches.push(patch);
+        await new Promise(resolve=>setTimeout(resolve,80));
+        responses.assistantStatus.status={...responses.assistantStatus.status,...patch};
+        for(const callback of listeners.onAssistantStatus)callback(responses.assistantStatus.status);
+        return {ok:true,...responses.assistantStatus.status};
+      },
+      assistantControl:async action=>{
+        assistantActions.push(action);
+        await new Promise(resolve=>setTimeout(resolve,80));
+        if(!['start-work','pause'].includes(action))return {ok:false,error:'Unsupported fixture action'};
+        if(action==='start-work')responses.assistantStatus.status={...responses.assistantStatus.status,execute:true};
+        responses.assistantState.state={...responses.assistantState.state,status:action==='pause'?'paused':'running'};
+        for(const callback of listeners.onAssistantStatus)callback(responses.assistantStatus.status);
+        for(const callback of listeners.onAssistant)callback({state:responses.assistantState.state,event:{kind:'control'}});
+        return {ok:true,state:responses.assistantState.state,autopilot:responses.assistantStatus.status};
+      }
     });
     contextBridge.exposeInMainWorld("commandFixture",{
       publishAssistant:(state,event)=>{responses.assistantState={ok:true,state};for(const callback of listeners.onAssistant)callback({state,event});},
-      publishStatus:status=>{responses.assistantStatus={ok:true,status};for(const callback of listeners.onAssistantStatus)callback(status);}
+      publishStatus:status=>{responses.assistantStatus={ok:true,status};for(const callback of listeners.onAssistantStatus)callback(status);},
+      modePatches:()=>modePatches,
+      assistantActions:()=>assistantActions,
+      assistantState:()=>responses.assistantState.state,
+      status:()=>responses.assistantStatus.status
     });
     localStorage.setItem("mefiStudio.zen","0");
     localStorage.setItem("mefiStudio.zenReactive","0");
@@ -373,9 +396,15 @@ app.whenReady().then(async () => {
   // Decode a real float WAV through the player and Chromium's media analyser.
   // Quiet samples retain their precision; the window stays muted and no
   // capture device is requested. Each section isolates a musical response.
+  const audioDefaults = await run("return window.MefiIdle.audioStatus();");
+  assert.equal(audioDefaults.response, 0.35, "fresh installs start with gentle audio response");
+  assert.deepEqual(audioDefaults.effects, { waves: true, nodes: true, percussion: false, background: false, splitBands: true });
   await run(`
     window.MefiIdle.setView('2d');
     window.MefiIdle.setOrbit(false);
+    // Retain strong full-mix coverage independently of the calmer defaults.
+    window.MefiIdle.setAudioResponse(1);
+    window.MefiIdle.setAudioEffects({percussion:true,splitBands:false});
     const rate=48000,sectionSeconds=3,samples=rate*sectionSeconds*6,buffer=new ArrayBuffer(44+samples*4),wav=new DataView(buffer);
     const ascii=(offset,text)=>{for(let i=0;i<text.length;i++)wav.setUint8(offset+i,text.charCodeAt(i));};
     ascii(0,'RIFF');wav.setUint32(4,36+samples*4,true);ascii(8,'WAVE');ascii(12,'fmt ');
@@ -430,7 +459,10 @@ app.whenReady().then(async () => {
         return base.apply(this,args);
       };
     }
-    window.__audioNodeSample=()=>{
+    window.__audioNodeSample=async()=>{
+      // Read pixels and projections in the same renderer turn after a paint.
+      // A separate host-side wait can race the graph's four-second refresh.
+      ${waitForGraphPaint}
       const canvas=document.getElementById('idle-layer'),ctx=canvas.getContext('2d');
       const scaleX=canvas.width/canvas.clientWidth,scaleY=canvas.height/canvas.clientHeight;
       const waveNodes=window.MefiIdle.debugNodes().filter(node=>Number.isFinite(node.x));
@@ -483,12 +515,14 @@ app.whenReady().then(async () => {
         for(const key of Object.keys(peaks))peaks[key]=Math.max(peaks[key],audio[key]??audio.bands[key]??0);
         frames++;
       }
-      return {peaks,frames,snapshot:window.__audioNodeSample()};
+      return {peaks,frames,snapshot:await window.__audioNodeSample()};
     };
   `);
   await settledFrame();
   await sleep(650);
-  const audioQuiet = await run("return window.__audioNodeSample();");
+  // A refresh replaces projection data until the next canvas frame. Exercise
+  // sampling at that exact boundary instead of depending on the polling phase.
+  const audioQuiet = await run("window.dispatchEvent(new CustomEvent('mefi:tree-select')); return window.__audioNodeSample();");
   assert.equal(audioQuiet.audio.source, "local");
   assert.equal(audioQuiet.audio.listening, true);
   assert.ok(audioQuiet.audio.energy < 0.02, "a paused imported track does not invent audio energy");
@@ -565,19 +599,91 @@ app.whenReady().then(async () => {
     }
   }
   assert.ok(audioPlaying.nodes.every(node=>node.audioResponse?.level>0.02), "all ordinary graph nodes respond to the connected track");
-  report.audio = {quiet:audioQuiet,lowLevel,loud,playing:audioPlaying,nextWave:audioNextWave,bassline,snare,hat,silence:audioSilence,paused:audioPaused,waveChecks,stableGeometry:true};
-  if (process.env.MEFI_AUDIO_CONTROLS_CAPTURE && path.isAbsolute(process.env.MEFI_AUDIO_CONTROLS_CAPTURE)) {
-    await run("window.MefiMusic.open();");
-    await sleep(300);
-    fs.mkdirSync(path.dirname(process.env.MEFI_AUDIO_CONTROLS_CAPTURE), { recursive: true });
-    fs.writeFileSync(process.env.MEFI_AUDIO_CONTROLS_CAPTURE, (await contents.capturePage()).toPNG());
-    await run("window.MefiMusic.close();");
+  report.audio = {defaults:audioDefaults,quiet:audioQuiet,lowLevel,loud,playing:audioPlaying,nextWave:audioNextWave,bassline,snare,hat,silence:audioSilence,paused:audioPaused,waveChecks,stableGeometry:true};
+  await run(`
+    window.MefiIdle.setAudioResponse(.35);
+    window.MefiIdle.setAudioEffects({waves:true,nodes:true,percussion:false,background:false,splitBands:true});
+    window.MefiMusic.open();
+    window.__audioCaptureCalls=[];
+    window.__audioCaptureMethods={};
+    for(const method of ['getUserMedia','getDisplayMedia']){
+      if(!navigator.mediaDevices?.[method])continue;
+      window.__audioCaptureMethods[method]=navigator.mediaDevices[method];
+      navigator.mediaDevices[method]=()=>{window.__audioCaptureCalls.push(method);return Promise.reject(new Error('Audio controls requested capture'));};
+    }
+    window.__audioControlSource={src:window.__fixtureAudio.src,volume:window.__fixtureAudio.volume};
+    window.__audioControlSample=async()=>{
+      ${waitForGraphPaint}
+      return {
+      audio:window.MefiIdle.audioStatus(),playing:!window.__fixtureAudio.paused,
+      sourceStable:window.__fixtureAudio.src===window.__audioControlSource.src&&window.__fixtureAudio.volume===window.__audioControlSource.volume,
+      checked:Object.fromEntries(['waves','nodes','percussion','background','splitBands'].map(key=>[key,document.getElementById('music-audio-'+key).checked])),
+      response:document.getElementById('music-audio-response').value,
+      nodeLevels:window.MefiIdle.debugNodes().filter(node=>node.kind!=='agent').map(node=>node.audioResponse?.level??0),
+      connections:window.MefiIdle.audioWaveStatus().connections.map(({from,to,band,amplitude})=>({from,to,band,amplitude})),
+      captureCalls:window.__audioCaptureCalls.slice()
+      };
+    };
+    await window.__audioSection(1);
+  `);
+  await settledFrame();
+  const audioControls = { initial: await run("return window.__audioControlSample();") };
+  assert.ok(audioControls.initial.connections.length > 0 && audioControls.initial.nodeLevels.some(level=>level>0.02));
+  await run("document.getElementById('music-audio-waves').click();");
+  await settledFrame();
+  audioControls.wavesOff = await run("return window.__audioControlSample();");
+  assert.equal(audioControls.wavesOff.connections.length, 0, "turning off connection waves removes every reactive path");
+  assert.equal(audioControls.wavesOff.checked.nodes, true, "the wave switch leaves node glow enabled");
+  assert.ok(audioControls.wavesOff.nodeLevels.some(level=>level>0.02), "nodes keep responding with waves off");
+  await run("document.getElementById('music-audio-waves').click();document.getElementById('music-audio-nodes').click();");
+  await settledFrame();
+  audioControls.nodesOff = await run("return window.__audioControlSample();");
+  assert.ok(audioControls.nodesOff.connections.length > 0, "connection waves keep moving with node glow off");
+  assert.equal(audioControls.nodesOff.checked.waves, true);
+  assert.ok(audioControls.nodesOff.nodeLevels.every(level=>level===0), "turning off node glow clears every node response");
+  await run(`
+    document.getElementById('music-audio-nodes').click();
+    const input=document.getElementById('music-audio-response');input.value='0';input.dispatchEvent(new Event('input',{bubbles:true}));
+  `);
+  await settledFrame();
+  audioControls.zero = await run("return window.__audioControlSample();");
+  assert.equal(audioControls.zero.audio.response, 0, "native slider input retains numeric zero");
+  assert.equal(audioControls.zero.connections.length, 0);
+  assert.ok(audioControls.zero.nodeLevels.every(level=>level===0), "zero stops node effects while sound keeps playing");
+  await run(`
+    const input=document.getElementById('music-audio-response');input.value='0.35';input.dispatchEvent(new Event('input',{bubbles:true}));
+    window.__fixtureAudio.currentTime=3.1;
+  `);
+  await settledFrame();
+  audioControls.restored = await run("return window.__audioControlSample();");
+  const bandMapping = new Map(audioControls.restored.connections.map(wave=>[wave.from+':'+wave.to,wave.band]));
+  assert.ok(new Set(bandMapping.values()).size>=2, "separate frequency lines distribute this graph across multiple bands");
+  await sleep(120);
+  const splitLater = await run("return window.__audioControlSample();");
+  for(const wave of splitLater.connections)assert.equal(wave.band,bandMapping.get(wave.from+':'+wave.to), "each connection keeps its frequency between frames");
+  await run("document.getElementById('music-audio-splitBands').click();");
+  await settledFrame();
+  audioControls.fullMix = await run("return window.__audioControlSample();");
+  assert.ok(audioControls.fullMix.connections.length>0 && audioControls.fullMix.connections.every(wave=>wave.band==='mix'), "frequency toggle can return every connection to the full mix");
+  await run("document.getElementById('music-audio-splitBands').click();");
+  await settledFrame();
+  audioControls.splitAgain = await run("return window.__audioControlSample();");
+  for(const wave of audioControls.splitAgain.connections)assert.equal(wave.band,bandMapping.get(wave.from+':'+wave.to), "frequency assignments survive toggling the feature");
+  for(const [name,sample] of Object.entries(audioControls)){
+    assert.ok(sample.playing && sample.sourceStable, `${name}: visual controls leave local playback and volume unchanged`);
+    assert.equal(sample.audio.selection, "local");assert.equal(sample.audio.source, "local");
+    assert.deepEqual(sample.captureCalls, [], `${name}: visual controls never request a capture device`);
   }
+  report.audio.controls = audioControls;
+  await captureAudio("MEFI_AUDIO_CONTROLS_CAPTURE");
+  await run("window.MefiMusic.close();");
   await run(`
     window.MefiIdle.setMusicReactive(false);
+    window.__fixtureAudio.pause();
+    for(const [method,base] of Object.entries(window.__audioCaptureMethods))navigator.mediaDevices[method]=base;
     for(const [method,base] of Object.entries(window.__audioCanvasMethods))CanvasRenderingContext2D.prototype[method]=base;
     for(const [method,base] of Object.entries(window.__audioAnalyserMethods))AnalyserNode.prototype[method]=base;
-    for(const key of ['__audioNodeSample','__audioSection','__fixtureAudio','__audioPaintPaths','__audioCurrentPath','__audioCanvasMethods','__audioAnalyserMethods','__audioInput'])delete window[key];
+    for(const key of ['__audioNodeSample','__audioSection','__fixtureAudio','__audioPaintPaths','__audioCurrentPath','__audioCanvasMethods','__audioAnalyserMethods','__audioInput','__audioControlSample','__audioControlSource','__audioCaptureCalls','__audioCaptureMethods'])delete window[key];
   `);
   await run("window.MefiNav.go('booklet');");
   const visibleRailFrames = await run("return window.__railPaintFrames;");
@@ -590,6 +696,137 @@ app.whenReady().then(async () => {
   await run("window.MefiNav.go('command'); await window.MefiIdle.ready();");
   await until(`window.__commandPaintFrames>=${report.stoppedFrames + 3}`, "paint loop restarts on reentry");
   report.reentered = await snapshot();
+  // Exercise both real controls against an in-memory preference bridge. This
+  // never opens Studio's host, saved settings, task stores or coding workers.
+  await run(`
+    window.commandFixture.publishStatus({enabled:false,execute:false,mode:'swarm',autoBuild:true,parallel:2,running:[],history:[]});
+    window.MefiNav.go('workspace');
+    await window.MefiWorkspace.refresh(true);
+  `);
+  await until("!document.getElementById('workspace-agent-mode').disabled", "Home agent mode loaded");
+  report.agentModes = { layouts: [] };
+  report.agentModes.homeSaving = await run(`
+    const control=document.getElementById('workspace-agent-mode');
+    if(control.value!=='swarm')throw new Error('Home missed saved Swarm mode');
+    control.value='cluster';control.dispatchEvent(new Event('change',{bubbles:true}));
+    return control.disabled && control.getAttribute('aria-busy')==='true';
+  `);
+  await until("!document.getElementById('workspace-agent-mode').disabled && document.getElementById('workspace-agent-mode').value==='cluster'", "Home saves Cluster");
+  await run(`window.MefiNav.go('command');await window.MefiIdle.ready();`);
+  await setPanels(false, false);
+  await until("!document.getElementById('idle-feed-agent-mode').disabled && document.getElementById('idle-feed-agent-mode').value==='cluster'", "Command reflects Home selection");
+  report.agentModes.commandSaving = await run(`
+    const control=document.getElementById('idle-feed-agent-mode');
+    if(!control.closest('.cmd-tools')||control.closest('#idle-feed'))throw new Error('Agent mode must be in the node tree toolbar');
+    if(document.getElementById('idle-feed-toggle').getAttribute('aria-expanded')!=='false')throw new Error('Live work must be collapsed before changing mode');
+    control.focus();
+    if(document.activeElement!==control)throw new Error('Collapsed Live work hid the mode selector from keyboard focus');
+    control.value='swarm';control.dispatchEvent(new Event('change',{bubbles:true}));
+    return control.disabled && control.getAttribute('aria-busy')==='true';
+  `);
+  await until("!document.getElementById('idle-feed-agent-mode').disabled && document.getElementById('idle-feed-agent-mode').value==='swarm'", "Command saves Swarm");
+  await run(`
+    window.commandFixture.publishAssistant({status:'running',messages:[],prefs:{},work:[],agents:[{role:'cluster-planner',status:'running',text:'Checking the focused task'}]});
+    window.commandFixture.publishStatus({...window.commandFixture.status(),mode:'cluster',clusterFocus:{source:'task',id:'command_render_task',title:'Verify real node painting'},clusterAgents:[{id:'planner',role:'planner',status:'running',taskId:'command_render_task',taskTitle:'Verify real node painting',step:'Checking the focused task'}]});
+  `);
+  await until("document.getElementById('idle-feed-agents-count').textContent==='1 working' && document.getElementById('idle-feed-now').textContent.includes('Task preparation')", "Cluster helper appears once with its real phase");
+  report.agentModes.helperCount = await run("return document.getElementById('idle-feed-agents').children.length;");
+  const modeLayout = async (id, label) => {
+    const command = id === "idle-feed-agent-mode";
+    const layout = await run(`
+      const control=document.getElementById(${JSON.stringify(id)});
+      if(!${command})control.scrollIntoView({block:'center',inline:'nearest'});
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const box=control.getBoundingClientRect();
+      const controls=[...document.querySelectorAll(${JSON.stringify(command ? ".cmd-tools button, .cmd-tools select, .cmd-tools input" : ".ws-backlog select, .ws-backlog input")})].filter(item=>item.getBoundingClientRect().width>0).map(item=>({id:item.id,...item.getBoundingClientRect().toJSON()}));
+      const onTree=!!control.closest('.cmd-tools')&&!control.closest('#idle-feed');
+      const feedCollapsed=document.getElementById('idle-feed-toggle').getAttribute('aria-expanded')==='false';
+      const hit=document.elementFromPoint(box.x+box.width/2,box.y+box.height/2);
+      return {label:${JSON.stringify(label)},width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,box:box.toJSON(),controls,onTree,feedCollapsed,reachable:hit===control||control.contains(hit)};
+    `);
+    report.agentModes.layouts.push(layout);
+    assert.ok(layout.box.width > 70 && layout.box.height >= 28, `${label}: usable mode selector`);
+    assert.ok(layout.box.x >= 0 && layout.box.right <= layout.width && layout.box.y >= 0 && layout.box.bottom <= layout.height, `${label}: mode selector fits the visible viewport`);
+    assert.ok(layout.scroll <= layout.width + 2, `${label}: no horizontal overflow`);
+    if (command) {
+      assert.ok(layout.onTree && layout.feedCollapsed, `${label}: mode stays on the tree with Live work collapsed`);
+      assert.ok(layout.reachable, `${label}: mode selector receives pointer input`);
+      for (const control of layout.controls) assert.ok(control.x >= 0 && control.right <= layout.width && control.y >= 0 && control.bottom <= layout.height, `${label}: ${control.id} fits the visible toolbar`);
+    }
+    for (const [index, control] of layout.controls.entries()) for (const other of layout.controls.slice(index + 1)) {
+      assert.ok(Math.min(control.right, other.right)-Math.max(control.x, other.x)<=1 || Math.min(control.bottom, other.bottom)-Math.max(control.y, other.y)<=1, `${label}: ${control.id} and ${other.id} do not overlap`);
+    }
+  };
+  await modeLayout("idle-feed-agent-mode", "Command desktop with Live work collapsed");
+  window.setContentSize(600, 800); await sleep(120);
+  await modeLayout("idle-feed-agent-mode", "Command narrow with Live work collapsed");
+  await run("window.MefiNav.go('workspace');await window.MefiWorkspace.refresh(true);");
+  await modeLayout("workspace-agent-mode", "Home narrow");
+  window.setContentSize(1280, 800); await sleep(120);
+  await modeLayout("workspace-agent-mode", "Home desktop");
+  report.agentModes.patches = await run("return window.commandFixture.modePatches();");
+  report.agentModes.paused = await run("return window.commandFixture.status().execute===false && window.commandFixture.status().enabled===false;");
+  assert.deepEqual(report.agentModes.patches, [{mode:"cluster"},{mode:"swarm"}]);
+  assert.equal(report.agentModes.homeSaving && report.agentModes.commandSaving && report.agentModes.paused, true);
+  // The New work switch uses actual rendered controls and the isolated bridge.
+  // Its synthetic worker remains present while pausing admission of new work.
+  await run(`
+    window.commandFixture.publishAssistant({status:'paused',messages:[],prefs:{proactive:false,backlogMode:false},work:[],agents:[]});
+    window.commandFixture.publishStatus({enabled:false,execute:false,mode:'cluster',autoBuild:false,parallel:2,adaptiveParallel:false,running:[{id:'toggle-live-worker',taskId:'command_render_task',title:'Synthetic worker already running',startedAt:Date.now()-1000,pid:987}],history:[]});
+    window.MefiNav.go('command');await window.MefiIdle.ready();
+  `);
+  await setPanels(true, true);
+  await run(`
+    const assistant=window.MefiIdle.debugNodes().find(node=>node.kind==='assistant');
+    if(!assistant)throw new Error('Missing assistant node for New work control');
+    window.MefiIdle.select(assistant.id);
+  `);
+  await until("!document.getElementById('cmd-chat-new-work').disabled && !document.getElementById('cmd-chat-new-work').checked", "New work loads paused and workers off");
+  const toggleState = () => run(`
+    const controls=['cmd-chat-new-work','idle-chat-pause'].map(id=>{
+      const input=document.getElementById(id),label=input.closest('.new-work-toggle');
+      return {id,checked:input.checked,disabled:input.disabled,busy:input.getAttribute('aria-busy'),role:input.getAttribute('role'),text:label.textContent.trim()};
+    });
+    return {controls,status:window.commandFixture.status(),assistant:window.commandFixture.assistantState()};
+  `);
+  report.newWork = { layouts: [], before: await toggleState(), saving: [] };
+  const newWorkLayout = async (id, label) => {
+    const layout = await run(`
+      const input=document.getElementById(${JSON.stringify(id)}),label=input.closest('.new-work-toggle'),track=label.querySelector('.track');
+      const box=label.getBoundingClientRect(),trackBox=track.getBoundingClientRect(),style=getComputedStyle(label);
+      const hit=document.elementFromPoint(trackBox.x+trackBox.width/2,trackBox.y+trackBox.height/2);
+      return {id:input.id,label:${JSON.stringify(label)},width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,box:box.toJSON(),track:trackBox.toJSON(),text:label.textContent.trim(),visible:style.display!=='none'&&style.visibility!=='hidden',reachable:hit===label||label.contains(hit)};
+    `);
+    report.newWork.layouts.push(layout);
+    assert.ok(layout.visible && layout.box.width > 70 && layout.box.height >= 14, `${label}: visible labelled New work switch`);
+    assert.match(layout.text, /New work/);
+    assert.ok(layout.box.x >= 0 && layout.box.right <= layout.width && layout.box.y >= 0 && layout.box.bottom <= layout.height, `${label}: switch fits the visible viewport`);
+    assert.ok(layout.reachable, `${label}: pointer reaches the switch track`);
+    assert.ok(layout.scroll <= layout.width + 2, `${label}: no horizontal overflow`);
+  };
+  for (const [width, label] of [[1280, "desktop"], [600, "narrow"]]) {
+    window.setContentSize(width, 800); await sleep(150);
+    await newWorkLayout("cmd-chat-new-work", `Assistant ${label}`);
+    report.newWork.saving.push(await run(`
+      document.getElementById('cmd-chat-new-work').closest('.new-work-toggle').click();
+      return ['cmd-chat-new-work','idle-chat-pause'].every(id=>{
+        const input=document.getElementById(id);
+        return input.disabled&&input.getAttribute('aria-busy')==='true'&&input.closest('.new-work-toggle').textContent.includes('Saving…');
+      });
+    `));
+    await until("['cmd-chat-new-work','idle-chat-pause'].every(id=>document.getElementById(id).checked&&!document.getElementById(id).disabled)", `New work enables both ${label} controls`);
+    report.newWork[`${label}On`] = await toggleState();
+    await run("document.getElementById('cmd-chat-new-work').closest('.new-work-toggle').click();");
+    await until("['cmd-chat-new-work','idle-chat-pause'].every(id=>!document.getElementById(id).checked&&!document.getElementById(id).disabled)", `New work pauses both ${label} controls`);
+    report.newWork[`${label}Off`] = await toggleState();
+    if (process.env.MEFI_NEW_WORK_CAPTURE_DIR && path.isAbsolute(process.env.MEFI_NEW_WORK_CAPTURE_DIR)) {
+      fs.mkdirSync(process.env.MEFI_NEW_WORK_CAPTURE_DIR, { recursive: true });
+      fs.writeFileSync(path.join(process.env.MEFI_NEW_WORK_CAPTURE_DIR, `new-work-${label}.png`), (await contents.capturePage()).toPNG());
+    }
+  }
+  report.newWork.actions = await run("return window.commandFixture.assistantActions();");
+  assert.deepEqual(report.newWork.actions, ["start-work", "pause", "start-work", "pause"]);
+  assert.ok(report.newWork.saving.every(Boolean), "both New work switches show the pending save");
   assert.deepEqual(report.errors, []);
   assert.deepEqual(report.networkAttempts, []);
   assert.deepEqual(report.processAttempts, []);

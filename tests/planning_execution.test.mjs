@@ -14,6 +14,8 @@ import { sessionCheckEvidence } from "../scripts/eyes.mjs";
 import * as history from "../scripts/task-history.mjs";
 import backlog from "../scripts/backlog.cjs";
 import taskHandoffs from "../scripts/task-handoffs.cjs";
+import taskDelegation from "../scripts/task-delegation.cjs";
+import executorResume from "../scripts/executor-resume.cjs";
 import { buildTaskHandoff } from "../scripts/task-context.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
@@ -41,7 +43,7 @@ test("an approved plan joins the paused queue and its dependent dispatches only 
   let checkEvidenceAvailable = false;
   const checkWindows = [];
   const env = vm.createContext({
-    Date, console, path, crypto, taskHandoffs, process: { pid: 321 }, backlog, assistantModule: assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
+    Date, console, path, crypto, taskHandoffs, taskDelegation, executorResume, executorProcessAlive: () => false, process: { pid: 321 }, backlog, assistantModule: assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
     projectSwitching: false, assistantState: { status: "paused", prefs: {} }, SMOKE: false, CAPTURE: false, CLI_MODE: false, executorUpdateHold: () => null,
     projects: { current: () => project }, projectRoot: () => root,
     measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => ({ exclusive: false }) }), executorRunEnv: async () => ({ cli: "fixture" }),

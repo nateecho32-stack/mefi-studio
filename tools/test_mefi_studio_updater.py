@@ -156,6 +156,7 @@ const scope = {
   stopUpdateWatch: () => {},
   stopEyesWatch: () => {},
   stopMachineWatch: () => {},
+  stopAssistant: () => {},
   relaunchArgs: () => ["--updated"],
   app: { releaseSingleInstanceLock: () => {}, relaunch: () => {}, exit: (code) => exits.push(code) },
   ipcMain: { handle: (channel, handler) => { handlers[channel] = handler; } },

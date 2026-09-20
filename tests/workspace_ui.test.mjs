@@ -34,7 +34,7 @@ class Element {
   querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
 }
 
-async function environment({ timerQueue = null } = {}) {
+async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter = true, desktop = true, bootActive = () => false } = {}) {
   const elements = new Map(); const storage = new Map(); const events = {};
   const get = (id) => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   const el = (name) => get(`workspace-${name}`);
@@ -60,11 +60,12 @@ async function environment({ timerQueue = null } = {}) {
     onIdeas: (fn) => { events.ideas = fn; },
     onAssistant: (fn) => { events.assistant = fn; },
     onAssistantStatus: (fn) => { events.status = fn; },
+    ...bridgeOverrides,
   };
   const context = vm.createContext({
     window: {
-      mefiStudio: bridge, dispatchEvent() {}, addEventListener() {},
-      MefiNav: { list: () => [], go() {} }, MefiIdle: { exit() {} }, MefiBoot: { pollStart() {} },
+      mefiStudio: desktop ? bridge : undefined, dispatchEvent() {}, addEventListener() {},
+      MefiNav: { list: () => [], go() {} }, MefiIdle: { exit() {} }, MefiBoot: { pollStart() {}, isActive: bootActive },
       MefiTasks: { describe: (task) => ({ stage: task.status === "done" ? "done" : task.status === "awaiting_verification" ? "review" : "open", label: task.status, summary: task.prompt || "" }) },
     },
     document: { body: new Element(), hidden: false, getElementById: get, createElement: (tag) => new Element(tag), addEventListener() {} },
@@ -75,10 +76,139 @@ async function environment({ timerQueue = null } = {}) {
   });
   vm.runInContext(source, context);
   await flush();
-  context.window.MefiWorkspace.enter();
+  if (autoEnter) context.window.MefiWorkspace.enter();
   await flush();
   return { workspace: context.window.MefiWorkspace, el, bridge, events, storage, projects, nav: context.window.MefiNav };
 }
+
+test("startup readiness waits for projects and populated panels without duplicating cold enters", async () => {
+  const projects = deferred(), tasks = deferred(); let projectCalls = 0, taskCalls = 0, loading = true;
+  const env = await environment({ autoEnter: false, bootActive: () => loading, bridgeOverrides: {
+    projectsList: () => { projectCalls += 1; return projects.promise; },
+    tasksList: () => { taskCalls += 1; return tasks.promise; },
+  } });
+  const ready = env.workspace.ready(); let settled = false;
+  ready.then(() => { settled = true; });
+  assert.equal(env.workspace.ready(), ready, "all startup consumers join the same attempt");
+  assert.equal(env.workspace.enter(), ready);
+  assert.equal(env.workspace.enter(), ready);
+  await flush();
+  assert.equal(projectCalls, 1);
+  assert.equal(taskCalls, 0, "project context loads before project panels");
+  assert.equal(settled, false);
+  projects.resolve(env.projects); await flush();
+  assert.equal(taskCalls, 1);
+  assert.equal(settled, false, "a selected project alone is not a prepared workspace");
+  tasks.resolve({ ok: true, tasks: [{ id: "loaded", title: "Prepared startup task", status: "open" }] });
+  assert.equal(await ready, true);
+  assert.match(env.el("work-list").textContent, /Prepared startup task/);
+  await env.workspace.enter();
+  assert.equal(taskCalls, 1, "revealing the prepared workspace beneath the boot gate does not refetch");
+  loading = false;
+  await env.workspace.enter();
+  assert.equal(taskCalls, 2, "later visits still refresh current data");
+});
+
+test("startup reports project and panel failures and an explicit retry recovers", async () => {
+  let projectCalls = 0;
+  const env = await environment({ autoEnter: false, bridgeOverrides: {
+    projectsList: () => { projectCalls += 1; throw new Error("Project store unavailable"); },
+  } });
+  assert.equal(await env.workspace.ready(), false);
+  assert.equal(env.el("retry").hidden, false);
+  assert.match(env.el("feedback").textContent, /Project store unavailable/);
+  assert.equal(await env.workspace.ready(), false);
+  assert.equal(projectCalls, 1, "reading readiness cannot silently retry a failed load");
+  env.bridge.projectsList = async () => { projectCalls += 1; return env.projects; };
+  env.bridge.tasksList = async () => { throw new Error("Task store unavailable"); };
+  assert.equal(await env.workspace.ready({ retry: true }), false);
+  assert.match(env.el("feedback").textContent, /Couldn't refresh work/);
+  env.bridge.tasksList = async () => ({ ok: true, tasks: [] });
+  assert.equal(await env.workspace.ready({ retry: true }), true);
+  assert.equal(projectCalls, 3);
+  assert.equal(env.el("retry").hidden, true);
+});
+
+test("startup project reads have a deadline and can retry after an unanswered IPC", async () => {
+  const timerQueue = [];
+  const env = await environment({ autoEnter: false, timerQueue, bridgeOverrides: { projectsList: () => new Promise(() => {}) } });
+  const ready = env.workspace.ready();
+  const waiting = timerQueue.filter((timer) => timer.delay === 12000 && !timer.cancelled);
+  assert.equal(waiting.length, 1);
+  waiting[0].fn();
+  assert.equal(await ready, false);
+  env.bridge.projectsList = async () => env.projects;
+  assert.equal(await env.workspace.ready({ retry: true }), true);
+});
+
+test("startup retries fence late project selection and earlier panel snapshots", async () => {
+  const oldProjects = deferred();
+  const env = await environment({ autoEnter: false, bridgeOverrides: { projectsList: () => oldProjects.promise } });
+  const initial = env.workspace.ready();
+  env.bridge.projectsList = async () => env.projects;
+  assert.equal(await env.workspace.ready({ retry: true }), true);
+  oldProjects.resolve({ ok: true, activeId: "old", projects: [{ id: "old", name: "Stale project" }] });
+  assert.equal(await initial, false);
+  assert.equal(env.el("project-name").textContent, "Project A");
+
+  const oldTasks = deferred(), newProjects = deferred();
+  env.bridge.tasksList = () => oldTasks.promise;
+  const oldAttempt = env.workspace.ready({ retry: true }); await flush();
+  env.bridge.projectsList = () => newProjects.promise;
+  const retry = env.workspace.ready({ retry: true }); await flush();
+  oldTasks.resolve({ ok: true, tasks: [{ id: "stale", title: "Stale startup task", status: "open" }] });
+  assert.equal(await oldAttempt, false);
+  assert.doesNotMatch(env.el("work-list").textContent, /Stale startup task/);
+  env.bridge.tasksList = async () => ({ ok: true, tasks: [{ id: "fresh", title: "Fresh retry task", status: "open" }] });
+  newProjects.resolve(env.projects);
+  assert.equal(await retry, true);
+  assert.match(env.el("work-list").textContent, /Fresh retry task/);
+});
+
+test("browser-only workspace readiness succeeds without a desktop store", async () => {
+  const env = await environment({ autoEnter: false, desktop: false });
+  assert.equal(await env.workspace.ready(), true);
+  assert.equal(await env.workspace.ready({ retry: true }), true);
+});
+
+test("Home agent mode saves once and reflects focus and lost-acknowledgement recovery", async () => {
+  const env = await environment(); const pending = deferred(); const changes = [];
+  assert.equal(env.el("agent-mode").disabled, true, "wait for an authoritative saved setting");
+  let mode = "swarm";
+  env.bridge.assistantStatus = async () => ({ ok: true, status: { mode, execute: false, running: [] } });
+  env.bridge.assistantAutopilot = (patch) => { changes.push(patch); return pending.promise; };
+  await env.workspace.refresh(true);
+  assert.equal(env.el("agent-mode").value, "swarm");
+  assert.match(env.el("agent-mode-note").textContent, /collaborate on tasks and their subtasks/);
+  env.el("agent-mode").value = "cluster";
+  const save = env.el("agent-mode").trigger("change");
+  assert.equal(env.el("agent-mode").disabled, true);
+  await env.el("agent-mode").trigger("change");
+  assert.deepEqual(JSON.parse(JSON.stringify(changes)), [{ mode: "cluster" }]);
+  mode = "cluster"; pending.resolve({ ok: true, mode, execute: false }); await save;
+  assert.equal(env.el("agent-mode").value, "cluster");
+  assert.equal(env.el("agent-mode").disabled, false);
+  env.events.status({ mode: "cluster", clusterFocus: { title: "Improve search" }, running: [] });
+  assert.match(env.el("agent-mode-note").textContent, /focus on: Improve search/);
+  env.bridge.assistantAutopilot = async () => { mode = "swarm"; throw new Error("Acknowledgement lost"); };
+  env.el("agent-mode").value = "swarm"; await env.el("agent-mode").trigger("change");
+  assert.equal(env.el("agent-mode").value, "swarm");
+  assert.match(env.el("feedback").textContent, /Acknowledgement lost/);
+  await assert.rejects(() => env.workspace.setAgentMode("invalid"), /Choose Swarm or Cluster/);
+  assert.equal(changes.length, 1);
+});
+
+test("Home ignores a late mode-recovery response after newer status arrives", async () => {
+  const env = await environment(); const pending = deferred();
+  env.bridge.assistantAutopilot = async () => ({ ok: false, error: "Save uncertain" });
+  env.bridge.assistantStatus = () => pending.promise;
+  env.events.status({ mode: "swarm", running: [] });
+  const save = env.workspace.setAgentMode("cluster"); await flush();
+  env.events.status({ mode: "swarm", running: [] });
+  pending.resolve({ ok: true, status: { mode: "cluster" } });
+  await assert.rejects(save, /Save uncertain/);
+  assert.equal(env.el("agent-mode").value, "swarm");
+});
 
 test("build mode saves once without changing worker controls and restores the saved value on failure", async () => {
   const env = await environment(); const pending = deferred(); const changes = [];

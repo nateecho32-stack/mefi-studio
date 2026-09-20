@@ -515,7 +515,7 @@ test("Audio link mirrors Command changes, retries failed capture and disconnects
 
 test("Audio link controls remain unavailable when the Command audio API is absent", () => {
   const env = environment(); env.music.open();
-  for (const id of ["music-audio-toggle", "music-audio-source", "music-audio-response", "music-audio-waves", "music-audio-nodes", "music-audio-percussion", "music-audio-background"]) assert.equal(env.ids.get(id).disabled, true, id);
+  for (const id of ["music-audio-toggle", "music-audio-source", "music-audio-response", "music-audio-waves", "music-audio-splitBands", "music-audio-nodes", "music-audio-percussion", "music-audio-background"]) assert.equal(env.ids.get(id).disabled, true, id);
   assert.equal(env.ids.get("music-audio-state").textContent, "Audio link off");
   assert.equal(env.audio.paused, true);
 });
@@ -524,8 +524,8 @@ test("Audio reactions start gently and provide independent accessible checkboxes
   const env = environment({ audioLink: { audioStatus: () => ({}), setAudioEffects() {}, setAudioResponse() {} } });
   assert.equal(env.ids.get("music-audio-response").value, "0.35");
   assert.equal(env.ids.get("music-audio-response").parentElement.children.at(-1).textContent, "35%");
-  const defaults = { waves: true, nodes: true, percussion: false, background: false };
-  const labels = { waves: "Connection waves", nodes: "Node glow", percussion: "Drum accents", background: "Background glow" };
+  const defaults = { waves: true, splitBands: true, nodes: true, percussion: false, background: false };
+  const labels = { waves: "Connection waves", splitBands: "Separate frequency lines", nodes: "Node glow", percussion: "Drum accents", background: "Background glow" };
   for (const [key, enabled] of Object.entries(defaults)) {
     const input = env.ids.get(`music-audio-${key}`);
     assert.equal(input.tagName, "input"); assert.equal(input.type, "checkbox");
@@ -542,7 +542,7 @@ test("Audio reactions start gently and provide independent accessible checkboxes
 
 test("Audio reaction choices restore from the host and follow external status updates without changing capture", () => {
   let writes = 0;
-  const saved = { waves: false, nodes: false, percussion: true, background: true };
+  const saved = { waves: false, splitBands: false, nodes: false, percussion: true, background: true };
   const status = { selection: "desktop", response: 0, effects: saved, reactive: true, listening: true, label: "Desktop linked" };
   const env = environment({ audioLink: {
     audioStatus: () => status,
@@ -553,7 +553,7 @@ test("Audio reaction choices restore from the host and follow external status up
   for (const [key, enabled] of Object.entries(saved)) assert.equal(env.ids.get(`music-audio-${key}`).checked, enabled);
   assert.equal(env.ids.get("music-audio-response").value, "0", "a saved zero remains zero");
   assert.equal(env.ids.get("music-audio-response").parentElement.children.at(-1).textContent, "0%");
-  const changed = { waves: true, nodes: false, percussion: false, background: true };
+  const changed = { waves: true, splitBands: true, nodes: false, percussion: false, background: true };
   env.emit("mefi-audio-change", { ...status, effects: changed, response: .2 });
   for (const [key, enabled] of Object.entries(changed)) assert.equal(env.ids.get(`music-audio-${key}`).checked, enabled);
   assert.equal(env.ids.get("music-audio-response").value, "0.2");
@@ -566,7 +566,7 @@ test("Audio reaction choices restore from the host and follow external status up
 test("Audio reactions submit only the changed choice and zero strength leaves playback and capture alone", async () => {
   const calls = [];
   let requests = 0;
-  let status = { selection: "local", response: .35, effects: { waves: true, nodes: true, percussion: false, background: false }, reactive: true, listening: true, label: "Track linked" };
+  let status = { selection: "local", response: .35, effects: { waves: true, splitBands: true, nodes: true, percussion: false, background: false }, reactive: true, listening: true, label: "Track linked" };
   const env = environment({ recommend: async () => { requests += 1; }, audioLink: {
     audioStatus: () => status,
     setAudioEffects: (effects) => { calls.push(["effects", { ...effects }]); status = { ...status, effects: { ...status.effects, ...effects } }; },

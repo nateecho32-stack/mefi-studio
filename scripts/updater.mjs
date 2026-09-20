@@ -31,7 +31,7 @@ export const GENERATED = "renderer/booklet.html";
 export const POLL_INTERVAL_MS = 15000;
 export const POLL_BACKOFF_FACTOR = 2;
 export const POLL_MAX_MS = 120000;
-export const DEFAULTS = { debounceMs: 1200, restartQuietMs: 5000, maxWaitMs: 10000, pollMs: POLL_INTERVAL_MS, loopWindowMs: 60000, loopLimit: 3, checkTimeoutMs: 15000 };
+export const DEFAULTS = { debounceMs: 1200, restartQuietMs: 5000, maxWaitMs: 10000, deferredRetryMs: 5000, pollMs: POLL_INTERVAL_MS, loopWindowMs: 60000, loopLimit: 3, checkTimeoutMs: 15000 };
 
 const IGNORED_TOP = new Set(["data", "dist", "node_modules"]);
 const TEMP_NAME = /(~$|\.(tmp|swp|swx|crswap|bak|orig|sync-tmp)$|\.tmp\.[\w.-]+$|^#.*#$)/i;
@@ -336,6 +336,7 @@ export function createUpdater({
   debounceMs = DEFAULTS.debounceMs,
   restartQuietMs = DEFAULTS.restartQuietMs,
   maxWaitMs = DEFAULTS.maxWaitMs,
+  deferredRetryMs = DEFAULTS.deferredRetryMs,
   pollMs = DEFAULTS.pollMs,
   execPath = process.execPath,
   packaged = false,
@@ -370,6 +371,7 @@ export function createUpdater({
     hints: new Set(),
     pendingSince: null,
     timer: null,
+    deferredTimer: null,
     pollTimer: null,
     pollDelay: Math.max(1000, pollMs),
     hidden,
@@ -438,6 +440,8 @@ export function createUpdater({
       if (force) state.rerunForce = true;
       return { ok: true, applied: false, phase: state.phase, queued: true };
     }
+    clearTimeout(state.deferredTimer);
+    state.deferredTimer = null;
     state.running = true;
     state.pendingSince = null;
     state.hints.clear();
@@ -526,7 +530,18 @@ export function createUpdater({
         emit("restarting", { reason: null });
         const answer = await actions.restart?.(files);
         if (answer && answer.deferred) {
-          emit("pending", { reason: answer.reason ?? "restart deferred" });
+          emit("pending", { reason: state.auto ? answer.reason ?? "restart deferred" : "auto-restart is off" });
+          // Worker/game completion does not change the watched source. The
+          // stat baseline already includes these files, so neither an idle
+          // poll nor a hidden window can wake this restart. Retry independently
+          // until the host drains, without keeping whenIdle() pending forever.
+          if (state.started && state.auto) {
+            state.deferredTimer = setTimeout(() => {
+              state.deferredTimer = null;
+              if (state.started && state.auto) run().catch(() => {});
+            }, Math.max(1, deferredRetryMs));
+            state.deferredTimer.unref?.();
+          }
           outcome = { ok: true, applied: false, phase: "pending", kind, files, reason: state.reason };
           return outcome;
         }
@@ -653,8 +668,10 @@ export function createUpdater({
       } catch {}
     }
     clearTimeout(state.timer);
+    clearTimeout(state.deferredTimer);
     clearTimeout(state.pollTimer);
     state.timer = null;
+    state.deferredTimer = null;
     state.pollTimer = null;
     state.pollDelay = Math.max(1000, pollMs);
     state.started = false;
@@ -671,7 +688,12 @@ export function createUpdater({
 
   function setAuto(value) {
     state.auto = Boolean(value);
+    if (!state.auto) {
+      clearTimeout(state.deferredTimer);
+      state.deferredTimer = null;
+    }
     if (state.auto && state.phase === "pending") notify();
+    else if (!state.auto && state.phase === "pending") emit("pending", { reason: "auto-restart is off" });
     else emit(state.phase);
     return status();
   }

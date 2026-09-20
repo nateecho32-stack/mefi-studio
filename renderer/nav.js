@@ -257,7 +257,7 @@
       key: "A",
       glyph: "g-analyzer",
       badge: null,
-      desc: "Read a file or verify an idea against the work tree",
+      desc: "Read project plans, inspect current evidence and find starting points",
       showIn: showIn({ tools: true, dock: true, palette: true, help: true }),
       element: "analyzer-overlay",
       focus: "#analyzer-idea",
@@ -616,7 +616,7 @@
     }
     // Overlays claim their layer from inside open(), so exclusivity holds no
     // matter who opened them — dock, key, palette, card, tour or module.
-    dest.open?.(params);
+    return dest.open?.(params);
   }
 
   function toggle(id) {
@@ -1468,7 +1468,7 @@
 
   // Fields, scroll positions and the focus, once the surfaces that hold them
   // are up. A field the user has typed into since is left alone.
-  function restoreDetails(saved) {
+  function restoreDetails(saved, { forceFocus = false } = {}) {
     for (const [id, value] of Object.entries(saved.fields ?? {})) {
       const element = document.getElementById(id);
       if (!element || !element.matches?.(FIELD_SELECTOR) || element.value) continue;
@@ -1482,15 +1482,13 @@
     if (saved.focus) {
       const target = document.getElementById(saved.focus);
       const current = document.activeElement;
-      if (target && (current === document.body || current === null || current === target || current?.id === "idle-layer")) {
+      if (target && (forceFocus || current === document.body || current === null || current === target || current?.id === "idle-layer")) {
         target.focus?.({ preventScroll: true });
       }
     }
   }
 
-  // Called once by booklet.js at the end of boot. Returns true when it restored
-  // something, so the caller knows to skip the commandHome home behaviour.
-  function resume() {
+  function consumeResume() {
     let saved = null;
     try {
       saved = JSON.parse(readStore(RESUME_KEY) || "null");
@@ -1503,7 +1501,73 @@
     } catch {
       /* as above */
     }
-    if (!saved || typeof saved.at !== "number" || Date.now() - saved.at > 60000) return false;
+    if (!saved || typeof saved.at !== "number" || Date.now() - saved.at > 60000) return null;
+    return saved;
+  }
+
+  // The startup gate can await actual surface readiness instead of estimating
+  // it with timers. Focus is repeated once after the gate releases its inert
+  // content; a focus() during preload cannot reach an inert saved field.
+  async function resumeReady({ isCurrent = () => true } = {}) {
+    const canceled = () => ({ restored: false, finish() {} });
+    if (!isCurrent()) return canceled();
+    const saved = consumeResume();
+    if (!saved) return canceled();
+    if (document.readyState === "loading") {
+      await new Promise((resolve) => document.addEventListener("DOMContentLoaded", resolve, { once: true }));
+      if (!isCurrent()) return canceled();
+    }
+    const ready = async (surface) => {
+      if (typeof surface?.ready === "function") await surface.ready();
+      else await surface?.ready;
+    };
+    if (saved.tab && saved.tab !== readStore("mefiStudio.tab")) {
+      await window.MefiBooklet?.showTab?.(saved.tab);
+      if (!isCurrent()) return canceled();
+    }
+    if (saved.workspace) {
+      await window.MefiWorkspace?.enter?.();
+      if (!isCurrent()) return canceled();
+      await ready(window.MefiWorkspace);
+      if (!isCurrent()) return canceled();
+    }
+    if (saved.command) {
+      const commandState = typeof saved.command === "object" ? saved.command : {};
+      await window.MefiIdle?.enter?.(true, commandState);
+      if (!isCurrent()) return canceled();
+      await ready(window.MefiIdle);
+      if (!isCurrent()) return canceled();
+    }
+    const sheet = saved.sheet && get(saved.sheet);
+    if (sheet) {
+      const sheetState = saved.sheet === "explorer" ? saved.explorer : saved.sheet === "tasks" ? saved.tasks : null;
+      await go(saved.sheet, sheetState && typeof sheetState === "object" ? sheetState : {});
+      if (!isCurrent()) return canceled();
+      await ready(sheet);
+      if (!isCurrent()) return canceled();
+    }
+    // The first frame lays out the restored surface; the second observes it
+    // after a paint, when its scroll ranges and dynamically created fields exist.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    if (!isCurrent()) return canceled();
+    restoreDetails(saved);
+    if (!isCurrent()) return canceled();
+    let finished = false;
+    return {
+      restored: Boolean(saved.workspace || saved.command || sheet),
+      finish() {
+        if (finished) return;
+        finished = true;
+        restoreDetails(saved, { forceFocus: true });
+      },
+    };
+  }
+
+  // Legacy callers retain the deferred, synchronous contract. Startup uses
+  // resumeReady() while its loading gate keeps the application inaccessible.
+  function resume() {
+    const saved = consumeResume();
+    if (!saved) return false;
     if (saved.tab && saved.tab !== readStore("mefiStudio.tab")) window.MefiBooklet?.showTab?.(saved.tab);
     const commandState = saved.command && typeof saved.command === "object" ? saved.command : {};
     if (saved.workspace) window.MefiWorkspace?.enter?.();
@@ -1594,6 +1658,7 @@
     init,
     saveResume,
     resume,
+    resumeReady,
     activity,
     applyStyles,
   };

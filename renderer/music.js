@@ -28,6 +28,7 @@
   };
   const AUDIO_EFFECTS = {
     waves: { title: "Connection waves", detail: "Let sound gently bend the connections.", enabled: true },
+    splitBands: { title: "Separate frequency lines", detail: "Bass, mids and treble drive different connections.", enabled: true },
     nodes: { title: "Node glow", detail: "Light the nodes with the music.", enabled: true },
     percussion: { title: "Drum accents", detail: "Add sharper ripples on drum hits.", enabled: false },
     background: { title: "Background glow", detail: "Let the space behind the tree pulse.", enabled: false },
@@ -575,6 +576,7 @@
       choice.dataset.view = view; choice.setAttribute("aria-label", view === "2d" ? "Flat 2D node tree" : "Perspective 3D node tree");
     }
     els.previewFit = button("Fit", "ghost music-preview-fit", els.previewViews, () => window.MefiIdle?.fitAll?.(), "music-tree-fit");
+    els.previewFit.title = "Rearrange and fit the node tree";
     els.previewFit.setAttribute("aria-label", "Fit the node tree in the preview");
     els.previewHint = element("p", null, null, previewHeader);
     syncTreeView();

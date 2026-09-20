@@ -230,12 +230,15 @@
   }
 
   let speedsPending = null;
-  function loadSpeeds() {
+  let speedEpoch = 0;
+  function loadSpeeds({ fresh = false } = {}) {
+    if (fresh) { speedEpoch++; speedsPending = null; }
     if (speedsPending) return speedsPending;
-    speedsPending = readSpeeds().finally(() => { speedsPending = null; });
+    const pending = readSpeeds(speedEpoch).finally(() => { if (speedsPending === pending) speedsPending = null; });
+    speedsPending = pending;
     return speedsPending;
   }
-  async function readSpeeds() {
+  async function readSpeeds(epoch) {
     let next;
     try {
       if (window.mefiStudio?.speedMeasurements) {
@@ -251,7 +254,7 @@
     } catch {
       return false;
     }
-    if (JSON.stringify(state.speeds) === JSON.stringify(next)) return false;
+    if (epoch !== speedEpoch || JSON.stringify(state.speeds) === JSON.stringify(next)) return false;
     state.speeds = next;
     cardCache = new WeakMap();
     state.graph?.setSpeeds?.(state.speeds);
@@ -268,12 +271,19 @@
     return { doc: await response.json(), source: "live fetch" };
   }
 
-  let refreshInFlight = false;
-  async function refresh(reason) {
-    if (refreshInFlight) return;
-    refreshInFlight = true;
+  let refreshInFlight = null;
+  let refreshEpoch = 0;
+  function refresh(reason, { fresh = false } = {}) {
+    if (refreshInFlight && !fresh) return refreshInFlight;
+    const epoch = ++refreshEpoch;
+    const pending = refreshDoc(reason, epoch).finally(() => { if (refreshInFlight === pending) refreshInFlight = null; });
+    refreshInFlight = pending;
+    return pending;
+  }
+  async function refreshDoc(reason, epoch) {
     try {
       const { doc, source } = await liveDoc();
+      if (epoch !== refreshEpoch) return;
       if (doc.schemaVersion !== state.doc.schemaVersion) {
         window.location.reload();
         return;
@@ -289,9 +299,7 @@
       }
       writeStore("mefiStudio.lastRefresh", String(Date.now()));
     } catch (error) {
-      showBanner(`Showing built-in data — live refresh failed (${error.message}).`, true);
-    } finally {
-      refreshInFlight = false;
+      if (epoch === refreshEpoch) showBanner(`Showing built-in data — live refresh failed (${error.message}).`, true);
     }
   }
 
@@ -671,38 +679,59 @@
   window.MefiTree?.init();
   showTab(readStore("mefiStudio.tab") ?? "booklet");
 
-  const paintCatalog = () => {
+  const paintCatalog = async ({ retry = false } = {}) => {
     renderAll();
-    loadSpeeds().then((changed) => { if (changed) renderCards(); });
-    refresh("open");
+    await Promise.all([
+      loadSpeeds({ fresh: retry }).then((changed) => { if (changed) renderCards(); }),
+      refresh("open", { fresh: retry }),
+    ]);
   };
 
-  // The workspace paints first. Build the model catalog when the browser is idle.
-  if (wantCommand) {
-    if (typeof requestIdleCallback === "function") requestIdleCallback(paintCatalog, { timeout: 1600 });
-    else setTimeout(paintCatalog, 400);
+  if (capture || smoke) {
+    // Diagnostic launches keep their existing direct navigation contract.
+    const gate = document.getElementById("boot-layer");
+    if (gate) gate.hidden = true;
+    void paintCatalog();
+    window.MefiOnboarding?.startup?.({ automatic: false });
   } else {
-    paintCatalog();
+    let home = wantCommand;
+    let restored = null;
+    let viewPrepared = false;
+    const prepareView = async ({ isCurrent }) => {
+      if (window.mefiStudio?.prefsGet) {
+        const result = await window.MefiBoot.read("prefsGet");
+        if (!result?.ok) return false;
+        if (!isCurrent()) return false;
+        home = result.prefs?.commandHome !== false;
+        writeStore("mefiStudio.commandHome", home ? "1" : "0");
+      }
+      if (!isCurrent()) return false;
+      if (!restored) {
+        const result = await window.MefiNav?.resumeReady?.({ isCurrent }) ?? { restored: window.MefiNav?.resume?.() ?? false };
+        if (!isCurrent()) return false;
+        restored = result;
+      }
+      if (!isCurrent()) return false;
+      if (!restored.restored && home) window.MefiWorkspace?.enter?.();
+      if (window.MefiIdle?.isActive?.()) await window.MefiIdle.ready();
+      viewPrepared = true;
+      return true;
+    };
+    window.MefiBoot.run([
+      { id: "workspace", label: "Your projects and work", load: ({ retry }) => window.MefiWorkspace?.ready?.({ retry }) },
+      { id: "catalog", label: "Model catalog", load: paintCatalog },
+      { id: "tree", label: "Session tree", load: async ({ retry }) => {
+        await (retry ? window.MefiTree?.reload?.() : window.MefiTree?.ready?.());
+        return window.MefiTree?.status?.() !== "unavailable";
+      } },
+      { id: "view", label: "Saved view and preferences", load: prepareView },
+      { id: "fonts", label: "Fonts and interface", load: () => document.fonts?.ready },
+    ], () => {
+      if (!viewPrepared && !restored?.restored && home) window.MefiWorkspace?.enter?.();
+      if (restored?.restored) restored.finish?.();
+      else if (window.MefiWorkspace?.isActive?.()) document.getElementById("workspace-layer")?.focus({ preventScroll: true });
+      else document.getElementById("search")?.focus({ preventScroll: true });
+      window.MefiOnboarding?.startup?.({ automatic: true });
+    });
   }
-
-  // Live updates restore the current surface. The workspace is home; keep the
-  // existing commandHome preference key so established launch choices survive.
-  if (!capture && !smoke) {
-    if (!window.MefiNav?.resume?.() && wantCommand) {
-      const openHome = () => window.MefiWorkspace?.enter?.();
-      // Workspace paints immediately. Store reads populate it independently;
-      // an unavailable service never blocks the composer behind a boot movie.
-      openHome();
-      window.mefiStudio
-        ?.prefsGet?.()
-        .then((result) => {
-          if (result?.ok && result.prefs?.commandHome === false) {
-            window.MefiBoot?.cancel?.();
-            if (window.MefiWorkspace?.isActive?.()) window.MefiWorkspace.exit();
-          }
-        })
-        .catch(() => {});
-    }
-  }
-  window.MefiOnboarding?.startup?.({ automatic: !capture && !smoke });
 })();

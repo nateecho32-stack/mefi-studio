@@ -9,7 +9,7 @@ const catalog = JSON.parse(await readFile(new URL("../data/models.json", import.
 const flush = async () => { for (let i = 0; i < 30; i++) await Promise.resolve(); };
 const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
 
-function environment(overrides = {}) {
+function environment(overrides = {}, options = {}) {
   const elements = new Map(), frames = new Map(), calls = [];
   let frameId = 0, formatCalls = 0, paints = 0;
   const ctx = new Proxy({}, { get: (_, name) => name === "measureText" ? (text) => ({ width: String(text).length * 7 }) : () => { if (name === "clearRect") paints++; }, set: () => true });
@@ -24,10 +24,11 @@ function environment(overrides = {}) {
     replaceChildren(...children) { this.children = children; if (children[0]?.value) this.value = children[0].value; }
     getBoundingClientRect() { return { width: 1000, height: 500, left: 0, top: 0 }; }
     getContext() { return ctx; }
+    focus() { this.focused = true; }
   }
   const get = (id) => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   get("booklet-data").textContent = JSON.stringify(catalog);
-  const document = { getElementById: get, querySelectorAll: () => [], createElement: () => new Element(), body: new Element() };
+  const document = { getElementById: get, querySelectorAll: () => [], createElement: () => new Element(), body: new Element(), ...options.document };
   const base = {
     launchStudio: async () => ({}), onStudioLog() {},
     readCatalog: async () => catalog, speedMeasurements: async () => ({ ok: true, measurements: {} }),
@@ -35,8 +36,10 @@ function environment(overrides = {}) {
     getAiRouting: async () => ({ provider: "auto", models: {} }), cliStatus: async () => [],
   };
   const bridge = Object.fromEntries(Object.entries({ ...base, ...overrides }).map(([name, fn]) => [name, (...args) => { calls.push(name); return fn(...args); }]));
-  const window = { mefiStudio: bridge, location: { href: "file:///fixture/renderer/booklet.html?capture=1", search: "?capture=1", reload() {} }, addEventListener() {}, devicePixelRatio: 1 };
-  const context = vm.createContext({ window, document, URL, URLSearchParams, console, localStorage: { getItem: () => null, setItem() {} }, setTimeout: () => 1, clearTimeout() {}, requestAnimationFrame: (fn) => { const id = ++frameId; frames.set(id, fn); return id; }, cancelAnimationFrame: (id) => frames.delete(id) });
+  const query = options.capture === false ? "" : "?capture=1";
+  const window = { mefiStudio: bridge, location: { href: `file:///fixture/renderer/booklet.html${query}`, search: query, reload() {} }, addEventListener() {}, devicePixelRatio: 1, ...options.window };
+  const store = new Map(Object.entries(options.storage ?? {}));
+  const context = vm.createContext({ window, document, URL, URLSearchParams, console, localStorage: { getItem: (key) => store.get(key) ?? null, setItem: (key, value) => store.set(key, value) }, setTimeout: () => 1, clearTimeout() {}, requestAnimationFrame: (fn) => { const id = ++frameId; frames.set(id, fn); return id; }, cancelAnimationFrame: (id) => frames.delete(id) });
   vm.runInContext(graphSource, context);
   const money = window.MefiGraph.fmt.money;
   window.MefiGraph.fmt.money = (...args) => { formatCalls++; return money(...args); };
@@ -57,6 +60,75 @@ test("startup defers connection and CLI checks until Settings opens, then initia
   env.window.MefiBooklet.showTab("booklet"); env.window.MefiBooklet.showTab("studio"); await flush();
   assert.equal(settingsCalls().length, 5, "reopening must not rescan or attach duplicate save handlers");
   assert.equal(env.get("save-key").listeners.click.length, 1);
+});
+
+test("normal startup gates five local readiness stages and defers first-launch onboarding until release", async () => {
+  let gate, workspaceActive = false;
+  const loads = [], onboarding = [];
+  const env = environment({}, { capture: false, document: { fonts: { ready: Promise.resolve() } }, window: {
+    MefiBoot: { run: (steps, onReady) => { gate = { steps, onReady }; } },
+    MefiWorkspace: {
+      ready: async ({ retry }) => { loads.push(["workspace", retry]); return true; },
+      enter: () => { workspaceActive = true; }, isActive: () => workspaceActive,
+    },
+    MefiTree: { init() {}, ready: async () => { loads.push(["tree"]); }, status: () => "ready" },
+    MefiNav: { resumeReady: async () => ({ restored: false }) },
+    MefiOnboarding: { startup: (options) => onboarding.push(options) },
+  } });
+  assert.deepEqual(Array.from(gate.steps, (step) => step.id), ["workspace", "catalog", "tree", "view", "fonts"]);
+  assert.deepEqual(onboarding, [], "first-launch guide cannot open before the loading gate releases");
+  assert.equal(env.calls.filter((name) => name === "readCatalog").length, 0, "catalog rendering belongs to its real loading stage");
+  await Promise.all(gate.steps.map((step) => step.load({ retry: false, isCurrent: () => true })));
+  assert.deepEqual(loads, [["workspace", false], ["tree"]]);
+  assert.equal(workspaceActive, true, "the selected surface is prepared beneath the gate");
+  assert.match(env.get("cards").innerHTML, new RegExp(catalog.models[0].id));
+  assert.deepEqual(onboarding, [], "readiness completion itself does not bypass the gate handoff");
+  gate.onReady();
+  assert.equal(onboarding.length, 1);
+  assert.equal(onboarding[0].automatic, true);
+  assert.equal(env.get("workspace-layer").focused, true);
+  assert.deepEqual(env.calls.filter((name) => ["getApiKey", "jevStatus", "getAiRouting", "cliStatus"].includes(name)), [], "preloading never triggers Settings connection or CLI checks");
+});
+
+test("catalog retry replaces hung local reads and fences stale catalog and speed responses", async () => {
+  const oldDoc = deferred(), oldSpeeds = deferred(), newDoc = deferred(), newSpeeds = deferred();
+  let gate, docCalls = 0, speedCalls = 0, reloads = 0;
+  const env = environment({
+    readCatalog: () => (++docCalls === 1 ? oldDoc.promise : newDoc.promise),
+    speedMeasurements: () => (++speedCalls === 1 ? oldSpeeds.promise : newSpeeds.promise),
+  }, { capture: false, window: {
+    MefiBoot: { run: (steps, onReady) => { gate = { steps, onReady }; } },
+    location: { href: "file:///fixture/renderer/booklet.html", search: "", reload: () => { reloads += 1; } },
+  } });
+  const load = gate.steps.find((step) => step.id === "catalog").load;
+  const initial = load({ retry: false }); await flush();
+  const joined = env.window.MefiBooklet.refresh("manual");
+  assert.equal(docCalls, 1, "ordinary refresh joins its current read");
+  assert.equal(speedCalls, 1);
+  const retry = load({ retry: true }); await flush();
+  assert.equal(docCalls, 2, "retry starts a fresh catalog read despite the old hung promise");
+  assert.equal(speedCalls, 2, "retry also replaces the hung local speed snapshot");
+  const current = structuredClone(catalog);
+  current.hash = "fresh-startup-catalog";
+  current.models[0].name = "Fresh startup model";
+  newDoc.resolve(current); await flush();
+  assert.equal(speedCalls, 2, "applying the new catalog shares the retry's pending speed read");
+  newSpeeds.resolve({ ok: true, measurements: { [catalog.models[0].id]: { tokensPerSecond: 42, measuredAt: 2000 } } });
+  await retry;
+  assert.match(env.get("cards").innerHTML, /Fresh startup model/);
+  assert.match(env.get("cards").innerHTML, /42 t\/s/);
+  const stale = structuredClone(catalog);
+  stale.hash = "stale-startup-catalog";
+  stale.schemaVersion = "outdated-schema";
+  stale.models[0].name = "Stale startup model";
+  oldDoc.resolve(stale);
+  oldSpeeds.resolve({ ok: true, measurements: { [catalog.models[0].id]: { tokensPerSecond: 9, measuredAt: 1000 } } });
+  await Promise.all([initial, joined]); await flush();
+  assert.equal(reloads, 0, "an obsolete catalog response cannot reload the application");
+  assert.match(env.get("cards").innerHTML, /Fresh startup model/);
+  assert.match(env.get("cards").innerHTML, /42 t\/s/);
+  assert.doesNotMatch(env.get("cards").innerHTML, /Stale startup model|9 t\/s/);
+  assert.deepEqual(env.calls.filter((name) => ["getApiKey", "jevStatus", "getAiRouting", "cliStatus"].includes(name)), []);
 });
 
 test("initial routing load holds editable controls until saved settings arrive", async () => {

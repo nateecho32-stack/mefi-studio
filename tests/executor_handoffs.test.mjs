@@ -50,7 +50,7 @@ function poolHost(saved = null) {
     pool, assistantState: state, assistantModule: assistant,
     ASSISTANT_PRIORITY: { cadence: 1, demand: 2, responder: 3 },
     ASSISTANT_JOB_TIMEOUT_MS: 150000, EXECUTOR_PARALLEL_MAX: 12, AI_PARALLEL_MAX: 6,
-    CLI_MODE: true, projectSwitching: false, projectAgentJobs: 0,
+    CLI_MODE: true, projectSwitching: false, projectAgentJobs: 0, assistantStopping: false,
     projects: { current: () => ({ id: "fixture" }), run: (_project, run) => run() },
     setTimeout: () => 1, clearTimeout() {},
     assistantRoleTargets: () => [{ kind: "assistant", id: "assistant" }],

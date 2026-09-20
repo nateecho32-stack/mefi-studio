@@ -7,6 +7,9 @@
   const state = { projects: [], activeId: null, tasks: [], ideas: [], backlog: null, assistant: {}, status: {}, filter: "open", query: "", limit: 20, mode: "chat", pending: false, busyAction: null, switching: false, epoch: 0 };
   let initialized = false;
   let refreshFlight = null;
+  let startupPromise = null;
+  let startupPending = false;
+  let startupSequence = 0;
   let threadSignature = "";
   let workSignature = "";
   const signatures = new Map();
@@ -17,6 +20,8 @@
   let createdTask = null;
   let buildModeSaving = false;
   const buildMode = () => ({ autoBuild: state.status.autoBuild !== false, loaded: typeof state.status.autoBuild === "boolean", saving: buildModeSaving });
+  let agentModeSaving = false;
+  const agentMode = () => ({ mode: state.status.mode === "cluster" ? "cluster" : "swarm", loaded: ["swarm", "cluster"].includes(state.status.mode), saving: agentModeSaving });
   const storage = {
     get(key, fallback = "") { try { return localStorage.getItem(`mefiStudio.workspace.${key}`) ?? fallback; } catch { return fallback; } },
     set(key, value) { try { localStorage.setItem(`mefiStudio.workspace.${key}`, value); } catch { /* private store */ } },
@@ -55,6 +60,7 @@
     if ($("plan-idea")) $("plan-idea").disabled = state.pending || state.switching || unavailable;
     $("pause").disabled = !api()?.assistantControl || state.switching;
     if ($("auto-build")) $("auto-build").disabled = !api()?.assistantAutopilot || !buildMode().loaded || buildModeSaving || state.switching;
+    if ($("agent-mode")) $("agent-mode").disabled = !api()?.assistantAutopilot || !agentMode().loaded || agentModeSaving || state.switching;
     $("reveal").disabled = !project()?.path || !api()?.shellReveal;
     $("run-backlog").disabled = !state.activeId || !state.backlog || state.backlogUnavailable || !api()?.backlogControl || state.switching || Boolean(state.busyAction);
     for (const button of $("work-list").querySelectorAll("button")) {
@@ -287,6 +293,7 @@
     controls();
   }
   function renderBuildMode() {
+    renderAgentMode();
     const mode = buildMode();
     if ($("auto-build")) $("auto-build").checked = mode.autoBuild;
     if ($("build-mode-label")) $("build-mode-label").textContent = mode.saving ? "Saving…" : !mode.loaded ? "Loading preference…" : mode.autoBuild ? "Automatic" : "Verify first";
@@ -294,6 +301,49 @@
       ? "Turn off to review builds first. Applies to all projects."
       : "Open Review to approve builds. All projects; current workers finish.";
     window.dispatchEvent(new CustomEvent("mefi:build-mode", { detail: mode }));
+  }
+  function renderAgentMode() {
+    const choice = agentMode();
+    const control = $("agent-mode"), note = $("agent-mode-note");
+    if (control) {
+      if (!choice.saving) control.value = choice.mode;
+      control.setAttribute("aria-busy", String(choice.saving));
+      control.title = "Both modes use the Assistant to plan, delegate subtasks and review results. Swarm also works across ready tasks; Cluster keeps agents on one shared task. Applies to all projects; current work finishes when switching.";
+    }
+    if (note) note.textContent = choice.saving ? "Saving agent mode…" : !choice.loaded ? "Loading agent mode…" : choice.mode === "swarm"
+      ? "Agents collaborate on tasks and their subtasks across the queue. Pause, approvals and capacity still apply."
+      : state.status.clusterFocus?.title ? `Agents focus on: ${state.status.clusterFocus.title}`
+      : state.status.running?.length ? "Current workers finish before agents focus on one task."
+      : "The Assistant and builders share one task, delegate independent subtasks, then combine the results.";
+  }
+  async function setAgentMode(mode) {
+    if (!["swarm", "cluster"].includes(mode)) throw new Error("Choose Swarm or Cluster.");
+    if (!api()?.assistantAutopilot || !agentMode().loaded) throw new Error("Agent settings aren't ready. Retry loading first.");
+    if (agentModeSaving || state.switching) throw new Error("Wait for the current setting or project change to finish.");
+    agentModeSaving = true; renderAgentMode(); controls();
+    const epoch = state.epoch;
+    try {
+      const result = guard(await api().assistantAutopilot({ mode }));
+      if (epoch !== state.epoch) return agentMode();
+      revisions.status += 1;
+      const status = result.status || result;
+      state.status = { ...state.status, ...status, mode: status.mode || mode };
+      feedback(`${mode === "cluster" ? "Cluster" : "Swarm"} mode saved. Current work finishes; Pause and build approval settings still apply.`);
+      await refresh(true);
+      return agentMode();
+    } catch (error) {
+      // Recover an acknowledgement lost after the preference was saved. A newer
+      // pushed status or project selection must win over this read.
+      const revision = revisions.status;
+      try {
+        const result = await readWithDeadline(() => api().assistantStatus());
+        const status = result?.status || result;
+        if (result?.ok !== false && ["swarm", "cluster"].includes(status?.mode) && epoch === state.epoch && revision === revisions.status) {
+          revisions.status += 1; state.status = { ...state.status, ...status };
+        }
+      } catch {}
+      throw error;
+    } finally { agentModeSaving = false; renderAgentMode(); controls(); }
   }
   async function setAutoBuild(autoBuild) {
     if (!api()?.assistantAutopilot || !buildMode().loaded) throw new Error("Build settings aren't ready. Retry loading first.");
@@ -464,17 +514,48 @@
     refreshFlight = run;
     try { return await run; } finally { if (refreshFlight === run) refreshFlight = null; }
   }
+  function loadInitialWorkspace() {
+    const sequence = ++startupSequence;
+    const epoch = state.epoch;
+    // A deliberate retry supersedes unfinished reads from the previous attempt,
+    // including the gap while the new project selection is still loading.
+    readSequence += 1;
+    startupPending = true;
+    startupPromise = (async () => {
+      if (!api()) return true;
+      try {
+        const result = await readWithDeadline(() => api().projectsList?.());
+        if (sequence !== startupSequence) return false;
+        // A live project-selection event takes precedence over this snapshot.
+        if (epoch !== state.epoch) return (await (refreshFlight ?? refresh(true))) === true;
+        adoptProjects(guard(result));
+        return (await refresh(true)) === true;
+      } catch (error) {
+        if (sequence !== startupSequence) return false;
+        $("retry").hidden = false;
+        feedback(error.message, true, "read");
+        return false;
+      }
+    })().finally(() => { if (sequence === startupSequence) startupPending = false; });
+    return startupPromise;
+  }
+  function ready({ retry = false } = {}) {
+    init();
+    return retry ? loadInitialWorkspace() : startupPromise ?? Promise.resolve(!api());
+  }
   function enter() {
     init(); window.MefiIdle?.exit?.(); $("layer").hidden = false;
     document.body.classList.add("workspace-active");
     $("layer").focus({ preventScroll: true });
-    refresh(true);
+    // Startup already reads and paints the workspace. Opening it underneath
+    // the loading layer joins that work instead of issuing a second batch.
+    return startupPending || window.MefiBoot?.isActive?.() ? ready() : refresh(true);
   }
   function exit() { if (!$("layer")) return; $("layer").hidden = true; document.body.classList.remove("workspace-active"); saveDraft(); }
   function init() {
     if (initialized || !$("layer")) return; initialized = true;
     $("form").addEventListener("submit", submit);
-    $("retry").addEventListener("click", () => refresh(true));
+    $("retry").addEventListener("click", () => state.activeId ? refresh(true) : ready({ retry: true }));
     $("input").addEventListener("input", () => saveDraft());
     $("task-outline")?.addEventListener("click", () => {
       if (state.pending || state.switching || state.mode !== "work") return;
@@ -496,6 +577,10 @@
     $("auto-build")?.addEventListener("change", async () => {
       try { await setAutoBuild($("auto-build").checked); }
       catch (error) { feedback(error.message, true); renderBuildMode(); controls(); }
+    });
+    $("agent-mode")?.addEventListener("change", async () => {
+      try { await setAgentMode($("agent-mode").value); }
+      catch (error) { feedback(error.message, true); renderAgentMode(); controls(); }
     });
     $("add-project").addEventListener("click", async () => {
       if (state.pending || state.busyAction || state.switching) return;
@@ -532,11 +617,11 @@
     api()?.onAssistant?.((payload) => { if (payload?.state?.projectId && payload.state.projectId !== state.activeId) return; revisions.assistant += 1; if (payload?.state) state.assistant = payload.state; if (active()) { renderThread(); renderCompanion(); } });
     api()?.onAssistantStatus?.((status) => { if (status?.projectId && status.projectId !== state.activeId) return; revisions.status += 1; state.status = status || {}; renderBuildMode(); controls(); if (active()) { renderCompanion(); renderWork(); } scheduleBacklogRead(); });
     personalize(); renderProjects(); renderWork(); renderBacklog();
-    api()?.projectsList?.().then((result) => { adoptProjects(guard(result)); return refresh(true); }).catch((error) => feedback(error.message, true));
+    loadInitialWorkspace();
     if (!api()) $("jev").textContent = "Desktop app connects your tools";
     window.MefiBoot?.pollStart?.("workspace.refresh", () => { if (!document.hidden && active()) refresh(); }, 15000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden && active()) refresh(); });
   }
-  window.MefiWorkspace = { enter, exit, refresh, isActive: active, buildMode, setAutoBuild };
+  window.MefiWorkspace = { enter, exit, refresh, ready, isActive: active, buildMode, setAutoBuild, agentMode, setAgentMode };
   init();
 })();

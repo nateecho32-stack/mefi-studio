@@ -23,7 +23,9 @@ function buildAllowed(item, { autoBuild = true } = {}) {
 }
 
 function dependencyIds(item) {
-  return [...new Set(Array.isArray(item?.dependsOn) ? item.dependsOn.filter((id) => typeof id === "string" && id.trim()).map((id) => id.trim()) : [])];
+  const explicit = Array.isArray(item?.dependsOn) ? item.dependsOn : [];
+  const delegated = item?.delegation?.version === 1 && Array.isArray(item.delegation.childTaskIds) ? item.delegation.childTaskIds : [];
+  return [...new Set([...explicit, ...delegated].filter((id) => typeof id === "string" && id.trim()).map((id) => id.trim()))];
 }
 
 function completedTask(task) {
@@ -31,7 +33,12 @@ function completedTask(task) {
 }
 
 function dependencyState(item, tasks = []) {
-  const byId = new Map(rows(tasks).map((task) => [task.id, task]));
+  const projectId = item?.projectId ?? item?.delegation?.projectId;
+  const projectPath = item?.projectPath ?? item?.delegation?.projectPath;
+  const normalizedPath = (value) => String(value).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  const inProject = (task) => !(projectId != null && task.projectId != null && task.projectId !== projectId)
+    && !(projectPath && task.projectPath && normalizedPath(task.projectPath) !== normalizedPath(projectPath));
+  const byId = new Map(rows(tasks).filter(inProject).map((task) => [task.id, task]));
   const ids = dependencyIds(item);
   const dependencies = ids.map((id) => {
     const task = byId.get(id);
@@ -74,6 +81,10 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true } = 
   if (item.status === "done" || item.status === "archived") return { stage: "done", reason: item.status === "archived" ? "Archived completion" : "Completed" };
   if (item.status === "awaiting_verification" || item.status === "verifying") {
     if (item.handoffState?.pending > 0) return { stage: item.handoffState.state === "blocked" ? "blocked" : "waiting", reason: item.handoffState.reason || "Waiting for delegated work to finish", blockedBy: "handoffs", canRetry: false, childTaskIds: item.handoffState.childTaskIds ?? [] };
+    if (item.delegation && Array.isArray(tasks)) {
+      const delegated = dependencyState(item, tasks);
+      if (delegated.stage) return delegated;
+    }
     return { stage: "review", reason: "Run finished; checking its completion evidence" };
   }
   if (item.status === "active" || item.status === "running") return { stage: "running", reason: "A worker holds this task" };

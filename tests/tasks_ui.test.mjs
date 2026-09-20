@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
 const source = await readFile(new URL("../renderer/tasks.js", import.meta.url), "utf8");
+const groupsSource = await readFile(new URL("../renderer/task-groups.js", import.meta.url), "utf8");
 
 class Element {
   constructor(tag = "div") {
@@ -31,7 +32,7 @@ class Element {
   click() { for (const fn of this.listeners.click ?? []) fn({ target: this, stopPropagation() {}, preventDefault() {} }); }
 }
 
-function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = null, bridge = {} } = {}) {
+function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = null, bridge = {}, overview = false } = {}) {
   const els = new Map();
   const get = (id) => { if (!els.has(id)) els.set(id, new Element()); return els.get(id); };
   for (const filter of ["all", "open", "done"]) {
@@ -56,6 +57,7 @@ function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = nu
     document: { readyState: "loading", getElementById: get, createElement: (tag) => new Element(tag), querySelectorAll: () => [], addEventListener() {} },
     setTimeout() {}, setInterval() {}, console,
   });
+  if (overview) vm.runInContext(groupsSource, context);
   vm.runInContext(source, context);
   const api = context.window.MefiTasks; api.init();
   return { api, get, saved, notifications, broadcast: (rows) => onTasks(rows), project: (activeId) => onProjects({ activeId }) };
@@ -146,6 +148,138 @@ test("an in-flight board load cannot overwrite a newer completion broadcast", as
 
 const descendants = (element) => element.children.flatMap((child) => [child, ...descendants(child)]);
 const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test("shared-task details link delegated builders and count only confirmed subtasks", async () => {
+  const tasks = [
+    { id: "parent", projectId: "p", title: "Shared export", status: "open", delegation: { childTaskIds: ["done", "checking", "approval", "missing", "foreign"], summary: "Build format and UI independently" } },
+    { id: "done", projectId: "p", title: "Write format", status: "done", verification: { state: "verified" }, parentTaskId: "parent", delegatedFrom: { parentTaskId: "parent" } },
+    { id: "checking", projectId: "p", title: "Write UI", status: "awaiting_verification", parentTaskId: "parent", delegatedFrom: { parentTaskId: "parent" } },
+    { id: "approval", projectId: "p", title: "Write checks", status: "open", parentTaskId: "parent", delegatedFrom: { parentTaskId: "parent" } },
+    { id: "foreign", projectId: "other", title: "Unrelated private work", status: "done", verification: { state: "verified" } },
+  ];
+  const env = environment({ tasks, bridge: { backlogStatus: async () => ({ ok: true, projectId: "p", taskStates: [{ id: "approval", stage: "approval", reason: "Approve the saved brief first" }] }) } });
+  await env.api.open({ taskId: "parent" }); await settle();
+  const panel = descendants(env.get("task-detail")).find((element) => element.dataset.taskPanel === "delegation");
+  assert.match(panel.textContent, /Delegated subtasks · 1\/5 confirmed/);
+  assert.match(panel.textContent, /Build format and UI independently/);
+  assert.match(panel.textContent, /Write UI.*Checking completion/);
+  assert.match(panel.textContent, /Write checks.*Needs build approval/);
+  assert.match(panel.textContent, /Unavailable subtask · missing.*Board status unavailable/);
+  assert.doesNotMatch(panel.textContent, /Unrelated private work/);
+  assert.equal(descendants(panel).filter((element) => element.dataset.taskAction === "view-subtask" && element.disabled).length, 2);
+  descendants(panel).find((element) => element.dataset.taskId === "checking").click();
+  assert.equal(env.api.state.selected, "checking");
+  const parentLink = descendants(env.get("task-detail")).find((element) => element.dataset.taskAction === "view-parent");
+  assert.equal(parentLink.textContent, "Shared task: Shared export");
+  parentLink.click();
+  assert.equal(env.api.state.selected, "parent");
+});
+
+test("a shared-task overview includes the parent integration step after all subtasks finish", async () => {
+  const tasks = [
+    { id: "parent", title: "Shared export", status: "open", delegation: { childTaskIds: ["child"] } },
+    { id: "child", title: "Write format", status: "done", verification: { state: "verified" }, parentTaskId: "parent", delegatedFrom: { parentTaskId: "parent" } },
+  ];
+  const env = environment({ tasks, overview: true });
+  await env.api.open(); await settle();
+  assert.match(env.get("task-list").textContent, /SHARED TASK & SUBTASKS/);
+  assert.match(env.get("task-list").textContent, /1\/2 confirmed \(50%\)/);
+  assert.match(env.get("task-list").textContent, /Next: Shared export/);
+});
+
+test("overview follows plan progress with an actual current step and keeps worker exits unconfirmed", async () => {
+  const tasks = [
+    { id: "done", planningId: "release", title: "Define export format", status: "done", verification: { state: "verified" } },
+    { id: "active", planningId: "release", title: "Write export files", status: "active" },
+    { id: "review", planningId: "release", title: "Verify import compatibility", status: "awaiting_verification", lastAttempt: { exitCode: 0 } },
+  ];
+  const env = environment({ tasks, overview: true, bridge: { planningList: async () => ({ ok: true, plans: [{ id: "release", title: "Portable release", status: "converted", taskIds: tasks.map((task) => task.id) }] }) } });
+  await env.api.open();
+  const cards = env.get("task-list").children.filter((element) => element.dataset.overviewId);
+  assert.equal(cards.length, 1);
+  assert.match(cards[0].textContent, /Portable release.*1\/3 confirmed \(33%\).*Current stepWorking on: Write export files/);
+  const progress = descendants(cards[0]).find((element) => element.attrs.role === "progressbar");
+  assert.equal(progress.attrs["aria-valuenow"], "1"); assert.equal(progress.attrs["aria-valuemax"], "3");
+  assert.match(progress.attrs["aria-valuetext"], /1 working; 1 awaiting checks/);
+  const details = descendants(cards[0]).find((element) => element.tagName === "details");
+  assert.equal(details.open, false);
+  env.api.selectTask("review");
+  assert.equal(descendants(env.get("task-list")).find((element) => element.tagName === "details").open, true);
+  assert.match(env.get("task-detail").textContent, /completion checks are pending/i);
+  assert.equal(env.saved.length, 0);
+});
+
+test("discussion cards show recorded decisions and the next unblocked question without pretending to build", async () => {
+  const plan = { id: "talk", title: "Share without accounts", destination: "Keep shared exports portable", status: "planning", questions: [
+    { id: "format", question: "Which format?", status: "resolved" },
+    { id: "conflict", question: "How should conflicts be handled?", status: "open", dependsOn: ["format"] },
+  ] };
+  const env = environment({ overview: true, bridge: { planningList: async () => ({ ok: true, plans: [plan] }) } });
+  await env.api.open();
+  const card = env.get("task-list").children.find((element) => element.dataset.overviewId);
+  assert.equal(card.dataset.stage, "planning");
+  assert.match(card.textContent, /1\/2 decisions recorded.*discussion does not start a build/);
+  assert.match(card.textContent, /Current stepDiscuss: How should conflicts be handled/);
+  assert.doesNotMatch(card.textContent, /Open current task|confirmed \(/);
+  assert.equal(descendants(card).find((element) => element.attrs.role === "progressbar").attrs["aria-label"], "Planning decisions recorded");
+  assert.equal(env.saved.length, 0);
+});
+
+test("grouped requirements never imply independent running workers and search retains the goal", async () => {
+  const tasks = [
+    { id: "group", title: "Reliable retries", status: "active", members: [{ id: "one" }, { id: "two" }] },
+    { id: "one", title: "Ideas retry helper", prompt: "Preserve the exhaustedAttempts contract", status: "absorbed", absorbedInto: "group" },
+    { id: "two", title: "Compactor retry helper", status: "absorbed", absorbedInto: "group" },
+  ];
+  const env = environment({ tasks, overview: true });
+  await env.api.open();
+  assert.match(env.get("task-list").textContent, /0\/2 requirements confirmed \(0%\) · plan in progress/);
+  assert.match(env.get("task-list").textContent, /Current stepWorking on: Reliable retries/);
+  assert.doesNotMatch(env.get("task-list").textContent, /2 working/);
+  env.get("task-search").value = "exhaustedAttempts"; env.get("task-search").listeners.input[0]();
+  assert.match(env.get("task-list").textContent, /Reliable retries.*Ideas retry helper/);
+  assert.equal(env.get("task-list").children.filter((element) => element.dataset.overviewId).length, 1);
+  assert.equal(env.saved.length, 0);
+});
+
+test("overview counts legacy completion as awaiting evidence and folds only confirmed history", async () => {
+  const env = environment({ overview: true, tasks: [
+    { id: "old", title: "Historical result", status: "done", verification: { state: "unverified" } },
+    { id: "confirmed", title: "Confirmed result", status: "done", verification: { state: "manual" } },
+  ] });
+  await env.api.open();
+  const old = env.get("task-list").children.find((element) => element.dataset.overviewId === "old");
+  assert.equal(old.dataset.stage, "review");
+  assert.match(old.textContent, /0\/1 confirmed.*historical completion still needs verified evidence/s);
+  const completed = descendants(env.get("task-list")).find((element) => element.tagName === "details" && /Confirmed plans & tasks/.test(element.textContent));
+  assert.equal(completed.open, false);
+});
+
+test("a late planning response cannot restore discussion cards from the previous project", async () => {
+  let projectId = "p", finish;
+  const pending = new Promise((resolve) => { finish = resolve; });
+  const env = environment({ overview: true, bridge: {
+    tasksList: async () => ({ ok: true, projectId, tasks: [] }),
+    planningList: ({ projectId }) => projectId === "p" ? pending : Promise.resolve({ ok: true, projectId, plans: [{ id: "new", projectId, title: "Current discussion", status: "planning" }] }),
+  } });
+  const opening = env.api.open(); await settle();
+  projectId = "q"; env.project(projectId); await settle();
+  finish({ ok: true, projectId: "p", plans: [{ id: "old", title: "Private prior discussion", status: "planning" }] });
+  await opening; await settle();
+  assert.match(env.get("task-list").textContent, /Current discussion/);
+  assert.doesNotMatch(env.get("task-list").textContent, /Private prior discussion/);
+});
+
+test("a failed result keeps its evidence blocker instead of a stale ready scheduling message", async () => {
+  const env = environment({ overview: true, tasks: [{ id: "failed", title: "Check export", status: "open", verification: { state: "failed", reason: "Named validation did not pass" } }], bridge: {
+    backlogStatus: async () => ({ ok: true, taskStates: [{ id: "failed", stage: "ready", reason: "Ready when scheduling resumes" }] }),
+  } });
+  await env.api.open();
+  const card = env.get("task-list").children.find((element) => element.dataset.overviewId === "failed");
+  const note = card.children.find((element) => element.className === "task-overview-note");
+  assert.equal(card.dataset.stage, "blocked");
+  assert.equal(note.textContent, "Named validation did not pass");
+});
 
 test("prerequisites exclude self and other projects, preserve a draft during broadcasts, and save a targeted delta", async () => {
   const child = { id: "child", projectId: "p", title: "Add export", status: "open", dependsOn: ["parent"] };

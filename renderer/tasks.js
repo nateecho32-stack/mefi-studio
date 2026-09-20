@@ -13,7 +13,7 @@
   // shows, and the tick bails while hidden or while the sheet is closed, so a
   // hidden app issues no store reads.
   const TASKS_POLL_MS = 15000;
-  const state = { tasks: [], selected: null, filter: "all", readiness: "all", projectId: null, query: "", doneCollapsed: false, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
+  const state = { tasks: [], plans: [], plansError: null, selected: null, filter: "all", readiness: "all", projectId: null, query: "", doneCollapsed: false, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
   // Two-step delete: the id of the task whose Delete button is armed right now.
   let deleteArmed = null;
   const els = {};
@@ -34,6 +34,8 @@
   let projectEpoch = 0;
   let createPending = false;
   const createDrafts = new Map();
+  const overviewExpanded = new Set();
+  let plansRead = 0;
   const taskKey = (task) => `${task?.projectId || state.backlog?.projectId || ""}/${task?.id || ""}`;
   const node = (tag, className, text) => Object.assign(document.createElement(tag), { className, textContent: text ?? "" });
 
@@ -304,6 +306,9 @@
   function renderList() {
     els.list.textContent = "";
     renderFilters();
+    els.overlay?.classList.toggle("task-overview-mode", state.filter !== "done");
+    els.overlay?.classList.toggle("task-detail-open", Boolean(selectedTask()));
+    if (state.filter !== "done" && window.MefiTaskGroups?.overviewGroups) { renderOverview(); return; }
     // A selected done task must be visible, so unfold the mark it lives under.
     const selected = selectedTask();
     if (selected && isDone(selected)) state.doneCollapsed = false;
@@ -349,6 +354,170 @@
     if (!open.length) els.list.append(mutedLi(emptyListMessage(done.length)));
   }
 
+  // Saved relationships shape the overview; rendering never rewrites work.
+  // Only verified evidence or the user's confirmation fills the done segment.
+  function overviewProgress(task) {
+    if (!task || task.unavailable) return "waiting";
+    if (isDone(task)) return ["verified", "manual"].includes(task.verification?.state) ? "done" : "review";
+    const scheduled = scheduledTask(task);
+    if (["active", "running"].includes(task.status) || scheduled?.stage === "running") return "running";
+    if (task.verification?.state === "failed" || (task.runFailures || 0) >= 5 || (task.verifyAttempts || 0) >= 3 || scheduled?.stage === "blocked") return "blocked";
+    if (["awaiting_verification", "verifying"].includes(task.status) || needsReview(task) || scheduled?.stage === "review") return "review";
+    return "waiting";
+  }
+
+  function overviewModel(group) {
+    const members = Array.isArray(group.members) ? group.members : [];
+    const memberTasks = members.map((member) => member.task).filter(Boolean);
+    // An explicit group is one executor job representing its saved member
+    // requirements. Its parent status applies to absorbed requirements only;
+    // individually running/checking members retain their own actual state.
+    const rows = group.kind === "task-plan" ? memberTasks : [group.task, ...memberTasks].filter(Boolean);
+    const work = [...new Map(rows.map((task) => [task.id, task])).values()];
+    const groupStage = group.kind === "task-plan" && group.task ? overviewProgress(group.task) : null;
+    const stageOf = (task) => task.status === "absorbed" && group.task ? groupStage === "done" ? "done" : "waiting" : overviewProgress(task);
+    const counts = { done: 0, running: 0, review: 0, blocked: 0, waiting: 0 };
+    for (const task of work) counts[stageOf(task)] += 1;
+    const plan = group.plan;
+    const planning = Boolean(plan && !["converted", "converting"].includes(plan.status) && !work.length);
+    const questions = Array.isArray(plan?.questions) ? plan.questions : [];
+    const resolved = questions.filter((question) => question.status === "resolved");
+    const nextQuestion = questions.find((question) => question.status !== "resolved" && (question.dependsOn || []).every((id) => resolved.some((item) => item.id === id))) || questions.find((question) => question.status !== "resolved");
+    const stage = planning ? "planning" : work.length && counts.done === work.length ? "done" : counts.running || groupStage === "running" ? "running" : counts.blocked || groupStage === "blocked" ? "blocked" : counts.review || groupStage === "review" ? "review" : "waiting";
+    const current = ["running", "blocked", "review"].includes(groupStage) ? group.task : work.find((task) => stageOf(task) === "running") || work.find((task) => stageOf(task) === "blocked") || work.find((task) => stageOf(task) === "review") || work.find((task) => stageOf(task) === "waiting");
+    const currentStage = current === group.task && groupStage ? groupStage : current ? stageOf(current) : null;
+    let next = current ? `${currentStage === "running" ? "Working on" : currentStage === "review" ? "Check completion" : currentStage === "blocked" ? "Needs attention" : "Next"}: ${current.title}` : work.length ? "Every task has verified evidence or your confirmation." : "Waiting for task status.";
+    // The worker reports progress for the combined job, not each absorbed
+    // requirement independently. Do not claim it has started a specific member.
+    if (current?.status === "absorbed" && group.task) next = `${stage === "running" ? "Working on" : stage === "review" ? "Check completion" : "Next"}: ${group.task.title}`;
+    if (current?.unavailable) next = `Waiting for board status: ${current.title}`;
+    if (planning) next = nextQuestion ? `Discuss: ${nextQuestion.question}` : plan.unknowns?.length ? `Explore: ${plan.unknowns[0].text}` : plan.spec?.approvedAt ? "Create the approved tasks when you are ready." : plan.spec && !plan.spec.stale ? "Review and approve the specification." : resolved.length ? "Turn the recorded decisions into a specification." : "Set the destination and the questions to discuss.";
+    return { group, work, counts, planning, questions, resolved, stage, current, currentStage, next, total: planning ? questions.length : work.length, done: planning ? resolved.length : counts.done };
+  }
+
+  function overviewCard(model) {
+    const { group, counts, stage, planning } = model;
+    const card = node("li", "task-overview-card");
+    card.dataset.overviewId = group.id;
+    card.dataset.stage = stage;
+    const head = node("div", "task-overview-card-head");
+    const kind = planning ? "PLAN & DISCUSSION" : group.kind === "approved-plan" ? "APPROVED PLAN" : group.kind === "task" ? "TASK" : group.kind === "task-delegation" ? "SHARED TASK & SUBTASKS" : "PLAN & FOLLOW-UPS";
+    head.append(node("span", "eyebrow", kind));
+    const badge = node("span", "task-overview-status", ({ planning: "Planning", running: "Working", review: "Checking completion", blocked: "Needs attention", done: "Confirmed", waiting: "Waiting" })[stage]);
+    badge.dataset.stage = stage;
+    head.append(badge);
+    card.append(head, node("h3", "task-overview-title", group.title || group.task?.title || "Untitled plan"));
+    const destination = group.plan?.destination || group.task?.prompt;
+    if (destination) card.append(node("p", "task-overview-destination", clipText(destination, 180)));
+    const progress = node("div", "task-overview-progress");
+    progress.setAttribute("role", "progressbar");
+    progress.setAttribute("aria-label", planning ? "Planning decisions recorded" : "Confirmed task completion");
+    progress.setAttribute("aria-valuemin", "0");
+    progress.setAttribute("aria-valuemax", String(Math.max(1, model.total)));
+    progress.setAttribute("aria-valuenow", String(model.done));
+    const progressText = planning ? `${model.done} of ${model.total} decisions recorded` : `${model.done} of ${model.total} tasks confirmed; ${counts.running} working; ${counts.review} awaiting checks; ${counts.blocked} need attention`;
+    progress.setAttribute("aria-valuetext", progressText);
+    const segments = planning ? { done: model.done, waiting: Math.max(0, model.total - model.done) } : counts;
+    for (const key of ["done", "running", "review", "blocked", "waiting"]) {
+      if (!segments[key]) continue;
+      const part = node("span", "task-overview-segment");
+      part.dataset.stage = key;
+      part.style.setProperty("flex-grow", String(segments[key]));
+      part.setAttribute("aria-hidden", "true");
+      progress.append(part);
+    }
+    card.append(progress);
+    const percent = model.total ? Math.round(model.done / model.total * 100) : 0;
+    const countText = planning ? `${model.done}/${model.total} decisions recorded · discussion does not start a build` : group.kind === "task-plan" ? `${model.done}/${model.total} requirements confirmed (${percent}%) · ${stage === "running" ? "plan in progress" : stage === "review" ? "plan awaiting checks" : stage === "blocked" ? "plan needs attention" : stage === "done" ? "plan confirmed" : "plan waiting"}` : `${model.done}/${model.total} confirmed (${percent}%)${counts.running ? ` · ${counts.running} working` : ""}${counts.review ? ` · ${counts.review} awaiting checks` : ""}${counts.blocked ? ` · ${counts.blocked} need attention` : ""}${counts.waiting ? ` · ${counts.waiting} waiting` : ""}`;
+    card.append(node("p", "task-overview-counts", countText));
+    const next = node("div", "task-overview-next");
+    next.append(node("span", "task-overview-step-label", "Current step"), node("strong", "", model.next));
+    card.append(next);
+    if (model.current && model.currentStage === "review") card.append(node("p", "task-overview-note", isDone(model.current) ? "This historical completion still needs verified evidence or your confirmation." : describe(model.current.status === "absorbed" ? group.task : model.current).summary));
+    if (model.current && ["blocked", "waiting"].includes(model.currentStage)) {
+      const scheduled = scheduledTask(model.current);
+      const reason = model.currentStage === "blocked" ? model.current.verification?.reason || model.current.lastRunError || (scheduled?.stage === "blocked" ? scheduled.reason : "Review the previous attempt before continuing.") : ["waiting", "cooling", "approval"].includes(scheduled?.stage) ? scheduled.reason : null;
+      if (reason) card.append(node("p", "task-overview-note", reason));
+    }
+    if (stage === "done" && group.task) card.append(node("p", "task-overview-note", doneSummary(group.task)));
+    const actions = node("div", "task-overview-actions");
+    if (group.planId && (group.plan || group.kind === "approved-plan")) actions.append(rowButton(planning ? "Continue planning" : "View plan", "Open the saved destination, discussion and decisions", () => { close(); window.MefiPlanning?.open?.({ planId: group.planId }); }));
+    const target = model.current?.status === "absorbed" ? group.task : model.current?.unavailable ? null : model.current || group.task;
+    if (target && state.tasks.some((task) => task.id === target.id)) actions.append(rowButton("Open current task", "Open the full brief, result and task history", () => window.MefiTasks.selectTask(target.id)));
+    if (actions.children.length) card.append(actions);
+    const members = [group.task && { id: group.task.id, task: group.task, canonical: true }, ...(group.members || [])].filter(Boolean);
+    const seen = new Set();
+    const detailsRows = members.filter((member) => member.task && !seen.has(member.id) && seen.add(member.id));
+    if (detailsRows.length) {
+      const details = node("details", "task-overview-details");
+      details.open = overviewExpanded.has(group.id) || detailsRows.some((member) => member.id === state.selected);
+      details.append(node("summary", "", `Tasks & progress · ${detailsRows.length}`));
+      details.addEventListener("toggle", () => { details.open ? overviewExpanded.add(group.id) : overviewExpanded.delete(group.id); });
+      const list = node("ul", "pin-list task-overview-members");
+      for (const member of detailsRows) {
+        if (member.canonical !== false) list.append(taskRow(member.task));
+        else {
+          const saved = node("li", "task-overview-saved");
+          saved.append(node("strong", "", member.task.title || "Saved requirement"), node("p", "", member.task.prompt || "Waiting for the saved task's board status."));
+          list.append(saved);
+        }
+      }
+      details.append(list);
+      card.append(details);
+    }
+    return card;
+  }
+
+  function renderOverview() {
+    const groups = window.MefiTaskGroups.overviewGroups(state.tasks, { plans: state.plans });
+    const query = state.query.trim().toLowerCase();
+    const models = groups.map(overviewModel).filter((model) => {
+      const group = model.group;
+      const rows = [group.task, ...(group.members || []).map((member) => member.task)].filter(Boolean);
+      const matches = !query || `${group.title || ""} ${group.plan?.destination || ""} ${(group.plan?.questions || []).map((question) => question.question).join(" ")}`.toLowerCase().includes(query) || rows.some(matchesQuery);
+      if (!matches || state.readiness !== "all" && !rows.some(matchesReadiness)) return false;
+      if (state.filter === "review") return model.stage === "review" || model.stage === "blocked" || model.counts.review > 0 || model.counts.blocked > 0;
+      if (state.filter === "open") return model.planning || model.stage === "running" || model.counts.running > 0 || model.counts.waiting > 0;
+      return true;
+    });
+    const rank = { running: 0, blocked: 1, review: 2, planning: 3, waiting: 4, done: 5 };
+    models.sort((a, b) => rank[a.stage] - rank[b.stage] || (b.group.plan?.updatedAt || b.group.task?.updatedAt || 0) - (a.group.plan?.updatedAt || a.group.task?.updatedAt || 0));
+    const heading = node("li", "task-overview-summary");
+    heading.append(node("strong", "", `${models.length} ${models.length === 1 ? "plan or task" : "plans & tasks"}`), node("span", "", "Follow the goal, the current step and the work still to confirm."));
+    els.list.append(heading);
+    if (state.plansError) els.list.append(node("li", "task-overview-note", "Saved plans could not be refreshed. Task progress is still available."));
+    const finished = models.filter((model) => model.stage === "done");
+    for (const model of models.filter((model) => model.stage !== "done")) els.list.append(overviewCard(model));
+    if (finished.length) {
+      const row = node("li", "task-overview-finished");
+      const details = node("details", "task-overview-finished-fold");
+      details.open = overviewExpanded.has("finished") || finished.some((model) => model.work.some((task) => task.id === state.selected));
+      details.append(node("summary", "", `Confirmed plans & tasks · ${finished.length}`));
+      details.addEventListener("toggle", () => { details.open ? overviewExpanded.add("finished") : overviewExpanded.delete("finished"); });
+      const list = node("ul", "pin-list task-overview-finished-list");
+      for (const model of finished) list.append(overviewCard(model));
+      details.append(list); row.append(details); els.list.append(row);
+    }
+    if (!models.length) els.list.append(mutedLi(emptyListMessage(0)));
+  }
+
+  async function loadPlans() {
+    const api = window.mefiStudio;
+    if (!api?.planningList) return;
+    const epoch = projectEpoch, projectId = state.projectId, read = ++plansRead;
+    try {
+      const result = await api.planningList(projectId ? { projectId } : {});
+      if (epoch !== projectEpoch || read !== plansRead || projectId !== state.projectId || result?.projectId && projectId && result.projectId !== projectId) return;
+      if (!result?.ok || !Array.isArray(result.plans)) throw new Error("Plans unavailable");
+      state.plans = result.plans.filter((plan) => !plan.projectId || !projectId || plan.projectId === projectId);
+      state.plansError = null;
+    } catch {
+      if (epoch !== projectEpoch || read !== plansRead) return;
+      state.plansError = true;
+    }
+    if (!els.overlay.hidden) renderList();
+  }
+
   async function load(options = {}) {
     const revision = taskRevision;
     const epoch = projectEpoch;
@@ -379,6 +548,7 @@
     renderList();
     renderDetail();
     applyPrefs();
+    await loadPlans();
   }
 
   // One shared read serves every waiting writer, so two quick adds cannot each
@@ -691,6 +861,43 @@
     }
   }
 
+  function renderTaskDelegation(task) {
+    const sameProject = (item) => (!task.projectId || !item.projectId || item.projectId === task.projectId) &&
+      (!task.projectPath || !item.projectPath || String(item.projectPath).replace(/[\\/]+/g, "/").replace(/\/+$/, "").toLowerCase() === String(task.projectPath).replace(/[\\/]+/g, "/").replace(/\/+$/, "").toLowerCase());
+    const parentId = task.delegatedFrom?.parentTaskId;
+    if (parentId) {
+      const parent = state.tasks.find((item) => item.id === parentId && sameProject(item));
+      const link = node("button", "ghost mini", parent ? `Shared task: ${parent.title || parent.id}` : "Shared task unavailable");
+      link.type = "button"; link.dataset.taskAction = "view-parent"; link.disabled = !parent;
+      link.addEventListener("click", () => window.MefiTasks.selectTask(parentId));
+      els.detail.append(link);
+    }
+    const childIds = new Set(Array.isArray(task.delegation?.childTaskIds) ? task.delegation.childTaskIds : []);
+    for (const item of state.tasks) if (item.delegatedFrom?.parentTaskId === task.id && sameProject(item)) childIds.add(item.id);
+    childIds.delete(task.id);
+    if (!childIds.size) return;
+    const children = [...childIds].map((id) => ({ id, task: state.tasks.find((item) => item.id === id && sameProject(item)) }));
+    const confirmed = children.filter((child) => overviewProgress(child.task) === "done").length;
+    const section = node("section", "task-context-section task-delegation");
+    section.dataset.taskPanel = "delegation";
+    section.append(node("h4", "", `Delegated subtasks · ${confirmed}/${children.length} confirmed`));
+    if (task.delegation?.summary) section.append(node("p", "task-context-hint", task.delegation.summary));
+    section.append(node("p", "task-context-hint", "The parent resumes to combine and verify results after every subtask is confirmed. With Verify first, each new subtask needs its own build approval."));
+    const list = node("ul", "pin-list");
+    for (const child of children) {
+      const row = node("li", "task-delegation-child");
+      const link = node("button", "ghost mini", child.task?.title || `Unavailable subtask · ${child.id}`);
+      link.type = "button"; link.dataset.taskAction = "view-subtask"; link.dataset.taskId = child.id; link.disabled = !child.task;
+      link.addEventListener("click", () => window.MefiTasks.selectTask(child.id));
+      const stage = overviewProgress(child.task), scheduled = child.task && scheduledTask(child.task);
+      const label = !child.task ? "Board status unavailable" : scheduled?.stage === "approval" ? "Needs build approval" : ({ done: "Confirmed", running: "Working", review: "Checking completion", blocked: "Needs attention", waiting: "Waiting" })[stage];
+      row.append(link, node("span", "task-context-hint", label));
+      if (scheduled?.reason) row.append(node("p", "task-context-hint", scheduled.reason));
+      list.append(row);
+    }
+    section.append(list); els.detail.append(section);
+  }
+
   function renderTaskContext(task) {
     const key = taskKey(task), api = window.mefiStudio;
     const scheduled = state.backlog?.taskStates?.find((item) => item.id === task.id);
@@ -802,6 +1009,7 @@
 
   function renderDetail() {
     const task = selectedTask();
+    if (els.overviewBack) els.overviewBack.hidden = !task;
     els.detail.textContent = "";
     els.statusRow.textContent = "";
     renderTitle(task);
@@ -880,6 +1088,7 @@
     prompt.style.whiteSpace = "pre-wrap";
     prompt.textContent = task.prompt ?? "";
     els.detail.append(prompt);
+    renderTaskDelegation(task);
     renderTaskContext(task);
 
     const section = (heading) => {
@@ -1206,6 +1415,7 @@
       overhead: "tasks-overhead",
       openButton: "tasks-open",
       filters: "task-filters",
+      overviewBack: "task-overview-back",
     })) {
       els[key] = document.getElementById(id);
     }
@@ -1235,6 +1445,7 @@
       els.filters.append(select); els.readinessFilter = select;
     }
     els.openButton?.addEventListener("click", open);
+    els.overviewBack?.addEventListener("click", () => { state.selected = null; renderList(); renderDetail(); });
     els.close?.addEventListener("click", close);
     els.overlay?.addEventListener("click", (event) => {
       if (event.target === els.overlay) close();
@@ -1304,8 +1515,9 @@
     window.mefiStudio?.onProjects?.((result) => {
       if (!result?.activeId || result.activeId === state.projectId) return;
       createDrafts.set(state.projectId || "", els.newInput?.value || "");
-      projectEpoch += 1; taskRevision += 1; backlogRead += 1;
-      state.projectId = result.activeId; state.tasks = []; state.selected = null; state.backlog = null;
+      projectEpoch += 1; taskRevision += 1; backlogRead += 1; plansRead += 1;
+      state.projectId = result.activeId; state.tasks = []; state.plans = []; state.plansError = null; state.selected = null; state.backlog = null;
+      overviewExpanded.clear();
       state.readiness = "all"; state.query = ""; hydrated = false; hydrating = null;
       status("", false);
       if (els.search) els.search.value = "";

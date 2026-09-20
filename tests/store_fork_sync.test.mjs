@@ -92,3 +92,34 @@ test("with queue room the pass drains keep ideas through the app's own admission
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("explicit --promote drains one named idea through the app's promote arm despite a saturated queue", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "store-fork-promote-"));
+  try {
+    const source = path.join(root, "src"), target = path.join(root, "tgt");
+    mkdirSync(source, { recursive: true });
+    mkdirSync(target, { recursive: true });
+    makeStore(source, { tasks: [], ideas: [] });
+    makeStore(target, { tasks: targetTasks, ideas: [targetIdeas[0], sourceIdeas[1]] });
+    const out = run(source, target, "--promote=idea_src_keep");
+    assert.match(out, /explicit promote arm for idea_src_keep bypasses the queue gate/);
+    assert.match(out, /drain: 1 idea\(s\) admitted through the admitBacklogIdeas path/);
+    const { tasks, ideas } = readStore(target);
+    const drained = ideas.find((row) => row.id === "idea_src_keep");
+    assert.equal(drained.status, "planned", "the named idea drained");
+    const task = tasks.find((row) => row.id === drained.taskId);
+    assert.ok(task, "drained idea points at a real task");
+    assert.equal(task.source, "idea");
+    assert.deepEqual(task.ideas, ["idea_src_keep"]);
+    const untouched = ideas.find((row) => row.id === "idea_tgt_existing");
+    assert.equal(untouched.status, "keep", "the saturation rule still holds for every other keep row");
+    assert.equal(untouched.taskId, undefined);
+    assert.equal(tasks.length, 5, "four busy rows plus the one promoted task");
+    assert.ok(run(source, target, "--promote=idea_src_keep").includes("nothing changed"), "a repeat promote is a no-op");
+    const absent = run(source, target, "--promote=idea_missing");
+    assert.match(absent, /not an eligible keep\/new unlinked idea/);
+    assert.ok(absent.includes("nothing changed"), "an ineligible id writes nothing");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

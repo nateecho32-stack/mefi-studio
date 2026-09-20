@@ -3,6 +3,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
+import boardGrowth from "../scripts/board-growth.cjs";
 import { readFile } from "node:fs/promises";
 import * as decisionClient from "../scripts/decision-client.mjs";
 import * as workClassification from "../scripts/work-classification.mjs";
@@ -70,6 +71,7 @@ test("request admission sends only accepted records to Jev and never awaits the 
   const queued = [], board = { requests: [incoming] };
   const added = { title: "Repair launch settings", prompt: "Restore missing settings", source: "audit" };
   const context = vm.createContext({
+    boardGrowth,
     projects: { stamp: (row) => row },
     workTitleKey: (title) => String(title).toLowerCase().trim(),
     mutateBoard: async (mutate) => mutate(board),

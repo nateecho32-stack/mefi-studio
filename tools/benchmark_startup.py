@@ -59,10 +59,11 @@ class MeasuredWindow extends RealWindow {
       const loadedMs = Math.round(performance.now() - started);
       try {
         const renderer = await this.webContents.executeJavaScript(`new Promise((resolve, reject) => {
-          const end = performance.now() + 15000;
+          const end = performance.now() + 30000;
           const poll = () => {
             const boot = document.getElementById('boot-layer');
-            const workspaceReady = Boolean(window.MefiWorkspace?.isActive?.() && document.getElementById('workspace-send')?.disabled === false);
+            const launchReady = !window.MefiBoot?.isActive?.() && boot?.hidden !== false;
+            const workspaceReady = Boolean(launchReady && window.MefiWorkspace?.isActive?.() && document.getElementById('workspace-send')?.disabled === false);
             const cards = document.querySelectorAll('.card').length;
             if (workspaceReady || (!window.MefiWorkspace && boot && boot.hidden && cards > 0)) {
               resolve({ readyMs: Math.round(performance.now()), cards, workspaceReady });

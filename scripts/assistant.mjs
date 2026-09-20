@@ -10,6 +10,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { dependencyIds } from "./backlog.cjs";
 
 const MINUTE = 60000;
 const HOUR = 60 * MINUTE;
@@ -101,6 +102,8 @@ export const AGENT_ROLES = [
   { role: "grower", cadenceMs: 45 * MINUTE, ai: true },
   { role: "responder", cadenceMs: 0, ai: false },
   { role: "reference", cadenceMs: 0, ai: false },
+  { role: "cluster-planner", cadenceMs: 0, ai: true },
+  { role: "cluster-reviewer", cadenceMs: 0, ai: true },
 ];
 export const AGENT_STATUSES = ["idle", "queued", "running", "done", "error"];
 const ROLE_VERBS = { watcher: "watching", machine: "scanning", auditor: "auditing", keeper: "tidying", compactor: "compacting the queue", foreman: "handing out work", thinker: "thinking", briefer: "briefing", overseer: "overseeing", responder: "replying", improver: "improving", grower: "growing", ideas: "scanning ideas", reference: "gathering references" };
@@ -243,6 +246,7 @@ export function emptyState(now = Date.now()) {
     ai: { keyPresent: false, online: false, lastOkAt: 0, lastError: null, failures: 0, backoffUntil: 0, model: ASSISTANT_MODEL },
     action: { kind: "idle", text: "idle", since: now },
     lastError: null,
+    audit: null,
     messages: [],
     log: [],
     thinking: null,
@@ -263,6 +267,7 @@ export function emptyState(now = Date.now()) {
     pool: emptyPool(),
     agents: AGENT_ROLES.map(({ role }) => emptyAgent(role)),
     intel: [],
+    builderEvents: [],
     work: [],
     overseer: emptyOverseer(),
     focus: null,
@@ -277,6 +282,7 @@ function normalizeWorkEntry(entry, now = 0) {
   return {
     id: entry.id,
     kind: entry.kind,
+    ...(str(entry.key) ? { key: str(entry.key) } : {}),
     role: str(entry.role) || KIND_ROLES[entry.kind] || entry.kind,
     payload: isObject(entry.payload) ? entry.payload : {},
     taskId: typeof entry.taskId === "string" && entry.taskId ? entry.taskId : null,
@@ -315,7 +321,16 @@ function normalizeMessage(entry, index) {
 
 function normalizeLog(entry) {
   if (!isObject(entry) || typeof entry.text !== "string" || typeof entry.kind !== "string" || !entry.kind) return null;
-  return { at: num(entry.at, 0), kind: entry.kind, text: entry.text };
+  const role = str(entry.role).trim().slice(0, 24);
+  return role ? { at: num(entry.at, 0), kind: entry.kind, text: entry.text, role } : { at: num(entry.at, 0), kind: entry.kind, text: entry.text };
+}
+
+// The last audit pass the host recorded. errors below zero (or missing) means
+// "never ran clean" — the counter then keeps whatever the log holds.
+function normalizeAudit(raw) {
+  if (!isObject(raw)) return null;
+  const errors = Math.floor(num(raw.errors, -1));
+  return { ok: bool(raw.ok, errors === 0), errors, warnings: Math.floor(num(raw.warnings, 0)), at: num(raw.at, 0) };
 }
 
 function normalizeThinking(raw) {
@@ -385,6 +400,7 @@ export function normalizeState(raw, now = Date.now()) {
     state.action = { kind: oneOf(action.kind, ACTION_KINDS, "idle"), text: str(action.text, "idle"), since: num(action.since, now) };
     state.lastError =
       isObject(raw.lastError) && typeof raw.lastError.text === "string" ? { at: num(raw.lastError.at, 0), text: raw.lastError.text.slice(0, 500) } : null;
+    state.audit = normalizeAudit(raw.audit);
     state.messages = clampTail(asArray(raw.messages).map(normalizeMessage).filter(Boolean), CAPS.messages);
     state.log = clampTail(asArray(raw.log).map(normalizeLog).filter(Boolean), CAPS.log);
     state.thinking = normalizeThinking(raw.thinking);
@@ -415,6 +431,7 @@ export function normalizeState(raw, now = Date.now()) {
     state.prefs = normalizePrefs(raw.prefs);
     state.agents = normalizeAgents(raw.agents);
     state.intel = asArray(raw.intel).map(normalizeIntelRow).filter(Boolean).slice(0, INTEL_CAP);
+    state.builderEvents = clampTail(asArray(raw.builderEvents).map(normalizeBuilderEvent).filter(Boolean), BUILDER_EVENTS_CAP);
     state.pool = emptyPool(state.prefs); // nothing runs or waits in a freshly loaded state
     state.work = clampTail(asArray(raw.work).map((entry) => normalizeWorkEntry(entry, 0)).filter(Boolean), CAPS.work);
     state.overseer = normalizeOverseer(raw.overseer);
@@ -433,11 +450,23 @@ const isOpenTodo = (todo) => todo.status !== "completed" && todo.status !== "can
 
 // Classify the root sessions the rail shows into active / working / stale /
 // folded and hand the renderer a display order. Deterministic for a given now.
+// Parallel-executor merges land as two sessions with the same title; the rail
+// would count two active slots for one piece of work. One normalized title =
+// one slot: the newest session wins, the older clone never reaches the counts.
+const sessionTitleKey = (session) => compactKey(session?.title);
+
 export function organize({ sessions = [], todos = [], now = Date.now(), policy = {} } = {}) {
   const rules = normalizePolicy({ ...DEFAULT_POLICY, ...(isObject(policy) ? policy : {}) });
+  const seenTitles = new Set();
   const roots = asArray(sessions)
     .filter((session) => isObject(session) && typeof session.id === "string" && !session.parentId && num(session.timeUpdated, 0) > now - RAIL_WINDOW_MS)
-    .sort(byNewest);
+    .sort(byNewest)
+    .filter((session) => {
+      const key = sessionTitleKey(session);
+      if (key && seenTitles.has(key)) return false;
+      if (key) seenTitles.add(key);
+      return true;
+    });
   const bySession = new Map();
   for (const todo of asArray(todos)) {
     if (!isObject(todo) || typeof todo.sessionId !== "string") continue;
@@ -469,6 +498,12 @@ export function organize({ sessions = [], todos = [], now = Date.now(), policy =
   const foldedSet = new Set(folded);
   let hiddenTodos = 0;
   for (const [sessionId, list] of bySession) if (foldedSet.has(sessionId)) hiddenTodos += list.length;
+  // Work accounting: one active session can carry one in-progress todo. Todo
+  // rows beyond that are overflow — the watcher reports them as requeued
+  // (back to pending) instead of in flight, so the intel it hands the
+  // digest can never claim more work than there are active slots.
+  const inProgressRows = asArray(todos).filter((todo) => isObject(todo) && todo.status === "in_progress");
+  const inProgress = Math.min(inProgressRows.length, active.length);
   return {
     updatedAt: now,
     policy: rules,
@@ -476,6 +511,8 @@ export function organize({ sessions = [], todos = [], now = Date.now(), policy =
     active,
     stale,
     folded,
+    inProgress,
+    requeuedTodos: Math.max(0, inProgressRows.length - inProgress),
     // Outside counts on purpose: it moves every tick, and sameOrganization
     // must not redraw the tree each time it does. The overseer digest reads it.
     staleQuietMin: staleQuietMs ? Math.round(staleQuietMs / MINUTE) : 0,
@@ -484,10 +521,20 @@ export function organize({ sessions = [], todos = [], now = Date.now(), policy =
 }
 
 // True when two organize() results would draw the same tree (updatedAt ignored).
+// The work-accounting numbers ride along: when they move, the host must store
+// the fresh organization or the watcher intel and the digest drift apart.
 export function sameOrganization(a, b) {
   const pick = (org) => {
     const source = isObject(org) ? org : {};
-    return JSON.stringify({ order: source.order ?? [], active: source.active ?? [], stale: source.stale ?? [], folded: source.folded ?? [], counts: source.counts ?? {} });
+    return JSON.stringify({
+      order: source.order ?? [],
+      active: source.active ?? [],
+      stale: source.stale ?? [],
+      folded: source.folded ?? [],
+      counts: source.counts ?? {},
+      inProgress: Math.max(0, Math.floor(num(source.inProgress, 0))),
+      requeuedTodos: Math.max(0, Math.floor(num(source.requeuedTodos, 0))),
+    });
   };
   return pick(a) === pick(b);
 }
@@ -557,10 +604,25 @@ export function overseerDigest(state, now = Date.now()) {
   const fixes = asArray(current.fixes).filter((entry) => isObject(entry));
   const work = asArray(current.work).filter((entry) => isObject(entry));
   const problems = asArray(current.problems).filter((entry) => isObject(entry));
+  const audit = normalizeAudit(current.audit);
+  // A genuinely clean audit says zero errors; an absent or unknown audit never
+  // reconciles the counter.
+  const auditClean = audit !== null && audit.errors === 0 && audit.ok !== false;
   const ai = isObject(current.ai) ? current.ai : {};
   const housekeeping = isObject(current.housekeeping) ? current.housekeeping : {};
   const organization = isObject(current.organization) ? current.organization : {};
   const orgCounts = isObject(organization.counts) ? organization.counts : {};
+  // Work accounting reads the same tick twice: the watcher's in-progress todo
+  // count is the truth about mid-flight work, so the digest derives inFlight
+  // from the freshest watcher report instead of its own journal (which said 0
+  // while the watcher said 10). A report older than the intel window no more
+  // owns the number than a stale intel line owns the plan; the journal stands
+  // in until the next watcher tick.
+  const watcherInProgress = asArray(current.intel)
+    .map(normalizeIntelRow)
+    .filter((row) => row && row.role === "watcher" && row.facts && Number.isFinite(Number(row.facts.inProgress)) && now - row.at <= 30 * MINUTE)
+    .sort((a, b) => b.at - a.at)
+    .map((row) => Math.max(0, Math.floor(Number(row.facts.inProgress))))[0];
   let unanswered = 0;
   for (const message of messages.slice().reverse()) {
     if (message.role === "assistant") break;
@@ -573,7 +635,18 @@ export function overseerDigest(state, now = Date.now()) {
     status: str(current.status, "running"),
     roster: agents.map((row) => ({ role: row.role, status: str(row.status, "idle"), runs: Math.floor(num(row.runs, 0)), lastMs: Math.round(num(row.lastMs, 0)), error: str(row.error) || null })),
     errorRoles: agents.filter((row) => row.status === "error").map((row) => row.role),
-    logErrors: log.filter((entry) => entry.kind === "error").length,
+    // Error rows become records naming the role that logged them. When the
+    // latest audit pass reported zero errors and nothing is open, the counter
+    // is reset: stale rows in the capped log must not read as live trouble.
+    logErrors:
+      auditClean && !problems.length
+        ? []
+        : clampTail(
+            log
+              .filter((entry) => entry.kind === "error")
+              .map((entry) => ({ at: num(entry.at, 0), role: str(entry.role).trim() || "assistant", text: clip(str(entry.text), 120) })),
+            12,
+          ),
     problems: { count: problems.length, kinds: problems.map((entry) => str(entry.kind)).filter(Boolean), aged: problems.filter((entry) => now - num(entry.since, 0) > HOUR).length },
     fixes: { total: fixes.length, failed: fixes.filter((entry) => entry.ok === false).length },
     replies: {
@@ -581,7 +654,7 @@ export function overseerDigest(state, now = Date.now()) {
       local: messages.filter((entry) => entry.role === "assistant" && entry.via !== "ai").length,
       unanswered,
     },
-    work: { inFlight: work.length, stale: work.filter((entry) => now - num(entry.startedAt, 0) > WORK_STALE_MS).length },
+    work: { inFlight: watcherInProgress ?? work.length, stale: work.filter((entry) => now - num(entry.startedAt, 0) > WORK_STALE_MS).length },
     // The tree's own shape: sessions gone quiet mid-work are the review's
     // window into what the assistants on this machine left hanging.
     sessions: {
@@ -598,11 +671,19 @@ export function overseerDigest(state, now = Date.now()) {
     ai: { keyPresent: bool(ai.keyPresent, false), online: bool(ai.online, false), failures: Math.floor(num(ai.failures, 0)), backoffMin: Math.max(0, Math.round((num(ai.backoffUntil, 0) - now) / MINUTE)) },
     prefs: normalizePrefs(current.prefs),
     intel: intelLines(current, now, { limit: 6, maxAgeMs: 30 * MINUTE }),
+    // Builder outcomes are counted per event: reports = runs that finished,
+    // fails = runs that failed, both inside the half-hour window, so the
+    // numbers match what the builders actually reported home. States saved
+    // before the event log keep their single intel row counted.
     builders: (() => {
+      const events = asArray(current.builderEvents)
+        .map(normalizeBuilderEvent)
+        .filter((row) => row && now - row.at <= BUILDER_EVENT_WINDOW_MS);
+      if (events.length) return { reports: events.filter((row) => row.ok).length, fails: events.filter((row) => !row.ok).length };
       const rows = asArray(current.intel)
         .map(normalizeIntelRow)
-        .filter((row) => row && row.role === "builder" && now - row.at <= 30 * MINUTE);
-      return { reports: rows.length, fails: rows.filter((row) => row.facts?.ok === false).length };
+        .filter((row) => row && row.role === "builder" && now - row.at <= BUILDER_EVENT_WINDOW_MS);
+      return { reports: rows.filter((row) => row.facts?.ok !== false).length, fails: rows.filter((row) => row.facts?.ok === false).length };
     })(),
   };
 }
@@ -629,7 +710,8 @@ export function overseerReview(digest, overseer = null) {
     add("warn", "stale sessions waiting", `${plural(num(d.sessions.stale), "session")} quiet with work in progress · oldest ${ago(num(d.sessions.staleQuietMin, 0))} · the repair pass files resume work`);
   if (num(d.ai?.failures, 0) >= 2) add("warn", "AI link failing", `${d.ai.failures} consecutive failure(s)${d.ai.backoffMin ? ` · backoff ${d.ai.backoffMin}m` : ""}`);
   else if (!d.ai?.keyPresent) add("info", "no API key", "replies and briefs are local-only until a key is saved");
-  if (prevDigest && num(prevDigest.logErrors, 0) < num(d.logErrors, 0)) add("warn", "errors rising", `error log entries ${prevDigest.logErrors} → ${d.logErrors} since the last review`);
+  const errorTally = (value) => (Array.isArray(value) ? value.length : num(value, 0)); // digests before the role-tagged records kept a bare count
+  if (prevDigest && errorTally(prevDigest.logErrors) < errorTally(d.logErrors)) add("warn", "errors rising", `error log entries ${errorTally(prevDigest.logErrors)} → ${errorTally(d.logErrors)} since the last review`);
   if (d.housekeeping?.ageMin !== null && num(d.housekeeping?.ageMin, 0) > 4 * 60) add("info", "housekeeping stale", `last tidy ${ago(d.housekeeping.ageMin)}`);
   const weights = { critical: 25, warn: 12, info: 4 };
   const score = Math.max(0, Math.min(100, 100 - findings.reduce((sum, entry) => sum + (weights[entry.severity] ?? 4), 0)));
@@ -747,7 +829,11 @@ export function overseerTune(prefs, tune) {
 // Fold one review into the playbook: lessons dedupe on their text (repeats
 // raise hits — the memory of what keeps going wrong), the score history rolls,
 // and directives record what the review actually did (prefs tuned, requests
-// filed) so the next pass never re-issues open work.
+// filed) so the next pass never re-issues open work. Directives dedupe at
+// write time by normalized text: a rephrase of an already-recorded directive
+// ("Resume: eyes.mjs atomic write guards" arriving twice, three times…)
+// bumps the existing row — a fresh `at`, moved to the tail so clampTail
+// keeps it — instead of appending another copy.
 export function overseerMerge(overseer, review, now = Date.now(), { digest = null, via = "local", directives = [] } = {}) {
   const base = normalizeOverseer(overseer);
   const source = isObject(review) ? review : {};
@@ -764,6 +850,16 @@ export function overseerMerge(overseer, review, now = Date.now(), { digest = nul
     } else lessons.push({ text, hits: 1, firstAt: now, lastAt: now, source: via === "ai" ? "ai" : "local" });
   }
   lessons.sort((a, b) => b.hits - a.hits || b.lastAt - a.lastAt);
+  const recorded = [...base.directives];
+  for (const entry of asArray(directives).map((row) => normalizeOverseerDirective({ at: now, ...(isObject(row) ? row : {}) })).filter(Boolean)) {
+    const key = compactKey(entry.text);
+    const index = recorded.findIndex((row) => compactKey(row.text) === key);
+    if (index >= 0) {
+      const bumped = { ...recorded[index], at: now };
+      recorded.splice(index, 1);
+      recorded.push(bumped);
+    } else recorded.push(entry);
+  }
   const score = Number.isFinite(Number(source.score)) ? Math.min(100, Math.max(0, Math.round(Number(source.score)))) : base.score;
   return {
     reviews: base.reviews + 1,
@@ -773,7 +869,7 @@ export function overseerMerge(overseer, review, now = Date.now(), { digest = nul
     health: oneOf(source.health, OVERSEER_HEALTHS, base.health === "unknown" ? "fair" : base.health),
     findings: clampTail(asArray(source.findings).map(normalizeOverseerFinding).filter(Boolean), OVERSEER_LIMITS.findings),
     lessons: lessons.slice(0, OVERSEER_LIMITS.lessons),
-    directives: clampTail([...base.directives, ...asArray(directives).map((entry) => normalizeOverseerDirective({ at: now, ...(isObject(entry) ? entry : {}) })).filter(Boolean)], OVERSEER_LIMITS.directives),
+    directives: clampTail(recorded, OVERSEER_LIMITS.directives),
     scores: clampTail(score === null ? base.scores : [...base.scores, { at: now, score }], OVERSEER_LIMITS.scores),
     digest: digest ?? base.digest,
   };
@@ -935,6 +1031,10 @@ const INTEL_CAP = INTEL_ROLES.length;
 const INTEL_TEXT_MAX = 160;
 const INTEL_FACTS_MAX = 8;
 const INTEL_FACT_VALUE_MAX = 60;
+// Builder outcomes are events, not a row: every finish and every failure
+// counts, so a later run cannot erase an earlier failure from the digest.
+const BUILDER_EVENTS_CAP = 24;
+const BUILDER_EVENT_WINDOW_MS = 30 * MINUTE;
 
 const normalizeIntelFacts = (value) => {
   if (!isObject(value)) return {};
@@ -954,6 +1054,22 @@ const normalizeIntelRow = (row) => {
   if (!text) return null;
   return { role: row.role, at: num(row.at, 0), text, facts: normalizeIntelFacts(row.facts) };
 };
+
+// One structured builder outcome: job id, role and exit code travel with the
+// verdict so the digest and the intel feed parse the same event.
+const normalizeBuilderEvent = (row) => {
+  if (!isObject(row) || row.role !== "builder" || typeof row.ok !== "boolean") return null;
+  const exit = Number(row.exit);
+  return { at: num(row.at, 0), role: "builder", ok: row.ok, job: clip(str(row.job), 120), exit: Number.isFinite(exit) ? Math.floor(exit) : null, title: clip(str(row.title), 70) };
+};
+
+// Every builder finish/fail appends one event — outcomes accumulate within
+// the cap instead of being overwritten by whichever run reported last.
+function appendBuilderEvent(state, event) {
+  const row = normalizeBuilderEvent(isObject(event) && typeof event.ok === "boolean" ? { ...event, role: "builder" } : null);
+  if (!row) return state;
+  return { ...state, builderEvents: clampTail([...asArray(state.builderEvents).map(normalizeBuilderEvent).filter(Boolean), row], BUILDER_EVENTS_CAP) };
+}
 
 // One report home: the row for that role is replaced and the array re-sorts
 // newest first. An unknown role or an empty finding leaves the state alone.
@@ -998,6 +1114,7 @@ export function hearReport(state, report, now = Date.now()) {
   if (!finding) return { state: current, finding: "", reply: "", wakeOverseer: false, wakeForeman: false };
   const handed = Math.floor(num(source.handed, 0));
   let next = applyIntel(current, { role, at: now, text: finding, facts: { ok, title, handed } });
+  if (role === "builder") next = appendBuilderEvent(next, { at: now, ok, job: source.job, exit: source.exit, title });
   const reply = ok
     ? `Builder reported: finished "${title || "the job"}"${handed ? ` · ${handed} follow-up(s) handed on` : ""}.`
     : `Builder reported: failed "${title || "the job"}". ${clip(str(source.error) || "no done line", 80)} Looking at it.`;
@@ -1190,7 +1307,7 @@ function duration(ms) {
 
 // A text that already carries quotes (`gather for task "…"`) is not wrapped again.
 const quoted = (text) => (text.includes('"') ? clip(text, 60) : `"${clip(text, 40)}"`);
-const describeWork = (entry) => (entry.kind === "responder" ? `reply to ${quoted(entry.text)}` : `${entry.kind}${entry.text ? ` ${quoted(entry.text)}` : ""}`);
+const describeWork = (entry) => entry.kind === "role" ? str(entry.payload?.role) || entry.role || "agent" : (entry.kind === "responder" ? `reply to ${quoted(entry.text)}` : `${entry.kind}${entry.text ? ` ${quoted(entry.text)}` : ""}`);
 
 // One line per restarted item: unanswered replies, bare interrupted roles not
 // covered by a journal entry, then the journal entries themselves.
@@ -1305,7 +1422,7 @@ function tidyRequests(requests, { now, collisions, audit, duplicates }, report) 
     ? new Set(duplicates.findings.map((row) => (isObject(row) ? row.file : row)).filter((file) => typeof file === "string"))
     : null;
   const cutoff = now - TIDY_LIMITS.autoRequestDays * DAY;
-  const protectedRequest = (request) => !isObject(request) || hasHandoffLineage(request) || request.source === "chat" || !AUTO_SOURCES.has(request.source) || request.status === "running" || request.status === "verifying";
+  const protectedRequest = (request) => !isObject(request) || hasHandoffLineage(request) || hasDelegation(request) || hasPendingContinuation(request) || request.source === "chat" || !AUTO_SOURCES.has(request.source) || request.status === "running" || request.status === "verifying";
   let removed = 0;
   let kept = requests.filter((request) => {
     if (protectedRequest(request)) return true;
@@ -1412,6 +1529,25 @@ export const compactKey = (value) =>
     .replace(/\s+/g, " ")
     .trim();
 
+// A request's payload is what it asks, not how it is titled: the prompt,
+// source, area, file set and session pair normalised into one stable hash.
+// A filing pass that re-snapshots the same problem under reworded display
+// text must drop the copy before the queue ever sees it, so the compactor
+// hashes payloads and skips exact duplicates before enqueue. A promptless
+// ask has no payload to hash and keeps the title key as its identity.
+export function requestPayloadKey(request) {
+  if (!isObject(request) || !compactKey(request.prompt)) return "";
+  const file = (value) => String(value ?? "").replace(/[\\/]+/g, "/").replace(/\/+$/, "").toLowerCase();
+  return JSON.stringify({
+    prompt: compactKey(request.prompt),
+    source: compactKey(request.source),
+    area: compactKey(request.area),
+    file: file(request.file),
+    files: uniqueStrings(asArray(request.files).map(file)).filter(Boolean).sort(),
+    sessions: uniqueStrings(asArray(request.sessions).map(str)).sort(),
+  });
+}
+
 // Titles identify a display topic, not the accepted obligation. Cleanup may
 // collapse spelling-only copies, but distinct briefs or file/acceptance scope
 // must survive under their own IDs. Attempts and provenance are not scope.
@@ -1423,12 +1559,12 @@ export function taskObligationKey(task) {
   const canonical = (value) => Array.isArray(value) ? value.map(canonical) : isObject(value)
     ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])])) : value;
   const scope = {};
-  for (const key of ["description", "details", "note", "notes", "context", "ideaDetail", "acceptance", "acceptanceCriteria", "requirements", "constraints", "scope", "projectId", "file"]) {
+  for (const key of ["description", "details", "note", "notes", "context", "ideaDetail", "acceptance", "acceptanceCriteria", "requirements", "constraints", "scope", "remaining", "handoff", "projectId", "projectPath", "projectRoot", "file"]) {
     if (task?.[key] != null && task[key] !== "") scope[key] = typeof task[key] === "string" ? text(task[key]) : canonical(task[key]);
   }
   for (const key of ["files", "problemFiles", "ideas", "dependsOn", "sessions"]) if (asArray(task?.[key]).length) scope[key] = uniqueStrings(task[key].map(str)).sort();
   if (asArray(task?.refs).length) scope.refs = task.refs.map((row) => JSON.stringify(canonical(row))).sort();
-  if (asArray(task?.members).length) scope.members = task.members.map((member) => [str(member?.id), text(member?.title), text(member?.prompt)]).sort(([a], [b]) => a.localeCompare(b));
+  if (asArray(task?.members).length) scope.members = task.members.map((member) => [str(member?.id), taskObligationKey({ ...member, title: str(member?.title) || "Grouped obligation" })]).sort(([a], [b]) => a.localeCompare(b));
   const prompt = text(task?.prompt);
   return JSON.stringify([title, !prompt || titleText(prompt) === titleText(task?.title) ? "" : prompt, scope]);
 }
@@ -1822,7 +1958,15 @@ const compactWeight = (item) => asArray(item?.logs).length * 2 + asArray(item?.r
 const isLiveTask = (task) => task?.status === "open" || task?.status === "active" || task?.status === "awaiting_verification";
 const isFinishedTask = (task) => task?.status === "done" || task?.status === "archived";
 const hasHandoffLineage = (item) => Boolean(str(item?.handoffId) || str(item?.fromRun));
+const hasPendingContinuation = (item) => item?.runProgress?.pending === true;
 const handoffIdentity = (item) => str(item?.handoffId) && str(item?.fromRun) ? JSON.stringify([str(item.handoffId), str(item.fromRun)]) : null;
+// A request coordinator still owes final integration after releasing its
+// planning claim. Only the exact promoted coordinator can represent it;
+// title, payload and collision heuristics cannot erase that obligation.
+const delegationIdentity = (item) => item?.delegation?.version === 1 && str(item.delegation.fromRun) && str(item.delegation.scope)
+  && asArray(item.delegation.childTaskIds).length
+  ? JSON.stringify([item.delegation.fromRun, item.delegation.scope, [...item.delegation.childTaskIds].sort()]) : null;
+const hasDelegation = (item) => Boolean(delegationIdentity(item));
 
 // Dependencies name stable task IDs. A title/theme match cannot authorize
 // deleting either an edge's source or its target; grouping would also change
@@ -1832,8 +1976,8 @@ function dependencyProtectedIds(tasks) {
   for (const task of asArray(tasks)) {
     // Approved plans link to these exact task IDs. Automatic grouping or title
     // deduplication must not replace the human-reviewed implementation slices.
-    if ((task?.planningId || hasHandoffLineage(task)) && task?.id) protectedIds.add(str(task.id));
-    const dependencies = asArray(task?.dependsOn).map(str).filter(Boolean);
+    if ((task?.planningId || task?.buildApproval || hasHandoffLineage(task) || hasPendingContinuation(task)) && task?.id) protectedIds.add(str(task.id));
+    const dependencies = dependencyIds(task);
     if (dependencies.length && task?.id) protectedIds.add(str(task.id));
     for (const id of dependencies) protectedIds.add(id);
   }
@@ -1923,6 +2067,7 @@ function rebuildPlanPrompt(task, ideasById) {
   }
   if (lines.length < 2) return null;
   const theme = planThemeKey(task.title) ?? "collected";
+  if (asArray(task.members).length) return `Related ${theme} idea context. All grouped member requirements and acceptance checks remain required.\n${lines.join("\n")}`;
   return `Work through these ${theme} ideas the assistant collected. Do the ones that still make sense and say why you skipped any.\n${lines.join("\n")}`;
 }
 
@@ -1934,8 +2079,46 @@ function rebuildTaskGroupPrompt(task) {
   const members = asArray(task.members).filter((member) => isObject(member) && str(member.id));
   if (members.length < 2) return null;
   const theme = planThemeKey(task.title) ?? "collected";
-  const lines = members.map((member, index) => `${index + 1}. ${clip(str(member.title), 80)}${member.prompt ? ` — ${clip(str(member.prompt), 400)}` : ""}`);
-  return `Work through these ${theme} tasks the AI review grouped. Do the ones that still make sense and say why you skipped any.\n${lines.join("\n")}`;
+  const contextFields = ["description", "details", "note", "notes", "context", "ideaDetail", "acceptance", "acceptanceCriteria", "requirements", "constraints", "scope", "remaining", "handoff", "projectId", "projectPath", "projectRoot", "file", "files", "problemFiles", "refs", "dependsOn"];
+  const lines = members.map((member, index) => {
+    const context = contextFields.filter((key) => member[key] != null && member[key] !== "" && (!Array.isArray(member[key]) || member[key].length))
+      .map((key) => `${key}: ${typeof member[key] === "string" ? member[key] : JSON.stringify(member[key], null, 2)}`);
+    return [`${index + 1}. ${str(member.title)} [${str(member.id)}]`, str(member.prompt), ...context].filter(Boolean).join("\n");
+  });
+  return `Complete all accepted requirements in these ${theme} tasks. Grouping keeps every member's scope and acceptance checks intact. Verify each member before marking the group complete. If requirements conflict with each other or current project constraints, explain the conflict and keep the unresolved work visible. If any requirement remains blocked or unfinished, report it as remaining work; do not silently skip it.${task.groupingReason ? `\nGrouping context: ${str(task.groupingReason)}` : ""}\n\n${lines.join("\n\n")}`;
+}
+
+// A grouping can share one working checkout only. Missing scope remains a
+// distinct legacy scope rather than guessing that it belongs to a named project.
+function taskProjectKey(task) {
+  const projectPath = str(task?.projectPath || task?.projectRoot).replace(/[\\/]+/g, "/").replace(/\/+$/, "");
+  return JSON.stringify([str(task?.projectId), process.platform === "win32" ? projectPath.toLowerCase() : projectPath]);
+}
+
+function groupedTaskMetadata(members) {
+  const refs = [], seenRefs = new Set();
+  for (const ref of members.flatMap((member) => asArray(member.refs))) {
+    const key = JSON.stringify(ref);
+    if (!seenRefs.has(key)) { seenRefs.add(key); refs.push(structuredClone(ref)); }
+  }
+  const files = uniqueStrings(members.flatMap((member) => [str(member.file), ...asArray(member.files).map(str), ...asArray(member.problemFiles).map(str)]).filter(Boolean));
+  const priorities = members.map((member) => member.priority).filter((value) => typeof value === "number" && Number.isFinite(value));
+  const priority = priorities.length ? Math.max(...priorities) : members.find((member) => member.priority != null)?.priority;
+  const pinned = members.filter((member) => member.workPin || member.pin);
+  const pinTimes = pinned.map((member) => num(member.pinnedAt, 0)).filter((at) => at > 0);
+  const scope = {};
+  for (const key of ["projectId", "projectPath", "projectRoot"]) {
+    const value = members.find((member) => str(member[key]))?.[key];
+    if (value != null) scope[key] = value;
+  }
+  return {
+    ...scope, refs,
+    ...(files.length ? { files } : {}),
+    ...(priority != null ? { priority } : {}),
+    ...(pinned.length ? { workPin: true } : {}),
+    ...(members.some((member) => member.pin) ? { pin: true } : {}),
+    ...(pinTimes.length ? { pinnedAt: Math.min(...pinTimes) } : {}),
+  };
 }
 
 // Rewire idea → task links after a merge/drop. keepPlanned keeps the idea
@@ -2057,7 +2240,7 @@ function planIdeas(ideas, tasks, now, rules, excludeIds = new Set(), allocateId 
 //     full prompt, refs, priority, provenance — pointing at its plan via
 //     absorbedInto (the executor never picks it: only "open" runs);
 //   • the plan carries `members`, a complete snapshot of every obligation
-//     (full prompts, not the clipped prompt lines), so expiring or losing the
+//     (including full prompts and acceptance checks), so expiring or losing the
 //     grouping restores the original tasks instead of leaving nothing.
 // Member ideas are rewired to the plan while it lives. Only open, unclaimed,
 // non-plan tasks resolve; a name the board does not carry is ignored (the
@@ -2065,37 +2248,17 @@ function planIdeas(ideas, tasks, now, rules, excludeIds = new Set(), allocateId 
 // and a theme that already has a plan is never re-minted. IDs come from the
 // shared allocator (see compact).
 function obligationSnapshot(task) {
+  // Saved task fields evolve. A field allowlist previously lost acceptance
+  // criteria, project scope and future requirement fields when rows were lost.
+  // Preserve the complete record, excluding only transient execution ownership.
+  const { runId, lease, absorbedInto, ...snapshot } = structuredClone(task);
   return {
+    ...snapshot,
     id: str(task.id),
     title: str(task.title),
     prompt: str(task.prompt),
-    refs: asArray(task.refs),
-    ideas: uniqueStrings(asArray(task.ideas).map(str)),
-    ...(asArray(task.dependsOn).length ? { dependsOn: asArray(task.dependsOn).map(str) } : {}),
-    ...(task.contextHistory ? { contextHistory: task.contextHistory } : {}),
-    ...(asArray(task.logs).length ? { logs: asArray(task.logs) } : {}),
-    ...(task.handoff != null ? { handoff: task.handoff } : {}),
-    ...(task.handoffId ? { handoffId: str(task.handoffId) } : {}),
-    ...(task.fromRun ? { fromRun: str(task.fromRun) } : {}),
-    ...(task.parentTaskId ? { parentTaskId: str(task.parentTaskId) } : {}),
-    ...(task.originalTitle ? { originalTitle: str(task.originalTitle) } : {}),
-    ...(task.lastAttempt ? { lastAttempt: task.lastAttempt } : {}),
-    ...(task.verification ? { verification: task.verification } : {}),
-    ...(task.runFailures != null ? { runFailures: task.runFailures } : {}),
-    ...(task.verifyAttempts != null ? { verifyAttempts: task.verifyAttempts } : {}),
-    ...(task.workPin ? { workPin: true } : {}),
-    ...(task.pinnedAt ? { pinnedAt: task.pinnedAt } : {}),
-    ...(task.color ? { color: str(task.color) } : {}),
-    ...(task.source ? { source: str(task.source) } : {}),
-    ...(task.file ? { file: str(task.file) } : {}),
-    ...(asArray(task.files).length ? { files: asArray(task.files).map(str) } : {}),
-    ...(task.priority != null ? { priority: task.priority } : {}),
-    ...(task.depth != null ? { depth: task.depth } : {}),
-    ...(task.parent ? { parent: str(task.parent) } : {}),
-    ...(task.owner ? { owner: str(task.owner) } : {}),
-    ...(asArray(task.sessions).length ? { sessions: asArray(task.sessions).map(str) } : {}),
-    ...(task.problemFamily ? { problemFamily: str(task.problemFamily) } : {}),
-    ...(asArray(task.problemFiles).length ? { problemFiles: asArray(task.problemFiles).map(str) } : {}),
+    refs: asArray(snapshot.refs),
+    ideas: uniqueStrings(asArray(snapshot.ideas).map(str)),
     createdAt: num(task.createdAt, 0),
     updatedAt: num(task.updatedAt, 0),
   };
@@ -2104,6 +2267,13 @@ function obligationSnapshot(task) {
 function planTaskGroups(tasks, ideas, groups, now, rules, allocateId = null) {
   const foldable = new Map();
   const protectedIds = dependencyProtectedIds(tasks);
+  const linkedIdeas = new Map();
+  for (const idea of asArray(ideas)) {
+    const owner = str(idea?.taskId), id = str(idea?.id);
+    if (!owner || !id) continue;
+    if (!linkedIdeas.has(owner)) linkedIdeas.set(owner, []);
+    linkedIdeas.get(owner).push(id);
+  }
   for (const task of asArray(tasks)) {
     if (!task || task.status !== "open" || task.runId || isObject(task.lease) || str(task.id).startsWith("task_plan_") || protectedIds.has(str(task.id))) continue;
     // A fresh grouped plan must not reset a member's paid-retry budget or
@@ -2140,33 +2310,34 @@ function planTaskGroups(tasks, ideas, groups, now, rules, allocateId = null) {
       memberIds.add(str(task.id));
       if (members.length >= rules.planTaskCap) break;
     }
-    if (members.length < 2) continue;
+    if (members.length < 2 || new Set(members.map(taskProjectKey)).size !== 1) continue;
     const id = allocateId ? allocateId() : `task_plan_${now.toString(36)}_${plans.length}`;
-    // The plan's prompt carries each obligation in full (clipped for the
-    // builder's budget only); the complete bodies ride in members and on the
-    // absorbed rows. The old 120-char clip discarded acceptance criteria and
-    // file scopes with no recoverable record behind them.
-    const lines = members.map((task, index) => `${index + 1}. ${clip(str(task.title), 80)}${task.prompt ? ` — ${clip(str(task.prompt), 400)}` : ""}`);
-    plans.push({
+    const snapshots = members.map((task) => ({
+      ...obligationSnapshot(task),
+      ideas: uniqueStrings([...asArray(task.ideas).map(str), ...asArray(linkedIdeas.get(str(task.id)))]),
+    }));
+    const plan = {
       id,
       title: `Plan: ${theme} — ${plural(members.length, "task")}`,
-      prompt: `Work through these ${theme} tasks the AI review grouped. Do the ones that still make sense and say why you skipped any.\n${lines.join("\n")}`,
       status: "open",
       color: "#e6c98d",
       source: "a-eyes",
       createdAt: now,
       updatedAt: now,
       logs: [{ at: now, kind: "status", text: `plan folded from ${plural(members.length, "task")} the AI review grouped` }],
-      ideas: uniqueStrings(members.flatMap((task) => asArray(task.ideas).map(str))),
-      members: members.map(obligationSnapshot),
+      ...(str(group.reason) ? { groupingReason: str(group.reason) } : {}),
+      ideas: uniqueStrings(snapshots.flatMap((task) => task.ideas)),
+      members: snapshots,
       mergedFrom: members.map((task) => str(task.id)),
-      refs: [],
-    });
+      ...groupedTaskMetadata(members),
+    };
+    plan.prompt = rebuildTaskGroupPrompt(plan);
+    plans.push(plan);
     for (const task of members) {
       folded.add(str(task.id));
       absorb.set(task, id);
-      for (const ideaId of asArray(task.ideas).map(str)) relink.set(ideaId, id);
     }
+    for (const ideaId of plan.ideas) relink.set(ideaId, id);
     taken.add(theme);
     taken.add(compactKey(plans[plans.length - 1].title));
   }
@@ -2190,6 +2361,22 @@ function planTaskGroups(tasks, ideas, groups, now, rules, allocateId = null) {
     absorbed: absorb.size,
     ideas: applyRelink(ideas, relink, { keepPlanned: true, at: now }),
   };
+}
+
+// Explicit consolidation without compaction's unrelated cleanup, expiry or
+// idea admission. Callers can preview this pure result before saving it.
+export function groupTasks({ tasks = [], ideas = [], groups = [], now = Date.now(), limits = {} } = {}) {
+  const rules = { ...COMPACT_LIMITS, ...(isObject(limits) ? limits : {}) };
+  const ids = new Set(asArray(tasks).map((task) => str(task?.id)).filter(Boolean));
+  let sequence = 0;
+  const allocateId = () => {
+    let id;
+    do { id = `task_plan_${now.toString(36)}_${sequence++}`; } while (ids.has(id));
+    ids.add(id);
+    return id;
+  };
+  const result = planTaskGroups(tasks, ideas, groups, now, rules, allocateId);
+  return { ...result, tasks: [...result.plans, ...result.tasks] };
 }
 
 export function compact({ requests = [], tasks = [], ideas = [], collisions = null, now = Date.now(), limits = {}, taskGroups = null, allocateId = null, promoteIdeas = true } = {}) {
@@ -2268,12 +2455,13 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   {
     const groups = new Map();
     for (const task of outTasks) {
-      if (!isLiveTask(task) || task.runId || protectedIds.has(str(task.id))) continue;
+      if (!isLiveTask(task) || task.runId || isObject(task.lease) || protectedIds.has(str(task.id))) continue;
       const theme = planThemeKey(task.title);
       if (!theme) continue;
-      const members = groups.get(theme);
+      const key = `${theme}|${taskProjectKey(task)}`;
+      const members = groups.get(key);
       if (members) members.push(task);
-      else groups.set(theme, [task]);
+      else groups.set(key, [task]);
     }
     const drop = new Set();
     const replace = new Map();
@@ -2300,14 +2488,14 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
         }
       }
       if (drop.has(winner)) continue; // unreachable; kept for symmetry
-      const merged = { ...winner, ideas: mergedIds };
+      const merged = { ...winner, ...groupedTaskMetadata([...members, ...mergedMembers]), ideas: mergedIds };
       if (mergedMembers.length >= 2) merged.members = mergedMembers;
       if (mergedFrom.length > asArray(winner.mergedFrom).length) {
         merged.mergedFrom = uniqueStrings(mergedFrom);
         merged.logs = [...asArray(winner.logs), { at: now, kind: "status", text: `absorbed ${plural(members.length - 1, "duplicate plan")} of the same theme` }].slice(-40);
         merged.updatedAt = now;
       }
-      const rebuilt = rebuildPlanPrompt(merged, ideasById) ?? (mergedMembers.length >= 2 ? rebuildTaskGroupPrompt(merged) : null);
+      const rebuilt = [mergedMembers.length >= 2 ? rebuildTaskGroupPrompt(merged) : null, rebuildPlanPrompt(merged, ideasById)].filter(Boolean).join("\n\n");
       if (rebuilt) merged.prompt = rebuilt;
       replace.set(winner, merged);
       report.duplicateTasks += members.length - 1;
@@ -2561,6 +2749,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   // snippets and problem themes cannot prove it was admitted or completed.
   // Group snapshots also represent a handoff if its absorbed row is missing.
   const representedHandoffs = new Set(outTasks.flatMap((task) => [task, ...asArray(task.members)]).map(handoffIdentity).filter(Boolean));
+  const representedDelegations = new Set(outTasks.flatMap((task) => [task, ...asArray(task.members)]).map(delegationIdentity).filter(Boolean));
   for (const task of outTasks) {
     if (task.status === "archived" || !isFixTicket(task)) continue;
     const theme = fixThemeKey(task);
@@ -2569,21 +2758,39 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   const seen = new Set();
   const seenThemes = new Set();
   for (const request of inRequests) {
-    if ((request.status !== "running" && request.status !== "verifying") || !isFixTicket(request)) continue;
+    if ((request.status !== "running" && request.status !== "verifying" && !hasPendingContinuation(request)) || !isFixTicket(request)) continue;
     const theme = fixThemeKey(request);
     if (theme) seenThemes.add(theme);
   }
   let outRequests = [];
+  const payloadKeys = new Set();
   for (const request of inRequests) {
-    // A claim in flight — or one mid-verification — is never touched.
-    if (request.status === "running" || request.status === "verifying") {
+    // A claim in flight — or one mid-verification — is never touched, but its
+    // payload still holds the slot so a refiled copy cannot enqueue beside it.
+    const payloadKey = requestPayloadKey(request);
+    if (request.status === "running" || request.status === "verifying" || hasPendingContinuation(request)) {
+      if (payloadKey) payloadKeys.add(payloadKey);
       outRequests.push(request);
+      continue;
+    }
+    if (hasDelegation(request)) {
+      if (representedDelegations.has(delegationIdentity(request))) report.absorbed += 1;
+      else outRequests.push(request);
       continue;
     }
     if (hasHandoffLineage(request)) {
       if (representedHandoffs.has(handoffIdentity(request))) report.absorbed += 1;
       else outRequests.push(request);
       continue;
+    }
+    // Exact payload duplicates drop before enqueue: a refiled snapshot under
+    // reworded display text is the same request, whatever its title says.
+    if (payloadKey) {
+      if (payloadKeys.has(payloadKey)) {
+        report.duplicateRequests += 1;
+        continue;
+      }
+      payloadKeys.add(payloadKey);
     }
     const key = compactKey(request.title) || compactKey(request.prompt);
     if (!key) {
@@ -2619,7 +2826,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   {
     const runningKeys = new Set();
     for (const request of outRequests) {
-      if ((request.status === "running" || request.status === "verifying") && request.source === "collision") {
+      if ((request.status === "running" || request.status === "verifying" || hasPendingContinuation(request)) && request.source === "collision") {
         const key = sessionSetKey(request);
         if (key) runningKeys.add(key);
       }
@@ -2627,7 +2834,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
     const groups = new Map();
     const drop = new Set();
     for (const request of outRequests) {
-      if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request) || request.source !== "collision") continue;
+      if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request) || hasDelegation(request) || hasPendingContinuation(request) || request.source !== "collision") continue;
       const key = sessionSetKey(request);
       if (!key) continue;
       if (runningKeys.has(key)) {
@@ -2667,7 +2874,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
     const live = liveCollisionIndex(collisions);
     const before = outRequests.length;
     outRequests = outRequests.filter((request) => {
-      if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request)) return true;
+      if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request) || hasDelegation(request) || hasPendingContinuation(request)) return true;
       if (request.source === "collision" && !collisionRequestLive(request, live)) return false;
       if (request.source === "overseer" && /^overseer:\s*resolve collision/i.test(str(request.title))) return false;
       return true;
@@ -2683,7 +2890,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   //    touched.
   const staleCutoff = now - rules.staleRequestHours * HOUR;
   const fresh = outRequests.filter((request) => {
-    if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request)) return true;
+    if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request) || hasDelegation(request) || hasPendingContinuation(request)) return true;
     if (request.source === "chat" || !AUTO_SOURCES.has(request.source)) return true;
     const at = num(request.at, 0);
     return at >= staleCutoff;
@@ -2923,13 +3130,13 @@ export function isDoneMarkerLine(line, mark = EXECUTOR_DONE_MARK_TEXT) {
 // remains, so settlement carries the worker's own account of the obligations
 // instead of only an anonymous success marker:
 //   MEFI_RESULT: done: tar torch + stick copy; remaining: catalog contract; ran tools/test_sets world
-// Parsed leniently — it is evidence attached to the attempt, never the
-// verdict itself.
+// The marker must start its own line. Reading a saved task can echo an older
+// result inside JSON or prose before the worker reports its current result.
+// Fields remain lenient — this is attached context, never the verdict itself.
 export function parseExecutorResult(line, mark = "MEFI_RESULT:") {
-  const flat = String(line ?? "").trim();
-  const index = flat.indexOf(mark);
-  if (index === -1) return null;
-  const body = flat.slice(index + mark.length).trim();
+  const flat = String(line ?? "").replace(/\u001b\[[0-9;]*m/g, "").trim();
+  if (!flat.startsWith(mark)) return null;
+  const body = flat.slice(mark.length).trim();
   if (!body || body.length > 300) return null;
   const parts = {};
   for (const chunk of body.split(/;+/)) {
@@ -3110,7 +3317,7 @@ export function housekeepingSweep({ requests = [], tasks = [], liveRuns = new Se
   });
   const beforePrune = outRequests.length;
   outRequests = outRequests.filter((request) => {
-    if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request)) return true;
+    if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request) || hasDelegation(request) || hasPendingContinuation(request)) return true;
     if (str(request.source) === "chat" || !AUTO_SOURCES.has(request.source)) return true;
     return !(num(request.at, 0) && num(request.at, 0) < requestCutoff);
   });
@@ -4780,6 +4987,27 @@ function selfTest() {
     expect(titles.filter((title) => title.toLowerCase() === "something new").length === 1, `duplicate requests collapse ${JSON.stringify(titles)}`);
     expect(titles.includes("Running already"), "a request in flight is never dropped");
     expect(compacted.report.duplicateTasks === 2 && compacted.report.absorbed === 1 && compacted.report.duplicateRequests === 1, `compact report ${JSON.stringify(compacted.report)}`);
+    // Exact payload duplicates drop before enqueue: the same ask refiled under
+    // reworded display text is one request, while a genuinely different ask
+    // from the same source still queues.
+    const payloadDup = compact({
+      now: at,
+      tasks: [],
+      requests: [
+        { title: "Resume: eyes.mjs atomic write guards", prompt: "A-Eyes overseer: resume the atomic write guards.", source: "overseer", at: at - MINUTE },
+        { title: "Atomic write guards: resume eyes.mjs", prompt: "A-Eyes overseer: resume the atomic write guards.", source: "overseer", at },
+      ],
+    });
+    expect(payloadDup.requests.length === 1 && payloadDup.requests[0].title === "Resume: eyes.mjs atomic write guards" && payloadDup.report.duplicateRequests === 1, `exact payload duplicates drop before enqueue ${JSON.stringify({ titles: payloadDup.requests.map((request) => request.title), report: payloadDup.report })}`);
+    const payloadDistinct = compact({
+      now: at,
+      tasks: [],
+      requests: [
+        { title: "Resume: eyes.mjs atomic write guards", prompt: "resume the atomic write guards", source: "overseer", at },
+        { title: "Resume: eyes.mjs queue gates", prompt: "resume the queue gates", source: "overseer", at },
+      ],
+    });
+    expect(payloadDistinct.requests.length === 2, `a different ask from the same source stays ${JSON.stringify(payloadDistinct.requests.map((request) => request.title))}`);
     expect(compacted.report.revived === 0 && compacted.report.unblocked === 1, `revive/unblock ${JSON.stringify(compacted.report)}`);
     expect(compacted.requestsChanged && compacted.tasksChanged, "a pass that changed both stores says so");
     // the review: an unclaimed auto request expires (the filing pass re-files
@@ -5023,7 +5251,9 @@ function selfTest() {
     const heardHand = hearReport(emptyState(result.now), { role: "builder", ok: true, title: "Split the work", handed: 2 }, result.now);
     expect(!heardHand.wakeOverseer && heardHand.wakeForeman && /follow-up/.test(heardHand.reply), `a handoff wakes the foreman ${heardHand.reply}`);
     const digestFail = overseerDigest(heardFail.state, result.now);
-    expect(digestFail.builders.fails === 1 && digestFail.builders.reports === 1, `digest counts builder fails ${JSON.stringify(digestFail.builders)}`);
+    expect(digestFail.builders.fails === 1 && digestFail.builders.reports === 0, `digest counts builder fails separately from successful reports ${JSON.stringify(digestFail.builders)}`);
+    const digestBoth = overseerDigest(heardOk.state, result.now + 2000);
+    expect(digestBoth.builders.fails === 1 && digestBoth.builders.reports === 1, `digest counts one failed and one finished run ${JSON.stringify(digestBoth.builders)}`);
     const reviewFail = overseerReview(digestFail);
     expect(reviewFail.findings.some((entry) => entry.title === "builders reporting failures"), `overseer names builder failures ${JSON.stringify(reviewFail.findings)}`);
     const talkFail = overseerTalk(reviewFail, { digest: digestFail });
@@ -5110,6 +5340,15 @@ function selfTest() {
   expect(overseer.normalized.reviews === 2 && overseer.normalized.score === 72 && overseer.normalized.lessons.length === 1 && overseer.normalized.lessons[0].hits === 1 && overseer.normalized.directives.length === 1 && overseer.normalized.scores.length === 2, `overseer normalized ${JSON.stringify(overseer.normalized)}`);
   expect(overseer.digest.errorRoles.join(",") === "briefer" && overseer.digest.replies.unanswered === 1 && overseer.digest.work.stale === 1 && overseer.digest.ai.keyPresent === false, `overseer digest ${JSON.stringify(overseer.digest.errorRoles)}`);
   expect(overseer.digest.sessions.stale === 1 && overseer.digest.sessions.active === 2 && overseer.digest.sessions.folded === 2 && overseer.digest.sessions.staleQuietMin === 1800, `overseer digest sessions ${JSON.stringify(overseer.digest.sessions)}`);
+  // Error log rows reach the digest as role-tagged records; a clean audit
+  // pass with no open problems resets the counter even with stale rows.
+  const errorRows = [{ at: result.now - MINUTE, kind: "error", role: "watcher", text: "boom" }, { at: result.now - MINUTE, kind: "error", text: "anonymous" }];
+  const reconciled = overseerDigest({ ...emptyState(result.now), log: errorRows, audit: { ok: true, errors: 0, warnings: 0, at: result.now } }, result.now);
+  expect(Array.isArray(reconciled.logErrors) && reconciled.logErrors.length === 0, `a clean audit with no open problems resets logErrors ${JSON.stringify(reconciled.logErrors)}`);
+  const troubled = overseerDigest({ ...emptyState(result.now), log: errorRows, problems: [{ kind: "audit", text: "1 audit error", since: result.now }] }, result.now);
+  expect(troubled.logErrors.length === 2 && troubled.logErrors.every((entry) => entry.role) && troubled.logErrors[1].role === "assistant", `logErrors records carry roles ${JSON.stringify(troubled.logErrors)}`);
+  const dirtyAudit = overseerDigest({ ...emptyState(result.now), log: errorRows.slice(0, 1), audit: { ok: false, errors: 2, warnings: 0, at: result.now } }, result.now);
+  expect(dirtyAudit.logErrors.length === 1, `a dirty audit keeps the records ${JSON.stringify(dirtyAudit.logErrors)}`);
   expect(overseer.review.score === 48 && overseer.review.health === "poor" && overseer.review.findings.length === 5 && overseer.review.findings[0].title === "briefer failing" && overseer.review.lessons.length === 0 && overseer.review.upgrades.length === 2, `overseer review ${JSON.stringify(overseer.review)}`);
   const talked = overseerTalk(overseer.review, { digest: overseer.digest });
   expect(talked.roles.includes("briefer") && talked.roles.includes("foreman") && talked.resumeUnanswered && /briefer failing/.test(talked.say) && /On it/.test(talked.reply), `overseer talks the fixture review to the assistant ${JSON.stringify(talked)}`);
@@ -5127,6 +5366,13 @@ function selfTest() {
   expect(merged2.lessons.length === 5 && merged2.reviews === 4 && merged2.lessons[0].text.startsWith("briefer failing"), `merge adds lessons ${JSON.stringify(merged2.lessons.map((entry) => entry.text))}`);
   const merged3 = overseerMerge(merged2, second, result.now + 2000);
   expect(merged3.lessons.length === 5 && merged3.lessons[0].hits === 2 && merged3.reviews === 5, "repeat lessons raise hits");
+  // Directives dedupe at write time by normalized text: a rephrase of a
+  // recorded directive bumps the existing row instead of appending a third
+  // copy, and a genuinely new directive still records.
+  const directiveAgain = overseerMerge({ reviews: 1, directives: [{ at: result.now - HOUR, kind: "finding", text: "Resume: eyes.mjs atomic write guards" }] }, {}, result.now + 1000, { directives: [{ text: "resume eyes mjs atomic write guards" }] });
+  expect(directiveAgain.directives.length === 1 && directiveAgain.directives[0].at === result.now + 1000, `a rephrased directive bumps instead of appending ${JSON.stringify(directiveAgain.directives)}`);
+  const directiveFresh = overseerMerge(directiveAgain, {}, result.now + 2000, { directives: [{ text: "Resume: eyes.mjs queue gates" }] });
+  expect(directiveFresh.directives.length === 2, `a different directive still records ${JSON.stringify(directiveFresh.directives.map((entry) => entry.text))}`);
   const rawOverseer = normalizeOverseer({ reviews: "x", score: 999, health: "weird", lessons: [null, { text: "keep me", hits: -2 }], findings: "nope", scores: [{ score: "no" }, { score: 50 }] });
   expect(rawOverseer.reviews === 0 && rawOverseer.score === 100 && rawOverseer.health === "unknown" && rawOverseer.lessons.length === 1 && rawOverseer.lessons[0].hits === 1 && rawOverseer.scores.length === 1, `overseer garbage ${JSON.stringify(rawOverseer)}`);
   expect(result.replies[21].actions.includes("overseer") && result.replies[21].text.includes("review #3") && result.replies[21].text.includes("playbook"), `overseer reply: ${result.replies[21].text}`);
@@ -5442,7 +5688,7 @@ function selfTest() {
     });
     expect(rotated.requests.some((request) => request.title === "Resolve collision: oldname.lua"), `tidy keeps a live session pair when the representative file rotated ${JSON.stringify(rotated.requests)}`);
   }
-  return { ok: failures.length === 0, failures, checks: 180 };
+  return { ok: failures.length === 0, failures, checks: 183 };
 }
 
 async function cli() {

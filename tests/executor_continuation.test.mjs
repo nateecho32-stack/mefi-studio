@@ -9,6 +9,8 @@ import * as assistant from "../scripts/assistant.mjs";
 import * as history from "../scripts/task-history.mjs";
 import backlog from "../scripts/backlog.cjs";
 import taskHandoffs from "../scripts/task-handoffs.cjs";
+import taskDelegation from "../scripts/task-delegation.cjs";
+import executorResume from "../scripts/executor-resume.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const section = (start, end) => {
@@ -24,7 +26,7 @@ function verificationHost({ tasks = [], requests = [], unavailable = [], changes
   let board = { tasks: copy(tasks), requests: copy(requests) };
   const notes = [];
   const env = vm.createContext({
-    Date: clock, crypto, taskHandoffs, process: { pid: 1 }, EXECUTOR_PARALLEL_CAP: 3, autopilot: { jobs: [] }, assistantState: { prefs: {} }, assistantModule: assistant,
+    Date: clock, crypto, backlog, taskHandoffs, taskDelegation, executorResume, executorProcessAlive: () => false, process: { pid: 1 }, EXECUTOR_PARALLEL_CAP: 3, autopilot: { jobs: [] }, assistantState: { prefs: {} }, assistantModule: assistant,
     getAssistant: async () => assistant, loadModule: async () => history,
     getEyes: async () => ({ listChanges: ({ sessionId }) => {
       if (unavailable.includes(sessionId)) throw new Error("fixture evidence store unavailable");

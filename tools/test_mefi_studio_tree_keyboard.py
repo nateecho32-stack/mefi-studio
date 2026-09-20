@@ -118,8 +118,10 @@ class MefiStudioTreeKeyboardTests(unittest.TestCase):
         self.assertIn("hover = kbdFocus;", setter, "sighted keyboard users get the tooltip and ring too")
 
     def test_focus_follows_a_rebuild(self):
-        build = _function_body(self.tree, "buildGraph")
+        build = _function_body(self.tree, "buildGraphImpl")
         self.assertIn("if (kbdFocus) setKbdFocus(findNodeById(kbdFocus.id));", build, "keyboard focus must follow its node across a rebuild")
+        wrapper = _function_body(self.tree, "buildGraph")
+        self.assertIn("buildGraphImpl(sessions, todos, fallback)", wrapper, "buildGraph must still run the pinned rebuild body")
 
     # ---- housekeeping ----------------------------------------------------
 

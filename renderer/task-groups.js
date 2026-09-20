@@ -5,6 +5,11 @@
   const object = (value) => value && typeof value === "object" && !Array.isArray(value);
   const idOf = (value) => typeof value === "string" ? value.trim() : "";
   const rows = (value) => Array.isArray(value) ? value : [];
+  const sameProject = (a, b) => {
+    if (a?.projectId && b?.projectId && a.projectId !== b.projectId) return false;
+    const key = (value) => String(value || "").replace(/[\\/]+/g, "/").replace(/\/+$/, "").toLowerCase();
+    return !a?.projectPath || !b?.projectPath || key(a.projectPath) === key(b.projectPath);
+  };
 
   function groupTasks(tasks, { plans = [] } = {}) {
     const byId = new Map();
@@ -43,6 +48,15 @@
           if (member && !member.snapshot) member.snapshot = snapshot;
         } else add(group, canonical || snapshot, snapshot, Boolean(canonical));
       }
+    }
+    // Delegated builders are real tasks, so preserve each child's status and
+    // keep the parent as the final integration step instead of absorbing it.
+    for (const task of byId.values()) {
+      const parent = byId.get(idOf(task.delegatedFrom?.parentTaskId || task.parentTaskId));
+      if (!parent || !sameProject(parent, task) || !task.delegatedFrom && !rows(parent.delegation?.childTaskIds).includes(task.id)) continue;
+      const group = ensure(parent);
+      if (!rows(parent.members).length) group.kind = "task-delegation";
+      add(group, task);
     }
     const planById = new Map(rows(plans).filter(object).map((plan) => [idOf(plan.id), plan]));
     for (const task of byId.values()) {
@@ -95,5 +109,73 @@
     return result;
   }
 
-  window.MefiTaskGroups = { groupTasks, graphTasks };
+  // A goal-level board: explicit plans and conversation follow-ups share a
+  // card, but the underlying task records and scheduling stay untouched.
+  function overviewGroups(tasks, { plans = [] } = {}) {
+    const byId = new Map(rows(tasks).filter((task) => object(task) && idOf(task.id)).map((task) => [task.id, task]));
+    const result = new Map(), owner = new Map();
+    const add = (group, task, { canonical = true, snapshot = null } = {}) => {
+      if (!idOf(task?.id) || owner.has(task.id)) return;
+      owner.set(task.id, group);
+      group.members.push({ id: task.id, task, canonical, snapshot, readOnly: !canonical });
+    };
+    for (const plan of rows(plans).filter((plan) => object(plan) && idOf(plan.id))) {
+      const group = { id: `planning:${plan.id}`, kind: "approved-plan", planId: plan.id, title: String(plan.title || "Project plan"), plan, task: null, readOnly: true, members: [] };
+      result.set(group.id, group);
+      const ids = new Set(rows(plan.taskIds).map(idOf));
+      for (const task of byId.values()) if (sameProject(plan, task) && (task.planningId === plan.id || ids.has(task.id))) add(group, task);
+      for (const id of ids) if (id && !byId.has(id)) add(group, { id, title: "Saved step unavailable", status: "unknown", unavailable: true }, { canonical: false });
+    }
+    for (const task of byId.values()) {
+      if (!task.planningId || owner.has(task.id)) continue;
+      const id = `planning:${task.planningId}`;
+      // Keep task progress visible even while the planning list is unavailable.
+      let group = result.get(id);
+      if (!group) {
+        group = { id, kind: "approved-plan", planId: task.planningId, title: String(task.planningTitle || "Project plan"), task: null, readOnly: true, members: [] };
+        result.set(id, group);
+      }
+      if (sameProject(group.plan, task)) add(group, task);
+    }
+    for (const explicit of groupTasks([...byId.values()], { plans })) {
+      if (!explicit.task) continue;
+      let group = owner.get(explicit.task.id);
+      if (!group) {
+        group = { ...explicit, members: [] };
+        result.set(group.id, group);
+        // An executable grouped plan is the aggregate, not another child step.
+        owner.set(explicit.task.id, group);
+      }
+      for (const member of explicit.members) if (sameProject(explicit.task, member.task)) add(group, member.task, member);
+    }
+    const rootOf = (task) => {
+      let current = task;
+      const chain = [], seen = new Set();
+      while (current && !owner.has(current.id)) {
+        if (seen.has(current.id)) return chain.slice(chain.findIndex((row) => row.id === current.id)).sort((a, b) => a.id.localeCompare(b.id))[0];
+        seen.add(current.id); chain.push(current);
+        const parent = byId.get(idOf(current.parentTaskId));
+        if (!parent || !sameProject(current, parent)) return current;
+        current = parent;
+      }
+      return current || task;
+    };
+    for (const task of byId.values()) {
+      if (owner.has(task.id)) continue;
+      const root = rootOf(task);
+      let group = owner.get(root.id);
+      if (!group) {
+        group = { id: root.id, kind: "task", title: String(root.title || "Untitled work"), task: root, readOnly: false, members: [] };
+        result.set(group.id, group);
+        add(group, root);
+      }
+      add(group, task);
+      if (group.kind === "task" && group.members.length > 1) group.kind = "task-thread";
+    }
+    // Parents listed after their children must land on the same root card.
+    // Preserve all explicit membership order and append conversation follow-ups.
+    return [...result.values()];
+  }
+
+  window.MefiTaskGroups = { groupTasks, graphTasks, overviewGroups };
 })();

@@ -10,6 +10,13 @@ For source installs, run `npm ci`, `npm run build-booklet`, then `npm start`
 from this directory. Windows portable downloads must be extracted in full
 before opening `Mefi Studio AI+.exe`.
 
+On launch, a loading circle and progress bar prepare your projects, saved work,
+model catalog, session tree, fonts and saved view before the app becomes
+interactive. Progress follows completed setup steps. If something fails or
+times out, choose **Try again** or **Open with available data**; clicking the
+background or pressing Escape does not skip unfinished loading. Saved views,
+drafts and focus are restored, and the first-run guide opens after loading.
+
 **Preparing a GitHub download:** run `npm run check`, `npm test` and
 `npm run audit`, then `npm run package:release`. This creates a fresh folder
 under `dist/releases/` with only the two public catalogs in its data directory.
@@ -114,6 +121,11 @@ Descriptions help distinguish results. Use the arrow keys and Enter to open a
 result, or **Close** / Escape to return to where you were.
 
 The existing task board holds prerequisites, handoff context, and task history.
+It opens as an overview of **plan cards**, with progress and a **Current step**
+for each goal. Saved discussions show decisions settled; execution plans show
+confirmed work, current workers and verification separately. Follow-up tasks
+stay beneath their original goal. Expand a card to inspect its steps, evidence
+and task actions. These visual relationships do not change scheduling.
 These features run in Studio using local project storage, with no additional
 package, terminal, account, or hosted database. Coding still uses the configured
 worker connection. A prerequisite must finish before dependent work can start;
@@ -124,7 +136,7 @@ rolling back project files or marking work complete.
 
 Use **Make yourself at home** to set your name, companion name, accent, and
 movement preference. **Node tree** in the sidebar opens the Command constellation
-directly (or press **D** outside a text field; **F** fits the tree). **Studio tools** holds the full task board,
+directly (or press **D** outside a text field; **F** rearranges and fits the tree). **Studio tools** holds the full task board,
 session explorer, model booklet, value graphs, ideas, and diagnostics. API keys,
 Jev, coding providers, and the optional Ruins Runner launcher live in **Settings
 & connections**. Press **H** to return home or **Ctrl K** to find a tool.
@@ -164,9 +176,10 @@ The recording indicator reopens the panel; **Stop** freezes the capture,
 **Reset** clears it, and **Export JSON** saves a report for comparing runs.
 It follows the game's profiler approach: bounded frame history, nested rendering
 scopes with self time, p95/worst timings and automatic hitch records. Command
-frame painting, layout, graph updates, agent motion and the tree rail have named
-timings. Desktop captures also show host request duration, event-loop lag and
-Studio process CPU/memory. Slow asynchronous requests include waiting and are
+frame painting, nodes, connections, labels, backdrop, layout, graph updates,
+agent motion and the tree rail have named timings. Desktop captures also show
+host request duration, event-loop lag and Studio process CPU/memory.
+Slow asynchronous requests include waiting and are
 not by themselves evidence of blocked rendering.
 
 Capture is off by default and stays in memory until export. Hidden-window
@@ -179,12 +192,57 @@ capture. CPU covers Studio processes, not external coding workers. Reports
 contain static operation names and numeric measurements, without task text,
 request payloads, file paths or credentials.
 
+For repeatable performance comparisons, run `node tools/profile_studio.mjs
+--output tools/logs/profile.json --capture`. It records isolated 32- and
+154-node Command workloads in 2D and rotating 3D, using the same profiler.
+Use `--source PATH` to compare another source snapshot. The fixture uses
+software rendering and disposable state; its timings help locate expensive
+work rather than predict live GPU frame rates. See `TESTRUNS.md` for the
+workload settings and measured optimization results.
+
 **Command center** puts the current worker and its reported step in **Live work**,
 with readiness counts and a ranked queue underneath. Agent details and technical
 logs expand when needed. Active agents move smoothly between their work and the
 Assistant; finished agents return and fade away. Their positions survive status
 refreshes, and role colors distinguish their work. Verification and claim recovery run before
 the next dispatch, including ordinary automatic work outside backlog mode.
+**Agents**, directly on the node tree toolbar, chooses how agents share the
+work. It stays available when Live work is collapsed. The same choice is also
+available as **Agent mode** on Home.
+**Swarm** and **Cluster** both use the Assistant's planner and reviewer to help
+builders complete a shared task. The planner can delegate independent parts to
+two or three subtasks with their own builders. The parent waits for those
+results, then resumes to combine and verify the work. Each subtask keeps its
+brief, approval, progress and result on the board beneath the parent; open the
+parent to follow its subtask links and confirmed progress.
+
+**Swarm** can also work on other ready tasks across the queue. **Cluster** keeps
+agents on one shared task and its required subtasks through verification before
+moving to another goal. Independent subtasks can build together within the saved
+machine-managed or manual parallel limit. Use **Work on it** to prioritize a
+task before the next focus is chosen. A task needing review keeps the focus
+until resolved or you switch modes.
+
+The **New work** toggle in Command's Assistant panel turns scheduling on or off.
+Turning it on resumes the assistant and enables coding workers; turning it off
+stops new starts while current workers finish. The setting survives restarts.
+**Work on it** keeps that setting in effect and explains when it is off. The task
+stays prioritized; a dispatch request alone does not confirm a worker has started.
+The conversation confirms **Started** when the worker process launches. Repeating
+**Work on it** follows an existing builder or reuses its saved task, with separate
+messages for preparation, building and verification. Builder names connection
+failures and a full manual worker limit when another start has to wait.
+
+The mode is saved across restarts; existing installations start in Swarm.
+Switching to Cluster lets current workers finish. Pause, build approvals,
+prerequisites, file claims and machine checks apply in either mode. **Verify
+first** requires approval for each delegated subtask. Both modes' planner and
+reviewer use the saved z.ai or OpenCode Go HTTP connection and the Assistant's
+agent/AI limits; their planning advice does not count as completed tests.
+If that connection is unavailable, Live work shows the skipped assistance and
+the configured builder can continue. Findings are included in the worker brief
+and saved with its attempt; they never approve or complete work by themselves.
+
 **Parallel builds** defaults to **Machine managed**, including existing
 installations with a saved worker limit. The machine agent admits independent,
 eligible coding work while Studio remains responsive, without a fixed worker
@@ -225,7 +283,12 @@ Agents connect to their current host as they work or return to the Assistant.
 Large Constellation and Rings branches keep their children beside their session
 instead of wrapping them around the opposite side of the tree.
 **Space** toggles rotation;
-**F** refits the tree. These managed positions last for the current view session;
+**Fit** or **F** rebuilds the node arrangement and frames the whole tree. It
+restores a readable 3D angle, ends a current drag or Follow camera, and places
+workers beside their tasks again. The chosen 2D/3D view, layout, appearance,
+task relationships and Orbit preference stay the same; rotation briefly
+settles so the repaired layout can be read. **Shift F** still focuses the
+selected branch. These managed positions last for the current view session;
 a reload starts a fresh layout, and resizing can adjust its spacing.
 
 Click the **Live work** heading to collapse or expand the panel. **Zen mode** in
@@ -256,6 +319,9 @@ space for active task labels. Worker satellites stay clear of task nodes and
 panel edges, and newly revealed children join their parent's existing position.
 Every layout has a flat 2D view and a real 3D volume: orbiting reveals depth
 between branches, rings or tiers while their world positions remain fixed.
+Constellation and Rings use gradual depth changes between nearby nodes and
+distinct front and back tiers, with extra spacing in wider 3D views. Fit
+rebuilds that curved volume so the tree retains depth when you rotate it.
 Saved task groups can be expanded to inspect their members. Running and
 verifying children stay visible even when the group is collapsed; saved member
 briefs and history remain available without creating another runnable task.
@@ -264,8 +330,9 @@ work, and **Extra glow** adds brighter halos and luminous cores. These effects
 are saved separately and animate around fixed anchors; reduced motion keeps
 the trails still.
 The settings open beside the live tree so changes can be seen immediately.
-Switch between **2D** and **3D** beside the preview; **Fit** brings the whole
-tree back into view after panning or zooming. Changing an already selected view
+Switch between **2D** and **3D** beside the preview; **Fit** rearranges the nodes
+and brings the whole tree back into view after panning, zooming or rotating.
+Changing an already selected view
 keeps the camera in place, and preview controls do not stack notifications.
 Closing the settings returns to the previous view and camera framing.
 
@@ -289,11 +356,20 @@ follows a loaded local track; **Local player**, **Desktop audio / Spotify**, and
 when local tracks are queued. Capture starts only after an explicit control
 gesture; changing to Spotify or removing a track asks you to reconnect when
 desktop capture is needed. The connection status shows paused tracks and errors.
-Use **Response** to adjust the strength from 25% to 200%, independently of volume.
+Use **Response** to adjust the strength from 0% to 200%, independently of volume.
+The default is a gentle 35%, with smaller waves and slower movement. Previous
+response settings are reduced once when moving to these calmer controls.
+**Connection waves** and **Node glow** switch independently. **Drum accents**
+and **Background glow** start off and can be enabled separately.
+**Separate frequency lines** starts on: each connection keeps its own bass,
+midrange or treble assignment as the graph updates. A bass note animates its
+assigned lines without pulsing all the other connections. Turn this option off
+to let each line follow the full mix. These choices are remembered.
 The response adapts to quiet and loud signals across bass, mids and treble.
 Sustained bass rolls along the connections; low drum attacks, midrange hits and
-high percussion drive different ripples. The live waveform also traces the
-connections and the inside of each node. A visible audio cable joins the music
+high percussion drive different ripples. The live waveform shapes the inside of
+each node and, with frequency splitting off, traces the connections too. A
+visible audio cable joins the music
 node to the hub while linked. The visual reactions follow frequency and attack
 patterns. Silence and pause let the waves settle; node anchors, labels and task
 relationships stay in place. Reduced motion keeps the effects still.
@@ -317,7 +393,7 @@ Mefi's Studio AI+/
     graph.js                value map, task-fit heatmap, pools, recommendation engine
     eyes.js                 A-Eyes: change feed, diffs, PNG pins, log tail, inspector
     workspace.js            project home, companion conversation, explicit tasks, review and completion results
-    boot.js                 shared visibility-aware polling and optional constellation startup animation
+    boot.js                 startup readiness/progress gate and shared visibility-aware polling
     tree3d.js               3D task-tree rail (starfield, green activity lights, pulses)
   scripts/
     refresh-models.mjs      live roster + models.dev + curated -> data/models.json
@@ -710,6 +786,13 @@ edit-only attempt can pass on attributable completed edits, so this still does
 not independently certify every acceptance criterion. Tracked delegated work
 gets durable child cards; parents wait until those exact children finish, and
 exhausted children hold their parents for review while unrelated work proceeds.
+Automatic grower, improver and Overseer suggestions wait when the board and
+inbox already contain three unresolved obligations, including work awaiting
+review. Repair, verification and explicit requests continue. Discovery receives
+the existing backlog and may correctly suggest no new work. Admission rechecks
+capacity under the board lock, and exact repeated suggestions are matched
+against saved tasks and group members.
+
 Compaction preserves intent while collapsing representations:
 same-theme plans merge into one task whose membership is unioned, whose
 prompt is rebuilt from the surviving obligation set, and whose ideas are
@@ -730,6 +813,15 @@ are two deliberate stores, never merged away;
 missing slice between them through the app's own helpers — idea identity,
 admission rule and drained task rows copied additively, existing rows and the
 home `board.db` fork untouched.
+
+For an explicitly reviewed consolidation while Studio is closed, use
+`node scripts/group-board.mjs --data=<directory> --groups=<json-file>` to
+preview it, then append `--apply`. The manifest lists each group's `title`,
+exact task titles in `tasks`, and optional corresponding `taskIds`. This
+operation only groups the supplied work, backs up the original local stores,
+and records task history. Full requirements, acceptance checks, references and
+file scope survive in the grouped brief and original member records. Active,
+dependent, approved, failed or cooling tasks are protected from regrouping.
 
 **The Policy Lab.** Beside the execution loop sits an experiment loop that
 learns from measured history instead of adding more tasks. It is
@@ -852,7 +944,16 @@ lessons, upgrades, tunes); without one the deterministic local review still
 runs. On the node tree it hovers directly above the assistant node in
 periwinkle, not in the worker ring.
 
-**Closing and coming back.** Every job the pool starts — a reply, an
+**Closing and coming back.** Reloading the view keeps host agents running and
+restores their live status. On a full restart, Studio resumes the helper roles
+and unfinished builder tasks that were working last. Builders save their session,
+checklist, progress and recent output locally as they work, and flush their latest
+checkpoint before a normal quit. The next builder receives that context and
+continues from the existing edits, with interrupted tasks ahead of ordinary
+queued work. A live worker retains ownership; Studio waits for it instead of
+starting a duplicate. Pause, build approvals and prerequisites still apply.
+
+Every job the pool starts — a reply, an
 improve/grow/explore/expand run, an audit, a brief, an ideas scan, a reference
 gather, an analyzer read — is journaled to `data/eyes-assistant.json` the
 moment it starts and struck out the moment it ends, so a quit, crash or reboot
@@ -861,7 +962,9 @@ before anything else: every job still marked in flight, every message that
 never got a reply and every agent that was mid-run is restarted, the log and
 the thread get one line ("closed for 2 h 13 m · restarting 3 jobs: …") and a
 toast says *Restarted N interrupted jobs*. A job is retried at most three
-times, then dropped with an error in the log; work older than ten minutes is
+times after unplanned interruptions, then dropped with an error in the log;
+normal quits and updates preserve a queued continuation without spending that
+retry budget. Work older than ten minutes is
 flagged as a `work-stale` problem, retried once and dropped. The assistant
 card and the Explorer column keep a **Working on** list of what is in flight,
 the Command pill reads `assistant · working on N`, and "what are you working
@@ -897,11 +1000,33 @@ the owning agent is told. Healthy in-budget runs are never touched.
 
 ### Analyzer (`A`)
 
+Loading a project starts a local overview in **Analyzer**. **Analyze project**
+refreshes it after files change. It reads historical plans, roadmaps, design
+notes and specifications alongside this project's saved Studio plans, then
+compares their work items with current source files. The report shows the
+project inventory, related code with `file:line` evidence, missing references,
+and old completion claims that still need verification.
+
+Ranked starting points explain why to tackle something, the first step and an
+acceptance check. Prepare one as an editable idea before deciding what to build.
+An empty project gets starting points for defining an outcome and building a
+small first slice. Analysis does not change plans or create runnable tasks.
+File existence and keyword matches cannot establish that behavior works; test
+commands are listed for review, not executed. Scan limits and unreadable plans
+are reported, and dependency, build, private-data and hidden folders are skipped.
+
+The local overview works without a key. **AI project read** explicitly sends
+bounded report excerpts to the saved z.ai or OpenCode Go HTTP connection for
+additional interpretation; it has no coding tools. Loading a folder never
+starts this AI request. Project changes clear the previous report and ignore
+delayed results from the old project.
+
 Drop a file or paste an idea. Files are picked apart in read time: composition
 bars, outline, TODO markers, and referenced paths that exist versus are
-missing. Ideas are verified against the work tree: keyword coverage, evidence
-hits with `file:line`, and a new / related / already-implemented verdict. The
-optional AI deep read adds features, ideas, content, and gaps.
+missing. Ideas are compared with the work tree: keyword coverage, evidence
+hits with `file:line`, and a new / related-work verdict. Text matches do not
+prove implementation. The optional AI deep read adds features, ideas, content,
+and gaps.
 
 ### Tasks, references and feature ideas
 
@@ -935,16 +1060,9 @@ clusters related ideas into a self-building map you can dive into.
 ### Command view (`D`, the constellation)
 
 The project workspace is the default home. Open the constellation through
-**Studio tools** or `D`; its ambience settings control its optional startup
-and idle behavior. The optional **boot menu** starts with one
-gold assistant node alone on black, then its agents fly out and spawn a green
-reader node per chat and source the tree is built from — each node names the
-chat or thing it is reading — and clean each node away again in red once its
-read lands. The real constellation builds underneath the whole time; when
-every read is done and the tree reports ready, the layer breathes
-"organising the node tree" → "ready" and fades away into the finished
-constellation. A key or click skips the wait, a slow store is capped at
-~6 s, and live-update reloads (which restore saved state) never show it.
+**Studio tools** or `D`; its ambience settings control its idle behavior.
+The startup loading screen prepares the initial view, including a saved
+Command view on reload, before releasing the app's controls.
 Nodes are labelled, the **Legend** pill explains the
 colours and rings, hovering one shows its kind, status, agent, model and age,
 and the search box finds a session, todo or task and rings the matches. Walk
@@ -1110,4 +1228,9 @@ selector-context, property and importance) survives unchanged.
 `npm run check:css -- pre-merge.css post-merge.css` compares any two files —
 snapshot the pre-merge copy, resolve the collision, then run this to confirm
 the merge is winner-for-winner equivalent (see TESTRUNS.md, "Verifying a
-session edit-collision handoff").
+session edit-collision handoff"). The dead-selector companion,
+`npm run check:css:unused` (also a step in the `npm run check` chain), flags
+winner-bearing selectors whose classes appear in no surrounding renderer
+html/js/css usage (`--allow cls,...` excuses a class that JS builds
+dynamically), so rules orphaned by a refactor surface in the audit instead of
+by hand.

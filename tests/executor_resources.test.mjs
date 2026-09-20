@@ -127,6 +127,50 @@ test("manual width remains a cap while measured resource pressure can hold work 
   assert.equal(h.autopilot.parallel, 2);
 });
 
+test("a full manual pool explains the hold and starts the queued task after a worker finishes", async () => {
+  const h = executorHost({ adaptiveParallel: false, parallel: 1, tasks: [task("first"), task("waiting", { createdAt: 2 })] });
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 1);
+  assert.match(h.autopilot.waiting, /Manual worker limit reached \(1\/1\).*worker to finish/);
+  assertUnclaimed(h, "waiting");
+  h.wake("work on waiting task"); await h.pump();
+  assert.equal(h.starts.length, 1, "another explicit request preserves the selected manual limit");
+  assert.match(h.autopilot.waiting, /Manual worker limit reached/);
+  await h.finish("first"); await h.pump();
+  assert.deepEqual(h.starts.map((row) => row.taskId), ["first", "waiting"]);
+  assert.equal(h.autopilot.parallel, 1);
+});
+
+test("an unavailable worker route exposes its reason without claiming work or growing an idle queue", async () => {
+  const h = executorHost({ adaptiveParallel: true, tasks: [task("route-held")] });
+  h.env.executorRunEnv = async () => ({ error: "AI routing is z.ai-only but no z.ai key is saved" });
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 0);
+  assertUnclaimed(h, "route-held");
+  assert.equal(h.registry.size, 0);
+  assert.match(h.autopilot.waiting, /Worker connection unavailable:.*no z.ai key is saved/);
+  assert.ok(!h.roleRequests.includes("compactor"), "a blocked route is not an empty queue to grow");
+  h.env.executorRunEnv = async () => ({ via: "fixture", modelArgs: "", env: {} });
+  h.wake("worker connection repaired"); await h.pump();
+  assert.equal(h.starts.length, 1);
+  assert.equal(h.autopilot.waiting, null, "a successful retry clears the route hold");
+});
+
+test("unexpected dispatch errors stay visible and release the fill loop for a later retry", async () => {
+  const h = executorHost({ adaptiveParallel: true, tasks: [task("dispatch-held")] });
+  const spawnNextJob = h.env.spawnNextJob;
+  h.env.spawnNextJob = async () => { throw new Error("fixture work store unavailable"); };
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 0);
+  assertUnclaimed(h, "dispatch-held");
+  assert.match(h.autopilot.waiting, /Worker could not start: fixture work store unavailable/);
+  assert.ok(!h.roleRequests.includes("compactor"));
+  h.env.spawnNextJob = spawnNextJob;
+  h.wake("work store recovered"); await h.pump();
+  assert.equal(h.starts.length, 1);
+  assert.equal(h.autopilot.waiting, null);
+});
+
 test("machine-managed scheduling preserves Pause and exclusive test leases", async () => {
   for (const options of [{ paused: true }, { execute: false }, { exclusive: true }]) {
     const h = executorHost({ adaptiveParallel: true, tasks: [task("held", { pin: true })], ...options });

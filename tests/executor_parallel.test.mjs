@@ -8,6 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import * as eyes from "../scripts/eyes.mjs";
 import * as assistant from "../scripts/assistant.mjs";
 import backlog from "../scripts/backlog.cjs";
+import executorResume from "../scripts/executor-resume.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const section = (start, end) => {
@@ -85,7 +86,7 @@ test("real selection, file claims and fill loop run independent tasks together b
   const launched = [];
   const autopilot = { execute: true, parallel: 2, jobs: [] };
   const env = vm.createContext({
-    Date, console, path, process: { pid: 321 }, backlog, assistantModule: assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
+    Date, console, path, process: { pid: 321 }, backlog, executorResume, assistantModule: assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
     projectSwitching: false, assistantState: { status: "running" }, SMOKE: false, CAPTURE: false, CLI_MODE: false, executorUpdateHold: () => null,
     projects: { current: () => ({ id: "fixture", path: "C:/fixture" }) }, projectRoot: () => "C:/fixture",
     measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => ({ exclusive: false }) }), executorRunEnv: async () => ({ cli: "fixture" }),

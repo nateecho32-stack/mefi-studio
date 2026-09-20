@@ -15,11 +15,30 @@ function environment(state = {}) {
     },
     isBusyNode: (node, runningIds) => runningIds.has(node.id), agentRgb: () => [120, 180, 240],
   });
-  const start = source.indexOf("  function setAudioResponse(");
+  const start = source.indexOf("  function normalizeAudioPreferences(");
   const end = source.indexOf("  function drawFrame(", start);
   assert.ok(start > 0 && end > start);
   vm.runInContext(source.slice(start, end), env);
   return env;
+}
+
+function preferences(stored = new Map()) {
+  const state = {}, env = environment(state);
+  env.readStore = (key) => stored.get(key) ?? null;
+  env.writeStore = (key, value) => { stored.set(key, value); env.writes.push([key, value]); };
+  const { response, ...effects } = env.readAudioPreferences();
+  Object.assign(state, { audioResponse: response, audioEffects: effects });
+  return { env, state, stored };
+}
+
+function frameInputs(env) {
+  const start = source.indexOf("  function drawFrame("), end = source.indexOf("    const graphArea = usableArea();", start);
+  assert.ok(start > 0 && end > start);
+  env.noMotion = () => false;
+  env.audioEnergy = () => 0.8;
+  env.workPinIds = () => new Set();
+  vm.runInContext(`${source.slice(start, end)} return { audioLinked, audioNodes, visualMusic, backgroundLinked, energy, musicBands, musicBeat }; }`, env);
+  return () => env.drawFrame(200);
 }
 
 function recordingContext() {
@@ -59,6 +78,231 @@ function graphFixture(nodeLayout = "constellation") {
   };
   return { state, env: environment(state), projected: nodes.map(node => ({ node, p: { x: node.x + 200, y: node.y + 100 } })) };
 }
+
+test("audio preferences start gently and normalize malformed saved controls", () => {
+  const defaults = { response: 0.35, waves: true, nodes: true, percussion: false, background: false, splitBands: true };
+  for (const raw of [undefined, "broken json", "null", "[]", "42", '"loud"']) {
+    const f = preferences(new Map([["mefiStudio.audioVisuals.v1", raw]]));
+    assert.deepEqual({ response: f.state.audioResponse, ...f.state.audioEffects }, defaults);
+  }
+  for (const [saved, expected] of [
+    [{ response: 0, waves: false, nodes: false, percussion: true, background: true, splitBands: false }, { response: 0, waves: false, nodes: false, percussion: true, background: true, splitBands: false }],
+    [{ response: 100, waves: "false", nodes: 0, percussion: "true", background: 1, splitBands: "false" }, { ...defaults, response: 2 }],
+    [{ response: -4, waves: false }, { ...defaults, response: 0, waves: false }],
+    [{ response: "1.8", unrelated: true }, defaults],
+  ]) {
+    const f = preferences(new Map([["mefiStudio.audioVisuals.v1", JSON.stringify(saved)]]));
+    assert.deepEqual({ response: f.state.audioResponse, ...f.state.audioEffects }, expected);
+  }
+});
+
+test("legacy response becomes gentler once, while new choices and zero survive reload", () => {
+  for (const [legacy, expected] of [["1", 0.35], ["2", 0.7], ["0", 0], ["-1", 0], ["100", 0.7], ["", 0.35], ["nope", 0.35]]) {
+    const f = preferences(new Map([["mefiStudio.audioResponse", legacy]]));
+    assert.equal(f.state.audioResponse, expected);
+    f.env.setAudioEffects({ waves: false });
+    assert.equal(preferences(f.stored).state.audioResponse, expected, "saving an effect does not apply the migration again");
+  }
+  const f = preferences(new Map([["mefiStudio.audioResponse", "2"]]));
+  f.env.setAudioResponse(1.25);
+  f.env.setAudioEffects({ waves: false, nodes: false, percussion: true, background: true, splitBands: false });
+  let reloaded = preferences(f.stored);
+  assert.equal(reloaded.state.audioResponse, 1.25);
+  assert.deepEqual(reloaded.state.audioEffects, { waves: false, nodes: false, percussion: true, background: true, splitBands: false });
+  reloaded.state.audioWaves = [{ from: "old" }];
+  reloaded.env.setAudioResponse(0);
+  assert.equal(reloaded.state.audioWaves.length, 0);
+  reloaded = preferences(reloaded.stored);
+  assert.equal(reloaded.state.audioResponse, 0, "zero is a saved setting, not a missing value");
+  assert.equal(reloaded.env.nodeAudioResponse({ kind: "music" }, fullMusic(), true, reloaded.state.audioResponse).level, 0);
+});
+
+test("effect changes save independently and preserve connected audio and playback", () => {
+  const f = preferences();
+  const unexpected = () => assert.fail("a visual preference cannot reconnect, stop, or play audio");
+  const localAudio = { paused: false, play: unexpected, pause: unexpected };
+  const inputStream = { getTracks: () => [{ stop: unexpected }] };
+  const inputSource = { disconnect: unexpected };
+  const pending = Promise.resolve();
+  Object.assign(f.state, { reactive: true, localAudio, inputStream, inputSource, inputPending: pending, inputGeneration: 17, audioSource: "local", captureArmed: true });
+  Object.assign(f.env, { useReactiveInput: unexpected, stopReactiveInput: unexpected, ensureAudio: unexpected });
+  const before = { ...f.state };
+  f.env.setAudioEffects({ nodes: false, percussion: true });
+  assert.deepEqual({ ...f.state.audioEffects }, { waves: true, nodes: false, percussion: true, background: false, splitBands: true });
+  f.state.audioWaves = [{ from: "previous frame" }];
+  f.env.setAudioEffects({ waves: false, background: true, splitBands: false });
+  assert.equal(f.state.audioWaves.length, 0, "switching off waves releases their last frame immediately");
+  f.env.setAudioEffects({ waves: "yes", nodes: 1, splitBands: 1, response: 2, unexpected: true });
+  f.env.setAudioEffects(null);
+  f.env.setAudioResponse(0.2);
+  assert.deepEqual({ ...f.state.audioEffects }, { waves: false, nodes: false, percussion: true, background: true, splitBands: false });
+  const saved = JSON.parse(f.stored.get("mefiStudio.audioVisuals.v1"));
+  assert.deepEqual(saved, { response: 0.2, waves: false, nodes: false, percussion: true, background: true, splitBands: false });
+  for (const key of ["reactive", "localAudio", "inputStream", "inputSource", "inputPending", "inputGeneration", "audioSource", "captureArmed"]) assert.equal(f.state[key], before[key], key);
+  assert.equal(localAudio.paused, false);
+});
+
+test("connection waves and node lighting can each run alone or both be switched off", () => {
+  const { state, env, projected } = graphFixture();
+  Object.assign(state, { reactive: true, localAudio: {}, audioResponse: 0.35 });
+  const inputs = frameInputs(env);
+  for (const waves of [false, true]) {
+    for (const nodes of [false, true]) {
+      env.setAudioEffects({ waves, nodes });
+      const frame = inputs();
+      const node = projected[0].node, ctx = recordingContext();
+      const response = env.nodeAudioResponse(node, frame.visualMusic, frame.audioNodes, state.audioResponse);
+      env.drawNodeAudio(ctx, node, projected[0].p, 12, [200, 180, 120], response, frame.audioNodes ? frame.visualMusic : null, 200);
+      env.drawGraphConnections(recordingContext(), projected, new Set(), frame.audioLinked, 200);
+      assert.equal(ctx.strokes.length > 0, nodes, `nodes=${nodes}, waves=${waves}`);
+      assert.equal(state.audioWaves.length > 0, waves, `nodes=${nodes}, waves=${waves}`);
+      assert.equal(state.reactive, true, "the master audio link remains connected");
+    }
+  }
+  env.setAudioResponse(0);
+  const frame = inputs();
+  assert.equal(frame.audioNodes, false);
+  env.drawGraphConnections(recordingContext(), projected, new Set(), frame.audioLinked, 200);
+  assert.equal(state.audioWaves.length, 0);
+});
+
+test("percussion is optional while sustained bass, mids, treble and waveform remain responsive", () => {
+  const env = environment(), music = { ...fullMusic(), beat: 0.9, energy: 0.7 };
+  const before = structuredClone(music), calm = env.visualMusicResponse(music, { percussion: false });
+  for (const voice of ["kick", "snare", "hat", "beat"]) assert.equal(calm[voice], 0);
+  for (const voice of ["bass", "bassline", "mid", "treble", "energy", "waveform"]) assert.equal(calm[voice], music[voice]);
+  for (const node of [{ kind: "assistant" }, { kind: "session" }, { kind: "agent" }]) {
+    const quiet = env.nodeAudioResponse(node, calm, true, 0.35);
+    const drums = env.nodeAudioResponse(node, env.visualMusicResponse(music, { percussion: true }), true, 0.35);
+    assert.ok(quiet.level > 0);
+    assert.equal(quiet.beat, 0);
+    assert.equal(drums.level, quiet.level);
+    assert.ok(drums.beat > 0);
+  }
+  const { state, env: graph, projected } = graphFixture();
+  state.music = { kick: 0.9, snare: 0.8, hat: 0.7, beat: 1 };
+  graph.setAudioEffects({ percussion: false });
+  graph.drawGraphConnections(recordingContext(), projected, new Set(), true, 200);
+  assert.equal(state.audioWaves.length, 0);
+  graph.setAudioEffects({ percussion: true });
+  graph.drawGraphConnections(recordingContext(), projected, new Set(), true, 200);
+  assert.ok(state.audioWaves.length > 0);
+  assert.deepEqual(music, before, "visual toggles do not rewrite the analyzer snapshot");
+});
+
+test("separate connection voices isolate bass, mids and treble and stay attached after graph reordering", () => {
+  const nodes = [{ id: "hub", kind: "assistant" }, ...Array.from({ length: 12 }, (_, index) => ({ id: `task:voice:${index}`, kind: "task", _audioResponse: { level: 1, beat: 1 } }))];
+  const state = { nodes, audioResponse: 0.35, edges: nodes.slice(1).map((_, index) => ({ a: 0, b: index + 1 })), music: fullMusic() };
+  const env = environment(state);
+  const projected = nodes.map((node, index) => ({ node, p: { x: index * 30, y: index % 3 * 50 + 40 } }));
+  env.setAudioEffects({ splitBands: true, percussion: true });
+  const draw = () => {
+    const ctx = recordingContext();
+    env.drawGraphConnections(ctx, projected, new Set(), true, 200);
+    return ctx;
+  };
+  draw();
+  const voices = new Map(Array.from(state.audioWaves, wave => [wave.to, wave.band]));
+  assert.equal(voices.size, 12);
+  assert.deepEqual(new Set(voices.values()), new Set(["bass", "mid", "treble"]));
+  for (const [band, music] of [
+    ["bass", { bassline: 0.8 }], ["mid", { mid: 0.8 }], ["treble", { treble: 0.8 }],
+    ["bass", { kick: 0.8 }], ["mid", { snare: 0.8 }], ["treble", { hat: 0.8 }],
+  ]) {
+    state.music = { ...music, waveform: waveform() };
+    const quiet = recordingContext();
+    env.drawGraphConnections(quiet, projected, new Set(), false, 200);
+    const playing = draw();
+    const expected = [...voices].filter(([, voice]) => voice === band).map(([id]) => id).sort();
+    assert.deepEqual(Array.from(state.audioWaves, wave => wave.to).sort(), expected, `${Object.keys(music)[0]} reaches only its own cables`);
+    assert.ok(state.audioWaves.every(wave => wave.band === band && wave.amplitude > 0));
+    assert.deepEqual(playing.strokes.filter(stroke => stroke.path.length === 2), quiet.strokes, "other-band node brightness does not leak into a connection's base tether");
+    assert.equal(playing.strokes.filter(stroke => stroke.path.length > 2).length, expected.length * 2, "only assigned cables receive painted wave strokes");
+  }
+  state.music = fullMusic();
+  const snapshot = structuredClone(state.music);
+  state.nodes.reverse(); projected.reverse();
+  const hubIndex = state.nodes.findIndex(node => node.id === "hub");
+  state.edges = state.nodes.flatMap((node, index) => index === hubIndex ? [] : [{ a: hubIndex, b: index }]);
+  draw();
+  assert.deepEqual(new Map(Array.from(state.audioWaves, wave => [wave.to, wave.band])), voices, "voices depend on node identity rather than edge indices");
+  assert.deepEqual(state.music, snapshot, "routing leaves the analyzer's shared snapshot intact");
+  env.setAudioEffects({ splitBands: false });
+  state.music = { mid: 0.8, waveform: waveform() };
+  draw();
+  assert.equal(state.audioWaves.length, 12, "full mix can intentionally reach every cable");
+  assert.ok(state.audioWaves.every(wave => wave.band === "mix"));
+  env.setAudioEffects({ splitBands: true, percussion: false });
+  state.music = { kick: 1, snare: 1, hat: 1, beat: 1, waveform: waveform() };
+  draw();
+  assert.equal(state.audioWaves.length, 0, "splitting the bands cannot re-enable disabled drum attacks");
+});
+
+test("background response stays off by default and follows its own toggle and response amount", () => {
+  const state = { reactive: true, localAudio: {}, bands: { bass: 0.8, mid: 0.6, treble: 0.4 }, music: { ...fullMusic(), beat: 0.9 }, audioResponse: 0.35 };
+  const env = environment(state), inputs = frameInputs(env);
+  const off = inputs();
+  assert.equal(off.energy, 0);
+  assert.deepEqual({ ...off.musicBands }, { bass: 0, mid: 0, treble: 0 });
+  assert.equal(off.musicBeat, 0);
+  env.setAudioEffects({ background: true, waves: false, nodes: false });
+  const background = inputs();
+  assert.equal(background.energy, 0.8 * 0.35);
+  assert.equal(background.musicBands.mid, 0.6 * 0.35);
+  assert.equal(background.musicBeat, 0, "background does not enable drum flashes by itself");
+  env.setAudioEffects({ percussion: true });
+  assert.equal(inputs().musicBeat, 0.9 * 0.35);
+  env.setAudioResponse(0);
+  assert.equal(inputs().energy, 0);
+  assert.equal(inputs().musicBeat, 0);
+  env.setAudioResponse(1);
+  env.noMotion = () => true;
+  const still = inputs();
+  assert.equal(still.energy, 0);
+  assert.equal(still.musicBeat, 0);
+  assert.deepEqual({ ...still.musicBands }, { bass: 0, mid: 0, treble: 0 });
+  env.noMotion = () => false;
+  for (const connection of [{ reactive: false, localAudio: {} }, { reactive: true, localAudio: null }]) {
+    Object.assign(state, connection);
+    const disconnected = inputs();
+    assert.equal(disconnected.energy, 0, "the master link also gates background motion");
+    assert.equal(disconnected.musicBeat, 0);
+    assert.deepEqual({ ...disconnected.musicBands }, { bass: 0, mid: 0, treble: 0 });
+  }
+});
+
+test("the default connection response stays subtle and travels slowly between frames", () => {
+  const f = preferences(), a = { x: 0, y: 0 }, b = { x: 400, y: 0 };
+  const music = f.env.visualMusicResponse(fullMusic(), f.state.audioEffects);
+  const gentle = f.env.audioConnectionWave(a, b, music, f.state.audioResponse, 200);
+  const full = f.env.audioConnectionWave(a, b, music, 1, 200);
+  assert.ok(gentle.amplitude > 0.1 && gentle.amplitude <= 4.2, `default displacement ${gentle.amplitude}px`);
+  assert.ok(gentle.amplitude < full.amplitude * 0.4);
+  assert.ok(gentle.activity < full.activity * 0.4, "lower response also lowers connection brightness");
+  const first = f.env.audioConnectionWave(a, b, { bassline: 1 }, 1, 200);
+  const later = f.env.audioConnectionWave(a, b, { bassline: 1 }, 1, 300);
+  const travel = Math.max(...first.points.map((point, index) => distance(point, later.points[index])));
+  assert.ok(travel > 0.1 && travel < 2, `bass moves ${travel}px over 100ms`);
+});
+
+test("low response also softens optional drum flashes and stroke thickness", () => {
+  const state = { audioEffects: { percussion: true, splitBands: false }, music: { kick: 1, snare: 1, hat: 1 }, audioWaves: [] };
+  const env = environment(state);
+  const a = { node: { id: "hub" }, p: { x: 0, y: 0 } }, b = { node: { id: "task" }, p: { x: 400, y: 0 } };
+  const draw = (response) => {
+    state.audioResponse = response;
+    const ctx = recordingContext();
+    env.drawAudioConnection(ctx, a, b, [230, 180, 100], 1, 200);
+    return ctx.strokes;
+  };
+  const loud = draw(1)[1];
+  for (const response of [0.35, 0.1, 0.01]) {
+    const quiet = draw(response)[1];
+    assert.ok(quiet.color.alpha <= loud.color.alpha * response * 1.01, `drum brightness follows response ${response}`);
+    assert.ok(quiet.width < loud.width, "quiet settings also soften the drum's outline");
+  }
+  assert.equal(draw(0).length, 0);
+});
 
 test("frequency voices stay attached to nodes across reordering and all bands affect quiet work", () => {
   const env = environment();
@@ -101,7 +345,7 @@ test("silence and disabled/reduced-motion response stay dark; sensitivity is bou
 
 test("music light stays inside each node and graph links retain their endpoints and work tint", () => {
   const a = { id: "hub", kind: "assistant" }, b = { id: "task", kind: "task", _audioResponse: { level: 0.8, beat: 0.5 } };
-  const state = { nodes: [a, b], edges: [{ a: 0, b: 1 }], branchParents: new Map([[b.id, a.id]]) };
+  const state = { nodes: [a, b], edges: [{ a: 0, b: 1 }], branchParents: new Map([[b.id, a.id]]), audioEffects: { splitBands: false } };
   const env = environment(state), arcs = [], strokes = [], points = [];
   const ctx = {
     save() {}, restore() {}, beginPath() {}, fill() {},

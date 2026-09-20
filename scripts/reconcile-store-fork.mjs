@@ -21,6 +21,14 @@
 //   node scripts/reconcile-store-fork.mjs            # apply + write back
 //   node scripts/reconcile-store-fork.mjs --dry-run  # report only
 //   node scripts/reconcile-store-fork.mjs --source=<dir> --target=<dir>
+//   node scripts/reconcile-store-fork.mjs --promote=<ideaId>
+//     The app's explicit arm (main.cjs backlogControl "promote" ->
+//     admitBacklogIdeas({ ideaIds: [id] })): drain exactly that idea with
+//     limit 1, bypassing the occupancy gate. For live boards whose queue
+//     never idles long enough (3 - occupied) to reach 0 for the ordinary
+//     arm, the same way the renderer's Promote button works at any queue
+//     depth. The idea must still be an eligible keep/new unlinked row;
+//     ineligible or missing ids drain nothing and change no files.
 
 import path from "node:path";
 import { statSync } from "node:fs";
@@ -31,6 +39,8 @@ import backlog from "./backlog.cjs";
 
 const STUDIO_ROOT = path.dirname(fileURLToPath(import.meta.url)).replace(/[\\/]scripts$/, "");
 const dryRun = process.argv.includes("--dry-run");
+const promoteArg = process.argv.find((value) => value.startsWith("--promote="));
+const promoteId = promoteArg ? promoteArg.slice("--promote=".length).trim() : null;
 const argDir = (name) => {
   const arg = process.argv.find((value) => value.startsWith(`${name}=`));
   return arg ? path.resolve(arg.slice(name.length + 1)) : null;
@@ -103,7 +113,12 @@ const counts = summary.counts;
 const occupied = counts.ready + counts.running + counts.review + counts.cooling + counts.waiting + counts.approval;
 const limit = Math.max(0, 3 - occupied);
 
-let drained = promoteIdeaBacklog({ tasks: mergedTasks, ideas: mergedIdeas, now: Date.now(), limit });
+let drained;
+if (promoteId) {
+  drained = promoteIdeaBacklog({ tasks: mergedTasks, ideas: mergedIdeas, now: Date.now(), limit: 1, ideaIds: [promoteId] });
+} else {
+  drained = promoteIdeaBacklog({ tasks: mergedTasks, ideas: mergedIdeas, now: Date.now(), limit });
+}
 const finalTasks = drained.tasks;
 const finalIdeas = drained.ideas;
 
@@ -116,7 +131,8 @@ if (taskAdditions.length) {
   console.log(`tasks: ${taskAdditions.length} drained task row(s) copied so the links resolve`);
   for (const task of taskAdditions) console.log(`  + ${task.id} "${task.title}"`);
 }
-console.log(`queue: occupied=${occupied} limit=${limit}${limit > 0 ? "" : " — no room; keep/unlinked ideas stay for the app's own drain (backlog mode)"}`);
+console.log(`queue: occupied=${occupied} limit=${limit}${promoteId ? ` — explicit promote arm for ${promoteId} bypasses the queue gate (main.cjs admitBacklogIdeas ideaIds)` : limit > 0 ? "" : " — no room; keep/unlinked ideas stay for the app's own drain (backlog mode)"}`);
+if (promoteId && !drained.promoted) console.log(`promote: ${promoteId} is not an eligible keep/new unlinked idea on this board — nothing drained (the app would reply "no longer available to promote")`);
 if (drained.promoted) {
   console.log(`drain: ${drained.promoted} idea(s) admitted through the admitBacklogIdeas path`);
   for (const id of drained.taskIds) console.log(`  ~ ${id}`);

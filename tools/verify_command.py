@@ -139,37 +139,60 @@ VERIFY_METHOD = r'''
     }
     await this.until("document.getElementById('idle-feed-toggle').getAttribute('aria-expanded')==='false' && document.getElementById('cmd-chat-toggle').getAttribute('aria-expanded')==='true'",'Live work collapses while Assistant stays expanded');
     const overlaps=(a,b)=>Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x)>1 && Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y)>1;
-    const gap=(node,box)=>Math.max(0,Math.hypot(Math.max(box.x-node.x,0,node.x-box.x-box.w),Math.max(box.y-node.y,0,node.y-box.y-box.h))-node.radius);
+    const gap=(node,box)=>Math.max(0,Math.hypot(Math.max(box.x-node.x,0,node.x-box.x-box.w),Math.max(box.y-node.y,0,node.y-box.y-box.h))-(node.orbitTrail?.radius??node.radius));
     report.nodeReadability={cases:[],failures:[],baseline:Boolean(config.baseline)};
     const requireReadable=(condition,message)=>{if(!condition)report.nodeReadability.failures.push(message);};
     for(const [width,height,size] of [[1916,1170,'wide'],[1463,943,'desktop']]) {
       this.setContentSize(width,height);await sleep(200);
-      for(const view of ['3d','2d']) {
-        const name=`readability-${size}-${view}`;
+      for(const [view,suffix,dx,dy] of [['3d','3d',0,0],['3d','3d-left',-70,-16],['3d','3d-right',70,16],['2d','2d',0,0]]) {
+        const name=`readability-${size}-${suffix}`;
         await this.run(`window.MefiIdle.setView(${JSON.stringify(view)});window.MefiIdle.fitAll();`);
+        const beforeRotation=await this.run("await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return {area:window.MefiIdle.graphViewport(),geometry:window.MefiIdle.geometryStatus()};");
+        const drag=async(reverse=false)=>{
+          const area=beforeRotation.area,x=Math.round(area.x+area.w*.48),y=Math.round(area.y+area.h*.42);
+          const start=reverse?{x:x+dx,y:y+dy}:{x,y},end=reverse?{x,y}:{x:x+dx,y:y+dy};
+          this.webContents.focus();
+          this.webContents.sendInputEvent({type:'mouseMove',...start});
+          this.webContents.sendInputEvent({type:'mouseDown',button:'right',clickCount:1,...start});
+          this.webContents.sendInputEvent({type:'mouseMove',button:'right',...end});
+          this.webContents.sendInputEvent({type:'mouseUp',button:'right',clickCount:1,...end});
+        };
+        if(dx)await drag();
         this.webContents.sendInputEvent({type:'mouseMove',x:400,y:40});
         await sleep(500);
         const samples=[];
-        for(let frame=0;frame<3;frame++) {
-          if(frame)await sleep(160);
+        const frames=size==='desktop'&&suffix==='3d'?12:3;
+        for(let frame=0;frame<frames;frame++) {
+          if(frame)await sleep(200);
           const layout=await this.layout(`${name}-frame-${frame+1}`,false);
           const extra=await this.run("return {geometry:window.MefiIdle.geometryStatus(),camera:window.MefiIdle.settingsPreviewStatus(),centres:window.MefiIdle.debugNodes().filter(node=>Number.isFinite(node.x)&&Number.isFinite(node.y)).map(node=>({id:node.id,hit:document.elementFromPoint(node.x,node.y)?.id}))};");
           const nodes=layout.nodes.filter(node=>Number.isFinite(node.x)&&Number.isFinite(node.y));
           const active=nodes.filter(node=>activeIds.has(node.id));
           const labels=nodes.filter(node=>node.labelRect);
+          const fixed=nodes.filter(node=>node.kind!=='agent');
+          const orbOverlaps=fixed.flatMap((node,index)=>fixed.slice(0,index).flatMap(other=>{
+            const separation=Math.hypot(node.x-other.x,node.y-other.y)-(node.orbitTrail?.radius??node.radius)-(other.orbitTrail?.radius??other.radius);
+            return separation<0?[{a:node.id,b:other.id,separation}]:[];
+          }));
+          for(const pair of orbOverlaps)requireReadable(pair.separation>=-1,`${name}: ${pair.a} and ${pair.b} orb rings overlap by ${(-pair.separation).toFixed(1)}px`);
           const controls=['header','feed','chat','selected','dock','search','composer','tools','follow','legend','ambience'].filter(key=>layout[key]).map(key=>({id:key,rect:{x:layout[key].x,y:layout[key].y,w:layout[key].width,h:layout[key].height}}));
           requireReadable(layout.graph.labels==='auto' && layout.graph.orbit==='paused',`${name}: Auto labels and paused orbit remain selected`);
+          if(dx) {
+            requireReadable(Math.abs(extra.geometry.angle-beforeRotation.geometry.angle)>=.3,`${name}: actual right-drag changes the 3D viewing angle`);
+            const previous=new Map(beforeRotation.geometry.nodes.map(node=>[node.id,node]));
+            for(const node of extra.geometry.nodes.filter(node=>!node.id.startsWith('builder:')&&!node.id.startsWith('__agent__:')))requireReadable(JSON.stringify(node.anchor)===JSON.stringify(previous.get(node.id)?.anchor),`${name}: rotation preserves ${node.id} world anchors`);
+          }
           requireReadable(active.length===6,`${name}: all six running tasks remain visible`);
           for(const node of active) {
             requireReadable(Boolean(node.labelRect),`${name}: ${node.id} has a readable task name`);
             if(node.labelRect) {
-              requireReadable(gap(node,node.labelRect)<=80,`${name}: ${node.id} label is ${gap(node,node.labelRect).toFixed(1)}px from its orb`);
+              requireReadable(gap(node,node.labelRect)<=80.01,`${name}: ${node.id} label is ${gap(node,node.labelRect).toFixed(1)}px from its visible ring`);
               requireReadable(node.labelLines?.length>=1 && node.labelLines.length<=2,`${name}: ${node.id} paints one or two readable title lines`);
               requireReadable(node.labelLines?.join(' ')===node.label,`${name}: ${node.id} retains its complete task title`);
             }
           }
           for(const entry of extra.centres)requireReadable(entry.hit==='idle-layer',`${name}: ${entry.id} orb is obscured by ${entry.hit}`);
-          for(const node of nodes)for(const control of controls)requireReadable(gap({...node,radius:node.orbitTrail?.radius??node.radius},control.rect)>=2,`${name}: ${node.id} orb touches ${control.id}`);
+          for(const node of nodes)for(const control of controls)requireReadable(gap(node,control.rect)>=2,`${name}: ${node.id} orb touches ${control.id}`);
           for(const [index,node] of labels.entries()) {
             const box=node.labelRect,area=layout.viewport;
             requireReadable(box.x>=area.x-1 && box.y>=area.y-1 && box.x+box.w<=area.x+area.w+1 && box.y+box.h<=area.y+area.h+1,`${name}: ${node.id} label fits the clear graph viewport`);
@@ -186,15 +209,144 @@ VERIFY_METHOD = r'''
             requireReadable(Math.abs(extra.geometry.angle-first.geometry.angle)<.0001 && Math.abs(extra.geometry.pitch-first.geometry.pitch)<.0001,`${name}: paused camera keeps its angle`);
             requireReadable(JSON.stringify(extra.camera.camera)===JSON.stringify(first.camera.camera) && extra.camera.zoom===first.camera.zoom,`${name}: paused camera keeps its position and zoom`);
           }
-          samples.push({layout,...extra,activeLabelGaps:active.filter(node=>node.labelRect).map(node=>({id:node.id,gap:gap(node,node.labelRect)}))});
+          samples.push({layout,...extra,orbOverlaps,activeLabelGaps:active.filter(node=>node.labelRect).map(node=>({id:node.id,gap:gap(node,node.labelRect)}))});
         }
-        report.nodeReadability.cases.push({name,width,height,view,samples});
+        report.nodeReadability.cases.push({name,width,height,view,rotation:dx?{dx,dy,angleBefore:beforeRotation.geometry.angle,angleAfter:samples[0].geometry.angle,pitchAfter:samples[0].geometry.pitch}:null,samples});
         await this.capture(name);
+        if(dx) {await drag(true);await sleep(100);}
       }
     }
     report.nodeReadability.failures=[...new Set(report.nodeReadability.failures)];
     if(!config.baseline)assert.equal(report.nodeReadability.failures.length,0,report.nodeReadability.failures.join('\n'));
-    this.check(config.baseline?'Captured the six-builder readability baseline and recorded its geometry failures':'Six concurrent long task names stay close to their unobscured orbs, clear other labels and controls, and keep a stable camera in 3D and 2D at wide and desktop sizes');
+    this.check(config.baseline?'Captured the six-builder readability baseline and recorded its geometry failures':'Six concurrent long task names stay close to their unobscured orbs, clear other labels and controls, and keep stable world anchors in 2D and default/rotated 3D at wide and desktop sizes');
+  }
+  async verifyFitLayout() {
+    report.fitLayout={cases:[],failures:[],baseline:Boolean(config.baseline)};
+    const check=(condition,message)=>{if(!condition)report.fitLayout.failures.push(message);};
+    const activeIds=new Set(config.fixture.autopilot.running.map(job=>`task:${job.taskId}`));
+    await this.run("window.MefiMusic.applyTheme('aurora');window.MefiMusic.applyNodeStyle('orbs');window.MefiMusic.applyNodeLayout('constellation');window.MefiMusic.applyNodeEffects({orbitTrails:true,extraGlow:true});window.MefiIdle.clearSearch();window.MefiIdle.setLabels('auto');window.MefiIdle.setOrbit(false);");
+    for(const [id,expanded] of [['idle-feed-toggle',false],['cmd-chat-toggle',true]])if(await this.run(`return document.getElementById(${JSON.stringify(id)}).getAttribute('aria-expanded');`)!==String(expanded))await this.click(`#${id}`);
+    const savedTasks=await this.run("return (await window.mefiStudio.tasksList()).tasks;");
+    const snapshot=async(name)=>{
+      const layout=await this.layout(name,false);
+      const details=await this.run("return {geometry:window.MefiIdle.geometryStatus(),camera:window.MefiIdle.settingsPreviewStatus(),prefs:window.MefiMusic.graphPreferences()};");
+      const fixed=layout.nodes.filter(node=>node.kind!=='agent'&&Number.isFinite(node.x)&&Number.isFinite(node.y));
+      const spanX=Math.max(...fixed.map(node=>node.x))-Math.min(...fixed.map(node=>node.x));
+      const spanY=Math.max(...fixed.map(node=>node.y))-Math.min(...fixed.map(node=>node.y));
+      const overlaps=fixed.flatMap((node,index)=>fixed.slice(0,index).flatMap(other=>{
+        const gap=Math.hypot(node.x-other.x,node.y-other.y)-(node.orbitTrail?.radius??node.radius)-(other.orbitTrail?.radius??other.radius);
+        return gap < -1?[{a:node.id,b:other.id,gap}]:[];
+      }));
+      const geometry=details.geometry,camera=details.camera,scale=camera.fit*camera.zoom,cos=Math.cos(geometry.angle),sin=Math.sin(geometry.angle);
+      const points=geometry.nodes.filter(node=>fixed.some(entry=>entry.id===node.id)).map(node=>{
+        const world=node.anchor??node.world,x=(world.x+camera.camera.x)*scale,z=(world.z+camera.camera.z)*scale;
+        return {x:x*cos-z*sin,y:(world.y+camera.camera.y)*scale,depth:x*sin+z*cos,k:node.projected.k};
+      });
+      const depthSpan=Math.max(...points.map(point=>point.depth))-Math.min(...points.map(point=>point.depth));
+      const mean=key=>points.reduce((sum,point)=>sum+point[key],0)/points.length,mx=mean('x'),my=mean('y'),md=mean('depth');
+      let xx=0,yy=0,xy=0,xd=0,yd=0;
+      for(const point of points){const x=point.x-mx,y=point.y-my,d=point.depth-md;xx+=x*x;yy+=y*y;xy+=x*y;xd+=x*d;yd+=y*d;}
+      const determinant=xx*yy-xy*xy,a=determinant?(xd*yy-yd*xy)/determinant:0,b=determinant?(yd*xx-xd*xy)/determinant:0;
+      const residual=Math.sqrt(points.reduce((sum,point)=>sum+(point.depth-md-a*(point.x-mx)-b*(point.y-my))**2,0)/points.length);
+      const dimension=Math.min(layout.viewport.w,layout.viewport.h);
+      const depthMetrics={span:depthSpan,fraction:depthSpan/dimension,scaleSpan:Math.max(...points.map(point=>point.k))-Math.min(...points.map(point=>point.k)),residual,residualFraction:residual/dimension};
+      return {name,layout,...details,fixed,spanX,spanY,overlaps,depthMetrics};
+    };
+    const drag=async(area,dx,dy,button='right')=>{
+      const x=Math.round(area.x+area.w*.38),y=Math.round(area.y+area.h*.42);
+      this.webContents.focus();
+      this.webContents.sendInputEvent({type:'mouseMove',x,y});
+      this.webContents.sendInputEvent({type:'mouseDown',button,clickCount:1,x,y});
+      this.webContents.sendInputEvent({type:'mouseMove',button,x:x+dx,y:y+dy});
+      this.webContents.sendInputEvent({type:'mouseUp',button,clickCount:1,x:x+dx,y:y+dy});
+      this.webContents.sendInputEvent({type:'mouseMove',x:400,y:40});
+      await sleep(300);
+    };
+    const keyFit=async()=>{
+      await this.run("document.activeElement?.blur();");
+      this.webContents.focus();
+      this.webContents.sendInputEvent({type:'keyDown',keyCode:'F'});
+      this.webContents.sendInputEvent({type:'keyUp',keyCode:'F'});
+      await sleep(400);
+    };
+    const validate=(sample,reference,label)=>{
+      const area=sample.layout.viewport;
+      check(sample.spanX>=reference.spanX*.85 && sample.spanX>=area.w*.6,`${label}: Fit restores a broad graph instead of an edge-on stack (${sample.spanX.toFixed(1)}px vs ${reference.spanX.toFixed(1)}px)`);
+      check(sample.overlaps.length===0,`${label}: fixed orb rings remain separate (${sample.overlaps.length} overlaps)`);
+      check(JSON.stringify(sample.fixed.map(node=>[node.id,node.kind,node.label]).sort())===JSON.stringify(reference.fixed.map(node=>[node.id,node.kind,node.label]).sort()),`${label}: every saved node and title survives Fit`);
+      check(JSON.stringify(sample.prefs)===JSON.stringify(reference.prefs),`${label}: Fit preserves graph appearance preferences`);
+      check(sample.geometry.view===reference.geometry.view,`${label}: Fit preserves the chosen ${reference.geometry.view} view`);
+      check(Math.abs(sample.geometry.angle-reference.geometry.angle)<.0001 && Math.abs(sample.geometry.pitch)<.0001,`${label}: Fit restores the overview camera orientation`);
+      check(sample.layout.graph.orbit==='paused',`${label}: explicit Fit leaves the paused camera stationary`);
+      if(reference.geometry.links)check(JSON.stringify(sample.geometry.links)===JSON.stringify(reference.geometry.links),`${label}: Fit preserves graph relationships`);
+      for(const node of sample.fixed) {
+        const r=node.orbitTrail?.radius??node.radius;
+        check(node.x-r>=area.x-1 && node.y-r>=area.y-1 && node.x+r<=area.x+area.w+1 && node.y+r<=area.y+area.h+1,`${label}: ${node.id} stays inside the clear graph viewport`);
+        if(activeIds.has(node.id))check(node.labelRect && node.labelLines?.join(' ')===node.label,`${label}: ${node.id} keeps its complete running-task title`);
+      }
+      if(sample.geometry.view==='3d') {
+        check(sample.depthMetrics.fraction>=.18,`${label}: fitted 3D has substantial depth (${(sample.depthMetrics.fraction*100).toFixed(1)}% of clear viewport)`);
+        check(sample.depthMetrics.scaleSpan>=.10,`${label}: fitted 3D retains visible perspective between near and far nodes`);
+        check(sample.depthMetrics.residualFraction>=.015,`${label}: 3D nodes occupy a volume rather than a tilted plane`);
+      }
+    };
+    for(const [width,height,size] of [[1916,1170,'wide'],[1463,943,'desktop']]) {
+      this.setContentSize(width,height);await sleep(200);
+      await this.run("window.MefiIdle.setView('3d');window.MefiIdle.fitAll();");await sleep(400);
+      const reference=await snapshot(`fit-${size}-reference`);
+      await this.capture(`fit-${size}-reference`);
+      await drag(reference.layout.viewport,314,0);
+      const edgeOn=await snapshot(`fit-${size}-edge-on`);
+      check(edgeOn.spanX<reference.spanX*.65,`${size}: a real right-drag reproduces the narrow edge-on graph`);
+      await this.capture(`fit-${size}-edge-on`);
+      await this.click('#idle-fit');await sleep(400);
+      const button=await snapshot(`fit-${size}-button`);validate(button,reference,`${size} toolbar Fit`);
+      await this.capture(`fit-${size}-button`);
+      await drag(button.layout.viewport,314,24);
+      const keyboardEdgeOn=await snapshot(`fit-${size}-keyboard-edge-on`);
+      check(keyboardEdgeOn.spanX<reference.spanX*.65,`${size}: keyboard recovery starts from an edge-on graph`);
+      await keyFit();
+      const keyboard=await snapshot(`fit-${size}-keyboard`);validate(keyboard,reference,`${size} keyboard F`);
+      await this.capture(`fit-${size}-keyboard`);
+      await this.click('#idle-fit');await sleep(250);
+      const repeated=await snapshot(`fit-${size}-repeat`);validate(repeated,reference,`${size} repeated Fit`);
+      if(!config.baseline)this.assertStableNodes(keyboard.fixed,repeated.fixed,`${size}: repeated Fit keeps the recovered layout`);
+      await sleep(450);
+      const settled=await snapshot(`fit-${size}-settled`);
+      if(!config.baseline)this.assertStableNodes(repeated.fixed,settled.fixed,`${size}: the fitted camera does not drift`);
+      check(JSON.stringify(repeated.camera)===JSON.stringify(settled.camera),`${size}: Fit leaves camera, zoom and framing stable`);
+      await drag(settled.layout.viewport,70,16);
+      const rotated=await snapshot(`fit-${size}-3d-rotated`);
+      const beforeById=new Map(settled.geometry.nodes.map(node=>[node.id,node]));
+      const parallax=rotated.geometry.nodes.filter(node=>rotated.fixed.some(fixed=>fixed.id===node.id)).map(node=>({id:node.id,movement:Math.hypot(node.projected.x-beforeById.get(node.id).projected.x,node.projected.y-beforeById.get(node.id).projected.y)}));
+      check(parallax.filter(node=>node.movement>5).length>=6,`${size}: a real post-Fit right-drag reveals substantial 3D parallax`);
+      check(rotated.overlaps.length===0,`${size}: fitted node rings remain separate after turning 3D right`);
+      for(const node of rotated.geometry.nodes.filter(node=>rotated.fixed.some(fixed=>fixed.id===node.id)))check(JSON.stringify(node.anchor)===JSON.stringify(beforeById.get(node.id).anchor),`${size}: post-Fit rotation preserves ${node.id} world anchors`);
+      await this.capture(`fit-${size}-3d-rotated`);
+      await drag(rotated.layout.viewport,-70,-16);
+      const unrotated=await snapshot(`fit-${size}-3d-restored`);
+      if(!config.baseline)this.assertStableNodes(settled.fixed,unrotated.fixed,`${size}: inverse right-drag restores the fitted projection`);
+      await drag(unrotated.layout.viewport,-70,-16);
+      const rotatedLeft=await snapshot(`fit-${size}-3d-left`);
+      check(rotatedLeft.overlaps.length===0,`${size}: fitted node rings remain separate after turning 3D left`);
+      for(const node of rotatedLeft.geometry.nodes.filter(node=>rotatedLeft.fixed.some(fixed=>fixed.id===node.id)))check(JSON.stringify(node.anchor)===JSON.stringify(beforeById.get(node.id).anchor),`${size}: left orbit preserves ${node.id} world anchors`);
+      await this.capture(`fit-${size}-3d-left`);
+      await drag(rotatedLeft.layout.viewport,70,16);
+      await this.run("window.MefiIdle.setView('2d');window.MefiIdle.fitAll();");await sleep(300);
+      const flatReference=await snapshot(`fit-${size}-2d-reference`);
+      await drag(flatReference.layout.viewport,130,55,'left');
+      this.webContents.sendInputEvent({type:'mouseWheel',x:Math.round(flatReference.layout.viewport.x+flatReference.layout.viewport.w*.5),y:Math.round(flatReference.layout.viewport.y+flatReference.layout.viewport.h*.5),deltaX:0,deltaY:-100,canScroll:true});
+      await sleep(250);
+      const flatMoved=await snapshot(`fit-${size}-2d-moved`);
+      await keyFit();
+      const flat=await snapshot(`fit-${size}-2d-keyboard`);validate(flat,flatReference,`${size} 2D keyboard F`);
+      await this.capture(`fit-${size}-2d-keyboard`);
+      report.fitLayout.cases.push({size,width,height,reference,edgeOn,button,keyboardEdgeOn,keyboard,repeated,settled,rotated,parallax,unrotated,rotatedLeft,flatReference,flatMoved,flat});
+    }
+    check(JSON.stringify(await this.run("return (await window.mefiStudio.tasksList()).tasks;"))===JSON.stringify(savedTasks),'Fit never changes saved tasks or their dependencies');
+    report.fitLayout.failures=[...new Set(report.fitLayout.failures)];
+    if(!config.baseline)assert.equal(report.fitLayout.failures.length,0,report.fitLayout.failures.join('\n'));
+    this.check(config.baseline?'Captured edge-on Fit behavior before the positioning repair':'Toolbar Fit and F recover a broad, separated graph from an edge-on 3D rotation and a panned/zoomed 2D map while preserving nodes, tasks, relationships, preferences and real 3D depth');
   }
   assertStableNodes(before,after,label) {
     const current=new Map(after.map(node=>[node.id,node]));
@@ -247,7 +399,7 @@ VERIFY_METHOD = r'''
       await this.run(`const select=document.getElementById('idle-feed-parallel');if(select.disabled)throw new Error('Capacity control disabled');select.value='${parallel}';select.dispatchEvent(new Event('change',{bubbles:true}));`);
       await this.until(`!document.getElementById('idle-feed-parallel').disabled && document.getElementById('idle-feed-parallel').value==='${parallel}'`, `capacity saves ${parallel} workers`);
     }
-    assert.deepEqual(report.parallelRequests, [{parallel:2},{parallel:3}], "capacity changes never toggle enable or execute");
+    assert.deepEqual(report.parallelRequests, [{adaptiveParallel:false,parallel:2},{adaptiveParallel:false,parallel:3}], "capacity changes never toggle enable or execute");
     assert.equal(config.fixture.autopilot.execute, true);
     assert.equal(config.fixture.autopilot.enabled, true);
     // Workers are synthetic; use real open tasks instead of trying to set
@@ -1048,7 +1200,7 @@ VERIFY_METHOD = r'''
     assert.equal(expanded.status.enabled,false,'Zen is off in a fresh profile');
     assert.equal(await this.run("return document.getElementById('idle-ambient-zen').checked;"),false);
     await this.click('#idle-ambience');
-    await this.click('#idle-ambient-zen');
+    await this.click('label:has(#idle-ambient-zen)');
     await this.click('#idle-ambience');
     assert.equal(await this.run("return window.MefiIdle.ambientZenStatus().enabled;"),true,'the Ambience toggle opts into Zen');
     await this.click('#idle-feed-toggle');
@@ -1131,7 +1283,7 @@ VERIFY_METHOD = r'''
     report.zen={elapsedMs:elapsed,before,zen,after};
     await this.capture('22-idle-zen-restored');
     await this.click('#idle-ambience');
-    await this.click('#idle-ambient-zen');
+    await this.click('label:has(#idle-ambient-zen)');
     await this.click('#idle-ambience');
     assert.equal(await this.run("return window.MefiIdle.ambientZenStatus().enabled;"),false);
     assert.equal(await this.run("return localStorage.getItem('mefiStudio.ambientZen');"),'0');
@@ -1172,8 +1324,9 @@ VERIFY_METHOD = r'''
     await this.until("window.MefiIdle?.isActive?.() && window.MefiIdle.status().nodes > 15", "Command dense graph ready");
     if (!config.baseline) assert.equal(await this.run("return window.MefiIdle.status().orbit;"),'paused','fresh Node tree opens with a stationary camera');
     assert.equal(await this.run("const canvas=document.getElementById('idle-layer');const rect=canvas.getBoundingClientRect();return rect.width>200 && rect.height>180 && getComputedStyle(canvas).visibility!=='hidden';"),true,'Node tree navigation opens a visible populated canvas');
-    if(config.nodeReadability) {
-      await this.verifyNodeReadability();
+    if(config.nodeReadability || config.fitLayout) {
+      if(config.fitLayout)await this.verifyFitLayout();
+      else await this.verifyNodeReadability();
       assert.equal(report.networkAttempts.length,0,'readability fixture never attempts external requests');
       assert.equal(report.workerAttempts.length,0,'readability fixture never starts worker processes');
       assert.equal(report.consoleErrors.length,0,`Renderer errors: ${report.consoleErrors.join('; ')}`);
@@ -1347,6 +1500,7 @@ const fixtureAssistantPromise = import('./scripts/assistant.mjs').then(module =>
   if (channel === 'assistant:autopilot') {
     const patch=args[0]||{};
     (report.parallelRequests ||= []).push({...patch});
+    if(typeof patch.adaptiveParallel==='boolean')config.fixture.autopilot.adaptiveParallel=patch.adaptiveParallel;
     config.fixture.autopilot.parallel=Math.max(1,Math.min(3,Math.round(Number(patch.parallel)||2)));
     return {ok:true,...config.fixture.autopilot};
   }
@@ -1439,7 +1593,7 @@ def fixture(project, now, node_readability=False):
     return tasks, ideas, {"assistant": assistant, "autopilot": status, "store": store}
 
 
-def verify(source, output, baseline=False, interactive=False, palette_only=False, appearance_matrix=False, collapsed_polish=False, node_readability=False):
+def verify(source, output, baseline=False, interactive=False, palette_only=False, appearance_matrix=False, collapsed_polish=False, node_readability=False, fit_layout=False):
     electron = ROOT / "node_modules/electron/dist/electron.exe"
     if not electron.is_file():
         raise RuntimeError("Install Electron with npm ci before verifying Command.")
@@ -1469,7 +1623,7 @@ def verify(source, output, baseline=False, interactive=False, palette_only=False
         project_info = {"id": project_id(project), "name": project.name, "path": str(project)}
         write_json(profile / "settings.json", {"machine": {"autoKill": False}, "assistant": {"background": False, "keepAwake": False, "proactive": False}, "projects": {"activeId": project_info["id"], "items": [project_info]}, "ui": {"useWeb": False, "autoReference": False, "autopilot": {"enabled": False, "execute": False}}})
         now = int(time.time() * 1000)
-        tasks, ideas, data = fixture(project_info, now, node_readability=node_readability)
+        tasks, ideas, data = fixture(project_info, now, node_readability=node_readability or fit_layout)
         if collapsed_polish:
             data["checkpoints"] = {session["id"]: [{"at": now - 30000, "note": "Saved fixture checkpoint: keyboard navigation and recovery context."}] for session in data["store"]["sessions"]}
         write_json(app_root / "data/eyes-tasks.json", tasks)
@@ -1478,7 +1632,7 @@ def verify(source, output, baseline=False, interactive=False, palette_only=False
         package = json.loads((source / "package.json").read_text(encoding="utf-8-sig"))
         package["main"] = "command-verify-entry.cjs"
         write_json(app_root / "package.json", package)
-        config = {"profile": str(profile), "appRoot": str(app_root), "output": str(destination), "alpha": project_info, "baseline": baseline, "fixture": data, "interactive": interactive, "paletteOnly": palette_only, "appearanceMatrix": appearance_matrix, "collapsedPolish": collapsed_polish, "nodeReadability": node_readability}
+        config = {"profile": str(profile), "appRoot": str(app_root), "output": str(destination), "alpha": project_info, "baseline": baseline, "fixture": data, "interactive": interactive, "paletteOnly": palette_only, "appearanceMatrix": appearance_matrix, "collapsedPolish": collapsed_polish, "nodeReadability": node_readability, "fitLayout": fit_layout}
         (app_root / package["main"]).write_text(bootstrap(config), encoding="utf-8")
         main = app_root / "main.cjs"
         instrumented = main.read_text(encoding="utf-8")
@@ -1519,7 +1673,8 @@ if __name__ == "__main__":
     parser.add_argument("--palette-only", action="store_true", help="Check custom palettes, preview view controls and Zen on a fresh disposable fixture")
     parser.add_argument("--appearance-matrix", action="store_true", help="Check all 50 style/layout/view combinations and 10 light-theme style/view combinations")
     parser.add_argument("--collapsed-polish", action="store_true", help="Capture both collapsed panels with three builders, checkpoint badges, orb effects, 3D/2D and light colors; skip the Zen wait")
-    parser.add_argument("--node-readability", action="store_true", help="Check six long running-task names with eight sessions, collapsed Live work and expanded Assistant in 3D/2D at wide and desktop sizes")
+    parser.add_argument("--node-readability", action="store_true", help="Check six long running-task names with eight sessions, collapsed Live work and expanded Assistant in default/rotated 3D and 2D at wide and desktop sizes")
+    parser.add_argument("--fit-layout", action="store_true", help="Check toolbar Fit and F restore broad node spacing after an edge-on 3D rotation and a panned/zoomed 2D map")
     args = parser.parse_args()
-    result = verify(args.source.resolve(), args.output.resolve(), args.baseline, args.interactive, args.palette_only, args.appearance_matrix, args.collapsed_polish, args.node_readability)
+    result = verify(args.source.resolve(), args.output.resolve(), args.baseline, args.interactive, args.palette_only, args.appearance_matrix, args.collapsed_polish, args.node_readability, args.fit_layout)
     print(f"Command UI verified: {len(result['checks'])} checks, {len(result['screenshots'])} screenshots in {args.output.resolve()}")

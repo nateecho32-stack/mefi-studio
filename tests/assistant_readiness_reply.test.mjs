@@ -92,6 +92,7 @@ test("compaction counts scheduler eligibility and confirms only the dispatch req
     assistantAskForWork: () => { asked += 1; return true; },
   });
   vm.runInContext(source.slice(start, end), env);
+  env.consumeReviewedTaskGroups = async () => null;
   const result = await env.assistantCompactorJob(Date.now(), {});
   assert.equal(result.intel.runnable, 1);
   assert.match(result.text, /1 work item ready/);

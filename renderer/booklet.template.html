@@ -1,10 +1,26 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-starting>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'self' file:; frame-src https://open.spotify.com;">
 <title>Mefi's Studio AI+ · Your workspace</title>
+<script id="startup-mode">if (['capture', 'smoke'].some(key => new URLSearchParams(location.search).get(key) === '1')) document.documentElement.removeAttribute('data-starting');</script>
 <style id="booklet-styles">__BOOKLET_STYLES__</style>
+<div id="boot-layer" role="dialog" aria-modal="true" aria-labelledby="boot-title" aria-describedby="boot-detail" tabindex="-1">
+  <section class="boot-card">
+    <div class="boot-mark" aria-hidden="true"><span class="boot-spinner"></span><span class="boot-monogram">M<span>+</span></span></div>
+    <p class="eyebrow">Mefi's Studio AI+</p>
+    <h1 id="boot-title" class="boot-title">Opening your studio</h1>
+    <p id="boot-detail" class="boot-detail" role="status" aria-live="polite" aria-atomic="true">Preparing your workspace before you begin.</p>
+    <div class="boot-progress-heading"><span>Getting ready</span><span id="boot-count" class="boot-count">0%</span></div>
+    <progress id="boot-progress" max="100" value="0" aria-label="Startup progress"></progress>
+    <ol id="boot-steps" class="boot-steps" aria-label="Startup checks"><li class="boot-step" data-state="loading">Preparing startup</li></ol>
+    <div id="boot-actions" class="boot-actions" hidden>
+      <button id="boot-retry" class="primary" type="button">Try again</button>
+      <button id="boot-continue" class="ghost" type="button">Open with available data</button>
+    </div>
+  </section>
+</div>
 <svg id="nav-glyphs" class="glyph-sprite" aria-hidden="true" focusable="false" width="0" height="0">
   <symbol id="g-music" viewBox="0 0 16 16"><path d="M6 12V4l7-2v8M6 6l7-2"/><ellipse cx="3.7" cy="12.7" rx="2.3" ry="1.7"/><ellipse cx="10.7" cy="10.7" rx="2.3" ry="1.7"/></symbol>
   <symbol id="g-command" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M6.3 6.5 3.9 4.6M9.9 6.9l2.3-1.8M9.3 9.8l1.6 2.3"/><circle cx="3.2" cy="4" r="1" fill="currentColor" stroke="none"/><circle cx="12.9" cy="4.5" r="1" fill="currentColor" stroke="none"/><circle cx="11.4" cy="12.9" r="1" fill="currentColor" stroke="none"/></symbol>
@@ -86,6 +102,11 @@
             <label class="switch" for="workspace-auto-build"><input type="checkbox" id="workspace-auto-build" checked disabled aria-describedby="workspace-build-mode-note"><span class="track"></span><span>Auto build</span></label>
             <strong id="workspace-build-mode-label">Loading preference…</strong>
             <p id="workspace-build-mode-note">Choose whether queued work starts automatically or waits for your approval.</p>
+          </div>
+          <div class="build-mode-control agent-mode-control">
+            <label for="workspace-agent-mode">Agent mode</label>
+            <select id="workspace-agent-mode" disabled aria-describedby="workspace-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select>
+            <p id="workspace-agent-mode-note" role="status">Both modes collaborate and delegate subtasks. Swarm works across the queue; Cluster focuses on one shared task.</p>
           </div>
           <div class="ws-backlog-heading"><span class="ws-backlog-light" aria-hidden="true"></span><strong id="workspace-backlog-title">A little progress, every pass</strong></div>
           <p id="workspace-backlog-summary">Checking your project's backlog…</p>
@@ -228,7 +249,7 @@
           <div class="row">
             <select id="eyes-session" class="grow"></select>
             <button id="eyes-refresh" class="ghost" title="Reload from the OpenCode database">Refresh</button>
-            <button id="analyzer-open" class="ghost" title="Analyzer: drop files or ideas (A)">Analyzer</button>
+            <button id="analyzer-open" class="ghost" title="Analyzer: project plans, evidence and starting points (A)">Analyzer</button>
           </div>
           <div class="row">
             <select id="eyes-agent" title="Filter by agent"><option value="">all agents</option></select>
@@ -394,14 +415,6 @@
   <canvas id="tree-canvas" tabindex="0" role="tree" aria-label="Session tree"></canvas>
   <div class="rail-stats" id="tree-stats">no session yet</div>
 </aside>
-<div id="boot-layer" role="status" aria-label="Mefi's Studio is starting" hidden>
-  <canvas id="boot-canvas" aria-hidden="true"></canvas>
-  <div class="boot-copy" aria-hidden="true">
-    <p class="eyebrow">Mefi's Studio AI+</p>
-    <p id="boot-title" class="boot-title">waking the assistant</p>
-    <p id="boot-count" class="boot-count"></p>
-  </div>
-</div>
 <canvas id="idle-layer" tabindex="0" role="application" aria-label="Command constellation" hidden></canvas>
 <div id="idle-hud" hidden>
   <div class="cmd-top">
@@ -433,8 +446,9 @@
         <span class="hint" id="idle-search-count" aria-live="polite"></span>
       </div>
     </div>
-    <div class="cmd-tools" role="toolbar" aria-label="View controls">
-      <button id="idle-fit" class="ghost icon" title="Fit all (F)" aria-label="Fit all"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-fit"/></svg></button>
+    <div class="cmd-tools" role="toolbar" aria-label="Node tree controls">
+      <label class="cmd-agent-mode">Agents <select id="idle-feed-agent-mode" disabled aria-label="Agent coordination mode" aria-describedby="idle-feed-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select></label>
+      <button id="idle-fit" class="ghost icon" title="Rearrange and fit the node tree (F)" aria-label="Fit and rearrange node tree"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-fit"/></svg></button>
       <button id="idle-orbit" class="ghost icon" aria-pressed="true" title="Orbit on · Space pauses" aria-label="Orbit"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg></button>
       <button id="idle-cam-orbit" class="ghost" data-cam="orbit" aria-pressed="true" title="Camera: orbit — keep the whole tree framed (C cycles orbit / follow / free)" aria-label="Camera: orbit"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-fit"/></svg><span class="label">Orbit</span></button>
       <button id="idle-cam-follow" class="ghost" data-cam="follow" aria-pressed="false" title="Camera: follow — track the agent's current work (C cycles orbit / follow / free)" aria-label="Camera: follow"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-target"/></svg><span class="label">Follow</span></button>
@@ -469,6 +483,7 @@
       <button id="cmd-chat-toggle" class="ghost mini" aria-expanded="true" title="Collapse the chat log">&ndash;</button>
     </header>
     <div id="cmd-chat-body" class="chat-log-body">
+      <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="cmd-chat-new-work" role="switch" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="cmd-chat-new-work-state" aria-hidden="true">Loading…</span></label>
       <div id="cmd-chat-thread" class="assistant-thread chat-log-thread" aria-live="polite"></div>
       <div class="chat-chips" aria-label="Quick asks">
         <button class="ghost mini" data-cmdchat-msg="status">Status</button>
@@ -498,6 +513,7 @@
       <label class="feed-capacity">Build mode <select id="idle-feed-build-mode" aria-label="Build approval mode"><option value="auto">Auto build</option><option value="verify">Verify first</option></select></label>
     </div>
     <div id="idle-feed-scroll" class="feed-scroll" tabindex="0" role="region" aria-label="Current work and queue">
+    <p id="idle-feed-agent-mode-note" class="feed-mode-note" role="status">Both modes collaborate and delegate subtasks. Swarm works across the queue; Cluster focuses on one shared task.</p>
     <section class="feed-current" aria-label="Current work">
       <div class="feed-section-head"><h3>Current work</h3></div>
       <div id="idle-feed-now" class="feed-now" aria-live="polite"></div>
@@ -532,7 +548,7 @@
         <button id="idle-chat-overseer" class="ghost mini" title="The overseer reviews the assistant's own work, tunes prefs and files upgrades">Oversee</button>
         <button id="idle-chat-tidy" class="ghost mini" title="Archive done tasks, prune finished ideas, clear resolved requests">Tidy</button>
         <button id="idle-chat-fix" class="ghost mini" title="Repair the catalog and data files, check the live update">Fix</button>
-        <button id="idle-chat-pause" class="ghost mini" title="Pause or resume the assistant service">Pause</button>
+        <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="idle-chat-pause" role="switch" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="idle-chat-new-work-state" aria-hidden="true">Loading…</span></label>
         <button id="idle-chat-explorer" class="ghost mini" title="The full assistant surface in the Session explorer (E)">Explorer</button>
       </div>
     </div>
@@ -587,7 +603,7 @@
       <button class="sheet-back ghost mini" data-nav-close="tasks" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
       <div class="sheet-title">
         <div class="eyebrow">A-Eyes</div>
-        <h2 id="tasks-heading">Tasks</h2>
+        <h2 id="tasks-heading">Task board</h2>
       </div>
       <div class="sheet-links" data-sheet-links="tasks" role="group" aria-label="Other tools"></div>
       <div class="sheet-actions">
@@ -597,13 +613,14 @@
     </header>
     <div class="explorer-grid">
       <aside class="explorer-col">
-        <h3>Board</h3>
+        <div class="task-board-heading"><h3>Plans & progress</h3><button id="task-overview-back" class="ghost mini" type="button" hidden>Back to overview</button></div>
+        <p class="task-board-intro">Your plans and discussions, with the current step and confirmed progress. Open a card to see its tasks.</p>
         <div class="row tight">
           <input id="task-new" type="text" class="grow" placeholder="New task — the assistant picks it up…" autocomplete="off">
           <button id="task-add" class="primary">Add</button>
         </div>
         <div class="row tight">
-          <input id="task-search" type="search" class="grow" placeholder="Search tasks…" aria-label="Search tasks" autocomplete="off">
+          <input id="task-search" type="search" class="grow" placeholder="Search plans, discussions and tasks…" aria-label="Search plans, discussions and tasks" autocomplete="off">
         </div>
         <div class="chips" id="task-filters" role="group" aria-label="Filter tasks">
           <button class="chip on" id="task-filter-all" data-filter="all" type="button">All</button>
@@ -739,21 +756,28 @@
     </header>
     <div class="explorer-grid">
       <aside class="explorer-col">
-        <h3>Intake</h3>
+        <h3>Project starting points</h3>
+        <p class="muted">Loading a project reads its old plans and checks them against current files. Review the evidence, then choose a next step.</p>
+        <div class="row tight">
+          <button id="analyzer-project" class="primary">Analyze project</button>
+          <button id="analyzer-project-ai" class="ghost" disabled>AI project read</button>
+        </div>
+        <p class="eyes-status">Local analysis needs no key. AI project read sends report excerpts to your configured AI connection when requested.</p>
+        <h3>File or idea</h3>
         <div id="analyzer-drop" class="drop-zone">Drop a file here<span class="muted"> · or paste an idea below</span></div>
         <textarea id="analyzer-idea" class="fill mt-sm" rows="5" placeholder="Paste an idea… e.g. &quot;fishing rod charge cast with rarity glow and fish-brewed potions&quot;"></textarea>
         <div class="row tight">
           <button id="analyzer-idea-run" class="primary">Analyze idea</button>
-          <label class="switch" title="Ask DeepSeek V4.1 Flash for a deep read (needs a key)"><input type="checkbox" id="analyzer-ai"><span class="track"></span><span>AI deep read</span></label>
+          <label class="switch" title="Add an AI deep read to file and idea analysis (needs a connection)"><input type="checkbox" id="analyzer-ai"><span class="track"></span><span>AI deep read</span></label>
         </div>
-        <p class="eyes-status" id="analyzer-status">idle</p>
+        <p class="eyes-status" id="analyzer-status" role="status" aria-live="polite">Waiting for a project</p>
       </aside>
       <section class="explorer-col">
         <h3 id="analyzer-title">Findings</h3>
-        <div id="analyzer-findings"><p class="muted">Nothing analyzed yet. Drop a file or paste an idea — analysis runs in read time, no key needed.</p></div>
+        <div id="analyzer-findings"><p class="muted">Open a project for a local overview, or analyze a file or idea here.</p></div>
       </section>
       <aside class="explorer-col">
-        <h3>Evidence</h3>
+        <h3>Evidence &amp; limits</h3>
         <ul id="analyzer-evidence" class="pin-list"></ul>
         <div id="analyzer-ai-out"></div>
       </aside>

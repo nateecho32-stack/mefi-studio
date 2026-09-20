@@ -390,6 +390,47 @@ test("eyes.js log tail: the tick also gates on the eyes tab, so other tabs make 
   assert.equal(fetches, 2, "show restores the exact cadence");
 });
 
+test("eyes.js log tail: without the guard the fallback interval holds the same start/stop lifecycle", async () => {
+  const source = await readFile(path.join(STUDIO, "renderer", "eyes.js"), "utf8");
+  assert.match(source, /else fallbackLogTimer = setInterval\(refreshLog, 5000\)/, "browser mode falls back to a raw log interval");
+  assert.match(source, /if \(fallbackLogTimer\) clearInterval\(fallbackLogTimer\);/, "every mode switch clears the fallback interval");
+  const modeSource = source.match(/function setMode\(mode\) \{[\s\S]*?\n  \}/);
+  assert.ok(modeSource, "setMode must exist");
+  // window carries no MefiBoot, so the shipped setMode takes its fallback
+  // branch; the lifecycle must match the guard's: one interval per entry,
+  // cleared on every switch away, restarted exactly once on return.
+  const live = new Set();
+  let nextId = 1;
+  let refreshes = 0;
+  const setMode = compile(modeSource[0], {
+    window: {},
+    document: { querySelectorAll: () => [] },
+    state: { mode: null },
+    fallbackLogTimer: null, // the module's `let fallbackLogTimer = null;`
+    els: { modePng: { hidden: true }, modeDiff: { hidden: true }, modeLog: { hidden: true } },
+    refreshLog: () => {
+      refreshes += 1;
+    },
+    drawPins: () => {},
+    setInterval(fn, ms) {
+      const id = nextId++;
+      live.add(id);
+      return id;
+    },
+    clearInterval(id) {
+      live.delete(id);
+    },
+    requestAnimationFrame: () => 0,
+  });
+  setMode("log");
+  assert.equal(live.size, 1, "log mode without the guard starts exactly one fallback interval");
+  assert.equal(refreshes, 1, "entering log mode refreshes immediately");
+  setMode("png");
+  assert.equal(live.size, 0, "leaving log mode clears the fallback interval");
+  setMode("log");
+  assert.equal(live.size, 1, "returning to log mode starts exactly one fallback interval");
+});
+
 // ---- overlay polls ----------------------------------------------------------
 // The remaining poll owners sit on overlays (tasks board, explorer, idle
 // Command). The shared guard already stops their timers while hidden; these

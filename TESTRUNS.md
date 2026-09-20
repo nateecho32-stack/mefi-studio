@@ -1,15 +1,281 @@
 # Test Runs
 
+Worker-start feedback coverage in `tests/assistant_work_on.test.mjs` reproduces
+repeated **Work on it** clicks after a session request has been promoted and its
+inbox entry removed. It checks existing-worker reuse, preparation versus process
+startup, one chat confirmation per spawn, verification, stale assignments and
+Pause while a builder is running. `tests/executor_resources.test.mjs` also checks
+connection failures, dispatch-error recovery and full manual limits. These use
+in-memory stores and fake child events without launching paid workers.
+
+`tests/assistant_work_on.test.mjs` covers the actual **Work on it** host path:
+paused and disabled workers are reported explicitly, repeated clicks retain one
+prioritized request, and dispatch is distinguished from a confirmed worker start.
+The in-memory executor fixture checks that resuming allows the saved request to
+run without another click. The New work control persists worker enablement,
+preserves build approvals and other preferences, and leaves current workers
+running when switched off. It uses fake workers and never changes live user data.
+`tests/command_new_work.test.mjs` checks synchronized switches, loading, busy
+and failure states. The real Command renderer fixture also clicks the switch at
+desktop and 600px widths, with synthetic state and external requests blocked.
+
+New work validation (2026-09-19): booklet rebuilt, check and audit passed, and
+`npm test` passed with 1,277 Node tests (one opt-in skip), 220 Python contracts
+and all six normalized-path checks. The Electron switch check passed at desktop
+and narrow widths; Windows display scaling is allowed one pixel of rounding.
+Synthetic captures stay in ignored `tools/logs/new-work-toggle/`; full output is
+saved locally as `%TEMP%/mefi-work-on-test.log`.
+
+Shared-task delegation is covered by `tests/task_delegation.test.mjs` and
+`tests/executor_delegation.test.mjs`. Both Swarm and Cluster use the real host
+selection, assistant preparation, child claims, result verification and parent
+integration with memory stores and fake HTTP/process boundaries. Cases include
+parallel and overlapping-file subtasks, manual limits, individual build
+approvals, mode/pause/scope races, failed saves, request promotion, restart
+focus, saved-subtask recovery, cleanup protection and bounded delegation
+without recursive splitting. Reopening a child holds its parent's verification.
+No paid provider calls or live coding workers are used.
+
+The isolated task-overview Electron fixture also checks delegated parent and
+child navigation, confirmed-only subtask progress and the separate integration
+step at desktop and 600px widths. Reviewed captures and its report are local
+in ignored `tools/logs/task-delegation-review/`; no renderer, network or child
+process errors were observed.
+
+Shared-task validation on 2026-09-19: booklet rebuilt; `npm run check`,
+`npm test` and `npm run audit` passed. The final full run passed 1,271 Node
+tests (one opt-in skip), 220 Python tests and six normalized-path checks.
+Audit reported zero findings. Final logs are local in the temporary directory
+as `mefi-shared-task-test-final.log` and `mefi-shared-task-check-final.log`.
+
+Task-pileup regressions are covered by `tests/updater_deferred.test.mjs` and
+`tests/executor_result_protocol.test.mjs`. Deferred updates retry after workers
+save their results without needing another source edit or a visible window;
+stopping the watcher or disabling automatic updates cancels retries. Retries
+validate the latest source before restarting. Executor results must begin their
+own line, so saved results echoed inside JSON or prose cannot replace the
+current attempt's report. Host fixtures verify both successful completion and
+retention of real unfinished work. These checks use temporary state and fake
+workers, with no live-board writes or provider calls.
+
+Startup readiness coverage runs through `npm test`, or directly with
+`node --test tests/renderer_startup.test.mjs tests/nav_startup.test.mjs
+tests/workspace_ui.test.mjs tests/catalog_renderer.test.mjs
+tests/startup_render.test.mjs`. Controlled reads and clocks check parallel
+preparation, real completed-step progress, input blocking, bounded timeouts,
+explicit partial opening, retry after a hung request, and stale result fencing.
+Workspace tests verify project/data readiness and no duplicate initial batch;
+navigation tests verify saved views, drafts, scroll and focus restoration.
+The real Electron fixture launches normally with delayed synthetic project and
+catalog reads, checks the loader before allowing either read to finish, then
+checks the populated Workspace and first-run guide. Separate launches cover
+failure/retry, explicit partial opening, 600px layout, reduced motion and
+readable loading surfaces with a custom light theme.
+It uses disposable profiles and public catalog data, blocks external requests
+and child processes, and never starts the live app or coding workers. Set
+`MEFI_STARTUP_CAPTURE_DIR` to an absolute local directory to retain screenshots
+and the fixture report. Startup data reads do not run Settings-only connection
+or CLI discovery checks; capture/smoke launches retain direct navigation.
+
+Startup validation on 2026-09-19: booklet rebuilt; `npm run check` and
+`npm run audit` passed with zero findings. All 48 focused startup tests passed,
+including the real Electron loader, delayed reads, failure/retry, partial
+opening, reduced motion and custom light theme. The latest full `npm test`
+recorded 1,196 Node passes, one opt-in skip and one failure in the concurrently
+changing Cluster direct-request resume test (`tests/executor_resume.test.mjs`).
+A separate reproduction then encountered the ongoing fixture's missing
+`scripts/task-delegation.cjs` dependency. The combined full-suite gate remains
+unpassed; standalone Python discovery passed all 220 tests and all six
+normalized-path lock checks passed. Logs are local in `tools/logs/` as
+`startup-release-test.log`, `startup-release-check.log`,
+`startup-release-audit.log`, `startup-focused-final.log` and
+`startup-python-final.log`. Synthetic preview screenshots are in the ignored
+`tools/logs/startup-ui/` directory.
+
+`tools/test_mefi_studio_session_dedupe.py` covers session work accounting:
+normalized-title deduplication, one in-progress todo per active session,
+overflow requeueing, and the overseer digest using fresh watcher counts.
+It runs in the standard Python discovery step without network or workers.
+
+Project onboarding in Analyzer is covered by `tests/analyzer_project.test.mjs`,
+`tests/analyzer_host.test.mjs`, and `tests/analyzer_ui.test.mjs` (included in
+`npm test`). Temporary project fixtures check historical documents and saved
+Studio plans against current source, missing paths, misleading completed claims,
+empty projects, traversal and linked paths, exclusions and scan limits. Host
+fixtures cover captured project identity, shared reads, retry, unavailable
+saved plans and explicit AI context from the host report. Renderer fixtures
+cover automatic local analysis on project load, delayed replies and picker
+results after switching projects, safe AI rendering, and editable starting
+points without creating work. No live plans, user settings or workers are used.
+
+Analyzer validation on 2026-09-19: booklet rebuild, `npm run check`, and
+`npm run audit` passed (zero findings). All 40 focused Analyzer tests passed;
+an isolated Electron preview checked automatic local loading, editable starting
+points, desktop and 600px layouts with no renderer errors or horizontal overflow.
+The final full `npm test` passed 1,145 Node tests (one opt-in skip), then ran
+211 Python tests with one failure in the concurrently changed assistant's
+`test_module_syntax_and_self_test`: its builder digest expectation still counts
+a failed-only event as a successful report. That failure reproduces directly
+with `node scripts/assistant.mjs --self-test`; Analyzer's Python contracts pass.
+The six normalized-path lock checks passed separately. The combined full-suite
+gate remains unpassed. Logs are local in the temporary directory as
+`mefi-analyzer-final-test.log`, `mefi-analyzer-focused-final.log`,
+`mefi-analyzer-final-check.log` and `mefi-analyzer-final-audit.log`.
+
+Swarm and Cluster modes are covered by `tests/agent_modes.test.mjs` and
+`tests/executor_modes.test.mjs`. These exercise real host selection, claims,
+support preparation, verification and handoffs using memory stores and fake
+HTTP/worker boundaries. Coverage includes independent Swarm tasks, parallel
+Cluster advisors feeding one builder, focus through verification and delegated
+work, saved modes, project isolation, unavailable assistance, Pause, mode/scope/
+approval changes, resource races, actual assistant pool limits, bounded queued
+advisory waits and discarded late replies. They make no paid provider calls.
+
+`tests/workspace_ui.test.mjs` and `tests/command_activity.test.mjs` cover mode
+controls, saving/recovery and helper activity. The isolated Electron
+`tests/command_render.test.mjs` fixture additionally checks both real mode
+selectors at 1280px and 600px, their mode-only setting writes, unchanged Pause,
+busy controls and duplicate helper suppression. All are included in `npm test`.
+The Python assistant contract includes the two on-demand Cluster roster roles.
+The node tree toolbar selector is also exercised with Live work collapsed:
+mode saves, keyboard focus and pointer access work at 1280px and 600px, with
+every toolbar control inside the viewport and no control overlap or horizontal
+overflow.
+
+Node-tree selector placement validation on 2026-09-19: rebuilt booklet;
+the isolated Command Electron regression passed, including mode changes with
+Live work collapsed at desktop and 600px widths. Check and audit passed after
+the placement edit. Full-suite reruns on the concurrently changing tree remain
+blocked: the latest Node run had 1,149 passes, one skip and two renderer
+timeouts. The profiler timeout passed separately; task overview still timed
+out waiting for its startup fade. Separate Python discovery ran 214 tests
+with two failures, including the boot-canvas DOM contract. The assistant
+self-test and six normalized-path checks passed. Logs remain in the local
+temporary directory as `mefi-tree-mode-test-final.log`,
+`mefi-tree-mode-unrelated-render.log`, and `mefi-tree-mode-python.log`.
+
+Swarm/Cluster validation on 2026-09-19: booklet rebuilt, `npm run check` and
+`npm run audit` passed with zero findings. Full `npm test` passed (1,115 Node
+passes, one opt-in skip, 211 Python passes and six normalized-path checks).
+After the final preparation-status display change, all 96 focused mode,
+Workspace, Command, booklet and real Electron checks passed; check and audit
+passed again. Complete logs are retained in the local temporary directory as
+`mefi-agent-modes-test-final.log`, `mefi-agent-modes-final-delta.log`,
+`mefi-agent-modes-check-final.log` and `mefi-agent-modes-audit-final.log`.
+
+Task-board overview and consolidation coverage runs through `npm test`:
+`tests/board_growth.test.mjs`, `tests/board_grouping.test.mjs`,
+`tests/group_board.test.mjs`, `tests/task_grouping_cleanup.test.mjs`,
+`tests/task_overview_groups.test.mjs`, `tests/tasks_ui.test.mjs`, and
+`tests/task_overview_render.test.mjs`. These cover automatic discovery limits,
+concurrent admission, scope preservation, reviewed grouping under the board
+gateway, claim and project fencing, replay recovery, local backups, goal-level
+grouping, discussion progress, and confirmed-only completion. The isolated
+Electron overview fixture uses 95 synthetic tasks, blocks provider requests
+and child processes, and checks desktop/600px layouts, search and original
+task details. It never loads the live Studio host or user board. Set
+`MEFI_TASK_OVERVIEW_CAPTURE_DIR` to an absolute local directory to keep its
+screenshots and report for visual inspection.
+
+Board validation on 2026-09-19: booklet build, `npm run check`, and
+`npm run audit` passed (zero findings); the focused board suites and desktop/
+600px Electron overview passed. The final combined `npm test` reached 1,096
+Node passes, one opt-in skip and two failures in the concurrently edited
+`executor_modes` fixture (`assistantPoolCounts` missing in its VM). Separate
+Python discovery ran 211 tests with two agent-mode contract failures (pool
+widening text and the new cluster-role roster); normalized-path checks passed
+6/6. The full-suite gate remains unpassed. An earlier profiler-export timeout
+passed on focused rerun and in the final combined run. Local logs are
+`%TEMP%/mefi-board-final-test.log` and `%TEMP%/mefi-board-python.log`; overview
+screenshots and its isolated report are in `tools/logs/task-overview-review/`.
+
 Performance profiler coverage runs through `npm test`, or directly with
 `node --test tests/performance_core.test.mjs tests/performance_host.test.mjs
-tests/performance_render.test.mjs tests/tree3d_performance.test.mjs`.
+tests/performance_render.test.mjs tests/profiler_lifecycle.test.mjs
+tests/tree3d_performance.test.mjs`.
 Controlled clocks verify nested self time, rolling p95, bounded retention,
 capture reset/stop fencing, absent metrics, IPC result/error preservation,
 payload exclusion and host lifecycle cleanup. The isolated Electron profiler
 fixture uses temporary stores and blocked external requests, injects a measured
 UI stall, and checks real frame/long-task detection, recording across panel
 closure, frozen JSON export, visibility suspension and the 600px layout.
-It does not start Studio's assistant or external coding workers.
+It does not start Studio's assistant or external coding workers. A second
+isolated launch exercises real Electron process metrics and IPC timing through
+the desktop bridge. Panel lifecycle tests cover delayed/out-of-order host
+responses, export/reset races, single in-flight reads and timeout recovery.
+
+### Profiler-guided Command optimization
+
+Run `node tools/profile_studio.mjs --output tools/logs/profile.json --capture`
+for four isolated real-renderer workloads: 32 and 154 painted nodes, each in
+2D and rotating 3D. The Electron fixture uses a 1280x900 offscreen window,
+software rendering, a 2-second warmup and a 5-second capture per case. Command
+retains its normal 30 fps drawing cap; the profiler observes browser callbacks
+separately. Audio is off and the profiler panel stays closed while recording.
+The fixture copies only
+renderer sources and the public model catalog into temporary state, blocks
+external requests and process launches, and never starts Studio's workers.
+`--source PATH` compares a source snapshot; `--warmup-ms`, `--duration-ms` and
+`--scenarios` control the workload. Reports record the renderer SHA-256,
+actual node counts and complete profiler data. Keep captures under ignored
+`tools/logs/` and run comparisons sequentially without concurrent tests.
+
+Captures identified node painting as the largest named Command cost. Orb
+gradients now reuse a bounded per-canvas cache while retaining screen-space
+paths and exact continuous radii. Stable graph topology also reuses its parent
+map, invalidating on in-place node/edge changes. New nested scopes separate
+node painting, connections, labels and backdrop from other frame work.
+
+Measurements on 2026-09-19 used frozen before/after sources differing only in
+these two cache changes. Each value below is the average of two per-run mean
+durations in milliseconds; they are diagnostic measurements, not test thresholds.
+
+| Workload | Frame before | Frame after | Nodes before | Nodes after |
+| --- | ---: | ---: | ---: | ---: |
+| 32 nodes, 3D | 3.559 | 2.502 | 1.493 | 1.011 |
+| 154 nodes, 3D | 6.080 | 5.418 | 3.207 | 2.413 |
+| 32 nodes, 2D | 3.542 | 3.042 | 1.587 | 1.249 |
+| 154 nodes, 2D | 6.082 | 5.398 | 3.309 | 2.728 |
+
+Node work fell 18–32% and measured frame work 11–30% on these averages. Timing
+varied substantially: dense 3D frame means ranged 4.400–7.761 ms before and
+4.504–6.332 ms after. Three scenarios had overlapping before/after ranges,
+so these runs do not establish a live-app FPS guarantee. Source hashes matched
+within each pair, node counts matched, and all captures reported no renderer
+errors, external requests or process launches. Full data and screenshots stay
+under `tools/logs/profiler-optimization-*`; the comparison JSON includes ranges.
+
+`node --test tests/command_topology_cache.test.mjs
+tests/node_paint_cache.test.mjs` checks exact parent-map reuse/invalidation,
+bounded retention and real Electron pixels at DPR 1, 1.5 and 2. The pixel
+fixture compares 192 moving/fading/selected/glowing node cases per density,
+including glyphs, and verifies restored canvas state. Maximum channel deltas
+were 1/255, 4/255 and 1/255 from gradient rounding, with unchanged geometry.
+These tests are included in `npm test`; there are no wall-clock speed assertions.
+
+Optimization validation: rebuilt booklet, `npm run check` and `npm run audit`
+passed (zero findings). The final focused Command, cache and real Electron
+profiler run passed all 129 tests. Python discovery passed all 211 contracts,
+and normalized-path ownership passed all six checks. The latest combined
+`npm test` run passed 1,127 Node tests, skipped one and failed one existing
+profiler JSON-download timeout; both profiler Electron tests then passed in
+the focused run. The combined gate remains unpassed. Complete logs remain at
+`tools/logs/profiler-optimization-{check,audit,test-complete,focused-final,python,lock}.log`.
+The benchmark CLI also passed a short correctness smoke after fixing Windows
+temporary-directory cleanup; its smoke timings are excluded from comparisons.
+
+Profiler validation on 2026-09-19: rebuilt booklet, `npm run check`, and
+`npm run audit` passed (zero findings). The 51 focused profiler, project,
+booklet-build and update-continuity checks passed, including both real Electron
+profiler launches. Python discovery passed all 211 contracts and normalized-path
+ownership passed all six checks. The final combined `npm test` run passed 986
+Node tests, skipped one and failed one in the concurrently edited Command audio
+fixture: `tests/command_render.test.mjs`, “Audio fixture task disappeared”. The
+profiler suites passed in that run; the full-suite gate remains unpassed.
+Complete logs are in the local temporary directory as
+`mefi-profiler-combined-test.log`, `mefi-profiler-final-focused.log`,
+`mefi-profiler-python.log`, `mefi-profiler-combined-check.log`, and
+`mefi-profiler-combined-audit.log`.
 
 Machine-managed scheduling is covered by `tests/machine_capacity.test.mjs`,
 `tests/worker_responsiveness.test.mjs`, `tests/executor_resources.test.mjs`,
@@ -63,6 +329,26 @@ This is the test guide for the standalone Mefi's Studio AI+ repository. Run all 
 
 ## Read Before Any Tests
 
+Agent continuation coverage: `tests/executor_resume.test.mjs` exercises the
+actual host dispatch, stream/checklist checkpoint writes, new-host recovery,
+interrupted-task priority, live/unknown process ownership, Pause and approval
+gates, canceled claims, stale writes, storage retries, view reload and final
+quit flushes. `tests/assistant_pool.test.mjs` covers replay of the saved role,
+target and progress, singleton queue keys, paused continuations, planned-update
+retry budgets and the shutdown dispatch fence. Coordinator and task-context
+tests retain interrupted records through cleanup and in durable history.
+All use isolated fixtures without running paid workers or changing live data.
+
+Validated on 2026-09-19: `npm run check` and `npm run audit` pass (zero
+findings). The full Node suite with `--test-concurrency=1` passed 1,196 tests
+with one opt-in skip; all 220 Python contracts and six normalized-path checks
+passed. The initial default-concurrency `npm test` run failed in existing
+Electron audio/rendering/cleanup fixtures and timed out three renderer tests;
+all 13 affected-file tests passed sequentially, followed by the full sequential
+Node run. Logs are local under `tools/logs/agent-resume-*.log`.
+The final 19-test continuation suite also passes after fixing the forced-save
+promise race and keeping resumed direct requests under their original identity.
+
 Use the local Node.js and Python contracts for this Electron app:
 
 ```powershell
@@ -70,7 +356,7 @@ npm run check
 npm test
 ```
 
-`npm run check` verifies package-script targets and JavaScript syntax and runs the spec-collision audit (`npm run check:specs`, `scripts/spec-collisions.mjs`) that enforces the CONTRIBUTING.md test-file conventions. `npm run check:css` (`scripts/check-css.mjs`) is the standalone CSS-refactor safety gate: it computes the cascade-winning declaration for every (selector-context, property, importance) key in a stylesheet and proves a candidate (by default the working copy of `renderer/styles.css`) keeps exactly the same winners as the base ref (by default `HEAD`), reporting missing/changed/new winners and exiting non-zero on divergence. `tests/check_css.test.mjs` pins the winner extraction, cascade-equivalence comparison and the CLI exit codes (`node scripts/check-css.mjs base.css candidate.css` also works on bare files; `npm run check:css -- pre-merge.css post-merge.css` is the same two-file form used to prove a styles.css merge — see "Verifying a session edit-collision handoff" below). `npm run check:css:merge` (`scripts/check-css.mjs --merge`) is the collision-resolution form folded into the same convention: after a styles.css merge conflict it checks **both sides against the merge base** (ours `HEAD`, theirs `MERGE_HEAD`, base their `git merge-base`) and fails when the resolution drops a one-sided winner change, resurrects a one-sided deletion, or settles a both-sides change on neither side's value; it runs inside the `npm run check` chain and is a no-op (`MERGE-CSS-SKIP`, exit 0) when no merge is in progress, with `--theirs <ref>` auditing any branch pair. Guarded by `tests/check_css_merge.test.mjs`. `npm test` runs the Node behavioral suite in `tests/`, all Python contracts in `tools/`, and the normalized-path lock proof (`node tools/test_normalized_path_lock.mjs`, the A-Eyes overseer directive's named check) as its closing gate. To investigate one layer or one contract:
+`npm run check` verifies package-script targets and JavaScript syntax and runs the spec-collision audit (`npm run check:specs`, `scripts/spec-collisions.mjs`) that enforces the CONTRIBUTING.md test-file conventions. `npm run check:css` (`scripts/check-css.mjs`) is the standalone CSS-refactor safety gate: it computes the cascade-winning declaration for every (selector-context, property, importance) key in a stylesheet and proves a candidate (by default the working copy of `renderer/styles.css`) keeps exactly the same winners as the base ref (by default `HEAD`), reporting missing/changed/new winners and exiting non-zero on divergence. `tests/check_css.test.mjs` pins the winner extraction, cascade-equivalence comparison and the CLI exit codes (`node scripts/check-css.mjs base.css candidate.css` also works on bare files; `npm run check:css -- pre-merge.css post-merge.css` is the same two-file form used to prove a styles.css merge — see "Verifying a session edit-collision handoff" below). `npm run check:css:merge` (`scripts/check-css.mjs --merge`) is the collision-resolution form folded into the same convention: after a styles.css merge conflict it checks **both sides against the merge base** (ours `HEAD`, theirs `MERGE_HEAD`, base their `git merge-base`) and fails when the resolution drops a one-sided winner change, resurrects a one-sided deletion, or settles a both-sides change on neither side's value; it runs inside the `npm run check` chain and is a no-op (`MERGE-CSS-SKIP`, exit 0) when no merge is in progress, with `--theirs <ref>` auditing any branch pair. Guarded by `tests/check_css_merge.test.mjs`. `npm run check:css:unused` (`scripts/check-css.mjs --unused`) is the dead-selector half of the same audit: it scans every `renderer/*.css` (or explicit file arguments), extracts the class tokens of each winner-bearing selector (rules with no declarations carry no winners and are skipped; `@keyframes` internals are not candidates) and flags any selector whose class never appears in the surrounding renderer html/js/css usage, exiting 1 with `UNUSED-SELECTOR` lines; `--allow cls,...` keeps a documented dynamic class out of the report. It also runs inside the `npm run check` chain and stays clean on this tree (`ALL-SELECTORS-USED`). Guarded by `tests/check_css_unused.test.mjs`. `npm test` runs the Node behavioral suite in `tests/`, all Python contracts in `tools/`, and the normalized-path lock proof (`node tools/test_normalized_path_lock.mjs`, the A-Eyes overseer directive's named check) as its closing gate. To investigate one layer or one contract:
 
 ```powershell
 node --test "tests/**/*.test.mjs"
@@ -199,7 +485,13 @@ tests/command_audio_spectrum.test.mjs tests/music.test.mjs
 tests/command_graph.test.mjs tests/command_render.test.mjs`.
 It covers explicit versus automatic sources, late capture cleanup, pause and
 retry status, saved response strength, stable frequency voices and bounded node
-lighting. Adaptive spectrum tests cover quiet and loud levels, sudden volume
+lighting. Preference tests cover the gentle 35% default, one-time migration,
+true zero response and independently saved wave, node, percussion, background
+and frequency-splitting toggles without changing playback or capture. Split
+connections retain their bass/mid/treble assignment across graph updates, mask
+other bands and leave base tethers unchanged when their own band is silent.
+Low-response checks bound wave travel and scale optional drum brightness and
+stroke width. Adaptive spectrum tests cover quiet and loud levels, sudden volume
 drops, independent low/mid/high attacks, sustained bass, signed waveforms and
 silence at multiple sample and frame rates. Connection tests cover curved and
 straight paths, anchored ends, time-varying displacement, bounded vertex counts,
@@ -208,7 +500,13 @@ The isolated Electron fixture plays an in-memory float WAV through the real
 local player and analyser, with quiet/loud mixes, bass, drum and treble sections.
 It checks actual stroked wave paths and displaced pixels, node lighting, silence
 release, and unchanged node positions and labels. It never requests OS capture
-or starts workers. Optional `MEFI_AUDIO_CAPTURE`, `MEFI_AUDIO_QUIET_CAPTURE`,
+or starts workers. Native checkbox and slider checks independently disable
+waves and nodes, settle both at 0% while playback continues, restore 35%, and
+retain frequency assignments across redraws and a split/full-mix round trip.
+Pixel and control samples wait for the current graph paint in the renderer;
+a forced refresh immediately before sampling covers the model/projection race.
+Failures read the saved Electron report before fixture cleanup.
+Optional `MEFI_AUDIO_CAPTURE`, `MEFI_AUDIO_QUIET_CAPTURE`,
 `MEFI_AUDIO_WAVE_CAPTURE` and `MEFI_AUDIO_CONTROLS_CAPTURE` absolute paths save
 local visual evidence.
 
@@ -219,6 +517,19 @@ across an 80 dB quiet/loud input change, with independently exercised bass,
 midrange drums and high percussion. Local screenshots verify the painted waves.
 Control checks cover disconnecting an empty local queue and avoiding repeated
 live announcements while adjusting Response.
+
+Calmer controls and frequency routing validated on 2026-09-19: rebuilt booklet,
+`npm run check` and `npm run audit` passed (zero findings). All 20 response
+regressions and 26 Music control tests passed. The real Electron audio fixture
+passed both alone and in the combined suite after fixing its graph-paint race.
+The final combined `npm test` run passed 1005 Node tests, skipped one and failed
+one unrelated profiler JSON-download timeout in `tests/performance_render.test.mjs`.
+Both profiler Electron tests passed in a separate targeted rerun; the combined
+timeout's exact cause remains unconfirmed (`tools/logs/audio-profiler-triage.log`).
+All 211 Python contracts and six normalized-path checks passed separately; the
+full-suite gate remains unpassed. Complete logs are retained locally as
+`tools/logs/audio-calm-final.log`, `tools/logs/audio-calm-python.log`,
+`tools/logs/audio-calm-check.log` and `tools/logs/audio-calm-audit.log`.
 
 ## Python contracts
 
@@ -242,6 +553,7 @@ live announcements while adjusting Response.
 | `tools/test_mefi_studio_normalized_path_lock.py` | Executor lock contracts for Mefi's Studio AI+ (`scripts/assistant.mjs` via a Node stdin driver, plus static pins): the spawn-loop file lock normalizes before comparing — `filesOverlap`/`sameFile` collapse forward/backward separators, drop trailing separators, fold case, match an absolute path against its repo-relative tail and a bare basename against the same basename under any folder — so two spellings of one file (the A-Eyes `test_mefi_studio_eyes.py` collision) are one claim; `claimWork` defers the second pick with reason `claimed` and advice naming the held file, a finished job releases its claim, an unrelated file proceeds, no lease file is ever written (that hung dispatch on OneDrive), the collision theme keys share the normalizer (`sameFileLabel`), and `main.cjs` consults `claimWork` before dispatch. Node half skips cleanly without Node. |
 | `tools/test_mefi_studio_claim_registry.py` | npm-test discovery shim: re-exports the claim-registry contracts from `tools/test_claim_registry.py` (the A-Eyes overseer directive names that file) so the dev set runs them. That file races `./tools/x.py` against its absolute form through the real `scripts/assistant.mjs` write-lock registry — `writeClaimKey` resolves relative paths against the module root and folds separators and case into one key, two racing sessions on one path yield exactly one `refuse` with reason `claimed`, `claimWork` defers dispatch while the claim lives, `releaseWrite` frees the path only for the owner, and the refused session may then take it; static pins cover the `writeClaims` map, the registry API, the `claimWork` consultation, and `main.cjs`'s `claimWrite`/`releaseWrite` wiring. Node half skips cleanly without Node. Standalone: `python -m unittest discover -s tools -p "test_claim_registry.py"`, `python -m unittest tools.test_mefi_studio_claim_registry` (the shim falls back to a package-relative import), or run the Node driver directly. |
 | `tools/test_mefi_studio_assistant_write_lock.py` | npm-test discovery shim: re-exports the write-lock serialization contracts from `tools/test_assistant_write_lock.py` (the A-Eyes overseer directive names that file) so the dev set runs them. That file proves two same-path writers serialize: both race the same file under `tools/x.py` and an upper-case backslash absolute spelling, exactly one writer is refused while the case-normalized claim map holds one entry, dispatch defers the second writer's pick until the winner releases, and the registry is empty once the handoff completes; static pins cover the `writeClaims` map key (`toLowerCase`), the `claimWork` gate, and `main.cjs` registering `entry.files` under the run id at dispatch and releasing them in `finish()`. Node half skips cleanly without Node. Standalone: `python -m unittest discover -s tools -p "test_assistant_write_lock.py"` or `python -m unittest tools.test_mefi_studio_assistant_write_lock` (the shim falls back to a package-relative import). |
+| `tools/test_mefi_studio_builder_intel.py` | npm-test discovery shim: re-exports the builder outcome reporting contracts from `tools/test_builder_intel.py` (the A-Eyes overseer directive names that file) so the dev set runs them. That file feeds one failed and one finished executor run through the real `scripts/assistant.mjs` `hearReport` — the same call `main.cjs`'s `assistantHearBuilder` makes — and asserts the digest counts `fails=1`/`reports=1` in either order (outcomes are events, so a later finish cannot erase an earlier failure), outcomes older than half an hour drop out of the window, and each done/fail appends a structured event (job id, role `builder`, exit code, verdict) that survives a state save/reload and is parsed by the test itself; static pins cover `assistantHearBuilder(entry, job, ok, errorMessage = "", exitCode = null)`, the `jobId`/`exit` threading into the report, the fallback intel row and the emitted intel facts, and the executor finish path passing `code ?? null`. Node half skips cleanly without Node. Standalone: `python -m unittest discover -s tools -p "test_builder_intel.py"` or `python -m unittest tools.test_mefi_studio_builder_intel` (the shim falls back to a package-relative import). |
 | `tools/test_normalized_path_lock.mjs` | Node proof for the A-Eyes overseer directive (`node tools/test_normalized_path_lock.mjs` from the repository root; exit 0 = the lock holds; it also closes `npm test` so the proof is a named check in the standard pipeline): two concurrent claims on the same file under two spellings of its path yield exactly one rejection through the real `scripts/assistant.mjs` registry — plus release-then-retry, idempotent same-owner re-claims, `claimWork` deferring a pick whose path the registry holds, all-or-nothing multi-file claims, and foreign owners being unable to release someone else's claim. Verified 2026-09-19: 6/6 checks pass, `tools/test_claim_registry.py` 2/2, `tools/test_assistant_write_lock.py` 2/2, both `test_mefi_studio_*` shims 2/2 each. Re-verified 2026-09-19 in run_1789850103724_1 with the same results (proof exit 0, both contracts OK, no mojibake in the proof's output strings, `main.cjs` claim/release wiring confirmed at dispatch and finish). Re-verified 2026-09-19 in run_1789851482100_2: proof 6/6, contracts 2/2 + 2/2, full discovery set 202 OK; fixed both shims to also import package-style (`python -m unittest tools.test_mefi_studio_claim_registry` used to fail with `ModuleNotFoundError`) and pinned that in the shim rows above. Re-verified 2026-09-19 in run_1789854672162_6: proof 6/6, both contracts 2/2 (directive-named and package spellings), full `test_mefi_studio_*` discovery set 203 OK, `npm run check:specs` 84 specs/unique basenames/no orphans, `tests/spec_collisions.test.mjs` 4/4, and `.local-migration/` holds zero `test_*.py` copies. |
 
 
@@ -597,6 +909,69 @@ is captured as `01c-left-edge-closed.png`; no renderer errors or external
 network attempts were reported. The eight focused sidebar tests also passed.
 The final required gates passed: build, check, audit, and `npm test` (705 Node
 passes, one opt-in skip, 204 Python passes and normalized-path checks).
+
+Run `python tools/verify_command.py --fit-layout --output
+tools/logs/node-fit-layout` to verify Fit as a layout repair. The isolated
+Electron tour uses actual pointer drags to turn a populated 3D tree edge-on,
+then presses the Fit button and F key. It checks restored horizontal spread,
+canonical viewing angle, clear rings and readable task names, unchanged
+relationships and appearance, stable repeated fits, and 2D pan/zoom recovery.
+Depth and perspective checks reject a flattened 3D result; actual rotations
+after Fit verify that spatial anchors remain fixed as the view changes.
+The graph contracts cover interrupted drags, leaving Follow, preserving the
+Orbit preference, and keeping Shift F and text input behavior intact.
+
+Fit validation (2026-09-19): the 128 focused graph, motion, topology and
+performance checks passed. The isolated Fit tour passed at wide and desktop
+sizes with 16 captures. Both toolbar Fit and F restored a broad arrangement
+after an edge-on drag, preserving all 30 links and six full work titles.
+Fitted depth spanned 32–34% of the clear viewport's shorter dimension;
+curvature checks rejected a tilted flat plane. Actual 20-degree turns in
+both directions kept anchors fixed and work rings apart. Repeated Fit and
+2D pan/zoom recovery passed, with no renderer errors, network requests or
+worker launches. Evidence remains under `tools/logs/node-fit-layout/final/`.
+The booklet was rebuilt; check and audit passed. The final full-suite run on
+the concurrently changing tree had 1,138 Node passes, 19 failures, five
+cancellations and one opt-in skip. Failures include missing executor VM
+globals (`process`, `executorProcessAlive`) and unrelated Electron timeouts.
+Separate Python discovery ran 220 tests with two stale contract failures in
+assistant error logging and startup refresh; all six normalized-path checks
+passed. The full-suite gate remains unpassed. Logs are retained in
+`tools/logs/node-fit-full-test-final.log` and `tools/logs/node-fit-python.log`.
+The booklet regression now compares against its copied fixture sources,
+avoiding mismatches when the live checkout changes during the test; its three
+checks passed independently.
+
+Run `python tools/verify_command.py --node-readability --output
+tools/logs/node-readability` for the six-builder node-tree regression. It uses
+eight synthetic sessions, long task names, a collapsed Live work panel and an
+expanded Assistant panel at wide and desktop sizes in both 2D and 3D. It also
+uses real pointer drags to inspect two rotated 3D views and samples moving
+worker satellites across repeated frames. Painted samples check complete
+two-line titles, nearby labels, clear controls and node surfaces, stable world
+anchors and a stationary camera after each drag. `--baseline`
+retains diagnostic captures even when these readability checks fail.
+The fixture uses disposable stores and blocks workers and external requests.
+
+The graph contracts also cover balanced loose-task sectors, dominant branches
+using the wider canvas dimension, 180 modest 3D rotation scenarios with clear
+work rims and fixed anchors, word wrapping, oversized titles, fractional
+camera movement without label side-flips, and six long titles reusing measured
+text across redraws. Run `node --test tests/command_graph.test.mjs
+tests/command_performance.test.mjs tests/command_motion.test.mjs` for these
+focused behavior and performance checks.
+
+Node readability validation (2026-09-19): the focused graph, motion and
+performance suites passed 102 tests. The isolated readability tour passed
+eight 2D/default-3D/rotated-3D cases across 33 painted samples; all six complete
+work titles stayed visible, with no node-ring, label or control overlaps.
+The normal Command tour passed 24 checks. Both reported zero renderer errors,
+external requests or worker launches. Reports and captures remain ignored
+under `tools/logs/node-readability/final/` and
+`tools/logs/node-readability-command/final/`.
+The final `npm test` run passed 1,006 Node tests (one opt-in skip), all 211
+Python contracts and all six normalized-path ownership checks. Complete logs
+are retained in `tools/logs/node-readability-full-test.log`.
 
 Node layout regressions in `tests/command_graph.test.mjs` now cover hierarchy
 depth in Rings, contiguous Helix branches, distinct centered Terraces, work-rim

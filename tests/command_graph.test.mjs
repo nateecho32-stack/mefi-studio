@@ -39,7 +39,7 @@ test("the graph frame scheduler draws and reschedules without undeclared runtime
 test("Music preview uses the requested real-graph viewport and restores the prior view on close", () => {
   const state = { active: false, camera: { x: 10, y: 20, z: 30 }, camMode: "free", fit: 1.2, zoom: 1.4, overviewScale: .7, angle: 0.6, pitch: 0.1, nodeLayout: "constellation", screenLayout: { key: "original" } };
   let enters = 0, exits = 0, fits = 0;
-  const env = vm.createContext({ state, Number, Math, Object, enter: () => { enters += 1; state.active = true; }, exit: () => { exits += 1; state.active = false; }, fitAll: () => { fits += 1; state.camera = { x: 0, y: 0, z: 0 }; state.screenLayout = null; }, syncViewControls() {}, renderHint() {} });
+  const env = vm.createContext({ state, Number, Math, Object, enter: () => { enters += 1; state.active = true; }, exit: () => { exits += 1; state.active = false; }, refitLayout: () => { fits += 1; state.camera = { x: 0, y: 0, z: 0 }; state.screenLayout = null; }, syncViewControls() {}, renderHint() {} });
   vm.runInContext(section("function setSettingsPreview(", "function applyTreePreferences("), env);
   const viewport = { x: 520, y: 16, w: 900, h: 800 };
   env.setSettingsPreview(viewport);
@@ -196,12 +196,46 @@ test("Live work collapse updates hidden content, accessibility and saved prefere
 });
 
 test("an explicit graph fit settles its camera before managed anchors are allocated", () => {
-  const state = { camera: { x: -200, y: 60, z: 80, tx: 20, ty: 10, tz: 5 }, pitch: 0.2, screenLayout: {} };
-  const env = vm.createContext({ state, setZoom: (zoom) => { state.zoom = zoom; }, autoFit() {}, hideTip() {} });
+  const state = { camera: { x: -200, y: 60, z: 80, tx: 20, ty: 10, tz: 5 }, view: "3d", pitch: 0.2, angle: 2.1, orbit: "auto", orbitVel: .02, screenLayout: {}, camMode: "follow", follow: { key: "task:old" }, followZoomTarget: 2.5, panning: { cam: { x: 400 } }, rotating: { angle: 2.1 }, graphAreaAt: 123, hudRectsAt: 123, agentLayout: new Map([["worker", { x: 800, y: 800 }]]) };
+  const el = { canvas: { style: { cursor: "grabbing" } } };
+  const env = vm.createContext({ state, el, Date: { now: () => 1000 }, SETTLE_MS: 2500, setZoom: (zoom) => { state.zoom = zoom; }, autoFit() {}, hideTip() {}, setCamMode(mode) { state.camMode = mode; env.refitLayout(); } });
   vm.runInContext(section("function fitAll()", "function nodeState("), env);
   env.fitAll();
   assert.deepEqual(JSON.parse(JSON.stringify(state.camera)), { x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0 });
   assert.equal(state.screenLayout, null); assert.equal(state.zoom, 1);
+  assert.equal(state.view, "3d", "layout repair cannot switch a spatial graph into the flat view");
+  assert.equal(state.angle, .5); assert.equal(state.pitch, 0); assert.equal(state.orbitVel, 0);
+  assert.equal(state.camMode, "orbit"); assert.equal(state.follow, null); assert.equal(state.followZoomTarget, null);
+  assert.equal(state.panning, null); assert.equal(state.rotating, null); assert.equal(el.canvas.style.cursor, "default");
+  assert.equal(state.agentLayout.size, 0); assert.equal(state.graphAreaAt, 0); assert.equal(state.hudRectsAt, 0);
+  assert.equal(state.settleUntil, 3500); assert.equal(state.orbit, "auto", "Fit settles motion without changing the user's orbit preference");
+});
+
+test("automatic layout refits preserve the chosen yaw and camera mode", () => {
+  const state = { camera: { x: 10, y: 20, z: 30 }, angle: 1.8, pitch: .2, camMode: "follow", orbit: "paused", agentLayout: new Map([["worker", {}]]) };
+  const env = vm.createContext({ state, setZoom() {}, autoFit() {}, hideTip() {} });
+  vm.runInContext(section("function refitLayout()", "function nodeState("), env);
+  env.refitLayout();
+  assert.equal(state.angle, 1.8); assert.equal(state.camMode, "follow"); assert.equal(state.orbit, "paused");
+  assert.equal(state.agentLayout.size, 1, "automatic refits retain ongoing worker motion");
+});
+
+test("F and Home repair the overview while Shift F keeps branch focus and typing is untouched", () => {
+  let fits = 0, branches = 0;
+  const state = { active: true, selected: null };
+  const document = { body: { dataset: {} } };
+  const root = { id: "root" };
+  const env = vm.createContext({ state, document, fitAll: () => { fits += 1; }, branchFit: () => { branches += 1; }, rootNode: () => root, selectNode: (node) => { state.selected = { node }; } });
+  vm.runInContext(section("function handleKey(", "// One Esc step"), env);
+  for (const key of ["f", "F", "Home"]) assert.equal(env.handleKey({ key }), true);
+  assert.equal(fits, 3); assert.equal(state.selected.node, root);
+  assert.equal(env.handleKey({ key: "F", shiftKey: true }), true);
+  assert.equal(branches, 1); assert.equal(fits, 3);
+  assert.equal(env.handleKey({ key: "f", target: { closest: () => true } }), false);
+  assert.equal(env.handleKey({ key: "f", ctrlKey: true }), false);
+  document.body.dataset.sheet = "music";
+  assert.equal(env.handleKey({ key: "f" }), false);
+  assert.equal(fits, 3);
 });
 
 function spectrum(sampleRate, ranges = []) {
@@ -447,7 +481,7 @@ test("orbs retain luminous cores and a single status rim without stacked status 
   vm.runInContext(section("function nodeVisualProfile(", "function arrangeProjectedNodes("), env);
   for (const kind of ["task", "agent", "session"]) {
     const paints = [], gradients = [];
-    const ctx = { save() {}, restore() {}, beginPath() {}, arc() {}, fillRect() {}, fill() { paints.push(["fill", this.fillStyle]); }, stroke() { paints.push(["stroke", this.strokeStyle]); }, createRadialGradient() { const stops = []; gradients.push(stops); return { addColorStop: (...stop) => stops.push(stop) }; } };
+    const ctx = { save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc() {}, fillRect() {}, fill() { paints.push(["fill", this.fillStyle]); }, stroke() { paints.push(["stroke", this.strokeStyle]); }, createRadialGradient() { const stops = []; gradients.push(stops); return { addColorStop: (...stop) => stops.push(stop) }; } };
     env.drawNodeSurface(ctx, { id: kind, kind }, { x: 50, y: 50 }, 12, [220, 180, 110], { active: true });
     assert.equal(paints.filter(([operation]) => operation === "stroke").length, 1);
     assert.equal(gradients.length, 2, "one restrained halo and one coloured core");
@@ -490,7 +524,7 @@ test("Classic, Soft glass and Minimal use distinct rendering without altering no
   const counts = {};
   for (const style of ["orbs", "glass", "minimal"]) {
     const calls = { radial: 0, linear: 0, fill: 0 };
-    const ctx = { save() {}, restore() {}, beginPath() {}, arc() {}, fill() { calls.fill += 1; }, stroke() {}, createRadialGradient() { calls.radial += 1; return { addColorStop() {} }; }, createLinearGradient() { calls.linear += 1; return { addColorStop() {} }; } };
+    const ctx = { save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc() {}, fill() { calls.fill += 1; }, stroke() {}, createRadialGradient() { calls.radial += 1; return { addColorStop() {} }; }, createLinearGradient() { calls.linear += 1; return { addColorStop() {} }; } };
     state.nodeStyle = style; env.drawNodeSurface(ctx, node, { x: 50, y: 50 }, 12, [220, 180, 110], { active: true }); counts[style] = calls;
   }
   assert.deepEqual(counts, { orbs: { radial: 2, linear: 0, fill: 4 }, glass: { radial: 0, linear: 1, fill: 2 }, minimal: { radial: 0, linear: 0, fill: 1 } });
@@ -501,7 +535,7 @@ test("style changes preserve managed positions and only explicit layout changes 
   const saved = { nodes: new Map() };
   const state = { nodeStyle: "orbs", nodeLayout: "constellation", screenLayout: saved, active: true };
   let fits = 0;
-  const env = vm.createContext({ state, el: { width: 1400, height: 900 }, fitAll: () => { fits += 1; } });
+  const env = vm.createContext({ state, el: { width: 1400, height: 900 }, refitLayout: () => { fits += 1; } });
   vm.runInContext(section("function applyTreePreferences(", "function traceNodeSurface("), env);
   env.applyTreePreferences({ nodeStyle: "glass", nodeLayout: "constellation" });
   assert.equal(state.screenLayout, saved); assert.equal(fits, 0);
@@ -521,7 +555,7 @@ test("blue work orbits are optional, truthful and static for reduced motion", ()
   const state = { orbitTrails: false }, arcs = [];
   const env = vm.createContext({ state, Math });
   vm.runInContext(section("function drawWorkOrbit(", "function graphLayoutSeeds("), env);
-  const ctx = { save() {}, restore() {}, beginPath() {}, arc: (...args) => arcs.push(args), stroke() {} };
+  const ctx = { save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc: (...args) => arcs.push(args), stroke() {} };
   const node = { id: "work", kind: "task", _workLabel: "Running", x: 3, y: 4, z: 5 };
   env.drawWorkOrbit(ctx, node, { x: 50, y: 50 }, 12, 100, false);
   assert.equal(arcs.length, 0); assert.equal(node._orbitTrail, null);
@@ -549,11 +583,11 @@ test("Extra glow adds a bounded visible halo to every chosen style without chang
   const node = { id: "task", kind: "task", x: 10, y: 20, z: 30 };
   for (const style of ["orbs", "glass", "minimal"]) {
     const radii = [];
-    const ctx = { save() {}, restore() {}, beginPath() {}, arc() {}, fill() {}, stroke() {}, createRadialGradient(...args) { radii.push(args[5]); return { addColorStop() {} }; }, createLinearGradient: () => ({ addColorStop() {} }) };
+    const ctx = { save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc() {}, fill() {}, stroke() {}, createRadialGradient(...args) { radii.push(args[5]); return { addColorStop() {} }; }, createLinearGradient: () => ({ addColorStop() {} }) };
     state.nodeStyle = style; state.extraGlow = false;
     env.drawNodeSurface(ctx, node, { x: 100, y: 100 }, 12, [220, 180, 110]); const normal = radii.length;
     state.extraGlow = true; env.drawNodeSurface(ctx, node, { x: 100, y: 100 }, 12, [220, 180, 110]);
-    assert.equal(radii.length - normal, normal + 1); assert.equal(node._extraGlow, true);
+    assert.equal(radii.length - normal, style === "orbs" ? 1 : normal + 1, "orbs reuse their base paints; enabling glow adds one new halo"); assert.equal(node._extraGlow, true);
     assert.ok(radii.some((radius) => radius > 12 && radius <= 12 * 2.25)); assert.ok(Math.max(...radii) <= 12 * 2.25, "glow leaves a crisp edge instead of filling the surrounding branch");
   }
   assert.deepEqual([node.x, node.y, node.z], [10, 20, 30]);
@@ -1260,6 +1294,60 @@ test("a complete overview orbit keeps fixed nodes clear of panel clipping", () =
   }
 });
 
+test("circular 3D views retain meaningful volume and separate work rims through modest camera turns", () => {
+  for (const layout of ["constellation", "radial"]) for (const width of [1100, 1456]) for (const family of ["loose", "dominant", "several"]) {
+    const { env, state } = graphContext();
+    const area = { x: 28, y: 280, w: width, h: 780 };
+    Object.assign(state, { fit: 1, view: "3d", nodeLayout: layout, tasks: [], settingsPreview: area });
+    vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+    const nodes = [{ id: "root", kind: "root" }, { id: "assistant", kind: "assistant" },
+      ...Array.from({ length: 8 }, (_, index) => ({ id: `session:${index}`, kind: "session" })),
+      ...Array.from({ length: 16 }, (_, index) => ({ id: `task:${index}`, kind: "task", _workLabel: index % 3 === 0 ? "Running" : null })),
+    ].map((node) => ({ ...node, x: 0, y: 0, z: 0 }));
+    state.edges = nodes.flatMap((node, index) => index ? [{
+      a: node.kind === "task" ? family === "loose" ? 0 : family === "dominant" ? 2 : 2 + (index - 10) % 4 : 0,
+      b: index,
+    }] : []);
+    const run = () => {
+      const points = nodes.map((node) => ({ node, p: env.project(node) }));
+      env.layoutProjectedGraph(points, area, "orbit", 1000, true);
+      return points;
+    };
+    const first = run();
+    const depths = first.map(({ p }) => p.depth);
+    const shortSide = Math.min(area.w, area.h);
+    assert.ok(Math.max(...depths) - Math.min(...depths) > shortSide * 0.2, `${layout} depth remains substantial relative to the graph, including after its initial fit`);
+    const anchors = nodes.map((node) => ({ ...node._layoutAnchor }));
+    // A tilted billboard has a depth range too. Fit the closest depth plane
+    // and require substantial remaining curvature through the whole cloud.
+    const cloud = anchors.map((point) => [point.x * Math.cos(state.angle) - point.z * Math.sin(state.angle), point.y, point.x * Math.sin(state.angle) + point.z * Math.cos(state.angle)]);
+    const center = [0, 1, 2].map((axis) => cloud.reduce((sum, point) => sum + point[axis], 0) / cloud.length);
+    const centered = cloud.map((point) => point.map((value, axis) => value - center[axis]));
+    const product = (a, b) => centered.reduce((sum, point) => sum + point[a] * point[b], 0);
+    const xx = product(0, 0), yy = product(1, 1), xy = product(0, 1), xz = product(0, 2), yz = product(1, 2);
+    const determinant = xx * yy - xy * xy;
+    const slopeX = (xz * yy - yz * xy) / determinant, slopeY = (yz * xx - xz * xy) / determinant;
+    const thickness = Math.sqrt(centered.reduce((sum, [x, y, z]) => sum + (z - slopeX * x - slopeY * y) ** 2, 0) / cloud.length);
+    assert.ok(Number.isFinite(thickness) && thickness > shortSide * 0.04, `${layout} retains a curved volume instead of a flat or tilted field (${thickness.toFixed(1)}px)`);
+    const surfaceRadius = ({ node, p }) => {
+      const working = node._workLabel === "Running";
+      const base = node.kind === "task" ? 12 : node.kind === "assistant" ? 15 : 11;
+      const radius = Math.min(working || node.kind === "assistant" ? 15 : 11, base * Math.max(0.75, Math.min(1.15, p.k)));
+      return radius + (working ? 9 : 0);
+    };
+    for (const yaw of [-0.45, -0.25, 0, 0.25, 0.45]) for (const pitch of [-0.2, 0, 0.2]) {
+      state.angle = 0.5 + yaw; state.pitch = pitch;
+      const points = run();
+      for (let a = 0; a < points.length; a += 1) for (let b = 0; b < a; b += 1) {
+        const distance = Math.hypot(points[a].p.x - points[b].p.x, points[a].p.y - points[b].p.y);
+        assert.ok(distance >= surfaceRadius(points[a]) + surfaceRadius(points[b]) + 1,
+          `${layout}/${family}/${width}px yaw ${yaw} pitch ${pitch}: ${points[a].node.id} and ${points[b].node.id} keep distinct surfaces`);
+      }
+      nodes.forEach((node, index) => assert.deepEqual({ ...node._layoutAnchor }, anchors[index], "camera movement cannot rearrange world anchors"));
+    }
+  }
+});
+
 test("Halo and Crystal use distinct bounded surfaces while preserving node positions", () => {
   const env = vm.createContext({ state: { nodeStyle: "halo" }, Math, rgba: (_tint, alpha) => `rgba(120,180,220,${alpha})` });
   vm.runInContext(section("function traceNodeSurface(", "function drawWorkOrbit("), env);
@@ -1296,7 +1384,7 @@ test("every node style respects Follow/search dimming and its lifecycle fade", (
   vm.runInContext(section("function traceNodeSurface(", "function drawWorkOrbit("), env);
   for (const style of ["orbs", "glass", "minimal", "halo", "crystal"]) {
     const alphas = [];
-    const ctx = { save() {}, restore() {}, beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, arc() {}, fill() { alphas.push(this.globalAlpha); }, stroke() { alphas.push(this.globalAlpha); }, createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }) };
+    const ctx = { save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, arc() {}, fill() { alphas.push(this.globalAlpha); }, stroke() { alphas.push(this.globalAlpha); }, createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }) };
     env.state.nodeStyle = style;
     env.drawNodeSurface(ctx, { kind: "task", _fade: 0.5 }, { x: 50, y: 50 }, 12, [120,180,220], { alpha: 0.4 });
     assert.ok(alphas.length > 0 && alphas.every((alpha) => alpha === 0.2), `${style} preserves both independent fading factors`);
@@ -1703,4 +1791,24 @@ test("fractional camera motion keeps equal-distance labels on the same side of t
     env.drawLabels([{ node, p }]);
     assert.ok(node._label.x > p.x, "subpixel rounding cannot flip a label across the orb");
   }
+});
+
+test("work titles rewrap into a nearby opening before using distant whitespace", () => {
+  const { env, el } = labelContext();
+  const node = { id: "narrow-opening", kind: "task", label: "Keep worker names beside their own nodes", _workLabel: "Running", _pr: 15 };
+  const p = { x: 700, y: 450, depth: 800, k: 1 };
+  // Controls leave a short horizontal opening beside this work node. A
+  // wide chip cannot fit; two narrower lines can retain the whole title.
+  env.hudRects = () => [
+    { x: 0, y: 0, w: 1500, h: 400 },
+    { x: 0, y: 500, w: 1500, h: 500 },
+    { x: 0, y: 400, w: 675, h: 100 },
+    { x: 916, y: 400, w: 600, h: 100 },
+  ];
+  env.drawLabels([{ node, p }]);
+  assert.ok(node._label, "the nearby opening retains a working name");
+  assert.equal(Array.from(node._labelLines).join(" "), node.label);
+  assert.ok(node._label.x > p.x && node._label.x - p.x < 40);
+  assert.ok(node._label.w < 190, "the chip uses the narrow opening");
+  assert.ok(node._labelLines.every((line) => el.ctx.measureText(line).width <= node._label.w - 14));
 });

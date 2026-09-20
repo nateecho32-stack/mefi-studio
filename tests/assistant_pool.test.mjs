@@ -29,7 +29,7 @@ function poolHost({ parallel = 2, aiParallel = 2, switching = false } = {}) {
     Date: class extends Date { static now() { return now; } },
     ASSISTANT_PRIORITY: { cadence: 1, demand: 2, responder: 3 },
     ASSISTANT_JOB_TIMEOUT_MS: 150000, EXECUTOR_PARALLEL_MAX: 12, AI_PARALLEL_MAX: 6,
-    projectSwitching: switching, projectAgentJobs: 0, CLI_MODE: true,
+    projectSwitching: switching, projectAgentJobs: 0, CLI_MODE: true, assistantStopping: false,
     projects: { current: () => ({ id: "fixture" }), run: (_project, call) => call() },
     setTimeout(fn, ms) { const id = ++seq; timers.set(id, { fn, ms }); return id; },
     clearTimeout(id) { timers.delete(id); },
@@ -37,7 +37,7 @@ function poolHost({ parallel = 2, aiParallel = 2, switching = false } = {}) {
     assistantJobId: () => `saved_${++seq}`,
     assistantJobLabel: (role, work) => `${role} · ${work.text}`,
     assistantJournal(entry) { env.assistantState = assistant.applyWork(env.assistantState, entry, now); },
-    assistantWrite: async () => {}, assistantLog() {}, logLine() {}, assistantReportIntel(...args) { intel.push(args); },
+    assistantWrite: async () => {}, assistantLog() {}, logError(text, role) { env.assistantLog("error", text, null, role); }, logLine() {}, assistantReportIntel(...args) { intel.push(args); },
     assistantAgentEvent(...args) { events.push(args); },
     assistantThink(text, role) { env.assistantState.thinking = { text, role }; },
     assistantThinkClear(role) { if (env.assistantState.thinking?.role === role) env.assistantState.thinking = null; },
@@ -363,4 +363,159 @@ test("late animation hops cannot hide a timeout or invent completed progress", a
   assert.equal(h.row("reference").progress, null);
   assert.match(h.row("reference").text, /timed out.*slot held/);
   assert.notEqual(h.row("reference").target?.id, "too-late");
+});
+
+function resumableHost(saved = null, { paused = false } = {}) {
+  const h = poolHost({ parallel: 1 });
+  const calls = [], pending = new Map();
+  let snapshot = null;
+  if (saved) h.env.assistantState = assistant.normalizeState(saved, 1000);
+  h.env.assistantState.status = paused ? "paused" : "running";
+  h.env.assistantState.prefs.parallel = 1;
+  Object.assign(h.env, {
+    ASSISTANT_HOP_MS: 500,
+    ASSISTANT_ROLE_JOBS: Object.fromEntries(["watcher", "auditor", "improver", "foreman"].map((role) => [role, async (_now, entry) => {
+      calls.push({ role, entry });
+      const wait = deferred();
+      pending.set(role, wait);
+      return wait.promise;
+    }])),
+    assistantAiUsable: () => false,
+    assistantWorkLabel: (work) => work.text,
+    assistantInFlight: (id) => [...h.pool.queue, ...h.pool.running.values()].some((entry) => entry.key === id || entry.work?.id === id),
+    assistantLoop: true, assistantTimer: null, applyKeepAwake() {},
+    saveAssistantSync() { snapshot = structuredClone(h.env.assistantState); },
+  });
+  vm.runInContext([
+    section("async function assistantHop(", "// Record the targets already visited"),
+    section("function assistantEnqueueRole(", "// On-demand roles"),
+    section("function assistantWorkJob(", "// Boot: what the previous process"),
+    section("function stopAssistant(", "async function assistantPause("),
+  ].join("\n"), h.env);
+  return { ...h, calls, pending, snapshot: () => snapshot };
+}
+
+test("normal exit saves the last roster jobs and their current progress before abandoning callbacks", async () => {
+  const h = resumableHost();
+  h.env.assistantEnqueueRole("watcher");
+  h.env.assistantEnqueueRole("auditor");
+  await flush();
+  const entry = h.calls[0].entry;
+  const target = { kind: "session", id: "last-session" };
+  entry.targets = [{ kind: "session", id: "first-session" }, target];
+  await h.env.assistantHop(entry, target, { progress: 0.5, label: "examining last session" });
+  const checkpoint = h.env.assistantState.work.find((work) => work.role === "watcher");
+  assert.equal(checkpoint.target.id, "last-session", "progress is saved during work, before shutdown");
+  assert.equal(checkpoint.progress, 0.5);
+  assert.equal(checkpoint.status, "running");
+  h.env.stopAssistant();
+  const saved = h.snapshot();
+  assert.deepEqual(saved.work.map((work) => work.role), ["watcher", "auditor"]);
+  assert.ok(saved.work.every((work) => work.status === "queued" && work.attempts === 1));
+  assert.equal(saved.work[0].key, "watcher");
+  assert.equal(saved.work[0].target.id, "last-session");
+  assert.equal(saved.work[0].targets.length, 2);
+  assert.equal(saved.work[0].progress, 0.5);
+  assert.equal(h.pool.running.size, 0);
+  assert.equal(h.pool.queue.length, 0);
+  h.pending.get("watcher").resolve({ ok: true });
+  await flush();
+  assert.equal(h.env.assistantState.work.length, 2, "late callbacks cannot erase saved continuation work");
+});
+
+test("restored role jobs retain their targets and singleton keys when the startup cadence queues them again", async () => {
+  const old = resumableHost();
+  old.env.assistantEnqueueRole("watcher");
+  old.env.assistantEnqueueRole("auditor");
+  await flush();
+  const entry = old.calls[0].entry;
+  entry.targets = [{ kind: "session", id: "saved-target" }];
+  await old.env.assistantHop(entry, entry.targets[0], { progress: 0.75 });
+  old.env.stopAssistant();
+  const h = resumableHost(old.snapshot());
+  const pending = assistant.pendingWork(old.snapshot());
+  h.env.assistantRestartWork(pending);
+  h.env.assistantEnqueueRole("watcher");
+  h.env.assistantEnqueueRole("auditor");
+  h.env.assistantRestartWork(pending);
+  await flush();
+  assert.deepEqual(h.calls.map((call) => call.role), ["watcher"]);
+  assert.equal(h.pool.running.size, 1);
+  assert.equal(h.pool.queue.length, 1, "fresh ticks share the restored queued role");
+  assert.equal(h.calls[0].entry.target.id, "saved-target");
+  assert.equal(h.calls[0].entry.progress, 0.75);
+  h.pending.get("watcher").resolve({ ok: true });
+  await flush();
+  assert.deepEqual(h.calls.map((call) => call.role), ["watcher", "auditor"]);
+  assert.equal(h.env.assistantState.work.some((work) => work.role === "watcher"), false);
+});
+
+test("repeated intentional exits retain saved work without exhausting its interruption retry budget", async () => {
+  let h = resumableHost();
+  h.env.assistantEnqueueRole("watcher");
+  await flush();
+  for (let reload = 0; reload < 5; reload += 1) {
+    h.env.stopAssistant();
+    const saved = h.snapshot();
+    h = resumableHost(saved);
+    h.env.assistantRestartWork(assistant.pendingWork(saved));
+    await flush();
+    assert.equal(h.calls.length, 1);
+    assert.equal(h.env.assistantState.work[0].attempts, 1);
+  }
+});
+
+test("paused boot retains both saved jobs and legacy interrupted roles until Resume", async () => {
+  const saved = assistant.emptyState(1);
+  saved.status = "paused";
+  saved.work = [{ id: "saved-role", key: "watcher", kind: "role", role: "watcher", payload: { role: "watcher" }, status: "queued", attempts: 1 }];
+  saved.agents = [{ role: "auditor", status: "running" }];
+  const h = resumableHost(saved, { paused: true });
+  h.env.assistantRestartWork(assistant.pendingWork(saved));
+  await flush();
+  assert.equal(h.calls.length, 0);
+  assert.equal(h.pool.queue.length, 2);
+  assert.ok(h.pool.queue.every((entry) => entry.held));
+  h.env.assistantState.status = "running";
+  h.env.assistantPump();
+  await flush();
+  assert.equal(h.calls[0].role, "watcher");
+});
+
+test("explicit growth keeps its saved request semantics across a restart in backlog mode", async () => {
+  const old = resumableHost();
+  old.env.assistantState.prefs.backlogMode = true;
+  old.env.assistantEnqueueRole("improver", 2, { explicitGrowth: true });
+  await flush();
+  assert.equal(old.calls[0].entry.automaticGrowth, false);
+  old.env.stopAssistant();
+  const saved = old.snapshot();
+  const h = resumableHost(saved);
+  h.env.assistantRestartWork(assistant.pendingWork(saved));
+  await flush();
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.calls[0].role, "improver");
+  assert.equal(h.calls[0].entry.automaticGrowth, false);
+});
+
+test("helper completions during a quit flush retain follow-ups without starting more work", async () => {
+  const h = resumableHost();
+  const finish = deferred();
+  h.env.ASSISTANT_ROLE_JOBS.watcher = async () => {
+    await finish.promise;
+    h.env.assistantEnqueueRole("auditor", 2, { automatic: true });
+    return { ok: true };
+  };
+  h.env.assistantEnqueueRole("watcher");
+  await flush();
+  h.env.stopAssistant();
+  finish.resolve();
+  await flush();
+  assert.equal(h.calls.length, 0, "the late follow-up cannot spend a call while exiting");
+  assert.equal(h.pool.running.size, 0);
+  assert.equal(h.pool.queue[0].role, "auditor");
+  assert.ok(h.env.assistantState.work.some((work) => work.role === "auditor"));
+  assert.equal(h.env.assistantState.status, "running", "shutdown does not save an operator Pause");
+  h.env.stopAssistant();
+  assert.ok(h.snapshot().work.some((work) => work.role === "auditor" && work.status === "queued"));
 });

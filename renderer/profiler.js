@@ -83,7 +83,7 @@
     return { schemaVersion: 1, renderer: core.snapshot(), host: host ? JSON.parse(JSON.stringify(host)) : null,
       coverage: { longTasksSupported, hostStatus: hostState || "available", frameCadence: "Visible renderer requestAnimationFrame intervals; not GPU time or Command draw FPS.",
         scopes: "Synchronous self time excludes nested measured scopes. Async and IPC timings include waiting; they are not CPU time.",
-        retention: "Frame statistics cover the latest 900 intervals; scope p95 covers the latest 180 calls. Counts, means, self time and maxima cover this capture. Host limits are included separately.",
+        retention: "Frame statistics cover the latest 900 intervals; scope p95 covers the latest 180 calls. Scope counts, means, self time and maxima cover this capture. Host limits are included separately.",
         privacy: "Static operation names and numeric measurements only; no task text, request payloads, file paths or credentials." } };
   }
   async function exportCapture() {

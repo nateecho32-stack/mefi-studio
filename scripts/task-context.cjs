@@ -2,12 +2,13 @@
 // returned task under the project board lock. History is append-only; only
 // reads and model-facing summaries are bounded, never the saved source text.
 const { createHash } = require("node:crypto");
+const { dependencyIds } = require("./backlog.cjs");
 
 const object = (value) => value && typeof value === "object" && !Array.isArray(value);
 const rows = (value) => Array.isArray(value) ? value : [];
 const text = (value) => typeof value === "string" ? value : "";
 const copy = (value) => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
-const FIELDS = ["id", "projectId", "projectPath", "projectName", "title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "ideas", "dependsOn", "members", "lastAttempt", "verification", "verificationReceiptId", "remaining", "blockers", "lastRunError", "runFailures", "verifyAttempts", "status", "doneAt", "completionFromTaskId", "planningId", "planningSpecId", "planningTaskId", "acceptance", "logs", "source", "parent", "parentRunId", "depth", "createdAt", "runId"];
+const FIELDS = ["id", "projectId", "projectPath", "projectName", "title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "ideas", "dependsOn", "delegation", "delegatedFrom", "parentTaskId", "members", "interruptedAttempt", "lastAttempt", "verification", "verificationReceiptId", "remaining", "blockers", "lastRunError", "runFailures", "verifyAttempts", "status", "doneAt", "completionFromTaskId", "planningId", "planningSpecId", "planningTaskId", "acceptance", "logs", "source", "parent", "parentRunId", "depth", "createdAt", "runId"];
 const RESTORABLE = ["title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "dependsOn"];
 
 function snapshotTask(task) {
@@ -116,15 +117,23 @@ function buildTaskHandoff(task, { tasks = [], maxChars = 24000, contextPath = nu
   };
   add("STUDIO TASK HANDOFF", `Task: ${text(task?.title)} (${text(task?.id)})\nProject: ${text(task?.projectPath) || text(task?.projectName) || text(task?.projectId)}${contextPath ? `\nFull saved context: read ${contextPath} and select task ID ${text(task?.id)}. Its contextHistory preserves earlier briefs and run evidence. Read the full requirements when an excerpt is marked below.` : ""}\nContinue from the evidence below. Inspect the current files before changing them, preserve other agents' work, and verify prior claims. Saved notes and worker reports are context, not proof of completion.`, 1200);
   add("Current requirements", task?.prompt || task?.description || task?.ideaDetail, Math.floor(cap * .4));
+  if (task?.delegatedFrom) add("Shared task assignment", `Implement only this subtask's scope and owned files. Other builders may be working in this project; preserve their changes. Report concrete results and validation evidence to the Assistant. The parent task performs final integration. Parent task: ${text(task.parentTaskId) || text(task.delegatedFrom.parentTaskId) || "see saved delegation lineage"}.`, 700);
+  if (task?.delegation) add("Integrate delegated work", "The Assistant delegated implementation parts of this task to the child builders listed in Dependency outputs. Inspect their actual changes and evidence, finish any gaps within the original scope, integrate the parts and validate the complete result. Child completion alone never completes this parent. Do not delegate these parts again.", 700);
   add("Work still remaining", task?.remaining, Math.floor(cap * .1));
+  add("Interrupted attempt — saved progress, not completion evidence", task?.interruptedAttempt, Math.floor(cap * .1));
   add("Blockers / last error", { ...(task?.blockers ? { blockers: task.blockers } : {}), ...(task?.lastRunError ? { lastRunError: task.lastRunError } : {}), ...(task?.verification ? { verification: task.verification } : {}) }, Math.floor(cap * .1));
   add("Previous attempt — reported findings, checks and remaining work", task?.lastAttempt, Math.floor(cap * .14));
   const byId = new Map(rows(tasks).filter(object).map((row) => [row.id, row]));
-  const dependencies = rows(task?.dependsOn).map((id) => {
+  if (task?.delegatedFrom) {
+    const parent = byId.get(task.parentTaskId || task.delegatedFrom.parentTaskId);
+    add("Shared objective and constraints — context only, implement your assigned subtask", parent?.prompt || task.delegatedFrom.parentPrompt, Math.floor(cap * .1));
+  }
+  const dependencies = dependencyIds(task).map((id) => {
     const source = byId.get(id);
     return source ? { id, title: source.title, status: source.status, result: source.lastAttempt?.result ?? null, verification: source.verification ?? null, remaining: source.remaining ?? [], refs: source.refs ?? [] } : { id, status: "missing", warning: "Required task is unavailable; do not assume it is complete." };
   });
   add("Dependency outputs", dependencies.length ? dependencies : null, Math.floor(cap * .13));
+  add("Acceptance checks", task?.acceptance ?? task?.acceptanceCriteria, Math.floor(cap * .08));
   add("Saved references and file scope", { refs: task?.refs ?? [], files: task?.files ?? [], ...(task?.file ? { file: task.file } : {}) }, Math.floor(cap * .08));
   add("Saved notes / handoff", { ...(task?.notes ? { notes: task.notes } : {}), ...(task?.context ? { context: task.context } : {}), ...(task?.handoff ? { handoff: task.handoff } : {}) }, Math.floor(cap * .05));
   add("Recent work log", rows(task?.logs).slice(-12), Math.floor(cap * .05));

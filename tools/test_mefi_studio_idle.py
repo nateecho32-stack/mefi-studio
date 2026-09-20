@@ -162,8 +162,8 @@ class MefiStudioIdleTests(unittest.TestCase):
         work = self.idle[self.idle.index("async function workOnNode") : self.idle.index("async function assistantControl")]
         self.assertIn("paintChatLog()", work)
         self.assertNotIn("renderChatLog();", work, "Work on it must not let a missing chat log fail the dispatch")
-        self.assertIn("it is next", work)
-        self.assertLess(work.find("it is next"), work.find("paintChatLog()"), "the success toast fires even if the log painter throws")
+        self.assertIn("result.dispatch?.message", work)
+        self.assertLess(work.find("result.dispatch?.message"), work.find("paintChatLog()"), "the dispatch status toast fires even if the log painter throws")
 
     def test_chat_log_is_opaque_and_shows_running_count(self):
         # The thread used to be glass over the constellation, so graph labels
@@ -269,7 +269,9 @@ class MefiStudioIdleTests(unittest.TestCase):
         self.assertIn("Number.isFinite(entry.progress)", self.main)
         self.assertIn("Math.max(0, Math.min(1, entry.progress))", self.main)
         self.assertIn("autopilot.jobs.filter((entry) => !entry.finished)", self.main)
-        self.assertIn("progress: null, // the run's own todo fraction", self.main)
+        # An interrupted builder starts with its saved fraction until the
+        # resumed session supplies a new checklist; a new task is unknown.
+        self.assertIn("progress: job.ref.runProgress?.pending && Number.isFinite(job.ref.runProgress.progress) ? job.ref.runProgress.progress : null", self.main)
         # Renderer side: builder nodes wear the fraction so the work-left
         # meter shows under a building agent, and a push carrying the same
         # job set with newer numbers refreshes the meters in place — a full
@@ -278,16 +280,20 @@ class MefiStudioIdleTests(unittest.TestCase):
         self.assertIn("node.progress = typeof job.progress === \"number\" ? job.progress : null;", self.idle)
         self.assertIn("Same jobs, newer numbers", self.idle)
 
-    def test_boot_menu_does_not_hold_the_launch(self):
+    def test_startup_preloads_real_work_and_offers_recovery(self):
         boot = (STUDIO / "renderer" / "boot.js").read_text(encoding="utf-8")
         match = re.search(r"const MIN_SHOW_MS = (\d+)", boot)
         self.assertIsNotNone(match, "boot.js must keep a MIN_SHOW_MS floor")
         self.assertLessEqual(int(match.group(1)), 1200)
-        self.assertIn("boot.idleDone && boot.dataDone", boot)
+        self.assertIn('step.status === "error"', boot)
+        self.assertIn("STEP_TIMEOUT_MS", boot)
+        self.assertIn('boot.phase === "error") void attempt(true)', boot)
+        self.assertIn("node.inert = true", boot)
         booklet = (STUDIO / "renderer" / "booklet.js").read_text(encoding="utf-8")
         self.assertIn("paintCatalog", booklet)
-        self.assertIn('refresh("open")', booklet)
-        self.assertIn("requestIdleCallback", booklet)
+        self.assertIn('refresh("open", { fresh: retry })', booklet)
+        self.assertIn("window.MefiBoot.run([", booklet)
+        self.assertIn("window.MefiWorkspace?.ready?.({ retry })", booklet)
 
     def test_docs_register_this_contract(self):
         self.assertIn("`tools/test_mefi_studio_idle.py`", self.guide)

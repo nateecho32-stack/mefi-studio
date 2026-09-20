@@ -18,7 +18,7 @@ class Element {
   click() { return this.listeners.click?.(); }
 }
 function environment({ assistant = {}, full = {}, backlog = null, requests = [], nodes = [], bridge = {}, timers = {} } = {}) {
-  const el = Object.fromEntries(["feed", "feedDot", "feedState", "feedNow", "feedMetrics", "feedAttention", "feedQueue", "feedQueueCount", "feedAgents", "feedAgentsCount", "feedMenu", "feedDrop", "feedList", "feedMeta", "feedActivity", "feedParallel", "feedBuildMode"].map((key) => [key, new Element()]));
+  const el = Object.fromEntries(["feed", "feedDot", "feedState", "feedNow", "feedMetrics", "feedAttention", "feedQueue", "feedQueueCount", "feedAgents", "feedAgentsCount", "feedMenu", "feedDrop", "feedList", "feedMeta", "feedActivity", "feedParallel", "feedBuildMode", "feedAgentMode", "feedAgentModeNote"].map((key) => [key, new Element()]));
   const state = { active: false, feedDirty: true, assistant, requests, nodes, feed: [], tasks: [], backlog, backlogRevision: 0, backlogReadAt: 0, backlogReadPending: false, feedMenuOpen: false };
   const navigations = [];
   const context = vm.createContext({
@@ -30,12 +30,125 @@ function environment({ assistant = {}, full = {}, backlog = null, requests = [],
     updateAssistantPill() {}, renderInfo() {},
     setTimeout: timers.setTimeout || setTimeout, clearTimeout: timers.clearTimeout || clearTimeout,
   });
-  vm.runInContext(`${preferenceSource}\n${chatSource}\n${feedSource}\nthis.api = { commandJobDetail, commandQueue, renderFeed, refreshCommandBacklog, commandChatActivity, changeBuildParallel, createBuildParallelControl, changeBuildMode };`, context);
+  vm.runInContext(`${preferenceSource}\n${chatSource}\n${feedSource}\nthis.api = { commandJobDetail, commandQueue, renderFeed, refreshCommandBacklog, commandChatActivity, changeBuildParallel, createBuildParallelControl, changeBuildMode, changeAgentMode };`, context);
   return { ...context.api, state, el, navigations };
 }
 const descendants = (element) => [element, ...element.children.flatMap(descendants)];
 const byClass = (element, name) => descendants(element).find((item) => item.className?.split(" ").includes(name));
 const flush = async () => { for (let index = 0; index < 10; index += 1) await Promise.resolve(); };
+
+test("Agent mode saves only coordination, serializes changes and preserves paused workers", async () => {
+  const calls = []; let finish;
+  const pending = new Promise((resolve) => { finish = resolve; });
+  const env = environment({ assistant: { mode: "swarm", enabled: false, execute: false }, bridge: { assistantAutopilot: (patch) => { calls.push(patch); return pending; } } });
+  env.renderFeed();
+  assert.equal(env.el.feedAgentMode.value, "swarm");
+  assert.match(env.el.feedAgentModeNote.textContent, /collaborate on tasks and their subtasks/);
+  const saving = env.changeAgentMode("cluster");
+  assert.equal(env.el.feedAgentMode.disabled, true);
+  assert.equal(env.el.feedAgentMode.attrs["aria-busy"], "true");
+  assert.equal(await env.changeAgentMode("swarm"), false);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ mode: "cluster" }]);
+  finish({ mode: "cluster", enabled: false, execute: false });
+  assert.equal(await saving, true);
+  assert.equal(env.el.feedAgentMode.value, "cluster");
+  assert.equal(env.el.feedAgentMode.disabled, false);
+  assert.equal(env.state.assistant.execute, false);
+  assert.equal(env.state.assistant.enabled, false);
+});
+
+test("Agent mode recovers saved preference after lost acknowledgement and ignores stale recovery", async () => {
+  let finishRead;
+  const env = environment({ assistant: { mode: "swarm" }, bridge: {
+    assistantAutopilot: async () => { throw new Error("Acknowledgement lost"); },
+    assistantStatus: async () => ({ ok: true, status: { mode: "cluster" } }),
+  } });
+  assert.equal(await env.changeAgentMode("cluster"), false);
+  assert.equal(env.el.feedAgentMode.value, "cluster");
+  assert.equal(await env.changeAgentMode("unrecognized"), false);
+  const late = environment({ assistant: { mode: "swarm" }, bridge: {
+    assistantAutopilot: async () => ({ ok: false }),
+    assistantStatus: () => new Promise((resolve) => { finishRead = resolve; }),
+  } });
+  const saving = late.changeAgentMode("cluster"); await flush();
+  late.state.assistant = { mode: "swarm", execute: false };
+  finishRead({ ok: true, status: { mode: "cluster", execute: true } });
+  assert.equal(await saving, false);
+  assert.equal(late.el.feedAgentMode.value, "swarm");
+  assert.equal(late.state.assistant.execute, false);
+});
+
+test("Cluster shows actual task preparation, helper failures and the shared focus", () => {
+  const env = environment({ assistant: { mode: "cluster", enabled: true, execute: true,
+    clusterFocus: { source: "task", id: "focus", title: "Improve search" },
+    clusterAgents: [{ id: "planner", role: "planner", status: "running", taskId: "focus", taskTitle: "Improve search", step: "Inspecting entry points" }, { id: "reviewer", role: "reviewer", status: "failed", step: "Provider unavailable" }],
+  } });
+  env.renderFeed();
+  assert.match(env.el.feedAgentModeNote.textContent, /agents focus on: Improve search/);
+  assert.equal(env.el.feedState.textContent, "task preparation");
+  assert.match(env.el.feedNow.textContent, /Task preparation.*Improve search.*Inspecting entry points/);
+  assert.equal(env.el.feedAgentsCount.textContent, "1 need attention");
+  assert.match(env.el.feedAgents.textContent, /RUNNINGPlanner.*Inspecting entry points/);
+  assert.match(env.el.feedAgents.textContent, /ERRORReviewer.*Provider unavailable/);
+  assert.doesNotMatch(env.el.feedNow.textContent, /percent|%/);
+  env.state.assistant.clusterAgents = [];
+  env.state.assistant.clusterFocus = null;
+  env.state.assistant.running = [{ taskId: "a", title: "Current A" }, { taskId: "b", title: "Current B" }];
+  env.state.feedDirty = true; env.renderFeed();
+  assert.match(env.el.feedAgentModeNote.textContent, /current workers finish/);
+  assert.equal(env.el.feedNow.children.length, 2);
+});
+
+test("Cluster helper status merges with the service roster without counting the same agent twice", () => {
+  const env = environment({ assistant: { mode: "cluster", execute: true, clusterFocus: { title: "Fix export" }, clusterAgents: [{ role: "planner", status: "running", step: "Checking paths" }] },
+    full: { agents: [{ role: "cluster-planner", status: "running", text: "Duplicate planner" }, { role: "watcher", status: "running", text: "Checking workspace" }] },
+  });
+  env.renderFeed();
+  assert.equal(env.el.feedAgentsCount.textContent, "2 working");
+  assert.equal(env.el.feedAgents.children.length, 2);
+  assert.doesNotMatch(env.el.feedAgents.textContent, /Duplicate planner/);
+});
+
+test("Swarm presents shared-task preparation and concurrent helper roles without implying a build started", () => {
+  const env = environment({ assistant: { mode: "swarm", enabled: true, execute: true, adaptiveParallel: true,
+    running: [{ taskId: "one", title: "Shared export task", phase: "preparing" }, { taskId: "two", title: "Shared search task", phase: "building" }],
+    clusterAgents: [
+      { id: "one-planner", mode: "swarm", role: "planner", status: "running", taskId: "one", taskTitle: "Shared export task", step: "Splitting export work" },
+      { id: "two-planner", mode: "swarm", role: "planner", status: "running", taskId: "two", taskTitle: "Shared search task", step: "Planning search checks" },
+    ],
+  }, full: { agents: [{ role: "cluster-planner", status: "running", text: "Duplicate planner" }] } });
+  env.renderFeed();
+  assert.equal(env.el.feedState.textContent, "1 building · 1 preparing");
+  assert.equal(env.el.feedMeta.textContent, "1 preparing · 1 building · machine managed");
+  assert.equal(env.el.feedAgentsCount.textContent, "2 working");
+  assert.equal(env.el.feedAgents.children.length, 2);
+  assert.match(env.el.feedNow.textContent, /Task preparation.*Shared export task.*Splitting export work/);
+  assert.match(env.el.feedAgents.textContent, /Planner.*Shared export task.*Planner.*Shared search task/);
+  assert.doesNotMatch(env.el.feedNow.textContent + env.el.feedAgents.textContent, /Cluster|Duplicate planner/);
+});
+
+test("a claimed Cluster task remains preparation until the coding process starts", () => {
+  const job = { taskId: "focus", title: "Improve search", phase: "preparing", progress: 1 };
+  const env = environment({ assistant: { mode: "cluster", enabled: true, execute: true, running: [job],
+    clusterFocus: { source: "task", id: "focus", title: "Improve search" },
+    clusterAgents: [{ role: "planner", status: "running", taskId: "focus", step: "Inspecting search entry points" }],
+  } });
+  env.renderFeed();
+  assert.equal(env.el.feedState.textContent, "task preparation");
+  assert.match(env.el.feedNow.textContent, /Task preparation.*Improve search.*Inspecting search entry points/);
+  assert.doesNotMatch(env.el.feedNow.textContent, /Working now|Worker is running|%/);
+  assert.equal(env.el.feedMeta.textContent, "1 preparing · 0 building · cluster focus");
+  assert.equal(env.commandJobDetail(job).progress, null);
+  env.state.assistant.clusterAgents[0].step = "Checking acceptance gaps";
+  env.state.feedDirty = true; env.renderFeed();
+  assert.match(env.el.feedNow.textContent, /Checking acceptance gaps/);
+  job.phase = "building"; job.progress = null;
+  env.state.assistant.clusterAgents[0].status = "done";
+  env.state.feedDirty = true; env.renderFeed();
+  assert.match(env.el.feedNow.textContent, /Working now.*Worker is running/);
+  assert.equal(env.el.feedState.textContent, "running");
+  assert.equal(env.el.feedMeta.textContent, "1 building · cluster focus");
+});
 
 test("Command current work uses the matching live step and never invents progress", () => {
   const env = environment();

@@ -21,6 +21,8 @@ const RENDERER = path.join(STUDIO, "renderer");
 // Keep in step with the inline list in scripts/build-booklet.mjs; the fixture
 // only counts as faithful while it copies the same inputs the real build reads.
 const INLINE_SCRIPTS = [
+  "performance-core.js",
+  "profiler.js",
   "task-groups.js",
   "nav.js",
   "sidebar.js",
@@ -74,6 +76,7 @@ async function makeFixtureRoot() {
   await copyFile(path.join(RENDERER, "styles.css"), path.join(renderer, "styles.css"));
   await copyFile(path.join(RENDERER, "music.css"), path.join(renderer, "music.css"));
   await copyFile(path.join(RENDERER, "planning.css"), path.join(renderer, "planning.css"));
+  await copyFile(path.join(RENDERER, "profiler.css"), path.join(renderer, "profiler.css"));
   for (const name of INLINE_SCRIPTS) {
     await copyFile(path.join(RENDERER, name), path.join(renderer, name));
   }
@@ -112,11 +115,11 @@ test("booklet build on fixtures: the output exists, is non-empty and self-contai
     const code = bakedSection(html, /<script>([\s\S]*?)<\/script>/, "code block");
     assert.ok(styles.trim().length > 0, "the baked styles must be non-empty");
     assert.ok(code.trim().length > 0, "the baked code must be non-empty");
-    const groupHelper = await readFile(path.join(RENDERER, "task-groups.js"), "utf8");
+    const groupHelper = await readFile(path.join(root, "renderer", "task-groups.js"), "utf8");
     const helperAt = code.indexOf(groupHelper);
     assert.ok(helperAt >= 0, "the shared task grouping helper is included in the built artifact");
     for (const consumer of ["idle.js", "workspace.js"]) {
-      const consumerAt = code.indexOf(await readFile(path.join(RENDERER, consumer), "utf8"));
+      const consumerAt = code.indexOf(await readFile(path.join(root, "renderer", consumer), "utf8"));
       assert.ok(consumerAt > helperAt, `${consumer} loads after the shared grouping helper`);
     }
 

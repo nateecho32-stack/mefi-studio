@@ -4,6 +4,7 @@ import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import backlog from "../scripts/backlog.cjs";
 import taskContext from "../scripts/task-context.cjs";
+import executorResume from "../scripts/executor-resume.cjs";
 import * as assistant from "../scripts/assistant.mjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
@@ -133,7 +134,7 @@ test("pause clears a timed restart and retry refuses to double-run a live or rev
 test("the actual executor will not dispatch exhausted verification tasks or requests", async () => {
   const records = { tasks: [{ id: "task", title: "Task", status: "open", verifyAttempts: 3 }], requests: [{ title: "Request", verifyAttempts: 3 }] };
   const env = vm.createContext({
-    Date, console, backlog, projectSwitching: false, assistantState: { status: "running" }, assistantModule: null, executorUpdateHold: () => null,
+    Date, console, backlog, executorResume, process: { pid: 321 }, projectSwitching: false, assistantState: { status: "running" }, assistantModule: null, executorUpdateHold: () => null,
     projects: { current: () => ({ id: "fixture", path: "/fixture" }) }, projectRoot: () => "/fixture",
     autopilot: { execute: true, jobs: [] }, measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => null }),
     executorRunEnv: async () => ({ via: "fixture" }), getEyes: async () => ({ readJson: async (key) => records[key] }),
@@ -304,7 +305,7 @@ test("dispatch rechecks prerequisites inside the claim lock and loses the claim 
   const records = { tasks: [{ id: "pre", title: "Prerequisite", status: "done", doneAt: 1 }, { id: "next", title: "Dependent", status: "open", dependsOn: ["pre"] }], requests: [] };
   let claims = 0;
   const env = vm.createContext({
-    Date, console, backlog, projectSwitching: false, assistantState: { status: "running" }, assistantModule: null, executorUpdateHold: () => null,
+    Date, console, backlog, executorResume, process: { pid: 321 }, projectSwitching: false, assistantState: { status: "running" }, assistantModule: null, executorUpdateHold: () => null,
     projects: { current: () => ({ id: "fixture", path: "/fixture" }) }, projectRoot: () => "/fixture",
     autopilot: { execute: true, jobs: [] }, autopilotJobSeq: 0,
     measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => null }), executorRunEnv: async () => ({ via: "fixture" }),

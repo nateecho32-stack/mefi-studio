@@ -11,6 +11,9 @@ test("real host loop dispatches, records streamed completion, verifies and start
   assert.deepEqual(h.starts.map((start) => start.taskId), ["first"]);
   assert.equal(h.board().tasks[0].status, "active");
   assert.ok(h.starts[0].child.inputEnded); assert.match(h.starts[0].child.prompt, /Full saved task context/);
+  assert.match(h.starts[0].child.prompt, /Keep verification and board bookkeeping in the current task/);
+  assert.match(h.starts[0].child.prompt, /Never create a child task merely to close, update, verify or confirm another card/);
+  assert.match(h.starts[0].child.prompt, /hand off only substantive unfinished work/);
   await h.finish("first"); await h.pump();
   assert.equal(h.board().tasks[0].status, "awaiting_verification", "worker output alone never closes the card");
   assert.equal(h.starts.length, 1, "dependencies wait through evidence flush dwell");

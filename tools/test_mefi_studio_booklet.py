@@ -69,12 +69,12 @@ class MefiStudioBookletTests(unittest.TestCase):
         for marker in (
             "mefiStudio.lastRefresh",
             'cache: "no-store"',
-            "refresh(\"open\")",
             "mefiStudio.readCatalog",
             "addEventListener(\"focus\"",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.booklet)
+        self.assertRegex(self.booklet, r'refresh\("open"(?:,|\))')
 
     def test_print_styles_present(self):
         self.assertIn("@media print", self.booklet)

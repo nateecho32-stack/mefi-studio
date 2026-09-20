@@ -1141,7 +1141,7 @@
     // Finished group (the rail's folded node sends it).
     const assistant = params.assistant;
     if (params.folded) state.foldedOpen = true;
-    load().then(() => {
+    return load().then(() => {
       revealSelected();
       // claim() focuses one frame after open(), when the tree holds only the
       // non-focusable loading note, and renderTree() replaces any row it did

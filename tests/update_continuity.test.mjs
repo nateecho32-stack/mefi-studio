@@ -59,7 +59,7 @@ test("an incomplete renderer build keeps the live payload and retries the whole 
   assert.equal(await readFile(path.join(appRoot, "renderer", "booklet.html"), "utf8"), "COMPLETE const ready = true;");
 });
 
-test("hot styling preserves base, music/theme and planning stylesheets in build order", async () => {
+test("hot styling preserves base, music/theme, planning and profiler stylesheets in build order", async () => {
   let applied = "previous styles";
   let missing = false;
   const env = vm.createContext({
@@ -67,6 +67,7 @@ test("hot styling preserves base, music/theme and planning stylesheets in build 
     readFile: async (file) => {
       if (missing && file.endsWith("music.css")) throw new Error("not ready");
       if (file.endsWith("planning.css")) return ".planning-sheet { color: ivory; }";
+      if (file.endsWith("profiler.css")) return ".profiler-sheet { color: gold; }";
       return file.endsWith("music.css") ? ".music-sheet { color: violet; }" : "body { color: gold; }";
     },
     window: { isDestroyed: () => false, webContents: { executeJavaScript: async (script) =>
@@ -75,14 +76,14 @@ test("hot styling preserves base, music/theme and planning stylesheets in build 
   vm.runInContext(section("async function rendererValue(", "// The renderer writes"), env);
   vm.runInContext(section("async function applyStyle(", "// Changed script modules"), env);
   assert.equal(await env.applyStyle(["renderer/music.css"]), true);
-  assert.equal(applied, "body { color: gold; }\n.music-sheet { color: violet; }\n.planning-sheet { color: ivory; }");
+  assert.equal(applied, "body { color: gold; }\n.music-sheet { color: violet; }\n.planning-sheet { color: ivory; }\n.profiler-sheet { color: gold; }");
   missing = true;
   assert.equal(await env.applyStyle(["renderer/styles.css"]), false);
   assert.ok(applied.includes(".music-sheet"), "an incomplete read cannot strip the current styles");
 });
 
 function restartHost() {
-  let exits = 0, asks = 0;
+  let exits = 0, asks = 0, assistantStops = 0;
   let settings = { ui: { autopilot: { enabled: false, execute: false, parallel: 3 } } };
   const env = vm.createContext({
     Date, activeChild: null, autopilot: { jobs: [{ id: "real", finished: false }] }, window: null,
@@ -91,10 +92,11 @@ function restartHost() {
     saveResume: async () => {}, setTimeout: (fn) => { fn(); }, send() {},
     assistantAskForWork: () => { asks += 1; },
     stopUpdateWatch() {}, stopEyesWatch() {}, stopMachineWatch() {}, relaunchArgs: () => ["--updated"],
-    app: { releaseSingleInstanceLock() {}, relaunch() {}, exit: () => { exits += 1; } },
+    stopAssistant() { assistantStops += 1; },
+    app: { releaseSingleInstanceLock() {}, relaunch() { assert.equal(assistantStops, 1, "save helpers before the next process can start"); }, exit: () => { exits += 1; } },
   });
   vm.runInContext(section("// A pending restart drains", "async function startUpdateWatch("), env);
-  return { env, exits: () => exits, asks: () => asks, settings: () => settings };
+  return { env, exits: () => exits, asks: () => asks, assistantStops: () => assistantStops, settings: () => settings };
 }
 
 test("updates drain live workers without forcing a timed restart or changing a saved pause", async () => {
@@ -104,6 +106,7 @@ test("updates drain live workers without forcing a timed restart or changing a s
     assert.equal(result.deferred, true);
     assert.match(host.env.executorUpdateHold(), /waiting for current builds/);
     assert.equal(host.exits(), 0);
+    assert.equal(host.assistantStops(), 0, "a deferred update keeps live helper work running");
   }
   host.env.autopilot.jobs[0].finished = true;
   host.env.autopilot.jobs[0].settlementPending = true;
@@ -111,6 +114,7 @@ test("updates drain live workers without forcing a timed restart or changing a s
   host.env.autopilot.jobs[0].settlementPending = false;
   assert.equal((await host.env.applyRestart(["main.cjs"])).ok, true);
   assert.equal(host.exits(), 1, "settled entries do not pin a restart");
+  assert.equal(host.assistantStops(), 1, "explicit app.exit receives the normal saved-work shutdown");
   assert.deepEqual(host.settings().ui.autopilot, { enabled: false, execute: false, parallel: 3 });
 });
 

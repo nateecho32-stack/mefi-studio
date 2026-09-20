@@ -73,6 +73,8 @@
     grower: "growing…",
     ideas: "scanning ideas…",
     reference: "gathering references…",
+    "cluster-planner": "planning the focused task…",
+    "cluster-reviewer": "reviewing the focused task…",
   };
   // One hue per role, so the satellites around the assistant read as a crew of
   // distinct agents instead of a ring of identical golds. Status still reads:
@@ -94,6 +96,8 @@
     grower: "#b8dc7a", // leaf
     ideas: "#e6a8e8", // orchid
     reference: "#9fe0e8", // aqua
+    "cluster-planner": "#a4caf7", // blue
+    "cluster-reviewer": "#d4b2f0", // lilac
   };
   // HSL -> #rrggbb for the hash fallback below (canvas accepts either, but
   // draw() appends a hex alpha, so the palette has to be hex).
@@ -960,7 +964,7 @@
         id: `__agent__:${agent.role}`,
         kind: "agent",
         role: agent.role,
-        label: agent.role,
+        label: agent.role.replace(/^cluster-/, "Cluster "),
         status: agentStateOf(agent),
         state: agentStateOf(agent),
         text: agent.text ?? "",

@@ -191,7 +191,7 @@ EXPECTED_INTENTS = [
 ]
 
 
-AGENT_ROLES = ["watcher", "machine", "auditor", "keeper", "compactor", "foreman", "thinker", "briefer", "overseer", "improver", "ideas", "grower", "responder", "reference"]
+AGENT_ROLES = ["watcher", "machine", "auditor", "keeper", "compactor", "foreman", "thinker", "briefer", "overseer", "improver", "ideas", "grower", "responder", "reference", "cluster-planner", "cluster-reviewer"]
 
 AGENT_EVENTS = [
     {"role": "watcher", "status": "running", "at": NOW + 1000, "target": {"kind": "session", "id": "ses_active"}, "targets": [{"kind": "session", "id": "ses_active"}, {"kind": "session", "id": "ses_stale"}], "progress": 0.5},
@@ -279,7 +279,7 @@ def _agent_roles_table():
     assert block, "AGENT_ROLES table not found"
     rows = []
     for role, cadence, ai in re.findall(
-        r'\{\s*role:\s*"(\w+)",\s*cadenceMs:\s*([^,]+),\s*ai:\s*(true|false)\s*\}', block.group(1)
+        r'\{\s*role:\s*"([\w-]+)",\s*cadenceMs:\s*([^,]+),\s*ai:\s*(true|false)\s*\}', block.group(1)
     ):
         expression = cadence.strip().replace("MINUTE", "60000")
         rows.append({"role": role, "cadenceMs": int(eval(expression)), "ai": ai == "true"})  # noqa: S307 - fixed table
@@ -341,6 +341,32 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn("machine capacity and task requirements allow", work_on)
         self.assertIn("repeat", work_on)
         self.assertIn("if (!repeat)", work_on)
+
+    def test_log_errors_carry_the_calling_role(self):
+        # The digest's logErrors records must name who logged the error:
+        # logError() stamps the calling role (an unknown caller falls back to
+        # the innermost running agent, then the host), pool failures log their
+        # own entry's role, and the auditor stamps the record the digest
+        # reconciles against.
+        self.assertIn("function logError(", self.main)
+        error_fn = _function_body(self.main, "logError")
+        self.assertIn('assistantLog("error"', error_fn, "logError routes through the shared log writer")
+        self.assertIn("role ?? fallback", error_fn, "the caller's role wins")
+        self.assertIn('?? "assistant"', error_fn, "an unknown caller falls back to the host, never an empty role")
+        log_fn = _function_body(self.main, "assistantLog")
+        self.assertIn("role: who", log_fn, "assistantLog stamps the role onto the row")
+        settle_region = self.main[self.main.index("function assistantTimeout") : self.main.index("function assistantDrain")]
+        self.assertIn("logError(text, entry.role)", settle_region, "a failed pool job logs its own role")
+        self.assertIn("logError(entry.text, entry.role)", settle_region, "a timed-out job logs its own role")
+        self.assertIn(
+            "assistantState.audit = { ok: !result.errors",
+            _function_body(self.main, "assistantAuditorJob"),
+            "the audit pass stamps the reconciliation record the digest resets against",
+        )
+        self.assertIn("role", _function_body(self.module, "normalizeLog"), "loaded log rows keep their role")
+        digest_fn = _function_body(self.module, "overseerDigest")
+        self.assertIn('str(entry.role).trim() || "assistant"', digest_fn, "digest records default the role so a record is never anonymous")
+        self.assertIn("auditClean", digest_fn, "the digest reconciles the counter against the last audit pass")
 
     def test_fresh_clone_catalog_and_csp_fallbacks(self):
         self.assertNotIn('models.snapshot.json', self.main, "the snapshot is retired; catalog:read reads the committed models.json")
@@ -775,6 +801,52 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn('compactor: "compacting the queue…"', self.tree3d)
         self.assertIn("compactor:", self.module)
 
+    def test_duplicate_requests_and_directives_dedupe_at_write(self):
+        # A-Eyes overseer directives: the compactor hashes request payloads and
+        # drops exact duplicates before they enqueue (a refiled snapshot under
+        # reworded display text is one request), and the overseer dedupes its
+        # directives at write time by normalized text — a rephrase bumps the
+        # recorded row instead of appending a third copy.
+        self.assertIn("export function requestPayloadKey", self.module, "the payload hash is the module's own normaliser, not a second copy in main")
+        compact_body = self.module[self.module.index("export function compact({") :]
+        self.assertIn("requestPayloadKey(request)", compact_body, "the compactor hashes every request payload")
+        self.assertIn("payloadKeys.has(payloadKey)", compact_body, "exact payload duplicates drop before enqueue")
+        self.assertIn("recorded.findIndex((row) => compactKey(row.text) === key)", self.module, "directives dedupe by normalized text")
+        if not NODE:
+            self.skipTest("Node unavailable; static contracts still ran")
+        script = (
+            "import { compact, overseerMerge } from './scripts/assistant.mjs';"
+            "const now = 1800000000000;"
+            "const dup = compact({ now, tasks: [], requests: ["
+            "  { title: 'Resume: eyes.mjs atomic write guards', prompt: 'A-Eyes overseer: resume the atomic write guards.', source: 'overseer', at: now - 60000 },"
+            "  { title: 'Atomic write guards: resume eyes.mjs', prompt: 'A-Eyes overseer: resume the atomic write guards.', source: 'overseer', at: now },"
+            "]});"
+            "if (dup.requests.length !== 1 || dup.report.duplicateRequests !== 1) throw new Error('payload duplicates survived: ' + JSON.stringify({ kept: dup.requests.map((request) => request.title), report: dup.report }));"
+            "const distinct = compact({ now, tasks: [], requests: ["
+            "  { title: 'Resume: eyes.mjs atomic write guards', prompt: 'resume the atomic write guards', source: 'overseer', at: now },"
+            "  { title: 'Resume: eyes.mjs queue gates', prompt: 'resume the queue gates', source: 'overseer', at: now },"
+            "]});"
+            "if (distinct.requests.length !== 2) throw new Error('a different ask collapsed: ' + JSON.stringify(distinct.requests.map((request) => request.title)));"
+            "const base = { reviews: 1, directives: [{ at: now - 3600000, kind: 'finding', text: 'Resume: eyes.mjs atomic write guards' }] };"
+            "const again = overseerMerge(base, {}, now + 1000, { directives: [{ text: 'resume eyes mjs atomic write guards' }] });"
+            "if (again.directives.length !== 1 || again.directives[0].at !== now + 1000) throw new Error('rephrase appended instead of bumping: ' + JSON.stringify(again.directives));"
+            "const thrice = overseerMerge(again, {}, now + 2000, { directives: [{ text: 'Resume: eyes.mjs atomic write guards!' }] });"
+            "if (thrice.directives.length !== 1) throw new Error('third copy appended: ' + JSON.stringify(thrice.directives));"
+            "const fresh = overseerMerge(thrice, {}, now + 3000, { directives: [{ text: 'Resume: eyes.mjs queue gates' }] });"
+            "if (fresh.directives.length !== 2) throw new Error('a new directive was dropped: ' + JSON.stringify(fresh.directives.map((entry) => entry.text)));"
+            "console.log(JSON.stringify({ ok: true }));"
+        )
+        result = subprocess.run(
+            [NODE, "--input-type=module", "-e", script],
+            cwd=STUDIO,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=60,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertTrue(json.loads(result.stdout)["ok"])
+
     def test_ai_review_compacts_the_board_and_groups_tasks_into_plans(self):
         # The AI review button is not only ingestion: it reviews the board it
         # was pressed on. Inside the same locked write the pass compacts with
@@ -970,7 +1042,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
                 self.assertIn(f'"{role}"', self.main)
         roles = _agent_roles_table()
         on_demand = [row for row in roles if row["cadenceMs"] == 0]
-        self.assertEqual(["responder", "reference"], [row["role"] for row in on_demand], "only these two are on demand")
+        self.assertEqual(["responder", "reference", "cluster-planner", "cluster-reviewer"], [row["role"] for row in on_demand], "cluster advisors run only for a claimed task")
         for role in ("improver", "grower", "ideas"):
             with self.subTest(role=role):
                 cadence = next(row["cadenceMs"] for row in roles if row["role"] == role)
@@ -1358,7 +1430,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         digest = overseer["digest"]
         self.assertEqual(["briefer"], digest["errorRoles"], "the error row survives load and feeds the review")
         self.assertEqual(0, digest["replies"]["unanswered"])
-        self.assertEqual(0, digest["logErrors"])
+        self.assertEqual([], digest["logErrors"], "a clean log holds no error records")
         self.assertEqual({"count": 1, "kinds": ["update-held"], "aged": 0}, digest["problems"])
         self.assertEqual(60, digest["housekeeping"]["ageMin"])
         self.assertEqual({"stale": 1, "active": 2, "folded": 2, "staleQuietMin": 30 * 60}, digest["sessions"], "the tree's stale section reaches the review")
@@ -1386,6 +1458,41 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertEqual(["nonsense", "tidyDoneAfterHours"], tune["rejected"], "unknown keys and non-numbers are rejected")
         self.assertEqual(72, tune["prefs"]["staleAfterHours"])
         self.assertEqual(2, tune["prefs"]["parallel"])
+
+    def test_fixture_overseer_log_errors_carry_role_and_reset_on_a_clean_audit(self):
+        # Error log rows reach the digest as records naming the role that
+        # logged them (a missing role falls back to the host, never empty),
+        # and the counter resets when the latest audit pass reported zero
+        # errors and no problems are open.
+        if not NODE:
+            self.skipTest("Node unavailable; static contracts still ran")
+        fixture = _fixture()
+        fixture["state"]["log"] = [
+            {"at": NOW - 5 * MINUTE, "kind": "error", "role": "watcher", "text": "watcher scan failed: boom"},
+            {"at": NOW - MINUTE, "kind": "error", "text": "legacy row logged without a role"},
+            {"at": NOW - 2 * MINUTE, "kind": "tick", "text": "tick 40"},
+        ]
+        digest = _run_fixture(fixture)["overseer"]["digest"]
+        records = digest["logErrors"]
+        self.assertEqual(2, len(records), "only error rows become records; ticks stay out")
+        self.assertEqual(["watcher", "assistant"], [record["role"] for record in records], "a missing role falls back to the host")
+        for record in records:
+            self.assertTrue(record["role"], "every logErrors record carries a non-empty role")
+
+        fixture["state"]["audit"] = {"ok": True, "errors": 0, "warnings": 0, "at": NOW - MINUTE}
+        fixture["state"]["problems"] = []
+        digest = _run_fixture(fixture)["overseer"]["digest"]
+        self.assertEqual([], digest["logErrors"], "a clean audit with zero open problems resets the log-error counter")
+
+        dirty = _fixture()
+        dirty["state"]["log"] = [{"at": NOW - MINUTE, "kind": "error", "role": "auditor", "text": "audit failed"}]
+        dirty["state"]["audit"] = {"ok": False, "errors": 1, "warnings": 0, "at": NOW - MINUTE}
+        dirty["state"]["problems"] = []
+        self.assertEqual(1, len(_run_fixture(dirty)["overseer"]["digest"]["logErrors"]), "a dirty audit keeps the records visible")
+        anonymous = _fixture()
+        anonymous["state"]["log"] = [{"at": NOW - MINUTE, "kind": "error", "text": "nobody"}]
+        for record in _run_fixture(anonymous)["overseer"]["digest"]["logErrors"]:
+            self.assertTrue(record["role"], "even junk input yields a named record")
 
     def test_fixture_overseer_rescues_stale_sessions(self):
         # The repair pass's plan: a session gone quiet mid-work past the stale

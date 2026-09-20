@@ -13,6 +13,9 @@ import * as history from "../../scripts/task-history.mjs";
 import backlog from "../../scripts/backlog.cjs";
 import taskContext from "../../scripts/task-context.cjs";
 import taskHandoffs from "../../scripts/task-handoffs.cjs";
+import agentModes from "../../scripts/agent-modes.cjs";
+import taskDelegation from "../../scripts/task-delegation.cjs";
+import executorResume from "../../scripts/executor-resume.cjs";
 
 const source = (await readFile(new URL("../../main.cjs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const section = (start, end) => {
@@ -22,15 +25,16 @@ const section = (start, end) => {
 };
 const copy = (value) => structuredClone(value);
 
-export function executorHost({ tasks = [], requests = [], parallel = 1, adaptiveParallel = false, workerCapacity = null, paused = false, execute = true, autoBuild = true, savedSettings = null } = {}) {
+export function executorHost({ tasks = [], requests = [], parallel = 1, adaptiveParallel = false, workerCapacity = null, paused = false, execute = true, autoBuild = true, mode = "swarm", savedSettings = null, realPool = false, poolParallel = 2, aiParallel = 2, pid = 101, livePids = [999], unknownPids = [], realWatches = false } = {}) {
   let now = 1_000_000, pendingForeman = false, pendingWriteFailures = 0;
   let board = { tasks: copy(tasks), requests: copy(requests), ideas: [] };
-  const logs = [], starts = [], roleRequests = [], records = [], timers = [], terminations = [], capacityCalls = [];
-  const sessions = new Map(), changes = new Map(), checks = new Map(), extras = new Map(), registry = new Map();
+  const logs = [], starts = [], roleRequests = [], records = [], timers = [], terminations = [], capacityCalls = [], supportCalls = [], supportJobs = [], contextCalls = [], routeCalls = [];
+  const sessions = new Map(), todos = new Map(), changes = new Map(), checks = new Map(), extras = new Map(), registry = new Map();
   const root = path.resolve("fixture-only-project");
-  const state = { status: paused ? "paused" : "running", prefs: { backlogMode: true }, agents: [] };
-  const autopilot = { enabled: true, execute, autoBuild, parallel, adaptiveParallel, jobs: [], consecutiveFailures: 0, infraFailures: 0, parkedUntil: 0, minutes: 5, history: [] };
-  let settings = copy(savedSettings ?? { ui: { autopilot: { enabled: true, execute, autoBuild, parallel, adaptiveParallel, minutes: 5 } } });
+  const state = { ...(realPool ? assistant.emptyState(now) : {}), status: paused ? "paused" : "running", prefs: { backlogMode: true, parallel: poolParallel, aiParallel }, agents: [] };
+  const pool = { queue: [], running: new Map(), seq: 0, waiters: [] };
+  const autopilot = { enabled: true, execute, autoBuild, mode, modeRevision: 0, clusterFocus: null, clusterAgents: [], parallel, adaptiveParallel, jobs: [], consecutiveFailures: 0, infraFailures: 0, parkedUntil: 0, minutes: 5, history: [] };
+  let settings = copy(savedSettings ?? { ui: { autopilot: { enabled: true, execute, autoBuild, mode, parallel, adaptiveParallel, minutes: 5 } } });
   const machine = {
     leaseStatus: async () => ({ exclusive: false }),
     workerCapacity: async (options) => {
@@ -42,6 +46,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     readJson: async (key, fallback) => copy(board[key] ?? extras.get(key) ?? fallback),
     writeJson: async (key, value) => { extras.set(key, copy(value)); },
     findRunSession: ({ runId }) => sessions.get(runId) ?? null,
+    listTodos: ({ sessionId }) => copy(todos.get(sessionId) ?? []),
     listChanges: ({ sessionId }) => { if (changes.get(sessionId) instanceof Error) throw changes.get(sessionId); return copy(changes.get(sessionId) ?? []); },
     listSessionChecks: ({ sessionId, since, until }) => {
       assert.ok(Number.isFinite(since) && since > 0 && Number.isFinite(until) && until >= since, "verification must bound observed checks to its attempt");
@@ -52,18 +57,33 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
   const stream = () => Object.assign(new EventEmitter(), { setEncoding() {} });
   const env = vm.createContext({
     Date: class extends Date { static now() { return now; } }, crypto, path, console,
-    process: { pid: 101, env: {} }, os: { cpus: () => [{}, {}] },
-    autopilot, assistantState: state, assistantCache: { store: {}, ingest: { newMaterial: false, at: now } }, autopilotJobSeq: 0,
+    process: { pid, env: {}, kill: (target) => {
+      if (unknownPids.includes(target)) throw Object.assign(new Error("fixture process access denied"), { code: "EPERM" });
+      if (target === pid || livePids.includes(target) || autopilot.jobs.some((job) => !job.finished && job.pid === target)) return true;
+      throw Object.assign(new Error("fixture process has exited"), { code: "ESRCH" });
+    } }, os: { cpus: () => [{}, {}] },
+    autopilot, pool, projectAgentJobs: 0, assistantState: state, assistantCache: { store: {}, ingest: { newMaterial: false, at: now } }, autopilotJobSeq: 0,
     assistantModule: { ...assistant,
       claimWrite: (files, id) => { if (files.some((file) => registry.has(file) && registry.get(file) !== id)) return { action: "refuse" }; for (const file of files) registry.set(file, id); return { action: "proceed" }; },
       releaseWrite: (files, id) => { for (const file of files) if (registry.get(file) === id) registry.delete(file); },
-    }, backlog, taskContext, taskHandoffs,
-    projectSwitching: false, executorUpdateHold: () => null,
+    }, backlog, taskContext, taskHandoffs, agentModes, taskDelegation, executorResume,
+    projectSwitching: false, executorUpdateHold: () => null, assistantStopping: false,
     projects: { current: () => ({ id: "fixture", path: root }), active: () => ({ id: "fixture", path: root }), run: (_project, fn) => fn() },
     projectRoot: () => root, projectDataPath: (key) => path.join(root, key),
     getMachine: async () => machine,
     measureWorkerLag: async () => 0,
     getEyes: async () => eyes, getAssistant: async () => env.assistantModule,
+    getAnalyzer: async () => ({ verifyIdea: async (text, options) => { contextCalls.push({ text, ...options }); return { hits: [] }; } }),
+    resolveAiRoute: async (role, options) => { routeCalls.push({ role, ...options }); return { ok: true, provider: "fixture-http", model: "fixture-model" }; },
+    httpAssistantCall: async (route, system, user, maxTokens, options) => {
+      supportCalls.push({ route: copy(route), system, user, maxTokens, ...options });
+      return { ok: true, text: `${options.taskType} finding: inspect the captured task and verify its changed module.` };
+    },
+    enqueue: (role, run, options = {}) => {
+      const entry = { role, targets: options.targets ?? [], target: options.targets?.[0] ?? null };
+      supportJobs.push({ role, ...options });
+      return Promise.resolve().then(() => run(entry));
+    },
     getPolicyModule: async () => null, warmPolicyBaseline() {}, resolveActivePolicyIdentity: async () => null,
     getReceiptsModule: async () => null, policyRecord: (...args) => records.push(args),
     loadModule: async (name) => { assert.equal(name, "scripts/task-history.mjs"); return history; },
@@ -72,9 +92,11 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     EXECUTOR_MAX_DEPTH: 3, EXECUTOR_MAX_HANDOFFS: 3, EXECUTOR_PROMPT_MAX: 24000,
     EXECUTOR_DONE_MARK: "MEFI_JOB_DONE", EXECUTOR_NEXT_MARK: "MEFI_NEXT:", EXECUTOR_CALL_MARK: "MEFI_CALL:",
     EXECUTOR_CALLABLE: new Set(["auditor", "reference"]), EXECUTOR_BUDGET_MINUTES: 15,
-    EXECUTOR_KILL_MS: 1500000, EXECUTOR_START_BUDGET_MS: 180000, EXECUTOR_STAGGER_MS: 3000,
+    EXECUTOR_KILL_MS: 1500000, EXECUTOR_START_BUDGET_MS: 180000, EXECUTOR_STAGGER_MS: 3000, EXECUTOR_PROGRESS_POLL_MS: 12000,
     EXECUTOR_PARALLEL_MAX: 12, EXECUTOR_PARALLEL_CAP: 3, AUTOPILOT_PARK_MS: 600000, MINUTE_MS: 60000,
-    ASSISTANT_PRIORITY: { demand: 1 }, ASSISTANT_NODE: { id: "assistant", kind: "assistant" }, ASSISTANT_JOB_WEDGED_MS: 1500000,
+    ASSISTANT_PRIORITY: { cadence: 1, demand: 2, responder: 3 }, ASSISTANT_NODE: { id: "assistant", kind: "assistant" }, ASSISTANT_JOB_WEDGED_MS: 1500000,
+    AI_PARALLEL_MAX: 6, ASSISTANT_JOB_TIMEOUT_MS: 150000,
+    assistantRoleTargets: () => [], assistantAgentEvent() {}, assistantReportIntel() {}, assistantThink() {}, assistantThinkClear() {}, assistantWrite: async () => {}, assistantPoolCounts() {},
     SMOKE: false, CAPTURE: false, CLI_MODE: false, proactiveTimer: null,
     compareWork: (a, b) => Number(Boolean(b.pin)) - Number(Boolean(a.pin)) || (a.createdAt ?? a.at ?? 0) - (b.createdAt ?? b.at ?? 0),
     mutateBoard: async (mutator) => {
@@ -89,8 +111,10 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     assistantHop: async () => {}, assistantLog: (_kind, text) => logs.push(text), logLine: (text) => logs.push(text),
     assistantEnqueueRole: (role) => { roleRequests.push(role); if (role === "foreman") pendingForeman = true; },
     admitBacklogIdeas: async () => 0, refreshAutopilotQueue: async () => {},
-    ensureAssistant: async () => {}, assistantPause: async () => { state.status = "paused"; }, assistantResume: async () => { state.status = "running"; },
-    backlogStatus: async () => ({ ok: true, ...backlog.summarizeBacklog({ ...board, jobs: autopilot.jobs, autoBuild: autopilot.autoBuild, paused: state.status === "paused" || !autopilot.execute }) }),
+    ensureAssistant: async () => {},
+    assistantPause: async () => { env.assistantState.status = "paused"; autopilot.clusterCancel?.("Work paused"); if (realPool) env.assistantClearQueue({ text: "dropped · paused" }); },
+    assistantResume: async () => { env.assistantState.status = "running"; if (realPool) env.assistantPump(); },
+    backlogStatus: async () => ({ ok: true, ...backlog.summarizeBacklog({ ...board, jobs: autopilot.jobs, autoBuild: autopilot.autoBuild, paused: env.assistantState.status === "paused" || !autopilot.execute }) }),
     assistantHearBuilder: () => ({}), assistantNodeContext() {}, assistantAppendReply() {}, saveAssistant: async () => {}, assistantSetProblems() {},
     emitAutopilot() {}, send() {}, executorLog: async (record) => records.push(record),
     pushAutopilotHistory: (kind, text) => autopilot.history.push({ kind, text, at: now }),
@@ -122,6 +146,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     section("function taskView(", "async function setTaskDependencies("),
     section("async function saveTaskEdits(", "function workTitleKey("),
     section("async function promoteRequestsToTasks()", "// Chat work lands straight"),
+    section("function executorProcessAlive(", "// The `opencode run` child"),
     section("function attributeRunSession(", "function watchRunSession("),
     section("let executorFillInFlight = null;", "// Work the assistant does on its own plumbing"),
     section("async function releaseExecutorClaim(", "// A finished run's handoffs:"),
@@ -133,11 +158,22 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     section("async function setAutopilot(", "// Settings may override the defaults"),
     section("let autopilotBootPromise = null;", "async function readSettings("),
   ].join("\n"), env);
+  if (realWatches) vm.runInContext(section("function watchJobProgress(", "// Starts eligible work"), env);
+  if (realPool) {
+    vm.runInContext([
+      section("function assistantRowTargets(", "// Roster label"),
+      section("function assistantPoolCounts(", "function assistantAgentEvent("),
+      section("function enqueue(", "// ---- role jobs:"),
+    ].join("\n"), env);
+    const pooledEnqueue = env.enqueue;
+    env.enqueue = (role, run, options = {}) => { supportJobs.push({ role, ...options }); return pooledEnqueue(role, run, options); };
+  }
   return {
-    env, state, autopilot, starts, logs, roleRequests, records, registry, timers, terminations, machine, capacityCalls,
+    env, get state() { return env.assistantState; }, pool, autopilot, starts, logs, roleRequests, records, registry, timers, terminations, machine, capacityCalls, supportCalls, supportJobs, contextCalls, routeCalls,
     board: () => copy(board), edit: (fn) => fn(board), now: () => now, settings: () => copy(settings),
     advance: (ms) => { now += ms; }, failNextWrite: () => { pendingWriteFailures += 1; },
     evidence: (id, value) => changes.set(id, value),
+    session: (runId, sessionId, rows = []) => { sessions.set(runId, { id: sessionId }); todos.set(sessionId, copy(rows)); },
     wake: (reason = "fixture cadence") => env.assistantAskForWork(reason),
     async pump() { for (let turns = 0; pendingForeman; turns += 1) { assert.ok(turns < 12, "foreman wakeups must converge"); pendingForeman = false; await env.assistantForemanJob(now, {}); } },
     async finish(taskId, { code = 0, lines = ["MEFI_JOB_DONE"], files = [{ file: "fixture.js", status: "completed" }], observedChecks = [] } = {}) {

@@ -12,6 +12,7 @@ import * as eyes from "../scripts/eyes.mjs";
 import * as assistant from "../scripts/assistant.mjs";
 import backlog from "../scripts/backlog.cjs";
 import taskHandoffs from "../scripts/task-handoffs.cjs";
+import executorResume from "../scripts/executor-resume.cjs";
 import { createRequire } from "node:module";
 const { createProjects } = createRequire(import.meta.url)("../scripts/projects.cjs");
 
@@ -60,7 +61,7 @@ test("session evidence belongs to the exact user dispatch, never the nearest con
 test("worker attribution waits for its identity and refuses sibling or finished jobs", () => {
   const first = { id: "run_100_1", startedAt: 100, sessionId: null };
   const second = { id: "run_100_2", startedAt: 100, sessionId: "sibling" };
-  const env = vm.createContext({ autopilot: { jobs: [first, second] } });
+  const env = vm.createContext({ autopilot: { jobs: [first, second] }, queueExecutorCheckpoint() {} });
   vm.runInContext(section("function attributeRunSession(", "function watchRunSession("), env);
   const reader = { listSessions: () => assert.fail("timestamp matching must not be used"), findRunSession: () => null };
   assert.equal(env.attributeRunSession(reader, first), false);
@@ -137,7 +138,7 @@ function finishHost({ kind = "task", owner = "run_100_1", missing = false, failW
   const effects = [], timers = [], logs = [], records = [], roles = [];
   let mutations = 0;
   const env = vm.createContext({
-    Date, console, entry, autopilot, job: { kind, title: ref.title, prompt: ref.prompt, source: "chat", ref: structuredClone(ref) }, assistantModule: assistant, taskHandoffs,
+    Date, console, entry, autopilot, job: { kind, title: ref.title, prompt: ref.prompt, source: "chat", ref: structuredClone(ref) }, assistantModule: assistant, taskHandoffs, queueExecutorCheckpoint() {},
     eyes: { findRunSession: () => ({ id: "own-session" }), readJson: async (key) => key === "history" ? [] : {}, writeJson: async (key, value) => records.push([key, structuredClone(value)]) },
     releaseFiles: () => effects.push("release"), discardEntry: () => { autopilot.jobs = autopilot.jobs.filter((item) => item !== entry); effects.push("release"); },
     executorLog: async () => effects.push("exit-fact"), policyRecord: () => effects.push("policy-fact"), workTitleKey: (text) => String(text),
@@ -272,7 +273,7 @@ function dispatchHost({ interrupt = null, refuse = false, throwClaim = false, ed
   let leases = 0, mutations = 0, hold = null;
   const autopilot = { execute: true, jobs: [], parallel: 1 };
   const env = vm.createContext({
-    Date, path, process: { pid: 999 }, backlog, autopilot, autopilotJobSeq: 0, assistantCache: { store: {} },
+    Date, path, process: { pid: 999 }, backlog, executorResume, autopilot, autopilotJobSeq: 0, assistantCache: { store: {} },
     assistantModule: { ...assistant,
       claimWrite: (files, owner) => {
         askedPaths.push(...files);
@@ -367,7 +368,7 @@ function childHost({ throwFallback = false, throwKill = false } = {}) {
   const entry = { id: "run_100_1", finished: false, spoke: false, handoffs: [], calls: new Set(), outputTail: [], outputLog: [], child: null };
   const env = vm.createContext({
     Date: Clock, entry, runRoute: { grok: true, cli: "grok", opencode: { env: {}, modelArgs: "" } }, runRoot: "C:/fixture", prompt: "fixture brief", startedAt: 1,
-    process: { env: {} }, assistantModule: assistant, autopilot: { parallel: 1, jobs: [entry] }, eyes: {},
+    process: { env: {} }, assistantModule: assistant, autopilot: { parallel: 1, jobs: [entry] }, eyes: {}, queueExecutorCheckpoint() {},
     job: { kind: "task", ref: { id: "task" }, title: "Fixture work" },
     EXECUTOR_DONE_MARK: "DONE", EXECUTOR_MAX_HANDOFFS: 3, EXECUTOR_KILL_MS: 600000, EXECUTOR_START_BUDGET_MS: 120000,
     parseExecutorHandoff: () => null, logLine() {}, pushAutopilotHistory() {}, executorLog: async () => {}, emitAutopilot() {},
