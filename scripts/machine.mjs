@@ -170,7 +170,11 @@ export async function leaseStatus({ repoRoot = DEFAULT_ROOT, now = Date.now(), a
   let files = [];
   try {
     files = (await readdir(dir)).filter((name) => name.endsWith(".json"));
-  } catch {
+  } catch (error) {
+    // Fail open only when no runner has created the lease board yet. An
+    // unreadable board (EACCES/EPERM/…) may be hiding an exclusive holder, so
+    // the original error must reach the foreman's fail-closed lease path.
+    if (error?.code !== "ENOENT") throw error;
     return { busy: false, exclusive: false, totalWidth: 0, holders: [] };
   }
   const holders = [];

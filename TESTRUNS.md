@@ -340,6 +340,58 @@ manual limits, Pause, exclusive leases and failed claim-release retries.
 No test starts a coding worker or uses the live project board. Full `npm test`
 also runs the isolated Electron rendering and recovery fixtures.
 
+The renderer responsiveness probe behind those lag readings is
+`main.cjs` `measureWorkerLag`: one renderer script pairs two independent
+aliveness channels so an occluded window is never mistaken for a stalled one —
+a two-frame `requestAnimationFrame` chain (frames stop when a background window
+is throttled) beside a dedicated Web Worker timer that posts its own drift past
+a 150 ms schedule (worker timers are not frame-throttled); when worker
+construction is refused or errors, an unthrottled `MessageChannel` round-trip
+takes over. The script runs through `rendererValue` with a `null` fallback and a
+1000 ms timeout. Scoring: frames answered reads
+`max(0, elapsed − 50)` (two frames plus IPC allowance), so high CPU with a live
+view still admits workers; only the worker answered means frames were merely
+throttled and the reading is `max(0, workerDriftMs − 200, elapsed − 200)` — an
+occluded-but-live window reads ~0 while a main thread wedged after script eval
+keeps growing; neither channel answered, or a non-numeric worker reading, keeps
+the 1000 ms sentinel as genuine unresponsiveness evidence, and a forced
+resample lets a recovered renderer admit work again. Hidden, minimized,
+destroyed or missing renderers report `null` without probing and clear the
+cached sample; a window hidden mid-probe discards its result, and a replaced
+window's stale probe can neither clear nor populate the replacement's sample.
+Completed samples are cached per window for 750 ms, concurrent reads share one
+in-flight probe, `force` bypasses the completed cache but joins an in-flight
+one, and each physical probe carries an id through the cache so the foreman lag
+gate (documented with `tools/test_mefi_studio_machine.py` above) counts a
+sample exactly once.
+`tests/worker_responsiveness.test.mjs` runs the real sampler source in a VM
+with controlled clocks and view doubles to pin the script shape (exactly two
+`requestAnimationFrame` calls, `new Worker` with `postMessage(Date.now() - t0)`,
+the MessageChannel fallback on refusal or worker error), all three scoring
+branches, sentinel recovery, visibility invalidation, cache/in-flight sharing
+and probe identity; `tests/foreman_lag_gate.test.mjs` pins the foreman's
+consumption of these samples. `tests/occlusion_probe.test.mjs` is the
+live-Chromium proof of the same contract: a real Electron fixture loads the
+actual `renderer/booklet.html`, proves the blob worker constructs under the
+page CSP (`worker-src blob:`), covers the visible window with an always-on-top
+window (native occlusion, never minimize), asserts rAF stays silent while the
+worker/MessageChannel channel keeps answering, and extracts the probe
+expression from `main.cjs` to show the occluded window reads ~0 ms instead of
+the 1000 ms sentinel, with rAF resuming once the cover is removed. Run with
+`node --test tests/worker_responsiveness.test.mjs
+tests/foreman_lag_gate.test.mjs tests/occlusion_probe.test.mjs` from this
+directory (the live proof needs a display; it skips on headless Linux).
+Under the full suite `scripts/run-node-tests.mjs` holds this fixture out of
+the parallel stage and runs it serialized afterward, because mid-suite CPU
+contention inflated even the cleanest of three samples to 452 ms on a healthy
+window while the isolated fixture reads ~0.
+
+Validated on 2026-09-20: `npm run check`, `npm test` (1,490 parallel Node
+tests with 1,489 passing and one opt-in skip, the serialized occlusion probe
+passing at ~0 ms lag, 243 Python contracts and the normalized-path checks)
+passed. Logs are retained locally in the temporary
+directory.
+
 Validated on 2026-09-19: rebuilt booklet, `npm run check`, `npm test`
 (937 Node passes, one opt-in skip, 211 Python passes and six normalized-path
 checks), and `npm run audit` with zero findings. Logs are retained locally in
@@ -809,9 +861,11 @@ fixture stores and fake transport rather than live user state or model calls.
 | `tests/machine_reads.test.mjs` | Shared UI scans, brief cache freshness, fresh enforcement and failure recovery. |
 | `tests/renderer_startup.test.mjs` | Concurrent IPC sharing without stale caching, populated-tree readiness, bounded boot, reduced motion and valid canvas radii. |
 | `tests/boot_poll_visibility.test.mjs` | The shared poll guard's visibility timing contract on a virtual clock: hidden tabs set no interval and fire nothing, hide/show cycles never stack timers (one live interval per key across 25 rapid cycles), resume sets a fresh full interval so hidden time drifts nothing and is never replayed as a catch-up burst, and an in-flight request completing while hidden cannot resurrect the paused timer; source-shape pins hold each tick's hidden bail ahead of its fetch with a show snap-back for nav, eyes.log, tasks.board, explorer.state and idle's Command timers; and the shipped tasks/explorer/idle ticks are extracted verbatim, compiled against stubs and driven through the guard to prove hidden silence, sheet gates and exact cadence for the overlay polls. |
+| `tests/occlusion_probe.test.mjs` | Live-Chromium proof of the occlusion-vs-lag disambiguation behind `measureWorkerLag`: a real Electron fixture loads the actual `renderer/booklet.html`, proves the blob worker constructs under the page CSP (`worker-src blob:`), covers the visible window with an always-on-top window (native occlusion, never minimize), asserts rAF stays silent for 3s while the worker/MessageChannel channel keeps answering, and extracts the probe expression from `main.cjs` so the occluded window reads ~0 ms instead of the 1000 ms sentinel, with rAF resuming once the cover is removed. Load-tolerant by scheduling: `npm test` runs it through `scripts/run-node-tests.mjs`, which drains the parallel `node --test` stage first and only then starts this fixture in a second, serialized `node --test` invocation, because sibling test files loading the CPU inflate the IPC wall time and worker drift the lagMs reading subtracts (best of 3 samples still read 452 ms mid-suite on a healthy window before isolation; isolated it reads ~0). The visible and occluded phases additionally resample the probe up to 3 times (~400ms apart, stopping at the first <100 ms reading) and judge the cleanest sample; every sample must still answer via the unthrottled channel (never frames, never the sentinel), so neither isolation nor retries can mask a real throttling regression or wedged page, and all samples are recorded in the report for diagnosis. Needs a display; skips on headless Linux. Run alone with `node --test tests/occlusion_probe.test.mjs`. |
 | `tests/eyes_overlap_boundaries.test.mjs` | The Node-side eyes-contract mirror of `tools/test_mefi_studio_eyes.py`: the real `scripts/eyes.mjs` `collisions()` drives a fixture OpenCode database (built with `node:sqlite` in per-run temp dirs) to pin the temporal-overlap boundary cases — adjacent windows touching at one instant, a gap of exactly `overlapMs` inclusive vs one just past it excluded, a contained window intersecting to the inner session's span, a three-session nested group whose common intersection collapses to the innermost single instant, zero-length single-edit pairs — plus `overlapRangeOf` validation (corrupt/NaN/inverted windows normalize to null; zero-length stays real). Run alone with `node --test tests/eyes_overlap_boundaries.test.mjs`. |
 | `tests/eyes_missing_store.test.mjs` | First-run eyes behavior when the machine has never run OpenCode: every listing read (`listSessions`, `listChanges`, `listTodos`, `activitySince`, `listChatTexts`, `collisions`, `filePresence`, `findRunSession`, `assistantFacts`) treats a never-created store as empty instead of throwing, so the boot session-tree step shows "no recent sessions" rather than gating the app, check evidence stays explicitly unavailable, and a store that exists but cannot be read still raises the real failure. |
 | `tests/model_auto_setup.test.mjs` | The auto-setup planner's pure decisions: saved-key precedence over installed CLIs, either Jev route's key enabling task-aware selection, builder choice from installed OpenCode/Grok CLIs, refusing an empty machine with guidance, a no-op for an already-configured machine, and disarming an armed fallback whose auto order has no second usable provider; `tests/jev_routing_ui.test.mjs` covers the Settings card's host summary, honest refusal, in-flight click guard, read-only setup overview, and the auto-order editor (numbered preference list, add/remove, whole-list saves, generalized fallback switch). |
+| `tests/verification_drain.test.mjs` | Overseer verification-drain contracts against the real `main.cjs` drain slice with stubbed spawn/store/timers: queued jobs pair up two at a time (`VERIFICATION_PARALLEL = 2`) so a done-report burst no longer stacks behind one serial `npm run check` — the first two spawn together, a freed slot picks the third up before the drain resolves, and the queue empties; commands stay sequential inside one job (a failed check ends it, the focused test never runs, and the failed state, per-command tail and log line are stamped onto the card); request rows are stamped by `agentModes.requestKey` identity, never a task id; and each landed result arms exactly one coalesced 1-second settle timer that runs one housekeeping pass (no kick while the debounce is pending, one pass for two results), so cards close without waiting for the next autopilot tick. No real child processes or timers. |
 | `tests/finished_claims_guard.test.mjs` | Finished-uncommitted dispatch dedupe through the real `scripts/assistant.mjs` `claimWork`/`shouldHoldWork`: a pick whose file scope overlaps a finished session's uncommitted edits defers with reason `finished-uncommitted` (held files and owning session named in the advice), `shouldHoldWork` parks it, and `main.cjs` dispatch consults the hold and logs "held for verification: finished session …"; case/spelling path differences still collide through the shared normalizer, an active session's dirty files or a cleared session never trigger the hold, committed work releases it, non-overlapping scope is never held, collision-resolution jobs still run through the hold instead of being parked, a sibling in-flight job's claim wins, the task's own failed-verification fix retry is exempt from its own attempt's hold (evidence-keyed on the unverified verdict, counted verify attempts and the attempt's session rather than the title; a foreign holder alongside the own attempt still holds the shared file, and the exemption never bypasses an in-flight sibling claim), and `finishedClaims` stays silent without a file scope. |
 
 `tools/benchmark_startup.py` measures real Electron loading in an isolated,

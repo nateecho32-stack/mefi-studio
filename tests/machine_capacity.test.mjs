@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createWorkerCapacitySampler, describe } from "../scripts/machine.mjs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { createWorkerCapacitySampler, describe, leaseStatus } from "../scripts/machine.mjs";
 
 function fixture(overrides = {}) {
   let now = 1000;
@@ -306,4 +309,24 @@ test("machine summaries explain measured capacity alongside test coordination", 
   assert.match(summary, /no active test leases/);
   assert.match(summary, /1 LOVE test process/);
   assert.doesNotMatch(describe({ capacity: { canStart: false, reason: "Waiting for machine CPU readings." } }), /undefined|NaN/);
+});
+
+test("a missing lease directory fails open while an unreadable one fails closed", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "mefi-lease-scope-"));
+  try {
+    const none = await leaseStatus({ repoRoot: root, alive: () => true });
+    assert.equal(none.busy, false, "no lease board yet must read as a free machine");
+    assert.deepEqual(none.holders, []);
+    await mkdir(path.join(root, "tools", "logs"), { recursive: true });
+    // A file sitting where the board belongs makes readdir fail with a
+    // non-ENOENT code (ENOTDIR here; EACCES/EPERM behave the same): the error
+    // must propagate so the foreman's lease path stays fail closed.
+    await writeFile(path.join(root, "tools", "logs", "_lease"), "not a directory");
+    await assert.rejects(
+      leaseStatus({ repoRoot: root, alive: () => true }),
+      (error) => error?.code !== "ENOENT",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

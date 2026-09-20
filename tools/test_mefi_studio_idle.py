@@ -286,7 +286,11 @@ class MefiStudioIdleTests(unittest.TestCase):
         self.assertIsNotNone(match, "boot.js must keep a MIN_SHOW_MS floor")
         self.assertLessEqual(int(match.group(1)), 1200)
         self.assertIn('step.status === "error"', boot)
-        self.assertIn("STEP_TIMEOUT_MS", boot)
+        # Slow steps only warn; the gate keeps waiting. Only a step that
+        # never settles at all trips the STEP_DEAD_MS backstop into error,
+        # which still offers the recovery path asserted below.
+        self.assertIn("STEP_SLOW_MS", boot)
+        self.assertIn("STEP_DEAD_MS", boot)
         self.assertIn('boot.phase === "error") void attempt(true)', boot)
         self.assertIn("node.inert = true", boot)
         booklet = (STUDIO / "renderer" / "booklet.js").read_text(encoding="utf-8")

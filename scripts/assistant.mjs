@@ -3354,10 +3354,14 @@ export function focusedTestsForTask(task = null, resultNote = null) {
     const value = str(candidate).trim().replace(/\\/g, "/");
     if (!value || seen.has(value) || !FOCUSED_TEST_RE.test(value)) continue;
     seen.add(value);
-    // Executable form, following the repo's own documented pipelines.
+    // Executable form, following the repo's own documented pipelines. The
+    // runner executes this string via shell:true, so every path segment is
+    // double-quoted — an unquoted "Coding projects" was split by cmd.exe and
+    // recorded as "Coding, projects", failing every spaced absolute path.
+    const quoted = (part) => `"${part.replace(/"/g, '""')}"`;
     tests.push(/\.py$/i.test(value)
-      ? `python -m unittest discover -s ${value.slice(0, value.lastIndexOf("/")) || "."} -p "${value.slice(value.lastIndexOf("/") + 1)}"`
-      : `node --test ${value}`);
+      ? `python -m unittest discover -s ${quoted(value.slice(0, value.lastIndexOf("/")) || ".")} -p ${quoted(value.slice(value.lastIndexOf("/") + 1))}`
+      : `node --test ${quoted(value)}`);
     if (tests.length >= VERIFICATION_MAX_FOCUSED) break;
   }
   return tests;

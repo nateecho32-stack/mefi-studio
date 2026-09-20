@@ -149,6 +149,10 @@ class VerificationSchedulingTests(unittest.TestCase):
         self.assertIn("VERIFICATION_RESULT_RE", module)
         # The queued run is npm run check plus the task's focused tests.
         self.assertIn('commands: ["npm run check", ...tests]', module)
+        # Spaced Windows paths survive the shell:true runner: every path
+        # segment is double-quoted ("Coding projects" was once split by
+        # cmd.exe and recorded as "Coding, projects").
+        self.assertIn("node --test ${quoted(value)}", module, "focused node commands quote the test path")
         main = MAIN.read_text(encoding="utf-8")
         # Settlement queues the job inside the transaction that marks the card
         # awaiting_verification — before the card can ever close.
@@ -160,6 +164,10 @@ class VerificationSchedulingTests(unittest.TestCase):
         # by key so the row still gains its verificationRun stamp.
         self.assertIn("assistantModule.findQueuedVerification", main, "a deduped retry recovers the stamp via the queued job")
         self.assertIn("async function runVerificationJobs(", main, "the queued run is drained after settlement")
+        # A done-report burst drains without stacking: bounded parallel jobs and
+        # a settle kick that closes the card without waiting for the next pass.
+        self.assertIn("const VERIFICATION_PARALLEL = 2", main, "the drain runs a bounded pair of verification jobs")
+        self.assertIn("kickVerificationSettlement()", main, "a landed result settles its card immediately")
         # Direct requests settle through the same scheduler, keyed by request
         # identity (agentModes.requestKey), and the runner stamps the observed
         # state back onto the request row by that same identity.
@@ -184,8 +192,8 @@ class VerificationSchedulingTests(unittest.TestCase):
         self.assertTrue(queued["keyStable"], "the dedup key is stable per attempt")
         # Command fidelity: the task's focused tests ride the same job.
         self.assertEqual(
-            ["node --test tests/foo.test.mjs",
-             'python -m unittest discover -s tools -p "test_mefi_studio_tasks.py"'],
+            ['node --test "tests/foo.test.mjs"',
+             'python -m unittest discover -s "tools" -p "test_mefi_studio_tasks.py"'],
             queued["focused"],
             f"focused tests resolved from the task scope: {queued}",
         )
@@ -206,13 +214,13 @@ class VerificationSchedulingTests(unittest.TestCase):
         self.assertEqual(1, request["requestQueueLength"], f"exactly one request job expected: {request}")
         self.assertTrue(request["requestKeyed"], f"the job key is request identity + attempt: {request}")
         self.assertTrue(request["requestTaskId"].startswith(("id:", "request:")), f"the taskId is a request identity: {request}")
-        self.assertEqual(["npm run check", "node --test tests/foo.test.mjs"], request["requestCommands"])
+        self.assertEqual(["npm run check", 'node --test "tests/foo.test.mjs"'], request["requestCommands"])
         self.assertTrue(request["noTaskCollision"], "request and task keys never share a job")
         # 9. The deduped retry recovers the queued job by its stable key —
         # the partial-commit path that restores a lost verificationRun stamp.
         self.assertTrue(recovery["recoveredIsQueuedJob"], "the recovered job is the attempt's queued job")
         self.assertEqual(queued["key"], recovery["recoveredKey"], "the recovery lookup uses the same key")
-        self.assertEqual(["npm run check", "node --test tests/foo.test.mjs", 'python -m unittest discover -s tools -p "test_mefi_studio_tasks.py"'], recovery["recoveredCommands"])
+        self.assertEqual(["npm run check", 'node --test "tests/foo.test.mjs"', 'python -m unittest discover -s "tools" -p "test_mefi_studio_tasks.py"'], recovery["recoveredCommands"])
         self.assertTrue(recovery["missingNull"], "an attempt that never queued finds nothing")
         self.assertTrue(recovery["notDoneNull"], "a non-done report has no job to recover")
 

@@ -26,6 +26,9 @@
   };
   const els = {};
   let initialized = false;
+  // Sequence token for store reads: a slow read that resolves after a newer
+  // one (poll tick, re-open, show snap-back) must not overwrite fresh content.
+  let loadSeq = 0;
   // Session refresh cadence while the sheet is open. The interval itself stops
   // while the window hides (boot.js's shared poll guard) and restarts when it
   // shows, and the tick bails while hidden or while the sheet is closed, so a
@@ -53,10 +56,14 @@
   async function load() {
     if (!window.mefiStudio?.eyesState) {
       status("Desktop mode only — run npm start inside mefi-studio.", true);
+      treeNote("Desktop mode only — run npm start inside mefi-studio.");
       return;
     }
+    const seq = ++loadSeq;
     // The first read of the store can take a second or two on a busy machine;
-    // an empty column reads as "nothing here", so say what is happening.
+    // an empty column reads as "nothing here", so say what is happening. This
+    // is the pending state open() relies on: the sheet is already up while the
+    // read is in flight, and nothing here holds it hostage.
     if (!state.sessions.length) treeNote("Loading sessions…");
     try {
       const [stateResult, requests, checkpoints, briefing, collisions, service] = await Promise.all([
@@ -67,6 +74,9 @@
         window.mefiStudio.eyesCollisions?.().catch(() => null) ?? null,
         window.mefiStudio.assistantState?.().catch(() => null) ?? null,
       ]);
+      // A newer read started while this one was in flight; drop the stale
+      // result instead of clobbering the content it already rendered.
+      if (seq !== loadSeq) return;
       if (!stateResult?.ok) {
         status(`session store unavailable: ${stateResult?.error ?? "unknown error"}`, true);
       }
@@ -87,13 +97,31 @@
       renderTree();
       renderDetail();
       renderAssistant();
+      // A failed store read must not read as "nothing here": name the failure
+      // in the tree too, and let the next poll tick retry.
+      if (!stateResult?.ok && !state.sessions.length) {
+        treeNote(`session store unavailable: ${stateResult?.error ?? "unknown error"}`);
+      }
       if (!state.audit) runAudit();
-      window.mefiStudio?.machineStatus?.().then((result) => result?.ok && renderMachine(result.status));
+      window.mefiStudio?.machineStatus?.().then((result) => {
+        // A failed scan must read as degraded, never as a free machine.
+        if (result?.ok) renderMachine(result.status);
+        else if (els.machineLines) {
+          els.machineLines.textContent = `machine scan unavailable: ${result?.error ?? "unknown error"}`;
+          els.machineLines.style.color = "var(--bad)";
+        }
+      }).catch((error) => {
+        if (els.machineLines) els.machineLines.textContent = `machine scan failed: ${String(error?.message ?? error)}`;
+      });
       window.mefiStudio?.machineSet?.({}).then((result) => {
         if (result?.ok && els.machineAuto) els.machineAuto.checked = result.machine.autoKill !== false;
       });
     } catch (error) {
+      // Never leave the pending "Loading sessions…" note stuck: render the
+      // failure and let the poll retry.
+      if (seq !== loadSeq) return;
       status(`explorer failed: ${String(error?.message ?? error)}`, true);
+      treeNote(`explorer failed: ${String(error?.message ?? error)} — retrying on the next poll`);
     }
   }
 
@@ -1161,22 +1189,35 @@
     // Finished group (the rail's folded node sends it).
     const assistant = params.assistant;
     if (params.folded) state.foldedOpen = true;
-    return load().then(() => {
+    // The first read of the store can take a second or two on a busy machine,
+    // so nothing here waits on it: the sheet opens at once into load()'s
+    // pending state ("Loading sessions…" until the read resolves), focus and
+    // assistant deep links land now, and the tree rows are asserted once the
+    // read completes. nav's claim() focuses a frame from now; its fallback
+    // keeps focus on the sheet while the tree holds only the loading note.
+    els.overlay.querySelector(".explorer-sheet")?.focus();
+    if (assistant === true && !els.overlay.hidden) {
+      els.input?.focus();
+      els.input?.scrollIntoView?.({ block: "nearest" });
+    } else if (assistant?.mode) runAssistant(assistant.mode, params.sessionId ?? state.selected, assistant.payload);
+    const settled = load();
+    // Back onto the tree rows once they exist — deliberately not gating open():
+    // a slow first read must never hold the sheet's startup. claim() focuses
+    // one frame after open(), when the tree holds only the non-focusable
+    // loading note, and renderTree() replaces any row it did focus — either
+    // way focus can end up on the bare sheet, so re-assert it on the row now
+    // that the rows exist. Only while the sheet is still up: a close during
+    // load() already handed focus back, and the next surface must keep it.
+    settled.then(() => {
       revealSelected();
-      // claim() focuses one frame after open(), when the tree holds only the
-      // non-focusable loading note, and renderTree() replaces any row it did
-      // focus — either way focus is left outside or on the bare sheet, so
-      // re-assert it on the row now that the rows exist.
       const sheet = els.overlay.querySelector(".explorer-sheet");
       const active = document.activeElement;
-      // Only while the sheet is still up: a close during load() already handed
-      // focus back, and the next surface must keep it.
       if (!els.overlay.hidden && (active === sheet || !els.overlay.contains(active))) (els.tree?.querySelector("li.selected") ?? sheet)?.focus();
-      if (assistant === true && !els.overlay.hidden) {
-        els.input?.focus();
-        els.input?.scrollIntoView?.({ block: "nearest" });
-      } else if (assistant?.mode) runAssistant(assistant.mode, params.sessionId ?? state.selected, assistant.payload);
     });
+    // load() handles its own errors; the promise stays unobserved on purpose
+    // so a slow or failed read can never block whoever opened us.
+    settled.catch(() => {});
+    return Promise.resolve();
   }
 
   function close() {

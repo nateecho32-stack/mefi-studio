@@ -286,12 +286,23 @@ async function resourcePass({ kill = true, reason = "poll", withProcesses = true
 function startMachineWatch() {
   if (machineTimer) return { ok: true, running: true };
   let lastProcessScan = 0;
+  let leaseReadFailLogged = false;
   const tick = async () => {
     let leases = { busy: false };
     try {
       const machine = await getMachine();
       leases = await machine.leaseStatus({ repoRoot: projectRoot() });
-    } catch {}
+      leaseReadFailLogged = false;
+    } catch (error) {
+      // The { busy: false } default only steers scan cadence here; keep it so
+      // the stray-kill backstop still runs. But a failing read must not vanish
+      // silently — log once per incident (cleared by the next healthy read)
+      // so scan lag stays visible without touching admission.
+      if (!leaseReadFailLogged) {
+        logLine(`[machine] lease read failed: ${error?.stack || error}`);
+        leaseReadFailLogged = true;
+      }
+    }
     const hidden = window && (window.isMinimized() || !window.isVisible());
     // PowerShell process scan only when tests are running or every 30s as a
     // backstop; lease reads are cheap filesystem calls either way.
@@ -352,7 +363,12 @@ async function rendererValue(script, fallback = null, timeoutMs = 1500) {
 }
 
 // Measure visible UI responsiveness, including waiting to reach its event loop
-// and paint frames. Background frame throttling must never hold coding work.
+// and paint frames. Background frame throttling must never hold coding work: an
+// occluded-but-visible Electron window stops producing frames while its event
+// loop stays live, so each probe pairs the two-frame rAF chain with a Web
+// Worker timer (worker timers are not frame-throttled). If only the worker
+// answers, frames were merely throttled and the delay past its own schedule —
+// never the 1000ms rAF timeout sentinel — is the lag evidence.
 measureWorkerLag.probes = 0; // identity for each physical probe, so the lag gate counts a sample once
 async function measureWorkerLag({ force = false } = {}) {
   const view = window;
@@ -366,12 +382,51 @@ async function measureWorkerLag({ force = false } = {}) {
     const startedAt = Date.now();
     let answered = null;
     try {
-      answered = await rendererValue("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))", null, 1000);
+      answered = await rendererValue(`new Promise(resolve => {
+        let done = false;
+        const finish = (answer) => { if (!done) { done = true; resolve(answer); } };
+        requestAnimationFrame(() => requestAnimationFrame(() => finish({ frames: true })));
+        // Frame throttling cannot stall these channels: dedicated worker timers
+        // are unthrottled, and if a worker is refused (a strict CSP, for
+        // example) a MessageChannel round-trip is an ordinary task Chromium
+        // never throttles. If either answers, the event loop is alive and only
+        // frames were missing — the 1000ms sentinel then means a genuine stall.
+        const loopDelay = () => {
+          const t0 = Date.now();
+          const channel = new MessageChannel();
+          channel.port1.onmessage = () => { try { channel.port1.close(); channel.port2.close(); } catch {} finish({ workerDriftMs: Date.now() - t0 }); };
+          channel.port2.postMessage(0);
+        };
+        try {
+          const src = "const t0 = Date.now(); setTimeout(() => postMessage(Date.now() - t0), 150);";
+          const url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+          const worker = new Worker(url);
+          URL.revokeObjectURL(url);
+          worker.onmessage = (event) => { try { worker.terminate(); } catch {} finish({ workerDriftMs: Number(event.data) }); };
+          worker.onerror = () => { try { worker.terminate(); } catch {} loopDelay(); };
+        } catch { loopDelay(); }
+      })`, null, 1000);
     } catch {}
     if (!visible()) return null;
-    // Two ordinary frames plus IPC get a 50ms allowance. Time beyond that is
-    // actual delay, so high CPU with a responsive view can still admit workers.
-    const lagMs = answered === true ? Math.max(0, Date.now() - startedAt - 50) : 1000;
+    let lagMs;
+    if (answered?.frames === true) {
+      // Two ordinary frames plus IPC get a 50ms allowance. Time beyond that is
+      // actual delay, so high CPU with a responsive view can still admit workers.
+      lagMs = Math.max(0, Date.now() - startedAt - 50);
+    } else if (Number.isFinite(answered?.workerDriftMs)) {
+      // Frames were throttled but the event loop answered through the
+      // unthrottled channel (a worker timer, or the MessageChannel round-trip
+      // fallback when workers are refused): only drift past its 150ms
+      // schedule (or past the round trip's 150ms + IPC allowance) is real
+      // delay. A merely occluded window reads ~0; a main thread wedged after
+      // script eval keeps growing.
+      lagMs = Math.max(0, answered.workerDriftMs - 200, Date.now() - startedAt - 200);
+    } else {
+      // The script itself never completed (blocked event loop), or neither
+      // aliveness channel ever answered while frames never came: the sentinel
+      // stands as genuine unresponsiveness evidence.
+      lagMs = 1000;
+    }
     measureWorkerLag.cache = { view, at: Date.now(), lagMs, probe: pending.probeId };
     return lagMs;
   })().finally(() => { if (measureWorkerLag.inFlight === pending) measureWorkerLag.inFlight = null; });
@@ -8680,6 +8735,11 @@ async function spawnNextJob() {
 // attempt (assistant.scheduleVerificationOnDone) and this runner drains it.
 const verificationJobs = [];
 const VERIFICATION_COMMAND_BUDGET_MS = 15 * 60 * 1000;
+// `npm run check` is the long pole of every verification, so a strictly serial
+// drain stacked a burst of done reports into one long wait while each card
+// stayed "verifying". Two checks run at once — bounded, matching the default
+// worker pool so a verification burst cannot crowd out the machine.
+const VERIFICATION_PARALLEL = 2;
 const runCheckCommand = (command, cwd) => new Promise((resolve) => {
   const child = spawn(String(command), { cwd, shell: true, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   let tail = "";
@@ -8699,56 +8759,98 @@ const runCheckCommand = (command, cwd) => new Promise((resolve) => {
     resolve({ command: String(command), ok: exitCode === 0, timedOut, exitCode, tail: timedOut ? `timed out after ${Math.round(VERIFICATION_COMMAND_BUDGET_MS / 60000)}m` : last.slice(-200) });
   });
 });
+// One queued job's commands, run for real, then the observed state stamped
+// back onto its card. Commands stay sequential inside a job (a failed check
+// ends the run; the tail says why) — jobs are what run side by side.
+async function runVerificationJob(planned, fallbackJob) {
+  if (!planned || !Array.isArray(planned.commands) || !planned.commands.length) return;
+  const cwd = planned.projectPath || (fallbackJob?.kind === "task" && fallbackJob.ref?.projectPath ? fallbackJob.ref.projectPath : projectRoot());
+  logLine(`[autopilot] verification run started: ${planned.commands.join(" && ")}`);
+  const results = [];
+  for (const command of planned.commands) {
+    const result = await runCheckCommand(command, cwd);
+    results.push(result);
+    if (!result.ok) break; // a failed check ends the run; the tail says why
+  }
+  const failed = results.filter((row) => !row.ok);
+  const state = failed.length ? "failed" : "passed";
+  const summary = failed.length
+    ? `${failed[0].command} failed${failed[0].timedOut ? " (timed out)" : ""}${failed[0].tail ? ` — ${failed[0].tail}` : ""}`
+    : `${results.length} check(s) passed`;
+  logLine(`[autopilot] verification run ${state}: ${summary}`);
+  try {
+    await mutateBoard((board) => {
+      let changed = false;
+      board.tasks = board.tasks.map((task) => {
+        if (task?.id !== planned.taskId || task.verificationRun?.key !== planned.key) return task;
+        changed = true;
+        return {
+          ...task,
+          verificationRun: { ...task.verificationRun, state, at: Date.now(), results },
+          logs: [...(task.logs ?? []), { at: Date.now(), kind: "status", text: `verification run ${state} — ${summary}` }].slice(-40),
+        };
+      });
+      // Verifying request rows keyed their queued run by request identity;
+      // stamp the observed state there too, or the row stays "queued" forever.
+      board.requests = board.requests.map((row) => {
+        if (!row || agentModes.requestKey(row) !== planned.taskId || row.verificationRun?.key !== planned.key) return row;
+        changed = true;
+        return {
+          ...row,
+          verificationRun: { ...row.verificationRun, state, at: Date.now(), results },
+          logs: [...(row.logs ?? []), { at: Date.now(), kind: "status", text: `verification run ${state} — ${summary}` }].slice(-40),
+        };
+      });
+      return changed ? board : null;
+    });
+  } catch (error) {
+    logLine(`[autopilot] verification result not saved: ${error.message}`);
+  }
+  // The observed result only matters once it is settled onto the card; the
+  // next autopilot pass may be minutes away, so close the loop now.
+  kickVerificationSettlement();
+}
+
+// Coalesced post-verification settle: several results can land together and
+// one housekeeping pass settles them all. Unref'd so it never holds the app.
+let verificationSettleTimer = null;
+function kickVerificationSettlement() {
+  if (verificationSettleTimer) return;
+  verificationSettleTimer = setTimeout(() => {
+    verificationSettleTimer = null;
+    autopilotHousekeeping().catch((error) => logLine(`[autopilot] post-verification housekeeping failed: ${error.message}`));
+  }, 1000);
+  verificationSettleTimer.unref?.();
+}
+
 // Drain the queue and run each job's commands for real. The close decision
 // stays with autopilotHousekeeping's evidence-checked verifier; this records
 // what the overseer's own run observed, so a done claim never sits unproven.
+let verificationDrain = null;
 async function runVerificationJobs(job) {
-  while (verificationJobs.length) {
-    const planned = verificationJobs.shift();
-    if (!planned || !Array.isArray(planned.commands) || !planned.commands.length) continue;
-    const cwd = job?.kind === "task" && job.ref?.projectPath ? job.ref.projectPath : projectRoot();
-    logLine(`[autopilot] verification run started: ${planned.commands.join(" && ")}`);
-    const results = [];
-    for (const command of planned.commands) {
-      const result = await runCheckCommand(command, cwd);
-      results.push(result);
-      if (!result.ok) break; // a failed check ends the run; the tail says why
-    }
-    const failed = results.filter((row) => !row.ok);
-    const state = failed.length ? "failed" : "passed";
-    const summary = failed.length
-      ? `${failed[0].command} failed${failed[0].timedOut ? " (timed out)" : ""}${failed[0].tail ? ` — ${failed[0].tail}` : ""}`
-      : `${results.length} check(s) passed`;
-    logLine(`[autopilot] verification run ${state}: ${summary}`);
-    try {
-      await mutateBoard((board) => {
-        let changed = false;
-        board.tasks = board.tasks.map((task) => {
-          if (task?.id !== planned.taskId || task.verificationRun?.key !== planned.key) return task;
-          changed = true;
-          return {
-            ...task,
-            verificationRun: { ...task.verificationRun, state, at: Date.now(), results },
-            logs: [...(task.logs ?? []), { at: Date.now(), kind: "status", text: `verification run ${state} — ${summary}` }].slice(-40),
-          };
-        });
-        // Verifying request rows keyed their queued run by request identity;
-        // stamp the observed state there too, or the row stays "queued" forever.
-        board.requests = board.requests.map((row) => {
-          if (!row || agentModes.requestKey(row) !== planned.taskId || row.verificationRun?.key !== planned.key) return row;
-          changed = true;
-          return {
-            ...row,
-            verificationRun: { ...row.verificationRun, state, at: Date.now(), results },
-            logs: [...(row.logs ?? []), { at: Date.now(), kind: "status", text: `verification run ${state} — ${summary}` }].slice(-40),
-          };
-        });
-        return changed ? board : null;
+  if (verificationDrain) return verificationDrain;
+  verificationDrain = (async () => {
+    do {
+      const workers = Array.from({ length: VERIFICATION_PARALLEL }, async () => {
+        while (verificationJobs.length) {
+          const planned = verificationJobs.shift();
+          if (!planned) break;
+          try {
+            await runVerificationJob(planned, job);
+          } catch (error) {
+            logLine(`[autopilot] verification run failed: ${error.message}`);
+          }
+        }
       });
-    } catch (error) {
-      logLine(`[autopilot] verification result not saved: ${error.message}`);
-    }
-  }
+      await Promise.all(workers);
+    } while (verificationJobs.length);
+  })().finally(() => {
+    verificationDrain = null;
+    // A job enqueued in the gap after the last worker stopped must not wait
+    // for the next finished run to be picked up.
+    if (verificationJobs.length) runVerificationJobs(job).catch(() => {});
+  });
+  return verificationDrain;
 }
 
 // A finished run's handoffs: the work it passed to the next executor agent and
@@ -10852,7 +10954,17 @@ function registerIpc() {
   });
 
   // ---- machine coordination + resource manager ----------------------------
-  ipcMain.handle("machine:status", async (_event, { kill = false } = {}) => ({ ok: true, status: await readMachineStatus({ kill }) }));
+  // A failed scan must reach the panel as a degraded result, not a rejected
+  // invoke: the renderer read has no catch, and a stale "free" badge would
+  // hide an unreadable lease board.
+  ipcMain.handle("machine:status", async (_event, { kill = false } = {}) => {
+    try {
+      return { ok: true, status: await readMachineStatus({ kill }) };
+    } catch (error) {
+      logLine(`[machine] status read failed: ${error?.stack || error}`);
+      return { ok: false, error: String(error?.message ?? error) };
+    }
+  });
   ipcMain.handle("machine:watch", async (_event, { running } = {}) => (running === false ? stopMachineWatch() : startMachineWatch()));
   ipcMain.handle("machine:set", async (_event, prefs) => {
     const settings = await readSettings();

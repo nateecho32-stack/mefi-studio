@@ -140,6 +140,8 @@ test("failed steps keep controls locked and explicit Retry recovers without stal
   const env = bootEnvironment({ reducedMotion: true, bridge: { tasksList: () => ++calls === 1 ? new Promise(() => {}) : Promise.resolve({ ok: true }) } });
   const pending = env.boot.run([{ id: "work", label: "Your work", load: () => env.boot.read("tasksList") }]);
   await env.advance(15200);
+  assert.equal(env.boot.state().phase, "loading", "a slow or stuck read never blocks before the backstop");
+  await env.advance(45200);
   assert.equal(env.boot.state().phase, "error");
   assert.equal(env.boot.state().progress, 0);
   assert.equal(env.main.inert, true); assert.equal(env.elements["boot-actions"].hidden, false);
@@ -159,6 +161,8 @@ test("unavailable results never become Ready and late work cannot reopen an expl
     { id: "late", label: "History", load: () => late.promise },
   ], (value) => { handoffs++; completed = value; });
   await env.advance(15200);
+  assert.equal(env.boot.state().phase, "loading", "slowness alone never flips the gate");
+  await env.advance(45200);
   assert.equal(env.boot.state().phase, "error"); assert.equal(env.boot.state().progress, 0);
   env.elements["boot-continue"].onclick();
   assert.equal(await ready, false); assert.equal(completed, false); assert.equal(handoffs, 1);

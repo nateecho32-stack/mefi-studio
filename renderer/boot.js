@@ -3,7 +3,12 @@
   "use strict";
 
   const MIN_SHOW_MS = 250;
-  const STEP_TIMEOUT_MS = 15000;
+  // A busy machine stretches startup reads into tens of seconds; slowness is
+  // never a failure. The 15s mark only logs a diagnostic and the gate keeps
+  // waiting for the step to genuinely settle. Only a step that never settles
+  // at all (a dead call) trips the backstop gate, well past any such lag.
+  const STEP_SLOW_MS = 15000;
+  const STEP_DEAD_MS = 60000;
   const FADE_MS = 180;
   const boot = { active: false, phase: "idle", epoch: 0, steps: [], promise: Promise.resolve(true), resolve: null, onReady: null };
   const el = {};
@@ -96,23 +101,28 @@
   async function attempt(retry = false) {
     const epoch = ++boot.epoch;
     const isCurrent = () => boot.active && boot.epoch === epoch;
-    if (retry) reads.clear(); // A timed-out shared read must not poison Retry.
+    if (retry) reads.clear(); // A failed step's shared read must not poison Retry.
     boot.phase = "loading";
     for (const step of boot.steps) step.status = "pending";
     paint();
     await Promise.all(boot.steps.map(async (step) => {
       step.status = "loading";
       paint();
-      let timer;
+      let slowTimer, deadTimer;
       try {
-        const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Startup step timed out")), STEP_TIMEOUT_MS); });
-        const result = await Promise.race([Promise.resolve().then(() => step.load({ retry, isCurrent })), timeout]);
+        // Slowness never errors the gate: the diagnostic fires, the real
+        // promise keeps racing, and only a never-settling call hits the
+        // backstop below. Genuine rejections still land in the catch.
+        const dead = new Promise((_, reject) => { deadTimer = setTimeout(() => reject(new Error("Startup step never finished")), STEP_DEAD_MS); });
+        slowTimer = setTimeout(() => { if (isCurrent()) console.warn(`Startup step "${step.id}" is slow (over ${STEP_SLOW_MS} ms) — waiting instead of blocking a busy machine.`); }, STEP_SLOW_MS);
+        const result = await Promise.race([Promise.resolve().then(() => step.load({ retry, isCurrent })), dead]);
         if (result === false || result?.ok === false) throw new Error("Startup step unavailable");
         if (isCurrent()) step.status = "ready";
       } catch {
         if (isCurrent()) step.status = "error";
       } finally {
-        clearTimeout(timer);
+        clearTimeout(slowTimer);
+        clearTimeout(deadTimer);
         if (isCurrent()) paint();
       }
     }));

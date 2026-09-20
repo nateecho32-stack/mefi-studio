@@ -2,7 +2,7 @@
 <html lang="en" data-starting>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'self' file:; frame-src https://open.spotify.com;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'self' file:; frame-src https://open.spotify.com;">
 <title>Mefi's Studio AI+ · Your workspace</title>
 <script id="startup-mode">if (['capture', 'smoke'].some(key => new URLSearchParams(location.search).get(key) === '1')) document.documentElement.removeAttribute('data-starting');</script>
 <style id="booklet-styles">/* Mefi's Studio AI+ — Club Blackout theme.
@@ -22247,6 +22247,9 @@ body.music-preview-active #idle-hud { display: none !important; }
   };
   const els = {};
   let initialized = false;
+  // Sequence token for store reads: a slow read that resolves after a newer
+  // one (poll tick, re-open, show snap-back) must not overwrite fresh content.
+  let loadSeq = 0;
   // Session refresh cadence while the sheet is open. The interval itself stops
   // while the window hides (boot.js's shared poll guard) and restarts when it
   // shows, and the tick bails while hidden or while the sheet is closed, so a
@@ -22274,10 +22277,14 @@ body.music-preview-active #idle-hud { display: none !important; }
   async function load() {
     if (!window.mefiStudio?.eyesState) {
       status("Desktop mode only — run npm start inside mefi-studio.", true);
+      treeNote("Desktop mode only — run npm start inside mefi-studio.");
       return;
     }
+    const seq = ++loadSeq;
     // The first read of the store can take a second or two on a busy machine;
-    // an empty column reads as "nothing here", so say what is happening.
+    // an empty column reads as "nothing here", so say what is happening. This
+    // is the pending state open() relies on: the sheet is already up while the
+    // read is in flight, and nothing here holds it hostage.
     if (!state.sessions.length) treeNote("Loading sessions…");
     try {
       const [stateResult, requests, checkpoints, briefing, collisions, service] = await Promise.all([
@@ -22288,6 +22295,9 @@ body.music-preview-active #idle-hud { display: none !important; }
         window.mefiStudio.eyesCollisions?.().catch(() => null) ?? null,
         window.mefiStudio.assistantState?.().catch(() => null) ?? null,
       ]);
+      // A newer read started while this one was in flight; drop the stale
+      // result instead of clobbering the content it already rendered.
+      if (seq !== loadSeq) return;
       if (!stateResult?.ok) {
         status(`session store unavailable: ${stateResult?.error ?? "unknown error"}`, true);
       }
@@ -22308,13 +22318,31 @@ body.music-preview-active #idle-hud { display: none !important; }
       renderTree();
       renderDetail();
       renderAssistant();
+      // A failed store read must not read as "nothing here": name the failure
+      // in the tree too, and let the next poll tick retry.
+      if (!stateResult?.ok && !state.sessions.length) {
+        treeNote(`session store unavailable: ${stateResult?.error ?? "unknown error"}`);
+      }
       if (!state.audit) runAudit();
-      window.mefiStudio?.machineStatus?.().then((result) => result?.ok && renderMachine(result.status));
+      window.mefiStudio?.machineStatus?.().then((result) => {
+        // A failed scan must read as degraded, never as a free machine.
+        if (result?.ok) renderMachine(result.status);
+        else if (els.machineLines) {
+          els.machineLines.textContent = `machine scan unavailable: ${result?.error ?? "unknown error"}`;
+          els.machineLines.style.color = "var(--bad)";
+        }
+      }).catch((error) => {
+        if (els.machineLines) els.machineLines.textContent = `machine scan failed: ${String(error?.message ?? error)}`;
+      });
       window.mefiStudio?.machineSet?.({}).then((result) => {
         if (result?.ok && els.machineAuto) els.machineAuto.checked = result.machine.autoKill !== false;
       });
     } catch (error) {
+      // Never leave the pending "Loading sessions…" note stuck: render the
+      // failure and let the poll retry.
+      if (seq !== loadSeq) return;
       status(`explorer failed: ${String(error?.message ?? error)}`, true);
+      treeNote(`explorer failed: ${String(error?.message ?? error)} — retrying on the next poll`);
     }
   }
 
@@ -23382,22 +23410,35 @@ body.music-preview-active #idle-hud { display: none !important; }
     // Finished group (the rail's folded node sends it).
     const assistant = params.assistant;
     if (params.folded) state.foldedOpen = true;
-    return load().then(() => {
+    // The first read of the store can take a second or two on a busy machine,
+    // so nothing here waits on it: the sheet opens at once into load()'s
+    // pending state ("Loading sessions…" until the read resolves), focus and
+    // assistant deep links land now, and the tree rows are asserted once the
+    // read completes. nav's claim() focuses a frame from now; its fallback
+    // keeps focus on the sheet while the tree holds only the loading note.
+    els.overlay.querySelector(".explorer-sheet")?.focus();
+    if (assistant === true && !els.overlay.hidden) {
+      els.input?.focus();
+      els.input?.scrollIntoView?.({ block: "nearest" });
+    } else if (assistant?.mode) runAssistant(assistant.mode, params.sessionId ?? state.selected, assistant.payload);
+    const settled = load();
+    // Back onto the tree rows once they exist — deliberately not gating open():
+    // a slow first read must never hold the sheet's startup. claim() focuses
+    // one frame after open(), when the tree holds only the non-focusable
+    // loading note, and renderTree() replaces any row it did focus — either
+    // way focus can end up on the bare sheet, so re-assert it on the row now
+    // that the rows exist. Only while the sheet is still up: a close during
+    // load() already handed focus back, and the next surface must keep it.
+    settled.then(() => {
       revealSelected();
-      // claim() focuses one frame after open(), when the tree holds only the
-      // non-focusable loading note, and renderTree() replaces any row it did
-      // focus — either way focus is left outside or on the bare sheet, so
-      // re-assert it on the row now that the rows exist.
       const sheet = els.overlay.querySelector(".explorer-sheet");
       const active = document.activeElement;
-      // Only while the sheet is still up: a close during load() already handed
-      // focus back, and the next surface must keep it.
       if (!els.overlay.hidden && (active === sheet || !els.overlay.contains(active))) (els.tree?.querySelector("li.selected") ?? sheet)?.focus();
-      if (assistant === true && !els.overlay.hidden) {
-        els.input?.focus();
-        els.input?.scrollIntoView?.({ block: "nearest" });
-      } else if (assistant?.mode) runAssistant(assistant.mode, params.sessionId ?? state.selected, assistant.payload);
     });
+    // load() handles its own errors; the promise stays unobserved on purpose
+    // so a slow or failed read can never block whoever opened us.
+    settled.catch(() => {});
+    return Promise.resolve();
   }
 
   function close() {
@@ -27401,7 +27442,12 @@ body.music-preview-active #idle-hud { display: none !important; }
   "use strict";
 
   const MIN_SHOW_MS = 250;
-  const STEP_TIMEOUT_MS = 15000;
+  // A busy machine stretches startup reads into tens of seconds; slowness is
+  // never a failure. The 15s mark only logs a diagnostic and the gate keeps
+  // waiting for the step to genuinely settle. Only a step that never settles
+  // at all (a dead call) trips the backstop gate, well past any such lag.
+  const STEP_SLOW_MS = 15000;
+  const STEP_DEAD_MS = 60000;
   const FADE_MS = 180;
   const boot = { active: false, phase: "idle", epoch: 0, steps: [], promise: Promise.resolve(true), resolve: null, onReady: null };
   const el = {};
@@ -27494,23 +27540,28 @@ body.music-preview-active #idle-hud { display: none !important; }
   async function attempt(retry = false) {
     const epoch = ++boot.epoch;
     const isCurrent = () => boot.active && boot.epoch === epoch;
-    if (retry) reads.clear(); // A timed-out shared read must not poison Retry.
+    if (retry) reads.clear(); // A failed step's shared read must not poison Retry.
     boot.phase = "loading";
     for (const step of boot.steps) step.status = "pending";
     paint();
     await Promise.all(boot.steps.map(async (step) => {
       step.status = "loading";
       paint();
-      let timer;
+      let slowTimer, deadTimer;
       try {
-        const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Startup step timed out")), STEP_TIMEOUT_MS); });
-        const result = await Promise.race([Promise.resolve().then(() => step.load({ retry, isCurrent })), timeout]);
+        // Slowness never errors the gate: the diagnostic fires, the real
+        // promise keeps racing, and only a never-settling call hits the
+        // backstop below. Genuine rejections still land in the catch.
+        const dead = new Promise((_, reject) => { deadTimer = setTimeout(() => reject(new Error("Startup step never finished")), STEP_DEAD_MS); });
+        slowTimer = setTimeout(() => { if (isCurrent()) console.warn(`Startup step "${step.id}" is slow (over ${STEP_SLOW_MS} ms) — waiting instead of blocking a busy machine.`); }, STEP_SLOW_MS);
+        const result = await Promise.race([Promise.resolve().then(() => step.load({ retry, isCurrent })), dead]);
         if (result === false || result?.ok === false) throw new Error("Startup step unavailable");
         if (isCurrent()) step.status = "ready";
       } catch {
         if (isCurrent()) step.status = "error";
       } finally {
-        clearTimeout(timer);
+        clearTimeout(slowTimer);
+        clearTimeout(deadTimer);
         if (isCurrent()) paint();
       }
     }));

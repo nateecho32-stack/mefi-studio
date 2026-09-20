@@ -374,6 +374,10 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn('ipcMain.handle("catalog:read", () => catalogDocument.read())', self.main)
         self.assertIn('path.join(STUDIO_ROOT, "data", fileName)', self.main)
         self.assertIn('http-equiv="Content-Security-Policy"', self.template)
+        # worker-src falls back to script-src, which lists no blob: — without an
+        # explicit worker-src the lag probe's blob worker is refused and the
+        # occlusion-vs-lag disambiguation silently degrades to the old sentinel.
+        self.assertIn("worker-src 'self' blob:;", self.template)
 
     def test_service_boots_from_when_ready_with_a_timeout_chain(self):
         self.assertIn("function startAssistant", self.main)
