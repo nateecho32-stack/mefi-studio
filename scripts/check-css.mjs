@@ -122,6 +122,9 @@ export function selectorClasses(selector) {
 export function findUnusedSelectors(cssText, usageText, { allow = [] } = {}) {
   const css = blankComments(cssText);
   const usage = new Set(usageText.match(/[\w-]+/g) ?? []);
+  const dynamicPrefixes = new Set();
+  for (const match of usageText.matchAll(/([\w-]+)[ \t]*\$\{/g)) dynamicPrefixes.add(match[1]);
+  const composed = (name) => [...dynamicPrefixes].some((prefix) => name === prefix || name.startsWith(`${prefix}-`));
   const allowed = new Set(allow);
   const unused = [];
   (function walk(from, to) {
@@ -131,7 +134,7 @@ export function findUnusedSelectors(cssText, usageText, { allow = [] } = {}) {
       if (parseDecls(css.slice(node.braceStart + 1, node.end - 1)).length === 0) continue;
       for (const selector of splitSelectorList(node.header)) {
         const classes = selectorClasses(selector);
-        const missing = classes.filter((name) => !usage.has(name) && !allowed.has(name));
+        const missing = classes.filter((name) => !usage.has(name) && !allowed.has(name) && !composed(name));
         if (classes.length > 0 && missing.length > 0) {
           unused.push({ selector, missing, line: css.slice(0, node.start).split("\n").length });
         }

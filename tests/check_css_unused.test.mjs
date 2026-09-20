@@ -74,6 +74,27 @@ test("findUnusedSelectors: comments in the stylesheet do not create usage", () =
   assert.equal(hits.length, 0, "token usage includes the sheet's own comment text, keeping it conservative");
 });
 
+test("findUnusedSelectors: classes composed by template-literal interpolation stay alive", () => {
+  const css = ".music-effect-orbitTrails::before { content: \"\"; }";
+  const usage = 'element("label", `music-effect ${effectClass}`, null, effects);';
+  const hits = findUnusedSelectors(css, usage);
+  assert.deepEqual(hits, [], `dynamic composition must not flag live classes: ${JSON.stringify(hits)}`);
+});
+
+test("findUnusedSelectors: interpolation prefixes do not revive classes outside their family", () => {
+  const css = ".totally-dead { color: red; }";
+  const usage = 'element("label", `music-effect ${effectClass}`);';
+  const hits = findUnusedSelectors(css, usage);
+  assert.deepEqual(hits.map((hit) => hit.missing), [["totally-dead"]]);
+});
+
+test("findUnusedSelectors: a prefix only counts when it touches an interpolation", () => {
+  const css = ".music-effect-orbitTrails { color: red; }";
+  const usage = 'element("label", "music-effect", null, effects);';
+  const hits = findUnusedSelectors(css, usage);
+  assert.equal(hits.length, 1, "a plain string near no interpolation composes nothing");
+});
+
 test("CLI --unused: unused class exits 1 with UNUSED-SELECTOR lines; usage from siblings exits 0", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "check-css-unused-"));
   try {
