@@ -6,9 +6,9 @@
   const api = () => window.mefiStudio;
   const rows = (value) => Array.isArray(value) ? value : [];
   const finite = (value) => typeof value === "number" && Number.isFinite(value);
-  const number = (value, digits = 0) => finite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: digits }) : "Unknown";
+  const number = (value, digits = 0) => finite(value) ? value.toLocaleString("en-US", { maximumFractionDigits: digits }) : "Unknown";
   const duration = (value) => finite(value) ? value < 1000 ? `${number(value)} ms` : `${number(value / 1000, 1)} s` : "Unmeasured";
-  const money = (value) => finite(value) ? `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: value < 0.01 ? 6 : 4 })}` : "Unknown";
+  const money = (value) => finite(value) ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: value < 0.01 ? 6 : 4 })}` : "Unknown";
   const when = (value) => {
     if (value == null || value === "") return "Time unavailable";
     const date = new Date(value);

@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   performanceSnapshot: () => ipcRenderer.invoke("performance:snapshot"),
   projectsList: () => ipcRenderer.invoke("projects:list"),
   projectsAdd: () => ipcRenderer.invoke("projects:add"),
+  projectsAddPath: (folder) => ipcRenderer.invoke("projects:add-path", { path: folder }),
   projectsSelect: (id, options) => ipcRenderer.invoke("projects:select", options ? { id, saveProgress: options.saveProgress === true } : id),
   projectsRemove: (id) => ipcRenderer.invoke("projects:remove", id),
   onProjects: (callback) => ipcRenderer.on("projects:changed", (_event, data) => callback(data)),

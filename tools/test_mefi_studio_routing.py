@@ -363,7 +363,9 @@ class MefiStudioRoutingTests(unittest.TestCase):
     def test_keyless_cli_and_local_routes_skip_the_encrypted_key_gate(self):
         assistant = _function_body(self.main, "runAssistant")
         self.assertRegex(assistant, r'keyless = provider === "grok".*provider === "claude".*provider === "lmstudio"')
-        self.assertIn("settings.customApiKeyEncrypted", assistant, "a custom key counts as a saved key")
+        self.assertIn('keyAvailable(settings, field)', assistant, "the gate reads keys through one source-aware check")
+        self.assertIn('"customApiKeyEncrypted"', assistant, "a custom key counts as a saved key")
+        self.assertNotIn("safeStorage.isEncryptionAvailable()", assistant, "an environment-supplied key never needs the OS keystore")
         self.assertIn("normalizeAutoProviders(settings.aiAutoProviders)", assistant, "an auto order with a keyless route also skips the key gate")
 
     def test_mefi_zai_provider_config_shape(self):

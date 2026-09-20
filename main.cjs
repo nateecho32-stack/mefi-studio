@@ -1,7 +1,9 @@
 // Mefi's Studio AI+ — Electron main process (CommonJS: Electron's most reliable main format).
 // Window + IPC for the catalog, the LÖVE launcher, and the optional speed probe.
 
-const { spawn } = require("node:child_process");
+// Host-specific spawns (cmd.exe, where.exe, taskkill) are translated on
+// Linux/macOS by scripts/platform.cjs; on Windows this is node's own spawn.
+const { spawn } = require("./scripts/platform.cjs");
 const { existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } = require("node:fs");
 const { appendFile, copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } = require("node:fs/promises");
 const os = require("node:os");
@@ -9,6 +11,7 @@ const crypto = require("node:crypto");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { resolveStudioPaths } = require("./scripts/paths.cjs");
+const credentials = require("./scripts/credentials.cjs");
 const { createProjects } = require("./scripts/projects.cjs");
 const backlog = require("./scripts/backlog.cjs");
 const boardGrowth = require("./scripts/board-growth.cjs");
@@ -607,6 +610,10 @@ async function applyRestart(files, { counted = true } = {}) {
 
 async function startUpdateWatch() {
   if (updater || SMOKE || CAPTURE || CLI_MODE) return { ok: true, running: Boolean(updater) };
+  // A container or service host runs a fixed checkout: there is no editor
+  // beside it whose saves should hot-swap modules, so the stat-walk poll and
+  // the restart-on-main.cjs behaviour are switched off for that install.
+  if (process.env.MEFI_STUDIO_NO_LIVE_UPDATE === "1") return { ok: true, running: false, disabled: true };
   if (!existsSync(path.join(UPDATE_SOURCE_ROOT, "renderer", "booklet.template.html"))) {
     send("update:event", updateEvent({ reason: "source tree not found", watching: false }));
     return { ok: false, error: "source tree not found" };
@@ -1364,12 +1371,20 @@ async function assistantSessionId() {
 }
 
 function decryptKey(settings, field) {
+  // An exported variable wins over the saved ciphertext and needs no keystore.
+  const fromEnv = credentials.envKey(field);
+  if (fromEnv) return fromEnv;
   if (!settings?.[field] || !safeStorage.isEncryptionAvailable()) return null;
   try {
     return safeStorage.decryptString(Buffer.from(settings[field], "base64"));
   } catch {
     return null;
   }
+}
+
+// Whether a credential field can be read now, from either source.
+function keyAvailable(settings, field) {
+  return credentials.hasKey(settings, field, { encryptionAvailable: safeStorage.isEncryptionAvailable() });
 }
 
 // Single-model routes have one model concept: when no heavy value is saved,
@@ -2226,8 +2241,8 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
   const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
   const keyless = provider === "grok" || provider === "claude" || provider === "antigravity" || provider === "lmstudio"
     || (provider === "auto" && normalizeAutoProviders(settings.aiAutoProviders).some((id) => ["grok", "claude", "antigravity", "lmstudio"].includes(id)));
-  const anyKey = Boolean(settings.apiKeyEncrypted || settings.zaiApiKeyEncrypted || settings.customApiKeyEncrypted);
-  if (!keyless && (!anyKey || !safeStorage.isEncryptionAvailable())) {
+  const anyKey = ["apiKeyEncrypted", "zaiApiKeyEncrypted", "customApiKeyEncrypted"].some((field) => keyAvailable(settings, field));
+  if (!keyless && !anyKey) {
     return { ok: false, error: "no API key saved - add a z.ai or OpenCode Go key in the Studio tab" };
   }
   const eyes = await getEyes();
@@ -2597,7 +2612,7 @@ function assistantEmptyState(now) {
 async function assistantKeyPresent() {
   try {
     const settings = await readSettings();
-    return Boolean(settings.apiKeyEncrypted || settings.zaiApiKeyEncrypted) && safeStorage.isEncryptionAvailable();
+    return keyAvailable(settings, "apiKeyEncrypted") || keyAvailable(settings, "zaiApiKeyEncrypted");
   } catch {
     return false;
   }
@@ -10253,12 +10268,11 @@ function registerIpc() {
   ipcMain.handle("performance:control", (event, payload) => performanceProfiler.control(payload?.action, event.sender));
   ipcMain.handle("performance:snapshot", () => ({ ok: true, ...performanceProfiler.snapshot() }));
   ipcMain.handle("projects:list", () => projects.list());
-  ipcMain.handle("projects:add", async () => {
+  // Registering a folder is the same whether a picker or a caller named it.
+  async function registerProjectFolder(folder) {
     try {
       const openBefore = projects.open();
-      const picked = await dialog.showOpenDialog(window, { title: "Open a project folder", properties: ["openDirectory"] });
-      if (picked.canceled || !picked.filePaths?.[0]) return { ...projects.list(), canceled: true };
-      const added = projects.add(picked.filePaths[0]);
+      const added = projects.add(folder);
       // Opening the first folder is how a project starts: it becomes active
       // and the workspace analyses it. Later folders are added alongside.
       if (!openBefore && added.id !== projects.active().id) {
@@ -10270,6 +10284,19 @@ function registerIpc() {
       send("projects:changed", result);
       return result;
     } catch (error) { return { ...projects.list(), ok: false, error: error.message }; }
+  }
+  ipcMain.handle("projects:add", async () => {
+    try {
+      const picked = await dialog.showOpenDialog(window, { title: "Open a project folder", properties: ["openDirectory"] });
+      if (picked.canceled || !picked.filePaths?.[0]) return { ...projects.list(), canceled: true };
+      return await registerProjectFolder(picked.filePaths[0]);
+    } catch (error) { return { ...projects.list(), ok: false, error: error.message }; }
+  });
+  // A headless host has no picker: the folder arrives from the caller. The
+  // project store still insists on an existing directory.
+  ipcMain.handle("projects:add-path", async (_event, { path: folder } = {}) => {
+    if (typeof folder !== "string" || !folder.trim()) return { ...projects.list(), ok: false, error: "Name the project folder to open." };
+    return registerProjectFolder(path.resolve(folder.trim()));
   });
   ipcMain.handle("projects:remove", async (_event, id) => {
     try {
@@ -10430,7 +10457,8 @@ function registerIpc() {
   ipcMain.handle("settings:get-key", async (_event, which = "opencode") => {
     const settings = await readSettings();
     // Status only — a saved key never crosses IPC back to the renderer.
-    return { saved: Boolean(decryptKey(settings, keyFieldFor(which))), encrypted: safeStorage.isEncryptionAvailable() };
+    const field = keyFieldFor(which);
+    return { saved: Boolean(decryptKey(settings, field)), encrypted: safeStorage.isEncryptionAvailable(), via: credentials.envKey(field) ? "env" : "settings" };
   });
 
   ipcMain.handle("settings:set-key", async (_event, apiKey, which = "opencode") => {
@@ -10489,9 +10517,9 @@ function registerIpc() {
       // settings only have the single-purpose aiFallbackOpenCode.
       autoProviders: normalizeAutoProviders(settings.aiAutoProviders),
       autoFallback: autoFallbackEnabled(settings),
-      hasZai: Boolean(settings.zaiApiKeyEncrypted),
-      hasOpenCode: Boolean(settings.apiKeyEncrypted),
-      hasCustom: Boolean(settings.customApiKeyEncrypted),
+      hasZai: keyAvailable(settings, "zaiApiKeyEncrypted"),
+      hasOpenCode: keyAvailable(settings, "apiKeyEncrypted"),
+      hasCustom: keyAvailable(settings, "customApiKeyEncrypted"),
       // Endpoint preferences (not secrets): the effective local server URL and
       // the user's own OpenAI-compatible endpoint, empty when unset.
       lmStudioEndpoint: normalizeLmStudioEndpoint(settings.lmStudioEndpoint),
@@ -10901,7 +10929,7 @@ function registerIpc() {
 
   ipcMain.handle("auditor:run", async () => {
     const settings = await readSettings();
-    const withAi = Boolean(settings.apiKeyEncrypted || settings.zaiApiKeyEncrypted) && safeStorage.isEncryptionAvailable();
+    const withAi = keyAvailable(settings, "apiKeyEncrypted") || keyAvailable(settings, "zaiApiKeyEncrypted");
     return assistantDemand(
       "auditor",
       async () => {

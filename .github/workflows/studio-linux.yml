@@ -1,0 +1,32 @@
+name: Studio checks (Linux)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    env:
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: npm ci
+      - name: Gates
+        run: npm run check
+      - name: Tests
+        run: npm test
+      - name: Headless smoke under Xvfb
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb libnss3 libgtk-3-0 libgbm1 libasound2 libxss1
+          xvfb-run -a node_modules/electron/dist/electron --no-sandbox --disable-gpu --disable-dev-shm-usage --password-store=basic --user-data-dir="$RUNNER_TEMP/mefi-user-data" . --smoke
