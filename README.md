@@ -115,9 +115,10 @@ project's ignored local `planning.json`.
   tree, scanning the machine, running the Auditor every five minutes, fixing and
   tidying on cadence, and (with Proactive on) briefing every five minutes.
 - Messaging is a real chatbot: multiline composer, quick-ask chips, follow-ups
-  resolved against the last reply, replies grounded in the current board and
-  inbox, and plain keywords that work without AI. Asking for work queues it;
-  vague chatter gets a yes/no offer instead of an accidental job.
+  resolved against the last reply, replies grounded in the current board,
+  inbox, open folder and the folder's own scanned plan documents, and plain
+  keywords that work without AI. Asking for work queues it; vague chatter gets
+  a yes/no offer instead of an accidental job.
 - **Work on it** makes a node the assistant's next piece of work — pinned to
   the front of the board and started at demand priority. Every session, todo and
   task acts as a **node folder** of typed context cells that compile into chat

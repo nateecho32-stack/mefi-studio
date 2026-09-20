@@ -390,6 +390,62 @@ test("eyes.js log tail: the tick also gates on the eyes tab, so other tabs make 
   assert.equal(fetches, 2, "show restores the exact cadence");
 });
 
+test("eyes.js log tail: one visibility toggle — hidden fetches nothing, show snaps exactly one immediate refresh, cadence resumes without duplicates", async () => {
+  const source = await readFile(path.join(STUDIO, "renderer", "eyes.js"), "utf8");
+  assert.equal(
+    (source.match(/document\.addEventListener\("visibilitychange"/g) || []).length,
+    1,
+    "the log tail registers exactly one visibilitychange listener, so no toggle can double-fire refreshes"
+  );
+  const visibility = source.match(/document\.addEventListener\("visibilitychange", \(\) => \{([\s\S]*?)\n    \}\);/);
+  assert.ok(visibility, "the log tail must handle visibility changes");
+  const tail = source.match(/async function refreshLog\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(tail, "refreshLog must exist");
+  const clock = makeClock();
+  const env = await loadBootWithClock(clock);
+  let fetches = 0;
+  const els = { tab: { hidden: false }, log: { textContent: "", scrollTop: 0, scrollHeight: 0 } };
+  const state = { mode: "log" };
+  const refreshLog = compile(tail[0], {
+    document: {
+      get hidden() {
+        return env.state.hidden;
+      },
+    },
+    window: {
+      mefiStudio: {
+        eyesLog: async () => {
+          fetches += 1;
+          return { ok: true, text: "log" };
+        },
+      },
+    },
+    els,
+  });
+  const onVisibility = compile(`() => {${visibility[1]}}`, {
+    document: {
+      get hidden() {
+        return env.state.hidden;
+      },
+    },
+    state,
+    refreshLog,
+  });
+  env.boot.pollStart("eyes.log", refreshLog, 5000);
+  clock.advance(10000); // baseline: two visible intervals
+  assert.equal(fetches, 2, "the visible cadence fetches once per 5s interval");
+  env.hide(); // the single visibility toggle the acceptance brief asks for
+  const beforeHidden = fetches;
+  clock.advance(12500); // 2.5 hidden intervals
+  assert.equal(fetches - beforeHidden, 0, "a hidden window fetches nothing");
+  env.show();
+  onVisibility(); // the shipped show listener snaps the tail back immediately
+  assert.equal(fetches - beforeHidden, 1, "show fires exactly one immediate refresh, never two");
+  assert.equal(env.live.size, 1, "the guard resumes exactly one interval");
+  clock.advance(15000); // three resumed intervals
+  assert.equal(fetches, 6, "three visible intervals add three fetches: a doubled count would be a leaked second interval or listener");
+});
+
 test("eyes.js log tail: without the guard the fallback interval holds the same start/stop lifecycle", async () => {
   const source = await readFile(path.join(STUDIO, "renderer", "eyes.js"), "utf8");
   assert.match(source, /else fallbackLogTimer = setInterval\(refreshLog, 5000\)/, "browser mode falls back to a raw log interval");

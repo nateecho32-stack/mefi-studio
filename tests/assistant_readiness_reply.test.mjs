@@ -17,6 +17,15 @@ test("host facts count the whole stored board before limiting prompt context", a
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", IDEAS_PATH: "ideas", BRIEFING_PATH: "briefing",
     assistantCache: { machine: { running: [] }, audit: { errors: 0, warnings: 0, findings: [] } }, updater: null,
     compareWork: () => 0, getAssistant: async () => ({ buildFacts, suggestWork: () => [] }),
+    projects: { current: () => ({ id: "project_trippy", name: "2d Trippy Hell", path: "C:/work/2d Trippy Hell" }) },
+    analyzerProjectReports: new Map([["project_trippy", {
+      name: "2d Trippy Hell", analyzedAt: "2026-09-20T18:55:00.000Z",
+      summary: { plans: 9, items: 240, missingReferences: 34 }, inventory: { files: 1200, sourceFiles: 974, testFiles: 2, documents: 86 },
+      limitations: ["Scan truncated at 1200 files or 6000 directory entries; absence of evidence is inconclusive."],
+      plans: [{ title: "newwork plan", source: "newwork-plan.md", sourceType: "file", status: "open", items: [{ text: "Add the next orbit", status: "open" }] }],
+      startingPoints: [{ title: "Continue: Add the next orbit", firstStep: "Read PLAN.md" }],
+    }]]),
+    assistantClip: (value, max = 160) => { const line = String(value ?? "").replace(/\s+/g, " ").trim(); return line.length > max ? `${line.slice(0, max - 1)}…` : line; },
   });
   vm.runInContext(source.slice(start, end), env);
   const facts = await env.assistantMessageFacts(Date.now(), "builder status");
@@ -25,6 +34,9 @@ test("host facts count the whole stored board before limiting prompt context", a
   assert.equal(facts.backlog.counts.readyTasks, 66);
   assert.equal(facts.backlog.counts.readyRequests, 1, "represented inbox work is not counted twice");
   assert.equal(facts.executor.running.length, 0, "settled entries never claim a live build worker");
+  assert.equal(facts.project.name, "2d Trippy Hell", "the open folder rides the facts");
+  assert.equal(facts.projectScan.plans[0].source, "newwork-plan.md", "the folder scan's plans ride the facts");
+  assert.equal(facts.projectScan.partial, true, "a truncated scan is disclosed as partial");
 });
 
 test("builder replies use full readiness counts and distinguish assistant activity from build workers", () => {

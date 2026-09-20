@@ -106,3 +106,55 @@ test("plans with only broad unknowns guide clarification without inventing a nex
   assert.doesNotMatch(reply.text, /Next question/);
   assert.deepEqual(reply.actions, []);
 });
+
+const projectScan = {
+  name: "2d Trippy Hell",
+  analyzedAt: "2026-09-20T18:55:00.000Z",
+  counts: { files: 1200, sourceFiles: 974, testFiles: 2, documents: 86, plans: 9, items: 240, missingReferences: 34 },
+  partial: true,
+  plans: [
+    { title: "newwork plan", source: "newwork-plan.md", sourceType: "file", status: "missing-reference", items: [{ text: "Continue: Add the next orbit", status: "related", claimedComplete: false }], omittedItems: 20 },
+    { title: "perf plan", source: "perf-plan.md", sourceType: "file", status: "open", items: [], omittedItems: 0 },
+  ],
+  startingPoints: [{ title: "Reconcile missing paths: scripts/foo.lua", firstStep: "Locate any replacement for scripts/foo.lua." }],
+  omittedPlans: 3,
+};
+
+test("the open folder and its scanned plan documents ride the facts", () => {
+  const facts = buildFacts({ project: { id: "project_trippy", name: "2d Trippy Hell", path: "C:/work/2d Trippy Hell" }, projectScan });
+  assert.equal(facts.project.name, "2d Trippy Hell");
+  assert.equal(facts.project.path, "C:/work/2d Trippy Hell");
+  assert.equal(facts.projectScan.plans[0].source, "newwork-plan.md");
+  assert.equal(facts.projectScan.plans[0].items[0].text, "Continue: Add the next orbit");
+  assert.equal(facts.projectScan.startingPoints[0].firstStep, "Locate any replacement for scripts/foo.lua.");
+  assert.equal(facts.projectScan.omittedPlans, 3);
+  assert.equal(buildFacts({}).project, null, "an unopened project stays unknown");
+  assert.equal(buildFacts({}).projectScan, null, "an unscanned folder stays unknown, not empty");
+});
+
+test("folder scan facts stay bounded and the keyless planning reply names them", () => {
+  const long = "x".repeat(10000);
+  const facts = buildFacts({
+    planning: { total: 0, active: 0, ready: 0, converting: 0, converted: 0, plans: [], truncated: 0 },
+    project: { name: "2d Trippy Hell", path: "C:/work/2d Trippy Hell" },
+    projectScan: {
+      name: long, analyzedAt: 42, partial: true,
+      plans: Array.from({ length: 9 }, (_, index) => ({ title: `${long} ${index}`, source: long, sourceType: "file", status: "open", items: Array.from({ length: 8 }, () => ({ text: long })), omittedItems: 4 })),
+      startingPoints: Array.from({ length: 6 }, () => ({ title: long, firstStep: long })),
+    },
+  });
+  assert.equal(facts.projectScan.plans.length, 6);
+  assert.equal(facts.projectScan.plans[0].items.length, 4);
+  assert.ok(facts.projectScan.plans[0].title.length <= 120);
+  assert.ok(facts.projectScan.plans[0].source.length <= 160);
+  assert.ok(facts.projectScan.plans[0].items[0].text.length <= 160);
+  assert.equal(facts.projectScan.startingPoints.length, 3);
+  assert.equal(facts.projectScan.analyzedAt, null, "a non-string scan timestamp is dropped");
+  const reply = localReply({ text: "show my plans", facts });
+  assert.match(reply.text, /No Studio plans are saved in this project/);
+  assert.match(reply.text, /folder scan found 6 plan documents \(partial scan\)/);
+  assert.match(reply.text, /\+3 more/);
+  assert.deepEqual(reply.actions, []);
+  const status = localReply({ text: "status", facts });
+  assert.ok(status.text.includes('Project: "2d Trippy Hell" at C:/work/2d Trippy Hell.'), status.text);
+});

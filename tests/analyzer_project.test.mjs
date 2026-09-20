@@ -198,6 +198,18 @@ test("large file and plan bounds disclose omissions and preserve saved plans", a
   assert.ok(result.limitations.some((line) => /Combined plan items truncated/.test(line)));
 });
 
+test("a deep bulk tree cannot starve the plan documents at the top of the project", async (t) => {
+  const entries = { "PLAN.md": "# PLAN\n- [ ] Add the next orbit\n", "README.md": "# Comet\n" };
+  for (let index = 0; index < PROJECT_LIMITS.files + 3; index += 1) entries[`deep/level-${index % 4}/file-${index}.js`] = "export const orbit = true;\n";
+  const root = await fixture(t, entries);
+  const result = await analyzeProject({ root });
+  assert.ok(result.inventory.files <= PROJECT_LIMITS.files);
+  assert.equal(result.plans.length, 1, "the root plan is read before the deep files exhaust the file bound");
+  assert.equal(result.plans[0].source, "PLAN.md");
+  assert.equal(result.plans[0].items[0].text, "Add the next orbit");
+  assert.ok(result.limitations.some((line) => /Scan truncated/.test(line)));
+});
+
 test("file and directory depth bounds stop scanning and disclose incomplete coverage", async (t) => {
   const entries = {};
   for (let index = 0; index < PROJECT_LIMITS.files + 3; index += 1) entries[`many/file-${index}.js`] = "export const orbit = true;\n";

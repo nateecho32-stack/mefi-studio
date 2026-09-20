@@ -4378,12 +4378,22 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
   switch (kind) {
     case "planning-status": {
       const planning = planningSummaryFacts(source.planning);
+      // The open folder has plans of its own: Studio's saved Plans and the
+      // plan documents already in the checkout are different stores, so the
+      // keyless reply must name the scanned ones instead of only saying that
+      // nothing is saved. A null scan stays unknown, never "no plans".
+      const scan = isObject(source.projectScan) ? source.projectScan : null;
+      const scanned = asArray(scan?.plans).filter(isObject);
+      const scanLine = scanned.length
+        ? `The folder scan found ${plural(scanned.length, "plan document")}${scan.partial ? " (partial scan)" : ""}: ${scanned.slice(0, 3).map((plan) => `"${clip(str(plan.title) || str(plan.source) || "plan", 40)}"`).join(", ")}${scanned.length > 3 ? ` +${scanned.length - 3} more` : ""}. Open Analyzer to review them and their starting points.`
+        : null;
       if (!planning || planning.total === null) {
         lines.push("I could not read the saved plans for this project. Open Plans to check them.");
+        if (scanLine) lines.push(scanLine);
         break;
       }
       if (planning.total === 0) {
-        lines.push("No saved plans in this project. Choose Plan an idea to work through an outcome and its unanswered questions before creating tasks.");
+        lines.push(scanLine ? `No Studio plans are saved in this project. ${scanLine}` : "No saved plans in this project. Choose Plan an idea to work through an outcome and its unanswered questions before creating tasks.");
         break;
       }
       const counts = [["active", "active"], ["ready", "ready to create tasks"], ["converting", "creating tasks"], ["converted", "handed to the task board"]]
@@ -4398,9 +4408,15 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
         if (uncertain) lines.push(`"${clip(uncertain.title, 35)}" has ${plural(uncertain.unknowns, "unknown")} to clarify.`);
       }
       if (planning.truncated > 0) lines.push(`${planning.truncated} more saved plans are available in Plans.`);
+      if (scanLine) lines.push(scanLine);
       break;
     }
     case "status": {
+      // The folder is part of the status: "this project" is the one open, and
+      // naming it keeps a reply from confusing sibling checkouts.
+      if (isObject(source.project) && str(source.project.name)) {
+        lines.push(`Project: "${clip(source.project.name, 60)}"${str(source.project.path) ? ` at ${clip(source.project.path, 200)}` : ""}.`);
+      }
       if (sessions) {
         const active = sessions.filter(isActiveFact);
         lines.push(`${plural(sessions.length, "session")} in the tree, ${active.length} active${active.length ? `: ${active.slice(0, 2).map(sessionLine).join(", ")}` : ""}.`);
@@ -4860,9 +4876,32 @@ function planningSummaryFacts(value) {
   };
 }
 
+// The folder scan the assistant may quote: the plan documents the Analyzer's
+// local project scan found in the open folder. Bounded again here so a caller
+// that skips the host projection cannot put a whole report into the facts.
+function normalizeProjectScan(projectScan) {
+  if (!isObject(projectScan)) return null;
+  const counts = isObject(projectScan.counts) ? Object.fromEntries(
+    ["files", "sourceFiles", "testFiles", "documents", "plans", "items", "missingReferences"].map((key) => [key, Math.max(0, Math.floor(num(projectScan.counts[key], 0)))])
+  ) : null;
+  return {
+    name: clip(str(projectScan.name), 100),
+    analyzedAt: str(projectScan.analyzedAt) || null,
+    counts,
+    partial: projectScan.partial === true,
+    plans: asArray(projectScan.plans).filter(isObject).slice(0, 6).map((plan) => ({
+      title: clip(str(plan.title), 120), source: clip(str(plan.source), 160), sourceType: str(plan.sourceType), status: str(plan.status),
+      items: asArray(plan.items).filter(isObject).slice(0, 4).map((item) => ({ text: clip(str(item.text), 160), status: str(item.status), claimedComplete: item.claimedComplete === true })),
+      omittedItems: Math.max(0, Math.floor(num(plan.omittedItems, 0))),
+    })),
+    startingPoints: asArray(projectScan.startingPoints).filter(isObject).slice(0, 3).map((point) => ({ title: clip(str(point.title), 140), firstStep: clip(str(point.firstStep), 200) })),
+    omittedPlans: Math.max(0, Math.floor(num(projectScan.omittedPlans, 0))),
+  };
+}
+
 // The facts shape localReply reads, from the raw store rows. main.cjs builds
 // the same shape (each source guarded, null when unreadable); the CLI uses it.
-export function buildFacts({ sessions = null, todos = null, collisions = null, presence = null, uncommitted = null, tasks = null, ideas = null, requests = null, executor = null, backlog = null, planning = null, machine = null, audit = null, briefing = null, update = null, work = null, resumed = null, focus = null, nodeFolders = null, lessons = null, log = null, query = "", now = Date.now() } = {}) {
+export function buildFacts({ sessions = null, todos = null, collisions = null, presence = null, uncommitted = null, tasks = null, ideas = null, requests = null, executor = null, backlog = null, planning = null, project = null, projectScan = null, machine = null, audit = null, briefing = null, update = null, work = null, resumed = null, focus = null, nodeFolders = null, lessons = null, log = null, query = "", now = Date.now() } = {}) {
   const todoRows = asArray(todos).filter((todo) => isObject(todo) && typeof todo.sessionId === "string");
   const focusRow = normalizeFocus(focus);
   const folderKey = focusRow ? nodeKeyOf(focusRow) : null;
@@ -4880,6 +4919,8 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
     focusFolder: folder
       ? { key: folderKey, count: asArray(folder.entries).filter(isObject).length, lines: nodeFolderLines(nodeFolders, folderKey, { limit: 4, now }) }
       : null,
+    project: isObject(project) ? { id: str(project.id), name: clip(str(project.name), 100), path: clip(str(project.path), 300) } : null,
+    projectScan: normalizeProjectScan(projectScan),
     memory: compiled.primer.length ? { primer: compiled.primer, flags: compiled.flags, dig: compiled.dig } : null,
     planning: planningSummaryFacts(planning),
     sessions: Array.isArray(sessions)

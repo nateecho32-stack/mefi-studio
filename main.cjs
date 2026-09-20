@@ -1338,7 +1338,9 @@ const ASSISTANT_OVERSEER_SYSTEM = [
 const ASSISTANT_CHAT_SYSTEM = [
   "You are the assistant in Mefi's Studio AI+: an always-on helper that watches several AI coding agents sharing one machine and one repo, tidies their work, and keeps the node tree organized.",
   "You run a roster of agents — watcher, machine, auditor, keeper, briefer, improver, grower, ideas, reference. New work can request those helpers; repeated work reuses the existing task without another helper dispatch. Questions stay in conversation.",
-  "You receive JSON: message (the user's latest text — always present, even when short), did (what you just did), thread, then facts (live sessions with todos, file collisions, tasks, the request inbox, ideas, machine, audit, briefing, update, the executor and its in-flight jobs, log — the assistant's own recent activity — suggestions — ranked next-work picks — and memory, a pushed primer of typed cells: dec/obs/bel/rsk/ver).",
+  "You receive JSON: message (the user's latest text — always present, even when short), did (what you just did), thread, then facts (the folder that project opened — project — live sessions with todos, file collisions, tasks, the request inbox, ideas, plans saved in Studio, the folder's own scanned plan documents — projectScan — machine, audit, briefing, update, the executor and its in-flight jobs, log — the assistant's own recent activity — suggestions — ranked next-work picks — and memory, a pushed primer of typed cells: dec/obs/bel/rsk/ver).",
+  "facts.project is the folder the user opened: its name and path. This project, here, the repo, and the folder's own name all refer to it — never say the user's project or folder is missing while it matches facts.project.",
+  "facts.projectScan is Studio's local scan of that folder: the plan documents already in the checkout, their items, and starting points. It is separate from facts.planning, which lists only plans saved in Studio's Plans. When the user asks you to read the plans in this project or in the open folder, answer from projectScan with its plan titles and files. A null projectScan means that folder has not been scanned yet — it never means the folder holds no plans.",
   "facts.memory is compiled against this message before you see it — do not search for it. If memory.dig is true, a remembered fact was superseded; address that row before acting.",
   "facts.log is the assistant's own activity tail (ticks omitted). Read it when asked about the log, what just happened, or what you have been doing; do not invent lines that are not there.",
   "facts.planning describes saved decision plans and their next open questions. These are separate from executable tasks: direct the user to Plans or Plan an idea to discuss questions, record decisions, review a specification, and explicitly create its tasks. Never claim a plan is running or has started builders just because it exists or is approved. A null planning section means unavailable, not no plans.",
@@ -5102,6 +5104,15 @@ function refreshTray() {
 // shaped by the module's own builder.
 async function assistantMessageFacts(now, query = "") {
   const raw = { sessions: null, todos: null, collisions: null, presence: null, uncommitted: null, tasks: null, ideas: null, planning: null, machine: null, audit: null, briefing: null, update: null, now };
+  // The folder the user opened is a fact in its own right: its identity and
+  // the Analyzer's local scan of it, so a reply about "this project" or about
+  // the plans in it answers for the folder the thread actually belongs to.
+  try {
+    const project = projects.current();
+    raw.project = { id: project.id, name: project.name, path: project.path };
+    const scanned = analyzerProjectReports.get(project.id);
+    if (scanned) raw.projectScan = projectScanFacts(scanned);
+  } catch {}
   // Independent sources run together. A slow audit or unavailable OpenCode
   // store must neither serialize all the other reads nor discard their facts.
   await Promise.allSettled([
@@ -5182,6 +5193,38 @@ async function assistantMessageFacts(now, query = "") {
   } catch {
     return raw;
   }
+}
+
+// The Analyzer's project report, bounded into the facts the assistant quotes:
+// which plan documents the open folder holds and the starting points that came
+// out of them. Null when the folder has not been scanned yet — unknown, not
+// empty, so a reply never claims a scan that never ran.
+function projectScanFacts(report) {
+  if (!report || typeof report !== "object") return null;
+  const counts = report.summary && typeof report.summary === "object" ? report.summary : {};
+  const inventory = report.inventory && typeof report.inventory === "object" ? report.inventory : {};
+  const count = (value) => (Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0);
+  const plans = Array.isArray(report.plans) ? report.plans : [];
+  return {
+    name: assistantClip(report.name, 100),
+    analyzedAt: typeof report.analyzedAt === "string" ? report.analyzedAt : null,
+    counts: {
+      files: count(inventory.files), sourceFiles: count(inventory.sourceFiles), testFiles: count(inventory.testFiles), documents: count(inventory.documents),
+      plans: count(counts.plans), items: count(counts.items), missingReferences: count(counts.missingReferences),
+    },
+    partial: (Array.isArray(report.limitations) ? report.limitations : []).some((line) => /truncat|limit/i.test(String(line))),
+    plans: plans.slice(0, 6).map((plan) => {
+      const items = plan && Array.isArray(plan.items) ? plan.items : [];
+      return {
+        title: assistantClip(plan?.title, 120), source: assistantClip(plan?.source, 160),
+        sourceType: String(plan?.sourceType ?? ""), status: String(plan?.status ?? ""),
+        items: items.slice(0, 4).map((item) => ({ text: assistantClip(item?.text, 160), status: String(item?.status ?? ""), claimedComplete: item?.claimedComplete === true })),
+        omittedItems: Math.max(0, items.length - 4),
+      };
+    }),
+    startingPoints: (Array.isArray(report.startingPoints) ? report.startingPoints : []).slice(0, 3).map((point) => ({ title: assistantClip(point?.title, 140), firstStep: assistantClip(point?.firstStep, 200) })),
+    omittedPlans: Math.max(0, plans.length - 6),
+  };
 }
 
 function assistantMessageId() {
@@ -8731,6 +8774,9 @@ async function spawnNextJob() {
   return "spawned";
 }
 
+// npm scripts exist only where a package.json defines them. Kept above the
+// verification queue so the drain contract test injects its own probe.
+const hasPackageJson = (dir) => Boolean(dir) && existsSync(path.join(dir, "package.json"));
 // The overseer's verification queue: done reports enqueue one keyed job per
 // attempt (assistant.scheduleVerificationOnDone) and this runner drains it.
 const verificationJobs = [];
@@ -8764,7 +8810,18 @@ const runCheckCommand = (command, cwd) => new Promise((resolve) => {
 // ends the run; the tail says why) — jobs are what run side by side.
 async function runVerificationJob(planned, fallbackJob) {
   if (!planned || !Array.isArray(planned.commands) || !planned.commands.length) return;
-  const cwd = planned.projectPath || (fallbackJob?.kind === "task" && fallbackJob.ref?.projectPath ? fallbackJob.ref.projectPath : projectRoot());
+  // A task's project can be any folder — a game checkout, a notes tree — and
+  // most define no npm scripts, so `npm run check` there dies ENOENT before
+  // any real check executes. Keep a project root that has its own
+  // package.json; otherwise move the job to the Studio checkout, whose
+  // package.json defines every command the overseer schedules (focused
+  // node/python commands carry absolute paths, so the move is safe for them).
+  const requested = planned.projectPath || (fallbackJob?.kind === "task" && fallbackJob.ref?.projectPath ? fallbackJob.ref.projectPath : projectRoot());
+  let cwd = requested;
+  if (!hasPackageJson(cwd)) {
+    cwd = hasPackageJson(SOURCE_ROOT) ? SOURCE_ROOT : STUDIO_ROOT;
+    logLine(`[autopilot] verification run moved to the Studio checkout: "${requested}" has no package.json`);
+  }
   logLine(`[autopilot] verification run started: ${planned.commands.join(" && ")}`);
   const results = [];
   for (const command of planned.commands) {
@@ -10022,6 +10079,18 @@ function projectBusyReason() {
   return null;
 }
 
+// Opening a folder reads it: start the Analyzer's project scan as soon as the
+// folder is adopted, so the assistant's projectScan facts and the Analyzer
+// share one bounded read even when the panel was never opened. A scan already
+// cached or in flight for this project is reused. The mode guard and the
+// typeof guard keep smoke runs and host test fixtures that extract
+// adoptProject from starting a scan they never stubbed.
+function kickProjectScan() {
+  if (typeof runAnalyzer !== "function" || !projects.open()) return;
+  if (SMOKE || CAPTURE || CLI_MODE) return;
+  runAnalyzer({ kind: "project" }).catch((error) => logError(`project scan failed: ${error.message}`));
+}
+
 // Move every project-bound piece of live state from `previous` to `next`:
 // save the outgoing conversation, load the next store, reset routing and
 // executor caches, then re-send every panel. Callers hold projectSwitching
@@ -10064,6 +10133,7 @@ async function adoptProject(previous, next, { savedAgents = 0, selected = false 
   send("eyes:requests", requests);
   send("eyes:ideas", ideas);
   send("eyes:assistant", { state: assistantState, event: { kind: "project", text: next.placeholder ? "No project open. Open a folder to start." : `Ready in ${next.name}.`, projectId: next.id } });
+  kickProjectScan();
   emitAutopilot();
   return { ...projects.list(), saved: savedAgents };
 }
@@ -11054,7 +11124,14 @@ function createWindow() {
       // window visibility or occlusion (capturePage fails with UnknownVizError
       // on a covered window).
       offscreen: CAPTURE,
-      backgroundThrottling: false,
+      // A real user's window must keep throttling enabled: forced-off
+      // throttling makes Electron never mark the renderer hidden, so minimize
+      // or covering the window fires no visibilitychange and every poll guard
+      // (boot.js pollStart, the eyes/tasks/explorer/idle hidden bails) stays
+      // unreachable — the app would keep fetching while hidden. Harness
+      // windows (smoke boots, capture) are never shown on purpose; they keep
+      // throttling off so their hidden boot gates and timers still run.
+      backgroundThrottling: !SMOKE && !CAPTURE,
     },
   });
   if (saved?.maximized) window.maximize();

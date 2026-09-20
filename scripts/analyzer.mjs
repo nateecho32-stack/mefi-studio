@@ -296,10 +296,44 @@ function planExcerpt(value, limitations, max = 700) {
 
 async function projectInventory(root, limitations) {
   const files = [], textFiles = [];
-  let entriesSeen = 0, bytesRead = 0;
+  let entriesSeen = 0, bytesRead = 0, truncated = false;
   const warn = (message) => limitations.add(message);
-  async function walk(dir, depth) {
-    if (depth > PROJECT_LIMITS.depth) { warn(`Directory depth limit (${PROJECT_LIMITS.depth}) reached; deeper files were not inspected.`); return; }
+  async function inspect(dir, entry) {
+    const full = path.join(dir, entry.name), relative = projectRelative(root, full);
+    try {
+      const canonical = await realpath(full);
+      if (!insideProject(root, canonical)) { warn("Paths resolving outside the selected project were skipped."); return; }
+      if (!entry.isFile()) return;
+      const info = await lstat(full);
+      if (!info.isFile() || info.isSymbolicLink()) return;
+      const ext = path.extname(entry.name).toLowerCase();
+      const document = DOCUMENT_EXTENSIONS.has(ext), source = isSourceFile(relative), test = isTestFile(relative) && SOURCE_EXTENSIONS.has(ext);
+      const file = { file: relative, source, test, document, bytes: info.size };
+      files.push(file);
+      if (!source && !test && !document && entry.name !== "package.json" && !["Cargo.toml", "pyproject.toml", "go.mod", "Makefile", "CMakeLists.txt"].includes(entry.name)) return;
+      if (info.size > PROJECT_LIMITS.fileBytes) { warn(`Files larger than ${PROJECT_LIMITS.fileBytes} bytes were inventoried without reading their content.`); return; }
+      if (bytesRead + info.size > PROJECT_LIMITS.totalBytes) { warn(`Content scan truncated at ${PROJECT_LIMITS.totalBytes} bytes; some inventoried files were not read.`); return; }
+      const handle = await open(full, "r");
+      try {
+        // Read at most the cap even when a file grows after its stat.
+        const buffer = Buffer.alloc(Math.min(info.size + 1, PROJECT_LIMITS.fileBytes + 1));
+        const result = await handle.read(buffer, 0, buffer.length, 0);
+        bytesRead += result.bytesRead;
+        if (result.bytesRead > info.size) warn("Files changed during the scan; refresh analysis after editing finishes.");
+        if (result.bytesRead > PROJECT_LIMITS.fileBytes) return;
+        const text = buffer.subarray(0, result.bytesRead).toString("utf8");
+        if (text.includes("\0")) return;
+        textFiles.push({ ...file, text, lines: text.split(/\r?\n/) });
+      } finally { await handle.close(); }
+    } catch (error) { warn(`Could not inspect ${safeExcerpt(relative, 120)} (${error.code || "read error"}).`); }
+  }
+  // Breadth-first by depth: a directory's own files are read before its
+  // subdirectories, so a plan at the top of a huge checkout is inventoried
+  // before one deep tree can exhaust the file, entry or byte budgets. Every
+  // existing cap still bounds the scan and the limitations still say so.
+  const queue = [[root, 0]];
+  while (queue.length && !truncated) {
+    const [dir, depth] = queue.shift();
     let directory;
     try {
       // Streaming directory iteration prevents one huge folder from defeating
@@ -308,42 +342,25 @@ async function projectInventory(root, limitations) {
       for await (const entry of directory) {
         if (++entriesSeen > PROJECT_LIMITS.entries || files.length >= PROJECT_LIMITS.files) {
           warn(`Scan truncated at ${PROJECT_LIMITS.files} files or ${PROJECT_LIMITS.entries} directory entries; absence of evidence is inconclusive.`);
+          truncated = true;
           break;
         }
         if (excludedPart(entry.name)) continue;
-        const full = path.join(dir, entry.name), relative = projectRelative(root, full);
         if (entry.isSymbolicLink()) { warn("Symbolic links and junctions were skipped; linked files are not evidence."); continue; }
-        try {
-          const canonical = await realpath(full);
-          if (!insideProject(root, canonical)) { warn("Paths resolving outside the selected project were skipped."); continue; }
-          if (entry.isDirectory()) { await walk(full, depth + 1); continue; }
-          if (!entry.isFile()) continue;
-          const info = await lstat(full);
-          if (!info.isFile() || info.isSymbolicLink()) continue;
-          const ext = path.extname(entry.name).toLowerCase();
-          const document = DOCUMENT_EXTENSIONS.has(ext), source = isSourceFile(relative), test = isTestFile(relative) && SOURCE_EXTENSIONS.has(ext);
-          const file = { file: relative, source, test, document, bytes: info.size };
-          files.push(file);
-          if (!source && !test && !document && entry.name !== "package.json" && !["Cargo.toml", "pyproject.toml", "go.mod", "Makefile", "CMakeLists.txt"].includes(entry.name)) continue;
-          if (info.size > PROJECT_LIMITS.fileBytes) { warn(`Files larger than ${PROJECT_LIMITS.fileBytes} bytes were inventoried without reading their content.`); continue; }
-          if (bytesRead + info.size > PROJECT_LIMITS.totalBytes) { warn(`Content scan truncated at ${PROJECT_LIMITS.totalBytes} bytes; some inventoried files were not read.`); continue; }
-          const handle = await open(full, "r");
+        if (entry.isDirectory()) {
+          if (depth + 1 > PROJECT_LIMITS.depth) { warn(`Directory depth limit (${PROJECT_LIMITS.depth}) reached; deeper files were not inspected.`); continue; }
+          const full = path.join(dir, entry.name);
           try {
-            // Read at most the cap even when a file grows after its stat.
-            const buffer = Buffer.alloc(Math.min(info.size + 1, PROJECT_LIMITS.fileBytes + 1));
-            const result = await handle.read(buffer, 0, buffer.length, 0);
-            bytesRead += result.bytesRead;
-            if (result.bytesRead > info.size) warn("Files changed during the scan; refresh analysis after editing finishes.");
-            if (result.bytesRead > PROJECT_LIMITS.fileBytes) continue;
-            const text = buffer.subarray(0, result.bytesRead).toString("utf8");
-            if (text.includes("\0")) continue;
-            textFiles.push({ ...file, text, lines: text.split(/\r?\n/) });
-          } finally { await handle.close(); }
-        } catch (error) { warn(`Could not inspect ${safeExcerpt(relative, 120)} (${error.code || "read error"}).`); }
+            const canonical = await realpath(full);
+            if (!insideProject(root, canonical)) { warn("Paths resolving outside the selected project were skipped."); continue; }
+          } catch { /* the directory's own listing reports an unreadable path */ }
+          queue.push([full, depth + 1]);
+          continue;
+        }
+        await inspect(dir, entry);
       }
-    } catch (error) { warn(`Could not read directory ${safeExcerpt(projectRelative(root, dir) || ".", 120)} (${error.code || "read error"}).`); }
+    } catch (error) { warn(`Could not read directory ${safeExcerpt(projectRelative(root, dir) || ".", 120)} (${error.code || "read error"})`); }
   }
-  await walk(root, 0);
   files.sort((a, b) => a.file.localeCompare(b.file));
   textFiles.sort((a, b) => a.file.localeCompare(b.file));
   return { files, textFiles };

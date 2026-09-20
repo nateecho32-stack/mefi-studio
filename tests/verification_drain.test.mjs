@@ -22,6 +22,9 @@ function drainHost({ tasks = [], requests = [] } = {}) {
   const spawns = [];
   const timers = [];
   const housekeeping = [];
+  // Roots that would actually host an npm script; a test can shrink this to
+  // exercise the payload fallback.
+  const pkgRoots = new Set(["C:/fixture-root", "C:/fixture-studio"]);
   const env = vm.createContext({
     // Every command is a controllable child: the test closes it by hand.
     spawn: (command, options) => {
@@ -50,12 +53,15 @@ function drainHost({ tasks = [], requests = [] } = {}) {
     },
     logLine: (text) => logs.push(String(text)),
     projectRoot: () => "C:/fixture-root",
+    SOURCE_ROOT: "C:/fixture-studio",
+    STUDIO_ROOT: "C:/fixture-payload",
+    hasPackageJson: (dir) => pkgRoots.has(dir),
     agentModes,
     autopilotHousekeeping: async () => { housekeeping.push(true); },
   });
   vm.runInContext(DRAIN, env);
   return {
-    env, spawns, timers, logs, housekeeping,
+    env, spawns, timers, logs, housekeeping, pkgRoots,
     board: () => structuredClone(board),
     queue: (job) => env.__queueVerification(job),
     queued: () => env.__verificationQueue.length,
@@ -120,4 +126,38 @@ test("a landed result kicks one coalesced housekeeping pass instead of waiting f
   timer.fn();
   await host.flush();
   assert.equal(host.housekeeping.length, 1, "one housekeeping pass settles the batch");
+});
+
+// A done report on a task from a project without its own package.json (a game
+// checkout, a notes tree) used to run `npm run check` in that folder and die
+// ENOENT before any real check executed.
+test("a project folder without package.json has its verification moved to the Studio checkout", async () => {
+  const host = drainHost({ tasks: [{ id: "t-game", title: "Game fix", verificationRun: { key: "k-game", state: "queued" } }] });
+  host.queue({ key: "k-game", taskId: "t-game", projectPath: "C:/game checkout", commands: ["npm run check"] });
+  const drain = host.env.runVerificationJobs({});
+  host.spawns[0].close(0);
+  await drain;
+  assert.equal(host.spawns[0].cwd, "C:/fixture-studio", "npm cannot run where no package.json defines the script");
+  assert.ok(host.logs.some((line) => line.includes("has no package.json")), "the move is logged");
+  assert.equal(host.board().tasks[0].verificationRun.state, "passed", "the check itself still settles the card");
+});
+
+test("a project that defines its own npm scripts keeps its own root", async () => {
+  const host = drainHost();
+  host.queue({ key: "k-app", taskId: "t-app", projectPath: "C:/fixture-root", commands: ["npm run check"] });
+  const drain = host.env.runVerificationJobs({});
+  host.spawns[0].close(0);
+  await drain;
+  assert.equal(host.spawns[0].cwd, "C:/fixture-root");
+  assert.equal(host.logs.some((line) => line.includes("has no package.json")), false, "no move was logged");
+});
+
+test("a payload install with no npm checkout falls back to the app payload root", async () => {
+  const host = drainHost();
+  host.pkgRoots.delete("C:/fixture-studio");
+  host.queue({ key: "k-orphan", taskId: "t-orphan", projectPath: "C:/game checkout", commands: ["npm run check"] });
+  const drain = host.env.runVerificationJobs({});
+  host.spawns[0].close(0);
+  await drain;
+  assert.equal(host.spawns[0].cwd, "C:/fixture-payload");
 });
