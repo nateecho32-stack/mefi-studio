@@ -11,14 +11,22 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   DEFAULT_JEV_MODEL,
+  DEFAULT_JEV_ROUTE,
+  JEV_ROUTES,
+  buildClassifyRequest,
   buildEvaluationRequest,
+  buildSystemoneRequest,
   classify,
   evaluationUrl,
   gatewayConfig,
   isJevModel,
+  isJevRoute,
   listModels,
+  normalizeJevRoute,
   parseAnswers,
   resolveApiKey,
+  resolveJevRoute,
+  systemoneUrl,
   validateQuestionSpec,
   validateWireAnswers,
 } from "../scripts/decision-client.mjs";
@@ -42,12 +50,44 @@ test("gateway config: defaults, env overrides, clamps", () => {
   const defaults = gatewayConfig({ env: {} });
   assert.equal(defaults.model, DEFAULT_JEV_MODEL);
   assert.equal(defaults.baseUrl, "https://ai-gateway.vercel.sh/v1");
+  assert.equal(defaults.route, "vercel");
+  assert.equal(defaults.routeLabel, "Vercel AI Gateway");
+  assert.equal(defaults.protocol, "evaluation");
   assert.equal(defaults.timeoutMs, 15000);
   const overridden = gatewayConfig({ env: { MEFI_JEV_MODEL: "typesafe-ai/jev-next", MEFI_AI_GATEWAY_BASE_URL: "https://proxy.example/v1/", MEFI_JEV_TIMEOUT_MS: "1" } });
   assert.equal(overridden.model, "typesafe-ai/jev-next");
   assert.equal(overridden.baseUrl, "https://proxy.example/v1", "trailing slash stripped");
   assert.equal(overridden.timeoutMs, 1000, "timeout clamps to its floor, never zero");
   assert.equal(gatewayConfig({ env: { MEFI_JEV_TIMEOUT_MS: "", MEFI_JEV_MAX_STATE_CHARS: " " } }).timeoutMs, 15000, "empty shell overrides retain defaults");
+});
+
+test("routes: the Jev API is a first-class route with its own endpoint, model and env", () => {
+  const direct = gatewayConfig({ env: {}, route: "typesafe" });
+  assert.equal(direct.route, "typesafe");
+  assert.equal(direct.routeLabel, "TypeSafe Jev API");
+  assert.equal(direct.protocol, "systemone");
+  assert.equal(direct.baseUrl, "https://api.typesafe.ai/v1");
+  assert.equal(direct.model, "jev-1.13.0");
+  assert.equal(gatewayConfig({ env: { MEFI_JEV_ROUTE: "typesafe" } }).route, "typesafe", "the env selects the route");
+  assert.equal(gatewayConfig({ env: { MEFI_JEV_ROUTE: "typesafe" }, route: "vercel" }).route, "vercel", "an explicit route wins over the env");
+  assert.equal(gatewayConfig({ env: { MEFI_JEV_ROUTE: "nope" } }).route, "vercel", "an unknown env route falls back, never guesses");
+  assert.equal(gatewayConfig({ env: {}, route: "TYPESAFE" }).route, "typesafe", "route names are case-insensitive");
+  assert.deepEqual(Object.keys(JEV_ROUTES).sort(), ["typesafe", "vercel"]);
+});
+
+test("route helpers keep the set closed and the default stable", () => {
+  assert.equal(DEFAULT_JEV_ROUTE, "vercel");
+  assert.equal(isJevRoute("vercel"), true);
+  assert.equal(isJevRoute("typesafe"), true);
+  assert.equal(isJevRoute(" TYPESAFE "), true);
+  assert.equal(isJevRoute("openrouter"), false);
+  assert.equal(isJevRoute(""), false);
+  assert.equal(normalizeJevRoute("nope"), "vercel");
+  assert.equal(normalizeJevRoute("typesafe"), "typesafe");
+  assert.equal(resolveJevRoute({ jevRoute: "typesafe" }, {}), "typesafe");
+  assert.equal(resolveJevRoute({ jevRoute: "typesafe" }, { MEFI_JEV_ROUTE: "vercel" }), "vercel");
+  assert.equal(resolveJevRoute({ jevRoute: "garbage" }, {}), "vercel");
+  assert.equal(resolveJevRoute(null, {}), "vercel");
 });
 
 test("evaluationUrl resolves against the gateway origin (v4/ai/evaluation-model)", () => {
@@ -67,6 +107,19 @@ test("key resolution: env wins, then the encrypted settings field, then null", (
   assert.equal(resolveApiKey({ env: {}, settings: { gatewayApiKeyEncrypted: "x" }, decrypt: () => { throw new Error("keystore locked"); } }), null);
   const longKey = "x".repeat(400);
   assert.equal(resolveApiKey({ env: { AI_GATEWAY_API_KEY: longKey } }).key, longKey, "credentials are never truncated");
+});
+
+test("key resolution follows the route: a key is never sent to the other endpoint", () => {
+  const decrypt = (_settings, field) => ({ gatewayApiKeyEncrypted: "gateway-key", jevApiKeyEncrypted: "typesafe-key" }[field] ?? null);
+  assert.deepEqual(resolveApiKey({ env: { TYPESAFE_API_KEY: "env-typesafe" }, route: "typesafe" }), { key: "env-typesafe", via: "env" });
+  assert.deepEqual(resolveApiKey({ env: { MEFI_STUDIO_JEV_KEY: " studio-jev " }, route: "typesafe" }), { key: "studio-jev", via: "env" });
+  assert.deepEqual(resolveApiKey({ env: {}, settings: { jevApiKeyEncrypted: "x" }, decrypt, route: "typesafe" }), { key: "typesafe-key", via: "settings" });
+  assert.deepEqual(resolveApiKey({ env: {}, settings: { gatewayApiKeyEncrypted: "x" }, decrypt, route: "vercel" }), { key: "gateway-key", via: "settings" });
+  assert.equal(resolveApiKey({ env: {}, settings: { gatewayApiKeyEncrypted: "x" }, decrypt, route: "typesafe" }), null, "the gateway key is not a Jev API key");
+  assert.equal(resolveApiKey({ env: { AI_GATEWAY_API_KEY: "gateway-env" }, route: "typesafe" }), null, "gateway env keys never authorize the Jev API route");
+  assert.equal(resolveApiKey({ env: { TYPESAFE_API_KEY: "typesafe-env" }, route: "vercel" }), null, "Jev API env keys never authorize the gateway route");
+  assert.deepEqual(resolveApiKey({ env: { MEFI_JEV_ROUTE: "typesafe", TYPESAFE_API_KEY: "k" } }), { key: "k", via: "env" }, "the env route selects its own credential");
+  assert.deepEqual(resolveApiKey({ env: { MEFI_JEV_ROUTE: "typesafe" }, settings: { jevApiKeyEncrypted: "x" }, decrypt }), { key: "typesafe-key", via: "settings" });
 });
 
 // ---- question specs ---------------------------------------------------------------
@@ -110,6 +163,36 @@ test("buildEvaluationRequest: id-keyed questions, criteria maps, noul becomes bo
   );
 });
 
+test("buildSystemoneRequest: the Jev API wire names the model in the body and keeps noul", () => {
+  const config = { ...gatewayConfig({ env: {}, route: "typesafe" }), apiKey: KEY };
+  const request = buildSystemoneRequest({
+    config,
+    questions: [
+      { id: "rel", type: "choice", prompt: "Compare A to B", options: ["same_obligation", "unrelated"] },
+      { id: "worth", type: "noul", prompt: "Is it blocked?" },
+    ],
+    state: "state text",
+  });
+  assert.equal(request.url, "https://api.typesafe.ai/v1/systemone");
+  assert.equal(request.headers.authorization, `Bearer ${KEY}`);
+  assert.equal(request.headers["ai-model-id"], undefined, "no gateway protocol headers on the direct wire");
+  assert.equal(request.headers["ai-evaluation-model-specification-version"], undefined);
+  assert.equal(request.body.model, "jev-1.13.0", "the direct API names the model in the body");
+  assert.deepEqual(request.body.questions.rel, { type: "choice", instructions: "Compare A to B", criteria: { same_obligation: "same_obligation", unrelated: "unrelated" } });
+  assert.deepEqual(request.body.questions.worth, { type: "noul", instructions: "Is it blocked?" }, "the direct API names the yes/no type noul");
+  assert.equal(Object.keys(request.body).sort().join(","), "model,questions,state");
+  const clipped = buildSystemoneRequest({ config: { ...config, maxStateChars: 100 }, questions: SPEC_ONE, state: "x".repeat(5000) });
+  assert.ok(clipped.body.state.length <= 100);
+  assert.throws(
+    () => buildSystemoneRequest({ config, questions: [{ id: "s", type: "score", prompt: "p", levels: "l" }], state: "s" }),
+    /not mapped to the Jev API wire/
+  );
+  assert.equal(buildClassifyRequest({ config, questions: SPEC_ONE, state: "s" }).url, systemoneUrl(config.baseUrl));
+  assert.equal(buildClassifyRequest({ config: { ...config, protocol: "evaluation" }, questions: SPEC_ONE, state: "s" }).url, evaluationUrl(config.baseUrl));
+  assert.equal(systemoneUrl("https://proxy.example/v9"), "https://proxy.example/v9/systemone");
+  assert.equal(systemoneUrl("https://proxy.example/"), "https://proxy.example/systemone");
+});
+
 test("validateWireAnswers validates strictly against the question specs", () => {
   const specs = [
     { id: "rel", type: "choice", prompt: "p", options: ["same_obligation", "unrelated"] },
@@ -121,6 +204,15 @@ test("validateWireAnswers validates strictly against the question specs", () => 
   );
   assert.equal(good.ok, true);
   assert.deepEqual(good.answers, { rel: { choice: "same_obligation" }, blocked: { noul: 0.25 } });
+  // TypeSafe's own API answers the yes/no type as noul/noul — same range check.
+  const direct = validateWireAnswers(
+    { rel: { type: "choice", choice: "unrelated", confidence: 0.9 }, blocked: { type: "noul", noul: 0.75 } },
+    specs
+  );
+  assert.equal(direct.ok, true);
+  assert.deepEqual(direct.answers, { rel: { choice: "unrelated" }, blocked: { noul: 0.75 } });
+  assert.equal(validateWireAnswers({ rel: { type: "choice", choice: "unrelated" }, blocked: { type: "noul", noul: 1.5 } }, specs).ok, false);
+  assert.equal(validateWireAnswers({ rel: { type: "choice", choice: "unrelated" }, blocked: { noul: 0.5 } }, specs).ok, false, "an untyped answer is refused on both wires");
   const bad = validateWireAnswers({ rel: { type: "choice", choice: "vibes" }, blocked: { type: "boolean", probability: 1.5 }, extra: { type: "choice", choice: "same_obligation" } }, specs);
   assert.equal(bad.ok, false);
   assert.ok(bad.errors.some((line) => line.includes("not one of")));
@@ -211,6 +303,40 @@ test("classify: happy path hits the evaluation endpoint and returns chargeable u
   assert.ok(body.state.includes("state text"));
 });
 
+test("classify routes through TypeSafe's Jev API and accepts its noul answers", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    return okResponse({
+      model: "jev-1.13.0",
+      answers: {
+        rel: { type: "choice", choice: "same_obligation", confidence: 0.8, probabilities: { same_obligation: 0.87, unrelated: 0.13 } },
+        blocked: { type: "noul", noul: 0.25, confidence: 0.5 },
+      },
+      usage: { input_tokens: 120, output_tokens: 8 },
+    });
+  };
+  const questions = [
+    { id: "rel", type: "choice", prompt: "Compare A to B", options: ["same_obligation", "unrelated"] },
+    { id: "blocked", type: "noul", prompt: "Is it blocked?" },
+  ];
+  const result = await classify({ questions, state: "state text", apiKey: KEY, config: gatewayConfig({ env: {}, route: "typesafe" }), fetchImpl });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.answers, { rel: { choice: "same_obligation" }, blocked: { noul: 0.25 } });
+  assert.equal(result.model, "jev-1.13.0", "the versioned model that answered is reported");
+  assert.deepEqual(result.usage, { modelCalls: 1, promptTokens: 120, completionTokens: 8 });
+  assert.equal(calls[0].url, "https://api.typesafe.ai/v1/systemone");
+  assert.equal(calls[0].options.headers["ai-model-id"], undefined);
+  const body = JSON.parse(calls[0].options.body);
+  assert.equal(body.model, "jev-1.13.0");
+  assert.equal(body.questions.blocked.type, "noul");
+  // A versioned answer id outside the Jev family never replaces the pin.
+  const stranger = await classify({ questions: SPEC_ONE, state: "s", apiKey: KEY, config: gatewayConfig({ env: {}, route: "typesafe" }),
+    fetchImpl: async () => okResponse({ model: "gpt-5.5", answers: { rel: { type: "choice", choice: "unrelated" } }, usage: {} }) });
+  assert.equal(stranger.ok, true);
+  assert.equal(stranger.model, "jev-1.13.0");
+});
+
 test("classify: transport, HTTP, and unusable-reply failures never invent answers", async () => {
   const networkDown = async () => {
     throw new Error("ECONNREFUSED");
@@ -224,7 +350,9 @@ test("classify: transport, HTTP, and unusable-reply failures never invent answer
   const unusable = await classify({ questions: SPEC_ONE, state: "s", apiKey: KEY, fetchImpl: empty });
   assert.equal(unusable.ok, false, "a reply with no answers is an error, never a guess");
   assert.match(unusable.error, /no answer given/);
-  assert.equal((await classify({ questions: SPEC_ONE, state: "s", apiKey: null, fetchImpl: okResponse })).error.includes("no AI gateway key"), true);
+  assert.match((await classify({ questions: SPEC_ONE, state: "s", apiKey: null, fetchImpl: okResponse })).error, /no Jev key configured/);
+  const directMissing = await classify({ questions: SPEC_ONE, state: "s", apiKey: null, config: gatewayConfig({ env: {}, route: "typesafe" }), fetchImpl: okResponse });
+  assert.match(directMissing.error, /no Jev key configured for the TypeSafe Jev API route/);
 });
 
 test("classify: the timeout aborts the request", async () => {
@@ -393,12 +521,15 @@ test("message classification routes claims to verification — a claim is not ev
 
 // ---- the wiring keeps the key off disk and out of logs -----------------------------
 
-test("the gateway key follows the studio's keystore contract", async () => {
+test("the Jev keys follow the studio's keystore contract", async () => {
   const { readFile } = await import("node:fs/promises");
   const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
   assert.match(source, /--set-gateway-key/);
   assert.match(source, /gatewayApiKeyEncrypted/);
   assert.match(source, /MEFI_STUDIO_GATEWAY_KEY/);
+  assert.match(source, /--set-jev-key/);
+  assert.match(source, /jevApiKeyEncrypted/);
+  assert.match(source, /MEFI_STUDIO_JEV_KEY/);
   assert.match(source, /refusing to store the key in plaintext/);
   // status only ever crosses IPC as a boolean
   assert.match(source, /Status only — a saved key never crosses IPC/);

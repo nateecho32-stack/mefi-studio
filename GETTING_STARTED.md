@@ -3,8 +3,16 @@
 The in-app walkthrough opens automatically on your first launch and explains
 the five steps below. You can close it whenever you want; it remembers your
 place and stays closed on later launches. Choose **Start here** in the sidebar
-or open the guide from Help to continue. Its links open the relevant controls;
-reading the guide never creates or starts work.
+or open the guide from Help to continue.
+
+Each lesson has a **Walk me…** button. It keeps a small coach in the corner
+while it opens the matching menu with you and highlights the exact control: the
+project **+**, the connection groups, the task box, Live work, and Review. Press
+**Done — next stop** and the coach travels to the next menu; the first stop ticks
+itself off as soon as you select a project. **Esc** or **End tour** puts the
+coach away, and the setup trail under the workspace invitation shows what is
+done. Reading the guide never creates or starts work, so nothing runs until you
+do it yourself.
 
 ## 1. Choose the folder you want to work on
 
@@ -20,8 +28,11 @@ preference is saved for all projects and can be changed at any time.
 ## 2. Connect your tools
 
 Open **Settings & connections**. Configure your assistant connection and coding
-provider using the connection controls there. Conversation and coding are
-separate capabilities: saving an assistant key alone does not prove a coding
+provider using the connection controls there, or choose **Run auto setup** to
+apply a configuration from the keys and CLIs already on this machine. The setup
+overview above the controls shows what was detected; auto setup explains each
+choice and never sends a request or changes a saved key. Conversation and coding
+are separate capabilities: saving an assistant key alone does not prove a coding
 worker can start. Read the connection result before starting a task. The model
 catalog, manual planning and browsing saved work remain available without AI.
 

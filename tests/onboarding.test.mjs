@@ -8,10 +8,10 @@ const navSource = await readFile(new URL("../renderer/nav.js", import.meta.url),
 const KEY = "mefiStudio.walkthrough.v1";
 
 function environment(storage = new Map(), { storageDenied = false } = {}) {
-  const elements = new Map(); const routes = []; const claims = []; const releases = [];
+  const elements = new Map(); const routes = []; const claims = []; const releases = []; const listeners = new Map();
   let document;
   class Element {
-    constructor(tag = "div") { this.tag = tag; this.children = []; this.listeners = {}; this.attrs = {}; this.dataset = {}; this.hidden = false; this.disabled = false; this.clicks = 0; this.classList = { toggle() {} }; }
+    constructor(tag = "div") { this.tag = tag; this.children = []; this.listeners = {}; this.attrs = {}; this.dataset = {}; this.hidden = false; this.disabled = false; this.clicks = 0; const classes = new Set(); this.classList = { add: (...names) => names.forEach((name) => classes.add(name)), remove: (...names) => names.forEach((name) => classes.delete(name)), contains: (name) => classes.has(name), toggle() {} }; }
     set textContent(value) { this.copy = String(value); this.children = []; }
     get textContent() { return (this.copy || "") + this.children.map((item) => item.textContent).join(""); }
     replaceChildren(...children) { this.children = []; this.append(...children); }
@@ -31,19 +31,23 @@ function environment(storage = new Map(), { storageDenied = false } = {}) {
   }
   const get = (id) => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   const el = (name) => get(`walkthrough-${name}`);
+  const query = (selector) => get(`query:${selector}`);
   document = { activeElement: null, readyState: "loading", body: new Element(), getElementById: get,
     createElement: (tag) => new Element(tag), createElementNS: (_, tag) => new Element(tag),
-    querySelector: () => get("sidebar-guide"), querySelectorAll: () => [], addEventListener() {},
+    querySelector: query, querySelectorAll: () => [], addEventListener() {},
   };
   for (const id of ["back", "next", "action", "secondary", "dismiss"]) el(id).tag = "button";
   el("overlay").hidden = true;
+  el("coach").hidden = true;
   el("sheet").append(el("steps"), el("action"), el("secondary"), el("back"), el("next"));
   el("overlay").append(el("sheet"));
   const window = {
     MefiNav: { go: (id) => routes.push(id), claim: (id) => claims.push(id), release: (id) => releases.push(id) },
     // The guide may never invoke a provider, project writer or task API.
     mefiStudio: new Proxy({}, { get() { throw new Error("walkthrough touched host API"); } }),
-    addEventListener() {}, dispatchEvent() {},
+    addEventListener(type, fn) { const list = listeners.get(type) ?? []; list.push(fn); listeners.set(type, list); },
+    removeEventListener(type, fn) { const list = listeners.get(type) ?? []; const at = list.indexOf(fn); if (at >= 0) list.splice(at, 1); },
+    dispatchEvent() {},
   };
   const context = vm.createContext({ window, document, localStorage: {
     getItem: (key) => { if (storageDenied) throw new Error("storage unavailable"); return storage.get(key) ?? null; },
@@ -51,7 +55,10 @@ function environment(storage = new Map(), { storageDenied = false } = {}) {
   }, URLSearchParams, setTimeout, clearTimeout, console });
   vm.runInContext(source, context);
   window.MefiOnboarding.init();
-  return { guide: window.MefiOnboarding, el, get, routes, claims, releases, storage, document, context };
+  function emit(type, event = {}) {
+    for (const fn of [...(listeners.get(type) || [])]) fn({ type, target: null, preventDefault() {}, stopPropagation() {}, ...event });
+  }
+  return { guide: window.MefiOnboarding, el, get, query, routes, claims, releases, storage, document, context, emit };
 }
 
 test("first launch opens the guide once and closing it keeps the saved guide available", () => {
@@ -161,6 +168,86 @@ test("guide completion only dismisses the guide; lessons can be revisited", () =
   reloaded.el("steps").children[0].click();
   assert.equal(reloaded.el("back").disabled, true);
   assert.match(reloaded.el("progress").textContent, /Step 1 of 5/);
+});
+
+test("walk with me stays in the corner, follows the menus and highlights the real control", () => {
+  const env = environment(); env.guide.startup();
+  env.el("action").click();
+  assert.equal(env.el("overlay").hidden, true);
+  assert.equal(env.el("coach").hidden, false);
+  assert.deepEqual(env.routes, ["workspace"]);
+  assert.deepEqual(env.releases, ["onboarding"]);
+  assert.equal(env.get("workspace-mode-work").clicks, 0);
+  assert.match(env.el("coach-progress").textContent, /Step 1 of 5 · Your workspace/);
+  assert.match(env.el("coach-copy").textContent, /project menu/);
+  assert.equal(env.query("#workspace-add-project").classList.contains("walkthrough-focus"), true);
+  env.el("coach-next").click();
+  assert.deepEqual(env.routes, ["workspace", "studio"]);
+  assert.equal(env.query("#settings-assistant-heading").classList.contains("walkthrough-focus"), true);
+  assert.equal(env.query("#workspace-add-project").classList.contains("walkthrough-focus"), false);
+  assert.match(env.el("coach-progress").textContent, /Step 2 of 5 · Connections/);
+  const saved = JSON.parse(env.storage.get(KEY));
+  assert.equal(saved.done[0], true);
+  assert.equal(saved.mode, "coach");
+  assert.equal(saved.step, 1);
+  env.el("coach-back").click();
+  assert.deepEqual(env.routes, ["workspace", "studio", "workspace"]);
+  assert.equal(env.el("coach-back").disabled, true);
+});
+
+test("the setup stop ticks itself off when the user actually selects a project", () => {
+  const env = environment(); env.guide.startup();
+  env.el("action").click();
+  assert.equal(JSON.parse(env.storage.get(KEY)).done[0], false);
+  env.emit("mefi:project-changed", { detail: {} });
+  assert.equal(JSON.parse(env.storage.get(KEY)).done[0], false);
+  env.emit("mefi:project-changed", { detail: { projectId: "alpha" } });
+  const saved = JSON.parse(env.storage.get(KEY));
+  assert.equal(saved.done[0], true);
+  assert.match(env.el("coach-hint").textContent, /Project selected/);
+  assert.match(env.el("coach-next").textContent, /Next stop/);
+  assert.match(env.el("invite-steps").children[0].textContent, /✓/);
+});
+
+test("the invitation can resume as a guided walk at the saved stop", () => {
+  const env = environment(new Map([[KEY, JSON.stringify({ version: 1, step: 2, status: "reading" })]]));
+  assert.match(env.el("invite-walk").textContent, /Walk with me · Create/);
+  env.el("invite-walk").click();
+  assert.equal(env.el("coach").hidden, false);
+  assert.deepEqual(env.routes, ["workspace"]);
+  assert.equal(env.get("workspace-mode-work").clicks, 1);
+  assert.match(env.el("coach-progress").textContent, /Step 3 of 5 · Create/);
+});
+
+test("Escape ends the guided walk without disturbing the app around it", () => {
+  const env = environment(); env.guide.startup();
+  env.el("action").click();
+  const event = { key: "Escape", prevented: 0, stopped: 0 };
+  env.emit("keydown", { key: "Escape", preventDefault: () => event.prevented++, stopPropagation: () => event.stopped++ });
+  assert.equal(event.prevented, 1);
+  assert.equal(event.stopped, 1);
+  assert.equal(env.el("coach").hidden, true);
+  assert.equal(JSON.parse(env.storage.get(KEY)).mode, "idle");
+  assert.match(env.el("invite-walk").textContent, /Walk with me · Your workspace/);
+  env.emit("keydown", { key: "Escape" });
+  assert.equal(env.el("coach").hidden, true);
+});
+
+test("the guided walk finishes the setup and never reopens by itself", () => {
+  const env = environment(new Map([[KEY, JSON.stringify({ version: 1, step: 3, status: "reading", done: [true, true, true, false, false] })]]));
+  env.el("invite-walk").click();
+  assert.match(env.el("coach-progress").textContent, /Step 4 of 5/);
+  env.el("coach-next").click();
+  assert.match(env.el("coach-progress").textContent, /Step 5 of 5/);
+  env.el("coach-next").click();
+  assert.equal(env.el("coach").hidden, true);
+  const saved = JSON.parse(env.storage.get(KEY));
+  assert.equal(saved.status, "complete");
+  assert.deepEqual(saved.done, [true, true, true, true, true]);
+  assert.equal(env.el("invitation").hidden, true);
+  const reloaded = environment(env.storage);
+  assert.equal(reloaded.guide.startup(), false);
+  assert.equal(reloaded.el("coach").hidden, true);
 });
 
 test("corrupt saved state and unavailable local storage do not break the guide", () => {

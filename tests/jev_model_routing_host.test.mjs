@@ -30,6 +30,8 @@ function routingHost({ initialSettings = {}, credential = "fixture-jev-key", can
   const attempts = [], charges = [], evidenceReads = [], candidateRequests = [], calls = [], logs = [];
   const client = {
     resolveApiKey: () => credential ? { key: credential } : null,
+    resolveJevRoute: () => "vercel",
+    JEV_ROUTES: { vercel: { label: "Vercel AI Gateway" } },
     gatewayConfig: () => ({ model: "typesafe-ai/jev", timeoutMs: 50, maxStateChars: 8000 }),
   };
   const router = {
@@ -96,7 +98,7 @@ test("fixed defaults, explicit overrides and missing Jev credentials do not spen
   assert.equal((await manual.route({}, manualRoute)).model, "manual-model");
   assert.equal(manual.decision().method, "override");
   const unconfigured = routingHost({ credential: null });
-  assert.match((await unconfigured.route()).routingDecision.reason, /gateway key/i);
+  assert.match((await unconfigured.route()).routingDecision.reason, /Jev key/i);
   for (const host of [fixed, manual, unconfigured]) {
     assert.equal(host.attempts.length, 0);
     assert.equal(host.charges.length, 0);

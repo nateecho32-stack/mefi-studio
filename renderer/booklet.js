@@ -363,15 +363,56 @@
     const speedModel = document.getElementById("speed-model");
     updateSpeedModels();
 
+    // The setup overview mirrors what the host already reported — saved-key
+    // flags, routing, installed CLIs — so the auto setup card never issues its
+    // own probes. Every row keeps "unknown" honest until a real read lands.
+    const setup = { keys: { opencode: null, zai: null }, routing: null, clis: null, routingError: false, cliError: false };
+    const setupAssistant = document.getElementById("setup-assistant");
+    const setupSelection = document.getElementById("setup-selection");
+    const setupBuilders = document.getElementById("setup-builders");
+    const providerNames = { auto: "Auto (prefers z.ai)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI" };
+    function grokInstalled() {
+      return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === "grok" && cli.installed);
+    }
+    function keyState(which) {
+      const known = setup.keys[which];
+      if (known !== null) return known ? "key saved" : "no key saved";
+      const flag = which === "zai" ? setup.routing?.hasZai : setup.routing?.hasOpenCode;
+      return flag === true ? "key saved" : flag === false ? "no key saved" : "key unknown";
+    }
+    function renderSetupState() {
+      const routing = setup.routing;
+      if (setup.routingError) setupAssistant.textContent = "status unavailable";
+      else if (!routing) setupAssistant.textContent = "checking…";
+      else {
+        const provider = providerNames[routing.provider] ? routing.provider : "auto";
+        const detail = provider === "grok" ? "CLI login"
+          : provider === "auto" ? (setup.keys.zai ? "will use z.ai" : setup.keys.opencode ? "will use OpenCode Go" : grokInstalled() ? "will use Grok CLI" : "save a key to connect")
+          : keyState(provider);
+        setupAssistant.textContent = `${providerNames[provider]} · ${detail}`;
+      }
+      if (setup.routingError) setupSelection.textContent = "status unavailable";
+      else if (!routing) setupSelection.textContent = "checking…";
+      else if ((routing.modelSelection ?? "jev") === "fixed") setupSelection.textContent = "Fixed defaults · overrides win";
+      else setupSelection.textContent = routing.jevConfigured ? "Jev · task fit, speed & cost" : "Jev · waiting for a gateway key";
+      if (setup.cliError) setupBuilders.textContent = "CLI status unavailable";
+      else if (!setup.clis) setupBuilders.textContent = "checking…";
+      else {
+        const installed = setup.clis.filter((cli) => cli.installed);
+        setupBuilders.textContent = installed.length ? `${installed.map((cli) => cli.name).join(", ")} installed` : "No CLI detected — install OpenCode or Grok";
+      }
+    }
+    renderSetupState();
+
     const keyStatus = document.getElementById("key-status");
     const zaiKeyStatus = document.getElementById("zai-key-status");
     window.mefiStudio
       .getApiKey("opencode")
-      .then((key) => (keyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"))
+      .then((key) => { setup.keys.opencode = Boolean(key?.saved); keyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
       .catch(() => (keyStatus.textContent = "key status unavailable"));
     window.mefiStudio
       .getApiKey("zai")
-      .then((key) => (zaiKeyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"))
+      .then((key) => { setup.keys.zai = Boolean(key?.saved); zaiKeyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
       .catch(() => (zaiKeyStatus.textContent = "key status unavailable"));
 
     document.getElementById("save-key").addEventListener("click", async () => {
@@ -393,25 +434,42 @@
     const jevStatus = document.getElementById("jev-status");
     const jevEnabled = document.getElementById("jev-enabled");
     const jevTest = document.getElementById("test-jev");
+    const jevRoute = document.getElementById("jev-route");
+    const jevKey = document.getElementById("jev-key");
+    // Each route stores its credential in its own encrypted settings field.
+    const jevRouteFields = {
+      vercel: { key: "gateway", placeholder: "Vercel gateway API key (stored encrypted)" },
+      typesafe: { key: "jev", placeholder: "TypeSafe Jev API key (stored encrypted)" },
+    };
+    const jevRouteOf = () => (jevRouteFields[jevRoute.value] ? jevRoute.value : "vercel");
     async function refreshJev() {
       try {
         const status = await window.mefiStudio.jevStatus();
+        const route = jevRouteFields[status.route] ? status.route : "vercel";
+        jevRoute.value = route;
+        jevKey.placeholder = jevRouteFields[route].placeholder;
         jevEnabled.checked = status.enabled;
         jevTest.disabled = !status.configured;
-        const route = !status.configured ? "Save a gateway key to connect Jev" : !status.enabled ? "Jev classification paused" : status.accountingPending ? "Jev waiting for the usage ledger" : `Jev configured · ${status.model}`;
+        const where = status.routeLabel ? ` · ${status.routeLabel}` : "";
+        const saved = status.routes && status.routes[route] !== undefined ? (status.routes[route] ? " · key saved" : " · no key saved") : "";
+        const state = !status.configured ? `Save a Jev key for ${status.routeLabel ?? "this route"} to connect` : !status.enabled ? "Jev classification paused" : status.accountingPending ? "Jev waiting for the usage ledger" : `Jev configured · ${status.model}`;
         const queue = status.pending ? ` · ${status.pending} waiting` : "";
-        jevStatus.textContent = `${route}${queue}${status.lastError ? ` · ${status.lastError}` : ""}`;
+        jevStatus.textContent = `${state}${where}${saved}${queue}${status.lastError ? ` · ${status.lastError}` : ""}`;
       } catch { jevStatus.textContent = "Jev status unavailable"; }
     }
     document.getElementById("save-jev-key").addEventListener("click", async () => {
-      const input = document.getElementById("jev-key");
+      const input = jevKey;
       try {
-        const result = await window.mefiStudio.setApiKey(input.value.trim(), "gateway");
+        const result = await window.mefiStudio.setApiKey(input.value.trim(), jevRouteFields[jevRouteOf()].key);
         input.value = "";
         if (!result?.ok) { jevStatus.textContent = `Save failed: ${result?.error ?? "unknown"}`; return; }
         await refreshJev();
         await loadAiRouting();
       } catch { input.value = ""; jevStatus.textContent = "Could not save Jev key"; }
+    });
+    jevRoute.addEventListener("change", async () => {
+      try { await window.mefiStudio.jevSetRoute(jevRoute.value); await refreshJev(); await loadAiRouting(); }
+      catch { jevStatus.textContent = "Could not change Jev route"; }
     });
     jevEnabled.addEventListener("change", async () => {
       try { await window.mefiStudio.jevSetEnabled(jevEnabled.checked); await refreshJev(); }
@@ -472,6 +530,9 @@
       try {
         const routing = await window.mefiStudio.getAiRouting();
         if (read !== routingRead) return;
+        setup.routing = routing;
+        setup.routingError = false;
+        renderSetupState();
         if (syncControls) {
           providerSelect.value = routing.provider;
           modelSelection.value = routing.modelSelection ?? "jev";
@@ -488,7 +549,7 @@
             ? "Grok CLI uses your explicit model or its CLI default. Jev selection is available for HTTP calls and z.ai coding workers."
             : routing.jevConfigured
               ? "Jev model selection ready · task fit, speed and cost. Explicit model overrides take priority."
-              : "Jev model selection is waiting for a gateway key. Save a Jev key below; usual defaults apply until connected.";
+              : "Jev model selection is waiting for a Jev key. Save one below for the selected route; usual defaults apply until connected.";
         const decision = routing.routingDecision;
         routingEvidence.hidden = !decision;
         routingEvidence.textContent = decision ? evidenceText(decision.evidence, decision.taskType) : "";
@@ -500,7 +561,11 @@
           routingDecision.textContent = `Last selection: ${method} · ${decision.provider} / ${decision.model} · ${decision.taskType}${stamp}. ${decision.reason || "No reason recorded."}`;
         }
       } catch {
-        if (read === routingRead) routingStatus.textContent = "Model selection status unavailable. Refresh to try again.";
+        if (read === routingRead) {
+          routingStatus.textContent = "Model selection status unavailable. Refresh to try again.";
+          setup.routingError = true;
+          renderSetupState();
+        }
       } finally {
         if (read === routingRead) routingRefresh.disabled = false;
       }
@@ -539,6 +604,40 @@
     executorCli.addEventListener("change", () => saveRouting({ executorCli: executorCli.value }, `builders run on ${executorCli.value}`));
     executorModel.addEventListener("change", () => saveRouting({ executorModel: executorModel.value }, `builder model ${executorModel.value.trim() ? `"${executorModel.value.trim()}"` : "reset to default"}`));
 
+    // Auto setup: one host call that reads saved keys and installed CLIs and
+    // applies the matching configuration. The renderer only reports the host's
+    // summary and re-reads state, so the controls above stay authoritative.
+    const autoSetupButton = document.getElementById("auto-setup");
+    const autoSetupStatus = document.getElementById("auto-setup-status");
+    if (typeof window.mefiStudio.autoSetup !== "function") {
+      autoSetupButton.disabled = true;
+      autoSetupStatus.textContent = "Auto setup needs the desktop app.";
+    } else {
+      autoSetupButton.addEventListener("click", async () => {
+        if (autoSetupButton.disabled) return;
+        autoSetupButton.disabled = true;
+        autoSetupStatus.textContent = "Checking saved keys and installed CLIs…";
+        try {
+          const result = await window.mefiStudio.autoSetup();
+          if (!result?.ok) {
+            autoSetupStatus.textContent = `Auto setup could not finish: ${result?.error ?? "unknown error"}`;
+            studioLog("! auto setup: nothing detected to configure");
+            return;
+          }
+          const notes = Array.isArray(result.notes) && result.notes.length ? ` ${result.notes.join(" ")}` : "";
+          autoSetupStatus.textContent = `${result.summary ?? "Auto setup applied."}${notes}`;
+          studioLog(`> auto setup: ${result.summary ?? "applied"}`);
+          await loadAiRouting({ syncControls: true });
+          await refreshCliStatus();
+        } catch (error) {
+          autoSetupStatus.textContent = `Auto setup failed: ${error.message}`;
+          studioLog(`! auto setup: ${error.message}`);
+        } finally {
+          autoSetupButton.disabled = false;
+        }
+      });
+    }
+
     // Coding CLIs: launch the owner's installed tools in their own terminal.
     // Codex and Claude Code use their own accounts; OpenCode carries the
     // Studio-managed mefi-zai provider when a z.ai key is saved.
@@ -546,6 +645,8 @@
     async function refreshCliStatus() {
       try {
         const clis = await window.mefiStudio.cliStatus();
+        setup.clis = Array.isArray(clis) ? clis : [];
+        setup.cliError = false;
         cliStatus.textContent = clis.map((cli) => `${cli.name} ${cli.installed ? "✓" : "not found"}`).join(" · ");
         document.querySelectorAll("#studio-desktop button[data-cli]").forEach((button) => {
           const match = clis.find((cli) => cli.id === button.dataset.cli);
@@ -553,7 +654,9 @@
         });
       } catch {
         cliStatus.textContent = "CLI status unavailable";
+        setup.cliError = true;
       }
+      renderSetupState();
     }
     refreshCliStatus();
     document.querySelectorAll("#studio-desktop button[data-cli]").forEach((button) => {

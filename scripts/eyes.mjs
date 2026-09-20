@@ -30,6 +30,15 @@ export function openDb(dbPath = DEFAULT_DB) {
   return db;
 }
 
+// A machine that has never run OpenCode has no session store yet. Listing
+// surfaces treat that as an empty store, so first-run Studio opens with an
+// empty tree instead of gating startup on "store unavailable". Callers that
+// must distinguish (check evidence, direct opens) still see openDb's throw for
+// a store that exists but cannot be read.
+function storePresent(dbPath) {
+  return existsSync(dbPath);
+}
+
 function parseModel(raw) {
   try {
     const parsed = JSON.parse(raw);
@@ -104,6 +113,7 @@ function toChange(part) {
 }
 
 export function listSessions({ dbPath = DEFAULT_DB, limit = 40 } = {}) {
+  if (!storePresent(dbPath)) return [];
   const db = openDb(dbPath);
   const rows = db
     .prepare(
@@ -142,6 +152,7 @@ export function listSessions({ dbPath = DEFAULT_DB, limit = 40 } = {}) {
 // in either order, so their edits must never be attributed by timestamp alone.
 export function findRunSession({ dbPath = DEFAULT_DB, runId, since = 0 } = {}) {
   if (!/^run_[a-zA-Z0-9_]+$/.test(String(runId ?? ""))) return null;
+  if (!storePresent(dbPath)) return null;
   const db = openDb(dbPath);
   const rows = db.prepare(`
     select distinct s.id, s.directory, s.time_created
@@ -161,6 +172,7 @@ export function findRunSession({ dbPath = DEFAULT_DB, runId, since = 0 } = {}) {
 }
 
 export function listChanges({ dbPath = DEFAULT_DB, sessionId = null, limit = 300, since = null, until = null } = {}) {
+  if (!storePresent(dbPath)) return [];
   const db = openDb(dbPath);
   const where = `json_extract(data,'$.type') in ('tool','patch')`;
   if (since !== null || until !== null) {
@@ -271,6 +283,7 @@ export function listSessionChecks({ dbPath = DEFAULT_DB, sessionId, since, until
 }
 
 export function listTodos({ dbPath = DEFAULT_DB, sessionId = null } = {}) {
+  if (!storePresent(dbPath)) return [];
   const db = openDb(dbPath);
   const rows = sessionId
     ? db.prepare("select * from todo where session_id = ? order by position asc").all(sessionId)
@@ -288,6 +301,7 @@ export function listTodos({ dbPath = DEFAULT_DB, sessionId = null } = {}) {
 
 // New tool activity since a timestamp; used by the 1.5s poll for the tree pulses.
 export function activitySince({ dbPath = DEFAULT_DB, since = 0, limit = 60 } = {}) {
+  if (!storePresent(dbPath)) return [];
   const db = openDb(dbPath);
   const rows = db
     .prepare(
@@ -591,6 +605,7 @@ export function ownerIsInactive(collision) {
 }
 
 function editWindowsByFile({ dbPath = DEFAULT_DB, since, root = null } = {}) {
+  if (!storePresent(dbPath)) return new Map();
   const db = openDb(dbPath);
   const rows = db
     .prepare(
@@ -1169,6 +1184,7 @@ export function requestsFromBriefing(briefing, existing = []) {
 // page. Windowed callers (overseer chatter, reference gathering) keep the
 // legacy newest-first read with the default order: "desc".
 export function listChatTexts({ dbPath = DEFAULT_DB, after = { at: 0, id: "" }, since = null, limit = 400, minLength = 40, maxLength = 400, order = "desc" } = {}) {
+  if (!storePresent(dbPath)) return [];
   const db = openDb(dbPath);
   const seed = after && typeof after === "object" ? after : { at: Number(after) || 0, id: "" };
   const afterAt = Number.isFinite(Number(since ?? seed.at)) ? Number(since ?? seed.at) : 0;

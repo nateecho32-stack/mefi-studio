@@ -6,7 +6,8 @@ encrypted settings field, the assistant's provider router prefers z.ai under
 route and glm-5.3 the heavy one, the autopilot executor's `opencode run` jobs
 ride the Studio-managed `mefi-zai` provider through OPENCODE_CONFIG_CONTENT
 (key passed per-process, never written to disk or logged), the CLI panel
-detects and launches the owner's installed opencode/codex/claude, the speed
+detects and launches the owner's installed opencode/codex/claude, auto setup
+plans a configuration from saved-key flags and detected CLIs, the speed
 probe splits on glm-* model ids, and no saved key ever crosses IPC back to the
 renderer. When `opencode` is on PATH a live half verifies the injected config
 actually resolves the mefi-zai models; that half skips cleanly without it.
@@ -67,7 +68,12 @@ class MefiStudioRoutingTests(unittest.TestCase):
     def test_zai_key_has_its_own_encrypted_field(self):
         self.assertIn('"zaiApiKeyEncrypted"', self.main)
         self.assertIn('"apiKeyEncrypted"', self.main)
-        self.assertIn('which === "zai" ? "zaiApiKeyEncrypted" : which === "gateway" ? "gatewayApiKeyEncrypted" : "apiKeyEncrypted"', self.main, "three key fields: OpenCode Go, z.ai, and the Jev-only AI Gateway")
+        # One encrypted field per credential owner; unknown ids fall back to
+        # the OpenCode Go field rather than sharing another route's key.
+        self.assertIn('const keyFieldFor = (which) => KEY_FIELDS[which] ?? "apiKeyEncrypted"', self.main)
+        for field in ('zai: "zaiApiKeyEncrypted"', 'gateway: "gatewayApiKeyEncrypted"', 'jev: "jevApiKeyEncrypted"'):
+            with self.subTest(field=field):
+                self.assertIn(field, self.main)
         body = _function_body(self.main, "decryptKey")
         self.assertTrue(body, "decryptKey must exist")
         self.assertIn("safeStorage.decryptString", body)
@@ -187,15 +193,30 @@ class MefiStudioRoutingTests(unittest.TestCase):
         for cli in ('id: "opencode"', 'id: "grok"', 'id: "codex"', 'id: "claude"'):
             with self.subTest(cli=cli):
                 self.assertIn(cli, self.main)
-        status = re.search(r'ipcMain\.handle\("studio:cli-status"(.*?)\)\s*\n\s*\);', self.main, re.S)
-        self.assertIsNotNone(status)
-        self.assertIn('"where.exe"', status.group(1), "detection resolves the installed path")
-        self.assertIn("installed: false", status.group(1), "a missing CLI reports cleanly")
+        status = _function_body(self.main, "codingCliStatus")
+        self.assertTrue(status, "codingCliStatus must exist — auto setup and the CLI panel share it")
+        self.assertIn('"where.exe"', status, "detection resolves the installed path")
+        self.assertIn("installed: false", status, "a missing CLI reports cleanly")
+        self.assertIn('ipcMain.handle("studio:cli-status", () => codingCliStatus())', self.main)
         launch = re.search(r'ipcMain\.handle\("studio:launch-cli"(.*?)\}\);', self.main, re.S)
         self.assertIsNotNone(launch)
         self.assertIn("detached: true", launch.group(1), "interactive CLIs outlive the launcher")
         self.assertIn("zaiOpencodeEnv()", launch.group(1), "OpenCode carries mefi-zai when a key is saved")
         self.assertIn("unknown cli", launch.group(1), "unregistered ids are rejected")
+
+    def test_auto_setup_plans_from_saved_keys_and_installed_clis(self):
+        planner = _function_body(self.main, "planAutoSetup")
+        self.assertTrue(planner, "planAutoSetup must exist")
+        self.assertIn('keys.zai ? "zai" : keys.opencode ? "opencode"', planner, "a saved key outranks an installed CLI")
+        self.assertIn('keys.gateway ? "jev" : "fixed"', planner, "Jev selection needs its gateway key")
+        self.assertIn('installed("opencode") ? "opencode" : installed("grok") ? "grok"', planner)
+        self.assertIn("changes.fallbackOpenCode = false", planner, "no OpenCode key never leaves a billing fallback armed")
+        self.assertIn("changes, active", planner, "the planner reports both the delta and the effective configuration")
+        handler = re.search(r'ipcMain\.handle\("settings:auto-setup"(.*?)\n  \}\);', self.main, re.S)
+        self.assertIsNotNone(handler, "settings:auto-setup handler missing")
+        self.assertIn("planAutoSetup({ settings, keys, clis: await codingCliStatus() })", handler.group(1))
+        self.assertIn("await writeSettings(next)", handler.group(1), "only detected, planned changes are written")
+        self.assertIn("applied: false", handler.group(1), "an already-configured machine reports a no-op")
 
     def test_zai_link_probe_uses_the_injected_env(self):
         probe = re.search(r'ipcMain\.handle\("studio:test-zai"(.*?)\}\);', self.main, re.S)
@@ -208,10 +229,10 @@ class MefiStudioRoutingTests(unittest.TestCase):
     # ---- renderer + probe ------------------------------------------------
 
     def test_renderer_surface(self):
-        for name in ("getAiRouting", "setAiRouting", "cliStatus", "launchCli", "testZai"):
+        for name in ("getAiRouting", "setAiRouting", "autoSetup", "cliStatus", "launchCli", "testZai"):
             with self.subTest(bridge=name):
                 self.assertIn(name, self.preload)
-        for element_id in ("zai-key", "save-zai-key", "zai-key-status", "ai-provider", "ai-fallback", "cli-status", "cli-test-zai"):
+        for element_id in ("zai-key", "save-zai-key", "zai-key-status", "ai-provider", "ai-fallback", "cli-status", "cli-test-zai", "auto-setup", "auto-setup-status", "setup-assistant", "setup-selection", "setup-builders"):
             with self.subTest(element_id=element_id):
                 self.assertIn(f'id="{element_id}"', self.template)
         for cli in ('data-cli="opencode"', 'data-cli="grok"', 'data-cli="codex"', 'data-cli="claude"'):

@@ -18,14 +18,26 @@ function environment(overrides = {}, bridge = {}) {
     async trigger(name) { for (const callback of this.listeners[name] || []) await callback({ target: this }); await flush(); }
   }
   for (const match of template.matchAll(/\bid="([^"]+)"/g)) ids.set(match[1], new Element());
-  const settings = { provider: "auto", fallbackOpenCode: false, models: {}, executorCli: "opencode", executorModel: "", modelSelection: "jev", jevConfigured: false, routingDecision: null, ...overrides };
+  const settings = { provider: "auto", fallbackOpenCode: false, models: {}, executorCli: "opencode", executorModel: "", modelSelection: "jev", jevConfigured: false, jevRoute: "vercel", routingDecision: null, ...overrides };
   let reads = 0;
+  const saved = [];
+  const routeLabels = { vercel: "Vercel AI Gateway", typesafe: "TypeSafe Jev API" };
   const api = {
     launchStudio() {}, onStudioLog() {},
     getApiKey: async () => ({ saved: true }),
-    setApiKey: async (_key, provider) => { if (provider === "gateway") settings.jevConfigured = true; return { ok: true }; },
-    jevStatus: async () => ({ enabled: false, configured: settings.jevConfigured }),
+    setApiKey: async (_key, provider) => {
+      saved.push(provider);
+      if (provider === "gateway" || provider === "jev") settings.jevConfigured = true;
+      return { ok: true };
+    },
+    jevStatus: async () => ({
+      enabled: false, configured: settings.jevConfigured, route: settings.jevRoute,
+      routeLabel: routeLabels[settings.jevRoute],
+      routes: { vercel: settings.jevConfigured, typesafe: false },
+      model: settings.jevRoute === "typesafe" ? "jev-1.13.0" : "typesafe-ai/jev",
+    }),
     jevSetEnabled: async () => ({ ok: true }),
+    jevSetRoute: async (route) => { settings.jevRoute = route; return { ok: true }; },
     cliStatus: async () => [],
     getAiRouting: async () => { reads += 1; return structuredClone(settings); },
     setAiRouting: async (payload) => { writes.push(structuredClone(payload)); Object.assign(settings, payload); return { ok: true }; },
@@ -34,7 +46,7 @@ function environment(overrides = {}, bridge = {}) {
   const document = { getElementById: (id) => ids.get(id) || null, querySelectorAll: () => [] };
   const context = vm.createContext({ document, window: { mefiStudio: api }, state: { doc: { models: [] } }, updateSpeedModels() {}, studioLog: (line) => logs.push(line) });
   vm.runInContext(`${studio}\ninitStudio();`, context);
-  return { get: (id) => ids.get(id), settings, writes, api, logs, reads: () => reads };
+  return { get: (id) => ids.get(id), settings, writes, saved, api, logs, reads: () => reads };
 }
 
 test("Jev mode without a gateway key shows its fallback and keeps configured overrides", async () => {
@@ -42,7 +54,7 @@ test("Jev mode without a gateway key shows its fallback and keeps configured ove
   assert.equal(env.get("ai-model-selection").value, "jev");
   assert.equal(env.get("ai-model-routine").value, "explicit-model");
   assert.equal(env.get("ai-model-heavy").value, "explicit-heavy");
-  assert.match(env.get("ai-routing-status").textContent, /waiting for a gateway key.*usual defaults/);
+  assert.match(env.get("ai-routing-status").textContent, /waiting for a Jev key.*usual defaults/);
   assert.match(env.get("ai-routing-decision").textContent, /No selection recorded/);
   assert.equal(env.get("ai-routing-evidence").hidden, true);
   assert.equal(env.reads(), 1);
@@ -71,6 +83,25 @@ test("saving the gateway key refreshes routing readiness independently of intake
   assert.equal(env.get("jev-enabled").checked, false);
   assert.equal(env.writes.length, 0);
   assert.equal(env.reads(), 2);
+});
+
+test("the Jev route saves through IPC and each route stores its own key", async () => {
+  const env = environment({ jevRoute: "typesafe" }); await flush();
+  assert.equal(env.get("jev-route").value, "typesafe");
+  assert.match(env.get("jev-key").placeholder, /TypeSafe Jev API key/);
+  assert.match(env.get("jev-status").textContent, /TypeSafe Jev API/);
+  env.get("jev-key").value = "fixture-typesafe-key";
+  await env.get("save-jev-key").trigger("click");
+  assert.deepEqual(env.saved, ["jev"], "the direct route saves the Jev API key field");
+  assert.equal(env.settings.jevRoute, "typesafe", "saving a key never switches the route");
+  env.get("jev-route").value = "vercel";
+  await env.get("jev-route").trigger("change");
+  assert.equal(env.settings.jevRoute, "vercel", "route changes save through jev:set-route");
+  assert.deepEqual(env.writes, [], "the route is not part of the AI routing patch");
+  assert.match(env.get("jev-key").placeholder, /Vercel gateway API key/);
+  env.get("jev-key").value = "fixture-gateway-key";
+  await env.get("save-jev-key").trigger("click");
+  assert.deepEqual(env.saved, ["jev", "gateway"], "the gateway route saves the gateway key field");
 });
 
 test("last model selection separates reported measurements, missing values and catalog estimates", async () => {
@@ -120,4 +151,57 @@ test("failed routing saves expose an error without claiming the new mode is acti
   await env.get("ai-model-selection").trigger("change");
   assert.match(env.get("ai-routing-status").textContent, /Could not save routing: storage unavailable.*saved selection is unchanged/);
   assert.equal(env.settings.modelSelection, "jev");
+});
+
+test("auto setup reports the host summary, its reasons, and re-reads the applied routing", async () => {
+  let runs = 0;
+  const env = environment({}, {
+    autoSetup: async () => {
+      runs += 1;
+      return { ok: true, applied: true, summary: "Assistant on z.ai GLM, Jev model selection, builders on OpenCode.", notes: ["z.ai key found: the assistant uses your z.ai plan.", "Jev gateway key found: task-aware model selection is on."] };
+    },
+  }); await flush();
+  await env.get("auto-setup").trigger("click");
+  assert.equal(runs, 1);
+  const text = env.get("auto-setup-status").textContent;
+  assert.match(text, /Assistant on z\.ai GLM, Jev model selection, builders on OpenCode\./);
+  assert.match(text, /z\.ai key found.*task-aware model selection is on/);
+  assert.equal(env.get("auto-setup").disabled, false, "the control recovers after the host call");
+  assert.equal(env.reads(), 2, "the controls re-read the routing the host applied");
+});
+
+test("auto setup refuses honestly when nothing is connected and never claims success", async () => {
+  const env = environment({}, { autoSetup: async () => ({ ok: false, error: "Nothing to set up yet - save a z.ai or OpenCode Go key." }) }); await flush();
+  await env.get("auto-setup").trigger("click");
+  assert.match(env.get("auto-setup-status").textContent, /could not finish: Nothing to set up yet/);
+  assert.doesNotMatch(env.get("auto-setup-status").textContent, /Assistant on/);
+  assert.equal(env.reads(), 1, "a refused setup does not pretend routing changed");
+});
+
+test("auto setup holds its control while the host call is in flight and ignores extra clicks", async () => {
+  const pending = deferred();
+  let runs = 0;
+  const env = environment({}, { autoSetup: () => { runs += 1; return pending.promise; } }); await flush();
+  const click = env.get("auto-setup").trigger("click");
+  await flush();
+  assert.equal(env.get("auto-setup").disabled, true);
+  assert.match(env.get("auto-setup-status").textContent, /Checking saved keys/);
+  await env.get("auto-setup").trigger("click");
+  assert.equal(runs, 1, "a second click while the first is pending is ignored");
+  pending.resolve({ ok: true, summary: "Already set up - assistant on z.ai GLM." });
+  await click; await flush();
+  assert.equal(env.get("auto-setup").disabled, false);
+  assert.match(env.get("auto-setup-status").textContent, /Already set up/);
+});
+
+test("the setup overview mirrors saved keys, model selection and installed CLIs without new probes", async () => {
+  const env = environment(
+    { provider: "zai", hasZai: true, hasOpenCode: false, jevConfigured: true, modelSelection: "jev" },
+    { cliStatus: async () => [{ id: "opencode", name: "OpenCode", installed: true }, { id: "grok", name: "Grok", installed: false }] },
+  ); await flush();
+  assert.match(env.get("setup-assistant").textContent, /z\.ai GLM · key saved/);
+  assert.match(env.get("setup-selection").textContent, /Jev · task fit, speed & cost/);
+  assert.match(env.get("setup-builders").textContent, /OpenCode installed/);
+  assert.equal(env.reads(), 1);
+  assert.equal(env.writes.length, 0, "the overview is read-only");
 });

@@ -83,7 +83,7 @@
   <div class="ws-main">
     <div class="ws-topbar"><div class="ws-project-heading"><span class="ws-kicker">WORKSPACE /</span><strong id="workspace-project-name">Opening your project…</strong></div><div class="ws-top-actions"><button id="workspace-reveal" class="ghost mini" title="Show the project folder">Open folder ↗</button><button class="ghost mini" data-nav="palette" aria-label="Find a tool or command">Search <kbd>Ctrl K</kbd></button></div></div>
     <div class="ws-heading"><div><p class="ws-kicker" id="workspace-greeting">YOUR SPACE TO CREATE</p><h1>What are we making?</h1><p id="workspace-project-path" class="ws-project-path"></p></div><span id="workspace-connection" class="ws-connection">Connecting…</span></div>
-    <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">A little guidance for your first project.</strong><p>Choose a project, connect your tools, create work and follow it through review.</p></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start walkthrough</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays in the sidebar">Not now</button></div></section>
+    <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">A little guidance for your first project.</strong><p>Choose a project, connect your tools, create work and follow it through review.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start walkthrough</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk with me</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays in the sidebar">Not now</button></div></section>
     <div class="ws-columns">
       <section class="ws-conversation" aria-label="Conversation with your companion">
         <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div><button id="workspace-pause" class="ghost mini" title="Pause new work. Running jobs finish normally.">Pause</button></div>
@@ -307,9 +307,24 @@
     <div class="panel">
       <div class="settings-heading"><div><h2>Settings & connections</h2><p class="muted">Connect your assistant, choose your coding workers, and manage optional tools.</p></div><button class="ghost" data-nav="onboarding">Start here</button></div>
       <div id="studio-desktop">
+        <section class="settings-group setup-card" aria-labelledby="settings-setup-heading">
+        <div class="setup-head">
+          <div>
+            <h3 id="settings-setup-heading">Auto setup</h3>
+            <p class="muted">One pass over what this machine already has: saved keys choose the assistant route, installed CLIs choose the builders, and a saved Jev key turns on task-aware model selection. It sends no request, changes no key, and keeps every model override.</p>
+          </div>
+          <button id="auto-setup">Run auto setup</button>
+        </div>
+        <div class="setup-state">
+          <div class="setup-state-item"><span class="setup-state-label">Assistant</span><span id="setup-assistant">checking…</span></div>
+          <div class="setup-state-item"><span class="setup-state-label">Model selection</span><span id="setup-selection">checking…</span></div>
+          <div class="setup-state-item"><span class="setup-state-label">Builders</span><span id="setup-builders">checking…</span></div>
+        </div>
+        <p class="muted" id="auto-setup-status" role="status">Not run yet. Auto setup applies only the changes that are needed and explains each one.</p>
+        </section>
         <section class="settings-group" aria-labelledby="settings-assistant-heading">
         <h3 id="settings-assistant-heading">Assistant connection</h3>
-        <p class="muted">Save a key for the provider you use, then choose its routing below. Grok uses the CLI's own login.</p>
+        <p class="muted">Save a key for the provider you use, then choose its routing below. Grok uses the CLI's own login. Keys are stored encrypted and never shown again.</p>
         <div class="row">
           <input type="password" id="zai-key" placeholder="z.ai Coding Plan API key (stored encrypted)" autocomplete="off" aria-label="z.ai Coding Plan API key">
           <button id="save-zai-key">Save z.ai key</button>
@@ -320,6 +335,10 @@
           <button id="save-key">Save OpenCode key</button>
           <span class="muted" id="key-status">checking…</span>
         </div>
+        </section>
+        <section class="settings-group" aria-labelledby="settings-routing-heading">
+        <h3 id="settings-routing-heading">Model routing</h3>
+        <p class="muted">Who pays for assistant calls, and how each task's model is chosen. Provider choice and model selection are independent; explicit model overrides take priority.</p>
         <div class="row">
           <label class="muted">AI routing
             <select id="ai-provider">
@@ -376,8 +395,8 @@
         </div>
         </section>
         <details class="settings-optional"><summary>Jev connection & optional task suggestions</summary>
-          <p class="muted">The gateway key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
-          <div class="row"><input type="password" id="jev-key" placeholder="Jev gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev gateway API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled"><span class="track"></span><span>Intake classification</span></label></div>
+          <p class="muted">Choose where Jev is routed: the Vercel AI Gateway or TypeSafe's Jev API directly. Each route keeps its own key, stored encrypted; switching never moves a key between routes. The key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
+          <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: the Vercel AI Gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled"><span class="track"></span><span>Intake classification</span></label></div>
           <p class="muted" id="jev-status" role="status">Checking Jev…</p>
         </details>
         <details class="settings-optional"><summary>Diagnostics & app updates</summary>
@@ -937,6 +956,13 @@
     <footer class="walkthrough-footer"><span>Your place is saved on this device.</span><div><button class="ghost" id="walkthrough-back" type="button">Back</button><button class="primary" id="walkthrough-next" type="button">Next step</button></div></footer>
   </section>
 </div>
+<aside class="walkthrough-coach" id="walkthrough-coach" role="region" aria-label="Walkthrough coach" hidden>
+  <header class="walkthrough-coach-head"><span class="eyebrow" id="walkthrough-coach-progress" role="status">Step 1 of 5</span><div class="walkthrough-coach-tools"><button class="ghost mini" id="walkthrough-coach-back" type="button">Back</button><button class="ghost mini" id="walkthrough-coach-guide" type="button">Full guide</button><button class="ghost mini" id="walkthrough-coach-end" type="button" title="End the guided walk (Esc)">End tour</button></div></header>
+  <strong id="walkthrough-coach-title">Your workspace</strong>
+  <p id="walkthrough-coach-copy" aria-live="polite"></p>
+  <p class="walkthrough-coach-hint" id="walkthrough-coach-hint"></p>
+  <div class="walkthrough-coach-actions"><button id="walkthrough-coach-next" class="primary mini" type="button">Done — next stop</button></div>
+</aside>
 <div class="overlay" id="help-overlay" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="help-heading" tabindex="-1">
     <header class="sheet-head plain">
@@ -948,7 +974,7 @@
         <button class="ghost sheet-close" data-nav-close="help" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>
     </header>
-    <p class="help-start">New to Studio? <button class="ghost mini" data-nav="onboarding">Open the walkthrough</button></p>
+    <p class="help-start">New to Studio? <button class="ghost mini" data-nav="onboarding">Walk me through Studio</button></p>
     <div class="shortcut-grid" id="help-grid"></div>
   </div>
 </div>

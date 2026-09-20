@@ -152,6 +152,10 @@ project's ignored local `planning.json`.
 - **AI routing** picks who pays — Auto (prefer z.ai), z.ai only, OpenCode Go
   only, or the Grok CLI on its own login — with an opt-in fallback. **Model
   selection** uses Jev or fixed defaults; explicit model overrides win.
+- **Auto setup** in Settings reads saved-key flags and installed CLIs and
+  applies the matching provider, model selection and builder in one pass. It
+  sends no request, changes no key, keeps model overrides, reports every
+  choice, and leaves the same controls editable afterward.
 - Builders run through `opencode run` (with a Studio-managed z.ai provider) or
   the Grok CLI, with automatic one-time fallback decided by the failure kind.
 - Keys live in the OS keystore (`safeStorage`; DPAPI on Windows). Headless

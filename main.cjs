@@ -50,7 +50,7 @@ const { sourceRoot: SOURCE_ROOT, repoRoot: REPO_ROOT, gameRoot: GAME_ROOT } = re
 const SMOKE = process.argv.includes("--smoke");
 const CAPTURE = process.argv.includes("--capture") || process.argv.includes("--capture-idle");
 const CLI_MODE = process.argv.some((arg) =>
-  ["--set-key", "--set-zai-key", "--set-gateway-key", "--jev-probe", "--jev-status", "--jev-models", "--speed-probe", "--assistant-brief", "--assistant-improve", "--assistant-grow", "--assistant-audit", "--assistant-proactive", "--assistant-all"].includes(arg)
+  ["--set-key", "--set-zai-key", "--set-gateway-key", "--set-jev-key", "--jev-probe", "--jev-status", "--jev-models", "--speed-probe", "--assistant-brief", "--assistant-improve", "--assistant-grow", "--assistant-audit", "--assistant-proactive", "--assistant-all"].includes(arg)
 );
 
 // GUI launches are single-instance: two windows would fight over the same
@@ -988,14 +988,15 @@ async function runJevIntake(additions) {
     loadModule("scripts/decision-client.mjs"), loadModule("scripts/jev-loop.mjs"),
     loadModule("scripts/work-classification.mjs"), getEyes(),
   ]);
-  const resolved = client.resolveApiKey({ settings, decrypt: decryptKey });
+  const route = client.resolveJevRoute(settings);
+  const resolved = client.resolveApiKey({ settings, decrypt: decryptKey, route });
   if (!resolved) return { ok: true, defer: true, reason: "no-key" };
   try { await flushJevCharges(); }
   catch { return { ok: true, defer: true, reason: "accounting-pending" }; }
   const [requests, tasks] = await Promise.all([eyes.readJson(REQUESTS_PATH, []), eyes.readJson(TASKS_PATH, [])]);
   const { comparisons, questions, state } = loop.planIntake(additions, { requests, tasks });
   if (!comparisons.length) return { ok: true, attempted: false, proposals: 0 };
-  const result = await client.classify({ questions, state, apiKey: resolved.key });
+  const result = await client.classify({ questions, state, apiKey: resolved.key, config: client.gatewayConfig({ route }) });
   await chargeJevCall(result, "jev-shadow-intake");
   if (!result.ok) {
     logLine(`[jev] classification unavailable: ${assistantClip(result.error, 160)}`);
@@ -1020,22 +1021,30 @@ async function runJevIntake(additions) {
 
 async function jevStatus() {
   const [settings, client, queue] = await Promise.all([readSettings(), loadModule("scripts/decision-client.mjs"), getJevQueue()]);
-  const resolved = client.resolveApiKey({ settings, decrypt: decryptKey });
+  const route = client.resolveJevRoute(settings);
+  const config = client.gatewayConfig({ route });
+  const resolved = client.resolveApiKey({ settings, decrypt: decryptKey, route });
+  // Per-route saved/not-saved booleans only — a key never crosses IPC.
+  const routes = Object.fromEntries(Object.values(client.JEV_ROUTES).map((preset) => [
+    preset.id, Boolean(client.resolveApiKey({ settings, decrypt: decryptKey, route: preset.id })),
+  ]));
   return { configured: Boolean(resolved), enabled: settings.jevShadow !== false,
-    model: client.gatewayConfig().model, accountingPending: jevPendingCharges.length, ...queue.status() };
+    route, routeLabel: config.routeLabel, routes,
+    model: config.model, accountingPending: jevPendingCharges.length, ...queue.status() };
 }
 
 function probeJev() {
   if (jevProbeInFlight) return jevProbeInFlight;
   jevProbeInFlight = (async () => {
     const [settings, client] = await Promise.all([readSettings(), loadModule("scripts/decision-client.mjs")]);
-    const resolved = client.resolveApiKey({ settings, decrypt: decryptKey });
-    if (!resolved) return { ok: false, error: "Save a Jev gateway key first." };
+    const route = client.resolveJevRoute(settings);
+    const resolved = client.resolveApiKey({ settings, decrypt: decryptKey, route });
+    if (!resolved) return { ok: false, error: `Save a Jev key for the ${client.JEV_ROUTES[route].label} route first.` };
     try { await flushJevCharges(); }
     catch { return { ok: false, error: "Jev is waiting for its usage ledger to become writable. No additional call was made." }; }
     const result = await client.classify({
       questions: [{ id: "connection", type: "choice", prompt: "Choose ready if the state says ready, otherwise unavailable.", options: ["ready", "unavailable"] }],
-      state: "ready", apiKey: resolved.key,
+      state: "ready", apiKey: resolved.key, config: client.gatewayConfig({ route }),
     });
     await chargeJevCall(result, "jev-connection-check");
     if (!result.ok) return { ok: false, error: result.error };
@@ -1280,6 +1289,40 @@ function assistantModelOverride(settings, role) {
   return wanted.slice(0, 120);
 }
 
+// Auto setup: one pass that turns what this machine already has into a working
+// configuration. Saved keys choose the assistant route, an installed CLI
+// chooses the builders, and a saved Jev gateway key enables task-aware model
+// selection. It sends no request, writes no key, keeps every model override,
+// and reports each choice so the controls in Settings stay the source of truth.
+function planAutoSetup({ settings = {}, keys = {}, clis = [] } = {}) {
+  const installed = (id) => clis.some((cli) => cli.id === id && cli.installed === true);
+  const provider = keys.zai ? "zai" : keys.opencode ? "opencode" : installed("grok") ? "grok" : null;
+  if (!provider) {
+    return { ok: false, error: "Nothing to set up yet - save a z.ai or OpenCode Go key, or install the Grok CLI, then run auto setup again." };
+  }
+  const currentProvider = typeof settings.aiProvider === "string" ? settings.aiProvider : "auto";
+  const currentSelection = settings.modelSelection === "fixed" ? "fixed" : "jev";
+  const currentBuilder = settings.executorCli === "grok" ? "grok" : "opencode";
+  const modelSelection = keys.gateway ? "jev" : "fixed";
+  const builder = installed("opencode") ? "opencode" : installed("grok") ? "grok" : null;
+  const changes = {};
+  if (currentProvider !== provider) changes.provider = provider;
+  if (currentSelection !== modelSelection) changes.modelSelection = modelSelection;
+  if (builder && currentBuilder !== builder) changes.executorCli = builder;
+  if (settings.aiFallbackOpenCode === true && !keys.opencode) changes.fallbackOpenCode = false;
+  const notes = [];
+  if (provider === "zai") notes.push("z.ai key found: the assistant uses your z.ai plan.");
+  else if (provider === "opencode") notes.push("OpenCode Go key found: the assistant bills OpenCode Go.");
+  else notes.push("No assistant key saved: the assistant answers through the Grok CLI's own login.");
+  if (keys.gateway) notes.push("Jev gateway key found: task-aware model selection is on.");
+  else notes.push("No Jev gateway key: fixed model defaults. Save a gateway key and run auto setup again to enable Jev selection.");
+  if (builder === "opencode") notes.push("OpenCode CLI found: builders run through it.");
+  else if (builder === "grok") notes.push("OpenCode CLI not found; Grok CLI found: builders run through Grok.");
+  else notes.push("No builder CLI detected: install OpenCode or Grok before queuing build work.");
+  if (changes.fallbackOpenCode === false) notes.push("OpenCode fallback turned off: no OpenCode Go key is saved.");
+  return { ok: true, changes, active: { provider, modelSelection, executorCli: builder ?? currentBuilder }, notes };
+}
+
 // Pick who pays for this call. "auto" prefers the user's z.ai plan and only
 // touches OpenCode when that is the explicit pick or the only key on file; a
 // z.ai failure retries on OpenCode solely when aiFallbackOpenCode was turned
@@ -1329,8 +1372,9 @@ const modelRoutingBackoff = new Map();
 function routingSettingsKey(settings) {
   return crypto.createHash("sha256").update(JSON.stringify([
     settings.aiProvider, settings.modelSelection, settings.aiModels,
-    settings.gatewayApiKeyEncrypted, settings.zaiApiKeyEncrypted,
-    settings.apiKeyEncrypted, settings.executorCli, settings.executorModel,
+    settings.jevRoute, settings.gatewayApiKeyEncrypted, settings.jevApiKeyEncrypted,
+    settings.zaiApiKeyEncrypted, settings.apiKeyEncrypted,
+    settings.executorCli, settings.executorModel,
   ])).digest("hex");
 }
 
@@ -1350,9 +1394,10 @@ async function applyModelRouting(route, { role = "routine", taskType = role, tas
   if (SMOKE || CAPTURE || CLI_MODE) return route;
   try {
     const [client, router] = await Promise.all([loadModule("scripts/decision-client.mjs"), loadModule("scripts/model-routing.mjs")]);
-    const credential = client.resolveApiKey({ settings, decrypt: decryptKey });
-    if (!credential) return finish("default", "Save a Jev gateway key to enable task-aware selection.");
-    const config = client.gatewayConfig();
+    const jevRoute = client.resolveJevRoute(settings);
+    const credential = client.resolveApiKey({ settings, decrypt: decryptKey, route: jevRoute });
+    if (!credential) return finish("default", "Save a Jev key to enable task-aware selection.");
+    const config = client.gatewayConfig({ route: jevRoute });
     // Hash the credential to isolate environment-key changes without retaining
     // the key in a cache identity or sending it to another provider.
     const scope = `${projectId}:${signature}:${crypto.createHash("sha256").update(credential.key).update(JSON.stringify(config)).digest("hex")}`;
@@ -8978,8 +9023,8 @@ function registerIpc() {
     { id: "claude", name: "Claude Code", cmd: "claude" },
   ];
 
-  ipcMain.handle("studio:cli-status", async () =>
-    Promise.all(
+  async function codingCliStatus() {
+    return Promise.all(
       CODING_CLIS.map(
         (cli) =>
           new Promise((resolve) => {
@@ -8992,8 +9037,10 @@ function registerIpc() {
             child.on("close", (code) => resolve({ id: cli.id, name: cli.name, installed: code === 0 && Boolean(first), source: first }));
           })
       )
-    )
-  );
+    );
+  }
+
+  ipcMain.handle("studio:cli-status", () => codingCliStatus());
 
   ipcMain.handle("studio:launch-cli", async (_event, id) => {
     const cli = CODING_CLIS.find((item) => item.id === id);
@@ -9052,10 +9099,14 @@ function registerIpc() {
     return { ok: true, stopped: true };
   });
 
-  const keyFieldFor = (which) =>
-    which === "github"
-      ? "githubTokenEncrypted"
-      : which === "zai" ? "zaiApiKeyEncrypted" : which === "gateway" ? "gatewayApiKeyEncrypted" : "apiKeyEncrypted";
+  // One encrypted field per credential owner. "gateway" is the Vercel AI
+  // Gateway key; "jev" is TypeSafe's own Jev API key. Neither is ever sent to
+  // the other route.
+  const KEY_FIELDS = {
+    github: "githubTokenEncrypted", zai: "zaiApiKeyEncrypted",
+    gateway: "gatewayApiKeyEncrypted", jev: "jevApiKeyEncrypted",
+  };
+  const keyFieldFor = (which) => KEY_FIELDS[which] ?? "apiKeyEncrypted";
 
   ipcMain.handle("settings:get-key", async (_event, which = "opencode") => {
     const settings = await readSettings();
@@ -9070,7 +9121,7 @@ function registerIpc() {
     else if (safeStorage.isEncryptionAvailable()) settings[field] = safeStorage.encryptString(apiKey).toString("base64");
     else return { ok: false, error: "OS encryption unavailable" };
     await writeSettings(settings);
-    if (which === "gateway") (await getJevQueue()).wake();
+    if (which === "gateway" || which === "jev") (await getJevQueue()).wake();
     return { ok: true };
   });
 
@@ -9083,13 +9134,26 @@ function registerIpc() {
     (await getJevQueue()).wake();
     return jevStatus();
   });
+  // Where Jev is routed from: the Vercel AI Gateway or TypeSafe's Jev API.
+  // Each route keeps its own encrypted key; switching never moves a key.
+  ipcMain.handle("jev:set-route", async (_event, value) => {
+    const client = await loadModule("scripts/decision-client.mjs");
+    if (!client.isJevRoute(value)) return { ok: false, error: "Unknown Jev route" };
+    const settings = await readSettings();
+    settings.jevRoute = client.normalizeJevRoute(value);
+    await writeSettings(settings);
+    (await getJevQueue()).wake();
+    return jevStatus();
+  });
 
   ipcMain.handle("settings:get-ai-routing", async () => {
     const settings = await readSettings();
     const client = await loadModule("scripts/decision-client.mjs");
+    const jevRoute = client.resolveJevRoute(settings);
     return {
       modelSelection: settings.modelSelection === "fixed" ? "fixed" : "jev",
-      jevConfigured: Boolean(client.resolveApiKey({ settings, decrypt: decryptKey })),
+      jevConfigured: Boolean(client.resolveApiKey({ settings, decrypt: decryptKey, route: jevRoute })),
+      jevRoute,
       routingDecision: modelRoutingDecisions.get(projects.current().id) ?? null,
       provider: AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto",
       fallbackOpenCode: settings.aiFallbackOpenCode === true,
@@ -9134,6 +9198,37 @@ function registerIpc() {
     if (patch.executorModel !== undefined) settings.executorModel = String(patch.executorModel ?? "").trim().slice(0, 120);
     await writeSettings(settings);
     return { ok: true };
+  });
+
+  // Auto setup: the one-click path through the same settings the controls
+  // above write. Detection reads only saved-key flags and CLI installs; the
+  // planner decides, this handler applies only real changes, and the response
+  // explains every choice. Saved keys and model overrides are never touched.
+  ipcMain.handle("settings:auto-setup", async () => {
+    const settings = await readSettings();
+    const keys = {
+      zai: Boolean(decryptKey(settings, "zaiApiKeyEncrypted")),
+      opencode: Boolean(decryptKey(settings, "apiKeyEncrypted")),
+      gateway: Boolean(decryptKey(settings, "gatewayApiKeyEncrypted")),
+    };
+    const plan = planAutoSetup({ settings, keys, clis: await codingCliStatus() });
+    if (!plan.ok) return plan;
+    const providerNames = { zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI" };
+    const selectionNames = { jev: "Jev model selection", fixed: "fixed model defaults" };
+    const builderNames = { opencode: "OpenCode", grok: "Grok" };
+    const summary = `Assistant on ${providerNames[plan.active.provider]}, ${selectionNames[plan.active.modelSelection]}, builders on ${builderNames[plan.active.executorCli] ?? plan.active.executorCli}.`;
+    if (Object.keys(plan.changes).length === 0) {
+      return { ...plan, applied: false, summary: `Already set up - ${summary.charAt(0).toLowerCase()}${summary.slice(1)}` };
+    }
+    // Re-read before writing so a concurrent key or routing save is not lost.
+    const next = await readSettings();
+    if (plan.changes.provider !== undefined) next.aiProvider = plan.changes.provider;
+    if (plan.changes.modelSelection !== undefined) next.modelSelection = plan.changes.modelSelection;
+    if (plan.changes.executorCli !== undefined) next.executorCli = plan.changes.executorCli;
+    if (plan.changes.fallbackOpenCode === false) next.aiFallbackOpenCode = false;
+    await writeSettings(next);
+    logLine(`[setup] auto setup: ${summary}`);
+    return { ...plan, applied: true, summary };
   });
 
   ipcMain.handle("speed:probe", async (_event, { modelId }) => runSpeedProbe(modelId));
@@ -9868,9 +9963,10 @@ app.whenReady().then(() => {
     })();
     return;
   }
-  // The Jev decision client's AI Gateway key (scripts/decision-client.mjs).
-  // Same contract as the other keys: DPAPI-encrypted at rest, headless env
-  // setter, never logged and never written to a tracked file.
+  // The Jev decision client's keys (scripts/decision-client.mjs). One field
+  // per route: the Vercel AI Gateway key and TypeSafe's own Jev API key. Same
+  // contract as the other keys: DPAPI-encrypted at rest, headless env setter,
+  // never logged and never written to a tracked file.
   if (process.argv.includes("--set-gateway-key")) {
     (async () => {
       const key = process.env.MEFI_STUDIO_GATEWAY_KEY || process.env.AI_GATEWAY_API_KEY;
@@ -9887,7 +9983,28 @@ app.whenReady().then(() => {
       const settings = await readSettings();
       settings.gatewayApiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
       await writeSettings(settings);
-      console.log(`AI gateway key stored encrypted (${key.length} chars, ${process.platform} safeStorage)`);
+      console.log(`AI gateway key stored encrypted (${key.length} chars, ${process.platform} safeStorage) — route: Vercel AI Gateway`);
+      app.exit(0);
+    })();
+    return;
+  }
+  if (process.argv.includes("--set-jev-key")) {
+    (async () => {
+      const key = process.env.MEFI_STUDIO_JEV_KEY || process.env.TYPESAFE_API_KEY;
+      if (!key) {
+        console.error("set MEFI_STUDIO_JEV_KEY (or TYPESAFE_API_KEY) in the environment first");
+        app.exit(1);
+        return;
+      }
+      if (!safeStorage.isEncryptionAvailable()) {
+        console.error("OS encryption unavailable; refusing to store the key in plaintext");
+        app.exit(1);
+        return;
+      }
+      const settings = await readSettings();
+      settings.jevApiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
+      await writeSettings(settings);
+      console.log(`Jev API key stored encrypted (${key.length} chars, ${process.platform} safeStorage) — route: TypeSafe Jev API`);
       app.exit(0);
     })();
     return;

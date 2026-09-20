@@ -32,7 +32,7 @@ function host({ settings = { gatewayApiKeyEncrypted: "fixture-encrypted" }, requ
   const client = {
     ...decisionClient,
     resolveApiKey: (options) => decisionClient.resolveApiKey({ ...options, env: {} }),
-    gatewayConfig: () => decisionClient.gatewayConfig({ env: {} }),
+    gatewayConfig: (options = {}) => decisionClient.gatewayConfig({ ...options, env: {} }),
     classify: (options) => {
       calls.push(options);
       return decisionClient.classify({ ...options, env: {}, fetchImpl });
@@ -155,6 +155,28 @@ test("intake without overlapping outstanding work spends nothing", async () => {
   assert.equal(records.length, 0);
 });
 
+test("the saved route picks the endpoint and its own credential", async () => {
+  const urls = [];
+  const direct = host({ settings: { jevRoute: "typesafe", jevApiKeyEncrypted: "fixture-encrypted" },
+    fetchImpl: async (url, options) => { urls.push({ url, body: JSON.parse(options.body) }); return reply({ rel_0: { type: "choice", choice: "same_obligation" } }); } });
+  assert.deepEqual(plain(await direct.context.runJevIntake([incoming])), { ok: true, attempted: true, proposals: 1 });
+  assert.equal(direct.calls.length, 1);
+  assert.equal(direct.calls[0].config.route, "typesafe");
+  assert.equal(urls[0].url, "https://api.typesafe.ai/v1/systemone");
+  assert.equal(urls[0].body.model, "jev-1.13.0");
+  assert.equal(urls[0].body.questions.rel_0.type, "choice");
+  assert.equal(direct.records[0].answer, "same_obligation");
+  // A gateway key is never sent to the Jev API route: unconfigured means no call.
+  const wrongKey = host({ settings: { jevRoute: "typesafe", gatewayApiKeyEncrypted: "fixture-encrypted" } });
+  assert.deepEqual(plain(await wrongKey.context.runJevIntake([incoming])), { ok: true, defer: true, reason: "no-key" });
+  assert.equal(wrongKey.calls.length, 0);
+  // The gateway route keeps its own wire and default pin.
+  const gateway = host({ fetchImpl: async (url, options) => { urls.push({ url, body: JSON.parse(options.body) }); return reply({ rel_0: { type: "choice", choice: "unrelated" } }); } });
+  await gateway.context.runJevIntake([incoming]);
+  assert.equal(urls[1].url, "https://ai-gateway.vercel.sh/v4/ai/evaluation-model");
+  assert.equal(urls[1].body.model, undefined, "the gateway carries the model in its header, not the body");
+});
+
 test("a failed evaluation is budget-charged from usage and never becomes a proposal", async () => {
   const { context, calls, charges, records } = host({ fetchImpl: async () => reply({}, { inputTokens: 37, outputTokens: 4 }) });
   const result = await context.runJevIntake([incoming]);
@@ -247,6 +269,9 @@ test("missing-key probes stay local and status never exposes the stored key", as
   const status = await ready.context.jevStatus();
   assert.equal(status.configured, true);
   assert.equal(status.enabled, true);
+  assert.equal(status.route, "vercel");
+  assert.equal(status.routeLabel, "Vercel AI Gateway");
+  assert.deepEqual(plain(status.routes), { vercel: true, typesafe: false });
   assert.equal(status.accountingPending, 0);
   assert.equal(JSON.stringify(status).includes(secret), false);
   assert.equal(Object.keys(status).some((key) => /apikey|encrypted/i.test(key)), false);

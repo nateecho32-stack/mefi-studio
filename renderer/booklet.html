@@ -2952,6 +2952,27 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 .walkthrough-footer { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 18px 0 0; margin: 0; border-top: 1px solid var(--hairline); }
 .walkthrough-footer > span { color: var(--muted); font-size: 10px; }
 .walkthrough-footer > div { display: flex; gap: 8px; flex-shrink: 0; }
+.walkthrough-setup { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.walkthrough-setup-item { display: inline-flex; align-items: center; padding: 2px 8px; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font-size: 10px; letter-spacing: .02em; white-space: nowrap; }
+.walkthrough-setup-item.done { color: var(--ivory); border-color: var(--hairline-strong); background: color-mix(in srgb, var(--gold) 10%, transparent); }
+.walkthrough-setup-item[aria-current="step"] { color: var(--gold-bright); border-color: var(--gold-bright); }
+.walkthrough-step.done { color: var(--gold-bright); }
+.walkthrough-coach { position: fixed; right: 18px; bottom: 18px; z-index: var(--z-pop); display: flex; flex-direction: column; gap: 7px; width: min(340px, calc(100vw - 36px)); padding: 15px 16px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 92%, var(--gold) 8%); box-shadow: var(--shadow-3), var(--inset-hi); }
+.walkthrough-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.walkthrough-coach-tools { display: flex; flex-wrap: wrap; gap: 4px; }
+#walkthrough-coach-title { color: var(--ivory); font-size: 14px; }
+#walkthrough-coach-copy { margin: 0; color: var(--ivory); font-size: 12px; line-height: 1.65; }
+.walkthrough-coach-hint { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.walkthrough-coach-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.walkthrough-coach-actions .primary { font-size: 11px; }
+.walkthrough-focus { outline: 2px solid var(--gold-bright) !important; outline-offset: 3px; border-radius: 7px; animation: walkthrough-pulse 1.6s ease-in-out infinite; }
+body.command-active .walkthrough-coach { right: 392px; }
+@media (max-width: 1150px) { body.command-active .walkthrough-coach { right: 18px; } }
+@media (max-width: 650px) { .walkthrough-coach { left: 12px; right: 12px; bottom: 12px; width: auto; } }
+@keyframes walkthrough-pulse {
+  0%, 100% { outline-color: var(--gold-bright); }
+  50% { outline-color: transparent; }
+}
 .help-start { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
 .settings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .settings-heading h2 { margin-bottom: 7px; }
@@ -2967,6 +2988,15 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 .settings-optional > summary { color: var(--ivory); cursor: pointer; font-size: 13px; padding: 5px 0; }
 .settings-optional > p { font-size: 12px; line-height: 1.7; }
 .settings-optional > .log { margin-bottom: 0; }
+.settings-group.setup-card { border-top: 0; padding-top: 4px; }
+.setup-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.setup-head > div { min-width: 0; }
+.setup-head > button { flex-shrink: 0; }
+.setup-state { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin: 14px 0 10px; }
+.setup-state-item { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 9px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
+.setup-state-label { color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.setup-state-item > span:last-child { color: var(--ivory); font-size: 12.5px; line-height: 1.5; }
+#auto-setup-status { font-size: 12px; line-height: 1.7; }
 .ws-compose-bottom { flex-wrap: wrap; }
 .ws-compose-bottom > span { flex: 1 1 120px; }
 .ws-feedback-row { flex-wrap: wrap; }
@@ -2993,6 +3023,7 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
   .walkthrough-footer { align-items: flex-start; flex-direction: column; }
   .walkthrough-footer > div { width: 100%; justify-content: flex-end; }
   .settings-heading { flex-wrap: wrap; }
+  .setup-head { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) { #idle-hud .cmd-music-level i { transition: none; } }
 
@@ -3616,7 +3647,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   <div class="ws-main">
     <div class="ws-topbar"><div class="ws-project-heading"><span class="ws-kicker">WORKSPACE /</span><strong id="workspace-project-name">Opening your project…</strong></div><div class="ws-top-actions"><button id="workspace-reveal" class="ghost mini" title="Show the project folder">Open folder ↗</button><button class="ghost mini" data-nav="palette" aria-label="Find a tool or command">Search <kbd>Ctrl K</kbd></button></div></div>
     <div class="ws-heading"><div><p class="ws-kicker" id="workspace-greeting">YOUR SPACE TO CREATE</p><h1>What are we making?</h1><p id="workspace-project-path" class="ws-project-path"></p></div><span id="workspace-connection" class="ws-connection">Connecting…</span></div>
-    <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">A little guidance for your first project.</strong><p>Choose a project, connect your tools, create work and follow it through review.</p></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start walkthrough</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays in the sidebar">Not now</button></div></section>
+    <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">A little guidance for your first project.</strong><p>Choose a project, connect your tools, create work and follow it through review.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start walkthrough</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk with me</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays in the sidebar">Not now</button></div></section>
     <div class="ws-columns">
       <section class="ws-conversation" aria-label="Conversation with your companion">
         <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div><button id="workspace-pause" class="ghost mini" title="Pause new work. Running jobs finish normally.">Pause</button></div>
@@ -3840,9 +3871,24 @@ body.music-preview-active #idle-hud { display: none !important; }
     <div class="panel">
       <div class="settings-heading"><div><h2>Settings & connections</h2><p class="muted">Connect your assistant, choose your coding workers, and manage optional tools.</p></div><button class="ghost" data-nav="onboarding">Start here</button></div>
       <div id="studio-desktop">
+        <section class="settings-group setup-card" aria-labelledby="settings-setup-heading">
+        <div class="setup-head">
+          <div>
+            <h3 id="settings-setup-heading">Auto setup</h3>
+            <p class="muted">One pass over what this machine already has: saved keys choose the assistant route, installed CLIs choose the builders, and a saved Jev key turns on task-aware model selection. It sends no request, changes no key, and keeps every model override.</p>
+          </div>
+          <button id="auto-setup">Run auto setup</button>
+        </div>
+        <div class="setup-state">
+          <div class="setup-state-item"><span class="setup-state-label">Assistant</span><span id="setup-assistant">checking…</span></div>
+          <div class="setup-state-item"><span class="setup-state-label">Model selection</span><span id="setup-selection">checking…</span></div>
+          <div class="setup-state-item"><span class="setup-state-label">Builders</span><span id="setup-builders">checking…</span></div>
+        </div>
+        <p class="muted" id="auto-setup-status" role="status">Not run yet. Auto setup applies only the changes that are needed and explains each one.</p>
+        </section>
         <section class="settings-group" aria-labelledby="settings-assistant-heading">
         <h3 id="settings-assistant-heading">Assistant connection</h3>
-        <p class="muted">Save a key for the provider you use, then choose its routing below. Grok uses the CLI's own login.</p>
+        <p class="muted">Save a key for the provider you use, then choose its routing below. Grok uses the CLI's own login. Keys are stored encrypted and never shown again.</p>
         <div class="row">
           <input type="password" id="zai-key" placeholder="z.ai Coding Plan API key (stored encrypted)" autocomplete="off" aria-label="z.ai Coding Plan API key">
           <button id="save-zai-key">Save z.ai key</button>
@@ -3853,6 +3899,10 @@ body.music-preview-active #idle-hud { display: none !important; }
           <button id="save-key">Save OpenCode key</button>
           <span class="muted" id="key-status">checking…</span>
         </div>
+        </section>
+        <section class="settings-group" aria-labelledby="settings-routing-heading">
+        <h3 id="settings-routing-heading">Model routing</h3>
+        <p class="muted">Who pays for assistant calls, and how each task's model is chosen. Provider choice and model selection are independent; explicit model overrides take priority.</p>
         <div class="row">
           <label class="muted">AI routing
             <select id="ai-provider">
@@ -3909,8 +3959,8 @@ body.music-preview-active #idle-hud { display: none !important; }
         </div>
         </section>
         <details class="settings-optional"><summary>Jev connection & optional task suggestions</summary>
-          <p class="muted">The gateway key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
-          <div class="row"><input type="password" id="jev-key" placeholder="Jev gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev gateway API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled"><span class="track"></span><span>Intake classification</span></label></div>
+          <p class="muted">Choose where Jev is routed: the Vercel AI Gateway or TypeSafe's Jev API directly. Each route keeps its own key, stored encrypted; switching never moves a key between routes. The key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
+          <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: the Vercel AI Gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled"><span class="track"></span><span>Intake classification</span></label></div>
           <p class="muted" id="jev-status" role="status">Checking Jev…</p>
         </details>
         <details class="settings-optional"><summary>Diagnostics & app updates</summary>
@@ -4470,6 +4520,13 @@ body.music-preview-active #idle-hud { display: none !important; }
     <footer class="walkthrough-footer"><span>Your place is saved on this device.</span><div><button class="ghost" id="walkthrough-back" type="button">Back</button><button class="primary" id="walkthrough-next" type="button">Next step</button></div></footer>
   </section>
 </div>
+<aside class="walkthrough-coach" id="walkthrough-coach" role="region" aria-label="Walkthrough coach" hidden>
+  <header class="walkthrough-coach-head"><span class="eyebrow" id="walkthrough-coach-progress" role="status">Step 1 of 5</span><div class="walkthrough-coach-tools"><button class="ghost mini" id="walkthrough-coach-back" type="button">Back</button><button class="ghost mini" id="walkthrough-coach-guide" type="button">Full guide</button><button class="ghost mini" id="walkthrough-coach-end" type="button" title="End the guided walk (Esc)">End tour</button></div></header>
+  <strong id="walkthrough-coach-title">Your workspace</strong>
+  <p id="walkthrough-coach-copy" aria-live="polite"></p>
+  <p class="walkthrough-coach-hint" id="walkthrough-coach-hint"></p>
+  <div class="walkthrough-coach-actions"><button id="walkthrough-coach-next" class="primary mini" type="button">Done — next stop</button></div>
+</aside>
 <div class="overlay" id="help-overlay" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="help-heading" tabindex="-1">
     <header class="sheet-head plain">
@@ -4481,7 +4538,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         <button class="ghost sheet-close" data-nav-close="help" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>
     </header>
-    <p class="help-start">New to Studio? <button class="ghost mini" data-nav="onboarding">Open the walkthrough</button></p>
+    <p class="help-start">New to Studio? <button class="ghost mini" data-nav="onboarding">Walk me through Studio</button></p>
     <div class="shortcut-grid" id="help-grid"></div>
   </div>
 </div>
@@ -28551,43 +28608,62 @@ body.music-preview-active #idle-hud { display: none !important; }
 })();
 
 // A local, resumable guide. Reading a lesson never changes a project or runs work.
+// "Walk with me" keeps a small coach in the corner while it navigates the real
+// menus with the user, highlights the exact control and ticks each stop off.
 (function () {
   "use strict";
   const KEY = "mefiStudio.walkthrough.v1";
   const VERSION = 1;
+  const MODES = ["idle", "sheet", "coach"];
   const $ = (id) => document.getElementById(`walkthrough-${id}`);
   const lessons = [
     {
       title: "Welcome to Mefi's Studio", short: "Your workspace", glyph: "g-explorer",
-      copy: "Turn an idea into a checked result: talk it through, create a task or plan, follow the work, then review what changed. This guide shows you where to do each step.",
+      copy: "Turn an idea into a checked result: talk it through, create a task or plan, follow the work, then review what changed. This guide shows you where to do each step, and can walk the menus with you.",
       points: ["Start with Projects in the sidebar. Use + to add an existing folder, then select it. Check the project name above the conversation before adding work.", "Choose how builds start below. Auto build is on by default. Turn it off for Verify first: inspect each task, then approve the ones you want built.", "Each project keeps its own tasks, plans, conversation and results. Your project files stay in their folder; Studio keeps its history separately."],
-      action: "Choose a project", route: "project", note: "This opens the workspace and focuses the project controls. It does not change your selected project.",
+      action: "Walk me to my projects", route: "project",
+      station: "I opened the project menu with you and highlighted +. Add an existing folder, then select it. I tick this off the moment you are in a project.",
+      note: "This opens the workspace and the project menu with you. It does not change your selected project.",
+      target: "#workspace-add-project", menu: true, waitFor: "mefi:project-changed", done: "Project selected",
     },
     {
       title: "Connect the assistant and coding workers", short: "Connections", glyph: "g-ambience",
       copy: "The assistant helps you think and organize. Coding workers carry out tasks in your project. Their provider settings are separate.",
       points: ["In Settings & connections, save the key for the assistant provider you want, or choose Grok with its own CLI login.", "Choose the coding worker provider and ensure its CLI is installed and signed in. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; it advises on related work and does not replace your coding provider."],
-      action: "Open connections", route: "studio", note: "Connection tests and AI requests may use your provider allowance when you explicitly run them.",
+      action: "Walk me to connections", route: "studio",
+      station: "We are in Settings & connections together, at the assistant group. Save the key you want, then scroll to the coding worker group and confirm its CLI is signed in. Nothing is sent until you choose to test it.",
+      note: "Connection tests and AI requests may use your provider allowance when you explicitly run them.",
+      target: "#settings-assistant-heading", done: "Connections checked",
     },
     {
       title: "Give a clear task, or explore a plan", short: "Create", glyph: "g-tasks",
       copy: "Use Give a task when the outcome is clear. Use Plan an idea when you need to settle questions before anything is built.",
       points: ["Talk together is for questions and discussion. Give a task saves work in the selected project; Use a task outline helps you describe the result and checks.", "Start small: for example, ‘Add a Create note button to the empty notes list; check that it opens a new note.’ Say what should stay unchanged, too.", "Plan an idea collects questions and decisions. Review and approve the specification, then explicitly create its tasks.", "With Verify first, View task lets you inspect the brief and Approve build, or leave it waiting. New work also follows your Pause and worker settings."],
-      action: "Prepare a task", route: "task", secondary: "Explore a plan", secondaryRoute: "plans", note: "These buttons open the editor. They do not submit a task or start a planning request.",
+      action: "Walk me to the task box", route: "task", secondary: "Explore a plan", secondaryRoute: "plans",
+      station: "This is the task box for the selected project. Describe the result and how you will check it, or open Use a task outline for a guided shape. I do not send anything from here.",
+      note: "These buttons open the editor and the plan sheet. They do not submit a task or start a planning request.",
+      target: "#workspace-input", done: "Task box found",
     },
     {
       title: "Follow the queue and current work", short: "Monitor", glyph: "g-command",
       copy: "Your work is the everyday queue. Command's node tree shows live workers, their current step and what is waiting to run.",
       points: ["Your work separates the queue, saved ideas, Review and Done. Open any task for its brief, prerequisites, history and result.", "In Node tree, Live work shows running workers and their reported steps. Click Ready, Waiting or Needs attention to see the matching tasks and their reasons.", "Work through backlog starts existing work and admits saved ideas gradually. Pause stops new scheduling while current workers finish; let them finish before switching projects.", "A prerequisite must finish before dependent work starts. Read connection, retry and file-conflict messages before adding more work."],
-      action: "Open live work", route: "command", secondary: "Open task board", secondaryRoute: "tasks", note: "Follow in Command tracks active work. You can pan or select a task to take control of the view.",
+      action: "Walk me to Live work", route: "command", secondary: "Open task board", secondaryRoute: "tasks",
+      station: "We are in Command. Live work on the right follows running workers and their reported steps; the node tree behind it follows your selection. Open a reason like Ready, Waiting or Needs attention to see the matching tasks.",
+      note: "Follow in Command tracks active work. You can pan or select a task to take control of the view.",
+      target: "#idle-feed", done: "Live work found",
     },
     {
       title: "Review results and recover deliberately", short: "Review", glyph: "g-eyes",
       copy: "A worker finishing is a result to inspect. Done should mean there is verification evidence, or you have explicitly confirmed the result yourself.",
       points: ["Open Review in Your work to read the result, evidence and next actions. Inspect the project changes and run any remaining acceptance checks.", "If work needs attention, read its reason first. Correct the connection, brief or prerequisite, then use its retry control when you are ready.", "Keep failed work available for diagnosis. Task history can recover an earlier brief; it does not roll back your project files."],
-      action: "Open Review", route: "review", secondary: "Open task board", secondaryRoute: "tasks", note: "You can reopen this guide from Start here in the sidebar, Settings or Shortcuts. Completing the guide does not mark any task done.",
+      action: "Walk me to Review", route: "review",
+      station: "This is Review in Your work. Open a finished task to read the result and evidence, then run any remaining acceptance checks. Tasks that need attention keep their reason and retry controls here.",
+      note: "You can reopen this guide from Start here in the sidebar, Settings or Shortcuts. Completing the guide does not mark any task done.",
+      target: "#workspace-review", done: "Review found",
     },
   ];
+  const blankDone = () => lessons.map(() => false);
   function read() {
     try {
       const value = JSON.parse(localStorage.getItem(KEY));
@@ -28595,12 +28671,16 @@ body.music-preview-active #idle-hud { display: none !important; }
         version: VERSION,
         step: Number.isInteger(value.step) ? Math.max(0, Math.min(lessons.length - 1, value.step)) : 0,
         status: ["new", "reading", "dismissed", "complete"].includes(value.status) ? value.status : "new",
+        mode: MODES.includes(value.mode) ? value.mode : "idle",
+        done: blankDone().map((_, index) => Boolean(value.done?.[index])),
       };
     } catch {}
-    return { version: VERSION, step: 0, status: "new" };
+    return { version: VERSION, step: 0, status: "new", mode: "idle", done: blankDone() };
   }
   let state = read();
   let initialized = false;
+  let claimed = false;
+  let highlighted = null;
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
   function node(tag, className, text) {
     const element = document.createElement(tag);
@@ -28608,12 +28688,38 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (text !== undefined) element.textContent = text;
     return element;
   }
+  function later(fn) {
+    try { if (typeof requestAnimationFrame === "function") { requestAnimationFrame(fn); return; } } catch {}
+    try { setTimeout(fn, 0); } catch { fn(); }
+  }
+  // The workspace header carries the truth about a selected project. Reading it
+  // keeps the guide away from every project-writing host API.
+  function projectReady() {
+    const label = document.getElementById("workspace-project-name")?.textContent?.trim() || "";
+    if (!label) return false;
+    return !/^(Your workspace|Opening your project|Loading|Desktop app)/.test(label);
+  }
+  function isDone(index) {
+    if (state.done[index]) return true;
+    return index === 0 && projectReady();
+  }
+  const doneCount = () => lessons.filter((_, index) => isDone(index)).length;
   function renderInvitation() {
     const card = $("invitation");
     if (!card) return;
+    const active = state.status === "reading";
     card.hidden = state.status === "dismissed" || state.status === "complete";
-    $("invite-title").textContent = state.status === "reading" ? "Your next step is saved." : "A little guidance for your first project.";
-    $("invite-open").textContent = state.status === "reading" ? `Continue guide · ${state.step + 1} of ${lessons.length}` : "Start walkthrough";
+    $("invite-title").textContent = active ? "Your place is saved. Pick the setup back up any time." : "Set up your first project together.";
+    $("invite-open").textContent = active ? `Open the guide · ${doneCount()} of ${lessons.length} done` : "Start walkthrough";
+    const walk = $("invite-walk");
+    if (walk) walk.textContent = active ? `Walk with me · ${lessons[state.step].short}` : "Walk me through it";
+    const trail = $("invite-steps");
+    if (trail) trail.replaceChildren(...lessons.map((lesson, index) => {
+      const done = isDone(index);
+      const item = node("span", `walkthrough-setup-item${done ? " done" : ""}`, `${done ? "✓ " : ""}${lesson.short}`);
+      if (index === state.step && state.status !== "complete") item.setAttribute("aria-current", "step");
+      return item;
+    }));
   }
   function render() {
     const lesson = lessons[state.step];
@@ -28630,7 +28736,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     $("back").disabled = state.step === 0;
     $("next").textContent = state.step === lessons.length - 1 ? "Finish guide" : "Next step";
     const steps = lessons.map((item, index) => {
-      const button = node("button", "walkthrough-step", `${index + 1}. ${item.short}`);
+      const button = node("button", `walkthrough-step${isDone(index) ? " done" : ""}`, `${isDone(index) ? "✓ " : ""}${index + 1}. ${item.short}`);
       button.type = "button";
       button.setAttribute("aria-current", index === state.step ? "step" : "false");
       button.addEventListener("click", () => move(index));
@@ -28649,23 +28755,97 @@ body.music-preview-active #idle-hud { display: none !important; }
       ? "Unapproved work waits in Review. Open a task to review its scope and approve its build. This choice is saved for all projects."
       : "Queued work can start automatically. Turn off to choose which tasks get built. You can change this above Your work at any time.";
   }
+  function renderCoach() {
+    if (!$("coach")) return;
+    const lesson = lessons[state.step];
+    const done = isDone(state.step);
+    $("coach-progress").textContent = `Step ${state.step + 1} of ${lessons.length} · ${lesson.short}`;
+    $("coach-title").textContent = lesson.title;
+    $("coach-copy").textContent = lesson.station || lesson.copy;
+    $("coach-hint").textContent = done
+      ? `${lesson.done} ✓ — press the button when you are ready for the next stop.`
+      : lesson.waitFor
+        ? "I will tick this off the moment it is done. Take your time."
+        : "I stay out of your way here; press the button when you are ready.";
+    $("coach-next").textContent = state.step === lessons.length - 1 ? "Finish the tour" : done ? "Next stop" : "Done — next stop";
+    $("coach-back").disabled = state.step === 0;
+    $("coach").hidden = false;
+  }
+  function clearHighlight() {
+    if (!highlighted) return;
+    try { highlighted.classList?.remove?.("walkthrough-focus"); } catch {}
+    highlighted = null;
+  }
+  function highlight(selector) {
+    clearHighlight();
+    if (!selector) return null;
+    const target = document.querySelector(selector);
+    if (!target) return null;
+    try { target.classList?.add?.("walkthrough-focus"); } catch {}
+    highlighted = target;
+    try { target.scrollIntoView?.({ block: "center", inline: "nearest" }); } catch {}
+    return target;
+  }
+  function claimLayer() {
+    if (claimed) return;
+    claimed = true;
+    window.MefiNav?.claim?.("onboarding");
+  }
+  function releaseLayer() {
+    if (!claimed) return;
+    claimed = false;
+    window.MefiNav?.release?.("onboarding");
+  }
   function move(index) {
     state = { ...state, step: Math.max(0, Math.min(lessons.length - 1, index)), status: "reading" };
     save(); render(); $("title").focus();
   }
   function open() {
     init();
-    if (!$("overlay") || !$("overlay").hidden) return;
-    state.status = "reading";
+    const overlay = $("overlay");
+    if (!overlay) return;
+    state = { ...state, status: "reading", mode: "sheet" };
     save(); render();
-    $("overlay").hidden = false;
-    window.MefiNav?.claim?.("onboarding");
+    const coachEl = $("coach");
+    if (coachEl) coachEl.hidden = true;
+    clearHighlight();
+    overlay.hidden = false;
+    claimLayer();
   }
   function close() {
-    if (!$("overlay") || $("overlay").hidden) return;
-    $("overlay").hidden = true;
-    save(); renderInvitation();
-    window.MefiNav?.release?.("onboarding");
+    const overlay = $("overlay");
+    if (!overlay) return;
+    const coachEl = $("coach");
+    if (overlay.hidden && (!coachEl || coachEl.hidden)) return;
+    overlay.hidden = true;
+    if (coachEl) coachEl.hidden = true;
+    clearHighlight();
+    state = { ...state, mode: "idle" };
+    save(); releaseLayer(); renderInvitation();
+  }
+  // Safe destinations: navigation and highlighting only. Nothing is submitted,
+  // approved or started from a lesson.
+  function routeTo(lesson) {
+    const route = lesson.route;
+    if (["project", "task", "review"].includes(route)) {
+      window.MefiNav?.go?.("workspace");
+      if (route === "task") {
+        document.getElementById("workspace-mode-work")?.click();
+        document.getElementById("workspace-input")?.focus?.();
+      } else if (route === "review") {
+        const review = document.getElementById("workspace-review");
+        review?.click(); review?.focus?.();
+      }
+    } else window.MefiNav?.go?.(route);
+    if (lesson.menu) window.MefiSidebar?.open?.();
+    highlight(lesson.target);
+    if (route === "project") document.getElementById("workspace-add-project")?.focus?.();
+    const at = state.step;
+    later(() => {
+      if (state.mode !== "coach" || state.step !== at) return;
+      if (lesson.menu) window.MefiSidebar?.open?.();
+      highlight(lesson.target);
+    });
   }
   function visit(route) {
     close();
@@ -28680,6 +28860,29 @@ body.music-preview-active #idle-hud { display: none !important; }
       } else document.getElementById("workspace-add-project")?.focus();
     } else window.MefiNav?.go?.(route);
   }
+  function coach(index, options = {}) {
+    init();
+    if (!$("coach") || !$("overlay")) return;
+    state = { ...state, step: Math.max(0, Math.min(lessons.length - 1, index)), status: "reading", mode: "coach" };
+    save();
+    $("overlay").hidden = true;
+    releaseLayer();
+    renderCoach(); renderInvitation();
+    if (options.navigate !== false) routeTo(lessons[state.step]);
+  }
+  function advance() {
+    state.done[state.step] = true;
+    if (state.step >= lessons.length - 1) { state.status = "complete"; close(); return; }
+    coach(state.step + 1);
+  }
+  function projectChanged(event) {
+    if (!event?.detail?.projectId || isDone(0)) return;
+    state.done[0] = true;
+    save();
+    if (state.mode === "coach") renderCoach();
+    if (state.mode === "sheet" && $("overlay") && !$("overlay").hidden) render();
+    renderInvitation();
+  }
   function init() {
     if (initialized || !$("overlay")) return;
     initialized = true;
@@ -28691,15 +28894,34 @@ body.music-preview-active #idle-hud { display: none !important; }
       renderBuildMode();
     });
     window.addEventListener("mefi:build-mode", renderBuildMode);
+    window.addEventListener("mefi:project-changed", projectChanged);
+    window.addEventListener("mefi:nav", () => {
+      if (state.mode !== "coach") return;
+      const at = state.step;
+      later(() => { if (state.mode === "coach" && state.step === at) highlight(lessons[at].target); });
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || state.mode !== "coach") return;
+      if (event.target?.closest?.("input, textarea, select, [contenteditable]")) return;
+      event.preventDefault?.(); event.stopPropagation?.();
+      close();
+    }, true);
+    $("coach-next")?.addEventListener("click", () => advance());
+    $("coach-back")?.addEventListener("click", () => coach(state.step - 1));
+    $("coach-guide")?.addEventListener("click", () => open());
+    $("coach-end")?.addEventListener("click", () => close());
+    $("invite-walk")?.addEventListener("click", () => coach(state.status === "new" ? 0 : state.step));
     $("back").addEventListener("click", () => move(state.step - 1));
     $("next").addEventListener("click", () => {
       if (state.step < lessons.length - 1) return move(state.step + 1);
       state.status = "complete"; save(); close();
     });
-    $("action").addEventListener("click", () => visit(lessons[state.step].route));
+    $("action").addEventListener("click", () => coach(state.step));
     $("secondary").addEventListener("click", () => visit(lessons[state.step].secondaryRoute));
     $("dismiss").addEventListener("click", () => {
-      state.status = "dismissed"; save(); renderInvitation();
+      state.status = "dismissed"; save();
+      close();
+      renderInvitation();
       document.querySelector('[data-nav="onboarding"]')?.focus();
     });
     $("overlay").addEventListener("click", (event) => { if (event.target === $("overlay")) close(); });
@@ -28721,7 +28943,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     open();
     return true;
   }
-  window.MefiOnboarding = { init, startup, open, close };
+  window.MefiOnboarding = { init, startup, open, close, coach };
 })();
 
 // Mefi's Studio AI+ — booklet renderer, filters, refresh-on-open, studio launcher UI.
@@ -29089,15 +29311,56 @@ body.music-preview-active #idle-hud { display: none !important; }
     const speedModel = document.getElementById("speed-model");
     updateSpeedModels();
 
+    // The setup overview mirrors what the host already reported — saved-key
+    // flags, routing, installed CLIs — so the auto setup card never issues its
+    // own probes. Every row keeps "unknown" honest until a real read lands.
+    const setup = { keys: { opencode: null, zai: null }, routing: null, clis: null, routingError: false, cliError: false };
+    const setupAssistant = document.getElementById("setup-assistant");
+    const setupSelection = document.getElementById("setup-selection");
+    const setupBuilders = document.getElementById("setup-builders");
+    const providerNames = { auto: "Auto (prefers z.ai)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI" };
+    function grokInstalled() {
+      return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === "grok" && cli.installed);
+    }
+    function keyState(which) {
+      const known = setup.keys[which];
+      if (known !== null) return known ? "key saved" : "no key saved";
+      const flag = which === "zai" ? setup.routing?.hasZai : setup.routing?.hasOpenCode;
+      return flag === true ? "key saved" : flag === false ? "no key saved" : "key unknown";
+    }
+    function renderSetupState() {
+      const routing = setup.routing;
+      if (setup.routingError) setupAssistant.textContent = "status unavailable";
+      else if (!routing) setupAssistant.textContent = "checking…";
+      else {
+        const provider = providerNames[routing.provider] ? routing.provider : "auto";
+        const detail = provider === "grok" ? "CLI login"
+          : provider === "auto" ? (setup.keys.zai ? "will use z.ai" : setup.keys.opencode ? "will use OpenCode Go" : grokInstalled() ? "will use Grok CLI" : "save a key to connect")
+          : keyState(provider);
+        setupAssistant.textContent = `${providerNames[provider]} · ${detail}`;
+      }
+      if (setup.routingError) setupSelection.textContent = "status unavailable";
+      else if (!routing) setupSelection.textContent = "checking…";
+      else if ((routing.modelSelection ?? "jev") === "fixed") setupSelection.textContent = "Fixed defaults · overrides win";
+      else setupSelection.textContent = routing.jevConfigured ? "Jev · task fit, speed & cost" : "Jev · waiting for a gateway key";
+      if (setup.cliError) setupBuilders.textContent = "CLI status unavailable";
+      else if (!setup.clis) setupBuilders.textContent = "checking…";
+      else {
+        const installed = setup.clis.filter((cli) => cli.installed);
+        setupBuilders.textContent = installed.length ? `${installed.map((cli) => cli.name).join(", ")} installed` : "No CLI detected — install OpenCode or Grok";
+      }
+    }
+    renderSetupState();
+
     const keyStatus = document.getElementById("key-status");
     const zaiKeyStatus = document.getElementById("zai-key-status");
     window.mefiStudio
       .getApiKey("opencode")
-      .then((key) => (keyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"))
+      .then((key) => { setup.keys.opencode = Boolean(key?.saved); keyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
       .catch(() => (keyStatus.textContent = "key status unavailable"));
     window.mefiStudio
       .getApiKey("zai")
-      .then((key) => (zaiKeyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"))
+      .then((key) => { setup.keys.zai = Boolean(key?.saved); zaiKeyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
       .catch(() => (zaiKeyStatus.textContent = "key status unavailable"));
 
     document.getElementById("save-key").addEventListener("click", async () => {
@@ -29119,25 +29382,42 @@ body.music-preview-active #idle-hud { display: none !important; }
     const jevStatus = document.getElementById("jev-status");
     const jevEnabled = document.getElementById("jev-enabled");
     const jevTest = document.getElementById("test-jev");
+    const jevRoute = document.getElementById("jev-route");
+    const jevKey = document.getElementById("jev-key");
+    // Each route stores its credential in its own encrypted settings field.
+    const jevRouteFields = {
+      vercel: { key: "gateway", placeholder: "Vercel gateway API key (stored encrypted)" },
+      typesafe: { key: "jev", placeholder: "TypeSafe Jev API key (stored encrypted)" },
+    };
+    const jevRouteOf = () => (jevRouteFields[jevRoute.value] ? jevRoute.value : "vercel");
     async function refreshJev() {
       try {
         const status = await window.mefiStudio.jevStatus();
+        const route = jevRouteFields[status.route] ? status.route : "vercel";
+        jevRoute.value = route;
+        jevKey.placeholder = jevRouteFields[route].placeholder;
         jevEnabled.checked = status.enabled;
         jevTest.disabled = !status.configured;
-        const route = !status.configured ? "Save a gateway key to connect Jev" : !status.enabled ? "Jev classification paused" : status.accountingPending ? "Jev waiting for the usage ledger" : `Jev configured · ${status.model}`;
+        const where = status.routeLabel ? ` · ${status.routeLabel}` : "";
+        const saved = status.routes && status.routes[route] !== undefined ? (status.routes[route] ? " · key saved" : " · no key saved") : "";
+        const state = !status.configured ? `Save a Jev key for ${status.routeLabel ?? "this route"} to connect` : !status.enabled ? "Jev classification paused" : status.accountingPending ? "Jev waiting for the usage ledger" : `Jev configured · ${status.model}`;
         const queue = status.pending ? ` · ${status.pending} waiting` : "";
-        jevStatus.textContent = `${route}${queue}${status.lastError ? ` · ${status.lastError}` : ""}`;
+        jevStatus.textContent = `${state}${where}${saved}${queue}${status.lastError ? ` · ${status.lastError}` : ""}`;
       } catch { jevStatus.textContent = "Jev status unavailable"; }
     }
     document.getElementById("save-jev-key").addEventListener("click", async () => {
-      const input = document.getElementById("jev-key");
+      const input = jevKey;
       try {
-        const result = await window.mefiStudio.setApiKey(input.value.trim(), "gateway");
+        const result = await window.mefiStudio.setApiKey(input.value.trim(), jevRouteFields[jevRouteOf()].key);
         input.value = "";
         if (!result?.ok) { jevStatus.textContent = `Save failed: ${result?.error ?? "unknown"}`; return; }
         await refreshJev();
         await loadAiRouting();
       } catch { input.value = ""; jevStatus.textContent = "Could not save Jev key"; }
+    });
+    jevRoute.addEventListener("change", async () => {
+      try { await window.mefiStudio.jevSetRoute(jevRoute.value); await refreshJev(); await loadAiRouting(); }
+      catch { jevStatus.textContent = "Could not change Jev route"; }
     });
     jevEnabled.addEventListener("change", async () => {
       try { await window.mefiStudio.jevSetEnabled(jevEnabled.checked); await refreshJev(); }
@@ -29198,6 +29478,9 @@ body.music-preview-active #idle-hud { display: none !important; }
       try {
         const routing = await window.mefiStudio.getAiRouting();
         if (read !== routingRead) return;
+        setup.routing = routing;
+        setup.routingError = false;
+        renderSetupState();
         if (syncControls) {
           providerSelect.value = routing.provider;
           modelSelection.value = routing.modelSelection ?? "jev";
@@ -29214,7 +29497,7 @@ body.music-preview-active #idle-hud { display: none !important; }
             ? "Grok CLI uses your explicit model or its CLI default. Jev selection is available for HTTP calls and z.ai coding workers."
             : routing.jevConfigured
               ? "Jev model selection ready · task fit, speed and cost. Explicit model overrides take priority."
-              : "Jev model selection is waiting for a gateway key. Save a Jev key below; usual defaults apply until connected.";
+              : "Jev model selection is waiting for a Jev key. Save one below for the selected route; usual defaults apply until connected.";
         const decision = routing.routingDecision;
         routingEvidence.hidden = !decision;
         routingEvidence.textContent = decision ? evidenceText(decision.evidence, decision.taskType) : "";
@@ -29226,7 +29509,11 @@ body.music-preview-active #idle-hud { display: none !important; }
           routingDecision.textContent = `Last selection: ${method} · ${decision.provider} / ${decision.model} · ${decision.taskType}${stamp}. ${decision.reason || "No reason recorded."}`;
         }
       } catch {
-        if (read === routingRead) routingStatus.textContent = "Model selection status unavailable. Refresh to try again.";
+        if (read === routingRead) {
+          routingStatus.textContent = "Model selection status unavailable. Refresh to try again.";
+          setup.routingError = true;
+          renderSetupState();
+        }
       } finally {
         if (read === routingRead) routingRefresh.disabled = false;
       }
@@ -29265,6 +29552,40 @@ body.music-preview-active #idle-hud { display: none !important; }
     executorCli.addEventListener("change", () => saveRouting({ executorCli: executorCli.value }, `builders run on ${executorCli.value}`));
     executorModel.addEventListener("change", () => saveRouting({ executorModel: executorModel.value }, `builder model ${executorModel.value.trim() ? `"${executorModel.value.trim()}"` : "reset to default"}`));
 
+    // Auto setup: one host call that reads saved keys and installed CLIs and
+    // applies the matching configuration. The renderer only reports the host's
+    // summary and re-reads state, so the controls above stay authoritative.
+    const autoSetupButton = document.getElementById("auto-setup");
+    const autoSetupStatus = document.getElementById("auto-setup-status");
+    if (typeof window.mefiStudio.autoSetup !== "function") {
+      autoSetupButton.disabled = true;
+      autoSetupStatus.textContent = "Auto setup needs the desktop app.";
+    } else {
+      autoSetupButton.addEventListener("click", async () => {
+        if (autoSetupButton.disabled) return;
+        autoSetupButton.disabled = true;
+        autoSetupStatus.textContent = "Checking saved keys and installed CLIs…";
+        try {
+          const result = await window.mefiStudio.autoSetup();
+          if (!result?.ok) {
+            autoSetupStatus.textContent = `Auto setup could not finish: ${result?.error ?? "unknown error"}`;
+            studioLog("! auto setup: nothing detected to configure");
+            return;
+          }
+          const notes = Array.isArray(result.notes) && result.notes.length ? ` ${result.notes.join(" ")}` : "";
+          autoSetupStatus.textContent = `${result.summary ?? "Auto setup applied."}${notes}`;
+          studioLog(`> auto setup: ${result.summary ?? "applied"}`);
+          await loadAiRouting({ syncControls: true });
+          await refreshCliStatus();
+        } catch (error) {
+          autoSetupStatus.textContent = `Auto setup failed: ${error.message}`;
+          studioLog(`! auto setup: ${error.message}`);
+        } finally {
+          autoSetupButton.disabled = false;
+        }
+      });
+    }
+
     // Coding CLIs: launch the owner's installed tools in their own terminal.
     // Codex and Claude Code use their own accounts; OpenCode carries the
     // Studio-managed mefi-zai provider when a z.ai key is saved.
@@ -29272,6 +29593,8 @@ body.music-preview-active #idle-hud { display: none !important; }
     async function refreshCliStatus() {
       try {
         const clis = await window.mefiStudio.cliStatus();
+        setup.clis = Array.isArray(clis) ? clis : [];
+        setup.cliError = false;
         cliStatus.textContent = clis.map((cli) => `${cli.name} ${cli.installed ? "✓" : "not found"}`).join(" · ");
         document.querySelectorAll("#studio-desktop button[data-cli]").forEach((button) => {
           const match = clis.find((cli) => cli.id === button.dataset.cli);
@@ -29279,7 +29602,9 @@ body.music-preview-active #idle-hud { display: none !important; }
         });
       } catch {
         cliStatus.textContent = "CLI status unavailable";
+        setup.cliError = true;
       }
+      renderSetupState();
     }
     refreshCliStatus();
     document.querySelectorAll("#studio-desktop button[data-cli]").forEach((button) => {

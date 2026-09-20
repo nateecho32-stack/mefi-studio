@@ -2945,6 +2945,27 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 .walkthrough-footer { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 18px 0 0; margin: 0; border-top: 1px solid var(--hairline); }
 .walkthrough-footer > span { color: var(--muted); font-size: 10px; }
 .walkthrough-footer > div { display: flex; gap: 8px; flex-shrink: 0; }
+.walkthrough-setup { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.walkthrough-setup-item { display: inline-flex; align-items: center; padding: 2px 8px; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font-size: 10px; letter-spacing: .02em; white-space: nowrap; }
+.walkthrough-setup-item.done { color: var(--ivory); border-color: var(--hairline-strong); background: color-mix(in srgb, var(--gold) 10%, transparent); }
+.walkthrough-setup-item[aria-current="step"] { color: var(--gold-bright); border-color: var(--gold-bright); }
+.walkthrough-step.done { color: var(--gold-bright); }
+.walkthrough-coach { position: fixed; right: 18px; bottom: 18px; z-index: var(--z-pop); display: flex; flex-direction: column; gap: 7px; width: min(340px, calc(100vw - 36px)); padding: 15px 16px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 92%, var(--gold) 8%); box-shadow: var(--shadow-3), var(--inset-hi); }
+.walkthrough-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.walkthrough-coach-tools { display: flex; flex-wrap: wrap; gap: 4px; }
+#walkthrough-coach-title { color: var(--ivory); font-size: 14px; }
+#walkthrough-coach-copy { margin: 0; color: var(--ivory); font-size: 12px; line-height: 1.65; }
+.walkthrough-coach-hint { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.walkthrough-coach-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.walkthrough-coach-actions .primary { font-size: 11px; }
+.walkthrough-focus { outline: 2px solid var(--gold-bright) !important; outline-offset: 3px; border-radius: 7px; animation: walkthrough-pulse 1.6s ease-in-out infinite; }
+body.command-active .walkthrough-coach { right: 392px; }
+@media (max-width: 1150px) { body.command-active .walkthrough-coach { right: 18px; } }
+@media (max-width: 650px) { .walkthrough-coach { left: 12px; right: 12px; bottom: 12px; width: auto; } }
+@keyframes walkthrough-pulse {
+  0%, 100% { outline-color: var(--gold-bright); }
+  50% { outline-color: transparent; }
+}
 .help-start { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
 .settings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .settings-heading h2 { margin-bottom: 7px; }
@@ -2960,6 +2981,15 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 .settings-optional > summary { color: var(--ivory); cursor: pointer; font-size: 13px; padding: 5px 0; }
 .settings-optional > p { font-size: 12px; line-height: 1.7; }
 .settings-optional > .log { margin-bottom: 0; }
+.settings-group.setup-card { border-top: 0; padding-top: 4px; }
+.setup-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.setup-head > div { min-width: 0; }
+.setup-head > button { flex-shrink: 0; }
+.setup-state { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin: 14px 0 10px; }
+.setup-state-item { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 9px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
+.setup-state-label { color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.setup-state-item > span:last-child { color: var(--ivory); font-size: 12.5px; line-height: 1.5; }
+#auto-setup-status { font-size: 12px; line-height: 1.7; }
 .ws-compose-bottom { flex-wrap: wrap; }
 .ws-compose-bottom > span { flex: 1 1 120px; }
 .ws-feedback-row { flex-wrap: wrap; }
@@ -2986,6 +3016,7 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
   .walkthrough-footer { align-items: flex-start; flex-direction: column; }
   .walkthrough-footer > div { width: 100%; justify-content: flex-end; }
   .settings-heading { flex-wrap: wrap; }
+  .setup-head { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) { #idle-hud .cmd-music-level i { transition: none; } }
 
