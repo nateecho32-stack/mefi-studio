@@ -3204,6 +3204,88 @@ export function parseExecutorResult(line, mark = "MEFI_RESULT:") {
   return { raw: body.slice(0, 300), parts };
 }
 
+// ---- overseer verification scheduling ---------------------------------------------
+// A builder's "MEFI_RESULT: done" report is a claim, not a verdict. When one
+// lands, the overseer schedules its OWN verification run — `npm run check`
+// plus the task's focused tests — BEFORE the card may close: the queued job is
+// keyed per attempt, so repeated callbacks, a report containing two result
+// lines, or a re-settled card still queue exactly one job. A report whose
+// result field is anything else (failed, partial, missing) queues zero jobs,
+// and the report field is read start-anchored (parseExecutorResult requires
+// the line to BE the mark) so prose quoting the protocol mid-sentence never
+// schedules anything. The queue is pure state the caller owns: main.cjs passes
+// its live queue and drains it after settlement; the contract test passes an
+// array and counts what a done report queued.
+const VERIFICATION_RESULT_RE = /^(?:done|complete|completed)\b/i;
+const FOCUSED_TEST_RE = /(?:^|[\\/])(?:tests?[\\/][^\s"']+\.mjs|tools[\\/]test_[^\s"']+\.py)$/i;
+const VERIFICATION_MAX_FOCUSED = 6;
+
+export function verificationJobKey(taskId = null, attemptKey = null) {
+  return `verification:${str(taskId).trim() || "unknown"}:${str(attemptKey).trim() || "unkeyed"}`;
+}
+
+// The task's focused tests: test-shaped entries from its saved scope (files,
+// file, refs) plus any real test path named in the report's "ran" clause.
+// Anything untestable resolves to an empty list — the verification run is
+// still `npm run check`, just with nothing focused added.
+export function focusedTestsForTask(task = null, resultNote = null) {
+  const candidates = [];
+  const source = isObject(task) ? task : {};
+  candidates.push(...asArray(source.files), source.file, ...asArray(source.refs));
+  const ran = str(isObject(resultNote) ? resultNote.parts?.ran : "").toLowerCase();
+  if (ran) candidates.push(...ran.split(/[\s,;]+/));
+  const seen = new Set();
+  const tests = [];
+  for (const candidate of candidates) {
+    const value = str(candidate).trim().replace(/\\/g, "/");
+    if (!value || seen.has(value) || !FOCUSED_TEST_RE.test(value)) continue;
+    seen.add(value);
+    // Executable form, following the repo's own documented pipelines.
+    tests.push(/\.py$/i.test(value)
+      ? `python -m unittest discover -s ${value.slice(0, value.lastIndexOf("/")) || "."} -p "${value.slice(value.lastIndexOf("/") + 1)}"`
+      : `node --test ${value}`);
+    if (tests.length >= VERIFICATION_MAX_FOCUSED) break;
+  }
+  return tests;
+}
+
+// Queue the attempt's verification job, exactly once per key. Returns the
+// queued job, or null when the report is not a done claim or the attempt
+// already has its job queued (the duplicate case — recover that job with
+// findQueuedVerification, never by queueing again).
+export function scheduleVerificationOnDone({ resultNote = null, task = null, attemptKey = null, queue = [], now = Date.now() } = {}) {
+  const parsed = isObject(resultNote) && resultNote.parts ? resultNote : (resultNote ? parseExecutorResult(resultNote) : null);
+  const resultField = str(parsed?.raw).trim();
+  if (!parsed || !VERIFICATION_RESULT_RE.test(resultField)) return null;
+  const taskId = str(isObject(task) ? task.id : "").trim() || null;
+  const key = verificationJobKey(taskId, attemptKey);
+  const already = asArray(queue).some((job) => isObject(job) && job.key === key);
+  if (already) return null;
+  const tests = focusedTestsForTask(task, parsed);
+  const job = {
+    key,
+    kind: "verification",
+    taskId,
+    attemptKey: str(attemptKey).trim() || null,
+    title: `Verify: ${str(isObject(task) ? task.title : "").trim().slice(0, 80) || taskId || "attempt"}`,
+    commands: ["npm run check", ...tests],
+    createdAt: Number(now) || Date.now(),
+  };
+  if (Array.isArray(queue)) queue.push(job);
+  return job;
+}
+
+// Recover an attempt's already-queued verification job by its stable key,
+// without queueing again. The queue push survives a rolled-back store write,
+// so a retried settlement dedupes to null — callers use this to restore the
+// row's verificationRun stamp. Only an attempt that actually queued finds a
+// job here: a non-done report has no key in the queue, so the lookup stays
+// null for it too.
+export function findQueuedVerification({ taskId = null, attemptKey = null, queue = [] } = {}) {
+  const key = verificationJobKey(taskId, attemptKey);
+  return asArray(queue).find((job) => isObject(job) && job.key === key) ?? null;
+}
+
 // ---- completion verification ------------------------------------------------------
 // "The run said done" is a claim, not evidence. Verification is decided by the
 // attempt's acceptance contract:
@@ -4587,6 +4669,31 @@ export function nextBackoffMs(failures) {
   const count = Math.floor(num(failures, 0));
   if (count <= 0) return 0;
   return Math.min(60, 5 * 2 ** (count - 1)) * MINUTE;
+}
+
+// The one state nothing watches: a key is present but the AI has never
+// answered (online false, zero failures), so no real call is owed, no backoff
+// is running and the loop would sit unprobed forever. planOfflineProbe turns
+// that exact state into a single queued probe ({ delay, at, attempts }); any
+// other state returns null and the existing online/failure handling stays in
+// charge. A probe waits out a doubling backoff (per failed attempt, capped)
+// and is never re-queued while one is already pending (pendingUntil in the
+// future) or an owed backoff (ai.backoffUntil) still runs.
+export const OFFLINE_PROBE_BASE_MS = 90 * 1000;
+export const OFFLINE_PROBE_MAX_MS = 30 * MINUTE;
+
+export function offlineProbeDelayMs(attempts) {
+  return Math.min(OFFLINE_PROBE_MAX_MS, OFFLINE_PROBE_BASE_MS * 2 ** Math.max(0, Math.floor(num(attempts, 0))));
+}
+
+export function planOfflineProbe(ai, now = Date.now(), { pendingUntil = 0, attempts = 0 } = {}) {
+  if (!isObject(ai)) return null;
+  if (ai.keyPresent !== true || ai.online === true) return null;
+  if (num(ai.failures, 0) !== 0) return null;
+  if (now < num(ai.backoffUntil, 0)) return null;
+  if (now < num(pendingUntil, 0)) return null;
+  const tries = Math.max(0, Math.floor(num(attempts, 0)));
+  return { delay: offlineProbeDelayMs(tries), at: now + offlineProbeDelayMs(tries), attempts: tries };
 }
 
 const BUSY_TEXT = { audit: "auditing…", brief: "briefing…", fix: "fixing…", tidy: "tidying…", organize: "organising…", message: "replying…", tick: "ticking…" };

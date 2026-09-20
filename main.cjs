@@ -1110,6 +1110,7 @@ const ASSISTANT_SYSTEM = [
   "Reply with STRICT minified JSON only. No markdown, no prose, no extra keys.",
   'Schema: {"summary":"<=50 words","alerts":[{"severity":"info|warn|critical","title":"<=8 words","detail":"<=40 words","sessionIds":["ses_..."]}],"checkpoints":[{"sessionId":"ses_...","note":"<=30 words"}],"expand":[]}',
   "Alerts must cover: file collisions, two sessions overlapping on the same subsystem, stale in-progress work, and unusually large deletions. Checkpoints are short progress notes for active sessions (one per session, the most useful observation).",
+  "A session with finished:true completed its final turn normally — it is done work: never alert it as idle, stalled, or unscoped, and its missing todos mean no list was kept, not lost work. Only sessions whose facts show open todos and no finished marker can be stale.",
   "Never invent sessions, files, ids, or numbers that are not in the facts.",
 ].join(" ");
 
@@ -1118,6 +1119,7 @@ const ASSISTANT_GROW_SYSTEM = [
   "You receive JSON facts about recent sessions plus an archive list of older session titles.",
   "Reply with STRICT minified JSON only, no markdown: {\"summary\":\"<=40 words\",\"alerts\":[],\"checkpoints\":[],\"expand\":[{\"title\":\"<=8 words\",\"prompt\":\"<=60 words\"}]}",
   "Return zero to three concrete, buildable follow-ups grounded in unfinished archive work. board.existingWork is already accepted work: do not re-propose it, even reworded. Prefer finishing those obligations; an empty expand list is correct. Never invent features or infer unfinished work solely from an old title.",
+  "Sessions and archive rows with finished:true ended normally — that work is done: never propose expand items for them, not even reworded. Only unfinished rows with real leftover obligations earn proposals.",
 ].join(" ");
 
 const ASSISTANT_IMPROVE_SYSTEM = [
@@ -1125,6 +1127,7 @@ const ASSISTANT_IMPROVE_SYSTEM = [
   "You receive the app file inventory (paths and line counts), package scripts, recent agent sessions, and file collisions.",
   'Reply with STRICT minified JSON only: {"summary":"<=40 words","alerts":[],"checkpoints":[],"expand":[{"title":"<=8 words","prompt":"<=60 words"}]}',
   "Return zero to three concrete improvements to THIS app, each naming exact files and an acceptance check. board.existingWork is already accepted work: do not re-propose it, even reworded. Prefer finishing existing obligations; an empty expand list is correct. Never propose speculative rewrites or new dependencies.",
+  "recentSessions rows with finished:true completed normally — done work: never propose expand items that treat them as unfinished.",
 ].join(" ");
 
 function startEyesWatch() {
@@ -1211,7 +1214,7 @@ async function improveFacts(eyes) {
     generatedAt: new Date().toISOString(),
     appInventory: files,
     packageScripts,
-    recentSessions: facts.sessions.map((session) => ({ title: session.title, agent: session.agent, todos: session.todos.slice(0, 6) })),
+    recentSessions: facts.sessions.map((session) => ({ title: session.title, agent: session.agent, finished: session.finished === true, todos: session.todos.slice(0, 6) })),
     collisions: facts.collisions.slice(0, 6),
   };
 }
@@ -2179,12 +2182,12 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
     const base = eyes.assistantFacts({ root: projectRoot() });
     facts = {
       generatedAt: base.generatedAt,
-      recentTitles: base.sessions.slice(0, 6).map((session) => session.title),
+      recentTitles: base.sessions.slice(0, 6).map((session) => ({ title: session.title, finished: session.finished === true })),
       archive: eyes
         .listSessions({ limit: 40 })
         .filter((session) => Date.now() - session.timeUpdated > 30 * 60 * 1000)
         .slice(0, 24)
-        .map((session) => ({ id: session.id, title: session.title, agent: session.agent })),
+        .map((session) => ({ id: session.id, title: session.title, agent: session.agent, finished: session.finished === true })),
     };
   } else {
     facts = eyes.assistantFacts({ sessionLimit: 8, changeLimit: 40, todoLimitPerSession: 8, root: projectRoot() });
@@ -2235,6 +2238,20 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
     result = { summary: text.slice(0, 300), alerts: [], checkpoints: [], expand: [] };
   }
   const briefing = { mode, generatedAt: new Date().toISOString(), model: call.model ?? ASSISTANT_MODEL, ...result };
+  // Build passes carry the trusted finished-session titles (from facts, never
+  // model output) so the expand boundary can hard-guard against a reply that
+  // ignores the "never propose finished sessions" prompt rule.
+  if (mode === "grow" || mode === "improve" || mode === "expand") {
+    const finishedRows = [
+      ...(Array.isArray(facts.recentTitles) ? facts.recentTitles : []),
+      ...(Array.isArray(facts.recentSessions) ? facts.recentSessions : []),
+      ...(Array.isArray(facts.archive) ? facts.archive : []),
+    ];
+    if (facts.session?.finished === true) finishedRows.push(facts.session);
+    briefing.finishedTitles = finishedRows
+      .filter((row) => row?.finished === true && row?.title)
+      .map((row) => String(row.title));
+  }
   if (mode !== "grow" && mode !== "improve" && mode !== "expand") {
     await eyes.writeJson(BRIEFING_PATH, briefing);
     if (Array.isArray(result.checkpoints) && result.checkpoints.length) {
@@ -2447,6 +2464,12 @@ let assistantStopping = false;
 let assistantPending = null;
 let assistantWriting = null;
 let assistantWriteAgain = false;
+// The offline-with-key probe: at most one queued at a time, with its own
+// doubling backoff per failed probe (never persisted — a restart re-plans).
+let assistantAiProbeTimer = null;
+let assistantAiProbePendingUntil = 0;
+let assistantAiProbeAttempts = 0;
+let assistantAiProbeRunning = false;
 let tray = null;
 let trayPaused = null;
 
@@ -2856,6 +2879,8 @@ function assistantAiOk() {
   ai.lastOkAt = Date.now();
   ai.lastError = null;
   ai.backoffUntil = 0;
+  assistantAiProbeAttempts = 0;
+  clearAssistantAiProbe();
 }
 
 function assistantAiFailed(error) {
@@ -2873,6 +2898,76 @@ function assistantAiFailed(error) {
 function assistantAiUsable() {
   const ai = assistantState.ai;
   return Boolean(ai.keyPresent) && Date.now() >= (ai.backoffUntil ?? 0);
+}
+
+// Offline with a key and zero failures is the one state nothing probes: the
+// cadence roles gate on a usable AI but no real call is owed, so nothing
+// would ever learn the endpoint came back. planOfflineProbe (module; local
+// fallback when the assistant logic itself failed to load) queues exactly one
+// lightweight probe for that state; a pending probe or an owed backoff blocks
+// a re-queue, and each failed probe doubles the wait.
+function clearAssistantAiProbe() {
+  if (assistantAiProbeTimer) clearTimeout(assistantAiProbeTimer);
+  assistantAiProbeTimer = null;
+  assistantAiProbePendingUntil = 0;
+}
+
+function offlineProbePlanFallback(now) {
+  const ai = assistantState?.ai;
+  if (!ai || ai.keyPresent !== true || ai.online === true) return null;
+  if ((ai.failures ?? 0) !== 0) return null;
+  if (now < (ai.backoffUntil ?? 0) || now < assistantAiProbePendingUntil) return null;
+  const delay = Math.min(assistantModule?.OFFLINE_PROBE_MAX_MS ?? 30 * 60000, (assistantModule?.OFFLINE_PROBE_BASE_MS ?? 90000) * 2 ** Math.max(0, assistantAiProbeAttempts));
+  return { delay, at: now + delay, attempts: assistantAiProbeAttempts };
+}
+
+function assistantAiProbePlan(now = Date.now()) {
+  if (!assistantState) return null;
+  const plan = assistantModule?.planOfflineProbe?.(assistantState.ai, now, { pendingUntil: assistantAiProbePendingUntil, attempts: assistantAiProbeAttempts });
+  return plan ?? offlineProbePlanFallback(now);
+}
+
+function scheduleAssistantAiProbe() {
+  const plan = assistantAiProbePlan();
+  if (!plan || assistantAiProbeRunning) return;
+  clearAssistantAiProbe();
+  assistantAiProbePendingUntil = Date.now() + plan.delay;
+  assistantAiProbeTimer = setTimeout(() => {
+    assistantAiProbeTimer = null;
+    runAssistantAiProbe().catch((error) => logError(`AI probe failed: ${error.message}`, "assistant"));
+  }, plan.delay);
+  assistantAiProbeTimer.unref?.();
+}
+
+async function runAssistantAiProbe() {
+  const ai = assistantState?.ai;
+  // Smoke and capture runs never spend a call, and a paused loop or a state
+  // that moved on while the timer sat queued (a real call answered, a real
+  // call failed into the usual backoff) drops the probe.
+  if (!ai || SMOKE || CAPTURE || assistantState.status !== "running" || assistantAiProbeRunning || !assistantAiProbePlan()) return;
+  assistantAiProbeRunning = true;
+  try {
+    assistantAiProbePendingUntil = 0;
+    const call = await assistantFetch("You are a connectivity probe. Answer with the single word: ok.", "Reply with ok.", 200, { role: "routine", taskType: "ai-probe" });
+    if (call.ok) {
+      assistantAiOk();
+      assistantSetProblems(["ai-offline"], []);
+      assistantLog("control", `AI probe ok · back online via ${assistantState.ai.model}`);
+      return;
+    }
+    // A probe is not a real call: failures stays untouched (the guard requires
+    // zero), the attempt count drives the doubling wait, and the usual
+    // backoffUntil keeps the AI-gated cadence roles quiet until the next probe.
+    assistantAiProbeAttempts += 1;
+    const delay = assistantModule?.offlineProbeDelayMs?.(assistantAiProbeAttempts) ?? Math.min(30 * 60000, 90000 * 2 ** assistantAiProbeAttempts);
+    ai.backoffUntil = Date.now() + delay;
+    ai.lastError = String(call.error ?? "probe failed").slice(0, 200);
+    assistantSetProblems(["ai-offline"], [{ kind: "ai-offline", text: `AI offline: ${ai.lastError}` }]);
+    assistantLog("control", `AI probe ${assistantAiProbeAttempts} failed · next probe in ${Math.max(1, Math.round(delay / 60000))}m`);
+    scheduleAssistantAiProbe();
+  } finally {
+    assistantAiProbeRunning = false;
+  }
 }
 
 // Open problems are owned per role: a role replaces its own kinds when it
@@ -4715,6 +4810,9 @@ async function assistantTick(reason = "timer") {
     assistantState.tickCount += 1;
     assistantState.heartbeatAt = now;
     assistantState.ai.keyPresent = await assistantKeyPresent();
+    // Keep the offline-with-key probe armed on every pass; planOfflineProbe
+    // decides whether the state actually calls for one.
+    scheduleAssistantAiProbe();
     const first = assistantState.tickCount === 1 || !assistantFirstTickResolve.done;
     // With no folder open the loop stays alive and reports its heartbeat, but
     // queues no roles: nothing may read, organise or spend for the seed store.
@@ -4819,6 +4917,7 @@ function stopAssistant() {
   assistantLoop = false;
   if (assistantTimer) clearTimeout(assistantTimer);
   assistantTimer = null;
+  clearAssistantAiProbe();
   applyKeepAwake();
   if (assistantState) {
     assistantClearQueue({ abandonRunning: true, text: "abandoned · quit" });
@@ -4832,6 +4931,7 @@ async function assistantPause() {
   if (assistantTimer) clearTimeout(assistantTimer);
   assistantTimer = null;
   assistantState.status = "paused";
+  clearAssistantAiProbe();
   autopilot.clusterCancel?.("Work paused");
   overseerManualUntil = 0;
   assistantState.nextTickAt = 0;
@@ -6455,16 +6555,30 @@ async function autopilotProactivePass({ useAi = true } = {}) {
 }
 
 // briefing.expand[] items become real queue entries here (eyes.mjs stays
-// pure); each is deduped by title against the queue as it stands.
+// pure); each is deduped by title against the queue as it stands. A finished
+// session is done work: the briefing carries its trusted finished titles (see
+// runAssistant), and any proposal matching one is dropped so a model that
+// ignores the prompt rule still cannot resurrect done sessions as requests.
 function requestsFromExpand(briefing, existing = [], source = "grow") {
   const requests = [];
+  const finished = new Set(
+    (Array.isArray(briefing?.finishedTitles) ? briefing.finishedTitles : [])
+      .map((title) => workTitleKey(title))
+      .filter(Boolean),
+  );
+  let droppedFinished = 0;
   for (const item of briefing?.expand ?? []) {
     if (!item?.title) continue;
     const title = String(item.title).slice(0, 90);
+    if (finished.size && finished.has(workTitleKey(title))) {
+      droppedFinished += 1;
+      continue;
+    }
     if (existing.some((request) => request.title === title)) continue;
     if (requests.some((request) => request.title === title)) continue;
     requests.push({ title, prompt: String(item.prompt ?? item.title), source, at: Date.now() });
   }
+  if (droppedFinished) logLine(`[assistant] ${source}: dropped ${droppedFinished} expand proposal(s) matching finished session title(s)`);
   return requests;
 }
 
@@ -7815,6 +7929,27 @@ async function spawnNextJob() {
             // Keep them on the parent before attempting the separate queue write.
             if (entry.handoffs.length) next.remaining = entry.handoffs.slice(0, EXECUTOR_MAX_HANDOFFS).map((handoff) => handoff.title);
             else delete next.remaining;
+            // A verifying request's done report schedules the same overseer
+            // verification as task settlement — keyed by request identity
+            // (id:<id> or request:<digest>), never a task id, so a direct
+            // run's claim is proven before its row can settle.
+            if (entry.resultNote && typeof assistantModule?.scheduleVerificationOnDone === "function") {
+              const planned = assistantModule.scheduleVerificationOnDone({
+                resultNote: entry.resultNote,
+                task: { id: agentModes.requestKey(owned), title: owned.title, files: owned.files, file: owned.file, refs: owned.refs },
+                attemptKey: entry.id,
+                queue: verificationJobs,
+              });
+              // Same partial-commit recovery as the task path: a deduped
+              // retry still finds the attempt's queued job and stamps the row.
+              const queuedJob = planned ?? (typeof assistantModule?.findQueuedVerification === "function"
+                ? assistantModule.findQueuedVerification({ taskId: agentModes.requestKey(owned), attemptKey: entry.id, queue: verificationJobs })
+                : null);
+              if (queuedJob) {
+                next.verificationRun = { key: queuedJob.key, commands: queuedJob.commands, state: "queued", at: Date.now() };
+                next.logs = [...(next.logs ?? []), { at: Date.now(), kind: "status", text: `verification scheduled — ${queuedJob.commands.join(" && ")}` }].slice(-40);
+              }
+            }
             return next;
           });
         } else if (userStop) {
@@ -7904,6 +8039,27 @@ async function spawnNextJob() {
         // bookkeeping line so the Done digest shows what was actually done.
         if (entry.resultNote?.raw) {
           task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "result", text: String(entry.resultNote.raw).slice(0, 300) }].slice(-40);
+        }
+        // A-Eyes overseer directive: a done report schedules the overseer's
+        // own verification run (npm run check + the task's focused tests)
+        // before the card may close. Queued inside the settlement
+        // transaction, keyed per attempt, so retries and duplicate reports
+        // still queue exactly one job; a non-done result queues none.
+        if (entry.resultNote && typeof assistantModule?.scheduleVerificationOnDone === "function") {
+          const planned = assistantModule.scheduleVerificationOnDone({
+            resultNote: entry.resultNote, task: job.ref, attemptKey: entry.id, queue: verificationJobs,
+          });
+          // Partial-commit recovery: the queue push survives a rolled-back
+          // store write, so the retried settlement dedupes to null. Recover
+          // the queued job by its stable key, or the row never gains the
+          // verificationRun stamp the verification runner matches on.
+          const queuedJob = planned ?? (typeof assistantModule?.findQueuedVerification === "function"
+            ? assistantModule.findQueuedVerification({ taskId: job.ref?.id ?? null, attemptKey: entry.id, queue: verificationJobs })
+            : null);
+          if (queuedJob) {
+            task.verificationRun = { key: queuedJob.key, commands: queuedJob.commands, state: "queued", at: Date.now() };
+            task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "status", text: `verification scheduled — ${queuedJob.commands.join(" && ")}` }].slice(-40);
+          }
         }
       } else if (userStop) {
         // Stopped on purpose: the claim goes back to the queue with its saved
@@ -8060,6 +8216,9 @@ async function spawnNextJob() {
       autopilot.lastError = null;
       pushAutopilotHistory("review", `finished, awaiting verification: ${job.title}`);
       await runExecutorHandoffs(entry, job).catch((error) => logLine(`[autopilot] handoff failed: ${error.message}`));
+      // The scheduled verification run executes now, off the finish path's
+      // critical section; results are stamped back onto the card.
+      runVerificationJobs(job).catch((error) => logLine(`[autopilot] verification run failed: ${error.message}`));
     } else if (userStop) {
       // The operator's stop is not the task's or the infrastructure's fault.
       pushAutopilotHistory("stopped", `stopped on request: ${job.title} · progress saved`);
@@ -8431,6 +8590,81 @@ async function spawnNextJob() {
   return "spawned";
 }
 
+// The overseer's verification queue: done reports enqueue one keyed job per
+// attempt (assistant.scheduleVerificationOnDone) and this runner drains it.
+const verificationJobs = [];
+const VERIFICATION_COMMAND_BUDGET_MS = 15 * 60 * 1000;
+const runCheckCommand = (command, cwd) => new Promise((resolve) => {
+  const child = spawn(String(command), { cwd, shell: true, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  let tail = "";
+  const note = (chunk) => {
+    tail += String(chunk);
+    if (tail.length > 8000) tail = tail.slice(-8000);
+  };
+  child.stdout?.on("data", note);
+  child.stderr?.on("data", note);
+  const killTimer = setTimeout(() => { try { child.kill(); } catch {} }, VERIFICATION_COMMAND_BUDGET_MS);
+  child.on("error", (error) => { clearTimeout(killTimer); resolve({ command: String(command), ok: false, timedOut: false, exitCode: null, tail: String(error?.message ?? error).slice(-200) }); });
+  child.on("close", (code, signal) => {
+    clearTimeout(killTimer);
+    const timedOut = signal === "SIGTERM";
+    const exitCode = Number.isSafeInteger(code) ? code : null;
+    const last = tail.trim().split(/\r?\n/).filter(Boolean).slice(-2).join(" | ");
+    resolve({ command: String(command), ok: exitCode === 0, timedOut, exitCode, tail: timedOut ? `timed out after ${Math.round(VERIFICATION_COMMAND_BUDGET_MS / 60000)}m` : last.slice(-200) });
+  });
+});
+// Drain the queue and run each job's commands for real. The close decision
+// stays with autopilotHousekeeping's evidence-checked verifier; this records
+// what the overseer's own run observed, so a done claim never sits unproven.
+async function runVerificationJobs(job) {
+  while (verificationJobs.length) {
+    const planned = verificationJobs.shift();
+    if (!planned || !Array.isArray(planned.commands) || !planned.commands.length) continue;
+    const cwd = job?.kind === "task" && job.ref?.projectPath ? job.ref.projectPath : projectRoot();
+    logLine(`[autopilot] verification run started: ${planned.commands.join(" && ")}`);
+    const results = [];
+    for (const command of planned.commands) {
+      const result = await runCheckCommand(command, cwd);
+      results.push(result);
+      if (!result.ok) break; // a failed check ends the run; the tail says why
+    }
+    const failed = results.filter((row) => !row.ok);
+    const state = failed.length ? "failed" : "passed";
+    const summary = failed.length
+      ? `${failed[0].command} failed${failed[0].timedOut ? " (timed out)" : ""}${failed[0].tail ? ` — ${failed[0].tail}` : ""}`
+      : `${results.length} check(s) passed`;
+    logLine(`[autopilot] verification run ${state}: ${summary}`);
+    try {
+      await mutateBoard((board) => {
+        let changed = false;
+        board.tasks = board.tasks.map((task) => {
+          if (task?.id !== planned.taskId || task.verificationRun?.key !== planned.key) return task;
+          changed = true;
+          return {
+            ...task,
+            verificationRun: { ...task.verificationRun, state, at: Date.now(), results },
+            logs: [...(task.logs ?? []), { at: Date.now(), kind: "status", text: `verification run ${state} — ${summary}` }].slice(-40),
+          };
+        });
+        // Verifying request rows keyed their queued run by request identity;
+        // stamp the observed state there too, or the row stays "queued" forever.
+        board.requests = board.requests.map((row) => {
+          if (!row || agentModes.requestKey(row) !== planned.taskId || row.verificationRun?.key !== planned.key) return row;
+          changed = true;
+          return {
+            ...row,
+            verificationRun: { ...row.verificationRun, state, at: Date.now(), results },
+            logs: [...(row.logs ?? []), { at: Date.now(), kind: "status", text: `verification run ${state} — ${summary}` }].slice(-40),
+          };
+        });
+        return changed ? board : null;
+      });
+    } catch (error) {
+      logLine(`[autopilot] verification result not saved: ${error.message}`);
+    }
+  }
+}
+
 // A finished run's handoffs: the work it passed to the next executor agent and
 // the roster agents it asked to follow up. This is what keeps the loop going —
 // without it every job was a dead end and the board only ever shrank.
@@ -8632,9 +8866,65 @@ async function autopilotHousekeeping() {
         return null;
       }
     };
+    // The overseer's own verification run (row.verificationRun) is direct
+    // evidence: map its per-command outcomes into the observedChecks shape
+    // verifyCompletion reads. A queued run has no results yet — current
+    // evidence rules apply; a timed-out command or one without an exit code
+    // counts as failed, never as a pass. The run's stamp is later than the
+    // attempt's evidence window, so for a command the worker also ran, the
+    // overseer's fresh result wins summarizeObservedChecks' latest-wins dedupe.
+    const verificationRunChecks = (run) => {
+      if (!run || !Array.isArray(run.results) || !run.results.length) return [];
+      const startedAt = Number(run.at);
+      if (!Number.isFinite(startedAt) || startedAt <= 0) return [];
+      return run.results.map((row) => {
+        const timedOut = row?.timedOut === true;
+        // Rows stamped before exitCode was recorded carry only `ok`.
+        const exitCode = Number.isSafeInteger(row?.exitCode) ? row.exitCode : row?.ok === true ? 0 : null;
+        const status = timedOut || exitCode === null ? "error" : "completed";
+        return {
+          command: String(row?.command ?? ""),
+          startedAt,
+          status,
+          exitCode,
+          passed: status === "completed" && exitCode === 0,
+          outputExcerpt: String(row?.tail ?? "").slice(-200),
+        };
+      });
+    };
     if (typeof verify === "function") {
       const tasks = [...board.tasks];
       for (const task of tasks) {
+        // A done card whose overseer run later stamped "failed" settled before
+        // its queued verification finished (the race between VERIFY_DWELL and
+        // the run's own duration). The done claim is unproven: re-decide with
+        // the same verifier so the failing evidence reopens the card, bounded
+        // by the ordinary verify budget instead of a reopen/settle loop.
+        if (task?.status === "done" && task.verificationRun?.state === "failed" && Array.isArray(task.verificationRun.results) && task.verificationRun.results.length) {
+          const attempt = task.lastAttempt ?? {};
+          const verdict = verify({
+            verdictOk: true,
+            changedFiles: 0,
+            hasSession: Boolean(attempt.sessionId),
+            observedChecks: verificationRunChecks(task.verificationRun),
+            resolvedHandoffs: task.handoffState?.resolvedTitles ?? [],
+            remaining: Array.isArray(task.remaining) ? task.remaining : [],
+            resultNote: attempt.result ?? null,
+            priorAttempts: Number(task.verifyAttempts) || 0,
+          });
+          task.verifyAttempts = verdict.attemptNo;
+          task.status = "open";
+          delete task.doneAt;
+          delete task.runId;
+          delete task.lease;
+          if (verdict.state === "failed") delete task.nextRunAt;
+          else task.nextRunAt = now + 60 * 1000;
+          task.verification = { state: verdict.state, at: now, reason: verdict.reason, sentinel: attempt.sawDone === true, exit: attempt.code ?? null, changedFiles: null };
+          task.logs = [...(task.logs ?? []), { at: now, kind: "status", text: `reopened — overseer verification run failed — ${verdict.reason}${verdict.state === "failed" ? " · parked for manual review" : `, retry ${verdict.attemptNo}/${verifyMax}`}` }].slice(-40);
+          verifyNotes.push(`reopened "${assistantClip(task.title, 60)}" — ${verdict.reason}`);
+          changedByVerify = true;
+          continue;
+        }
         if (task?.status !== "awaiting_verification") continue;
         if (handoffs.waitingTaskIds.has(task.id)) continue;
         if (task.delegation && backlog.dependencyState(task, board.tasks).stage) continue;
@@ -8644,11 +8934,12 @@ async function autopilotHousekeeping() {
         if (files === null) { waitForEvidence(task); continue; }
         const observedChecks = attemptChecks(attempt, task.title);
         if (observedChecks === null) { waitForEvidence(task); continue; }
+        const overseerChecks = verificationRunChecks(task.verificationRun);
         const verdict = verify({
           verdictOk: attempt.sawDone === true || attempt.code === 0,
           changedFiles: Array.isArray(files) ? files.length : 0,
           hasSession: Boolean(attempt.sessionId),
-          observedChecks,
+          observedChecks: overseerChecks.length ? [...observedChecks, ...overseerChecks] : observedChecks,
           resolvedHandoffs: task.handoffState?.resolvedTitles ?? [],
           remaining: Array.isArray(task.remaining) ? task.remaining : [],
           resultNote: attempt.result ?? null,
@@ -8726,11 +9017,12 @@ async function autopilotHousekeeping() {
         if (files === null) { waitForEvidence(request); continue; }
         const observedChecks = attemptChecks(attempt, request.title);
         if (observedChecks === null) { waitForEvidence(request); continue; }
+        const overseerChecks = verificationRunChecks(request.verificationRun);
         const verdict = verify({
           verdictOk: attempt.sawDone === true || attempt.code === 0,
           changedFiles: Array.isArray(files) ? files.length : 0,
           hasSession: Boolean(attempt.sessionId),
-          observedChecks,
+          observedChecks: overseerChecks.length ? [...observedChecks, ...overseerChecks] : observedChecks,
           resolvedHandoffs: request.handoffState?.resolvedTitles ?? [],
           remaining: Array.isArray(request.remaining) ? request.remaining : [],
           resultNote: attempt.result ?? null,
