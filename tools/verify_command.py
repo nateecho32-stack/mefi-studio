@@ -1,10 +1,10 @@
 """Verify Command against a dense, isolated Electron fixture, without workers.
 
-python tools/verify_command.py [--baseline] [--collapsed-polish] [--output tools/logs/command-ui]
+python tools/verify_command.py [--baseline] [--node-readability] [--output tools/logs/command-ui]
 
 Uses the Workspace harness's offscreen window, logging and network guard. All
 board files, projects and Electron settings live in a temporary directory. A
-read-only IPC fixture supplies four sessions and synthetic worker/roster status;
+read-only IPC fixture supplies four sessions (eight for node readability) and synthetic worker/roster status;
 it never launches those workers. Baseline screenshots are retained separately.
 """
 import argparse
@@ -128,6 +128,73 @@ VERIFY_METHOD = r'''
     await sleep(200);
     await this.run("window.MefiIdle.fitAll();");
     this.check("Auto keeps three running work orbs visible at desktop and narrow widths; drawn labels stay within their density budget and avoid each other and controls across repeated frames");
+  }
+  async verifyNodeReadability() {
+    const activeIds=new Set(config.fixture.autopilot.running.map(job=>`task:${job.taskId}`));
+    assert.equal(activeIds.size,6,'readability fixture exercises six concurrent builders');
+    assert.equal(config.fixture.store.sessions.length,8,'readability fixture exercises eight saved sessions');
+    await this.run("window.MefiMusic.applyTheme('aurora');window.MefiMusic.applyNodeStyle('orbs');window.MefiMusic.applyNodeLayout('constellation');window.MefiMusic.applyNodeEffects({orbitTrails:true,extraGlow:true});window.MefiIdle.clearSearch();window.MefiIdle.setLabels('auto');window.MefiIdle.setOrbit(false);");
+    for(const [id,expanded] of [['idle-feed-toggle',false],['cmd-chat-toggle',true]]) {
+      if(await this.run(`return document.getElementById(${JSON.stringify(id)}).getAttribute('aria-expanded');`)!==String(expanded))await this.click(`#${id}`);
+    }
+    await this.until("document.getElementById('idle-feed-toggle').getAttribute('aria-expanded')==='false' && document.getElementById('cmd-chat-toggle').getAttribute('aria-expanded')==='true'",'Live work collapses while Assistant stays expanded');
+    const overlaps=(a,b)=>Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x)>1 && Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y)>1;
+    const gap=(node,box)=>Math.max(0,Math.hypot(Math.max(box.x-node.x,0,node.x-box.x-box.w),Math.max(box.y-node.y,0,node.y-box.y-box.h))-node.radius);
+    report.nodeReadability={cases:[],failures:[],baseline:Boolean(config.baseline)};
+    const requireReadable=(condition,message)=>{if(!condition)report.nodeReadability.failures.push(message);};
+    for(const [width,height,size] of [[1916,1170,'wide'],[1463,943,'desktop']]) {
+      this.setContentSize(width,height);await sleep(200);
+      for(const view of ['3d','2d']) {
+        const name=`readability-${size}-${view}`;
+        await this.run(`window.MefiIdle.setView(${JSON.stringify(view)});window.MefiIdle.fitAll();`);
+        this.webContents.sendInputEvent({type:'mouseMove',x:400,y:40});
+        await sleep(500);
+        const samples=[];
+        for(let frame=0;frame<3;frame++) {
+          if(frame)await sleep(160);
+          const layout=await this.layout(`${name}-frame-${frame+1}`,false);
+          const extra=await this.run("return {geometry:window.MefiIdle.geometryStatus(),camera:window.MefiIdle.settingsPreviewStatus(),centres:window.MefiIdle.debugNodes().filter(node=>Number.isFinite(node.x)&&Number.isFinite(node.y)).map(node=>({id:node.id,hit:document.elementFromPoint(node.x,node.y)?.id}))};");
+          const nodes=layout.nodes.filter(node=>Number.isFinite(node.x)&&Number.isFinite(node.y));
+          const active=nodes.filter(node=>activeIds.has(node.id));
+          const labels=nodes.filter(node=>node.labelRect);
+          const controls=['header','feed','chat','selected','dock','search','composer','tools','follow','legend','ambience'].filter(key=>layout[key]).map(key=>({id:key,rect:{x:layout[key].x,y:layout[key].y,w:layout[key].width,h:layout[key].height}}));
+          requireReadable(layout.graph.labels==='auto' && layout.graph.orbit==='paused',`${name}: Auto labels and paused orbit remain selected`);
+          requireReadable(active.length===6,`${name}: all six running tasks remain visible`);
+          for(const node of active) {
+            requireReadable(Boolean(node.labelRect),`${name}: ${node.id} has a readable task name`);
+            if(node.labelRect) {
+              requireReadable(gap(node,node.labelRect)<=80,`${name}: ${node.id} label is ${gap(node,node.labelRect).toFixed(1)}px from its orb`);
+              requireReadable(node.labelLines?.length>=1 && node.labelLines.length<=2,`${name}: ${node.id} paints one or two readable title lines`);
+              requireReadable(node.labelLines?.join(' ')===node.label,`${name}: ${node.id} retains its complete task title`);
+            }
+          }
+          for(const entry of extra.centres)requireReadable(entry.hit==='idle-layer',`${name}: ${entry.id} orb is obscured by ${entry.hit}`);
+          for(const node of nodes)for(const control of controls)requireReadable(gap({...node,radius:node.orbitTrail?.radius??node.radius},control.rect)>=2,`${name}: ${node.id} orb touches ${control.id}`);
+          for(const [index,node] of labels.entries()) {
+            const box=node.labelRect,area=layout.viewport;
+            requireReadable(box.x>=area.x-1 && box.y>=area.y-1 && box.x+box.w<=area.x+area.w+1 && box.y+box.h<=area.y+area.h+1,`${name}: ${node.id} label fits the clear graph viewport`);
+            for(const previous of labels.slice(0,index))requireReadable(!overlaps(box,previous.labelRect),`${name}: ${node.id} label overlaps ${previous.id}`);
+            for(const control of controls)requireReadable(!overlaps(box,control.rect),`${name}: ${node.id} label overlaps ${control.id}`);
+            for(const other of nodes.filter(other=>other.id!==node.id))requireReadable(gap(other,box)>=3,`${name}: ${node.id} label touches ${other.id} orb`);
+          }
+          if(samples.length) {
+            const first=samples[0],byId=new Map(nodes.map(node=>[node.id,node]));
+            for(const previous of first.layout.nodes.filter(node=>node.kind!=='agent')) {
+              const next=byId.get(previous.id);
+              requireReadable(next && Math.hypot(next.x-previous.x,next.y-previous.y)<=1,`${name}: ${previous.id} stays fixed between unchanged frames`);
+            }
+            requireReadable(Math.abs(extra.geometry.angle-first.geometry.angle)<.0001 && Math.abs(extra.geometry.pitch-first.geometry.pitch)<.0001,`${name}: paused camera keeps its angle`);
+            requireReadable(JSON.stringify(extra.camera.camera)===JSON.stringify(first.camera.camera) && extra.camera.zoom===first.camera.zoom,`${name}: paused camera keeps its position and zoom`);
+          }
+          samples.push({layout,...extra,activeLabelGaps:active.filter(node=>node.labelRect).map(node=>({id:node.id,gap:gap(node,node.labelRect)}))});
+        }
+        report.nodeReadability.cases.push({name,width,height,view,samples});
+        await this.capture(name);
+      }
+    }
+    report.nodeReadability.failures=[...new Set(report.nodeReadability.failures)];
+    if(!config.baseline)assert.equal(report.nodeReadability.failures.length,0,report.nodeReadability.failures.join('\n'));
+    this.check(config.baseline?'Captured the six-builder readability baseline and recorded its geometry failures':'Six concurrent long task names stay close to their unobscured orbs, clear other labels and controls, and keep a stable camera in 3D and 2D at wide and desktop sizes');
   }
   assertStableNodes(before,after,label) {
     const current=new Map(after.map(node=>[node.id,node]));
@@ -1105,6 +1172,13 @@ VERIFY_METHOD = r'''
     await this.until("window.MefiIdle?.isActive?.() && window.MefiIdle.status().nodes > 15", "Command dense graph ready");
     if (!config.baseline) assert.equal(await this.run("return window.MefiIdle.status().orbit;"),'paused','fresh Node tree opens with a stationary camera');
     assert.equal(await this.run("const canvas=document.getElementById('idle-layer');const rect=canvas.getBoundingClientRect();return rect.width>200 && rect.height>180 && getComputedStyle(canvas).visibility!=='hidden';"),true,'Node tree navigation opens a visible populated canvas');
+    if(config.nodeReadability) {
+      await this.verifyNodeReadability();
+      assert.equal(report.networkAttempts.length,0,'readability fixture never attempts external requests');
+      assert.equal(report.workerAttempts.length,0,'readability fixture never starts worker processes');
+      assert.equal(report.consoleErrors.length,0,`Renderer errors: ${report.consoleErrors.join('; ')}`);
+      return;
+    }
     this.setContentSize(1463,943);
     await sleep(250);
     await this.capture('00c-node-tree-opened');
@@ -1311,7 +1385,7 @@ const fixtureAssistantPromise = import('./scripts/assistant.mjs').then(module =>
     return (prefix + VERIFY_METHOD).replace('__CONFIG__', json.dumps(config))
 
 
-def fixture(project, now):
+def fixture(project, now, node_readability=False):
     titles = ["Refine the project switcher", "Save a durable task handoff", "Verify keyboard navigation", "Polish the progress view"]
     tasks = [{"id": f"command_task_{i:02d}", "projectId": project["id"], "projectPath": project["path"],
               "title": titles[0] if i == 0 else f"{titles[i % 4]} — backlog {i + 1}",
@@ -1335,10 +1409,37 @@ def fixture(project, now):
     assistant = {"status": "running", "agents": agents, "messages": messages, "log": logs, "prefs": {"proactive": False, "keepAwake": False, "background": False, "backlogMode": True}, "heartbeatAt": now, "action": {"kind": "working", "text": "Checking keyboard navigation", "since": now - 30000}, "work": [], "unread": 1}
     status = {"enabled": True, "execute": True, "parallel": 1, "running": [{"title": titles[0], "taskId": "command_task_00", "sessionId": "command_session_0", "projectId": project["id"], "startedAt": now - 95000, "source": "chat", "progress": .4}], "queueDepth": 51, "waiting": None, "history": [{"at": now - 20000, "kind": "run", "text": "Working on keyboard navigation"}], "foreman": {"status": "done", "text": "Handed current work to the builder", "lastRunAt": now - 20000}}
     store = {"sessions": sessions, "todos": todos, "changes": [{"id": f"change_{i}", "sessionId": "command_session_0", "time": now - i * 10000, "tool": "edit", "file": f"renderer/component_{i}.js", "additions": i + 2, "deletions": 1} for i in range(7)], "pngs": []}
+    if node_readability:
+        running_titles = [
+            "Guard the remaining live-state refresh paths",
+            "Verify the dev-store after a live session refresh",
+            "Commit the suite registration and discovery checks",
+            "Audit tests for incomplete worker handoff evidence",
+            "Run the full Python discovery sweep",
+            "Mark idle-only sessions clearly in the node tree",
+        ]
+        session_titles = running_titles + ["Dead-selector detection comparison", "Review the saved task handoff"]
+        store["sessions"] = [{"id": f"command_session_{i}", "title": title, "agent": "build", "model": "fixture/local", "timeCreated": now - 3600000, "timeUpdated": now - i * 90000, "parentId": None} for i, title in enumerate(session_titles)]
+        store["todos"] = [{"sessionId": session["id"], "position": 0, "content": f"Checking {session['title'].lower()}", "status": "in_progress" if i < 6 else "pending", "priority": "medium"} for i, session in enumerate(store["sessions"])]
+        for task, title in zip(tasks, running_titles):
+            task.update(title=title, status="active")
+        status.update(parallel=6, running=[{"title": title, "taskId": f"command_task_{i:02d}", "sessionId": f"command_session_{i}", "projectId": project["id"], "startedAt": now - 95000 - i * 17000, "source": "fixture", "progress": .15 + i * .12} for i, title in enumerate(running_titles)])
+        for agent in agents:
+            agent.update(status="idle", progress=None)
+        transcript = [
+            ("user", "Keep the six active tasks readable in the node tree."),
+            ("assistant", "Six builds are working through their saved checks. Open a task node to review its brief and current activity."),
+            ("user", "Review the remaining live-state refresh paths."),
+            ("assistant", "The task is on the board with its existing acceptance checks. Its current build is verifying the saved state before it records a result."),
+            ("user", "Work on node-tree focus and label gaps."),
+            ("assistant", "The node-tree follow-up is pinned near the front of the board. It will start when machine capacity and the task prerequisites allow it."),
+            ("assistant", "The latest completed task is ready for review. Its saved work log includes the checks and remaining follow-up notes."),
+        ]
+        assistant.update(messages=[{"id": f"readability_message_{i}", "at": now - (len(transcript)-i) * 20000, "role": role, "text": message, "via": "fixture"} for i, (role, message) in enumerate(transcript)], unread=4, action={"kind": "working", "text": "Six builds in progress", "since": now - 95000})
     return tasks, ideas, {"assistant": assistant, "autopilot": status, "store": store}
 
 
-def verify(source, output, baseline=False, interactive=False, palette_only=False, appearance_matrix=False, collapsed_polish=False):
+def verify(source, output, baseline=False, interactive=False, palette_only=False, appearance_matrix=False, collapsed_polish=False, node_readability=False):
     electron = ROOT / "node_modules/electron/dist/electron.exe"
     if not electron.is_file():
         raise RuntimeError("Install Electron with npm ci before verifying Command.")
@@ -1368,7 +1469,7 @@ def verify(source, output, baseline=False, interactive=False, palette_only=False
         project_info = {"id": project_id(project), "name": project.name, "path": str(project)}
         write_json(profile / "settings.json", {"machine": {"autoKill": False}, "assistant": {"background": False, "keepAwake": False, "proactive": False}, "projects": {"activeId": project_info["id"], "items": [project_info]}, "ui": {"useWeb": False, "autoReference": False, "autopilot": {"enabled": False, "execute": False}}})
         now = int(time.time() * 1000)
-        tasks, ideas, data = fixture(project_info, now)
+        tasks, ideas, data = fixture(project_info, now, node_readability=node_readability)
         if collapsed_polish:
             data["checkpoints"] = {session["id"]: [{"at": now - 30000, "note": "Saved fixture checkpoint: keyboard navigation and recovery context."}] for session in data["store"]["sessions"]}
         write_json(app_root / "data/eyes-tasks.json", tasks)
@@ -1377,7 +1478,7 @@ def verify(source, output, baseline=False, interactive=False, palette_only=False
         package = json.loads((source / "package.json").read_text(encoding="utf-8-sig"))
         package["main"] = "command-verify-entry.cjs"
         write_json(app_root / "package.json", package)
-        config = {"profile": str(profile), "appRoot": str(app_root), "output": str(destination), "alpha": project_info, "baseline": baseline, "fixture": data, "interactive": interactive, "paletteOnly": palette_only, "appearanceMatrix": appearance_matrix, "collapsedPolish": collapsed_polish}
+        config = {"profile": str(profile), "appRoot": str(app_root), "output": str(destination), "alpha": project_info, "baseline": baseline, "fixture": data, "interactive": interactive, "paletteOnly": palette_only, "appearanceMatrix": appearance_matrix, "collapsedPolish": collapsed_polish, "nodeReadability": node_readability}
         (app_root / package["main"]).write_text(bootstrap(config), encoding="utf-8")
         main = app_root / "main.cjs"
         instrumented = main.read_text(encoding="utf-8")
@@ -1418,6 +1519,7 @@ if __name__ == "__main__":
     parser.add_argument("--palette-only", action="store_true", help="Check custom palettes, preview view controls and Zen on a fresh disposable fixture")
     parser.add_argument("--appearance-matrix", action="store_true", help="Check all 50 style/layout/view combinations and 10 light-theme style/view combinations")
     parser.add_argument("--collapsed-polish", action="store_true", help="Capture both collapsed panels with three builders, checkpoint badges, orb effects, 3D/2D and light colors; skip the Zen wait")
+    parser.add_argument("--node-readability", action="store_true", help="Check six long running-task names with eight sessions, collapsed Live work and expanded Assistant in 3D/2D at wide and desktop sizes")
     args = parser.parse_args()
-    result = verify(args.source.resolve(), args.output.resolve(), args.baseline, args.interactive, args.palette_only, args.appearance_matrix, args.collapsed_polish)
+    result = verify(args.source.resolve(), args.output.resolve(), args.baseline, args.interactive, args.palette_only, args.appearance_matrix, args.collapsed_polish, args.node_readability)
     print(f"Command UI verified: {len(result['checks'])} checks, {len(result['screenshots'])} screenshots in {args.output.resolve()}")

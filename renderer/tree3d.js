@@ -804,6 +804,13 @@
   // root and the assistant node are built either way, so the assistant stays
   // visible and selectable whatever the store is doing.
   function buildGraph(sessions, todos, fallback = { status: "empty", text: "no recent sessions", stats: "no recent sessions" }) {
+    const profiler = globalThis.window?.MefiProfiler;
+    const span = profiler?.begin("tree.graph");
+    try { return buildGraphImpl(sessions, todos, fallback); }
+    finally { profiler?.end(span); }
+  }
+
+  function buildGraphImpl(sessions, todos, fallback) {
     const roster = visibleAgentRoster();
     cache.sessions = sessions;
     cache.todos = todos;
@@ -1433,8 +1440,14 @@
     if (time - lastDraw >= 33) {
       // Stable viewing angle: work updates do not rotate the rail by themselves.
       lastDraw = time;
-      advanceMotion(time);
-      draw(time);
+      const profiler = globalThis.window?.MefiProfiler;
+      const span = profiler?.begin("tree.frame");
+      try {
+        advanceMotion(time);
+        draw(time);
+      } finally {
+        profiler?.end(span);
+      }
     }
     syncAnimation();
   }

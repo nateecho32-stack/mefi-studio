@@ -133,7 +133,7 @@ export function findUnusedSelectors(cssText, usageText, { allow = [] } = {}) {
         const classes = selectorClasses(selector);
         const missing = classes.filter((name) => !usage.has(name) && !allowed.has(name));
         if (classes.length > 0 && missing.length > 0) {
-          unused.push({ selector, missing, line: css.slice(0, node.headerStart).split("\n").length });
+          unused.push({ selector, missing, line: css.slice(0, node.start).split("\n").length });
         }
       }
     }

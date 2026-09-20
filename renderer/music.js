@@ -26,6 +26,12 @@
     helix: { name: "Helix", detail: "A rising spiral" },
     layers: { name: "Terraces", detail: "Stacked levels" },
   };
+  const AUDIO_EFFECTS = {
+    waves: { title: "Connection waves", detail: "Let sound gently bend the connections.", enabled: true },
+    nodes: { title: "Node glow", detail: "Light the nodes with the music.", enabled: true },
+    percussion: { title: "Drum accents", detail: "Add sharper ripples on drum hits.", enabled: false },
+    background: { title: "Background glow", detail: "Let the space behind the tree pulse.", enabled: false },
+  };
   const CUSTOM_DEFAULTS = Object.freeze({ accent: "#C9A86A", background: "#050507", surface: "#0D0E12", text: "#ECE5D8" });
   const hexColor = (value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim().toUpperCase() : null;
   const safeCustomColors = (value) => Object.fromEntries(Object.entries(CUSTOM_DEFAULTS).map(([key, fallback]) => [key, hexColor(value?.[key]) || fallback]));
@@ -348,9 +354,13 @@
     els.audioHint.textContent = status?.description || "Connect local music, desktop audio or your microphone to the nodes.";
     els.audioSource.value = status?.selection || "auto";
     els.audioSource.disabled = !window.MefiIdle?.setAudioSource;
-    els.audioResponse.value = String(status?.response ?? 1);
+    els.audioResponse.value = String(status?.response ?? .35);
     els.audioResponse.disabled = !window.MefiIdle?.setAudioResponse;
-    els.audioResponseValue.textContent = `${Math.round((status?.response ?? 1) * 100)}%`;
+    els.audioResponseValue.textContent = `${Math.round((status?.response ?? .35) * 100)}%`;
+    for (const [key, effect] of Object.entries(AUDIO_EFFECTS)) {
+      els.audioEffects[key].checked = status?.effects?.[key] ?? effect.enabled;
+      els.audioEffects[key].disabled = !window.MefiIdle?.setAudioEffects;
+    }
   }
   function audioLinkEnabled(status) {
     return Boolean(status?.reactive && (status.listening || status.pending || status.selection === "local" && !status.error));
@@ -404,7 +414,7 @@
     const audioLink = element("section", "music-audio-link", null, settings);
     audioLink.setAttribute("aria-labelledby", "music-audio-heading");
     const audioHeading = element("h3", null, "Audio link", audioLink); audioHeading.id = "music-audio-heading";
-    element("p", "music-fineprint", "Bass warms the hubs, mids light the branches, and treble picks out smaller nodes. Connections breathe with the music.", audioLink);
+    element("p", "music-fineprint", "Gentle waves and node glow follow quiet or loud music. Add drum accents or background glow when you want more movement.", audioLink);
     const audioControls = element("div", "music-audio-controls", null, audioLink);
     const sourceLabel = element("label", null, "Listen to", audioControls);
     els.audioSource = element("select", null, null, sourceLabel); els.audioSource.id = "music-audio-source";
@@ -422,9 +432,25 @@
     els.audioSource.setAttribute("aria-describedby", els.audioHint.id);
     const responseLabel = element("label", "music-audio-response", "Response", audioLink);
     els.audioResponse = element("input", null, null, responseLabel); els.audioResponse.id = "music-audio-response";
-    els.audioResponse.type = "range"; els.audioResponse.min = "0.25"; els.audioResponse.max = "2"; els.audioResponse.step = "0.05";
-    els.audioResponseValue = element("output", null, "100%", responseLabel); els.audioResponseValue.setAttribute("for", els.audioResponse.id);
+    els.audioResponse.type = "range"; els.audioResponse.min = "0"; els.audioResponse.max = "2"; els.audioResponse.step = "0.05";
+    els.audioResponseValue = element("output", null, "35%", responseLabel); els.audioResponseValue.setAttribute("for", els.audioResponse.id);
     els.audioResponse.addEventListener("input", () => { window.MefiIdle?.setAudioResponse?.(Number(els.audioResponse.value)); renderAudioLink(); });
+    const responseHint = element("p", "music-fineprint", "Starts gently at 35%. Lower to 0% to settle the effects without changing playback volume.", audioLink); responseHint.id = "music-audio-response-hint";
+    els.audioResponse.setAttribute("aria-label", "Audio response strength"); els.audioResponse.setAttribute("aria-describedby", responseHint.id);
+    const audioEffectsHeading = element("h4", "music-node-label", "Reactions", audioLink); audioEffectsHeading.id = "music-audio-effects-label";
+    const audioEffects = element("div", "music-effects music-audio-effects", null, audioLink); audioEffects.setAttribute("role", "group"); audioEffects.setAttribute("aria-labelledby", audioEffectsHeading.id);
+    els.audioEffects = {};
+    for (const [key, effect] of Object.entries(AUDIO_EFFECTS)) {
+      const id = `music-audio-${key}`;
+      const row = element("label", "music-effect", null, audioEffects);
+      const copy = element("span", "music-effect-copy", null, row);
+      element("strong", null, effect.title, copy);
+      const description = element("small", null, effect.detail, copy); description.id = `${id}-hint`;
+      const input = element("input", null, null, row); input.type = "checkbox"; input.id = id; input.checked = effect.enabled;
+      input.setAttribute("aria-label", effect.title); input.setAttribute("aria-describedby", description.id);
+      input.addEventListener("change", () => { window.MefiIdle?.setAudioEffects?.({ [key]: input.checked }); renderAudioLink(); });
+      els.audioEffects[key] = input;
+    }
     const main = element("main", "music-main", null, body);
     const tabs = element("div", "music-tabs", null, main); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Music source");
     els.localTab = button("Local music", "music-tab", tabs, () => setSource("local"), "music-local-tab");

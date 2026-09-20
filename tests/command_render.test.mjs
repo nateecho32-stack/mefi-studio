@@ -55,6 +55,17 @@ const runFixture = async () => {
     assert.ok(report.audio.playing.audio.energy > 0.15 && report.audio.paused.audio.energy < 0.02);
     assert.ok(report.audio.playing.luminance > report.audio.quiet.luminance + 2 && report.audio.playing.luminance > report.audio.paused.luminance + 2,
       "real player audio visibly brightens stationary node bodies and releases on pause");
+    assert.ok(report.audio.lowLevel.peaks.energy > report.audio.loud.peaks.energy * 0.35,
+      "very quiet float PCM retains a visible response across an 80 dB input change");
+    assert.ok(report.audio.lowLevel.snapshot.luminance > report.audio.quiet.luminance + 2);
+    assert.ok(report.audio.waveChecks.anchored && report.audio.waveChecks.animated && report.audio.waveChecks.stroked > 0 && report.audio.waveChecks.painted > 3,
+      "anchored wave paths change across real canvas frames and paint visible pixels");
+    for (const voice of ["bassline", "snare", "hat"]) {
+      assert.ok(report.audio[voice].frames >= 6 && report.audio[voice].peaks[voice] > 0.04,
+        `${voice} responds independently in the real media analyser`);
+    }
+    assert.ok(report.audio.silence.playing && report.audio.silence.audio.energy < 0.02,
+      "digital silence settles even while playback continues");
     for (const snapshot of [report.first, report.reentered]) {
       assert.ok(snapshot.finiteNodes >= 3);
       assert.ok(snapshot.taskPixels > 8, "a real task node must paint pixels above the dark backdrop");

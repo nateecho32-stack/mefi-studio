@@ -2,6 +2,8 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("mefiStudio", {
+  performanceControl: (payload) => ipcRenderer.invoke("performance:control", payload ?? {}),
+  performanceSnapshot: () => ipcRenderer.invoke("performance:snapshot"),
   projectsList: () => ipcRenderer.invoke("projects:list"),
   projectsAdd: () => ipcRenderer.invoke("projects:add"),
   projectsSelect: (id) => ipcRenderer.invoke("projects:select", id),

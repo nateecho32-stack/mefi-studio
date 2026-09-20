@@ -110,6 +110,31 @@ test("Command collision bounds refresh after camera motion, orbit effects and no
   assert.equal(env.nodeLabelBlocker(projected)(surface), false);
 });
 
+test("parallel long task titles bound text measurements and reuse them across recurring redraws", () => {
+  const { env, state } = environment();
+  let measurements = 0;
+  const nativeMeasure = env.el.ctx.measureText;
+  env.el.ctx.measureText = (value) => { measurements += 1; return nativeMeasure(value); };
+  const projected = ["Guard transitions", "Recover the store", "Register search tests", "Audit keyboard controls", "Run Python discovery", "Mark idle sessions"].map((prefix, index) => ({
+    node: {
+      id: `task:long:${index}`, kind: "task", _workLabel: "Running", _pr: 15,
+      label: `${prefix}: ${"Inspect saved work and preserve the project context while checking renderer behavior. ".repeat(3)}`.slice(0, 180),
+    },
+    p: { x: 280 + index % 3 * 420, y: 320 + Math.floor(index / 3) * 330, k: 1, depth: 800 },
+  }));
+  env.drawLabels(projected);
+  assert.ok(measurements > 0 && measurements <= 180, `six long titles need bounded initial text layout (${measurements} measurements)`);
+  assert.equal(state.labelRects.length, projected.length, "all six workers remain named");
+  assert.ok(projected.every(({ node }) => node._labelLines.length === 2));
+  measurements = 0;
+  for (let frame = 0; frame < 12; frame += 1) {
+    for (const { p } of projected) { p.x += 0.125; p.y += 0.0625; }
+    env.drawLabels(projected);
+    assert.equal(state.labelRects.length, projected.length);
+  }
+  assert.equal(measurements, 0, "unchanged task titles must not churn the measurement cache during animation");
+});
+
 test("narrow Command overviews keep a real work label between expanded side panels", () => {
   const { env, state, area, text } = environment();
   Object.assign(area, { x: 318, y: 174, w: 277, h: 631 });

@@ -2693,7 +2693,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   // Bound runnable admissions rather than destroying requests over a cap.
   const capped = fresh;
 
-  // 7. What could start right now, if the executor had a free slot — and the
+  // 7. What could start right now, if the machine has capacity — and the
   //    pick it would take, so the pass reports the review it just did.
   const waiting = capped.filter(
     (request) =>
@@ -3547,9 +3547,13 @@ function executorLine(executor, readiness = null) {
   const source = isObject(executor) ? executor : null;
   if (!source) return null;
   const running = asArray(source.running).filter((job) => isObject(job) && !job.finished);
+  const machineManaged = source.adaptiveParallel !== false;
+  const capacity = machineManaged
+    ? `${running.length} building · machine managed`
+    : `${running.length}/${Math.max(running.length, num(source.parallel, 1))} worker slots`;
   const lines = [running.length
-    ? `Building now (${running.length}/${Math.max(running.length, num(source.parallel, 1))} worker slots): ${running.slice(0, 3).map((job) => `"${clip(job.title, 40)}"`).join(", ")}.`
-    : "No build worker is running."];
+    ? `Building now (${capacity}): ${running.slice(0, 3).map((job) => `"${clip(job.title, 40)}"`).join(", ")}${running.length > 3 ? ` and ${running.length - 3} more` : ""}.`
+    : `No build worker is running.${machineManaged ? " Scheduling is machine managed." : ""}`];
   const counts = isObject(readiness?.counts) ? readiness.counts : null;
   if (counts) {
     lines.push(`${plural(num(counts.readyTasks, 0), "task")} and ${plural(num(counts.readyRequests, 0), "request")} ready in one ranked queue.`);
@@ -3558,6 +3562,7 @@ function executorLine(executor, readiness = null) {
     if (holds.length) lines.push(`Other saved work: ${holds.join("; ")}.`);
   } else if (num(source.queued, 0)) lines.push(`${plural(num(source.queued), "work item")} queued; detailed readiness is unavailable.`);
   if (readiness?.paused || source.enabled === false) lines.push(`New workers are paused${running.length ? "; current workers can finish" : ""}.`);
+  else if (machineManaged && source.capacity?.canStart === false) lines.push(`Dispatch waiting: ${clip(str(source.capacity.reason) || "waiting for machine capacity", 140)}. New starts resume automatically when machine capacity recovers.`);
   else if (str(readiness?.waiting || source.waiting)) lines.push(`Dispatch waiting: ${clip(str(readiness?.waiting || source.waiting), 140)}.`);
   else if (!running.length && num(counts?.ready, num(source.queued, 0)) > 0) lines.push("Ready work is waiting for the dispatcher; a worker start has not been confirmed.");
   return lines.join(" ");
@@ -4423,6 +4428,15 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
           waiting: str(executor.waiting) || null,
           queued: Math.floor(num(executor.queued, 0)),
           parallel: Math.max(1, Math.floor(num(executor.parallel, 1))),
+          adaptiveParallel: executor.adaptiveParallel !== false,
+          capacity: isObject(executor.capacity) ? {
+            canStart: executor.capacity.canStart === true,
+            reason: clip(str(executor.capacity.reason), 180) || null,
+            resources: isObject(executor.capacity.resources) ? { ...Object.fromEntries(
+              ["cpuPercent", "availableMemoryMB", "totalMemoryMB", "lagMs", "hostLagMs", "rendererLagMs"].map((key) => [key,
+                typeof executor.capacity.resources[key] === "number" && Number.isFinite(executor.capacity.resources[key]) ? executor.capacity.resources[key] : null]),
+            ), lagPressure: typeof executor.capacity.resources.lagPressure === "boolean" ? executor.capacity.resources.lagPressure : null } : null,
+          } : null,
           lastAsk: str(executor.lastAsk) || null,
           running: asArray(executor.running)
             .filter(isObject)
@@ -4688,7 +4702,7 @@ function selfTest() {
   expect(JSON.stringify(result.intents) === JSON.stringify(wanted), `intents ${JSON.stringify(result.intents)}`);
   const reply = (index) => result.replies[index].text;
   expect(reply(0).includes("6 sessions") && reply(0).includes("1 collision") && reply(0).includes("tick 41"), `status reply: ${reply(0)}`);
-  expect(reply(0).includes('Building now (1/1 worker slots): "Fix the ipc handler"'), `status names the executor job: ${reply(0)}`);
+  expect(reply(0).includes('Building now (1 building · machine managed): "Fix the ipc handler"'), `status names the executor job: ${reply(0)}`);
   expect(reply(12).includes("put on the task board") && result.replies[12].actions.includes("queue-request"), `request reply: ${reply(12)}`);
   expect(reply(13).includes("Crafting bench recipes") || reply(13).includes("crafting.lua"), `related facts: ${reply(13)}`);
   expect(reply(11).includes("tidy") && reply(11).includes("pause"), `help reply: ${reply(11)}`);

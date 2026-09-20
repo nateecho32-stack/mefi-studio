@@ -22,15 +22,22 @@ const section = (start, end) => {
 };
 const copy = (value) => structuredClone(value);
 
-export function executorHost({ tasks = [], requests = [], parallel = 1, paused = false, execute = true, autoBuild = true, savedSettings = null } = {}) {
+export function executorHost({ tasks = [], requests = [], parallel = 1, adaptiveParallel = false, workerCapacity = null, paused = false, execute = true, autoBuild = true, savedSettings = null } = {}) {
   let now = 1_000_000, pendingForeman = false, pendingWriteFailures = 0;
   let board = { tasks: copy(tasks), requests: copy(requests), ideas: [] };
-  const logs = [], starts = [], roleRequests = [], records = [], timers = [], terminations = [];
+  const logs = [], starts = [], roleRequests = [], records = [], timers = [], terminations = [], capacityCalls = [];
   const sessions = new Map(), changes = new Map(), checks = new Map(), extras = new Map(), registry = new Map();
   const root = path.resolve("fixture-only-project");
   const state = { status: paused ? "paused" : "running", prefs: { backlogMode: true }, agents: [] };
-  const autopilot = { enabled: true, execute, autoBuild, parallel, jobs: [], consecutiveFailures: 0, infraFailures: 0, parkedUntil: 0, minutes: 5, history: [] };
-  let settings = copy(savedSettings ?? { ui: { autopilot: { enabled: true, execute, autoBuild, parallel, minutes: 5 } } });
+  const autopilot = { enabled: true, execute, autoBuild, parallel, adaptiveParallel, jobs: [], consecutiveFailures: 0, infraFailures: 0, parkedUntil: 0, minutes: 5, history: [] };
+  let settings = copy(savedSettings ?? { ui: { autopilot: { enabled: true, execute, autoBuild, parallel, adaptiveParallel, minutes: 5 } } });
+  const machine = {
+    leaseStatus: async () => ({ exclusive: false }),
+    workerCapacity: async (options) => {
+      capacityCalls.push(copy(options));
+      return workerCapacity ? workerCapacity(options) : { canStart: true, reason: null, resources: { lagMs: options.lagMs, cpuPercent: 15, availableMemoryMB: 8192, totalMemoryMB: 32768 } };
+    },
+  };
   const eyes = {
     readJson: async (key, fallback) => copy(board[key] ?? extras.get(key) ?? fallback),
     writeJson: async (key, value) => { extras.set(key, copy(value)); },
@@ -54,7 +61,8 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, paused =
     projectSwitching: false, executorUpdateHold: () => null,
     projects: { current: () => ({ id: "fixture", path: root }), active: () => ({ id: "fixture", path: root }), run: (_project, fn) => fn() },
     projectRoot: () => root, projectDataPath: (key) => path.join(root, key),
-    getMachine: async () => ({ leaseStatus: async () => ({ exclusive: false }) }),
+    getMachine: async () => machine,
+    measureWorkerLag: async () => 0,
     getEyes: async () => eyes, getAssistant: async () => env.assistantModule,
     getPolicyModule: async () => null, warmPolicyBaseline() {}, resolveActivePolicyIdentity: async () => null,
     getReceiptsModule: async () => null, policyRecord: (...args) => records.push(args),
@@ -66,7 +74,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, paused =
     EXECUTOR_CALLABLE: new Set(["auditor", "reference"]), EXECUTOR_BUDGET_MINUTES: 15,
     EXECUTOR_KILL_MS: 1500000, EXECUTOR_START_BUDGET_MS: 180000, EXECUTOR_STAGGER_MS: 3000,
     EXECUTOR_PARALLEL_MAX: 12, EXECUTOR_PARALLEL_CAP: 3, AUTOPILOT_PARK_MS: 600000, MINUTE_MS: 60000,
-    ASSISTANT_PRIORITY: { demand: 1 }, ASSISTANT_NODE: { id: "assistant", kind: "assistant" },
+    ASSISTANT_PRIORITY: { demand: 1 }, ASSISTANT_NODE: { id: "assistant", kind: "assistant" }, ASSISTANT_JOB_WEDGED_MS: 1500000,
     SMOKE: false, CAPTURE: false, CLI_MODE: false, proactiveTimer: null,
     compareWork: (a, b) => Number(Boolean(b.pin)) - Number(Boolean(a.pin)) || (a.createdAt ?? a.at ?? 0) - (b.createdAt ?? b.at ?? 0),
     mutateBoard: async (mutator) => {
@@ -83,7 +91,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, paused =
     admitBacklogIdeas: async () => 0, refreshAutopilotQueue: async () => {},
     ensureAssistant: async () => {}, assistantPause: async () => { state.status = "paused"; }, assistantResume: async () => { state.status = "running"; },
     backlogStatus: async () => ({ ok: true, ...backlog.summarizeBacklog({ ...board, jobs: autopilot.jobs, autoBuild: autopilot.autoBuild, paused: state.status === "paused" || !autopilot.execute }) }),
-    assistantHearBuilder: () => ({}), assistantNodeContext() {}, assistantAppendReply() {}, saveAssistant: async () => {},
+    assistantHearBuilder: () => ({}), assistantNodeContext() {}, assistantAppendReply() {}, saveAssistant: async () => {}, assistantSetProblems() {},
     emitAutopilot() {}, send() {}, executorLog: async (record) => records.push(record),
     pushAutopilotHistory: (kind, text) => autopilot.history.push({ kind, text, at: now }),
     setAutopilotWaiting: (reason) => { autopilot.waiting = reason; },
@@ -121,11 +129,12 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, paused =
     section("const VERIFY_DWELL_MS =", "// One autopilot tick:"),
     section("async function assistantForemanJob(", "// The thinker:"),
     section("function assistantAskForWork(", "// What the assistant is doing about the build queue"),
+    section("function assistantSuperviseJobs(", "function assistantStaleWork("),
     section("async function setAutopilot(", "// Settings may override the defaults"),
     section("let autopilotBootPromise = null;", "async function readSettings("),
   ].join("\n"), env);
   return {
-    env, state, autopilot, starts, logs, roleRequests, records, registry, timers, terminations,
+    env, state, autopilot, starts, logs, roleRequests, records, registry, timers, terminations, machine, capacityCalls,
     board: () => copy(board), edit: (fn) => fn(board), now: () => now, settings: () => copy(settings),
     advance: (ms) => { now += ms; }, failNextWrite: () => { pendingWriteFailures += 1; },
     evidence: (id, value) => changes.set(id, value),

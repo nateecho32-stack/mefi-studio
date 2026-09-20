@@ -51,7 +51,7 @@ test("every OpenCode route, including Grok fallback, receives snapshot-free work
   }
 });
 
-test("two workers are the new default while explicit width one and the three-worker cap are honored", async () => {
+test("manual mode retains its two-worker default and one-to-three worker limits", async () => {
   let saved = {};
   const autopilot = { enabled: false, execute: false, parallel: 2, jobs: [], minutes: 5 };
   const env = vm.createContext({
@@ -88,7 +88,7 @@ test("real selection, file claims and fill loop run independent tasks together b
     Date, console, path, process: { pid: 321 }, backlog, assistantModule: assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
     projectSwitching: false, assistantState: { status: "running" }, SMOKE: false, CAPTURE: false, CLI_MODE: false, executorUpdateHold: () => null,
     projects: { current: () => ({ id: "fixture", path: "C:/fixture" }) }, projectRoot: () => "C:/fixture",
-    getMachine: async () => ({ leaseStatus: async () => ({ exclusive: false }) }), executorRunEnv: async () => ({ cli: "fixture" }),
+    measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => ({ exclusive: false }) }), executorRunEnv: async () => ({ cli: "fixture" }),
     getEyes: async () => ({ readJson: async (key) => structuredClone(board[key]) }),
     getPolicyModule: async () => null, warmPolicyBaseline() {}, resolveActivePolicyIdentity: async () => null,
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", workTitleKey: (value) => value,

@@ -30,7 +30,7 @@ function environment({ assistant = {}, full = {}, backlog = null, requests = [],
     updateAssistantPill() {}, renderInfo() {},
     setTimeout: timers.setTimeout || setTimeout, clearTimeout: timers.clearTimeout || clearTimeout,
   });
-  vm.runInContext(`${preferenceSource}\n${chatSource}\n${feedSource}\nthis.api = { commandJobDetail, commandQueue, renderFeed, refreshCommandBacklog, commandChatActivity, changeBuildParallel, changeBuildMode };`, context);
+  vm.runInContext(`${preferenceSource}\n${chatSource}\n${feedSource}\nthis.api = { commandJobDetail, commandQueue, renderFeed, refreshCommandBacklog, commandChatActivity, changeBuildParallel, createBuildParallelControl, changeBuildMode };`, context);
   return { ...context.api, state, el, navigations };
 }
 const descendants = (element) => [element, ...element.children.flatMap(descendants)];
@@ -148,7 +148,7 @@ test("Parallel build selection saves capacity only, serializes clicks and preser
   let resolve;
   const calls = [];
   const answer = new Promise((yes) => { resolve = yes; });
-  const env = environment({ assistant: { parallel: 2, execute: false, enabled: false }, bridge: { assistantAutopilot: (patch) => { calls.push(patch); return answer; } } });
+  const env = environment({ assistant: { parallel: 2, adaptiveParallel: false, execute: false, enabled: false }, bridge: { assistantAutopilot: (patch) => { calls.push(patch); return answer; } } });
   env.renderFeed();
   assert.equal(env.el.feedParallel.value, "2");
   env.el.feedParallel.value = "3";
@@ -157,9 +157,10 @@ test("Parallel build selection saves capacity only, serializes clicks and preser
   assert.equal(env.el.feedParallel.attrs["aria-busy"], "true");
   assert.equal(await env.changeBuildParallel("1"), false);
   assert.equal(calls.length, 1);
-  assert.deepEqual(Object.keys(calls[0]), ["parallel"]);
+  assert.deepEqual(Object.keys(calls[0]), ["adaptiveParallel", "parallel"]);
+  assert.equal(calls[0].adaptiveParallel, false);
   assert.equal(calls[0].parallel, 3);
-  resolve({ parallel: 3, execute: false, enabled: false });
+  resolve({ parallel: 3, adaptiveParallel: false, execute: false, enabled: false });
   assert.equal(await saving, true);
   assert.equal(env.el.feedParallel.disabled, false);
   assert.equal(env.el.feedParallel.value, "3");
@@ -169,7 +170,7 @@ test("Parallel build selection saves capacity only, serializes clicks and preser
 
 test("Parallel build errors restore the authoritative value and reject out-of-range input", async () => {
   let calls = 0;
-  const env = environment({ assistant: { parallel: 2 }, bridge: { assistantAutopilot: async () => { calls += 1; throw new Error("Connection interrupted"); } } });
+  const env = environment({ assistant: { parallel: 2, adaptiveParallel: false }, bridge: { assistantAutopilot: async () => { calls += 1; throw new Error("Connection interrupted"); } } });
   env.renderFeed();
   env.el.feedParallel.value = "3";
   assert.equal(await env.changeBuildParallel("3"), false);
@@ -177,6 +178,50 @@ test("Parallel build errors restore the authoritative value and reject out-of-ra
   assert.equal(env.el.feedParallel.disabled, false);
   for (const value of ["0", "4", "2.5", "invalid"]) assert.equal(await env.changeBuildParallel(value), false);
   assert.equal(calls, 1);
+});
+
+test("Machine managed is the default and opting into a manual limit updates both capacity controls", async () => {
+  const calls = [];
+  const env = environment({ assistant: { parallel: 2, execute: false, enabled: false }, bridge: { assistantAutopilot: async (patch) => { calls.push(patch); return { ...env.state.assistant, ...patch }; } } });
+  env.renderFeed();
+  const detail = env.createBuildParallelControl();
+  const picker = detail.children.find((child) => child.tagName === "select");
+  assert.equal(env.el.feedParallel.value, "machine", "legacy saved width does not imply manual mode");
+  assert.equal(picker.value, "machine");
+  assert.equal(picker.children[0].textContent, "Machine managed");
+  assert.equal(picker.attrs["aria-label"], "Build scheduling capacity");
+  assert.match(picker.title, /while Studio remains responsive/);
+  assert.match(picker.title, /staggered to recheck performance/);
+  picker.value = "3";
+  picker.listeners.change();
+  await flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ adaptiveParallel: false, parallel: 3 }]);
+  assert.equal(picker.value, "3");
+  assert.equal(env.el.feedParallel.value, "3");
+  assert.equal(await env.changeBuildParallel("machine"), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[1])), { adaptiveParallel: true });
+  assert.equal(env.state.assistant.parallel, 3, "automatic mode preserves the saved manual cap");
+  assert.equal(env.state.assistant.execute, false);
+  assert.equal(env.state.assistant.enabled, false);
+  assert.equal(picker.value, "machine");
+  assert.equal(env.el.feedParallel.value, "machine");
+});
+
+test("Machine-managed builders show actual concurrency and machine holds without inventing a slot limit", () => {
+  const running = Array.from({ length: 5 }, (_, index) => ({ taskId: `job_${index}`, title: `Independent work ${index}` }));
+  const env = environment({ assistant: { parallel: 2, adaptiveParallel: true, execute: true, running, capacity: { canStart: true, reason: null } } });
+  env.renderFeed();
+  assert.equal(env.el.feedNow.children.length, 5);
+  assert.equal(env.el.feedMeta.textContent, "5 building · machine managed");
+  env.state.assistant.capacity = { canStart: false, reason: "Studio is responding slowly" };
+  env.state.feedDirty = true;
+  env.renderFeed();
+  assert.equal(env.el.feedMeta.textContent, "5 building · machine managed · Studio is responding slowly");
+  assert.doesNotMatch(env.el.feedMeta.textContent, /slots/);
+  env.state.assistant.capacity = { canStart: true, reason: null };
+  env.state.feedDirty = true;
+  env.renderFeed();
+  assert.equal(env.el.feedMeta.textContent, "5 building · machine managed");
 });
 
 test("Build mode saves only approval preference, serializes input and keeps scheduling paused", async () => {
@@ -255,7 +300,7 @@ test("Command exposes held builds under Needs attention and opens the approval b
 
 test("All concurrent builders have separate current-work cards and actual slot counts", () => {
   const running = Array.from({ length: 3 }, (_, index) => ({ title: `Independent build ${index + 1}`, taskId: `build_${index}`, startedAt: Date.now() - 5000 }));
-  const env = environment({ assistant: { parallel: 3, enabled: true, execute: true, running } });
+  const env = environment({ assistant: { parallel: 3, adaptiveParallel: false, enabled: true, execute: true, running } });
   env.renderFeed();
   assert.equal(env.el.feedNow.children.length, 3);
   for (const job of running) assert.match(env.el.feedNow.textContent, new RegExp(job.title));
@@ -297,7 +342,7 @@ test("Command explains a failed status read and offers a coalesced read-only ref
 });
 
 test("A worker awaiting safe termination remains in use and never reports completed progress", () => {
-  const env = environment({ assistant: { parallel: 1, running: [{ taskId: "stuck", title: "Slow worker", progress: 1, startedAt: Date.now() - 80000, stopping: { since: Date.now() - 5000, reason: "No activity before the deadline", error: "Stop command failed; retry scheduled" } }] } });
+  const env = environment({ assistant: { parallel: 1, adaptiveParallel: false, running: [{ taskId: "stuck", title: "Slow worker", progress: 1, startedAt: Date.now() - 80000, stopping: { since: Date.now() - 5000, reason: "No activity before the deadline", error: "Stop command failed; retry scheduled" } }] } });
   env.renderFeed();
   assert.match(env.el.feedNow.textContent, /Stopping safely/);
   assert.match(env.el.feedNow.textContent, /No activity before the deadline/);

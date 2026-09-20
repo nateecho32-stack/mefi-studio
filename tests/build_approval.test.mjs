@@ -90,7 +90,7 @@ test("changing to Verify first during selection or after the durable claim preve
     }
     if (stage === "lease") {
       let reads = 0;
-      h.env.getMachine = async () => ({ leaseStatus: async () => { if (++reads === 2) h.autopilot.autoBuild = false; return { exclusive: false }; } });
+      h.env.getMachine = async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => { if (++reads === 2) h.autopilot.autoBuild = false; return { exclusive: false }; } });
     }
     if (stage === "final-read") {
       const eyes = await h.env.getEyes();
@@ -110,7 +110,7 @@ test("scope changed after claim is reread before spawn and cannot use stale appr
   const h = executorHost({ tasks: [task("late-edit")], autoBuild: false });
   await approve(h, "late-edit");
   let reads = 0;
-  h.env.getMachine = async () => ({ leaseStatus: async () => {
+  h.env.getMachine = async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => {
     if (++reads === 2) h.edit((board) => { board.tasks[0].prompt = "Unreviewed replacement"; });
     return { exclusive: false };
   } });

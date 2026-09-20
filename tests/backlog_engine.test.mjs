@@ -135,7 +135,7 @@ test("the actual executor will not dispatch exhausted verification tasks or requ
   const env = vm.createContext({
     Date, console, backlog, projectSwitching: false, assistantState: { status: "running" }, assistantModule: null, executorUpdateHold: () => null,
     projects: { current: () => ({ id: "fixture", path: "/fixture" }) }, projectRoot: () => "/fixture",
-    autopilot: { execute: true, jobs: [] }, getMachine: async () => ({ leaseStatus: async () => null }),
+    autopilot: { execute: true, jobs: [] }, measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => null }),
     executorRunEnv: async () => ({ via: "fixture" }), getEyes: async () => ({ readJson: async (key) => records[key] }),
     getPolicyModule: async () => null, warmPolicyBaseline: () => {},
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", workTitleKey: (value) => value,
@@ -307,7 +307,7 @@ test("dispatch rechecks prerequisites inside the claim lock and loses the claim 
     Date, console, backlog, projectSwitching: false, assistantState: { status: "running" }, assistantModule: null, executorUpdateHold: () => null,
     projects: { current: () => ({ id: "fixture", path: "/fixture" }) }, projectRoot: () => "/fixture",
     autopilot: { execute: true, jobs: [] }, autopilotJobSeq: 0,
-    getMachine: async () => ({ leaseStatus: async () => null }), executorRunEnv: async () => ({ via: "fixture" }),
+    measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => null }), executorRunEnv: async () => ({ via: "fixture" }),
     getEyes: async () => ({ readJson: async (key) => records[key] }),
     getPolicyModule: async () => null, warmPolicyBaseline: () => {}, resolveActivePolicyIdentity: async () => null,
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", workTitleKey: (value) => value,

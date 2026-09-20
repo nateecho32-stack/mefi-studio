@@ -285,7 +285,7 @@ function dispatchHost({ interrupt = null, refuse = false, throwClaim = false, ed
     },
     projectSwitching: false, assistantState: { status: "running" }, executorUpdateHold: () => hold,
     projects: { current: () => ({ id: "external", path: root }) }, projectRoot: () => root,
-    getMachine: async () => ({ leaseStatus: async () => {
+    measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => {
       leases += 1;
       if (leases === 2 && interrupt === "after-claim") hold = "waiting for workers before restart";
       if (leases === 2 && interrupt === "pause") autopilot.execute = false;

@@ -1,0 +1,40 @@
+.profiler-overlay { position: fixed; inset: 0; z-index: var(--z-sheet); padding: 24px; display: grid; place-items: center; background: rgba(0,0,0,.72); }
+.profiler-overlay[hidden], .profiler-overlay [hidden], .profiler-hud[hidden] { display: none !important; }
+.profiler-sheet { width: min(1160px, 100%); height: min(920px, 100%); display: flex; flex-direction: column; background: var(--panel-solid); color: var(--ivory); border: 1px solid var(--hairline-strong); border-radius: 20px; box-shadow: var(--shadow-3); overflow: hidden; }
+.profiler-head { display: flex; align-items: center; gap: 18px; flex: none; padding: 20px 26px; border-bottom: 1px solid var(--hairline); }
+.profiler-head .sheet-title { flex: 1; min-width: 0; }
+.profiler-head h2 { margin: 3px 0 5px; font-size: 24px; }
+.profiler-head p { margin: 0; font-size: 12px; color: var(--muted); }
+.profiler-body { padding: 20px 26px 32px; overflow: auto; min-height: 0; }
+.profiler-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.profiler-controls label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin-left: auto; }
+.profiler-body p { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.profiler-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 20px 0; }
+.profiler-metrics > div { padding: 14px; border: 1px solid var(--hairline); background: var(--tint-gold-1); border-radius: 10px; }
+.profiler-metrics span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 7px; }
+.profiler-metrics strong { font-size: 23px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.profiler-section { border-top: 1px solid var(--hairline); padding-top: 18px; margin-top: 20px; min-width: 0; }
+.profiler-section h3 { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+.profiler-section h3 span { font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 8px; }
+.profiler-chart { display: block; width: 100%; height: 140px; }
+.profiler-table-wrap { overflow-x: auto; border: 1px solid var(--hairline); border-radius: 10px; margin-top: 12px; }
+.profiler-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 12px; }
+.profiler-table th, .profiler-table td { padding: 11px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--hairline); }
+.profiler-table th { font-weight: 500; color: var(--muted); font-size: 11px; }
+.profiler-table th:first-child, .profiler-table td:first-child { text-align: left; }
+.profiler-table td[colspan] { white-space: normal; color: var(--muted); line-height: 1.6; }
+.profiler-table tr:last-child td { border-bottom: 0; }
+.profiler-bottom { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 22px; }
+.profiler-incidents { list-style: none; padding: 0; margin: 14px 0; font-family: var(--font-mono); font-size: 11px; line-height: 1.7; }
+.profiler-incidents li { padding: 9px 0; border-bottom: 1px solid var(--hairline); overflow-wrap: anywhere; }
+.profiler-hud { position: fixed; right: 20px; bottom: 18px; z-index: calc(var(--z-sheet) - 1); padding: 10px 15px; border: 1px solid var(--gold); border-radius: 24px; background: var(--panel-solid); color: var(--gold-bright); box-shadow: var(--shadow-2); font-size: 12px; }
+@media (max-width: 700px) {
+  .profiler-overlay { padding: 8px; }
+  .profiler-head { padding: 14px; gap: 10px; }
+  .profiler-head h2 { font-size: 20px; }
+  .profiler-body { padding: 14px; }
+  .profiler-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .profiler-metrics strong { font-size: 21px; }
+  .profiler-controls label { width: 100%; margin-left: 0; }
+  .profiler-bottom { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}

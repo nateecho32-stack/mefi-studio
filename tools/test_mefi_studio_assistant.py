@@ -338,7 +338,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn('"eyes:assistant"', self.preload, "the push listener must subscribe to eyes:assistant")
         self.assertIn('send("eyes:assistant"', self.main)
         work_on = self.main[self.main.index("async function assistantWorkOn") : self.main.index("async function assistantQueuePinnedWork")]
-        self.assertIn("the executor takes it before everything else", work_on)
+        self.assertIn("machine capacity and task requirements allow", work_on)
         self.assertIn("repeat", work_on)
         self.assertIn("if (!repeat)", work_on)
 
@@ -691,7 +691,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn("await executeNextRequest();", _function_body(self.main, "assistantForemanJob"))
         self.assertIn("executorFillInFlight", _function_body(self.main, "executeNextRequest"), "two timed-out foremen must not claim the same work")
         pump = _function_body(self.main, "assistantPump")
-        self.assertIn('entry.role !== "responder" && entry.role !== "foreman"', pump, "the foreman bypasses the roster cap so watcher ticks cannot starve dispatch")
+        self.assertIn('!["responder", "foreman", "machine"].includes(entry.role)', pump, "the foreman and machine agent bypass the roster cap so watcher ticks cannot starve dispatch or capacity checks")
         # The auto builder's own pass files work and then asks, it never dispatches.
         pass_body = _function_body(self.main, "autopilotPass")
         self.assertIn("assistantAskForWork(", pass_body)
@@ -1252,7 +1252,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         for piece in ("6 sessions", "3 active", "Fix the crafting bench", "1 collision", "crafting.lua", "1 open task", "2 unread ideas", "Machine busy", "Audit: 1 error", "tick 41", "next in 2m", "AI offline (HTTP 401 unauthorized)"):
             with self.subTest(piece=piece):
                 self.assertIn(piece, status)
-        self.assertIn('Building now (1/1 worker slots): "Fix ipc handler"', status, "the status reply names the worker and its occupied slot")
+        self.assertIn('Building now (1 building · machine managed): "Fix ipc handler"', status, "the status reply names the worker and machine scheduling mode")
         self.assertEqual([], replies["Status?"]["actions"])
         self.assertIn('"Crafting bench recipes"', replies["Any open tasks"]["text"])
         self.assertIn("2 done, 0 archived", replies["Any open tasks"]["text"])
@@ -1304,7 +1304,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn("work on", suggest["text"])
         agents = replies["what are the agents doing"]
         self.assertEqual([], agents["actions"], "a roster question dispatches nothing")
-        for piece in ("watcher", "briefer", "HTTP 429", "Building now (1/1 worker slots)"):
+        for piece in ("watcher", "briefer", "HTTP 429", "Building now (1 building · machine managed)"):
             with self.subTest(agents_piece=piece):
                 self.assertIn(piece, agents["text"])
         overseer = replies["oversee the assistant"]

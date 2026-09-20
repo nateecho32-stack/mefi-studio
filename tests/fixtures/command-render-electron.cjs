@@ -99,7 +99,10 @@ app.whenReady().then(async () => {
   const until = async (expression, label) => {
     const deadline = Date.now() + 5000;
     while (Date.now() < deadline) {
-      assert.deepEqual(report.errors, [], `Renderer errors before ${label}`);
+      // Name the captured console errors in the assertion itself: a cold-boot
+      // one-shot must survive into the test output with its full text (and the
+      // "Renderer errors before" prefix stays intact for the retry signature).
+      assert.deepEqual(report.errors, [], `Renderer errors before ${label}: ${JSON.stringify(report.errors)}`);
       if (await run(`return Boolean(${expression});`)) return;
       await sleep(30);
     }
@@ -367,20 +370,31 @@ app.whenReady().then(async () => {
     throw new Error(error.message + ': ' + JSON.stringify(remaining));
   }
   report.motion.completed = true;
-  // Import a real, local PCM track through the player and Chromium's media
-  // analyser. The fixture window stays muted; no capture device is requested.
+  // Decode a real float WAV through the player and Chromium's media analyser.
+  // Quiet samples retain their precision; the window stays muted and no
+  // capture device is requested. Each section isolates a musical response.
   await run(`
     window.MefiIdle.setView('2d');
     window.MefiIdle.setOrbit(false);
-    const rate=48000,samples=rate,buffer=new ArrayBuffer(44+samples*2),wav=new DataView(buffer);
+    const rate=48000,sectionSeconds=3,samples=rate*sectionSeconds*6,buffer=new ArrayBuffer(44+samples*4),wav=new DataView(buffer);
     const ascii=(offset,text)=>{for(let i=0;i<text.length;i++)wav.setUint8(offset+i,text.charCodeAt(i));};
-    ascii(0,'RIFF');wav.setUint32(4,36+samples*2,true);ascii(8,'WAVE');ascii(12,'fmt ');
-    wav.setUint32(16,16,true);wav.setUint16(20,1,true);wav.setUint16(22,1,true);
-    wav.setUint32(24,rate,true);wav.setUint32(28,rate*2,true);wav.setUint16(32,2,true);wav.setUint16(34,16,true);
-    ascii(36,'data');wav.setUint32(40,samples*2,true);
+    ascii(0,'RIFF');wav.setUint32(4,36+samples*4,true);ascii(8,'WAVE');ascii(12,'fmt ');
+    wav.setUint32(16,16,true);wav.setUint16(20,3,true);wav.setUint16(22,1,true);
+    wav.setUint32(24,rate,true);wav.setUint32(28,rate*4,true);wav.setUint16(32,4,true);wav.setUint16(34,32,true);
+    ascii(36,'data');wav.setUint32(40,samples*4,true);
     for(let i=0;i<samples;i++){
-      const t=i/rate,value=0.2*(Math.sin(2*Math.PI*96*t)+Math.sin(2*Math.PI*960*t)+Math.sin(2*Math.PI*6000*t));
-      wav.setInt16(44+i*2,Math.round(value*32767),true);
+      const section=Math.floor(i/(rate*sectionSeconds)),t=i/rate%sectionSeconds,phase=t%0.32;
+      const sine=frequency=>Math.sin(2*Math.PI*frequency*t);
+      const bass=0.3*sine(96)*(0.65+0.35*Math.sin(Math.PI*t/0.4)**2);
+      const kick=0.2*Math.sin(2*Math.PI*(58*phase+18*(1-Math.exp(-phase*30))/30))*Math.exp(-phase*22);
+      // A short smooth attack avoids a discontinuity leaking an artificial
+      // full-spectrum click into these deliberately isolated drum bands.
+      const attack=1-Math.exp(-phase*400);
+      const snare=0.16*(sine(1250)+sine(2180)+sine(3390))*attack*Math.exp(-phase*24);
+      const hat=0.16*(sine(6100)+sine(8300))*attack*Math.exp(-phase*42);
+      const mix=bass+kick+0.14*sine(960)+0.08*sine(6000)+snare+hat;
+      const value=section===0?mix*0.0001:section===1?mix:section===2?bass+kick:section===3?snare:section===4?hat:0;
+      wav.setFloat32(44+i*4,value,true);
     }
     if(window.MefiMusic.addFiles([new File([buffer],'Command audio fixture.wav',{type:'audio/wav'})])!==1)
       throw new Error('Player rejected the local WAV fixture');
@@ -388,10 +402,39 @@ app.whenReady().then(async () => {
     window.__fixtureAudio.loop=true;
     window.MefiIdle.setAudioSource('local');
     window.MefiIdle.setMusicReactive(true);
+    window.__audioAnalyserMethods={};
+    window.__audioInput={fftDb:-Infinity,waveformPeak:0};
+    for(const method of ['getFloatFrequencyData','getFloatTimeDomainData']){
+      const base=AnalyserNode.prototype[method];
+      window.__audioAnalyserMethods[method]=base;
+      AnalyserNode.prototype[method]=function(buffer){
+        const result=base.call(this,buffer);
+        let peak=method==='getFloatFrequencyData'?-Infinity:0;
+        for(const value of buffer)peak=Math.max(peak,method==='getFloatFrequencyData'?value:Math.abs(value));
+        window.__audioInput[method==='getFloatFrequencyData'?'fftDb':'waveformPeak']=peak;
+        return result;
+      };
+    }
+    window.__audioPaintPaths=[];
+    window.__audioCanvasMethods={};
+    for(const method of ['clearRect','beginPath','moveTo','lineTo','stroke']){
+      const base=CanvasRenderingContext2D.prototype[method];
+      window.__audioCanvasMethods[method]=base;
+      CanvasRenderingContext2D.prototype[method]=function(...args){
+        if(this.canvas.id==='idle-layer'){
+          if(method==='clearRect')window.__audioPaintPaths=[];
+          if(method==='beginPath')window.__audioCurrentPath=[];
+          if(method==='moveTo'||method==='lineTo')(window.__audioCurrentPath||=[]).push({x:args[0],y:args[1]});
+          if(method==='stroke'&&window.__audioCurrentPath?.length>=8)window.__audioPaintPaths.push(window.__audioCurrentPath.slice());
+        }
+        return base.apply(this,args);
+      };
+    }
     window.__audioNodeSample=()=>{
       const canvas=document.getElementById('idle-layer'),ctx=canvas.getContext('2d');
       const scaleX=canvas.width/canvas.clientWidth,scaleY=canvas.height/canvas.clientHeight;
-      const nodes=window.MefiIdle.debugNodes().filter(node=>node.kind!=='agent'&&node.kind!=='music'&&Number.isFinite(node.x));
+      const waveNodes=window.MefiIdle.debugNodes().filter(node=>Number.isFinite(node.x));
+      const nodes=waveNodes.filter(node=>node.kind!=='agent'&&node.kind!=='music');
       const task=nodes.find(node=>node.id==='task:command_render_task');
       if(!task)throw new Error('Audio fixture task disappeared');
       // Sample inside the stationary body, excluding labels, connections and
@@ -404,8 +447,43 @@ app.whenReady().then(async () => {
         const index=(py*w+px)*4;
         luminance+=(pixels[index]*0.2126+pixels[index+1]*0.7152+pixels[index+2]*0.0722)*pixels[index+3]/255;count++;
       }
+      const waves=window.MefiIdle.audioWaveStatus();
+      let paintedWavePoints=0,strokedWavePaths=0;
+      for(const wave of waves.connections){
+        const points=wave.points,first=points[0],last=points.at(-1);
+        if(!first||!last)continue;
+        if(window.__audioPaintPaths.some(path=>path.length===points.length&&[0,Math.floor(points.length/2),points.length-1].every(index=>Math.hypot(path[index].x-points[index].x,path[index].y-points[index].y)<0.01)))strokedWavePaths++;
+        const length=Math.hypot(last.x-first.x,last.y-first.y)||1;
+        for(const point of points.slice(2,-2)){
+          const offset=Math.abs((last.x-first.x)*(point.y-first.y)-(last.y-first.y)*(point.x-first.x))/length;
+          if(offset<2||waveNodes.some(node=>Math.hypot(point.x-node.x,point.y-node.y)<node.radius+6))continue;
+          const px=Math.round(point.x*scaleX),py=Math.round(point.y*scaleY);
+          if(px<1||py<1||px>=canvas.width-1||py>=canvas.height-1)continue;
+          const paint=ctx.getImageData(px-1,py-1,3,3).data;
+          for(let index=0;index<paint.length;index+=4){
+            if(Math.max(paint[index],paint[index+1],paint[index+2])*paint[index+3]/255>35){paintedWavePoints++;break;}
+          }
+        }
+      }
       return {luminance:luminance/count,audio:window.MefiIdle.audioStatus(),playing:!window.__fixtureAudio.paused,
+        input:{...window.__audioInput,time:window.__fixtureAudio.currentTime,volume:window.__fixtureAudio.volume},
+        waves,paintedWavePoints,strokedWavePaths,waveNodes:waveNodes.map(node=>({id:node.id,x:node.x,y:node.y})),
         nodes:nodes.map(node=>({id:node.id,x:node.x,y:node.y,radius:node.radius,anchor:node.layoutAnchor,label:node.labelRect,audioResponse:node.audioResponse}))};
+    };
+    window.__audioSection=async section=>{
+      window.__fixtureAudio.currentTime=section*sectionSeconds+0.01;
+      await window.__fixtureAudio.play();
+      const deadline=performance.now()+950,peaks={energy:0,kick:0,snare:0,hat:0,bassline:0,bass:0,mid:0,treble:0};
+      let frames=0;
+      while(performance.now()<deadline){
+        await new Promise(resolve=>requestAnimationFrame(resolve));
+        const audio=window.MefiIdle.audioStatus();
+        // Allow the old section's release to finish before comparing voices.
+        if(performance.now()<deadline-550)continue;
+        for(const key of Object.keys(peaks))peaks[key]=Math.max(peaks[key],audio[key]??audio.bands[key]??0);
+        frames++;
+      }
+      return {peaks,frames,snapshot:window.__audioNodeSample()};
     };
   `);
   await settledFrame();
@@ -414,14 +492,62 @@ app.whenReady().then(async () => {
   assert.equal(audioQuiet.audio.source, "local");
   assert.equal(audioQuiet.audio.listening, true);
   assert.ok(audioQuiet.audio.energy < 0.02, "a paused imported track does not invent audio energy");
-  await run("await window.__fixtureAudio.play();");
-  await until("window.MefiIdle.audioStatus().energy>0.15 && window.MefiIdle.debugNodes().find(node=>node.id==='task:command_render_task')?.audioResponse?.level>0.08", "local audio drives a painted task node");
-  await sleep(180);
-  const audioPlaying = await run("return window.__audioNodeSample();");
+  const lowLevel = await run("return window.__audioSection(0);");
+  assert.ok(lowLevel.peaks.energy>0.15 && lowLevel.snapshot.luminance>audioQuiet.luminance+2,
+    `very quiet decoded audio visibly animates task bodies: ${JSON.stringify({peaks:lowLevel.peaks,input:lowLevel.snapshot.input,status:lowLevel.snapshot.audio,quiet:audioQuiet.luminance,playing:lowLevel.snapshot.luminance})}`);
+  const captureAudio = async (name) => {
+    if (!process.env[name] || !path.isAbsolute(process.env[name])) return;
+    fs.mkdirSync(path.dirname(process.env[name]), { recursive: true });
+    fs.writeFileSync(process.env[name], (await contents.capturePage()).toPNG());
+  };
+  await captureAudio("MEFI_AUDIO_QUIET_CAPTURE");
+  const loud = await run("return window.__audioSection(1);");
+  const audioPlaying = loud.snapshot;
+  assert.ok(loud.peaks.energy>0.15 && lowLevel.peaks.energy>loud.peaks.energy*0.35,
+    "automatic level adaptation preserves meaningful response across an 80 dB input range");
   if (process.env.MEFI_AUDIO_CAPTURE && path.isAbsolute(process.env.MEFI_AUDIO_CAPTURE)) {
     fs.mkdirSync(path.dirname(process.env.MEFI_AUDIO_CAPTURE), { recursive: true });
     fs.writeFileSync(process.env.MEFI_AUDIO_CAPTURE, (await contents.capturePage()).toPNG());
   }
+  await sleep(150);
+  const audioNextWave = await run("return window.__audioNodeSample();");
+  await captureAudio("MEFI_AUDIO_WAVE_CAPTURE");
+  const waveChecks = { anchored: true, animated: false, painted: audioPlaying.paintedWavePoints, stroked: audioPlaying.strokedWavePaths };
+  for (const frame of [lowLevel.snapshot, audioPlaying, audioNextWave]) {
+    assert.ok(frame.waves.connections.length>0 && frame.strokedWavePaths>0,
+      "audio wave samples are actually stroked through the real canvas context");
+    for (const wave of frame.waves.connections) {
+      assert.ok(wave.points.length>=8 && wave.points.every(point=>Number.isFinite(point.x)&&Number.isFinite(point.y)),
+        "wave connections have finite interior geometry");
+      const first=wave.points[0],last=wave.points.at(-1);
+      for (const [id,point] of [[wave.from,first],[wave.to,last]]) {
+        const node=frame.waveNodes.find(candidate=>candidate.id===id);
+        assert.ok(node && Math.hypot(node.x-point.x,node.y-point.y)<0.1,
+          `audio wave endpoint stays attached to ${id}`);
+      }
+      const next=audioNextWave.waves.connections.find(candidate=>candidate.from===wave.from&&candidate.to===wave.to);
+      if(frame===audioPlaying&&next&&wave.points.some((point,index)=>next.points[index]&&Math.hypot(next.points[index].x-point.x,next.points[index].y-point.y)>1))waveChecks.animated=true;
+    }
+  }
+  assert.ok(waveChecks.animated, "wave crests move along connections between two painted frames");
+  assert.ok(audioPlaying.paintedWavePoints>3 && lowLevel.snapshot.paintedWavePoints>3,
+    `both quiet and loud input paint displaced wave pixels away from nodes: ${JSON.stringify({quiet:lowLevel.snapshot.paintedWavePoints,loud:audioPlaying.paintedWavePoints})}`);
+  const bassline = await run("return window.__audioSection(2);");
+  const snare = await run("return window.__audioSection(3);");
+  const hat = await run("return window.__audioSection(4);");
+  for(const [name,section] of Object.entries({bassline,snare,hat}))assert.ok(section.frames>=6 && section.peaks.energy>0.1,
+    `${name} input independently animates the graph`);
+  assert.ok(bassline.peaks.bass>bassline.peaks.treble*1.4 && bassline.peaks.kick>0.04 && bassline.peaks.bassline>0.1,
+    `bass notes and kick attacks reach separate musical responses: ${JSON.stringify(bassline.peaks)}`);
+  assert.ok(snare.peaks.mid>snare.peaks.bass*1.4 && snare.peaks.snare>0.04,
+    `midrange drum attacks work without a bass track: ${JSON.stringify(snare.peaks)}`);
+  assert.ok(hat.peaks.treble>hat.peaks.bass*1.4 && hat.peaks.hat>0.04,
+    `high hat attacks work without a bass track: ${JSON.stringify(hat.peaks)}`);
+  await run("window.__fixtureAudio.currentTime=15.01;");
+  await until("window.MefiIdle.audioStatus().energy<0.02 && window.MefiIdle.debugNodes().find(node=>node.id==='task:command_render_task')?.audioResponse?.level<0.02", "digital silence releases node and connection responses while playback continues");
+  const audioSilence = await run("return window.__audioNodeSample();");
+  assert.equal(audioSilence.playing, true, "silence is checked while the player is still running");
+  assert.ok(audioSilence.waves.connections.every(wave=>wave.amplitude<1.5), "silent playback releases visible connection displacement");
   await run("window.__fixtureAudio.pause();");
   await until("window.MefiIdle.audioStatus().energy<0.02 && window.MefiIdle.debugNodes().find(node=>node.id==='task:command_render_task')?.audioResponse?.level<0.02", "paused audio releases its node response");
   const audioPaused = await run("return window.__audioNodeSample();");
@@ -429,7 +555,7 @@ app.whenReady().then(async () => {
   assert.ok(audioPlaying.luminance > audioQuiet.luminance + 2 && audioPlaying.luminance > audioPaused.luminance + 2,
     `local playback brightens the painted task body and pausing releases it: ${JSON.stringify({quiet:audioQuiet.luminance,playing:audioPlaying.luminance,paused:audioPaused.luminance})}`);
   for (const before of audioQuiet.nodes) {
-    for (const frame of [audioPlaying, audioPaused]) {
+    for (const frame of [lowLevel.snapshot, audioPlaying, audioNextWave, bassline.snapshot, snare.snapshot, hat.snapshot, audioSilence, audioPaused]) {
       const after=frame.nodes.find(node=>node.id===before.id);
       assert.ok(after, `${before.id} remains present during audio playback`);
       assert.ok(Math.hypot(after.x-before.x,after.y-before.y)<0.1, `${before.id} stays still while its surface responds`);
@@ -439,7 +565,7 @@ app.whenReady().then(async () => {
     }
   }
   assert.ok(audioPlaying.nodes.every(node=>node.audioResponse?.level>0.02), "all ordinary graph nodes respond to the connected track");
-  report.audio = {quiet:audioQuiet,playing:audioPlaying,paused:audioPaused,stableGeometry:true};
+  report.audio = {quiet:audioQuiet,lowLevel,loud,playing:audioPlaying,nextWave:audioNextWave,bassline,snare,hat,silence:audioSilence,paused:audioPaused,waveChecks,stableGeometry:true};
   if (process.env.MEFI_AUDIO_CONTROLS_CAPTURE && path.isAbsolute(process.env.MEFI_AUDIO_CONTROLS_CAPTURE)) {
     await run("window.MefiMusic.open();");
     await sleep(300);
@@ -447,7 +573,12 @@ app.whenReady().then(async () => {
     fs.writeFileSync(process.env.MEFI_AUDIO_CONTROLS_CAPTURE, (await contents.capturePage()).toPNG());
     await run("window.MefiMusic.close();");
   }
-  await run("window.MefiIdle.setMusicReactive(false); delete window.__audioNodeSample; delete window.__fixtureAudio;");
+  await run(`
+    window.MefiIdle.setMusicReactive(false);
+    for(const [method,base] of Object.entries(window.__audioCanvasMethods))CanvasRenderingContext2D.prototype[method]=base;
+    for(const [method,base] of Object.entries(window.__audioAnalyserMethods))AnalyserNode.prototype[method]=base;
+    for(const key of ['__audioNodeSample','__audioSection','__fixtureAudio','__audioPaintPaths','__audioCurrentPath','__audioCanvasMethods','__audioAnalyserMethods','__audioInput'])delete window[key];
+  `);
   await run("window.MefiNav.go('booklet');");
   const visibleRailFrames = await run("return window.__railPaintFrames;");
   await until(`window.__railPaintFrames>=${visibleRailFrames + 3}`, "visible rail resumes painting");

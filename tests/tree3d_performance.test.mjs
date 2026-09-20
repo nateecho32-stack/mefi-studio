@@ -6,16 +6,16 @@ import vm from "node:vm";
 const source = await readFile(new URL("../renderer/tree3d.js", import.meta.url), "utf8");
 const flush = async () => { for (let i = 0; i < 20; i += 1) await Promise.resolve(); };
 
-async function environment({ classes = [], sessions, todos = [] } = {}) {
+async function environment({ classes = [], sessions, todos = [], profiler } = {}) {
   const bodyClasses = new Set(classes), frames = new Map(), documentEvents = new Map(), windowEvents = new Map(), bridgeEvents = {};
-  let nextFrame = 0, now = 0, paints = 0, bitmapWrites = 0, bodyObserver, resizeObserver;
+  let nextFrame = 0, now = 0, paints = 0, bitmapWrites = 0, bodyObserver, resizeObserver, paintError;
   const element = () => ({
     style: {}, clientWidth: 420, clientHeight: 600, append() {}, addEventListener() {},
     setAttribute() {}, removeAttribute() {}, querySelector: () => null,
     classList: { contains: () => false, toggle() {} },
   });
   const ctx = new Proxy({}, {
-    get: (target, key) => key in target ? target[key] : key === "clearRect" ? () => { paints += 1; }
+    get: (target, key) => key in target ? target[key] : key === "clearRect" ? () => { if (paintError) throw paintError; paints += 1; }
       : key === "measureText" ? (text) => ({ width: String(text).length * 7 })
       : () => ({ addColorStop() {} }),
     set: (target, key, value) => { target[key] = value; return true; },
@@ -30,6 +30,7 @@ async function environment({ classes = [], sessions, todos = [] } = {}) {
     addEventListener: (name, callback) => documentEvents.set(name, callback),
   };
   const window = {
+    MefiProfiler: profiler,
     devicePixelRatio: 1, matchMedia: () => ({ matches: false }),
     addEventListener: (name, callback) => windowEvents.set(name, callback),
     mefiStudio: {
@@ -54,6 +55,7 @@ async function environment({ classes = [], sessions, todos = [] } = {}) {
     tree: window.MefiTree, window, rail, frames,
     paints: () => paints, bitmapWrites: () => bitmapWrites, pulseCount: window.__pulseCount,
     resize: () => resizeObserver(),
+    failPaint(error) { paintError = error; },
     advance(time) { now = time; return window.MefiTree.advanceAgents(time); },
     async agents(agents) { await window.MefiTree.applyAssistant({ state: { status: "running", agents } }); },
     async activity(data) { bridgeEvents.activity(data); await flush(); },
@@ -62,6 +64,28 @@ async function environment({ classes = [], sessions, todos = [] } = {}) {
     frame(time) { now = time; const pending = [...frames.values()]; frames.clear(); for (const callback of pending) callback(time); },
   };
 }
+
+test("the real rail profiles completed work only and closes its scope after a paint failure", async () => {
+  const started = [], completed = [], stack = [];
+  const profiler = {
+    begin(name) { const token = { name }; started.push(name); stack.push(token); return token; },
+    end(token) { assert.equal(stack.pop(), token, "renderer timing scopes must close in order"); completed.push(token.name); },
+  };
+  const env = await environment({ classes: ["workspace-active"], profiler });
+  assert.ok(started.includes("tree.graph"), "covered graph updates still receive causal timings");
+  assert.equal(started.includes("tree.frame"), false);
+  assert.deepEqual(completed, started);
+  env.cover("workspace-active", false);
+  env.frame(1);
+  assert.equal(started.filter((name) => name === "tree.frame").length, 1);
+  env.frame(17);
+  assert.equal(started.filter((name) => name === "tree.frame").length, 1, "throttled RAF callbacks must not dilute draw timings");
+  const error = new Error("paint fixture failed");
+  env.failPaint(error);
+  assert.throws(() => env.frame(34), (caught) => caught === error);
+  assert.equal(stack.length, 0, "failed draws cannot corrupt the next sample's scope stack");
+  assert.deepEqual(completed, started);
+});
 
 test("the real tree rail suspends covered canvases and resumes a single fresh frame", async () => {
   const env = await environment({ classes: ["workspace-active"] });

@@ -494,7 +494,7 @@
     <div id="idle-feed-metrics" class="feed-metrics" aria-label="Work readiness"></div>
     <div class="feed-controls">
       <label class="switch mini feed-autopilot" title="Autopilot: queue and run Auto Builder requests"><input type="checkbox" id="idle-autopilot"><span class="track"></span><span>Autopilot</span></label>
-      <label class="feed-capacity">Parallel builds <select id="idle-feed-parallel" aria-label="Maximum concurrent builds"><option value="1">1 worker</option><option value="2">2 workers</option><option value="3">3 workers</option></select></label>
+      <label class="feed-capacity">Parallel builds <select id="idle-feed-parallel" aria-label="Build scheduling capacity"><option value="machine">Machine managed</option><option value="1">Manual: 1 worker</option><option value="2">Manual: 2 workers</option><option value="3">Manual: 3 workers</option></select></label>
       <label class="feed-capacity">Build mode <select id="idle-feed-build-mode" aria-label="Build approval mode"><option value="auto">Auto build</option><option value="verify">Verify first</option></select></label>
     </div>
     <div id="idle-feed-scroll" class="feed-scroll" tabindex="0" role="region" aria-label="Current work and queue">
@@ -690,6 +690,36 @@
         <h3>Active tasks</h3>
         <ul id="overhead-legend" class="pin-list"></ul>
       </aside>
+    </div>
+  </div>
+</div>
+<button id="profiler-hud" class="profiler-hud" hidden title="Open the running performance capture">Recording performance</button>
+<div class="profiler-overlay" id="profiler-overlay" hidden>
+  <div class="profiler-sheet sheet" role="dialog" aria-modal="true" aria-labelledby="profiler-heading" tabindex="-1">
+    <header class="profiler-head">
+      <div class="sheet-title"><div class="eyebrow">Studio diagnostics</div><h2 id="profiler-heading">Performance profiler</h2><p id="profiler-status" role="status">Ready to record</p></div>
+      <button id="profiler-close" class="ghost" title="Close (Esc)">Close <kbd>Esc</kbd></button>
+    </header>
+    <div class="profiler-body">
+      <div class="profiler-controls">
+        <button id="profiler-start">Start capture</button><button id="profiler-stop" class="ghost" disabled>Stop</button><button id="profiler-reset" class="ghost" disabled>Reset</button><button id="profiler-export" class="ghost" disabled>Export JSON</button>
+        <label>Frame budget <select id="profiler-budget"><option value="30">30 fps · 33.3 ms</option><option value="60">60 fps · 16.7 ms</option></select></label>
+      </div>
+      <p id="profiler-notice" role="status">Start a capture, close this panel, and reproduce the slowdown. Return here to stop, inspect and export.</p>
+      <div id="profiler-metrics" class="profiler-metrics"></div>
+      <p id="profiler-host-status"></p>
+      <section class="profiler-section"><h3>Frame history <span>latest 180 UI intervals</span></h3><canvas id="profiler-chart" class="profiler-chart" height="140" aria-label="Recent UI frame intervals in milliseconds"></canvas><p id="profiler-frames-note"></p></section>
+      <section class="profiler-section"><h3>Rendering hotspots <span>ranked by total self time</span></h3><p>Self time excludes nested measured work. A high average or p95 identifies consistently expensive operations; a high maximum reveals a spike.</p>
+        <div class="profiler-table-wrap"><table class="profiler-table"><thead><tr><th scope="col">Operation</th><th scope="col">Calls</th><th scope="col">Self total</th><th scope="col">Self / call</th><th scope="col">Mean</th><th scope="col">p95</th><th scope="col">Worst</th></tr></thead><tbody id="profiler-spans"></tbody></table></div>
+      </section>
+      <section class="profiler-section"><h3>Host requests <span>ranked by total elapsed time</span></h3><p>These durations include asynchronous waiting and can overlap. A slow request is not necessarily a blocked UI or high CPU usage.</p>
+        <div class="profiler-table-wrap"><table class="profiler-table"><thead><tr><th scope="col">Request</th><th scope="col">Calls</th><th scope="col">Mean</th><th scope="col">p95</th><th scope="col">Worst</th><th scope="col">Errors</th></tr></thead><tbody id="profiler-ipc"></tbody></table></div>
+      </section>
+      <div class="profiler-bottom">
+        <section class="profiler-section"><h3>Recent hitches</h3><p>Nearby scopes help locate a slowdown; they do not prove its cause. Frame gaps, long tasks and scope events may describe the same hitch.</p><ul id="profiler-incidents" class="profiler-incidents"></ul></section>
+        <section class="profiler-section"><h3>Studio processes</h3><div class="profiler-table-wrap"><table class="profiler-table"><thead><tr><th scope="col">Process</th><th scope="col">CPU</th><th scope="col">Memory</th></tr></thead><tbody id="profiler-processes"></tbody></table></div><p>Memory is each process's working set. Shared pages may be counted in more than one process.</p></section>
+      </div>
+      <p id="profiler-limits"></p><p>Capture stays in memory until you export. Reports contain operation names and measurements, with no task text, request payloads, paths or credentials. Profiling adds some measurement overhead.</p>
     </div>
   </div>
 </div>

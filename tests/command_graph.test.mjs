@@ -643,6 +643,45 @@ test("dominant circular branches keep children beside their session instead of w
   }
 });
 
+test("circular overviews distribute loose task families across the canvas instead of clustering lexical IDs", () => {
+  const { env } = graphContext();
+  vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+  const area = { x: 28, y: 280, w: 1456, h: 780 };
+  const nodes = [{ id: "root", kind: "root" }, { id: "assistant", kind: "assistant" },
+    ...Array.from({ length: 8 }, (_, index) => ({ id: `session:${index}`, kind: "session" })),
+    ...Array.from({ length: 16 }, (_, index) => ({ id: `task:${index}`, kind: "task" }))];
+  const parents = new Map(nodes.filter((node) => node.kind === "session" || node.kind === "assistant").map((node) => [node.id, "root"]));
+  for (const layout of ["constellation", "radial"]) {
+    const points = env.graphLayoutSeeds(nodes.map((node) => ({ node, p: {} })), area, layout, parents, new Map());
+    const hub = points.get("root"), quadrants = [0, 0, 0, 0];
+    for (const node of nodes.filter((node) => node.kind === "task")) {
+      const point = points.get(node.id);
+      quadrants[Number(point.x >= hub.x) + Number(point.y >= hub.y) * 2] += 1;
+    }
+    assert.ok(quadrants.every((count) => count >= 3), `${layout} gives task families room in every quadrant (${quadrants.join(", ")})`);
+  }
+});
+
+test("dominant circular branches use the long viewport dimension while keeping their children local", () => {
+  const { env } = graphContext();
+  vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+  const nodes = [{ id: "root", kind: "root" }, { id: "assistant", kind: "assistant" },
+    ...Array.from({ length: 8 }, (_, index) => ({ id: `session:${index}`, kind: "session" })),
+    ...Array.from({ length: 16 }, (_, index) => ({ id: `task:${index}`, kind: "task" }))];
+  const parents = new Map(nodes.filter((node) => node.kind !== "root").map((node) => [node.id, node.kind === "task" ? "session:0" : "root"]));
+  for (const layout of ["constellation", "radial"]) for (const [w, h] of [[1456, 780], [440, 700]]) {
+    const area = { x: 28, y: 280, w, h };
+    const points = env.graphLayoutSeeds(nodes.map((node) => ({ node, p: {} })), area, layout, parents, new Map());
+    const hub = points.get("root"), parent = points.get("session:0");
+    const children = nodes.filter((node) => node.kind === "task").map((node) => points.get(node.id));
+    const axis = w >= h ? "x" : "y", side = w >= h ? "y" : "x";
+    const span = Math.max(...children.map((point) => point[axis])) - Math.min(...children.map((point) => point[axis]));
+    assert.ok(span > Math.max(w, h) * 0.62, `${layout} gives the dominant branch most of the ${axis} span (${span.toFixed(1)}px)`);
+    assert.ok(Math.abs(parent[axis] - hub[axis]) < 1e-7, "the parent sits across the short viewport axis");
+    assert.ok(children.every((point) => (point[side] - hub[side]) * (parent[side] - hub[side]) > 0), "all children stay on their parent's side of the hub");
+  }
+});
+
 test("managed layout anchors transform coherently under zoom and Follow targets the displayed work", () => {
   for (const view of ["2d", "3d"]) {
     const { env, state } = graphContext(); Object.assign(state, { fit: 1, zoom: 1, view, nodeLayout: "radial", tasks: [], edges: [] });
@@ -1603,5 +1642,65 @@ test("dense 277px node trees retain a readable running task name clear of nodes 
     run();
     for (const [id, anchor] of anchors) assert.deepEqual({ ...nodes.find((node) => node.id === id)._layoutAnchor }, anchor, "label placement and idle redraws cannot move saved work");
     assert.deepEqual(state.labelRects.map((rect) => ({ ...rect })), labels, "the dense overview retains stable readable names");
+  }
+});
+
+test("parallel work labels wrap distinctive task titles and fit beside their own orbs", () => {
+  const { env, el, state } = labelContext({ width: 1920, height: 1200, chat: true });
+  state.feedCollapsed = true;
+  el.feed = box(24, 140, 220, 48);
+  const titles = [
+    "Guard the remaining live-state transitions",
+    "Verify store recovery after a live refresh",
+    "Commit search-suite registration changes",
+    "Audit renderer behavior and keyboard tests",
+    "Run the complete Python discovery sweep",
+    "Mark idle-only sessions in the work tree",
+  ];
+  const projected = titles.map((label, index) => ({
+    node: { id: `task:parallel:${index}`, kind: "task", label, _workLabel: "Running", _pr: 15 },
+    p: { x: 320 + index % 3 * 420, y: 390 + Math.floor(index / 3) * 330, depth: 800, k: 1 },
+  }));
+  env.drawLabels(projected);
+  for (const { node, p } of projected) {
+    assert.ok(node._label, `${node.label} remains named`);
+    assert.equal(Array.from(node._labelLines).join(" "), node.label, "two lines preserve the distinguishing end of each title");
+    assert.equal(node._labelLines.length, el.ctx.measureText(node.label).width > 200 ? 2 : 1);
+    const rect = node._label;
+    const gap = Math.hypot(Math.max(rect.x - p.x, 0, p.x - rect.x - rect.w), Math.max(rect.y - p.y, 0, p.y - rect.y - rect.h));
+    assert.ok(gap >= node._pr && gap <= node._pr + 15, "the padded name stays beside its orb without covering it");
+    assert.ok(node._labelLines.every((line) => el.ctx.measureText(line).width <= 200));
+  }
+  assert.ok(state.labelRects.length <= env.labelBudget());
+  const first = projected.map(({ node }) => ({ ...node._label }));
+  env.drawLabels([...projected].reverse());
+  assert.deepEqual(projected.map(({ node }) => ({ ...node._label })), first, "refresh ordering cannot shuffle labels");
+});
+
+test("two-line work labels clip oversized and unbroken titles without changing their source", () => {
+  const { env, el } = labelContext();
+  for (const title of ["Validate grouped worker transitions and interrupted result recovery across every saved project in the workspace", "x".repeat(500)]) {
+    const node = { id: "long-title", kind: "task", label: title, _workLabel: "Running" };
+    const lines = env.workLabelLines(el.ctx, node, env.fontFor(node), "Running");
+    assert.equal(lines.length, 2);
+    assert.match(lines[1], /…$/);
+    assert.ok(lines.every((line) => el.ctx.measureText(line).width <= 200));
+    assert.equal(node.label, title);
+  }
+});
+
+test("fractional camera motion keeps equal-distance labels on the same side of their orb", () => {
+  const { env } = labelContext();
+  env.workLabelLines = () => ["A running task", "with fractional text metrics"];
+  env.measure = () => 199.17;
+  // Leave equal left/right openings while other branches obstruct the top
+  // and bottom. Real canvas text and perspective both use fractional pixels.
+  env.blocked = (rect) => Math.abs(rect.y + rect.h / 2 - 400) > 2;
+  const node = { id: "fractional", kind: "task", label: "A running task", _workLabel: "Running", _pr: 24 };
+  const p = { x: 700, y: 400, depth: 800, k: 1 };
+  for (let step = 0; step < 100; step += 1) {
+    p.x = 700 + step / 100;
+    env.drawLabels([{ node, p }]);
+    assert.ok(node._label.x > p.x, "subpixel rounding cannot flip a label across the orb");
   }
 });

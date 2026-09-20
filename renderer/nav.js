@@ -238,6 +238,16 @@
       isOpen: () => overlayOpen("overhead-overlay"),
     },
     {
+      id: "profiler", label: "Performance profiler", short: "Profiler", kind: "overlay", layer: "sheet", group: "tools",
+      key: null, glyph: "g-graph", badge: null,
+      desc: "Record frame timings, rendering hotspots, host requests, CPU and memory",
+      searchTerms: "debug diagnostics lag slow fps hitch performance profiler cpu memory",
+      showIn: showIn({ tools: true, palette: true, help: true }),
+      element: "profiler-overlay", focus: "#profiler-start",
+      open: () => window.MefiProfiler?.open?.(), close: () => window.MefiProfiler?.close?.(),
+      isOpen: () => overlayOpen("profiler-overlay"),
+    },
+    {
       id: "analyzer",
       label: "Analyzer",
       short: "Analyzer",
@@ -768,7 +778,7 @@
 
   function menuGroup(dest) {
     if (["workspace", "tasks", "plans", "ideas"].includes(dest.id)) return "Work";
-    if (["command", "eyes", "explorer", "overhead", "analyzer"].includes(dest.id)) return "Monitor & inspect";
+    if (["command", "eyes", "explorer", "overhead", "analyzer", "profiler"].includes(dest.id)) return "Monitor & inspect";
     if (["booklet", "graph"].includes(dest.id)) return "Models";
     return "Settings & help";
   }

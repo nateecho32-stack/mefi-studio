@@ -456,7 +456,7 @@ test("Audio link settings choose their source and response without connecting un
   assert.deepEqual(calls, [["source", "mic"], ["response", 1.65]]);
   assert.equal(response.parentElement.children.at(-1).textContent, "165%");
   assert.equal(response.type, "range");
-  assert.equal(response.min, "0.25"); assert.equal(response.max, "2");
+  assert.equal(response.min, "0"); assert.equal(response.max, "2");
   assert.equal(selector.attrs["aria-describedby"], "music-audio-hint");
   toggle.click();
   assert.deepEqual(calls.at(-1), ["connect", true]);
@@ -515,7 +515,85 @@ test("Audio link mirrors Command changes, retries failed capture and disconnects
 
 test("Audio link controls remain unavailable when the Command audio API is absent", () => {
   const env = environment(); env.music.open();
-  for (const id of ["music-audio-toggle", "music-audio-source", "music-audio-response"]) assert.equal(env.ids.get(id).disabled, true, id);
+  for (const id of ["music-audio-toggle", "music-audio-source", "music-audio-response", "music-audio-waves", "music-audio-nodes", "music-audio-percussion", "music-audio-background"]) assert.equal(env.ids.get(id).disabled, true, id);
   assert.equal(env.ids.get("music-audio-state").textContent, "Audio link off");
   assert.equal(env.audio.paused, true);
+});
+
+test("Audio reactions start gently and provide independent accessible checkboxes", () => {
+  const env = environment({ audioLink: { audioStatus: () => ({}), setAudioEffects() {}, setAudioResponse() {} } });
+  assert.equal(env.ids.get("music-audio-response").value, "0.35");
+  assert.equal(env.ids.get("music-audio-response").parentElement.children.at(-1).textContent, "35%");
+  const defaults = { waves: true, nodes: true, percussion: false, background: false };
+  const labels = { waves: "Connection waves", nodes: "Node glow", percussion: "Drum accents", background: "Background glow" };
+  for (const [key, enabled] of Object.entries(defaults)) {
+    const input = env.ids.get(`music-audio-${key}`);
+    assert.equal(input.tagName, "input"); assert.equal(input.type, "checkbox");
+    assert.equal(input.disabled, false); assert.equal(input.checked, enabled);
+    assert.equal(input.attrs["aria-label"], labels[key]);
+    assert.ok(env.ids.get(input.attrs["aria-describedby"]).textContent, "each reaction explains its visible effect");
+    assert.equal(input.parentElement.tagName, "label", "the full row activates the native checkbox");
+    assert.equal(input.parentElement.parentElement.attrs.role, "group");
+  }
+  const response = env.ids.get("music-audio-response");
+  assert.ok(response.attrs["aria-label"]);
+  assert.match(env.ids.get(response.attrs["aria-describedby"]).textContent, /0%.*without changing playback volume/);
+});
+
+test("Audio reaction choices restore from the host and follow external status updates without changing capture", () => {
+  let writes = 0;
+  const saved = { waves: false, nodes: false, percussion: true, background: true };
+  const status = { selection: "desktop", response: 0, effects: saved, reactive: true, listening: true, label: "Desktop linked" };
+  const env = environment({ audioLink: {
+    audioStatus: () => status,
+    setAudioEffects: () => { writes += 1; }, setAudioResponse: () => { writes += 1; },
+    setAudioSource: () => { writes += 1; }, setMusicReactive: () => { writes += 1; },
+  } });
+  env.music.open();
+  for (const [key, enabled] of Object.entries(saved)) assert.equal(env.ids.get(`music-audio-${key}`).checked, enabled);
+  assert.equal(env.ids.get("music-audio-response").value, "0", "a saved zero remains zero");
+  assert.equal(env.ids.get("music-audio-response").parentElement.children.at(-1).textContent, "0%");
+  const changed = { waves: true, nodes: false, percussion: false, background: true };
+  env.emit("mefi-audio-change", { ...status, effects: changed, response: .2 });
+  for (const [key, enabled] of Object.entries(changed)) assert.equal(env.ids.get(`music-audio-${key}`).checked, enabled);
+  assert.equal(env.ids.get("music-audio-response").value, "0.2");
+  assert.equal(env.ids.get("music-audio-source").value, "desktop");
+  assert.equal(env.ids.get("music-audio-toggle").attrs["aria-pressed"], "true");
+  assert.equal(writes, 0, "restoring and synchronizing controls only reads the host's preferences");
+  assert.equal(env.audio.paused, true);
+});
+
+test("Audio reactions submit only the changed choice and zero strength leaves playback and capture alone", async () => {
+  const calls = [];
+  let requests = 0;
+  let status = { selection: "local", response: .35, effects: { waves: true, nodes: true, percussion: false, background: false }, reactive: true, listening: true, label: "Track linked" };
+  const env = environment({ recommend: async () => { requests += 1; }, audioLink: {
+    audioStatus: () => status,
+    setAudioEffects: (effects) => { calls.push(["effects", { ...effects }]); status = { ...status, effects: { ...status.effects, ...effects } }; },
+    setAudioResponse: (response) => { calls.push(["response", response]); status = { ...status, response }; },
+    setAudioSource: () => { calls.push(["source"]); }, setMusicReactive: () => { calls.push(["capture"]); },
+  } });
+  env.music.addFiles([file("Keep this quiet.mp3")]);
+  env.audio.currentTime = 17;
+  const expected = { ...status.effects };
+  for (const key of Object.keys(expected)) {
+    const input = env.ids.get(`music-audio-${key}`);
+    expected[key] = !expected[key]; input.checked = expected[key]; input.dispatch("change");
+    assert.deepEqual(calls.at(-1), ["effects", { [key]: expected[key] }]);
+    for (const [other, enabled] of Object.entries(expected)) assert.equal(env.ids.get(`music-audio-${other}`).checked, enabled, `${key} leaves ${other} independent`);
+  }
+  const response = env.ids.get("music-audio-response");
+  response.value = "0"; response.dispatch("input");
+  assert.deepEqual(calls.at(-1), ["response", 0], "zero is passed as a number to the host");
+  assert.equal(response.value, "0"); assert.equal(response.parentElement.children.at(-1).textContent, "0%");
+  assert.equal(env.audio.paused, true, "changing preferences never starts playback");
+  assert.equal(env.audio.currentTime, 17); assert.equal(env.audio.volume, .7);
+  env.ids.get("music-play").click(); await flush();
+  assert.equal(env.audio.paused, false);
+  const waves = env.ids.get("music-audio-waves"); waves.checked = true; waves.dispatch("change");
+  response.value = ".1"; response.dispatch("input");
+  assert.equal(env.audio.paused, false, "changing preferences does not stop a playing track");
+  assert.equal(env.audio.currentTime, 17); assert.equal(env.audio.volume, .7);
+  assert.equal(calls.some(([type]) => type === "source" || type === "capture"), false);
+  assert.equal(requests, 0);
 });

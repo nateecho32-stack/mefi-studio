@@ -1,0 +1,262 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { executorHost } from "./fixtures/host_executor.mjs";
+
+const task = (id, extra = {}) => ({ id, title: `Implement resource fixture ${id}`, prompt: `Implement ${id} within its own module.`, status: "open", createdAt: 1, files: [`src/${id}.js`], ...extra });
+const healthy = () => ({ canStart: true, reason: null, resources: { lagMs: 0, cpuPercent: 15, availableMemoryMB: 8192, totalMemoryMB: 32768 } });
+const pressure = (kind) => ({
+  canStart: false,
+  reason: kind === "lag" ? "Machine responsiveness: waiting for UI lag to recover" : "Machine memory pressure: emergency reserve is exhausted",
+  resources: { lagMs: kind === "lag" ? 250 : 0, cpuPercent: 20, availableMemoryMB: kind === "memory" ? 128 : 8192, totalMemoryMB: 32768 },
+});
+const assertUnclaimed = (h, id) => {
+  const saved = h.board().tasks.find((row) => row.id === id);
+  assert.equal(saved.status, "open");
+  assert.equal(saved.runId, undefined);
+  assert.equal(saved.lease, undefined);
+};
+
+test("machine-managed scheduling starts more than three independent workers without waiting for completion", async () => {
+  const h = executorHost({ adaptiveParallel: true, parallel: 1, tasks: Array.from({ length: 5 }, (_, index) => task(`independent-${index}`)) });
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 5);
+  assert.equal(h.autopilot.jobs.length, 5, "all workers coexist before any completion event");
+  assert.equal(h.registry.size, 5, "each worker retains its own file claim");
+  assert.ok(h.board().tasks.every((row) => row.status === "active"));
+  assert.ok(h.capacityCalls.length >= 10, "admission is measured before and after every durable claim");
+  assert.equal(h.autopilot.parallel, 1, "adaptive admission does not overwrite the retained manual width");
+});
+
+test("a pinned user request starts while three other workers are still running", async () => {
+  const h = executorHost({ adaptiveParallel: true, parallel: 3, tasks: [task("first"), task("second"), task("third")] });
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 3);
+  const firstRuns = h.autopilot.jobs.map((row) => row.id);
+  h.edit((board) => board.tasks.push(task("requested", { pin: true, pinAt: h.now(), createdAt: h.now() })));
+  h.wake("work on it"); await h.pump();
+  assert.deepEqual(h.starts.map((row) => row.taskId), ["first", "second", "third", "requested"]);
+  assert.ok(firstRuns.every((id) => h.autopilot.jobs.some((row) => row.id === id)), "starting requested work does not terminate or replace an existing worker");
+  assert.equal(h.terminations.length, 0);
+});
+
+for (const kind of ["lag", "memory"]) {
+  test(`${kind} pressure defers fresh work without creating a durable or file claim`, async () => {
+    const decision = pressure(kind);
+    const h = executorHost({ adaptiveParallel: true, tasks: [task("held", { pin: true })], workerCapacity: async () => decision });
+    h.wake(); await h.pump();
+    assert.equal(h.starts.length, 0);
+    assert.equal(h.autopilot.jobs.length, 0);
+    assert.equal(h.registry.size, 0);
+    assertUnclaimed(h, "held");
+    assert.equal(h.autopilot.waiting, decision.reason, "the operator sees the measured reason for the delay");
+    assert.equal(h.board().tasks[0].runFailures, undefined, "resource waits are not task failures");
+  });
+}
+
+test("resource recovery fills the queue while the already running workers keep their claims", async () => {
+  let underPressure = true;
+  const h = executorHost({ adaptiveParallel: true, parallel: 1, tasks: [task("first"), task("second"), task("third")], workerCapacity: async ({ running }) => underPressure && running >= 2 ? pressure("lag") : healthy() });
+  h.wake(); await h.pump();
+  assert.deepEqual(h.starts.map((row) => row.taskId), ["first", "second"]);
+  assertUnclaimed(h, "third");
+  assert.match(h.autopilot.waiting, /responsiveness/);
+  underPressure = false;
+  h.wake("machine performance recovered"); await h.pump();
+  assert.deepEqual(h.starts.map((row) => row.taskId), ["first", "second", "third"]);
+  assert.equal(h.autopilot.jobs.length, 3);
+  assert.equal(h.registry.size, 3);
+  assert.equal(h.autopilot.waiting, null);
+  assert.equal(h.terminations.length, 0);
+});
+
+test("pressure arriving during the durable claim releases that claim before creating a child", async () => {
+  let claimed = false;
+  const h = executorHost({ adaptiveParallel: true, tasks: [task("race")], workerCapacity: async () => claimed ? pressure("memory") : healthy() });
+  const mutate = h.env.mutateBoard;
+  h.env.mutateBoard = async (fn) => {
+    const result = await mutate(fn);
+    if (h.board().tasks[0].runId) claimed = true;
+    return result;
+  };
+  h.wake(); await h.pump();
+  assert.ok(claimed, "the test crosses the durable claim boundary");
+  assert.equal(h.starts.length, 0);
+  assert.equal(h.autopilot.jobs.length, 0);
+  assert.equal(h.registry.size, 0);
+  assertUnclaimed(h, "race");
+  assert.match(h.autopilot.waiting, /memory pressure/);
+});
+
+test("the post-claim admission counts existing workers without counting its own pending start twice", async () => {
+  const h = executorHost({ adaptiveParallel: true, tasks: [task("last-available")], workerCapacity: async ({ running }) => running < 1 ? healthy() : pressure("memory") });
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 1);
+  assert.deepEqual(h.capacityCalls.slice(0, 2).map((row) => row.running), [0, 0]);
+  assert.equal(h.capacityCalls[1].force, true, "the post-claim read bypasses cached pre-claim measurements");
+  assert.equal(h.autopilot.jobs.length, 1);
+});
+
+test("admission forwards measured UI lag and forces a fresh post-claim responsiveness check", async () => {
+  const probes = [];
+  const h = executorHost({ adaptiveParallel: true, tasks: [task("lag-forwarding")] });
+  h.env.measureWorkerLag = async (options) => {
+    probes.push({ ...options });
+    return options.force ? 22 : 8;
+  };
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 1);
+  assert.deepEqual(probes.slice(0, 2), [{ force: false }, { force: true }]);
+  assert.deepEqual(h.capacityCalls.slice(0, 2).map((row) => row.lagMs), [8, 22]);
+});
+
+test("manual width remains a cap while measured resource pressure can hold work below that cap", async () => {
+  let underPressure = false;
+  const h = executorHost({ adaptiveParallel: false, parallel: 2, tasks: [task("first"), task("second"), task("third")], workerCapacity: async () => underPressure ? pressure("lag") : healthy() });
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 2);
+  assertUnclaimed(h, "third");
+  underPressure = true;
+  await h.finish("first"); await h.pump();
+  assert.equal(h.starts.length, 2, "a free manual slot cannot bypass resource pressure");
+  assertUnclaimed(h, "third");
+  assert.match(h.autopilot.waiting, /responsiveness/);
+  underPressure = false;
+  h.wake("resources available"); await h.pump();
+  assert.equal(h.starts.length, 3);
+  assert.equal(h.autopilot.jobs.length, 2);
+  assert.equal(h.autopilot.parallel, 2);
+});
+
+test("machine-managed scheduling preserves Pause and exclusive test leases", async () => {
+  for (const options of [{ paused: true }, { execute: false }, { exclusive: true }]) {
+    const h = executorHost({ adaptiveParallel: true, tasks: [task("held", { pin: true })], ...options });
+    if (options.exclusive) h.machine.leaseStatus = async () => ({ exclusive: true });
+    h.wake("explicit work request"); await h.pump();
+    assert.equal(h.starts.length, 0, JSON.stringify(options));
+    assert.equal(h.registry.size, 0, JSON.stringify(options));
+    assertUnclaimed(h, "held");
+    if (options.exclusive) assert.equal(h.autopilot.waiting, "machine busy");
+    if (options.paused) assert.equal(h.state.status, "paused");
+    if (options.execute === false) assert.equal(h.autopilot.execute, false);
+  }
+});
+
+test("an exclusive lease arriving after the claim still rolls back under adaptive admission", async () => {
+  const h = executorHost({ adaptiveParallel: true, tasks: [task("lease-race")] });
+  let leases = 0;
+  h.machine.leaseStatus = async () => ({ exclusive: ++leases > 1 });
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 0);
+  assert.equal(h.registry.size, 0);
+  assert.equal(h.autopilot.jobs.length, 0);
+  assertUnclaimed(h, "lease-race");
+  assert.equal(h.autopilot.waiting, "machine busy");
+});
+
+test("legacy saved worker width migrates to machine-managed mode without losing the retained manual width or Pause", async () => {
+  const h = executorHost({ savedSettings: { ui: { autopilot: { enabled: false, execute: false, parallel: 1, minutes: 7 } } } });
+  await h.env.bootAutopilot();
+  assert.equal(h.autopilot.adaptiveParallel, true);
+  assert.equal(h.autopilot.parallel, 1);
+  assert.equal(h.autopilot.enabled, false);
+  assert.equal(h.autopilot.execute, false);
+  assert.equal(h.settings().ui.autopilot.adaptiveParallel, true);
+  assert.equal(h.settings().ui.autopilot.parallel, 1);
+});
+
+test("an explicit manual mode survives settings saves and a fresh host boot", async () => {
+  const first = executorHost({ adaptiveParallel: true, parallel: 3 });
+  await first.env.setAutopilot({ adaptiveParallel: false, parallel: 1 });
+  assert.equal(first.settings().ui.autopilot.adaptiveParallel, false);
+  await first.env.setAutopilot({ autoBuild: false });
+  const restarted = executorHost({ savedSettings: first.settings() });
+  await restarted.env.bootAutopilot();
+  assert.equal(restarted.autopilot.adaptiveParallel, false);
+  assert.equal(restarted.autopilot.parallel, 1);
+  assert.equal(restarted.autopilot.autoBuild, false);
+});
+
+test("switching a full manual pool to machine-managed mode dispatches existing ready work immediately", async () => {
+  const h = executorHost({ adaptiveParallel: false, parallel: 1, tasks: [task("running"), task("waiting")] });
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 1);
+  await h.env.setAutopilot({ adaptiveParallel: true });
+  await h.pump();
+  assert.deepEqual(h.starts.map((row) => row.taskId), ["running", "waiting"]);
+  assert.equal(h.autopilot.jobs.length, 2);
+  assert.equal(h.autopilot.parallel, 1);
+  assert.equal(h.autopilot.enabled, true);
+  assert.equal(h.autopilot.execute, true);
+});
+
+test("supervision retries a resource-held adaptive queue without waiting for an existing worker to finish", async () => {
+  let underPressure = true;
+  const h = executorHost({ adaptiveParallel: true, parallel: 1, tasks: [task("running"), task("waiting")], workerCapacity: async ({ running }) => underPressure && running >= 1 ? pressure("lag") : healthy() });
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 1);
+  const before = h.roleRequests.length;
+  h.advance(29000);
+  h.env.assistantSuperviseJobs(h.now());
+  assert.equal(h.roleRequests.length, before, "supervision respects the retry interval");
+  underPressure = false;
+  h.advance(2000);
+  h.env.assistantSuperviseJobs(h.now());
+  assert.equal(h.roleRequests.length, before + 1);
+  await h.pump();
+  assert.equal(h.starts.length, 2);
+  assert.equal(h.autopilot.jobs.length, 2);
+  assert.equal(h.autopilot.waiting, null);
+});
+
+test("switching to a full manual limit during resource measurement prevents a stale adaptive admission", async () => {
+  const h = executorHost({ adaptiveParallel: true, parallel: 1, tasks: [task("running")] });
+  h.wake(); await h.pump();
+  h.edit((board) => board.tasks.push(task("waiting", { createdAt: 2 })));
+  h.machine.workerCapacity = async () => {
+    h.autopilot.adaptiveParallel = false;
+    return healthy();
+  };
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 1);
+  assert.equal(h.autopilot.jobs.length, 1);
+  assertUnclaimed(h, "waiting");
+});
+
+for (const pausedDuringRetry of [false, true]) test(`a failed resource rollback retains ownership and recovers${pausedDuringRetry ? " without bypassing Pause" : " without a stranded claim"}`, async () => {
+  let underPressure = false, rollbackFailureArmed = false;
+  const h = executorHost({ adaptiveParallel: true, tasks: [task("rollback")], workerCapacity: async () => underPressure ? pressure("memory") : healthy() });
+  const mutate = h.env.mutateBoard;
+  h.env.mutateBoard = async (fn) => {
+    const result = await mutate(fn);
+    if (!rollbackFailureArmed && h.board().tasks[0].runId) {
+      rollbackFailureArmed = true;
+      underPressure = true;
+      h.failNextWrite();
+    }
+    return result;
+  };
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 0);
+  assert.equal(h.autopilot.jobs[0]?.settlementPending, true, "failed rollback retains ownership until it can be persisted");
+  assert.equal(h.registry.size, 1);
+  const retry = h.timers.find((timer) => timer.delay === 5000 && !timer.cancelled);
+  assert.ok(retry, "an unstarted worker has an automatic claim-release retry");
+  underPressure = false;
+  if (pausedDuringRetry) h.state.status = "paused";
+  h.advance(5000);
+  retry.fn();
+  for (let step = 0; step < 30; step += 1) await Promise.resolve();
+  await h.pump();
+  if (pausedDuringRetry) {
+    assert.equal(h.starts.length, 0, "storage recovery must not restart paused work");
+    assert.equal(h.autopilot.jobs.length, 0);
+    assert.equal(h.registry.size, 0);
+    assertUnclaimed(h, "rollback");
+    h.state.status = "running";
+    h.wake("resume after resource rollback"); await h.pump();
+  }
+  assert.equal(h.starts.length, 1, "successful storage retry must release or recover the unstarted claim");
+  assert.equal(h.autopilot.jobs.length, 1);
+  assert.ok(h.autopilot.jobs[0].child, "the sole remaining claim belongs to the newly started process");
+  assert.equal(h.registry.size, 1);
+});

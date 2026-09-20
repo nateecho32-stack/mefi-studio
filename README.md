@@ -158,14 +158,45 @@ without changing the saved Pause preference.
 See [FEATURE_AUDIT.md](FEATURE_AUDIT.md) for the verified scope and remaining
 gaps in the capabilities described in the supplied screenshots.
 
+**Performance profiler** is in **Studio tools**, or search “profiler” with
+**Ctrl K**. Choose **Start capture**, close the panel and reproduce a slowdown.
+The recording indicator reopens the panel; **Stop** freezes the capture,
+**Reset** clears it, and **Export JSON** saves a report for comparing runs.
+It follows the game's profiler approach: bounded frame history, nested rendering
+scopes with self time, p95/worst timings and automatic hitch records. Command
+frame painting, layout, graph updates, agent motion and the tree rail have named
+timings. Desktop captures also show host request duration, event-loop lag and
+Studio process CPU/memory. Slow asynchronous requests include waiting and are
+not by themselves evidence of blocked rendering.
+
+Capture is off by default and stays in memory until export. Hidden-window
+intervals are excluded from renderer measurements; the host keeps sampling
+until Stop or a renderer reload/exit. UI cadence measures browser callbacks,
+not GPU time or Command's deliberately capped 30 fps drawing. The default
+frame budget is 33.3 ms, with a 16.7 ms option. Frame statistics cover the last
+900 intervals, scope p95 the last 180 calls, and totals cover the current
+capture. CPU covers Studio processes, not external coding workers. Reports
+contain static operation names and numeric measurements, without task text,
+request payloads, file paths or credentials.
+
 **Command center** puts the current worker and its reported step in **Live work**,
 with readiness counts and a ranked queue underneath. Agent details and technical
 logs expand when needed. Active agents move smoothly between their work and the
 Assistant; finished agents return and fade away. Their positions survive status
 refreshes, and role colors distinguish their work. Verification and claim recovery run before
 the next dispatch, including ordinary automatic work outside backlog mode.
-**Parallel builds** chooses one to three coding workers. Independent file claims
-can run together; overlapping work waits. The separate assistant agent and AI
+**Parallel builds** defaults to **Machine managed**, including existing
+installations with a saved worker limit. The machine agent admits independent,
+eligible coding work while Studio remains responsive, without a fixed worker
+count. It staggers starts and rechecks actual app lag as work grows. When Studio
+becomes laggy, new starts wait and resume automatically when responsiveness
+recovers; current workers continue. High CPU usage alone does not limit builds.
+**Work on it** prioritizes
+the selected task and asks for dispatch immediately. Pause, required approvals,
+prerequisites and overlapping file claims still hold work when necessary.
+Choose **Manual: 1 worker**, **2 workers** or **3 workers** to opt into a fixed
+limit; your saved manual limit is retained when switching to Machine managed.
+The separate assistant agent and AI
 limits remain available on the Assistant's detail card. Studio worker processes
 disable OpenCode's shared filesystem snapshots to avoid concurrent snapshot
 index locks; their tool-change evidence, conversations and Studio task history
@@ -182,7 +213,9 @@ priority. Hover, selection and search reveal details; **All** keeps the expanded
 label option. The glowing orb style remains, with softer halos and distinct agent
 colors. Running work uses the theme accent; attempts awaiting verification use
 a quieter blue rim. Their compact labels put status above the task title, so
-the useful name has more room. Checkpoint notes use small outlined marks with
+the useful name has more room. On wider trees, work titles wrap to two lines
+before shortening, and names use nearby gaps around their own nodes.
+Checkpoint notes use small outlined marks with
 larger click targets. Constellation groups related work around a centered hub,
 and collapsed panel headers retain clear space above the graph.
 The overview starts still: task and session anchors stay fixed during status
@@ -214,7 +247,9 @@ appearance and arrangement. Pick **Classic orbs**, **Soft glass**, **Minimal**,
 These choices are remembered. Changing style keeps the current arrangement;
 choosing another layout explicitly rearranges the tree. Branches groups children
 under centered parents in spaced rows, with quieter secondary connections.
-Constellation gives loose work more of the available space. Rings follows
+Constellation and Rings spread loose tasks among the session branches around
+the hub. Large branches use compact sectors and the viewport's wider dimension
+so quiet sessions cannot leave all current work crowded against one edge. Rings follows
 dependency depth in branch sectors, Helix keeps each branch together, and
 Terraces uses centered shelves with sibling columns. Narrow views leave clear
 space for active task labels. Worker satellites stay clear of task nodes and
@@ -255,9 +290,13 @@ when local tracks are queued. Capture starts only after an explicit control
 gesture; changing to Spotify or removing a track asks you to reconnect when
 desktop capture is needed. The connection status shows paused tracks and errors.
 Use **Response** to adjust the strength from 25% to 200%, independently of volume.
-Bass lights the hubs, mids and treble bring out different nodes, and existing
-connections brighten with the music. These effects fade with silence and pause
-without moving labels or changing work status. Reduced motion keeps them still.
+The response adapts to quiet and loud signals across bass, mids and treble.
+Sustained bass rolls along the connections; low drum attacks, midrange hits and
+high percussion drive different ripples. The live waveform also traces the
+connections and the inside of each node. A visible audio cable joins the music
+node to the hub while linked. The visual reactions follow frequency and attack
+patterns. Silence and pause let the waves settle; node anchors, labels and task
+relationships stay in place. Reduced motion keeps the effects still.
 
 Project state stays under the application's ignored `data/projects/` folders;
 the original project's existing files stay in place. Source and portable builds
@@ -566,15 +605,16 @@ every five with Proactive and a key), **responder** (one job per message, top
 priority, so a reply never waits for a tick) and the on-demand **improver**,
 **grower**, **ideas** and **reference**. Cadence roles are singletons; replies
 have a separate lane of at most two jobs, capped by the AI width, and the
-foreman has one independent slot. Queue aging prevents steady replies from
+foreman and Machine each have an independent slot. Queue aging prevents steady replies from
 starving maintenance. A job that takes more than 150 s reports a timeout but
 keeps its slot and saved journal until its underlying operation settles. New
 work for that role waits; unrelated roles can continue. A permanently stuck
 operation needs an app restart. This is ownership retention, not cancellation.
 *Parallel
 agents* (1–12) and *AI in parallel* (1–6) set the background pool's width from the
-assistant card or `assistantPrefs`, and *Autopilot jobs* (1–3, same card)
-sets how many queued requests and open tasks the executor runs at once —
+assistant card or `assistantPrefs`. *Parallel builds* uses Machine managed
+admission based on app responsiveness by default, with optional manual limits
+of one to three workers —
 each in-flight job claims its work in the store (requests flip to
 `running`, tasks to `active`) under a lock that re-reads first, so two
 slots cannot execute the same title, then re-checks the machine lease
@@ -625,10 +665,12 @@ board the assistant plans from. And the loop never idles: when nothing is
 runnable and no job is building, the foreman wakes the **compactor** (which
 folds loose ideas into plans and re-asks when a plan is runnable) and, when
 its last scan has gone cold, the **ideas** agent — so a dry board grows work
-instead of waiting. The executor's default width scales with the machine:
-two jobs by default (one on a single-core machine); a saved width within the
-one-to-three limit is the operator's setting and wins, and every spawn still
-yields to an exclusive test lease.
+instead of waiting. The executor checks main-process and visible-renderer lag
+before each start and again after claiming its task. New starts are spaced
+three seconds apart so the next admission reflects the added work. Legacy
+saved widths are retained for
+manual mode; an explicit manual mode choice survives restart. Every spawn
+still yields to an exclusive test lease.
 
 **Board integrity.** Every writer of requests, tasks and ideas — queue
 filings, promotion, chat tasks, the compactor, the keeper, housekeeping,
@@ -839,7 +881,15 @@ The Explorer's **Machine** panel and the background resource manager keep
 agents from spamming the machine: it reads the repo's own test leases
 (`tools/logs/_lease/`), lists live LOVE test processes with age/memory, writes
 `data/machine-status.json` for other agents, and adds lease/run facts to every
-briefing so the assistant can say "wait your turn". Auto-kill (on by default,
+briefing. Coding admission follows measured responsiveness in Studio's main
+process and visible renderer; hidden or minimized views do not contribute
+renderer lag. Sustained excess lag of 100 ms, or a severe 300 ms delay, holds
+new starts. Readings of 40 ms or less let the queue resume automatically even
+while other workers remain active. CPU usage and available RAM remain useful
+context rather than worker-count limits; only the emergency guard below
+512 MB of available RAM holds starts to avoid exhausting memory.
+The Machine role stays available when the background agent pool is full.
+Auto-kill (on by default,
 toggleable) terminates **strays** (dead parent), **hangs** (no CPU progress for
 4 minutes) and **over-age** runs (20+ minutes); every kill is logged to
 `data/resource-manager.json`, shown in the panel, and queued to the inbox so

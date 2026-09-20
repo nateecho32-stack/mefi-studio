@@ -10,6 +10,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import os from "node:os";
 import studioPaths from "./paths.cjs";
 
 const STUDIO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -17,6 +18,138 @@ const { repoRoot: DEFAULT_ROOT } = studioPaths.resolveStudioPaths({ studioRoot: 
 
 export const TEST_MARKERS = ["lua_quality_runner", ".codex_smoke", "TRIPPY_LUA_QUALITY_CHECK", "[test]", "invoke-love", "feature-smoke"];
 export const LEASE_MAX_AGE_HOURS = 6;
+
+export const WORKER_CAPACITY_DEFAULTS = Object.freeze({
+  sampleMs: 150,
+  cacheMs: 750,
+  lagBusyMs: 100,
+  lagCriticalMs: 300,
+  lagRecoveryMs: 40,
+  pressureSamples: 2,
+  recoverySamples: 2,
+  desktopReserveMemoryMB: 256,
+  workerMemoryMB: 256,
+});
+
+// Admission reads are deliberately independent of the slow process/lease scan.
+// A short timer measures how promptly the host can respond. CPU counters are
+// sampled over that same interval for information; CPU use does not gate work.
+export function createWorkerCapacitySampler({
+  cpus = () => os.cpus(),
+  freemem = () => os.freemem(),
+  totalmem = () => os.totalmem(),
+  clock = () => Date.now(),
+  wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  ...limits
+} = {}) {
+  const options = { ...WORKER_CAPACITY_DEFAULTS, ...limits };
+  let cached = null;
+  let inFlight = null;
+  let pendingRendererLagMs = null;
+  let lagPressure = false;
+  let highSamples = 0;
+  let recoverySamples = 0;
+
+  function cpuTotals() {
+    try {
+      const rows = cpus();
+      if (!Array.isArray(rows) || !rows.length) return null;
+      let total = 0, idle = 0;
+      for (const row of rows) {
+        const times = row?.times;
+        const values = [times?.user, times?.nice, times?.sys, times?.idle, times?.irq];
+        if (values.some((value) => !Number.isFinite(value) || value < 0)) return null;
+        total += values.reduce((sum, value) => sum + value, 0);
+        idle += times.idle;
+      }
+      return { total, idle, count: rows.length };
+    } catch {
+      return null;
+    }
+  }
+
+  function memoryMB(read) {
+    try {
+      const bytes = read();
+      return Number.isFinite(bytes) && bytes >= 0 ? bytes / (1024 * 1024) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function sample(now) {
+    const baseline = cpuTotals();
+    const startedAt = clock();
+    await wait(options.sampleMs);
+    const elapsed = clock() - startedAt;
+    const hostLagMs = Number.isFinite(elapsed) && elapsed >= 0 ? Math.max(0, elapsed - options.sampleMs) : null;
+    const rendererLagMs = pendingRendererLagMs;
+    const lagReadings = [hostLagMs, rendererLagMs].filter((value) => value !== null);
+    const lagMs = lagReadings.length ? Math.max(...lagReadings) : null;
+    const sampledAt = now + (Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0);
+    const current = cpuTotals();
+    const totalDelta = current && baseline ? current.total - baseline.total : 0;
+    const idleDelta = current && baseline ? current.idle - baseline.idle : -1;
+    const cpuPercent = current && baseline && current.count === baseline.count &&
+      totalDelta > 0 && idleDelta >= 0 && idleDelta <= totalDelta
+      ? Math.round((1 - idleDelta / totalDelta) * 1000) / 10 : null;
+    const availableMemoryMB = memoryMB(freemem);
+    const totalMemoryMB = memoryMB(totalmem);
+    const memoryKnown = totalMemoryMB > 0 && availableMemoryMB !== null && availableMemoryMB <= totalMemoryMB;
+    // Keep a modest emergency reserve and room for one more worker. A share
+    // of total RAM unnecessarily blocks healthy machines with several GB free;
+    // current workers already appear in the available-memory measurement.
+    const requiredMemoryMB = memoryKnown
+      ? Math.ceil(options.desktopReserveMemoryMB + options.workerMemoryMB) : null;
+
+    if (lagMs === null) {
+      highSamples = 0;
+      recoverySamples = 0;
+    } else if (lagMs >= options.lagBusyMs) {
+      highSamples += 1;
+      recoverySamples = 0;
+      if (lagMs >= options.lagCriticalMs || highSamples >= options.pressureSamples) lagPressure = true;
+    } else {
+      highSamples = 0;
+      recoverySamples = lagMs <= options.lagRecoveryMs ? recoverySamples + 1 : 0;
+      if (recoverySamples >= options.recoverySamples) lagPressure = false;
+    }
+
+    const memoryPressure = memoryKnown && availableMemoryMB < requiredMemoryMB;
+    let reason = null;
+    if (lagMs === null || !memoryKnown) {
+      const missing = [lagMs === null ? "responsiveness" : null, !memoryKnown ? "memory" : null].filter(Boolean).join(" and ");
+      reason = `Waiting for machine ${missing} readings before starting another worker.`;
+    } else if (memoryPressure) {
+      reason = `Machine memory is low (${Math.floor(availableMemoryMB)} MB available; ${requiredMemoryMB} MB needed before another worker).`;
+    } else if (lagPressure) {
+      reason = `Waiting for machine responsiveness to recover (${Math.round(lagMs)} ms lag in the latest sample).`;
+    }
+    return {
+      canStart: reason === null,
+      reason,
+      resources: { lagMs, hostLagMs, rendererLagMs, lagPressure, cpuPercent, availableMemoryMB, totalMemoryMB, requiredMemoryMB, sampledAt, memoryPressure },
+    };
+  }
+
+  // A final admission check after claiming work bypasses the settled cache;
+  // concurrent checks still share one interval instead of measuring in a burst.
+  return async function workerCapacity({ running = 0, now = clock(), force = false, lagMs = null } = {}) {
+    const rendererLagMs = Number.isFinite(lagMs) && lagMs >= 0 ? lagMs : null;
+    if (force || !cached || rendererLagMs !== cached.resources.rendererLagMs || now < cached.resources.sampledAt || now - cached.resources.sampledAt >= options.cacheMs) {
+      if (!inFlight) {
+        pendingRendererLagMs = rendererLagMs;
+        inFlight = sample(now).then((result) => { cached = result; return result; }).finally(() => { inFlight = null; });
+      } else if (rendererLagMs !== null) {
+        pendingRendererLagMs = Math.max(pendingRendererLagMs ?? 0, rendererLagMs);
+      }
+      await inFlight;
+    }
+    return { ...cached, resources: { ...cached.resources, running: Math.max(0, Number(running) || 0) } };
+  };
+}
+
+export const workerCapacity = createWorkerCapacitySampler();
 
 export function isPidAlive(pid) {
   try {
@@ -140,6 +273,15 @@ export function classify({ processes = [], previousCpu = new Map(), now = Date.n
 
 export function describe(status) {
   const lines = [];
+  if (status.capacity) {
+    const { resources = {}, canStart, reason } = status.capacity;
+    const usage = [];
+    if (Number.isFinite(resources.lagMs)) usage.push(`${Math.round(resources.lagMs)} ms response lag`);
+    if (Number.isFinite(resources.cpuPercent)) usage.push(`CPU ${Math.round(resources.cpuPercent)}%`);
+    if (Number.isFinite(resources.availableMemoryMB)) usage.push(`${Math.floor(resources.availableMemoryMB)} MB RAM available`);
+    if (usage.length) lines.push(usage.join(", "));
+    if (!canStart && reason) lines.push(reason);
+  }
   if (status.leases?.exclusive) lines.push(`EXCLUSIVE lease held by ${status.leases.holders[0]?.label || status.leases.holders[0]?.agent || "?"} — wait for it to finish`);
   else if (status.leases?.busy) lines.push(`${status.leases.holders.length} lease holder(s) at width ${status.leases.totalWidth}: ${status.leases.holders.map((holder) => holder.label || holder.agent).join(", ")}`);
   else lines.push("no active test leases");

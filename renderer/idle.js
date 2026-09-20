@@ -132,6 +132,7 @@
   const CAM_MODES = ["orbit", "follow", "free"];
 
   const storedLabels = readStore("mefiStudio.cmdLabels");
+  const initialAudioPreferences = readAudioPreferences();
 
   const state = {
     active: false,
@@ -141,8 +142,10 @@
     audioSource: ["auto", "local", "desktop", "mic"].includes(readStore("mefiStudio.audioSource.v2")) ? readStore("mefiStudio.audioSource.v2") : readStore("mefiStudio.zenSource") === "mic" ? "mic" : "auto",
     bands: { bass: 0, mid: 0, treble: 0 },
     music: null,
-    audioResponse: Math.max(0.25, Math.min(2, Number(readStore("mefiStudio.audioResponse")) || 1)),
+    audioResponse: initialAudioPreferences.response,
+    audioEffects: { waves: initialAudioPreferences.waves, nodes: initialAudioPreferences.nodes, percussion: initialAudioPreferences.percussion, background: initialAudioPreferences.background },
     spectrumBuffer: null,
+    waveformBuffer: null,
     inputSource: null,
     inputError: null,
     inputGeneration: 0,
@@ -309,7 +312,9 @@
       state.bus.gain.value = 0.9;
       state.analyser = state.audio.createAnalyser();
       state.analyser.fftSize = 2048;
-      state.analyser.smoothingTimeConstant = 0.15;
+      state.analyser.smoothingTimeConstant = 0;
+      state.analyser.minDecibels = -120;
+      state.analyser.maxDecibels = -10;
       state.bus.connect(state.analyser);
       state.analyser.connect(state.audio.destination);
     } catch {
@@ -378,7 +383,9 @@
         const source = state.audio.createMediaStreamSource(stream);
         const inputAnalyser = state.audio.createAnalyser();
         inputAnalyser.fftSize = 2048;
-        inputAnalyser.smoothingTimeConstant = 0.15;
+        inputAnalyser.smoothingTimeConstant = 0;
+        inputAnalyser.minDecibels = -120;
+        inputAnalyser.maxDecibels = -10;
         source.connect(inputAnalyser);
         state.inputSource = source;
         state.analyser = inputAnalyser;
@@ -423,7 +430,9 @@
         source.connect(state.audio.destination);
         const analyser = state.audio.createAnalyser();
         analyser.fftSize = 2048;
-        analyser.smoothingTimeConstant = 0.15;
+        analyser.smoothingTimeConstant = 0;
+        analyser.minDecibels = -120;
+        analyser.maxDecibels = -10;
         // This output stays connected after leaving Command. Turning off the
         // visualizer must never mute a track that the player is still playing.
         record = { element, source, analyser, connected: false };
@@ -465,7 +474,9 @@
     state.bus.disconnect();
     state.analyser = state.audio.createAnalyser();
     state.analyser.fftSize = 2048;
-    state.analyser.smoothingTimeConstant = 0.15;
+    state.analyser.smoothingTimeConstant = 0;
+    state.analyser.minDecibels = -120;
+    state.analyser.maxDecibels = -10;
     state.bus.connect(state.analyser);
     state.analyser.connect(state.audio.destination);
     renderMusicStatus(true);
@@ -521,7 +532,7 @@
     }
     // Publish connection/player transitions, not every FFT frame. Controls can
     // stay synchronized without a separate polling loop or noisy live region.
-    const key = JSON.stringify([status.reactive, status.selection, status.source, status.phase, status.text, status.error, status.response]);
+    const key = JSON.stringify([status.reactive, status.selection, status.source, status.phase, status.text, status.error, status.response, status.effects]);
     if (key !== state.audioUiKey) {
       state.audioUiKey = key;
       if (typeof CustomEvent === "function") window.dispatchEvent?.(new CustomEvent("mefi-audio-change", { detail: status }));
@@ -537,7 +548,7 @@
     const phase = !state.reactive ? "off" : state.inputError ? "error" : pending ? "pending" : listening ? paused ? "paused" : "listening" : "ready";
     const text = phase === "off" ? "Audio link off" : phase === "error" ? "Audio unavailable" : phase === "pending" ? "Connecting audio…" : phase === "paused" ? "Track paused" : phase === "listening" ? (state.music?.energy > 0.035 ? `${source === "local" ? "Track" : source === "mic" ? "Mic" : "Desktop"} linked` : "Listening · quiet") : state.audioSource === "local" ? "Add a track to link" : "Connect audio";
     const description = state.inputError || (listening ? paused ? "Studio track is paused. Play it to animate the nodes." : `Following ${sourceName.toLowerCase()}. Bass, mids and treble animate the nodes and connections.` : pending ? `Connecting to ${sourceName.toLowerCase()}…` : state.audioSource === "local" ? "Add a local track, then play it to animate the nodes." : state.audioSource === "auto" ? "Follows loaded Studio tracks directly. Connect to desktop audio when no track is loaded." : `Connect to ${sourceName.toLowerCase()} to animate the nodes.`);
-    return { reactive: state.reactive, selection: state.audioSource, source, listening, pending, error: state.inputError, phase, text, label: text, description, response: state.audioResponse ?? 1, bands: { ...state.bands }, energy: state.music?.energy ?? 0, beat: state.music?.beat ?? 0 };
+    return { reactive: state.reactive, selection: state.audioSource, source, listening, pending, error: state.inputError, phase, text, label: text, description, response: state.audioResponse ?? 0.35, effects: { waves: state.audioEffects?.waves !== false, nodes: state.audioEffects?.nodes !== false, percussion: state.audioEffects?.percussion === true, background: state.audioEffects?.background === true }, bands: { ...state.bands }, energy: state.music?.energy ?? 0, beat: state.music?.beat ?? 0, kick: state.music?.kick ?? 0, snare: state.music?.snare ?? 0, hat: state.music?.hat ?? 0, bassline: state.music?.bassline ?? 0 };
   }
 
   function bell({ low = false, long = false, quick = false, level = 1 }) {
@@ -575,41 +586,96 @@
     }
   }
 
-  // Pure spectrum response: physical frequency bands keep 44.1/48 kHz inputs
-  // consistent. Fast attacks follow notes, slower releases avoid flicker, and
-  // an adaptive bass onset follows beats without interpreting silence as one.
-  function analyzeMusicSpectrum(buffer, sampleRate, fftSize, previous, now) {
+  // Float FFT magnitudes retain quiet notes that byte spectra round away. Each
+  // band follows its own recent level; normalization changes only the picture,
+  // never playback volume. Positive spectral changes give low/mid/high attack
+  // cues (kick/snare/hat), while sustained bass has its own smooth envelope.
+  // These are rhythmic signal features, not instrument or stem separation.
+  function analyzeMusicSpectrum(buffer, sampleRate, fftSize, previous, now, options = {}) {
     const clamp = (value) => Math.max(0, Math.min(1, value));
-    const prior = previous ?? { at: now - 33, bass: 0, mid: 0, treble: 0, energy: 0, beat: 0, bassMean: 0, bassRaw: 0, lastBeat: -1000, peak: 0.3 };
-    const dt = Math.max(1, Math.min(100, now - prior.at));
+    const prior = previous ?? {};
+    const dt = Math.max(1, Math.min(1000, now - (prior.at ?? now - 33)));
     const hzPerBin = (Number(sampleRate) || 48000) / (Number(fftSize) || buffer.length * 2 || 2048);
-    const band = (fromHz, toHz) => {
+    const envelope = (old = 0, target, attack = 55, release = 260) => old + (target - old) * (1 - Math.exp(-dt / (target > old ? attack : release)));
+    const samples = options.waveform;
+    let wavePeak = 0;
+    if (samples?.length) {
+      for (let index = 0; index < samples.length; index += 1) wavePeak = Math.max(wavePeak, Math.abs(Number(samples[index]) || 0));
+    }
+    const waveGate = clamp((20 * Math.log10(Math.max(1e-12, wavePeak)) + 112) / 12);
+    const amplitudes = new Float32Array(buffer.length);
+    let spectrumPeak = 0;
+    for (let index = 1; index < buffer.length; index += 1) {
+      const value = Number(buffer[index]);
+      amplitudes[index] = options.decibels ? Number.isFinite(value) ? 10 ** (Math.min(0, value) / 20) : 0 : clamp((value || 0) / 255);
+      if (index * hzPerBin >= 20 && index * hzPerBin < 16000) spectrumPeak = Math.max(spectrumPeak, amplitudes[index]);
+    }
+    const bandState = {}, targets = {}, attacks = {};
+    for (const [name, fromHz, toHz, cue, hold] of [
+      ["bass", 20, 250, "kick", 125], ["mid", 250, 4000, "snare", 95], ["treble", 4000, 16000, "hat", 65],
+    ]) {
       const from = Math.max(1, Math.ceil(fromHz / hzPerBin));
       const to = Math.min(buffer.length, Math.ceil(toHz / hzPerBin));
-      let squares = 0;
-      let peak = 0;
+      const history = prior.bandState?.[name] ?? {};
+      let squares = 0, peak = 0, fluxSquares = 0, fluxPeak = 0;
       for (let index = from; index < to; index += 1) {
-        const value = clamp((Number(buffer[index]) || 0) / 255);
+        const value = amplitudes[index];
+        const delta = Math.max(0, value - (prior.spectrum?.[index] ?? 0));
         squares += value * value;
         peak = Math.max(peak, value);
+        fluxSquares += delta * delta;
+        fluxPeak = Math.max(fluxPeak, delta);
       }
-      return clamp((Math.sqrt(squares / Math.max(1, to - from)) * 0.7 + peak * 0.3 - 0.04) / 0.96);
-    };
-    const raw = { bass: band(35, 250), mid: band(250, 4000), treble: band(4000, 14000) };
-    const level = raw.bass * 0.5 + raw.mid * 0.35 + raw.treble * 0.15;
-    const peak = Math.max(0.25, level, prior.peak * Math.exp(-dt / 4000));
-    const gain = Math.min(2, 0.8 / peak);
-    const envelope = (old, target, attack = 65, release = 300) => old + (target - old) * (1 - Math.exp(-dt / (target > old ? attack : release)));
-    const bassMean = prior.bassMean + (raw.bass - prior.bassMean) * (1 - Math.exp(-dt / 650));
-    const onset = raw.bass > 0.13 && raw.bass - prior.bassRaw > 0.075 && raw.bass > prior.bassMean * 1.35 + 0.025 && now - prior.lastBeat > 190;
+      const count = Math.max(1, to - from);
+      const raw = Math.sqrt(squares / count) * 0.65 + peak * 0.35;
+      // Time samples establish the source floor: FFT windowing spreads a quiet
+      // drum across bins far below its audible waveform level. The FFT-only
+      // fallback allows that extra headroom. Relative gating prevents a loud
+      // sine's faint FFT leakage from lighting every frequency band.
+      const sourceGate = samples?.length ? waveGate : clamp((20 * Math.log10(Math.max(1e-12, peak)) + 120) / 12);
+      const gate = sourceGate * clamp((peak / Math.max(1e-12, spectrumPeak) - 0.001) / 0.003);
+      const oldReference = Math.max(1e-7, history.reference ?? raw);
+      // Release in log space lets a large volume reduction settle in seconds,
+      // instead of waiting through a long linear peak decay from a loud track.
+      const reference = Math.max(1e-7, raw, oldReference * Math.exp(Math.log(Math.max(1e-7, raw) / oldReference) * (1 - Math.exp(-dt / 900))));
+      const target = clamp(raw / reference * 0.86) * gate;
+      const flux = clamp((Math.sqrt(fluxSquares / count) * 0.65 + fluxPeak * 0.35) / reference * Math.min(2, 33 / dt)) * gate;
+      const onset = target > 0.12 && flux > Math.max(0.14, (history.fluxMean ?? 0) * 1.8 + 0.045) && now - (history.lastOnset ?? -1000) >= hold;
+      targets[name] = target;
+      attacks[cue] = onset ? clamp(0.42 + flux * 0.65) * gate : 0;
+      bandState[name] = { reference, raw, fluxMean: envelope(history.fluxMean, flux, 700, 700), lastOnset: onset ? now : history.lastOnset ?? -1000 };
+    }
+    const kick = Math.max(attacks.kick, (prior.kick ?? 0) * Math.exp(-dt / 190));
+    const snare = Math.max(attacks.snare, (prior.snare ?? 0) * Math.exp(-dt / 135));
+    const hat = Math.max(attacks.hat, (prior.hat ?? 0) * Math.exp(-dt / 85));
+    const onset = Math.max(attacks.kick, attacks.snare, attacks.hat);
+    const sorted = Object.values(targets).sort((a, b) => b - a);
+    const level = sorted[0] * 0.62 + sorted[1] * 0.25 + sorted[2] * 0.13;
+    const waveform = new Array(64).fill(0);
+    let waveStart = 0;
+    if (samples?.length) {
+      // Align the beginning to a rising crossing to keep long bass waves legible.
+      for (let index = 1; index < Math.min(256, samples.length / 4); index += 1) {
+        if (samples[index - 1] <= 0 && samples[index] > 0) { waveStart = index; break; }
+      }
+    }
+    for (let index = 0; index < waveform.length; index += 1) {
+      const position = waveStart + index * Math.max(0, (samples?.length ?? 1) - waveStart - 1) / (waveform.length - 1);
+      const left = Math.floor(position), fraction = position - left;
+      const sample = samples?.length ? (Number(samples[left]) || 0) * (1 - fraction) + (Number(samples[Math.min(left + 1, samples.length - 1)]) || 0) * fraction : 0;
+      const target = Math.max(-1, Math.min(1, sample / Math.max(1e-7, wavePeak))) * waveGate;
+      waveform[index] = envelope(prior.waveform?.[index], target, samples?.length && waveGate ? 24 : 90, samples?.length && waveGate ? 24 : 90);
+    }
     return {
       at: now,
-      bass: envelope(prior.bass, clamp(raw.bass * gain)),
-      mid: envelope(prior.mid, clamp(raw.mid * gain * 1.12)),
-      treble: envelope(prior.treble, clamp(raw.treble * gain * 1.3), 45, 220),
-      energy: envelope(prior.energy, clamp(level * gain), 90, 420),
-      beat: onset ? Math.max(0.45, clamp(raw.bass * gain)) : prior.beat * Math.exp(-dt / 230),
-      bassMean, bassRaw: raw.bass, lastBeat: onset ? now : prior.lastBeat, peak,
+      bass: envelope(prior.bass, targets.bass),
+      mid: envelope(prior.mid, targets.mid, 45, 220),
+      treble: envelope(prior.treble, targets.treble, 32, 155),
+      energy: envelope(prior.energy, level, 65, 280),
+      beat: Math.max(onset, (prior.beat ?? 0) * Math.exp(-dt / 190)),
+      kick, snare, hat, bassline: envelope(prior.bassline, targets.bass, 100, 360), waveform,
+      bassMean: envelope(prior.bassMean, bandState.bass.raw, 650, 650), bassRaw: bandState.bass.raw,
+      lastBeat: onset ? now : prior.lastBeat ?? -1000, peak: spectrumPeak, bandState, spectrum: amplitudes,
     };
   }
 
@@ -621,9 +687,21 @@
       renderMusicStatus();
       return state.energy;
     }
-    if (state.spectrumBuffer?.length !== state.analyser.frequencyBinCount) state.spectrumBuffer = new Uint8Array(state.analyser.frequencyBinCount);
-    state.analyser.getByteFrequencyData(state.spectrumBuffer);
-    state.music = analyzeMusicSpectrum(state.spectrumBuffer, state.audio?.sampleRate, state.analyser.fftSize, state.music, Date.now());
+    const decibels = typeof state.analyser.getFloatFrequencyData === "function";
+    const BufferType = decibels ? Float32Array : Uint8Array;
+    if (!(state.spectrumBuffer instanceof BufferType) || state.spectrumBuffer.length !== state.analyser.frequencyBinCount) state.spectrumBuffer = new BufferType(state.analyser.frequencyBinCount);
+    const paused = state.localAudio?.element?.paused || state.localAudio?.element?.ended;
+    if (paused) state.spectrumBuffer.fill(decibels ? -Infinity : 0);
+    else if (decibels) state.analyser.getFloatFrequencyData(state.spectrumBuffer);
+    else state.analyser.getByteFrequencyData(state.spectrumBuffer);
+    let waveform;
+    if (typeof state.analyser.getFloatTimeDomainData === "function") {
+      if (state.waveformBuffer?.length !== state.analyser.fftSize) state.waveformBuffer = new Float32Array(state.analyser.fftSize);
+      if (paused) state.waveformBuffer.fill(0);
+      else state.analyser.getFloatTimeDomainData(state.waveformBuffer);
+      waveform = state.waveformBuffer;
+    }
+    state.music = analyzeMusicSpectrum(state.spectrumBuffer, state.audio?.sampleRate, state.analyser.fftSize, state.music, Date.now(), { decibels, waveform });
     state.bands.bass = state.music.bass;
     state.bands.mid = state.music.mid;
     state.bands.treble = state.music.treble;
@@ -642,6 +720,13 @@
   }
 
   function refreshGraph() {
+    const profiler = globalThis.window?.MefiProfiler;
+    const span = profiler?.begin("command.graph");
+    try { return refreshGraphImpl(); }
+    finally { profiler?.end(span); }
+  }
+
+  function refreshGraphImpl() {
     const snapshot = window.MefiTree?.snapshot?.();
     if (!snapshot) return;
     // Last live positions for the FX pass: a node leaving the board this
@@ -1624,7 +1709,9 @@
     return ids;
   };
   // A node is "being built" when the executor holds its session or its task.
-  const isBusyNode = (node, ids) => Boolean(node) && ids.size > 0 && (ids.has(node.id) || ids.has(node.sessionId) || ids.has(node.task?.id));
+  // `ids` is caller-supplied, so an early frame that runs before the set was
+  // built reads as "nothing busy" instead of throwing on `.size`.
+  const isBusyNode = (node, ids) => Boolean(node) && (ids?.size ?? 0) > 0 && (ids.has(node.id) || ids.has(node.sessionId) || ids.has(node.task?.id));
 
   // The ids behind Work on it: pinned open/active board tasks, and the node
   // targets of pinned inbox requests that have not been claimed yet. The blue
@@ -1650,7 +1737,7 @@
     for (const id of ids) state.workPinSeen.set(id, now);
     return ids;
   }
-  const matchesIdSet = (node, ids) => Boolean(node) && ids.size > 0 && (ids.has(String(node.id ?? "")) || ids.has(String(node.sessionId ?? "")) || ids.has(String(node.task?.id ?? "")));
+  const matchesIdSet = (node, ids) => Boolean(node) && (ids?.size ?? 0) > 0 && (ids.has(String(node.id ?? "")) || ids.has(String(node.sessionId ?? "")) || ids.has(String(node.task?.id ?? "")));
 
   // Follow resolves the actual worker's task before its session. Activity can
   // move attention between workers, but never redirects it to an unrelated
@@ -1904,7 +1991,10 @@
       if (state.selected?.kind === "assistant") renderInfo();
       state.feedDirty = true;
       if (state.active) renderFeed();
-      window.MefiToast?.(Object.hasOwn(patch, "autoBuild") ? `${label} · ${result?.autoBuild === false ? "Verify first" : "Auto build"}` : `${label} · ${result?.parallel ?? patch.parallel ?? "?"} at once`, "good");
+      const savedChoice = Object.hasOwn(patch, "autoBuild")
+        ? result.autoBuild === false ? "Verify first" : "Auto build"
+        : result.adaptiveParallel !== false ? "Machine managed" : `manual limit: ${result.parallel ?? patch.parallel ?? "?"}`;
+      window.MefiToast?.(`${label} · ${savedChoice}`, "good");
       return result;
     } catch (error) {
       window.MefiToast?.(`${label} ${Object.hasOwn(patch, "autoBuild") ? "update could not be confirmed" : "not saved"} · ${String(error?.message ?? error)}`, "bad");
@@ -2687,24 +2777,47 @@
   function branchSectorPhases(tree, area, parents, root) {
     const phases = new Map([...tree].map(([id, point]) => [id,
       (point.x - area.x - 32) / Math.max(1, area.w - 64) * Math.PI * 2 - Math.PI / 2]));
-    const branches = new Map(), extents = new Map();
+    const branches = new Map(), groups = new Map();
     for (const id of tree.keys()) {
+      if (id === root) continue;
       let branch = id, parent = parents.get(branch);
       const seen = new Set([id]);
       while (parent && parent !== root && tree.has(parent) && !seen.has(parent)) {
         seen.add(parent); branch = parent; parent = parents.get(branch);
       }
       branches.set(id, branch);
-      extents.set(branch, Math.max(extents.get(branch) ?? 0, Math.abs(phases.get(id) - phases.get(branch))));
+      if (!groups.has(branch)) groups.set(branch, { id: branch, count: 0, extent: 0 });
+      const group = groups.get(branch);
+      group.count += 1;
+      group.extent = Math.max(group.extent, Math.abs(phases.get(id) - phases.get(branch)));
     }
-    // A dominant session can occupy nearly the whole tidy row. Wrapping that
-    // row around a full circle puts its outer children behind their parent.
-    // Contract only oversized sectors around their existing branch anchor,
-    // retaining sibling order and the gaps between unrelated branches.
+    // Neighbouring IDs often describe the same kind of work. Spread their
+    // branch sectors around the circle so tasks do not all collect on one
+    // side while quiet sessions occupy the other. The ordering stays stable
+    // across input recency changes; saved world anchors still win on refresh.
+    const ordered = [...groups.values()].sort((a, b) => String(a.id).localeCompare(String(b.id)))
+      .map((group, index) => ({ ...group, order: (index * 0.61803398875) % 1 }))
+      .sort((a, b) => a.order - b.order);
+    const weight = ordered.reduce((sum, group) => sum + Math.sqrt(group.count), 0);
+    let cursor = -Math.PI / 2;
+    for (const group of ordered) {
+      const width = Math.PI * 2 * Math.sqrt(group.count) / Math.max(1, weight);
+      group.anchor = cursor + width / 2;
+      // Keep descendants on their parent's side, without reserving an almost
+      // complete circle for a large branch and then leaving it empty.
+      group.scale = Math.min(Math.PI / 3, width * 0.46) / Math.max(0.001, group.extent);
+      groups.set(group.id, group);
+      cursor += width;
+    }
+    const dominant = [...ordered].sort((a, b) => b.count - a.count || String(a.id).localeCompare(String(b.id)))[0];
+    const total = ordered.reduce((sum, group) => sum + group.count, 0);
+    // A wide screen has room across the top/bottom of a fan, rather than
+    // along its narrow right edge. Orient only a genuinely dominant branch.
+    const rotation = dominant?.count >= 6 && dominant.count > total * 0.4
+      ? (area.w >= area.h ? -Math.PI / 2 : 0) - dominant.anchor : 0;
     return new Map([...phases].map(([id, phase]) => {
-      const branch = branches.get(id), anchor = phases.get(branch);
-      const scale = Math.min(1, (Math.PI / 3) / Math.max(0.001, extents.get(branch)));
-      return [id, anchor + (phase - anchor) * scale];
+      const group = groups.get(branches.get(id));
+      return [id, group ? group.anchor + rotation + (phase - phases.get(group.id)) * group.scale : phase];
     }));
   }
 
@@ -2880,6 +2993,13 @@
   }
 
   function layoutProjectedGraph(projected, area, mode, animationTime = Date.now(), still = false) {
+    const profiler = globalThis.window?.MefiProfiler;
+    const span = profiler?.begin("command.layout");
+    try { return layoutProjectedGraphImpl(projected, area, mode, animationTime, still); }
+    finally { profiler?.end(span); }
+  }
+
+  function layoutProjectedGraphImpl(projected, area, mode, animationTime, still) {
     const layoutName = state.nodeLayout ?? "constellation";
     const key = `${layoutName}|${state.view}|${area.x},${area.y},${area.w},${area.h}`;
     if (state.screenLayout?.key !== key) {
@@ -3385,22 +3505,46 @@
   }
 
   function renderParallelControl() {
-    if (!el.feedParallel) return;
     const known = Number.isFinite(Number(state.assistant?.parallel)) && Number(state.assistant.parallel) >= 1;
-    el.feedParallel.disabled = Boolean(state.parallelSaving) || !known || !window.mefiStudio?.assistantAutopilot;
-    if (!state.parallelSaving) el.feedParallel.value = String(Math.max(1, Math.min(3, Math.round(Number(state.assistant?.parallel) || 2))));
-    el.feedParallel.setAttribute("aria-busy", String(Boolean(state.parallelSaving)));
+    for (const control of [el.feedParallel, el.infoParallel].filter(Boolean)) {
+      control.disabled = Boolean(state.parallelSaving) || !known || !window.mefiStudio?.assistantAutopilot;
+      if (!state.parallelSaving) control.value = state.assistant?.adaptiveParallel !== false ? "machine" : String(Math.max(1, Math.min(3, Math.round(Number(state.assistant?.parallel) || 2))));
+      control.setAttribute("aria-busy", String(Boolean(state.parallelSaving)));
+      control.title = "Machine managed starts independent, eligible work while Studio remains responsive. Starts are staggered to recheck performance; new starts wait when Studio is laggy and resume when it recovers. Manual limits cap concurrent builds. Pause, approvals and file claims still apply.";
+    }
+  }
+
+  function createBuildParallelControl() {
+    const wrap = document.createElement("label");
+    wrap.className = "stepper";
+    const label = document.createElement("span");
+    label.className = "k";
+    label.textContent = "Parallel builds";
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", "Build scheduling capacity");
+    for (const [value, text] of [["machine", "Machine managed"], ["1", "Manual: 1 worker"], ["2", "Manual: 2 workers"], ["3", "Manual: 3 workers"]]) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = text;
+      select.append(option);
+    }
+    select.addEventListener("change", () => void changeBuildParallel(select.value));
+    el.infoParallel = select;
+    wrap.append(label, select);
+    renderParallelControl();
+    return wrap;
   }
 
   async function changeBuildParallel(value) {
     if (state.parallelSaving) return false;
+    const adaptiveParallel = value === "machine";
     const parallel = Number(value);
-    if (!Number.isInteger(parallel) || parallel < 1 || parallel > 3) { renderParallelControl(); return false; }
+    if (!adaptiveParallel && (!Number.isInteger(parallel) || parallel < 1 || parallel > 3)) { renderParallelControl(); return false; }
     state.parallelSaving = true;
     renderParallelControl();
     try {
       // Choosing capacity never turns scheduling on or changes a pause.
-      const result = await autopilotPrefs({ parallel }, "Parallel builds");
+      const result = await autopilotPrefs(adaptiveParallel ? { adaptiveParallel: true } : { adaptiveParallel: false, parallel }, "Parallel builds");
       return Boolean(result);
     } finally {
       state.parallelSaving = false;
@@ -3739,7 +3883,12 @@
     }
 
     if (el.feedMeta) {
-      el.feedMeta.textContent = state.backlog?.waiting || (jobs.length
+      const machineManaged = assistant?.adaptiveParallel !== false;
+      const capacityHold = assistant?.capacity?.canStart === false ? assistant.capacity.reason || "Waiting for machine capacity" : null;
+      const waiting = assistant?.execute === false ? "new work paused" : capacityHold || state.backlog?.waiting || assistant?.waiting;
+      el.feedMeta.textContent = machineManaged && assistant
+        ? `${jobs.length} building · machine managed${waiting ? ` · ${waiting}` : ""}`
+        : state.backlog?.waiting || (jobs.length
         ? `${jobs.length} of ${assistant?.parallel ?? 1} worker slots in use${assistant?.execute === false ? " · new work paused" : ""}`
         : state.backlog?.summary || assistant?.waiting || "The board keeps task results and verification details.");
     }
@@ -3969,6 +4118,13 @@
   // Positions come in every frame; the counters say when to pulse,
   // spark, or fire the bright "done" pulse — each rendered here exactly once.
   function syncAgentMotion(now, animationTime) {
+    const profiler = globalThis.window?.MefiProfiler;
+    const span = profiler?.begin("command.agents");
+    try { return syncAgentMotionImpl(now, animationTime); }
+    finally { profiler?.end(span); }
+  }
+
+  function syncAgentMotionImpl(now, animationTime) {
     // Flights use the animation clock; Command's dated work effects use now.
     const live = window.MefiTree?.advanceAgents?.(animationTime) ?? window.MefiTree?.agentPositions?.() ?? {};
     const hub = assistantNode();
@@ -4115,24 +4271,63 @@
     }
     if (!document.hidden && time - lastFrameAt >= 33) {
       lastFrameAt = time;
+      const profiler = globalThis.window?.MefiProfiler;
+      const span = profiler?.begin("command.frame");
       try {
         drawFrame(time);
       } catch (error) {
         if (!state.frameError) {
           state.frameError = true;
-          console.error("[idle]", error?.message ?? error);
+          // The stack, not just the message: a one-shot early-frame error must
+          // name its own function and line, or the cold-boot hunt starts blind.
+          console.error("[idle]", error?.stack ?? String(error?.message ?? error));
         }
+      } finally {
+        profiler?.end(span);
       }
     }
     frameRequest = requestAnimationFrame(frame);
   }
 
+  function normalizeAudioPreferences(value, legacyResponse = null) {
+    const saved = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const legacy = legacyResponse == null || legacyResponse === "" ? NaN : Number(legacyResponse);
+    const response = typeof saved.response === "number" && Number.isFinite(saved.response) ? saved.response : Number.isFinite(legacy) ? Math.max(0, Math.min(2, legacy)) * 0.35 : 0.35;
+    return { response: Math.max(0, Math.min(2, response)), waves: typeof saved.waves === "boolean" ? saved.waves : true, nodes: typeof saved.nodes === "boolean" ? saved.nodes : true, percussion: saved.percussion === true, background: saved.background === true };
+  }
+
+  function readAudioPreferences() {
+    let saved;
+    try { saved = JSON.parse(readStore("mefiStudio.audioVisuals.v1")); } catch {}
+    return normalizeAudioPreferences(saved, readStore("mefiStudio.audioResponse"));
+  }
+
+  function persistAudioPreferences() {
+    writeStore("mefiStudio.audioVisuals.v1", JSON.stringify({ response: state.audioResponse, ...state.audioEffects }));
+  }
+
+  function setAudioEffects(changes = {}) {
+    const effects = normalizeAudioPreferences(state.audioEffects);
+    delete effects.response;
+    for (const key of ["waves", "nodes", "percussion", "background"]) if (typeof changes?.[key] === "boolean") effects[key] = changes[key];
+    state.audioEffects = effects;
+    if (!effects.waves) state.audioWaves = [];
+    persistAudioPreferences();
+    renderMusicStatus(true);
+  }
+
   function setAudioResponse(value) {
     const next = Number(value);
     if (!Number.isFinite(next)) return;
-    state.audioResponse = Math.max(0.25, Math.min(2, next));
-    writeStore("mefiStudio.audioResponse", String(state.audioResponse));
+    state.audioResponse = Math.max(0, Math.min(2, next));
+    if (!state.audioResponse) state.audioWaves = [];
+    persistAudioPreferences();
     renderMusicStatus(true);
+  }
+
+  function visualMusicResponse(music, effects = {}) {
+    if (!music || effects.percussion === true) return music;
+    return { ...music, beat: 0, kick: 0, snare: 0, hat: 0 };
   }
 
   // A node keeps its frequency voice across sorting, camera moves and rebuilds.
@@ -4147,13 +4342,14 @@
       band = ["bass", "mid", "treble"][hash % 3];
     }
     const clamp = (value) => Math.max(0, Math.min(1, Number(value) || 0));
-    const strength = Math.max(0.25, Math.min(2, Number(response) || 1));
-    const beat = enabled ? clamp(clamp(music?.beat) * strength) : 0;
+    const strength = Number.isFinite(Number(response)) ? Math.max(0, Math.min(2, Number(response))) : 0.35;
+    const transient = band === "bass" ? music?.kick : band === "mid" ? music?.snare : music?.hat;
+    const beat = enabled ? clamp((clamp(transient ?? music?.beat) * 0.85 + clamp(music?.beat) * 0.15) * strength) : 0;
     const level = enabled ? clamp((clamp(music?.[band]) * 0.82 + clamp(music?.energy) * 0.18) * strength) : 0;
     return { band, level, beat };
   }
 
-  function drawNodeAudio(ctx, node, p, radius, tint, response) {
+  function drawNodeAudio(ctx, node, p, radius, tint, response, music = null, time = 0) {
     const { level, beat } = response;
     if (level < 0.005 && beat < 0.005) return;
     ctx.save();
@@ -4161,18 +4357,95 @@
     // Leave the status rim and central music/assistant glyph readable.
     const core = radius * (0.28 + level * 0.42 + beat * 0.1);
     const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(1, core));
-    glow.addColorStop(0, rgba(tint, level * 0.42 + beat * 0.22));
+    glow.addColorStop(0, rgba(tint, Math.min(0.9, level * 0.58 + beat * 0.32)));
     glow.addColorStop(1, rgba(tint, 0));
     ctx.fillStyle = glow;
     ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, core), 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = rgba(tint, level * 0.6 + beat * 0.24);
     ctx.lineWidth = Math.min(1.8, radius * 0.14);
     ctx.beginPath(); ctx.arc(p.x, p.y, radius * (0.72 + level * 0.12), 0, Math.PI * 2); ctx.stroke();
+    // The live waveform folds around the inside of each orb. Higher bands
+    // add fine detail; drum attacks open the contour without moving the node.
+    if (music?.waveform?.length && level > 0.02) {
+      const samples = music.waveform;
+      const turns = response.band === "treble" ? 7 : response.band === "mid" ? 4 : 2;
+      ctx.beginPath();
+      for (let index = 0; index <= 32; index += 1) {
+        const angle = index / 32 * Math.PI * 2;
+        const sample = samples[Math.floor(index % 32 / 32 * samples.length)] || 0;
+        const ripple = Math.sin(angle * turns - time / 280) * beat * 0.08 + sample * level * 0.12;
+        const r = radius * Math.max(0.35, Math.min(0.92, 0.57 + level * 0.15 + ripple));
+        const x = p.x + Math.cos(angle) * r, y = p.y + Math.sin(angle) * r;
+        if (index) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+      }
+      ctx.strokeStyle = rgba(tint, level * 0.5 + beat * 0.4); ctx.lineWidth = 1;
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
-  function drawGraphConnections(ctx, projected, runningIds, audioLinked = false) {
-    // Work sets the connection's color; audio only modulates its light.
+  // Sample the real connection path, including branch curves, and displace
+  // only its interior along the local normal. Endpoints remain on their nodes.
+  function audioConnectionWave(a, b, music, response = 1, time = 0, curved = false, seed = 0) {
+    const clamp = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+    const strength = Number.isFinite(Number(response)) ? Math.max(0, Math.min(2, Number(response))) : 0.35;
+    const bass = clamp(music?.bassline ?? music?.bass), mid = clamp(music?.mid), treble = clamp(music?.treble);
+    const kick = clamp(music?.kick ?? music?.beat), snare = clamp(music?.snare), hat = clamp(music?.hat);
+    const activity = Math.max(bass, mid, treble, kick, snare, hat);
+    const dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy);
+    if (strength === 0 || activity < 0.008 || length < 4 || !Number.isFinite(length)) return null;
+    const span = Math.min(12, length * 0.07) * strength;
+    const cycles = Math.max(1, Math.min(3, length / 160));
+    const segments = Math.max(16, Math.min(56, Math.ceil(length / 9)));
+    const phase = time / 1800, tau = Math.PI * 2;
+    const samples = music?.waveform ?? [];
+    const points = [];
+    let amplitude = 0;
+    for (let index = 0; index <= segments; index += 1) {
+      const t = index / segments, u = 1 - t;
+      const x = curved ? a.x + dx * (3 * t * t - 2 * t * t * t) : a.x + dx * t;
+      const y = curved ? a.y + dy * (1.5 * t - 1.5 * t * t + t * t * t) : a.y + dy * t;
+      const tx = curved ? dx * 6 * t * u : dx;
+      const ty = curved ? dy * (1.5 - 3 * t + 3 * t * t) : dy;
+      const tangent = Math.hypot(tx, ty) || length;
+      const samplePosition = ((t * 2 + phase * 0.14 + seed * 0.03) % 1) * samples.length;
+      const sampleIndex = Math.floor(samplePosition), blend = samplePosition - sampleIndex;
+      const sample = samples.length ? (samples[sampleIndex] || 0) * (1 - blend) + (samples[(sampleIndex + 1) % samples.length] || 0) * blend : 0;
+      const broad = Math.sin(tau * (t * cycles - phase * 0.65) + seed) * (bass * 0.65 + kick * 0.3);
+      const body = Math.sin(tau * (t * (cycles * 2 + 1) - phase * 1.25) + seed * 0.7) * (mid * 0.32 + snare * 0.28);
+      const detail = Math.sin(tau * (t * (cycles * 4 + 3) - phase * 2.4)) * (treble * 0.15 + hat * 0.25);
+      const displacement = Math.max(-1, Math.min(1, broad + body + detail * 0.65 + sample * activity * 0.12));
+      const offset = index === 0 || index === segments ? 0 : Math.sin(Math.PI * t) * span * displacement;
+      amplitude = Math.max(amplitude, Math.abs(offset));
+      points.push({ x: x - ty / tangent * offset, y: y + tx / tangent * offset });
+    }
+    return { points, amplitude, activity: activity * Math.min(1, strength), bass, mid, treble, kick, snare, hat };
+  }
+
+  function drawAudioConnection(ctx, a, b, tint, lifetime, time, curved = false, sourceLink = false) {
+    if (lifetime <= 0.02) return;
+    let seed = 0;
+    for (const char of `${a.node.id}:${b.node.id}`) seed = (seed * 31 + char.charCodeAt(0)) >>> 0;
+    const wave = audioConnectionWave(a.p, b.p, visualMusicResponse(state.music, state.audioEffects), state.audioResponse, time, curved, seed % 628 / 100);
+    if (!wave) return;
+    const { points, activity } = wave;
+    const bandTint = wave.treble > wave.bass && wave.treble > wave.mid ? NODE_RGB.session : wave.mid > wave.bass ? NODE_RGB.pending : NODE_RGB.warm;
+    const color = tint.map((channel, index) => Math.round(channel * 0.4 + (bandTint?.[index] ?? channel) * 0.6));
+    ctx.save(); ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
+    for (let index = 1; index < points.length; index += 1) ctx.lineTo(points[index].x, points[index].y);
+    ctx.strokeStyle = rgba(color, lifetime * activity * 0.12); ctx.lineWidth = sourceLink ? 7 : 5; ctx.stroke();
+    ctx.strokeStyle = rgba(color, lifetime * Math.min(0.85, activity * 0.62 + Math.max(wave.kick, wave.snare, wave.hat) * 0.2));
+    ctx.lineWidth = (sourceLink ? 1.6 : 1.1) + Math.max(wave.kick, wave.snare, wave.hat) * 0.9; ctx.stroke();
+    ctx.restore();
+    state.audioWaves.push({ from: a.node.id, to: b.node.id, sourceLink, ...wave });
+  }
+
+  function drawGraphConnections(ctx, projected, runningIds, audioLinked = false, time = 0) {
+    state.audioWaves = [];
+    audioLinked = audioLinked && state.audioEffects?.waves !== false && state.audioResponse !== 0;
+    // Keep the work tether underneath each waveform so its endpoints and
+    // assignment remain readable as the sound bends the connection.
     for (const edge of state.edges) {
       const a = projected[edge.a], b = projected[edge.b];
       if (!a || !b || a.node._absorbed || b.node._absorbed || a.node.kind === "agent" || b.node.kind === "agent") continue;
@@ -4194,6 +4467,7 @@
         ctx.bezierCurveTo(a.p.x, middle, b.p.x, middle, b.p.x, b.p.y);
       } else ctx.lineTo(b.p.x, b.p.y);
       ctx.stroke();
+      if (audioLinked) drawAudioConnection(ctx, a, b, tint, lifetime, time, Boolean(primary && branches));
     }
 
     // The managed host follows assignments and return flights. Draw one link
@@ -4212,6 +4486,14 @@
       ctx.strokeStyle = rgba(agentRgb(node.role), lifetime * ((state.nodeLayout === "tree" ? 0.18 : 0.38) + light));
       ctx.lineWidth = 1 + light * 1.8;
       ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(target.p.x, target.p.y); ctx.stroke();
+      if (audioLinked) drawAudioConnection(ctx, { node, p }, target, agentRgb(node.role), lifetime, time);
+    }
+    // This is the audio source's visual cable, kept outside the task graph so
+    // playing music cannot create a prerequisite or rearrange the layout.
+    const music = audioLinked ? projected.find(({ node }) => node.kind === "music") : null;
+    const hub = assistant ?? projected.find(({ node }) => node.kind === "root");
+    if (music && hub && !music.node._absorbed && !hub.node._absorbed) {
+      drawAudioConnection(ctx, music, hub, NODE_RGB.warm, Math.min(music.node._fade ?? 1, hub.node._fade ?? 1), time, false, true);
     }
   }
 
@@ -4219,13 +4501,16 @@
     if (!state.lastFrame) state.lastFrame = time;
     const still = noMotion();
     const measuredEnergy = audioEnergy();
-    const energy = still ? 0 : measuredEnergy;
-    const musicBands = still ? { bass: 0, mid: 0, treble: 0 } : state.bands;
-    const musicBeat = still || !state.reactive || !state.inputStream && !state.localAudio ? 0 : state.music?.beat ?? 0;
+    const backgroundLinked = !still && state.audioEffects?.background === true && state.audioResponse > 0;
+    const energy = backgroundLinked ? measuredEnergy * Math.min(1, state.audioResponse) : 0;
+    const musicBands = backgroundLinked ? { bass: state.bands.bass * Math.min(1, state.audioResponse), mid: state.bands.mid * Math.min(1, state.audioResponse), treble: state.bands.treble * Math.min(1, state.audioResponse) } : { bass: 0, mid: 0, treble: 0 };
+    const musicBeat = !backgroundLinked || state.audioEffects?.percussion !== true || !state.reactive || !state.inputStream && !state.localAudio ? 0 : (state.music?.beat ?? 0) * Math.min(1, state.audioResponse);
     const audioLinked = !still && state.reactive && Boolean(state.inputStream || state.localAudio);
     // Nodes the assistant has been told to work on (Work on it): pinned board
     // tasks plus pinned, still-queued inbox requests. One set per frame.
     const pinnedIds = workPinIds();
+    const visualMusic = visualMusicResponse(state.music, state.audioEffects);
+    const audioNodes = audioLinked && state.audioEffects?.nodes !== false && state.audioResponse > 0;
     const graphArea = usableArea();
     const graphFrameKey = `${graphArea.x},${graphArea.y},${graphArea.w},${graphArea.h}`;
     if (state.graphFrameKey !== graphFrameKey) {
@@ -4342,7 +4627,7 @@
     const runningJobs = autopilotJobs(state.assistant);
     for (const { node } of projected) {
       node._orbitTrail = null; node._extraGlow = false;
-      node._audioResponse = nodeAudioResponse(node, state.music, audioLinked, state.audioResponse);
+      node._audioResponse = nodeAudioResponse(node, visualMusic, audioNodes, state.audioResponse);
       node._bubble = null; node._bubblePaint = null;
       const ids = [node.id, node.sessionId, node.task?.id].filter(Boolean).map(String);
       node._workLabel = node.task?.status === "awaiting_verification" ? "Verifying" : (node.kind === "todo" ? node.status === "in_progress" : ids.some((id) => runningIds.has(id))) ? "Running" : ids.some((id) => pinnedIds.has(id)) ? "Next" : null;
@@ -4355,7 +4640,7 @@
     const screenPoints = new Map(projected.map(({ node, p }) => [node.id, p]));
     computeBranch();
 
-    drawGraphConnections(ctx, projected, runningIds, audioLinked);
+    drawGraphConnections(ctx, projected, runningIds, audioLinked, time);
 
     // pulses: bright travelling dots on the working path — a line that ends
     // at an agent carries the signal itself instead (wave, see surgeLine)
@@ -4449,7 +4734,7 @@
         ctx.fillStyle = "#303947"; ctx.fillRect(p.x - 9, p.y + radius + 5, 18, 1.5);
         ctx.fillStyle = rgba(tint, 0.8); ctx.fillRect(p.x - 9, p.y + radius + 5, 18 * fraction, 1.5);
       }
-      drawNodeAudio(ctx, node, p, radius, tint, node._audioResponse);
+      drawNodeAudio(ctx, node, p, radius, tint, node._audioResponse, audioNodes ? visualMusic : null, time / 1.8);
       // Collision boost: a thin amber rim, same restraint as the music beat —
       // the clash color marks the session while the fight is still live.
       if (colliding && (active || selected)) {
@@ -4524,7 +4809,7 @@
     return `rgba(154,143,125,${alpha})`;
   }
 
-  function labelText(ctx, node, font, { separateStatus = false } = {}) {
+  function labelText(ctx, node, font, { separateStatus = false, maxWidth, maxChars } = {}) {
     // a travelling agent's label carries its target ("reference · Crafting bench recipes")
     const cap = node.kind === "session" || node.kind === "task" ? 44 : node.kind === "root" ? 12 : node.kind === "assistant" ? 16 : node.kind === "folded" ? 20 : node.kind === "agent" ? (node.targetNode ? 36 : 14) : 34;
     let text = String(node.label ?? "").trim();
@@ -4539,10 +4824,10 @@
     else if (node._workLabel && node.kind !== "agent" && !separateStatus) text = `${node._workLabel} · ${text}`;
     if (node.taskGroup) text = `${state.expandedTaskGroups.has(node.taskGroup.id) ? "−" : "+"} ${node.taskGroup.members.length} · ${text}`;
     const compact = state.labels === "auto" && state.selected?.id !== node.id && state.hoverNode !== node;
-    const charLimit = compact ? Math.min(cap, 32) : cap;
+    const charLimit = maxChars ?? (compact ? Math.min(cap, 32) : cap);
     // Side panels can leave less than 300px for the graph. Shorten overview
     // titles to that clear width so crowded work still has room for a name.
-    const widthLimit = compact ? Math.min(180, LABEL_MAX_PX, Math.max(80, usableArea().w * 0.4)) : LABEL_MAX_PX;
+    const widthLimit = maxWidth ?? (compact ? Math.min(180, LABEL_MAX_PX, Math.max(80, usableArea().w * 0.4)) : LABEL_MAX_PX);
     let clipped = text.length > charLimit;
     if (clipped) text = text.slice(0, charLimit);
     while (text.length > 1 && measure(ctx, font, `${text}${clipped ? "…" : ""}`) > widthLimit) {
@@ -4550,6 +4835,34 @@
       clipped = true;
     }
     return clipped ? `${text}…` : text;
+  }
+
+  function workLabelLines(ctx, node, font, workStatus) {
+    if (!workStatus || usableArea().w < 480) return [labelText(ctx, node, font, { separateStatus: Boolean(workStatus) })];
+    // Working names need enough context to distinguish simultaneous jobs.
+    // Wrap at words before clipping; the stored title remains untouched.
+    const width = Math.min(200, usableArea().w * 0.4);
+    const title = labelText(ctx, node, font, { separateStatus: true, maxWidth: Infinity, maxChars: Infinity }).replace(/\s+/g, " ");
+    if (measure(ctx, font, title) <= width) return [title];
+    const fittingLength = (text, suffix = "") => {
+      let low = 1, high = text.length;
+      while (low < high) {
+        const middle = Math.ceil((low + high) / 2);
+        if (measure(ctx, font, text.slice(0, middle) + suffix) <= width) low = middle;
+        else high = middle - 1;
+      }
+      return low;
+    };
+    let end = fittingLength(title);
+    const word = title.lastIndexOf(" ", end);
+    if (word > end / 2) end = word;
+    const first = title.slice(0, end).trimEnd();
+    let rest = title.slice(end).trimStart();
+    if (measure(ctx, font, rest) > width) {
+      rest = rest.slice(0, fittingLength(rest, "…"));
+      rest = `${rest.trimEnd()}…`;
+    }
+    return [first, rest];
   }
 
   function labelBudget() {
@@ -4624,11 +4937,11 @@
       return { x: tx - width, y: ty - h + 3, w: width, h, tx, ty, align: "right" };
     }
     if (slot === "below") {
-      const ty = p.y + radius + h - 2;
+      const ty = p.y + radius + h + 5;
       return { x: p.x - width / 2, y: ty - h + 3, w: width, h, tx: p.x, ty, align: "center" };
     }
     if (slot === "above") {
-      const ty = p.y - radius - 8;
+      const ty = p.y - radius - 15;
       return { x: p.x - width / 2, y: ty - h + 3, w: width, h, tx: p.x, ty, align: "center" };
     }
     const tx = p.x + radius + 8;
@@ -4721,7 +5034,7 @@
   }
 
   function drawLabels(projected) {
-    for (const { node } of projected) { node._label = null; node._cardRect = null; }
+    for (const { node } of projected) { node._label = null; node._labelLines = []; node._cardRect = null; }
     const ctx = el.ctx;
     if (!ctx) return;
     state.labelRects.length = 0;
@@ -4733,19 +5046,54 @@
     for (const { node, p, priority } of candidates) {
       if (drawn >= budget) break;
       const workStatus = node.kind === "task" && ["Running", "Verifying", "Next"].includes(node._workLabel) ? node._workLabel : null;
-      const font = fontFor(node), text = labelText(ctx, node, font, { separateStatus: Boolean(workStatus) });
-      if (!text) continue;
-      const height = workStatus ? 33 : LABEL_HEIGHT;
-      const width = Math.max(measure(ctx, font, text), workStatus ? 72 : 0), radius = node._orbitTrail?.radius ?? node._pr ?? 4;
+      const font = fontFor(node), lines = workLabelLines(ctx, node, font, workStatus);
+      if (!lines[0]) continue;
+      const height = workStatus ? 33 + (lines.length - 1) * 16 : LABEL_HEIGHT;
+      const width = Math.max(...lines.map((line) => measure(ctx, font, line)), workStatus ? 72 : 0), radius = node._orbitTrail?.radius ?? node._pr ?? 4;
       let rect = null, paint = null;
       const needsName = priority <= 2.15 || node.kind === "task" && node._workLabel === "Running";
-      for (const distance of needsName ? [0, 20, 40, 80, 120, 180] : [0, 20, 40]) {
+      for (const distance of [0, 20, 40]) {
+        let best = Infinity;
         for (const slot of LABEL_SLOTS) {
-          const candidate = slotRect(slot, p, radius + distance, width, height);
-          const surface = { x: candidate.x - 7, y: candidate.y - 4, w: candidate.w + 14, h: candidate.h + 8 };
-          if (!blocked(surface, excluded) && !hitsNode(surface, node)) { rect = candidate; paint = surface; break; }
+          // Slide along the orb's sides before sending a label far away.
+          // Corner slots use the nearby whitespace missed by four axial rays.
+          const vertical = slot === "left" || slot === "right";
+          const shift = vertical ? height / 2 + 8 : width / 2;
+          for (const offset of needsName ? [0, -shift, shift] : [0]) {
+            const candidate = slotRect(slot, p, radius + distance, width, height);
+            if (vertical) { candidate.y += offset; candidate.ty += offset; }
+            else { candidate.x += offset; candidate.tx += offset; }
+            const surface = { x: candidate.x - 7, y: candidate.y - 4, w: candidate.w + 14, h: candidate.h + 8 };
+            const dx = Math.max(surface.x - p.x, 0, p.x - surface.x - surface.w);
+            const dy = Math.max(surface.y - p.y, 0, p.y - surface.y - surface.h);
+            const score = dx * dx + dy * dy + ((surface.x + surface.w / 2 - p.x) ** 2 + (surface.y + surface.h / 2 - p.y) ** 2) * 0.04;
+            if (score >= best - 0.01 || blocked(surface, excluded) || hitsNode(surface, node)) continue;
+            best = score; rect = candidate; paint = surface;
+          }
         }
         if (rect) break;
+      }
+      if (needsName && !rect) {
+        // Search the whole nearby perimeter, not just rays through the orb.
+        // On a dense branch a diagonal pocket may be much closer than the
+        // first axial opening, especially beside a moving worker satellite.
+        const area = usableArea(), w = width + 14, h = height + 8;
+        const reach = radius + 80;
+        const left = Math.max(area.x + 12, p.x - reach - w), right = Math.min(area.x + area.w - w - 12, p.x + reach);
+        const top = Math.max(area.y + 12, p.y - reach - h), bottom = Math.min(area.y + area.h - h - 12, p.y + reach);
+        let nearest = Infinity;
+        for (let y = top; y <= bottom; y += 12) {
+          for (let x = left; x <= right; x += 12) {
+            const dx = Math.max(x - p.x, 0, p.x - x - w), dy = Math.max(y - p.y, 0, p.y - y - h);
+            const gap = Math.hypot(dx, dy);
+            const score = gap * gap + ((x + w / 2 - p.x) ** 2 + (y + h / 2 - p.y) ** 2) * 0.04;
+            if (gap < radius + 4 || gap > reach || score >= nearest - 0.01) continue;
+            const surface = { x, y, w, h };
+            if (blocked(surface, excluded) || hitsNode(surface, node)) continue;
+            nearest = score; paint = surface;
+            rect = { x: x + 7, y: y + 4, w: width, h: height, tx: x + 7, ty: y + h - 7, align: "left" };
+          }
+        }
       }
       if (!rect && needsName) {
         const area = usableArea();
@@ -4755,6 +5103,8 @@
           for (let x = area.x + 12; x + w <= area.x + area.w - 12; x += 32) {
             const distance = (x + w / 2 - p.x) ** 2 + (y + h / 2 - p.y) ** 2;
             if (distance >= nearest) continue;
+            const gap = Math.hypot(Math.max(x - p.x, 0, p.x - x - w), Math.max(y - p.y, 0, p.y - y - h));
+            if (gap < radius + 4) continue;
             const surface = { x, y, w, h };
             if (blocked(surface, excluded) || hitsNode(surface, node)) continue;
             nearest = distance; paint = surface;
@@ -4785,9 +5135,9 @@
       }
       ctx.font = font; ctx.textBaseline = "alphabetic"; ctx.textAlign = rect.align;
       ctx.fillStyle = state.canvasPalette ? rgba(NODE_RGB.session, alpha) : node.kind === "agent" ? labelColour(node, alpha) : `rgba(222,229,239,${alpha})`;
-      ctx.fillText(text, rect.tx, workStatus ? paint.y + 30 : rect.ty);
+      lines.forEach((text, index) => ctx.fillText(text, rect.tx, workStatus ? paint.y + 30 + index * 16 : rect.ty));
       ctx.globalAlpha = previousAlpha ?? 1;
-      state.labelRects.push(paint); node._label = { ...paint }; drawn += 1;
+      state.labelRects.push(paint); node._label = { ...paint }; node._labelLines = lines; drawn += 1;
     }
     ctx.lineWidth = 1; ctx.textAlign = "left";
   }
@@ -5319,6 +5669,7 @@
     const threadPinned = !oldThread || oldThread.scrollTop + oldThread.clientHeight >= oldThread.scrollHeight - 28;
     const cardTop = state.cardScrollId === selected?.id ? el.info.scrollTop : 0;
     el.info.textContent = "";
+    el.infoParallel = null;
     if (!selected) {
       el.info.hidden = true;
       state.cardScrollId = null;
@@ -5607,9 +5958,10 @@
         };
         stepper("Parallel agents", "parallel", 1, 12, () => full?.prefs?.parallel, assistantPrefs);
         stepper("AI in parallel", "aiParallel", 1, 6, () => full?.prefs?.aiParallel, assistantPrefs);
-        stepper("Parallel builds", "parallel", 1, state.assistant?.parallelLimit ?? 3, () => state.assistant?.parallel, autopilotPrefs);
+        steppers.append(createBuildParallelControl());
         info.append(steppers);
       }
+      if (!roster.length) info.append(createBuildParallelControl());
 
       // The R&D layer's last word: health, score, and how much the playbook holds.
       const overseer = full?.overseer;
@@ -5712,7 +6064,7 @@
       if (node.groupMember?.canonical !== false) action("Open in Tasks", () => primaryAction(node), { primary: true, title: "Tasks (T)" });
       if (!node.readOnly) {
       action("Work on it", () => workOnNode(node), {
-        title: "Make this task the assistant's next piece of work — pinned to the front, the executor starts it as soon as a slot frees",
+        title: "Prioritize this task. Machine managed starts eligible work while Studio remains responsive; prerequisites, approval, file claims and any selected manual build limit still apply.",
       });
       if (task.status === "open") {
         action("Activate", async () => {
@@ -5836,7 +6188,7 @@
       }
 
       appendNodeFolder(info, node);
-      const workHint = "Make this node the assistant's next piece of work — pinned to the front of the queue";
+      const workHint = "Prioritize this work. Machine managed starts eligible, independent work while Studio remains responsive; Pause, approvals, prerequisites and file claims still apply.";
       if (node.kind === "session") {
         action("Open in Explorer", () => primaryAction(node), { primary: true, title: "Session explorer (E)" });
         action("Work on it", () => workOnNode(node), { title: workHint });
@@ -7282,7 +7634,7 @@
       opacity: node._absorbed ? 0 : node._fade ?? node.opacity ?? 1,
       world: { x: node.x, y: node.y, z: node.z }, screen: { x: node._px, y: node._py },
     })),
-    debugNodes: () => state.nodes.map((node) => ({ id: node.id, kind: node.kind, label: node.label, workStatus: node._workLabel, x: node._px, y: node._py, radius: node._pr, layoutAnchor: node._layoutAnchor ? { ...node._layoutAnchor } : null, labelRect: node._label ? { ...node._label } : null, cardRect: node._cardRect ? { ...node._cardRect } : null, bubbleRect: node._bubblePaint ? { ...node._bubblePaint } : null, bubbleHitRect: node._bubble ? { x: node._bubble.x, y: node._bubble.y, w: node._bubble.w, h: node._bubble.h } : null, shape: nodeVisualProfile(node).shape, visualStyle: state.nodeStyle, audioResponse: node._audioResponse ? { ...node._audioResponse } : null, orbitTrail: node._orbitTrail ? { ...node._orbitTrail } : null, extraGlow: node._extraGlow === true })),
+    debugNodes: () => state.nodes.map((node) => ({ id: node.id, kind: node.kind, label: node.label, workStatus: node._workLabel, x: node._px, y: node._py, radius: node._pr, layoutAnchor: node._layoutAnchor ? { ...node._layoutAnchor } : null, labelRect: node._label ? { ...node._label } : null, labelLines: [...(node._labelLines ?? [])], cardRect: node._cardRect ? { ...node._cardRect } : null, bubbleRect: node._bubblePaint ? { ...node._bubblePaint } : null, bubbleHitRect: node._bubble ? { x: node._bubble.x, y: node._bubble.y, w: node._bubble.w, h: node._bubble.h } : null, shape: nodeVisualProfile(node).shape, visualStyle: state.nodeStyle, audioResponse: node._audioResponse ? { ...node._audioResponse } : null, orbitTrail: node._orbitTrail ? { ...node._orbitTrail } : null, extraGlow: node._extraGlow === true })),
     graphViewport: () => ({ ...usableArea() }),
     geometryStatus: () => ({ view: state.view, angle: state.angle, pitch: state.pitch, nodes: state.nodes.map((node) => ({ id: node.id, anchor: node._layoutAnchor ? { ...node._layoutAnchor } : null, world: { x: node.x, y: node.y, z: node.z }, projected: project(node._layoutAnchor ?? node) })) }),
     setSettingsPreview,
@@ -7290,6 +7642,7 @@
     settingsPreviewStatus: () => ({ active: Boolean(state.settingsPreview), viewport: state.settingsPreview ? { ...state.settingsPreview } : null, camera: { ...state.camera }, zoom: state.zoom, fit: state.fit, previousWasActive: state.previewRestore?.wasActive ?? null }),
     followStatus: () => ({ mode: state.camMode, taskId: state.follow?.taskId ?? null, nodeId: state.follow?.key ?? null, title: state.follow?.title ?? null, stage: state.follow?.stage ?? null, reason: state.follow?.reason ?? null, since: state.follow?.since ?? null, zoom: state.zoom, targetZoom: state.followZoomTarget }),
     audioStatus,
+    audioWaveStatus: () => ({ connections: (state.active && state.reactive && (state.inputStream || state.localAudio) && !noMotion() ? state.audioWaves ?? [] : []).map((wave) => ({ ...wave, points: wave.points.map((point) => ({ ...point })) })) }),
     isActive: () => state.active,
     escape,
     handleKey,
@@ -7304,6 +7657,7 @@
     setAudioSource,
     setMusicReactive,
     setAudioResponse,
+    setAudioEffects,
     search,
     selectAssistant,
     saveState,

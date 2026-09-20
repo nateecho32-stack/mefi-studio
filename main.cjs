@@ -19,6 +19,7 @@ const { applyIdeaAction } = require("./scripts/idea-actions.cjs");
 const { createMusicRecommender } = require("./scripts/music-recommendations.cjs");
 const { attachRendererRecovery } = require("./scripts/renderer-recovery.cjs");
 const { createModelPerformanceStore } = require("./scripts/model-performance.cjs");
+const { createPerformanceProfiler } = require("./scripts/performance-profiler.cjs");
 const { buildContext } = require("./scripts/context-manager.cjs");
 const electron = require("electron");
 
@@ -32,6 +33,7 @@ if (typeof electron === "string" || !electron.app) {
 }
 
 const { app, BrowserWindow, ipcMain, safeStorage, shell, dialog, clipboard, desktopCapturer, powerSaveBlocker, Tray, Menu, nativeImage, screen } = electron;
+const performanceProfiler = createPerformanceProfiler({ getAppMetrics: () => app.getAppMetrics() });
 
 const STUDIO_ROOT = __dirname;
 const { sourceRoot: SOURCE_ROOT, repoRoot: REPO_ROOT, gameRoot: GAME_ROOT } = resolveStudioPaths({
@@ -214,13 +216,17 @@ function readMachineStatus({ kill = false } = {}) {
 // Resource manager: watches LOVE test runs, kills strays/hangs/over-age
 // processes, and tells the agents through the inbox + briefing facts.
 // `withProcesses: false` skips the PowerShell process scan (the expensive
-// part) and only refreshes lease state.
+// part); CPU/memory sampling and lease state still refresh.
 async function resourcePass({ kill = true, reason = "poll", withProcesses = true } = {}) {
   const machine = await getMachine();
   const eyes = await getEyes();
   const settings = await readSettings();
   const limits = { ...MACHINE_DEFAULTS, ...(settings.machine ?? {}) };
   const leases = await machine.leaseStatus({ repoRoot: projectRoot() });
+  const lagMs = await measureWorkerLag();
+  let capacity = await machine.workerCapacity({ running: autopilot.jobs.length, lagMs });
+  if (autopilot.resourceBackoffUntil > Date.now()) capacity = { ...capacity, canStart: false, reason: "worker startup stalled; allowing the machine to recover" };
+  autopilot.capacity = capacity;
   const processes = withProcesses ? await machine.processSnapshot() : [];
   const { verdicts } = withProcesses ? machine.classify({ processes, previousCpu: machinePreviousCpu, limits }) : { verdicts: [] };
   if (withProcesses) machinePreviousCpu = new Map(processes.map((row) => [row.pid, row.cpuMs]));
@@ -260,8 +266,9 @@ async function resourcePass({ kill = true, reason = "poll", withProcesses = true
     running,
     processes: verdicts,
     actions,
-    wait: leases.busy,
-    lines: machine.describe({ leases, processes: verdicts, actions }),
+    capacity,
+    wait: leases.exclusive || !capacity.canStart,
+    lines: machine.describe({ leases, processes: verdicts, actions, capacity }),
   };
   await eyes.writeJson(MACHINE_STATUS_PATH, status);
   await eyes.writeJson(RESOURCE_LOG_PATH, { updatedAt: status.updatedAt, events: machineEvents.slice(0, 60) });
@@ -284,7 +291,12 @@ function startMachineWatch() {
     const withProcesses = !hidden && (leases.busy || Date.now() - lastProcessScan > 30000);
     if (withProcesses) lastProcessScan = Date.now();
     try {
-      await resourcePass({ kill: true, reason: withProcesses ? "poll" : "leases", withProcesses });
+      const status = await resourcePass({ kill: true, reason: withProcesses ? "poll" : "leases", withProcesses });
+      // Recovery must wake dispatch even while every old manual slot is busy.
+      if (!status.wait && autopilot.capacityWaiting && autopilot.execute && assistantState?.status === "running") {
+        autopilot.capacityWaiting = false;
+        assistantAskForWork("machine capacity recovered");
+      }
     } catch (error) {
       logLine(`[machine] scan failed: ${error.message}`);
     }
@@ -330,6 +342,33 @@ async function rendererValue(script, fallback = null, timeoutMs = 1500) {
     ]);
   } catch { return fallback; }
   finally { clearTimeout(timer); }
+}
+
+// Measure visible UI responsiveness, including waiting to reach its event loop
+// and paint frames. Background frame throttling must never hold coding work.
+async function measureWorkerLag({ force = false } = {}) {
+  const view = window;
+  const visible = () => view && view === window && !view.isDestroyed() && !view.webContents.isDestroyed?.() && !view.isMinimized() && view.isVisible();
+  if (!visible()) { measureWorkerLag.cache = null; return null; }
+  const cached = measureWorkerLag.cache;
+  if (!force && cached?.view === view && Date.now() >= cached.at && Date.now() - cached.at < 750) return cached.lagMs;
+  if (measureWorkerLag.inFlight?.view === view) return measureWorkerLag.inFlight.promise;
+  const pending = { view, promise: null };
+  pending.promise = (async () => {
+    const startedAt = Date.now();
+    let answered = null;
+    try {
+      answered = await rendererValue("new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))", null, 1000);
+    } catch {}
+    if (!visible()) return null;
+    // Two ordinary frames plus IPC get a 50ms allowance. Time beyond that is
+    // actual delay, so high CPU with a responsive view can still admit workers.
+    const lagMs = answered === true ? Math.max(0, Date.now() - startedAt - 50) : 1000;
+    measureWorkerLag.cache = { view, at: Date.now(), lagMs };
+    return lagMs;
+  })().finally(() => { if (measureWorkerLag.inFlight === pending) measureWorkerLag.inFlight = null; });
+  measureWorkerLag.inFlight = pending;
+  return pending.promise;
 }
 
 // The renderer writes localStorage["mefiStudio.resume"] so the next boot lands
@@ -1386,6 +1425,7 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
       ...facts,
       machine: {
         wait: machineStatus.wait,
+        capacity: machineStatus.capacity,
         exclusive: machineStatus.leases.exclusive,
         holders: machineStatus.leases.holders.map((holder) => `${holder.label || holder.agent} (w${holder.width}${holder.exclusive ? ", exclusive" : ""})`),
         runningTests: machineStatus.running.map((entry) => ({ pid: entry.pid, status: entry.status, ageMinutes: entry.ageMinutes })),
@@ -2046,9 +2086,8 @@ function assistantSetProblems(kinds, list) {
 // (which returns a new state), then the true pool counts are written back:
 // the roster has one row per role, but several responders may run at once.
 const EXECUTOR_PARALLEL_MAX = 12;
-// A small worker pool alongside the lightweight assistant roster. Worker
-// snapshots are disabled in executorOpencodeEnv; file claims still serialize
-// overlapping edits, and startup recovery may narrow the pool back to one.
+// Optional manual worker limit alongside the lightweight assistant roster.
+// Automatic mode uses measured resources; file claims serialize overlapping edits.
 const EXECUTOR_PARALLEL_CAP = 3;
 const AI_PARALLEL_MAX = 6;
 function assistantPoolCounts() {
@@ -2167,6 +2206,9 @@ function enqueue(role, job, { ai = false, priority = ASSISTANT_PRIORITY.cadence,
   const existing = pool.queue.find((entry) => entry.key === key) ?? [...pool.running.values()].find((entry) => entry.key === key);
   if (existing) {
     existing.priority = Math.max(existing.priority, priority);
+    // Demand can arrive after the foreman's last pick but before it reports
+    // completion. Coalesce that demand into one further pass.
+    if (role === "foreman" && pool.running.has(existing.id) && priority >= ASSISTANT_PRIORITY.demand) existing.rerunRequested = true;
     // An explicit request may run an already held handoff while paused.
     // Automatic follow-ups pass held:true and never revoke the operator hold.
     if (!held) existing.held = false;
@@ -2224,7 +2266,7 @@ function assistantRefreshRole(role, { emit = false } = {}) {
 // Background roles obey their worker/AI widths. Replies have a separate,
 // bounded lane because they can await work from that background pool; sharing
 // its last slot would block the very role a reply requested. The single foreman
-// heartbeat also stays available. Older work gains priority each minute so a
+// heartbeat and Machine resource monitor also stay available. Older work gains priority each minute so a
 // stream of new requests cannot starve an already waiting cadence pass.
 function assistantPump() {
   if (!assistantState || projectSwitching) return;
@@ -2238,7 +2280,7 @@ function assistantPump() {
     started = false;
     const running = [...pool.running.values()];
     const runningRoles = new Set(running.map((entry) => entry.role));
-    const background = running.filter((entry) => entry.role !== "responder" && entry.role !== "foreman");
+    const background = running.filter((entry) => !["responder", "foreman", "machine"].includes(entry.role));
     const aiRunning = background.filter((entry) => entry.ai).length;
     for (let index = 0; index < pool.queue.length; index += 1) {
       const entry = pool.queue[index];
@@ -2246,12 +2288,12 @@ function assistantPump() {
       // A timeout is a deadline report, not cancellation. Even the separate
       // reply lane must wait for that role's previous operation to stop.
       if (running.some((job) => job.role === entry.role && job.timedOut)) continue;
-      if (entry.role !== "responder" && entry.role !== "foreman") {
+      if (!["responder", "foreman", "machine"].includes(entry.role)) {
         if (background.length >= parallel || runningRoles.has(entry.role)) continue;
         if (entry.ai && aiRunning >= aiParallel) continue;
       } else if (entry.role === "responder") {
         if (running.filter((job) => job.role === "responder").length >= Math.min(2, aiParallel)) continue;
-      } else if (runningRoles.has(entry.role) && entry.role === "foreman") {
+      } else if (runningRoles.has(entry.role) && ["foreman", "machine"].includes(entry.role)) {
         continue;
       }
       pool.queue.splice(index, 1);
@@ -2333,6 +2375,9 @@ function assistantSettle(entry, { result, error }) {
   entry.resolve(error !== undefined ? { ok: false, error: failure } : result);
   if (entry.work) assistantJournal({ id: entry.work.id, done: true });
   else if (!CLI_MODE) assistantWrite().catch(() => {});
+  if (entry.rerunRequested && assistantState.status === "running" && !projectSwitching) {
+    enqueue(entry.role, entry.job, { key: entry.key, priority: ASSISTANT_PRIORITY.demand, targets: entry.targets });
+  }
   assistantPump();
   if (!assistantRefreshRole(entry.role, { emit: true })) assistantThinkClear(entry.role);
 }
@@ -2565,7 +2610,7 @@ async function assistantMachineJob() {
       : []
   );
   const running = (status.running ?? []).length;
-  return { ok: true, text: `${running ? `${running} test run(s)` : "machine quiet"}${killed.size ? ` · ${killed.size} killed` : ""}`, intel: { running, killed: killed.size, unhealthy: unhealthy.length } };
+  return { ok: true, text: `${status.capacity?.reason || "capacity available"} · ${running} test run(s)${killed.size ? ` · ${killed.size} killed` : ""}`, intel: { running, killed: killed.size, unhealthy: unhealthy.length, capacity: status.capacity } };
 }
 
 // A torn store (crash or concurrent write mid-save) truncates the tail, not
@@ -2753,7 +2798,7 @@ async function assistantForemanJob(now, entry) {
       `foreman handed out ${started.length} job(s): ${started.map((job) => assistantClip(job.title, 40)).join(", ")}${drivers.length ? ` — on: ${drivers.join(" · ")}` : ""}`,
     );
   }
-  const free = Math.max(0, Math.max(1, autopilot.parallel) - autopilot.jobs.length);
+  const free = autopilot.adaptiveParallel === true ? null : Math.max(0, Math.max(1, autopilot.parallel) - autopilot.jobs.length);
   // Nothing handed out, nothing building, nothing held: the assistant grows
   // work instead of idling. The compactor folds loose ideas into plans (and
   // asks for work again when a plan is runnable); the ideas agent tops the
@@ -2778,11 +2823,11 @@ async function assistantForemanJob(now, entry) {
     ? "executor off · nothing handed out"
     : started.length
       ? `handed out ${started.length} · ${autopilot.jobs.length} building`
-      : autopilot.jobs.length >= Math.max(1, autopilot.parallel)
+      : autopilot.adaptiveParallel !== true && autopilot.jobs.length >= Math.max(1, autopilot.parallel)
         ? `all ${autopilot.jobs.length} slots busy`
         : autopilot.waiting
           ? `held · ${autopilot.waiting}`
-          : `nothing to hand out · ${free} slot(s) free`;
+          : autopilot.adaptiveParallel === true ? "nothing ready to hand out · machine managed" : `nothing to hand out · ${free} slot(s) free`;
   return { ok: true, text, intel: { handedOut: started.length, building: autopilot.jobs.length, slotsFree: free } };
 }
 
@@ -2836,7 +2881,7 @@ async function assistantThinkerJob(now, entry) {
 }
 
 // Ask the assistant to hand work out. Never calls the executor directly: the
-// foreman is a roster job, so the dispatch is visible, queued behind the pool,
+// foreman is a roster job with its own lane, so dispatch is visible
 // and attributable to the assistant like every other decision it makes.
 function assistantAskForWork(reason) {
   if (SMOKE || CAPTURE || CLI_MODE) return false;
@@ -3675,9 +3720,9 @@ function assistantSuperviseJobs(now) {
   // "machine busy" used to suppress the kick, so a dropped exclusive lease
   // left the executor parked until the foreman happened to get a pool slot.
   const lastAskAt = autopilot.lastAsk?.at ?? 0;
-  const slotsFree = autopilot.execute && jobs.length < Math.max(1, autopilot.parallel) && autopilot.queueDepth > 0;
-  if (slotsFree && now - lastAskAt > 30000 && (autopilot.waiting === "machine busy" || !jobs.length)) {
-    const why = autopilot.waiting === "machine busy" ? "lease dropped, retrying" : "queue waiting with nothing running";
+  const slotsFree = autopilot.execute && (autopilot.adaptiveParallel === true || jobs.length < Math.max(1, autopilot.parallel)) && autopilot.queueDepth > 0;
+  if (slotsFree && now - lastAskAt > 30000 && (autopilot.adaptiveParallel === true || autopilot.capacityWaiting || autopilot.waiting === "machine busy" || !jobs.length)) {
+    const why = autopilot.capacityWaiting ? "rechecking machine capacity" : autopilot.waiting === "machine busy" ? "lease dropped, retrying" : "queue waiting for dispatch";
     problems.push({ kind: "executor", text: `${autopilot.queueDepth} queued with ${jobs.length} running — kicking the executor` });
     assistantAskForWork(why);
   }
@@ -3988,6 +4033,7 @@ async function assistantMessageFacts(now, query = "") {
       const status = assistantCache.machine ?? (await resourcePass({ kill: false, reason: "assistant", withProcesses: false }));
       raw.machine = {
         wait: Boolean(status.wait),
+        capacity: status.capacity ?? null,
         lines: String(status.lines ?? "").split(" · ").filter(Boolean),
         running: (status.running ?? []).map((entry) => ({ pid: entry.pid, status: entry.status, ageMinutes: entry.ageMinutes })),
       };
@@ -4019,6 +4065,8 @@ async function assistantMessageFacts(now, query = "") {
       queued: Math.max(0, Math.floor(Number(autopilot.queueDepth) || 0)),
       waiting: autopilot.waiting ?? null,
       parallel: Math.max(1, Math.floor(Number(autopilot.parallel) || 1)),
+      adaptiveParallel: autopilot.adaptiveParallel === true,
+      capacity: autopilot.capacity ?? null,
       lastAsk: autopilot.lastAsk?.reason ?? null,
       running: (autopilot.jobs ?? []).filter((job) => !job.finished).map((job) => ({ title: job.title, minutes: Math.max(0, (now - (job.startedAt ?? now)) / 60000) })),
       history: (autopilot.history ?? []).slice(0, 8).map((entry) => ({ kind: entry.kind, text: entry.text, at: entry.at })),
@@ -4250,7 +4298,7 @@ async function assistantMessage(raw) {
 // It is focused (follow-ups and the gold ring follow), pinned to the front of
 // the queue — a board task is pinned in place, a session or todo is queued as
 // a pinned chat request — the ask is threaded so the chat log shows it, and
-// the foreman runs at demand priority so a free slot takes it on the spot.
+// the foreman runs at demand priority so machine capacity is checked at once.
 // No responder pass in between: this path does the work directly.
 async function assistantWorkOn(raw) {
   const kind = String(raw?.kind ?? "");
@@ -4309,7 +4357,7 @@ async function assistantWorkOn(raw) {
   }
   assistantNodeContext({ kind, id }, "note", `work on it — ${where}`, "assistant");
   assistantLog("control", `work on it: ${kind} "${label}" — ${where}`);
-  if (!repeat) assistantAppendReply(`${where}; the executor takes it before everything else.`, "local", "request");
+  if (!repeat) assistantAppendReply(`${where}; it will start as soon as machine capacity and task requirements allow${autopilot.adaptiveParallel === true ? "." : ", within your manual worker limit."}`, "local", "request");
   assistantAskForWork("work on it");
   await saveAssistant({ force: true });
   return { ok: true, where, state: assistantState };
@@ -4471,7 +4519,11 @@ const autopilot = {
   execute: false, // bootAutopilot loads the saved choice before any worker can run
   autoBuild: true, // verify-first holds each saved scope until explicitly approved
   minutes: 5,
-  parallel: 2, // worker processes; a bounded pool separate from the assistant roster
+  parallel: 2, // retained manual worker limit
+  adaptiveParallel: true, // the Machine agent admits workers from measured responsiveness
+  capacity: null,
+  capacityWaiting: false,
+  resourceBackoffUntil: 0,
   jobs: [], // in-flight runs: {id, kind, title, source, ref, child, pid, startedAt, sessionId, taskId, finished}
   consecutiveFailures: 0,
   infraFailures: 0, // spawn errors / instant exits — 3 in a row parks the executor for a cooldown
@@ -4618,6 +4670,8 @@ function autopilotStatus() {
     minutes: autopilot.minutes,
     parallel: autopilot.parallel,
     parallelLimit: EXECUTOR_PARALLEL_CAP,
+    adaptiveParallel: autopilot.adaptiveParallel === true,
+    capacity: autopilot.capacity ?? null,
     // Pids stay main-side: the renderer gets labels, not handles. `progress`
     // is the run's own todo fraction (null until the session reports todos),
     // what the builder meters on the constellation show.
@@ -5323,7 +5377,8 @@ function watchJobProgress(eyes, entry) {
   setTimeout(poll, EXECUTOR_PROGRESS_POLL_MS).unref?.();
 }
 
-// Fills every free executor slot with a headless `opencode run` session in
+// Starts eligible work while the Machine agent admits new workers (or until
+// the optional manual limit is reached), using `opencode run` sessions in
 // the repo root: pending requests first, then the oldest open tasks (a-eyes
 // first). Each pick is claimed in the store before the next slot fills — a
 // request flips to "running", a task to "active" — so two jobs never take the
@@ -5357,7 +5412,7 @@ async function executeNextRequest() {
     }
     let stop = "empty";
     let lostTries = 0;
-    while (autopilot.execute && assistantState?.status !== "paused" && !executorUpdateHold() && autopilot.jobs.length < Math.max(1, autopilot.parallel)) {
+    while (autopilot.execute && assistantState?.status !== "paused" && !executorUpdateHold() && !autopilot.jobs.some((entry) => entry.settlementPending) && (autopilot.adaptiveParallel === true || autopilot.jobs.length < Math.max(1, autopilot.parallel))) {
       // Sequential awaits: each pick re-reads the store with the previous job's
       // claim already on it, so parallel slots can never grab the same work.
       try {
@@ -5370,7 +5425,7 @@ async function executeNextRequest() {
       // A lost claim means another fill (or a live session) took that title
       // between the pick and the lock. Try the next piece instead of parking.
       if (stop === "lost") {
-        if (++lostTries > Math.max(1, autopilot.parallel) + 2) break;
+        if (++lostTries > Math.max(1, autopilot.queueDepth || autopilot.parallel) + 2) break;
         continue;
       }
       if (stop !== "spawned") break;
@@ -5378,12 +5433,13 @@ async function executeNextRequest() {
       // shared OpenCode store and its snapshot repo, and every run in the
       // sweep can wedge before it prints a line. A few seconds between
       // spawns costs nothing and keeps startup collisions from compounding.
-      if (autopilot.execute && autopilot.jobs.length < Math.max(1, autopilot.parallel)) {
+      if (autopilot.execute && (autopilot.adaptiveParallel === true || autopilot.jobs.length < Math.max(1, autopilot.parallel))) {
         await new Promise((resolve) => setTimeout(resolve, EXECUTOR_STAGGER_MS));
       }
     }
+    autopilot.capacityWaiting = stop === "resources" || stop === "busy";
     setAutopilotWaiting(
-      executorUpdateHold() || (stop === "busy" ? "machine busy" : stop === "approval" ? "Verify first: tasks are waiting for your build approval" : stop === "cooldown" ? "tasks cooling down" : stop === "prerequisites" ? "waiting for task prerequisites" : stop === "review" ? "tasks need review before retry" : stop === "deferred" ? "waiting on live editors" : null)
+      executorUpdateHold() || (autopilot.jobs.some((entry) => entry.settlementPending) ? "saving a worker claim release; retrying storage" : stop === "resources" ? autopilot.capacity?.reason || "waiting for machine capacity" : stop === "busy" ? "machine busy" : stop === "approval" ? "Verify first: tasks are waiting for your build approval" : stop === "cooldown" ? "tasks cooling down" : stop === "prerequisites" ? "waiting for task prerequisites" : stop === "review" ? "tasks need review before retry" : stop === "deferred" ? "waiting on live editors" : null)
     );
   })().finally(() => {
     executorFillInFlight = null;
@@ -5590,18 +5646,39 @@ async function releaseExecutorClaim(eyes, job, entry) {
 async function spawnNextJob() {
   const runProject = projects.current();
   const runRoot = runProject.path;
+  const manualCapacityAvailable = (ownEntry = null) => autopilot.adaptiveParallel === true || autopilot.jobs.filter((job) => job !== ownEntry).length < Math.max(1, autopilot.parallel || 1);
   // The pause can land mid-fill (an infra breaker tripped on a sibling job),
   // so re-check instead of trusting the dispatcher's one-time gate.
   if (projectSwitching || !autopilot.execute || assistantState?.status === "paused" || executorUpdateHold()) return "empty";
+  if (!manualCapacityAvailable()) return "empty";
   let leases = null;
+  // Read-only, cheap admission checks use the Machine agent's shared sampler.
+  // Rechecking after the durable claim prevents a pressure change during I/O
+  // from launching a new process. The tentative claim is not a worker yet.
+  const readCapacity = async (running, force = false) => {
+    let capacity;
+    try {
+      const machine = await getMachine();
+      const lagMs = await measureWorkerLag({ force });
+      capacity = await machine.workerCapacity({ running, force, lagMs });
+    } catch {
+      capacity = { canStart: false, reason: "machine measurements unavailable; retrying", resources: null };
+    }
+    if (autopilot.resourceBackoffUntil > Date.now()) {
+      capacity = { ...capacity, canStart: false, reason: "worker startup stalled; allowing the machine to recover" };
+    }
+    autopilot.capacity = capacity;
+    return capacity.canStart === true;
+  };
   try {
     const machine = await getMachine();
     leases = await machine.leaseStatus({ repoRoot: projectRoot() });
   } catch {}
   // An exclusive lease means another agent owns the machine; stay parked.
-  // leaseStatus only — a full resourcePass wrote two JSON files per slot fill
-  // and a OneDrive lock on those files hung dispatch with claimed work and no child.
+  // Read-only leases and resource sampling — a full resourcePass wrote two
+  // JSON files per start, which could hang dispatch on a OneDrive file lock.
   if (leases?.exclusive) return "busy";
+  if (!await readCapacity(autopilot.jobs.length)) return "resources";
   // Resolve the CLI/provider before claiming work. A missing `runRoute` used
   // to throw after the claim landed, leaving the task `active` with no child.
   const runRoute = await executorRunEnv().catch((error) => ({ error: error.message }));
@@ -5747,7 +5824,7 @@ async function spawnNextJob() {
         policy: { id: policyIdentityNow.id, version: policyIdentityNow.version, kind: policyIdentityNow.kind, hash: policyIdentityNow.hash },
         observation: {
           actions: policyActions,
-          limits: { maxConcurrency: Math.max(1, autopilot.parallel), paused: false, machineBusy: Boolean(leases?.exclusive) },
+          limits: { maxConcurrency: autopilot.adaptiveParallel === true ? autopilot.jobs.length + 1 : Math.max(1, autopilot.parallel), paused: false, machineBusy: Boolean(leases?.exclusive) },
           eligibleCount: ranked.length,
         },
         recommended: policyActions.map((action) => action.id),
@@ -5809,6 +5886,31 @@ async function spawnNextJob() {
   const discardEntry = () => {
     releaseFiles();
     autopilot.jobs = autopilot.jobs.filter((item) => item !== entry);
+  };
+  let releaseInFlight = null;
+  const cancelClaim = () => {
+    if (releaseInFlight) return releaseInFlight;
+    releaseInFlight = (async () => {
+      try {
+        await releaseExecutorClaim(eyes, job, entry);
+        const recovered = entry.settlementPending;
+        entry.finished = true;
+        entry.settlementPending = false;
+        discardEntry();
+        if (recovered) {
+          emitAutopilot();
+          assistantAskForWork("worker claim release saved");
+        }
+      } catch (error) {
+        // Keep file ownership until the durable rollback succeeds. A pending
+        // launch has no child/reaper yet, so explicitly retain a retry path.
+        entry.settlementPending = true;
+        entry.reap = cancelClaim;
+        logLine(`[autopilot] claim release pending: ${error.message}`);
+        setTimeout(() => { if (!entry.finished) cancelClaim(); }, 5000).unref?.();
+      }
+    })().finally(() => { releaseInFlight = null; });
+    return releaseInFlight;
   };
   // The claim rides the job id: a run that dies with the app (or whose close
   // never landed) is re-queued by housekeeping once its id leaves the list.
@@ -5886,13 +5988,15 @@ async function spawnNextJob() {
     leases = await machine.leaseStatus({ repoRoot: projectRoot() });
   } catch {}
   if (leases?.exclusive) {
-    await releaseExecutorClaim(eyes, job, entry).catch(() => {});
-    discardEntry();
+    await cancelClaim();
     return "busy";
   }
-  if (!autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || !backlog.buildAllowed(job.ref, autopilot)) {
-    await releaseExecutorClaim(eyes, job, entry).catch(() => {});
-    discardEntry();
+  if (!await readCapacity(autopilot.jobs.filter((job) => job !== entry).length, true)) {
+    await cancelClaim();
+    return "resources";
+  }
+  if (!autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || !manualCapacityAvailable(entry) || !backlog.buildAllowed(job.ref, autopilot)) {
+    await cancelClaim();
     return "empty";
   }
   // A mode switch or scope edit can arrive during route/claim/lease awaits.
@@ -5906,9 +6010,8 @@ async function spawnNextJob() {
       return Boolean(current && backlog.buildScope(current) === selectedScope && backlog.buildAllowed(current, autopilot));
     });
   } catch {}
-  if (!launchAllowed || !autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || !backlog.buildAllowed(job.ref, autopilot)) {
-    await releaseExecutorClaim(eyes, job, entry).catch(() => {});
-    discardEntry();
+  if (!launchAllowed || !autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || !manualCapacityAvailable(entry) || !backlog.buildAllowed(job.ref, autopilot)) {
+    await cancelClaim();
     return "lost";
   }
   // Policy Lab PR1 — the attempt's identity: handoff lineage, the claim, the
@@ -6583,12 +6686,15 @@ async function spawnNextJob() {
       // The kill may leave git locks in the shared snapshot worktree; aged-out
       // ones are swept so they cannot poison later runs.
       sweepSnapshotLocks().catch(() => {});
-      // The machine just said it cannot start this many CLI agents at once.
-      // Narrow the pool (and persist it) instead of refilling every slot
-      // into the same stampede — a wedged start is a width signal, not a
-      // task problem. Recovery can serialize the pool without removing the
-      // user's ability to increase the bounded width after fixing the cause.
-      if (autopilot.parallel > 1) {
+      // Give stalled startups a brief recovery interval in automatic mode.
+      // Manual mode retains the existing persisted narrowing behavior.
+      if (autopilot.adaptiveParallel === true) {
+        autopilot.resourceBackoffUntil = Date.now() + 30000;
+        autopilot.capacityWaiting = true;
+        autopilot.capacity = { ...autopilot.capacity, canStart: false, reason: "worker startup stalled; allowing the machine to recover" };
+        pushAutopilotHistory("held", "new workers held briefly after a stalled startup; Machine will reassess capacity");
+        emitAutopilot();
+      } else if (autopilot.parallel > 1) {
         const narrowed = Math.max(1, autopilot.parallel - 1);
         autopilot.parallel = narrowed;
         pushAutopilotHistory("narrowed", `pool narrowed to ${narrowed} — wedged start under load`);
@@ -7101,6 +7207,7 @@ async function setAutopilot(prefs = {}) {
     }
   }
   if (prefs.minutes !== undefined) autopilot.minutes = Math.max(1, Number(prefs.minutes) || autopilot.minutes);
+  if (prefs.adaptiveParallel !== undefined) autopilot.adaptiveParallel = Boolean(prefs.adaptiveParallel);
   if (prefs.parallel !== undefined) autopilot.parallel = Math.min(EXECUTOR_PARALLEL_MAX, Math.max(1, Math.round(Number(prefs.parallel) || autopilot.parallel)));
   // The same bound applies to saved settings and interactive controls.
   autopilot.parallel = Math.min(autopilot.parallel, EXECUTOR_PARALLEL_CAP);
@@ -7109,7 +7216,7 @@ async function setAutopilot(prefs = {}) {
     const autoBuild = buildRevision !== null && buildRevision === setAutopilot.buildRevision ? prefs.autoBuild : autopilot.autoBuild !== false;
     settings.ui = {
       ...(settings.ui ?? {}),
-      autopilot: { enabled: autopilot.enabled, execute: autopilot.execute, autoBuild, minutes: autopilot.minutes, parallel: autopilot.parallel },
+      autopilot: { enabled: autopilot.enabled, execute: autopilot.execute, autoBuild, minutes: autopilot.minutes, parallel: autopilot.parallel, adaptiveParallel: autopilot.adaptiveParallel === true },
     };
     await writeSettings(settings);
     if (buildRevision !== null && buildRevision === setAutopilot.buildRevision) autopilot.autoBuild = autoBuild;
@@ -7125,7 +7232,7 @@ async function setAutopilot(prefs = {}) {
   emitAutopilot();
   // A widened pool has free slots right now — fill them instead of waiting
   // for the next tick or a job to end.
-  if (autopilot.enabled && autopilot.execute && autopilot.jobs.length < autopilot.parallel) {
+  if (autopilot.enabled && autopilot.execute && (autopilot.adaptiveParallel === true || autopilot.jobs.length < autopilot.parallel)) {
     assistantAskForWork("the pool was widened");
   }
   return { ok: true, ...autopilotStatus() };
@@ -7137,7 +7244,7 @@ function setProactive(enabled, minutes = 5) {
   return setAutopilot({ enabled, minutes });
 }
 
-// Two workers by default on multicore hosts; users may choose one to three.
+// Retained manual-mode default; automatic mode uses measured resources.
 function machineParallelDefault() {
   const cores = Number.isFinite(os?.cpus?.()?.length) && os.cpus().length > 0 ? os.cpus().length : 8;
   return Math.min(2, Math.max(1, cores));
@@ -7150,9 +7257,8 @@ function savedExecutorParallel(saved = {}) {
 }
 
 // Settings may override the defaults (on/on/5m); the first pass runs ~15s
-// after the call so the window and watchers settle first. A saved parallel
-// width — narrow included — is the operator's setting: the machine default
-// only fills an unset value.
+// after the call so the window and watchers settle first. Automatic admission
+// is the default; saved numeric widths remain available in manual mode.
 let autopilotBootPromise = null;
 async function bootAutopilot() {
   if (autopilotBootPromise) return autopilotBootPromise;
@@ -7167,6 +7273,9 @@ async function bootAutopilot() {
       autoBuild: saved.autoBuild !== false,
       minutes: saved.minutes ?? autopilot.minutes,
       parallel: savedExecutorParallel(saved),
+      // Legacy widths were also saved automatically. Only an explicit mode
+      // choice opts into a fixed cap; retain that old width for manual mode.
+      adaptiveParallel: saved.adaptiveParallel !== false,
     });
     setTimeout(() => projects.run(projects.active(), () => autopilotPass()), 15000).unref?.();
     // A previous session's kills may have left stale snapshot locks; clear
@@ -7692,6 +7801,9 @@ function refreshCatalog() {
 }
 
 function registerIpc() {
+  performanceProfiler.attachIpc(ipcMain);
+  ipcMain.handle("performance:control", (event, payload) => performanceProfiler.control(payload?.action, event.sender));
+  ipcMain.handle("performance:snapshot", () => ({ ok: true, ...performanceProfiler.snapshot() }));
   ipcMain.handle("projects:list", () => projects.list());
   ipcMain.handle("projects:add", async () => {
     try {
@@ -8779,6 +8891,7 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   app.isQuitting = true;
+  performanceProfiler.stop();
   for (const pending of jevProjectQueues.values()) pending.then((queue) => queue.stop()).catch(() => {});
   stopAssistant();
 });

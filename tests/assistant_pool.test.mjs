@@ -57,7 +57,7 @@ function poolHost({ parallel = 2, aiParallel = 2, switching = false } = {}) {
 
 test("demand promotes the existing queued cadence job without duplicating it", async () => {
   const h = poolHost({ parallel: 1, switching: true });
-  h.add("machine", "machine");
+  h.add("auditor", "auditor");
   const watcher = h.add("watcher", "watcher");
   const duplicate = h.env.enqueue("watcher", () => assert.fail("duplicate ran"), { key: "watcher", priority: 2 });
   assert.equal(duplicate, watcher.promise);
@@ -66,6 +66,95 @@ test("demand promotes the existing queued cadence job without duplicating it", a
   h.env.assistantPump();
   await flush();
   assert.deepEqual(h.started, ["watcher"]);
+});
+
+test("Machine runs with a full background pool while its next pass remains singleton", async () => {
+  const h = poolHost({ parallel: 1, aiParallel: 1 });
+  h.add("briefer", "background", { ai: true });
+  h.add("keeper", "queued tidy");
+  const machine = h.add("machine", "resource scan");
+  h.add("machine", "next resource scan");
+  await flush();
+  assert.deepEqual(h.started, ["background", "resource scan"]);
+  assert.equal(h.pool.running.size, 2);
+  assert.equal([...h.pool.running.values()].filter((job) => job.role === "machine").length, 1);
+  machine.resolve({ ok: true });
+  await flush();
+  assert.deepEqual(h.started, ["background", "resource scan", "next resource scan"]);
+  assert.equal(h.pool.running.size, 2, "Machine's next pass does not consume the occupied background slot");
+  assert.equal(h.pool.queue[0].key, "queued tidy");
+});
+
+test("a timed-out Machine pass retains ownership without blocking independent background work", async () => {
+  const h = poolHost({ parallel: 1 });
+  const machine = h.add("machine", "slow resource scan");
+  const background = h.add("briefer", "background");
+  h.add("machine", "replacement resource scan");
+  h.add("keeper", "next background job");
+  await flush();
+  await h.fire();
+  assert.equal((await machine.promise).ok, false);
+  assert.equal(machine.entry().timedOut, true);
+  assert.equal(h.env.projectAgentJobs, 2, "timeout retains the live operation's project ownership");
+  assert.match(h.row("machine").text, /timed out.*slot held/);
+  background.resolve({ ok: true });
+  await flush();
+  assert.deepEqual(h.started, ["slow resource scan", "background", "next background job"]);
+  assert.equal([...h.pool.running.values()].filter((job) => job.role === "machine").length, 1);
+  assert.equal(h.pool.queue[0].key, "replacement resource scan");
+  machine.resolve({ ok: true });
+  await flush();
+  assert.deepEqual(h.started, ["slow resource scan", "background", "next background job", "replacement resource scan"]);
+  assert.equal([...h.pool.running.values()].filter((job) => job.role === "machine").length, 1);
+  assert.equal(h.row("machine").status, "running");
+  assert.doesNotMatch(h.row("machine").text, /timed out/);
+});
+
+test("new demand during a running foreman coalesces into one pass after it settles", async () => {
+  const h = poolHost({ parallel: 1 });
+  const passes = [deferred(), deferred()];
+  let starts = 0;
+  const original = h.env.enqueue("foreman", () => {
+    starts += 1;
+    assert.ok(starts <= 2, "one demand burst creates at most one extra pass");
+    return passes[starts - 1].promise;
+  });
+  await flush();
+  for (let index = 0; index < 8; index += 1) {
+    const duplicate = h.env.enqueue("foreman", () => assert.fail("duplicate function ran"), { priority: 2 });
+    assert.equal(duplicate, original);
+  }
+  await flush();
+  assert.equal(starts, 1, "a demand burst cannot overlap the live dispatcher");
+  assert.equal(h.pool.running.size, 1);
+  assert.equal(h.pool.queue.length, 0);
+  passes[0].resolve({ ok: true });
+  await flush();
+  assert.equal(starts, 2);
+  assert.equal(h.pool.running.size, 1);
+  passes[1].resolve({ ok: true });
+  await flush();
+  assert.equal(starts, 2);
+  assert.equal(h.pool.running.size, 0);
+  assert.equal(h.pool.queue.length, 0);
+});
+
+test("Pause before the foreman settles prevents replay of a coalesced demand", async () => {
+  const h = poolHost();
+  const foreman = h.add("foreman", "dispatch");
+  h.env.enqueue("foreman", () => assert.fail("duplicate function ran"), { key: "dispatch", priority: 2 });
+  await flush();
+  assert.equal(foreman.entry().rerunRequested, true);
+  h.env.assistantState.status = "paused";
+  foreman.resolve({ ok: true });
+  await flush();
+  assert.deepEqual(h.started, ["dispatch"]);
+  assert.equal(h.pool.running.size, 0);
+  assert.equal(h.pool.queue.length, 0);
+  h.env.assistantState.status = "running";
+  h.env.assistantPump();
+  await flush();
+  assert.deepEqual(h.started, ["dispatch"], "Resume does not replay a pre-Pause request");
 });
 
 test("an older cadence pass wins after aging instead of starving behind new demand", async () => {

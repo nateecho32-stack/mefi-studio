@@ -44,7 +44,7 @@ test("an approved plan joins the paused queue and its dependent dispatches only 
     Date, console, path, crypto, taskHandoffs, process: { pid: 321 }, backlog, assistantModule: assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
     projectSwitching: false, assistantState: { status: "paused", prefs: {} }, SMOKE: false, CAPTURE: false, CLI_MODE: false, executorUpdateHold: () => null,
     projects: { current: () => project }, projectRoot: () => root,
-    getMachine: async () => ({ leaseStatus: async () => ({ exclusive: false }) }), executorRunEnv: async () => ({ cli: "fixture" }),
+    measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => ({ exclusive: false }) }), executorRunEnv: async () => ({ cli: "fixture" }),
     getEyes: async () => ({
       readJson: async (key) => structuredClone(board[key]),
       listChanges: () => [{ file: "src/serializer.js", status: "completed" }],

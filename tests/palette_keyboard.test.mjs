@@ -152,6 +152,7 @@ test("command palette: arrows wrap at both ends, Escape and Enter restore the op
   assert.equal(globalThis.document.activeElement, input);
   assert.equal(activeId(), "palette-option-0");
   assert.equal(input.attrs["aria-activedescendant"], "palette-option-0");
+  assert.equal(list.attrs["aria-activedescendant"], "palette-option-0", "the listbox names the active option too");
   assert.equal(list.children[0].attrs["aria-posinset"], "1", "options announce their position");
   assert.equal(list.children[0].attrs["aria-setsize"], "3", "position is against the full result set");
 
@@ -163,6 +164,7 @@ test("command palette: arrows wrap at both ends, Escape and Enter restore the op
   assert.equal(downWrap.defaultPrevented, true);
   assert.equal(activeId(), "palette-option-0", "ArrowDown wraps from the last option to the first");
   assert.equal(input.attrs["aria-activedescendant"], "palette-option-0");
+  assert.equal(list.attrs["aria-activedescendant"], "palette-option-0", "aria-activedescendant tracks arrow-key movement on the listbox as well");
 
   // ArrowUp wraps the other way: from the first option straight to the last
   const upWrap = key("ArrowUp");
@@ -196,8 +198,10 @@ test("command palette: arrows wrap at both ends, Escape and Enter restore the op
   const filteredDown = key("ArrowDown");
   assert.equal(filteredDown.defaultPrevented, true);
   assert.equal(activeId(), "palette-option-0", "a one-row filtered list wraps onto itself");
-  key("Escape");
+  const filteredEscape = key("Escape");
+  assert.equal(filteredEscape.defaultPrevented, true, "Escape is claimed by the palette even mid-filter");
   assert.equal(overlay.hidden, true);
+  assert.equal(input.attrs["aria-expanded"], "false");
   assert.equal(globalThis.document.activeElement, opener, "Escape restores the opener after a filtered session");
 
   // reopen with a two-row filtered list ("bo" matches booklet and Task board)
@@ -284,6 +288,14 @@ test("palette finds everyday words and descriptions, ranks titles first, and kee
   assert.equal(env.document.activeElement, env.input);
   env.key("Tab", { shiftKey: true });
   assert.equal(env.document.activeElement, env.close);
+  // Escape claims closing from any control inside the dialog, not just the
+  // field: from the focused Close button it still closes and restores the opener.
+  const closeEscape = env.key("Escape");
+  assert.equal(closeEscape.defaultPrevented, true);
+  assert.equal(env.overlay.hidden, true);
+  assert.equal(env.document.activeElement, opener, "Escape from the Close button restores the opener");
+  env.palette.open();
+  assert.equal(env.overlay.hidden, false);
   for (const fn of env.close.listeners.click) fn();
   assert.equal(env.overlay.hidden, true);
   assert.equal(env.document.activeElement, opener);

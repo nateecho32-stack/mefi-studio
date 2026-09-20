@@ -44,13 +44,31 @@ test("builder replies use full readiness counts and distinguish assistant activi
 });
 
 test("paused builders and running workers are reported together without claiming queued work started", () => {
-  const facts = { executor: { enabled: false, parallel: 3, running: [{ title: "Real current task" }] }, backlog: { counts: { readyTasks: 8, readyRequests: 0 }, paused: true } };
+  const facts = { executor: { enabled: false, parallel: 3, adaptiveParallel: false, running: [{ title: "Real current task" }] }, backlog: { counts: { readyTasks: 8, readyRequests: 0 }, paused: true } };
   const reply = localReply({ text: "clean up the builder", facts });
   assert.match(reply.text, /Building now \(1\/3 worker slots\): "Real current task"/);
   assert.match(reply.text, /New workers are paused; current workers can finish/);
   assert.match(reply.text, /does not confirm that a worker has started/);
   assert.deepEqual(reply.actions, ["compact"]);
   assert.doesNotMatch(reply.text, /cap cuts|foreman takes|behind the queue/);
+});
+
+test("builder facts and replies retain machine admission decisions without reporting manual slots", () => {
+  const resources = { cpuPercent: 94, availableMemoryMB: 1900, totalMemoryMB: 16384, lagMs: 175, hostLagMs: 125, rendererLagMs: 175, lagPressure: true };
+  const facts = buildFacts({ executor: { enabled: true, parallel: 2, running: Array.from({ length: 5 }, (_, index) => ({ title: `Work ${index}` })), capacity: { canStart: false, reason: "Studio is responding slowly", resources } } });
+  assert.equal(facts.executor.adaptiveParallel, true);
+  assert.deepEqual(facts.executor.capacity, { canStart: false, reason: "Studio is responding slowly", resources });
+  const reply = localReply({ text: "builder status", facts });
+  assert.match(reply.text, /Building now \(5 building · machine managed\)/);
+  assert.match(reply.text, /and 2 more/);
+  assert.match(reply.text, /Dispatch waiting: Studio is responding slowly/);
+  assert.match(reply.text, /resume automatically when machine capacity recovers/);
+  assert.doesNotMatch(reply.text, /worker slots/);
+  const recovered = buildFacts({ executor: { ...facts.executor, capacity: { canStart: true, reason: null, resources: { ...resources, lagMs: 10, hostLagMs: 10, rendererLagMs: null, lagPressure: false } } } });
+  assert.equal(recovered.executor.capacity.resources.rendererLagMs, null, "a hidden renderer has no observed lag");
+  assert.equal(recovered.executor.capacity.resources.lagPressure, false);
+  assert.equal(recovered.executor.capacity.resources.cpuPercent, 94, "high CPU remains resource context after responsiveness recovers");
+  assert.doesNotMatch(localReply({ text: "builder status", facts: recovered }).text, /Dispatch waiting|responding slowly/);
 });
 
 test("dispatch holds and unavailable readiness remain explicit", () => {
