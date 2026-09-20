@@ -2208,6 +2208,9 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-project-icon { width: 25px; height: 25px; flex: 0 0 25px; border-radius: 7px; display: grid; place-items: center; font: 14px Georgia, serif; background: #343d2e; color: var(--ws-accent); }
 .ws-project-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-project-arrow { margin-left: auto; opacity: .45; }
+.ws-empty-project { display: grid; gap: 9px; padding: 10px 9px 4px; color: #7f8877; font-size: 11px; line-height: 1.7; }
+.ws-empty-project p { margin: 0; }
+.ws-empty-project button { width: 100%; }
 .ws-sidebar-note { color: #7f8877; font-size: 11px; line-height: 1.8; padding: 7px 9px; }
 .ws-sidebar-bottom { margin-top: auto; padding-top: 34px; }
 .ws-tools summary, .ws-personal summary { display: flex; align-items: center; gap: 9px; list-style: none; cursor: pointer; padding: 12px 9px; color: #c3cab8; font-size: 12px; }
@@ -2997,6 +3000,12 @@ body.command-active .walkthrough-coach { right: 392px; }
 .settings-group select { max-width: 100%; }
 .settings-group input[type="password"] { flex: 1 1 280px; min-width: 0; }
 .settings-group label { max-width: 100%; }
+.auto-order { flex-direction: column; align-items: flex-start; gap: 8px; }
+.auto-order-list { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.auto-order-item { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
+.auto-order-index { color: var(--muted); font-size: 11px; min-width: 1.2em; text-align: right; }
+.auto-order-name { color: var(--ivory); font-size: 12.5px; flex: 1 1 auto; }
+.auto-order-add { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
 .settings-optional { border-top: 1px solid var(--hairline); padding: 14px 0; }
 .settings-optional > summary { color: var(--ivory); cursor: pointer; font-size: 13px; padding: 5px 0; }
 .settings-optional > p { font-size: 12px; line-height: 1.7; }
@@ -3726,7 +3735,7 @@ body.music-preview-active #idle-hud { display: none !important; }
 </div>
 <section id="workspace-layer" class="workspace" aria-label="Your project workspace" hidden tabindex="-1">
   <div class="ws-main">
-    <div class="ws-topbar"><div class="ws-project-heading"><span class="ws-kicker">WORKSPACE /</span><strong id="workspace-project-name">Opening your project…</strong></div><div class="ws-top-actions"><button id="workspace-reveal" class="ghost mini" title="Show the project folder">Open folder ↗</button><button class="ghost mini" data-nav="palette" aria-label="Find a tool or command">Search <kbd>Ctrl K</kbd></button></div></div>
+    <div class="ws-topbar"><div class="ws-project-heading"><span class="ws-kicker">WORKSPACE /</span><strong id="workspace-project-name">Opening your project…</strong></div><div class="ws-top-actions"><button id="workspace-reveal" class="ghost mini" title="Show the project folder">Open folder ↗</button><button id="workspace-remove-project" class="ghost mini" title="Remove this folder from Studio's project list. Files and local work stay on disk.">Remove project</button><button class="ghost mini" data-nav="palette" aria-label="Find a tool or command">Search <kbd>Ctrl K</kbd></button></div></div>
     <div class="ws-heading"><div><p class="ws-kicker" id="workspace-greeting">YOUR SPACE TO CREATE</p><h1>What are we making?</h1><p id="workspace-project-path" class="ws-project-path"></p></div><span id="workspace-connection" class="ws-connection">Connecting…</span></div>
     <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">A little guidance for your first project.</strong><p>Choose a project, connect your tools, create work and follow it through review.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start walkthrough</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk with me</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays in the sidebar">Not now</button></div></section>
     <div class="ws-columns">
@@ -3999,7 +4008,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         <div class="row">
           <label class="muted">AI routing
             <select id="ai-provider">
-              <option value="auto">Auto — prefer z.ai GLM; OpenCode only when it is the only key</option>
+              <option value="auto">Auto — first usable provider in your order</option>
               <option value="zai">z.ai only — never bill OpenCode</option>
               <option value="opencode">OpenCode Go only</option>
               <option value="grok">Grok CLI — the assistant answers through the grok CLI's own login</option>
@@ -4011,6 +4020,14 @@ body.music-preview-active #idle-hud { display: none !important; }
           </label>
           <span class="muted" id="provider-readiness" role="status">checking…</span>
         </div>
+        <div class="row auto-order">
+          <span class="muted">Auto order — used when AI routing is Auto: the first usable provider answers, and with fallback enabled a failed HTTP route retries down the list.</span>
+          <ol class="auto-order-list" id="auto-order-list" aria-label="Auto provider preference order"></ol>
+          <div class="auto-order-add">
+            <select id="auto-order-add" aria-label="Provider to add to the auto order"></select>
+            <button class="ghost" id="auto-order-add-button" type="button">Add provider</button>
+          </div>
+        </div>
         <div class="row">
           <label class="muted">Routine model <span class="muted" id="model-scope-note">for this provider</span>
             <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model this provider uses for routine passes (replies, briefs, chat). Saved per provider; empty = the provider's own default." style="width: 15em">
@@ -4018,7 +4035,7 @@ body.music-preview-active #idle-hud { display: none !important; }
           <label class="muted">Heavy model
             <input type="text" id="ai-model-heavy" placeholder="same as routine" spellcheck="false" autocomplete="off" title="Model this provider uses for heavy passes (overseer, improver, analyzer read). Saved per provider; empty = routine's model where the provider has one, otherwise the provider's default." style="width: 15em">
           </label>
-          <label class="switch" title="Off by default: when z.ai fails, retry once on OpenCode Go (this bills OpenCode)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>OpenCode fallback on z.ai failure</span></label>
+          <label class="switch" title="Off by default: when an HTTP route fails, retry on the next usable HTTP provider in the auto order (this can bill that provider)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>Fall back to the next provider on failure</span></label>
         </div>
         <div class="row">
           <label class="muted">Model selection
@@ -24006,6 +24023,17 @@ body.music-preview-active #idle-hud { display: none !important; }
     state.projectId = event.detail?.projectId || null;
     state.projectResult = null;
     els.idea.value = "";
+    if (!state.projectId) {
+      // No project is open: clear the panel instead of scanning the seed store.
+      state.request += 1;
+      state.aiRequest += 1;
+      state.pending = null;
+      state.aiPending = false;
+      clearResult();
+      status("Open a project folder to analyse it.");
+      controls();
+      return;
+    }
     runProject();
   }
 
@@ -27647,6 +27675,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     if ($("auto-build")) $("auto-build").disabled = !api()?.assistantAutopilot || !buildMode().loaded || buildModeSaving || state.switching;
     if ($("agent-mode")) $("agent-mode").disabled = !api()?.assistantAutopilot || !agentMode().loaded || agentModeSaving || state.switching;
     $("reveal").disabled = !project()?.path || !api()?.shellReveal;
+    if ($("remove-project")) $("remove-project").disabled = !project()?.id || !api()?.projectsRemove || state.pending || state.switching || Boolean(state.busyAction);
     $("run-backlog").disabled = !state.activeId || !state.backlog || state.backlogUnavailable || !api()?.backlogControl || state.switching || Boolean(state.busyAction);
     for (const button of $("work-list").querySelectorAll("button")) {
       if (button.dataset.backlogAction) button.disabled = !api()?.backlogControl || state.switching || Boolean(state.busyAction);
@@ -27679,13 +27708,22 @@ body.music-preview-active #idle-hud { display: none !important; }
         button.addEventListener("click", () => selectProject(item.id));
         $("projects").append(button);
       }
-      if (!rows.length) $("projects").append(text("p", "ws-empty-project", api() ? "Your projects will appear here." : "Open the desktop app to connect your project folders."));
+      if (!rows.length) {
+        const empty = text("div", "ws-empty-project", "");
+        if (api()?.projectsAdd) {
+          empty.append(text("p", "", "No project is open yet. Choose a folder and Studio will analyse it and start there."));
+          const open = text("button", "primary", "Open a folder");
+          open.addEventListener("click", () => $("add-project").click());
+          empty.append(open);
+        } else empty.append(text("p", "", "Open the desktop app to connect your project folders."));
+        $("projects").append(empty);
+      }
     }
     const current = project();
     $("project-name").textContent = current?.name || "Your workspace";
     $("project-path").textContent = current?.path || "Pick a folder. Start a conversation. Make progress.";
     $("project-path").title = current?.path || "";
-    $("composer-context").textContent = current ? `In ${current.name}` : "Desktop app required";
+    $("composer-context").textContent = current ? `In ${current.name}` : "Open a folder to begin";
     controls();
   }
   function adoptProjects(result) {
@@ -27699,8 +27737,8 @@ body.music-preview-active #idle-hud { display: none !important; }
       state.tasks = []; state.ideas = []; state.backlog = null; state.backlogUnavailable = false; state.assistant = {}; state.status = {};
       state.filter = "open"; state.query = ""; state.limit = 20;
       $("work-search").value = "";
-      state.mode = storage.get(`mode.${state.activeId}`, "chat") === "work" ? "work" : "chat";
-      $("input").value = readDraft(state.activeId, state.mode);
+      state.mode = state.activeId ? (storage.get(`mode.${state.activeId}`, "chat") === "work" ? "work" : "chat") : "chat";
+      $("input").value = state.activeId ? readDraft(state.activeId, state.mode) : "";
       renderMode();
       createdTask = null;
       if ($("created-task")) $("created-task").hidden = true;
@@ -28116,6 +28154,9 @@ body.music-preview-active #idle-hud { display: none !important; }
   }
   async function refresh(force = false) {
     if (!api() || (!active() && !force)) return;
+    // No project is open: every panel stays in its first-run state until a
+    // folder is chosen, and the hidden seed store is never read.
+    if (!state.activeId) return true;
     if (refreshFlight && !force) return refreshFlight;
     const epoch = state.epoch;
     const sequence = ++readSequence;
@@ -28213,8 +28254,30 @@ body.music-preview-active #idle-hud { display: none !important; }
     $("add-project").addEventListener("click", async () => {
       if (state.pending || state.busyAction || state.switching) return;
       state.switching = true; controls();
-      try { const result = await api().projectsAdd(); if (result?.canceled || result?.cancelled) return; adoptProjects(guard(result)); await refresh(true); feedback("Project added. Select it in the sidebar to start working.", false, "sidebar"); }
-      catch (error) { feedback(error.message, true, "sidebar"); } finally { state.switching = false; controls(); }
+      try {
+        const result = await api().projectsAdd();
+        if (result?.canceled || result?.cancelled) return;
+        adoptProjects(guard(result));
+        await refresh(true);
+        if (result.selectedId) {
+          feedback(`Opened ${project()?.name || "your project"}. Analysing the folder now.`, false, "sidebar");
+          window.MefiAnalyzer?.open?.();
+        } else feedback("Project added. Select it in the sidebar to start working.", false, "sidebar");
+      } catch (error) { feedback(error.message, true, "sidebar"); } finally { state.switching = false; controls(); }
+    });
+    $("remove-project")?.addEventListener("click", async () => {
+      const current = project();
+      if (!current || state.pending || state.busyAction || state.switching) return;
+      const question = `Remove "${current.name}" from Studio's project list?\n\nThe folder and its local work stay on disk. Open the same folder again to restore them.`;
+      const approved = typeof window.confirm === "function" ? window.confirm(question) : false;
+      if (!approved) return;
+      state.switching = true; controls();
+      try {
+        adoptProjects(guard(await api().projectsRemove(current.id)));
+        if (state.activeId) await refresh(true);
+        feedback(`Removed ${current.name}. Its files and local work are still on disk.`, false, "sidebar");
+      } catch (error) { feedback(error.message, true, "sidebar"); }
+      finally { state.switching = false; controls(); }
     });
     $("reveal").addEventListener("click", () => api()?.shellReveal(project()?.path));
     $("stop-all")?.addEventListener("click", () => void stopAllAgents());
@@ -30179,7 +30242,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     const setupAssistant = document.getElementById("setup-assistant");
     const setupSelection = document.getElementById("setup-selection");
     const setupBuilders = document.getElementById("setup-builders");
-    const providerNames = { auto: "Auto (prefers z.ai)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
+    const providerNames = { auto: "Auto (your order)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
     const singleModelProviders = new Set(["grok", "claude", "antigravity", "lmstudio", "custom"]);
     function cliInstalled(id) {
       return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === id && cli.installed);
@@ -30190,16 +30253,29 @@ body.music-preview-active #idle-hud { display: none !important; }
       const flag = which === "zai" ? setup.routing?.hasZai : setup.routing?.hasOpenCode;
       return flag === true ? "key saved" : flag === false ? "no key saved" : "key unknown";
     }
+    // The auto order is tried top to bottom; usability here comes from the same
+    // flags the readiness line already reads (saved keys, installed CLIs, the
+    // local server), never a fresh probe.
+    const autoOrderOf = (routing) => Array.isArray(routing?.autoProviders) && routing.autoProviders.length ? routing.autoProviders : ["zai", "opencode"];
+    function autoProviderUsable(id) {
+      if (id === "zai") return setup.keys.zai === true || setup.routing?.hasZai === true;
+      if (id === "opencode") return setup.keys.opencode === true || setup.routing?.hasOpenCode === true;
+      if (id === "custom") return Boolean(setup.routing?.customEndpoint) && (setup.keys.custom === true || setup.routing?.hasCustom === true);
+      if (id === "lmstudio") return true;
+      return cliInstalled(id);
+    }
     function renderSetupState() {
       const routing = setup.routing;
       if (setup.routingError) setupAssistant.textContent = "status unavailable";
       else if (!routing) setupAssistant.textContent = "checking…";
       else {
         const provider = providerNames[routing.provider] ? routing.provider : "auto";
+        const order = autoOrderOf(routing);
+        const autoFirst = order.find((id) => autoProviderUsable(id));
         const detail = provider === "grok" || provider === "claude" || provider === "antigravity" ? "CLI login"
           : provider === "lmstudio" ? "no key needed"
           : provider === "custom" ? (routing.hasCustom ? "key saved" : "no key saved")
-          : provider === "auto" ? (setup.keys.zai ? "will use z.ai" : setup.keys.opencode ? "will use OpenCode Go" : cliInstalled("grok") ? "will use Grok CLI" : cliInstalled("claude") ? "will use Claude Code CLI" : cliInstalled("antigravity") ? "will use Antigravity CLI" : "save a key to connect")
+          : provider === "auto" ? (autoFirst ? `will use ${providerNames[autoFirst]}` : "no usable provider in this order yet")
           : keyState(provider);
         setupAssistant.textContent = `${providerNames[provider]} · ${detail}`;
       }
@@ -30217,7 +30293,10 @@ body.music-preview-active #idle-hud { display: none !important; }
       const readiness = document.getElementById("provider-readiness");
       const selected = routing && providerNames[routing.provider] ? routing.provider : null;
       if (!selected) readiness.textContent = "checking…";
-      else if (selected === "auto") readiness.textContent = setup.keys.zai ? "z.ai key saved — auto uses it" : setup.keys.opencode ? "OpenCode key saved — auto uses it" : "no key yet — auto can still use an installed CLI";
+      else if (selected === "auto") {
+        const order = autoOrderOf(routing).map((id) => `${providerNames[id] ?? id}${autoProviderUsable(id) ? "" : " (unavailable)"}`);
+        readiness.textContent = `auto order: ${order.join(" → ")}`;
+      }
       else if (selected === "zai" || selected === "opencode") readiness.textContent = `${keyState(selected)} — this provider's saved model applies`;
       else if (selected === "custom") readiness.textContent = `${routing.customEndpoint ? "endpoint saved" : "no endpoint saved"}, ${setup.keys.custom ? "key saved" : "no key saved"}`;
       else if (selected === "lmstudio") readiness.textContent = "local server — no key needed; its loaded model is detected automatically";
@@ -30326,10 +30405,11 @@ body.music-preview-active #idle-hud { display: none !important; }
     });
     refreshJev();
 
-    // AI routing: who pays for assistant calls. Auto prefers the z.ai plan;
-    // the OpenCode fallback switch exists so nothing bills OpenCode by surprise.
-    // Provider choice and model selection are independent; explicit role models
-    // take priority over Jev. Status refreshes never erase unsaved model inputs.
+    // AI routing: who pays for assistant calls. Auto walks the owner's saved
+    // provider order (first usable wins); the fallback switch exists so nothing
+    // bills another provider by surprise. Provider choice and model selection
+    // are independent; explicit role models take priority over Jev. Status
+    // refreshes never erase unsaved model inputs.
     const providerSelect = document.getElementById("ai-provider");
     const modelSelection = document.getElementById("ai-model-selection");
     const routingStatus = document.getElementById("ai-routing-status");
@@ -30337,6 +30417,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     const routingEvidence = document.getElementById("ai-routing-evidence");
     const routingRefresh = document.getElementById("ai-routing-refresh");
     const fallbackToggle = document.getElementById("ai-fallback");
+    const autoOrderList = document.getElementById("auto-order-list");
+    const autoOrderAdd = document.getElementById("auto-order-add");
+    const autoOrderAddButton = document.getElementById("auto-order-add-button");
     const modelRoutine = document.getElementById("ai-model-routine");
     const modelHeavy = document.getElementById("ai-model-heavy");
     const executorCli = document.getElementById("executor-cli");
@@ -30378,7 +30461,10 @@ body.music-preview-active #idle-hud { display: none !important; }
         if (syncControls) {
           providerSelect.value = routing.provider;
           modelSelection.value = routing.modelSelection ?? "jev";
-          fallbackToggle.checked = routing.fallbackOpenCode;
+          fallbackToggle.checked = routing.autoFallback === true;
+          autoOrder = autoOrderOf(routing);
+          renderAutoOrder();
+          renderAutoOrderAdd();
           // Models follow the selected provider: the keyed HTTP routes (and
           // "auto") may show the role-wide fallback, CLI and local routes show
           // only what was saved for them.
@@ -30425,10 +30511,74 @@ body.music-preview-active #idle-hud { display: none !important; }
         if (read === routingRead) routingRefresh.disabled = false;
       }
     }
-    const routingControls = [providerSelect, modelSelection, fallbackToggle, modelRoutine, modelHeavy, executorCli, executorModel, lmStudioEndpoint, customEndpoint];
+    // Auto order editor: the host stores the same ordered array. The editor
+    // only reorders, adds and removes, then saves the whole list; every save
+    // re-reads routing so the controls stay authoritative.
+    const autoProviderIds = ["zai", "opencode", "grok", "claude", "antigravity", "lmstudio", "custom"];
+    let autoOrder = ["zai", "opencode"];
+    function renderAutoOrder() {
+      autoOrderList.replaceChildren(...autoOrder.map((id, index) => {
+        const item = document.createElement("li");
+        item.className = "auto-order-item";
+        item.dataset.provider = id;
+        const position = document.createElement("span");
+        position.className = "auto-order-index";
+        position.textContent = String(index + 1);
+        const name = document.createElement("span");
+        name.className = "auto-order-name";
+        name.textContent = providerNames[id] ?? id;
+        const control = (label, action, disabled) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "ghost";
+          button.textContent = label;
+          button.disabled = disabled;
+          button.dataset.action = action;
+          button.setAttribute("aria-label", `${action === "remove" ? "Remove" : action === "up" ? "Move up" : "Move down"} ${providerNames[id] ?? id}`);
+          button.addEventListener("click", () => {
+            if (action === "remove") {
+              if (autoOrder.length === 1) return;
+              return saveAutoOrder(autoOrder.filter((entry) => entry !== id), `${providerNames[id] ?? id} removed from the auto order`);
+            }
+            const target = index + (action === "up" ? -1 : 1);
+            if (target < 0 || target >= autoOrder.length) return;
+            const next = [...autoOrder];
+            [next[index], next[target]] = [next[target], next[index]];
+            return saveAutoOrder(next, `auto order: ${next.map((entry) => providerNames[entry] ?? entry).join(" → ")}`);
+          });
+          return button;
+        };
+        item.append(position, name, control("↑", "up", index === 0), control("↓", "down", index === autoOrder.length - 1), control("✕", "remove", autoOrder.length === 1));
+        return item;
+      }));
+    }
+    function renderAutoOrderAdd() {
+      const remaining = autoProviderIds.filter((id) => !autoOrder.includes(id));
+      autoOrderAdd.replaceChildren(...remaining.map((id) => {
+        const option = document.createElement("option");
+        option.value = id;
+        option.textContent = providerNames[id] ?? id;
+        return option;
+      }));
+      autoOrderAdd.disabled = remaining.length === 0;
+      autoOrderAddButton.disabled = remaining.length === 0;
+    }
+    function saveAutoOrder(next, confirmation) {
+      autoOrder = next;
+      renderAutoOrder();
+      renderAutoOrderAdd();
+      return saveRouting({ autoProviders: next }, confirmation, { syncControls: true });
+    }
+    autoOrderAddButton.addEventListener("click", () => {
+      const id = autoOrderAdd.value;
+      if (!autoProviderIds.includes(id) || autoOrder.includes(id)) return;
+      return saveAutoOrder([...autoOrder, id], `${providerNames[id] ?? id} added to the auto order`);
+    });
+    const routingControls = [providerSelect, modelSelection, fallbackToggle, autoOrderAdd, autoOrderAddButton, modelRoutine, modelHeavy, executorCli, executorModel, lmStudioEndpoint, customEndpoint];
     for (const control of routingControls) control.disabled = true;
     loadAiRouting({ syncControls: true }).finally(() => {
       for (const control of routingControls) control.disabled = false;
+      renderAutoOrderAdd();
     });
     routingRefresh.addEventListener("click", () => loadAiRouting());
     async function saveRouting(payload, confirmation, { syncControls = false } = {}) {
@@ -30446,7 +30596,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     // route's model id is never left in a field that now belongs to another.
     providerSelect.addEventListener("change", () => saveRouting({ provider: providerSelect.value }, `assistant answers via ${providerSelect.value}`, { syncControls: true }));
     modelSelection.addEventListener("change", () => saveRouting({ modelSelection: modelSelection.value }, `model selection: ${modelSelection.value}`));
-    fallbackToggle.addEventListener("change", () => saveRouting({ fallbackOpenCode: fallbackToggle.checked }, "provider fallback saved"));
+    fallbackToggle.addEventListener("change", () => saveRouting({ autoFallback: fallbackToggle.checked }, "provider fallback saved"));
     const saveModel = (which, value) => {
       const provider = providerNames[providerSelect.value] ? providerSelect.value : "auto";
       const trimmed = value.trim();

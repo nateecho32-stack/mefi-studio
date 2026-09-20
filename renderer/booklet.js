@@ -370,7 +370,7 @@
     const setupAssistant = document.getElementById("setup-assistant");
     const setupSelection = document.getElementById("setup-selection");
     const setupBuilders = document.getElementById("setup-builders");
-    const providerNames = { auto: "Auto (prefers z.ai)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
+    const providerNames = { auto: "Auto (your order)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
     const singleModelProviders = new Set(["grok", "claude", "antigravity", "lmstudio", "custom"]);
     function cliInstalled(id) {
       return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === id && cli.installed);
@@ -381,16 +381,29 @@
       const flag = which === "zai" ? setup.routing?.hasZai : setup.routing?.hasOpenCode;
       return flag === true ? "key saved" : flag === false ? "no key saved" : "key unknown";
     }
+    // The auto order is tried top to bottom; usability here comes from the same
+    // flags the readiness line already reads (saved keys, installed CLIs, the
+    // local server), never a fresh probe.
+    const autoOrderOf = (routing) => Array.isArray(routing?.autoProviders) && routing.autoProviders.length ? routing.autoProviders : ["zai", "opencode"];
+    function autoProviderUsable(id) {
+      if (id === "zai") return setup.keys.zai === true || setup.routing?.hasZai === true;
+      if (id === "opencode") return setup.keys.opencode === true || setup.routing?.hasOpenCode === true;
+      if (id === "custom") return Boolean(setup.routing?.customEndpoint) && (setup.keys.custom === true || setup.routing?.hasCustom === true);
+      if (id === "lmstudio") return true;
+      return cliInstalled(id);
+    }
     function renderSetupState() {
       const routing = setup.routing;
       if (setup.routingError) setupAssistant.textContent = "status unavailable";
       else if (!routing) setupAssistant.textContent = "checking…";
       else {
         const provider = providerNames[routing.provider] ? routing.provider : "auto";
+        const order = autoOrderOf(routing);
+        const autoFirst = order.find((id) => autoProviderUsable(id));
         const detail = provider === "grok" || provider === "claude" || provider === "antigravity" ? "CLI login"
           : provider === "lmstudio" ? "no key needed"
           : provider === "custom" ? (routing.hasCustom ? "key saved" : "no key saved")
-          : provider === "auto" ? (setup.keys.zai ? "will use z.ai" : setup.keys.opencode ? "will use OpenCode Go" : cliInstalled("grok") ? "will use Grok CLI" : cliInstalled("claude") ? "will use Claude Code CLI" : cliInstalled("antigravity") ? "will use Antigravity CLI" : "save a key to connect")
+          : provider === "auto" ? (autoFirst ? `will use ${providerNames[autoFirst]}` : "no usable provider in this order yet")
           : keyState(provider);
         setupAssistant.textContent = `${providerNames[provider]} · ${detail}`;
       }
@@ -408,7 +421,10 @@
       const readiness = document.getElementById("provider-readiness");
       const selected = routing && providerNames[routing.provider] ? routing.provider : null;
       if (!selected) readiness.textContent = "checking…";
-      else if (selected === "auto") readiness.textContent = setup.keys.zai ? "z.ai key saved — auto uses it" : setup.keys.opencode ? "OpenCode key saved — auto uses it" : "no key yet — auto can still use an installed CLI";
+      else if (selected === "auto") {
+        const order = autoOrderOf(routing).map((id) => `${providerNames[id] ?? id}${autoProviderUsable(id) ? "" : " (unavailable)"}`);
+        readiness.textContent = `auto order: ${order.join(" → ")}`;
+      }
       else if (selected === "zai" || selected === "opencode") readiness.textContent = `${keyState(selected)} — this provider's saved model applies`;
       else if (selected === "custom") readiness.textContent = `${routing.customEndpoint ? "endpoint saved" : "no endpoint saved"}, ${setup.keys.custom ? "key saved" : "no key saved"}`;
       else if (selected === "lmstudio") readiness.textContent = "local server — no key needed; its loaded model is detected automatically";
@@ -517,10 +533,11 @@
     });
     refreshJev();
 
-    // AI routing: who pays for assistant calls. Auto prefers the z.ai plan;
-    // the OpenCode fallback switch exists so nothing bills OpenCode by surprise.
-    // Provider choice and model selection are independent; explicit role models
-    // take priority over Jev. Status refreshes never erase unsaved model inputs.
+    // AI routing: who pays for assistant calls. Auto walks the owner's saved
+    // provider order (first usable wins); the fallback switch exists so nothing
+    // bills another provider by surprise. Provider choice and model selection
+    // are independent; explicit role models take priority over Jev. Status
+    // refreshes never erase unsaved model inputs.
     const providerSelect = document.getElementById("ai-provider");
     const modelSelection = document.getElementById("ai-model-selection");
     const routingStatus = document.getElementById("ai-routing-status");
@@ -528,6 +545,9 @@
     const routingEvidence = document.getElementById("ai-routing-evidence");
     const routingRefresh = document.getElementById("ai-routing-refresh");
     const fallbackToggle = document.getElementById("ai-fallback");
+    const autoOrderList = document.getElementById("auto-order-list");
+    const autoOrderAdd = document.getElementById("auto-order-add");
+    const autoOrderAddButton = document.getElementById("auto-order-add-button");
     const modelRoutine = document.getElementById("ai-model-routine");
     const modelHeavy = document.getElementById("ai-model-heavy");
     const executorCli = document.getElementById("executor-cli");
@@ -569,7 +589,10 @@
         if (syncControls) {
           providerSelect.value = routing.provider;
           modelSelection.value = routing.modelSelection ?? "jev";
-          fallbackToggle.checked = routing.fallbackOpenCode;
+          fallbackToggle.checked = routing.autoFallback === true;
+          autoOrder = autoOrderOf(routing);
+          renderAutoOrder();
+          renderAutoOrderAdd();
           // Models follow the selected provider: the keyed HTTP routes (and
           // "auto") may show the role-wide fallback, CLI and local routes show
           // only what was saved for them.
@@ -616,10 +639,74 @@
         if (read === routingRead) routingRefresh.disabled = false;
       }
     }
-    const routingControls = [providerSelect, modelSelection, fallbackToggle, modelRoutine, modelHeavy, executorCli, executorModel, lmStudioEndpoint, customEndpoint];
+    // Auto order editor: the host stores the same ordered array. The editor
+    // only reorders, adds and removes, then saves the whole list; every save
+    // re-reads routing so the controls stay authoritative.
+    const autoProviderIds = ["zai", "opencode", "grok", "claude", "antigravity", "lmstudio", "custom"];
+    let autoOrder = ["zai", "opencode"];
+    function renderAutoOrder() {
+      autoOrderList.replaceChildren(...autoOrder.map((id, index) => {
+        const item = document.createElement("li");
+        item.className = "auto-order-item";
+        item.dataset.provider = id;
+        const position = document.createElement("span");
+        position.className = "auto-order-index";
+        position.textContent = String(index + 1);
+        const name = document.createElement("span");
+        name.className = "auto-order-name";
+        name.textContent = providerNames[id] ?? id;
+        const control = (label, action, disabled) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "ghost";
+          button.textContent = label;
+          button.disabled = disabled;
+          button.dataset.action = action;
+          button.setAttribute("aria-label", `${action === "remove" ? "Remove" : action === "up" ? "Move up" : "Move down"} ${providerNames[id] ?? id}`);
+          button.addEventListener("click", () => {
+            if (action === "remove") {
+              if (autoOrder.length === 1) return;
+              return saveAutoOrder(autoOrder.filter((entry) => entry !== id), `${providerNames[id] ?? id} removed from the auto order`);
+            }
+            const target = index + (action === "up" ? -1 : 1);
+            if (target < 0 || target >= autoOrder.length) return;
+            const next = [...autoOrder];
+            [next[index], next[target]] = [next[target], next[index]];
+            return saveAutoOrder(next, `auto order: ${next.map((entry) => providerNames[entry] ?? entry).join(" → ")}`);
+          });
+          return button;
+        };
+        item.append(position, name, control("↑", "up", index === 0), control("↓", "down", index === autoOrder.length - 1), control("✕", "remove", autoOrder.length === 1));
+        return item;
+      }));
+    }
+    function renderAutoOrderAdd() {
+      const remaining = autoProviderIds.filter((id) => !autoOrder.includes(id));
+      autoOrderAdd.replaceChildren(...remaining.map((id) => {
+        const option = document.createElement("option");
+        option.value = id;
+        option.textContent = providerNames[id] ?? id;
+        return option;
+      }));
+      autoOrderAdd.disabled = remaining.length === 0;
+      autoOrderAddButton.disabled = remaining.length === 0;
+    }
+    function saveAutoOrder(next, confirmation) {
+      autoOrder = next;
+      renderAutoOrder();
+      renderAutoOrderAdd();
+      return saveRouting({ autoProviders: next }, confirmation, { syncControls: true });
+    }
+    autoOrderAddButton.addEventListener("click", () => {
+      const id = autoOrderAdd.value;
+      if (!autoProviderIds.includes(id) || autoOrder.includes(id)) return;
+      return saveAutoOrder([...autoOrder, id], `${providerNames[id] ?? id} added to the auto order`);
+    });
+    const routingControls = [providerSelect, modelSelection, fallbackToggle, autoOrderAdd, autoOrderAddButton, modelRoutine, modelHeavy, executorCli, executorModel, lmStudioEndpoint, customEndpoint];
     for (const control of routingControls) control.disabled = true;
     loadAiRouting({ syncControls: true }).finally(() => {
       for (const control of routingControls) control.disabled = false;
+      renderAutoOrderAdd();
     });
     routingRefresh.addEventListener("click", () => loadAiRouting());
     async function saveRouting(payload, confirmation, { syncControls = false } = {}) {
@@ -637,7 +724,7 @@
     // route's model id is never left in a field that now belongs to another.
     providerSelect.addEventListener("change", () => saveRouting({ provider: providerSelect.value }, `assistant answers via ${providerSelect.value}`, { syncControls: true }));
     modelSelection.addEventListener("change", () => saveRouting({ modelSelection: modelSelection.value }, `model selection: ${modelSelection.value}`));
-    fallbackToggle.addEventListener("change", () => saveRouting({ fallbackOpenCode: fallbackToggle.checked }, "provider fallback saved"));
+    fallbackToggle.addEventListener("change", () => saveRouting({ autoFallback: fallbackToggle.checked }, "provider fallback saved"));
     const saveModel = (which, value) => {
       const provider = providerNames[providerSelect.value] ? providerSelect.value : "auto";
       const trimmed = value.trim();

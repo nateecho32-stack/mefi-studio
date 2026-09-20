@@ -68,7 +68,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
       releaseWrite: (files, id) => { for (const file of files) if (registry.get(file) === id) registry.delete(file); },
     }, backlog, taskContext, taskHandoffs, agentModes, taskDelegation, executorResume,
     projectSwitching: false, executorUpdateHold: () => null, assistantStopping: false,
-    projects: { current: () => ({ id: "fixture", path: root }), active: () => ({ id: "fixture", path: root }), run: (_project, fn) => fn() },
+    projects: { current: () => ({ id: "fixture", path: root }), active: () => ({ id: "fixture", path: root }), open: () => ({ id: "fixture", path: root }), run: (_project, fn) => fn() },
     projectRoot: () => root, projectDataPath: (key) => path.join(root, key),
     getMachine: async () => machine,
     measureWorkerLag: async () => 0,

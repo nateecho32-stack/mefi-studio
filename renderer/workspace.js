@@ -64,6 +64,7 @@
     if ($("auto-build")) $("auto-build").disabled = !api()?.assistantAutopilot || !buildMode().loaded || buildModeSaving || state.switching;
     if ($("agent-mode")) $("agent-mode").disabled = !api()?.assistantAutopilot || !agentMode().loaded || agentModeSaving || state.switching;
     $("reveal").disabled = !project()?.path || !api()?.shellReveal;
+    if ($("remove-project")) $("remove-project").disabled = !project()?.id || !api()?.projectsRemove || state.pending || state.switching || Boolean(state.busyAction);
     $("run-backlog").disabled = !state.activeId || !state.backlog || state.backlogUnavailable || !api()?.backlogControl || state.switching || Boolean(state.busyAction);
     for (const button of $("work-list").querySelectorAll("button")) {
       if (button.dataset.backlogAction) button.disabled = !api()?.backlogControl || state.switching || Boolean(state.busyAction);
@@ -96,13 +97,22 @@
         button.addEventListener("click", () => selectProject(item.id));
         $("projects").append(button);
       }
-      if (!rows.length) $("projects").append(text("p", "ws-empty-project", api() ? "Your projects will appear here." : "Open the desktop app to connect your project folders."));
+      if (!rows.length) {
+        const empty = text("div", "ws-empty-project", "");
+        if (api()?.projectsAdd) {
+          empty.append(text("p", "", "No project is open yet. Choose a folder and Studio will analyse it and start there."));
+          const open = text("button", "primary", "Open a folder");
+          open.addEventListener("click", () => $("add-project").click());
+          empty.append(open);
+        } else empty.append(text("p", "", "Open the desktop app to connect your project folders."));
+        $("projects").append(empty);
+      }
     }
     const current = project();
     $("project-name").textContent = current?.name || "Your workspace";
     $("project-path").textContent = current?.path || "Pick a folder. Start a conversation. Make progress.";
     $("project-path").title = current?.path || "";
-    $("composer-context").textContent = current ? `In ${current.name}` : "Desktop app required";
+    $("composer-context").textContent = current ? `In ${current.name}` : "Open a folder to begin";
     controls();
   }
   function adoptProjects(result) {
@@ -116,8 +126,8 @@
       state.tasks = []; state.ideas = []; state.backlog = null; state.backlogUnavailable = false; state.assistant = {}; state.status = {};
       state.filter = "open"; state.query = ""; state.limit = 20;
       $("work-search").value = "";
-      state.mode = storage.get(`mode.${state.activeId}`, "chat") === "work" ? "work" : "chat";
-      $("input").value = readDraft(state.activeId, state.mode);
+      state.mode = state.activeId ? (storage.get(`mode.${state.activeId}`, "chat") === "work" ? "work" : "chat") : "chat";
+      $("input").value = state.activeId ? readDraft(state.activeId, state.mode) : "";
       renderMode();
       createdTask = null;
       if ($("created-task")) $("created-task").hidden = true;
@@ -533,6 +543,9 @@
   }
   async function refresh(force = false) {
     if (!api() || (!active() && !force)) return;
+    // No project is open: every panel stays in its first-run state until a
+    // folder is chosen, and the hidden seed store is never read.
+    if (!state.activeId) return true;
     if (refreshFlight && !force) return refreshFlight;
     const epoch = state.epoch;
     const sequence = ++readSequence;
@@ -630,8 +643,30 @@
     $("add-project").addEventListener("click", async () => {
       if (state.pending || state.busyAction || state.switching) return;
       state.switching = true; controls();
-      try { const result = await api().projectsAdd(); if (result?.canceled || result?.cancelled) return; adoptProjects(guard(result)); await refresh(true); feedback("Project added. Select it in the sidebar to start working.", false, "sidebar"); }
-      catch (error) { feedback(error.message, true, "sidebar"); } finally { state.switching = false; controls(); }
+      try {
+        const result = await api().projectsAdd();
+        if (result?.canceled || result?.cancelled) return;
+        adoptProjects(guard(result));
+        await refresh(true);
+        if (result.selectedId) {
+          feedback(`Opened ${project()?.name || "your project"}. Analysing the folder now.`, false, "sidebar");
+          window.MefiAnalyzer?.open?.();
+        } else feedback("Project added. Select it in the sidebar to start working.", false, "sidebar");
+      } catch (error) { feedback(error.message, true, "sidebar"); } finally { state.switching = false; controls(); }
+    });
+    $("remove-project")?.addEventListener("click", async () => {
+      const current = project();
+      if (!current || state.pending || state.busyAction || state.switching) return;
+      const question = `Remove "${current.name}" from Studio's project list?\n\nThe folder and its local work stay on disk. Open the same folder again to restore them.`;
+      const approved = typeof window.confirm === "function" ? window.confirm(question) : false;
+      if (!approved) return;
+      state.switching = true; controls();
+      try {
+        adoptProjects(guard(await api().projectsRemove(current.id)));
+        if (state.activeId) await refresh(true);
+        feedback(`Removed ${current.name}. Its files and local work are still on disk.`, false, "sidebar");
+      } catch (error) { feedback(error.message, true, "sidebar"); }
+      finally { state.switching = false; controls(); }
     });
     $("reveal").addEventListener("click", () => api()?.shellReveal(project()?.path));
     $("stop-all")?.addEventListener("click", () => void stopAllAgents());

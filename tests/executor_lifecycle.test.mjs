@@ -44,6 +44,8 @@ test("session evidence belongs to the exact user dispatch, never the nearest con
     assert.equal(eyes.findRunSession({ dbPath: file, runId: "run_100_9", since: 90 }), null);
     assert.equal(eyes.findRunSession({ dbPath: file, runId: "run_100_2", since: 101 }), null);
     const projects = createProjects({ defaultRoot: folder, studioRoot: folder, isDirectory: () => true });
+    const project = projects.add(folder);
+    projects.select(project.id);
     const scoped = projects.eyes(eyes);
     assert.equal(scoped.findRunSession({ dbPath: file, runId: "run_100_2" }).id, "ours");
     add("foreign-project", "This dispatch is run run_100_3.", { directory: path.join(os.tmpdir(), "another-project") });
@@ -311,7 +313,7 @@ function dispatchHost({ interrupt = null, refuse = false, throwClaim = false, ed
       releaseWrite: (files, owner) => { releases.push(owner); for (const file of files) if (registered.get(file) === owner) registered.delete(file); },
     },
     projectSwitching: false, assistantState: { status: "running" }, executorUpdateHold: () => hold,
-    projects: { current: () => ({ id: "external", path: root }) }, projectRoot: () => root,
+    projects: { current: () => ({ id: "external", path: root }), open: () => ({ id: "external", path: root }) }, projectRoot: () => root,
     measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => {
       leases += 1;
       if (leases === 2 && interrupt === "after-claim") hold = "waiting for workers before restart";

@@ -148,6 +148,7 @@ test("timer still settles and dispatches backlog but does not run duplicate expa
   const env = vm.createContext({
     Date, projectSwitching: false, SMOKE: false, CAPTURE: false, CLI_MODE: false,
     assistantState: { status: "running", prefs: {} }, autopilot: { enabled: true, execute: true }, TASKS_PATH: "tasks",
+    projects: { open: () => ({ id: "fixture" }) },
     getEyes: async () => ({ readJson: async () => [] }),
     autopilotProactivePass: async () => ({ added: 0 }), growthBoardFacts: async () => ({ growthHeld: true }),
     runAssistant: () => assert.fail("automatic discovery must wait for existing work"),

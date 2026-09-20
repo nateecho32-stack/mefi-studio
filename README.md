@@ -59,10 +59,11 @@ caches, and neither uploads anything.
 
 ### One repository, many projects
 
-Studio uses its own root as the default working repository; set
-`MEFI_STUDIO_REPO` to work in another checkout. The optional Ruins Runner
-integration uses `MEFI_STUDIO_GAME_ROOT`, or a sibling `2d Trippy Hell` folder
-when present — a fresh clone works without the game.
+A fresh install opens with no project: choose a folder in **Projects** and
+Studio scans it locally before any work starts. Set `MEFI_STUDIO_REPO` to open
+a working repository directly for headless or developer launches. The optional
+Ruins Runner integration uses `MEFI_STUDIO_GAME_ROOT`, or a sibling
+`2d Trippy Hell` folder when present — a fresh clone works without the game.
 
 ## Highlights
 
@@ -158,10 +159,12 @@ project's ignored local `planning.json`.
   a compact version sits at the bottom of the Command rail, and the full view
   is the Model Lab **Tracker** tab. Opening it and every five minutes while it
   is visible is the only time the account is asked; no prompts are sent.
-- **AI routing** picks who pays — Auto (prefer z.ai), z.ai only, OpenCode Go
-  only, the Grok, Claude Code or Antigravity CLIs on their own logins, a local
-  LM Studio server, or a custom OpenAI-compatible endpoint with your own key —
-  with an opt-in fallback. **Model selection** uses Jev or fixed defaults.
+- **AI routing** picks who pays — Auto walks an ordered provider list you edit
+  in Settings (the first usable provider answers, and the opt-in fallback
+  walks down the list), plus z.ai only, OpenCode Go only, the Grok, Claude
+  Code or Antigravity CLIs on their own logins, a local LM Studio server, or a
+  custom OpenAI-compatible endpoint with your own key. **Model selection** uses
+  Jev or fixed defaults.
 - **Models are saved per provider and per builder CLI**, so switching routes
   never carries one provider's model id into another; a provider with nothing
   saved uses its own default, and the keyed HTTP routes keep the role-wide
@@ -293,7 +296,7 @@ like `Run Dev Tool (LOVE2D).cmd` (windowed LÖVE 11.5 with
 
 | Guide | What it covers |
 | --- | --- |
-| [GETTING_STARTED.md](GETTING_STARTED.md) | First launch and your first project |
+| [GETTING_STARTED.md](GETTING_STARTED.md) | First launch, new-machine setup and your first project |
 | [TESTRUNS.md](TESTRUNS.md) | Every test run, workload settings and measured results |
 | [FEATURE_AUDIT.md](FEATURE_AUDIT.md) | Verified scope and remaining gaps |
 | [PERFORMANCE.md](PERFORMANCE.md) | Startup measurements and reproduction |

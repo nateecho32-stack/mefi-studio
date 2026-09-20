@@ -1,8 +1,9 @@
 """Provider routing and coding-CLI contracts for Mefi's Studio AI+ (standalone repository).
 
 Pins the z.ai GLM Coding Plan integration: the z.ai key lives in its own
-encrypted settings field, the assistant's provider router prefers z.ai under
-"auto" and never silently spends OpenCode credit, GLM 5.3 Flash is the routine
+encrypted settings field, the assistant's provider router walks the owner's
+ordered auto provider list (first usable answers) and never silently spends
+another account's credit, GLM 5.3 Flash is the routine
 route and glm-5.3 the heavy one, the autopilot executor's `opencode run` jobs
 ride the Studio-managed `mefi-zai` provider through OPENCODE_CONFIG_CONTENT
 (key passed per-process, never written to disk or logged), the CLI panel
@@ -153,13 +154,22 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn('AI_PROVIDERS.includes(settings.aiProvider)', body)
         self.assertIn('decryptKey(settings, "zaiApiKeyEncrypted")', body)
         self.assertIn('decryptKey(settings, "apiKeyEncrypted")', body)
-        # Explicit "opencode" (or auto with no z.ai key) is the only way the
-        # OpenCode key is touched; explicit "zai" without a key is an error,
-        # not a fallback to the other account.
-        self.assertIn('provider === "opencode" || (provider === "auto" && !zaiKey)', body)
+        # Explicit picks are absolute: explicit "opencode" is the only way the
+        # OpenCode key is touched without the order, and explicit "zai" without
+        # a key is an error, not a fallback to the other account.
+        self.assertIn('if (provider === "opencode")', body)
         self.assertIn('"no z.ai key saved', body)
-        # The opt-in fallback requires all three: auto + toggle + a Go key.
-        self.assertIn('provider === "auto" && settings.aiFallbackOpenCode === true && goKey', body)
+        # Auto is the owner's ordered list: each entry resolves to a candidate,
+        # the first usable one answers, and the failure walk is opt-in.
+        auto = _function_body(self.main, "resolveAutoRoute")
+        self.assertTrue(auto, "resolveAutoRoute must exist")
+        self.assertIn("normalizeAutoProviders(settings.aiAutoProviders)", auto)
+        self.assertIn("autoFallbackEnabled(settings)", auto)
+        self.assertIn("AUTO_PROVIDER_NAMES[id]", auto, "an unusable order names itself in the error")
+        candidate = _function_body(self.main, "resolveAiCandidate")
+        self.assertTrue(candidate, "resolveAiCandidate must exist")
+        self.assertIn('assistantModelOverride(settings, role, "zai")', candidate)
+        self.assertIn("grokCliAvailable()", candidate, "an auto CLI entry is skipped when its binary is missing")
         # The OpenCode session header only rides the OpenCode route — z.ai
         # never receives an x-opencode-session header. assistantFetch splits
         # its HTTP half into httpAssistantCall (the grok-CLI fallback lands
@@ -167,8 +177,32 @@ class MefiStudioRoutingTests(unittest.TestCase):
         fetch = _function_body(self.main, "assistantFetch")
         http = _function_body(self.main, "httpAssistantCall")
         self.assertTrue(http, "httpAssistantCall must exist — the grok fallback lands on it")
-        self.assertIn('route.provider === "opencode" ? await assistantSessionId() : null', http)
+        self.assertIn('candidate.provider === "opencode" ? await assistantSessionId() : null', http)
+        self.assertIn("route.fallbacks", http, "the fallback walk follows the saved order")
         self.assertIn('resolveAiRoute(role, { allowCli: false })', fetch, "a failed CLI call falls back to the keyed HTTP routes")
+
+    def test_auto_provider_order_is_normalized_validated_and_saved(self):
+        # The saved order is the user's preference list: ordered, deduped,
+        # restricted to the pool, and never empty (auto needs somewhere to go).
+        normalize = _function_body(self.main, "normalizeAutoProviders")
+        self.assertTrue(normalize, "normalizeAutoProviders must exist")
+        self.assertIn("AI_AUTO_PROVIDERS.includes(id)", normalize)
+        self.assertIn("!order.includes(id)", normalize)
+        self.assertIn('["zai", "opencode"]', normalize)
+        self.assertIn('AI_AUTO_PROVIDERS = ["zai", "opencode", "grok", "claude", "antigravity", "lmstudio", "custom"]', self.main)
+        # The opt-in fallback switch generalized: aiAutoFallback first, the
+        # older aiFallbackOpenCode field honored for settings already written.
+        fallback = _function_body(self.main, "autoFallbackEnabled")
+        self.assertTrue(fallback, "autoFallbackEnabled must exist")
+        self.assertIn("settings.aiAutoFallback !== undefined", fallback)
+        self.assertIn("settings.aiFallbackOpenCode === true", fallback)
+        # The routing IPC exposes the order and saves it whole.
+        routing = _function_body(self.main, "registerIpc")
+        self.assertIn("autoProviders: normalizeAutoProviders(settings.aiAutoProviders)", routing)
+        self.assertIn("autoFallback: autoFallbackEnabled(settings)", routing)
+        self.assertIn("settings.aiAutoProviders = order", routing)
+        self.assertIn("auto provider order needs at least one provider", routing)
+        self.assertIn("unknown auto provider:", routing)
 
     def test_zai_route_uses_the_coding_plan_endpoint_and_glm_models(self):
         self.assertIn('ZAI_ENDPOINT = "https://api.z.ai/api/coding/paas/v4/chat/completions"', self.main)
@@ -179,7 +213,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         fetch = _function_body(self.main, "assistantFetch")
         http = _function_body(self.main, "httpAssistantCall")
         # glm-5.3 always reasons; its effort knob differs from the flash shape.
-        self.assertIn('route.model === ZAI_MODEL_HEAVY', http)
+        self.assertIn('candidate.model === ZAI_MODEL_HEAVY', http)
         self.assertIn('body.thinking = { type: "enabled" }', http)
         # The heavy route goes to the passes that earn it, not every call.
         self.assertIn('mode === "improve" ? "heavy" : "routine"', self.main)
@@ -191,6 +225,9 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn('provider === "opencode"', route, "an explicit opencode pick never injects mefi-zai")
         self.assertIn('"AI routing is z.ai-only but no z.ai key is saved"', route)
         self.assertIn("mefi-zai/${ZAI_MODEL_ROUTINE}", route)
+        self.assertIn("normalizeAutoProviders(settings.aiAutoProviders)", route, "the builder route follows the saved auto order")
+        self.assertIn('order.indexOf("zai")', route)
+        self.assertIn('order.indexOf("opencode")', route)
         self.assertIn("glm-5.3-flash", route, "queue-draining builders ride flash, not the heavy glm-5.3 route")
         self.assertNotIn("ZAI_MODEL_HEAVY", route, "the heavy model is overseer/improve, not a 24/7 worker")
         spawn = _function_body(self.main, "spawnNextJob")
@@ -327,6 +364,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         assistant = _function_body(self.main, "runAssistant")
         self.assertRegex(assistant, r'keyless = provider === "grok".*provider === "claude".*provider === "lmstudio"')
         self.assertIn("settings.customApiKeyEncrypted", assistant, "a custom key counts as a saved key")
+        self.assertIn("normalizeAutoProviders(settings.aiAutoProviders)", assistant, "an auto order with a keyless route also skips the key gate")
 
     def test_mefi_zai_provider_config_shape(self):
         body = _function_body(self.main, "zaiProviderConfig")
@@ -367,7 +405,8 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertRegex(planner, r'keys\.zai \? "zai"\s*: keys\.opencode \? "opencode"', "a saved key outranks an installed CLI")
         self.assertRegex(planner, r'modelSelection = (?:jevReady|keys\.gateway) \? "jev" : "fixed"', "a saved Jev key enables task-aware selection")
         self.assertRegex(planner, r'installed\("opencode"\) \? "opencode" : installed\("grok"\) \? "grok"', "an installed builder CLI decides the executor")
-        self.assertIn("changes.fallbackOpenCode = false", planner, "no OpenCode key never leaves a billing fallback armed")
+        self.assertIn("autoFallbackEnabled(settings)", planner, "the fallback switch is read through its generalized name")
+        self.assertIn("changes.autoFallback = false", planner, "a fallback with no second usable provider is turned off")
         self.assertIn("changes, active", planner, "the planner reports both the delta and the effective configuration")
         handler = re.search(r'ipcMain\.handle\("settings:auto-setup"(.*?)\n  \}\);', self.main, re.S)
         self.assertIsNotNone(handler, "settings:auto-setup handler missing")
@@ -389,7 +428,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         for name in ("getAiRouting", "setAiRouting", "autoSetup", "cliStatus", "launchCli", "testZai"):
             with self.subTest(bridge=name):
                 self.assertIn(name, self.preload)
-        for element_id in ("zai-key", "save-zai-key", "zai-key-status", "ai-provider", "ai-fallback", "cli-status", "cli-test-zai", "auto-setup", "auto-setup-status", "setup-assistant", "setup-selection", "setup-builders", "custom-endpoint", "custom-key", "save-custom-key", "custom-key-status", "lmstudio-endpoint"):
+        for element_id in ("zai-key", "save-zai-key", "zai-key-status", "ai-provider", "ai-fallback", "auto-order-list", "auto-order-add", "auto-order-add-button", "cli-status", "cli-test-zai", "auto-setup", "auto-setup-status", "setup-assistant", "setup-selection", "setup-builders", "custom-endpoint", "custom-key", "save-custom-key", "custom-key-status", "lmstudio-endpoint"):
             with self.subTest(element_id=element_id):
                 self.assertIn(f'id="{element_id}"', self.template)
         for cli in ('data-cli="opencode"', 'data-cli="grok"', 'data-cli="codex"', 'data-cli="claude"'):
@@ -397,6 +436,9 @@ class MefiStudioRoutingTests(unittest.TestCase):
                 self.assertIn(cli, self.template)
         self.assertIn('id="executor-cli"', self.template)
         self.assertIn("executorCli", self.booklet_js)
+        self.assertIn("autoProviders", self.booklet_js, "the renderer saves the ordered auto list")
+        self.assertIn("auto-order-list", self.booklet_js, "the renderer fills the order editor")
+        self.assertIn("autoFallback", self.booklet_js, "the renderer reads the generalized fallback switch")
         self.assertIn('getApiKey("zai")', self.booklet_js)
         self.assertIn('setApiKey(value, "zai")', self.booklet_js)
         self.assertIn('getApiKey("opencode")', self.booklet_js)

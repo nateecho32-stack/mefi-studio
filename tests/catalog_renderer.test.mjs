@@ -18,6 +18,7 @@ function environment(overrides = {}, options = {}) {
     get innerHTML() { return this.html; }
     set innerHTML(value) { this.html = value; this.writes++; }
     addEventListener(name, fn) { (this.listeners[name] ||= []).push(fn); }
+    setAttribute(name, value) { (this.attributes ||= {})[name] = String(value); }
     dispatch(name, event = {}) { for (const fn of this.listeners[name] || []) fn({ target: this, preventDefault() {}, ...event }); }
     querySelectorAll() { return []; }
     append(...children) { this.children.push(...children); }

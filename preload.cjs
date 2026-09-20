@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   projectsList: () => ipcRenderer.invoke("projects:list"),
   projectsAdd: () => ipcRenderer.invoke("projects:add"),
   projectsSelect: (id, options) => ipcRenderer.invoke("projects:select", options ? { id, saveProgress: options.saveProgress === true } : id),
+  projectsRemove: (id) => ipcRenderer.invoke("projects:remove", id),
   onProjects: (callback) => ipcRenderer.on("projects:changed", (_event, data) => callback(data)),
   readCatalog: () => ipcRenderer.invoke("catalog:read"),
   refreshCatalog: () => ipcRenderer.invoke("catalog:refresh"),

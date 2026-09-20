@@ -38,7 +38,7 @@ function fixture(options = {}) {
     async verifyIdea(text, input) { calls.ideas.push({ text, ...input }); return { kind: "idea" }; },
   };
   const context = vm.createContext({
-    projects: { current: () => current },
+    projects: { current: () => current, open: () => current },
     getAnalyzer: async () => { calls.getAnalyzer += 1; if (options.importGate) await options.importGate; return analyzer; },
     planningService: () => {
       const project = current;

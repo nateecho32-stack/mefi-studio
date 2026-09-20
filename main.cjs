@@ -1098,6 +1098,11 @@ const LMSTUDIO_ENDPOINT = "http://127.0.0.1:1234/v1/chat/completions";
 // a hosted gateway): its URL is a plain preference, its key lives in its own
 // encrypted field, and only a saved key makes the route usable.
 const AI_PROVIDERS = ["auto", "zai", "opencode", "grok", "claude", "antigravity", "lmstudio", "custom"];
+// Auto mode's provider pool. The owner saves an ordered subset in
+// aiAutoProviders; the first usable entry answers. "auto" itself is never a
+// candidate.
+const AI_AUTO_PROVIDERS = ["zai", "opencode", "grok", "claude", "antigravity", "lmstudio", "custom"];
+const AUTO_PROVIDER_NAMES = { zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" };
 
 const ASSISTANT_SYSTEM = [
   "You are A-Eyes, the coordination assistant for several AI coding agents sharing one machine and one repo.",
@@ -1325,6 +1330,27 @@ function executorModelOverride(settings, cli = "") {
   return String(settings.executorModel ?? "").trim().slice(0, 120);
 }
 
+// Auto mode is an ordered list of providers, not a fixed pair: the first
+// usable entry answers, and - only when the owner opted in - a failed HTTP
+// route retries down the rest of the list. The saved value is normalized on
+// every read, so an unknown id or a duplicate can never wedge routing, and an
+// empty list falls back to the original z.ai > OpenCode preference.
+function normalizeAutoProviders(value) {
+  const order = [];
+  for (const id of Array.isArray(value) ? value : []) {
+    if (AI_AUTO_PROVIDERS.includes(id) && !order.includes(id)) order.push(id);
+  }
+  return order.length ? order : ["zai", "opencode"];
+}
+
+// aiAutoFallback is the general name for the old single-purpose switch;
+// aiFallbackOpenCode from an earlier settings file still arms it when the new
+// field was never written.
+function autoFallbackEnabled(settings) {
+  if (settings.aiAutoFallback !== undefined) return settings.aiAutoFallback === true;
+  return settings.aiFallbackOpenCode === true;
+}
+
 // Auto setup: one pass that turns what this machine already has into a working
 // configuration. Saved keys choose the assistant route, an installed CLI
 // chooses the builders, and a saved Jev key (either route) enables task-aware
@@ -1355,7 +1381,18 @@ function planAutoSetup({ settings = {}, keys = {}, clis = [], local = {} } = {})
   if (currentProvider !== provider) changes.provider = provider;
   if (currentSelection !== modelSelection) changes.modelSelection = modelSelection;
   if (builder && currentBuilder !== builder) changes.executorCli = builder;
-  if (settings.aiFallbackOpenCode === true && !keys.opencode) changes.fallbackOpenCode = false;
+  // The fallback switch walks the auto order, so it only has a second leg to
+  // stand on when that order lists two usable providers.
+  const usable = new Set([
+    keys.zai ? "zai" : null,
+    keys.opencode ? "opencode" : null,
+    installed("grok") ? "grok" : null,
+    installed("claude") ? "claude" : null,
+    installed("antigravity") ? "antigravity" : null,
+    local.lmstudio ? "lmstudio" : null,
+    local.custom ? "custom" : null,
+  ].filter(Boolean));
+  if (autoFallbackEnabled(settings) && normalizeAutoProviders(settings.aiAutoProviders).filter((id) => usable.has(id)).length < 2) changes.autoFallback = false;
   const notes = [];
   if (provider === "zai") notes.push("z.ai key found: the assistant uses your z.ai plan.");
   else if (provider === "opencode") notes.push("OpenCode Go key found: the assistant bills OpenCode Go.");
@@ -1371,7 +1408,7 @@ function planAutoSetup({ settings = {}, keys = {}, clis = [], local = {} } = {})
   else if (builder === "claude") notes.push("OpenCode CLI not found; Claude Code CLI found: builders run through Claude Code.");
   else if (builder === "antigravity") notes.push("OpenCode CLI not found; Antigravity CLI found: builders run through Antigravity.");
   else notes.push("No builder CLI detected: install OpenCode, Grok, Claude Code or Antigravity before queuing build work.");
-  if (changes.fallbackOpenCode === false) notes.push("OpenCode fallback turned off: no OpenCode Go key is saved.");
+  if (changes.autoFallback === false) notes.push("Provider fallback turned off: the auto order has no second usable provider.");
   return { ok: true, changes, active: { provider, modelSelection, executorCli: builder ?? currentBuilder }, notes };
 }
 
@@ -1407,31 +1444,78 @@ async function compatEndpointModel(endpoint) {
   }
 }
 
-// Pick who pays for this call. "auto" prefers the user's z.ai plan and only
-// touches OpenCode when that is the explicit pick or the only key on file; a
-// z.ai failure retries on OpenCode solely when aiFallbackOpenCode was turned
-// on in the Studio tab — never by default, so there are no surprise charges.
-// "grok", "claude" and "antigravity" ride their CLI instead of an HTTP
-// endpoint: the CLI carries its own auth (Grok's login, Claude Code's
-// subscription, Antigravity's Google account), so no key is needed, and the
-// model saved for that provider (if any) is passed on the CLI.
-// "lmstudio" talks to the local server, also keyless. `allowCli: false`
-// resolves the same preference order with every CLI route excluded — the
-// fallback pass a failed CLI call lands on.
+// Pick who pays for this call. An explicit pick is absolute: "zai" errors
+// when its key is missing instead of silently billing OpenCode, and
+// "opencode" never touches the z.ai key. "auto" walks the owner's saved
+// provider order (aiAutoProviders, normalized; default z.ai > OpenCode) and
+// takes the first usable route; a failed HTTP route retries down the remaining
+// HTTP entries solely when aiAutoFallback (formerly aiFallbackOpenCode) was
+// turned on - never by default, so there are no surprise charges. "grok",
+// "claude" and "antigravity" ride their CLI instead of an HTTP endpoint: the
+// CLI carries its own auth (Grok's login, Claude Code's subscription,
+// Antigravity's Google account), so no key is needed, and the model saved for
+// that provider (if any) is passed on the CLI. "lmstudio" talks to the local
+// server, also keyless. `allowCli: false` resolves the same preference order
+// with every CLI route excluded - the fallback pass a failed CLI call lands on.
+async function resolveAiCandidate(provider, role, settings, { allowCli, zaiKey, goKey }) {
+  if (provider === "zai" || provider === "opencode") {
+    const apiKey = provider === "zai" ? zaiKey : goKey;
+    if (!apiKey) return null;
+    return provider === "zai"
+      ? { provider, endpoint: ZAI_ENDPOINT, model: assistantModelOverride(settings, role, "zai") || (role === "heavy" ? ZAI_MODEL_HEAVY : ZAI_MODEL_ROUTINE), apiKey }
+      : { provider, endpoint: ASSISTANT_ENDPOINT, model: assistantModelOverride(settings, role, "opencode") || ASSISTANT_MODEL, apiKey };
+  }
+  if (provider === "grok" || provider === "claude" || provider === "antigravity") {
+    if (!allowCli) return null;
+    const available = provider === "grok" ? await grokCliAvailable() : provider === "claude" ? await claudeCliAvailable() : await antigravityCliAvailable();
+    return available ? { provider, endpoint: null, model: assistantModelOverride(settings, role, provider), apiKey: null, cli: true } : null;
+  }
+  if (provider === "lmstudio") {
+    const endpoint = normalizeLmStudioEndpoint(settings.lmStudioEndpoint);
+    const model = assistantModelOverride(settings, role, "lmstudio") || (await compatEndpointModel(endpoint));
+    // The local server ignores the bearer, but the OpenAI request shape wants one.
+    return model ? { provider, endpoint, model, apiKey: "lm-studio" } : null;
+  }
+  if (provider === "custom") {
+    const endpoint = normalizeCompatEndpoint(settings.customEndpoint);
+    const customKey = endpoint ? decryptKey(settings, "customApiKeyEncrypted") : null;
+    if (!customKey) return null;
+    const model = assistantModelOverride(settings, role, "custom") || (await compatEndpointModel(endpoint));
+    return model ? { provider, endpoint, model, apiKey: customKey } : null;
+  }
+  return null;
+}
+
+async function resolveAutoRoute(role, settings, { allowCli, zaiKey, goKey }) {
+  const order = normalizeAutoProviders(settings.aiAutoProviders);
+  const candidates = [];
+  for (const id of order) {
+    const candidate = await resolveAiCandidate(id, role, settings, { allowCli, zaiKey, goKey });
+    if (candidate) candidates.push(candidate);
+  }
+  if (!candidates.length) {
+    return { ok: false, error: `no usable provider in the auto order (${order.map((id) => AUTO_PROVIDER_NAMES[id]).join(" > ")}) - save a key, install a CLI or change the order in the Studio tab` };
+  }
+  const [primary, ...rest] = candidates;
+  // A CLI route is never a silent retry target: it can prompt or hang, so the
+  // fallback list keeps the HTTP entries only.
+  const fallbacks = autoFallbackEnabled(settings) ? rest.filter((candidate) => !candidate.cli) : [];
+  return { ok: true, ...primary, fallback: fallbacks[0] ?? null, fallbacks };
+}
+
 async function resolveAiRoute(role = "routine", { allowCli = true } = {}) {
   const settings = await readSettings();
-  let provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
-  if ((provider === "grok" || provider === "claude" || provider === "antigravity") && !allowCli) provider = "auto";
+  const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
   const zaiKey = decryptKey(settings, "zaiApiKeyEncrypted");
   const goKey = decryptKey(settings, "apiKeyEncrypted");
-  if (provider === "grok") return { ok: true, provider: "grok", model: assistantModelOverride(settings, role, "grok"), endpoint: null, apiKey: null, fallback: null };
-  if (provider === "claude") return { ok: true, provider: "claude", model: assistantModelOverride(settings, role, "claude"), endpoint: null, apiKey: null, fallback: null };
-  if (provider === "antigravity") return { ok: true, provider: "antigravity", model: assistantModelOverride(settings, role, "antigravity"), endpoint: null, apiKey: null, fallback: null };
+  if (provider === "grok" || provider === "claude" || provider === "antigravity") {
+    if (allowCli) return { ok: true, provider, model: assistantModelOverride(settings, role, provider), endpoint: null, apiKey: null, cli: true, fallback: null };
+    return resolveAutoRoute(role, settings, { allowCli: false, zaiKey, goKey });
+  }
   if (provider === "lmstudio") {
     const endpoint = normalizeLmStudioEndpoint(settings.lmStudioEndpoint);
     const model = assistantModelOverride(settings, role, "lmstudio") || (await compatEndpointModel(endpoint));
     if (!model) return { ok: false, error: "LM Studio reported no loaded model - load one there or save a model override in the Studio tab" };
-    // The local server ignores the bearer, but the OpenAI request shape wants one.
     return { ok: true, provider: "lmstudio", endpoint, model, apiKey: "lm-studio", fallback: null };
   }
   if (provider === "custom") {
@@ -1443,22 +1527,15 @@ async function resolveAiRoute(role = "routine", { allowCli = true } = {}) {
     if (!model) return { ok: false, error: "the custom endpoint reported no model - save a model override in the Studio tab" };
     return { ok: true, provider: "custom", endpoint, model, apiKey: customKey, fallback: null };
   }
-  if (provider === "opencode" || (provider === "auto" && !zaiKey)) {
+  if (provider === "opencode") {
     if (!goKey) return { ok: false, error: "no API key saved - add a z.ai or OpenCode Go key in the Studio tab" };
     return { ok: true, provider: "opencode", endpoint: ASSISTANT_ENDPOINT, model: assistantModelOverride(settings, role, "opencode") || ASSISTANT_MODEL, apiKey: goKey, fallback: null };
   }
-  if (!zaiKey) return { ok: false, error: "no z.ai key saved - add one in the Studio tab" };
-  return {
-    ok: true,
-    provider: "zai",
-    endpoint: ZAI_ENDPOINT,
-    model: assistantModelOverride(settings, role, "zai") || (role === "heavy" ? ZAI_MODEL_HEAVY : ZAI_MODEL_ROUTINE),
-    apiKey: zaiKey,
-    fallback:
-      provider === "auto" && settings.aiFallbackOpenCode === true && goKey
-        ? { endpoint: ASSISTANT_ENDPOINT, model: ASSISTANT_MODEL, apiKey: goKey }
-        : null,
-  };
+  if (provider === "zai") {
+    if (!zaiKey) return { ok: false, error: "no z.ai key saved - add one in the Studio tab" };
+    return { ok: true, provider: "zai", endpoint: ZAI_ENDPOINT, model: assistantModelOverride(settings, role, "zai") || (role === "heavy" ? ZAI_MODEL_HEAVY : ZAI_MODEL_ROUTINE), apiKey: zaiKey, fallback: null };
+  }
+  return resolveAutoRoute(role, settings, { allowCli, zaiKey, goKey });
 }
 
 const modelPerformanceStores = new Map();
@@ -1904,10 +1981,22 @@ async function executorRunEnv() {
     const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
     if (provider === "opencode") return { cli: "opencode", env: executorOpencodeEnv(), modelArgs: "", via: "opencode default" };
     const zaiEnv = await zaiOpencodeEnv();
+    const mefiZai = () => ({ cli: "opencode", env: executorOpencodeEnv(zaiEnv), modelProvider: "zai", model: ZAI_MODEL_ROUTINE, modelArgs: ` --model mefi-zai/${ZAI_MODEL_ROUTINE}`, via: `mefi-zai/${ZAI_MODEL_ROUTINE}` });
     // The default is glm-5.3-flash on the coding plan. Task-aware selection
     // happens once the next task is known, before the ownership transaction.
-    if (zaiEnv) return { cli: "opencode", env: executorOpencodeEnv(zaiEnv), modelProvider: "zai", model: ZAI_MODEL_ROUTINE, modelArgs: ` --model mefi-zai/${ZAI_MODEL_ROUTINE}`, via: `mefi-zai/${ZAI_MODEL_ROUTINE}` };
-    if (provider === "zai") return { error: "AI routing is z.ai-only but no z.ai key is saved" };
+    if (provider === "zai") return zaiEnv ? mefiZai() : { error: "AI routing is z.ai-only but no z.ai key is saved" };
+    // auto: builders ride whichever of z.ai / OpenCode the saved order puts
+    // first; a z.ai entry without its key falls through to the next runner.
+    const order = normalizeAutoProviders(settings.aiAutoProviders);
+    const zaiAt = order.indexOf("zai");
+    const openAt = order.indexOf("opencode");
+    if (zaiAt >= 0 && (openAt < 0 || zaiAt < openAt)) {
+      if (zaiEnv) return mefiZai();
+      if (openAt >= 0) return { cli: "opencode", env: executorOpencodeEnv(), modelArgs: "", via: "opencode default · z.ai key missing" };
+      return { error: "AI routing is z.ai-only but no z.ai key is saved" };
+    }
+    // OpenCode leads the order (or is the only keyed runner listed): builders
+    // stay on OpenCode's own account.
     return { cli: "opencode", env: executorOpencodeEnv(), modelArgs: "", via: "opencode default" };
   };
   if (settings.executorCli === "grok") {
@@ -1955,9 +2044,8 @@ async function assistantFetch(system, user, maxTokens = 6000, { role = "routine"
   // maxTokens has no knob there, and the model saved for that provider rides
   // the CLI itself. The CLI is the route, not the whole story: a missing
   // binary, a timeout or an empty reply falls back once to the keyed HTTP
-  // routes — z.ai by preference, OpenCode Go by the same auto rules, never
-  // back to a CLI.
-  if (route.provider === "grok" || route.provider === "claude" || route.provider === "antigravity") {
+  // routes — the rest of the auto order, never back to a CLI.
+  if (route.cli === true || route.provider === "grok" || route.provider === "claude" || route.provider === "antigravity") {
     const startedAt = Date.now();
     const cli = route.provider === "grok" ? await grokCompletion(system, user, route.model)
       : route.provider === "claude" ? await claudeCompletion(system, user, route.model)
@@ -1980,41 +2068,54 @@ async function assistantFetch(system, user, maxTokens = 6000, { role = "routine"
 }
 
 // The HTTP half of assistantFetch: body shaping (the reasoning knobs), the
-// primary call, and the opt-in OpenCode fallback. Split out so the grok-CLI
-// route can land here when the CLI cannot answer.
+// primary call, and the opt-in fallback walk down the auto order. Split out so
+// the grok-CLI route can land here when the CLI cannot answer.
 async function httpAssistantCall(route, system, user, maxTokens, { taskType = "routine", source = "request", role = "routine" } = {}) {
   route = await applyModelRouting(route, { role, taskType, task: user });
-  const body = {
-    model: route.model,
-    temperature: 0.2,
-    max_tokens: maxTokens,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: user },
-    ],
+  // The wire shape belongs to the route that answers: glm-5.3 reasons on every
+  // request and caps effort at low|high|max — "low" keeps the heavy passes
+  // honest without burning the plan. The flash route and OpenCode keep the
+  // previous single-knob shape. Fallback entries are shaped the same way.
+  const requestBody = (candidate) => {
+    const body = {
+      model: candidate.model,
+      temperature: 0.2,
+      max_tokens: maxTokens,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+    };
+    if (candidate.model === ZAI_MODEL_HEAVY) {
+      body.reasoning_effort = "low";
+      body.thinking = { type: "enabled" };
+    } else if (candidate.provider === "opencode") {
+      body.reasoning_effort = "low";
+    }
+    return body;
   };
-  // glm-5.3 reasons on every request and caps effort at low|high|max — "low"
-  // keeps the heavy passes honest without burning the plan. The flash route
-  // and OpenCode keep the previous single-knob shape.
-  if (route.model === ZAI_MODEL_HEAVY) {
-    body.reasoning_effort = "low";
-    body.thinking = { type: "enabled" };
-  } else if (route.provider === "opencode") {
-    body.reasoning_effort = "low";
-  }
-  const sessionHeader = route.provider === "opencode" ? await assistantSessionId() : null;
-  const primary = await chatCompletion(route.endpoint, route.apiKey, route.model, body, { sessionHeader, provider: route.provider, taskType, source });
+  const call = async (candidate) => chatCompletion(candidate.endpoint, candidate.apiKey, candidate.model, requestBody(candidate), {
+    sessionHeader: candidate.provider === "opencode" ? await assistantSessionId() : null,
+    provider: candidate.provider, taskType, source,
+  });
+  const primary = await call(route);
   if (primary.ok) {
     // The status panel shows the route that actually answered, not a static label.
     if (assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = primary.model;
     return primary;
   }
-  if (!route.fallback) return primary;
-  const fallbackBody = { ...body, model: route.fallback.model, reasoning_effort: "low" };
-  delete fallbackBody.thinking;
-  const retried = await chatCompletion(route.fallback.endpoint, route.fallback.apiKey, route.fallback.model, fallbackBody, { sessionHeader: await assistantSessionId(), provider: "opencode", taskType, source });
-  if (retried.ok && assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = retried.model;
-  return retried;
+  const fallbacks = Array.isArray(route.fallbacks) ? route.fallbacks : route.fallback ? [route.fallback] : [];
+  let last = primary;
+  for (const fallback of fallbacks) {
+    if (fallback.cli) continue; // this half speaks HTTP only
+    const retried = await call(fallback);
+    if (retried.ok) {
+      if (assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = retried.model;
+      return retried;
+    }
+    last = retried;
+  }
+  return last;
 }
 
 function normalizeBriefing(result) {
@@ -2041,9 +2142,11 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
   const settings = await readSettings();
   // Grok, Claude Code and LM Studio need no stored key: the first two ride
   // their CLI's own login, the last answers from the local server. Every other
-  // route still requires an encrypted key and a working OS keystore.
+  // route still requires an encrypted key and a working OS keystore. Auto
+  // clears the gate when its order lists a keyless provider.
   const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
-  const keyless = provider === "grok" || provider === "claude" || provider === "antigravity" || provider === "lmstudio";
+  const keyless = provider === "grok" || provider === "claude" || provider === "antigravity" || provider === "lmstudio"
+    || (provider === "auto" && normalizeAutoProviders(settings.aiAutoProviders).some((id) => ["grok", "claude", "antigravity", "lmstudio"].includes(id)));
   const anyKey = Boolean(settings.apiKeyEncrypted || settings.zaiApiKeyEncrypted || settings.customApiKeyEncrypted);
   if (!keyless && (!anyKey || !safeStorage.isEncryptionAvailable())) {
     return { ok: false, error: "no API key saved - add a z.ai or OpenCode Go key in the Studio tab" };
@@ -4613,6 +4716,22 @@ async function assistantTick(reason = "timer") {
     assistantState.heartbeatAt = now;
     assistantState.ai.keyPresent = await assistantKeyPresent();
     const first = assistantState.tickCount === 1 || !assistantFirstTickResolve.done;
+    // With no folder open the loop stays alive and reports its heartbeat, but
+    // queues no roles: nothing may read, organise or spend for the seed store.
+    if (!projects.open()) {
+      assistantState.heartbeatAt = now;
+      const hiddenNow = !window || window.isDestroyed() || window.isMinimized() || !window.isVisible();
+      assistantState.intervalMs = hiddenNow ? 120000 : 30000;
+      assistantState.nextTickAt = assistantLoop && assistantState.status === "running" ? now + assistantState.intervalMs : 0;
+      assistantLog("tick", `tick ${assistantState.tickCount} · no project open · open a folder to start`);
+      await saveAssistant();
+      if (assistantLoop) assistantSchedule();
+      if (first) {
+        assistantFirstTickResolve.done = true;
+        assistantDrain().then(() => assistantFirstTickResolve());
+      }
+      return { tick: assistantState.tickCount, reason, text: "no project open", queued: [], problems: [] };
+    }
     let roles = [];
     try {
       roles = reason === "timer" ? (await getAssistant()).dueRoles(assistantState, now, assistantState.prefs) : [...ASSISTANT_CADENCE_ROLES];
@@ -6715,7 +6834,7 @@ async function executeNextRequest() {
       ? `Manual worker limit reached (${autopilot.jobs.length}/${Math.max(1, autopilot.parallel)}); waiting for a worker to finish`
       : null;
     setAutopilotWaiting(
-      executorUpdateHold() || (autopilot.jobs.some((entry) => entry.settlementPending) ? "saving a worker claim release; retrying storage" : stop === "cluster" ? autopilot.clusterWaiting || "Cluster is focused on one task" : stop === "resources" ? autopilot.capacity?.reason || "waiting for machine capacity" : stop === "busy" ? "machine busy" : stop === "error" ? `Worker could not start: ${autopilot.lastError || "dispatch failed; retrying"}` : stop === "route" ? `Worker connection unavailable: ${autopilot.lastError || "check Settings & connections"}` : stop === "approval" ? "Verify first: tasks are waiting for your build approval" : stop === "cooldown" ? "tasks cooling down" : stop === "prerequisites" ? "waiting for task prerequisites" : stop === "review" ? "tasks need review before retry" : stop === "deferred" ? "waiting on live editors" : manualWait)
+      executorUpdateHold() || (autopilot.jobs.some((entry) => entry.settlementPending) ? "saving a worker claim release; retrying storage" : stop === "noproject" ? "Open a project folder to start work" : stop === "cluster" ? autopilot.clusterWaiting || "Cluster is focused on one task" : stop === "resources" ? autopilot.capacity?.reason || "waiting for machine capacity" : stop === "busy" ? "machine busy" : stop === "error" ? `Worker could not start: ${autopilot.lastError || "dispatch failed; retrying"}` : stop === "route" ? `Worker connection unavailable: ${autopilot.lastError || "check Settings & connections"}` : stop === "approval" ? "Verify first: tasks are waiting for your build approval" : stop === "cooldown" ? "tasks cooling down" : stop === "prerequisites" ? "waiting for task prerequisites" : stop === "review" ? "tasks need review before retry" : stop === "deferred" ? "waiting on live editors" : manualWait)
     );
   })().finally(() => {
     executorFillInFlight = null;
@@ -7030,7 +7149,10 @@ async function spawnNextJob() {
   };
   // The pause can land mid-fill (an infra breaker tripped on a sibling job),
   // so re-check instead of trusting the dispatcher's one-time gate.
-  if (projectSwitching || !autopilot.execute || assistantState?.status === "paused" || executorUpdateHold()) return "empty";
+  if (projectSwitching) return "empty";
+  // No folder is open: nothing may build in the app's own seed store.
+  if (!projects.open()) return "noproject";
+  if (!autopilot.execute || assistantState?.status === "paused" || executorUpdateHold()) return "empty";
   if (!manualCapacityAvailable()) return dispatchMode === "cluster" ? "cluster" : "empty";
   let leases = null;
   // Read-only, cheap admission checks use the Machine agent's shared sampler.
@@ -8698,6 +8820,9 @@ let autopilotPassInFlight = null;
 async function autopilotPass() {
   if (projectSwitching) return { ok: true, skipped: "switching project" };
   if (assistantState?.status === "paused") return { ok: true, skipped: "paused" };
+  // Nothing is organised, grown or spent for the app's own seed store: a
+  // folder must be open before the loop has a project to work on.
+  if (!projects.open()) return { ok: true, skipped: "no project open" };
   if (SMOKE || CAPTURE || CLI_MODE || !autopilot.enabled) return;
   if (autopilotPassInFlight) return autopilotPassInFlight;
   autopilotPassInFlight = (async () => {
@@ -9362,6 +9487,9 @@ function projectAnalyzerContext(report) {
 async function runAnalyzer({ kind, path: filePath, text, projectId } = {}) {
   const project = projects.current();
   if (projectId && projectId !== project.id) return { ok: false, projectId: project.id, error: "The selected project changed. Reload its analysis." };
+  // The panel may ask before the workspace reports which project is open. The
+  // host decides: with no folder open there is nothing to scan but the seed.
+  if (!projects.open()) return { ok: false, projectId: project.id, error: "Open a project folder to analyse it." };
   try {
     const planReader = kind === "project" ? planningService() : null;
     const analyzer = await getAnalyzer();
@@ -9414,9 +9542,57 @@ function projectBusyReason() {
   return null;
 }
 
+// Move every project-bound piece of live state from `previous` to `next`:
+// save the outgoing conversation, load the next store, reset routing and
+// executor caches, then re-send every panel. Callers hold projectSwitching
+// for the duration. `next` may be the no-project placeholder, which owns an
+// empty scoped store of its own.
+async function adoptProject(previous, next, { savedAgents = 0, selected = false } = {}) {
+  if (assistantTimer) clearTimeout(assistantTimer);
+  if (assistantSaveTimer) clearTimeout(assistantSaveTimer);
+  if (assistantEmitTimer) clearTimeout(assistantEmitTimer);
+  assistantTimer = assistantSaveTimer = assistantEmitTimer = null;
+  assistantEmitPending = null;
+  if (assistantState) await projects.run(previous, () => assistantWrite());
+  await mkdir(path.dirname(projects.dataPath(TASKS_PATH, next)), { recursive: true });
+  if (!selected) projects.select(next.id);
+  assistantState = null;
+  assistantPending = null;
+  assistantSavedAt = 0;
+  machineReadCache = null;
+  eyesLastTs = Date.now();
+  for (const key of Object.keys(assistantCache)) delete assistantCache[key];
+  Object.assign(assistantCache, { store: null, storeError: null, machine: null, audit: null, chats: [], chatsAt: 0, porcelain: "", porcelainAt: 0 });
+  await projects.run(next, () => ensureAssistant());
+  assistantState.projectId = next.id;
+  assistantState.projectPath = next.path;
+  autopilot.queueDepth = 0;
+  autopilot.tasksManaged = 0;
+  autopilot.history = [];
+  autopilot.lastAsk = null;
+  autopilot.clusterFocus = null;
+  autopilot.clusterAgents = [];
+  autopilot.clusterWaiting = null;
+  autopilot.waiting = null;
+  autopilot.lastError = null;
+  autopilot.consecutiveFailures = autopilot.infraFailures = autopilot.parkedUntil = 0;
+  await writeSettings(await readSettings());
+  const eyes = await getEyes();
+  const [tasks, requests, ideas] = await Promise.all([eyes.readJson(TASKS_PATH, []), eyes.readJson(REQUESTS_PATH, []), eyes.readJson(IDEAS_PATH, [])]);
+  send("projects:changed", projects.list());
+  send("eyes:tasks", tasks.map(taskView));
+  send("eyes:requests", requests);
+  send("eyes:ideas", ideas);
+  send("eyes:assistant", { state: assistantState, event: { kind: "project", text: next.placeholder ? "No project open. Open a folder to start." : `Ready in ${next.name}.`, projectId: next.id } });
+  emitAutopilot();
+  return { ...projects.list(), saved: savedAgents };
+}
+
 async function selectProject(id, { saveProgress = false } = {}) {
   if (id === projects.active().id) return projects.list();
-  let busy = projectBusyReason();
+  // With no project open there is no one's work to strand: the switch is free
+  // even while a placeholder cadence tick is in flight.
+  let busy = projects.open() ? projectBusyReason() : null;
   let savedAgents = 0;
   if (busy && !saveProgress) return { ...projects.list(), ok: false, error: busy, busy: true };
   const next = projects.find(id);
@@ -9446,46 +9622,9 @@ async function selectProject(id, { saveProgress = false } = {}) {
   const previous = projects.active();
   const previousState = assistantState;
   try {
-    if (assistantTimer) clearTimeout(assistantTimer);
-    if (assistantSaveTimer) clearTimeout(assistantSaveTimer);
-    if (assistantEmitTimer) clearTimeout(assistantEmitTimer);
-    assistantTimer = assistantSaveTimer = assistantEmitTimer = null;
-    assistantEmitPending = null;
-    if (assistantState) await projects.run(previous, () => assistantWrite());
-    await mkdir(path.dirname(projects.dataPath(TASKS_PATH, next)), { recursive: true });
-    projects.select(id);
-    assistantState = null;
-    assistantPending = null;
-    assistantSavedAt = 0;
-    machineReadCache = null;
-    eyesLastTs = Date.now();
-    for (const key of Object.keys(assistantCache)) delete assistantCache[key];
-    Object.assign(assistantCache, { store: null, storeError: null, machine: null, audit: null, chats: [], chatsAt: 0, porcelain: "", porcelainAt: 0 });
-    await projects.run(next, () => ensureAssistant());
-    assistantState.projectId = next.id;
-    assistantState.projectPath = next.path;
-    autopilot.queueDepth = 0;
-    autopilot.tasksManaged = 0;
-    autopilot.history = [];
-    autopilot.lastAsk = null;
-    autopilot.clusterFocus = null;
-    autopilot.clusterAgents = [];
-    autopilot.clusterWaiting = null;
-    autopilot.waiting = null;
-    autopilot.lastError = null;
-    autopilot.consecutiveFailures = autopilot.infraFailures = autopilot.parkedUntil = 0;
-    await writeSettings(await readSettings());
-    const eyes = await getEyes();
-    const [tasks, requests, ideas] = await Promise.all([eyes.readJson(TASKS_PATH, []), eyes.readJson(REQUESTS_PATH, []), eyes.readJson(IDEAS_PATH, [])]);
-    send("projects:changed", projects.list());
-    send("eyes:tasks", tasks.map(taskView));
-    send("eyes:requests", requests);
-    send("eyes:ideas", ideas);
-    send("eyes:assistant", { state: assistantState, event: { kind: "project", text: `Ready in ${next.name}.`, projectId: next.id } });
-    emitAutopilot();
-    return { ...projects.list(), saved: savedAgents };
+    return await adoptProject(previous, next, { savedAgents });
   } catch (error) {
-    projects.select(previous.id);
+    try { projects.select(previous.id); } catch {}
     assistantState = previousState;
     return { ...projects.list(), ok: false, error: `Could not switch projects: ${error.message}` };
   } finally {
@@ -9566,13 +9705,43 @@ function registerIpc() {
   ipcMain.handle("projects:list", () => projects.list());
   ipcMain.handle("projects:add", async () => {
     try {
-      const picked = await dialog.showOpenDialog(window, { title: "Add a project folder", properties: ["openDirectory"] });
+      const openBefore = projects.open();
+      const picked = await dialog.showOpenDialog(window, { title: "Open a project folder", properties: ["openDirectory"] });
       if (picked.canceled || !picked.filePaths?.[0]) return { ...projects.list(), canceled: true };
       const added = projects.add(picked.filePaths[0]);
+      // Opening the first folder is how a project starts: it becomes active
+      // and the workspace analyses it. Later folders are added alongside.
+      if (!openBefore && added.id !== projects.active().id) {
+        const switched = await selectProject(added.id);
+        if (switched.ok !== false) return { ...switched, addedId: added.id, selectedId: added.id };
+      }
       await writeSettings(await readSettings());
       const result = { ...projects.list(), addedId: added.id };
       send("projects:changed", result);
       return result;
+    } catch (error) { return { ...projects.list(), ok: false, error: error.message }; }
+  });
+  ipcMain.handle("projects:remove", async (_event, id) => {
+    try {
+      const target = projects.find(id);
+      if (!target) return { ...projects.list(), ok: false, error: "Choose a project from your project list." };
+      const busy = id === projects.active().id ? projectBusyReason() : null;
+      if (busy) return { ...projects.list(), ok: false, error: busy, busy: true };
+      const previous = projects.active();
+      projectSwitching = true;
+      try {
+        const removed = projects.remove(id);
+        if (!removed.activeChanged) {
+          await writeSettings(await readSettings());
+          send("projects:changed", projects.list());
+          return { ...projects.list(), removedId: removed.removed.id };
+        }
+        const result = await adoptProject(previous, projects.active(), { selected: true });
+        return { ...result, removedId: removed.removed.id };
+      } finally {
+        projectSwitching = false;
+        if (assistantLoop) projects.run(projects.active(), () => assistantSchedule());
+      }
     } catch (error) { return { ...projects.list(), ok: false, error: error.message }; }
   });
   ipcMain.handle("projects:select", (_event, payload) => {
@@ -9766,7 +9935,10 @@ function registerIpc() {
       jevRoute,
       routingDecision: modelRoutingDecisions.get(projects.current().id) ?? null,
       provider: AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto",
-      fallbackOpenCode: settings.aiFallbackOpenCode === true,
+      // Auto mode's ordered provider list and its opt-in failure walk; older
+      // settings only have the single-purpose aiFallbackOpenCode.
+      autoProviders: normalizeAutoProviders(settings.aiAutoProviders),
+      autoFallback: autoFallbackEnabled(settings),
       hasZai: Boolean(settings.zaiApiKeyEncrypted),
       hasOpenCode: Boolean(settings.apiKeyEncrypted),
       hasCustom: Boolean(settings.customApiKeyEncrypted),
@@ -9799,7 +9971,19 @@ function registerIpc() {
       if (!AI_PROVIDERS.includes(patch.provider)) return { ok: false, error: `unknown provider: ${patch.provider}` };
       settings.aiProvider = patch.provider;
     }
-    if (patch.fallbackOpenCode !== undefined) settings.aiFallbackOpenCode = Boolean(patch.fallbackOpenCode);
+    if (patch.autoFallback !== undefined) settings.aiAutoFallback = Boolean(patch.autoFallback);
+    // The auto order is the owner's preference list: ordered, deduped, and
+    // restricted to the provider pool. An empty list would leave auto with
+    // nothing to try, so it is refused rather than silently reset.
+    if (patch.autoProviders !== undefined) {
+      if (!Array.isArray(patch.autoProviders) || patch.autoProviders.length === 0) return { ok: false, error: "auto provider order needs at least one provider" };
+      const order = [];
+      for (const id of patch.autoProviders) {
+        if (!AI_AUTO_PROVIDERS.includes(id)) return { ok: false, error: `unknown auto provider: ${id}` };
+        if (!order.includes(id)) order.push(id);
+      }
+      settings.aiAutoProviders = order;
+    }
     // Model overrides: free-text ids, trimmed; empty string resets to the
     // route default. The models list drifts weekly, so nothing is validated
     // against a closed set.
@@ -9895,7 +10079,7 @@ function registerIpc() {
     if (plan.changes.provider !== undefined) next.aiProvider = plan.changes.provider;
     if (plan.changes.modelSelection !== undefined) next.modelSelection = plan.changes.modelSelection;
     if (plan.changes.executorCli !== undefined) next.executorCli = plan.changes.executorCli;
-    if (plan.changes.fallbackOpenCode === false) next.aiFallbackOpenCode = false;
+    if (plan.changes.autoFallback === false) next.aiAutoFallback = false;
     await writeSettings(next);
     logLine(`[setup] auto setup: ${summary}`);
     return { ...plan, applied: true, summary };
@@ -10114,6 +10298,7 @@ function registerIpc() {
   ipcMain.handle("assistant:state", async () => ({ ok: true, state: await ensureAssistant() }));
   ipcMain.handle("assistant:message", async (_event, { text, projectId } = {}) => {
     if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Send your message again in its intended project." };
+    if (!projects.open()) return { ok: false, error: "Open a project folder first - the assistant works inside a project." };
     return assistantMessage(text);
   });
   const recommendMusic = createMusicRecommender({ resolveRoute: resolveAiRoute, complete: httpAssistantCall });

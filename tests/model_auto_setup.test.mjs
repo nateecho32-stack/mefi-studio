@@ -7,10 +7,10 @@ import vm from "node:vm";
 // results, decides the same settings the Studio controls write, and returns
 // reasons. No filesystem, process or network boundary is involved here.
 const main = (await readFile(new URL("../main.cjs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
-const from = main.indexOf("function planAutoSetup(");
+const from = main.indexOf("function normalizeAutoProviders(");
 const to = main.indexOf("// Pick who pays", from);
 assert.ok(from >= 0 && to > from, "planAutoSetup must exist in main.cjs");
-const context = vm.createContext({});
+const context = vm.createContext({ AI_AUTO_PROVIDERS: ["zai", "opencode", "grok", "claude", "antigravity", "lmstudio", "custom"] });
 vm.runInContext(main.slice(from, to), context);
 const planAutoSetup = context.planAutoSetup;
 const plain = (value) => JSON.parse(JSON.stringify(value));
@@ -114,12 +114,31 @@ test("an already-configured machine reports no changes and keeps the current bui
   assert.deepEqual(plain(plan.active), { provider: "zai", modelSelection: "fixed", executorCli: "opencode" });
 });
 
-test("an inert OpenCode fallback is turned off and the input settings are never mutated", () => {
-  const settings = { aiProvider: "zai", modelSelection: "fixed", executorCli: "opencode", aiFallbackOpenCode: true };
-  const plan = planAutoSetup({ settings, keys: { zai: true, gateway: false }, clis: [cli("opencode", true)] });
-  assert.deepEqual(plain(plan.changes), { fallbackOpenCode: false });
+test("an armed fallback with no second usable provider is turned off and the input settings are never mutated", () => {
+  const settings = { aiProvider: "zai", modelSelection: "fixed", executorCli: "opencode", aiAutoFallback: true };
+  const plan = planAutoSetup({ settings, keys: { zai: true, gateway: false }, clis: [] });
+  assert.deepEqual(plain(plan.changes), { autoFallback: false });
   assert.match(plan.notes.join(" "), /fallback turned off/);
-  assert.equal(settings.aiFallbackOpenCode, true, "the planner describes changes; the host applies them");
+  assert.equal(settings.aiAutoFallback, true, "the planner describes changes; the host applies them");
+});
+
+test("an armed fallback stays while the auto order lists a second usable provider", () => {
+  const settings = { aiProvider: "zai", modelSelection: "fixed", executorCli: "opencode", aiAutoFallback: true };
+  const plan = planAutoSetup({ settings, keys: { zai: true, opencode: true }, clis: [cli("opencode", true)] });
+  assert.deepEqual(plain(plan.changes), {});
+  assert.doesNotMatch(plan.notes.join(" "), /fallback turned off/);
+  const narrowed = planAutoSetup({ settings: { ...settings, aiAutoProviders: ["zai"] }, keys: { zai: true, opencode: true }, clis: [cli("opencode", true)] });
+  assert.deepEqual(plain(narrowed.changes), { autoFallback: false }, "only providers in the saved order can be the second leg");
+});
+
+test("the legacy aiFallbackOpenCode flag still arms the auto fallback", () => {
+  const plan = planAutoSetup({
+    settings: { aiProvider: "zai", modelSelection: "fixed", executorCli: "opencode", aiFallbackOpenCode: true },
+    keys: { zai: true, opencode: true },
+    clis: [cli("opencode", true)],
+  });
+  assert.deepEqual(plain(plan.changes), {});
+  assert.doesNotMatch(plan.notes.join(" "), /fallback turned off/);
 });
 
 test("no detected builder leaves the saved executor alone and says so", () => {

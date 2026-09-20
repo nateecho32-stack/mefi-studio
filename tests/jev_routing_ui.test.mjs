@@ -12,13 +12,22 @@ const deferred = () => { let resolve; const promise = new Promise((done) => { re
 function environment(overrides = {}, bridge = {}) {
   const ids = new Map(); const writes = []; const logs = [];
   class Element {
-    constructor() { this.value = ""; this.textContent = ""; this.checked = false; this.disabled = false; this.hidden = false; this.listeners = {}; }
+    constructor(tag = "") {
+      this.tagName = String(tag).toUpperCase();
+      this.value = ""; this.textContent = ""; this.checked = false; this.disabled = false; this.hidden = false; this.listeners = {};
+      this.children = []; this.dataset = {}; this.attributes = {};
+    }
     addEventListener(name, callback) { (this.listeners[name] ||= []).push(callback); }
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+    getAttribute(name) { return this.attributes[name] ?? null; }
+    append(...nodes) { this.children.push(...nodes); }
+    appendChild(node) { this.children.push(node); return node; }
+    replaceChildren(...nodes) { this.children = [...nodes]; }
     querySelectorAll() { return []; }
     async trigger(name) { for (const callback of this.listeners[name] || []) await callback({ target: this }); await flush(); }
   }
   for (const match of template.matchAll(/\bid="([^"]+)"/g)) ids.set(match[1], new Element());
-  const settings = { provider: "auto", fallbackOpenCode: false, models: {}, executorCli: "opencode", executorModel: "", modelSelection: "jev", jevConfigured: false, jevRoute: "vercel", routingDecision: null, ...overrides };
+  const settings = { provider: "auto", autoProviders: ["zai", "opencode"], autoFallback: false, models: {}, executorCli: "opencode", executorModel: "", modelSelection: "jev", jevConfigured: false, jevRoute: "vercel", routingDecision: null, ...overrides };
   let reads = 0;
   const saved = [];
   const routeLabels = { vercel: "Vercel AI Gateway", typesafe: "TypeSafe Jev API", zen: "OpenCode Zen", openrouter: "OpenRouter" };
@@ -44,7 +53,7 @@ function environment(overrides = {}, bridge = {}) {
     setAiRouting: async (payload) => { writes.push(structuredClone(payload)); Object.assign(settings, payload); return { ok: true }; },
     ...bridge,
   };
-  const document = { getElementById: (id) => ids.get(id) || null, querySelectorAll: () => [] };
+  const document = { getElementById: (id) => ids.get(id) || null, createElement: (tag) => new Element(tag), querySelectorAll: () => [] };
   const context = vm.createContext({ document, window: { mefiStudio: api }, state: { doc: { models: [] } }, updateSpeedModels() {}, studioLog: (line) => logs.push(line) });
   vm.runInContext(`${studio}\ninitStudio();`, context);
   return { get: (id) => ids.get(id), settings, writes, saved, api, logs, reads: () => reads };
@@ -250,7 +259,8 @@ test("CLI, local and custom providers explain themselves and save their endpoint
 
 test("models follow the selected provider and save into that provider's own slot", async () => {
   const settings = {
-    provider: "zai", hasZai: true, hasOpenCode: false, modelSelection: "jev", jevConfigured: false, fallbackOpenCode: false,
+    provider: "zai", hasZai: true, hasOpenCode: false, modelSelection: "jev", jevConfigured: false, autoFallback: false,
+    autoProviders: ["zai", "opencode"],
     executorCli: "opencode", executorModel: "", routingDecision: null,
     models: { routine: "global-routine", heavy: "global-heavy" },
     providerModels: { zai: { routine: "glm-scoped" }, grok: { routine: "grok-4" } },
@@ -302,4 +312,46 @@ test("builder models are saved per CLI", async () => {
   env.get("executor-cli").value = "antigravity";
   await env.get("executor-cli").trigger("change");
   assert.deepEqual(env.writes[1], { executorCli: "antigravity" });
+});
+
+test("the auto order renders as a numbered preference list and saves whole-list edits", async () => {
+  const env = environment({ provider: "auto", autoProviders: ["zai", "grok", "opencode"] }); await flush();
+  const list = env.get("auto-order-list");
+  assert.deepEqual(list.children.map((row) => row.dataset.provider), ["zai", "grok", "opencode"]);
+  assert.deepEqual(list.children.map((row) => row.children[0].textContent), ["1", "2", "3"], "positions show the effective order");
+  assert.deepEqual(list.children.map((row) => row.children[1].textContent), ["z.ai GLM", "Grok CLI", "OpenCode Go"]);
+  assert.equal(list.children[0].children[2].disabled, true, "the first entry cannot move up");
+  assert.equal(list.children[2].children[3].disabled, true, "the last entry cannot move down");
+  await list.children[1].children[2].trigger("click");
+  assert.deepEqual(env.writes, [{ autoProviders: ["grok", "zai", "opencode"] }]);
+  assert.deepEqual(env.get("auto-order-list").children.map((row) => row.dataset.provider), ["grok", "zai", "opencode"], "the reordered list is re-read from the host");
+});
+
+test("the auto order adds and removes providers and never leaves it empty", async () => {
+  const env = environment({ provider: "auto", autoProviders: ["zai"] }); await flush();
+  const add = env.get("auto-order-add");
+  assert.deepEqual(add.children.map((option) => option.value), ["opencode", "grok", "claude", "antigravity", "lmstudio", "custom"], "the picker lists exactly the missing providers");
+  add.value = "opencode";
+  await env.get("auto-order-add-button").trigger("click");
+  assert.deepEqual(env.writes, [{ autoProviders: ["zai", "opencode"] }]);
+  const list = env.get("auto-order-list");
+  assert.deepEqual(list.children.map((row) => row.dataset.provider), ["zai", "opencode"]);
+  await list.children[0].children[4].trigger("click");
+  assert.deepEqual(env.writes[1], { autoProviders: ["opencode"] });
+  assert.equal(env.get("auto-order-add-button").disabled, false, "removing frees the provider for the picker again");
+  await env.get("auto-order-list").children[0].children[4].trigger("click");
+  assert.equal(env.writes.length, 2, "the last provider cannot be removed");
+});
+
+test("the fallback switch saves the generalized auto fallback and auto readiness names the order", async () => {
+  const env = environment(
+    { provider: "auto", autoProviders: ["opencode", "zai", "custom"], hasZai: true, hasOpenCode: false, hasCustom: false },
+    { getApiKey: async (which) => ({ saved: which === "zai" }) },
+  ); await flush();
+  assert.equal(env.get("ai-fallback").checked, false);
+  assert.equal(env.get("setup-assistant").textContent, "Auto (your order) · will use z.ai GLM");
+  assert.match(env.get("provider-readiness").textContent, /auto order: OpenCode Go \(unavailable\) → z\.ai GLM → Custom endpoint \(unavailable\)/);
+  env.get("ai-fallback").checked = true;
+  await env.get("ai-fallback").trigger("change");
+  assert.deepEqual(env.writes, [{ autoFallback: true }]);
 });

@@ -63,7 +63,7 @@ function controlHost({ tasks = [], requests = [], ideas = [] } = {}) {
   const eyes = { readJson: async (key) => copy(board[key]), writeJson: async (key, value) => { board[key] = copy(value); } };
   const env = vm.createContext({
     Date, console, backlog, taskContext, structuredClone, assistantState: state, autopilot,
-    projects: { current: () => project }, projectRoot: () => project.path,
+    projects: { current: () => project, open: () => project }, projectRoot: () => project.path,
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", IDEAS_PATH: "ideas",
     getAssistant: async () => assistant, getEyes: async () => eyes,
     ensureAssistant: async () => state, withBoardLock: (fn) => {
@@ -135,7 +135,7 @@ test("the actual executor will not dispatch exhausted verification tasks or requ
   const records = { tasks: [{ id: "task", title: "Task", status: "open", verifyAttempts: 3 }], requests: [{ title: "Request", verifyAttempts: 3 }] };
   const env = vm.createContext({
     Date, console, backlog, executorResume, process: { pid: 321 }, projectSwitching: false, assistantState: { status: "running" }, assistantModule: null, executorUpdateHold: () => null,
-    projects: { current: () => ({ id: "fixture", path: "/fixture" }) }, projectRoot: () => "/fixture",
+    projects: { current: () => ({ id: "fixture", path: "/fixture" }), open: () => ({ id: "fixture", path: "/fixture" }) }, projectRoot: () => "/fixture",
     autopilot: { execute: true, jobs: [] }, measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => null }),
     executorRunEnv: async () => ({ via: "fixture" }), getEyes: async () => ({ readJson: async (key) => records[key] }),
     getPolicyModule: async () => null, warmPolicyBaseline: () => {},
@@ -187,6 +187,7 @@ test("the real drain pass performs local settlement without calling paid work ge
     Date, projectSwitching: false, SMOKE: false, CAPTURE: false, CLI_MODE: false,
     assistantState: { status: "running", prefs: { backlogMode: true } },
     autopilot: { enabled: true, execute: true }, TASKS_PATH: "tasks",
+    projects: { open: () => ({ id: "fixture" }) },
     getEyes: async () => ({ readJson: async () => [] }),
     autopilotProactivePass: () => { throw new Error("Do not generate while draining"); },
     runAssistant: () => { throw new Error("Do not grow or improve while draining"); },
@@ -306,7 +307,7 @@ test("dispatch rechecks prerequisites inside the claim lock and loses the claim 
   let claims = 0;
   const env = vm.createContext({
     Date, console, backlog, executorResume, process: { pid: 321 }, projectSwitching: false, assistantState: { status: "running" }, assistantModule: null, executorUpdateHold: () => null,
-    projects: { current: () => ({ id: "fixture", path: "/fixture" }) }, projectRoot: () => "/fixture",
+    projects: { current: () => ({ id: "fixture", path: "/fixture" }), open: () => ({ id: "fixture", path: "/fixture" }) }, projectRoot: () => "/fixture",
     autopilot: { execute: true, jobs: [] }, autopilotJobSeq: 0,
     measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => null }), executorRunEnv: async () => ({ via: "fixture" }),
     getEyes: async () => ({ readJson: async (key) => records[key] }),

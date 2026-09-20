@@ -30,7 +30,7 @@ async function fixture(t) {
 test("project identities survive restart, reject relative roots and deduplicate folders", async (t) => {
   const f = await fixture(t);
   assert.equal(f.projects.add(f.other).id, f.secondary.id);
-  assert.equal(f.projects.list().projects.length, 2);
+  assert.equal(f.projects.list().projects.length, 1, "the app's own root is a seed, not a project");
   assert.throws(() => f.projects.add("relative-folder"), /absolute/);
   f.projects.select(f.secondary.id);
   const restored = createProjects({ defaultRoot: f.studio, studioRoot: f.studio, saved: f.projects.saved() });
@@ -39,10 +39,59 @@ test("project identities survive restart, reject relative roots and deduplicate 
   assert.equal(containsPath(f.other, `${f.other}-neighbor`), false);
 });
 
+test("a fresh install opens no project and keeps the studio seed hidden", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "mefi-projects-fresh-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const studio = path.join(root, "studio");
+  await mkdir(path.join(studio, "data"), { recursive: true });
+  const projects = createProjects({ defaultRoot: studio, studioRoot: studio, isDirectory: (file) => { try { return statSync(file).isDirectory(); } catch { return false; } } });
+  assert.deepEqual(projects.list().projects, []);
+  assert.equal(projects.list().activeId, null);
+  assert.equal(projects.open(), null);
+  assert.equal(projects.hasProjects(), false);
+  assert.equal(projects.active().placeholder, true);
+  assert.equal(projects.saved().activeId, null);
+  assert.deepEqual(projects.saved().items, []);
+});
+
+test("a saved studio seed is dropped once, and only an explicit re-add restores it", async (t) => {
+  const f = await fixture(t);
+  const seed = projectFromPath(f.studio);
+  const seeded = createProjects({
+    defaultRoot: f.studio, studioRoot: f.studio, isDirectory: existsSync,
+    saved: { activeId: seed.id, legacyPath: f.studio, items: [{ id: seed.id, name: "Mefi's Studio AI+", path: f.studio }] },
+  });
+  assert.deepEqual(seeded.list().projects, [], "settings written before projects became opt-in never keep the seed listed");
+  assert.equal(seeded.list().activeId, null);
+  const readded = seeded.add(f.studio);
+  assert.equal(readded.legacy, true, "re-adding the folder adopts the hidden legacy identity");
+  const restored = createProjects({ defaultRoot: f.studio, studioRoot: f.studio, saved: seeded.saved(), isDirectory: existsSync });
+  assert.equal(restored.list().projects.length, 1);
+  assert.equal(restored.active().path, f.studio);
+  assert.equal(restored.active().legacy, true);
+});
+
+test("removing a project keeps its data reachable on re-add", async (t) => {
+  const f = await fixture(t);
+  const original = '[{"id":"old","status":"done","title":"Legacy finished work"}]';
+  await writeFile(f.file, original);
+  const studio = f.projects.add(f.studio);
+  f.projects.select(studio.id);
+  const removed = f.projects.remove(studio.id);
+  assert.deepEqual(removed.removed, { id: studio.id, name: studio.name, path: f.studio });
+  assert.equal(removed.activeChanged, true);
+  assert.equal(f.projects.find(studio.id), undefined, "a removed project leaves the picker immediately");
+  const back = f.projects.add(f.studio);
+  f.projects.select(back.id);
+  assert.equal((await f.projects.eyes(f.eyes).readJson(f.file, []))[0].id, "old", "the legacy store was never duplicated or emptied");
+});
+
 test("legacy data stays byte-identical when adding and selecting another project", async (t) => {
   const f = await fixture(t);
   const original = '[{"id":"old","status":"done","title":"Legacy finished work"}]';
   await writeFile(f.file, original);
+  const studio = f.projects.add(f.studio);
+  f.projects.select(studio.id);
   const legacy = f.projects.active();
   f.projects.select(f.secondary.id);
   const scoped = f.projects.eyes(f.eyes);
@@ -61,7 +110,8 @@ test("legacy data stays byte-identical when adding and selecting another project
 
 test("an explicit workspace override on restart cannot reassign the original legacy board", async (t) => {
   const f = await fixture(t);
-  const legacy = f.projects.active();
+  const legacy = f.projects.add(f.studio);
+  f.projects.select(legacy.id);
   const restored = createProjects({ defaultRoot: f.other, preferredRoot: f.other, studioRoot: f.studio, saved: f.projects.saved() });
   assert.equal(restored.active().path, f.other);
   assert.equal(restored.active().legacy, undefined);
@@ -92,6 +142,8 @@ test("captured async work and store facade retain their project through a select
 
 test("OpenCode sessions, chat, todos and changes stay inside the selected folder", async (t) => {
   const f = await fixture(t);
+  const studio = f.projects.add(f.studio);
+  f.projects.select(studio.id);
   const rows = [{ id: "mine", directory: f.studio }, { id: "nested", directory: path.join(f.studio, "src") }, { id: "neighbor", directory: `${f.studio}-neighbor` }, { id: "other", directory: f.other }];
   const activity = rows.map((row) => ({ sessionId: row.id }));
   const changes = [...activity, { sessionId: "mine", file: path.join(f.other, "private.js") }];
@@ -104,19 +156,22 @@ test("OpenCode sessions, chat, todos and changes stay inside the selected folder
   assert.equal(factsInput.root, f.studio);
 });
 
-test("invalid saved project falls back to legacy without losing the saved list", async (t) => {
+test("an unavailable saved project leaves no project open without losing the saved list", async (t) => {
   const f = await fixture(t);
   f.projects.select(f.secondary.id);
   const saved = f.projects.saved();
   await rm(f.other, { recursive: true });
   assert.throws(() => f.projects.select(f.secondary.id), /unavailable/);
   const restored = createProjects({ defaultRoot: f.studio, studioRoot: f.studio, saved, isDirectory: existsSync });
-  assert.equal(restored.active().legacy, true);
-  assert.equal(restored.list().projects.length, 2);
+  assert.equal(restored.active().placeholder, true, "an unavailable folder never falls back to the hidden studio seed");
+  assert.equal(restored.list().activeId, null);
+  assert.equal(restored.list().projects.length, 1, "the saved list keeps the unavailable project for reconnecting");
 });
 
 test("real host refuses a project change during a live build and keeps its identity", async (t) => {
   const f = await fixture(t);
+  const studio = f.projects.add(f.studio);
+  f.projects.select(studio.id);
   const first = f.projects.active().id;
   const context = vm.createContext({
     projects: f.projects, projectSwitching: false, autopilot: { jobs: [{ title: "building" }] },
@@ -134,6 +189,8 @@ test("real host refuses a project change during a live build and keeps its ident
 
 test("real IPC wrapper binds a pending handler to its original project", async (t) => {
   const f = await fixture(t), wait = deferred();
+  const studio = f.projects.add(f.studio);
+  f.projects.select(studio.id);
   const handlers = new Map();
   const context = vm.createContext({ projects: f.projects, projectSwitching: false, projectOperations: 0, originalIpcHandle: (name, callback) => handlers.set(name, callback), ipcMain: {} });
   vm.runInContext(section("function handleProjectIpc(", 'app.setName('), context);
@@ -150,6 +207,8 @@ test("real IPC wrapper binds a pending handler to its original project", async (
 
 test("normal background mode switches between cadence ticks and reloads its own conversation", async (t) => {
   const f = await fixture(t);
+  const studio = f.projects.add(f.studio);
+  f.projects.select(studio.id);
   const first = f.projects.active();
   const oldState = { status: "running", messages: [{ role: "user", text: "First project context" }] };
   const savedState = { status: "paused", messages: [{ role: "user", text: "Second project context" }] };

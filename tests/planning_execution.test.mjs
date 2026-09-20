@@ -45,7 +45,7 @@ test("an approved plan joins the paused queue and its dependent dispatches only 
   const env = vm.createContext({
     Date, console, path, crypto, taskHandoffs, taskDelegation, executorResume, executorProcessAlive: () => false, process: { pid: 321 }, backlog, assistantModule: assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
     projectSwitching: false, assistantState: { status: "paused", prefs: {} }, SMOKE: false, CAPTURE: false, CLI_MODE: false, executorUpdateHold: () => null,
-    projects: { current: () => project }, projectRoot: () => root,
+    projects: { current: () => project, open: () => project }, projectRoot: () => root,
     measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => ({ exclusive: false }) }), executorRunEnv: async () => ({ cli: "fixture" }),
     getEyes: async () => ({
       readJson: async (key) => structuredClone(board[key]),

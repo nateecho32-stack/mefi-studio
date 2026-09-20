@@ -81,7 +81,7 @@
 </div>
 <section id="workspace-layer" class="workspace" aria-label="Your project workspace" hidden tabindex="-1">
   <div class="ws-main">
-    <div class="ws-topbar"><div class="ws-project-heading"><span class="ws-kicker">WORKSPACE /</span><strong id="workspace-project-name">Opening your project…</strong></div><div class="ws-top-actions"><button id="workspace-reveal" class="ghost mini" title="Show the project folder">Open folder ↗</button><button class="ghost mini" data-nav="palette" aria-label="Find a tool or command">Search <kbd>Ctrl K</kbd></button></div></div>
+    <div class="ws-topbar"><div class="ws-project-heading"><span class="ws-kicker">WORKSPACE /</span><strong id="workspace-project-name">Opening your project…</strong></div><div class="ws-top-actions"><button id="workspace-reveal" class="ghost mini" title="Show the project folder">Open folder ↗</button><button id="workspace-remove-project" class="ghost mini" title="Remove this folder from Studio's project list. Files and local work stay on disk.">Remove project</button><button class="ghost mini" data-nav="palette" aria-label="Find a tool or command">Search <kbd>Ctrl K</kbd></button></div></div>
     <div class="ws-heading"><div><p class="ws-kicker" id="workspace-greeting">YOUR SPACE TO CREATE</p><h1>What are we making?</h1><p id="workspace-project-path" class="ws-project-path"></p></div><span id="workspace-connection" class="ws-connection">Connecting…</span></div>
     <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">A little guidance for your first project.</strong><p>Choose a project, connect your tools, create work and follow it through review.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start walkthrough</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk with me</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays in the sidebar">Not now</button></div></section>
     <div class="ws-columns">
@@ -354,7 +354,7 @@
         <div class="row">
           <label class="muted">AI routing
             <select id="ai-provider">
-              <option value="auto">Auto — prefer z.ai GLM; OpenCode only when it is the only key</option>
+              <option value="auto">Auto — first usable provider in your order</option>
               <option value="zai">z.ai only — never bill OpenCode</option>
               <option value="opencode">OpenCode Go only</option>
               <option value="grok">Grok CLI — the assistant answers through the grok CLI's own login</option>
@@ -366,6 +366,14 @@
           </label>
           <span class="muted" id="provider-readiness" role="status">checking…</span>
         </div>
+        <div class="row auto-order">
+          <span class="muted">Auto order — used when AI routing is Auto: the first usable provider answers, and with fallback enabled a failed HTTP route retries down the list.</span>
+          <ol class="auto-order-list" id="auto-order-list" aria-label="Auto provider preference order"></ol>
+          <div class="auto-order-add">
+            <select id="auto-order-add" aria-label="Provider to add to the auto order"></select>
+            <button class="ghost" id="auto-order-add-button" type="button">Add provider</button>
+          </div>
+        </div>
         <div class="row">
           <label class="muted">Routine model <span class="muted" id="model-scope-note">for this provider</span>
             <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model this provider uses for routine passes (replies, briefs, chat). Saved per provider; empty = the provider's own default." style="width: 15em">
@@ -373,7 +381,7 @@
           <label class="muted">Heavy model
             <input type="text" id="ai-model-heavy" placeholder="same as routine" spellcheck="false" autocomplete="off" title="Model this provider uses for heavy passes (overseer, improver, analyzer read). Saved per provider; empty = routine's model where the provider has one, otherwise the provider's default." style="width: 15em">
           </label>
-          <label class="switch" title="Off by default: when z.ai fails, retry once on OpenCode Go (this bills OpenCode)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>OpenCode fallback on z.ai failure</span></label>
+          <label class="switch" title="Off by default: when an HTTP route fails, retry on the next usable HTTP provider in the auto order (this can bill that provider)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>Fall back to the next provider on failure</span></label>
         </div>
         <div class="row">
           <label class="muted">Model selection

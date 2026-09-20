@@ -428,6 +428,17 @@
     state.projectId = event.detail?.projectId || null;
     state.projectResult = null;
     els.idea.value = "";
+    if (!state.projectId) {
+      // No project is open: clear the panel instead of scanning the seed store.
+      state.request += 1;
+      state.aiRequest += 1;
+      state.pending = null;
+      state.aiPending = false;
+      clearResult();
+      status("Open a project folder to analyse it.");
+      controls();
+      return;
+    }
     runProject();
   }
 

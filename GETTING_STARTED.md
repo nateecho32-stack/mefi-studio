@@ -14,12 +14,119 @@ coach away, and the setup trail under the workspace invitation shows what is
 done. Reading the guide never creates or starts work, so nothing runs until you
 do it yourself.
 
+## New machine checklist
+
+A newly installed Studio opens with no project at all: nothing is read or built
+until you choose a folder. Work through this list once; only the first two
+sections are required, and nothing starts on its own.
+
+### Install what Studio needs
+
+- **Windows** — Studio is built for Windows, and its saved keys are protected
+  by the Windows keystore (DPAPI).
+- **Node 24 and npm** — needed for a source install only; `npm ci` downloads
+  Electron once (about 110 MB). A portable download needs neither.
+- **Git** — needed only to clone this repository. **Python 3** is needed only
+  for the test contracts (`npm test`).
+- **A builder CLI (optional)** — `opencode` is the preferred coding worker;
+  `grok`, `claude` and `agy` (Antigravity) are detected too. Studio connects
+  without one, but no build can start until one is installed and signed in.
+- **`gh` (optional)** — when GitHub CLI is signed in, Studio can reuse its
+  token for private release updates instead of saving one.
+
+### Get Studio running
+
+- Source: `npm ci`, then `npm run build-booklet`, then `npm start` from the
+  repository root. `npm start` needs a normal shell: if `ELECTRON_RUN_AS_NODE`
+  is set (some agent harnesses set it), clear it first or Studio refuses to
+  start and prints the fix.
+- Portable: extract the entire `Mefi Studio AI+` folder before opening
+  `Mefi Studio AI+.exe`, and keep its supporting folders beside it.
+- The browser fallback (`npm run start:web`) cannot run desktop workflows such
+  as launching builders or the game.
+
+### Open your first folder
+
+Add a folder in **Projects** with **+**, or choose **Open a folder** in the
+sidebar. The first folder you open becomes the active project, and Studio scans
+it locally — no AI request — showing old plans and starting points in
+**Analyzer**. Later folders are added alongside; select one to switch, and
+**Remove project** drops a folder from the list without touching its files
+(opening it again restores it).
+
+### Connect one assistant and one builder
+
+Open **Settings & connections** and either press **Run auto setup** or pick a
+route yourself. The assistant (conversation) and the builder (coding work) are
+separate capabilities: a saved key alone never proves a build can start.
+
+| What you have | Choose | What it needs |
+| --- | --- | --- |
+| z.ai coding plan | **z.ai GLM** | a saved z.ai key |
+| OpenCode Go subscription | **OpenCode Go** | its saved key |
+| Grok, Claude Code or Antigravity login | that CLI | the CLI on PATH, no key |
+| A local model server | **LM Studio (local)** | LM Studio running with a loaded model |
+| Another OpenAI-compatible server | **Custom endpoint** | endpoint URL and key |
+
+- **Jev model selection** needs a key for its route (Vercel AI Gateway,
+  TypeSafe, OpenCode Zen or OpenRouter); without one Studio uses fixed model
+  defaults. Without any connection, the catalog, manual planning and saved work
+  still function.
+- Keys are encrypted with the Windows keystore inside
+  `%APPDATA%\Mefi's Studio AI+\settings.json` and are bound to the Windows
+  account that saved them. A new user enters their own keys — copying the file
+  between machines does not work. Headless installs can pass keys with
+  `electron . --set-key`, `--set-zai-key`, `--set-gateway-key`,
+  `--set-jev-key`, `--set-zen-key`, `--set-openrouter-key` and
+  `--set-custom-key`; the README's Keys section pairs each flag with its
+  `MEFI_STUDIO_*_KEY` variable.
+- Models are saved per provider and per builder CLI, so switching routes never
+  carries one provider's model id into another.
+
+### Review the defaults
+
+These ship on and are the choices most worth a look on another machine; every
+one stays editable in **Settings & connections** or the workspace.
+
+- **Auto build** is on by default. Turn it off for **Verify first** when a new
+  user should approve each task before it runs.
+- **Parallel builds** follows **Machine managed** admission; manual limits of
+  one to three workers suit a machine dedicated to Studio.
+- **Proactive** briefings, **useWeb**, **auto reference** and the machine
+  guards (auto-kill strays, 240 idle seconds, 20-minute age, 1.5 GB) are on.
+  Relax the guards on a small or busy machine rather than switching them off.
+- **Your name**, the **companion name**, **Studio theme** and the movement
+  preference live under **Make yourself at home** and stay per machine.
+
+### Optional integrations
+
+- **Ruins Runner (LÖVE)** — the Studio tab launches the game checkout when one
+  is found. Set `MEFI_STUDIO_GAME_ROOT` when it is not a sibling `2d Trippy
+  Hell` folder, and run the game's `tools/build-windows.ps1` once if its LÖVE
+  runtime is missing.
+- **A different working repository** — set `MEFI_STUDIO_REPO`; otherwise Studio
+  opens with no project until a folder is chosen.
+- **Private release updates** — save a read-only GitHub token in **App
+  updates**, set `MEFI_STUDIO_GITHUB_TOKEN`, or let Studio reuse the `gh`
+  token.
+
+### What not to copy between machines
+
+Settings, keys, tasks, conversations, captures and databases are local state
+and do not travel. Only `data/curated.json` and `data/models.json` belong to
+the repository, and a source install and a portable build keep separate local
+stores. Never copy `settings.json` to another machine: its encrypted fields
+cannot be decrypted there. Build the new machine's own state with the steps
+above.
+
 ## 1. Choose the folder you want to work on
 
-In **Projects**, choose **+** and select an existing project folder, then select
-the project in the sidebar. Check the name and folder above the conversation.
-Tasks, conversations, plans and references belong to that project. For your
-first run, use a small project whose changes you can easily inspect.
+In **Projects**, choose **+** and select an existing project folder. The first
+folder you open becomes the active project; Studio scans it locally and shows
+what it found in **Analyzer**. Check the name and folder above the conversation.
+Later folders are added to the sidebar — select one to switch. Tasks,
+conversations, plans and references belong to that project. For your first run,
+use a small project whose changes you can easily inspect.
 
 Choose **Auto build** in the guide or above **Your work**. It is on by default.
 Turn it off for **Verify first** if you want to choose what gets built. This

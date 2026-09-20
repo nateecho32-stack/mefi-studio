@@ -15,8 +15,9 @@ function section(start, end) {
   return source.slice(from, to);
 }
 const okReply = () => ({ ok: true, json: async () => ({ model: "reported-model", usage: { prompt_tokens: 20, completion_tokens: 30, total_tokens: 50 }, choices: [{ message: { content: "Planning reply" } }] }) });
-function host(settings, responses = [okReply()]) {
+function host(settings, responses = [okReply()], { clis = [] } = {}) {
   const calls = [], observations = [], admitted = [], wakes = [], project = { id: "fixture", path: "/fixture" };
+  const installed = new Set(clis);
   const context = vm.createContext({
     path, crypto, AbortController, setTimeout, clearTimeout,
     STUDIO_ROOT: "/studio", projects: { current: () => project, active: () => project }, projectDataPath: (value) => value,
@@ -25,7 +26,13 @@ function host(settings, responses = [okReply()]) {
     ensureAssistant: async () => {}, refreshAutopilotQueue: async () => {}, assistantAskForWork: (reason) => wakes.push(reason),
     mutateBoard() { throw new Error("Model suggestions must not create tasks"); },
     AI_PROVIDERS: ["auto", "zai", "opencode", "grok", "claude", "antigravity"],
+    AI_AUTO_PROVIDERS: ["zai", "opencode", "grok", "claude", "antigravity", "lmstudio", "custom"],
+    AUTO_PROVIDER_NAMES: { zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" },
+    grokCliAvailable: async () => installed.has("grok"),
+    claudeCliAvailable: async () => installed.has("claude"),
+    antigravityCliAvailable: async () => installed.has("antigravity"),
     ASSISTANT_ENDPOINT: "https://opencode.invalid", ZAI_ENDPOINT: "https://zai.invalid",
+    LMSTUDIO_ENDPOINT: "http://127.0.0.1:1234/v1/chat/completions",
     ASSISTANT_MODEL: "routine-go", ZAI_MODEL_ROUTINE: "routine-zai", ZAI_MODEL_HEAVY: "heavy-zai",
     readSettings: async () => structuredClone(settings), decryptKey: (value, key) => value[key] ? `fixture-${key}` : null,
     applyModelRouting: async (route) => route,
@@ -109,7 +116,7 @@ test("models are scoped per provider without leaking across routes", async () =>
 });
 
 for (const fallback of [false, true]) test(`planning ${fallback ? "records both attempts for opt-in" : "does not silently enable"} provider fallback`, async () => {
-  const h = host({ aiProvider: "auto", zaiApiKeyEncrypted: "fixture", apiKeyEncrypted: "fixture", aiFallbackOpenCode: fallback }, [
+  const h = host({ aiProvider: "auto", zaiApiKeyEncrypted: "fixture", apiKeyEncrypted: "fixture", aiAutoFallback: fallback }, [
     { ok: false, status: 429, text: async () => "fixture quota exhausted" }, okReply(),
   ]);
   const result = await h.complete("spec");
@@ -126,4 +133,48 @@ for (const fallback of [false, true]) test(`planning ${fallback ? "records both 
     assert.equal(h.observations[1].taskType, "planning-spec");
     assert.equal(h.observations[1].tokenUsage.totalTokens, 50);
   }
+});
+
+test("auto follows the saved provider order instead of a fixed preference", async () => {
+  const reversed = host({ aiProvider: "auto", aiAutoProviders: ["opencode", "zai"], apiKeyEncrypted: "fixture", zaiApiKeyEncrypted: "fixture" });
+  await reversed.complete("question");
+  assert.equal(reversed.calls[0].endpoint, "https://opencode.invalid", "the first listed provider answers even when z.ai has a key");
+  assert.equal(reversed.calls[0].body.model, "routine-go");
+  const fallback = host({ aiProvider: "auto", aiAutoProviders: ["opencode", "zai"], apiKeyEncrypted: "fixture", zaiApiKeyEncrypted: "fixture", aiAutoFallback: true }, [
+    { ok: false, status: 429, text: async () => "fixture quota exhausted" }, okReply(),
+  ]);
+  const result = await fallback.complete("spec");
+  assert.equal(result.ok, true);
+  assert.equal(fallback.calls.length, 2);
+  assert.equal(fallback.calls[1].endpoint, "https://zai.invalid", "the fallback walk follows the same order");
+  assert.equal(fallback.calls[1].body.model, "heavy-zai", "the heavy role is resolved per provider");
+  assert.deepEqual(fallback.calls[1].body.thinking, { type: "enabled" }, "each fallback is shaped for its own provider");
+});
+
+test("the legacy aiFallbackOpenCode field still arms the generalized fallback", async () => {
+  const h = host({ aiProvider: "auto", zaiApiKeyEncrypted: "fixture", apiKeyEncrypted: "fixture", aiFallbackOpenCode: true }, [
+    { ok: false, status: 429, text: async () => "fixture quota exhausted" }, okReply(),
+  ]);
+  const result = await h.complete("spec");
+  assert.equal(result.ok, true);
+  assert.equal(h.calls.length, 2, "settings written before aiAutoFallback existed keep their fallback");
+  assert.equal(h.calls[1].endpoint, "https://opencode.invalid");
+});
+
+test("auto can put a CLI route first and skips it while the binary is missing", async () => {
+  const installed = host({ aiProvider: "auto", aiAutoProviders: ["grok", "zai"], zaiApiKeyEncrypted: "fixture" }, undefined, { clis: ["grok"] });
+  const route = await installed.context.resolveAiRoute("routine");
+  assert.equal(route.provider, "grok");
+  assert.equal(route.cli, true);
+  assert.equal(route.endpoint, null, "the CLI carries its own auth");
+  const missing = host({ aiProvider: "auto", aiAutoProviders: ["grok", "zai"], zaiApiKeyEncrypted: "fixture" });
+  const skipped = await missing.context.resolveAiRoute("routine");
+  assert.equal(skipped.provider, "zai", "an absent CLI is skipped for the next usable provider");
+});
+
+test("an auto order with nothing usable names the list instead of a fixed pair", async () => {
+  const h = host({ aiProvider: "auto", aiAutoProviders: ["custom", "lmstudio"] });
+  const route = await h.context.resolveAiRoute("routine");
+  assert.equal(route.ok, false);
+  assert.match(route.error, /no usable provider in the auto order \(custom endpoint > LM Studio\)/);
 });

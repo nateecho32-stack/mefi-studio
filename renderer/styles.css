@@ -2201,6 +2201,9 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-project-icon { width: 25px; height: 25px; flex: 0 0 25px; border-radius: 7px; display: grid; place-items: center; font: 14px Georgia, serif; background: #343d2e; color: var(--ws-accent); }
 .ws-project-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-project-arrow { margin-left: auto; opacity: .45; }
+.ws-empty-project { display: grid; gap: 9px; padding: 10px 9px 4px; color: #7f8877; font-size: 11px; line-height: 1.7; }
+.ws-empty-project p { margin: 0; }
+.ws-empty-project button { width: 100%; }
 .ws-sidebar-note { color: #7f8877; font-size: 11px; line-height: 1.8; padding: 7px 9px; }
 .ws-sidebar-bottom { margin-top: auto; padding-top: 34px; }
 .ws-tools summary, .ws-personal summary { display: flex; align-items: center; gap: 9px; list-style: none; cursor: pointer; padding: 12px 9px; color: #c3cab8; font-size: 12px; }
@@ -2990,6 +2993,12 @@ body.command-active .walkthrough-coach { right: 392px; }
 .settings-group select { max-width: 100%; }
 .settings-group input[type="password"] { flex: 1 1 280px; min-width: 0; }
 .settings-group label { max-width: 100%; }
+.auto-order { flex-direction: column; align-items: flex-start; gap: 8px; }
+.auto-order-list { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.auto-order-item { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
+.auto-order-index { color: var(--muted); font-size: 11px; min-width: 1.2em; text-align: right; }
+.auto-order-name { color: var(--ivory); font-size: 12.5px; flex: 1 1 auto; }
+.auto-order-add { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
 .settings-optional { border-top: 1px solid var(--hairline); padding: 14px 0; }
 .settings-optional > summary { color: var(--ivory); cursor: pointer; font-size: 13px; padding: 5px 0; }
 .settings-optional > p { font-size: 12px; line-height: 1.7; }

@@ -1,5 +1,10 @@
 // Local project identity and storage boundaries. A captured project never changes
 // when the selected project changes, including work that resumes after an await.
+//
+// Projects are shown only when the user chose the folder. The app seeds its own
+// working root as an internal legacy store so old unscoped data stays reachable
+// when that folder is added again, but the seed is never listed, selected or
+// saved as a project by itself: a fresh install starts with no project open.
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { AsyncLocalStorage } = require("node:async_hooks");
@@ -16,7 +21,7 @@ function containsPath(root, value) {
   return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
 }
 
-function projectFromPath(value, { name, legacy = false } = {}) {
+function projectFromPath(value, { name, legacy = false, explicit = false } = {}) {
   if (typeof value !== "string" || !path.isAbsolute(value)) throw new TypeError("Choose an absolute project folder.");
   const root = path.resolve(value);
   return Object.freeze({
@@ -24,6 +29,7 @@ function projectFromPath(value, { name, legacy = false } = {}) {
     name: String(name || path.basename(root) || root).slice(0, 100),
     path: root,
     ...(legacy ? { legacy: true } : {}),
+    ...(explicit ? { explicit: true } : {}),
   });
 }
 
@@ -32,27 +38,54 @@ function createProjects({ defaultRoot, studioRoot, saved = {}, preferredRoot = n
   const legacyRoot = typeof saved?.legacyPath === "string" && path.isAbsolute(saved.legacyPath) ? saved.legacyPath : defaultRoot;
   const legacy = projectFromPath(legacyRoot, { legacy: true });
   const projects = new Map([[legacy.id, legacy]]);
-  const fallback = projectFromPath(defaultRoot);
-  if (!projects.has(fallback.id)) projects.set(fallback.id, fallback);
+  const exposed = (project) => (project.exposed === true ? project : project.placeholder === true ? null : Object.freeze({ ...project, exposed: true }));
+  const hidden = (project) => {
+    const { exposed: _exposed, explicit: _explicit, ...rest } = project;
+    return Object.freeze(rest);
+  };
   for (const item of Array.isArray(saved?.items) ? saved.items : []) {
     try {
-      const project = projectFromPath(item.path, { name: item.name });
-      if (!projects.has(project.id)) projects.set(project.id, project);
+      const project = projectFromPath(item.path, { name: item.name, explicit: item.explicit === true });
+      // Migration: settings written before projects became opt-in carry the
+      // app's own root as a saved project. Drop that seed unless the folder was
+      // chosen again after this rule existed (explicit), and never let it
+      // replace the hidden legacy identity that owns the old unscoped data.
+      if (pathKey(project.path) === pathKey(defaultRoot) && item.explicit !== true) continue;
+      if (!projects.has(project.id)) projects.set(project.id, exposed(project));
+      else if (project.explicit) projects.set(project.id, exposed({ ...projects.get(project.id), explicit: true }));
     } catch {}
   }
-  let active = projects.get(saved?.activeId);
+  // MEFI_STUDIO_REPO names the working repository outright; a headless or
+  // developer launch gets it open without saving it as a lasting user choice.
+  let preferred = null;
   if (preferredRoot && path.isAbsolute(preferredRoot)) {
-    const preferred = projectFromPath(preferredRoot);
-    if (!projects.has(preferred.id)) projects.set(preferred.id, preferred);
-    active = projects.get(preferred.id);
+    const project = projectFromPath(preferredRoot);
+    preferred = exposed(projects.has(project.id) ? { ...projects.get(project.id) } : project);
+    projects.set(preferred.id, preferred);
   }
-  if (!active || !isDirectory(active.path)) active = projects.get(fallback.id);
+  // No project is open on a fresh install. Storage still needs a stable scope,
+  // so the placeholder owns an empty store of its own until a folder is added.
+  const placeholder = Object.freeze({ id: "project_none", name: "No project", path: path.join(studioRoot, ".no-project"), placeholder: true });
+  const exposedProjects = () => [...projects.values()].filter((project) => project.exposed === true);
+  const firstOpenable = () => exposedProjects().find((project) => isDirectory(project.path)) ?? null;
+  const resolveActive = () => {
+    for (const candidate of [preferred, projects.get(saved?.activeId)]) {
+      if (candidate?.exposed === true && isDirectory(candidate.path)) return candidate;
+    }
+    return firstOpenable() ?? placeholder;
+  };
+  let active = resolveActive();
+  const open = () => (active.exposed === true ? active : null);
   const current = () => context.getStore() || active;
-  const list = () => ({ ok: true, projects: [...projects.values()], activeId: active.id, activeProject: active });
+  const list = () => {
+    const openProject = open();
+    return { ok: true, projects: exposedProjects(), activeId: openProject?.id ?? null, activeProject: openProject };
+  };
   const stamp = (row, project = current()) => row && typeof row === "object" ? { ...row, projectId: project.id, projectPath: project.path } : row;
   function dataPath(file, project = current()) {
     const dataRoot = path.join(studioRoot, "data");
-    if (project.legacy || !containsPath(dataRoot, file)) return file;
+    if (project.legacy) return file;
+    if (!containsPath(dataRoot, file)) return file;
     const relative = path.relative(dataRoot, file);
     if (relative.split(path.sep)[0] === "projects") return file;
     // Catalog and credentials are app-wide; only operational files are scoped.
@@ -63,20 +96,45 @@ function createProjects({ defaultRoot, studioRoot, saved = {}, preferredRoot = n
     current, list, stamp, dataPath,
     run: (project, callback) => context.run(project, callback),
     active: () => active,
-    find: (id) => projects.get(id),
-    saved: () => ({ activeId: active.id, legacyPath: legacy.path, items: [...projects.values()].map(({ id, name, path }) => ({ id, name, path })) }),
+    open,
+    hasProjects: () => exposedProjects().length > 0,
+    find: (id) => {
+      const project = projects.get(id);
+      return project?.exposed === true ? project : undefined;
+    },
+    saved: () => {
+      const openProject = open();
+      return {
+        activeId: openProject?.id ?? null,
+        legacyPath: legacy.path,
+        items: exposedProjects().map(({ id, name, path: projectPath, explicit }) => ({ id, name, path: projectPath, ...(explicit ? { explicit: true } : {}) })),
+      };
+    },
     add(value) {
       const project = projectFromPath(value);
       if (!isDirectory(project.path)) throw new Error("The selected project folder is unavailable.");
-      if (!projects.has(project.id)) projects.set(project.id, project);
-      return projects.get(project.id);
+      const next = Object.freeze({ ...(projects.get(project.id) ?? project), exposed: true, explicit: true });
+      projects.set(project.id, next);
+      return next;
     },
     select(id) {
       const project = projects.get(id);
-      if (!project) throw new Error("Choose a project from your project list.");
+      if (!project || project.exposed !== true) throw new Error("Choose a project from your project list.");
       if (!isDirectory(project.path)) throw new Error("That project folder is unavailable. Reconnect it before switching.");
       active = project;
       return project;
+    },
+    // Removing never touches the folder or its local data. The hidden legacy
+    // identity stays behind so adding the same folder again reads the same
+    // store instead of starting a second one beside it.
+    remove(id) {
+      const project = projects.get(id);
+      if (!project || project.exposed !== true) throw new Error("Choose a project from your project list.");
+      if (project.legacy) projects.set(id, hidden(project));
+      else projects.delete(id);
+      const changed = active.id === id;
+      if (changed) active = firstOpenable() ?? placeholder;
+      return { removed: { id: project.id, name: project.name, path: project.path }, activeChanged: changed, activeId: open()?.id ?? null };
     },
     // One facade per operation binds all awaited reads/writes to its project.
     // No files are moved or rewritten just by listing or changing projects.
