@@ -25,6 +25,17 @@ export const DEFAULT_POLICY = { foldAfterMinutes: 60, staleAfterHours: 24, maxSe
 export const PARALLEL_MAX = 12;
 export const AI_PARALLEL_MAX = 6;
 export const DEFAULT_PREFS = { proactive: true, keepAwake: true, background: true, backlogMode: false, foldAfterMinutes: 60, staleAfterHours: 24, tidyDoneAfterHours: 24, parallel: 8, aiParallel: 4 };
+
+// One lag spike is a resample signal. The foreman only holds after two
+// consecutive samples strictly above the threshold.
+export function createMachineLagGate({ threshold = 100, requiredSamples = 2 } = {}) {
+  let consecutive = 0;
+  return (lagMs) => {
+    const high = Number.isFinite(lagMs) && lagMs > threshold;
+    consecutive = high ? consecutive + 1 : 0;
+    return { hold: consecutive >= requiredSamples, resample: high && consecutive < requiredSamples, consecutive };
+  };
+}
 const PREF_RANGES = { parallel: [1, PARALLEL_MAX], aiParallel: [1, AI_PARALLEL_MAX] }; // integer prefs clamped into a range
 export const INTENTS = ["status", "tasks", "ideas", "collisions", "machine", "agents", "suggest", "tidy", "fix", "organize", "pause", "resume", "resume-work", "help", "request", "chat", "overseer", "compact", "builder", "log", "planning-status"];
 export const ACTION_KINDS = ["idle", "tick", "audit", "brief", "fix", "tidy", "organize", "message", "overseer"];
@@ -5919,6 +5930,13 @@ function selfTest() {
 
 async function cli() {
   const args = process.argv.slice(2);
+  const lagGateIndex = args.indexOf("--lag-gate-fixture");
+  if (lagGateIndex >= 0) {
+    const fixture = JSON.parse(await readFile(args[lagGateIndex + 1], "utf8"));
+    const gate = createMachineLagGate(fixture.options);
+    console.log(JSON.stringify(asArray(fixture.samples).map((sample) => gate(sample)), null, 2));
+    return;
+  }
   const fixtureIndex = args.indexOf("--fixture");
   if (fixtureIndex >= 0) {
     const fixture = JSON.parse(await readFile(args[fixtureIndex + 1], "utf8"));
