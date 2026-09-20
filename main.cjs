@@ -1512,7 +1512,7 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
 // and its setTimeout tick chain, store/machine/audit facts, and the pushes
 // that keep every surface live.
 const ASSISTANT_PATH = path.join(STUDIO_ROOT, "data", "eyes-assistant.json");
-const ASSISTANT_CAPS = { messages: 200, log: 300, fixes: 100 };
+const ASSISTANT_CAPS = { messages: 200, log: 300, fixes: 100, questions: 40 };
 // What a broken data/eyes-*.json is reset to; eyes-assistant.json is rewritten
 // from memory instead.
 const ASSISTANT_DATA_FALLBACKS = {
@@ -1532,7 +1532,7 @@ const ASSISTANT_DATA_EVENTS = {
   "eyes-briefing.json": "eyes:briefing",
 };
 // When pushes coalesce, the most telling event of the window wins.
-const ASSISTANT_EVENT_RANK = { organize: 6, reply: 5, message: 4, focus: 4, think: 4, intel: 3, fix: 3, tidy: 3, context: 3, error: 2, agent: 2 };
+const ASSISTANT_EVENT_RANK = { question: 6, organize: 6, reply: 5, message: 4, focus: 4, think: 4, intel: 3, fix: 3, tidy: 3, context: 3, error: 2, agent: 2 };
 // The pool: responder > on-demand > cadence; a job gets 150 s.
 const ASSISTANT_PRIORITY = { responder: 3, demand: 2, cadence: 1 };
 const ASSISTANT_JOB_TIMEOUT_MS = 150000;
@@ -1720,6 +1720,7 @@ function assistantEmptyState(now) {
     },
     housekeeping: { lastAt: 0, tasksArchived: 0, ideasPruned: 0, requestsCleared: 0, checkpointsDropped: 0, foldersCleaned: 0, lastText: "" },
     problems: [],
+    questions: [],
     unread: 0,
     prefs: { proactive: true, keepAwake: true, background: true, foldAfterMinutes: 60, staleAfterHours: 24, tidyDoneAfterHours: 24, parallel: 8, aiParallel: 4 },
     pool: { parallel: 8, aiParallel: 4, running: 0, queued: 0 },
@@ -4427,6 +4428,10 @@ async function assistantRespond(user, entry = null) {
   // next reply — and the next agent on this node — reads back.
   if (folderTarget) assistantNodeContext(folderTarget, "chat", `asked "${assistantClip(text, 80)}" — ${assistantClip(reply, 90)}`, "responder");
   await saveAssistant({ force: true });
+  // A reply that put a next step on the table becomes a real Ask card.
+  if (typeof assistantOfferQuestion === "function") {
+    try { await assistantOfferQuestion(); } catch {}
+  }
   return replyEntry;
 }
 
@@ -4662,6 +4667,226 @@ async function assistantControl(action) {
     logError(`${action} failed: ${error.message}`);
     return { ok: false, error: String(error.message ?? error), state: assistantState };
   }
+}
+
+// ---- agent questions --------------------------------------------------------
+// A structured ask from the agents: the decision is named, the options are
+// written down with one flagged recommended, and nothing moves until the owner
+// answers. An answer either runs a small host action (message, work-on,
+// backlog, control) or sends its reply through the same chat path a typed
+// message takes, so the thread stays the single record of what was decided.
+let assistantQuestionSeq = 0;
+const ASSISTANT_QUESTION_TTL_MS = 48 * 60 * 60 * 1000;
+
+function assistantQuestionId() {
+  assistantQuestionSeq = (assistantQuestionSeq + 1) % 1000;
+  return `q_${Date.now()}_${assistantQuestionSeq}`;
+}
+
+function assistantQuestionAction(option) {
+  const action = option?.action;
+  if (!action || typeof action !== "object") return null;
+  if (action.kind === "message") return assistantMessage(String(action.text ?? option.reply ?? ""));
+  if (action.kind === "work-on") return assistantWorkOn(action.target ?? {});
+  if (action.kind === "backlog") return backlogControl({ ...(action.payload ?? {}), action: action.action });
+  if (action.kind === "control") return assistantControl(String(action.action ?? ""));
+  return null;
+}
+
+// Questions do not stay open forever: a decision nobody made after two days is
+// history, not a prompt.
+function assistantPruneQuestions(now = Date.now()) {
+  if (!Array.isArray(assistantState?.questions)) return 0;
+  let pruned = 0;
+  for (const question of assistantState.questions) {
+    if (question.status === "open" && now - (question.at || 0) > ASSISTANT_QUESTION_TTL_MS) {
+      question.status = "expired";
+      pruned += 1;
+    }
+  }
+  return pruned;
+}
+
+function assistantQuestion(payload = {}) {
+  if (!assistantState) return null;
+  const title = String(payload.title ?? "").trim().slice(0, 240);
+  if (!title) return null;
+  const options = (Array.isArray(payload.options) ? payload.options : [])
+    .slice(0, 6)
+    .map((option, index) => {
+      if (!option || typeof option !== "object") return null;
+      const label = String(option.label ?? "").trim().slice(0, 120);
+      if (!label) return null;
+      const action = option.action && typeof option.action === "object" && String(option.action.kind ?? "") ? option.action : null;
+      return {
+        id: String(option.id ?? `option_${index + 1}`).slice(0, 40) || `option_${index + 1}`,
+        label,
+        description: String(option.description ?? "").trim().slice(0, 240) || null,
+        reply: String(option.reply ?? "").trim().slice(0, 400) || null,
+        ...(action ? { action } : {}),
+        ...(option.dismiss === true ? { dismiss: true } : {}),
+        recommended: option.recommended === true,
+      };
+    })
+    .filter(Boolean);
+  if (!options.length) return null;
+  assistantPruneQuestions();
+  const question = {
+    id: assistantQuestionId(),
+    at: Date.now(),
+    kind: payload.kind === "suggestion" ? "suggestion" : "question",
+    source: String(payload.source ?? "assistant").slice(0, 40) || "assistant",
+    title,
+    detail: String(payload.detail ?? "").trim().slice(0, 400) || null,
+    status: "open",
+    options,
+    answer: null,
+  };
+  assistantState.questions.push(question);
+  assistantTrim(assistantState.questions, assistantCaps().questions);
+  assistantLog("question", `${question.kind === "suggestion" ? "suggested" : "asked"}: ${title}`);
+  assistantEmit({ kind: "question", ...question });
+  saveAssistant({ force: true }).catch(() => {});
+  return question;
+}
+
+async function assistantAnswer(payload = {}) {
+  await ensureAssistant();
+  assistantPruneQuestions();
+  const question = assistantState.questions.find((entry) => entry.id === payload.id && entry.status === "open");
+  if (!question) return { ok: false, error: "That question is no longer waiting.", state: assistantState };
+  const option = question.options.find((entry) => entry.id === payload.optionId) ?? null;
+  const text = String(payload.text ?? "").trim().slice(0, 400);
+  if (!option && !text) return { ok: false, error: "Choose an option or write an answer.", state: assistantState };
+  if (option?.dismiss) {
+    question.status = "dismissed";
+    question.answer = { at: Date.now(), optionId: option.id, label: option.label, text: null, via: "option" };
+    assistantLog("question", `dismissed: ${question.title}`);
+    assistantEmit({ kind: "question", ...question });
+    await saveAssistant({ force: true });
+    return { ok: true, state: assistantState };
+  }
+  question.status = "answered";
+  question.answer = {
+    at: Date.now(),
+    optionId: option?.id ?? null,
+    label: option?.label ?? text.slice(0, 120),
+    text: text || null,
+    via: option ? "option" : "text",
+  };
+  assistantLog("question", `answered: ${question.answer.label}`);
+  assistantEmit({ kind: "question", ...question });
+  await saveAssistant({ force: true });
+  try {
+    if (option?.action) {
+      await assistantQuestionAction(option);
+    } else {
+      const reply = text || option?.reply || option?.label || "";
+      // The responder can take as long as an AI call; the answer is already
+      // recorded, so the click returns and the thread fills in when it lands.
+      if (reply) assistantMessage(reply).catch((error) => logError(`answer reply failed: ${error.message}`));
+    }
+  } catch (error) {
+    logError(`answer failed: ${error.message}`);
+    return { ok: false, error: String(error.message ?? error), state: assistantState };
+  }
+  return { ok: true, state: assistantState };
+}
+
+async function assistantQuestions() {
+  await ensureAssistant();
+  if (assistantPruneQuestions()) await saveAssistant();
+  return { ok: true, questions: assistantState.questions, state: assistantState };
+}
+
+// The assistant's own last reply offered a next step ("could work on X"): turn
+// that into a real card with the first offer recommended. Only one offer card
+// is open at a time — a newer reply supersedes the old one.
+async function assistantOfferQuestion() {
+  if (!assistantState) return null;
+  let offers = [];
+  try {
+    const assistant = await getAssistant();
+    offers = assistant?.pendingOffers?.(assistantState) ?? [];
+  } catch {}
+  if (!offers.length) return null;
+  const open = assistantState.questions.filter((question) => question.status === "open" && question.source === "offer");
+  const sameAsk = open.find((question) => question.title === offers[0] || question.options?.some((option) => option.reply?.includes(`"${offers[0]}"`)));
+  if (sameAsk) return sameAsk;
+  for (const question of open) question.status = "superseded";
+  const options = offers.slice(0, 4).map((offer, index) => ({
+    id: `offer_${index + 1}`,
+    label: `Work on "${offer}"`,
+    description: index === 0 ? "Start this now with the current build settings." : "Queue this instead of the recommended pick.",
+    reply: `work on "${offer}"`,
+    recommended: index === 0,
+  }));
+  options.push({ id: "not_now", label: "Not now", description: "Leave the queue as it is; the suggestion stays in the thread.", dismiss: true });
+  return assistantQuestion({
+    kind: "suggestion",
+    source: "offer",
+    title: "Pick the next piece of work",
+    detail: `The assistant suggested: ${offers.map((offer) => `"${offer}"`).join(", ")}.`,
+    options,
+  });
+}
+
+// A build that failed twice is a decision, not another silent retry.
+function assistantBuildFailureQuestion(job, failures) {
+  if (!assistantState || !job?.ref?.id) return null;
+  const taskId = job.ref.id;
+  const already = assistantState.questions.some((question) => question.status === "open" && question.source === "build"
+    && question.options?.some((option) => option.action?.payload?.taskId === taskId));
+  if (already) return null;
+  return assistantQuestion({
+    kind: "question",
+    source: "build",
+    title: `"${String(job.title ?? "A task").slice(0, 140)}" has failed ${failures} times`,
+    detail: "The worker stopped without reporting done. Retrying re-arms the task for the next free worker; leaving it keeps the failure on the board for review.",
+    options: [
+      { id: "retry", label: "Retry once more", description: "Re-arm the task and let a worker try again.", recommended: true, action: { kind: "backlog", action: "retry", payload: { taskId } } },
+      { id: "hold", label: "Leave it for review", description: "Change nothing; the task stays failed on the board.", dismiss: true },
+    ],
+  });
+}
+
+// ---- the done log -----------------------------------------------------------
+// What finished, from two durable sources: the executor's JSONL ledger (one
+// finish row per build, with the verdict) and the assistant's own completed
+// passes (fix, tidy, audit, overseer, brief, organize, ideas). Read on demand
+// so a reload always shows the file, not a cache.
+const DONE_LOG_LIMIT = 80;
+const DONE_LOG_PASS_KINDS = new Set(["fix", "tidy", "audit", "overseer", "brief", "organize", "ideas"]);
+
+async function assistantDoneLog({ limit = DONE_LOG_LIMIT } = {}) {
+  const cap = Math.max(1, Math.min(200, Math.floor(Number(limit) || DONE_LOG_LIMIT)));
+  const entries = [];
+  try {
+    const text = await readFile(projectDataPath(EXECUTOR_LOG_PATH), "utf8");
+    for (const line of text.split("\n").filter(Boolean).slice(-cap * 4)) {
+      let record = null;
+      try { record = JSON.parse(line); } catch { continue; }
+      if (!record || record.event !== "finish") continue;
+      entries.push({
+        at: Number(record.at) || 0,
+        kind: record.kind === "task" ? "build" : "run",
+        title: String(record.title ?? "Untitled").slice(0, 200),
+        ok: record.ok === true,
+        taskId: typeof record.task === "string" ? record.task : null,
+        sessionId: typeof record.sessionId === "string" ? record.sessionId : null,
+        seconds: Number(record.seconds) || 0,
+        detail: record.ok === true
+          ? `reported done${record.seconds ? ` in ${record.seconds}s` : ""}`
+          : record.error ? String(record.error).slice(0, 200) : "stopped without reporting done",
+      });
+    }
+  } catch {}
+  for (const row of assistantState?.log ?? []) {
+    if (!DONE_LOG_PASS_KINDS.has(row.kind)) continue;
+    entries.push({ at: Number(row.at) || 0, kind: "pass", title: String(row.text ?? "").slice(0, 200), ok: true, taskId: null, sessionId: null, seconds: 0, detail: `${row.kind} pass` });
+  }
+  entries.sort((a, b) => b.at - a.at);
+  return { ok: true, entries: entries.slice(0, cap) };
 }
 
 async function assistantSetPrefs(patch = {}) {
@@ -6638,6 +6863,13 @@ async function spawnNextJob() {
       seconds: Math.round((Date.now() - entry.startedAt) / 1000),
       tail: (entry.outputLog ?? []).slice(-40),
     }).catch(() => {});
+    // A build that failed twice becomes a question instead of another silent
+    // retry. Guarded for the vm test slices that do not carry the question host.
+    if (!ok && job.kind === "task" && job.ref?.id && typeof assistantBuildFailureQuestion === "function") {
+      try {
+        assistantBuildFailureQuestion(job, Math.max(1, Math.floor(Number(job.ref.runFailures) || 0) + 1));
+      } catch {}
+    }
     // Policy Lab PR1 — the outcome half of the attempt. A finish report is
     // not a verification result: `outcome` records what the run CLAIMED; a
     // positive learning label can only come later, from a runner-produced
@@ -8826,6 +9058,17 @@ function registerIpc() {
     if (patch?.proactive !== undefined) await setAutopilot({ enabled: Boolean(patch.proactive) });
     return result;
   });
+  // Agent questions: the Ask cards, the answer path, and the durable done log.
+  ipcMain.handle("assistant:questions", () => assistantQuestions());
+  ipcMain.handle("assistant:ask", async (_event, payload) => {
+    await ensureAssistant();
+    const question = assistantQuestion(payload ?? {});
+    if (!question) return { ok: false, error: "A question needs a title and at least one labelled option.", state: assistantState };
+    await saveAssistant({ force: true });
+    return { ok: true, question, state: assistantState };
+  });
+  ipcMain.handle("assistant:answer", (_event, payload) => assistantAnswer(payload ?? {}));
+  ipcMain.handle("assistant:done-log", (_event, payload) => assistantDoneLog(payload ?? {}));
 
   ipcMain.handle("auditor:run", async () => {
     const settings = await readSettings();

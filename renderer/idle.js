@@ -213,6 +213,13 @@
     legendOpen: readStore("mefiStudio.cmdLegend") === "1",
     feedMenuOpen: readStore("mefiStudio.cmdFeedMenu") === "1",
     feedCollapsed: readStore("mefiStudio.cmdFeedCollapsed") === "1",
+    railTab: ["work", "assistant", "done", "ask"].includes(readStore("mefiStudio.cmdRailTab")) ? readStore("mefiStudio.cmdRailTab") : "work",
+    railCollapsed: false,
+    doneEntries: null,
+    doneAt: 0,
+    doneLoading: false,
+    askSending: false,
+    lastAssistantSelected: false,
     query: "",
     matches: [],
     matchSet: new Set(),
@@ -1675,9 +1682,267 @@
     el.chatLogToggle?.setAttribute("title", state.chatLogOpen ? "Collapse the chat log" : "Expand the chat log");
     if (el.chatLogToggle) el.chatLogToggle.textContent = state.chatLogOpen ? "–" : "+";
     el.hud?.classList.toggle("chat-log-open", state.chatLogOpen);
+    applyRailCollapsed();
     state.graphAreaAt = 0;
     state.hudRectsAt = 0;
   }
+
+  // ---- the right rail: Work · Assistant · Done · Ask ------------------------
+  // The live-work feed and the assistant chat share one docked panel. Each view
+  // keeps its own head and collapse control; the rail only decides which view
+  // is on screen and whether the panel shrinks to its header.
+  const RAIL_VIEWS = ["work", "assistant", "done", "ask"];
+
+  function applyRailCollapsed() {
+    const collapsed = state.railTab === "work" ? state.feedCollapsed
+      : state.railTab === "assistant" ? !state.chatLogOpen
+      : false;
+    state.railCollapsed = collapsed;
+    el.rail?.classList.toggle("rail-collapsed", collapsed);
+  }
+
+  function setRailTab(name, { save = true, focus = false } = {}) {
+    const view = RAIL_VIEWS.includes(name) ? name : "work";
+    state.railTab = view;
+    for (const button of el.railTabs ?? []) {
+      const selected = button.dataset.railView === view;
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+      if (selected && focus) button.focus();
+    }
+    if (el.feed) el.feed.hidden = view !== "work";
+    if (el.chatLog) el.chatLog.hidden = view !== "assistant";
+    if (el.done) el.done.hidden = view !== "done";
+    if (el.asks) el.asks.hidden = view !== "ask";
+    if (save) writeStore("mefiStudio.cmdRailTab", view);
+    applyRailCollapsed();
+    if (view === "done") void loadDoneLog();
+    if (view === "ask") renderAsks();
+    state.graphAreaAt = 0;
+    state.hudRectsAt = 0;
+  }
+
+  function railQuestions(full = null) {
+    const source = full ?? assistantFull();
+    return Array.isArray(source?.questions) ? source.questions : [];
+  }
+
+  // The tab counters: running builds on Work, unread replies on Assistant,
+  // open decisions on Ask.
+  function renderRailBadges(full = null) {
+    const jobs = autopilotJobs(state.assistant);
+    if (el.railWorkBadge) {
+      el.railWorkBadge.hidden = !jobs.length;
+      el.railWorkBadge.textContent = String(jobs.length);
+      el.railWorkBadge.title = jobs.length ? `${jobs.length} build${jobs.length === 1 ? "" : "s"} running` : "";
+    }
+    const unread = Number(full?.unread ?? assistantFull()?.unread ?? state.assistant?.unread) || 0;
+    if (el.railAssistantBadge) {
+      el.railAssistantBadge.hidden = !unread;
+      el.railAssistantBadge.textContent = String(unread);
+      el.railAssistantBadge.title = unread ? `${unread} unread repl${unread === 1 ? "y" : "ies"}` : "";
+    }
+    const waiting = railQuestions(full).filter((question) => question.status === "open").length;
+    if (el.railAskBadge) {
+      el.railAskBadge.hidden = !waiting;
+      el.railAskBadge.textContent = String(waiting);
+      el.railAskBadge.title = waiting ? `${waiting} decision${waiting === 1 ? "" : "s"} waiting` : "";
+    }
+  }
+
+  // The done log: the durable executor ledger plus the assistant's completed
+  // passes, read from the host on demand so a reload shows the file, not a cache.
+  async function loadDoneLog() {
+    if (!el.doneList) return;
+    if (!window.mefiStudio?.assistantDoneLog) {
+      if (el.doneState) el.doneState.textContent = "desktop app only";
+      renderDone();
+      return;
+    }
+    if (state.doneLoading) return;
+    state.doneLoading = true;
+    if (el.doneState) el.doneState.textContent = "Loading…";
+    try {
+      const result = await window.mefiStudio.assistantDoneLog({ limit: 80 });
+      state.doneEntries = Array.isArray(result?.entries) ? result.entries : [];
+      state.doneAt = Date.now();
+    } catch {
+      state.doneEntries = state.doneEntries ?? [];
+    } finally {
+      state.doneLoading = false;
+      renderDone();
+    }
+  }
+
+  function renderDone() {
+    if (!el.doneList) return;
+    const entries = state.doneEntries ?? [];
+    el.doneList.textContent = "";
+    if (!entries.length) {
+      const empty = document.createElement("li");
+      empty.className = "done-empty";
+      empty.textContent = window.mefiStudio
+        ? "Nothing has finished yet. Completed builds and assistant passes land here."
+        : "The done log is available in the desktop app.";
+      el.doneList.append(empty);
+    }
+    for (const entry of entries) {
+      const row = document.createElement("li");
+      row.className = "done-row";
+      row.dataset.ok = String(entry.ok !== false);
+      row.dataset.kind = entry.kind === "build" ? "build" : entry.kind === "pass" ? "pass" : "run";
+      const head = document.createElement("div");
+      head.className = "done-row-head";
+      const verdict = document.createElement("span");
+      verdict.className = "done-verdict";
+      verdict.textContent = entry.kind === "pass" ? "Pass" : entry.ok ? "Done" : "Failed";
+      const when = document.createElement("span");
+      when.className = "done-when";
+      when.textContent = agoLabel(entry.at) ?? "";
+      when.title = entry.at ? new Date(entry.at).toLocaleString() : "";
+      head.append(verdict, when);
+      const title = document.createElement(entry.taskId || entry.sessionId ? "button" : "span");
+      title.className = "done-title";
+      title.textContent = entry.title || "Untitled";
+      if (entry.taskId) {
+        title.type = "button";
+        title.addEventListener("click", () => nav("tasks", { taskId: entry.taskId, filter: "all" }));
+      } else if (entry.sessionId) {
+        title.type = "button";
+        title.addEventListener("click", () => nav("explorer", { sessionId: entry.sessionId }));
+      }
+      row.append(head, title);
+      if (entry.detail) {
+        const detail = document.createElement("span");
+        detail.className = "done-detail";
+        detail.textContent = entry.detail;
+        row.append(detail);
+      }
+      el.doneList.append(row);
+    }
+    if (el.doneState) el.doneState.textContent = entries.length ? `${entries.length} record${entries.length === 1 ? "" : "s"}` : "Nothing yet";
+  }
+
+  // The Ask cards: every open decision with its options, the recommended one
+  // flagged, and the answer history kept beside it.
+  function renderAsks(full = null) {
+    if (!el.askList) return;
+    const questions = railQuestions(full);
+    const open = questions.filter((question) => question.status === "open");
+    const closed = questions.filter((question) => question.status !== "open").slice(-5);
+    el.askList.textContent = "";
+    if (!questions.length) {
+      const empty = document.createElement("li");
+      empty.className = "ask-empty";
+      empty.textContent = "Nothing is waiting on you. When an agent needs a decision, it asks here with a recommended option.";
+      el.askList.append(empty);
+    }
+    for (const question of [...open, ...closed]) el.askList.append(askCard(question));
+    if (el.askState) el.askState.textContent = open.length ? `${open.length} waiting` : questions.length ? "All answered" : "Nothing waiting";
+  }
+
+  function askCard(question) {
+    const card = document.createElement("li");
+    card.className = "ask-card";
+    card.dataset.kind = question.kind === "suggestion" ? "suggestion" : "question";
+    card.dataset.status = question.status ?? "open";
+    const head = document.createElement("div");
+    head.className = "ask-head";
+    const kind = document.createElement("span");
+    kind.className = "ask-kind";
+    kind.textContent = question.kind === "suggestion" ? "Suggestion" : "Question";
+    const when = document.createElement("span");
+    when.className = "ask-when";
+    when.textContent = agoLabel(question.at) ?? "";
+    when.title = question.at ? new Date(question.at).toLocaleString() : "";
+    head.append(kind, when);
+    const title = document.createElement("p");
+    title.className = "ask-title";
+    title.textContent = question.title ?? "";
+    card.append(head, title);
+    if (question.detail) {
+      const detail = document.createElement("p");
+      detail.className = "ask-detail";
+      detail.textContent = question.detail;
+      card.append(detail);
+    }
+    if (question.status === "open") {
+      const options = document.createElement("div");
+      options.className = "ask-options";
+      for (const option of Array.isArray(question.options) ? question.options : []) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "ask-option";
+        button.dataset.option = option.id;
+        if (option.recommended) button.dataset.recommended = "true";
+        const label = document.createElement("span");
+        label.textContent = option.label;
+        if (option.recommended) {
+          const rec = document.createElement("span");
+          rec.className = "ask-rec";
+          rec.textContent = "Recommended";
+          label.append(rec);
+        }
+        button.append(label);
+        if (option.description) {
+          const desc = document.createElement("span");
+          desc.className = "ask-option-desc";
+          desc.textContent = option.description;
+          button.append(desc);
+        }
+        button.addEventListener("click", () => void answerQuestion(question.id, option.id, null, button));
+        options.append(button);
+      }
+      card.append(options);
+      const custom = document.createElement("form");
+      custom.className = "ask-custom";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "Or type your own answer…";
+      input.setAttribute("aria-label", "Write an answer");
+      const send = document.createElement("button");
+      send.type = "submit";
+      send.className = "ghost mini";
+      send.textContent = "Send";
+      custom.append(input, send);
+      custom.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const text = input.value.trim();
+        if (text) void answerQuestion(question.id, null, text, send);
+      });
+      card.append(custom);
+    } else if (question.answer) {
+      const note = document.createElement("p");
+      note.className = "ask-answer-note";
+      note.textContent = question.status === "dismissed" ? `Dismissed: ${question.answer.label ?? "not now"}`
+        : question.status === "expired" ? "Expired without an answer"
+        : question.status === "superseded" ? "Superseded by a newer question"
+        : `You chose: ${question.answer.label ?? question.answer.text ?? "answered"}`;
+      card.append(note);
+    }
+    return card;
+  }
+
+  async function answerQuestion(id, optionId, text, button) {
+    if (state.askSending) return;
+    if (!window.mefiStudio?.assistantAnswer) {
+      window.MefiToast?.("Answers are available in the desktop app", "warn");
+      return;
+    }
+    state.askSending = true;
+    if (button) button.disabled = true;
+    try {
+      const result = await window.mefiStudio.assistantAnswer({ id, optionId, text });
+      if (result?.ok === false && result?.error) window.MefiToast?.(result.error, "warn");
+    } catch (error) {
+      window.MefiToast?.(`Answer failed: ${error.message}`, "warn");
+    } finally {
+      state.askSending = false;
+      renderAsks();
+      renderRailBadges();
+    }
+  }
+
 
   // The service state as tree3d holds it (the full thread and log), and the
   // short summary every surface shares.
@@ -2180,6 +2445,9 @@
     refreshAssistantCache();
     updateAssistantPill();
     paintChatLog();
+    renderRailBadges(payload?.state ?? null);
+    if (state.railTab === "ask") renderAsks(payload?.state ?? null);
+    if (state.railTab === "done" && Date.now() - (state.doneAt ?? 0) > 4000) void loadDoneLog();
     const kind = payload?.event?.kind ?? null;
     if (!kind) return;
     if (kind === "tick") {
@@ -2446,16 +2714,24 @@
     let bottom = el.height - 86;
     const header = visibleBox(el.top);
     const dock = visibleBox(el.bottom);
+    const rail = visibleBox(el.rail);
     const feed = visibleBox(el.feed);
     const chat = visibleBox(el.chatLog);
     if (header) top = Math.max(top, header.bottom + 20);
     if (dock) bottom = Math.min(bottom, dock.top - 24);
-    if (feed && !state.feedCollapsed && feed.left < el.width / 2) left = Math.max(left, feed.right + 28);
-    if (chat && state.chatLogOpen && chat.left > el.width / 2) right = Math.min(right, chat.left - 28);
-    // Collapsing a panel returns its side gutter, but its visible header is
-    // still an obstruction. Begin the free canvas below those short headers.
-    if (feed && state.feedCollapsed) top = Math.max(top, feed.bottom + 24);
-    if (chat && !state.chatLogOpen) top = Math.max(top, chat.bottom + 24);
+    // The merged rail owns the right gutter; when it is collapsed its short
+    // header still blocks the top strip.
+    if (rail) {
+      if (state.railCollapsed) top = Math.max(top, rail.bottom + 24);
+      else right = Math.min(right, rail.left - 28);
+    } else {
+      if (feed && !state.feedCollapsed && feed.left < el.width / 2) left = Math.max(left, feed.right + 28);
+      if (chat && state.chatLogOpen && chat.left > el.width / 2) right = Math.min(right, chat.left - 28);
+      // Collapsing a panel returns its side gutter, but its visible header is
+      // still an obstruction. Begin the free canvas below those short headers.
+      if (feed && state.feedCollapsed) top = Math.max(top, feed.bottom + 24);
+      if (chat && !state.chatLogOpen) top = Math.max(top, chat.bottom + 24);
+    }
     // At compact widths CSS can put the feed above the map. Only reserve a
     // side panel if it leaves enough room for an actual interactive graph.
     if (right - left < 220) {
@@ -4112,6 +4388,15 @@
       el.feedChat.hidden = !chatting;
       if (chatting) renderChat();
     }
+    // Selecting the assistant brings its thread forward; picking anything else
+    // leaves the rail where the owner put it.
+    const assistantPicked = state.selected?.kind === "assistant";
+    if (assistantPicked !== state.lastAssistantSelected) {
+      state.lastAssistantSelected = assistantPicked;
+      if (assistantPicked) setRailTab("assistant");
+    }
+    renderRailBadges();
+    if (state.railTab === "ask") renderAsks();
     paintChatLog();
   }
 
@@ -5258,6 +5543,7 @@
     push(el.followStatus);
     push(el.bottom);
     push(el.info);
+    push(el.rail);
     push(el.feed);
     push(el.chatLog);
     push(el.legend);
@@ -6974,6 +7260,7 @@
     el.feedToggle?.setAttribute("aria-expanded", String(!state.feedCollapsed));
     if (el.feedToggle) el.feedToggle.title = state.feedCollapsed ? "Expand live work" : "Collapse live work";
     if (save) writeStore("mefiStudio.cmdFeedCollapsed", state.feedCollapsed ? "1" : "0");
+    applyRailCollapsed();
     state.graphAreaAt = 0;
     state.hudRectsAt = 0;
     if (state.selected?.kind === "assistant") { state.feedDirty = true; renderInfo(); renderFeed(); }
@@ -7324,6 +7611,19 @@
     el.chatLogJump = document.getElementById("cmd-chat-jump");
     el.chatLogNewWork = document.getElementById("cmd-chat-new-work");
     el.chatLogNewWorkState = document.getElementById("cmd-chat-new-work-state");
+    el.rail = document.getElementById("cmd-rail");
+    el.railBody = document.getElementById("cmd-rail-body");
+    el.railTabs = [...(el.rail?.querySelectorAll(".rail-tab[data-rail-view]") ?? [])];
+    el.railWorkBadge = document.getElementById("cmd-rail-work-badge");
+    el.railAssistantBadge = document.getElementById("cmd-rail-assistant-badge");
+    el.railAskBadge = document.getElementById("cmd-rail-ask-badge");
+    el.done = document.getElementById("cmd-done");
+    el.doneList = document.getElementById("cmd-done-list");
+    el.doneState = document.getElementById("cmd-done-state");
+    el.doneRefresh = document.getElementById("cmd-done-refresh");
+    el.asks = document.getElementById("cmd-asks");
+    el.askList = document.getElementById("cmd-ask-list");
+    el.askState = document.getElementById("cmd-ask-state");
     el.telemetry = document.getElementById("idle-telemetry");
     el.taskInput = document.getElementById("idle-task-input");
     el.taskAdd = document.getElementById("idle-task-add");
@@ -7538,6 +7838,22 @@
     el.chatLog?.querySelectorAll("[data-cmdchat-msg]")?.forEach((chip) => {
       chip.addEventListener("click", () => sendAssistant(chip.dataset.cmdchatMsg, "log"));
     });
+    // The rail's tabs: one visible view, roving focus, remembered between runs.
+    for (const button of el.railTabs ?? []) button.addEventListener("click", () => setRailTab(button.dataset.railView));
+    el.rail?.querySelector(".rail-tabs")?.addEventListener("keydown", (event) => {
+      const tabs = el.railTabs ?? [];
+      const index = tabs.findIndex((button) => button.getAttribute("aria-selected") === "true");
+      let next = null;
+      if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+      else if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+      else if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = tabs.length - 1;
+      if (next === null || !tabs[next]) return;
+      event.preventDefault();
+      setRailTab(tabs[next].dataset.railView, { focus: true });
+    });
+    el.doneRefresh?.addEventListener("click", () => void loadDoneLog());
+    setRailTab(state.railTab, { save: false });
     document.getElementById("idle-chat-explorer")?.addEventListener("click", () => nav("explorer", { assistant: true }));
     el.ambienceBtn?.addEventListener("click", toggleAmbience);
     el.legendToggle?.addEventListener("click", () => setLegend(!state.legendOpen));

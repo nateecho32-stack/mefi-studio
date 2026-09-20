@@ -20,7 +20,7 @@ const RAIL_WINDOW_MS = 14 * DAY; // the rail's own rule: older sessions are not 
 const REPLY_MAX_CHARS = 600;
 
 export const ASSISTANT_MODEL = "deepseek-v4.1-flash";
-export const CAPS = { messages: 200, log: 300, fixes: 100, work: 40 };
+export const CAPS = { messages: 200, log: 300, fixes: 100, work: 40, questions: 40 };
 export const DEFAULT_POLICY = { foldAfterMinutes: 60, staleAfterHours: 24, maxSessions: 8, maxTodosPerSession: 14 };
 export const PARALLEL_MAX = 12;
 export const AI_PARALLEL_MAX = 6;
@@ -28,7 +28,7 @@ export const DEFAULT_PREFS = { proactive: true, keepAwake: true, background: tru
 const PREF_RANGES = { parallel: [1, PARALLEL_MAX], aiParallel: [1, AI_PARALLEL_MAX] }; // integer prefs clamped into a range
 export const INTENTS = ["status", "tasks", "ideas", "collisions", "machine", "agents", "suggest", "tidy", "fix", "organize", "pause", "resume", "resume-work", "help", "request", "chat", "overseer", "compact", "builder", "log", "planning-status"];
 export const ACTION_KINDS = ["idle", "tick", "audit", "brief", "fix", "tidy", "organize", "message", "overseer"];
-export const LOG_KINDS = ["tick", "message", "reply", "fix", "tidy", "organize", "audit", "brief", "collision", "machine", "error", "control", "overseer", "think"];
+export const LOG_KINDS = ["tick", "message", "reply", "fix", "tidy", "organize", "audit", "brief", "collision", "machine", "error", "control", "overseer", "think", "question"];
 export const THINKING_KEEP = 8; // committed inner-monologue bubbles kept in the thread
 export const FIX_KINDS = ["data", "catalog", "requests", "process", "build", "overseer"];
 export const PROBLEM_KINDS = ["update-held", "store-unavailable", "ai-offline", "audit", "collision", "machine", "work-stale", "overseer", "executor"];
@@ -262,6 +262,7 @@ export function emptyState(now = Date.now()) {
     },
     housekeeping: { lastAt: 0, tasksArchived: 0, ideasPruned: 0, requestsCleared: 0, checkpointsDropped: 0, foldersCleaned: 0, lastText: "" },
     problems: [],
+    questions: [],
     unread: 0,
     prefs: { ...DEFAULT_PREFS },
     pool: emptyPool(),
@@ -374,6 +375,53 @@ function normalizeProblem(entry) {
   return { kind: entry.kind, text: str(entry.text), since: num(entry.since, 0) };
 }
 
+// A question the agents put to the owner: a decision with named options, the
+// recommended one flagged, and the answer kept beside it. The renderer turns
+// options into buttons; `reply` (if present) becomes the chat line the answer
+// sends, `action` is a host command (message, work-on, backlog, control), and
+// `dismiss` marks the "not now" choice that needs no reply at all.
+function normalizeQuestionOption(entry, index) {
+  if (!isObject(entry)) return null;
+  const label = str(entry.label).trim().slice(0, 120);
+  if (!label) return null;
+  const action = isObject(entry.action) && str(entry.action.kind) ? entry.action : null;
+  return {
+    id: str(entry.id).slice(0, 40) || `option_${index + 1}`,
+    label,
+    description: str(entry.description).trim().slice(0, 240) || null,
+    reply: str(entry.reply).trim().slice(0, 400) || null,
+    ...(action ? { action } : {}),
+    ...(entry.dismiss === true ? { dismiss: true } : {}),
+    recommended: entry.recommended === true,
+  };
+}
+
+function normalizeQuestion(entry, index) {
+  if (!isObject(entry) || typeof entry.title !== "string" || !entry.title.trim()) return null;
+  const at = num(entry.at, 0);
+  const options = asArray(entry.options).map(normalizeQuestionOption).filter(Boolean).slice(0, 6);
+  const answer = isObject(entry.answer)
+    ? {
+        at: num(entry.answer.at, 0),
+        optionId: str(entry.answer.optionId).slice(0, 40) || null,
+        label: str(entry.answer.label).slice(0, 120) || null,
+        text: str(entry.answer.text).slice(0, 400) || null,
+        via: str(entry.answer.via).slice(0, 24) || null,
+      }
+    : null;
+  return {
+    id: str(entry.id) || `q_${at}_${index}`,
+    at,
+    kind: oneOf(entry.kind, ["question", "suggestion"], "question"),
+    source: str(entry.source).slice(0, 40) || "assistant",
+    title: entry.title.trim().slice(0, 240),
+    detail: str(entry.detail).trim().slice(0, 400) || null,
+    status: oneOf(entry.status, ["open", "answered", "dismissed", "expired", "superseded"], "open"),
+    options,
+    answer,
+  };
+}
+
 // A valid state from anything: null, a partial file, junk keys, wrong types.
 // Known fields are coerced, unknown ones dropped, arrays clamped to CAPS.
 export function normalizeState(raw, now = Date.now()) {
@@ -427,6 +475,7 @@ export function normalizeState(raw, now = Date.now()) {
       lastText: str(housekeeping.lastText),
     };
     state.problems = asArray(raw.problems).map(normalizeProblem).filter(Boolean);
+    state.questions = clampTail(asArray(raw.questions).map(normalizeQuestion).filter(Boolean), CAPS.questions);
     state.unread = Math.floor(num(raw.unread, 0));
     state.prefs = normalizePrefs(raw.prefs);
     state.agents = normalizeAgents(raw.agents);
@@ -1059,7 +1108,10 @@ const normalizeIntelRow = (row) => {
 // verdict so the digest and the intel feed parse the same event.
 const normalizeBuilderEvent = (row) => {
   if (!isObject(row) || row.role !== "builder" || typeof row.ok !== "boolean") return null;
-  const exit = Number(row.exit);
+  // A killed or never-exited child passes null: `Number(null)` is 0, so an
+  // unknown exit code must be caught before the conversion instead of being
+  // recorded as a successful-looking exit 0.
+  const exit = row.exit === null || row.exit === undefined || row.exit === "" ? NaN : Number(row.exit);
   return { at: num(row.at, 0), role: "builder", ok: row.ok, job: clip(str(row.job), 120), exit: Number.isFinite(exit) ? Math.floor(exit) : null, title: clip(str(row.title), 70) };
 };
 
@@ -3905,7 +3957,7 @@ function lastAssistantText(state) {
 }
 
 // Titles quoted by the latest reply that asked for a decision.
-function pendingOffers(state) {
+export function pendingOffers(state) {
   const last = lastAssistantText(state);
   return last && OFFER_LINE.test(last) ? quoteTitles(last) : [];
 }
@@ -3955,11 +4007,18 @@ function vagueSubject(flat) {
 function resolveSubject({ index = null, state, picks, focused, loose = false }) {
   const offers = pendingOffers(state);
   const fromPick = (pick) => pick ? { title: pick.fullTitle || pick.title, via: "pick", ...(pick.target ? { existingTarget: pick.target } : {}) } : null;
+  // An offer is the pick's display label, clipped in the reply. When a current
+  // pick carries the same label, reuse its full title and identity so "yes"
+  // does not queue a near-duplicate of long work the clipped title cannot key.
+  const fromOffer = (title) => {
+    const pick = asArray(picks).find((entry) => entry?.title === title);
+    return { title: pick?.fullTitle || title, via: "offer", ...(pick?.target ? { existingTarget: pick.target } : {}) };
+  };
   if (index !== null) {
     const title = pickAt(offers, index);
-    return title ? { title, via: "offer" } : fromPick(pickAt(picks, index));
+    return title ? fromOffer(title) : fromPick(pickAt(picks, index));
   }
-  if (offers.length) return { title: offers[0], via: "offer" };
+  if (offers.length) return fromOffer(offers[0]);
   if (loose) {
     const quoted = lastQuoted(state);
     if (quoted.length) return { title: quoted[0], via: "quote" };
@@ -4486,7 +4545,11 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
           const title = pickAt(offers, index);
           if (title) {
             actions.push("queue-request", "agents");
-            request = { title: clip(title, 60), resolvedTitle: title, prompt: `Work on "${title}". Queued from the assistant chat — the user confirmed with "${clip(text, 140)}".` };
+            // The offer is the pick's clipped label; a matching current pick
+            // supplies the full title and identity the host dedupes on.
+            const pick = asArray(suggestWork({ ...source, now })).find((entry) => entry.title === title);
+            const resolved = pick?.fullTitle || title;
+            request = { title: clip(resolved, 60), resolvedTitle: resolved, ...(pick?.target ? { existingTarget: pick.target } : {}), prompt: `Work on "${resolved}". Queued from the assistant chat — the user confirmed with "${clip(text, 140)}".` };
             lines.push(`On it — "${clip(title, 60)}" is on the task board as the next piece of work and the roster is out with it.`);
             lines.push(aiNote(current).trim());
           } else {
@@ -5300,6 +5363,8 @@ function selfTest() {
     expect(!heardOk.wakeOverseer && heardOk.state.intel[0]?.facts?.ok === true, "a clean finish stays on the intel board");
     const heardHand = hearReport(emptyState(result.now), { role: "builder", ok: true, title: "Split the work", handed: 2 }, result.now);
     expect(!heardHand.wakeOverseer && heardHand.wakeForeman && /follow-up/.test(heardHand.reply), `a handoff wakes the foreman ${heardHand.reply}`);
+    const heardUnknown = hearReport(emptyState(result.now), { role: "builder", ok: false, title: "Killed run", job: "run_null", exit: null }, result.now);
+    expect(heardUnknown.state.builderEvents[0]?.exit === null, `an unknown exit code stays unknown, never zero ${JSON.stringify(heardUnknown.state.builderEvents)}`);
     const digestFail = overseerDigest(heardFail.state, result.now);
     expect(digestFail.builders.fails === 1 && digestFail.builders.reports === 0, `digest counts builder fails separately from successful reports ${JSON.stringify(digestFail.builders)}`);
     const digestBoth = overseerDigest(heardOk.state, result.now + 2000);
@@ -5738,7 +5803,7 @@ function selfTest() {
     });
     expect(rotated.requests.some((request) => request.title === "Resolve collision: oldname.lua"), `tidy keeps a live session pair when the representative file rotated ${JSON.stringify(rotated.requests)}`);
   }
-  return { ok: failures.length === 0, failures, checks: 183 };
+  return { ok: failures.length === 0, failures, checks: 184 };
 }
 
 async function cli() {

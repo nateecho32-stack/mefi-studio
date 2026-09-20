@@ -5,10 +5,11 @@ scripts/assistant.mjs (the same hearReport main.cjs calls) and pins the
 digest counters (digest.builders.reports counts finished runs, fails counts
 failed ones, inside the half-hour window — a later finish cannot erase an
 earlier failure), the structured builder events each done/fail appends (job
-id, role, exit code, verdict — parsed here), their survival across a state
-save/reload, and the main.cjs wiring: assistantHearBuilder threads the run's
-job id and exit code into the report, the fallback intel row and the emitted
-intel event, and the executor's finish path passes the child's exit code.
+id, role, exit code, verdict — parsed here; a killed run's unknown exit code
+stays null, never zero), their survival across a state save/reload, and the
+main.cjs wiring: assistantHearBuilder threads the run's job id and exit code
+into the report, the fallback intel row and the emitted intel event, and the
+executor's finish path passes the child's exit code.
 No network, no key, no Electron; the Node half skips cleanly without Node.
 
 Discovered by npm test through tools/test_mefi_studio_builder_intel.py.
@@ -71,11 +72,14 @@ backward = run(backward, false, "run_fail", 1, NOW);
 backward = run(backward, true, "run_ok", 0, NOW + 1000);
 let stale = emptyState(NOW - 31 * 60000);
 stale = run(stale, true, "run_old", 0, NOW - 31 * 60000);
+let unknown = emptyState(NOW);
+unknown = run(unknown, false, "run_killed", null, NOW);
 const reloaded = normalizeState(JSON.parse(JSON.stringify(forward)));
 console.log(JSON.stringify({
   forward: overseerDigest(forward, NOW + 2000).builders,
   backward: overseerDigest(backward, NOW + 2000).builders,
   events: forward.builderEvents,
+  unknown: unknown.builderEvents,
   reloaded: reloaded.builderEvents,
   reloadedDigest: overseerDigest(reloaded, NOW + 2000).builders,
   stale: overseerDigest(stale, NOW).builders,
@@ -98,6 +102,9 @@ console.log(JSON.stringify({
         self.assertEqual("builder", fail_row["role"])
         self.assertFalse(fail_row["ok"])
         self.assertEqual(1, fail_row["exit"])
+        unknown_row = payload["unknown"][0]
+        self.assertFalse(unknown_row["ok"])
+        self.assertIsNone(unknown_row["exit"], "a killed run's unknown exit code stays null, never 0")
         self.assertEqual(payload["events"], payload["reloaded"], "the structured events survive a state save and reload")
 
     def test_main_threads_job_id_and_exit_into_the_report(self):

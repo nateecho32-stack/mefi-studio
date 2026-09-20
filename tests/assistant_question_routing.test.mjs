@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { classifyIntent, localReply } from "../scripts/assistant.mjs";
+import { classifyIntent, localReply, suggestWork } from "../scripts/assistant.mjs";
 
 const facts = {
   tasks: [{ id: "existing", title: "Add an export button", status: "open" }],
@@ -105,6 +105,19 @@ test("actual task picks retain full titles and IDs beyond their display labels",
   assert.equal(reply.request.resolvedTitle, title);
   assert.ok(reply.request.title.length < title.length);
   assert.deepEqual(reply.request.existingTarget, { kind: "task", id: "search" });
+});
+
+test("offers quoted from a pick keep its full title and identity past the display clip", () => {
+  const title = `Add keyboard accessible search ${"with saved filters and navigation ".repeat(3)}`.trim();
+  const facts = { tasks: [{ id: "search", title, status: "open" }] };
+  const offered = suggestWork(facts)[0].title;
+  assert.notEqual(offered, title, "the offer is a clipped display label");
+  const state = { messages: [{ role: "assistant", text: `Could work on: "${offered}" — say work on one or name your own.` }] };
+  for (const text of ["yes", "work on the first one"]) {
+    const reply = localReply({ text, facts, state });
+    assert.equal(reply.request.resolvedTitle, title, text);
+    assert.deepEqual(reply.request.existingTarget, { kind: "task", id: "search" }, text);
+  }
 });
 
 test("quoted offers and affirmations never inherit an unrelated focused task identity", () => {

@@ -7,7 +7,7 @@ verification, resolved follow-ups, full briefs sharing a truncated title, and
 failed saves without helper dispatch. `tests/chat_work.test.mjs` checks matching
 boundaries for projects, grouped tasks, scope, negation, paths and closed work.
 `tests/assistant_question_routing.test.mjs` keeps questions and lookups out of
-execution while retaining explicit instructions and mixed question/work messages.
+execution while retaining explicit instructions, mixed question/work messages, and offer follow-ups bound to their pick's full title and identity.
 These checks use no live stores, coding workers or paid provider calls.
 
 Worker-start feedback coverage in `tests/assistant_work_on.test.mjs` reproduces
@@ -17,10 +17,13 @@ startup, one chat confirmation per spawn, verification, stale assignments and
 Pause while a builder is running. `tests/executor_resources.test.mjs` also checks
 connection failures, dispatch-error recovery and full manual limits. These use
 in-memory stores and fake child events without launching paid workers.
-Validated on 2026-09-19: `npm run check`, `npm test` (1,294 Node passes,
-one opt-in skip, 220 Python contracts and six normalized-path checks), and
-`npm run audit` passed. Complete logs remain in the local temporary directory
-as `mefi-spawn-fix-{check,test,audit}.log`.
+Validated on 2026-09-19: `npm run check`, 1,327 Node passes with one opt-in
+skip, 220 Python contracts and six normalized-path checks, and `npm run audit`
+passed. The parallel Node run can flake the Electron render captures under GPU
+load (`tests/task_overview_render.test.mjs`, `tests/performance_render.test.mjs`);
+both pass in isolation and the suite passes cleanly with
+`node --test --test-concurrency=1`. Complete logs remain in the local temporary
+directory as `mefi-spawn-fix-{check,test,audit}.log`.
 
 `tests/assistant_work_on.test.mjs` covers the actual **Work on it** host path:
 paused and disabled workers are reported explicitly, repeated clicks retain one
@@ -567,7 +570,7 @@ full-suite gate remains unpassed. Complete logs are retained locally as
 | `tools/test_mefi_studio_normalized_path_lock.py` | Executor lock contracts for Mefi's Studio AI+ (`scripts/assistant.mjs` via a Node stdin driver, plus static pins): the spawn-loop file lock normalizes before comparing — `filesOverlap`/`sameFile` collapse forward/backward separators, drop trailing separators, fold case, match an absolute path against its repo-relative tail and a bare basename against the same basename under any folder — so two spellings of one file (the A-Eyes `test_mefi_studio_eyes.py` collision) are one claim; `claimWork` defers the second pick with reason `claimed` and advice naming the held file, a finished job releases its claim, an unrelated file proceeds, no lease file is ever written (that hung dispatch on OneDrive), the collision theme keys share the normalizer (`sameFileLabel`), and `main.cjs` consults `claimWork` before dispatch. Node half skips cleanly without Node. |
 | `tools/test_mefi_studio_claim_registry.py` | npm-test discovery shim: re-exports the claim-registry contracts from `tools/test_claim_registry.py` (the A-Eyes overseer directive names that file) so the dev set runs them. That file races `./tools/x.py` against its absolute form through the real `scripts/assistant.mjs` write-lock registry — `writeClaimKey` resolves relative paths against the module root and folds separators and case into one key, two racing sessions on one path yield exactly one `refuse` with reason `claimed`, `claimWork` defers dispatch while the claim lives, `releaseWrite` frees the path only for the owner, and the refused session may then take it; static pins cover the `writeClaims` map, the registry API, the `claimWork` consultation, and `main.cjs`'s `claimWrite`/`releaseWrite` wiring. Node half skips cleanly without Node. Standalone: `python -m unittest discover -s tools -p "test_claim_registry.py"`, `python -m unittest tools.test_mefi_studio_claim_registry` (the shim falls back to a package-relative import), or run the Node driver directly. |
 | `tools/test_mefi_studio_assistant_write_lock.py` | npm-test discovery shim: re-exports the write-lock serialization contracts from `tools/test_assistant_write_lock.py` (the A-Eyes overseer directive names that file) so the dev set runs them. That file proves two same-path writers serialize: both race the same file under `tools/x.py` and an upper-case backslash absolute spelling, exactly one writer is refused while the case-normalized claim map holds one entry, dispatch defers the second writer's pick until the winner releases, and the registry is empty once the handoff completes; static pins cover the `writeClaims` map key (`toLowerCase`), the `claimWork` gate, and `main.cjs` registering `entry.files` under the run id at dispatch and releasing them in `finish()`. Node half skips cleanly without Node. Standalone: `python -m unittest discover -s tools -p "test_assistant_write_lock.py"` or `python -m unittest tools.test_mefi_studio_assistant_write_lock` (the shim falls back to a package-relative import). |
-| `tools/test_mefi_studio_builder_intel.py` | npm-test discovery shim: re-exports the builder outcome reporting contracts from `tools/test_builder_intel.py` (the A-Eyes overseer directive names that file) so the dev set runs them. That file feeds one failed and one finished executor run through the real `scripts/assistant.mjs` `hearReport` — the same call `main.cjs`'s `assistantHearBuilder` makes — and asserts the digest counts `fails=1`/`reports=1` in either order (outcomes are events, so a later finish cannot erase an earlier failure), outcomes older than half an hour drop out of the window, and each done/fail appends a structured event (job id, role `builder`, exit code, verdict) that survives a state save/reload and is parsed by the test itself; static pins cover `assistantHearBuilder(entry, job, ok, errorMessage = "", exitCode = null)`, the `jobId`/`exit` threading into the report, the fallback intel row and the emitted intel facts, and the executor finish path passing `code ?? null`. Node half skips cleanly without Node. Standalone: `python -m unittest discover -s tools -p "test_builder_intel.py"` or `python -m unittest tools.test_mefi_studio_builder_intel` (the shim falls back to a package-relative import). |
+| `tools/test_mefi_studio_builder_intel.py` | npm-test discovery shim: re-exports the builder outcome reporting contracts from `tools/test_builder_intel.py` (the A-Eyes overseer directive names that file) so the dev set runs them. That file feeds one failed and one finished executor run through the real `scripts/assistant.mjs` `hearReport` — the same call `main.cjs`'s `assistantHearBuilder` makes — and asserts the digest counts `fails=1`/`reports=1` in either order (outcomes are events, so a later finish cannot erase an earlier failure), outcomes older than half an hour drop out of the window, and each done/fail appends a structured event (job id, role `builder`, exit code, verdict) that survives a state save/reload and is parsed by the test itself, with a killed run's unknown exit code kept null rather than 0; static pins cover `assistantHearBuilder(entry, job, ok, errorMessage = "", exitCode = null)`, the `jobId`/`exit` threading into the report, the fallback intel row and the emitted intel facts, and the executor finish path passing `code ?? null`. Node half skips cleanly without Node. Standalone: `python -m unittest discover -s tools -p "test_builder_intel.py"` or `python -m unittest tools.test_mefi_studio_builder_intel` (the shim falls back to a package-relative import). |
 | `tools/test_normalized_path_lock.mjs` | Node proof for the A-Eyes overseer directive (`node tools/test_normalized_path_lock.mjs` from the repository root; exit 0 = the lock holds; it also closes `npm test` so the proof is a named check in the standard pipeline): two concurrent claims on the same file under two spellings of its path yield exactly one rejection through the real `scripts/assistant.mjs` registry — plus release-then-retry, idempotent same-owner re-claims, `claimWork` deferring a pick whose path the registry holds, all-or-nothing multi-file claims, and foreign owners being unable to release someone else's claim. Verified 2026-09-19: 6/6 checks pass, `tools/test_claim_registry.py` 2/2, `tools/test_assistant_write_lock.py` 2/2, both `test_mefi_studio_*` shims 2/2 each. Re-verified 2026-09-19 in run_1789850103724_1 with the same results (proof exit 0, both contracts OK, no mojibake in the proof's output strings, `main.cjs` claim/release wiring confirmed at dispatch and finish). Re-verified 2026-09-19 in run_1789851482100_2: proof 6/6, contracts 2/2 + 2/2, full discovery set 202 OK; fixed both shims to also import package-style (`python -m unittest tools.test_mefi_studio_claim_registry` used to fail with `ModuleNotFoundError`) and pinned that in the shim rows above. Re-verified 2026-09-19 in run_1789854672162_6: proof 6/6, both contracts 2/2 (directive-named and package spellings), full `test_mefi_studio_*` discovery set 203 OK, `npm run check:specs` 84 specs/unique basenames/no orphans, `tests/spec_collisions.test.mjs` 4/4, and `.local-migration/` holds zero `test_*.py` copies. |
 
 
@@ -1073,17 +1076,3 @@ fresh-migration cutover and guard, 2 store-fork sync including idempotence
 and the app's own admission-rule drain). The repo?dist sync pass
 (`scripts/reconcile-store-fork.mjs`, `--dry-run` to preview) remains the
 tool for the two deliberate JSON stores; it never touches `board.db`.
-
-Dedupe-tracking verification for task `task_fc3979c3e56e4a49` (2026-09-19):
-the A-Eyes "untracked dedupe test files" warn was stale.
-`git ls-files tools/` lists both `tools/test_session_dedupe.py` (172-line
-session dedupe contract suite) and `tools/test_mefi_studio_session_dedupe.py`
-(15-line discovery shim re-exporting it), `git status --porcelain` shows both
-clean, and `git log --oneline -- <files>` lands both in commit 95319cf ("fixes",
-HEAD at check time), so session ses_f432d9671ffebdeUbT5do8du83's work is
-already preserved and no commit was needed. Content scan found only synthetic
-fixture IDs (`ses_a`, `ses_b`, ...), no real session IDs or secrets. Checks run:
-`git diff HEAD -- tools/test_session_dedupe.py
-tools/test_mefi_studio_session_dedupe.py` empty; `python
-tools/test_session_dedupe.py` 3/3 OK and `python
-tools/test_mefi_studio_session_dedupe.py` 3/3 OK (both spellings of the suite).

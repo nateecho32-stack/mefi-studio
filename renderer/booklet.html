@@ -2996,6 +2996,170 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 }
 @media (prefers-reduced-motion: reduce) { #idle-hud .cmd-music-level i { transition: none; } }
 
+/* ============================================================
+   The right rail: Work · Assistant · Done · Ask
+   The live-work feed and the assistant chat used to sit on
+   opposite edges. They now share one docked, tabbed panel on the
+   right. The inner panels keep their own ids, heads and collapse
+   controls; the rail owns position, size and tab visibility.
+   ============================================================ */
+#idle-hud { --command-rail-width: 344px; }
+#idle-hud .cmd-rail {
+  position: absolute; top: var(--command-panel-top); right: 24px; bottom: var(--command-panel-bottom);
+  width: var(--command-rail-width);
+  display: flex; flex-direction: column;
+  padding: 12px;
+  border: 1px solid var(--cmd-edge); border-radius: 16px;
+  background: var(--cmd-surface); box-shadow: var(--cmd-shadow);
+  font-size: 13px; z-index: 1; pointer-events: auto;
+}
+#idle-hud .cmd-rail.rail-collapsed { bottom: auto; }
+#idle-hud .rail-tabs {
+  display: flex; align-items: center; gap: 3px; flex: none;
+  padding: 0 0 10px; margin-bottom: 10px; border-bottom: 1px solid var(--hairline);
+}
+#idle-hud .rail-tab {
+  position: relative; display: inline-flex; align-items: center; gap: 5px;
+  min-height: 30px; padding: 0 9px;
+  border: 1px solid transparent; border-radius: 7px;
+  background: transparent; color: var(--muted);
+  font: 500 12px/1.3 var(--font-ui); letter-spacing: .01em; box-shadow: none;
+}
+#idle-hud .rail-tab:hover { color: var(--ivory); background: var(--cmd-hover); transform: none; }
+#idle-hud .rail-tab[aria-selected="true"] { color: var(--gold-bright); background: var(--tint-gold-2); border-color: var(--hairline); }
+#idle-hud .rail-tab .count {
+  position: static; min-width: 17px; height: 17px; padding: 0 4px;
+  font-size: 10px; border: 1px solid var(--cmd-edge); border-radius: 5px;
+  background: var(--cmd-raised); color: var(--ivory); box-shadow: none;
+}
+#idle-hud .rail-tab .count.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--cmd-edge)); }
+#idle-hud .rail-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+#idle-hud .cmd-rail .cmd-feed,
+#idle-hud .cmd-rail .cmd-chat,
+#idle-hud .cmd-rail .cmd-done,
+#idle-hud .cmd-rail .cmd-asks {
+  position: static; inset: auto; width: auto; max-width: none; max-height: none; min-height: 0;
+  flex: 1; padding: 0; border: 0; border-radius: 0;
+  background: transparent; box-shadow: none; backdrop-filter: none;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#idle-hud .cmd-rail .cmd-feed[hidden],
+#idle-hud .cmd-rail .cmd-chat[hidden],
+#idle-hud .cmd-rail .cmd-done[hidden],
+#idle-hud .cmd-rail .cmd-asks[hidden] { display: none; }
+#idle-hud .cmd-rail .cmd-feed.collapsed,
+#idle-hud .cmd-rail .cmd-chat.collapsed {
+  flex: none; width: auto; max-width: none; padding: 0; border: 0; background: transparent;
+}
+#idle-hud .cmd-rail .cmd-feed.collapsed .feed-head,
+#idle-hud .cmd-rail .cmd-chat.collapsed .chat-log-head { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
+
+/* the two rail views that own a head (done/ask have .rail-view-head) */
+#idle-hud .rail-view-head {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  padding-bottom: 9px; margin-bottom: 9px; border-bottom: 1px solid var(--hairline);
+}
+#idle-hud .rail-view-title { margin: 0; font: 600 14px/1.3 var(--font-ui); color: var(--ivory); }
+#idle-hud .rail-view-head .feed-state { flex: 1; min-width: 0; font-size: 10px; text-align: right; }
+#idle-hud .rail-view-head button { flex: none; min-height: 26px; padding: 3px 8px; font-size: 11px; }
+#idle-hud .rail-view-note { flex: none; margin: 0 0 10px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+
+/* visible explanations for the queue controls */
+#idle-hud .control-help { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+#idle-hud .feed-help { flex: none; margin: 0 0 12px; padding: 0 10px; border: 1px solid var(--cmd-edge); border-radius: 8px; background: var(--cmd-raised); }
+#idle-hud .feed-help > summary { cursor: pointer; color: var(--muted); font-size: 11px; padding: 7px 0; }
+#idle-hud .feed-help[open] > summary { color: var(--ivory); }
+#idle-hud .feed-help-list { margin: 0; padding: 0 0 8px; font-size: 11px; line-height: 1.55; }
+#idle-hud .feed-help-list dt { color: var(--gold); font-weight: 600; margin-top: 8px; }
+#idle-hud .feed-help-list dt:first-child { margin-top: 0; }
+#idle-hud .feed-help-list dd { margin: 2px 0 0; color: var(--muted); }
+
+/* the done log */
+#idle-hud .done-list {
+  list-style: none; margin: 0; padding: 0 2px 0 0;
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 6px;
+}
+#idle-hud .done-row {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 9px 10px; border: 1px solid var(--cmd-edge); border-left: 2px solid var(--live);
+  border-radius: 8px; background: var(--cmd-raised); font-size: 12px;
+}
+#idle-hud .done-row[data-ok="false"] { border-left-color: var(--bad); }
+#idle-hud .done-row[data-kind="pass"] { border-left-color: var(--info); }
+#idle-hud .done-row-head { display: flex; align-items: center; gap: 6px; }
+#idle-hud .done-verdict { font: 600 10px/1.4 var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--live); }
+#idle-hud .done-row[data-ok="false"] .done-verdict { color: var(--bad); }
+#idle-hud .done-row[data-kind="pass"] .done-verdict { color: var(--info); }
+#idle-hud .done-when { margin-left: auto; color: var(--dim); font-size: 10px; font-variant-numeric: tabular-nums; }
+#idle-hud .done-title { color: var(--ivory); line-height: 1.45; overflow-wrap: anywhere; }
+#idle-hud button.done-title {
+  width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent;
+  font: inherit; text-align: left; white-space: normal; min-height: 0; box-shadow: none;
+}
+#idle-hud button.done-title:hover { color: var(--gold-bright); background: transparent; transform: none; box-shadow: none; }
+#idle-hud .done-detail { color: var(--muted); font-size: 11px; line-height: 1.45; }
+#idle-hud .done-empty, #idle-hud .ask-empty { margin: 0; padding: 8px 2px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+/* the ask cards */
+#idle-hud .ask-list {
+  list-style: none; margin: 0; padding: 0 2px 0 0;
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px;
+}
+#idle-hud .ask-card {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 11px; border: 1px solid var(--cmd-edge); border-left: 3px solid var(--gold);
+  border-radius: 9px; background: var(--cmd-raised);
+}
+#idle-hud .ask-card[data-kind="suggestion"] { border-left-color: var(--info); }
+#idle-hud .ask-card[data-status="answered"], #idle-hud .ask-card[data-status="dismissed"], #idle-hud .ask-card[data-status="expired"], #idle-hud .ask-card[data-status="superseded"] { opacity: .62; }
+#idle-hud .ask-head { display: flex; align-items: center; gap: 6px; }
+#idle-hud .ask-kind { font: 600 10px/1.4 var(--font-ui); text-transform: uppercase; letter-spacing: .08em; color: var(--gold); }
+#idle-hud .ask-card[data-kind="suggestion"] .ask-kind { color: var(--info); }
+#idle-hud .ask-when { margin-left: auto; color: var(--dim); font-size: 10px; font-variant-numeric: tabular-nums; }
+#idle-hud .ask-title { margin: 0; font: 600 13px/1.45 var(--font-ui); color: var(--ivory); overflow-wrap: anywhere; }
+#idle-hud .ask-detail { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+#idle-hud .ask-options { display: flex; flex-direction: column; gap: 5px; }
+#idle-hud .ask-option {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  width: 100%; min-height: 0; padding: 7px 9px;
+  border: 1px solid var(--hairline); border-radius: 7px;
+  background: var(--cmd-surface); color: var(--ivory);
+  font: 500 12px/1.4 var(--font-ui); text-align: left; white-space: normal; box-shadow: none;
+}
+#idle-hud .ask-option:hover { background: var(--cmd-hover); border-color: var(--hairline-strong); transform: none; }
+#idle-hud .ask-option[data-recommended="true"] { border-color: var(--gold-dim); background: color-mix(in srgb, var(--gold) 10%, var(--cmd-surface)); }
+#idle-hud .ask-option-desc { color: var(--muted); font-size: 10px; line-height: 1.45; }
+#idle-hud .ask-rec {
+  margin-left: 6px; padding: 1px 5px; border-radius: 4px;
+  background: var(--tint-gold-3); color: var(--gold-bright);
+  font: 600 9px/1.5 var(--font-ui); text-transform: uppercase; letter-spacing: .06em;
+}
+#idle-hud .ask-custom { display: flex; gap: 5px; }
+#idle-hud .ask-custom input { flex: 1; min-width: 0; min-height: 30px; padding: 4px 8px; font-size: 11px; }
+#idle-hud .ask-custom button { flex: none; min-height: 30px; }
+#idle-hud .ask-answer-note { color: var(--live); font-size: 11px; line-height: 1.5; }
+
+/* the rail replaces the old edges: the card and Follow banner step left */
+#idle-hud .cmd-card { right: calc(24px + var(--command-rail-width) + 16px); }
+#idle-hud.chat-log-open .cmd-card { right: calc(24px + var(--command-rail-width) + 16px); }
+#idle-hud .cmd-follow-status { left: 48px; right: calc(24px + var(--command-rail-width) + 16px); }
+@media (max-width: 1440px) { #idle-hud { --command-rail-width: 320px; } }
+@media (max-width: 1100px) {
+  #idle-hud { --command-rail-width: 288px; }
+  #idle-hud .cmd-rail { right: 18px; padding: 10px; }
+  #idle-hud .cmd-card, #idle-hud.chat-log-open .cmd-card { right: calc(18px + var(--command-rail-width) + 14px); }
+  #idle-hud .cmd-follow-status { left: 18px; right: calc(18px + var(--command-rail-width) + 14px); }
+}
+@media (max-width: 760px) {
+  #idle-hud { --command-rail-width: 252px; }
+  #idle-hud .cmd-rail { right: 12px; padding: 9px; }
+  #idle-hud .cmd-card, #idle-hud.chat-log-open .cmd-card { right: calc(12px + var(--command-rail-width) + 10px); }
+  #idle-hud .cmd-follow-status { left: 12px; right: 12px; }
+  #idle-hud .rail-tab { padding: 0 6px; font-size: 11px; }
+}
+
 /* Integrated music room. Shared theme tokens also colour Command and boards. */
 :root[data-studio-theme] .primary { background: linear-gradient(180deg, var(--gold-bright), var(--gold)); }
 :root[data-studio-theme] .primary { color: var(--ink); }
@@ -3844,7 +4008,15 @@ body.music-preview-active #idle-hud { display: none !important; }
   </div>
   <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" aria-live="polite" hidden></aside>
   <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
-  <aside id="cmd-chat" class="cmd-chat" role="region" aria-label="Assistant chat log">
+  <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, assistant, done and questions">
+    <header class="rail-tabs" role="tablist" aria-label="Panel views">
+      <button id="cmd-rail-tab-work" class="rail-tab" role="tab" aria-selected="true" aria-controls="idle-feed" data-rail-view="work">Work<span id="cmd-rail-work-badge" class="count" hidden></span></button>
+      <button id="cmd-rail-tab-assistant" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-chat" tabindex="-1" data-rail-view="assistant">Assistant<span id="cmd-rail-assistant-badge" class="count" hidden></span></button>
+      <button id="cmd-rail-tab-done" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-done" tabindex="-1" data-rail-view="done">Done</button>
+      <button id="cmd-rail-tab-ask" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-asks" tabindex="-1" data-rail-view="ask">Ask<span id="cmd-rail-ask-badge" class="count warn" hidden></span></button>
+    </header>
+    <div id="cmd-rail-body" class="rail-body">
+  <aside id="cmd-chat" class="cmd-chat" role="tabpanel" aria-label="Assistant chat log" hidden>
     <header class="chat-log-head">
       <i id="cmd-chat-dot" class="feed-dot" aria-hidden="true"></i>
       <button id="cmd-chat-jump" class="chat-log-title" title="Select the assistant (M)">Assistant</button>
@@ -3852,7 +4024,8 @@ body.music-preview-active #idle-hud { display: none !important; }
       <button id="cmd-chat-toggle" class="ghost mini" aria-expanded="true" title="Collapse the chat log">&ndash;</button>
     </header>
     <div id="cmd-chat-body" class="chat-log-body">
-      <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="cmd-chat-new-work" role="switch" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="cmd-chat-new-work-state" aria-hidden="true">Loading…</span></label>
+      <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="cmd-chat-new-work" role="switch" aria-describedby="idle-new-work-help" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="cmd-chat-new-work-state" aria-hidden="true">Loading…</span></label>
+      <p id="idle-new-work-help" class="control-help">The master switch for starting anything new: queued tasks, builds and work the assistant suggests. Off pauses admission — running jobs, replies and your answers to questions still work.</p>
       <div id="cmd-chat-thread" class="assistant-thread chat-log-thread" aria-live="polite"></div>
       <div class="chat-chips" aria-label="Quick asks">
         <button class="ghost mini" data-cmdchat-msg="status">Status</button>
@@ -3866,7 +4039,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       </div>
     </div>
   </aside>
-  <aside id="idle-feed" class="cmd-feed" role="region" aria-label="Live work">
+  <aside id="idle-feed" class="cmd-feed" role="tabpanel" aria-label="Live work">
     <header class="feed-head">
       <h2 class="feed-title"><button id="idle-feed-toggle" class="feed-toggle" type="button" aria-expanded="true" aria-controls="idle-feed-content" title="Collapse live work">
         <i id="idle-feed-dot" class="feed-dot" aria-hidden="true"></i>
@@ -3877,10 +4050,25 @@ body.music-preview-active #idle-hud { display: none !important; }
     <div id="idle-feed-content" class="feed-content">
     <div id="idle-feed-metrics" class="feed-metrics" aria-label="Work readiness"></div>
     <div class="feed-controls">
-      <label class="switch mini feed-autopilot" title="Autopilot: queue and run Auto Builder requests"><input type="checkbox" id="idle-autopilot"><span class="track"></span><span>Autopilot</span></label>
-      <label class="feed-capacity">Parallel builds <select id="idle-feed-parallel" aria-label="Build scheduling capacity"><option value="machine">Machine managed</option><option value="1">Manual: 1 worker</option><option value="2">Manual: 2 workers</option><option value="3">Manual: 3 workers</option></select></label>
-      <label class="feed-capacity">Build mode <select id="idle-feed-build-mode" aria-label="Build approval mode"><option value="auto">Auto build</option><option value="verify">Verify first</option></select></label>
+      <label class="switch mini feed-autopilot" title="Autopilot: queue and run Auto Builder requests"><input type="checkbox" id="idle-autopilot" aria-describedby="idle-autopilot-help"><span class="track"></span><span>Autopilot</span></label>
+      <label class="feed-capacity">Parallel builds <select id="idle-feed-parallel" aria-label="Build scheduling capacity" aria-describedby="idle-feed-parallel-help"><option value="machine">Machine managed</option><option value="1">Manual: 1 worker</option><option value="2">Manual: 2 workers</option><option value="3">Manual: 3 workers</option></select></label>
+      <label class="feed-capacity">Build mode <select id="idle-feed-build-mode" aria-label="Build approval mode" aria-describedby="idle-feed-build-mode-help"><option value="auto">Auto build</option><option value="verify">Verify first</option></select></label>
     </div>
+    <details id="idle-controls-help" class="feed-help">
+      <summary>How these controls work</summary>
+      <dl class="feed-help-list">
+        <dt id="idle-autopilot-help">Autopilot</dt>
+        <dd>Autopilot is the master switch for the assistant's queue. On each pass the assistant looks for ready tasks, starts them while a worker slot is free, and verifies what came back. Turning it off stops new work from starting; jobs already running finish normally.</dd>
+        <dt id="idle-feed-parallel-help">Parallel builds</dt>
+        <dd>How many builds may run at the same time. <b>Machine managed</b> starts work while the app stays responsive and backs off when the machine is busy. A manual limit (1–3) caps concurrent builds but never starts or pauses anything by itself.</dd>
+        <dt id="idle-feed-build-mode-help">Build mode</dt>
+        <dd><b>Auto build</b> starts eligible tasks as soon as a worker is free. <b>Verify first</b> holds every new or changed brief for your approval, so you decide what gets built. Switching never interrupts a running job.</dd>
+        <dt id="idle-feed-agent-mode-help">Agent mode</dt>
+        <dd>How agents coordinate. <b>Swarm</b> works across all ready tasks and their subtasks; <b>Cluster</b> focuses every agent on one shared task until it is done. Both plan, delegate and review results; current work finishes when you switch.</dd>
+        <dt>New work</dt>
+        <dd>The master switch for starting anything new — queued tasks, builds and work the assistant suggests. Off pauses admission; running jobs, replies and your answers to questions still work.</dd>
+      </dl>
+    </details>
     <div id="idle-feed-scroll" class="feed-scroll" tabindex="0" role="region" aria-label="Current work and queue">
     <p id="idle-feed-agent-mode-note" class="feed-mode-note" role="status">Both modes collaborate and delegate subtasks. Swarm works across the queue; Cluster focuses on one shared task.</p>
     <section class="feed-current" aria-label="Current work">
@@ -3917,10 +4105,29 @@ body.music-preview-active #idle-hud { display: none !important; }
         <button id="idle-chat-overseer" class="ghost mini" title="The overseer reviews the assistant's own work, tunes prefs and files upgrades">Oversee</button>
         <button id="idle-chat-tidy" class="ghost mini" title="Archive done tasks, prune finished ideas, clear resolved requests">Tidy</button>
         <button id="idle-chat-fix" class="ghost mini" title="Repair the catalog and data files, check the live update">Fix</button>
-        <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="idle-chat-pause" role="switch" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="idle-chat-new-work-state" aria-hidden="true">Loading…</span></label>
+        <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="idle-chat-pause" role="switch" aria-describedby="idle-new-work-help" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="idle-chat-new-work-state" aria-hidden="true">Loading…</span></label>
         <button id="idle-chat-explorer" class="ghost mini" title="The full assistant surface in the Session explorer (E)">Explorer</button>
       </div>
     </div>
+    </div>
+  </aside>
+  <section id="cmd-done" class="cmd-done" role="tabpanel" aria-labelledby="cmd-rail-tab-done" hidden>
+    <div class="rail-view-head">
+      <h2 class="rail-view-title">Done log</h2>
+      <span id="cmd-done-state" class="feed-state" role="status" aria-live="polite">Loading…</span>
+      <button id="cmd-done-refresh" class="ghost mini" type="button" title="Re-read the executor ledger">Refresh</button>
+    </div>
+    <p class="rail-view-note">Finished builds from the durable executor ledger, plus the assistant's own completed passes. <b>Done</b> means the worker reported success; <b>Failed</b> means it stopped early. These records survive restarts.</p>
+    <ul id="cmd-done-list" class="done-list" aria-label="Completed work"></ul>
+  </section>
+  <section id="cmd-asks" class="cmd-asks" role="tabpanel" aria-labelledby="cmd-rail-tab-ask" hidden>
+    <div class="rail-view-head">
+      <h2 class="rail-view-title">Questions</h2>
+      <span id="cmd-ask-state" class="feed-state" role="status" aria-live="polite">Nothing waiting</span>
+    </div>
+    <p class="rail-view-note">When an agent needs a decision it asks here with a recommended option. Nothing moves until you answer; your choice is recorded and sent to the assistant, which acts on it or explains what changed.</p>
+    <ul id="cmd-ask-list" class="ask-list" aria-label="Questions and suggestions"></ul>
+  </section>
     </div>
   </aside>
   <div id="cmd-legend" class="cmd-legend">
@@ -12922,6 +13129,13 @@ body.music-preview-active #idle-hud { display: none !important; }
     legendOpen: readStore("mefiStudio.cmdLegend") === "1",
     feedMenuOpen: readStore("mefiStudio.cmdFeedMenu") === "1",
     feedCollapsed: readStore("mefiStudio.cmdFeedCollapsed") === "1",
+    railTab: ["work", "assistant", "done", "ask"].includes(readStore("mefiStudio.cmdRailTab")) ? readStore("mefiStudio.cmdRailTab") : "work",
+    railCollapsed: false,
+    doneEntries: null,
+    doneAt: 0,
+    doneLoading: false,
+    askSending: false,
+    lastAssistantSelected: false,
     query: "",
     matches: [],
     matchSet: new Set(),
@@ -14384,9 +14598,267 @@ body.music-preview-active #idle-hud { display: none !important; }
     el.chatLogToggle?.setAttribute("title", state.chatLogOpen ? "Collapse the chat log" : "Expand the chat log");
     if (el.chatLogToggle) el.chatLogToggle.textContent = state.chatLogOpen ? "–" : "+";
     el.hud?.classList.toggle("chat-log-open", state.chatLogOpen);
+    applyRailCollapsed();
     state.graphAreaAt = 0;
     state.hudRectsAt = 0;
   }
+
+  // ---- the right rail: Work · Assistant · Done · Ask ------------------------
+  // The live-work feed and the assistant chat share one docked panel. Each view
+  // keeps its own head and collapse control; the rail only decides which view
+  // is on screen and whether the panel shrinks to its header.
+  const RAIL_VIEWS = ["work", "assistant", "done", "ask"];
+
+  function applyRailCollapsed() {
+    const collapsed = state.railTab === "work" ? state.feedCollapsed
+      : state.railTab === "assistant" ? !state.chatLogOpen
+      : false;
+    state.railCollapsed = collapsed;
+    el.rail?.classList.toggle("rail-collapsed", collapsed);
+  }
+
+  function setRailTab(name, { save = true, focus = false } = {}) {
+    const view = RAIL_VIEWS.includes(name) ? name : "work";
+    state.railTab = view;
+    for (const button of el.railTabs ?? []) {
+      const selected = button.dataset.railView === view;
+      button.setAttribute("aria-selected", String(selected));
+      button.tabIndex = selected ? 0 : -1;
+      if (selected && focus) button.focus();
+    }
+    if (el.feed) el.feed.hidden = view !== "work";
+    if (el.chatLog) el.chatLog.hidden = view !== "assistant";
+    if (el.done) el.done.hidden = view !== "done";
+    if (el.asks) el.asks.hidden = view !== "ask";
+    if (save) writeStore("mefiStudio.cmdRailTab", view);
+    applyRailCollapsed();
+    if (view === "done") void loadDoneLog();
+    if (view === "ask") renderAsks();
+    state.graphAreaAt = 0;
+    state.hudRectsAt = 0;
+  }
+
+  function railQuestions(full = null) {
+    const source = full ?? assistantFull();
+    return Array.isArray(source?.questions) ? source.questions : [];
+  }
+
+  // The tab counters: running builds on Work, unread replies on Assistant,
+  // open decisions on Ask.
+  function renderRailBadges(full = null) {
+    const jobs = autopilotJobs(state.assistant);
+    if (el.railWorkBadge) {
+      el.railWorkBadge.hidden = !jobs.length;
+      el.railWorkBadge.textContent = String(jobs.length);
+      el.railWorkBadge.title = jobs.length ? `${jobs.length} build${jobs.length === 1 ? "" : "s"} running` : "";
+    }
+    const unread = Number(full?.unread ?? assistantFull()?.unread ?? state.assistant?.unread) || 0;
+    if (el.railAssistantBadge) {
+      el.railAssistantBadge.hidden = !unread;
+      el.railAssistantBadge.textContent = String(unread);
+      el.railAssistantBadge.title = unread ? `${unread} unread repl${unread === 1 ? "y" : "ies"}` : "";
+    }
+    const waiting = railQuestions(full).filter((question) => question.status === "open").length;
+    if (el.railAskBadge) {
+      el.railAskBadge.hidden = !waiting;
+      el.railAskBadge.textContent = String(waiting);
+      el.railAskBadge.title = waiting ? `${waiting} decision${waiting === 1 ? "" : "s"} waiting` : "";
+    }
+  }
+
+  // The done log: the durable executor ledger plus the assistant's completed
+  // passes, read from the host on demand so a reload shows the file, not a cache.
+  async function loadDoneLog() {
+    if (!el.doneList) return;
+    if (!window.mefiStudio?.assistantDoneLog) {
+      if (el.doneState) el.doneState.textContent = "desktop app only";
+      renderDone();
+      return;
+    }
+    if (state.doneLoading) return;
+    state.doneLoading = true;
+    if (el.doneState) el.doneState.textContent = "Loading…";
+    try {
+      const result = await window.mefiStudio.assistantDoneLog({ limit: 80 });
+      state.doneEntries = Array.isArray(result?.entries) ? result.entries : [];
+      state.doneAt = Date.now();
+    } catch {
+      state.doneEntries = state.doneEntries ?? [];
+    } finally {
+      state.doneLoading = false;
+      renderDone();
+    }
+  }
+
+  function renderDone() {
+    if (!el.doneList) return;
+    const entries = state.doneEntries ?? [];
+    el.doneList.textContent = "";
+    if (!entries.length) {
+      const empty = document.createElement("li");
+      empty.className = "done-empty";
+      empty.textContent = window.mefiStudio
+        ? "Nothing has finished yet. Completed builds and assistant passes land here."
+        : "The done log is available in the desktop app.";
+      el.doneList.append(empty);
+    }
+    for (const entry of entries) {
+      const row = document.createElement("li");
+      row.className = "done-row";
+      row.dataset.ok = String(entry.ok !== false);
+      row.dataset.kind = entry.kind === "build" ? "build" : entry.kind === "pass" ? "pass" : "run";
+      const head = document.createElement("div");
+      head.className = "done-row-head";
+      const verdict = document.createElement("span");
+      verdict.className = "done-verdict";
+      verdict.textContent = entry.kind === "pass" ? "Pass" : entry.ok ? "Done" : "Failed";
+      const when = document.createElement("span");
+      when.className = "done-when";
+      when.textContent = agoLabel(entry.at) ?? "";
+      when.title = entry.at ? new Date(entry.at).toLocaleString() : "";
+      head.append(verdict, when);
+      const title = document.createElement(entry.taskId || entry.sessionId ? "button" : "span");
+      title.className = "done-title";
+      title.textContent = entry.title || "Untitled";
+      if (entry.taskId) {
+        title.type = "button";
+        title.addEventListener("click", () => nav("tasks", { taskId: entry.taskId, filter: "all" }));
+      } else if (entry.sessionId) {
+        title.type = "button";
+        title.addEventListener("click", () => nav("explorer", { sessionId: entry.sessionId }));
+      }
+      row.append(head, title);
+      if (entry.detail) {
+        const detail = document.createElement("span");
+        detail.className = "done-detail";
+        detail.textContent = entry.detail;
+        row.append(detail);
+      }
+      el.doneList.append(row);
+    }
+    if (el.doneState) el.doneState.textContent = entries.length ? `${entries.length} record${entries.length === 1 ? "" : "s"}` : "Nothing yet";
+  }
+
+  // The Ask cards: every open decision with its options, the recommended one
+  // flagged, and the answer history kept beside it.
+  function renderAsks(full = null) {
+    if (!el.askList) return;
+    const questions = railQuestions(full);
+    const open = questions.filter((question) => question.status === "open");
+    const closed = questions.filter((question) => question.status !== "open").slice(-5);
+    el.askList.textContent = "";
+    if (!questions.length) {
+      const empty = document.createElement("li");
+      empty.className = "ask-empty";
+      empty.textContent = "Nothing is waiting on you. When an agent needs a decision, it asks here with a recommended option.";
+      el.askList.append(empty);
+    }
+    for (const question of [...open, ...closed]) el.askList.append(askCard(question));
+    if (el.askState) el.askState.textContent = open.length ? `${open.length} waiting` : questions.length ? "All answered" : "Nothing waiting";
+  }
+
+  function askCard(question) {
+    const card = document.createElement("li");
+    card.className = "ask-card";
+    card.dataset.kind = question.kind === "suggestion" ? "suggestion" : "question";
+    card.dataset.status = question.status ?? "open";
+    const head = document.createElement("div");
+    head.className = "ask-head";
+    const kind = document.createElement("span");
+    kind.className = "ask-kind";
+    kind.textContent = question.kind === "suggestion" ? "Suggestion" : "Question";
+    const when = document.createElement("span");
+    when.className = "ask-when";
+    when.textContent = agoLabel(question.at) ?? "";
+    when.title = question.at ? new Date(question.at).toLocaleString() : "";
+    head.append(kind, when);
+    const title = document.createElement("p");
+    title.className = "ask-title";
+    title.textContent = question.title ?? "";
+    card.append(head, title);
+    if (question.detail) {
+      const detail = document.createElement("p");
+      detail.className = "ask-detail";
+      detail.textContent = question.detail;
+      card.append(detail);
+    }
+    if (question.status === "open") {
+      const options = document.createElement("div");
+      options.className = "ask-options";
+      for (const option of Array.isArray(question.options) ? question.options : []) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "ask-option";
+        button.dataset.option = option.id;
+        if (option.recommended) button.dataset.recommended = "true";
+        const label = document.createElement("span");
+        label.textContent = option.label;
+        if (option.recommended) {
+          const rec = document.createElement("span");
+          rec.className = "ask-rec";
+          rec.textContent = "Recommended";
+          label.append(rec);
+        }
+        button.append(label);
+        if (option.description) {
+          const desc = document.createElement("span");
+          desc.className = "ask-option-desc";
+          desc.textContent = option.description;
+          button.append(desc);
+        }
+        button.addEventListener("click", () => void answerQuestion(question.id, option.id, null, button));
+        options.append(button);
+      }
+      card.append(options);
+      const custom = document.createElement("form");
+      custom.className = "ask-custom";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "Or type your own answer…";
+      input.setAttribute("aria-label", "Write an answer");
+      const send = document.createElement("button");
+      send.type = "submit";
+      send.className = "ghost mini";
+      send.textContent = "Send";
+      custom.append(input, send);
+      custom.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const text = input.value.trim();
+        if (text) void answerQuestion(question.id, null, text, send);
+      });
+      card.append(custom);
+    } else if (question.answer) {
+      const note = document.createElement("p");
+      note.className = "ask-answer-note";
+      note.textContent = question.status === "dismissed" ? `Dismissed: ${question.answer.label ?? "not now"}`
+        : question.status === "expired" ? "Expired without an answer"
+        : question.status === "superseded" ? "Superseded by a newer question"
+        : `You chose: ${question.answer.label ?? question.answer.text ?? "answered"}`;
+      card.append(note);
+    }
+    return card;
+  }
+
+  async function answerQuestion(id, optionId, text, button) {
+    if (state.askSending) return;
+    if (!window.mefiStudio?.assistantAnswer) {
+      window.MefiToast?.("Answers are available in the desktop app", "warn");
+      return;
+    }
+    state.askSending = true;
+    if (button) button.disabled = true;
+    try {
+      const result = await window.mefiStudio.assistantAnswer({ id, optionId, text });
+      if (result?.ok === false && result?.error) window.MefiToast?.(result.error, "warn");
+    } catch (error) {
+      window.MefiToast?.(`Answer failed: ${error.message}`, "warn");
+    } finally {
+      state.askSending = false;
+      renderAsks();
+      renderRailBadges();
+    }
+  }
+
 
   // The service state as tree3d holds it (the full thread and log), and the
   // short summary every surface shares.
@@ -14889,6 +15361,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     refreshAssistantCache();
     updateAssistantPill();
     paintChatLog();
+    renderRailBadges(payload?.state ?? null);
+    if (state.railTab === "ask") renderAsks(payload?.state ?? null);
+    if (state.railTab === "done" && Date.now() - (state.doneAt ?? 0) > 4000) void loadDoneLog();
     const kind = payload?.event?.kind ?? null;
     if (!kind) return;
     if (kind === "tick") {
@@ -15155,16 +15630,24 @@ body.music-preview-active #idle-hud { display: none !important; }
     let bottom = el.height - 86;
     const header = visibleBox(el.top);
     const dock = visibleBox(el.bottom);
+    const rail = visibleBox(el.rail);
     const feed = visibleBox(el.feed);
     const chat = visibleBox(el.chatLog);
     if (header) top = Math.max(top, header.bottom + 20);
     if (dock) bottom = Math.min(bottom, dock.top - 24);
-    if (feed && !state.feedCollapsed && feed.left < el.width / 2) left = Math.max(left, feed.right + 28);
-    if (chat && state.chatLogOpen && chat.left > el.width / 2) right = Math.min(right, chat.left - 28);
-    // Collapsing a panel returns its side gutter, but its visible header is
-    // still an obstruction. Begin the free canvas below those short headers.
-    if (feed && state.feedCollapsed) top = Math.max(top, feed.bottom + 24);
-    if (chat && !state.chatLogOpen) top = Math.max(top, chat.bottom + 24);
+    // The merged rail owns the right gutter; when it is collapsed its short
+    // header still blocks the top strip.
+    if (rail) {
+      if (state.railCollapsed) top = Math.max(top, rail.bottom + 24);
+      else right = Math.min(right, rail.left - 28);
+    } else {
+      if (feed && !state.feedCollapsed && feed.left < el.width / 2) left = Math.max(left, feed.right + 28);
+      if (chat && state.chatLogOpen && chat.left > el.width / 2) right = Math.min(right, chat.left - 28);
+      // Collapsing a panel returns its side gutter, but its visible header is
+      // still an obstruction. Begin the free canvas below those short headers.
+      if (feed && state.feedCollapsed) top = Math.max(top, feed.bottom + 24);
+      if (chat && !state.chatLogOpen) top = Math.max(top, chat.bottom + 24);
+    }
     // At compact widths CSS can put the feed above the map. Only reserve a
     // side panel if it leaves enough room for an actual interactive graph.
     if (right - left < 220) {
@@ -16821,6 +17304,15 @@ body.music-preview-active #idle-hud { display: none !important; }
       el.feedChat.hidden = !chatting;
       if (chatting) renderChat();
     }
+    // Selecting the assistant brings its thread forward; picking anything else
+    // leaves the rail where the owner put it.
+    const assistantPicked = state.selected?.kind === "assistant";
+    if (assistantPicked !== state.lastAssistantSelected) {
+      state.lastAssistantSelected = assistantPicked;
+      if (assistantPicked) setRailTab("assistant");
+    }
+    renderRailBadges();
+    if (state.railTab === "ask") renderAsks();
     paintChatLog();
   }
 
@@ -17967,6 +18459,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     push(el.followStatus);
     push(el.bottom);
     push(el.info);
+    push(el.rail);
     push(el.feed);
     push(el.chatLog);
     push(el.legend);
@@ -19683,6 +20176,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     el.feedToggle?.setAttribute("aria-expanded", String(!state.feedCollapsed));
     if (el.feedToggle) el.feedToggle.title = state.feedCollapsed ? "Expand live work" : "Collapse live work";
     if (save) writeStore("mefiStudio.cmdFeedCollapsed", state.feedCollapsed ? "1" : "0");
+    applyRailCollapsed();
     state.graphAreaAt = 0;
     state.hudRectsAt = 0;
     if (state.selected?.kind === "assistant") { state.feedDirty = true; renderInfo(); renderFeed(); }
@@ -20033,6 +20527,19 @@ body.music-preview-active #idle-hud { display: none !important; }
     el.chatLogJump = document.getElementById("cmd-chat-jump");
     el.chatLogNewWork = document.getElementById("cmd-chat-new-work");
     el.chatLogNewWorkState = document.getElementById("cmd-chat-new-work-state");
+    el.rail = document.getElementById("cmd-rail");
+    el.railBody = document.getElementById("cmd-rail-body");
+    el.railTabs = [...(el.rail?.querySelectorAll(".rail-tab[data-rail-view]") ?? [])];
+    el.railWorkBadge = document.getElementById("cmd-rail-work-badge");
+    el.railAssistantBadge = document.getElementById("cmd-rail-assistant-badge");
+    el.railAskBadge = document.getElementById("cmd-rail-ask-badge");
+    el.done = document.getElementById("cmd-done");
+    el.doneList = document.getElementById("cmd-done-list");
+    el.doneState = document.getElementById("cmd-done-state");
+    el.doneRefresh = document.getElementById("cmd-done-refresh");
+    el.asks = document.getElementById("cmd-asks");
+    el.askList = document.getElementById("cmd-ask-list");
+    el.askState = document.getElementById("cmd-ask-state");
     el.telemetry = document.getElementById("idle-telemetry");
     el.taskInput = document.getElementById("idle-task-input");
     el.taskAdd = document.getElementById("idle-task-add");
@@ -20247,6 +20754,22 @@ body.music-preview-active #idle-hud { display: none !important; }
     el.chatLog?.querySelectorAll("[data-cmdchat-msg]")?.forEach((chip) => {
       chip.addEventListener("click", () => sendAssistant(chip.dataset.cmdchatMsg, "log"));
     });
+    // The rail's tabs: one visible view, roving focus, remembered between runs.
+    for (const button of el.railTabs ?? []) button.addEventListener("click", () => setRailTab(button.dataset.railView));
+    el.rail?.querySelector(".rail-tabs")?.addEventListener("keydown", (event) => {
+      const tabs = el.railTabs ?? [];
+      const index = tabs.findIndex((button) => button.getAttribute("aria-selected") === "true");
+      let next = null;
+      if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
+      else if (event.key === "ArrowLeft") next = (index - 1 + tabs.length) % tabs.length;
+      else if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = tabs.length - 1;
+      if (next === null || !tabs[next]) return;
+      event.preventDefault();
+      setRailTab(tabs[next].dataset.railView, { focus: true });
+    });
+    el.doneRefresh?.addEventListener("click", () => void loadDoneLog());
+    setRailTab(state.railTab, { save: false });
     document.getElementById("idle-chat-explorer")?.addEventListener("click", () => nav("explorer", { assistant: true }));
     el.ambienceBtn?.addEventListener("click", toggleAmbience);
     el.legendToggle?.addEventListener("click", () => setLegend(!state.legendOpen));
