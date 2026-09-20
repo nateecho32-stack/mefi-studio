@@ -7343,10 +7343,30 @@ async function spawnNextJob() {
     autopilot.capacity = capacity;
     return capacity.canStart === true;
   };
-  try {
-    const machine = await getMachine();
-    leases = await machine.leaseStatus({ repoRoot: projectRoot() });
-  } catch {}
+  // The lease board gates admission like the capacity read. machine.mjs's
+  // leaseStatus itself fails open only on its documented no-directory default,
+  // so an error reaching this catch is unexpected — a missing export or an
+  // unreadable board that may be hiding an exclusive holder. Fail closed to
+  // "busy" (ownership unknown) and log the fault once per incident, cleared by
+  // a healthy read, instead of silently reading the machine as free.
+  const readLeases = async () => {
+    let machine = null;
+    try {
+      machine = await getMachine();
+      if (typeof machine?.leaseStatus !== "function") throw new Error("missing export getMachine().leaseStatus");
+      const status = await machine.leaseStatus({ repoRoot: projectRoot() });
+      autopilot.leaseFaultLogged = false;
+      return status;
+    } catch (error) {
+      const missing = machine?.leaseStatus ? null : "missing export getMachine().leaseStatus";
+      if (!autopilot.leaseFaultLogged) {
+        logLine(`[autopilot] lease read failed (${missing ?? "transient error"}): ${error?.stack || error}`);
+        autopilot.leaseFaultLogged = true;
+      }
+      return { exclusive: true, unreadable: true };
+    }
+  };
+  leases = await readLeases();
   // An exclusive lease means another agent owns the machine; stay parked.
   // Read-only leases and resource sampling — a full resourcePass wrote two
   // JSON files per start, which could hang dispatch on a OneDrive file lock.
@@ -7721,11 +7741,8 @@ async function spawnNextJob() {
   // Race recheck of the machine lease after the claim lands — same
   // pattern as tools/lease.ps1 Assert-TestMachineLease. An exclusive
   // holder that arrived mid-claim wins; we drop the claim instead of
-  // launching a child.
-  try {
-    const machine = await getMachine();
-    leases = await machine.leaseStatus({ repoRoot: projectRoot() });
-  } catch {}
+  // launching a child. An unreadable board fails closed the same way.
+  leases = await readLeases();
   if (leases?.exclusive) {
     await cancelClaim();
     return "busy";

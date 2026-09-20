@@ -459,6 +459,50 @@ test("a capability that exists but throws is logged every time, not latched", as
   assert.equal(host.autopilot.capacity.canStart, false);
 });
 
+test("an unreadable lease board parks dispatch as busy instead of reading as a free machine", async () => {
+  const host = dispatchHost();
+  const logs = [];
+  const leaseFaults = () => logs.filter((line) => line.includes("lease read failed")).length;
+  host.env.logLine = (line) => logs.push(line);
+  host.env.getMachine = async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: undefined });
+  assert.equal(await host.env.spawnNextJob(), "busy", "a missing leaseStatus export must fail closed, not dispatch into an occupied machine");
+  assert.equal(host.autopilot.jobs.length, 0, "nothing may start while machine ownership is unknown");
+  assert.equal(host.mutations(), 0, "no claim may be taken on an unreadable lease board");
+  assert.match(logs[0], /lease read failed \(missing export getMachine\(\)\.leaseStatus\)/);
+  await host.env.spawnNextJob();
+  assert.equal(leaseFaults(), 1, "a persistent lease fault must not spam the log");
+  host.env.getMachine = async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => ({ exclusive: false }) });
+  host.autopilot.jobs = [];
+  assert.equal(await host.env.spawnNextJob(), "spawned", "a healthy read clears the lease fault");
+  assert.equal(leaseFaults(), 1);
+  host.autopilot.jobs = [];
+  host.env.machineLagGate = null;
+  Object.assign(host.board.tasks[0], { status: "open", runId: undefined });
+  host.env.getMachine = async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => { throw new Error("lease board locked"); } });
+  assert.equal(await host.env.spawnNextJob(), "busy", "a transient lease read failure parks dispatch too");
+  assert.equal(leaseFaults(), 2, "a fault after recovery must be logged again");
+  assert.match(logs.at(-1), /lease read failed \(transient error\)/);
+  assert.match(logs.at(-1), /lease board locked/);
+});
+
+test("a lease recheck failure after the claim drops the claim instead of launching", async () => {
+  const host = dispatchHost();
+  const logs = [];
+  host.env.logLine = (line) => logs.push(line);
+  let reads = 0;
+  host.env.getMachine = async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => {
+    reads += 1;
+    if (reads === 2) throw new Error("lease board locked");
+    return { exclusive: false };
+  } });
+  assert.equal(await host.env.spawnNextJob(), "busy", "the raced recheck must fail closed before a child is created");
+  assert.equal(host.registered.size, 0, "the dropped claim must release its file reservation");
+  assert.equal(host.board.tasks[0].status, "open", "the claim must not survive the failed recheck");
+  assert.equal(host.board.tasks[0].runId, undefined);
+  assert.equal(host.autopilot.jobs.length, 0);
+  assert.match(logs.at(-1), /lease read failed \(transient error\)/);
+});
+
 test("editing an open task during dispatch forces a fresh selection and file claim", async () => {
   const host = dispatchHost({ editBeforeClaim: { title: "Changed work", files: ["src/b.js"] } });
   assert.equal(await host.env.spawnNextJob(), "lost", "the old file reservation cannot authorize a new scope");
