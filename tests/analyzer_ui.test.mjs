@@ -101,6 +101,43 @@ test("uninspected references remain distinct from confirmed missing paths", asyn
   assert.doesNotMatch(text, /Missing: (\.\.\/outside.js|data\/settings.json|locked.js)/);
 });
 
+test("list rows pin their visible label text and row-label title on the row-label span, not the heading", async () => {
+  const rowsAfterHeading = (root, headingText) => {
+    const entries = root.children;
+    const at = entries.findIndex((el) => el.tagName === "h4" && el.text === headingText);
+    assert.ok(at >= 0, `${headingText} heading renders`);
+    const heading = entries[at];
+    const list = entries[at + 1];
+    assert.equal(list.tagName, "ul", `${headingText} heading is followed by its list`);
+    return { heading, rows: list.children.map((li) => li.children[0]) };
+  };
+
+  const fileResult = file();
+  fileResult.references = [
+    { ref: "src/store.js", found: true },
+    { ref: "tests/storage.test.js", found: false },
+  ];
+  const fileEnv = environment({ analyzerRun: async () => ({ ok: true, projectId: "alpha", result: fileResult }) });
+  await fileEnv.analyzer.file("fixture.js");
+  const references = rowsAfterHeading(fileEnv.get("findings"), "Referenced paths");
+  assert.deepEqual(references.rows.map((key) => key.text), ["exists", "MISSING"], "each row shows its visible label text");
+  assert.deepEqual(
+    references.rows.map((key) => key.title),
+    ["present in the work tree", "not found in the work tree"],
+    "each row-label carries its restored title"
+  );
+  assert.equal(references.heading.title ?? "", "", "the adjacent h4 heading carries no row-label title");
+
+  const ideaResult = idea("storage idea");
+  ideaResult.hits = [{ file: "src/store.js", line: 12, snippet: "saveRecord(value)", keyword: "storage" }];
+  const ideaEnv = environment({ analyzerRun: async (kind) => kind === "idea" ? { ok: true, projectId: "alpha", result: ideaResult } : { ok: true, projectId: "alpha", result: file() } });
+  await ideaEnv.analyzer.idea("storage idea");
+  const evidence = rowsAfterHeading(ideaEnv.get("evidence"), "Evidence");
+  assert.equal(evidence.rows.length, 1, "the evidence list renders its row");
+  assert.equal(evidence.rows[0].text, "src/store.js:12", "the evidence row-label shows its visible text");
+  assert.equal(evidence.rows[0].title, "storage · src/store.js", "the evidence row-label title matches the hit");
+});
+
 test("saved plan scope, settled decisions and acceptance remain visible as unverified context", async () => {
   const result = report();
   Object.assign(result.plans[0], {
