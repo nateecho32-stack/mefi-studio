@@ -174,7 +174,7 @@ test("project AI uses the host report and an explicit HTTP route without CLI too
   const result = await f.analyzerAi("project", { projectId: projectA.id, summary: "UNTRUSTED_RENDERER_SENTINEL", tools: ["shell"] });
   assert.equal(result.ok, true);
   assert.equal(result.result.summary, "Evidence-led suggestion");
-  assert.deepEqual(plain(f.calls.routes), [["heavy", { allowGrok: false }]]);
+  assert.deepEqual(plain(f.calls.routes), [["heavy", { allowCli: false }]]);
   assert.equal(f.calls.assistant.length, 0);
   assert.equal(f.calls.http.length, 1);
   const [, system, user, budget, metadata] = f.calls.http[0];

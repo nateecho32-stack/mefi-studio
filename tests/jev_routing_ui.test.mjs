@@ -21,20 +21,21 @@ function environment(overrides = {}, bridge = {}) {
   const settings = { provider: "auto", fallbackOpenCode: false, models: {}, executorCli: "opencode", executorModel: "", modelSelection: "jev", jevConfigured: false, jevRoute: "vercel", routingDecision: null, ...overrides };
   let reads = 0;
   const saved = [];
-  const routeLabels = { vercel: "Vercel AI Gateway", typesafe: "TypeSafe Jev API" };
+  const routeLabels = { vercel: "Vercel AI Gateway", typesafe: "TypeSafe Jev API", zen: "OpenCode Zen", openrouter: "OpenRouter" };
+  const routeModels = { vercel: "typesafe-ai/jev", typesafe: "jev-1.13.0", zen: "jev-1.13", openrouter: "typesafe/jev-1.13" };
   const api = {
     launchStudio() {}, onStudioLog() {},
     getApiKey: async () => ({ saved: true }),
     setApiKey: async (_key, provider) => {
       saved.push(provider);
-      if (provider === "gateway" || provider === "jev") settings.jevConfigured = true;
+      if (["gateway", "jev", "zen", "openrouter"].includes(provider)) settings.jevConfigured = true;
       return { ok: true };
     },
     jevStatus: async () => ({
       enabled: false, configured: settings.jevConfigured, route: settings.jevRoute,
       routeLabel: routeLabels[settings.jevRoute],
-      routes: { vercel: settings.jevConfigured, typesafe: false },
-      model: settings.jevRoute === "typesafe" ? "jev-1.13.0" : "typesafe-ai/jev",
+      routes: { vercel: settings.jevConfigured, typesafe: false, zen: false, openrouter: false },
+      model: routeModels[settings.jevRoute],
     }),
     jevSetEnabled: async () => ({ ok: true }),
     jevSetRoute: async (route) => { settings.jevRoute = route; return { ok: true }; },
@@ -102,6 +103,19 @@ test("the Jev route saves through IPC and each route stores its own key", async 
   env.get("jev-key").value = "fixture-gateway-key";
   await env.get("save-jev-key").trigger("click");
   assert.deepEqual(env.saved, ["jev", "gateway"], "the gateway route saves the gateway key field");
+  for (const [route, label, placeholder, field] of [
+    ["zen", "OpenCode Zen", /OpenCode Zen API key/, "zen"],
+    ["openrouter", "OpenRouter", /OpenRouter API key/, "openrouter"],
+  ]) {
+    env.get("jev-route").value = route;
+    await env.get("jev-route").trigger("change");
+    assert.equal(env.settings.jevRoute, route);
+    assert.match(env.get("jev-key").placeholder, placeholder, `${label} names its own key field`);
+    assert.match(env.get("jev-status").textContent, new RegExp(label));
+    env.get("jev-key").value = `fixture-${route}-key`;
+    await env.get("save-jev-key").trigger("click");
+    assert.equal(env.saved.at(-1), field, `${label} saves its own key field`);
+  }
 });
 
 test("last model selection separates reported measurements, missing values and catalog estimates", async () => {
@@ -204,4 +218,88 @@ test("the setup overview mirrors saved keys, model selection and installed CLIs 
   assert.match(env.get("setup-builders").textContent, /OpenCode installed/);
   assert.equal(env.reads(), 1);
   assert.equal(env.writes.length, 0, "the overview is read-only");
+});
+
+test("CLI, local and custom providers explain themselves and save their endpoints", async () => {
+  const claude = environment({ provider: "claude" }); await flush();
+  assert.match(claude.get("ai-routing-status").textContent, /Claude Code CLI uses your explicit model/);
+  assert.equal(claude.get("setup-assistant").textContent, "Claude Code CLI · CLI login");
+
+  const antigravity = environment({ provider: "antigravity" }, { cliStatus: async () => [{ id: "antigravity", name: "Antigravity", installed: true }] }); await flush();
+  assert.match(antigravity.get("ai-routing-status").textContent, /Antigravity CLI uses your explicit model/);
+  assert.equal(antigravity.get("setup-assistant").textContent, "Antigravity CLI · CLI login");
+  assert.match(antigravity.get("provider-readiness").textContent, /CLI installed/);
+
+  const missing = environment({ provider: "antigravity" }, { cliStatus: async () => [{ id: "antigravity", name: "Antigravity", installed: false }] }); await flush();
+  assert.match(missing.get("provider-readiness").textContent, /CLI not found — you can still save its model/);
+
+  const local = environment({ provider: "lmstudio", lmStudioEndpoint: "http://127.0.0.1:1234/v1/chat/completions" }); await flush();
+  assert.match(local.get("ai-routing-status").textContent, /LM Studio answers from the local server/);
+  assert.equal(local.get("lmstudio-endpoint").value, "http://127.0.0.1:1234/v1/chat/completions");
+  local.get("lmstudio-endpoint").value = "http://127.0.0.1:5555/v1";
+  await local.get("lmstudio-endpoint").trigger("change");
+  assert.deepEqual(local.writes, [{ lmStudioEndpoint: "http://127.0.0.1:5555/v1" }]);
+
+  const custom = environment({ provider: "custom", hasCustom: true, customEndpoint: "https://api.example.com/v1/chat/completions" }); await flush();
+  assert.match(custom.get("ai-routing-status").textContent, /custom endpoint answers with the saved key/);
+  assert.equal(custom.get("setup-assistant").textContent, "Custom endpoint · key saved");
+  custom.get("custom-endpoint").value = "";
+  await custom.get("custom-endpoint").trigger("change");
+  assert.deepEqual(custom.writes, [{ customEndpoint: "" }]);
+});
+
+test("models follow the selected provider and save into that provider's own slot", async () => {
+  const settings = {
+    provider: "zai", hasZai: true, hasOpenCode: false, modelSelection: "jev", jevConfigured: false, fallbackOpenCode: false,
+    executorCli: "opencode", executorModel: "", routingDecision: null,
+    models: { routine: "global-routine", heavy: "global-heavy" },
+    providerModels: { zai: { routine: "glm-scoped" }, grok: { routine: "grok-4" } },
+  };
+  const env = environment({}, {
+    getAiRouting: async () => structuredClone(settings),
+    setAiRouting: async (payload) => {
+      env.writes.push(structuredClone(payload));
+      if (payload.providerModels) {
+        for (const [provider, roles] of Object.entries(payload.providerModels)) settings.providerModels[provider] = { ...(settings.providerModels[provider] ?? {}), ...roles };
+      } else {
+        Object.assign(settings, payload);
+      }
+      return { ok: true };
+    },
+  });
+  await flush();
+  assert.equal(env.get("ai-model-routine").value, "glm-scoped", "the provider's saved model wins");
+  assert.equal(env.get("ai-model-heavy").value, "global-heavy", "an unset provider role shows the role-wide fallback");
+
+  env.get("ai-model-routine").value = "glm-new";
+  await env.get("ai-model-routine").trigger("change");
+  assert.deepEqual(env.writes[0], { providerModels: { zai: { routine: "glm-new" } } });
+
+  env.get("ai-provider").value = "grok";
+  await env.get("ai-provider").trigger("change");
+  assert.deepEqual(env.writes[1], { provider: "grok" });
+  assert.equal(env.get("ai-model-routine").value, "grok-4", "switching provider loads that provider's model");
+  assert.equal(env.get("ai-model-heavy").value, "", "CLI routes never inherit the role-wide fallback");
+
+  env.get("ai-model-routine").value = "grok-5";
+  await env.get("ai-model-routine").trigger("change");
+  assert.deepEqual(env.writes[2], { providerModels: { grok: { routine: "grok-5" } } });
+
+  env.get("ai-provider").value = "auto";
+  await env.get("ai-provider").trigger("change");
+  assert.equal(env.get("ai-model-routine").value, "global-routine", "auto keeps the role-wide overrides");
+  env.get("ai-model-routine").value = "global-new";
+  await env.get("ai-model-routine").trigger("change");
+  assert.deepEqual(env.writes[4], { models: { routine: "global-new" } });
+});
+
+test("builder models are saved per CLI", async () => {
+  const env = environment({ provider: "auto", executorCli: "grok", executorModel: "grok-4" }); await flush();
+  assert.equal(env.get("executor-model").value, "grok-4");
+  env.get("executor-model").value = "grok-5";
+  await env.get("executor-model").trigger("change");
+  assert.deepEqual(env.writes, [{ executorModels: { grok: "grok-5" } }]);
+  env.get("executor-cli").value = "antigravity";
+  await env.get("executor-cli").trigger("change");
+  assert.deepEqual(env.writes[1], { executorCli: "antigravity" });
 });

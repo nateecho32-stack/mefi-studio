@@ -77,7 +77,7 @@ test("cluster runs two task-focused advisors in parallel and hands both findings
   assert.deepEqual(h.supportJobs.map((row) => row.role).sort(), ["cluster-planner", "cluster-reviewer"]);
   assert.ok(h.supportJobs.every((row) => row.ai === true));
   assert.ok(h.supportJobs.every((row) => row.targets.some((target) => target.kind === "task" && target.id.includes("focus"))));
-  assert.ok(h.routeCalls.every((row) => row.allowGrok === false), "advisory agents cannot fall through to a coding CLI");
+  assert.ok(h.routeCalls.every((row) => row.allowCli === false), "advisory agents cannot fall through to a coding CLI");
   assert.ok(h.contextCalls.every((row) => row.root === h.env.projectRoot()));
   assert.ok(h.supportCalls.every((row) => row.user.includes(task("focus").prompt)));
   held.release(); await pumping;

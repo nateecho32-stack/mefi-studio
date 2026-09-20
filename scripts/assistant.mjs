@@ -275,6 +275,9 @@ export function emptyState(now = Date.now()) {
     nodeFolders: {},
     closedAt: 0,
     resumed: null,
+    // The done log's absorb watermark: pass rows at or before this stamp stay
+    // out of the Done tab while the activity log keeps them.
+    doneAbsorbedAt: 0,
   };
 }
 
@@ -488,6 +491,7 @@ export function normalizeState(raw, now = Date.now()) {
     state.nodeFolders = normalizeNodeFolders(raw.nodeFolders);
     state.closedAt = num(raw.closedAt, 0);
     state.resumed = normalizeResumed(raw.resumed);
+    state.doneAbsorbedAt = num(raw.doneAbsorbedAt, 0);
     return state;
   } catch {
     return emptyState(now);

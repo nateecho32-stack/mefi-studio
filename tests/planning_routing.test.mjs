@@ -24,7 +24,7 @@ function host(settings, responses = [okReply()]) {
     jevShadowIntake: (tasks) => { admitted.push(structuredClone(tasks)); return new Promise(() => {}); },
     ensureAssistant: async () => {}, refreshAutopilotQueue: async () => {}, assistantAskForWork: (reason) => wakes.push(reason),
     mutateBoard() { throw new Error("Model suggestions must not create tasks"); },
-    AI_PROVIDERS: ["auto", "zai", "opencode", "grok"],
+    AI_PROVIDERS: ["auto", "zai", "opencode", "grok", "claude", "antigravity"],
     ASSISTANT_ENDPOINT: "https://opencode.invalid", ZAI_ENDPOINT: "https://zai.invalid",
     ASSISTANT_MODEL: "routine-go", ZAI_MODEL_ROUTINE: "routine-zai", ZAI_MODEL_HEAVY: "heavy-zai",
     readSettings: async () => structuredClone(settings), decryptKey: (value, key) => value[key] ? `fixture-${key}` : null,
@@ -34,7 +34,7 @@ function host(settings, responses = [okReply()]) {
     recordModelCall: async (observation) => { observations.push(normalizeObservation(observation)); },
   });
   vm.runInContext([
-    section("function assistantModelOverride(", "const modelPerformanceStores"),
+    section("// Single-model routes have one model concept", "const modelPerformanceStores"),
     section("async function chatCompletion(", "// The Grok CLI"),
     section("async function httpAssistantCall(", "function normalizeBriefing("),
     section("const planningServices =", "async function planningRequest("),
@@ -84,6 +84,28 @@ test("planning with Grok selected uses saved HTTP credentials and never invokes 
   assert.match((await unconfigured.complete("question")).error, /saved z.ai or OpenCode Go key/);
   assert.equal(unconfigured.calls.length, 0);
   assert.equal(unconfigured.observations.length, 0);
+});
+
+test("planning with Antigravity selected keeps planning on the saved HTTP key, never the agy CLI", async () => {
+  const h = host({ aiProvider: "antigravity", zaiApiKeyEncrypted: "fixture" });
+  const result = await h.complete("spec");
+  assert.equal(result.ok, true);
+  assert.equal(h.calls[0].endpoint, "https://zai.invalid");
+  assert.equal(h.calls[0].body.tools, undefined);
+});
+
+test("models are scoped per provider without leaking across routes", async () => {
+  const h = host({ aiProvider: "zai", zaiApiKeyEncrypted: "fixture", aiModels: { routine: "global-routine", heavy: "global-heavy" }, aiModelsByProvider: { zai: { routine: "zai-routine" } } });
+  await h.complete("question");
+  assert.equal(h.calls[0].body.model, "zai-routine", "the provider's saved model wins");
+  await h.complete("spec");
+  assert.equal(h.calls[1].body.model, "global-heavy", "an unset provider role still uses the role-wide fallback");
+  const override = h.context.assistantModelOverride;
+  assert.equal(override({ aiModels: { routine: "global-routine" } }, "routine", "grok"), "", "a role-wide model never leaks into a CLI route");
+  assert.equal(override({ aiModelsByProvider: { grok: { routine: "grok-4" } } }, "routine", "grok"), "grok-4");
+  assert.equal(override({ aiModelsByProvider: { grok: { routine: "grok-4" } } }, "heavy", "grok"), "grok-4", "a single-model route reuses its routine model for heavy passes");
+  assert.equal(override({ aiModelsByProvider: { grok: { routine: "grok-4", heavy: "grok-heavy" } } }, "heavy", "grok"), "grok-heavy");
+  assert.equal(override({ aiModels: { routine: "global-routine" } }, "routine", "zai"), "global-routine", "the keyed HTTP routes keep the role-wide fallback");
 });
 
 for (const fallback of [false, true]) test(`planning ${fallback ? "records both attempts for opt-in" : "does not silently enable"} provider fallback`, async () => {

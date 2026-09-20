@@ -200,13 +200,13 @@ class VerifiedWindow extends NativeWindow {
     assert(settingsLayout.assistant && settingsLayout.worker, "assistant and worker connections are separate visible groups");
     assert(settingsLayout.optional.length >= 3 && settingsLayout.optional.every(open=>!open), "optional settings begin collapsed");
     assert(settingsLayout.scroll <= settingsLayout.width + 2, "settings do not overflow horizontally");
-    await this.until("document.getElementById('ai-routing-status').textContent.includes('gateway key')", "Jev routing reports missing connection honestly");
+    await this.until("document.getElementById('ai-routing-status').textContent.includes('Jev key')", "Jev routing reports missing connection honestly");
     assert.equal(await this.run("return document.getElementById('ai-model-selection').value;"), "jev");
     await this.run("const select=document.getElementById('ai-model-selection');select.value='fixed';select.dispatchEvent(new Event('change',{bubbles:true}));");
     await this.until("document.getElementById('ai-routing-status').textContent.includes('Fixed defaults')", "fixed model selection saves");
     assert.equal(await this.run("return (await window.mefiStudio.getAiRouting()).modelSelection;"), "fixed");
     await this.run("const select=document.getElementById('ai-model-selection');select.value='jev';select.dispatchEvent(new Event('change',{bubbles:true}));");
-    await this.until("document.getElementById('ai-routing-status').textContent.includes('gateway key')", "Jev model selection saves");
+    await this.until("document.getElementById('ai-routing-status').textContent.includes('Jev key')", "Jev model selection saves");
     await this.click("#ai-routing-refresh");
     await this.until("!document.getElementById('ai-routing-refresh').disabled", "routing refresh finishes");
     assert.equal(await this.run("return (await window.mefiStudio.getAiRouting()).modelSelection;"), "jev");

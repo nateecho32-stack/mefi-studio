@@ -181,7 +181,7 @@ function builderFixture(sharedHost = false) {
   let now = 10000, jobs = [];
   const hub = { id: "hub", kind: "assistant", x: 0, y: 0, z: 0 };
   const host = { id: "shared", kind: "session", x: 100, y: 0, z: 100 };
-  const state = { nodes: [], edges: [], fx: new Map(), absorbed: new Map(), graphSeeded: true, active: false };
+  const state = { nodes: [], edges: [], fx: new Map(), absorbed: new Map(), graphSeeded: true, active: false, allTasks: [] };
   const env = vm.createContext({
     state, Math, Date: class extends Date { static now() { return now; } },
     BUILDER_ORBIT: 15, BUILDER_FIELD: 78, NODE_ABSORB_MS: 800, NODE_ABSORB_TTL: 5000, NODE_GROW_MS: 650,
@@ -241,4 +241,12 @@ test("a builder returning during its departure reuses one live node and cancels 
   env.stepFx(12000);
   assert.equal(returning[0]._fade, 1, "the canceled exit cannot later hide resumed work");
   assert.equal(state.absorbed.size, 0, "resumed work is not recorded as completed");
+});
+
+test("a builder for a task pinned to a board node orbits that node", () => {
+  const { state, rebuild } = builderFixture(true);
+  state.allTasks = [{ id: "shared-work", target: { kind: "session", id: "shared" } }];
+  const builder = rebuild([{ taskId: "shared-work", title: 'Work on "Shared"', sessionId: null }]).find((node) => node.builder);
+  assert.equal(builder.hostId, "shared");
+  assert.equal(builder.onHost, true, "the task's own session id is not on the status row, only its target");
 });

@@ -77,6 +77,7 @@ function routingHost({ initialSettings = {}, credential = "fixture-jev-key", can
     },
   });
   vm.runInContext([
+    section("const SINGLE_MODEL_PROVIDERS =", "// The assistant's model"),
     section("function assistantModelOverride(", "// Pick who pays"),
     section("const modelRoutingDecisions =", "async function recordModelCall("),
     section("async function httpAssistantCall(", "function normalizeBriefing("),

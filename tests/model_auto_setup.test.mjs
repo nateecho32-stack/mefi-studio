@@ -28,7 +28,7 @@ test("auto setup prefers the saved z.ai key and explains every choice", () => {
   assert.deepEqual(plain(plan.active), { provider: "zai", modelSelection: "fixed", executorCli: "opencode" });
   const notes = plan.notes.join(" ");
   assert.match(notes, /z\.ai key found/);
-  assert.match(notes, /No Jev gateway key/);
+  assert.match(notes, /No Jev (gateway )?key/);
   assert.match(notes, /OpenCode CLI found/);
   assert.doesNotMatch(notes, /OpenCode Go key found/, "the unused OpenCode key is not the reported route");
 });
@@ -47,6 +47,17 @@ test("a gateway key enables Jev selection and a missing OpenCode CLI moves build
   assert.match(notes, /builders run through Grok/);
 });
 
+test("every Jev route's key enables task-aware selection", () => {
+  for (const keys of [{ zai: true, jev: true }, { zai: true, gateway: true }, { zai: true, zen: true }, { zai: true, openrouter: true }]) {
+    const plan = planAutoSetup({ settings: {}, keys, clis: [cli("opencode", true)] });
+    assert.equal(plan.active.modelSelection, "jev");
+    assert.match(plan.notes.join(" "), /Jev key found: task-aware model selection is on/);
+  }
+  const none = planAutoSetup({ settings: {}, keys: { zai: true }, clis: [cli("opencode", true)] });
+  assert.equal(none.active.modelSelection, "fixed");
+  assert.match(none.notes.join(" "), /No Jev key/);
+});
+
 test("a Grok-only machine configures the CLI login route without inventing a key", () => {
   const plan = planAutoSetup({ settings: {}, keys: {}, clis: [cli("grok", true)] });
   assert.equal(plan.ok, true);
@@ -55,10 +66,41 @@ test("a Grok-only machine configures the CLI login route without inventing a key
   assert.doesNotMatch(plan.notes.join(" "), /key found/);
 });
 
+test("a Claude-only machine configures the subscription route and Claude builders", () => {
+  const plan = planAutoSetup({ settings: {}, keys: {}, clis: [cli("claude", true)] });
+  assert.equal(plan.ok, true);
+  assert.deepEqual(plain(plan.changes), { provider: "claude", modelSelection: "fixed", executorCli: "claude" });
+  const notes = plan.notes.join(" ");
+  assert.match(notes, /Claude Code CLI's own subscription login/);
+  assert.match(notes, /builders run through Claude Code/);
+  assert.doesNotMatch(notes, /key found/);
+});
+
+test("an Antigravity-only machine configures the agy login route and Antigravity builders", () => {
+  const plan = planAutoSetup({ settings: {}, keys: {}, clis: [cli("antigravity", true)] });
+  assert.equal(plan.ok, true);
+  assert.deepEqual(plain(plan.changes), { provider: "antigravity", modelSelection: "fixed", executorCli: "antigravity" });
+  const notes = plan.notes.join(" ");
+  assert.match(notes, /Antigravity CLI's own Google account login/);
+  assert.match(notes, /builders run through Antigravity/);
+  assert.doesNotMatch(notes, /key found/);
+});
+
+test("a machine with no keys or CLIs is still set up from a local server or custom endpoint", () => {
+  const local = planAutoSetup({ settings: {}, keys: {}, clis: [], local: { lmstudio: true } });
+  assert.equal(local.ok, true);
+  assert.deepEqual(plain(local.changes), { provider: "lmstudio", modelSelection: "fixed" });
+  assert.match(local.notes.join(" "), /LM Studio is reachable/);
+  const custom = planAutoSetup({ settings: {}, keys: { custom: true }, clis: [], local: { custom: true } });
+  assert.equal(custom.active.provider, "custom");
+  assert.match(custom.notes.join(" "), /custom endpoint answers/);
+  assert.equal(planAutoSetup({ settings: {}, keys: {}, clis: [], local: {} }).ok, false, "nothing detected is still refused honestly");
+});
+
 test("an empty machine is refused with guidance instead of a partial configuration", () => {
   const plan = planAutoSetup({ settings: {}, keys: {}, clis: [] });
   assert.equal(plan.ok, false);
-  assert.match(plan.error, /save a z\.ai or OpenCode Go key, or install the Grok CLI/);
+  assert.match(plan.error, /save a z\.ai.*key/);
   assert.equal(plan.changes, undefined);
 });
 

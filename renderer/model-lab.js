@@ -200,17 +200,18 @@
   }
   function show(view) {
     state.view = view;
-    for (const name of ["rankings", "usage", "context", "compare"]) {
+    for (const name of ["rankings", "usage", "context", "tracker", "compare"]) {
       $(name).hidden = name !== view;
       $(`tab-${name}`).setAttribute("aria-selected", String(name === view));
       $(`tab-${name}`).tabIndex = name === view ? 0 : -1;
     }
+    if (view === "tracker") window.MefiUsageTracker?.refresh?.();
     if (view === "context") loadTasks().then((fresh) => { if (fresh) return previewContext(); }).catch((error) => { $("context-status").textContent = error.message || "Tasks could not be read."; });
   }
   function init() {
     if (state.initialized || !document.getElementById("model-lab")) return;
     state.initialized = true;
-    const views = ["rankings", "usage", "context", "compare"];
+    const views = ["rankings", "usage", "context", "tracker", "compare"];
     for (const [index, name] of views.entries()) {
       const button = $(`tab-${name}`);
       button.addEventListener("click", () => show(name));

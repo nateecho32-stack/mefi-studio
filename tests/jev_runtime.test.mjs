@@ -174,7 +174,24 @@ test("the saved route picks the endpoint and its own credential", async () => {
   const gateway = host({ fetchImpl: async (url, options) => { urls.push({ url, body: JSON.parse(options.body) }); return reply({ rel_0: { type: "choice", choice: "unrelated" } }); } });
   await gateway.context.runJevIntake([incoming]);
   assert.equal(urls[1].url, "https://ai-gateway.vercel.sh/v4/ai/evaluation-model");
-  assert.equal(urls[1].body.model, undefined, "the gateway carries the model in its header, not the body");
+  assert.equal(urls[1].body.model, undefined, "the gateway carries the model in the header, not the body");
+  // OpenCode Zen and OpenRouter ride the direct wire at their own endpoints.
+  for (const [route, url, model, field] of [
+    ["zen", "https://opencode.ai/zen/v1/systemone", "jev-1.13", "zenApiKeyEncrypted"],
+    ["openrouter", "https://openrouter.ai/api/alpha/decisions", "typesafe/jev-1.13", "openrouterApiKeyEncrypted"],
+  ]) {
+    const routed = host({ settings: { jevRoute: route, [field]: "fixture-encrypted" },
+      fetchImpl: async (requestUrl, options) => { urls.push({ url: requestUrl, body: JSON.parse(options.body) }); return reply({ rel_0: { type: "choice", choice: "same_obligation" } }); } });
+    assert.deepEqual(plain(await routed.context.runJevIntake([incoming])), { ok: true, attempted: true, proposals: 1 }, route);
+    assert.equal(routed.calls[0].config.route, route);
+    const last = urls.at(-1);
+    assert.equal(last.url, url);
+    assert.equal(last.body.model, model);
+    // Another route's key never authorizes this one.
+    const foreign = host({ settings: { jevRoute: route, gatewayApiKeyEncrypted: "fixture-encrypted" } });
+    assert.deepEqual(plain(await foreign.context.runJevIntake([incoming])), { ok: true, defer: true, reason: "no-key" }, `${route} refuses a gateway key`);
+    assert.equal(foreign.calls.length, 0);
+  }
 });
 
 test("a failed evaluation is budget-charged from usage and never becomes a proposal", async () => {
@@ -271,7 +288,7 @@ test("missing-key probes stay local and status never exposes the stored key", as
   assert.equal(status.enabled, true);
   assert.equal(status.route, "vercel");
   assert.equal(status.routeLabel, "Vercel AI Gateway");
-  assert.deepEqual(plain(status.routes), { vercel: true, typesafe: false });
+  assert.deepEqual(plain(status.routes), { vercel: true, typesafe: false, zen: false, openrouter: false });
   assert.equal(status.accountingPending, 0);
   assert.equal(JSON.stringify(status).includes(secret), false);
   assert.equal(Object.keys(status).some((key) => /apikey|encrypted/i.test(key)), false);

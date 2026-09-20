@@ -78,7 +78,7 @@ app.whenReady().then(async () => {
   fs.writeFileSync(preload, `const {contextBridge}=require("electron");
     const responses=${JSON.stringify(responses)};
     const listeners={onAssistant:[],onAssistantStatus:[]};
-    const modePatches=[],assistantActions=[],questionAnswers=[];
+    const modePatches=[],assistantActions=[],questionAnswers=[],doneAbsorbs=[];
     contextBridge.exposeInMainWorld("mefiStudio",{
       ...Object.fromEntries(Object.keys(responses).map(key=>[key,async()=>{if(key==='eyesCollisions')await new Promise(resolve=>setTimeout(resolve,5000));return responses[key];}])),
       ...Object.fromEntries(Object.keys(listeners).map(key=>[key,callback=>{listeners[key].push(callback);return()=>{};}])),
@@ -99,7 +99,8 @@ app.whenReady().then(async () => {
         for(const callback of listeners.onAssistant)callback({state:responses.assistantState.state,event:{kind:'control'}});
         return {ok:true,state:responses.assistantState.state,autopilot:responses.assistantStatus.status};
       },
-      assistantAnswer:async payload=>{questionAnswers.push(payload);return {ok:true,state:responses.assistantState.state};}
+      assistantAnswer:async payload=>{questionAnswers.push(payload);return {ok:true,state:responses.assistantState.state};},
+      assistantAbsorbDoneLog:async()=>{doneAbsorbs.push(true);responses.assistantDoneLog={ok:true,entries:[]};return {ok:true,records:2,passes:1,entries:[]};}
     });
     contextBridge.exposeInMainWorld("commandFixture",{
       publishAssistant:(state,event)=>{responses.assistantState={ok:true,state};for(const callback of listeners.onAssistant)callback({state,event});},
@@ -107,6 +108,7 @@ app.whenReady().then(async () => {
       modePatches:()=>modePatches,
       assistantActions:()=>assistantActions,
       questionAnswers:()=>questionAnswers,
+      doneAbsorbs:()=>doneAbsorbs.length,
       assistantState:()=>responses.assistantState.state,
       status:()=>responses.assistantStatus.status
     });
@@ -849,6 +851,24 @@ app.whenReady().then(async () => {
   await until("!document.getElementById('cmd-done').hidden && document.getElementById('idle-feed').hidden", "Done tab shows its view alone");
   await until("document.querySelectorAll('#cmd-done-list .done-row').length>=2", "the done log renders durable records");
   report.rail = { doneRows: await run("return document.querySelectorAll('#cmd-done-list .done-row').length;") };
+  // Collapse tucks the list away while the head keeps the count and Absorb;
+  // Absorb then flies the records into the button and clears them on the host.
+  const shot = async (name) => {
+    if (!process.env.MEFI_DONE_CAPTURE_DIR || !path.isAbsolute(process.env.MEFI_DONE_CAPTURE_DIR)) return;
+    fs.mkdirSync(process.env.MEFI_DONE_CAPTURE_DIR, { recursive: true });
+    fs.writeFileSync(path.join(process.env.MEFI_DONE_CAPTURE_DIR, `${name}.png`), (await contents.capturePage()).toPNG());
+  };
+  await run("document.getElementById('cmd-done-toggle').click();");
+  await until("document.getElementById('cmd-done').classList.contains('done-collapsed') && getComputedStyle(document.getElementById('cmd-done-list')).display==='none'", "the done log collapses to its head");
+  await shot("done-collapsed");
+  await run("document.getElementById('cmd-done-toggle').click();");
+  await until("!document.getElementById('cmd-done').classList.contains('done-collapsed') && getComputedStyle(document.getElementById('cmd-done-list')).display!=='none'", "the done log expands again");
+  await run("document.getElementById('cmd-done-absorb').click();");
+  await sleep(340);
+  await shot("absorb-mid");
+  await until("window.commandFixture.doneAbsorbs()===1 && document.querySelector('#cmd-done-list .done-empty')!==null", "Absorb clears the done log through the host");
+  await shot("absorb-done");
+  report.rail.absorbed = await run("return window.commandFixture.doneAbsorbs();");
   await run("document.getElementById('cmd-rail-tab-ask').click();");
   await until("!document.getElementById('cmd-asks').hidden && document.querySelector('#cmd-ask-list .ask-option[data-recommended=\"true\"]')!==null", "Ask tab renders the recommended option");
   await run("document.querySelector('#cmd-ask-list .ask-option[data-recommended=\"true\"]').click();");
@@ -858,6 +878,7 @@ app.whenReady().then(async () => {
   await until("!document.getElementById('idle-feed').hidden && document.getElementById('cmd-done').hidden && document.getElementById('cmd-asks').hidden", "Work tab returns the live-work view");
   report.rail.active = await run("return document.querySelector('.rail-tab[aria-selected=\"true\"]')?.dataset.railView;");
   assert.equal(report.rail.doneRows >= 2, true, "the done log lists the ledger records");
+  assert.equal(report.rail.absorbed, 1, "Absorb reaches the host and empties the list");
   assert.equal(report.rail.active, "work");
   assert.equal(report.rail.answers.length, 1);
   assert.deepEqual(report.errors, []);

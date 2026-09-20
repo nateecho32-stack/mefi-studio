@@ -218,6 +218,8 @@
     doneEntries: null,
     doneAt: 0,
     doneLoading: false,
+    doneCollapsed: readStore("mefiStudio.cmdDoneCollapsed") === "1",
+    doneAbsorbing: false,
     askSending: false,
     lastAssistantSelected: false,
     query: "",
@@ -919,6 +921,27 @@
     state.taskLayout = placed.layout;
     placed.entries.forEach(({ task, anchor, x: bx, y: by, z: bz }) => {
       const entry = metadata.get(task.id);
+      // Work on it: a task pinned to a session or todo on the board is that
+      // node's work, not a second node beside it. The task stays on the board;
+      // the graph shows the work where the user pointed. Group members and
+      // plan parents keep their own nodes so the group hierarchy stays true.
+      const target = task.target;
+      const targetId = ["session", "todo"].includes(String(target?.kind ?? "")) ? String(target?.id ?? "") : "";
+      const host = targetId && !entry.taskGroup && !entry.member
+        ? state.nodes.find((candidate) => (candidate.kind === "session" || candidate.kind === "todo") && !candidate.dying && (candidate.id === targetId || candidate.sessionId === targetId))
+        : null;
+      if (host) {
+        host.workTask = task;
+        const fx = ensureFx(`task:${task.id}`);
+        fx.task = task;
+        fx.builder = false;
+        fx.anchorId = host.id;
+        fx.seen = true;
+        // It never rendered a node of its own: its finish folds straight into
+        // the host instead of flying a ghost out of it.
+        fx.wasRendered = false;
+        return;
+      }
       const node = {
         id: `task:${task.id}`,
         kind: entry.taskGroup?.kind === "approved-plan" ? "task-group" : "task",
@@ -972,6 +995,15 @@
   // board. Requests usually name the thing they are about ("Work on <session>").
   const titleKeys = (text) => new Set((String(text ?? "").toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).slice(0, 10));
 
+  // Work on it pins work to the node the user pointed at (a session or a todo):
+  // the running ring, the card and the builder belong on that node, not on a
+  // second node echoing its name. Null when the target is not on the board.
+  function targetHostNode(target) {
+    const id = ["session", "todo"].includes(String(target?.kind ?? "")) ? String(target?.id ?? "") : "";
+    if (!id) return null;
+    return state.nodes.find((node) => (node.kind === "session" || node.kind === "todo") && !node.dying && (node.id === id || node.sessionId === id)) ?? null;
+  }
+
   // Where a running job belongs on the board: its task, its session, or the node
   // whose title it echoes. A job with no home is not forced onto the assistant —
   // three of those stacked on one hub was the whole visual problem — it goes out
@@ -980,11 +1012,21 @@
     if (job.taskId) {
       const task = state.nodes.find((node) => node.kind === "task" && node.task?.id === job.taskId);
       if (task) return task;
+      // Work on it: the task lives on the node it was pinned to, not on a node
+      // of its own, so the builder orbits that node.
+      const owned = (state.allTasks ?? []).find((entry) => entry?.id === job.taskId);
+      const host = targetHostNode(owned?.target);
+      if (host) return host;
     }
     if (job.sessionId) {
       const session = state.nodes.find((node) => node.kind === "session" && node.id === job.sessionId);
       if (session) return session;
     }
+    // A queued request the executor already claimed carries its target only on
+    // the request row: the worker belongs on the node the request names.
+    const request = (Array.isArray(state.requests) ? state.requests : []).find((entry) => entry?.title && entry.title === job.title);
+    const requested = targetHostNode(request?.target);
+    if (requested) return requested;
     const keys = titleKeys(job.title);
     if (!keys.size) return null;
     let best = null;
@@ -1208,6 +1250,9 @@
       const fx = state.fx.get(id);
       if (!fx || fx.absorbAt != null) continue;
       const task = hold.task ?? fx.task;
+      // Work on it finished: it folds into the node it was pinned to instead of
+      // parking a finished node beside it.
+      if (targetHostNode(task?.target)) { state.doneHold.delete(id); markAbsorb(id); continue; }
       const host = fx.anchorId ? state.nodes.find((node) => node.id === fx.anchorId && !node.dying) : null;
       const sx = fx.lastX ?? host?.x ?? 190;
       const sy = fx.lastY ?? host?.y ?? 46;
@@ -1696,6 +1741,7 @@
   function applyRailCollapsed() {
     const collapsed = state.railTab === "work" ? state.feedCollapsed
       : state.railTab === "assistant" ? !state.chatLogOpen
+      : state.railTab === "done" ? state.doneCollapsed
       : false;
     state.railCollapsed = collapsed;
     el.rail?.classList.toggle("rail-collapsed", collapsed);
@@ -1753,7 +1799,7 @@
   // The done log: the durable executor ledger plus the assistant's completed
   // passes, read from the host on demand so a reload shows the file, not a cache.
   async function loadDoneLog() {
-    if (!el.doneList) return;
+    if (!el.doneList || state.doneAbsorbing) return;
     if (!window.mefiStudio?.assistantDoneLog) {
       if (el.doneState) el.doneState.textContent = "desktop app only";
       renderDone();
@@ -1774,9 +1820,73 @@
     }
   }
 
+  // The done log collapses to its head: the count and the Absorb button stay
+  // reachable while the list tucks away, and the choice is remembered.
+  function setDoneCollapsed(collapsed, { save = true } = {}) {
+    state.doneCollapsed = Boolean(collapsed);
+    el.done?.classList.toggle("done-collapsed", state.doneCollapsed);
+    if (el.doneToggle) {
+      el.doneToggle.textContent = state.doneCollapsed ? "+" : "–";
+      el.doneToggle.setAttribute("aria-expanded", String(!state.doneCollapsed));
+      el.doneToggle.title = state.doneCollapsed ? "Expand the done log" : "Collapse the done log";
+    }
+    applyRailCollapsed();
+    if (save) writeStore("mefiStudio.cmdDoneCollapsed", state.doneCollapsed ? "1" : "0");
+  }
+
+  // Absorb: every record spirals into the Absorb button, then the host wipes
+  // them from the done log for good. The flight is skipped when motion is off —
+  // the wipe still lands, it just lands at once.
+  async function absorbDoneLog() {
+    if (state.doneAbsorbing || !el.doneList || !window.mefiStudio?.assistantAbsorbDoneLog) return;
+    const entries = state.doneEntries ?? [];
+    if (!entries.length) return;
+    state.doneAbsorbing = true;
+    if (el.doneAbsorb) el.doneAbsorb.disabled = true;
+    const rows = [...el.doneList.querySelectorAll(".done-row")];
+    const button = el.doneAbsorb;
+    const target = button?.getBoundingClientRect();
+    if (!noMotion() && target && rows.length) {
+      const cx = target.left + target.width / 2;
+      const cy = target.top + target.height / 2;
+      rows.forEach((row, index) => {
+        const rect = row.getBoundingClientRect();
+        row.style.setProperty("--absorb-dx", `${Math.round(cx - (rect.left + rect.width / 2))}px`);
+        row.style.setProperty("--absorb-dy", `${Math.round(cy - (rect.top + rect.height / 2))}px`);
+        row.style.setProperty("--absorb-i", String(Math.min(index, 12)));
+      });
+      el.done?.classList.add("absorbing");
+      button.classList.add("pulling");
+      await new Promise((resolve) => setTimeout(resolve, 640 + Math.min(rows.length, 12) * 45));
+    }
+    try {
+      const result = await window.mefiStudio.assistantAbsorbDoneLog();
+      if (!result?.ok) {
+        window.MefiToast?.(`absorb failed · ${result?.error ?? "unknown error"}`, "bad");
+        return;
+      }
+      state.doneEntries = [];
+      state.doneAt = Date.now();
+      window.MefiToast?.(`absorbed ${entries.length} record${entries.length === 1 ? "" : "s"}`, "good");
+    } catch (error) {
+      window.MefiToast?.(`absorb failed · ${String(error?.message ?? error)}`, "bad");
+    } finally {
+      state.doneAbsorbing = false;
+      el.done?.classList.remove("absorbing");
+      button?.classList.remove("pulling");
+      renderDone();
+    }
+  }
+
   function renderDone() {
     if (!el.doneList) return;
     const entries = state.doneEntries ?? [];
+    if (el.doneAbsorb) {
+      el.doneAbsorb.disabled = state.doneAbsorbing || !entries.length;
+      el.doneAbsorb.title = entries.length
+        ? `Absorb ${entries.length} record${entries.length === 1 ? "" : "s"} — the done log clears for good`
+        : "Nothing to absorb yet";
+    }
     el.doneList.textContent = "";
     if (!entries.length) {
       const empty = document.createElement("li");
@@ -1971,7 +2081,19 @@
     const ids = new Set();
     for (const job of autopilotJobs(assistant)) {
       if (job.sessionId) ids.add(job.sessionId);
-      if (job.taskId) ids.add(job.taskId);
+      if (job.taskId) {
+        ids.add(job.taskId);
+        // A task pinned to a board node lights that node, wherever the task
+        // itself would have been drawn.
+        const target = (state.allTasks ?? []).find((entry) => entry?.id === job.taskId)?.target;
+        if (["session", "todo"].includes(String(target?.kind ?? "")) && target?.id) ids.add(String(target.id));
+      }
+    }
+    // A pinned request the executor already claimed keeps its target lit for
+    // as long as the run lasts.
+    for (const request of Array.isArray(state.requests) ? state.requests : []) {
+      const target = request?.target;
+      if (request?.status === "running" && ["session", "todo"].includes(String(target?.kind ?? "")) && target?.id) ids.add(String(target.id));
     }
     return ids;
   };
@@ -1996,6 +2118,12 @@
       const task = node.task;
       if (node.kind === "task" && task?.pin && (task.status === "open" || task.status === "active")) ids.add(String(task.id));
     }
+    // A pinned task drawn on its target node instead of its own keeps the
+    // "up next" ring on that node.
+    for (const task of state.allTasks ?? []) {
+      const target = task?.target;
+      if (task?.pin && (task.status === "open" || task.status === "active") && ["session", "todo"].includes(String(target?.kind ?? "")) && target?.id) ids.add(String(target.id));
+    }
     // The seen set is the bridge across the handoff: the claim clears the pin
     // exactly when the build starts, so the ring keys off "was pinned and is
     // now running" rather than the pin alone. Entries age out so a finished
@@ -2017,9 +2145,14 @@
       if (job.taskId && completedTaskIds.has(job.taskId)) continue;
       const task = nodes.find((node) => node.kind === "task" && (job.taskId && (node.task?.id === job.taskId || node.id === `task:${job.taskId}`) || job.sessionId && node.task?.run?.sessionId === job.sessionId));
       if (task && (task.dying || ["done", "archived"].includes(task.task?.status))) continue;
+      // Work on it draws the task on the node it was pinned to: Follow frames
+      // that node instead of falling back to the worker's own session.
+      const target = !task && job.taskId ? (state.allTasks ?? []).find((entry) => entry?.id === job.taskId)?.target : null;
+      const targetId = ["session", "todo"].includes(String(target?.kind ?? "")) ? String(target?.id ?? "") : "";
+      const host = targetId ? nodes.find((entry) => (entry.kind === "session" || entry.kind === "todo") && !entry.dying && (entry.id === targetId || entry.sessionId === targetId)) : null;
       const session = job.sessionId ? nodes.find((node) => node.kind === "session" && (node.id === job.sessionId || node.sessionId === job.sessionId)) : null;
       const builder = nodes.find((node) => node.builder && !node.dying && (job.taskId && node.job?.taskId === job.taskId || job.sessionId && node.job?.sessionId === job.sessionId || !job.taskId && !job.sessionId && node.job === job));
-      const node = task ?? session ?? builder;
+      const node = task ?? host ?? session ?? builder;
       if (!node || seen.has(node.id)) continue;
       seen.add(node.id);
       const todo = session ? nodes.find((entry) => entry.kind === "todo" && entry.sessionId === session.id && (entry.status === "in_progress" || entry.state === "active")) : null;
@@ -2847,7 +2980,7 @@
       if (node.status === "queued") return NODE_RGB.pending;
       return agentRgb(node.role);
     }
-    if (node._workLabel === "Verifying" || node.task?.status === "awaiting_verification") return NODE_RGB.verify;
+    if (node._workLabel === "Verifying" || (node.task ?? node.workTask)?.status === "awaiting_verification") return NODE_RGB.verify;
     if (node._workLabel === "Running") return NODE_RGB.warm;
     if (node._workLabel === "Next") return NODE_RGB.dust;
     if (node.state === "stale") return NODE_RGB.stale;
@@ -2860,7 +2993,7 @@
 
   function nodeVisualProfile(node) {
     const focused = state.hoverNode === node || Boolean(state.selected && state.selected.id === node.id);
-    const verifying = node._workLabel === "Verifying" || node.task?.status === "awaiting_verification";
+    const verifying = node._workLabel === "Verifying" || (node.task ?? node.workTask)?.status === "awaiting_verification";
     const working = !verifying && (node._workLabel === "Running" || node.state === "active") || node.kind === "agent" && node.status === "running";
     const prominent = focused || working || node.kind === "assistant";
     return { prominent, maxRadius: prominent ? 15 : 11, alpha: prominent ? 1 : 0.65, shape: "circle" };
@@ -5146,8 +5279,9 @@
       node._orbitTrail = null; node._extraGlow = false;
       node._audioResponse = nodeAudioResponse(node, visualMusic, audioNodes, state.audioResponse);
       node._bubble = null; node._bubblePaint = null;
-      const ids = [node.id, node.sessionId, node.task?.id].filter(Boolean).map(String);
-      node._workLabel = node.task?.status === "awaiting_verification" ? "Verifying" : (node.kind === "todo" ? node.status === "in_progress" : ids.some((id) => runningIds.has(id))) ? "Running" : ids.some((id) => pinnedIds.has(id)) ? "Next" : null;
+      const ids = [node.id, node.sessionId, node.task?.id, node.workTask?.id].filter(Boolean).map(String);
+      const work = node.task ?? node.workTask ?? null;
+      node._workLabel = work?.status === "awaiting_verification" ? "Verifying" : (ids.some((id) => runningIds.has(id)) || node.kind === "todo" && node.status === "in_progress") ? "Running" : ids.some((id) => pinnedIds.has(id)) ? "Next" : null;
       if (node.kind === "task") {
         const job = runningJobs.find((entry) => entry.taskId === node.task?.id);
         node.progress = typeof job?.progress === "number" && Number.isFinite(job.progress) ? job.progress : null;
@@ -7401,6 +7535,7 @@
     }).catch(() => {});
     renderFeed();
     renderHint();
+    window.MefiUsageTracker?.open?.();
     bumpHud();
     state.lastTouch = Date.now();
     state.popupAt = Date.now() + 6000;
@@ -7479,6 +7614,7 @@
     updateTelemetry();
     if (autopilotJobs(state.assistant).length || chatMode()) state.feedDirty = true; // "running: … · Ns" and the chat status line age between status pushes
     renderFeed();
+    globalThis.MefiUsageTracker?.tick?.();
     if (state.ambient && !state.settingsPreview && Date.now() - state.popupAt > POPUP_MS) {
       state.popupAt = Date.now();
       popup();
@@ -7622,6 +7758,8 @@
     el.doneList = document.getElementById("cmd-done-list");
     el.doneState = document.getElementById("cmd-done-state");
     el.doneRefresh = document.getElementById("cmd-done-refresh");
+    el.doneToggle = document.getElementById("cmd-done-toggle");
+    el.doneAbsorb = document.getElementById("cmd-done-absorb");
     el.asks = document.getElementById("cmd-asks");
     el.askList = document.getElementById("cmd-ask-list");
     el.askState = document.getElementById("cmd-ask-state");
@@ -7854,6 +7992,9 @@
       setRailTab(tabs[next].dataset.railView, { focus: true });
     });
     el.doneRefresh?.addEventListener("click", () => void loadDoneLog());
+    el.doneToggle?.addEventListener("click", () => setDoneCollapsed(!state.doneCollapsed));
+    el.doneAbsorb?.addEventListener("click", () => void absorbDoneLog());
+    setDoneCollapsed(state.doneCollapsed, { save: false });
     setRailTab(state.railTab, { save: false });
     document.getElementById("idle-chat-explorer")?.addEventListener("click", () => nav("explorer", { assistant: true }));
     el.ambienceBtn?.addEventListener("click", toggleAmbience);

@@ -143,8 +143,10 @@ class MefiStudioLauncherTests(unittest.TestCase):
             env = dict(os.environ)
             for name in (
                 "ELECTRON_RUN_AS_NODE", "MEFI_STUDIO_KEY", "MEFI_STUDIO_ZAI_KEY",
-                "MEFI_STUDIO_GATEWAY_KEY", "AI_GATEWAY_API_KEY", "MEFI_ZAI_API_KEY",
-                "OPENCODE_CONFIG_CONTENT",
+                "MEFI_STUDIO_GATEWAY_KEY", "AI_GATEWAY_API_KEY", "TYPESAFE_API_KEY",
+                "MEFI_STUDIO_JEV_KEY", "OPENCODE_ZEN_API_KEY", "MEFI_STUDIO_ZEN_KEY",
+                "OPENROUTER_API_KEY", "MEFI_STUDIO_OPENROUTER_KEY", "MEFI_JEV_ROUTE",
+                "MEFI_ZAI_API_KEY", "OPENCODE_CONFIG_CONTENT",
             ):
                 env.pop(name, None)
             env.update({

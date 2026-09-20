@@ -17,6 +17,7 @@ import {
   buildEvaluationRequest,
   buildSystemoneRequest,
   classify,
+  decisionsUrl,
   evaluationUrl,
   gatewayConfig,
   isJevModel,
@@ -61,30 +62,51 @@ test("gateway config: defaults, env overrides, clamps", () => {
   assert.equal(gatewayConfig({ env: { MEFI_JEV_TIMEOUT_MS: "", MEFI_JEV_MAX_STATE_CHARS: " " } }).timeoutMs, 15000, "empty shell overrides retain defaults");
 });
 
-test("routes: the Jev API is a first-class route with its own endpoint, model and env", () => {
+test("routes: every hosted Jev route has its own endpoint, model and env", () => {
   const direct = gatewayConfig({ env: {}, route: "typesafe" });
   assert.equal(direct.route, "typesafe");
   assert.equal(direct.routeLabel, "TypeSafe Jev API");
   assert.equal(direct.protocol, "systemone");
   assert.equal(direct.baseUrl, "https://api.typesafe.ai/v1");
   assert.equal(direct.model, "jev-1.13.0");
+  const zen = gatewayConfig({ env: {}, route: "zen" });
+  assert.equal(zen.routeLabel, "OpenCode Zen");
+  assert.equal(zen.protocol, "systemone", "Zen serves the same systemone wire as TypeSafe");
+  assert.equal(zen.baseUrl, "https://opencode.ai/zen/v1");
+  assert.equal(zen.model, "jev-1.13");
+  assert.equal(zen.modelsUrl, "https://opencode.ai/zen/v1/models");
+  const openrouter = gatewayConfig({ env: {}, route: "openrouter" });
+  assert.equal(openrouter.routeLabel, "OpenRouter");
+  assert.equal(openrouter.protocol, "decisions", "OpenRouter serves Jev through its Decisions API");
+  assert.equal(openrouter.baseUrl, "https://openrouter.ai/api/alpha");
+  assert.equal(openrouter.model, "typesafe/jev-1.13");
+  assert.equal(openrouter.modelsUrl, "https://openrouter.ai/api/v1/models", "the models list lives outside the alpha decisions path");
   assert.equal(gatewayConfig({ env: { MEFI_JEV_ROUTE: "typesafe" } }).route, "typesafe", "the env selects the route");
   assert.equal(gatewayConfig({ env: { MEFI_JEV_ROUTE: "typesafe" }, route: "vercel" }).route, "vercel", "an explicit route wins over the env");
   assert.equal(gatewayConfig({ env: { MEFI_JEV_ROUTE: "nope" } }).route, "vercel", "an unknown env route falls back, never guesses");
   assert.equal(gatewayConfig({ env: {}, route: "TYPESAFE" }).route, "typesafe", "route names are case-insensitive");
-  assert.deepEqual(Object.keys(JEV_ROUTES).sort(), ["typesafe", "vercel"]);
+  assert.deepEqual(Object.keys(JEV_ROUTES).sort(), ["openrouter", "typesafe", "vercel", "zen"]);
+  for (const [id, preset] of Object.entries(JEV_ROUTES)) {
+    assert.equal(preset.id, id);
+    assert.ok(isJevModel(preset.model), `${id}'s pinned model is Jev-shaped`);
+    assert.ok(preset.envKeys.length > 0 && preset.keyHint.length > 0);
+  }
 });
 
 test("route helpers keep the set closed and the default stable", () => {
   assert.equal(DEFAULT_JEV_ROUTE, "vercel");
   assert.equal(isJevRoute("vercel"), true);
   assert.equal(isJevRoute("typesafe"), true);
+  assert.equal(isJevRoute("zen"), true);
+  assert.equal(isJevRoute("openrouter"), true);
   assert.equal(isJevRoute(" TYPESAFE "), true);
-  assert.equal(isJevRoute("openrouter"), false);
+  assert.equal(isJevRoute("vivgrid"), false);
   assert.equal(isJevRoute(""), false);
   assert.equal(normalizeJevRoute("nope"), "vercel");
   assert.equal(normalizeJevRoute("typesafe"), "typesafe");
+  assert.equal(normalizeJevRoute("openrouter"), "openrouter");
   assert.equal(resolveJevRoute({ jevRoute: "typesafe" }, {}), "typesafe");
+  assert.equal(resolveJevRoute({ jevRoute: "zen" }, {}), "zen");
   assert.equal(resolveJevRoute({ jevRoute: "typesafe" }, { MEFI_JEV_ROUTE: "vercel" }), "vercel");
   assert.equal(resolveJevRoute({ jevRoute: "garbage" }, {}), "vercel");
   assert.equal(resolveJevRoute(null, {}), "vercel");
@@ -110,16 +132,29 @@ test("key resolution: env wins, then the encrypted settings field, then null", (
 });
 
 test("key resolution follows the route: a key is never sent to the other endpoint", () => {
-  const decrypt = (_settings, field) => ({ gatewayApiKeyEncrypted: "gateway-key", jevApiKeyEncrypted: "typesafe-key" }[field] ?? null);
+  const decrypt = (_settings, field) => ({
+    gatewayApiKeyEncrypted: "gateway-key", jevApiKeyEncrypted: "typesafe-key",
+    zenApiKeyEncrypted: "zen-key", openrouterApiKeyEncrypted: "openrouter-key",
+  }[field] ?? null);
   assert.deepEqual(resolveApiKey({ env: { TYPESAFE_API_KEY: "env-typesafe" }, route: "typesafe" }), { key: "env-typesafe", via: "env" });
   assert.deepEqual(resolveApiKey({ env: { MEFI_STUDIO_JEV_KEY: " studio-jev " }, route: "typesafe" }), { key: "studio-jev", via: "env" });
   assert.deepEqual(resolveApiKey({ env: {}, settings: { jevApiKeyEncrypted: "x" }, decrypt, route: "typesafe" }), { key: "typesafe-key", via: "settings" });
   assert.deepEqual(resolveApiKey({ env: {}, settings: { gatewayApiKeyEncrypted: "x" }, decrypt, route: "vercel" }), { key: "gateway-key", via: "settings" });
+  assert.deepEqual(resolveApiKey({ env: { OPENCODE_ZEN_API_KEY: "env-zen" }, route: "zen" }), { key: "env-zen", via: "env" });
+  assert.deepEqual(resolveApiKey({ env: { MEFI_STUDIO_ZEN_KEY: " studio-zen " }, route: "zen" }), { key: "studio-zen", via: "env" });
+  assert.deepEqual(resolveApiKey({ env: {}, settings: { zenApiKeyEncrypted: "x" }, decrypt, route: "zen" }), { key: "zen-key", via: "settings" });
+  assert.deepEqual(resolveApiKey({ env: { OPENROUTER_API_KEY: "env-openrouter" }, route: "openrouter" }), { key: "env-openrouter", via: "env" });
+  assert.deepEqual(resolveApiKey({ env: { MEFI_STUDIO_OPENROUTER_KEY: " studio-or " }, route: "openrouter" }), { key: "studio-or", via: "env" });
+  assert.deepEqual(resolveApiKey({ env: {}, settings: { openrouterApiKeyEncrypted: "x" }, decrypt, route: "openrouter" }), { key: "openrouter-key", via: "settings" });
   assert.equal(resolveApiKey({ env: {}, settings: { gatewayApiKeyEncrypted: "x" }, decrypt, route: "typesafe" }), null, "the gateway key is not a Jev API key");
   assert.equal(resolveApiKey({ env: { AI_GATEWAY_API_KEY: "gateway-env" }, route: "typesafe" }), null, "gateway env keys never authorize the Jev API route");
   assert.equal(resolveApiKey({ env: { TYPESAFE_API_KEY: "typesafe-env" }, route: "vercel" }), null, "Jev API env keys never authorize the gateway route");
+  assert.equal(resolveApiKey({ env: { OPENCODE_ZEN_API_KEY: "zen-env" }, route: "openrouter" }), null, "Zen keys never authorize OpenRouter");
+  assert.equal(resolveApiKey({ env: { OPENROUTER_API_KEY: "or-env" }, route: "zen" }), null, "OpenRouter keys never authorize Zen");
+  assert.equal(resolveApiKey({ env: {}, settings: { zenApiKeyEncrypted: "x" }, decrypt, route: "typesafe" }), null);
   assert.deepEqual(resolveApiKey({ env: { MEFI_JEV_ROUTE: "typesafe", TYPESAFE_API_KEY: "k" } }), { key: "k", via: "env" }, "the env route selects its own credential");
   assert.deepEqual(resolveApiKey({ env: { MEFI_JEV_ROUTE: "typesafe" }, settings: { jevApiKeyEncrypted: "x" }, decrypt }), { key: "typesafe-key", via: "settings" });
+  assert.deepEqual(resolveApiKey({ env: { MEFI_JEV_ROUTE: "openrouter" }, settings: { openrouterApiKeyEncrypted: "x" }, decrypt }), { key: "openrouter-key", via: "settings" });
 });
 
 // ---- question specs ---------------------------------------------------------------
@@ -191,6 +226,30 @@ test("buildSystemoneRequest: the Jev API wire names the model in the body and ke
   assert.equal(buildClassifyRequest({ config: { ...config, protocol: "evaluation" }, questions: SPEC_ONE, state: "s" }).url, evaluationUrl(config.baseUrl));
   assert.equal(systemoneUrl("https://proxy.example/v9"), "https://proxy.example/v9/systemone");
   assert.equal(systemoneUrl("https://proxy.example/"), "https://proxy.example/systemone");
+});
+
+test("Zen and OpenRouter reuse the direct wire at their own endpoints", () => {
+  const zenConfig = { ...gatewayConfig({ env: {}, route: "zen" }), apiKey: KEY };
+  const zen = buildClassifyRequest({
+    config: zenConfig,
+    questions: [{ id: "rel", type: "choice", prompt: "Compare A to B", options: ["same_obligation", "unrelated"] }],
+    state: "state text",
+  });
+  assert.equal(zen.url, "https://opencode.ai/zen/v1/systemone");
+  assert.equal(zen.body.model, "jev-1.13");
+  assert.equal(zen.body.questions.rel.type, "choice");
+  const openrouterConfig = { ...gatewayConfig({ env: {}, route: "openrouter" }), apiKey: KEY };
+  const openrouter = buildClassifyRequest({
+    config: openrouterConfig,
+    questions: [{ id: "rel", type: "noul", prompt: "Is it blocked?" }],
+    state: "state text",
+  });
+  assert.equal(openrouter.url, "https://openrouter.ai/api/alpha/decisions");
+  assert.equal(openrouter.body.model, "typesafe/jev-1.13");
+  assert.deepEqual(openrouter.body.questions.rel, { type: "noul", instructions: "Is it blocked?" });
+  assert.equal(decisionsUrl("https://openrouter.ai/api/alpha"), "https://openrouter.ai/api/alpha/decisions");
+  assert.equal(decisionsUrl("https://proxy.example/v9/"), "https://proxy.example/v9/decisions");
+  assert.equal(buildClassifyRequest({ config: { ...zenConfig, protocol: "decisions" }, questions: SPEC_ONE, state: "s" }).url, decisionsUrl(zenConfig.baseUrl));
 });
 
 test("validateWireAnswers validates strictly against the question specs", () => {
@@ -337,6 +396,31 @@ test("classify routes through TypeSafe's Jev API and accepts its noul answers", 
   assert.equal(stranger.model, "jev-1.13.0");
 });
 
+test("classify reaches Zen and OpenRouter on their own wires and reports their model", async () => {
+  for (const [route, url, model] of [
+    ["zen", "https://opencode.ai/zen/v1/systemone", "jev-1.13"],
+    ["openrouter", "https://openrouter.ai/api/alpha/decisions", "typesafe/jev-1.13"],
+  ]) {
+    const calls = [];
+    const result = await classify({
+      questions: [{ id: "rel", type: "noul", prompt: "Is it blocked?" }],
+      state: "state text",
+      apiKey: KEY,
+      config: gatewayConfig({ env: {}, route }),
+      fetchImpl: async (requestUrl, options) => {
+        calls.push({ url: requestUrl, body: JSON.parse(options.body) });
+        return okResponse({ model, answers: { rel: { type: "noul", noul: 0.5 } }, usage: { input_tokens: 20, output_tokens: 0 } });
+      },
+    });
+    assert.equal(result.ok, true, route);
+    assert.equal(calls[0].url, url);
+    assert.equal(calls[0].body.model, model);
+    assert.deepEqual(result.answers, { rel: { noul: 0.5 } });
+    assert.equal(result.model, model, "the answering model is reported per route");
+    assert.deepEqual(result.usage, { modelCalls: 1, promptTokens: 20, completionTokens: 0 });
+  }
+});
+
 test("classify: transport, HTTP, and unusable-reply failures never invent answers", async () => {
   const networkDown = async () => {
     throw new Error("ECONNREFUSED");
@@ -425,6 +509,22 @@ test("listModels refuses malformed catalogs and flags only allowed Jev model ids
   const result = await listModels({ apiKey: KEY, fetchImpl: async () => okResponse({ data: [{ id: "typesafe-ai/jev" }, { id: "typesafe-ai/jev" }, { id: "other/jevish" }, {}] }) });
   assert.deepEqual(result.jevCandidates, ["typesafe-ai/jev"]);
   assert.deepEqual(result.models, ["typesafe-ai/jev", "other/jevish"]);
+});
+
+test("listModels follows the route's catalog URL", async () => {
+  const urls = [];
+  const fetchImpl = async (url) => {
+    urls.push(url);
+    return okResponse({ data: [{ id: "typesafe/jev-1.13" }, { id: "openai/gpt-5.5" }] });
+  };
+  const zen = await listModels({ apiKey: KEY, config: gatewayConfig({ env: {}, route: "zen" }), fetchImpl });
+  assert.equal(urls[0], "https://opencode.ai/zen/v1/models");
+  assert.deepEqual(zen.jevCandidates, ["typesafe/jev-1.13"]);
+  const openrouter = await listModels({ apiKey: KEY, config: gatewayConfig({ env: {}, route: "openrouter" }), fetchImpl });
+  assert.equal(urls[1], "https://openrouter.ai/api/v1/models", "the public OpenRouter catalog, not the alpha decisions path");
+  assert.deepEqual(openrouter.jevCandidates, ["typesafe/jev-1.13"]);
+  const overridden = gatewayConfig({ env: { MEFI_AI_GATEWAY_BASE_URL: "https://proxy.example/v1" }, route: "zen" });
+  assert.equal(overridden.modelsUrl, "https://proxy.example/v1/models", "a base URL override moves the catalog with the route");
 });
 
 const SPEC_ONE = [{ id: "rel", type: "choice", prompt: "Compare A to B", options: ["same_obligation", "unrelated"] }];
@@ -530,6 +630,12 @@ test("the Jev keys follow the studio's keystore contract", async () => {
   assert.match(source, /--set-jev-key/);
   assert.match(source, /jevApiKeyEncrypted/);
   assert.match(source, /MEFI_STUDIO_JEV_KEY/);
+  assert.match(source, /--set-zen-key/);
+  assert.match(source, /zenApiKeyEncrypted/);
+  assert.match(source, /OPENCODE_ZEN_API_KEY/);
+  assert.match(source, /--set-openrouter-key/);
+  assert.match(source, /openrouterApiKeyEncrypted/);
+  assert.match(source, /OPENROUTER_API_KEY/);
   assert.match(source, /refusing to store the key in plaintext/);
   // status only ever crosses IPC as a boolean
   assert.match(source, /Status only — a saved key never crosses IPC/);

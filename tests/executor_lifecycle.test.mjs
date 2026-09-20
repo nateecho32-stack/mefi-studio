@@ -387,7 +387,7 @@ function childHost({ throwFallback = false, throwKill = false } = {}) {
     },
     finish: async (code, error = null) => { entry.finished = true; finishes.push({ code, error }); },
   });
-  const body = section('  let runLabel = runRoute.cli === "grok"', '  try {\n    child = spawnAttempt(runRoute');
+  const body = section('  const isCliRun = runRoute.cli === "grok"', '  try {\n    child = spawnAttempt(runRoute');
   vm.runInContext(`function fixtureChildController() { let timeout = null, startWatchdog = null; ${body}\nreturn { attach, fallbackToOpencode }; }`, env);
   const controller = env.fixtureChildController();
   controller.attach(first, "grok", env.runRoute, true);

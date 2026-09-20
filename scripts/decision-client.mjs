@@ -1,5 +1,5 @@
 // Mefi's Studio AI+ — the Jev decision client (TypeSafe classifier over a
-// chosen route: the Vercel AI Gateway or TypeSafe's own Jev API).
+// chosen route: a hosted gateway or TypeSafe's own Jev API).
 //
 // Jev answers CONSTRAINED questions (choice / score / yes-probability) over
 // application state — it never writes prose into the workflow. This client is
@@ -15,7 +15,7 @@
 // Invalid or missing answers are errors, never guesses ("type-safe does not
 // mean correct").
 //
-// Dependency-free on purpose: plain `fetch` implements both wires below. Each
+// Dependency-free on purpose: plain `fetch` implements every wire below. Each
 // route has its own credential and endpoint; a key is never sent to a route
 // it was not saved for. Keys resolve from the route's env names (headless/CLI)
 // or its DPAPI-encrypted settings field — the key itself is never logged,
@@ -23,14 +23,22 @@
 // endpoint.
 //
 // Routes (settings.jevRoute, MEFI_JEV_ROUTE):
-//   vercel   Vercel AI Gateway — POST {origin}/v4/ai/evaluation-model,
-//            model id in the `ai-model-id` header (`typesafe-ai/jev`).
-//            Key: AI_GATEWAY_API_KEY / MEFI_STUDIO_GATEWAY_KEY /
-//            `gatewayApiKeyEncrypted` (electron . --set-gateway-key).
-//   typesafe TypeSafe's Jev API directly — POST {base}/systemone, model in
-//            the body (`jev-1.13.0`). Key: TYPESAFE_API_KEY /
-//            MEFI_STUDIO_JEV_KEY / `jevApiKeyEncrypted`
-//            (electron . --set-jev-key).
+//   vercel     Vercel AI Gateway — POST {origin}/v4/ai/evaluation-model,
+//              model id in the `ai-model-id` header (`typesafe-ai/jev`).
+//              Key: AI_GATEWAY_API_KEY / MEFI_STUDIO_GATEWAY_KEY /
+//              `gatewayApiKeyEncrypted` (electron . --set-gateway-key).
+//   typesafe   TypeSafe's Jev API directly — POST {base}/systemone, model in
+//              the body (`jev-1.13.0`). Key: TYPESAFE_API_KEY /
+//              MEFI_STUDIO_JEV_KEY / `jevApiKeyEncrypted`
+//              (electron . --set-jev-key).
+//   zen        OpenCode Zen — POST {base}/systemone, same wire as the direct
+//              API (`jev-1.13`, and the limited-time free `jev-1.13-free`).
+//              Key: OPENCODE_ZEN_API_KEY / MEFI_STUDIO_ZEN_KEY /
+//              `zenApiKeyEncrypted` (electron . --set-zen-key).
+//   openrouter OpenRouter's Decisions API — POST {base}/decisions, same wire
+//              (`typesafe/jev-1.13`). Key: OPENROUTER_API_KEY /
+//              MEFI_STUDIO_OPENROUTER_KEY / `openrouterApiKeyEncrypted`
+//              (electron . --set-openrouter-key).
 //
 // CLI:
 //   node scripts/decision-client.mjs --status   # route + key + config, no network
@@ -45,7 +53,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const JEVC_CLIENT_VERSION = 3;
+export const JEVC_CLIENT_VERSION = 4;
 export const JEV_DOC_MODEL = "jev-1.13.0";
 
 export const JEV_ROUTES = Object.freeze({
@@ -68,6 +76,27 @@ export const JEV_ROUTES = Object.freeze({
     settingsField: "jevApiKeyEncrypted",
     envKeys: Object.freeze(["TYPESAFE_API_KEY", "MEFI_STUDIO_JEV_KEY"]),
     keyHint: "set TYPESAFE_API_KEY, or run: electron . --set-jev-key",
+  }),
+  zen: Object.freeze({
+    id: "zen",
+    label: "OpenCode Zen",
+    protocol: "systemone",
+    baseUrl: "https://opencode.ai/zen/v1",
+    model: "jev-1.13",
+    settingsField: "zenApiKeyEncrypted",
+    envKeys: Object.freeze(["OPENCODE_ZEN_API_KEY", "MEFI_STUDIO_ZEN_KEY"]),
+    keyHint: "set OPENCODE_ZEN_API_KEY, or run: electron . --set-zen-key",
+  }),
+  openrouter: Object.freeze({
+    id: "openrouter",
+    label: "OpenRouter",
+    protocol: "decisions",
+    baseUrl: "https://openrouter.ai/api/alpha",
+    model: "typesafe/jev-1.13",
+    modelsUrl: "https://openrouter.ai/api/v1/models",
+    settingsField: "openrouterApiKeyEncrypted",
+    envKeys: Object.freeze(["OPENROUTER_API_KEY", "MEFI_STUDIO_OPENROUTER_KEY"]),
+    keyHint: "set OPENROUTER_API_KEY, or run: electron . --set-openrouter-key",
   }),
 });
 export const DEFAULT_JEV_ROUTE = "vercel";
@@ -133,6 +162,7 @@ export function gatewayConfig({ env = process.env, route = null } = {}) {
     protocol: preset.protocol,
     baseUrl,
     model,
+    modelsUrl: preset.modelsUrl || `${baseUrl}/models`,
     timeoutMs: clampNumber(env.MEFI_JEV_TIMEOUT_MS, 1000, 60000, 15000),
     maxStateChars: clampNumber(env.MEFI_JEV_MAX_STATE_CHARS, 200, 60000, 8000),
   };
@@ -218,12 +248,13 @@ function validateQuestions(questions) {
 // P(true) answers (our "noul"). The chat-completions endpoint is the wrong
 // surface for Jev — the gateway rejects evaluation models there.
 //
-// TypeSafe Jev API (`systemone`) — the direct route:
-//   POST {baseUrl}/systemone
+// TypeSafe-style (`systemone`, `decisions`) — the direct API, OpenCode Zen
+// and OpenRouter's Decisions API share one shape:
+//   POST {baseUrl}/systemone   or   POST {baseUrl}/decisions
 //   headers: authorization · content-type
 //   body: { model, state, questions: { <id>: { type: "noul"|"choice", … } } }
-// The direct API names the yes/no type "noul" on both request and response;
-// the gateway adapts it to "boolean" with a `probability` answer.
+// These name the yes/no type "noul" on both request and response; the gateway
+// adapts it to "boolean" with a `probability` answer.
 
 export function evaluationUrl(baseUrl) {
   const origin = new URL(baseUrl).origin;
@@ -232,6 +263,10 @@ export function evaluationUrl(baseUrl) {
 
 export function systemoneUrl(baseUrl) {
   return `${new URL(baseUrl).href.replace(/\/+$/, "")}/systemone`;
+}
+
+export function decisionsUrl(baseUrl) {
+  return `${new URL(baseUrl).href.replace(/\/+$/, "")}/decisions`;
 }
 
 function wireQuestionsOf(questions, { booleanNoul }) {
@@ -275,7 +310,7 @@ export function buildSystemoneRequest({ config, questions, state }) {
   validateQuestions(questions);
   const flatState = clipText(typeof state === "string" ? state : JSON.stringify(state), config.maxStateChars);
   return {
-    url: systemoneUrl(config.baseUrl),
+    url: config.protocol === "decisions" ? decisionsUrl(config.baseUrl) : systemoneUrl(config.baseUrl),
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${config.apiKey}`,
@@ -286,7 +321,7 @@ export function buildSystemoneRequest({ config, questions, state }) {
 }
 
 export function buildClassifyRequest(options) {
-  return options.config.protocol === "systemone" ? buildSystemoneRequest(options) : buildEvaluationRequest(options);
+  return options.config.protocol === "evaluation" ? buildEvaluationRequest(options) : buildSystemoneRequest(options);
 }
 
 // ---- response validation ---------------------------------------------------------
@@ -511,7 +546,7 @@ export async function listModels({ apiKey, config = null, env = process.env, fet
   let response;
   try {
     response = await withDeadline(cfg.timeoutMs, async (signal) => {
-      const raw = await fetchImpl(`${cfg.baseUrl}/models`, {
+      const raw = await fetchImpl(cfg.modelsUrl, {
         headers: { authorization: `Bearer ${apiKey}`, "user-agent": `mefi-studio/${JEVC_CLIENT_VERSION} (jev decision client)` },
         signal,
       });

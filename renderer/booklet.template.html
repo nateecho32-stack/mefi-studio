@@ -179,6 +179,7 @@
       <div class="lab-tabs" role="tablist" aria-label="Model Lab views">
         <button id="model-lab-tab-rankings" role="tab" aria-selected="true" aria-controls="model-lab-rankings" data-lab-view="rankings">Rankings</button>
         <button id="model-lab-tab-usage" role="tab" aria-selected="false" aria-controls="model-lab-usage" tabindex="-1" data-lab-view="usage">Usage</button>
+        <button id="model-lab-tab-tracker" role="tab" aria-selected="false" aria-controls="model-lab-tracker" tabindex="-1" data-lab-view="tracker">Tracker</button>
         <button id="model-lab-tab-context" role="tab" aria-selected="false" aria-controls="model-lab-context" tabindex="-1" data-lab-view="context">Context</button>
         <button id="model-lab-tab-compare" role="tab" aria-selected="false" aria-controls="model-lab-compare" tabindex="-1" data-lab-view="compare">Compare <span class="lab-soon">Planned</span></button>
       </div>
@@ -190,6 +191,11 @@
         <details id="model-lab-ratings" class="lab-disclosure"><summary>Rate recent work</summary><p class="muted">Rate a result you have reviewed. Your score stays separate from model judging and error counts.</p><div id="model-lab-recent"></div></details>
       </section>
       <section id="model-lab-usage" role="tabpanel" aria-labelledby="model-lab-tab-usage" hidden><h3>Recorded usage</h3><p id="model-lab-usage-coverage" class="muted">Missing provider usage stays unknown. These totals cover calls recorded by Studio; they are not an account balance.</p><p id="model-lab-usage-range" class="lab-status"></p><div id="model-lab-usage-totals" class="lab-usage-grid"></div><div id="model-lab-usage-list" class="lab-table-wrap"></div></section>
+      <section id="model-lab-tracker" role="tabpanel" aria-labelledby="model-lab-tab-tracker" hidden>
+        <div class="lab-toolbar"><div><h3>Usage tracker</h3><p class="muted">Recorded local usage and the OpenCode Go account windows, shown separately. The account read uses the saved key and sends no prompts.</p></div><button id="model-lab-tracker-refresh" class="ghost" type="button">Refresh usage</button></div>
+        <p id="model-lab-tracker-status" class="lab-status" role="status" aria-live="polite"></p>
+        <div id="model-lab-tracker-body" class="lab-tracker"></div>
+      </section>
       <section id="model-lab-context" role="tabpanel" aria-labelledby="model-lab-tab-context" hidden>
         <div class="lab-toolbar"><div><h3>Context preview</h3><p class="muted">Inspect the saved material a task can carry. Token counts are estimates.</p></div><div class="lab-context-controls"><label>Task <select id="model-lab-context-task"><option value="">Choose a task…</option></select></label><label>Preview budget <select id="model-lab-context-budget"><option value="1000">1,000 tokens</option><option value="2000">2,000 tokens</option><option value="4000" selected>4,000 tokens</option><option value="8000">8,000 tokens</option></select></label><button id="model-lab-context-refresh" class="ghost">Preview context</button></div></div>
         <p id="model-lab-context-status" class="lab-status" role="status"></p><div id="model-lab-context-sections" class="lab-context-sections"></div>
@@ -311,7 +317,7 @@
         <div class="setup-head">
           <div>
             <h3 id="settings-setup-heading">Auto setup</h3>
-            <p class="muted">One pass over what this machine already has: saved keys choose the assistant route, installed CLIs choose the builders, and a saved Jev key turns on task-aware model selection. It sends no request, changes no key, and keeps every model override.</p>
+            <p class="muted">One pass over what this machine already has: saved keys or a reachable local server choose the assistant route, installed CLIs choose the builders, and a saved Jev key turns on task-aware model selection. It sends no request, changes no key, and keeps every model override.</p>
           </div>
           <button id="auto-setup">Run auto setup</button>
         </div>
@@ -324,7 +330,7 @@
         </section>
         <section class="settings-group" aria-labelledby="settings-assistant-heading">
         <h3 id="settings-assistant-heading">Assistant connection</h3>
-        <p class="muted">Save a key for the provider you use, then choose its routing below. Grok uses the CLI's own login. Keys are stored encrypted and never shown again.</p>
+        <p class="muted">Save a key for the provider you use, then choose its routing below. Grok and Claude Code use their CLI's own login; LM Studio needs no key. Keys are stored encrypted and never shown again.</p>
         <div class="row">
           <input type="password" id="zai-key" placeholder="z.ai Coding Plan API key (stored encrypted)" autocomplete="off" aria-label="z.ai Coding Plan API key">
           <button id="save-zai-key">Save z.ai key</button>
@@ -335,10 +341,16 @@
           <button id="save-key">Save OpenCode key</button>
           <span class="muted" id="key-status">checking…</span>
         </div>
+        <div class="row">
+          <input type="text" id="custom-endpoint" placeholder="Custom endpoint — https://host/v1 (OpenAI-compatible)" spellcheck="false" autocomplete="off" aria-label="Custom provider endpoint" style="width: 24em">
+          <input type="password" id="custom-key" placeholder="Custom API key (stored encrypted)" autocomplete="off" aria-label="Custom provider API key">
+          <button id="save-custom-key">Save custom key</button>
+          <span class="muted" id="custom-key-status">checking…</span>
+        </div>
         </section>
         <section class="settings-group" aria-labelledby="settings-routing-heading">
         <h3 id="settings-routing-heading">Model routing</h3>
-        <p class="muted">Who pays for assistant calls, and how each task's model is chosen. Provider choice and model selection are independent; explicit model overrides take priority.</p>
+        <p class="muted">Who pays for assistant calls, and how each task's model is chosen. Models are saved per provider, so switching routes cannot carry one provider's model into another; use whichever option you already have — a saved key, an installed CLI login, or a local server.</p>
         <div class="row">
           <label class="muted">AI routing
             <select id="ai-provider">
@@ -346,13 +358,20 @@
               <option value="zai">z.ai only — never bill OpenCode</option>
               <option value="opencode">OpenCode Go only</option>
               <option value="grok">Grok CLI — the assistant answers through the grok CLI's own login</option>
+              <option value="claude">Claude Code CLI — the assistant answers on your Claude Code subscription login</option>
+              <option value="antigravity">Antigravity CLI — the assistant answers through agy on your Google account</option>
+              <option value="lmstudio">LM Studio — a local server on this machine, no key</option>
+              <option value="custom">Custom endpoint — your own OpenAI-compatible URL and key</option>
             </select>
           </label>
-          <label class="muted">Assistant model override
-            <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model id for routine passes (replies, briefs, chat). Empty = selected model-selection mode." style="width: 15em">
+          <span class="muted" id="provider-readiness" role="status">checking…</span>
+        </div>
+        <div class="row">
+          <label class="muted">Routine model <span class="muted" id="model-scope-note">for this provider</span>
+            <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model this provider uses for routine passes (replies, briefs, chat). Saved per provider; empty = the provider's own default." style="width: 15em">
           </label>
-          <label class="muted">Heavy model override
-            <input type="text" id="ai-model-heavy" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model id for heavy passes (overseer, improver, analyzer read). Empty = selected model-selection mode." style="width: 15em">
+          <label class="muted">Heavy model
+            <input type="text" id="ai-model-heavy" placeholder="same as routine" spellcheck="false" autocomplete="off" title="Model this provider uses for heavy passes (overseer, improver, analyzer read). Saved per provider; empty = routine's model where the provider has one, otherwise the provider's default." style="width: 15em">
           </label>
           <label class="switch" title="Off by default: when z.ai fails, retry once on OpenCode Go (this bills OpenCode)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>OpenCode fallback on z.ai failure</span></label>
         </div>
@@ -363,9 +382,12 @@
               <option value="fixed">Fixed defaults</option>
             </select>
           </label>
+          <label class="muted">LM Studio endpoint
+            <input type="text" id="lmstudio-endpoint" placeholder="http://127.0.0.1:1234/v1/chat/completions" spellcheck="false" autocomplete="off" title="The local LM Studio server's chat-completions URL. Used only when AI routing is LM Studio." style="width: 24em">
+          </label>
           <button class="ghost" id="ai-routing-refresh">Refresh selection</button>
         </div>
-        <p class="muted" id="ai-routing-help">Jev ranks available models within your chosen provider for each task using catalog quality and estimated prices, plus your project's measured timing, errors, ratings and reported costs. Missing evidence stays unknown. Selection uses a small billed gateway request. Save a Jev gateway key below to enable it; a timeout or unavailable Jev uses the usual default. Model overrides take priority. Grok CLI uses its explicit model or CLI default.</p>
+        <p class="muted" id="ai-routing-help">Jev ranks available models within your chosen provider for each task using catalog quality and estimated prices, plus your project's measured timing, errors, ratings and reported costs. Missing evidence stays unknown. Selection uses a small billed gateway request. Save a Jev gateway key below to enable it; a timeout or unavailable Jev uses the usual default. Model overrides take priority. Grok, Claude Code and Antigravity use their saved model or CLI default; LM Studio and custom endpoints answer from the URL above (load one model or save a model override).</p>
         <p class="muted" id="ai-routing-status" role="status">Checking model selection…</p>
         <p class="muted" id="ai-routing-decision" role="status">No selection recorded yet.</p>
         <p class="muted" id="ai-routing-evidence" hidden></p>
@@ -378,10 +400,12 @@
             <select id="executor-cli">
               <option value="opencode">OpenCode run</option>
               <option value="grok">Grok CLI — grok builds every queued job on its own login</option>
+              <option value="claude">Claude Code — claude builds every queued job on your subscription login</option>
+              <option value="antigravity">Antigravity — agy builds every queued job on your Google account</option>
             </select>
           </label>
-          <label class="muted">Grok builder model
-            <input type="text" id="executor-model" placeholder="grok default" spellcheck="false" autocomplete="off" title="Model id the builder CLI runs with (grok -m). Empty = CLI default." style="width: 15em">
+          <label class="muted">Builder model <span class="muted" id="builder-scope-note">for this CLI</span>
+            <input type="text" id="executor-model" placeholder="CLI default" spellcheck="false" autocomplete="off" title="Model this builder CLI runs with (grok -m / claude --model / agy --model). Saved per builder; empty = CLI default." style="width: 15em">
           </label>
         </div>
         <div class="row">
@@ -390,13 +414,14 @@
           <button class="ghost" data-cli="grok" title="Open the Grok CLI in the repo on its own login">Grok</button>
           <button class="ghost" data-cli="codex" title="Open Codex CLI in the repo on its own account">Codex</button>
           <button class="ghost" data-cli="claude" title="Open Claude Code in the repo on its own account">Claude Code</button>
+          <button class="ghost" data-cli="antigravity" title="Open the Antigravity CLI in the repo on your Google account">Antigravity</button>
           <button class="ghost" id="cli-test-zai" title="Verify OpenCode sees the Studio-managed mefi-zai GLM provider">Test z.ai link</button>
           <span class="muted" id="cli-status">checking…</span>
         </div>
         </section>
         <details class="settings-optional"><summary>Jev connection & optional task suggestions</summary>
-          <p class="muted">Choose where Jev is routed: the Vercel AI Gateway or TypeSafe's Jev API directly. Each route keeps its own key, stored encrypted; switching never moves a key between routes. The key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
-          <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: the Vercel AI Gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled"><span class="track"></span><span>Intake classification</span></label></div>
+          <p class="muted">Choose where Jev is routed: the Vercel AI Gateway, TypeSafe's Jev API directly, OpenCode Zen (including its free Jev tier), or OpenRouter. Each route keeps its own key, stored encrypted; switching never moves a key between routes. The key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
+          <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: a hosted gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option><option value="zen">OpenCode Zen</option><option value="openrouter">OpenRouter</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled"><span class="track"></span><span>Intake classification</span></label></div>
           <p class="muted" id="jev-status" role="status">Checking Jev…</p>
         </details>
         <details class="settings-optional"><summary>Diagnostics & app updates</summary>
@@ -611,9 +636,11 @@
     <div class="rail-view-head">
       <h2 class="rail-view-title">Done log</h2>
       <span id="cmd-done-state" class="feed-state" role="status" aria-live="polite">Loading…</span>
+      <button id="cmd-done-toggle" class="ghost mini" type="button" aria-expanded="true" aria-controls="cmd-done-list" title="Collapse the done log">&ndash;</button>
       <button id="cmd-done-refresh" class="ghost mini" type="button" title="Re-read the executor ledger">Refresh</button>
+      <button id="cmd-done-absorb" class="primary mini" type="button" title="Absorb every record — the done log clears for good" disabled>Absorb</button>
     </div>
-    <p class="rail-view-note">Finished builds from the durable executor ledger, plus the assistant's own completed passes. <b>Done</b> means the worker reported success; <b>Failed</b> means it stopped early. These records survive restarts.</p>
+    <p class="rail-view-note">Finished builds from the durable executor ledger, plus the assistant's own completed passes. <b>Done</b> means the worker reported success; <b>Failed</b> means it stopped early. These records survive restarts until you absorb them.</p>
     <ul id="cmd-done-list" class="done-list" aria-label="Completed work"></ul>
   </section>
   <section id="cmd-asks" class="cmd-asks" role="tabpanel" aria-labelledby="cmd-rail-tab-ask" hidden>
@@ -625,6 +652,19 @@
     <ul id="cmd-ask-list" class="ask-list" aria-label="Questions and suggestions"></ul>
   </section>
     </div>
+  <section id="cmd-usage" class="cmd-usage" aria-label="Usage and OpenCode Go credits">
+    <header class="cmd-usage-head">
+      <h2 class="cmd-usage-title">
+        <button id="cmd-usage-toggle" class="feed-toggle" type="button" aria-expanded="true" aria-controls="cmd-usage-body" title="Collapse usage">
+          <span>Usage</span><span id="cmd-usage-state" class="feed-state">waiting</span>
+          <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg>
+        </button>
+      </h2>
+      <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and the OpenCode Go windows">Refresh</button>
+      <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Model Lab">Open</button>
+    </header>
+    <div id="cmd-usage-body" class="cmd-usage-body"></div>
+  </section>
   </aside>
   <div id="cmd-legend" class="cmd-legend">
     <button id="idle-legend-toggle" class="pill" aria-expanded="false" aria-controls="cmd-legend-list" title="What the colours and rings mean"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-legend"/></svg><span class="label">Legend</span></button>

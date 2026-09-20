@@ -29,9 +29,12 @@ preference is saved for all projects and can be changed at any time.
 
 Open **Settings & connections**. Configure your assistant connection and coding
 provider using the connection controls there, or choose **Run auto setup** to
-apply a configuration from the keys and CLIs already on this machine. The setup
-overview above the controls shows what was detected; auto setup explains each
-choice and never sends a request or changes a saved key. Conversation and coding
+apply a configuration from the keys, CLIs and local servers already on this
+machine. The setup overview above the controls shows what was detected; auto
+setup explains each choice and never sends a request or changes a saved key.
+You do not need every option: save the model for the provider you actually
+have (models are kept per provider, so switching never mixes them), and the
+readiness line names what the selected option has. Conversation and coding
 are separate capabilities: saving an assistant key alone does not prove a coding
 worker can start. Read the connection result before starting a task. The model
 catalog, manual planning and browsing saved work remain available without AI.

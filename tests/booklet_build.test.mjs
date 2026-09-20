@@ -28,6 +28,7 @@ const INLINE_SCRIPTS = [
   "sidebar.js",
   "graph.js",
   "model-lab.js",
+  "tracker.js",
   "tree3d.js",
   "idle.js",
   "explorer.js",

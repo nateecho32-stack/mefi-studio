@@ -42,10 +42,10 @@ test("every OpenCode route, including Grok fallback, receives snapshot-free work
   const env = vm.createContext({
     process: { env: {} }, AI_PROVIDERS: ["auto", "opencode", "zai"], ZAI_MODEL_ROUTINE: "fixture",
     readSettings: async () => settings, zaiOpencodeEnv: async () => ({ OPENCODE_CONFIG_CONTENT: '{"provider":{"fixture":{}}}', FIXTURE_KEY: "value" }),
-    grokCliAvailable: async () => true, logLine() {}, pushAutopilotHistory() {},
+    grokCliAvailable: async () => true, claudeCliAvailable: async () => true, antigravityCliAvailable: async () => true, logLine() {}, pushAutopilotHistory() {},
   });
-  vm.runInContext(section("function executorOpencodeEnv(", "// Which route an autopilot") + section("async function executorRunEnv()", "async function assistantFetch("), env);
-  for (const value of [{ aiProvider: "opencode" }, { aiProvider: "zai" }, { aiProvider: "auto", executorCli: "grok" }]) {
+  vm.runInContext(section("function executorModelOverride(", "// Auto setup:") + section("function executorOpencodeEnv(", "// Which route an autopilot") + section("async function executorRunEnv()", "async function assistantFetch("), env);
+  for (const value of [{ aiProvider: "opencode" }, { aiProvider: "zai" }, { aiProvider: "auto", executorCli: "grok" }, { aiProvider: "auto", executorCli: "claude" }, { aiProvider: "auto", executorCli: "antigravity" }]) {
     settings = value;
     const route = await env.executorRunEnv();
     assert.equal(JSON.parse((route.opencode ?? route).env.OPENCODE_CONFIG_CONTENT).snapshot, false);

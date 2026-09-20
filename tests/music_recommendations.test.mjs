@@ -19,7 +19,7 @@ test("music recommendations validate and bound input and produce trusted search 
 test("music requests use a read-only HTTP route and never reinterpret operational mood text", async () => {
   let observed;
   const recommend = createMusicRecommender({
-    resolveRoute: async (...args) => { assert.deepEqual(args, ["routine", { allowGrok: false }]); return { ok: true, model: "fixture" }; },
+    resolveRoute: async (...args) => { assert.deepEqual(args, ["routine", { allowCli: false }]); return { ok: true, model: "fixture" }; },
     complete: async (route, system, user, tokens) => {
       observed = JSON.parse(user);
       assert.match(system, /no tools/);

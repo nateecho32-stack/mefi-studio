@@ -366,13 +366,14 @@
     // The setup overview mirrors what the host already reported — saved-key
     // flags, routing, installed CLIs — so the auto setup card never issues its
     // own probes. Every row keeps "unknown" honest until a real read lands.
-    const setup = { keys: { opencode: null, zai: null }, routing: null, clis: null, routingError: false, cliError: false };
+    const setup = { keys: { opencode: null, zai: null, custom: null }, routing: null, clis: null, routingError: false, cliError: false };
     const setupAssistant = document.getElementById("setup-assistant");
     const setupSelection = document.getElementById("setup-selection");
     const setupBuilders = document.getElementById("setup-builders");
-    const providerNames = { auto: "Auto (prefers z.ai)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI" };
-    function grokInstalled() {
-      return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === "grok" && cli.installed);
+    const providerNames = { auto: "Auto (prefers z.ai)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
+    const singleModelProviders = new Set(["grok", "claude", "antigravity", "lmstudio", "custom"]);
+    function cliInstalled(id) {
+      return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === id && cli.installed);
     }
     function keyState(which) {
       const known = setup.keys[which];
@@ -386,8 +387,10 @@
       else if (!routing) setupAssistant.textContent = "checking…";
       else {
         const provider = providerNames[routing.provider] ? routing.provider : "auto";
-        const detail = provider === "grok" ? "CLI login"
-          : provider === "auto" ? (setup.keys.zai ? "will use z.ai" : setup.keys.opencode ? "will use OpenCode Go" : grokInstalled() ? "will use Grok CLI" : "save a key to connect")
+        const detail = provider === "grok" || provider === "claude" || provider === "antigravity" ? "CLI login"
+          : provider === "lmstudio" ? "no key needed"
+          : provider === "custom" ? (routing.hasCustom ? "key saved" : "no key saved")
+          : provider === "auto" ? (setup.keys.zai ? "will use z.ai" : setup.keys.opencode ? "will use OpenCode Go" : cliInstalled("grok") ? "will use Grok CLI" : cliInstalled("claude") ? "will use Claude Code CLI" : cliInstalled("antigravity") ? "will use Antigravity CLI" : "save a key to connect")
           : keyState(provider);
         setupAssistant.textContent = `${providerNames[provider]} · ${detail}`;
       }
@@ -398,14 +401,26 @@
       if (setup.cliError) setupBuilders.textContent = "CLI status unavailable";
       else if (!setup.clis) setupBuilders.textContent = "checking…";
       else {
-        const installed = setup.clis.filter((cli) => cli.installed);
-        setupBuilders.textContent = installed.length ? `${installed.map((cli) => cli.name).join(", ")} installed` : "No CLI detected — install OpenCode or Grok";
+        const builderIds = ["opencode", "grok", "claude", "antigravity"];
+        const installed = setup.clis.filter((cli) => cli.installed && builderIds.includes(cli.id));
+        setupBuilders.textContent = installed.length ? `${installed.map((cli) => cli.name).join(", ")} installed` : "No builder CLI detected — install OpenCode, Grok, Claude Code or Antigravity";
       }
+      const readiness = document.getElementById("provider-readiness");
+      const selected = routing && providerNames[routing.provider] ? routing.provider : null;
+      if (!selected) readiness.textContent = "checking…";
+      else if (selected === "auto") readiness.textContent = setup.keys.zai ? "z.ai key saved — auto uses it" : setup.keys.opencode ? "OpenCode key saved — auto uses it" : "no key yet — auto can still use an installed CLI";
+      else if (selected === "zai" || selected === "opencode") readiness.textContent = `${keyState(selected)} — this provider's saved model applies`;
+      else if (selected === "custom") readiness.textContent = `${routing.customEndpoint ? "endpoint saved" : "no endpoint saved"}, ${setup.keys.custom ? "key saved" : "no key saved"}`;
+      else if (selected === "lmstudio") readiness.textContent = "local server — no key needed; its loaded model is detected automatically";
+      else if (setup.cliError) readiness.textContent = "CLI status unavailable";
+      else if (!setup.clis) readiness.textContent = "checking CLI…";
+      else readiness.textContent = cliInstalled(selected) ? "CLI installed on this machine" : "CLI not found — you can still save its model and install it later";
     }
     renderSetupState();
 
     const keyStatus = document.getElementById("key-status");
     const zaiKeyStatus = document.getElementById("zai-key-status");
+    const customKeyStatus = document.getElementById("custom-key-status");
     window.mefiStudio
       .getApiKey("opencode")
       .then((key) => { setup.keys.opencode = Boolean(key?.saved); keyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
@@ -414,6 +429,10 @@
       .getApiKey("zai")
       .then((key) => { setup.keys.zai = Boolean(key?.saved); zaiKeyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
       .catch(() => (zaiKeyStatus.textContent = "key status unavailable"));
+    window.mefiStudio
+      .getApiKey("custom")
+      .then((key) => { setup.keys.custom = Boolean(key?.saved); customKeyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
+      .catch(() => (customKeyStatus.textContent = "key status unavailable"));
 
     document.getElementById("save-key").addEventListener("click", async () => {
       const value = document.getElementById("api-key").value.trim();
@@ -431,6 +450,16 @@
       await loadAiRouting();
     });
 
+    // The custom endpoint's URL is saved like any routing preference; its key
+    // rides the same encrypted setApiKey path as every other credential.
+    document.getElementById("save-custom-key").addEventListener("click", async () => {
+      const value = document.getElementById("custom-key").value.trim();
+      const result = await window.mefiStudio.setApiKey(value, "custom");
+      customKeyStatus.textContent = result?.ok ? (value ? "key saved (encrypted)" : "key cleared") : `save failed: ${result?.error ?? "unknown"}`;
+      document.getElementById("custom-key").value = "";
+      await loadAiRouting();
+    });
+
     const jevStatus = document.getElementById("jev-status");
     const jevEnabled = document.getElementById("jev-enabled");
     const jevTest = document.getElementById("test-jev");
@@ -440,6 +469,8 @@
     const jevRouteFields = {
       vercel: { key: "gateway", placeholder: "Vercel gateway API key (stored encrypted)" },
       typesafe: { key: "jev", placeholder: "TypeSafe Jev API key (stored encrypted)" },
+      zen: { key: "zen", placeholder: "OpenCode Zen API key (stored encrypted)" },
+      openrouter: { key: "openrouter", placeholder: "OpenRouter API key (stored encrypted)" },
     };
     const jevRouteOf = () => (jevRouteFields[jevRoute.value] ? jevRoute.value : "vercel");
     async function refreshJev() {
@@ -501,6 +532,8 @@
     const modelHeavy = document.getElementById("ai-model-heavy");
     const executorCli = document.getElementById("executor-cli");
     const executorModel = document.getElementById("executor-model");
+    const lmStudioEndpoint = document.getElementById("lmstudio-endpoint");
+    const customEndpoint = document.getElementById("custom-endpoint");
     function evidenceText(evidence, taskType) {
       const workerNote = taskType === "coding" ? " Available measurements describe Studio HTTP requests; CLI worker timing and billing are not measured." : "";
       if (!evidence) return `No measured evidence recorded for this selection.${workerNote}`;
@@ -537,19 +570,32 @@
           providerSelect.value = routing.provider;
           modelSelection.value = routing.modelSelection ?? "jev";
           fallbackToggle.checked = routing.fallbackOpenCode;
-          modelRoutine.value = routing.models?.routine ?? "";
-          modelHeavy.value = routing.models?.heavy ?? "";
+          // Models follow the selected provider: the keyed HTTP routes (and
+          // "auto") may show the role-wide fallback, CLI and local routes show
+          // only what was saved for them.
+          const selectedProvider = providerNames[routing.provider] ? routing.provider : "auto";
+          const scoped = selectedProvider === "auto" ? null : routing.providerModels?.[selectedProvider];
+          const fallbackAllowed = selectedProvider === "auto" || selectedProvider === "zai" || selectedProvider === "opencode";
+          modelRoutine.value = scoped?.routine ?? (fallbackAllowed ? routing.models?.routine ?? "" : "");
+          modelHeavy.value = scoped?.heavy ?? (fallbackAllowed ? routing.models?.heavy ?? "" : "");
           executorCli.value = routing.executorCli ?? "opencode";
           executorModel.value = routing.executorModel ?? "";
+          lmStudioEndpoint.value = routing.lmStudioEndpoint ?? "";
+          customEndpoint.value = routing.customEndpoint ?? "";
         }
         const selection = routing.modelSelection ?? "jev";
+        const cliProvider = routing.provider === "grok" ? "Grok CLI" : routing.provider === "claude" ? "Claude Code CLI" : routing.provider === "antigravity" ? "Antigravity CLI" : null;
         routingStatus.textContent = selection === "fixed"
           ? "Fixed defaults enabled. Explicit model overrides take priority."
-          : routing.provider === "grok"
-            ? "Grok CLI uses your explicit model or its CLI default. Jev selection is available for HTTP calls and z.ai coding workers."
-            : routing.jevConfigured
-              ? "Jev model selection ready · task fit, speed and cost. Explicit model overrides take priority."
-              : "Jev model selection is waiting for a Jev key. Save one below for the selected route; usual defaults apply until connected.";
+          : cliProvider
+            ? `${cliProvider} uses your explicit model or its CLI default. Jev selection is available for HTTP calls and z.ai coding workers.`
+            : routing.provider === "lmstudio"
+              ? "LM Studio answers from the local server with no key. Load one model there or save a model override."
+              : routing.provider === "custom"
+                ? "The custom endpoint answers with the saved key. Save a model override when it serves more than one model."
+                : routing.jevConfigured
+                  ? "Jev model selection ready · task fit, speed and cost. Explicit model overrides take priority."
+                  : "Jev model selection is waiting for a Jev key. Save one below for the selected route; usual defaults apply until connected.";
         const decision = routing.routingDecision;
         routingEvidence.hidden = !decision;
         routingEvidence.textContent = decision ? evidenceText(decision.evidence, decision.taskType) : "";
@@ -570,28 +616,36 @@
         if (read === routingRead) routingRefresh.disabled = false;
       }
     }
-    const routingControls = [providerSelect, modelSelection, fallbackToggle, modelRoutine, modelHeavy, executorCli, executorModel];
+    const routingControls = [providerSelect, modelSelection, fallbackToggle, modelRoutine, modelHeavy, executorCli, executorModel, lmStudioEndpoint, customEndpoint];
     for (const control of routingControls) control.disabled = true;
     loadAiRouting({ syncControls: true }).finally(() => {
       for (const control of routingControls) control.disabled = false;
     });
     routingRefresh.addEventListener("click", () => loadAiRouting());
-    async function saveRouting(payload, confirmation) {
+    async function saveRouting(payload, confirmation, { syncControls = false } = {}) {
       try {
         const result = await window.mefiStudio.setAiRouting(payload);
         if (!result?.ok) throw new Error(result?.error ?? "save failed");
         studioLog(`> ${confirmation}`);
-        await loadAiRouting();
+        await loadAiRouting({ syncControls });
       } catch (error) {
         routingStatus.textContent = `Could not save routing: ${error.message}. Your saved selection is unchanged.`;
         studioLog(`! routing: ${error.message}`);
       }
     }
-    providerSelect.addEventListener("change", () => saveRouting({ provider: providerSelect.value }, `assistant answers via ${providerSelect.value}`));
+    // Switching provider reloads that provider's own saved models, so one
+    // route's model id is never left in a field that now belongs to another.
+    providerSelect.addEventListener("change", () => saveRouting({ provider: providerSelect.value }, `assistant answers via ${providerSelect.value}`, { syncControls: true }));
     modelSelection.addEventListener("change", () => saveRouting({ modelSelection: modelSelection.value }, `model selection: ${modelSelection.value}`));
     fallbackToggle.addEventListener("change", () => saveRouting({ fallbackOpenCode: fallbackToggle.checked }, "provider fallback saved"));
-    const saveModel = (which, value) =>
-      saveRouting({ models: { [which]: value } }, `${which} model ${value.trim() ? `"${value.trim()}"` : "uses model selection"}`);
+    const saveModel = (which, value) => {
+      const provider = providerNames[providerSelect.value] ? providerSelect.value : "auto";
+      const trimmed = value.trim();
+      const confirmation = `${provider} ${which} model ${trimmed ? `"${trimmed}"` : "uses the provider default"}`;
+      return provider === "auto"
+        ? saveRouting({ models: { [which]: value } }, confirmation)
+        : saveRouting({ providerModels: { [provider]: { [which]: value } } }, confirmation);
+    };
     for (const [input, role] of [[modelRoutine, "routine"], [modelHeavy, "heavy"]]) {
       input.addEventListener("change", () => saveModel(role, input.value));
       input.addEventListener("keydown", (event) => {
@@ -601,8 +655,25 @@
         }
       });
     }
-    executorCli.addEventListener("change", () => saveRouting({ executorCli: executorCli.value }, `builders run on ${executorCli.value}`));
-    executorModel.addEventListener("change", () => saveRouting({ executorModel: executorModel.value }, `builder model ${executorModel.value.trim() ? `"${executorModel.value.trim()}"` : "reset to default"}`));
+    // Builder models are saved per CLI too, so switching builders cannot leave
+    // one CLI's model id on another CLI's command line.
+    executorCli.addEventListener("change", () => saveRouting({ executorCli: executorCli.value }, `builders run on ${executorCli.value}`, { syncControls: true }));
+    executorModel.addEventListener("change", () => saveRouting({ executorModels: { [executorCli.value]: executorModel.value } }, `builder model for ${executorCli.value} ${executorModel.value.trim() ? `"${executorModel.value.trim()}"` : "reset to CLI default"}`));
+    executorModel.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        executorModel.blur();
+      }
+    });
+    for (const [input, field, label] of [[lmStudioEndpoint, "lmStudioEndpoint", "LM Studio endpoint"], [customEndpoint, "customEndpoint", "custom endpoint"]]) {
+      input.addEventListener("change", () => saveRouting({ [field]: input.value }, `${label} ${input.value.trim() ? `set to "${input.value.trim()}"` : "reset to default"}`));
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          input.blur();
+        }
+      });
+    }
 
     // Auto setup: one host call that reads saved keys and installed CLIs and
     // applies the matching configuration. The renderer only reports the host's

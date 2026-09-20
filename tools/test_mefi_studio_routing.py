@@ -9,9 +9,12 @@ ride the Studio-managed `mefi-zai` provider through OPENCODE_CONFIG_CONTENT
 detects and launches the owner's installed opencode/codex/claude, auto setup
 plans a configuration from saved-key flags and detected CLIs, the speed
 probe splits on glm-* model ids, and no saved key ever crosses IPC back to the
-renderer. When `opencode` is on PATH a live half verifies the injected config
-actually resolves the mefi-zai models; that half skips cleanly without it.
-No paid API call is ever made.
+renderer. Claude Code and Grok ride their CLI's own login (headless print mode,
+prompt on stdin, no Anthropic API key); LM Studio answers keyless from the
+local server; the custom route pairs any OpenAI-compatible endpoint with its
+own encrypted key. When `opencode` is on PATH a live half verifies the injected
+config actually resolves the mefi-zai models; that half skips cleanly without
+it. No paid API call is ever made.
 """
 from pathlib import Path
 import json
@@ -57,6 +60,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.main = (STUDIO / "main.cjs").read_text(encoding="utf-8")
+        cls.client = (STUDIO / "scripts" / "decision-client.mjs").read_text(encoding="utf-8")
         cls.preload = (STUDIO / "preload.cjs").read_text(encoding="utf-8")
         cls.template = (STUDIO / "renderer" / "booklet.template.html").read_text(encoding="utf-8")
         cls.booklet_js = (STUDIO / "renderer" / "booklet.js").read_text(encoding="utf-8")
@@ -71,7 +75,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # One encrypted field per credential owner; unknown ids fall back to
         # the OpenCode Go field rather than sharing another route's key.
         self.assertIn('const keyFieldFor = (which) => KEY_FIELDS[which] ?? "apiKeyEncrypted"', self.main)
-        for field in ('zai: "zaiApiKeyEncrypted"', 'gateway: "gatewayApiKeyEncrypted"', 'jev: "jevApiKeyEncrypted"'):
+        for field in ('zai: "zaiApiKeyEncrypted"', 'gateway: "gatewayApiKeyEncrypted"', 'jev: "jevApiKeyEncrypted"', 'zen: "zenApiKeyEncrypted"', 'openrouter: "openrouterApiKeyEncrypted"'):
             with self.subTest(field=field):
                 self.assertIn(field, self.main)
         body = _function_body(self.main, "decryptKey")
@@ -82,6 +86,53 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn("MEFI_STUDIO_ZAI_KEY", self.main)
         self.assertIn("settings.zaiApiKeyEncrypted = safeStorage.encryptString", self.main)
         self.assertIn("settings.apiKeyEncrypted = safeStorage.encryptString", self.main)
+
+    def test_jev_routes_keep_their_own_keys_and_endpoints(self):
+        # Four routes: the Vercel AI Gateway, TypeSafe's Jev API, OpenCode Zen
+        # and OpenRouter. The route decides the endpoint, the model id and
+        # which credential is read.
+        for route_id in ('id: "vercel"', 'id: "typesafe"', 'id: "zen"', 'id: "openrouter"'):
+            with self.subTest(route=route_id):
+                self.assertIn(route_id, self.client)
+        self.assertIn('baseUrl: "https://ai-gateway.vercel.sh/v1"', self.client)
+        self.assertIn('baseUrl: "https://api.typesafe.ai/v1"', self.client)
+        self.assertIn('baseUrl: "https://opencode.ai/zen/v1"', self.client)
+        self.assertIn('baseUrl: "https://openrouter.ai/api/alpha"', self.client)
+        self.assertIn('"typesafe-ai/jev"', self.client)
+        self.assertIn("JEV_DOC_MODEL", self.client)
+        self.assertIn('"jev-1.13"', self.client)
+        self.assertIn('"typesafe/jev-1.13"', self.client)
+        self.assertIn('"TYPESAFE_API_KEY"', self.client)
+        self.assertIn('"MEFI_STUDIO_JEV_KEY"', self.client)
+        self.assertIn('"OPENCODE_ZEN_API_KEY"', self.client)
+        self.assertIn('"MEFI_STUDIO_ZEN_KEY"', self.client)
+        self.assertIn('"OPENROUTER_API_KEY"', self.client)
+        self.assertIn('"MEFI_STUDIO_OPENROUTER_KEY"', self.client)
+        self.assertIn("MEFI_JEV_ROUTE", self.client)
+        self.assertIn("/systemone", self.client)
+        self.assertIn("/decisions", self.client)
+        self.assertIn("https://openrouter.ai/api/v1/models", self.client)
+        self.assertIn("client.resolveJevRoute(settings)", self.main)
+        self.assertIn("client.gatewayConfig({ route })", self.main)
+        self.assertIn('settings.jevRoute = client.normalizeJevRoute(value)', self.main)
+        self.assertIn("client.isJevRoute(value)", self.main)
+        # Headless setters for each route's key.
+        self.assertIn("--set-jev-key", self.main)
+        self.assertIn("settings.jevApiKeyEncrypted = safeStorage.encryptString", self.main)
+        self.assertIn("--set-zen-key", self.main)
+        self.assertIn("settings.zenApiKeyEncrypted = safeStorage.encryptString", self.main)
+        self.assertIn("--set-openrouter-key", self.main)
+        self.assertIn("settings.openrouterApiKeyEncrypted = safeStorage.encryptString", self.main)
+        # The renderer route selector and its bridge.
+        self.assertIn('id="jev-route"', self.template)
+        self.assertIn('<option value="vercel">Vercel AI Gateway</option>', self.template)
+        self.assertIn('<option value="typesafe">Jev API', self.template)
+        self.assertIn('<option value="zen">OpenCode Zen</option>', self.template)
+        self.assertIn('<option value="openrouter">OpenRouter</option>', self.template)
+        self.assertIn("jevSetRoute", self.preload)
+        for field in ('typesafe: { key: "jev"', 'zen: { key: "zen"', 'openrouter: { key: "openrouter"'):
+            with self.subTest(field=field):
+                self.assertIn(field, self.booklet_js)
 
     def test_keys_never_cross_ipc_to_the_renderer(self):
         body = _function_body(self.main, "registerIpc")
@@ -117,7 +168,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         http = _function_body(self.main, "httpAssistantCall")
         self.assertTrue(http, "httpAssistantCall must exist — the grok fallback lands on it")
         self.assertIn('route.provider === "opencode" ? await assistantSessionId() : null', http)
-        self.assertIn('resolveAiRoute(role, { allowGrok: false })', fetch, "a failed grok call falls back to the keyed HTTP routes")
+        self.assertIn('resolveAiRoute(role, { allowCli: false })', fetch, "a failed CLI call falls back to the keyed HTTP routes")
 
     def test_zai_route_uses_the_coding_plan_endpoint_and_glm_models(self):
         self.assertIn('ZAI_ENDPOINT = "https://api.z.ai/api/coding/paas/v4/chat/completions"', self.main)
@@ -171,6 +222,112 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn('id="executor-cli"', self.template)
         self.assertIn('id="executor-model"', self.template)
 
+    def test_claude_code_route_rides_the_subscription_login(self):
+        # The CLI, not an Anthropic API key: headless print mode, the prompt on
+        # stdin (never cmd's command line), no tools for reply requests.
+        complete = _function_body(self.main, "claudeCompletion")
+        self.assertTrue(complete, "claudeCompletion must exist")
+        self.assertIn('"cmd.exe"', complete, "the npm shim is reached through cmd.exe like opencode run")
+        self.assertIn("claude -p --output-format text", complete)
+        self.assertIn("--tools=", complete, "a reply request cannot touch the repo")
+        self.assertIn("--no-session-persistence", complete)
+        self.assertIn("child.stdin?.write", complete, "the prompt rides stdin, never the command line")
+        body = _function_body(self.main, "resolveAiRoute")
+        self.assertIn('provider === "claude"', body, "the router returns the CLI route without a key")
+        self.assertRegex(self.main, r'AI_PROVIDERS = \["auto", "zai", "opencode", "grok", "claude", "antigravity",.*"lmstudio", "custom"\]')
+        fetch = _function_body(self.main, "assistantFetch")
+        self.assertIn('route.provider === "grok" || route.provider === "claude"', fetch)
+        self.assertIn("claudeCompletion(system, user, route.model)", fetch)
+        # Builders: same subscription login, agentic print mode, prompt on stdin.
+        spawn = _function_body(self.main, "spawnNextJob")
+        self.assertIn('cli === "claude"', spawn)
+        self.assertIn("--dangerously-skip-permissions", spawn, "nobody is at the keyboard to approve an edit")
+        self.assertIn('settings.executorCli === "claude"', _function_body(self.main, "executorRunEnv"))
+        self.assertIn("claudeCliAvailable", _function_body(self.main, "executorRunEnv"))
+        self.assertIn("claude: true", _function_body(self.main, "executorRunEnv"))
+        self.assertIn('<option value="claude">', self.template)
+        self.assertIn('<option value="claude">Claude Code — claude builds', self.template)
+
+    def test_antigravity_route_rides_the_agy_login(self):
+        # Antigravity CLI (`agy`) as a keyless route: a direct spawn (a Go
+        # binary, not a cmd shim), the prompt on stdin, and every flag before
+        # `-p` because `-p` first makes agy silently ignore --model.
+        complete = _function_body(self.main, "antigravityCompletion")
+        self.assertTrue(complete, "antigravityCompletion must exist")
+        self.assertIn('spawn("agy", args', complete)
+        self.assertIn('args.push("--output-format", "text", "-p")', complete, "all flags precede -p")
+        self.assertNotIn("--dangerously-skip-permissions", complete, "a reply request cannot auto-approve tools")
+        self.assertIn("child.stdin?.write", complete, "the prompt rides stdin, never the command line")
+        body = _function_body(self.main, "resolveAiRoute")
+        self.assertIn('provider === "antigravity"', body)
+        fetch = _function_body(self.main, "assistantFetch")
+        self.assertIn("antigravityCompletion(system, user, route.model)", fetch)
+        # Builders: agentic print mode, permissions skipped, model before -p.
+        spawn = _function_body(self.main, "spawnNextJob")
+        self.assertIn('cli === "antigravity"', spawn)
+        self.assertIn('spawn("agy", args', spawn)
+        self.assertIn("--dangerously-skip-permissions", spawn, "nobody is at the keyboard to approve an edit")
+        self.assertIn('"--print-timeout", "60m"', spawn, "the CLI never ends a live build early")
+        self.assertIn('settings.executorCli === "antigravity"', _function_body(self.main, "executorRunEnv"))
+        self.assertIn("antigravityCliAvailable", _function_body(self.main, "executorRunEnv"))
+        self.assertIn("antigravity: true", _function_body(self.main, "executorRunEnv"))
+        self.assertIn('{ id: "antigravity", name: "Antigravity", cmd: "agy" }', self.main)
+        self.assertIn('<option value="antigravity">', self.template)
+        self.assertIn('data-cli="antigravity"', self.template)
+
+    def test_models_are_scoped_per_provider_and_builder(self):
+        override = _function_body(self.main, "assistantModelOverride")
+        self.assertTrue(override, "assistantModelOverride must exist")
+        self.assertIn("settings.aiModelsByProvider", override)
+        self.assertIn("SINGLE_MODEL_PROVIDERS.has(providerKey)", override)
+        self.assertIn('const SINGLE_MODEL_PROVIDERS = new Set(["grok", "claude", "antigravity", "lmstudio", "custom"])', self.main)
+        builder = _function_body(self.main, "executorModelOverride")
+        self.assertTrue(builder, "executorModelOverride must exist")
+        self.assertIn("settings.executorModels", builder)
+        routing = _function_body(self.main, "registerIpc")
+        self.assertIn("providerModels", routing)
+        self.assertIn("executorModels", routing)
+        self.assertIn('id="provider-readiness"', self.template)
+        self.assertIn('id="model-scope-note"', self.template)
+        self.assertIn("providerModels: { [provider]: { [which]: value } }", self.booklet_js)
+
+    def test_lmstudio_and_custom_routes_are_local_or_keyed_http(self):
+        # LM Studio is keyless on the loopback server; the custom route is any
+        # OpenAI-compatible endpoint with its own encrypted key.
+        self.assertIn('LMSTUDIO_ENDPOINT = "http://127.0.0.1:1234/v1/chat/completions"', self.main)
+        body = _function_body(self.main, "resolveAiRoute")
+        self.assertIn('provider === "lmstudio"', body)
+        self.assertIn("normalizeLmStudioEndpoint(settings.lmStudioEndpoint)", body)
+        self.assertIn('apiKey: "lm-studio"', body, "the local server ignores the bearer")
+        self.assertIn('provider === "custom"', body)
+        self.assertIn('decryptKey(settings, "customApiKeyEncrypted")', body)
+        self.assertIn("no custom API key saved", body)
+        self.assertIn("no custom endpoint saved", body)
+        # Bare base URLs normalize onto the chat-completions path; non-http
+        # values fall back instead of reaching fetch.
+        helper = _function_body(self.main, "normalizeCompatEndpoint")
+        self.assertTrue(helper, "normalizeCompatEndpoint must exist")
+        self.assertIn("/chat/completions", helper)
+        self.assertIn("^https?:", helper)
+        # The key has its own encrypted field and headless setter; the endpoint
+        # is a plain validated preference, saved through the routing IPC.
+        self.assertIn('custom: "customApiKeyEncrypted"', self.main)
+        self.assertIn("--set-custom-key", self.main)
+        self.assertIn("MEFI_STUDIO_CUSTOM_KEY", self.main)
+        self.assertIn("settings.customApiKeyEncrypted = safeStorage.encryptString", self.main)
+        self.assertIn('for (const key of ["customEndpoint", "lmStudioEndpoint"])', self.main)
+        self.assertIn('id="custom-endpoint"', self.template)
+        self.assertIn('id="custom-key"', self.template)
+        self.assertIn('id="save-custom-key"', self.template)
+        self.assertIn('id="lmstudio-endpoint"', self.template)
+        self.assertIn('setApiKey(value, "custom")', self.booklet_js)
+        self.assertIn('getApiKey("custom")', self.booklet_js)
+
+    def test_keyless_cli_and_local_routes_skip_the_encrypted_key_gate(self):
+        assistant = _function_body(self.main, "runAssistant")
+        self.assertRegex(assistant, r'keyless = provider === "grok".*provider === "claude".*provider === "lmstudio"')
+        self.assertIn("settings.customApiKeyEncrypted", assistant, "a custom key counts as a saved key")
+
     def test_mefi_zai_provider_config_shape(self):
         body = _function_body(self.main, "zaiProviderConfig")
         self.assertTrue(body, "zaiProviderConfig must exist")
@@ -207,14 +364,14 @@ class MefiStudioRoutingTests(unittest.TestCase):
     def test_auto_setup_plans_from_saved_keys_and_installed_clis(self):
         planner = _function_body(self.main, "planAutoSetup")
         self.assertTrue(planner, "planAutoSetup must exist")
-        self.assertIn('keys.zai ? "zai" : keys.opencode ? "opencode"', planner, "a saved key outranks an installed CLI")
-        self.assertIn('keys.gateway ? "jev" : "fixed"', planner, "Jev selection needs its gateway key")
-        self.assertIn('installed("opencode") ? "opencode" : installed("grok") ? "grok"', planner)
+        self.assertRegex(planner, r'keys\.zai \? "zai"\s*: keys\.opencode \? "opencode"', "a saved key outranks an installed CLI")
+        self.assertRegex(planner, r'modelSelection = (?:jevReady|keys\.gateway) \? "jev" : "fixed"', "a saved Jev key enables task-aware selection")
+        self.assertRegex(planner, r'installed\("opencode"\) \? "opencode" : installed\("grok"\) \? "grok"', "an installed builder CLI decides the executor")
         self.assertIn("changes.fallbackOpenCode = false", planner, "no OpenCode key never leaves a billing fallback armed")
         self.assertIn("changes, active", planner, "the planner reports both the delta and the effective configuration")
         handler = re.search(r'ipcMain\.handle\("settings:auto-setup"(.*?)\n  \}\);', self.main, re.S)
         self.assertIsNotNone(handler, "settings:auto-setup handler missing")
-        self.assertIn("planAutoSetup({ settings, keys, clis: await codingCliStatus() })", handler.group(1))
+        self.assertRegex(handler.group(1), r'planAutoSetup\(\{ settings, keys, clis(?:, local)? \}\)')
         self.assertIn("await writeSettings(next)", handler.group(1), "only detected, planned changes are written")
         self.assertIn("applied: false", handler.group(1), "an already-configured machine reports a no-op")
 
@@ -232,7 +389,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         for name in ("getAiRouting", "setAiRouting", "autoSetup", "cliStatus", "launchCli", "testZai"):
             with self.subTest(bridge=name):
                 self.assertIn(name, self.preload)
-        for element_id in ("zai-key", "save-zai-key", "zai-key-status", "ai-provider", "ai-fallback", "cli-status", "cli-test-zai", "auto-setup", "auto-setup-status", "setup-assistant", "setup-selection", "setup-builders"):
+        for element_id in ("zai-key", "save-zai-key", "zai-key-status", "ai-provider", "ai-fallback", "cli-status", "cli-test-zai", "auto-setup", "auto-setup-status", "setup-assistant", "setup-selection", "setup-builders", "custom-endpoint", "custom-key", "save-custom-key", "custom-key-status", "lmstudio-endpoint"):
             with self.subTest(element_id=element_id):
                 self.assertIn(f'id="{element_id}"', self.template)
         for cli in ('data-cli="opencode"', 'data-cli="grok"', 'data-cli="codex"', 'data-cli="claude"'):

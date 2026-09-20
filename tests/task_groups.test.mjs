@@ -107,3 +107,23 @@ test("large verification groups remain bounded while an actual running worker is
   assert.equal(entries.filter((entry) => entry.task.id === "worker").length, 1);
   assert.equal(entries[0].taskGroup.members.length, 81, "the full group card retains every obligation");
 });
+
+test("a task pinned to a board node works on that node instead of a node of its own", async () => {
+  const idle = await readFile(new URL("../renderer/idle.js", import.meta.url), "utf8");
+  const host = { id: "session", kind: "session", label: "Rebuild booklet", x: 0, y: 0, z: 0 };
+  const state = { nodes: [host], edges: [], tasks: [], allTasks: [], taskGroups: [], expandedTaskGroups: new Set(), taskLayout: new Map(), fx: new Map(), doneHold: new Map() };
+  const window = { MefiTaskGroups: env.window.MefiTaskGroups };
+  const scope = vm.createContext({ state, window, Date, Math, Map, Set, DONE_FRESH_MS: 1000, markAbsorb: (id) => { state.fx.get(id).absorbAt = 1; }, autopilotJobs: () => [{ taskId: "work", sessionId: "worker-session" }], ensureFx: (id) => { if (!state.fx.has(id)) state.fx.set(id, {}); return state.fx.get(id); }, absorbFallback: () => null });
+  vm.runInContext(idle.slice(idle.indexOf("function taskPlacements("), idle.indexOf("// Loose words from a title")), scope);
+  vm.runInContext(idle.slice(idle.indexOf("function takeTasks("), idle.indexOf("  const read =", idle.indexOf("function takeTasks("))), scope);
+  const task = { id: "work", status: "active", title: 'Work on "Rebuild booklet"', target: { kind: "session", id: "session" } };
+  scope.takeTasks([task]); scope.appendTaskNodes();
+  assert.equal(state.nodes.some((node) => node.id === "task:work"), false, "the task adds no second node beside the node it was pinned to");
+  assert.equal(host.workTask, task, "the clicked node carries the work");
+  const fx = state.fx.get("task:work");
+  assert.equal(fx.anchorId, "session");
+  assert.equal(fx.wasRendered, false, "a task that never rendered cannot fly a ghost out of its host");
+  state.nodes = [{ id: "elsewhere", kind: "session" }]; state.edges = [];
+  scope.appendTaskNodes();
+  assert.equal(state.nodes.some((node) => node.id === "task:work"), true, "the task keeps its own node when its target is not on the board");
+});

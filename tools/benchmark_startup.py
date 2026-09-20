@@ -89,7 +89,7 @@ require("./main.cjs");
         instrumented = instrumented.replace("app.exit(result.cards > 0 ? 0 : 1);", "global.__MefiMeasuredExit();", 1)
         main.write_text(instrumented, encoding="utf-8")
         env = dict(os.environ)
-        for name in ("ELECTRON_RUN_AS_NODE", "AI_GATEWAY_API_KEY", "MEFI_STUDIO_GATEWAY_KEY", "MEFI_STUDIO_KEY", "MEFI_STUDIO_ZAI_KEY", "MEFI_ZAI_API_KEY", "OPENCODE_CONFIG_CONTENT"):
+        for name in ("ELECTRON_RUN_AS_NODE", "AI_GATEWAY_API_KEY", "MEFI_STUDIO_GATEWAY_KEY", "TYPESAFE_API_KEY", "MEFI_STUDIO_JEV_KEY", "OPENCODE_ZEN_API_KEY", "MEFI_STUDIO_ZEN_KEY", "OPENROUTER_API_KEY", "MEFI_STUDIO_OPENROUTER_KEY", "MEFI_JEV_ROUTE", "MEFI_JEV_MODEL", "MEFI_AI_GATEWAY_BASE_URL", "MEFI_STUDIO_KEY", "MEFI_STUDIO_ZAI_KEY", "MEFI_ZAI_API_KEY", "OPENCODE_CONFIG_CONTENT"):
             env.pop(name, None)
         env.update(HOME=str(profile), USERPROFILE=str(profile), MEFI_STUDIO_BOARD_DB=str(profile / "board.db"),
                    MEFI_STUDIO_REPO=str(app_root), MEFI_STUDIO_GAME_ROOT=str(temporary / "absent-game"))

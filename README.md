@@ -24,8 +24,9 @@ Review as actual work changes.
 
 The in-app walkthrough opens on first launch and explains choosing a folder,
 connecting tools, creating one clear task, following its activity and reviewing
-its result. It remembers your place, and [GETTING_STARTED.md](GETTING_STARTED.md)
-covers the same path in writing.
+its result. Each lesson can **Walk me…** through the matching menu with a small
+coach that highlights the control, ticks stops off as you go and remembers your
+place. [GETTING_STARTED.md](GETTING_STARTED.md) covers the same path in writing.
 
 ## Quick start
 
@@ -149,18 +150,44 @@ project's ignored local `planning.json`.
   reported usage and USD cost, with human and model ratings kept separate;
   opening it never runs paid measurements. **Context** previews the current
   task brief within a chosen token budget and reports what was shortened.
+- **Usage tracker** sums recorded calls per day, provider and model, and reads
+  OpenCode Go's own 5-hour, weekly and monthly account windows with the saved
+  key. The live account reading and the local estimate stay clearly separate;
+  a compact version sits at the bottom of the Command rail, and the full view
+  is the Model Lab **Tracker** tab. Opening it and every five minutes while it
+  is visible is the only time the account is asked; no prompts are sent.
 - **AI routing** picks who pays — Auto (prefer z.ai), z.ai only, OpenCode Go
-  only, or the Grok CLI on its own login — with an opt-in fallback. **Model
-  selection** uses Jev or fixed defaults; explicit model overrides win.
-- **Auto setup** in Settings reads saved-key flags and installed CLIs and
-  applies the matching provider, model selection and builder in one pass. It
-  sends no request, changes no key, keeps model overrides, reports every
-  choice, and leaves the same controls editable afterward.
-- Builders run through `opencode run` (with a Studio-managed z.ai provider) or
-  the Grok CLI, with automatic one-time fallback decided by the failure kind.
+  only, the Grok, Claude Code or Antigravity CLIs on their own logins, a local
+  LM Studio server, or a custom OpenAI-compatible endpoint with your own key —
+  with an opt-in fallback. **Model selection** uses Jev or fixed defaults.
+- **Models are saved per provider and per builder CLI**, so switching routes
+  never carries one provider's model id into another; a provider with nothing
+  saved uses its own default, and the keyed HTTP routes keep the role-wide
+  Routine/Heavy overrides. Missing a subscription or key for one option never
+  blocks the others — the readiness line names what the selected option has.
+- **Jev routing** chooses where classifier calls go — the Vercel AI Gateway
+  (`typesafe-ai/jev`), TypeSafe's Jev API directly (`jev-1.13.0`), OpenCode
+  Zen (`jev-1.13`, including its free tier), or OpenRouter
+  (`typesafe/jev-1.13`) — each route keeping its own encrypted key. Headless
+  setup: `MEFI_STUDIO_GATEWAY_KEY=... electron . --set-gateway-key`,
+  `MEFI_STUDIO_JEV_KEY=... electron . --set-jev-key`,
+  `MEFI_STUDIO_ZEN_KEY=... electron . --set-zen-key`,
+  `MEFI_STUDIO_OPENROUTER_KEY=... electron . --set-openrouter-key`, and
+  `MEFI_JEV_ROUTE=zen` (or `vercel`, `typesafe`, `openrouter`) to pick the
+  route.
+- **Auto setup** in Settings reads saved-key flags, installed CLIs and (only
+  when nothing else is available) a live local server, then applies the
+  matching provider, model selection and builder in one pass. It sends no paid
+  request, changes no key, keeps model overrides, reports every choice, and
+  leaves the same controls editable afterward.
+- Builders run through `opencode run` (with a Studio-managed z.ai provider),
+  the Grok CLI, Claude Code (`claude -p` on your subscription login), or
+  Antigravity (`agy` on your Google account), with automatic one-time fallback
+  decided by the failure kind.
 - Keys live in the OS keystore (`safeStorage`; DPAPI on Windows). Headless
-  setup: `MEFI_STUDIO_KEY=... electron . --set-key` and
-  `MEFI_STUDIO_ZAI_KEY=... electron . --set-zai-key`.
+  setup: `MEFI_STUDIO_KEY=... electron . --set-key`,
+  `MEFI_STUDIO_ZAI_KEY=... electron . --set-zai-key`, and
+  `MEFI_STUDIO_CUSTOM_KEY=... electron . --set-custom-key`.
 
 ### Verification, storage and experiments
 

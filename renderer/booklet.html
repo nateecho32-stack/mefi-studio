@@ -3091,7 +3091,7 @@ body.command-active .walkthrough-coach { right: 392px; }
   padding-bottom: 9px; margin-bottom: 9px; border-bottom: 1px solid var(--hairline);
 }
 #idle-hud .rail-view-title { margin: 0; font: 600 14px/1.3 var(--font-ui); color: var(--ivory); }
-#idle-hud .rail-view-head .feed-state { flex: 1; min-width: 0; font-size: 10px; text-align: right; }
+#idle-hud .rail-view-head .feed-state { flex: 1; min-width: 0; font-size: 10px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #idle-hud .rail-view-head button { flex: none; min-height: 26px; padding: 3px 8px; font-size: 11px; }
 #idle-hud .rail-view-note { flex: none; margin: 0 0 10px; color: var(--muted); font-size: 11px; line-height: 1.55; }
 
@@ -3131,6 +3131,28 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud button.done-title:hover { color: var(--gold-bright); background: transparent; transform: none; box-shadow: none; }
 #idle-hud .done-detail { color: var(--muted); font-size: 11px; line-height: 1.45; }
 #idle-hud .done-empty, #idle-hud .ask-empty { margin: 0; padding: 8px 2px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+/* collapse: the head keeps the count and the Absorb button, the list tucks away */
+#idle-hud .cmd-done.done-collapsed .rail-view-note,
+#idle-hud .cmd-done.done-collapsed .done-list { display: none; }
+
+/* absorb: every record spirals into the Absorb button, then the log is gone */
+#idle-hud .cmd-done.absorbing .done-row {
+  pointer-events: none;
+  animation: done-absorb 620ms cubic-bezier(.55, -.2, .75, .5) forwards;
+  animation-delay: calc(var(--absorb-i, 0) * 45ms);
+}
+#idle-hud .cmd-done.absorbing .done-empty { opacity: 0; }
+@keyframes done-absorb {
+  0% { opacity: 1; transform: translate(0, 0) scale(1) rotate(0deg); }
+  30% { opacity: 1; transform: translate(calc(var(--absorb-dx, 0px) * .14), calc(var(--absorb-dy, 0px) * .14)) scale(1.02) rotate(-.5deg); }
+  100% { opacity: 0; transform: translate(var(--absorb-dx, 0px), var(--absorb-dy, 0px)) scale(.05) rotate(6deg); }
+}
+#idle-hud #cmd-done-absorb.pulling { animation: absorb-pull 780ms ease-out; }
+@keyframes absorb-pull {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 60%, transparent); }
+  100% { box-shadow: 0 0 0 16px color-mix(in srgb, var(--live) 0%, transparent); }
+}
 
 /* the ask cards */
 #idle-hud .ask-list {
@@ -3190,6 +3212,45 @@ body.command-active .walkthrough-coach { right: 392px; }
   #idle-hud .cmd-follow-status { left: 12px; right: 12px; }
   #idle-hud .rail-tab { padding: 0 6px; font-size: 11px; }
 }
+
+/* ============================================================
+   Usage tracker — Model Lab tab and the Command rail footer
+   ============================================================ */
+.lab-tracker { display: flex; flex-direction: column; gap: 22px; }
+.tracker-section { border: 1px solid var(--hairline); border-radius: 14px; padding: 20px; background: #ffffff02; }
+.tracker-section h3 { margin: 0 0 6px; font-size: 17px; }
+.tracker-section > p.muted { margin: 0 0 14px; font-size: 12px; line-height: 1.7; max-width: 720px; }
+.tracker-stack { display: flex; flex-direction: column; gap: 14px; }
+.tracker-windows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.tracker-window { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 10px; }
+.tracker-window-label { color: var(--muted); font-size: 12px; }
+.tracker-window-value { font-size: 14px; color: var(--gold-bright); font-variant-numeric: tabular-nums; min-width: 52px; text-align: right; }
+.tracker-bar { position: relative; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--ivory) 12%, transparent); overflow: hidden; }
+.tracker-bar > i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 4px; background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright)); }
+.tracker-bar > i.warn { background: linear-gradient(90deg, #a4422f, var(--bad)); }
+.tracker-detail { display: grid; gap: 4px; }
+.tracker-detail p { margin: 0; font-size: 12px; }
+.tracker-footnote { margin: 0; font-size: 11px; line-height: 1.7; }
+.tracker-live-card > strong { color: var(--ivory); }
+.tracker-live-card > small { line-height: 1.6; }
+@media (max-width: 680px) { .tracker-windows { grid-template-columns: 1fr; } }
+
+/* the Command rail's bottom-right footer: pinned under the tab panels */
+#idle-hud .cmd-usage { flex: none; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); pointer-events: auto; }
+#idle-hud .cmd-usage-head { display: flex; align-items: center; gap: 5px; }
+#idle-hud .cmd-usage-title { flex: 1; min-width: 0; margin: 0; font: 600 12px/1.3 var(--font-ui); }
+#idle-hud .cmd-usage-title .feed-toggle { min-height: 24px; font-size: 11px; }
+#idle-hud .cmd-usage-head button { flex: none; }
+#idle-hud .cmd-usage-head .ghost.mini { min-height: 24px; padding: 2px 8px; font-size: 10px; }
+#idle-hud .cmd-usage-body { display: flex; flex-direction: column; gap: 6px; }
+#idle-hud .cmd-usage-body[hidden] { display: none; }
+#idle-hud .cmd-usage .tracker-windows { grid-template-columns: 1fr; gap: 5px; }
+#idle-hud .cmd-usage .tracker-window { grid-template-columns: 22px 1fr 38px; gap: 6px; font-size: 10px; }
+#idle-hud .cmd-usage .tracker-window-label { font-size: 10px; }
+#idle-hud .cmd-usage .tracker-window-value { font-size: 10px; min-width: 0; }
+#idle-hud .cmd-usage .tracker-bar { height: 5px; border-radius: 3px; }
+#idle-hud .cmd-usage .tracker-line { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+#idle-hud .cmd-usage .tracker-line-warn { color: var(--warn); }
 
 /* Integrated music room. Shared theme tokens also colour Command and boards. */
 :root[data-studio-theme] .primary { background: linear-gradient(180deg, var(--gold-bright), var(--gold)); }
@@ -3743,6 +3804,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       <div class="lab-tabs" role="tablist" aria-label="Model Lab views">
         <button id="model-lab-tab-rankings" role="tab" aria-selected="true" aria-controls="model-lab-rankings" data-lab-view="rankings">Rankings</button>
         <button id="model-lab-tab-usage" role="tab" aria-selected="false" aria-controls="model-lab-usage" tabindex="-1" data-lab-view="usage">Usage</button>
+        <button id="model-lab-tab-tracker" role="tab" aria-selected="false" aria-controls="model-lab-tracker" tabindex="-1" data-lab-view="tracker">Tracker</button>
         <button id="model-lab-tab-context" role="tab" aria-selected="false" aria-controls="model-lab-context" tabindex="-1" data-lab-view="context">Context</button>
         <button id="model-lab-tab-compare" role="tab" aria-selected="false" aria-controls="model-lab-compare" tabindex="-1" data-lab-view="compare">Compare <span class="lab-soon">Planned</span></button>
       </div>
@@ -3754,6 +3816,11 @@ body.music-preview-active #idle-hud { display: none !important; }
         <details id="model-lab-ratings" class="lab-disclosure"><summary>Rate recent work</summary><p class="muted">Rate a result you have reviewed. Your score stays separate from model judging and error counts.</p><div id="model-lab-recent"></div></details>
       </section>
       <section id="model-lab-usage" role="tabpanel" aria-labelledby="model-lab-tab-usage" hidden><h3>Recorded usage</h3><p id="model-lab-usage-coverage" class="muted">Missing provider usage stays unknown. These totals cover calls recorded by Studio; they are not an account balance.</p><p id="model-lab-usage-range" class="lab-status"></p><div id="model-lab-usage-totals" class="lab-usage-grid"></div><div id="model-lab-usage-list" class="lab-table-wrap"></div></section>
+      <section id="model-lab-tracker" role="tabpanel" aria-labelledby="model-lab-tab-tracker" hidden>
+        <div class="lab-toolbar"><div><h3>Usage tracker</h3><p class="muted">Recorded local usage and the OpenCode Go account windows, shown separately. The account read uses the saved key and sends no prompts.</p></div><button id="model-lab-tracker-refresh" class="ghost" type="button">Refresh usage</button></div>
+        <p id="model-lab-tracker-status" class="lab-status" role="status" aria-live="polite"></p>
+        <div id="model-lab-tracker-body" class="lab-tracker"></div>
+      </section>
       <section id="model-lab-context" role="tabpanel" aria-labelledby="model-lab-tab-context" hidden>
         <div class="lab-toolbar"><div><h3>Context preview</h3><p class="muted">Inspect the saved material a task can carry. Token counts are estimates.</p></div><div class="lab-context-controls"><label>Task <select id="model-lab-context-task"><option value="">Choose a task…</option></select></label><label>Preview budget <select id="model-lab-context-budget"><option value="1000">1,000 tokens</option><option value="2000">2,000 tokens</option><option value="4000" selected>4,000 tokens</option><option value="8000">8,000 tokens</option></select></label><button id="model-lab-context-refresh" class="ghost">Preview context</button></div></div>
         <p id="model-lab-context-status" class="lab-status" role="status"></p><div id="model-lab-context-sections" class="lab-context-sections"></div>
@@ -3875,7 +3942,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         <div class="setup-head">
           <div>
             <h3 id="settings-setup-heading">Auto setup</h3>
-            <p class="muted">One pass over what this machine already has: saved keys choose the assistant route, installed CLIs choose the builders, and a saved Jev key turns on task-aware model selection. It sends no request, changes no key, and keeps every model override.</p>
+            <p class="muted">One pass over what this machine already has: saved keys or a reachable local server choose the assistant route, installed CLIs choose the builders, and a saved Jev key turns on task-aware model selection. It sends no request, changes no key, and keeps every model override.</p>
           </div>
           <button id="auto-setup">Run auto setup</button>
         </div>
@@ -3888,7 +3955,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         </section>
         <section class="settings-group" aria-labelledby="settings-assistant-heading">
         <h3 id="settings-assistant-heading">Assistant connection</h3>
-        <p class="muted">Save a key for the provider you use, then choose its routing below. Grok uses the CLI's own login. Keys are stored encrypted and never shown again.</p>
+        <p class="muted">Save a key for the provider you use, then choose its routing below. Grok and Claude Code use their CLI's own login; LM Studio needs no key. Keys are stored encrypted and never shown again.</p>
         <div class="row">
           <input type="password" id="zai-key" placeholder="z.ai Coding Plan API key (stored encrypted)" autocomplete="off" aria-label="z.ai Coding Plan API key">
           <button id="save-zai-key">Save z.ai key</button>
@@ -3899,10 +3966,16 @@ body.music-preview-active #idle-hud { display: none !important; }
           <button id="save-key">Save OpenCode key</button>
           <span class="muted" id="key-status">checking…</span>
         </div>
+        <div class="row">
+          <input type="text" id="custom-endpoint" placeholder="Custom endpoint — https://host/v1 (OpenAI-compatible)" spellcheck="false" autocomplete="off" aria-label="Custom provider endpoint" style="width: 24em">
+          <input type="password" id="custom-key" placeholder="Custom API key (stored encrypted)" autocomplete="off" aria-label="Custom provider API key">
+          <button id="save-custom-key">Save custom key</button>
+          <span class="muted" id="custom-key-status">checking…</span>
+        </div>
         </section>
         <section class="settings-group" aria-labelledby="settings-routing-heading">
         <h3 id="settings-routing-heading">Model routing</h3>
-        <p class="muted">Who pays for assistant calls, and how each task's model is chosen. Provider choice and model selection are independent; explicit model overrides take priority.</p>
+        <p class="muted">Who pays for assistant calls, and how each task's model is chosen. Models are saved per provider, so switching routes cannot carry one provider's model into another; use whichever option you already have — a saved key, an installed CLI login, or a local server.</p>
         <div class="row">
           <label class="muted">AI routing
             <select id="ai-provider">
@@ -3910,13 +3983,20 @@ body.music-preview-active #idle-hud { display: none !important; }
               <option value="zai">z.ai only — never bill OpenCode</option>
               <option value="opencode">OpenCode Go only</option>
               <option value="grok">Grok CLI — the assistant answers through the grok CLI's own login</option>
+              <option value="claude">Claude Code CLI — the assistant answers on your Claude Code subscription login</option>
+              <option value="antigravity">Antigravity CLI — the assistant answers through agy on your Google account</option>
+              <option value="lmstudio">LM Studio — a local server on this machine, no key</option>
+              <option value="custom">Custom endpoint — your own OpenAI-compatible URL and key</option>
             </select>
           </label>
-          <label class="muted">Assistant model override
-            <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model id for routine passes (replies, briefs, chat). Empty = selected model-selection mode." style="width: 15em">
+          <span class="muted" id="provider-readiness" role="status">checking…</span>
+        </div>
+        <div class="row">
+          <label class="muted">Routine model <span class="muted" id="model-scope-note">for this provider</span>
+            <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model this provider uses for routine passes (replies, briefs, chat). Saved per provider; empty = the provider's own default." style="width: 15em">
           </label>
-          <label class="muted">Heavy model override
-            <input type="text" id="ai-model-heavy" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model id for heavy passes (overseer, improver, analyzer read). Empty = selected model-selection mode." style="width: 15em">
+          <label class="muted">Heavy model
+            <input type="text" id="ai-model-heavy" placeholder="same as routine" spellcheck="false" autocomplete="off" title="Model this provider uses for heavy passes (overseer, improver, analyzer read). Saved per provider; empty = routine's model where the provider has one, otherwise the provider's default." style="width: 15em">
           </label>
           <label class="switch" title="Off by default: when z.ai fails, retry once on OpenCode Go (this bills OpenCode)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>OpenCode fallback on z.ai failure</span></label>
         </div>
@@ -3927,9 +4007,12 @@ body.music-preview-active #idle-hud { display: none !important; }
               <option value="fixed">Fixed defaults</option>
             </select>
           </label>
+          <label class="muted">LM Studio endpoint
+            <input type="text" id="lmstudio-endpoint" placeholder="http://127.0.0.1:1234/v1/chat/completions" spellcheck="false" autocomplete="off" title="The local LM Studio server's chat-completions URL. Used only when AI routing is LM Studio." style="width: 24em">
+          </label>
           <button class="ghost" id="ai-routing-refresh">Refresh selection</button>
         </div>
-        <p class="muted" id="ai-routing-help">Jev ranks available models within your chosen provider for each task using catalog quality and estimated prices, plus your project's measured timing, errors, ratings and reported costs. Missing evidence stays unknown. Selection uses a small billed gateway request. Save a Jev gateway key below to enable it; a timeout or unavailable Jev uses the usual default. Model overrides take priority. Grok CLI uses its explicit model or CLI default.</p>
+        <p class="muted" id="ai-routing-help">Jev ranks available models within your chosen provider for each task using catalog quality and estimated prices, plus your project's measured timing, errors, ratings and reported costs. Missing evidence stays unknown. Selection uses a small billed gateway request. Save a Jev gateway key below to enable it; a timeout or unavailable Jev uses the usual default. Model overrides take priority. Grok, Claude Code and Antigravity use their saved model or CLI default; LM Studio and custom endpoints answer from the URL above (load one model or save a model override).</p>
         <p class="muted" id="ai-routing-status" role="status">Checking model selection…</p>
         <p class="muted" id="ai-routing-decision" role="status">No selection recorded yet.</p>
         <p class="muted" id="ai-routing-evidence" hidden></p>
@@ -3942,10 +4025,12 @@ body.music-preview-active #idle-hud { display: none !important; }
             <select id="executor-cli">
               <option value="opencode">OpenCode run</option>
               <option value="grok">Grok CLI — grok builds every queued job on its own login</option>
+              <option value="claude">Claude Code — claude builds every queued job on your subscription login</option>
+              <option value="antigravity">Antigravity — agy builds every queued job on your Google account</option>
             </select>
           </label>
-          <label class="muted">Grok builder model
-            <input type="text" id="executor-model" placeholder="grok default" spellcheck="false" autocomplete="off" title="Model id the builder CLI runs with (grok -m). Empty = CLI default." style="width: 15em">
+          <label class="muted">Builder model <span class="muted" id="builder-scope-note">for this CLI</span>
+            <input type="text" id="executor-model" placeholder="CLI default" spellcheck="false" autocomplete="off" title="Model this builder CLI runs with (grok -m / claude --model / agy --model). Saved per builder; empty = CLI default." style="width: 15em">
           </label>
         </div>
         <div class="row">
@@ -3954,13 +4039,14 @@ body.music-preview-active #idle-hud { display: none !important; }
           <button class="ghost" data-cli="grok" title="Open the Grok CLI in the repo on its own login">Grok</button>
           <button class="ghost" data-cli="codex" title="Open Codex CLI in the repo on its own account">Codex</button>
           <button class="ghost" data-cli="claude" title="Open Claude Code in the repo on its own account">Claude Code</button>
+          <button class="ghost" data-cli="antigravity" title="Open the Antigravity CLI in the repo on your Google account">Antigravity</button>
           <button class="ghost" id="cli-test-zai" title="Verify OpenCode sees the Studio-managed mefi-zai GLM provider">Test z.ai link</button>
           <span class="muted" id="cli-status">checking…</span>
         </div>
         </section>
         <details class="settings-optional"><summary>Jev connection & optional task suggestions</summary>
-          <p class="muted">Choose where Jev is routed: the Vercel AI Gateway or TypeSafe's Jev API directly. Each route keeps its own key, stored encrypted; switching never moves a key between routes. The key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
-          <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: the Vercel AI Gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled"><span class="track"></span><span>Intake classification</span></label></div>
+          <p class="muted">Choose where Jev is routed: the Vercel AI Gateway, TypeSafe's Jev API directly, OpenCode Zen (including its free Jev tier), or OpenRouter. Each route keeps its own key, stored encrypted; switching never moves a key between routes. The key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
+          <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: a hosted gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option><option value="zen">OpenCode Zen</option><option value="openrouter">OpenRouter</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled"><span class="track"></span><span>Intake classification</span></label></div>
           <p class="muted" id="jev-status" role="status">Checking Jev…</p>
         </details>
         <details class="settings-optional"><summary>Diagnostics & app updates</summary>
@@ -4175,9 +4261,11 @@ body.music-preview-active #idle-hud { display: none !important; }
     <div class="rail-view-head">
       <h2 class="rail-view-title">Done log</h2>
       <span id="cmd-done-state" class="feed-state" role="status" aria-live="polite">Loading…</span>
+      <button id="cmd-done-toggle" class="ghost mini" type="button" aria-expanded="true" aria-controls="cmd-done-list" title="Collapse the done log">&ndash;</button>
       <button id="cmd-done-refresh" class="ghost mini" type="button" title="Re-read the executor ledger">Refresh</button>
+      <button id="cmd-done-absorb" class="primary mini" type="button" title="Absorb every record — the done log clears for good" disabled>Absorb</button>
     </div>
-    <p class="rail-view-note">Finished builds from the durable executor ledger, plus the assistant's own completed passes. <b>Done</b> means the worker reported success; <b>Failed</b> means it stopped early. These records survive restarts.</p>
+    <p class="rail-view-note">Finished builds from the durable executor ledger, plus the assistant's own completed passes. <b>Done</b> means the worker reported success; <b>Failed</b> means it stopped early. These records survive restarts until you absorb them.</p>
     <ul id="cmd-done-list" class="done-list" aria-label="Completed work"></ul>
   </section>
   <section id="cmd-asks" class="cmd-asks" role="tabpanel" aria-labelledby="cmd-rail-tab-ask" hidden>
@@ -4189,6 +4277,19 @@ body.music-preview-active #idle-hud { display: none !important; }
     <ul id="cmd-ask-list" class="ask-list" aria-label="Questions and suggestions"></ul>
   </section>
     </div>
+  <section id="cmd-usage" class="cmd-usage" aria-label="Usage and OpenCode Go credits">
+    <header class="cmd-usage-head">
+      <h2 class="cmd-usage-title">
+        <button id="cmd-usage-toggle" class="feed-toggle" type="button" aria-expanded="true" aria-controls="cmd-usage-body" title="Collapse usage">
+          <span>Usage</span><span id="cmd-usage-state" class="feed-state">waiting</span>
+          <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg>
+        </button>
+      </h2>
+      <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and the OpenCode Go windows">Refresh</button>
+      <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Model Lab">Open</button>
+    </header>
+    <div id="cmd-usage-body" class="cmd-usage-body"></div>
+  </section>
   </aside>
   <div id="cmd-legend" class="cmd-legend">
     <button id="idle-legend-toggle" class="pill" aria-expanded="false" aria-controls="cmd-legend-list" title="What the colours and rings mean"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-legend"/></svg><span class="label">Legend</span></button>
@@ -11184,17 +11285,18 @@ body.music-preview-active #idle-hud { display: none !important; }
   }
   function show(view) {
     state.view = view;
-    for (const name of ["rankings", "usage", "context", "compare"]) {
+    for (const name of ["rankings", "usage", "context", "tracker", "compare"]) {
       $(name).hidden = name !== view;
       $(`tab-${name}`).setAttribute("aria-selected", String(name === view));
       $(`tab-${name}`).tabIndex = name === view ? 0 : -1;
     }
+    if (view === "tracker") window.MefiUsageTracker?.refresh?.();
     if (view === "context") loadTasks().then((fresh) => { if (fresh) return previewContext(); }).catch((error) => { $("context-status").textContent = error.message || "Tasks could not be read."; });
   }
   function init() {
     if (state.initialized || !document.getElementById("model-lab")) return;
     state.initialized = true;
-    const views = ["rankings", "usage", "context", "compare"];
+    const views = ["rankings", "usage", "context", "tracker", "compare"];
     for (const [index, name] of views.entries()) {
       const button = $(`tab-${name}`);
       button.addEventListener("click", () => show(name));
@@ -11217,6 +11319,277 @@ body.music-preview-active #idle-hud { display: none !important; }
   }
   function open() { init(); if (state.initialized && Date.now() - state.at > 5000) refresh(); }
   window.MefiModelLab = { open, refresh, show, previewContext };
+})();
+
+// Usage tracker: recorded local totals and OpenCode Go account windows, kept
+// visibly separate. Local numbers come from the model ledger; the account read
+// uses the saved key through the host and never touches prompts or results.
+(function () {
+  "use strict";
+  const REFRESH_MS = 5 * 60 * 1000;
+  const STALE_MS = 5000;
+  const state = { initialized: false, collapsed: false, read: 0, at: 0, report: null, pending: null };
+  const $ = (id) => document.getElementById(id);
+  const api = () => window.mefiStudio;
+  const rows = (value) => Array.isArray(value) ? value : [];
+  const finite = (value) => typeof value === "number" && Number.isFinite(value);
+  const number = (value, digits = 0) => finite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: digits }) : "Unknown";
+  const money = (value, digits = 2) => finite(value) ? `$${value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: value > 0 && value < 0.01 ? 4 : digits })}` : "Unknown";
+  const percent = (value) => finite(value) ? `${number(value, 1)}%` : "Unknown";
+  const when = (value) => {
+    if (value == null || value === "") return "unavailable";
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date.toLocaleString() : "unavailable";
+  };
+  const clock = (value) => {
+    if (value == null || value === "") return "unknown time";
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) ? date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "unknown time";
+  };
+  const readStore = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
+  const writeStore = (key, value) => { try { localStorage.setItem(key, value); } catch {} };
+
+  function element(tag, className = "", text = "") {
+    const node = document.createElement(tag);
+    node.className = className;
+    node.textContent = text;
+    return node;
+  }
+  function emptyBox(title, detail) {
+    const box = element("div", "lab-empty");
+    box.append(element("h3", "", title), element("p", "", detail));
+    return box;
+  }
+  function empty(target, title, detail) {
+    target.replaceChildren(emptyBox(title, detail));
+  }
+  function table(headers, entries, rowOf) {
+    const node = element("table", "lab-table");
+    const head = element("thead");
+    const headRow = element("tr");
+    for (const title of headers) { const th = element("th", "", title); th.scope = "col"; headRow.append(th); }
+    head.append(headRow);
+    const body = element("tbody");
+    entries.forEach((entry) => {
+      const tr = element("tr");
+      for (const value of rowOf(entry)) { const cell = element("td"); cell.append(typeof value === "object" ? value : element("span", "", String(value))); tr.append(cell); }
+      body.append(tr);
+    });
+    node.append(head, body);
+    return node;
+  }
+  function modelName(provider, model) {
+    const cell = element("div", "lab-model-name");
+    cell.append(element("strong", "", model || "Unknown model"), element("span", "muted", provider || "Unknown provider"));
+    return cell;
+  }
+  function section(title, note, content) {
+    const node = element("section", "tracker-section");
+    node.append(element("h3", "", title));
+    if (note) node.append(element("p", "muted", note));
+    node.append(content);
+    return node;
+  }
+  function costText(record) {
+    return record?.knownRecords > 0 ? money(record.known) : "Unknown";
+  }
+  function localCost(record) {
+    return record && record.knownRecords > 0 ? money(record.spentUsd) : "Unknown";
+  }
+
+  function windowBar(label, record) {
+    const wrap = element("div", "tracker-window");
+    wrap.append(element("span", "tracker-window-label", label));
+    const bar = element("span", "tracker-bar");
+    const fill = element("i");
+    if (record && finite(record.percent)) {
+      fill.style.width = `${Math.max(0, Math.min(100, record.percent))}%`;
+      if (record.percent >= 100 || record.status === "rate-limited") fill.className = "warn";
+    }
+    bar.append(fill);
+    wrap.append(bar);
+    wrap.append(element("b", "tracker-window-value", record && finite(record.percent) ? percent(record.percent) : "—"));
+    return wrap;
+  }
+
+  function liveSection(credits) {
+    const target = element("div", "lab-usage-grid");
+    for (const [key, label] of [["rolling", "5-hour window"], ["weekly", "Weekly window"], ["monthly", "Monthly window"]]) {
+      const record = credits?.ok ? credits.usage?.[key] : null;
+      const card = element("div", "lab-usage-card tracker-live-card");
+      card.append(element("span", "", `OpenCode Go · ${label}`));
+      card.append(element("strong", "", record ? percent(record.percent) : "Unavailable"));
+      const detail = record
+        ? `${record.status === "rate-limited" ? "Limit reached · " : ""}${record.resetsAt ? `Resets ${when(record.resetsAt)}` : "Reset time unavailable"}`
+        : credits?.error || "No account reading yet.";
+      card.append(element("small", "muted", detail));
+      target.append(card);
+    }
+    return target;
+  }
+
+  function localSection(credits) {
+    const note = "Counts only calls Studio recorded for this project, with the costs the provider reported. Calls without reported cost stay unknown, so this estimate can only be lower than the account's real usage.";
+    const stack = element("div", "tracker-stack");
+    const windows = element("div", "tracker-windows");
+    for (const [key, label] of [["rolling", "5h"], ["weekly", "Week"], ["monthly", "Month"]]) windows.append(windowBar(label, credits?.[key]));
+    stack.append(windows);
+    const detail = element("div", "tracker-detail");
+    for (const [key, label] of [["rolling", "5h"], ["weekly", "Week"], ["monthly", "Month"]]) {
+      const record = credits?.[key];
+      if (!record) continue;
+      detail.append(element("p", "muted", `${label}: ${localCost(record)} of ${money(record.limitUsd, 2)} · ${number(record.calls)} calls · ${number(record.unknownRecords)} without reported cost`));
+    }
+    stack.append(detail);
+    return section("Recorded OpenCode Go spend (local estimate)", note, stack);
+  }
+
+  function renderSummary(local) {
+    const grid = element("div", "lab-usage-grid");
+    const stats = [
+      ["Calls recorded", number(local.totals.calls)],
+      ["Calls today", number(local.today.calls)],
+      ["Recorded cost", costText(local.totals.usage.costUsd)],
+      ["Lifetime calls", number(local.lifetime?.calls)],
+    ];
+    for (const [label, value] of stats) { const card = element("div", "lab-usage-card"); card.append(element("span", "", label), element("strong", "", value)); grid.append(card); }
+    return grid;
+  }
+  function daysTable(local) {
+    if (!rows(local.days).length) return emptyBox("No recorded calls yet", "Days appear here as Studio records measured calls. Unknown values stay unknown.");
+    return table(["Day", "Calls", "Errors", "Input tokens", "Output tokens", "Recorded cost"], local.days, (day) => [
+      day.day, number(day.calls), number(day.errors), number(day.usage.inputTokens.known), number(day.usage.outputTokens.known), costText(day.usage.costUsd),
+    ]);
+  }
+  function modelsTable(local) {
+    if (!rows(local.models).length) return emptyBox("No models observed", "Provider and model totals appear after the first recorded call.");
+    return table(["Model", "Calls", "Errors", "Total tokens", "Recorded cost", "Without cost"], local.models, (model) => [
+      modelName(model.provider, model.model), number(model.calls), number(model.errors), number(model.usage.totalTokens.known), costText(model.usage.costUsd), number(model.usage.costUsd.unknownRecords),
+    ]);
+  }
+
+  function renderFull(target, report) {
+    const local = report.local ?? {};
+    if (local.ok === false) { empty(target, "Usage could not be read", local.error || "The local ledger could not be read."); return; }
+    target.replaceChildren();
+    target.append(renderSummary(local));
+    target.append(section("OpenCode Go account (live)", "Read from opencode.ai with the saved key. This is the provider's own window; it is not the local estimate.", liveSection(report.credits)));
+    target.append(localSection(local.credits));
+    target.append(section("Recorded usage by day", "Days use this machine's calendar. Cost is shown only when the provider reported it.", daysTable(local)));
+    target.append(section("By provider and model", "Sums from the local ledger for the active project.", modelsTable(local)));
+    const retired = local.retention?.dropped ? ` ${number(local.retention.dropped)} older details retired; lifetime totals retained.` : "";
+    target.append(element("p", "muted tracker-footnote", `${local.coverage || "Only calls recorded by Studio are included."}${retired}`));
+  }
+
+  function renderCompact(target, report) {
+    target.replaceChildren();
+    const credits = report.credits ?? {};
+    const local = report.local?.ok === false ? null : report.local;
+    const windows = element("div", "tracker-windows");
+    for (const [key, label] of [["rolling", "5h"], ["weekly", "Wk"], ["monthly", "Mo"]]) windows.append(windowBar(label, credits.ok ? credits.usage?.[key] : null));
+    target.append(windows);
+    if (!credits.ok) target.append(element("p", "tracker-line tracker-line-warn", credits.error || "Live account usage is unavailable."));
+    if (report.local?.ok === false) target.append(element("p", "tracker-line tracker-line-warn", report.local.error || "Local usage could not be read."));
+    if (local) {
+      const today = local.today.usage;
+      target.append(element("p", "tracker-line", `Recorded today · ${number(local.today.calls)} calls · ${number(today.totalTokens.known)} tokens · ${costText(today.costUsd)}`));
+      const estimate = local.credits;
+      if (estimate) {
+        target.append(element("p", "tracker-line", `Local estimate · 5h ${localCost(estimate.rolling)}/${money(estimate.rolling.limitUsd, 0)} · wk ${localCost(estimate.weekly)}/${money(estimate.weekly.limitUsd, 0)} · mo ${localCost(estimate.monthly)}/${money(estimate.monthly.limitUsd, 0)}`));
+      }
+    }
+  }
+
+  function statusOf(report) {
+    if (!report) return "Waiting for a reading…";
+    const stamp = report.credits?.fetchedAt ?? report.at;
+    return `Updated ${clock(stamp)}${report.credits?.ok === false ? " · live account read unavailable" : ""}`;
+  }
+  function render() {
+    const report = state.report;
+    if (!report) return;
+    const full = $("model-lab-tracker-body");
+    if (full) renderFull(full, report);
+    const compact = $("cmd-usage-body");
+    if (compact) renderCompact(compact, report);
+    const fullStatus = $("model-lab-tracker-status");
+    if (fullStatus) fullStatus.textContent = statusOf(report);
+    const compactState = $("cmd-usage-state");
+    if (compactState) compactState.textContent = statusOf(report);
+  }
+  function setStatus(text) {
+    const fullStatus = $("model-lab-tracker-status");
+    if (fullStatus) fullStatus.textContent = text;
+    const compactState = $("cmd-usage-state");
+    if (compactState) compactState.textContent = text;
+  }
+
+  function refresh({ force = false } = {}) {
+    if (!force && state.report && Date.now() - state.at < STALE_MS) return Promise.resolve(state.report);
+    if (state.pending) return state.pending;
+    const token = ++state.read;
+    setStatus("Reading usage…");
+    state.pending = (async () => {
+      const bridge = api();
+      if (!bridge?.usageTracker) throw new Error("Usage tracking is available in the Studio desktop app.");
+      const [local, credits] = await Promise.all([
+        bridge.usageTracker(),
+        bridge.opencodeCredits ? bridge.opencodeCredits() : Promise.resolve({ ok: false, error: "Live account usage is unavailable in this build." }),
+      ]);
+      if (token !== state.read) return state.report;
+      state.at = Date.now();
+      state.report = { local: local ?? { ok: false, error: "No usage report." }, credits: credits ?? { ok: false, error: "No account reading." }, at: state.at };
+      render();
+      return state.report;
+    })().catch((error) => {
+      if (token === state.read) setStatus(error.message || "Usage could not be read.");
+      return state.report;
+    }).finally(() => { state.pending = null; });
+    return state.pending;
+  }
+
+  function tick() {
+    if (!document.body?.classList?.contains?.("command-active")) return;
+    if (Date.now() - state.at >= REFRESH_MS) refresh();
+  }
+  function setCompactCollapsed(collapsed, save = true) {
+    state.collapsed = Boolean(collapsed);
+    const body = $("cmd-usage-body");
+    if (body) body.hidden = state.collapsed;
+    const toggle = $("cmd-usage-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", String(!state.collapsed));
+      toggle.title = state.collapsed ? "Expand usage" : "Collapse usage";
+    }
+    if (save) writeStore("mefiStudio.cmdUsageCollapsed", state.collapsed ? "1" : "0");
+  }
+  function openTab() {
+    window.MefiIdle?.exit?.();
+    window.MefiBooklet?.showTab?.("graph");
+    window.MefiModelLab?.show?.("tracker");
+  }
+  function open() {
+    if (state.report && Date.now() - state.at < REFRESH_MS) return;
+    refresh();
+  }
+  function init() {
+    if (state.initialized) return;
+    state.initialized = true;
+    $("model-lab-tracker-refresh")?.addEventListener("click", () => refresh({ force: true }));
+    $("cmd-usage-refresh")?.addEventListener("click", () => refresh({ force: true }));
+    $("cmd-usage-open")?.addEventListener("click", openTab);
+    $("cmd-usage-toggle")?.addEventListener("click", () => setCompactCollapsed(!state.collapsed));
+    setCompactCollapsed(readStore("mefiStudio.cmdUsageCollapsed") === "1", false);
+    window.addEventListener("mefi:project-changed", () => {
+      state.read += 1;
+      state.at = 0;
+      state.report = null;
+      refresh({ force: true });
+    });
+  }
+
+  window.MefiUsageTracker = { refresh, tick, open, openTab, init };
+  init();
 })();
 
 // Mefi's Studio AI+ — 3D task-tree rail.
@@ -13356,6 +13729,8 @@ body.music-preview-active #idle-hud { display: none !important; }
     doneEntries: null,
     doneAt: 0,
     doneLoading: false,
+    doneCollapsed: readStore("mefiStudio.cmdDoneCollapsed") === "1",
+    doneAbsorbing: false,
     askSending: false,
     lastAssistantSelected: false,
     query: "",
@@ -14057,6 +14432,27 @@ body.music-preview-active #idle-hud { display: none !important; }
     state.taskLayout = placed.layout;
     placed.entries.forEach(({ task, anchor, x: bx, y: by, z: bz }) => {
       const entry = metadata.get(task.id);
+      // Work on it: a task pinned to a session or todo on the board is that
+      // node's work, not a second node beside it. The task stays on the board;
+      // the graph shows the work where the user pointed. Group members and
+      // plan parents keep their own nodes so the group hierarchy stays true.
+      const target = task.target;
+      const targetId = ["session", "todo"].includes(String(target?.kind ?? "")) ? String(target?.id ?? "") : "";
+      const host = targetId && !entry.taskGroup && !entry.member
+        ? state.nodes.find((candidate) => (candidate.kind === "session" || candidate.kind === "todo") && !candidate.dying && (candidate.id === targetId || candidate.sessionId === targetId))
+        : null;
+      if (host) {
+        host.workTask = task;
+        const fx = ensureFx(`task:${task.id}`);
+        fx.task = task;
+        fx.builder = false;
+        fx.anchorId = host.id;
+        fx.seen = true;
+        // It never rendered a node of its own: its finish folds straight into
+        // the host instead of flying a ghost out of it.
+        fx.wasRendered = false;
+        return;
+      }
       const node = {
         id: `task:${task.id}`,
         kind: entry.taskGroup?.kind === "approved-plan" ? "task-group" : "task",
@@ -14110,6 +14506,15 @@ body.music-preview-active #idle-hud { display: none !important; }
   // board. Requests usually name the thing they are about ("Work on <session>").
   const titleKeys = (text) => new Set((String(text ?? "").toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).slice(0, 10));
 
+  // Work on it pins work to the node the user pointed at (a session or a todo):
+  // the running ring, the card and the builder belong on that node, not on a
+  // second node echoing its name. Null when the target is not on the board.
+  function targetHostNode(target) {
+    const id = ["session", "todo"].includes(String(target?.kind ?? "")) ? String(target?.id ?? "") : "";
+    if (!id) return null;
+    return state.nodes.find((node) => (node.kind === "session" || node.kind === "todo") && !node.dying && (node.id === id || node.sessionId === id)) ?? null;
+  }
+
   // Where a running job belongs on the board: its task, its session, or the node
   // whose title it echoes. A job with no home is not forced onto the assistant —
   // three of those stacked on one hub was the whole visual problem — it goes out
@@ -14118,11 +14523,21 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (job.taskId) {
       const task = state.nodes.find((node) => node.kind === "task" && node.task?.id === job.taskId);
       if (task) return task;
+      // Work on it: the task lives on the node it was pinned to, not on a node
+      // of its own, so the builder orbits that node.
+      const owned = (state.allTasks ?? []).find((entry) => entry?.id === job.taskId);
+      const host = targetHostNode(owned?.target);
+      if (host) return host;
     }
     if (job.sessionId) {
       const session = state.nodes.find((node) => node.kind === "session" && node.id === job.sessionId);
       if (session) return session;
     }
+    // A queued request the executor already claimed carries its target only on
+    // the request row: the worker belongs on the node the request names.
+    const request = (Array.isArray(state.requests) ? state.requests : []).find((entry) => entry?.title && entry.title === job.title);
+    const requested = targetHostNode(request?.target);
+    if (requested) return requested;
     const keys = titleKeys(job.title);
     if (!keys.size) return null;
     let best = null;
@@ -14346,6 +14761,9 @@ body.music-preview-active #idle-hud { display: none !important; }
       const fx = state.fx.get(id);
       if (!fx || fx.absorbAt != null) continue;
       const task = hold.task ?? fx.task;
+      // Work on it finished: it folds into the node it was pinned to instead of
+      // parking a finished node beside it.
+      if (targetHostNode(task?.target)) { state.doneHold.delete(id); markAbsorb(id); continue; }
       const host = fx.anchorId ? state.nodes.find((node) => node.id === fx.anchorId && !node.dying) : null;
       const sx = fx.lastX ?? host?.x ?? 190;
       const sy = fx.lastY ?? host?.y ?? 46;
@@ -14834,6 +15252,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   function applyRailCollapsed() {
     const collapsed = state.railTab === "work" ? state.feedCollapsed
       : state.railTab === "assistant" ? !state.chatLogOpen
+      : state.railTab === "done" ? state.doneCollapsed
       : false;
     state.railCollapsed = collapsed;
     el.rail?.classList.toggle("rail-collapsed", collapsed);
@@ -14891,7 +15310,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   // The done log: the durable executor ledger plus the assistant's completed
   // passes, read from the host on demand so a reload shows the file, not a cache.
   async function loadDoneLog() {
-    if (!el.doneList) return;
+    if (!el.doneList || state.doneAbsorbing) return;
     if (!window.mefiStudio?.assistantDoneLog) {
       if (el.doneState) el.doneState.textContent = "desktop app only";
       renderDone();
@@ -14912,9 +15331,73 @@ body.music-preview-active #idle-hud { display: none !important; }
     }
   }
 
+  // The done log collapses to its head: the count and the Absorb button stay
+  // reachable while the list tucks away, and the choice is remembered.
+  function setDoneCollapsed(collapsed, { save = true } = {}) {
+    state.doneCollapsed = Boolean(collapsed);
+    el.done?.classList.toggle("done-collapsed", state.doneCollapsed);
+    if (el.doneToggle) {
+      el.doneToggle.textContent = state.doneCollapsed ? "+" : "–";
+      el.doneToggle.setAttribute("aria-expanded", String(!state.doneCollapsed));
+      el.doneToggle.title = state.doneCollapsed ? "Expand the done log" : "Collapse the done log";
+    }
+    applyRailCollapsed();
+    if (save) writeStore("mefiStudio.cmdDoneCollapsed", state.doneCollapsed ? "1" : "0");
+  }
+
+  // Absorb: every record spirals into the Absorb button, then the host wipes
+  // them from the done log for good. The flight is skipped when motion is off —
+  // the wipe still lands, it just lands at once.
+  async function absorbDoneLog() {
+    if (state.doneAbsorbing || !el.doneList || !window.mefiStudio?.assistantAbsorbDoneLog) return;
+    const entries = state.doneEntries ?? [];
+    if (!entries.length) return;
+    state.doneAbsorbing = true;
+    if (el.doneAbsorb) el.doneAbsorb.disabled = true;
+    const rows = [...el.doneList.querySelectorAll(".done-row")];
+    const button = el.doneAbsorb;
+    const target = button?.getBoundingClientRect();
+    if (!noMotion() && target && rows.length) {
+      const cx = target.left + target.width / 2;
+      const cy = target.top + target.height / 2;
+      rows.forEach((row, index) => {
+        const rect = row.getBoundingClientRect();
+        row.style.setProperty("--absorb-dx", `${Math.round(cx - (rect.left + rect.width / 2))}px`);
+        row.style.setProperty("--absorb-dy", `${Math.round(cy - (rect.top + rect.height / 2))}px`);
+        row.style.setProperty("--absorb-i", String(Math.min(index, 12)));
+      });
+      el.done?.classList.add("absorbing");
+      button.classList.add("pulling");
+      await new Promise((resolve) => setTimeout(resolve, 640 + Math.min(rows.length, 12) * 45));
+    }
+    try {
+      const result = await window.mefiStudio.assistantAbsorbDoneLog();
+      if (!result?.ok) {
+        window.MefiToast?.(`absorb failed · ${result?.error ?? "unknown error"}`, "bad");
+        return;
+      }
+      state.doneEntries = [];
+      state.doneAt = Date.now();
+      window.MefiToast?.(`absorbed ${entries.length} record${entries.length === 1 ? "" : "s"}`, "good");
+    } catch (error) {
+      window.MefiToast?.(`absorb failed · ${String(error?.message ?? error)}`, "bad");
+    } finally {
+      state.doneAbsorbing = false;
+      el.done?.classList.remove("absorbing");
+      button?.classList.remove("pulling");
+      renderDone();
+    }
+  }
+
   function renderDone() {
     if (!el.doneList) return;
     const entries = state.doneEntries ?? [];
+    if (el.doneAbsorb) {
+      el.doneAbsorb.disabled = state.doneAbsorbing || !entries.length;
+      el.doneAbsorb.title = entries.length
+        ? `Absorb ${entries.length} record${entries.length === 1 ? "" : "s"} — the done log clears for good`
+        : "Nothing to absorb yet";
+    }
     el.doneList.textContent = "";
     if (!entries.length) {
       const empty = document.createElement("li");
@@ -15109,7 +15592,19 @@ body.music-preview-active #idle-hud { display: none !important; }
     const ids = new Set();
     for (const job of autopilotJobs(assistant)) {
       if (job.sessionId) ids.add(job.sessionId);
-      if (job.taskId) ids.add(job.taskId);
+      if (job.taskId) {
+        ids.add(job.taskId);
+        // A task pinned to a board node lights that node, wherever the task
+        // itself would have been drawn.
+        const target = (state.allTasks ?? []).find((entry) => entry?.id === job.taskId)?.target;
+        if (["session", "todo"].includes(String(target?.kind ?? "")) && target?.id) ids.add(String(target.id));
+      }
+    }
+    // A pinned request the executor already claimed keeps its target lit for
+    // as long as the run lasts.
+    for (const request of Array.isArray(state.requests) ? state.requests : []) {
+      const target = request?.target;
+      if (request?.status === "running" && ["session", "todo"].includes(String(target?.kind ?? "")) && target?.id) ids.add(String(target.id));
     }
     return ids;
   };
@@ -15134,6 +15629,12 @@ body.music-preview-active #idle-hud { display: none !important; }
       const task = node.task;
       if (node.kind === "task" && task?.pin && (task.status === "open" || task.status === "active")) ids.add(String(task.id));
     }
+    // A pinned task drawn on its target node instead of its own keeps the
+    // "up next" ring on that node.
+    for (const task of state.allTasks ?? []) {
+      const target = task?.target;
+      if (task?.pin && (task.status === "open" || task.status === "active") && ["session", "todo"].includes(String(target?.kind ?? "")) && target?.id) ids.add(String(target.id));
+    }
     // The seen set is the bridge across the handoff: the claim clears the pin
     // exactly when the build starts, so the ring keys off "was pinned and is
     // now running" rather than the pin alone. Entries age out so a finished
@@ -15155,9 +15656,14 @@ body.music-preview-active #idle-hud { display: none !important; }
       if (job.taskId && completedTaskIds.has(job.taskId)) continue;
       const task = nodes.find((node) => node.kind === "task" && (job.taskId && (node.task?.id === job.taskId || node.id === `task:${job.taskId}`) || job.sessionId && node.task?.run?.sessionId === job.sessionId));
       if (task && (task.dying || ["done", "archived"].includes(task.task?.status))) continue;
+      // Work on it draws the task on the node it was pinned to: Follow frames
+      // that node instead of falling back to the worker's own session.
+      const target = !task && job.taskId ? (state.allTasks ?? []).find((entry) => entry?.id === job.taskId)?.target : null;
+      const targetId = ["session", "todo"].includes(String(target?.kind ?? "")) ? String(target?.id ?? "") : "";
+      const host = targetId ? nodes.find((entry) => (entry.kind === "session" || entry.kind === "todo") && !entry.dying && (entry.id === targetId || entry.sessionId === targetId)) : null;
       const session = job.sessionId ? nodes.find((node) => node.kind === "session" && (node.id === job.sessionId || node.sessionId === job.sessionId)) : null;
       const builder = nodes.find((node) => node.builder && !node.dying && (job.taskId && node.job?.taskId === job.taskId || job.sessionId && node.job?.sessionId === job.sessionId || !job.taskId && !job.sessionId && node.job === job));
-      const node = task ?? session ?? builder;
+      const node = task ?? host ?? session ?? builder;
       if (!node || seen.has(node.id)) continue;
       seen.add(node.id);
       const todo = session ? nodes.find((entry) => entry.kind === "todo" && entry.sessionId === session.id && (entry.status === "in_progress" || entry.state === "active")) : null;
@@ -15985,7 +16491,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       if (node.status === "queued") return NODE_RGB.pending;
       return agentRgb(node.role);
     }
-    if (node._workLabel === "Verifying" || node.task?.status === "awaiting_verification") return NODE_RGB.verify;
+    if (node._workLabel === "Verifying" || (node.task ?? node.workTask)?.status === "awaiting_verification") return NODE_RGB.verify;
     if (node._workLabel === "Running") return NODE_RGB.warm;
     if (node._workLabel === "Next") return NODE_RGB.dust;
     if (node.state === "stale") return NODE_RGB.stale;
@@ -15998,7 +16504,7 @@ body.music-preview-active #idle-hud { display: none !important; }
 
   function nodeVisualProfile(node) {
     const focused = state.hoverNode === node || Boolean(state.selected && state.selected.id === node.id);
-    const verifying = node._workLabel === "Verifying" || node.task?.status === "awaiting_verification";
+    const verifying = node._workLabel === "Verifying" || (node.task ?? node.workTask)?.status === "awaiting_verification";
     const working = !verifying && (node._workLabel === "Running" || node.state === "active") || node.kind === "agent" && node.status === "running";
     const prominent = focused || working || node.kind === "assistant";
     return { prominent, maxRadius: prominent ? 15 : 11, alpha: prominent ? 1 : 0.65, shape: "circle" };
@@ -18284,8 +18790,9 @@ body.music-preview-active #idle-hud { display: none !important; }
       node._orbitTrail = null; node._extraGlow = false;
       node._audioResponse = nodeAudioResponse(node, visualMusic, audioNodes, state.audioResponse);
       node._bubble = null; node._bubblePaint = null;
-      const ids = [node.id, node.sessionId, node.task?.id].filter(Boolean).map(String);
-      node._workLabel = node.task?.status === "awaiting_verification" ? "Verifying" : (node.kind === "todo" ? node.status === "in_progress" : ids.some((id) => runningIds.has(id))) ? "Running" : ids.some((id) => pinnedIds.has(id)) ? "Next" : null;
+      const ids = [node.id, node.sessionId, node.task?.id, node.workTask?.id].filter(Boolean).map(String);
+      const work = node.task ?? node.workTask ?? null;
+      node._workLabel = work?.status === "awaiting_verification" ? "Verifying" : (ids.some((id) => runningIds.has(id)) || node.kind === "todo" && node.status === "in_progress") ? "Running" : ids.some((id) => pinnedIds.has(id)) ? "Next" : null;
       if (node.kind === "task") {
         const job = runningJobs.find((entry) => entry.taskId === node.task?.id);
         node.progress = typeof job?.progress === "number" && Number.isFinite(job.progress) ? job.progress : null;
@@ -20539,6 +21046,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     }).catch(() => {});
     renderFeed();
     renderHint();
+    window.MefiUsageTracker?.open?.();
     bumpHud();
     state.lastTouch = Date.now();
     state.popupAt = Date.now() + 6000;
@@ -20617,6 +21125,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     updateTelemetry();
     if (autopilotJobs(state.assistant).length || chatMode()) state.feedDirty = true; // "running: … · Ns" and the chat status line age between status pushes
     renderFeed();
+    globalThis.MefiUsageTracker?.tick?.();
     if (state.ambient && !state.settingsPreview && Date.now() - state.popupAt > POPUP_MS) {
       state.popupAt = Date.now();
       popup();
@@ -20760,6 +21269,8 @@ body.music-preview-active #idle-hud { display: none !important; }
     el.doneList = document.getElementById("cmd-done-list");
     el.doneState = document.getElementById("cmd-done-state");
     el.doneRefresh = document.getElementById("cmd-done-refresh");
+    el.doneToggle = document.getElementById("cmd-done-toggle");
+    el.doneAbsorb = document.getElementById("cmd-done-absorb");
     el.asks = document.getElementById("cmd-asks");
     el.askList = document.getElementById("cmd-ask-list");
     el.askState = document.getElementById("cmd-ask-state");
@@ -20992,6 +21503,9 @@ body.music-preview-active #idle-hud { display: none !important; }
       setRailTab(tabs[next].dataset.railView, { focus: true });
     });
     el.doneRefresh?.addEventListener("click", () => void loadDoneLog());
+    el.doneToggle?.addEventListener("click", () => setDoneCollapsed(!state.doneCollapsed));
+    el.doneAbsorb?.addEventListener("click", () => void absorbDoneLog());
+    setDoneCollapsed(state.doneCollapsed, { save: false });
     setRailTab(state.railTab, { save: false });
     document.getElementById("idle-chat-explorer")?.addEventListener("click", () => nav("explorer", { assistant: true }));
     el.ambienceBtn?.addEventListener("click", toggleAmbience);
@@ -28629,7 +29143,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     {
       title: "Connect the assistant and coding workers", short: "Connections", glyph: "g-ambience",
       copy: "The assistant helps you think and organize. Coding workers carry out tasks in your project. Their provider settings are separate.",
-      points: ["In Settings & connections, save the key for the assistant provider you want, or choose Grok with its own CLI login.", "Choose the coding worker provider and ensure its CLI is installed and signed in. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; it advises on related work and does not replace your coding provider."],
+      points: ["In Settings & connections, save the key for the assistant provider you want, choose Grok, Claude Code or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Choose the coding worker provider and ensure its CLI is installed and signed in. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; it advises on related work and does not replace your coding provider."],
       action: "Walk me to connections", route: "studio",
       station: "We are in Settings & connections together, at the assistant group. Save the key you want, then scroll to the coding worker group and confirm its CLI is signed in. Nothing is sent until you choose to test it.",
       note: "Connection tests and AI requests may use your provider allowance when you explicitly run them.",
@@ -29314,13 +29828,14 @@ body.music-preview-active #idle-hud { display: none !important; }
     // The setup overview mirrors what the host already reported — saved-key
     // flags, routing, installed CLIs — so the auto setup card never issues its
     // own probes. Every row keeps "unknown" honest until a real read lands.
-    const setup = { keys: { opencode: null, zai: null }, routing: null, clis: null, routingError: false, cliError: false };
+    const setup = { keys: { opencode: null, zai: null, custom: null }, routing: null, clis: null, routingError: false, cliError: false };
     const setupAssistant = document.getElementById("setup-assistant");
     const setupSelection = document.getElementById("setup-selection");
     const setupBuilders = document.getElementById("setup-builders");
-    const providerNames = { auto: "Auto (prefers z.ai)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI" };
-    function grokInstalled() {
-      return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === "grok" && cli.installed);
+    const providerNames = { auto: "Auto (prefers z.ai)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
+    const singleModelProviders = new Set(["grok", "claude", "antigravity", "lmstudio", "custom"]);
+    function cliInstalled(id) {
+      return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === id && cli.installed);
     }
     function keyState(which) {
       const known = setup.keys[which];
@@ -29334,8 +29849,10 @@ body.music-preview-active #idle-hud { display: none !important; }
       else if (!routing) setupAssistant.textContent = "checking…";
       else {
         const provider = providerNames[routing.provider] ? routing.provider : "auto";
-        const detail = provider === "grok" ? "CLI login"
-          : provider === "auto" ? (setup.keys.zai ? "will use z.ai" : setup.keys.opencode ? "will use OpenCode Go" : grokInstalled() ? "will use Grok CLI" : "save a key to connect")
+        const detail = provider === "grok" || provider === "claude" || provider === "antigravity" ? "CLI login"
+          : provider === "lmstudio" ? "no key needed"
+          : provider === "custom" ? (routing.hasCustom ? "key saved" : "no key saved")
+          : provider === "auto" ? (setup.keys.zai ? "will use z.ai" : setup.keys.opencode ? "will use OpenCode Go" : cliInstalled("grok") ? "will use Grok CLI" : cliInstalled("claude") ? "will use Claude Code CLI" : cliInstalled("antigravity") ? "will use Antigravity CLI" : "save a key to connect")
           : keyState(provider);
         setupAssistant.textContent = `${providerNames[provider]} · ${detail}`;
       }
@@ -29346,14 +29863,26 @@ body.music-preview-active #idle-hud { display: none !important; }
       if (setup.cliError) setupBuilders.textContent = "CLI status unavailable";
       else if (!setup.clis) setupBuilders.textContent = "checking…";
       else {
-        const installed = setup.clis.filter((cli) => cli.installed);
-        setupBuilders.textContent = installed.length ? `${installed.map((cli) => cli.name).join(", ")} installed` : "No CLI detected — install OpenCode or Grok";
+        const builderIds = ["opencode", "grok", "claude", "antigravity"];
+        const installed = setup.clis.filter((cli) => cli.installed && builderIds.includes(cli.id));
+        setupBuilders.textContent = installed.length ? `${installed.map((cli) => cli.name).join(", ")} installed` : "No builder CLI detected — install OpenCode, Grok, Claude Code or Antigravity";
       }
+      const readiness = document.getElementById("provider-readiness");
+      const selected = routing && providerNames[routing.provider] ? routing.provider : null;
+      if (!selected) readiness.textContent = "checking…";
+      else if (selected === "auto") readiness.textContent = setup.keys.zai ? "z.ai key saved — auto uses it" : setup.keys.opencode ? "OpenCode key saved — auto uses it" : "no key yet — auto can still use an installed CLI";
+      else if (selected === "zai" || selected === "opencode") readiness.textContent = `${keyState(selected)} — this provider's saved model applies`;
+      else if (selected === "custom") readiness.textContent = `${routing.customEndpoint ? "endpoint saved" : "no endpoint saved"}, ${setup.keys.custom ? "key saved" : "no key saved"}`;
+      else if (selected === "lmstudio") readiness.textContent = "local server — no key needed; its loaded model is detected automatically";
+      else if (setup.cliError) readiness.textContent = "CLI status unavailable";
+      else if (!setup.clis) readiness.textContent = "checking CLI…";
+      else readiness.textContent = cliInstalled(selected) ? "CLI installed on this machine" : "CLI not found — you can still save its model and install it later";
     }
     renderSetupState();
 
     const keyStatus = document.getElementById("key-status");
     const zaiKeyStatus = document.getElementById("zai-key-status");
+    const customKeyStatus = document.getElementById("custom-key-status");
     window.mefiStudio
       .getApiKey("opencode")
       .then((key) => { setup.keys.opencode = Boolean(key?.saved); keyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
@@ -29362,6 +29891,10 @@ body.music-preview-active #idle-hud { display: none !important; }
       .getApiKey("zai")
       .then((key) => { setup.keys.zai = Boolean(key?.saved); zaiKeyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
       .catch(() => (zaiKeyStatus.textContent = "key status unavailable"));
+    window.mefiStudio
+      .getApiKey("custom")
+      .then((key) => { setup.keys.custom = Boolean(key?.saved); customKeyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
+      .catch(() => (customKeyStatus.textContent = "key status unavailable"));
 
     document.getElementById("save-key").addEventListener("click", async () => {
       const value = document.getElementById("api-key").value.trim();
@@ -29379,6 +29912,16 @@ body.music-preview-active #idle-hud { display: none !important; }
       await loadAiRouting();
     });
 
+    // The custom endpoint's URL is saved like any routing preference; its key
+    // rides the same encrypted setApiKey path as every other credential.
+    document.getElementById("save-custom-key").addEventListener("click", async () => {
+      const value = document.getElementById("custom-key").value.trim();
+      const result = await window.mefiStudio.setApiKey(value, "custom");
+      customKeyStatus.textContent = result?.ok ? (value ? "key saved (encrypted)" : "key cleared") : `save failed: ${result?.error ?? "unknown"}`;
+      document.getElementById("custom-key").value = "";
+      await loadAiRouting();
+    });
+
     const jevStatus = document.getElementById("jev-status");
     const jevEnabled = document.getElementById("jev-enabled");
     const jevTest = document.getElementById("test-jev");
@@ -29388,6 +29931,8 @@ body.music-preview-active #idle-hud { display: none !important; }
     const jevRouteFields = {
       vercel: { key: "gateway", placeholder: "Vercel gateway API key (stored encrypted)" },
       typesafe: { key: "jev", placeholder: "TypeSafe Jev API key (stored encrypted)" },
+      zen: { key: "zen", placeholder: "OpenCode Zen API key (stored encrypted)" },
+      openrouter: { key: "openrouter", placeholder: "OpenRouter API key (stored encrypted)" },
     };
     const jevRouteOf = () => (jevRouteFields[jevRoute.value] ? jevRoute.value : "vercel");
     async function refreshJev() {
@@ -29449,6 +29994,8 @@ body.music-preview-active #idle-hud { display: none !important; }
     const modelHeavy = document.getElementById("ai-model-heavy");
     const executorCli = document.getElementById("executor-cli");
     const executorModel = document.getElementById("executor-model");
+    const lmStudioEndpoint = document.getElementById("lmstudio-endpoint");
+    const customEndpoint = document.getElementById("custom-endpoint");
     function evidenceText(evidence, taskType) {
       const workerNote = taskType === "coding" ? " Available measurements describe Studio HTTP requests; CLI worker timing and billing are not measured." : "";
       if (!evidence) return `No measured evidence recorded for this selection.${workerNote}`;
@@ -29485,19 +30032,32 @@ body.music-preview-active #idle-hud { display: none !important; }
           providerSelect.value = routing.provider;
           modelSelection.value = routing.modelSelection ?? "jev";
           fallbackToggle.checked = routing.fallbackOpenCode;
-          modelRoutine.value = routing.models?.routine ?? "";
-          modelHeavy.value = routing.models?.heavy ?? "";
+          // Models follow the selected provider: the keyed HTTP routes (and
+          // "auto") may show the role-wide fallback, CLI and local routes show
+          // only what was saved for them.
+          const selectedProvider = providerNames[routing.provider] ? routing.provider : "auto";
+          const scoped = selectedProvider === "auto" ? null : routing.providerModels?.[selectedProvider];
+          const fallbackAllowed = selectedProvider === "auto" || selectedProvider === "zai" || selectedProvider === "opencode";
+          modelRoutine.value = scoped?.routine ?? (fallbackAllowed ? routing.models?.routine ?? "" : "");
+          modelHeavy.value = scoped?.heavy ?? (fallbackAllowed ? routing.models?.heavy ?? "" : "");
           executorCli.value = routing.executorCli ?? "opencode";
           executorModel.value = routing.executorModel ?? "";
+          lmStudioEndpoint.value = routing.lmStudioEndpoint ?? "";
+          customEndpoint.value = routing.customEndpoint ?? "";
         }
         const selection = routing.modelSelection ?? "jev";
+        const cliProvider = routing.provider === "grok" ? "Grok CLI" : routing.provider === "claude" ? "Claude Code CLI" : routing.provider === "antigravity" ? "Antigravity CLI" : null;
         routingStatus.textContent = selection === "fixed"
           ? "Fixed defaults enabled. Explicit model overrides take priority."
-          : routing.provider === "grok"
-            ? "Grok CLI uses your explicit model or its CLI default. Jev selection is available for HTTP calls and z.ai coding workers."
-            : routing.jevConfigured
-              ? "Jev model selection ready · task fit, speed and cost. Explicit model overrides take priority."
-              : "Jev model selection is waiting for a Jev key. Save one below for the selected route; usual defaults apply until connected.";
+          : cliProvider
+            ? `${cliProvider} uses your explicit model or its CLI default. Jev selection is available for HTTP calls and z.ai coding workers.`
+            : routing.provider === "lmstudio"
+              ? "LM Studio answers from the local server with no key. Load one model there or save a model override."
+              : routing.provider === "custom"
+                ? "The custom endpoint answers with the saved key. Save a model override when it serves more than one model."
+                : routing.jevConfigured
+                  ? "Jev model selection ready · task fit, speed and cost. Explicit model overrides take priority."
+                  : "Jev model selection is waiting for a Jev key. Save one below for the selected route; usual defaults apply until connected.";
         const decision = routing.routingDecision;
         routingEvidence.hidden = !decision;
         routingEvidence.textContent = decision ? evidenceText(decision.evidence, decision.taskType) : "";
@@ -29518,28 +30078,36 @@ body.music-preview-active #idle-hud { display: none !important; }
         if (read === routingRead) routingRefresh.disabled = false;
       }
     }
-    const routingControls = [providerSelect, modelSelection, fallbackToggle, modelRoutine, modelHeavy, executorCli, executorModel];
+    const routingControls = [providerSelect, modelSelection, fallbackToggle, modelRoutine, modelHeavy, executorCli, executorModel, lmStudioEndpoint, customEndpoint];
     for (const control of routingControls) control.disabled = true;
     loadAiRouting({ syncControls: true }).finally(() => {
       for (const control of routingControls) control.disabled = false;
     });
     routingRefresh.addEventListener("click", () => loadAiRouting());
-    async function saveRouting(payload, confirmation) {
+    async function saveRouting(payload, confirmation, { syncControls = false } = {}) {
       try {
         const result = await window.mefiStudio.setAiRouting(payload);
         if (!result?.ok) throw new Error(result?.error ?? "save failed");
         studioLog(`> ${confirmation}`);
-        await loadAiRouting();
+        await loadAiRouting({ syncControls });
       } catch (error) {
         routingStatus.textContent = `Could not save routing: ${error.message}. Your saved selection is unchanged.`;
         studioLog(`! routing: ${error.message}`);
       }
     }
-    providerSelect.addEventListener("change", () => saveRouting({ provider: providerSelect.value }, `assistant answers via ${providerSelect.value}`));
+    // Switching provider reloads that provider's own saved models, so one
+    // route's model id is never left in a field that now belongs to another.
+    providerSelect.addEventListener("change", () => saveRouting({ provider: providerSelect.value }, `assistant answers via ${providerSelect.value}`, { syncControls: true }));
     modelSelection.addEventListener("change", () => saveRouting({ modelSelection: modelSelection.value }, `model selection: ${modelSelection.value}`));
     fallbackToggle.addEventListener("change", () => saveRouting({ fallbackOpenCode: fallbackToggle.checked }, "provider fallback saved"));
-    const saveModel = (which, value) =>
-      saveRouting({ models: { [which]: value } }, `${which} model ${value.trim() ? `"${value.trim()}"` : "uses model selection"}`);
+    const saveModel = (which, value) => {
+      const provider = providerNames[providerSelect.value] ? providerSelect.value : "auto";
+      const trimmed = value.trim();
+      const confirmation = `${provider} ${which} model ${trimmed ? `"${trimmed}"` : "uses the provider default"}`;
+      return provider === "auto"
+        ? saveRouting({ models: { [which]: value } }, confirmation)
+        : saveRouting({ providerModels: { [provider]: { [which]: value } } }, confirmation);
+    };
     for (const [input, role] of [[modelRoutine, "routine"], [modelHeavy, "heavy"]]) {
       input.addEventListener("change", () => saveModel(role, input.value));
       input.addEventListener("keydown", (event) => {
@@ -29549,8 +30117,25 @@ body.music-preview-active #idle-hud { display: none !important; }
         }
       });
     }
-    executorCli.addEventListener("change", () => saveRouting({ executorCli: executorCli.value }, `builders run on ${executorCli.value}`));
-    executorModel.addEventListener("change", () => saveRouting({ executorModel: executorModel.value }, `builder model ${executorModel.value.trim() ? `"${executorModel.value.trim()}"` : "reset to default"}`));
+    // Builder models are saved per CLI too, so switching builders cannot leave
+    // one CLI's model id on another CLI's command line.
+    executorCli.addEventListener("change", () => saveRouting({ executorCli: executorCli.value }, `builders run on ${executorCli.value}`, { syncControls: true }));
+    executorModel.addEventListener("change", () => saveRouting({ executorModels: { [executorCli.value]: executorModel.value } }, `builder model for ${executorCli.value} ${executorModel.value.trim() ? `"${executorModel.value.trim()}"` : "reset to CLI default"}`));
+    executorModel.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        executorModel.blur();
+      }
+    });
+    for (const [input, field, label] of [[lmStudioEndpoint, "lmStudioEndpoint", "LM Studio endpoint"], [customEndpoint, "customEndpoint", "custom endpoint"]]) {
+      input.addEventListener("change", () => saveRouting({ [field]: input.value }, `${label} ${input.value.trim() ? `set to "${input.value.trim()}"` : "reset to default"}`));
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          input.blur();
+        }
+      });
+    }
 
     // Auto setup: one host call that reads saved keys and installed CLIs and
     // applies the matching configuration. The renderer only reports the host's

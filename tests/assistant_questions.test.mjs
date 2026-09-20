@@ -13,7 +13,8 @@ const section = (start, end) => {
 
 function questionHost({ executorLog = "", offers = [] } = {}) {
   const state = assistant.emptyState(1000);
-  const events = [], logs = [], messages = [], backlog = [], controls = [], saves = [];
+  const events = [], logs = [], messages = [], backlog = [], controls = [], saves = [], writes = [];
+  let ledger = executorLog;
   const env = vm.createContext({
     console,
     assistantState: state,
@@ -21,7 +22,10 @@ function questionHost({ executorLog = "", offers = [] } = {}) {
     ASSISTANT_CAPS: assistant.CAPS,
     EXECUTOR_LOG_PATH: "executor-log.jsonl",
     projectDataPath: (file) => file,
-    readFile: async () => executorLog,
+    readFile: async () => ledger,
+    writeFile: async (file, text) => { writes.push({ file, text }); ledger = text; },
+    rename: async () => {},
+    rm: async () => {},
     assistantCaps: () => assistant.CAPS,
     assistantTrim(list, cap) { if (list.length > cap) list.splice(0, list.length - cap); },
     assistantLog(kind, text) { logs.push({ kind, text }); },
@@ -36,7 +40,7 @@ function questionHost({ executorLog = "", offers = [] } = {}) {
     assistantControl: async (action) => { controls.push({ kind: "control", action }); return { ok: true }; },
   });
   vm.runInContext(section("// ---- agent questions", "async function assistantSetPrefs("), env);
-  return { env, state, events, logs, messages, backlog, controls, saves };
+  return { env, state, events, logs, messages, backlog, controls, saves, writes };
 }
 
 test("normalizeState keeps questions with their options and answers", () => {
@@ -200,4 +204,38 @@ test("the done log merges executor finishes with assistant passes, newest first"
   assert.equal(result.entries[1].ok, false);
   assert.equal(result.entries[2].taskId, "task_1");
   assert.match(result.entries[2].detail, /42s/);
+});
+
+test("absorbing the done log drops finish rows, keeps start rows and hides old passes", async () => {
+  const lines = [
+    JSON.stringify({ at: 100, event: "start", title: "Build the rail" }),
+    JSON.stringify({ at: 200, event: "finish", kind: "task", task: "task_1", title: "Build the rail", ok: true }),
+    JSON.stringify({ at: 300, event: "finish", kind: "task", title: "Broken build", ok: false, error: "exit 1" }),
+  ].join("\n");
+  const h = questionHost({ executorLog: lines });
+  h.state.log = [{ at: 400, kind: "fix", text: "repaired the catalog" }];
+  const result = await h.env.assistantAbsorbDoneLog();
+  assert.equal(result.ok, true);
+  assert.equal(result.records, 2);
+  assert.equal(result.passes, 1);
+  assert.equal(h.writes.length, 1, "the ledger is rewritten once");
+  assert.ok(!h.writes[0].text.includes('"finish"'), "finish rows are gone");
+  assert.ok(h.writes[0].text.includes('"start"'), "start rows stay");
+  assert.equal(h.state.doneAbsorbedAt > 0, true);
+  assert.equal(h.saves.length, 1);
+  const after = await h.env.assistantDoneLog({ limit: 10 });
+  assert.deepEqual(Array.from(after.entries, (entry) => entry.title), [], "the tab reads empty");
+  h.state.log.push({ at: h.state.doneAbsorbedAt + 1, kind: "tidy", text: "later tidy" });
+  const later = await h.env.assistantDoneLog({ limit: 10 });
+  assert.deepEqual(Array.from(later.entries, (entry) => entry.title), ["later tidy"], "passes after the absorb still land");
+});
+
+test("absorbing an empty ledger is a no-op that still clears old passes", async () => {
+  const h = questionHost();
+  h.state.log = [{ at: 400, kind: "audit", text: "audited" }];
+  const result = await h.env.assistantAbsorbDoneLog();
+  assert.equal(result.ok, true);
+  assert.equal(result.records, 0);
+  assert.equal(h.writes.length, 0, "a missing ledger is never written");
+  assert.equal((await h.env.assistantDoneLog({ limit: 10 })).entries.length, 0);
 });

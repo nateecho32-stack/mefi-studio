@@ -3084,7 +3084,7 @@ body.command-active .walkthrough-coach { right: 392px; }
   padding-bottom: 9px; margin-bottom: 9px; border-bottom: 1px solid var(--hairline);
 }
 #idle-hud .rail-view-title { margin: 0; font: 600 14px/1.3 var(--font-ui); color: var(--ivory); }
-#idle-hud .rail-view-head .feed-state { flex: 1; min-width: 0; font-size: 10px; text-align: right; }
+#idle-hud .rail-view-head .feed-state { flex: 1; min-width: 0; font-size: 10px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #idle-hud .rail-view-head button { flex: none; min-height: 26px; padding: 3px 8px; font-size: 11px; }
 #idle-hud .rail-view-note { flex: none; margin: 0 0 10px; color: var(--muted); font-size: 11px; line-height: 1.55; }
 
@@ -3124,6 +3124,28 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud button.done-title:hover { color: var(--gold-bright); background: transparent; transform: none; box-shadow: none; }
 #idle-hud .done-detail { color: var(--muted); font-size: 11px; line-height: 1.45; }
 #idle-hud .done-empty, #idle-hud .ask-empty { margin: 0; padding: 8px 2px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+/* collapse: the head keeps the count and the Absorb button, the list tucks away */
+#idle-hud .cmd-done.done-collapsed .rail-view-note,
+#idle-hud .cmd-done.done-collapsed .done-list { display: none; }
+
+/* absorb: every record spirals into the Absorb button, then the log is gone */
+#idle-hud .cmd-done.absorbing .done-row {
+  pointer-events: none;
+  animation: done-absorb 620ms cubic-bezier(.55, -.2, .75, .5) forwards;
+  animation-delay: calc(var(--absorb-i, 0) * 45ms);
+}
+#idle-hud .cmd-done.absorbing .done-empty { opacity: 0; }
+@keyframes done-absorb {
+  0% { opacity: 1; transform: translate(0, 0) scale(1) rotate(0deg); }
+  30% { opacity: 1; transform: translate(calc(var(--absorb-dx, 0px) * .14), calc(var(--absorb-dy, 0px) * .14)) scale(1.02) rotate(-.5deg); }
+  100% { opacity: 0; transform: translate(var(--absorb-dx, 0px), var(--absorb-dy, 0px)) scale(.05) rotate(6deg); }
+}
+#idle-hud #cmd-done-absorb.pulling { animation: absorb-pull 780ms ease-out; }
+@keyframes absorb-pull {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 60%, transparent); }
+  100% { box-shadow: 0 0 0 16px color-mix(in srgb, var(--live) 0%, transparent); }
+}
 
 /* the ask cards */
 #idle-hud .ask-list {
@@ -3183,3 +3205,42 @@ body.command-active .walkthrough-coach { right: 392px; }
   #idle-hud .cmd-follow-status { left: 12px; right: 12px; }
   #idle-hud .rail-tab { padding: 0 6px; font-size: 11px; }
 }
+
+/* ============================================================
+   Usage tracker — Model Lab tab and the Command rail footer
+   ============================================================ */
+.lab-tracker { display: flex; flex-direction: column; gap: 22px; }
+.tracker-section { border: 1px solid var(--hairline); border-radius: 14px; padding: 20px; background: #ffffff02; }
+.tracker-section h3 { margin: 0 0 6px; font-size: 17px; }
+.tracker-section > p.muted { margin: 0 0 14px; font-size: 12px; line-height: 1.7; max-width: 720px; }
+.tracker-stack { display: flex; flex-direction: column; gap: 14px; }
+.tracker-windows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.tracker-window { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 10px; }
+.tracker-window-label { color: var(--muted); font-size: 12px; }
+.tracker-window-value { font-size: 14px; color: var(--gold-bright); font-variant-numeric: tabular-nums; min-width: 52px; text-align: right; }
+.tracker-bar { position: relative; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--ivory) 12%, transparent); overflow: hidden; }
+.tracker-bar > i { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 4px; background: linear-gradient(90deg, var(--gold-dim), var(--gold-bright)); }
+.tracker-bar > i.warn { background: linear-gradient(90deg, #a4422f, var(--bad)); }
+.tracker-detail { display: grid; gap: 4px; }
+.tracker-detail p { margin: 0; font-size: 12px; }
+.tracker-footnote { margin: 0; font-size: 11px; line-height: 1.7; }
+.tracker-live-card > strong { color: var(--ivory); }
+.tracker-live-card > small { line-height: 1.6; }
+@media (max-width: 680px) { .tracker-windows { grid-template-columns: 1fr; } }
+
+/* the Command rail's bottom-right footer: pinned under the tab panels */
+#idle-hud .cmd-usage { flex: none; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); pointer-events: auto; }
+#idle-hud .cmd-usage-head { display: flex; align-items: center; gap: 5px; }
+#idle-hud .cmd-usage-title { flex: 1; min-width: 0; margin: 0; font: 600 12px/1.3 var(--font-ui); }
+#idle-hud .cmd-usage-title .feed-toggle { min-height: 24px; font-size: 11px; }
+#idle-hud .cmd-usage-head button { flex: none; }
+#idle-hud .cmd-usage-head .ghost.mini { min-height: 24px; padding: 2px 8px; font-size: 10px; }
+#idle-hud .cmd-usage-body { display: flex; flex-direction: column; gap: 6px; }
+#idle-hud .cmd-usage-body[hidden] { display: none; }
+#idle-hud .cmd-usage .tracker-windows { grid-template-columns: 1fr; gap: 5px; }
+#idle-hud .cmd-usage .tracker-window { grid-template-columns: 22px 1fr 38px; gap: 6px; font-size: 10px; }
+#idle-hud .cmd-usage .tracker-window-label { font-size: 10px; }
+#idle-hud .cmd-usage .tracker-window-value { font-size: 10px; min-width: 0; }
+#idle-hud .cmd-usage .tracker-bar { height: 5px; border-radius: 3px; }
+#idle-hud .cmd-usage .tracker-line { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+#idle-hud .cmd-usage .tracker-line-warn { color: var(--warn); }
