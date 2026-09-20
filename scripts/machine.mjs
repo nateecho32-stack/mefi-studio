@@ -123,7 +123,12 @@ export function createWorkerCapacitySampler({
     } else if (memoryPressure) {
       reason = `Machine memory is low (${Math.floor(availableMemoryMB)} MB available; ${requiredMemoryMB} MB needed before another worker).`;
     } else if (lagPressure) {
-      reason = `Waiting for machine responsiveness to recover (${Math.round(lagMs)} ms lag in the latest sample).`;
+      // A latched hold clears after recoverySamples consecutive responsive
+      // readings. The latest reading may already be healthy (even 0 ms), so
+      // cite the pending readings — never the healthy sample — as the hold.
+      const progress = Math.min(recoverySamples, options.recoverySamples);
+      const lagNote = lagMs >= options.lagBusyMs ? ` after ${Math.round(lagMs)} ms lag` : "";
+      reason = `Waiting for machine responsiveness to recover (${progress} of ${options.recoverySamples} responsive readings needed${lagNote}).`;
     }
     return {
       canStart: reason === null,

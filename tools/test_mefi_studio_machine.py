@@ -90,7 +90,7 @@ class MefiStudioMachineTests(unittest.TestCase):
             repo = Path(directory) / "repo"
             lease_dir = repo / "tools" / "logs" / "_lease"
             lease_dir.mkdir(parents=True)
-            fresh = datetime.datetime.fromtimestamp((now - 10 * 60_000) / 1000, tz=datetime.UTC).replace(tzinfo=None).isoformat() + "Z"
+            fresh = datetime.datetime.fromtimestamp((now - 10 * 60_000) / 1000, tz=datetime.timezone.utc).replace(tzinfo=None).isoformat() + "Z"
             (lease_dir / "111-aaaa.json").write_text(
                 json.dumps(
                     {

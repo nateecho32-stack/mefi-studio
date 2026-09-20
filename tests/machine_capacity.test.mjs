@@ -157,6 +157,28 @@ test("sustained response lag holds new work and recovery needs two responsive re
   assert.equal((await machine.capacity()).canStart, true);
 });
 
+test("a zero-lag recovery sample explains the pending readings instead of citing healthy lag", async () => {
+  const machine = fixture();
+  machine.lag(100);
+  assert.equal((await machine.capacity()).canStart, true);
+  machine.lag(100); machine.advance();
+  const latched = await machine.capacity();
+  assert.equal(latched.canStart, false);
+  assert.equal(latched.resources.lagPressure, true);
+  // First responsive reading keeps the hold but must not blame the healthy
+  // sample: the alert "blocked despite 0 ms lag" was a self-contradiction.
+  machine.lag(0); machine.advance();
+  const recovering = await machine.capacity();
+  assert.equal(recovering.canStart, false);
+  assert.equal(recovering.resources.lagMs, 0);
+  assert.doesNotMatch(recovering.reason, /0 ms/);
+  assert.match(recovering.reason, /recover \(1 of 2 responsive readings/);
+  machine.advance();
+  const recovered = await machine.capacity();
+  assert.equal(recovered.canStart, true);
+  assert.equal(recovered.reason, null);
+});
+
 test("severe response lag immediately prevents another worker", async () => {
   const machine = fixture();
   machine.lag(300);
