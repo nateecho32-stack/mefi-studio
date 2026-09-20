@@ -1193,7 +1193,7 @@ const ASSISTANT_GROW_SYSTEM = [
   "You receive JSON facts about recent sessions plus an archive list of older session titles.",
   "Reply with STRICT minified JSON only, no markdown: {\"summary\":\"<=40 words\",\"alerts\":[],\"checkpoints\":[],\"expand\":[{\"title\":\"<=8 words\",\"prompt\":\"<=60 words\"}]}",
   "Return zero to three concrete, buildable follow-ups grounded in unfinished archive work. board.existingWork is already accepted work: do not re-propose it, even reworded. Prefer finishing those obligations; an empty expand list is correct. Never invent features or infer unfinished work solely from an old title.",
-  "Sessions and archive rows with finished:true ended normally — that work is done: never propose expand items for them, not even reworded. Only unfinished rows with real leftover obligations earn proposals.",
+  "Each recentTitles/archive session entry may carry a boolean `finished` flag sourced from the producer. finished:true means the session completed its final turn normally — that work is done: never propose expand items for it, not even reworded. Entries with finished:false (or no finished field) are the unfinished candidates: aim follow-ups only at their real leftover obligations; an empty expand list is correct when none remain.",
 ].join(" ");
 
 const ASSISTANT_IMPROVE_SYSTEM = [
@@ -1201,7 +1201,7 @@ const ASSISTANT_IMPROVE_SYSTEM = [
   "You receive the app file inventory (paths and line counts), package scripts, recent agent sessions, and file collisions.",
   'Reply with STRICT minified JSON only: {"summary":"<=40 words","alerts":[],"checkpoints":[],"expand":[{"title":"<=8 words","prompt":"<=60 words"}]}',
   "Return zero to three concrete improvements to THIS app, each naming exact files and an acceptance check. board.existingWork is already accepted work: do not re-propose it, even reworded. Prefer finishing existing obligations; an empty expand list is correct. Never propose speculative rewrites or new dependencies.",
-  "recentSessions rows with finished:true completed normally — done work: never propose expand items that treat them as unfinished.",
+  "Each recentSessions entry may carry a boolean `finished` flag sourced from the producer. finished:true means the session completed its final turn normally — done work: never propose expand items that treat it as unfinished, not even reworded. Entries with finished:false (or no finished field) are the unfinished candidates: that is where improvement suggestions come from — target their open todos and gaps.",
 ].join(" ");
 
 function startEyesWatch() {
@@ -8123,6 +8123,7 @@ async function spawnNextJob() {
                 task: { id: agentModes.requestKey(owned), title: owned.title, files: owned.files, file: owned.file, refs: owned.refs },
                 attemptKey: entry.id,
                 queue: verificationJobs,
+                baseCheck: baseCheckForProject(owned?.projectPath ?? null),
               });
               // Same partial-commit recovery as the task path: a deduped
               // retry still finds the attempt's queued job and stamps the row.
@@ -8232,6 +8233,7 @@ async function spawnNextJob() {
         if (entry.resultNote && typeof assistantModule?.scheduleVerificationOnDone === "function") {
           const planned = assistantModule.scheduleVerificationOnDone({
             resultNote: entry.resultNote, task: job.ref, attemptKey: entry.id, queue: verificationJobs,
+            baseCheck: baseCheckForProject(job.ref?.projectPath ?? null),
           });
           // Partial-commit recovery: the queue push survives a rolled-back
           // store write, so the retried settlement dedupes to null. Recover
@@ -8780,6 +8782,25 @@ const hasPackageJson = (dir) => Boolean(dir) && existsSync(path.join(dir, "packa
 // The overseer's verification queue: done reports enqueue one keyed job per
 // attempt (assistant.scheduleVerificationOnDone) and this runner drains it.
 const verificationJobs = [];
+// A project's base verification check. main.cjs only observes the project's
+// real shape on disk (package.json, a tracked test\run-check.ps1, the headless
+// LÖVE harness in test\runner plus an installed love.exe); the decision itself
+// is assistant.projectBaseCheck, the pure function the unit tests pin, so the
+// shipped choice and the tested choice cannot drift. A row with no recorded
+// project path is judged against projectRoot(), the same directory
+// runVerificationJob falls back to for its cwd, so shape and execution agree.
+function baseCheckForProject(projectPath) {
+  const root = String(projectPath || "").trim() || projectRoot();
+  const chooser = assistantModule?.projectBaseCheck;
+  if (typeof chooser !== "function") return null;
+  const shape = { hasPackageJson: false, hasRepoCheck: false, hasLoveHarness: false, repoCheckFile: "test\\run-check.ps1" };
+  try {
+    shape.hasPackageJson = existsSync(path.join(root, "package.json"));
+    shape.hasRepoCheck = existsSync(path.join(root, "test", "run-check.ps1"));
+    shape.hasLoveHarness = existsSync(path.join(root, "test", "runner", "main.lua")) && existsSync("C:\\Program Files\\LOVE\\love.exe");
+  } catch { }
+  return chooser(shape);
+}
 const VERIFICATION_COMMAND_BUDGET_MS = 15 * 60 * 1000;
 // `npm run check` is the long pole of every verification, so a strictly serial
 // drain stacked a burst of done reports into one long wait while each card

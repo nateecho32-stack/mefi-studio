@@ -455,10 +455,12 @@ app.whenReady().then(async () => {
       const section=Math.floor(i/(rate*sectionSeconds)),t=i/rate%sectionSeconds,phase=t%0.32;
       const sine=frequency=>Math.sin(2*Math.PI*frequency*t);
       const bass=0.3*sine(96)*(0.65+0.35*Math.sin(Math.PI*t/0.4)**2);
-      const kick=0.2*Math.sin(2*Math.PI*(58*phase+18*(1-Math.exp(-phase*30))/30))*Math.exp(-phase*22);
+      // A gentle decay keeps each kick's bass-band rise detectable even when
+      // load-stalled renderer frames sample the spectrum coarsely.
+      const kick=0.2*Math.sin(2*Math.PI*(58*phase+18*(1-Math.exp(-phase*30))/30))*Math.exp(-phase*13);
       // A short smooth attack avoids a discontinuity leaking an artificial
       // full-spectrum click into these deliberately isolated drum bands.
-      const attack=1-Math.exp(-phase*400);
+      const attack=1-Math.exp(-phase*150);
       const snare=0.16*(sine(1250)+sine(2180)+sine(3390))*attack*Math.exp(-phase*24);
       const hat=0.16*(sine(6100)+sine(8300))*attack*Math.exp(-phase*42);
       const mix=bass+kick+0.14*sine(960)+0.08*sine(6000)+snare+hat;
@@ -555,8 +557,9 @@ app.whenReady().then(async () => {
       const sample=()=>{
         if(window.__fixtureAudio.paused)return;
         const t=window.__fixtureAudio.currentTime%sectionSeconds;
-        // Allow the old section's release to finish before comparing voices.
-        if(t<0.35)return;
+        // Allow the old section's release and the app's own band release
+        // envelope to finish before comparing voices.
+        if(t<0.9)return;
         const audio=window.MefiIdle.audioStatus();
         for(const key of Object.keys(peaks))peaks[key]=Math.max(peaks[key],audio[key]??audio.bands[key]??0);
         frames++;

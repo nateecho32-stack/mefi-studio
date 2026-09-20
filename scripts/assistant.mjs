@@ -3334,6 +3334,40 @@ const VERIFICATION_RESULT_RE = /^(?:done|complete|completed)\b/i;
 const FOCUSED_TEST_RE = /(?:^|[\\/])(?:tests?[\\/][^\s"']+\.mjs|tools[\\/]test_[^\s"']+\.py)$/i;
 const VERIFICATION_MAX_FOCUSED = 6;
 
+// Base check per project shape. `npm run check` assumed a package.json; a
+// LÖVE project has none by design, and npm there records every Lua task
+// unverified by ENOENT. main.cjs owns file access and passes the observed
+// shape in (projectBaseCheck) — this module stays pure. A LÖVE harness runs
+// the headless runner dir; love.exe exits 0 even on a FAILING suite, so the
+// command reads the harness's result.txt itself — success is a first line
+// starting with PASS. PowerShell does the waiting: cmd.exe (spawn shell:true
+// on Windows) does not wait for GUI-subsystem executables like love.exe.
+export function loveHarnessCheckCommand({ loveRunner = "C:\\Program Files\\LOVE\\love.exe", target = "test\\runner" } = {}) {
+  const runner = String(loveRunner).trim() || "C:\\Program Files\\LOVE\\love.exe";
+  const dir = String(target).trim().replace(/[\\/]+$/, "") || "test\\runner";
+  const ps = (value) => `'${String(value).replace(/'/g, "''")}'`;
+  const verdict = `${dir}\\result.txt`;
+  return `powershell -NoProfile -Command "& ${ps(runner)} ${ps(dir)} | Out-Null; $love = $LASTEXITCODE; $line = Get-Content -LiteralPath ${ps(verdict)} -TotalCount 1; if ($love -ne 0 -or $line -notlike 'PASS*') { exit 1 }"`;
+}
+
+// The project's own named check script, e.g. test\run-check.ps1. Running a
+// tracked repo file (rather than an app-derived inline command) is what lets
+// a verification run attribute evidence to a repo file the worker can cite.
+export function repoCheckCommand({ file = "test\\run-check.ps1" } = {}) {
+  const script = (file == null ? "" : String(file)).trim().replace(/^["']+|["']+$/g, "") || "test\\run-check.ps1";
+  return `powershell -NoProfile -ExecutionPolicy Bypass -File "${script}"`;
+}
+
+export function projectBaseCheck({ hasPackageJson = null, hasLoveHarness = false, hasRepoCheck = false, repoCheckFile = null } = {}) {
+  // package.json keeps the npm default even when a repo check exists (pkg wins
+  // over wrapper); otherwise a repo-named check is the base — it is the shape
+  // whose execution lands in the verification log as an attributable command —
+  // and the bare LÖVE harness remains the fallback when no wrapper exists.
+  if (hasPackageJson !== true && hasRepoCheck) return repoCheckCommand({ file: repoCheckFile });
+  if (hasPackageJson === false && hasLoveHarness) return loveHarnessCheckCommand();
+  return "npm run check";
+}
+
 export function verificationJobKey(taskId = null, attemptKey = null) {
   return `verification:${str(taskId).trim() || "unknown"}:${str(attemptKey).trim() || "unkeyed"}`;
 }
@@ -3371,7 +3405,7 @@ export function focusedTestsForTask(task = null, resultNote = null) {
 // queued job, or null when the report is not a done claim or the attempt
 // already has its job queued (the duplicate case — recover that job with
 // findQueuedVerification, never by queueing again).
-export function scheduleVerificationOnDone({ resultNote = null, task = null, attemptKey = null, queue = [], now = Date.now() } = {}) {
+export function scheduleVerificationOnDone({ resultNote = null, task = null, attemptKey = null, queue = [], now = Date.now(), baseCheck = null } = {}) {
   const parsed = isObject(resultNote) && resultNote.parts ? resultNote : (resultNote ? parseExecutorResult(resultNote) : null);
   const resultField = str(parsed?.raw).trim();
   if (!parsed || !VERIFICATION_RESULT_RE.test(resultField)) return null;
@@ -3386,7 +3420,7 @@ export function scheduleVerificationOnDone({ resultNote = null, task = null, att
     taskId,
     attemptKey: str(attemptKey).trim() || null,
     title: `Verify: ${str(isObject(task) ? task.title : "").trim().slice(0, 80) || taskId || "attempt"}`,
-    commands: ["npm run check", ...tests],
+    commands: [str(baseCheck).trim() || "npm run check", ...tests],
     createdAt: Number(now) || Date.now(),
   };
   if (Array.isArray(queue)) queue.push(job);
@@ -3433,12 +3467,26 @@ const namesCheck = (text) => !/^(?:none|nothing|n\/a|not (?:run|tested)|skipped|
 export function isVerificationCommand(value) {
   let command = str(value).trim();
   command = command.replace(/^cd\s+(?:"[^"\r\n]+"|'[^'\r\n]+'|[^&;\r\n]+)\s*&&\s*/i, "");
+  command = command.replace(/^&\s+/, ""); // PowerShell call operator: & "C:\...\love.exe" test\runner
   if (!command || /[\r\n;|&`<>]/.test(command)) return false;
+  // A repo-named check script invoked wholesale (powershell -File x.ps1).
+  // Only known-safe host flags and a check-shaped script basename count —
+  // the whole command must be the script invocation, nothing piped on.
+  const wrapper = /^(?:powershell|pwsh)(?:\.exe)?(?:\s+(?:-NoProfile|-NonInteractive|-ExecutionPolicy\s+(?:Bypass|RemoteSigned|AllSigned|Unrestricted|Restricted)))*\s+-File\s+(?:"([^"\r\n]+\.ps1)"|'([^'\r\n]+\.ps1)'|([^\s;|&`<>]+\.ps1))(?:\s|$)/i.exec(command);
+  if (wrapper) {
+    const base = String(wrapper[1] ?? wrapper[2] ?? wrapper[3] ?? "").split(/[\\/]/).pop() ?? "";
+    return /^(?:run[-_]?check|check|test|verify)[\w.-]*\.ps1$/i.test(base);
+  }
   return /^(?:npm|pnpm|yarn)(?:\.cmd)?\s+(?:test\b|(?:run\s+)?(?:test|check|audit|lint|typecheck|build|build-booklet)(?::[\w-]+)?\b)/i.test(command)
     || /^node(?:\.exe)?\s+(?:--test\b|--check\b|(?:["']?[^\s"']*[\\/])?(?:test[_-]|verify[_-])[^\s"']+\.[cm]?js["']?(?:\s|$))/i.test(command)
     || /^(?:python[\d.]*|py)(?:\.exe)?\s+(?:-m\s+(?:pytest|unittest|compileall)\b|(?:["']?[^\s"']*[\\/])?(?:test[_-]|verify[_-])[^\s"']+\.py["']?(?:\s|$))/i.test(command)
     || /^(?:pytest|ruff|eslint|tsc|vitest|jest)(?:\.cmd|\.exe)?(?:\s|$)/i.test(command)
-    || /^(?:cargo\s+(?:test|check|clippy)|go\s+(?:test|vet)|dotnet\s+test)\b/i.test(command);
+    || /^(?:cargo\s+(?:test|check|clippy)|go\s+(?:test|vet)|dotnet\s+test)\b/i.test(command)
+    // The LÖVE headless harness: love.exe <runner-dir> runs the project's
+    // suite. The bare runner's exit code alone cannot prove PASS (love exits
+    // 0 even on a failing suite), so this counts as evidence only alongside
+    // the overseer's queued run, which reads the harness's result.txt.
+    || /^(?:"[^"\r\n]*[\\/]love\d*\.exe"|love\d*\.exe)\s+(?:"[^"\r\n]+"|'[^'\r\n]+'|[^\s;|&`<>]+)\s*$/i.test(command);
 }
 
 export function summarizeObservedChecks(checks = []) {

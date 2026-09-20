@@ -528,6 +528,24 @@ class MefiStudioEyesTests(unittest.TestCase):
         self.assertIn('reason === "stop"', self.eyes, "only a normal step-finish ends a session")
         self.assertIn("finished: finished.has(row.id)", self.eyes, "listSessions carries the finished flag")
         self.assertIn("finished: session.finished === true", self.eyes, "assistantFacts carries the finished flag")
+        # The three feed builders in main.cjs (checkpoint recentSessions, grow
+        # recentTitles, grow archive) must carry the flag into every prompt.
+        self.assertIn(
+            "recentSessions: facts.sessions.map((session) => ({ title: session.title, agent: session.agent, finished: session.finished === true, todos: session.todos.slice(0, 6) }))",
+            self.main,
+            "checkpoint feed builder carries the finished flag",
+        )
+        self.assertIn(
+            "recentTitles: base.sessions.slice(0, 6).map((session) => ({ title: session.title, finished: session.finished === true }))",
+            self.main,
+            "grow recent-titles feed builder carries the finished flag",
+        )
+        self.assertIn(
+            ".map((session) => ({ id: session.id, title: session.title, agent: session.agent, finished: session.finished === true }))",
+            self.main,
+            "grow archive feed builder carries the finished flag",
+        )
+        self.assertEqual(3, self.main.count("finished: session.finished === true"), "exactly the three main.cjs feed builders carry the finished flag")
         self.assertIn("never alert it as idle, stalled, or unscoped", self.main, "the review prompt protects finished sessions")
         self.assertIn("Only sessions whose facts show open todos and no finished marker can be stale", self.main, "stale claims still need open todos")
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isVerificationCommand, summarizeObservedChecks, verifyCompletion } from "../scripts/assistant.mjs";
+import { isVerificationCommand, summarizeObservedChecks, verifyCompletion, scheduleVerificationOnDone, projectBaseCheck, loveHarnessCheckCommand, repoCheckCommand } from "../scripts/assistant.mjs";
 
 const check = (command = "npm test", extra = {}) => ({ command, status: "completed", exitCode: 0, startedAt: 1000, finishedAt: 2000, passed: true, ...extra });
 
@@ -37,4 +37,92 @@ test("missing and truncated command metadata never fabricates a passing check", 
   for (const row of [check("npm test", { commandTruncated: true }), check("npm test", { startedAt: 0 }), check("npm test", { passed: null }), check("npm test", { exitCode: "0" })]) {
     assert.equal(verifyCompletion({ verdictOk: true, hasSession: true, observedChecks: [row] }).state, "unverified");
   }
+});
+
+test("LÖVE harness runner invocations count as check evidence", () => {
+  for (const command of [
+    '& "C:\\Program Files\\LOVE\\love.exe" test\\runner',
+    '"C:\\Program Files\\LOVE\\love.exe" test\\runner',
+    "love.exe test\\runner",
+    "love.exe \"test folder\"",
+  ]) {
+    assert.equal(isVerificationCommand(command), true, command);
+  }
+  assert.equal(isVerificationCommand('& "C:\\Program Files\\LOVE\\love.exe" test\\runner && echo passed'), false, "a chained runner is not a direct check");
+  assert.equal(isVerificationCommand("love.exe"), false, "a runner with no target proves nothing");
+});
+
+test("LÖVE projects schedule the harness runner as their base check", () => {
+  const love = loveHarnessCheckCommand();
+  assert.ok(love.includes("love.exe"), love);
+  assert.ok(love.includes("result.txt"), love);
+  assert.ok(love.includes("PASS*"), love);
+  assert.equal(projectBaseCheck({ hasPackageJson: false, hasLoveHarness: true }), love);
+  assert.equal(projectBaseCheck({ hasPackageJson: true, hasLoveHarness: true }), "npm run check");
+  assert.equal(projectBaseCheck({ hasPackageJson: false, hasLoveHarness: false }), "npm run check");
+  assert.equal(projectBaseCheck(), "npm run check");
+  const task = { id: "t1", title: "lua work", projectPath: "C:/demo" };
+  const done = "MEFI_RESULT: done: suite green; remaining: none";
+  const job = scheduleVerificationOnDone({
+    resultNote: done, task, attemptKey: "run_1_a", queue: [],
+    baseCheck: projectBaseCheck({ hasPackageJson: false, hasLoveHarness: true }),
+  });
+  assert.equal(job.commands[0], love);
+  assert.equal(job.commands.length, 1, "a LÖVE task with no focused tests schedules only the harness run");
+  const npmJob = scheduleVerificationOnDone({ resultNote: done, task, attemptKey: "run_2_a", queue: [] });
+  assert.equal(npmJob.commands[0], "npm run check", "the default base check stays npm run check");
+});
+
+test("a repo-named check script counts as check evidence when invoked wholesale", () => {
+  for (const command of [
+    'powershell -NoProfile -ExecutionPolicy Bypass -File "test\\run-check.ps1"',
+    'powershell -NoProfile -File test/run-check.ps1',
+    'pwsh -NoProfile -ExecutionPolicy RemoteSigned -File "tools/check_build.ps1"',
+    "powershell -File verify_tree.ps1",
+  ]) {
+    assert.equal(isVerificationCommand(command), true, command);
+  }
+  for (const command of [
+    "powershell -File evil.ps1", // basename is not check-shaped
+    "powershell -File tools/report.ps1", // neither is this one
+    'powershell -NoProfile -File test/run-check.ps1 | Out-Null', // piped tail
+    'powershell -Command "npm test" -File test/run-check.ps1', // -Command is not a safe host flag
+    "powershell", // no script at all
+  ]) {
+    assert.equal(isVerificationCommand(command), false, command);
+  }
+});
+
+test("LÖVE projects prefer the tracked repo check over the derived harness command", () => {
+  const wrapper = repoCheckCommand({});
+  assert.ok(wrapper.includes("run-check.ps1"), wrapper);
+  assert.ok(wrapper.startsWith("powershell"), wrapper);
+  assert.equal(repoCheckCommand({ file: null }), wrapper, "a null file falls back to the standard wrapper");
+  assert.equal(projectBaseCheck({ hasPackageJson: false, hasRepoCheck: true }), wrapper);
+  assert.equal(projectBaseCheck({ hasPackageJson: false, hasRepoCheck: true, repoCheckFile: "test\\run-check.ps1" }), repoCheckCommand({ file: "test\\run-check.ps1" }));
+  assert.equal(projectBaseCheck({ hasPackageJson: true, hasRepoCheck: true }), "npm run check", "pkg wins over wrapper");
+  assert.equal(projectBaseCheck({ hasPackageJson: false, hasRepoCheck: false, hasLoveHarness: true }), loveHarnessCheckCommand(), "no wrapper falls back to the harness");
+  const task = { id: "t2", title: "lua work", projectPath: "C:/demo" };
+  const done = "MEFI_RESULT: done: suite green; remaining: none";
+  const job = scheduleVerificationOnDone({
+    resultNote: done, task, attemptKey: "run_3_a", queue: [],
+    baseCheck: projectBaseCheck({ hasPackageJson: false, hasRepoCheck: true }),
+  });
+  assert.equal(job.commands[0], wrapper);
+  assert.equal(isVerificationCommand(job.commands[0]), true, "the scheduled wrapper run is recorded check evidence");
+});
+
+test("main.cjs delegates the base-check decision to projectBaseCheck and judges pathless rows against projectRoot", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const main = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
+  const start = main.indexOf("function baseCheckForProject(");
+  assert.ok(start > 0, "main.cjs defines baseCheckForProject");
+  // main.cjs is CRLF on disk; find the function's closing brace either way.
+  const end = main.slice(start).search(/\r?\n\}\r?\n/);
+  assert.ok(end > 0, "baseCheckForProject has a closing brace");
+  const body = main.slice(start, start + end);
+  assert.match(body, /assistantModule\?\.projectBaseCheck/, "the shipped chooser is the tested pure function, not a second copy of its rules");
+  assert.doesNotMatch(body, /return "npm run check"/, "main.cjs never hardcodes the npm default beside the pure chooser");
+  assert.match(body, /\|\| projectRoot\(\)/, "a row without a project path is judged against the same root the runner uses as cwd");
+  for (const flag of ["hasPackageJson", "hasRepoCheck", "hasLoveHarness"]) assert.match(body, new RegExp(`shape\\.${flag} = existsSync\\(`), `${flag} is observed on disk`);
 });
