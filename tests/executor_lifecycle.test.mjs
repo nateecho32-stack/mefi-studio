@@ -411,9 +411,11 @@ test("a failed capacity read parks on resources and stops swallowing the error",
     // all heal by restoring the real module.
     restore = (host) => { host.env.getAssistant = async () => assistant; },
     expected = "missing export getAssistant\\(\\)\\.createMachineLagGate",
+    errorText = null,
   } of [
     { label: "a missing assistant module", breakIt: (host) => { host.env.getAssistant = async () => undefined; } },
     { label: "an assistant module without the gate export", breakIt: (host) => { host.env.getAssistant = async () => ({ ...assistant, createMachineLagGate: undefined }); } },
+    { label: "an assistant module whose getter throws", breakIt: (host) => { host.env.getAssistant = async () => { throw new Error("assistant bus down"); }; }, errorText: "assistant bus down" },
     {
       label: "a machine module without the capacity export",
       breakIt: (host) => { host.env.getMachine = async () => ({ workerCapacity: undefined, leaseStatus: async () => ({ exclusive: false }) }); },
@@ -431,6 +433,7 @@ test("a failed capacity read parks on resources and stops swallowing the error",
     assert.equal(host.autopilot.capacity.reason, "machine measurements unavailable; retrying");
     assert.equal(capacityFaults(), 1, `${label}: the swallowed error must surface exactly once`);
     assert.match(logs[0], new RegExp(expected));
+    if (errorText !== null) assert.match(logs[0], new RegExp(errorText), `${label}: the swallowed error's own message must surface`);
     await host.env.spawnNextJob();
     assert.equal(capacityFaults(), 1, `${label}: retries must not spam the log while the export is missing`);
     restore(host);
