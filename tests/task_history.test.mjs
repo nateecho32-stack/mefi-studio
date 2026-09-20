@@ -47,6 +47,13 @@ test("old requests retain project identity and distinguish worker-reported check
   assert.equal(completedRequestTask({}, verdict), null);
 });
 
+test("recorded test-only completion keeps its evidence type and counts on the Done card", () => {
+  const task = completedRequestTask(request, { ...verdict, evidence: { namedChecks: true, observedChecks: { total: 2, passed: 2, failed: 0, pending: 0, outputExcerpt: "private output" } } });
+  assert.equal(task.verification.evidenceKind, "runner-observed-checks");
+  assert.deepEqual(task.verification.checks, { passed: 2, failed: 0, pending: 0 });
+  assert.equal(JSON.stringify(task.verification).includes("private output"), false);
+});
+
 test("housekeeping preserves distinct completed attempts with the same title", () => {
   const first = completedRequestTask(request, verdict, { now: 300 });
   const second = completedRequestTask({ ...request, lastAttempt: { ...request.lastAttempt, runId: "run-2" } }, verdict, { now: 400 });

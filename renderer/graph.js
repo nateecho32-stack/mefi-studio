@@ -368,7 +368,7 @@
   }
 
   function mount(doc, options = {}) {
-    const speeds = options.speeds ?? {};
+    let speeds = options.speeds ?? {};
     const mapCanvas = document.getElementById("map");
     const tip = document.getElementById("map-tip");
     const taskSelect = document.getElementById("task-select");
@@ -381,6 +381,10 @@
     let tableSort = { key: "quality", dir: -1 };
 
     function redraw() {
+      // The catalog map sits inside a closed disclosure beneath Model Lab.
+      // Its canvases and tables only need work when that surface is visible.
+      const catalog = document.getElementById("model-lab-catalog");
+      if (document.getElementById("tab-graph")?.hidden || (catalog && !catalog.open)) return;
       points = drawValueMap(mapCanvas, tip, doc);
       drawHeatmap(document.getElementById("heat"), doc);
       drawPools(document.getElementById("pools"), doc);
@@ -409,6 +413,7 @@
     });
 
     taskSelect.addEventListener("change", () => renderRank(rankEl, taskSelect, doc));
+    document.getElementById("model-lab-catalog")?.addEventListener("toggle", (event) => { if (event.target.open) redraw(); });
     document.querySelectorAll("#table th").forEach((th) => {
       th.addEventListener("click", () => {
         const key = th.dataset.k;
@@ -419,7 +424,15 @@
 
     return {
       redraw,
-      setSpeeds: (next) => Object.assign(speeds, next ?? {}),
+      setSpeeds: (next) => { speeds = next ?? {}; },
+      setDoc: (next) => {
+        doc = next;
+        const selected = taskSelect.value;
+        taskSelect.replaceChildren(...doc.taskPresets.map((preset) => {
+          const option = document.createElement("option"); option.value = preset.id; option.textContent = preset.name; return option;
+        }));
+        if (doc.taskPresets.some((preset) => preset.id === selected)) taskSelect.value = selected;
+      },
     };
   }
 

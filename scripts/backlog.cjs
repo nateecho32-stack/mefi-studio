@@ -1,7 +1,26 @@
 // One eligibility vocabulary for dispatch and the project workbench. Pure:
 // reading a backlog never changes work, retries it, or starts a model call.
+const { createHash } = require("node:crypto");
 const key = (value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 const rows = (value) => Array.isArray(value) ? value.filter((row) => row && typeof row === "object") : [];
+
+// Approval names the saved work, not an editable status flag. Include nested
+// obligations and references; claim timestamps and run telemetry are not scope.
+const BUILD_SCOPE_FIELDS = ["id", "projectId", "projectPath", "title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "ideas", "dependsOn", "members", "remaining", "blockers", "acceptance", "acceptanceCriteria", "requirements", "constraints", "scope", "sessions", "problemFiles", "source", "parent", "parentRunId", "fromRun", "handoffId", "depth", "planningId", "planningSpecId", "planningTaskId"];
+function buildScope(item) {
+  const canonical = (value) => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object"
+    ? Object.fromEntries(Object.keys(value).sort().map((name) => [name, canonical(value[name])])) : value;
+  const scope = Object.fromEntries(BUILD_SCOPE_FIELDS.filter((name) => item?.[name] !== undefined).map((name) => [name, item[name]]));
+  return createHash("sha256").update(JSON.stringify(canonical(scope))).digest("hex");
+}
+
+function hasBuildApproval(item) {
+  return item?.buildApproval?.version === 1 && item.buildApproval.scope === buildScope(item);
+}
+
+function buildAllowed(item, { autoBuild = true } = {}) {
+  return autoBuild !== false || hasBuildApproval(item);
+}
 
 function dependencyIds(item) {
   return [...new Set(Array.isArray(item?.dependsOn) ? item.dependsOn.filter((id) => typeof id === "string" && id.trim()).map((id) => id.trim()) : [])];
@@ -50,10 +69,13 @@ function validateDependencies(tasks, taskId, dependsOn) {
   return { ok: true, dependsOn: next.dependsOn };
 }
 
-function workState(item, now = Date.now(), { tasks = null } = {}) {
+function workState(item, now = Date.now(), { tasks = null, autoBuild = true } = {}) {
   if (item.absorbedInto) return { stage: "grouped", reason: "Included in a task group", groupId: item.absorbedInto };
   if (item.status === "done" || item.status === "archived") return { stage: "done", reason: item.status === "archived" ? "Archived completion" : "Completed" };
-  if (item.status === "awaiting_verification" || item.status === "verifying") return { stage: "review", reason: "Run finished; checking its completion evidence" };
+  if (item.status === "awaiting_verification" || item.status === "verifying") {
+    if (item.handoffState?.pending > 0) return { stage: item.handoffState.state === "blocked" ? "blocked" : "waiting", reason: item.handoffState.reason || "Waiting for delegated work to finish", blockedBy: "handoffs", canRetry: false, childTaskIds: item.handoffState.childTaskIds ?? [] };
+    return { stage: "review", reason: "Run finished; checking its completion evidence" };
+  }
   if (item.status === "active" || item.status === "running") return { stage: "running", reason: "A worker holds this task" };
   const dependency = Array.isArray(tasks) ? dependencyState(item, tasks) : { dependencies: [] };
   if (dependency.stage) return dependency;
@@ -64,13 +86,14 @@ function workState(item, now = Date.now(), { tasks = null } = {}) {
   if (Number(item.runFailures) >= 5) return { stage: "blocked", reason: `${Number(item.runFailures)} attempts failed. Review the error, then retry.` };
   if (Number(item.nextRunAt) > now) return { stage: "cooling", reason: "Waiting before another attempt", retryAt: Number(item.nextRunAt) };
   if (item.status && item.status !== "open" && item.status !== "pending" && item.status !== "queued") return { stage: "blocked", reason: `Held (${String(item.status).slice(0, 40)})` };
+  if (!buildAllowed(item, { autoBuild })) return { stage: "approval", reason: "Verify first: review this task and approve its build", canApprove: true, buildScope: buildScope(item), ...dependency };
   return { stage: "ready", reason: item.pin ? "You chose this to go next" : "Ready for an available worker", ...dependency };
 }
 
-function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], compare, ideaEligible, now = Date.now(), paused = false, draining = false, waiting = null, lastError = null, parkedUntil = 0 } = {}) {
+function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], compare, ideaEligible, now = Date.now(), paused = false, draining = false, waiting = null, lastError = null, parkedUntil = 0, autoBuild = true } = {}) {
   const board = rows(tasks);
   const heldIds = new Set(rows(jobs).map((job) => job.taskId).filter(Boolean));
-  const taskStates = board.map((task) => ({ id: task.id, kind: "task", title: String(task.title ?? "Untitled task"), dependencies: dependencyState(task, board).dependencies, ...(heldIds.has(task.id) ? { stage: "running", reason: "A worker is building this task" } : workState(task, now, { tasks: board })) }));
+  const taskStates = board.map((task) => ({ id: task.id, kind: "task", title: String(task.title ?? "Untitled task"), dependencies: dependencyState(task, board).dependencies, ...(heldIds.has(task.id) ? { stage: "running", reason: "A worker is building this task" } : workState(task, now, { tasks: board, autoBuild })) }));
   const represented = new Set(board.filter((task) => task.status !== "archived").map((task) => key(task.title)).filter(Boolean));
   const uniqueRequests = rows(requests).filter((request) => {
     const titleKey = key(request.title || request.prompt);
@@ -78,9 +101,9 @@ function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], co
     if (titleKey) represented.add(titleKey);
     return true;
   });
-  const requestStates = uniqueRequests.map((request, index) => ({ id: request.id ?? `request_${index}`, kind: "request", title: String(request.title || request.prompt || "Queued request").slice(0, 120), ...workState(request, now, { tasks: board }) }));
+  const requestStates = uniqueRequests.map((request, index) => ({ id: request.id ?? `request_${index}`, kind: "request", title: String(request.title || request.prompt || "Queued request").slice(0, 120), ...workState(request, now, { tasks: board, autoBuild }) }));
   const all = [...taskStates, ...requestStates];
-  const counts = Object.fromEntries(["ready", "running", "review", "blocked", "cooling", "done", "grouped", "waiting"].map((stage) => [stage, all.filter((row) => row.stage === stage).length]));
+  const counts = Object.fromEntries(["ready", "running", "review", "blocked", "cooling", "done", "grouped", "waiting", "approval"].map((stage) => [stage, all.filter((row) => row.stage === stage).length]));
   counts.requests = requestStates.filter((item) => item.stage !== "done").length;
   const pendingIdeas = rows(ideas).filter((idea) => !idea.taskId && (!idea.status || ["new", "keep"].includes(idea.status)));
   counts.ideas = pendingIdeas.length;
@@ -93,16 +116,16 @@ function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], co
   if (Number(parkedUntil) > now) retryTimes.push(Number(parkedUntil));
   const nextRetryAt = retryTimes.length ? Math.min(...retryTimes) : null;
   const hold = Number(parkedUntil) > now ? "Worker startup is cooling down after repeated failures" : paused ? "Paused. Current workers can finish; new work will wait." : waiting || (lastError && !counts.running ? String(lastError).slice(0, 240) : null);
-  const summary = hold || (counts.running ? `${counts.running} building · ${counts.ready} ready next` : counts.ready ? `${counts.ready} ready to work on` : counts.review ? `${counts.review} finished attempts awaiting verification` : counts.eligibleIdeas ? `${counts.eligibleIdeas} ideas ready to become tasks` : counts.blocked ? `${counts.blocked} tasks need your review` : counts.waiting ? `${counts.waiting} tasks waiting for prerequisites` : counts.cooling ? `${counts.cooling} tasks waiting before retry` : "Existing work is caught up");
-  return { counts, taskStates, next: ordered.slice(0, 8).map(({ state }) => state), blocked: all.filter((row) => row.stage === "blocked").slice(0, 40), paused, draining, mode: draining ? "backlog" : "balanced", waiting: hold, summary, nextRetryAt };
+  const summary = hold || (counts.running ? `${counts.running} building · ${counts.ready} ready next` : counts.ready ? `${counts.ready} ready to work on` : counts.approval ? `${counts.approval} tasks waiting for your approval` : counts.review ? `${counts.review} finished attempts awaiting verification` : counts.eligibleIdeas ? `${counts.eligibleIdeas} ideas ready to become tasks` : counts.blocked ? `${counts.blocked} tasks need your review` : counts.waiting ? `${counts.waiting} tasks waiting for prerequisites` : counts.cooling ? `${counts.cooling} tasks waiting before retry` : "Existing work is caught up");
+  return { counts, taskStates, next: ordered.slice(0, 8).map(({ state }) => state), blocked: all.filter((row) => row.stage === "blocked").slice(0, 40), approval: all.filter((row) => row.stage === "approval").slice(0, 40), autoBuild: autoBuild !== false, paused, draining, mode: draining ? "backlog" : "balanced", waiting: hold, summary, nextRetryAt };
 }
 
 function retryTask(task, now = Date.now()) {
   const next = { ...task, status: "open", updatedAt: now, pin: true, pinAt: now };
-  for (const name of ["runFailures", "nextRunAt", "lastRunError", "verifyAttempts", "verification", "verificationReceiptId", "doneAt", "runId", "lease"]) delete next[name];
+  for (const name of ["runFailures", "nextRunAt", "lastRunError", "verifyAttempts", "verification", "verificationReceiptId", "doneAt", "runId", "lease", "buildApproval"]) delete next[name];
   // lastAttempt, remaining, refs, and logs are evidence, not retry switches.
   next.logs = [...rows(task.logs), { at: now, kind: "status", text: "Retry requested — previous result and remaining work retained" }].slice(-40);
   return next;
 }
 
-module.exports = { workState, summarizeBacklog, retryTask, dependencyState, dependencyIds, completedTask, validateDependencies };
+module.exports = { workState, summarizeBacklog, retryTask, dependencyState, dependencyIds, completedTask, validateDependencies, buildScope, hasBuildApproval, buildAllowed };

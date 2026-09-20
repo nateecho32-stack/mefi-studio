@@ -143,6 +143,7 @@ test("tree rail: arrows move the focus, Enter/Space activate, ARIA follows", asy
   const proxy = rail.children.find((child) => child.id === "tree-kbd-item");
   assert.ok(proxy, "the hidden treeitem proxy exists in the rail");
   assert.equal(proxy.attrs.role, "treeitem");
+  assert.ok(String(proxy.attrs["aria-label"] ?? "").length > 0, "the owned treeitem carries a label before the first navigation");
 
   const keydown = (key) => {
     const event = { key, preventDefault() { event.defaultPrevented = true; } };
@@ -195,6 +196,16 @@ test("tree rail: arrows move the focus, Enter/Space activate, ARIA follows", asy
   keydown("Escape");
   assert.equal(tree.focused(), null);
   assert.equal(canvas.attrs["aria-activedescendant"], undefined);
+
+  // Tab reachability: the canvas (tabindex 0, labelled, asserted above) is the
+  // rail's one tab stop. Tab itself is never eaten — focus must be able to
+  // enter and leave the rail — and the freshly tabbed-in tree answers the
+  // first arrow from the root.
+  const tab = keydown("Tab");
+  assert.ok(!tab.defaultPrevented, "Tab keeps its native focus movement");
+  keydown("ArrowDown");
+  assert.equal(tree.focused(), "__root__");
+  assert.equal(canvas.attrs["aria-activedescendant"], "tree-kbd-item");
 
   // programmatic focus (tests, dev tools) lands on the same path
   tree.focusNode("s2");

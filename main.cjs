@@ -2,7 +2,7 @@
 // Window + IPC for the catalog, the LÖVE launcher, and the optional speed probe.
 
 const { spawn } = require("node:child_process");
-const { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } = require("node:fs");
+const { existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } = require("node:fs");
 const { appendFile, copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } = require("node:fs/promises");
 const os = require("node:os");
 const crypto = require("node:crypto");
@@ -12,8 +12,14 @@ const { resolveStudioPaths } = require("./scripts/paths.cjs");
 const { createProjects } = require("./scripts/projects.cjs");
 const backlog = require("./scripts/backlog.cjs");
 const taskContext = require("./scripts/task-context.cjs");
+const taskHandoffs = require("./scripts/task-handoffs.cjs");
+const { createPlanningStore } = require("./scripts/planning.cjs");
+const { createPlanningService } = require("./scripts/planning-service.cjs");
 const { applyIdeaAction } = require("./scripts/idea-actions.cjs");
 const { createMusicRecommender } = require("./scripts/music-recommendations.cjs");
+const { attachRendererRecovery } = require("./scripts/renderer-recovery.cjs");
+const { createModelPerformanceStore } = require("./scripts/model-performance.cjs");
+const { buildContext } = require("./scripts/context-manager.cjs");
 const electron = require("electron");
 
 if (typeof electron === "string" || !electron.app) {
@@ -82,8 +88,10 @@ ipcMain.handle = handleProjectIpc;
 app.setName("Mefi's Studio AI+");
 
 let window = null;
+let rendererRecovery = null;
 let activeChild = null;
 let eyesTimer = null;
+let eyesWatchGeneration = 0;
 let eyesLastTs = Date.now();
 
 // Script modules load through one versioned importer so a live update can
@@ -114,13 +122,18 @@ function invalidateModules(rels) {
 
 async function getEyes() {
   const project = projects.current();
-  // NOTE: the board's SQLite authority (enableBoardStore) is intentionally
-  // NOT activated yet — the patch is still half-landed: boardRowSlots()
-  // returns 10/11 slots for tasks/ideas against an 11-placeholder insert,
-  // the schema lacks created_at/updated_at on requests and ideas, and a
-  // stale ~/.local/share/mefi-studio/board.db already carries migrated=1,
-  // so enabling today makes every board read fail to an empty list. When
-  // the store passes a read/write round trip, activate it here:
+  // DECISION (store fork, task_14a706e1968b2813): for this repo app the
+  // authoritative board is data/*.json. The home board.db
+  // (~/.local/share/mefi-studio/board.db) is a stale fork — 38 tasks/151
+  // already-drained ideas, newest row hours older than the views' 43/22 —
+  // and its migrated=1 flag would make it win (and export itself over the
+  // fresher views) the moment the store were enabled. So the store stays
+  // OFF here. Its code is complete (schema v3, round-trip + contested-writer
+  // tests in tests/board_store.test.mjs), and eyes.mjs's fork guard now
+  // degrades any stray board-store-enabled process (e.g.
+  // scripts/reconcile-board.mjs without --data) loudly back to file mode
+  // instead of clobbering the views. Enabling requires an explicit fresh
+  // migration: archive the stale board.db, then
   //   eyes.enableBoardStore(eyes.defaultBoardConfig(STUDIO_ROOT));
   return projects.eyes(await loadModule("scripts/eyes.mjs"), project);
 }
@@ -300,13 +313,27 @@ function updateEvent(patch) {
   return { phase: "idle", kind: null, files: [], error: null, reason: null, auto: true, watching: Boolean(updater), at: Date.now(), ...patch };
 }
 
+// A dead renderer can leave executeJavaScript pending forever. View probes must
+// never prevent the host from recovering, updating, or shutting down.
+async function rendererValue(script, fallback = null, timeoutMs = 1500) {
+  if (!window || window.isDestroyed() || window.webContents.isDestroyed?.()) return fallback;
+  let timer;
+  try {
+    return await Promise.race([
+      window.webContents.executeJavaScript(script, true),
+      new Promise((resolve) => { timer = setTimeout(() => resolve(fallback), timeoutMs); }),
+    ]);
+  } catch { return fallback; }
+  finally { clearTimeout(timer); }
+}
+
 // The renderer writes localStorage["mefiStudio.resume"] so the next boot lands
 // back on the Command view / sheet the user was looking at. Awaited, so the
 // write always happens before the page goes away.
 async function saveResume() {
   if (!window || window.isDestroyed()) return;
   try {
-    await window.webContents.executeJavaScript("window.MefiNav?.saveResume?.() ?? null", true);
+    await rendererValue("window.MefiNav?.saveResume?.() ?? null");
   } catch {}
 }
 
@@ -326,13 +353,14 @@ async function applyStyle(files) {
   if (!window || window.isDestroyed()) return false;
   let css;
   try {
-    css = await readFile(path.join(STUDIO_ROOT, "renderer", "styles.css"), "utf8");
+    css = (await Promise.all(["styles.css", "music.css", "planning.css"].map((name) =>
+      readFile(path.join(STUDIO_ROOT, "renderer", name), "utf8")))).join("\n");
   } catch {
     return false;
   }
   let applied = false;
   try {
-    applied = (await window.webContents.executeJavaScript(`window.MefiNav?.applyStyles?.(${JSON.stringify(css)}) === true`, true)) === true;
+    applied = (await rendererValue(`window.MefiNav?.applyStyles?.(${JSON.stringify(css)}) === true`, false)) === true;
   } catch {
     applied = false;
   }
@@ -378,7 +406,7 @@ async function awaitPause(kind) {
     if (window.isMinimized() || !window.isVisible() || !window.isFocused()) return;
     let activity = null;
     try {
-      activity = await window.webContents.executeJavaScript("window.MefiNav?.activity?.() ?? null", true);
+      activity = await rendererValue("window.MefiNav?.activity?.() ?? null");
     } catch {}
     if (!activity || typeof activity !== "object") return;
     const idleMs = Number(activity.idleMs) || 0;
@@ -389,11 +417,22 @@ async function awaitPause(kind) {
 
 // counted: false is the manual "Restart now" — the user, not a loop. Only
 // restarts the updater itself asked for may feed the restart-loop guard.
-// How long a live update may sit behind running build jobs before it goes
-// through regardless. Long enough for a normal run, short enough that a busy
-// builder cannot pin the app on stale code.
-const UPDATE_MAX_HOLD_MS = 15 * 60000;
-let restartHeldSince = 0;
+// A pending restart drains the current workers without changing the user's
+// saved run/pause preference. Their existing timeout/recovery rules still apply.
+let updateDrainRequested = false;
+function executorUpdateHold() {
+  return updateDrainRequested ? "Studio update waiting for current builds to finish" : null;
+}
+
+function handleUpdateEvent(payload) {
+  if (["watching", "held", "error", "stopped"].includes(payload.phase) ||
+      (payload.phase === "pending" && payload.reason === "auto-restart is off")) {
+    const wasDraining = updateDrainRequested;
+    updateDrainRequested = false;
+    if (wasDraining) assistantAskForWork("Studio update hold cleared");
+  }
+  send("update:event", payload);
+}
 
 async function applyRestart(files, { counted = true } = {}) {
   // A relaunch taskkills the LOVE child (see the process exit hook); park the
@@ -404,18 +443,11 @@ async function applyRestart(files, { counted = true } = {}) {
   // it spawned — so the loop was shooting itself: agent edits main.cjs, app
   // restarts ~20 s later, agent dies, nothing ever finished. The deferral is
   // safe because a run is hard-killed at EXECUTOR_KILL_MS, so it always ends.
-  if (autopilot.jobs.length) {
-    // Bounded, though: with three slots and a full queue the builder is rarely
-    // idle, and a hold with no ceiling would mean core changes never land at
-    // all. Past the ceiling the restart wins and the runs are re-queued by
-    // housekeeping, which rescues any claim whose job is gone.
-    restartHeldSince = restartHeldSince || Date.now();
-    if (Date.now() - restartHeldSince < UPDATE_MAX_HOLD_MS) {
-      return { deferred: true, reason: `${autopilot.jobs.length} build job(s) running` };
-    }
-    logLine(`[update] restart held ${Math.round((Date.now() - restartHeldSince) / 60000)}m behind the builders — applying anyway`);
+  const running = autopilot.jobs.filter((job) => !job.finished || job.settlementPending);
+  if (running.length) {
+    updateDrainRequested = true;
+    return { deferred: true, reason: `${running.length} build job(s) finishing before update; new dispatches wait` };
   }
-  restartHeldSince = 0;
   const settings = await readSettings();
   const at = Date.now();
   const recent = (settings.update?.restarts ?? []).filter((stamp) => at - stamp < 60000);
@@ -475,7 +507,7 @@ async function startUpdateWatch() {
         return false;
       }
     },
-    onEvent: (payload) => send("update:event", payload),
+    onEvent: handleUpdateEvent,
   });
   await updater.start();
   logLine(`[update] watching ${UPDATE_SOURCE_ROOT}`);
@@ -485,6 +517,7 @@ async function startUpdateWatch() {
 function stopUpdateWatch() {
   if (updater) updater.stop();
   updater = null;
+  updateDrainRequested = false;
   return { ok: true, running: false };
 }
 
@@ -503,16 +536,26 @@ async function queueRequests(additions) {
   // two filing passes can no longer both see "absent" and queue the same
   // request twice. The title key catches a refiling under a lightly different
   // wording; the exact source+prompt pair remains for identical snapshots.
-  additions = additions.map((row) => projects.stamp(row));
+  additions = additions.map((row) => {
+    const { buildApproval: _untrustedApproval, buildScope: _viewScope, ...request } = row;
+    return projects.stamp(request);
+  });
   const patch = await mutateBoard((board) => {
-    const fresh = additions.filter(
-      (request) =>
-        !board.requests.some(
+    const fresh = [];
+    for (const request of additions) {
+      const alreadyQueued = board.requests.some(
           (item) =>
             (item.source === request.source && item.prompt === request.prompt) ||
             (request.title && workTitleKey(item.title) && workTitleKey(item.title) === workTitleKey(request.title))
-        )
-    );
+        );
+      // Suppress repeated observations within this batch, while retaining
+      // differently scoped requests even when their display titles match.
+      const repeated = fresh.some((item) => item.prompt === request.prompt &&
+        ((request.prompt && item.source === request.source) || (request.title && workTitleKey(item.title) === workTitleKey(request.title))));
+      if (!alreadyQueued && !repeated) {
+        fresh.push(request);
+      }
+    }
     if (!fresh.length) return { added: 0 };
     board.requests = [...fresh, ...board.requests];
     return { requests: board.requests, added: fresh.length, accepted: fresh };
@@ -701,15 +744,27 @@ const ASSISTANT_IMPROVE_SYSTEM = [
 
 function startEyesWatch() {
   if (eyesTimer) return { ok: true, running: true };
+  const generation = ++eyesWatchGeneration;
   let idleTicks = 0;
+  const schedule = (ms) => {
+    if (generation !== eyesWatchGeneration) return;
+    eyesTimer = setTimeout(() => projects.run(projects.active(), tick), ms);
+    eyesTimer.unref?.();
+  };
   const tick = async () => {
+    if (generation !== eyesWatchGeneration) return;
     // Hidden or minimized windows need no live feed; skip the DB query.
     if (window && (window.isMinimized() || !window.isVisible())) {
-      eyesTimer = setTimeout(() => projects.run(projects.active(), tick), 5000);
+      schedule(5000);
       return;
     }
+    const projectId = projects.active().id;
     try {
       const eyes = await getEyes();
+      // Stop/restart or a project switch may land while the module is loading.
+      // An obsolete read must neither advance the new cursor nor revive a poll.
+      if (generation !== eyesWatchGeneration || projectId !== projects.active().id) return;
+      if (window && (window.isMinimized() || !window.isVisible())) return;
       const activity = eyes.activitySince({ since: eyesLastTs });
       if (activity.length) {
         eyesLastTs = activity[activity.length - 1].time;
@@ -720,17 +775,20 @@ function startEyesWatch() {
         idleTicks += 1;
       }
     } catch (error) {
-      send("eyes:error", String(error.message ?? error));
+      if (generation === eyesWatchGeneration && projectId === projects.active().id) {
+        send("eyes:error", String(error.message ?? error));
+      }
+    } finally {
+      // Back off to 5s when the machine has been quiet for two minutes.
+      schedule(idleTicks > 60 ? 5000 : 2000);
     }
-    // Back off to 5s when the machine has been quiet for two minutes.
-    eyesTimer = setTimeout(() => projects.run(projects.active(), tick), idleTicks > 60 ? 5000 : 2000);
   };
-  eyesTimer = setTimeout(() => projects.run(projects.active(), tick), 500);
-  eyesTimer.unref?.();
+  schedule(500);
   return { ok: true, running: true };
 }
 
 function stopEyesWatch() {
+  eyesWatchGeneration += 1;
   if (eyesTimer) clearTimeout(eyesTimer);
   eyesTimer = null;
   return { ok: true, running: false };
@@ -797,6 +855,7 @@ const ASSISTANT_IDEAS_SYSTEM = [
   "Only use the provided candidate lines. Merge near-duplicates and group thematically.",
   "The existingTitles list is what is already recorded — do not re-propose any of it, not even reworded.",
   "Return only genuine, actionable proposals; returning an empty ideas list is correct when every candidate is already represented, is progress narration, or describes something already done.",
+  "Never return sentence fragments, progress narration (\"let me check\", \"now updating\"), status reports (\"tests pass\", \"all green\"), or bare questions as ideas — those are extraction artifacts, and an empty ideas list is the right answer when the candidates are only that.",
   "openTasks is the live board: a taskGroup folds 2-8 of them that are one body of work — paraphrases, duplicates, or steps of a single job — into one plan, so name each task by its exact openTasks title. Never group unrelated work or a singleton; omit taskGroups entirely when the board is already tidy.",
 ].join(" ");
 
@@ -816,6 +875,7 @@ const ASSISTANT_CHAT_SYSTEM = [
   "You receive JSON: message (the user's latest text — always present, even when short), did (what you just did), thread, then facts (live sessions with todos, file collisions, tasks, the request inbox, ideas, machine, audit, briefing, update, the executor and its in-flight jobs, log — the assistant's own recent activity — suggestions — ranked next-work picks — and memory, a pushed primer of typed cells: dec/obs/bel/rsk/ver).",
   "facts.memory is compiled against this message before you see it — do not search for it. If memory.dig is true, a remembered fact was superseded; address that row before acting.",
   "facts.log is the assistant's own activity tail (ticks omitted). Read it when asked about the log, what just happened, or what you have been doing; do not invent lines that are not there.",
+  "facts.planning describes saved decision plans and their next open questions. These are separate from executable tasks: direct the user to Plans or Plan an idea to discuss questions, record decisions, review a specification, and explicitly create its tasks. Never claim a plan is running or has started builders just because it exists or is approved. A null planning section means unavailable, not no plans.",
   "Reply in plain text only: at most 120 words, no JSON, no markdown, no headings. Ground every statement in the facts; when the facts do not cover the question, say so. You may mention what you just did.",
   "The thread is yours: it, that, them, yes and the second one all refer back to what you just said — answer follow-ups directly instead of asking what was meant. Small talk earns a one-line human answer, not a status dump.",
   "When did is not empty, lead with it and name the thing that started — 'starting work on <title>' for a queued request, the pass name for a run agent, the roster for a dispatch — never a state dump. When did is empty and the message is a question, answer the question only.",
@@ -850,7 +910,7 @@ function decryptKey(settings, field) {
 // weekly, so the field is a text input, not a closed list.
 function assistantModelOverride(settings, role) {
   const models = settings.aiModels && typeof settings.aiModels === "object" ? settings.aiModels : {};
-  const wanted = String(role === "heavy" ? models.heavy : models.routine ?? "").trim();
+  const wanted = String((role === "heavy" ? models.heavy : models.routine) ?? "").trim();
   return wanted.slice(0, 120);
 }
 
@@ -887,7 +947,100 @@ async function resolveAiRoute(role = "routine", { allowGrok = true } = {}) {
   };
 }
 
-async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = null } = {}) {
+const modelPerformanceStores = new Map();
+function modelPerformanceStore() {
+  const filePath = projectDataPath(path.join(STUDIO_ROOT, "data", "model-performance.json"));
+  if (!modelPerformanceStores.has(filePath)) modelPerformanceStores.set(filePath, createModelPerformanceStore({ filePath }));
+  return modelPerformanceStores.get(filePath);
+}
+
+// Routing decisions contain only model metadata. Prompts and credentials are
+// neither persisted nor exposed through the Settings status control.
+const modelRoutingDecisions = new Map();
+const modelRoutingCache = new Map();
+const modelRoutingPending = new Map();
+const modelRoutingBackoff = new Map();
+function routingSettingsKey(settings) {
+  return crypto.createHash("sha256").update(JSON.stringify([
+    settings.aiProvider, settings.modelSelection, settings.aiModels,
+    settings.gatewayApiKeyEncrypted, settings.zaiApiKeyEncrypted,
+    settings.apiKeyEncrypted, settings.executorCli, settings.executorModel,
+  ])).digest("hex");
+}
+
+async function applyModelRouting(route, { role = "routine", taskType = role, task = "", worker = false } = {}) {
+  if (!route.ok || !["zai", "opencode"].includes(route.provider)) return route;
+  const projectId = projects.current().id;
+  const settings = await readSettings();
+  const signature = routingSettingsKey(settings);
+  const finish = (method, reason, selected = null) => {
+    const decision = { provider: route.provider, model: selected?.model ?? route.model, taskType,
+      method, reason, evidence: selected?.evidence ?? null, at: Date.now() };
+    modelRoutingDecisions.set(projectId, decision);
+    return { ...route, model: decision.model, routingDecision: decision };
+  };
+  if (!worker && assistantModelOverride(settings, role)) return finish("override", "Using your saved model override.");
+  if (settings.modelSelection === "fixed") return finish("default", "Fixed model defaults selected.");
+  if (SMOKE || CAPTURE || CLI_MODE) return route;
+  try {
+    const [client, router] = await Promise.all([loadModule("scripts/decision-client.mjs"), loadModule("scripts/model-routing.mjs")]);
+    const credential = client.resolveApiKey({ settings, decrypt: decryptKey });
+    if (!credential) return finish("default", "Save a Jev gateway key to enable task-aware selection.");
+    const config = client.gatewayConfig();
+    // Hash the credential to isolate environment-key changes without retaining
+    // the key in a cache identity or sending it to another provider.
+    const scope = `${projectId}:${signature}:${crypto.createHash("sha256").update(credential.key).update(JSON.stringify(config)).digest("hex")}`;
+    if ((modelRoutingBackoff.get(scope) ?? 0) > Date.now()) return finish("default", "Jev is temporarily unavailable; using the usual model.");
+    await flushJevCharges();
+    const [catalog, performance] = await Promise.all([
+      readFile(path.join(STUDIO_ROOT, "data", "models.json"), "utf8").then(JSON.parse),
+      modelPerformanceStore().snapshot(),
+    ]);
+    const routingRole = worker ? "worker" : role;
+    const candidates = router.buildRoutingCandidates({ catalog, performance, provider: route.provider,
+      defaults: [route.model], taskType, role: routingRole });
+    if (candidates.length < 2) return finish("default", "Too few compatible models to compare; using the usual model.");
+    const key = `${scope}:${crypto.createHash("sha256").update(JSON.stringify([role, taskType, String(task).slice(0, 2400), candidates])).digest("hex")}`;
+    let selected = modelRoutingCache.get(key);
+    if (!selected || selected.expiresAt <= Date.now()) {
+      let pending = modelRoutingPending.get(key);
+      if (!pending) {
+        pending = router.selectTaskModel({ candidates, taskType, role: routingRole, task, apiKey: credential.key, config,
+          onUsage: (_usage, result) => chargeJevCall(result, "jev-model-routing") });
+        modelRoutingPending.set(key, pending);
+        pending.finally(() => modelRoutingPending.delete(key)).catch(() => {});
+      }
+      selected = await pending;
+      if (selected.ok) {
+        if (modelRoutingCache.size >= 128) modelRoutingCache.delete(modelRoutingCache.keys().next().value);
+        modelRoutingCache.set(key, { ...selected, expiresAt: Date.now() + 5 * 60000 });
+      } else {
+        modelRoutingBackoff.set(scope, Date.now() + 30000);
+      }
+    }
+    // A settings change while Jev answers invalidates that answer.
+    if (routingSettingsKey(await readSettings()) !== signature) return finish("default", "Routing settings changed while Jev was selecting; using the original route for this call.");
+    if (!selected.ok || !candidates.some((candidate) => candidate.model === selected.model && candidate.provider === route.provider)) {
+      return finish("default", "Jev could not select a compatible model; using the usual model.");
+    }
+    logLine(`[routing] ${taskType}: ${route.provider}/${selected.model} selected by Jev`);
+    return finish("jev", "Jev compared task fit, quality evidence, speed and cost within this provider.", selected);
+  } catch {
+    return finish("default", "Jev or model evidence is unavailable; using the usual model.");
+  }
+}
+
+async function recordModelCall(observation) {
+  if (SMOKE || CAPTURE) return;
+  try { await modelPerformanceStore().record(observation); }
+  catch { logLine("[model-lab] Could not save a model measurement; recorded usage may be incomplete."); }
+}
+
+async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = null, provider = "unknown", taskType = "routine", source = "request", escalationOf = null } = {}) {
+  const startedAt = Date.now();
+  const observationId = crypto.randomUUID();
+  let observed = { status: "error", errorKind: "transport", tokenUsage: {}, costUsd: null };
+  const resultOf = (result) => ({ ...result, observationId, elapsedMs: Date.now() - startedAt, tokenUsage: observed.tokenUsage, costUsd: observed.costUsd });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 120000);
   try {
@@ -903,20 +1056,36 @@ async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = n
       headers,
       body: JSON.stringify(body),
     });
-    if (!response.ok) return { ok: false, error: `assistant HTTP ${response.status}: ${(await response.text()).slice(0, 200)}` };
+    if (!response.ok) {
+      observed.errorKind = response.status === 401 || response.status === 403 ? "auth" : response.status === 429 ? "quota" : "transport";
+      return resultOf({ ok: false, errorKind: observed.errorKind, error: `assistant HTTP ${response.status}: ${(await response.text()).slice(0, 200)}` });
+    }
     const payload = await response.json();
+    observed.model = typeof payload.model === "string" ? payload.model : model;
+    const usage = payload.usage ?? {};
+    observed.tokenUsage = { inputTokens: usage.prompt_tokens ?? null, outputTokens: usage.completion_tokens ?? null,
+      totalTokens: usage.total_tokens ?? null, cacheReadTokens: usage.prompt_tokens_details?.cached_tokens ?? null };
+    // Only an explicit USD field counts as reported cost. Missing billing data
+    // and subscription calls are not free, and catalog prices are not receipts.
+    observed.costUsd = typeof usage.cost_usd === "number" && Number.isFinite(usage.cost_usd) && usage.cost_usd >= 0 ? usage.cost_usd : null;
     const choice = payload.choices?.[0] ?? {};
     const text = choice.message?.content ?? "";
     const reasoning = choice.message?.reasoning_content ?? "";
     // A reasoning model can spend the whole budget thinking; if content is
     // empty but reasoning contains the JSON, use it rather than failing.
-    if (!text.trim() && reasoning.includes("{")) return { ok: true, text: reasoning, reasoning, finish: choice.finish_reason, model: body.model };
-    if (!text.trim()) return { ok: false, error: `empty reply (finish=${choice.finish_reason ?? "?"}, reasoning=${reasoning.length} chars)` };
-    return { ok: true, text, reasoning, finish: choice.finish_reason, model: body.model };
+    if (!text.trim() && reasoning.includes("{")) { observed.status = "ok"; observed.errorKind = null; return resultOf({ ok: true, text: reasoning, reasoning, finish: choice.finish_reason, model: observed.model }); }
+    if (!text.trim()) { observed.errorKind = "validation"; return resultOf({ ok: false, errorKind: "validation", error: `empty reply (finish=${choice.finish_reason ?? "?"}, reasoning=${reasoning.length} chars)` }); }
+    observed.status = "ok";
+    observed.errorKind = null;
+    return resultOf({ ok: true, text, reasoning, finish: choice.finish_reason, model: observed.model });
   } catch (error) {
-    return { ok: false, error: `assistant call failed: ${error.message}` };
+    if (controller.signal.aborted) observed.errorKind = "timeout";
+    return resultOf({ ok: false, errorKind: observed.errorKind, error: `assistant call failed: ${error.message}` });
   } finally {
     clearTimeout(timer);
+    await recordModelCall({ id: observationId, model: observed.model ?? model, provider, taskType, source,
+      at: startedAt, elapsedMs: Date.now() - startedAt, requestedEffort: body.reasoning_effort ?? null,
+      appliedEffort: null, escalationOf, ...observed });
   }
 }
 
@@ -1041,9 +1210,9 @@ async function executorRunEnv() {
     const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
     if (provider === "opencode") return { cli: "opencode", env: executorOpencodeEnv(), modelArgs: "", via: "opencode default" };
     const zaiEnv = await zaiOpencodeEnv();
-    // Queue-draining builders always ride glm-5.3-flash on the coding plan.
-    // glm-5.3 (heavy) is the overseer/improve route, not a 24/7 worker.
-    if (zaiEnv) return { cli: "opencode", env: executorOpencodeEnv(zaiEnv), modelArgs: ` --model mefi-zai/${ZAI_MODEL_ROUTINE}`, via: `mefi-zai/${ZAI_MODEL_ROUTINE}` };
+    // The default is glm-5.3-flash on the coding plan. Task-aware selection
+    // happens once the next task is known, before the ownership transaction.
+    if (zaiEnv) return { cli: "opencode", env: executorOpencodeEnv(zaiEnv), modelProvider: "zai", model: ZAI_MODEL_ROUTINE, modelArgs: ` --model mefi-zai/${ZAI_MODEL_ROUTINE}`, via: `mefi-zai/${ZAI_MODEL_ROUTINE}` };
     if (provider === "zai") return { error: "AI routing is z.ai-only but no z.ai key is saved" };
     return { cli: "opencode", env: executorOpencodeEnv(), modelArgs: "", via: "opencode default" };
   };
@@ -1063,7 +1232,7 @@ async function executorRunEnv() {
   return opencodeRoute();
 }
 
-async function assistantFetch(system, user, maxTokens = 6000, { role = "routine" } = {}) {
+async function assistantFetch(system, user, maxTokens = 6000, { role = "routine", taskType = role } = {}) {
   const route = await resolveAiRoute(role);
   if (!route.ok) return route;
   // Grok rides its CLI, not an HTTP endpoint — maxTokens has no knob there,
@@ -1072,24 +1241,30 @@ async function assistantFetch(system, user, maxTokens = 6000, { role = "routine"
   // an empty reply falls back once to the keyed HTTP routes — z.ai by
   // preference, OpenCode Go by the same auto rules, never back to grok.
   if (route.provider === "grok") {
+    const startedAt = Date.now();
     const grok = await grokCompletion(system, user, route.model);
+    const observationId = crypto.randomUUID();
+    await recordModelCall({ id: observationId, model: grok.model || route.model || "grok-default", provider: "grok", taskType, source: "request",
+      at: startedAt, elapsedMs: Date.now() - startedAt, status: grok.ok ? "ok" : "error", errorKind: grok.ok ? null : "cli", tokenUsage: {}, costUsd: null });
+    grok.observationId = observationId;
     if (grok.ok) {
       if (assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = grok.model;
       return grok;
     }
     const http = await resolveAiRoute(role, { allowGrok: false });
     if (!http.ok) return grok;
-    const retried = await httpAssistantCall(http, system, user, maxTokens);
+    const retried = await httpAssistantCall(http, system, user, maxTokens, { taskType, role });
     if (retried.ok) logLine(`[assistant] grok cli failed (${String(grok.error ?? "").slice(0, 90)}) — answered via ${retried.model}`);
     return retried.ok ? retried : grok;
   }
-  return httpAssistantCall(route, system, user, maxTokens);
+  return httpAssistantCall(route, system, user, maxTokens, { taskType, role });
 }
 
 // The HTTP half of assistantFetch: body shaping (the reasoning knobs), the
 // primary call, and the opt-in OpenCode fallback. Split out so the grok-CLI
 // route can land here when the CLI cannot answer.
-async function httpAssistantCall(route, system, user, maxTokens) {
+async function httpAssistantCall(route, system, user, maxTokens, { taskType = "routine", source = "request", role = "routine" } = {}) {
+  route = await applyModelRouting(route, { role, taskType, task: user });
   const body = {
     model: route.model,
     temperature: 0.2,
@@ -1109,7 +1284,7 @@ async function httpAssistantCall(route, system, user, maxTokens) {
     body.reasoning_effort = "low";
   }
   const sessionHeader = route.provider === "opencode" ? await assistantSessionId() : null;
-  const primary = await chatCompletion(route.endpoint, route.apiKey, route.model, body, { sessionHeader });
+  const primary = await chatCompletion(route.endpoint, route.apiKey, route.model, body, { sessionHeader, provider: route.provider, taskType, source });
   if (primary.ok) {
     // The status panel shows the route that actually answered, not a static label.
     if (assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = primary.model;
@@ -1118,7 +1293,7 @@ async function httpAssistantCall(route, system, user, maxTokens) {
   if (!route.fallback) return primary;
   const fallbackBody = { ...body, model: route.fallback.model, reasoning_effort: "low" };
   delete fallbackBody.thinking;
-  const retried = await chatCompletion(route.fallback.endpoint, route.fallback.apiKey, route.fallback.model, fallbackBody, { sessionHeader: await assistantSessionId() });
+  const retried = await chatCompletion(route.fallback.endpoint, route.fallback.apiKey, route.fallback.model, fallbackBody, { sessionHeader: await assistantSessionId(), provider: "opencode", taskType, source });
   if (retried.ok && assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = retried.model;
   return retried;
 }
@@ -1219,7 +1394,7 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
   const user = JSON.stringify(facts).slice(0, 14000);
   // The improver rewrites the assistant's own playbook — the one pass that
   // earns the always-reasoning glm-5.3 route; everything else rides flash.
-  const call = await assistantFetch(system, user, 6000, { role: mode === "improve" ? "heavy" : "routine" });
+  const call = await assistantFetch(system, user, 6000, { role: mode === "improve" ? "heavy" : "routine", taskType: mode });
   if (!call.ok) return { ok: false, error: call.error };
   const text = call.text;  let result = null;
   try {
@@ -1333,6 +1508,37 @@ const EXECUTOR_PROGRESS_POLL_MS = 10000;
 // Roles a finishing run is allowed to wake. The responder answers the user and
 // is never summoned by a job; the rest are all follow-up work.
 const EXECUTOR_CALLABLE = new Set(["auditor", "reference", "ideas", "improver", "grower", "watcher", "keeper", "machine", "briefer", "overseer"]);
+
+// Folder names a stale-scope search never descends into: dependency and build
+// trees dwarf the source tree and cannot own a moved project file.
+const SCOPE_WALK_SKIP = new Set(["node_modules", ".git", "dist", "out", "build", "data", "__pycache__", "venv"]);
+
+// Bounded breadth-first search for one basename under a project root — the
+// locator behind stale file-scope healing (resolveStaleFileScope). Shallowest
+// match wins, the walk caps entries and depth, and every filesystem error
+// reads as "not here". Returns an absolute path or null.
+function findBasenameUnderRoot(root, base, { maxEntries = 20000, maxDepth = 6 } = {}) {
+  const name = String(base ?? "").trim();
+  const start = String(root ?? "").trim();
+  if (!name || !start) return null;
+  let stat;
+  try { stat = statSync(start, { throwIfNoEntry: false }); } catch { return null; }
+  if (!stat?.isDirectory()) return null;
+  const queue = [[start, 0]];
+  let seen = 0;
+  let best = null;
+  while (queue.length && seen < maxEntries && !best) {
+    const [dir, depth] = queue.shift();
+    let list;
+    try { list = readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const item of list) {
+      if (++seen > maxEntries) break;
+      if (item.isFile() && item.name === name) { best = path.join(dir, item.name); break; }
+      if (item.isDirectory() && depth < maxDepth && !item.name.startsWith(".") && !SCOPE_WALK_SKIP.has(item.name.toLowerCase())) queue.push([path.join(dir, item.name), depth + 1]);
+    }
+  }
+  return best;
+}
 
 // Pull the handoffs out of one line of a run's output.
 function parseExecutorHandoff(line) {
@@ -1626,13 +1832,16 @@ function assistantWorkLabel(job) {
 
 // One hop: the agent's current target changes and a `running` event says so.
 async function assistantHop(entry, target, { progress = null, label = null } = {}) {
-  if (entry.settled) return;
+  if (entry.settled || entry.timedOut) return;
+  // A peer reply already in flight must not repaint a held role as healthy.
+  if ([...pool.running.values()].some((job) => job.role === entry.role && job.timedOut)) return;
   entry.target = target;
   entry.progress = progress;
   assistantRowTargets(entry.role, { target, targets: entry.targets, progress });
   if (progress !== 1 && Date.now() - (entry.lastHopAt || 0) < ASSISTANT_HOP_MS) return;
   entry.lastHopAt = Date.now();
   const text = `${entry.role} · ${label ?? `at ${target.kind} ${target.id}`}`;
+  entry.text = text;
   assistantApply({ role: entry.role, status: "running", at: entry.startedAt, text });
   assistantRowTargets(entry.role, { target, targets: entry.targets, progress });
   assistantAgentEvent(entry.role, "running", text, { target, targets: entry.targets, progress });
@@ -1658,11 +1867,11 @@ async function assistantVisitWhile(entry, promise, targets, label = () => null) 
   let index = 0;
   let timer = null;
   const visit = async () => {
-    if (settled || !list.length || entry.settled) return;
+    if (settled || !list.length || entry.settled || entry.timedOut) return;
     const target = list[index % list.length];
     await assistantHop(entry, target, { progress: null, label: label(target, index % list.length, list.length) });
     index += 1;
-    if (!settled && !entry.settled) {
+    if (!settled && !entry.settled && !entry.timedOut) {
       timer = setTimeout(() => visit().catch(() => {}), ASSISTANT_HOP_MS);
       timer.unref?.();
     }
@@ -1887,13 +2096,14 @@ function assistantReportIntel(role, text, facts = null) {
 // An executor run reports home while it is still on the board, so the
 // Command view can pulse builder → assistant. The overseer thinks the
 // finding through (a thought bubble, not unread) and wakes on failures.
-function assistantHearBuilder(entry, job, ok) {
+function assistantHearBuilder(entry, job, ok, errorMessage = "") {
   if (!assistantState) return;
   const tail = (entry.outputTail ?? []).filter(Boolean).slice(-2).join(" · ");
   const handed = (entry.handoffs ?? []).length;
+  const failure = errorMessage || tail || `no ${EXECUTOR_DONE_MARK}`;
   const finding = ok
     ? `finished "${assistantClip(job.title, 50)}"${tail ? ` · ${assistantClip(tail, 70)}` : ""}`
-    : `failed "${assistantClip(job.title, 50)}" · ${assistantClip(autopilot.lastError || tail || `no ${EXECUTOR_DONE_MARK}`, 80)}`;
+    : `failed "${assistantClip(job.title, 50)}" · ${assistantClip(failure, 80)}`;
   let heard = null;
   try {
     if (assistantModule?.hearReport) {
@@ -1904,7 +2114,7 @@ function assistantHearBuilder(entry, job, ok) {
           ok,
           title: job.title,
           text: finding,
-          error: ok ? "" : autopilot.lastError || tail || `no ${EXECUTOR_DONE_MARK}`,
+          error: ok ? "" : failure,
           handed,
         },
         Date.now(),
@@ -1948,9 +2158,16 @@ function assistantNodeContext(target, kind, text, role = null) {
 
 // A duplicate key while queued or running shares the job in flight. `work`
 // is the journal entry for a resumable job (on-demand work and replies).
-function enqueue(role, job, { ai = false, priority = ASSISTANT_PRIORITY.cadence, key = role, text = null, work = null, targets = null } = {}) {
+function enqueue(role, job, { ai = false, priority = ASSISTANT_PRIORITY.cadence, key = role, text = null, work = null, targets = null, held = false } = {}) {
   const existing = pool.queue.find((entry) => entry.key === key) ?? [...pool.running.values()].find((entry) => entry.key === key);
-  if (existing) return existing.promise;
+  if (existing) {
+    existing.priority = Math.max(existing.priority, priority);
+    // An explicit request may run an already held handoff while paused.
+    // Automatic follow-ups pass held:true and never revoke the operator hold.
+    if (!held) existing.held = false;
+    assistantPump();
+    return existing.promise;
+  }
   const where = Array.isArray(targets) && targets.length ? targets : assistantRoleTargets(role);
   const journal = work ? { attempts: 1, ...work, id: work.id ?? assistantJobId(), role, text: work.text ?? "", target: where[0] ?? null, targets: where } : null;
   const entry = {
@@ -1960,6 +2177,8 @@ function enqueue(role, job, { ai = false, priority = ASSISTANT_PRIORITY.cadence,
     key,
     ai,
     priority,
+    held,
+    text: journal ? assistantJobLabel(role, journal) : text ?? `${role} queued`,
     job,
     work: journal,
     targets: where,
@@ -1975,31 +2194,58 @@ function enqueue(role, job, { ai = false, priority = ASSISTANT_PRIORITY.cadence,
   entry.promise = new Promise((resolve) => (entry.resolve = resolve));
   pool.queue.push(entry);
   if (journal) assistantJournal({ ...journal, status: "queued", startedAt: Date.now() });
-  assistantApply({ role, status: "queued", text: journal ? assistantJobLabel(role, journal) : text ?? `${role} queued` });
-  assistantRowTargets(role, { target: entry.target, targets: entry.targets, progress: null });
+  assistantRefreshRole(role);
   assistantPump();
   return entry.promise;
 }
 
-// Worker loop: priority first, then arrival. A role never runs twice at once
-// (responders excepted: one job per message, never held back by the caps so
-// a reply is never blocked by a tick or a briefing). The foreman is the same
-// — handing out work is the heartbeat; watcher/auditor ticks must not starve it.
+// One roster row can describe several reply jobs. A queued/finished reply must
+// never hide another reply still running, or clear its target and elapsed time.
+function assistantRefreshRole(role, { emit = false } = {}) {
+  const running = [...pool.running.values()].filter((entry) => entry.role === role);
+  const entry = running.find((job) => job.timedOut) ?? running[0] ?? pool.queue.find((entry) => entry.role === role);
+  if (!entry) return false;
+  const status = running.length ? "running" : "queued";
+  const text = `${running.length > 1 ? `${running.length} replies · ` : ""}${entry.text}`;
+  const place = { target: entry.target, targets: entry.targets, progress: entry.progress };
+  assistantApply({ role, status, at: entry.startedAt || entry.queuedAt, text });
+  assistantRowTargets(role, place);
+  if (emit) assistantAgentEvent(role, status, text, place);
+  if (running.length && (!assistantState.thinking || assistantState.thinking.role === role)) assistantThink(text, role);
+  else if (!running.length) assistantThinkClear(role);
+  return true;
+}
+
+// Background roles obey their worker/AI widths. Replies have a separate,
+// bounded lane because they can await work from that background pool; sharing
+// its last slot would block the very role a reply requested. The single foreman
+// heartbeat also stays available. Older work gains priority each minute so a
+// stream of new requests cannot starve an already waiting cadence pass.
 function assistantPump() {
   if (!assistantState || projectSwitching) return;
   const parallel = assistantParallel(assistantState.prefs?.parallel, EXECUTOR_PARALLEL_MAX, 8);
   const aiParallel = assistantParallel(assistantState.prefs?.aiParallel, AI_PARALLEL_MAX, 4);
-  pool.queue.sort((a, b) => b.priority - a.priority || a.id - b.id);
+  const now = Date.now();
+  const rank = (entry) => Math.min(ASSISTANT_PRIORITY.responder, entry.priority + Math.floor(Math.max(0, now - entry.queuedAt) / 60000));
+  pool.queue.sort((a, b) => rank(b) - rank(a) || a.id - b.id);
   let started = true;
   while (started) {
     started = false;
-    const runningRoles = new Set([...pool.running.values()].map((entry) => entry.role));
-    const aiRunning = [...pool.running.values()].filter((entry) => entry.ai).length;
+    const running = [...pool.running.values()];
+    const runningRoles = new Set(running.map((entry) => entry.role));
+    const background = running.filter((entry) => entry.role !== "responder" && entry.role !== "foreman");
+    const aiRunning = background.filter((entry) => entry.ai).length;
     for (let index = 0; index < pool.queue.length; index += 1) {
       const entry = pool.queue[index];
+      if (entry.held && assistantState.status !== "running") continue;
+      // A timeout is a deadline report, not cancellation. Even the separate
+      // reply lane must wait for that role's previous operation to stop.
+      if (running.some((job) => job.role === entry.role && job.timedOut)) continue;
       if (entry.role !== "responder" && entry.role !== "foreman") {
-        if (pool.running.size >= parallel || runningRoles.has(entry.role)) continue;
+        if (background.length >= parallel || runningRoles.has(entry.role)) continue;
         if (entry.ai && aiRunning >= aiParallel) continue;
+      } else if (entry.role === "responder") {
+        if (running.filter((job) => job.role === "responder").length >= Math.min(2, aiParallel)) continue;
       } else if (runningRoles.has(entry.role) && entry.role === "foreman") {
         continue;
       }
@@ -2016,30 +2262,47 @@ function assistantStart(entry) {
   entry.startedAt = Date.now();
   pool.running.set(entry.id, entry);
   const label = entry.work ? assistantJobLabel(entry.role, entry.work) : `${entry.role} started`;
+  entry.text = label;
   if (entry.work) assistantJournal({ ...entry.work, status: "running", startedAt: entry.startedAt });
   else if (!CLI_MODE) assistantWrite().catch(() => {});
   entry.lastHopAt = entry.startedAt;
-  assistantApply({ role: entry.role, status: "running", at: entry.startedAt, text: label });
-  assistantRowTargets(entry.role, { target: entry.target, targets: entry.targets, progress: null });
-  assistantAgentEvent(entry.role, "running", label, { target: entry.target, targets: entry.targets, progress: null });
+  assistantRefreshRole(entry.role, { emit: true });
   assistantThink(label, entry.role);
-  let timer = null;
-  const timeout = new Promise((resolve) => {
-    timer = setTimeout(() => resolve({ timedOut: true }), ASSISTANT_JOB_TIMEOUT_MS);
-  });
+  const timer = setTimeout(() => assistantTimeout(entry), ASSISTANT_JOB_TIMEOUT_MS);
   projectAgentJobs += 1;
   const work = projects.run(entry.project, () => Promise.resolve().then(() => entry.job(entry)).finally(() => { projectAgentJobs -= 1; }));
-  Promise.race([work, timeout])
+  work
     .then(
-      (result) => assistantSettle(entry, result?.timedOut ? { error: "timed out" } : { result }),
+      (result) => assistantSettle(entry, { result }),
       (error) => assistantSettle(entry, { error })
     )
     .finally(() => clearTimeout(timer));
 }
 
-// A late result after a timeout is ignored: the role was freed already.
+// Report the deadline promptly, retaining the actual operation's ownership and
+// journal. There is no generic cancellation for every role: freeing its slot
+// here would let late writes race a replacement job. A permanently stuck job
+// stays visible and recoverable from its journal on the next app start.
+function assistantTimeout(entry) {
+  if (entry.settled || entry.timedOut) return;
+  entry.timedOut = true;
+  entry.progress = null;
+  entry.text = `${entry.role} timed out · operation still running · slot held`;
+  assistantState.lastError = { at: Date.now(), text: entry.text };
+  assistantRefreshRole(entry.role, { emit: true });
+  assistantLog("error", entry.text);
+  entry.resolve({ ok: false, error: "timed out; the operation is still running and its slot remains held" });
+  if (!CLI_MODE) assistantWrite().catch(() => {});
+}
+
+// Only the underlying operation's settlement releases its slot. A late success
+// is still an exceeded deadline, never a fresh completion for a replacement.
 function assistantSettle(entry, { result, error }) {
   if (entry.settled) return;
+  if (entry.timedOut) {
+    error = "timed out; the underlying operation has now stopped";
+    result = undefined;
+  }
   entry.settled = true;
   pool.running.delete(entry.id);
   const ms = Date.now() - entry.startedAt;
@@ -2065,8 +2328,8 @@ function assistantSettle(entry, { result, error }) {
   entry.resolve(error !== undefined ? { ok: false, error: failure } : result);
   if (entry.work) assistantJournal({ id: entry.work.id, done: true });
   else if (!CLI_MODE) assistantWrite().catch(() => {});
-  assistantThinkClear(entry.role);
   assistantPump();
+  if (!assistantRefreshRole(entry.role, { emit: true })) assistantThinkClear(entry.role);
 }
 
 // Resolves once nothing is queued or running.
@@ -2081,6 +2344,7 @@ function assistantClearQueue({ abandonRunning = false, text = "dropped" } = {}) 
   const keep = [];
   for (const entry of pool.queue) {
     if ((entry.role === "responder" || entry.work) && !abandonRunning) {
+      entry.held = entry.role !== "responder";
       keep.push(entry);
       continue;
     }
@@ -2099,6 +2363,7 @@ function assistantClearQueue({ abandonRunning = false, text = "dropped" } = {}) 
     }
     pool.running.clear();
   }
+  for (const role of new Set([...pool.queue, ...pool.running.values()].map((entry) => entry.role))) assistantRefreshRole(role);
   assistantPoolCounts();
   if (!pool.queue.length && !pool.running.size) for (const resolve of pool.waiters.splice(0)) resolve();
 }
@@ -2493,7 +2758,7 @@ async function assistantForemanJob(now, entry) {
     // A route failure can leave runnable work without starting a child. Do
     // not bounce foreman -> compactor -> foreman forever on that same queue.
     const compactor = assistantState?.agents?.find((agent) => agent?.role === "compactor");
-    if (!compactor?.lastRunAt || now - compactor.lastRunAt >= MINUTE_MS) assistantEnqueueRole("compactor", ASSISTANT_PRIORITY.demand);
+    if (!compactor?.lastRunAt || now - compactor.lastRunAt >= MINUTE_MS) assistantEnqueueRole("compactor", ASSISTANT_PRIORITY.demand, { automatic: true });
     // The ideas pass re-runs when cold — but a quiet store stays quiet: if the
     // last scan saw no new material, give it a half-hour before asking again.
     // Re-scanning old chats to fill slots is not progress; with the ingestion
@@ -2502,7 +2767,7 @@ async function assistantForemanJob(now, entry) {
     const ingest = assistantCache.ingest;
     const scanCold = !ideasRow?.lastRunAt || now - ideasRow.lastRunAt > 15 * 60000;
     const materialPlausible = !ingest || ingest.newMaterial !== false || now - (ingest.at ?? 0) > 30 * 60000;
-    if (scanCold && materialPlausible && !assistantState?.prefs?.backlogMode) assistantEnqueueRole("ideas", ASSISTANT_PRIORITY.demand);
+    if (scanCold && materialPlausible && !assistantState?.prefs?.backlogMode) assistantEnqueueRole("ideas", ASSISTANT_PRIORITY.demand, { automatic: true });
   }
   const text = !autopilot.execute
     ? "executor off · nothing handed out"
@@ -2614,7 +2879,7 @@ async function assistantCompactorJob(now, entry) {
           return rest;
         })
       : out.tasks;
-    const readiness = backlog.summarizeBacklog({ tasks, requests: out.requests, ideas: out.ideas, jobs: autopilot.jobs, compare: compareWork, now });
+    const readiness = backlog.summarizeBacklog({ tasks, requests: out.requests, ideas: out.ideas, jobs: autopilot.jobs, compare: compareWork, now, autoBuild: autopilot.autoBuild });
     const report = { ...out.report, runnable: readiness.counts.ready,
       text: String(out.report?.text ?? "Backlog reviewed").replace(/\d+ jobs? runnable/g, `${readiness.counts.ready} work item${readiness.counts.ready === 1 ? "" : "s"} ready`),
       reviewed: { ...out.report?.reviewed, next: readiness.next[0]?.title ?? null } };
@@ -2810,7 +3075,14 @@ async function assistantOverseerRepair(now, { manual = false } = {}) {
   const fixed = [];
   const directives = [];
   let rescued = 0;
+  const pausedOnEntry = assistantState.status === "paused";
   const eyes = await getEyes();
+
+  // Pause can arrive while this cadence repair awaits the store. It is an
+  // operator choice, not a service fault for the overseer to undo.
+  if (assistantState.status === "paused" && (!manual || !pausedOnEntry)) {
+    return { fixed, directives: [{ kind: "finding", text: "assistant paused by operator choice — not auto-resumed" }], rescued, staleCount: 0 };
+  }
 
   // 1. The service itself. A paused assistant fixes nothing.
   if (assistantState.status === "paused") {
@@ -2854,16 +3126,22 @@ async function assistantOverseerRepair(now, { manual = false } = {}) {
   //    the same instant.
   let boardTasks = [];
   {
-    const liveRuns = new Set(autopilot.jobs.map((job) => job.id));
     const patch = await mutateBoard((board) => {
+      // Dispatch may claim a new run while this repair waits for the board
+      // lock. Read ownership with the board to avoid reopening live work.
+      const liveRuns = new Set(autopilot.jobs.map((job) => job.id));
       let stuck = 0;
       const tasks = board.tasks.map((task) => {
         if (task?.status !== "active" || !task.runId || liveRuns.has(task.runId)) return task;
+        // Repair shares housekeeping's durable ownership rule: a fresh
+        // foreign lease still owns its work after this process restarts.
+        if (assistantModule?.leaseHeldElsewhere?.(task, { now })) return task;
         stuck += 1;
         return {
           ...task,
           status: "open",
           runId: undefined,
+          lease: undefined,
           updatedAt: now,
           logs: [...(task.logs ?? []), { at: now, kind: "status", text: "overseer reopened a stuck task" }].slice(-40),
         };
@@ -2871,11 +3149,13 @@ async function assistantOverseerRepair(now, { manual = false } = {}) {
       let stranded = 0;
       const requests = board.requests.map((request) => {
         if (request?.status !== "running" || liveRuns.has(request.runId)) return request;
+        if (assistantModule?.leaseHeldElsewhere?.(request, { now })) return request;
         stranded += 1;
         const next = { ...request };
         delete next.status;
         delete next.runId;
         delete next.runningAt;
+        delete next.lease;
         return next;
       });
       return { tasks, requests, stuck, stranded };
@@ -2937,9 +3217,11 @@ async function assistantOverseerRepair(now, { manual = false } = {}) {
   // 6. Reshape the queue and hand out whatever can run. The compactor clears
   //    duplicates and elapsed backoffs; the foreman fills the free slots —
   //    including the rescue requests this pass just filed.
-  assistantEnqueueRole("compactor", ASSISTANT_PRIORITY.demand);
-  assistantEnqueueRole("auditor", ASSISTANT_PRIORITY.demand);
-  assistantAskForWork("overseer repair");
+  if (assistantState.status !== "paused") {
+    assistantEnqueueRole("compactor", ASSISTANT_PRIORITY.demand);
+    assistantEnqueueRole("auditor", ASSISTANT_PRIORITY.demand);
+    assistantAskForWork("overseer repair");
+  }
   if (fixed.length) {
     assistantLog("overseer", `repair: ${fixed.join(", ")}`);
     emitAutopilot();
@@ -2970,7 +3252,7 @@ async function assistantOverseerJob(now, entry) {
   let via = "local";
   // Smoke runs get the local pass only — never an AI call.
   if (!SMOKE && assistantAiUsable()) {
-    const call = await assistantFetch(ASSISTANT_OVERSEER_SYSTEM, JSON.stringify(overseerFacts(now)).slice(0, 14000), 6000, { role: "heavy" });
+    const call = await assistantFetch(ASSISTANT_OVERSEER_SYSTEM, JSON.stringify(overseerFacts(now)).slice(0, 14000), 6000, { role: "heavy", taskType: "overseer" });
     if (call.ok) {
       assistantAiOk();
       assistantSetProblems(["ai-offline"], []);
@@ -3041,6 +3323,14 @@ async function assistantOverseerJob(now, entry) {
   // assistant answers, and the owning scouts actually go fix them. A quiet
   // healthy review stays off the thread.
   const talk = assistant.overseerTalk?.(review, { repaired, digest }) ?? { say: "", reply: "", roles: [], dispatch: false, organize: false, resumeUnanswered: false };
+  // A review can finish after Pause, but its follow-up scouts must wait.
+  // Their findings remain in the playbook for the next running pass.
+  if (assistantState.status === "paused") {
+    talk.roles = [];
+    talk.dispatch = false;
+    talk.organize = false;
+    if (talk.say) talk.reply = "Recorded the findings. Follow-up agents wait for Resume.";
+  }
   if (talk.say) {
     assistantCommitThought(talk.say, "overseer");
     if (talk.reply) assistantCommitThought(talk.reply, "thinker");
@@ -3106,14 +3396,17 @@ const ASSISTANT_ROLE_JOBS = {
   ideas: assistantIdeasJob,
 };
 
-function assistantEnqueueRole(role, priority = ASSISTANT_PRIORITY.cadence) {
+function assistantEnqueueRole(role, priority = ASSISTANT_PRIORITY.cadence, { automatic = false } = {}) {
   if (assistantState?.prefs?.backlogMode && ["briefer", "improver", "grower", "ideas"].includes(role)) return Promise.resolve({ ok: true, text: "Existing backlog first" });
   const job = ASSISTANT_ROLE_JOBS[role];
   if (!job) return Promise.resolve(null);
   // The overseer counts against the AI pool when it plans to spend a call;
   // keyless it still runs its local review on a normal slot.
   const spendsCall = role === "briefer" || role === "improver" || role === "grower" || ((role === "overseer" || role === "ideas") && assistantAiUsable());
-  return enqueue(role, (entry) => job(Date.now(), entry), { ai: spendsCall, priority });
+  return enqueue(role, (entry) => job(Date.now(), entry), {
+    ai: spendsCall, priority, held: automatic,
+    ...(automatic ? { work: { kind: "role", payload: { role }, text: "worker follow-up" } } : {}),
+  });
 }
 
 // On-demand roles (control buttons, message actions): the job result, or
@@ -3194,6 +3487,7 @@ async function assistantDispatchAgents(text) {
   sent.push("ideas");
   enqueue("reference", () => gatherReferences({ text }), {
     priority: ASSISTANT_PRIORITY.demand,
+    key: `reference:${text}`,
     work: { kind: "reference", payload: { text }, text: assistantClip(text, 40) },
   });
   sent.push("reference");
@@ -3213,6 +3507,16 @@ function assistantReplyWork(user) {
 function assistantWorkJob(entry) {
   const kind = entry.kind;
   const payload = entry.payload && typeof entry.payload === "object" ? entry.payload : {};
+  if (kind === "role") {
+    const role = payload.role;
+    const run = Object.hasOwn(ASSISTANT_ROLE_JOBS, role) ? ASSISTANT_ROLE_JOBS[role] : null;
+    if (typeof run !== "function") return null;
+    const ai = ["briefer", "improver", "grower"].includes(role) || (["overseer", "ideas"].includes(role) && assistantAiUsable());
+    return { role, ai, targets: assistantRoleTargets(role), run: (job) => {
+      if (assistantState?.prefs?.backlogMode && ["briefer", "improver", "grower", "ideas"].includes(role)) return { ok: true, text: "Existing backlog first" };
+      return run(Date.now(), job);
+    } };
+  }
   if (kind === "responder") {
     const user = assistantState.messages.find((message) => message.id === payload.messageId && message.role === "user");
     return user ? { role: "responder", ai: assistantAiUsable(), targets: [ASSISTANT_NODE], run: (job) => assistantRespond(user, job) } : null;
@@ -3258,7 +3562,9 @@ function assistantRestartWork(pending) {
   for (const job of pending?.jobs ?? []) {
     if (assistantInFlight(job.id)) continue;
     const label = assistantWorkLabel(job);
-    const attempts = (job.attempts ?? 1) + 1;
+    // Waiting work never consumed an attempt. Reopening a paused app must not
+    // exhaust the retry budget of a saved job that has not started yet.
+    const attempts = (job.attempts ?? 1) + (job.status === "running" ? 1 : 0);
     if (attempts > 3) {
       assistantJournal({ id: job.id, done: true });
       assistantLog("error", `gave up after 3 attempts: ${label}`);
@@ -3275,6 +3581,7 @@ function assistantRestartWork(pending) {
       key: job.id,
       work: { ...job, attempts },
       targets: runnable.targets,
+      held: assistantState.status === "paused" && runnable.role !== "responder",
     });
     roles.add(runnable.role);
     restarted.push(label);
@@ -3310,10 +3617,13 @@ async function assistantResumeWork() {
   }
   if (assistantState.status === "paused") pending.interruptedRoles = [];
   const restarted = assistantRestartWork(pending);
-  assistantLog("control", `resume: ${summary}`);
+  const resumedText = assistantState.status === "paused"
+    ? `Restored ${restarted.length} saved job(s). Background work waits for Resume; replies remain available.`
+    : summary;
+  assistantLog("control", `resume: ${resumedText}`);
   if (restarted.length) {
     assistantState.resumed = { at: now, jobs: restarted, closedForMs: pending.closedForMs ?? 0 };
-    assistantAppendReply(summary, "local", "status");
+    assistantAppendReply(resumedText, "local", "status");
   } else {
     assistantState.resumed = null;
   }
@@ -3338,18 +3648,17 @@ function assistantSuperviseJobs(now) {
         : "executor is off · nothing will be built until it is switched back on",
     });
   }
-  // A run past the hard kill timeout is wedged: the taskkill should have taken
-  // it, so if it is still on the board the claim is stuck with it. Reap so a
-  // dead child cannot occupy a slot forever. Ghosts (claimed, never spawned)
-  // get a much shorter leash — a hung store write must not park the pool.
+  // A run past its budget needs another termination attempt, not an early
+  // claim release: a failed taskkill can leave the writer alive. The child
+  // controller keeps ownership until exit or confirmed process-tree removal.
   const wedged = jobs.filter((job) => now - job.startedAt > ASSISTANT_JOB_WEDGED_MS);
   const ghosts = jobs.filter((job) => !job.pid && now - job.startedAt > 120000);
   const reaped = [];
   for (const job of [...wedged, ...ghosts]) {
     if (job.finished || reaped.includes(job)) continue;
     reaped.push(job);
-    if (job.child?.pid) spawn("taskkill", ["/pid", String(job.child.pid), "/t", "/f"], { windowsHide: true });
-    if (typeof job.reap === "function") job.reap(1, job.pid ? "wedged — kill timed out" : "spawn never started").catch?.(() => {});
+    if (job.child && typeof job.stop === "function") job.stop("wedged — kill timed out");
+    else if (!job.child && typeof job.reap === "function") job.reap(1, "spawn never started").catch?.(() => {});
   }
   if (wedged.length) {
     problems.push({
@@ -3516,6 +3825,9 @@ async function assistantTick(reason = "timer") {
 }
 
 async function startAssistant() {
+  // The foreman can run on the first assistant tick. Load saved executor
+  // preferences before that tick can turn a persisted pause into paid work.
+  if (!SMOKE && !CAPTURE && !CLI_MODE) await bootAutopilot();
   await ensureAssistant();
   if (assistantLoop) return { ok: true, running: assistantState.status === "running" };
   assistantLoop = true;
@@ -3553,6 +3865,7 @@ async function assistantPause() {
   if (assistantTimer) clearTimeout(assistantTimer);
   assistantTimer = null;
   assistantState.status = "paused";
+  overseerManualUntil = 0;
   assistantState.nextTickAt = 0;
   assistantClearQueue({ text: "dropped · paused" });
   applyKeepAwake();
@@ -3564,6 +3877,7 @@ async function assistantResume() {
   assistantState.status = "running";
   applyKeepAwake();
   assistantLog("control", "assistant resumed");
+  assistantPump();
   await saveAssistant({ force: true });
   if (assistantLoop) assistantSchedule(0);
 }
@@ -3589,6 +3903,7 @@ function showWindow() {
     return;
   }
   if (window.isMinimized()) window.restore();
+  rendererRecovery?.retry();
   window.show();
   window.focus();
 }
@@ -3644,10 +3959,11 @@ function refreshTray() {
 // Facts for a reply: every source guarded, null when it is not available,
 // shaped by the module's own builder.
 async function assistantMessageFacts(now, query = "") {
-  const raw = { sessions: null, todos: null, collisions: null, presence: null, uncommitted: null, tasks: null, ideas: null, machine: null, audit: null, briefing: null, update: null, now };
+  const raw = { sessions: null, todos: null, collisions: null, presence: null, uncommitted: null, tasks: null, ideas: null, planning: null, machine: null, audit: null, briefing: null, update: null, now };
   // Independent sources run together. A slow audit or unavailable OpenCode
   // store must neither serialize all the other reads nor discard their facts.
   await Promise.allSettled([
+    (async () => { raw.planning = await planningService().summary({ projectId: projects.current().id, query }); })(),
     (async () => {
       const store = await assistantReadStore();
       Object.assign(raw, { sessions: store.sessions, todos: store.todos, collisions: store.collisions, presence: store.presence, uncommitted: store.uncommitted });
@@ -3707,6 +4023,7 @@ async function assistantMessageFacts(now, query = "") {
     const assistant = await getAssistant();
     if (Array.isArray(raw.tasks) && Array.isArray(raw.requests)) {
       const readiness = backlog.summarizeBacklog({ tasks: raw.tasks, requests: raw.requests, jobs: (autopilot.jobs ?? []).filter((job) => !job.finished), now, compare: compareWork,
+        autoBuild: autopilot.autoBuild,
         paused: assistantState.status === "paused" || !autopilot.execute, waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil });
       const readyTasks = readiness.taskStates.filter((task) => task.stage === "ready").length;
       raw.backlog = { counts: { ...readiness.counts, readyTasks, readyRequests: readiness.counts.ready - readyTasks }, paused: readiness.paused,
@@ -3806,7 +4123,7 @@ async function assistantRespond(user, entry = null) {
           const wanted = local?.request && typeof local.request === "object" ? local.request : null;
           const created = await assistantCreateTask({
             title: String(wanted?.title || text).slice(0, 60),
-            prompt: String(wanted?.prompt || text).slice(0, 1400),
+            prompt: String(wanted?.prompt || text),
             source: "chat",
             focused,
             pin: Boolean(wanted?.pin),
@@ -3874,7 +4191,7 @@ async function assistantRespond(user, entry = null) {
       }
       let timer = null;
       const call = await Promise.race([
-        assistantFetch(ASSISTANT_CHAT_SYSTEM, body.slice(0, 14000), 1200),
+        assistantFetch(ASSISTANT_CHAT_SYSTEM, body.slice(0, 14000), 1200, { taskType: "conversation" }),
         new Promise((resolve) => (timer = setTimeout(() => resolve({ ok: false, error: "no reply within 45 s" }), 45000))),
       ]);
       clearTimeout(timer);
@@ -3959,6 +4276,7 @@ async function assistantWorkOn(raw) {
       // An explicit ask re-arms a task the autopilot had cooled down or given
       // up on — the same fresh start a manual reopen gets.
       if (wasFinished || wasHeld) {
+        delete task.buildApproval;
         delete task.doneAt;
         delete task.runFailures;
         delete task.nextRunAt;
@@ -4145,7 +4463,8 @@ let proactiveTimer = null;
 // "assistant:status" so a panel can watch it work.
 const autopilot = {
   enabled: true, // evaluate on a timer (was "proactive")
-  execute: true, // run queued requests via opencode
+  execute: false, // bootAutopilot loads the saved choice before any worker can run
+  autoBuild: true, // verify-first holds each saved scope until explicitly approved
   minutes: 5,
   parallel: 2, // worker processes; a bounded pool separate from the assistant roster
   jobs: [], // in-flight runs: {id, kind, title, source, ref, child, pid, startedAt, sessionId, taskId, finished}
@@ -4290,6 +4609,7 @@ function autopilotStatus() {
   return {
     enabled: autopilot.enabled,
     execute: autopilot.execute,
+    autoBuild: autopilot.autoBuild,
     minutes: autopilot.minutes,
     parallel: autopilot.parallel,
     parallelLimit: EXECUTOR_PARALLEL_CAP,
@@ -4305,6 +4625,7 @@ function autopilotStatus() {
       sessionId: entry.sessionId ?? null,
       ...(entry.taskId ? { taskId: entry.taskId } : {}),
       ...(Number.isFinite(entry.progress) ? { progress: Math.max(0, Math.min(1, entry.progress)) } : {}),
+      ...(entry.stopping ? { stopping: { ...entry.stopping } } : {}),
     })),
     lastPassAt: autopilot.lastPassAt,
     lastAdded: autopilot.lastAdded,
@@ -4363,6 +4684,7 @@ async function backlogStatus() {
     return { tasks, requests, ideas };
   });
   const snapshot = backlog.summarizeBacklog({ ...board, jobs: autopilot.jobs, compare: compareWork, ideaEligible: assistant.backlogIdeaEligible,
+    autoBuild: autopilot.autoBuild,
     paused: assistantState.status === "paused" || !autopilot.execute,
     draining: Boolean(assistantState.prefs?.backlogMode), waiting: autopilot.waiting, lastError: autopilot.lastError, parkedUntil: autopilot.parkedUntil });
   return { ok: true, projectId: projects.current().id, ...snapshot };
@@ -4373,8 +4695,8 @@ async function admitBacklogIdeas({ ideaIds = null } = {}) {
   if (typeof assistant.promoteIdeaBacklog !== "function") return { ok: false, error: "Idea admission is unavailable. Restart after updating Studio." };
   const result = await mutateBoard((board) => {
     const explicit = Array.isArray(ideaIds) && ideaIds.length > 0;
-    const summary = backlog.summarizeBacklog({ ...board, jobs: autopilot.jobs });
-    const occupied = summary.counts.ready + summary.counts.running + summary.counts.review + summary.counts.cooling + summary.counts.waiting;
+    const summary = backlog.summarizeBacklog({ ...board, jobs: autopilot.jobs, autoBuild: autopilot.autoBuild });
+    const occupied = summary.counts.ready + summary.counts.running + summary.counts.review + summary.counts.cooling + summary.counts.waiting + summary.counts.approval;
     const limit = explicit ? 1 : Math.max(0, 3 - occupied);
     if (!limit || (!explicit && (assistantState?.status === "paused" || !autopilot.execute))) return { promoted: 0, taskIds: [] };
     const promoted = assistant.promoteIdeaBacklog({ tasks: board.tasks, ideas: board.ideas, now: Date.now(), limit, ideaIds });
@@ -4386,9 +4708,9 @@ async function admitBacklogIdeas({ ideaIds = null } = {}) {
   return { ok: true, promoted: result.promoted ?? 0, taskIds: result.taskIds ?? [] };
 }
 
-async function backlogControl({ action, taskId, ideaId, projectId } = {}) {
+async function backlogControl({ action, taskId, ideaId, projectId, expectedScope } = {}) {
   if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Reload its backlog before continuing." };
-  if (!["run", "pause", "retry", "prioritize", "promote"].includes(action)) return { ok: false, error: "Choose run, pause, retry, prioritize, or promote." };
+  if (!["run", "pause", "retry", "prioritize", "promote", "approve"].includes(action)) return { ok: false, error: "Choose run, pause, retry, prioritize, promote, or approve." };
   await ensureAssistant();
   let result = { ok: true };
   if (action === "pause") {
@@ -4417,7 +4739,7 @@ async function backlogControl({ action, taskId, ideaId, projectId } = {}) {
       const index = board.tasks.findIndex((task) => task?.id === taskId);
       if (index < 0) return { ok: false, error: "This task is no longer on the board." };
       const task = board.tasks[index];
-      const state = backlog.workState(task, Date.now(), { tasks: board.tasks });
+      const state = backlog.workState(task, Date.now(), { tasks: board.tasks, autoBuild: autopilot.autoBuild });
       if (state.stage === "grouped") return { ok: false, error: "This task belongs to a group. Open its plan; retrying this member separately could duplicate the work." };
       if (state.blockedBy === "dependencies") return { ok: false, error: state.reason };
       if (state.stage === "running" || autopilot.jobs.some((job) => job.taskId === taskId)) return { ok: false, error: "This task already has a worker. Let it finish before changing its queue position." };
@@ -4426,6 +4748,11 @@ async function backlogControl({ action, taskId, ideaId, projectId } = {}) {
       else {
         if (state.stage === "done") return { ok: false, error: "This task is completed. Use Retry if you want to reopen it." };
         if (state.stage === "blocked") return { ok: false, error: "Review the failure, then choose Retry to re-arm this task." };
+        if (action === "approve") {
+          if (!projectId || typeof expectedScope !== "string" || expectedScope !== backlog.buildScope(task)) return { ok: false, error: "This task changed or its reviewed scope is missing. Reload its details, review the current brief, then approve again." };
+          task.buildApproval = { version: 1, scope: expectedScope, approvedAt: Date.now() };
+          task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "approval", text: "Build approved by you for this saved task scope" }].slice(-40);
+        }
         task.pin = true;
         task.pinAt = task.updatedAt = Date.now();
       }
@@ -4433,7 +4760,7 @@ async function backlogControl({ action, taskId, ideaId, projectId } = {}) {
     });
     if (!changed.ok) return { ok: false, error: changed.error };
     result = { ok: true, taskId };
-    assistantAskForWork(action === "retry" ? "a task was explicitly retried" : "a task was moved next");
+    assistantAskForWork(action === "approve" ? "a task build was approved" : action === "retry" ? "a task was explicitly retried" : "a task was moved next");
   }
   await refreshAutopilotQueue();
   emitAutopilot();
@@ -4444,10 +4771,56 @@ function taskProjectError(projectId) {
   return projectId && projectId !== projects.current().id ? "The selected project changed. Reload the task before continuing." : null;
 }
 
+// Plans have their own project-local store and never enter the executor queue
+// until a human approves the specification and explicitly creates its tasks.
+const planningServices = new Map();
+function planningService() {
+  const project = projects.current();
+  const filePath = projectDataPath(path.join(STUDIO_ROOT, "data", "planning.json"));
+  if (!planningServices.has(filePath)) {
+    planningServices.set(filePath, createPlanningService({
+      project,
+      store: createPlanningStore({ filePath, project }),
+      mutateBoard,
+      onConverted: async (admitted = []) => {
+        // Only durable new task rows reach advisory intake. A retry of an
+        // already admitted specification must not classify its tasks twice.
+        if (admitted.length) jevShadowIntake(admitted.map((task) => ({ ...task, kind: "task", at: task.createdAt })));
+        await ensureAssistant();
+        await refreshAutopilotQueue();
+        assistantAskForWork("you created tasks from an approved plan");
+      },
+      complete: async ({ system, user }, { kind }) => {
+        // Planning replies are data-only HTTP requests. A CLI's implicit tools
+        // must never turn discussion into production changes.
+        const route = await resolveAiRoute(kind === "spec" ? "heavy" : "routine", { allowGrok: false });
+        if (!route.ok) return { ok: false, error: "AI planning needs a saved z.ai or OpenCode Go key in Settings & connections. You can create questions, record decisions, and write the specification manually." };
+        return httpAssistantCall(route, system, user, kind === "spec" ? 7000 : 2500, { taskType: `planning-${kind}`, source: "planning", role: kind === "spec" ? "heavy" : "routine" });
+      },
+      gatherContext: async ({ plan, questionId, useWeb }) => {
+        const question = plan.questions.find((item) => item.id === questionId);
+        const query = `${plan.title} ${question?.question || plan.destination}`.slice(0, 2000);
+        const analyzer = await getAnalyzer();
+        const analysis = await analyzer.verifyIdea(query, { root: project.path });
+        const code = (analysis?.hits || []).slice(0, 14).map(({ file, line, snippet }) => ({ file, line, snippet: String(snippet || "").slice(0, 500) }));
+        const web = useWeb ? await (await getReference()).webSearch(query, { limit: 5 }) : [];
+        return { code, web, webRequested: useWeb, note: "Keyword matches are leads for inspection, not proof that a feature exists. No prototype or test was run." };
+      },
+    }));
+  }
+  return planningServices.get(filePath);
+}
+
+async function planningRequest(method, payload) {
+  try { return await planningService()[method](payload ?? {}); }
+  catch (error) { return { ok: false, projectId: projects.current().id, error: error.message }; }
+}
+
 function taskView(task) {
   if (!task || typeof task !== "object") return task;
   const { contextHistory, ...view } = task;
   view.contextVersion = contextHistory?.entries?.at(-1)?.revision ?? 0;
+  view.buildScope = backlog.buildScope(task);
   return view;
 }
 
@@ -4584,7 +4957,7 @@ async function saveTaskEdits(rows) {
     for (const row of next.filter((task) => task?.id)) {
       if (incoming.has(row.id)) continue;
       incoming.add(row.id);
-      const { contextHistory: _untrustedHistory, contextVersion: _viewVersion, ...editable } = row;
+      const { contextHistory: _untrustedHistory, contextVersion: _viewVersion, buildApproval: _untrustedApproval, buildScope: _viewScope, ...editable } = row;
       const current = existing.get(row.id);
       if (!current) {
         // Rows returned by tasks:list always carry a contextVersion, including
@@ -4759,19 +5132,32 @@ async function promoteRequestsToTasks() {
     const requests = board.requests;
     if (!requests.length) return { added: 0 };
     let added = 0;
+    // Moving work onto the board cannot clear a hold or claim. Pins and age
+    // use the dispatch ordering so a capped pass admits the chosen task first.
     const candidates = requests
-      .filter((request) => request?.title && request.status !== "running" && request.status !== "verifying")
-      .sort((a, b) => taskPriority(b) - taskPriority(a) || (a.at ?? 0) - (b.at ?? 0));
+      .filter((request) => request?.title && !request.runId && !request.absorbedInto && (!request.status || ["open", "pending", "queued"].includes(request.status)))
+      .sort(compareWork);
     const created = [];
     for (const request of candidates) {
       if (added >= 3) break;
       const title = String(request.title).slice(0, 90);
+      if (request.handoffId && request.fromRun) {
+        // Delegated work has an admitted identity and full saved scope.
+        // Similar titles/themes cannot substitute an unrelated task, and
+        // completion needs a durable card for the parent to observe.
+        const same = (row) => row?.handoffId === request.handoffId && row.fromRun === request.fromRun;
+        if (board.tasks.some((task) => same(task) || (Array.isArray(task?.members) && task.members.some(same))) || created.some(same)) continue;
+        created.push(request);
+        added += 1;
+        continue;
+      }
       // Worth first, oldest inside a band — the same pick the executor makes. A
       // request a run is already holding stays off the board: promoting it would
       // build the same job twice, once as the request and again as the task.
       if (board.tasks.some((task) => task && task.title === title && task.status === "active" && task.runId)) continue;
       const key = workTitleKey(title);
       if (key && board.tasks.some((task) => task && task.status !== "archived" && workTitleKey(task.title) === key)) continue;
+      if (key && created.some((candidate) => workTitleKey(String(candidate.title).slice(0, 90)) === key && candidate.prompt === request.prompt)) continue;
       const theme = workPlanTheme(title);
       if (theme && board.tasks.some((task) => task && task.status !== "archived" && workPlanTheme(task.title) === theme)) continue;
       if (isFixWork(request)) {
@@ -4841,7 +5227,8 @@ async function assistantCreateTask({ title, prompt = "", source = "chat", focuse
     projectPath: projectRoot(),
     id: "task_" + crypto.randomBytes(8).toString("hex"),
     title: cleanTitle,
-    prompt: String(prompt ?? cleanTitle).slice(0, 1400),
+    // Keep the canonical brief complete; worker-facing context is bounded later.
+    prompt: String(prompt ?? cleanTitle),
     status: "open",
     color: "#e6c98d",
     source,
@@ -4860,7 +5247,7 @@ async function assistantCreateTask({ title, prompt = "", source = "chat", focuse
     task.target = { kind: target.kind, id: target.id };
     const claim = target.kind === "session" ? target.id : target.kind === "todo" ? target.id.split(":")[0] : null;
     if (claim) task.sessions = [claim];
-    task.prompt = `${task.prompt}\n\nThe user pointed the assistant at ${target.kind} "${focused.title ?? target.id}" (id: ${target.id}) while asking for this.`.slice(0, 1400);
+    task.prompt = `${task.prompt}\n\nThe user pointed the assistant at ${target.kind} "${focused.title ?? target.id}" (id: ${target.id}) while asking for this.`;
   }
   const created = await mutateBoard((board) => {
     if (board.tasks.some((task) => task && task.status !== "done" && task.status !== "archived" && workTitleKey(task.title) === key)) return { created: null };
@@ -4882,28 +5269,26 @@ async function assistantCreateTask({ title, prompt = "", source = "chat", focuse
 // after spawn. Poll for it (3s x 20) so finish() can file a checkpoint against
 // the real session id instead of only the assistant history — and so the
 // wedged-start watchdog can tell a slow store from a stuck run.
+function attributeRunSession(eyes, entry) {
+  if (entry.sessionId || entry.finished || !autopilot.jobs.includes(entry)) return Boolean(entry.sessionId);
+  try {
+    const session = eyes.findRunSession?.({ runId: entry.id, since: entry.startedAt - 10000 });
+    if (!session || autopilot.jobs.some((other) => other !== entry && other.sessionId === session.id)) return false;
+    entry.sessionId = session.id;
+    return true;
+  } catch { return false; } // an unavailable store is never evidence for another run
+}
+
 function watchRunSession(eyes, startedAt, entry) {
   let tries = 0;
   const poll = () => {
     tries += 1;
     // A job that left the in-flight list already closed.
-    if (!autopilot.jobs.includes(entry)) return;
-    try {
-      // A session already claimed by a sibling job is out: two runs starting
-      // within the same seconds must not both grab the first new session.
-      // Of the unclaimed candidates, the OLDEST session born after this run
-      // spawned is the run's own — spawns are staggered, so a later
-      // sibling's session must never be claimed by an earlier one.
-      const session = eyes
-        .listSessions({ limit: 24 })
-        .filter((item) => item.timeCreated >= startedAt - 10000 && !autopilot.jobs.some((other) => other !== entry && other.sessionId === item.id))
-        .sort((a, b) => a.timeCreated - b.timeCreated)[0];
-      if (session) {
-        entry.sessionId = session.id;
-        emitAutopilot();
-        return;
-      }
-    } catch {}
+    if (!autopilot.jobs.includes(entry) || entry.finished) return;
+    if (attributeRunSession(eyes, entry)) {
+      emitAutopilot();
+      return;
+    }
     if (tries < 20 && autopilot.jobs.includes(entry)) setTimeout(poll, 3000).unref?.();
   };
   setTimeout(poll, 3000).unref?.();
@@ -4944,6 +5329,8 @@ let executorFillInFlight = null;
 async function executeNextRequest() {
   if (SMOKE || CAPTURE || CLI_MODE) return;
   if (assistantState?.status === "paused") return;
+  if (executorUpdateHold()) { setAutopilotWaiting(executorUpdateHold()); return; }
+  if (autopilot.jobs.some((entry) => entry.settlementPending)) { setAutopilotWaiting("saving a finished worker result; retrying storage"); return; }
   if (executorFillInFlight) return executorFillInFlight;
   executorFillInFlight = (async () => {
     if (!autopilot.execute) {
@@ -4965,7 +5352,7 @@ async function executeNextRequest() {
     }
     let stop = "empty";
     let lostTries = 0;
-    while (autopilot.execute && assistantState?.status !== "paused" && autopilot.jobs.length < Math.max(1, autopilot.parallel)) {
+    while (autopilot.execute && assistantState?.status !== "paused" && !executorUpdateHold() && autopilot.jobs.length < Math.max(1, autopilot.parallel)) {
       // Sequential awaits: each pick re-reads the store with the previous job's
       // claim already on it, so parallel slots can never grab the same work.
       try {
@@ -4991,7 +5378,7 @@ async function executeNextRequest() {
       }
     }
     setAutopilotWaiting(
-      stop === "busy" ? "machine busy" : stop === "cooldown" ? "tasks cooling down" : stop === "prerequisites" ? "waiting for task prerequisites" : stop === "review" ? "tasks need review before retry" : stop === "deferred" ? "waiting on live editors" : null
+      executorUpdateHold() || (stop === "busy" ? "machine busy" : stop === "approval" ? "Verify first: tasks are waiting for your build approval" : stop === "cooldown" ? "tasks cooling down" : stop === "prerequisites" ? "waiting for task prerequisites" : stop === "review" ? "tasks need review before retry" : stop === "deferred" ? "waiting on live editors" : null)
     );
   })().finally(() => {
     executorFillInFlight = null;
@@ -5101,9 +5488,12 @@ async function mutateBoard(mutator) {
       if (isThenable(returned)) throw new TypeError("mutateBoard: mutator must be synchronous — await inputs before the gateway, not inside it");
       const patch = returned ?? {};
       if (patch.ok === false) return patch;
-      const tasks = (patch.tasks ?? board.tasks).map((task) => taskContext.recordTaskRevision(task, {
+      const tasks = (patch.tasks ?? board.tasks).map((task) => {
+        if (task?.buildApproval && !backlog.hasBuildApproval(task)) delete task.buildApproval;
+        return taskContext.recordTaskRevision(task, {
         previous: previous.get(task?.id), kind: patch.revisionKind ?? "updated", note: patch.revisionNote ?? "", now: Date.now(),
-      }));
+        });
+      });
       return { ...patch, tasks };
     };
     // Preferred path: the SQLite authority. boardMutate runs the read, the
@@ -5197,7 +5587,7 @@ async function spawnNextJob() {
   const runRoot = runProject.path;
   // The pause can land mid-fill (an infra breaker tripped on a sibling job),
   // so re-check instead of trusting the dispatcher's one-time gate.
-  if (projectSwitching || !autopilot.execute || assistantState?.status === "paused") return "empty";
+  if (projectSwitching || !autopilot.execute || assistantState?.status === "paused" || executorUpdateHold()) return "empty";
   let leases = null;
   try {
     const machine = await getMachine();
@@ -5242,8 +5632,12 @@ async function spawnNextJob() {
   const liveKeys = new Set(autopilot.jobs.map((job) => workTitleKey(job.title)).filter(Boolean));
   const waiting = requests.filter((item) => {
     if (!item || item.status === "running" || item.status === "verifying") return false;
+    // Handoffs first become durable cards through the bounded promotion
+    // pass. A temporary direct-request completion is removed from the inbox
+    // and would leave its parent unable to distinguish finished from lost.
+    if (item.handoffId && item.fromRun) return false;
     if ((item.runFailures ?? 0) >= 5) return false;
-    if (backlog.workState(item, Date.now(), { tasks }).stage !== "ready") return false;
+    if (backlog.workState(item, Date.now(), { tasks, autoBuild: autopilot.autoBuild }).stage !== "ready") return false;
     if (item.nextRunAt && item.nextRunAt > Date.now()) return false;
     const key = workTitleKey(item.title) || workTitleKey(item.prompt);
     if (key && liveKeys.has(key)) return false;
@@ -5257,7 +5651,7 @@ async function spawnNextJob() {
   const open = tasks
     .filter((task) => task && task.status === "open" && !liveTaskIds.has(task.id) && !liveKeys.has(workTitleKey(task.title)) && !conflictsWithLiveFix(eyes, task))
     .sort((a, b) => (a.createdAt ?? a.updatedAt ?? 0) - (b.createdAt ?? b.updatedAt ?? 0));
-  const runnable = open.filter((task) => (task.runFailures ?? 0) < 5 && backlog.workState(task, now, { tasks }).stage === "ready" && !(task.nextRunAt && task.nextRunAt > now));
+  const runnable = open.filter((task) => (task.runFailures ?? 0) < 5 && backlog.workState(task, now, { tasks, autoBuild: autopilot.autoBuild }).stage === "ready" && !(task.nextRunAt && task.nextRunAt > now));
   // Pick by what the job is FOR, not just who filed it. Preferring
   // source === "a-eyes" meant the overseer's own upkeep chores ("Stamp digest
   // schema version", "Tag log errors by role") took every slot the moment it
@@ -5268,7 +5662,8 @@ async function spawnNextJob() {
     ...runnable.map((ref) => ({ kind: "task", ref })),
   ].sort((a, b) => compareWork(a.ref, b.ref));
   if (!ranked.length) {
-    const states = [...open, ...requests.filter((item) => item && item.status !== "running" && item.status !== "verifying")].map((item) => backlog.workState(item, now, { tasks }));
+    const states = [...open, ...requests.filter((item) => item && item.status !== "running" && item.status !== "verifying")].map((item) => backlog.workState(item, now, { tasks, autoBuild: autopilot.autoBuild }));
+    if (states.some((item) => item.stage === "approval")) return "approval";
     if (states.some((item) => item.stage === "cooling")) return "cooldown";
     if (states.some((item) => item.blockedBy === "dependencies")) return "prerequisites";
     if (states.some((item) => item.stage === "blocked")) return "review";
@@ -5360,6 +5755,19 @@ async function spawnNextJob() {
     }
   }
   if (!job) return deferred ? "deferred" : "empty";
+  const selectedScope = backlog.buildScope(job.ref);
+  // Choose a worker model only after the task is known and before ownership
+  // changes. CLI-owned accounts retain their configured/default models.
+  if (runRoute.modelProvider === "zai") {
+    const selected = await applyModelRouting({ ok: true, provider: "zai", model: runRoute.model },
+      { worker: true, taskType: "coding", task: `${job.title}\n${job.prompt}` });
+    // Only the advertised managed provider models may enter a shell command.
+    if ([ZAI_MODEL_ROUTINE, ZAI_MODEL_HEAVY].includes(selected.model)) {
+      runRoute.model = selected.model;
+      runRoute.modelArgs = ` --model mefi-zai/${selected.model}`;
+      runRoute.via = `mefi-zai/${selected.model}`;
+    }
+  }
   const startedAt = Date.now();
   const entry = {
     projectId: runProject.id,
@@ -5388,11 +5796,32 @@ async function spawnNextJob() {
     calls: new Set(), // MEFI_CALL roster roles it asked to follow up
     depth: Number(job.ref?.depth) || 0, // how far down a handoff chain this run sits
   };
+  // Resolve against this dispatch's selected project, and retain the module
+  // that owns the registry: a live module reload must not strand its claims.
+  const claimRegistry = assistantModule;
+  const claimPaths = entry.files.map((file) => path.resolve(runRoot, file));
+  const releaseFiles = () => { try { claimRegistry?.releaseWrite?.(claimPaths, entry.id); } catch {} };
+  const discardEntry = () => {
+    releaseFiles();
+    autopilot.jobs = autopilot.jobs.filter((item) => item !== entry);
+  };
   // The claim rides the job id: a run that dies with the app (or whose close
   // never landed) is re-queued by housekeeping once its id leaves the list.
   // Register before the claim lands on disk — housekeeping rescues claims
   // with no live run behind them, so the job must be visible first.
   autopilot.jobs.push(entry);
+  // Write-lock registry: hold this run's files under its id so a second
+  // dispatch on the same path (however it is spelled) defers until finish().
+  if (claimRegistry?.claimWrite && claimPaths.length) {
+    try {
+      const held = claimRegistry.claimWrite(claimPaths, entry.id);
+      if (held?.action !== "proceed") { discardEntry(); return "deferred"; }
+    } catch (error) {
+      discardEntry();
+      logLine(`[autopilot] file claim unavailable: ${error.message}`);
+      return "deferred";
+    }
+  }
   let claimed = false;
   try {
     // The claim is one transactional mutation: the freshness re-read, the
@@ -5404,11 +5833,16 @@ async function spawnNextJob() {
     // check atomic. The lease ({ pid, at }) rides the claim so housekeeping
     // can tell our own dead runs from another process's live ones.
     await mutateBoard((board) => {
-      if (!autopilot.execute || assistantState?.status === "paused") return null;
+      if (!autopilot.execute || assistantState?.status === "paused" || executorUpdateHold()) return null;
+      // The operator can edit an open card while the route/policy reads await.
+      // Its new scope needs a new collaboration decision and file reservation;
+      // never run an updated brief under the old selection's file locks.
+      const scopeUnchanged = (current) => backlog.buildScope(current) === selectedScope && Boolean(current.pin) === Boolean(job.ref.pin);
       if (job.kind === "request") {
         const same = (item) => item && item.at === job.ref.at && item.prompt === job.ref.prompt;
         const current = board.requests.find(same);
-        if (!current || current.status === "running" || current.status === "verifying" || backlog.workState(current, Date.now(), { tasks: board.tasks }).stage !== "ready" || (current.runId && current.runId !== entry.id)) return null;
+        if (!current || current.status === "running" || current.status === "verifying" || backlog.workState(current, Date.now(), { tasks: board.tasks, autoBuild: autopilot.autoBuild }).stage !== "ready" || (current.runId && current.runId !== entry.id)) return null;
+        if (!scopeUnchanged(current)) return null;
         current.status = "running";
         current.runId = entry.id;
         current.runningAt = startedAt;
@@ -5418,7 +5852,8 @@ async function spawnNextJob() {
         return {};
       }
       const current = board.tasks.find((item) => item && item.id === job.ref.id);
-      if (!current || current.status !== "open" || backlog.workState(current, Date.now(), { tasks: board.tasks }).stage !== "ready" || (current.runId && current.runId !== entry.id)) return null;
+      if (!current || current.status !== "open" || backlog.workState(current, Date.now(), { tasks: board.tasks, autoBuild: autopilot.autoBuild }).stage !== "ready" || (current.runId && current.runId !== entry.id)) return null;
+      if (!scopeUnchanged(current)) return null;
       current.status = "active";
       current.runId = entry.id;
       current.updatedAt = startedAt;
@@ -5429,11 +5864,11 @@ async function spawnNextJob() {
       return {};
     });
   } catch (error) {
-    autopilot.jobs = autopilot.jobs.filter((item) => item !== entry);
+    discardEntry();
     throw error;
   }
   if (!claimed) {
-    autopilot.jobs = autopilot.jobs.filter((item) => item !== entry);
+    discardEntry();
     return "lost";
   }
   autopilot.queueDepth = queuedWorkCount(requests, tasks);
@@ -5447,13 +5882,29 @@ async function spawnNextJob() {
   } catch {}
   if (leases?.exclusive) {
     await releaseExecutorClaim(eyes, job, entry).catch(() => {});
-    autopilot.jobs = autopilot.jobs.filter((item) => item !== entry);
+    discardEntry();
     return "busy";
   }
-  if (!autopilot.execute || assistantState?.status === "paused") {
+  if (!autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || !backlog.buildAllowed(job.ref, autopilot)) {
     await releaseExecutorClaim(eyes, job, entry).catch(() => {});
-    autopilot.jobs = autopilot.jobs.filter((item) => item !== entry);
+    discardEntry();
     return "empty";
+  }
+  // A mode switch or scope edit can arrive during route/claim/lease awaits.
+  // Re-read the durable owner and reviewed scope after those awaits. No await
+  // remains on the initial path from this check to process creation.
+  let launchAllowed = false;
+  try {
+    launchAllowed = await withBoardLock(async () => {
+      const saved = await eyes.readJson(job.kind === "task" ? TASKS_PATH : REQUESTS_PATH, []);
+      const current = saved.find((item) => item?.runId === entry.id);
+      return Boolean(current && backlog.buildScope(current) === selectedScope && backlog.buildAllowed(current, autopilot));
+    });
+  } catch {}
+  if (!launchAllowed || !autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || !backlog.buildAllowed(job.ref, autopilot)) {
+    await releaseExecutorClaim(eyes, job, entry).catch(() => {});
+    discardEntry();
+    return "lost";
   }
   // Policy Lab PR1 — the attempt's identity: handoff lineage, the claim, the
   // route and the acceptance baseline it will be judged against. The prompt
@@ -5563,7 +6014,13 @@ async function spawnNextJob() {
   let startWatchdog = null;
   const finish = async (code, errorMessage = null) => {
     if (entry.finished) return;
+    // Fast workers may end before the first polling interval. Bind only the
+    // exact dispatch identity before freezing the attempt's evidence.
+    attributeRunSession(eyes, entry);
     entry.finished = true;
+    // Release the write-lock registry claims first so a waiting dispatch is
+    // unblocked even if the settlement below throws.
+    releaseFiles();
     if (timeout) clearTimeout(timeout);
     if (startWatchdog) clearTimeout(startWatchdog);
     const sessionId = entry.sessionId ?? null;
@@ -5617,46 +6074,64 @@ async function spawnNextJob() {
         : null,
       cost: { durationMs: attemptDurationMs, modelCalls: null, tokens: null, providerCost: null, testExecutions: null },
     });
-    // Report home while the builder node is still on the board so the
-    // Command view can pulse it back to the assistant. The overseer is
-    // woken after the store write so it does not reopen the claim we are
-    // about to settle.
-    let heard = null;
-    try {
-      heard = assistantHearBuilder(entry, job, ok);
-    } catch (error) {
-      logLine(`[assistant] builder report failed: ${error.message}`);
-    }
     const attempt = {
       runId: entry.id,
+      startedAt: entry.startedAt,
       code: code ?? null,
       sawDone: entry.sawDone === true,
       spoke: entry.spoke === true,
       sessionId,
       at: Date.now(),
       tail: (entry.outputTail ?? []).slice(-1)[0] ?? null,
+      ...(errorMessage ? { error: String(errorMessage).slice(0, 500) } : {}),
       ...(entry.resultNote ? { result: entry.resultNote } : {}),
+      handoffs: taskHandoffs.captureTaskHandoffs(entry, job, { now: Date.now(), maxDepth: EXECUTOR_MAX_DEPTH, limit: EXECUTOR_MAX_HANDOFFS }),
     };
+    let settlementRetries = 0;
+    const settle = async () => {
+    let settled = false;
+    // A collision card's saved file scope copies session edit records, and
+    // those records keep a moved file's OLD absolute path — every dispatched
+    // worker then burns its run hunting a ghost path. Re-anchor stale entries
+    // to the same basename under the task's project root BEFORE the
+    // transaction (a bounded directory walk must never hold the board lock);
+    // the result is applied to the owned task inside the mutation below.
+    // Studio heals its own saved scope here — a worker run may not rewrite it.
+    let scopeHeal = null;
+    if (job.kind === "task") {
+      try {
+        scopeHeal = taskContext.resolveStaleFileScope(job.ref, {
+          exists: (candidate) => { try { return statSync(candidate, { throwIfNoEntry: false })?.isFile() === true; } catch { return false; } },
+          locate: (base, ref) => findBasenameUnderRoot(ref?.projectPath || projectRoot(), base),
+        });
+      } catch {}
+    }
     // Settlement rides ONE transactional mutation for the board stores: the
     // ownership re-read, the fence check, and the write are the same atomic
     // step, not a read then a separate whole-collection write.
     try {
-      await mutateBoard((board) => {
+      const outcome = await mutateBoard((board) => {
       const fence = (record, requireOwner = true) =>
         assistantModule?.ownershipFence ? assistantModule.ownershipFence(record, entry.id, { requireOwner }) : record ? record.runId === entry.id : false;
       if (job.kind === "request") {
         const same = (item) => item && item.at === job.ref.at && item.prompt === job.ref.prompt;
+        const owned = board.requests.find((item) => same(item) && fence(item));
+        // A previous file write may have committed before a later store
+        // failed. A retry of this same outcome must not spend another try.
+        if (!owned && board.requests.some((item) => same(item) && !item.runId && item.lastAttempt?.runId === entry.id)) return { settled: true };
+        if (!owned) return null;
         if (ok) {
           // Reported success: the row stays as "verifying" with the attempt's
-          // evidence — the housekeeping pass settles it with the same
-          // acceptance-contract check tasks get. Unclaimed duplicates of the
-          // finished work drop idempotently; a row another attempt owns is
-          // untouched.
-          board.requests = board.requests.flatMap((item) => {
-            if (!same(item)) return [item];
-            if (item.runId === entry.id) return [{ ...item, status: "verifying", runningAt: job.ref.runningAt ?? null, lastAttempt: attempt }];
-            if (!item.runId) return [];
-            return [item];
+          // evidence. Only this owner's row changes; copied titles or an
+          // unclaimed replacement are not authority to remove an obligation.
+          board.requests = board.requests.map((item) => {
+            if (item !== owned) return item;
+            const next = { ...item, status: "verifying", lastAttempt: attempt };
+            // Direct requests owe the same follow-ups as task-backed runs.
+            // Keep them on the parent before attempting the separate queue write.
+            if (entry.handoffs.length) next.remaining = entry.handoffs.slice(0, EXECUTOR_MAX_HANDOFFS).map((handoff) => handoff.title);
+            else delete next.remaining;
+            return next;
           });
         } else {
           // A failed request used to vanish, so unique handoffs (source
@@ -5664,11 +6139,8 @@ async function spawnNextJob() {
           // a failed task gets so the queue keeps retrying — but only if
           // this run still owns the claim; a re-queued row belongs to the
           // next attempt now.
-          let touched = false;
-          const remaining = board.requests.map((item) => {
-            if (!same(item)) return item;
-            if (!fence(item)) return item;
-            touched = true;
+          board.requests = board.requests.map((item) => {
+            if (item !== owned) return item;
             const failures = (item.runFailures ?? 0) + 1;
             const next = { ...item };
             delete next.status;
@@ -5676,30 +6148,17 @@ async function spawnNextJob() {
             delete next.runningAt;
             delete next.lease;
             next.runFailures = failures;
+            next.lastAttempt = attempt;
             next.lastRunError = (entry.outputTail ?? []).slice(-1)[0] || `exit ${code ?? "?"}`;
             if (failures < 5) next.nextRunAt = Date.now() + (failures <= 1 ? 60 * 1000 : Math.min(2 * 3600 * 1000, (2 ** failures) * 5 * 60000));
             else delete next.nextRunAt;
             return next;
           });
-          if (touched) {
-            board.requests = remaining;
-          } else if (!board.requests.some(same)) {
-            const restored = { ...job.ref };
-            delete restored.status;
-            delete restored.runId;
-            delete restored.runningAt;
-            delete restored.lease;
-            restored.runFailures = 1;
-            restored.nextRunAt = Date.now() + 60 * 1000;
-            restored.lastRunError = (entry.outputTail ?? []).slice(-1)[0] || `exit ${code ?? "?"}`;
-            board.requests = [restored, ...board.requests];
-          } else {
-            board.requests = remaining;
-          }
         }
-        return {};
+        return { settled: true };
       }
       const task = board.tasks.find((item) => item.id === job.ref.id);
+      if (task && !task.runId && task.lastAttempt?.runId === entry.id && task.status === "open") return { settled: true };
       // Ownership fence: settle only what this run still owns. If the claim
       // was re-queued by housekeeping/overseer (or the record vanished), a
       // stale completion must not close or fail someone else's attempt.
@@ -5708,6 +6167,15 @@ async function spawnNextJob() {
         return null;
       }
       task.updatedAt = Date.now();
+      task.lastAttempt = attempt;
+      // Apply the stale-scope heal computed above: the card's saved files/file
+      // must name files that exist. Unresolvable entries stay as saved (and
+      // are visible in the log) — nothing is dropped silently.
+      if (scopeHeal?.changed) {
+        task.files = scopeHeal.files;
+        if (scopeHeal.file) task.file = scopeHeal.file;
+        task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "status", text: `file scope healed — ${scopeHeal.healed.map((row) => `${row.from.split(/[\\/]/).pop()} re-anchored to ${row.to}`).join("; ")}` }].slice(-40);
+      }
       // A pin is a one-shot: the run it asked for has now happened, so
       // the next pick goes back to the ordinary worth order.
       delete task.pin;
@@ -5722,7 +6190,6 @@ async function spawnNextJob() {
         delete task.runFailures;
         delete task.nextRunAt;
         delete task.verification;
-        task.lastAttempt = attempt;
         // Follow-ups this run handed on are remaining obligations, kept
         // visible on the card; they are queued as requests right after
         // (runExecutorHandoffs), so nothing silently disappears with the
@@ -5767,13 +6234,40 @@ async function spawnNextJob() {
           });
         }
       }
-      // The outcome lands in the task's folder: the node remembers what its
-      // last build did, and the keeper cleans it out once the task is gone.
-      assistantNodeContext(taskTarget(task.id), "run", `autopilot "${assistantClip(job.title, 60)}" — ${ok ? "finished, verifying" : "failed"} (exit ${code ?? "?"})`, "executor");
-      return {};
+      return { settled: true };
       });
+      settled = outcome?.settled === true;
     } catch (error) {
-      logLine(`[autopilot] store update failed: ${error.message}`);
+      // Keep the ended run's claim visible to housekeeping until its result
+      // is durable. Retry storage, never the paid worker, with bounded pacing.
+      entry.settlementPending = true;
+      entry.settlementError = String(error.message).slice(0, 200);
+      logLine(`[autopilot] result not saved; retrying storage: ${entry.settlementError}`);
+      setAutopilotWaiting("saving a finished worker result; retrying storage");
+      emitAutopilot();
+      const delay = Math.min(60000, 5000 * 2 ** Math.min(settlementRetries++, 4));
+      setTimeout(() => settle().catch((failure) => logLine(`[autopilot] settlement retry failed: ${failure.message}`)), delay).unref?.();
+      return;
+    }
+    delete entry.settlementPending;
+    delete entry.settlementError;
+    if (!settled) {
+      discardEntry();
+      logLine(`[autopilot] stale result ignored — "${String(job.title).slice(0, 60)}" is no longer owned by ${entry.id}`);
+      emitAutopilot();
+      assistantAskForWork("a stale worker released its slot");
+      refreshAutopilotQueue(eyes).catch(() => {});
+      return;
+    }
+    // Outcome messages, follow-up work and node context require a successful
+    // ownership-fenced commit. A stale worker may log its exit, but cannot
+    // announce success or create a new branch of work for another attempt.
+    let heard = null;
+    try { heard = assistantHearBuilder(entry, job, ok, errorMessage); }
+    catch (error) { logLine(`[assistant] builder report failed: ${error.message}`); }
+    if (job.kind === "task") {
+      try { assistantNodeContext(taskTarget(job.ref.id), "run", `autopilot "${assistantClip(job.title, 60)}" — ${ok ? "finished, verifying" : "failed"} (exit ${code ?? "?"})`, "executor"); }
+      catch (error) { logLine(`[autopilot] task context update failed: ${error.message}`); }
     }
     // History and checkpoints are not board stores: they update serialized by
     // the same board lock, after the transactional settlement above.
@@ -5813,7 +6307,7 @@ async function spawnNextJob() {
           const store = await eyes.readJson(CHECKPOINTS_PATH, {});
           const list = store[sessionId] ?? [];
           list.unshift({
-            note: `autopilot: ${String(job.title).slice(0, 120)} — ${ok ? "done" : "failed"} (code ${code ?? "?"})`,
+            note: `autopilot: ${String(job.title).slice(0, 120)} — ${ok ? "finished, awaiting verification" : "failed"} (code ${code ?? "?"})`,
             at: Date.now(),
             source: "autopilot",
             files: [],
@@ -5823,7 +6317,7 @@ async function spawnNextJob() {
           send("eyes:checkpoints", store);
           // The spawned session's folder carries the same verdict, next to the
           // checkpoint — the node and its context stay one thing.
-          assistantNodeContext(sessionTarget(sessionId), "run", `autopilot "${assistantClip(job.title, 60)}" — ${ok ? "done" : "failed"} (exit ${code ?? "?"})`, "executor");
+          assistantNodeContext(sessionTarget(sessionId), "run", `autopilot "${assistantClip(job.title, 60)}" — ${ok ? "finished, awaiting verification" : "failed"} (exit ${code ?? "?"})`, "executor");
         }
       });
     } catch (error) {
@@ -5833,7 +6327,7 @@ async function spawnNextJob() {
     // housekeeping/overseer pass running in the window between the two saw a
     // "stuck" claim (no live run behind the runId) and re-queued work this
     // very function was about to settle.
-    autopilot.jobs = autopilot.jobs.filter((item) => item !== entry);
+    discardEntry();
     // Per-job failure isolation: a failed run after real runtime is the task's
     // problem — it cools down via runFailures above and the pool keeps working.
     // The only pause left is for infrastructure: a spawn error, or a run that
@@ -5845,7 +6339,7 @@ async function spawnNextJob() {
       autopilot.consecutiveFailures = 0;
       autopilot.infraFailures = 0;
       autopilot.lastError = null;
-      pushAutopilotHistory("done", `done: ${job.title}`);
+      pushAutopilotHistory("review", `finished, awaiting verification: ${job.title}`);
       await runExecutorHandoffs(entry, job).catch((error) => logLine(`[autopilot] handoff failed: ${error.message}`));
     } else {
       autopilot.consecutiveFailures += 1;
@@ -5880,10 +6374,12 @@ async function spawnNextJob() {
     // (or bounced back to open with a fresh backoff), so the queue's shape has
     // changed and the compactor is what turns that into the next thing to run.
     // It ends by filling the freed slot, so this replaces the bare kick.
-    assistantEnqueueRole("compactor", ASSISTANT_PRIORITY.demand);
+    assistantEnqueueRole("compactor", ASSISTANT_PRIORITY.demand, { automatic: true });
     assistantAskForWork("a slot came free");
-    if (heard?.wakeOverseer) assistantEnqueueRole("overseer", ASSISTANT_PRIORITY.demand);
+    if (heard?.wakeOverseer) assistantEnqueueRole("overseer", ASSISTANT_PRIORITY.demand, { automatic: true });
     refreshAutopilotQueue(eyes).catch(() => {});
+    };
+    await settle();
   };
   entry.reap = finish;
   // Provider route for this run: a saved z.ai key puts the job on the
@@ -5897,11 +6393,12 @@ async function spawnNextJob() {
   // Same line-buffering as streamChild, but the autopilot children are tracked
   // separately: activeChild belongs to the Love2D studio launcher. Shared by
   // every attach() below — the first attempt and any grok fallback alike.
-  const wire = (stream) => {
+  const wire = (stream, owner) => {
     if (!stream) return;
     stream.setEncoding("utf8");
     let buffer = "";
     const take = (line) => {
+      if (entry.finished || entry.child !== owner) return;
       logLine(`[${runLabel}] ${line}`);
       entry.spoke = true;
       // Strict verdict match: the line must BE the sentinel (a short trailing
@@ -5975,19 +6472,87 @@ async function spawnNextJob() {
   let child = null;
   let attemptStartedAt = startedAt;
   const attach = (nextChild, label, route, allowFallback) => {
+    let inputError = null;
+    let stopReason = null;
+    let stopForFallback = false;
+    let stopAttempt = null;
+    let stopRetry = null;
     child = nextChild;
     entry.child = child;
     entry.pid = child.pid ?? null;
+    delete entry.stopping;
     autopilot.waiting = null; // a job actually spawned — the emit below carries it
     runLabel = label;
-    wire(child.stdout);
-    wire(child.stderr);
+    const current = () => entry.child === nextChild && !entry.finished;
+    const ended = (code, error = null) => {
+      if (!current()) return;
+      if (stopRetry) clearTimeout(stopRetry);
+      if (stopAttempt?.timer) clearTimeout(stopAttempt.timer);
+      if (stopReason && stopForFallback && fallbackToOpencode(stopReason)) return;
+      // A silent nonzero grok exit is the CLI failing, not the job: fall back
+      // once before calling it a failure, after the original process exits.
+      if (!stopReason && allowFallback && code !== 0 && !entry.spoke && fallbackToOpencode(`silent exit ${code ?? "?"}`)) return;
+      finish(code, stopReason ?? error).catch((failure) => logLine(`[autopilot] finish failed: ${failure.message}`));
+    };
+    const stop = (reason, useFallback = false) => {
+      if (!current()) return;
+      if (!stopReason) {
+        stopReason = reason;
+        stopForFallback = useFallback;
+        entry.stopping = { since: Date.now(), reason, error: null, retryAt: null };
+        emitAutopilot();
+      }
+      // Supervision, the startup watchdog and the budget timer share one
+      // attempt. Failed termination stays visible and retries without ever
+      // launching another writer onto this child's files.
+      if (stopAttempt || stopRetry) return;
+      if (!nextChild.pid) { ended(1, stopReason); return; }
+      const attempt = {};
+      stopAttempt = attempt;
+      const retry = (error) => {
+        if (!current() || stopAttempt !== attempt) return;
+        stopAttempt = null;
+        if (attempt.timer) clearTimeout(attempt.timer);
+        const message = String(error?.message ?? error).slice(0, 240);
+        entry.stopping.error = message;
+        entry.stopping.retryAt = Date.now() + 15000;
+        autopilot.lastError = `Stopping worker: ${message}`;
+        logLine(`[autopilot] cannot yet stop ${label}: ${message}; retaining its claim and retrying`);
+        emitAutopilot();
+        stopRetry = setTimeout(() => { stopRetry = null; stop(stopReason, stopForFallback); }, 15000);
+        stopRetry.unref?.();
+      };
+      try {
+        attempt.child = spawn("taskkill", ["/pid", String(nextChild.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
+        attempt.child.once("error", retry);
+        attempt.child.once("close", (code) => {
+          if (!current() || stopAttempt !== attempt) return;
+          if (code === 0) ended(1, stopReason); // the complete process tree was removed
+          else retry(`taskkill exited ${code ?? "without a status"}`);
+        });
+        attempt.timer = setTimeout(() => {
+          if (!current() || stopAttempt !== attempt) return;
+          try { attempt.child.kill(); } catch {}
+          retry("termination command did not finish");
+        }, 15000);
+        attempt.timer.unref?.();
+        entry.stopping.retryAt = null;
+      } catch (error) { retry(error); }
+    };
+    entry.stop = stop;
+    wire(child.stdout, nextChild);
+    wire(child.stderr, nextChild);
+    // An early CLI exit can break the piped prompt before the child emits
+    // close. Handle the stream's own error event, keep the claim until exit,
+    // and do not accept exit 0 after an incomplete prompt delivery.
+    child.stdin?.on?.("error", (error) => {
+      if (entry.child !== nextChild || entry.finished) return;
+      inputError = String(error.message ?? error);
+      logLine(`[autopilot] ${label} prompt input failed: ${inputError}`);
+    });
     if (timeout) clearTimeout(timeout);
     timeout = setTimeout(() => {
-      if (child.pid) spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { windowsHide: true });
-      setTimeout(() => {
-        if (!entry.finished) finish(1, "killed after budget").catch(() => {});
-      }, 45000).unref?.();
+      stop("killed after budget");
     }, EXECUTOR_KILL_MS);
     timeout.unref?.();
     if (startWatchdog) clearTimeout(startWatchdog);
@@ -6003,14 +6568,13 @@ async function spawnNextJob() {
     const startBudgetMs = EXECUTOR_START_BUDGET_MS + Math.max(0, autopilot.jobs.length - 4) * 45000;
     attemptStartedAt = Date.now();
     startWatchdog = setTimeout(() => {
-      if (entry.finished) return;
+      if (entry.finished || entry.child !== nextChild) return;
       const wedged = assistantModule?.isWedgedStart
         ? assistantModule.isWedgedStart({ spoke: entry.spoke, sessionId: entry.sessionId, ageMs: Date.now() - attemptStartedAt, budgetMs: startBudgetMs })
         : !entry.spoke && !entry.sessionId;
       if (!wedged) return;
       entry.startKilled = true;
       logLine(`[autopilot] ${runLabel} run wedged (no session, no output in ${Math.round(startBudgetMs / 60000)}m) — killing: ${job.title}`);
-      if (child.pid) spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { windowsHide: true });
       // The kill may leave git locks in the shared snapshot worktree; aged-out
       // ones are swept so they cannot poison later runs.
       sweepSnapshotLocks().catch(() => {});
@@ -6027,18 +6591,16 @@ async function spawnNextJob() {
         readSettings().then((settings) => writeSettings({ ...settings, ui: { ...(settings.ui ?? {}), autopilot: { ...(settings.ui?.autopilot ?? {}), parallel: narrowed } } })).catch(() => {});
         emitAutopilot();
       }
-      if (allowFallback && fallbackToOpencode("wedged start")) return;
-      finish(1, `no session and no output for ${Math.round(startBudgetMs / 60000)}m after spawn — killed as a wedged start`).catch(() => {});
+      stop(`no session and no output for ${Math.round(startBudgetMs / 60000)}m after spawn — killed as a wedged start`, allowFallback);
     }, startBudgetMs);
     startWatchdog.unref?.();
     child.on("close", (code) => {
-      // A silent nonzero grok exit is the CLI failing, not the job: fall back
-      // once before calling it a failure.
-      if (allowFallback && code !== 0 && !entry.spoke && !entry.finished && fallbackToOpencode(`silent exit ${code ?? "?"}`)) return;
-      finish(code).catch((error) => logLine(`[autopilot] finish failed: ${error.message}`));
+      ended(code, inputError);
     });
     child.on("error", (error) => {
+      if (entry.child !== nextChild || entry.finished) return;
       logLine(`[autopilot] ${runLabel} failed: ${error.message}`);
+      if (stopReason) return; // termination still owns the live process and its claim
       if (allowFallback && fallbackToOpencode(`spawn failed: ${error.message}`)) return;
       finish(1, error.message).catch(() => {});
     });
@@ -6056,7 +6618,12 @@ async function spawnNextJob() {
       title: String(job.title ?? "").slice(0, 160),
       reason: String(reason).slice(0, 120),
     }).catch(() => {});
-    attach(spawnAttempt(fallbackRoute, false), "opencode", fallbackRoute, false);
+    try {
+      attach(spawnAttempt(fallbackRoute, false), "opencode", fallbackRoute, false);
+      watchRunSession(eyes, startedAt, entry);
+    } catch (error) {
+      finish(1, `fallback could not start: ${error.message}`).catch((failure) => logLine(`[autopilot] fallback settlement failed: ${failure.message}`));
+    }
     emitAutopilot();
     return true;
   };
@@ -6089,32 +6656,38 @@ async function spawnNextJob() {
 // A finished run's handoffs: the work it passed to the next executor agent and
 // the roster agents it asked to follow up. This is what keeps the loop going —
 // without it every job was a dead end and the board only ever shrank.
-// The chain is bounded by EXECUTOR_MAX_DEPTH, and queueRequests dedupes by
-// prompt, so a pair of agents cannot hand the same job back and forth.
+// The chain is bounded by EXECUTOR_MAX_DEPTH; stable attempt/child identities
+// make repeated admission idempotent without erasing different saved scope.
 async function runExecutorHandoffs(entry, job) {
   const handed = [];
   if (entry.depth < EXECUTOR_MAX_DEPTH && entry.handoffs.length) {
-    const queued = await queueRequests(
-      entry.handoffs.slice(0, EXECUTOR_MAX_HANDOFFS).map((item) => ({
-        title: item.title,
-        prompt: item.prompt,
-        source: "agent",
-        at: Date.now(),
-        depth: entry.depth + 1,
-        // Where it came from, so the chain is readable on the board — and the
-        // attempt that minted it, so a retried run's duplicate handoff is
-        // traceable to its origin instead of looking like fresh work.
-        parent: String(job.title).slice(0, 90),
-        fromRun: entry.id,
-      }))
-    );
+    const obligations = taskHandoffs.captureTaskHandoffs(entry, job, { now: Date.now(), maxDepth: EXECUTOR_MAX_DEPTH, limit: EXECUTOR_MAX_HANDOFFS });
+    // Admission uses the same durable attempt identity as settlement. If a
+    // crash separates the writes, housekeeping recovers this exact scope;
+    // repeated callbacks cannot mint another copy of the delegated work.
+    const admission = await mutateBoard((board) => taskHandoffs.admitTaskHandoffs(board, obligations));
+    const queued = admission.added ?? 0;
     if (queued) handed.push(`${queued} follow-up request(s)`);
   }
   for (const role of entry.calls) {
-    // An agent may only wake a role, never hand it a payload — the role reads
-    // the same stores everything else does, so there is nothing to smuggle in.
-    assistantEnqueueRole(role, ASSISTANT_PRIORITY.demand);
-    handed.push(`woke ${role}`);
+    // The worker chooses a role only. Reference gathering needs context, so
+    // use the already admitted brief, never a payload from the output marker.
+    if (role === "reference") {
+      const work = {
+        kind: "reference",
+        taskId: job.kind === "task" ? job.ref?.id ?? null : null,
+        payload: { text: [job.title, job.prompt].filter(Boolean).join("\n\n"), useWeb: false },
+        text: assistantClip(job.title, 40),
+      };
+      const reference = assistantWorkJob(work);
+      enqueue(role, reference.run, {
+        ai: false, priority: ASSISTANT_PRIORITY.demand, held: true,
+        key: `reference:handoff:${entry.id}`, work, targets: reference.targets,
+      });
+    } else {
+      assistantEnqueueRole(role, ASSISTANT_PRIORITY.demand, { automatic: true });
+    }
+    handed.push(assistantState?.status === "paused" ? `queued ${role} for Resume` : `woke ${role}`);
   }
   if (!handed.length) return;
   const line = `${assistantClip(job.title, 60)} handed on: ${handed.join(", ")}`;
@@ -6137,7 +6710,56 @@ async function runExecutorHandoffs(entry, job) {
 // it changed.
 const VERIFY_DWELL_MS = 30 * 1000; // allow the finished session's evidence to flush before checking it
 const LEASE_REFRESH_MS = 10 * 60 * 1000; // how often a live owner re-stamps its claims
+// Board-wide stale-scope heal. The settlement heal only touches the card a run
+// just finished — every other saved scope keeps pointing at a ghost path
+// forever, because a done card never settles again. Once per housekeeping
+// pass, re-derive each task's saved file scope from the filesystem. The walk
+// runs BEFORE the mutation (a bounded directory walk must never hold the
+// board lock) and the application re-checks inside the transaction that the
+// stale path is still the saved one, so a concurrent edit is never clobbered.
+// Studio heals its own saved scope — a worker run may not rewrite it.
+async function healBoardFileScopes(reason = "housekeeping") {
+  const eyes = await getEyes();
+  const saved = await eyes.readJson(TASKS_PATH, []);
+  const exists = (candidate) => { try { return statSync(candidate, { throwIfNoEntry: false })?.isFile() === true; } catch { return false; } };
+  const heals = new Map();
+  for (const task of Array.isArray(saved) ? saved : []) {
+    if (!task?.id || (!Array.isArray(task.files) || !task.files.length) && !task.file) continue;
+    try {
+      const scope = taskContext.resolveStaleFileScope(task, {
+        exists,
+        locate: (base, ref) => findBasenameUnderRoot(ref?.projectPath || projectRoot(), base),
+      });
+      if (scope.changed) heals.set(task.id, scope);
+    } catch {}
+  }
+  if (!heals.size) return 0;
+  const result = await mutateBoard((board) => {
+    let applied = 0;
+    board.tasks = board.tasks.map((task) => {
+      const heal = heals.get(task?.id);
+      if (!heal) return task;
+      const stillStale = heal.healed.some((row) => task.file === row.from || (Array.isArray(task.files) && task.files.includes(row.from)));
+      if (!stillStale) return task;
+      applied += 1;
+      return {
+        ...task,
+        files: heal.files,
+        ...(heal.file ? { file: heal.file } : {}),
+        updatedAt: Date.now(),
+        logs: [...(task.logs ?? []), { at: Date.now(), kind: "status", text: `file scope healed — ${heal.healed.map((row) => `${row.from.split(/[\\/]/).pop()} re-anchored to ${row.to}`).join("; ")}` }].slice(-40),
+      };
+    });
+    return { tasks: board.tasks, applied };
+  });
+  const appliedCount = Number(result?.applied) || 0;
+  if (appliedCount) logLine(`[autopilot] file scope healed (${reason}): ${appliedCount} task(s) re-anchored`);
+  return appliedCount;
+}
 async function autopilotHousekeeping() {
+  // Saved scopes are healed first, outside this pass's own mutation, so the
+  // sweep and the completion verifier read scopes that name real files.
+  try { await healBoardFileScopes("housekeeping"); } catch {}
   const historyModule = await loadModule("scripts/task-history.mjs");
   const now = Date.now();
   const assistant = await getAssistant();
@@ -6166,7 +6788,8 @@ async function autopilotHousekeeping() {
       if (!row.lease || !Number.isFinite(row.lease.at) || now - row.lease.at >= LEASE_REFRESH_MS) row.lease = { pid: process.pid, at: now };
     };
     const sweep = assistant.housekeepingSweep({ requests: board.requests, tasks: board.tasks, liveRuns, now, prefs: assistantState?.prefs, pid: process.pid });
-    const patch = { requests: sweep.requests, tasks: sweep.tasks, sweeps: sweep.report };
+    const handoffs = taskHandoffs.reconcileTaskHandoffs({ requests: sweep.requests, tasks: sweep.tasks, now });
+    const patch = { requests: handoffs.requests, tasks: handoffs.tasks, sweeps: sweep.report };
     board.requests = patch.requests;
     board.tasks = patch.tasks;
     for (const row of board.tasks) refreshLease(row);
@@ -6178,10 +6801,26 @@ async function autopilotHousekeeping() {
     // bounded (verifyAttempts) so an unprovable job cannot loop forever.
     let changedByVerify = false;
     const verifyNotes = [];
+    const waitForEvidence = (row) => {
+      const reason = "Waiting for the attempt's recorded execution evidence";
+      if (row.verification?.state === "pending" && row.verification.reason === reason) return;
+      row.verification = { state: "pending", at: now, reason };
+      changedByVerify = true;
+    };
+    const attemptEvidenceWindow = (attempt) => {
+      const since = Number(attempt.startedAt) || Number(/^run_(\d+)_/.exec(String(attempt.runId ?? ""))?.[1]);
+      const until = Number(attempt.at);
+      return Number.isFinite(since) && since > 0 && Number.isFinite(until) && until > 0 && until >= since ? { since, until } : null;
+    };
     const attemptChanges = (attempt, title) => {
       if (!attempt.sessionId) return [];
+      const window = attemptEvidenceWindow(attempt);
+      // Malformed saved metadata cannot become available by waiting. Give
+      // the verifier no attributable evidence and use its bounded retry
+      // path, without widening the read to unrelated session history.
+      if (!window) return [];
       try {
-        const files = eyes.listChanges({ sessionId: attempt.sessionId, limit: 50 });
+        const files = eyes.listChanges({ sessionId: attempt.sessionId, ...window, limit: 50 });
         if (!Array.isArray(files)) throw new Error("session changes are unavailable");
         return files.filter((file) => file?.status === "completed" && (file.file || file.files?.length));
       } catch (error) {
@@ -6191,18 +6830,36 @@ async function autopilotHousekeeping() {
         return null;
       }
     };
+    const attemptChecks = (attempt, title) => {
+      if (!attempt.sessionId || typeof eyes.listSessionChecks !== "function") return [];
+      const window = attemptEvidenceWindow(attempt);
+      if (!window) return [];
+      try {
+        const read = eyes.listSessionChecks({ sessionId: attempt.sessionId, ...window, limit: 200 });
+        if (!read?.available || read.truncated) throw new Error(read?.truncated ? "session check history exceeds the verification window" : "session checks are unavailable");
+        return Array.isArray(read.checks) ? read.checks : [];
+      } catch (error) {
+        verifyNotes.push(`verification waiting for "${assistantClip(title, 60)}" — ${String(error?.message ?? error).slice(0, 160)}`);
+        return null;
+      }
+    };
     if (typeof verify === "function") {
       const tasks = [...board.tasks];
       for (const task of tasks) {
         if (task?.status !== "awaiting_verification") continue;
+        if (handoffs.waitingTaskIds.has(task.id)) continue;
         const attempt = task.lastAttempt ?? {};
         if (Number(attempt.at) > 0 && now - Number(attempt.at) < VERIFY_DWELL_MS) continue;
         const files = attemptChanges(attempt, task.title);
-        if (files === null) continue;
+        if (files === null) { waitForEvidence(task); continue; }
+        const observedChecks = attemptChecks(attempt, task.title);
+        if (observedChecks === null) { waitForEvidence(task); continue; }
         const verdict = verify({
           verdictOk: attempt.sawDone === true || attempt.code === 0,
           changedFiles: Array.isArray(files) ? files.length : 0,
           hasSession: Boolean(attempt.sessionId),
+          observedChecks,
+          resolvedHandoffs: task.handoffState?.resolvedTitles ?? [],
           remaining: Array.isArray(task.remaining) ? task.remaining : [],
           resultNote: attempt.result ?? null,
           priorAttempts: Number(task.verifyAttempts) || 0,
@@ -6235,7 +6892,7 @@ async function autopilotHousekeeping() {
           delete task.runId;
           delete task.lease;
           delete task.verifyAttempts;
-          task.verification = { state: "verified", at: now, reason: verdict.reason, sentinel: attempt.sawDone === true, exit: attempt.code ?? null, changedFiles: files.length };
+          task.verification = { state: "verified", at: now, reason: verdict.reason, sentinel: attempt.sawDone === true, exit: attempt.code ?? null, changedFiles: files.length, checks: verdict.evidence?.observedChecks ?? null };
           task.logs = [
             ...(task.logs ?? []),
             { at: now, kind: "status", text: `verified — ${evidenceText}${Array.isArray(task.remaining) && task.remaining.length ? `, ${task.remaining.length} follow-up(s) handed on` : ""}` },
@@ -6271,15 +6928,20 @@ async function autopilotHousekeeping() {
       const settled = [];
       for (const request of requests) {
         if (request?.status !== "verifying") continue;
+        if (handoffs.waitingRequestRuns.has(request.lastAttempt?.runId)) continue;
         const attempt = request.lastAttempt ?? {};
         if (Number(attempt.at) > 0 && now - Number(attempt.at) < VERIFY_DWELL_MS) continue;
         const files = attemptChanges(attempt, request.title);
-        if (files === null) continue;
+        if (files === null) { waitForEvidence(request); continue; }
+        const observedChecks = attemptChecks(attempt, request.title);
+        if (observedChecks === null) { waitForEvidence(request); continue; }
         const verdict = verify({
           verdictOk: attempt.sawDone === true || attempt.code === 0,
           changedFiles: Array.isArray(files) ? files.length : 0,
           hasSession: Boolean(attempt.sessionId),
-          remaining: [],
+          observedChecks,
+          resolvedHandoffs: request.handoffState?.resolvedTitles ?? [],
+          remaining: Array.isArray(request.remaining) ? request.remaining : [],
           resultNote: attempt.result ?? null,
           priorAttempts: Number(request.verifyAttempts) || 0,
         });
@@ -6293,7 +6955,7 @@ async function autopilotHousekeeping() {
               attempt,
               verdict,
               changedFiles: Array.isArray(files) ? files.length : 0,
-              remaining: [],
+              remaining: Array.isArray(request.remaining) ? request.remaining : [],
               evaluator: evaluatorIdentity,
               now,
             })
@@ -6410,10 +7072,21 @@ async function autopilotPass() {
 }
 
 async function setAutopilot(prefs = {}) {
+  if (prefs.autoBuild !== undefined && typeof prefs.autoBuild !== "boolean") return { ok: false, error: "Auto build must be on or off." };
+  const buildRevision = prefs.autoBuild === undefined ? null : (setAutopilot.buildRevision = (setAutopilot.buildRevision ?? 0) + 1);
+  if (prefs.autoBuild !== undefined) {
+    // Stop unreviewed dispatch immediately. Enabling it waits for durable
+    // settings, and a later off choice supersedes an in-flight save of on.
+    if (!prefs.autoBuild) autopilot.autoBuild = false;
+    autopilot.waiting = null;
+  }
   if (prefs.enabled !== undefined) autopilot.enabled = Boolean(prefs.enabled);
   if (prefs.execute !== undefined) {
     const resuming = !autopilot.execute && prefs.execute;
     autopilot.execute = Boolean(prefs.execute);
+    // An explicit stop is durable operator intent, even during breaker
+    // cooldown. A later fill must not interpret it as a timed auto-resume.
+    if (!autopilot.execute) autopilot.parkedUntil = 0;
     // A manual resume clears the tallies so a tripped breaker starts clean.
     if (resuming) {
       autopilot.consecutiveFailures = 0;
@@ -6426,12 +7099,18 @@ async function setAutopilot(prefs = {}) {
   if (prefs.parallel !== undefined) autopilot.parallel = Math.min(EXECUTOR_PARALLEL_MAX, Math.max(1, Math.round(Number(prefs.parallel) || autopilot.parallel)));
   // The same bound applies to saved settings and interactive controls.
   autopilot.parallel = Math.min(autopilot.parallel, EXECUTOR_PARALLEL_CAP);
-  const settings = await readSettings();
-  settings.ui = {
-    ...(settings.ui ?? {}),
-    autopilot: { enabled: autopilot.enabled, execute: autopilot.execute, minutes: autopilot.minutes, parallel: autopilot.parallel },
-  };
-  await writeSettings(settings);
+  const save = (setAutopilot.pendingSave ?? Promise.resolve()).catch(() => {}).then(async () => {
+    const settings = await readSettings();
+    const autoBuild = buildRevision !== null && buildRevision === setAutopilot.buildRevision ? prefs.autoBuild : autopilot.autoBuild !== false;
+    settings.ui = {
+      ...(settings.ui ?? {}),
+      autopilot: { enabled: autopilot.enabled, execute: autopilot.execute, autoBuild, minutes: autopilot.minutes, parallel: autopilot.parallel },
+    };
+    await writeSettings(settings);
+    if (buildRevision !== null && buildRevision === setAutopilot.buildRevision) autopilot.autoBuild = autoBuild;
+  });
+  setAutopilot.pendingSave = save;
+  await save;
   if (proactiveTimer) clearInterval(proactiveTimer);
   proactiveTimer = null;
   if (autopilot.enabled) {
@@ -6469,7 +7148,10 @@ function savedExecutorParallel(saved = {}) {
 // after the call so the window and watchers settle first. A saved parallel
 // width — narrow included — is the operator's setting: the machine default
 // only fills an unset value.
+let autopilotBootPromise = null;
 async function bootAutopilot() {
+  if (autopilotBootPromise) return autopilotBootPromise;
+  autopilotBootPromise = (async () => {
   try {
     getPolicyModule().then(warmPolicyBaseline).catch(() => {});
     const settings = await readSettings();
@@ -6477,6 +7159,7 @@ async function bootAutopilot() {
     await setAutopilot({
       enabled: saved.enabled ?? true,
       execute: saved.execute ?? true,
+      autoBuild: saved.autoBuild !== false,
       minutes: saved.minutes ?? autopilot.minutes,
       parallel: savedExecutorParallel(saved),
     });
@@ -6485,8 +7168,11 @@ async function bootAutopilot() {
     // aged-out ones before the first run of this session reaches the store.
     sweepSnapshotLocks().catch(() => {});
   } catch (error) {
+    autopilot.execute = false;
     logLine(`[autopilot] boot failed: ${error.message}`);
   }
+  })();
+  return autopilotBootPromise;
 }
 
 async function readSettings() {
@@ -6587,15 +7273,21 @@ async function runSpeedProbe(modelId) {
     env.OPENCODE_GO_SESSION = await assistantSessionId();
   }
   const script = path.join(STUDIO_ROOT, "scripts", "measure-speed.mjs");
+  const startedAt = Date.now();
   return await new Promise((resolve) => {
-    const child = spawn(process.execPath, [script, "--model", modelId], { cwd: STUDIO_ROOT, env });    let output = "";
+    const child = spawn(process.execPath, [script, "--model", modelId], { cwd: STUDIO_ROOT, env, windowsHide: true });
+    let output = "";
+    let finished = false;
     child.stdout.on("data", (chunk) => (output += chunk));
     child.stderr.on("data", (chunk) => (output += chunk));
     child.on("close", async (code) => {
+      if (finished) return;
+      finished = true;
+      let measurement = null;
       for (const line of output.split(/\r?\n/)) if (line.trim()) logLine(`[speed] ${line}`);
       if (code === 0) {
         try {
-          const measurement = JSON.parse(output.slice(output.indexOf("{")));
+          measurement = JSON.parse(output.slice(output.indexOf("{")));
           const measurementsPath = path.join(STUDIO_ROOT, "data", "speed-measurements.json");
           let all = {};
           try {
@@ -6603,12 +7295,19 @@ async function runSpeedProbe(modelId) {
           } catch {}
           all[modelId] = measurement;
           await writeFile(measurementsPath, JSON.stringify(all, null, 2));
+          speedMeasurementDocument.invalidate();
         } catch (error) {
           logLine(`[speed] could not persist measurement: ${error.message}`);
         }
       }
+      await recordModelCall({ id: crypto.randomUUID(), model: modelId, provider: String(modelId).startsWith("glm-") ? "zai" : "opencode",
+        taskType: "speed-probe", source: "probe", at: startedAt, status: code === 0 ? "ok" : "error", errorKind: code === 0 ? null : "unknown",
+        elapsedMs: measurement?.elapsedMs ?? Date.now() - startedAt, tokenUsage: { inputTokens: measurement?.promptTokens ?? null,
+          outputTokens: measurement?.completionTokens ?? null, totalTokens: measurement?.totalTokens ?? null }, costUsd: measurement?.costUsd ?? null,
+        requestedEffort: modelId === ZAI_MODEL_HEAVY ? "low" : null, appliedEffort: null });
       resolve({ ok: code === 0, output });
     });
+    child.on("error", () => { finished = true; resolve({ ok: false, error: "The speed probe could not start." }); });
   });
 }
 
@@ -6617,7 +7316,9 @@ async function runSpeedProbe(modelId) {
 // been consumed: each scan reads only rows newer than the cursor, and the
 // cursor advances only after the pass fully succeeded — a failed AI call
 // leaves the window for the next pass to retry (harmless: the delta merge
-// dedupes reprocessing). It also reads the store once to learn what already
+// dedupes reprocessing). Raw chat lines are no longer ingested — the keyless
+// regex harvest filled the backlog with chat noise, so a pass without the AI
+// review preserves its window for later curation. It also reads the store once to learn what already
 // exists, collects only ADDITIONS, and then — after the AI call, which can
 // take a while — re-reads the store inside the board lock and applies the
 // validated delta (assistant.mergeIdeas). The old version held the whole
@@ -6659,10 +7360,18 @@ async function scanIdeasInternal(ai = false, entry = null) {
     if (listError) return { ok: false, error: listError, added: 0, aiError: null, scanned: 0, ideas: store };
     return { ok: true, added: 0, aiError: null, scanned: 0, newMaterial: false, ideas: store, text: "no new chat material since the last scan" };
   }
-  const found = listError ? [] : reference.scanIdeas(chats);
+  let found = listError ? [] : reference.scanIdeas(chats);
+  if (!ai) {
+    // Finding a candidate is not reviewing it. A keyless/cooldown scan must
+    // neither mint raw chat as work nor hide it from the next AI review.
+    const ideas = await eyes.readJson(IDEAS_PATH, []);
+    return { ok: !listError, ...(listError ? { error: listError } : {}), added: 0, aiError: listError,
+      scanned: found.length, newMaterial, pendingReview: newMaterial, ideas,
+      text: newMaterial ? `${found.length} candidate(s) waiting for AI review` : "no new chat material since the last scan" };
+  }
   // The model sees the existing registry (titles), so it can suppress
   // paraphrases of known ideas instead of re-minting them.
-  const knownTitles = (await eyes.readJson(IDEAS_PATH, [])).map((idea) => String(idea?.title ?? "")).filter(Boolean).slice(0, 60);
+  const knownTitles = (await eyes.readJson(IDEAS_PATH, [])).map((idea) => String(idea?.title ?? "").slice(0, 90)).filter(Boolean).slice(0, 60);
   const additions = [];
   const sourceKeyOf = (idea) =>
     String(idea?.sourceKey ?? idea?.detail ?? idea?.title ?? "")
@@ -6687,9 +7396,16 @@ async function scanIdeasInternal(ai = false, entry = null) {
       status: "new",
     });
   };
-  for (const idea of found) pushAddition(idea, "chat");
+  // Chat lines are noise until something curates them: the regex harvest used
+  // to mint a store row per candidate line (71 chat-noise excerpts had to be
+  // swept out of the backlog), so the keyless path no longer mints ideas at
+  // all — it preserves the window. Candidate lines still reach the AI
+  // review below, whose contract suppresses reworded repeats, progress
+  // narration and already-done work; an empty ideas list from that review is
+  // the correct answer for quiet or noisy chats alike.
   let aiError = listError;
   let taskGroups = [];
+  let reviewedChats = [];
   if (ai) {
     // The review also sees the live board, so it can group open tasks into
     // plans. Only what the model may fold goes out: open, unclaimed, not
@@ -6698,16 +7414,42 @@ async function scanIdeasInternal(ai = false, entry = null) {
       .filter((task) => task && task.status === "open" && !task.runId && !String(task.id ?? "").startsWith("task_plan_"))
       .slice(0, 40)
       .map((task) => ({ title: String(task.title ?? "").slice(0, 90), detail: String(task.prompt ?? "").slice(0, 120) }));
-    const payload = JSON.stringify({ candidates: found.slice(0, 40), existingTitles: knownTitles, openTasks }).slice(0, 12000);
-    const call = await assistantFetch(ASSISTANT_IDEAS_SYSTEM, payload, 6000);
+    const envelope = { candidates: [], existingTitles: knownTitles, openTasks };
+    // Reserve most of the bounded prompt for new candidates. Trim complete
+    // context entries, never serialized JSON: a cut string can hide material
+    // from the reviewer while still advancing the ingestion cursor.
+    while (JSON.stringify(envelope).length > 4000 && (envelope.existingTitles.length || envelope.openTasks.length)) {
+      if (JSON.stringify(envelope.openTasks).length >= JSON.stringify(envelope.existingTitles).length) envelope.openTasks.pop();
+      else envelope.existingTitles.pop();
+    }
+    // The durable cursor addresses source rows, not candidate lines. Only
+    // consume a prefix of COMPLETE rows whose candidates all fit the review.
+    // Asking the extractor for 41 also detects overflow beyond its usual
+    // 60-candidate cap without silently losing later lines from one row.
+    for (const chat of chats) {
+      const nextRows = [...reviewedChats, chat];
+      const candidates = reference.scanIdeas(nextRows, { limit: 41 });
+      if (candidates.length > 40 || JSON.stringify({ ...envelope, candidates }).length > 12000) break;
+      reviewedChats = nextRows;
+      envelope.candidates = candidates;
+    }
+    if (chats.length && !reviewedChats.length) {
+      return { ok: false, error: "The next chat message exceeds the idea-review budget; its contents remain pending.",
+        added: 0, aiError: "chat row exceeds review budget", scanned: 0, newMaterial, pendingReview: true,
+        ideas: await eyes.readJson(IDEAS_PATH, []), text: "Chat material retained for review; no ideas were skipped." };
+    }
+    found = envelope.candidates;
+    const payload = JSON.stringify(envelope);
+    const call = await assistantFetch(ASSISTANT_IDEAS_SYSTEM, payload, 6000, { taskType: "ideas" });
     if (!call.ok) aiError = call.error || aiError;
     else {
       try {
         const start = call.text.indexOf("{");
         const end = call.text.lastIndexOf("}");
         const parsed = JSON.parse(call.text.slice(start, end + 1));
-        for (const idea of parsed.ideas ?? []) pushAddition(idea, "ai");
-        if (!Array.isArray(parsed.ideas) || !parsed.ideas.length) assistantLog("ideas", "AI scan: nothing new worth recording");
+        if (!Array.isArray(parsed.ideas)) throw new Error("ideas array is required");
+        for (const idea of parsed.ideas) pushAddition(idea, "ai");
+        if (!parsed.ideas.length) assistantLog("ideas", "AI scan: nothing new worth recording");
         taskGroups = Array.isArray(parsed.taskGroups) ? parsed.taskGroups.filter((group) => group && typeof group === "object") : [];
         if (taskGroups.length) assistantLog("ideas", `AI review: ${taskGroups.length} task group(s) to fold into plans`);
       } catch {
@@ -6752,11 +7494,11 @@ async function scanIdeasInternal(ai = false, entry = null) {
   // "Source ingested" and "AI extraction completed" are deliberately the same
   // gate here — the cursor never advances past material the pass did not
   // finish reviewing.
-  if (!aiError) {
+  if (ai && !aiError) {
     const nextCursor = assistantModule?.advanceCursor
-      ? assistantModule.advanceCursor(chats, { at: chatCursor, id: chatCursorId })
+      ? assistantModule.advanceCursor(reviewedChats, { at: chatCursor, id: chatCursorId })
       : {
-          at: Math.max(chatCursor, ...chats.map((row) => row?.at ?? 0)),
+          at: Math.max(chatCursor, ...reviewedChats.map((row) => row?.at ?? 0)),
           id: chatCursorId,
         };
     if (nextCursor.at > chatCursor || (nextCursor.at === chatCursor && nextCursor.id !== chatCursorId && nextCursor.at > 0)) {
@@ -6780,12 +7522,12 @@ async function scanIdeasInternal(ai = false, entry = null) {
       : "no new chat material since the last scan";
   const reportText = result.report?.text ?? null;
   const text = ai && reportText ? `${ingestText} · board: ${reportText}` : ingestText;
-  return { ok: true, added, aiError, scanned: found.length, newMaterial, ideas: store, text };
+  return { ok: true, added, aiError, scanned: found.length, newMaterial, pendingReview: Boolean(aiError) || reviewedChats.length < chats.length, ideas: store, text };
 }
 
 async function analyzerAi(kind, payload) {
   const user = JSON.stringify({ kind, payload }).slice(0, 14000);
-  const call = await assistantFetch(ASSISTANT_ANALYZER_SYSTEM, user, 6000, { role: "heavy" });
+  const call = await assistantFetch(ASSISTANT_ANALYZER_SYSTEM, user, 6000, { role: "heavy", taskType: "analyzer" });
   if (!call.ok) return { ok: false, error: call.error };
   try {
     const start = call.text.indexOf("{");
@@ -6879,6 +7621,71 @@ async function selectProject(id) {
   }
 }
 
+// Catalogs are shared across projects. Keep parsed documents while their file
+// identity is unchanged and share concurrent reads, including the stat check.
+function createCatalogFileReader(fileName) {
+  const filePath = path.join(STUDIO_ROOT, "data", fileName);
+  let cached = null;
+  let pending = null;
+  let version = 0;
+  return {
+    invalidate() {
+      version += 1;
+      cached = null;
+      pending = null;
+    },
+    read() {
+      if (pending) return pending;
+      const readVersion = version;
+      const request = Promise.resolve().then(async () => {
+        const info = await stat(filePath);
+        const signature = `${info.mtimeMs}:${info.ctimeMs}:${info.size}:${info.ino}`;
+        if (cached?.signature === signature) return cached.value;
+        const value = JSON.parse(await readFile(filePath, "utf8"));
+        // A refresh can finish while an older read is still in flight. It must
+        // not repopulate the invalidated cache with the previous document.
+        if (version === readVersion) cached = { signature, value };
+        return value;
+      }).finally(() => {
+        if (pending === request) pending = null;
+      });
+      pending = request;
+      return request;
+    },
+  };
+}
+
+const catalogDocument = createCatalogFileReader("models.json");
+const speedMeasurementDocument = createCatalogFileReader("speed-measurements.json");
+let catalogRefreshPromise = null;
+
+function refreshCatalog() {
+  if (catalogRefreshPromise) return catalogRefreshPromise;
+  catalogRefreshPromise = Promise.resolve().then(() => new Promise((resolve) => {
+    const script = path.join(STUDIO_ROOT, "scripts", "refresh-models.mjs");
+    const child = spawn(process.execPath, [script], {
+      cwd: STUDIO_ROOT,
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+      windowsHide: true,
+    });
+    let output = "";
+    let finished = false;
+    const finish = (result) => {
+      if (finished) return;
+      finished = true;
+      catalogDocument.invalidate();
+      for (const line of output.split(/\r?\n/)) if (line.trim()) logLine(`[refresh] ${line}`);
+      resolve({ ...result, output });
+    };
+    child.stdout.on("data", (chunk) => (output += chunk));
+    child.stderr.on("data", (chunk) => (output += chunk));
+    child.on("close", (code) => finish({ ok: code === 0, code }));
+    child.on("error", (error) => finish({ ok: false, code: null, error: error.message }));
+  })).catch((error) => ({ ok: false, code: null, output: "", error: error.message }))
+    .finally(() => { catalogRefreshPromise = null; });
+  return catalogRefreshPromise;
+}
+
 function registerIpc() {
   ipcMain.handle("projects:list", () => projects.list());
   ipcMain.handle("projects:add", async () => {
@@ -6893,6 +7700,9 @@ function registerIpc() {
     } catch (error) { return { ...projects.list(), ok: false, error: error.message }; }
   });
   ipcMain.handle("projects:select", (_event, id) => selectProject(id));
+  ipcMain.handle("planning:list", (_event, payload) => planningRequest("list", payload));
+  ipcMain.handle("planning:action", (_event, payload) => planningRequest("action", payload));
+  ipcMain.handle("planning:assist", (_event, payload) => planningRequest("assist", payload));
   ipcMain.handle("tasks:create", async (_event, { title, prompt, projectId } = {}) => {
     if (projectId && projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Add this task again in its intended project." };
     if (!String(title ?? "").trim()) return { ok: false, error: "Give your task a title." };
@@ -6904,29 +7714,9 @@ function registerIpc() {
     assistantAskForWork("you added a task");
     return { ok: true, task: taskView(task), tasks: tasks.map(taskView), projectId: projects.current().id };
   });
-  ipcMain.handle("catalog:read", async () => {
-    const dataDir = path.join(STUDIO_ROOT, "data");
-    // The catalog is committed, so a fresh clone already has it. If it is ever
-    // deleted or torn, `npm run data` regenerates it from curated + the roster.
-    return JSON.parse(await readFile(path.join(dataDir, "models.json"), "utf8"));
-  });
-
-  ipcMain.handle("catalog:refresh", async () => {
-    const script = path.join(STUDIO_ROOT, "scripts", "refresh-models.mjs");
-    return await new Promise((resolve) => {
-      const child = spawn(process.execPath, [script], {
-        cwd: STUDIO_ROOT,
-        env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
-      });
-      let output = "";
-      child.stdout.on("data", (chunk) => (output += chunk));
-      child.stderr.on("data", (chunk) => (output += chunk));
-      child.on("close", (code) => {
-        for (const line of output.split(/\r?\n/)) if (line.trim()) logLine(`[refresh] ${line}`);
-        resolve({ ok: code === 0, code, output });
-      });
-    });
-  });
+  // The committed catalog is available immediately, without a network refresh.
+  ipcMain.handle("catalog:read", () => catalogDocument.read());
+  ipcMain.handle("catalog:refresh", () => refreshCatalog());
 
   ipcMain.handle("studio:launch", () => {
     if (!GAME_ROOT) return { ok: false, error: "Set MEFI_STUDIO_GAME_ROOT to a Ruins Runner checkout to use the LÖVE launcher." };
@@ -7055,7 +7845,11 @@ function registerIpc() {
 
   ipcMain.handle("settings:get-ai-routing", async () => {
     const settings = await readSettings();
+    const client = await loadModule("scripts/decision-client.mjs");
     return {
+      modelSelection: settings.modelSelection === "fixed" ? "fixed" : "jev",
+      jevConfigured: Boolean(client.resolveApiKey({ settings, decrypt: decryptKey })),
+      routingDecision: modelRoutingDecisions.get(projects.current().id) ?? null,
       provider: AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto",
       fallbackOpenCode: settings.aiFallbackOpenCode === true,
       hasZai: Boolean(settings.zaiApiKeyEncrypted),
@@ -7073,6 +7867,10 @@ function registerIpc() {
 
   ipcMain.handle("settings:set-ai-routing", async (_event, patch = {}) => {
     const settings = await readSettings();
+    if (patch.modelSelection !== undefined) {
+      if (!["jev", "fixed"].includes(patch.modelSelection)) return { ok: false, error: "Unknown model selection mode" };
+      settings.modelSelection = patch.modelSelection;
+    }
     if (patch.provider !== undefined) {
       if (!AI_PROVIDERS.includes(patch.provider)) return { ok: false, error: `unknown provider: ${patch.provider}` };
       settings.aiProvider = patch.provider;
@@ -7099,9 +7897,31 @@ function registerIpc() {
 
   ipcMain.handle("speed:probe", async (_event, { modelId }) => runSpeedProbe(modelId));
 
+  ipcMain.handle("model-performance:snapshot", async (_event, options = {}) => {
+    try {
+      return { ok: true, ...(await modelPerformanceStore().snapshot({ taskType: options.taskType, qualitySource: options.qualitySource })),
+        coverage: "Recorded Studio assistant HTTP/Grok calls and speed probes from this version. External coding CLI usage, account balances and subscription limits are not synchronized." };
+    } catch (error) { return { ok: false, error: error.message }; }
+  });
+  ipcMain.handle("model-performance:rate", async (_event, rating = {}) => {
+    // A renderer may submit a person's rating; it cannot label that rating as
+    // a judgment returned by another model.
+    if (rating.authority !== "human") return { ok: false, error: "This control accepts human ratings only." };
+    try { return { ok: true, ...(await modelPerformanceStore().rate({ observationId: rating.observationId, authority: "human", score: rating.score, note: rating.note })) }; }
+    catch (error) { return { ok: false, error: error.message }; }
+  });
+  ipcMain.handle("model-lab:context", async (_event, { taskId, budgetTokens } = {}) => {
+    const eyes = await getEyes();
+    const tasks = await eyes.readJson(TASKS_PATH, []);
+    const task = tasks.find((row) => row.id === taskId);
+    const module = await getAssistant();
+    const folderKey = module.nodeKeyOf({ kind: "task", id: `task:${taskId}` });
+    return buildContext({ task, tasks, budgetTokens, nodeFolder: assistantState?.nodeFolders?.[folderKey] });
+  });
+
   ipcMain.handle("speed:measurements-read", async () => {
     try {
-      return { ok: true, measurements: JSON.parse(await readFile(path.join(STUDIO_ROOT, "data", "speed-measurements.json"), "utf8")) };
+      return { ok: true, measurements: await speedMeasurementDocument.read() };
     } catch {
       return { ok: true, measurements: {} };
     }
@@ -7194,7 +8014,10 @@ function registerIpc() {
     return { ok: true, requests: await eyes.readJson(REQUESTS_PATH, []) };
   });
   ipcMain.handle("eyes:requests-write", async (_event, requests) => {
-    const next = Array.isArray(requests) ? requests : [];
+    const next = (Array.isArray(requests) ? requests : []).map((row) => {
+      const { buildApproval: _untrustedApproval, buildScope: _viewScope, ...request } = row ?? {};
+      return request;
+    });
     if (next.some((row) => row?.projectId && row.projectId !== projects.current().id)) return { ok: false, error: "These requests belong to another project. Reload before saving." };
     // Serialized with every other board writer so a renderer save cannot
     // land between a claim's read and write on the host side.
@@ -7529,9 +8352,34 @@ function createWindow() {
       console.log(`[renderer:${details.level ?? "?"}] ${String(details.message ?? "").slice(0, 400)}`);
     });
   }
-  window.loadFile(path.join(STUDIO_ROOT, "renderer", "booklet.html"), {
+  const view = window;
+  const loadView = () => view.loadFile(path.join(STUDIO_ROOT, "renderer", "booklet.html"), {
     query: { capture: CAPTURE ? "1" : "0", smoke: SMOKE ? "1" : "0" },
   });
+  rendererRecovery = attachRendererRecovery({
+    window: view,
+    load: loadView,
+    isQuitting: () => Boolean(app.isQuitting),
+    log: (record) => {
+      logLine(`[renderer-recovery] ${JSON.stringify(record)}`);
+      if (!SMOKE && !CAPTURE && !CLI_MODE) {
+        const file = path.join(STUDIO_ROOT, "data", "renderer-health.jsonl");
+        mkdir(path.dirname(file), { recursive: true }).then(() =>
+          appendFile(file, `${JSON.stringify(record)}\n`, "utf8")).catch(() => {});
+      }
+    },
+    onBlocked: async ({ retry }) => {
+      if (SMOKE || CAPTURE || CLI_MODE || view.isDestroyed() || app.isQuitting) return;
+      const answer = await dialog.showMessageBox(view, {
+        type: "error", title: "Studio's view needs to reload",
+        message: "Studio could not restore its window automatically.",
+        detail: "Your saved tasks and history are retained. Reload the view to try again; background work is managed separately.",
+        buttons: ["Reload Studio", "Keep open"], defaultId: 0, cancelId: 1,
+      });
+      if (answer.response === 0) retry();
+    },
+  });
+  loadView().catch(() => {}); // did-fail-load owns the bounded recovery path.
   // Background mode: closing parks the app in the tray and the assistant
   // keeps ticking; Quit lives in the tray menu.
   window.on("close", (event) => {

@@ -1,6 +1,7 @@
 // Keep a verified inbox request on the task board after the inbox releases it.
 // This is local history, with the same evidence as the verifier's decision.
 import { createHash } from "node:crypto";
+import { evidenceKind } from "./receipts.mjs";
 
 const text = (value) => typeof value === "string" ? value : "";
 const stamp = (value, fallback = 0) => Number.isFinite(value) && value >= 0 ? value : fallback;
@@ -32,7 +33,8 @@ export function completedRequestTask(request, verdict, { now = Date.now(), chang
       state: "verified", at: doneAt, reason: text(verdict.reason),
       sentinel: attempt.sawDone === true, exit: attempt.code ?? null,
       changedFiles: Math.max(0, Number(changedFiles) || 0),
-      evidenceKind: changedFiles > 0 && attempt.sessionId ? "runner-observed-edits" : verdict.evidence?.namedChecks ? "worker-named-checks" : "none",
+      evidenceKind: evidenceKind({ state: verdict.state, changedFiles, hasSession: Boolean(attempt.sessionId), namedChecks: verdict.evidence?.namedChecks, observedChecks: verdict.evidence?.observedChecks }),
+      ...(verdict.evidence?.observedChecks ? { checks: Object.fromEntries(["passed", "failed", "pending"].map((key) => [key, Math.max(0, Number(verdict.evidence.observedChecks[key]) || 0)])) } : {}),
     },
     logs: [
       ...(Array.isArray(request.logs) ? request.logs : []),

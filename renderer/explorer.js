@@ -923,11 +923,22 @@
     };
   }
 
+  // The same live rule idle.js's checkCollisions applies: only sessions with
+  // an active edit keep a collision live. An idle-only group is history — its
+  // row still lists with its handoff labels — but it must not hide the live
+  // solo editors the presence read reports on the same files.
+  function collisionIsLive(collision) {
+    return (collision?.sessions ?? []).some((entry) => entry && typeof entry === "object" && entry.active === true);
+  }
+
   function renderCollisions() {
     if (!els.collisions) return;
     els.collisions.textContent = "";
     const collidingFiles = new Set(
-      (state.collisions ?? []).flatMap((collision) => collision.files ?? [collision.file]).filter(Boolean)
+      (state.collisions ?? [])
+        .filter(collisionIsLive)
+        .flatMap((collision) => collision.files ?? [collision.file])
+        .filter(Boolean)
     );
     const liveSolo = (state.presence ?? []).filter((row) => row?.file && !row.colliding && !collidingFiles.has(row.file));
     if (!state.collisions.length && !liveSolo.length) {
@@ -1246,7 +1257,7 @@
     // waiting out the interval.
     const explorerTick = () => {
       if (!window.mefiStudio?.eyesState) return;
-      if (!document.hidden && !els.overlay.hidden) load();
+      if (document.visibilityState === "visible" && !els.overlay.hidden) load();
     };
     if (window.MefiBoot?.pollStart) window.MefiBoot.pollStart("explorer.state", explorerTick, EXPLORER_POLL_MS);
     else setInterval(explorerTick, EXPLORER_POLL_MS);

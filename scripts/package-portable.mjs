@@ -12,10 +12,19 @@ import { fileURLToPath } from "node:url";
 
 const STUDIO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ELECTRON_DIST = path.join(STUDIO, "node_modules", "electron", "dist");
-const OUT_DIR = path.join(STUDIO, "dist", "Mefi Studio AI+");
+const release = process.argv.includes("--release");
+const clean = process.argv.includes("--clean");
+if (release && clean) throw new Error("Use --release by itself. Release builds always use a new, empty folder.");
+const pkg = JSON.parse(await readFile(path.join(STUDIO, "package.json"), "utf8"));
+let releaseRoot = null;
+if (release) {
+  const releases = path.join(STUDIO, "dist", "releases");
+  await mkdir(releases, { recursive: true });
+  releaseRoot = await mkdtemp(path.join(releases, `mefi-studio-${String(pkg.version).replace(/[^a-zA-Z0-9.-]/g, "-")}-`));
+}
+const OUT_DIR = path.join(releaseRoot || path.join(STUDIO, "dist"), "Mefi Studio AI+");
 const APP_DIR = path.join(OUT_DIR, "resources", "app");
 const EXE_NAME = "Mefi Studio AI+.exe";
-const clean = process.argv.includes("--clean");
 
 if (!existsSync(ELECTRON_DIST)) {
   console.error("electron dist missing - run: npm install (then node node_modules/electron/install.js)");
@@ -62,35 +71,28 @@ async function copyRuntime(source, target) {
 await copyRuntime(ELECTRON_DIST, OUT_DIR);
 
 // 2. app payload
-for (const entry of ["main.cjs", "preload.cjs", "README.md"]) {
+for (const entry of ["main.cjs", "preload.cjs", "README.md", "GETTING_STARTED.md"]) {
   await cp(path.join(STUDIO, entry), path.join(APP_DIR, entry));
 }
 for (const dir of ["renderer", "scripts", "assets"]) {
   if (existsSync(path.join(STUDIO, dir))) await cp(path.join(STUDIO, dir), path.join(APP_DIR, dir), { recursive: true });
 }
 
-// data/ is split in two. The catalog (curated overrides, the generated models,
-// the fetch cache) ships with the build and is always refreshed.
-// Everything else is LIVE state the packaged app writes while it runs: tasks,
-// ideas, checkpoints, pins, requests, briefings, machine status. A rebuild must
-// seed those on a first install and never overwrite them afterwards, the same
-// rule the live updater follows (scripts/updater.mjs never syncs data/).
-const CATALOG = new Set(["curated.json", "models.json", "cache"]);
+// Ship only public catalog data. Source data is personal even when the
+// destination is empty. An existing development payload keeps its own state;
+// a --release payload is always new and cannot inherit either data store.
+const CATALOG = new Set(["curated.json", "models.json"]);
 const dataSource = path.join(STUDIO, "data");
 const dataTarget = path.join(APP_DIR, "data");
-let kept = 0;
+const kept = existsSync(dataTarget) ? (await readdir(dataTarget)).filter((name) => !CATALOG.has(name)).length : 0;
 if (existsSync(dataSource)) {
   await mkdir(dataTarget, { recursive: true });
   for (const entry of await readdir(dataSource)) {
+    if (!CATALOG.has(entry)) continue;
     const target = path.join(dataTarget, entry);
-    if (!CATALOG.has(entry) && existsSync(target)) {
-      kept += 1;
-      continue;
-    }
     await cp(path.join(dataSource, entry), target, { recursive: true });
   }
 }
-const pkg = JSON.parse(await readFile(path.join(STUDIO, "package.json"), "utf8"));
 const appPkg = {
   name: pkg.name,
   productName: pkg.productName,
@@ -102,4 +104,5 @@ await writeFile(path.join(APP_DIR, "package.json"), JSON.stringify(appPkg, null,
 
 console.log(`portable app ready: ${path.relative(STUDIO, path.join(OUT_DIR, EXE_NAME))}`);
 console.log(`payload: ${path.relative(STUDIO, APP_DIR)}`);
+if (release) console.log(`Clean distribution folder: ${releaseRoot}\nZip the entire Mefi Studio AI+ folder before opening it. Local settings, tasks, keys and caches were not included.`);
 if (kept) console.log(`live state kept: ${kept} data file${kept === 1 ? "" : "s"} already in the payload were left untouched`);

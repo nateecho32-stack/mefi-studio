@@ -30,7 +30,7 @@ const scratch = () => mkdtempSync(path.join(os.tmpdir(), "policy-lab-test-"));
 const evaluator = { name: "verifyCompletion", version: "3", sourceSha256: "abc123" };
 const work = { kind: "task", id: "task_1", title: "Fix the tar torch descriptions", prompt: "the full prompt text" };
 
-test("a runner-observed edit with a clean verdict is the only trusted positive label", () => {
+test("a runner-observed edit with a clean verdict is a trusted positive label", () => {
   const receipt = buildReceipt({
     attemptId: "run_1",
     workItem: work,
@@ -46,7 +46,7 @@ test("a runner-observed edit with a clean verdict is the only trusted positive l
   assert.equal(receipt.evidence.kind, "runner-observed-edits");
 });
 
-test("zero edits with worker-named checks: settled by the board, but never a learning positive", () => {
+test("historical worker-named check receipts are never a learning positive", () => {
   const receipt = buildReceipt({
     attemptId: "run_2",
     workItem: work,
@@ -60,6 +60,20 @@ test("zero edits with worker-named checks: settled by the board, but never a lea
   assert.equal(receipt.evidence.kind, "worker-named-checks");
   assert.equal(receiptTrust(receipt), "self-reported");
   assert.equal(receiptLabel(receipt), "reported");
+});
+
+test("recorded passing checks produce a trusted test-only receipt without leaking command output", () => {
+  const receipt = buildReceipt({ attemptId: "recorded-run", workItem: work, contract: "test-only", attempt: { sessionId: "recorded-session" },
+    verdict: { state: "verified", evidence: { observedChecks: { total: 1, passed: 1, failed: 0, pending: 0, command: "private command", outputExcerpt: "private output" } } }, now: 1 });
+  assert.equal(receipt.evidence.kind, "runner-observed-checks");
+  assert.equal(receiptTrust(receipt), "trusted");
+  assert.equal(receiptLabel(receipt), "verified");
+  assert.deepEqual(receipt.evidence.checks, { passed: 1, failed: 0, pending: 0 });
+  assert.equal(JSON.stringify(receipt).includes("private"), false);
+  for (const checks of [{ passed: 1, failed: 1, pending: 0 }, { passed: 1, failed: 0, pending: 1 }, { passed: 0, failed: 0, pending: 0 }]) {
+    assert.equal(receiptTrust({ ...receipt, evidence: { ...receipt.evidence, checks } }), null);
+  }
+  assert.equal(receiptTrust({ ...receipt, evidence: { ...receipt.evidence, outstandingObligations: 1 } }), null);
 });
 
 test("partial work, failed checks, missing sessions and failed verdicts are not positives", () => {

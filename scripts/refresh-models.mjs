@@ -8,33 +8,41 @@
 // Curated data always wins over fetched data; fetched data fills gaps.
 // Offline mode (--offline) rebuilds from the committed catalog + curated seed.
 
-import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const DATA_DIR = path.join(ROOT, "data");
-const CATALOG_PATH = path.join(DATA_DIR, "models.json");
 
 const ROSTER_URL = "https://opencode.ai/zen/go/v1/models";
 const MODELS_DEV_URL = "https://models.dev/api.json";
 const PROVIDER = "opencode-go";
 const FETCH_TIMEOUT_MS = 20000;
 
-const offline = process.argv.includes("--offline");
-const checkOnly = process.argv.includes("--check");
-
-async function fetchJson(url) {
+async function fetchJson(url, { fetchImpl, timeoutMs }) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  let timer;
   try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: { "user-agent": "mefi-studio/0.1 (+catalog refresh)" },
-    });
-    if (!response.ok) throw new Error(`${url} -> HTTP ${response.status}`);
-    return await response.json();
+    // Bound both the connection and body read, even if a transport ignores abort.
+    return await Promise.race([
+      (async () => {
+        const response = await fetchImpl(url, {
+          signal: controller.signal,
+          headers: { "user-agent": "mefi-studio/0.1 (+catalog refresh)" },
+        });
+        if (!response.ok) throw new Error(`${url} -> HTTP ${response.status}`);
+        return response.json();
+      })(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          const error = new Error(`${url} timed out after ${timeoutMs} ms`);
+          controller.abort(error);
+          reject(error);
+        }, timeoutMs);
+      }),
+    ]);
   } finally {
     clearTimeout(timer);
   }
@@ -103,10 +111,10 @@ function endpointFor(id, curated, meta) {
   return { kind, ...curated.endpoints[kind] };
 }
 
-function buildRecord(id, { curated, catalogEntry, onRoster, warnings }) {
+function buildRecord(id, { curated, catalogEntry, previousRecord, onRoster, warnings }) {
   const seed = curated.models[id] ?? {};
   const meta = catalogRecord(catalogEntry);
-  const pricing = seed.pricing ?? (meta.cost
+  const pricing = seed.pricing ?? previousRecord?.pricing ?? (meta.cost
     ? {
         default: {
           input: meta.cost.input,
@@ -171,74 +179,137 @@ function buildRecord(id, { curated, catalogEntry, onRoster, warnings }) {
   return record;
 }
 
-async function loadCatalogFromModelsDev() {
-  const api = await fetchJson(MODELS_DEV_URL);
-  const provider = api?.[PROVIDER];
-  if (!provider?.models) throw new Error(`models.dev has no provider ${PROVIDER}`);
-  return provider.models;
+function validId(id) {
+  return typeof id === "string" && id.trim().length > 0;
 }
 
-async function main() {
-  await mkdir(DATA_DIR, { recursive: true });
-  const curated = JSON.parse(await readFile(path.join(DATA_DIR, "curated.json"), "utf8"));
+async function loadRoster(options) {
+  const roster = await fetchJson(ROSTER_URL, options);
+  if (!Array.isArray(roster?.data) || roster.data.some((entry) => !validId(entry?.id))) {
+    throw new Error("live roster has no valid data array");
+  }
+  return [...new Set(roster.data.map((entry) => entry.id))];
+}
+
+async function loadCatalogFromModelsDev(options) {
+  const api = await fetchJson(MODELS_DEV_URL, options);
+  const models = api?.[PROVIDER]?.models;
+  if (!models || typeof models !== "object" || Array.isArray(models)
+    || Object.entries(models).some(([id, entry]) => !validId(id) || !entry || typeof entry !== "object" || Array.isArray(entry))) {
+    throw new Error(`models.dev has no valid models for provider ${PROVIDER}`);
+  }
+  return models;
+}
+
+function previousMetadata(model) {
+  return {
+    name: model.name,
+    family: model.vendor,
+    limit: model.limits,
+    reasoning: model.capabilities?.reasoning,
+    tool_call: model.capabilities?.toolCall,
+    attachment: model.capabilities?.attachment,
+    modalities: model.capabilities?.modalities,
+    open_weights: model.capabilities?.openWeights,
+    provider: { npm: model.capabilities?.providerNpm },
+    release_date: model.releaseDate,
+    knowledge: model.knowledge,
+  };
+}
+
+async function replaceCatalog(catalogPath, document) {
+  // A unique sibling prevents concurrent refreshes from sharing a temporary file.
+  // Readers keep the last complete catalog until the fully flushed replacement is ready.
+  const tempPath = `${catalogPath}.${process.pid}-${randomUUID()}.tmp`;
+  try {
+    const file = await open(tempPath, "wx");
+    try {
+      await file.writeFile(JSON.stringify(document, null, 2) + "\n", "utf8");
+      await file.sync();
+    } finally {
+      await file.close();
+    }
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await rename(tempPath, catalogPath);
+        break;
+      } catch (error) {
+        // Windows can briefly deny replacement while the renderer reads the file.
+        if (process.platform !== "win32" || !["EPERM", "EBUSY", "EACCES"].includes(error.code) || attempt >= 4) throw error;
+        await delay(20 * (attempt + 1));
+      }
+    }
+  } finally {
+    await rm(tempPath, { force: true });
+  }
+}
+
+export async function refreshCatalog({
+  root = ROOT,
+  offline = false,
+  checkOnly = false,
+  fetchImpl = globalThis.fetch,
+  timeoutMs = FETCH_TIMEOUT_MS,
+  logger = console,
+} = {}) {
+  const dataDir = path.join(root, "data");
+  const catalogPath = path.join(dataDir, "models.json");
+  await mkdir(dataDir, { recursive: true });
+  const curated = JSON.parse(await readFile(path.join(dataDir, "curated.json"), "utf8"));
   const warnings = [];
+
+  let committed;
+  async function readCommitted() {
+    if (!committed) {
+      committed = JSON.parse(await readFile(catalogPath, "utf8"));
+      if (!Array.isArray(committed?.models) || committed.models.some((model) => !validId(model?.id))) {
+        throw new Error("committed catalog has no valid models array");
+      }
+    }
+    return committed;
+  }
 
   let rosterIds = [];
   let catalog = {};
+  let previousRecords = new Map();
   let rosterOk = false;
   let catalogOk = false;
 
   if (offline) {
-    const committed = JSON.parse(await readFile(CATALOG_PATH, "utf8"));
-    rosterIds = committed.models.filter((m) => m.onRoster).map((m) => m.id);
-    catalog = Object.fromEntries(
-      committed.models.map((m) => [
-        m.id,
-        {
-          name: m.name,
-          family: m.vendor,
-          cost: null,
-          limit: m.limits,
-          reasoning: m.capabilities?.reasoning,
-          tool_call: m.capabilities?.toolCall,
-          attachment: m.capabilities?.attachment,
-          modalities: m.capabilities?.modalities,
-          open_weights: m.capabilities?.openWeights,
-          release_date: m.releaseDate,
-          knowledge: m.knowledge,
-        },
-      ])
-    );
-    console.log(`offline: ${rosterIds.length} roster ids from the committed catalog`);
+    const saved = await readCommitted();
+    rosterIds = saved.models.filter((m) => m.onRoster).map((m) => m.id);
+    previousRecords = new Map(saved.models.map((m) => [m.id, m]));
+    catalog = Object.fromEntries(saved.models.map((m) => [m.id, previousMetadata(m)]));
+    logger.log(`offline: ${rosterIds.length} roster ids from the committed catalog`);
   } else {
-    try {
-      const roster = await fetchJson(ROSTER_URL);
-      rosterIds = (roster.data ?? []).map((entry) => entry.id);
+    const options = { fetchImpl, timeoutMs: Math.min(FETCH_TIMEOUT_MS, Math.max(1, Number(timeoutMs) || FETCH_TIMEOUT_MS)) };
+    // Independent sources share one timeout window instead of adding their delays.
+    const [rosterResult, catalogResult] = await Promise.allSettled([
+      loadRoster(options),
+      loadCatalogFromModelsDev(options),
+    ]);
+    if (rosterResult.status === "fulfilled") {
+      rosterIds = rosterResult.value;
       rosterOk = true;
-    } catch (error) {
+    } else {
+      const error = rosterResult.reason;
       warnings.push(`live roster fetch failed: ${error.message}`);
-      console.error(`! live roster fetch failed: ${error.message}`);
+      logger.error(`! live roster fetch failed: ${error.message}`);
     }
-    try {
-      catalog = await loadCatalogFromModelsDev();
+    if (catalogResult.status === "fulfilled") {
+      catalog = catalogResult.value;
       catalogOk = true;
-    } catch (error) {
+    } else {
+      const error = catalogResult.reason;
       warnings.push(`models.dev fetch failed: ${error.message}`);
-      console.error(`! models.dev fetch failed: ${error.message}`);
+      logger.error(`! models.dev fetch failed: ${error.message}`);
     }
     if (!rosterOk || !catalogOk) {
-      const committed = JSON.parse(await readFile(CATALOG_PATH, "utf8"));
-      if (!rosterIds.length) rosterIds = committed.models.filter((m) => m.onRoster).map((m) => m.id);
+      const saved = await readCommitted();
+      if (!rosterOk) rosterIds = saved.models.filter((m) => m.onRoster).map((m) => m.id);
       if (!catalogOk) {
-        for (const model of committed.models) {
-          catalog[model.id] ??= {
-            name: model.name,
-            family: model.vendor,
-            limit: model.limits,
-            release_date: model.releaseDate,
-            knowledge: model.knowledge,
-          };
-        }
+        previousRecords = new Map(saved.models.map((m) => [m.id, m]));
+        catalog = Object.fromEntries(saved.models.map((m) => [m.id, previousMetadata(m)]));
       }
       warnings.push("used the committed catalog as fallback for failed sources");
     }
@@ -246,7 +317,9 @@ async function main() {
 
   const rosterSet = new Set(rosterIds);
   const ids = [...new Set([...rosterIds, ...Object.keys(catalog), ...Object.keys(curated.models)])].sort();
-  const models = ids.map((id) => buildRecord(id, { curated, catalogEntry: catalog[id], onRoster: rosterSet.has(id), warnings }));
+  const models = ids.map((id) => buildRecord(id, {
+    curated, catalogEntry: catalog[id], previousRecord: previousRecords.get(id), onRoster: rosterSet.has(id), warnings,
+  }));
 
   const payload = {
     schemaVersion: curated.schemaVersion ?? 1,
@@ -271,25 +344,28 @@ async function main() {
   };
 
   if (checkOnly) {
-    const committed = JSON.parse(await readFile(CATALOG_PATH, "utf8"));
-    if (committed.rosterHash !== document.rosterHash) {
-      console.error(`roster changed:\n  catalog  ${committed.rosterHash}\n  live     ${document.rosterHash}`);
-      process.exit(1);
+    const saved = await readCommitted();
+    if (saved.rosterHash !== document.rosterHash) {
+      throw new Error(`roster changed:\n  catalog  ${saved.rosterHash}\n  live     ${document.rosterHash}`);
     }
-    console.log("roster unchanged");
-    return;
+    logger.log("roster unchanged");
+    return document;
   }
 
-  await writeFile(CATALOG_PATH, JSON.stringify(document, null, 2) + "\n");
-  console.log(`catalog updated (${models.length} models, hash ${document.hash.slice(0, 12)})`);
+  await replaceCatalog(catalogPath, document);
+  logger.log(`catalog updated (${models.length} models, hash ${document.hash.slice(0, 12)})`);
 
   const undocumented = models.filter((m) => m.onRoster && !m.listed).map((m) => m.id);
-  if (undocumented.length) console.log(`roster-only models: ${undocumented.join(", ")}`);
-  for (const warning of warnings) console.log(`warn: ${warning}`);
-  console.log(`wrote ${path.relative(ROOT, CATALOG_PATH)}`);
+  if (undocumented.length) logger.log(`roster-only models: ${undocumented.join(", ")}`);
+  for (const warning of warnings) logger.log(`warn: ${warning}`);
+  logger.log(`wrote ${path.relative(root, catalogPath)}`);
+  return document;
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  refreshCatalog({ offline: process.argv.includes("--offline"), checkOnly: process.argv.includes("--check") })
+    .catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+}

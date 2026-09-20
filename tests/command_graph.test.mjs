@@ -14,6 +14,174 @@ const musicContext = vm.createContext({ Math, Number });
 vm.runInContext(section("function analyzeMusicSpectrum(", "function audioEnergy()"), musicContext);
 const analyze = musicContext.analyzeMusicSpectrum;
 
+test("the graph frame scheduler draws and reschedules without undeclared runtime state", () => {
+  const drawn = [], scheduled = [], errors = [];
+  const state = { active: true };
+  const document = { hidden: false, body: { dataset: {} } };
+  const env = vm.createContext({ state, document, drawFrame: (time) => drawn.push(time), requestAnimationFrame: (callback) => { scheduled.push(callback); return scheduled.length; }, console: { error: (...args) => errors.push(args) } });
+  vm.runInContext(section("// Animation state belongs", "function drawFrame("), env);
+  env.frame(100); env.frame(110); env.frame(150);
+  assert.deepEqual(drawn, [100, 150]);
+  assert.equal(scheduled.length, 3);
+  assert.equal(errors.length, 0);
+  document.body.dataset.sheet = "tasks";
+  env.frame(200);
+  assert.deepEqual(drawn, [100, 150]);
+  assert.equal(scheduled.length, 4, "closing a sheet must still have a next graph frame waiting");
+  document.body.dataset.sheet = "music"; state.settingsPreview = { x: 600, y: 0, w: 600, h: 800 };
+  env.frame(250);
+  assert.deepEqual(drawn, [100, 150, 250], "the actual canvas continues drawing inside Music settings");
+  document.body.dataset.sheet = "tasks";
+  env.frame(300);
+  assert.deepEqual(drawn, [100, 150, 250], "preview permission must not draw through other sheets");
+});
+
+test("Music preview uses the requested real-graph viewport and restores the prior view on close", () => {
+  const state = { active: false, camera: { x: 10, y: 20, z: 30 }, camMode: "free", fit: 1.2, zoom: 1.4, overviewScale: .7, angle: 0.6, pitch: 0.1, nodeLayout: "constellation", screenLayout: { key: "original" } };
+  let enters = 0, exits = 0, fits = 0;
+  const env = vm.createContext({ state, Number, Math, Object, enter: () => { enters += 1; state.active = true; }, exit: () => { exits += 1; state.active = false; }, fitAll: () => { fits += 1; state.camera = { x: 0, y: 0, z: 0 }; state.screenLayout = null; }, syncViewControls() {}, renderHint() {} });
+  vm.runInContext(section("function setSettingsPreview(", "function applyTreePreferences("), env);
+  const viewport = { x: 520, y: 16, w: 900, h: 800 };
+  env.setSettingsPreview(viewport);
+  assert.equal(enters, 1); assert.equal(fits, 1); assert.equal(state.camMode, "orbit");
+  assert.deepEqual(JSON.parse(JSON.stringify(state.settingsPreview)), viewport);
+  env.setSettingsPreview(viewport);
+  assert.equal(fits, 1, "unchanged bounds do not keep resetting the node arrangement");
+  env.setSettingsPreview(null);
+  assert.equal(exits, 1); assert.equal(state.camMode, "free");
+  assert.deepEqual(JSON.parse(JSON.stringify(state.camera)), { x: 10, y: 20, z: 30 });
+  assert.equal(state.zoom, 1.4); assert.equal(state.screenLayout.key, "original");
+  assert.equal(state.overviewScale, .7);
+});
+
+test("the complete Command module can enter and draw while preserving the default fixed view", async () => {
+  const callbacks = [], draws = [], errors = [];
+  const classes = { add() {}, remove() {}, toggle() {}, contains: () => false };
+  const document = { readyState: "loading", hidden: false, addEventListener() {}, body: { dataset: {}, classList: classes } };
+  const window = { addEventListener() {}, dispatchEvent() {}, __draw: (time) => draws.push(time), __audioRequests: 0 };
+  const hook = `window.__graphTest = { state, el, prepare() {
+    closeAmbience = resize = renderLegend = syncViewControls = setCamMode = loadPngs = updateTelemetry = renderFeed = renderHint = bumpHud = refreshGraph = selectNode = applyEnterParams = () => {};
+    refreshTasks = () => Promise.resolve();
+    drawFrame = window.__draw;
+    bell = ensureReactiveInput = () => { window.__audioRequests += 1; };
+  }};`;
+  const env = vm.createContext({ window, document, Promise, Date, Math, Map, Set, WeakMap, localStorage: { getItem: () => null, setItem() {} }, CustomEvent: class { constructor(type, details) { this.type = type; this.detail = details.detail; } }, requestAnimationFrame: (callback) => { callbacks.push(callback); return callbacks.length; }, setInterval: () => 1, console: { error: (...args) => errors.push(args) } });
+  vm.runInContext(source.replace("  window.MefiIdle = {", `${hook}\n  window.MefiIdle = {`), env);
+  const { state, el, prepare } = window.__graphTest;
+  prepare(); state.zen = false;
+  el.canvas = { focus() {} }; el.hud = { classList: classes };
+  assert.equal(window.MefiIdle.status().orbit, "paused");
+  window.MefiIdle.enter(true);
+  await state.readyPromise;
+  assert.equal(window.MefiIdle.status().orbit, "paused", "enter must not override the fixed default");
+  callbacks.shift()(100);
+  assert.deepEqual(draws, [100]);
+  assert.equal(errors.length, 0);
+  state.active = false; state.orbit = "auto";
+  window.MefiIdle.enter(true);
+  await state.readyPromise;
+  assert.equal(state.orbit, "auto", "an explicit user camera choice survives reopening");
+  state.active = false; state.zen = true; state.reactive = true; state.settingsPreview = { x: 600, y: 0, w: 600, h: 800 };
+  window.MefiIdle.enter(true); await state.readyPromise;
+  assert.equal(window.__audioRequests, 0, "opening a settings preview cannot start bells or audio capture");
+});
+
+test("Music preview refreshes real graph snapshots while other sheets remain idle", () => {
+  let reads = 0, popups = 0;
+  const state = { active: true, settingsPreview: { x: 600, y: 0, w: 600, h: 800 }, assistant: {}, ambient: true, popupAt: 0 };
+  const document = { hidden: false, body: { dataset: { sheet: "tasks" } } };
+  const env = vm.createContext({ state, document, Date, POPUP_MS: 1000, refreshCommandBacklog: () => { reads += 1; }, refreshGraph: () => { reads += 1; }, checkCollisions() {}, updateTelemetry() {}, autopilotJobs: () => [], chatMode: () => false, renderFeed() {}, popup: () => { popups += 1; } });
+  vm.runInContext(section("function tick()", "async function checkCollisions("), env);
+  env.tick(); assert.equal(reads, 0);
+  document.body.dataset.sheet = "music";
+  env.tick(); assert.equal(reads, 2); assert.equal(popups, 0);
+  document.hidden = true; env.tick(); assert.equal(reads, 2);
+});
+
+function zenContext() {
+  const classes = new Set(), writes = [];
+  const state = { active: true, ambientZen: false, lastInput: 1000, camera: { x: 1, y: 2, z: 3, tx: 1, ty: 2, tz: 3 }, camMode: "follow", orbit: "paused", orbitVel: 0, angle: 0.5, pitch: 0.1, view: "3d", feedCollapsed: false, screenLayout: { key: "stable", nodes: new Map() } };
+  const classList = { toggle: (name, on) => on ? classes.add(name) : classes.delete(name), remove: (name) => classes.delete(name) };
+  const el = { hud: { classList, inert: false }, feed: { classList }, feedContent: { hidden: false }, feedToggle: { attrs: {}, setAttribute(name, value) { this.attrs[name] = value; } } };
+  const document = { hidden: false, body: { dataset: {}, classList }, activeElement: null, querySelectorAll: () => [] };
+  const window = { MefiNav: { top: () => "command" } };
+  const env = vm.createContext({ state, el, document, window, Date, Math, Object, Array, Boolean, String, AMBIENT_ZEN_MS: 30000, ORBIT_BASE: 0.003, ORBIT_ENERGY: 0.001, noMotion: () => false, hideTip() {}, syncViewControls() {}, writeStore: (...args) => writes.push(args) });
+  vm.runInContext(section("function canAmbientZen()", "function canDim()"), env);
+  vm.runInContext(section("function orbitTarget(", "function computeBranch("), env);
+  return { state, el, document, window, env, classes, writes };
+}
+
+test("ambient Zen waits thirty idle seconds, preserves anchors, and wakes without rewinding the orbit", () => {
+  const { state, el, env, classes } = zenContext();
+  const anchors = state.screenLayout;
+  assert.equal(env.checkAmbientZen(30999), false);
+  assert.equal(env.checkAmbientZen(31000), true);
+  assert.equal(state.camMode, "orbit"); assert.equal(state.orbit, "auto");
+  assert.ok(classes.has("command-zen")); assert.equal(el.hud.inert, true);
+  assert.equal(state.screenLayout, anchors);
+  assert.ok(env.orbitTarget(0) > 0);
+  state.angle = 0.75;
+  assert.equal(env.wakeAmbientZen(32000), true);
+  assert.equal(state.camMode, "follow"); assert.equal(state.orbit, "paused");
+  assert.equal(state.angle, 0.75, "waking preserves the visible angle instead of snapping backwards");
+  assert.equal(state.orbitVel, 0); assert.equal(state.lastInput, 32000);
+  assert.equal(el.hud.inert, false); assert.equal(classes.has("command-zen"), false);
+  assert.equal(state.screenLayout, anchors);
+});
+
+test("Music, menus, typing, dragging, hidden windows and other views cannot enter ambient Zen", () => {
+  for (const block of [
+    ({ state }) => { state.settingsPreview = { x: 600, y: 0, w: 500, h: 700 }; },
+    ({ document }) => { document.body.dataset.sheet = "music"; },
+    ({ window }) => { window.MefiNav.top = () => "palette"; },
+    ({ state }) => { state.panning = { x: 1 }; },
+    ({ state }) => { state.rotating = { x: 1 }; },
+    ({ state }) => { state.query = "work"; },
+    ({ state }) => { state.feedMenuOpen = true; },
+    ({ document }) => { document.activeElement = { matches: () => true }; },
+    ({ document }) => { document.querySelectorAll = () => [{ closest: () => null }]; },
+    ({ document }) => { document.hidden = true; },
+    ({ state }) => { state.active = false; },
+  ]) {
+    const fixture = zenContext(); block(fixture);
+    assert.equal(fixture.env.checkAmbientZen(90000), false);
+    assert.equal(fixture.state.lastInput, 90000, "an unavailable view needs a fresh idle interval afterward");
+    assert.equal(fixture.el.hud.inert, false);
+  }
+});
+
+test("reduced motion and a 2D graph can become quiet without rotating or changing their view", () => {
+  const { state, env } = zenContext();
+  env.noMotion = () => true;
+  assert.equal(env.checkAmbientZen(31000), true);
+  assert.equal(state.orbit, "paused"); assert.equal(env.orbitTarget(1), 0);
+  env.wakeAmbientZen(32000); env.noMotion = () => false; state.view = "2d";
+  assert.equal(env.checkAmbientZen(62000), true);
+  assert.equal(state.view, "2d"); assert.equal(env.orbitTarget(1), 0);
+});
+
+test("Live work collapse updates hidden content, accessibility and saved preference without changing work state", () => {
+  const { state, el, env, writes, classes } = zenContext();
+  const anchors = state.screenLayout;
+  env.setFeedCollapsed(true);
+  assert.equal(el.feedContent.hidden, true); assert.equal(el.feedToggle.attrs["aria-expanded"], "false");
+  assert.equal(el.feedToggle.title, "Expand live work"); assert.ok(classes.has("collapsed"));
+  assert.deepEqual(writes, [["mefiStudio.cmdFeedCollapsed", "1"]]);
+  assert.equal(state.screenLayout, anchors); assert.equal(state.graphAreaAt, 0);
+  env.setFeedCollapsed(false, false);
+  assert.equal(el.feedContent.hidden, false); assert.equal(el.feedToggle.attrs["aria-expanded"], "true");
+  assert.equal(el.feedToggle.title, "Collapse live work"); assert.equal(writes.length, 1);
+});
+
+test("an explicit graph fit settles its camera before managed anchors are allocated", () => {
+  const state = { camera: { x: -200, y: 60, z: 80, tx: 20, ty: 10, tz: 5 }, pitch: 0.2, screenLayout: {} };
+  const env = vm.createContext({ state, setZoom: (zoom) => { state.zoom = zoom; }, autoFit() {}, hideTip() {} });
+  vm.runInContext(section("function fitAll()", "function nodeState("), env);
+  env.fitAll();
+  assert.deepEqual(JSON.parse(JSON.stringify(state.camera)), { x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0 });
+  assert.equal(state.screenLayout, null); assert.equal(state.zoom, 1);
+});
+
 function spectrum(sampleRate, ranges = []) {
   const fft = new Uint8Array(1024);
   for (let index = 1; index < fft.length; index += 1) {
@@ -66,7 +234,7 @@ function graphContext({ width = 1440, height = 900, chat = false } = {}) {
     top: box(24, 20, width - 48, 100),
     bottom: box(200, height - 74, width - 400, 54),
     feed: box(24, 140, 320, height - 240),
-    chatLog: box(width - 324, 140, 300, height - 240),
+    chatLog: box(width - 324, 140, 300, chat ? height - 240 : 64),
   };
   const state = { active: true, chatLogOpen: chat, graphArea: null, graphAreaAt: 0, camera: { x: 0, y: 0, z: 0 }, view: "2d", zoom: 1, angle: 0.5, pitch: 0, nodes: [] };
   const env = vm.createContext({ Date, Math, el, state });
@@ -95,14 +263,42 @@ test("collapsed chat returns space to graph and compact windows never get a nega
   assert.equal(collapsed.env.usableArea().x + collapsed.env.usableArea().w, 1412);
   const narrow = graphContext({ width: 820, height: 600, chat: true });
   const area = narrow.env.usableArea();
-  assert.ok(area.w >= 160 && area.h >= 160);
+  assert.ok(area.w > 0 && area.h > 0);
   assert.ok(area.x >= 0 && area.x + area.w <= 820);
+  assert.ok(area.x >= 344 && area.x + area.w <= 496, "even a crowded window must not reuse the space occupied by expanded panels");
+});
+
+test("node details and Follow controls reserve real graph space", () => {
+  const { env, state, el } = graphContext({ chat: true });
+  el.info = box(800, 210, 300, 500);
+  el.followStatus = box(372, 140, 420, 40);
+  const area = env.usableArea();
+  for (const panel of [el.feed, el.chatLog, el.info, el.followStatus]) {
+    const r = panel.getBoundingClientRect();
+    assert.ok(area.x + area.w <= r.left || area.x >= r.right || area.y + area.h <= r.top || area.y >= r.bottom);
+  }
+  el.info.hidden = true; el.followStatus.hidden = true; state.graphAreaAt = 0;
+  assert.ok(env.usableArea().w > area.w, "closing the detail card returns its space");
+});
+
+test("Zen releases invisible panel bounds and wake immediately restores them", () => {
+  const { env, state, el } = graphContext({ chat: true });
+  Object.assign(state, { hudRects: [], hudRectsAt: 0 });
+  vm.runInContext(section("function hudRects()", "function drawLabels("), env);
+  const normal = { ...env.usableArea() };
+  assert.ok(env.hudRects().length > 0);
+  state.ambientZen = true;
+  assert.deepEqual({ ...env.usableArea() }, { x: 28, y: 28, w: el.width - 56, h: el.height - 56 });
+  assert.equal(env.hudRects().length, 0, "faded panels cannot hide labels either");
+  state.ambientZen = false;
+  assert.deepEqual({ ...env.usableArea() }, normal);
+  assert.ok(env.hudRects().length > 0);
 });
 
 test("important graph labels win crowded placement without covering other text or nodes", () => {
   const { env, el, state } = graphContext();
   Object.assign(state, { labels: "all", selected: null, hoverNode: null, query: "", matchSet: new Set(), labelRects: [], labelWidths: new Map(), hudRects: [], hudRectsAt: 0 });
-  el.ctx = { measureText: (text) => ({ width: text.length * 6 }), beginPath() {}, roundRect() {}, fill() {}, stroke() {}, strokeText() {}, fillText() {} };
+  el.ctx = { measureText: (text) => ({ width: text.length * 6 }), beginPath() {}, moveTo() {}, lineTo() {}, roundRect() {}, fill() {}, fillRect() {}, stroke() {}, strokeText() {}, fillText() {} };
   vm.runInContext(source.slice(source.indexOf("const LABEL_FONT ="), source.indexOf("// Node life-cycle:")), env);
   Object.assign(env, { emphasis: () => 1, colorOf: () => [230, 201, 141], hexToRgb: () => [230, 201, 141], rgba: (_color, alpha) => `rgba(1,2,3,${alpha})`, NODE_RGB: { assistant: [1, 2, 3], done: [1, 2, 3], task: [1, 2, 3] } });
   vm.runInContext(section("function measure(ctx", "// ---------- hover tooltip"), env);
@@ -117,6 +313,409 @@ test("important graph labels win crowded placement without covering other text o
     assert.ok(rect.x >= 12 && rect.x + rect.w <= el.width - 12);
     for (let j = i + 1; j < state.labelRects.length; j += 1) assert.equal(env.overlaps(rect, state.labelRects[j]), false);
   }
+});
+
+function labelContext(options) {
+  const { env, el, state } = graphContext(options);
+  Object.assign(state, { camMode: "orbit", labels: "auto", selected: null, hoverNode: null, query: "", matchSet: new Set(), labelRects: [], labelWidths: new Map(), hudRects: [], hudRectsAt: 0 });
+  el.ctx = { measureText: (text) => ({ width: text.length * 6 }), beginPath() {}, moveTo() {}, lineTo() {}, roundRect() {}, fill() {}, fillRect() {}, stroke() {}, strokeText() {}, fillText() {} };
+  vm.runInContext(source.slice(source.indexOf("const LABEL_FONT ="), source.indexOf("// Node life-cycle:")), env);
+  Object.assign(env, { emphasis: () => 1, colorOf: () => [230, 201, 141], hexToRgb: () => [230, 201, 141], rgba: (_color, alpha) => `rgba(1,2,3,${alpha})`, NODE_RGB: { assistant: [1, 2, 3], done: [1, 2, 3], task: [1, 2, 3] } });
+  vm.runInContext(section("function measure(ctx", "// ---------- hover tooltip"), env);
+  return { env, el, state };
+}
+
+test("Auto caps Orbit and Free labels by clear viewport, regardless of backlog size", () => {
+  for (const [options, expected] of [[{ width: 1440, height: 900 }, 8], [{ width: 1100, height: 900 }, 6], [{ width: 820, height: 600, chat: true }, 4]]) {
+    for (const camMode of ["orbit", "free"]) {
+      const { env, state } = labelContext(options);
+      state.camMode = camMode;
+      const area = env.usableArea();
+      const projected = Array.from({ length: 100 }, (_, index) => ({
+        node: { id: `task:${String(index).padStart(3, "0")}`, kind: "task", label: `Work ${index}`, state: "active", _pr: 5 },
+        p: { x: area.x + 40 + (index % 4) * (area.w - 80) / 4, y: area.y + 40 + Math.floor(index / 4) * 90, k: 1, depth: 800 },
+      }));
+      assert.equal(env.labelBudget(), expected);
+      assert.equal(env.labelCandidates(projected).length, expected);
+      env.drawLabels(projected);
+      assert.ok(state.labelRects.length > 0 && state.labelRects.length <= expected);
+      for (const rect of state.labelRects) {
+        assert.ok(rect.x >= area.x && rect.x + rect.w <= area.x + area.w);
+        assert.ok(rect.y >= area.y && rect.y + rect.h <= area.y + area.h);
+      }
+      for (let i = 0; i < state.labelRects.length; i += 1) {
+        for (let j = i + 1; j < state.labelRects.length; j += 1) assert.equal(env.overlaps(state.labelRects[i], state.labelRects[j]), false);
+      }
+    }
+  }
+});
+
+test("Auto hides unrelated backlog text while hover, selection, search and All retain access", () => {
+  const { env, state } = labelContext();
+  const nodes = [
+    { id: "running", kind: "task", label: "Current worker", state: "active" },
+    ...Array.from({ length: 80 }, (_, index) => ({ id: `quiet:${index}`, kind: "task", label: `Saved task ${index}`, state: "task" })),
+    { id: "old-todo", kind: "todo", sessionId: "old", status: "in_progress", _workLabel: "Running", label: "Old session step" },
+    { id: "session", kind: "session", label: "Prior session" },
+  ];
+  const projected = nodes.map((node) => ({ node, p: { k: 1, depth: 800 } }));
+  assert.deepEqual(Array.from(env.labelCandidates(projected), ({ node }) => node.id), ["running"]);
+  state.selected = nodes[1];
+  state.hoverNode = nodes[2];
+  state.query = "Saved";
+  state.matchSet = new Set(nodes.slice(3, 70).map((node) => node.id));
+  let candidates = env.labelCandidates(projected);
+  assert.equal(candidates.length, 8);
+  assert.equal(candidates[0].node, nodes[1]);
+  assert.equal(candidates[1].node, nodes[2]);
+  assert.ok(candidates.slice(2).every(({ node }) => state.matchSet.has(node.id)));
+  state.query = "";
+  state.labels = "all";
+  candidates = env.labelCandidates(projected);
+  assert.ok(candidates.length > 8 && candidates.some(({ node }) => node.id === "quiet:20"));
+  assert.equal(nodes.length, 83, "label filtering must not remove saved graph nodes");
+});
+
+test("Auto keeps only two quiet session landmarks and its choices remain stable during rotation", () => {
+  const { env, state } = labelContext();
+  const projected = Array.from({ length: 20 }, (_, index) => ({ node: { id: `session:${index}`, kind: "session", label: `Session ${index}` }, p: { k: 1, depth: 500 + index * 40 } }));
+  const ids = (items) => Array.from(env.labelCandidates(items), ({ node }) => node.id);
+  const before = ids(projected);
+  assert.equal(before.length, 2);
+  assert.deepEqual(ids(projected.toReversed().map((item) => ({ ...item, p: { ...item.p, depth: 1500 - item.p.depth } }))), before);
+  state.hoverNode = projected[19].node;
+  assert.equal(ids(projected)[0], "session:19");
+});
+
+test("Auto clips display labels without changing saved titles and expands inspected text", () => {
+  const { env, el, state } = labelContext();
+  const title = "Implement resilient workflow continuation and dependency checks for grouped work";
+  const node = { id: "long", kind: "task", label: title, _workLabel: "Running" };
+  const compact = env.labelText(el.ctx, node, env.fontFor(node));
+  assert.ok(el.ctx.measureText(compact).width <= 180);
+  assert.match(compact, /…$/);
+  state.hoverNode = node;
+  const inspected = env.labelText(el.ctx, node, env.fontFor(node));
+  assert.ok(inspected.length > compact.length);
+  assert.ok(el.ctx.measureText(inspected).width <= 230);
+  assert.equal(node.label, title);
+});
+
+test("orbs reserve size and brightness emphasis for working or inspected nodes", () => {
+  const state = { selected: null, hoverNode: null };
+  const env = vm.createContext({ state });
+  vm.runInContext(section("function nodeVisualProfile(", "function traceNodeSurface("), env);
+  const quiet = { id: "quiet", kind: "session", state: "idle" };
+  const active = { id: "active", kind: "session", state: "active" };
+  const calm = env.nodeVisualProfile(quiet);
+  const busy = env.nodeVisualProfile(active);
+  assert.equal(calm.shape, "circle");
+  assert.ok(calm.maxRadius < busy.maxRadius && calm.alpha < busy.alpha);
+  assert.equal(env.nodeVisualProfile({ kind: "agent" }).shape, "circle");
+  assert.equal(env.nodeVisualProfile({ kind: "task" }).shape, "circle");
+  assert.equal(env.nodeVisualProfile({ kind: "agent", status: "running" }).prominent, true);
+  assert.equal(env.nodeVisualProfile({ kind: "agent", status: "queued" }).prominent, false);
+  state.hoverNode = quiet;
+  assert.equal(env.nodeVisualProfile(quiet).prominent, true);
+});
+
+test("orbs retain luminous cores and a single status rim without stacked status rings", () => {
+  const state = { selected: null, hoverNode: null };
+  const env = vm.createContext({ state, Math, rgba: (_tint, alpha) => `rgba(220,180,110,${alpha})` });
+  vm.runInContext(section("function nodeVisualProfile(", "function arrangeProjectedNodes("), env);
+  for (const kind of ["task", "agent", "session"]) {
+    const paints = [], gradients = [];
+    const ctx = { save() {}, restore() {}, beginPath() {}, arc() {}, fillRect() {}, fill() { paints.push(["fill", this.fillStyle]); }, stroke() { paints.push(["stroke", this.strokeStyle]); }, createRadialGradient() { const stops = []; gradients.push(stops); return { addColorStop: (...stop) => stops.push(stop) }; } };
+    env.drawNodeSurface(ctx, { id: kind, kind }, { x: 50, y: 50 }, 12, [220, 180, 110], { active: true });
+    assert.equal(paints.filter(([operation]) => operation === "stroke").length, 1);
+    assert.equal(gradients.length, 2, "one restrained halo and one coloured core");
+    assert.ok(paints.some(([operation, value]) => operation === "fill" && value === "#151a22"), "connections must not show through the core");
+  }
+});
+
+test("collapsed panel headers stay outside the graph while their side gutters become usable", () => {
+  const { env, state, el } = graphContext({ width: 1920, height: 1200 });
+  state.feedCollapsed = true;
+  el.feed = box(30, 196, 410, 84);
+  el.chatLog = box(1560, 196, 330, 64);
+  const area = env.usableArea();
+  assert.equal(area.x, 28);
+  assert.equal(area.x + area.w, 1892);
+  assert.ok(area.y >= 304, "collapsed Live work and Assistant headers are real obstructions");
+  state.settingsPreview = { x: 530, y: 20, w: 1300, h: 1100 };
+  assert.deepEqual({ ...env.usableArea() }, state.settingsPreview, "Music preview keeps its explicit unobstructed viewport");
+});
+
+test("collapsed Live work returns its gutter to the graph and keeps assistant composer access", () => {
+  const { state, el, env } = graphContext();
+  const wide = env.usableArea().w;
+  state.feedCollapsed = true; state.graphAreaAt = 0;
+  el.feed = box(24, 140, 220, 48);
+  assert.ok(env.usableArea().w > wide + 200);
+  el.feed.offsetWidth = 320; state.selected = { kind: "assistant" };
+  vm.runInContext(section("function feedVisible()", "function centerX()"), env);
+  vm.runInContext(section("function chatMode()", "function composerInput()"), env);
+  assert.equal(env.feedVisible(), false); assert.equal(env.chatMode(), false, "the hidden rail cannot swallow the floating assistant composer");
+  state.feedCollapsed = false;
+  assert.equal(env.feedVisible(), true); assert.equal(env.chatMode(), true);
+});
+
+test("Classic, Soft glass and Minimal use distinct rendering without altering node geometry", () => {
+  const state = { selected: null, hoverNode: null, nodeStyle: "orbs" };
+  const env = vm.createContext({ state, Math, rgba: (_tint, alpha) => `rgba(220,180,110,${alpha})` });
+  vm.runInContext(section("function nodeVisualProfile(", "function graphLayoutSeeds("), env);
+  const node = { id: "task", kind: "task", x: 4, y: 5, z: 6 };
+  const counts = {};
+  for (const style of ["orbs", "glass", "minimal"]) {
+    const calls = { radial: 0, linear: 0, fill: 0 };
+    const ctx = { save() {}, restore() {}, beginPath() {}, arc() {}, fill() { calls.fill += 1; }, stroke() {}, createRadialGradient() { calls.radial += 1; return { addColorStop() {} }; }, createLinearGradient() { calls.linear += 1; return { addColorStop() {} }; } };
+    state.nodeStyle = style; env.drawNodeSurface(ctx, node, { x: 50, y: 50 }, 12, [220, 180, 110], { active: true }); counts[style] = calls;
+  }
+  assert.deepEqual(counts, { orbs: { radial: 2, linear: 0, fill: 4 }, glass: { radial: 0, linear: 1, fill: 2 }, minimal: { radial: 0, linear: 0, fill: 1 } });
+  assert.deepEqual([node.x, node.y, node.z], [4, 5, 6]);
+});
+
+test("style changes preserve managed positions and only explicit layout changes request a reflow", () => {
+  const saved = { nodes: new Map() };
+  const state = { nodeStyle: "orbs", nodeLayout: "constellation", screenLayout: saved, active: true };
+  let fits = 0;
+  const env = vm.createContext({ state, el: { width: 1400, height: 900 }, fitAll: () => { fits += 1; } });
+  vm.runInContext(section("function applyTreePreferences(", "function traceNodeSurface("), env);
+  env.applyTreePreferences({ nodeStyle: "glass", nodeLayout: "constellation" });
+  assert.equal(state.screenLayout, saved); assert.equal(fits, 0);
+  env.applyTreePreferences({ nodeStyle: "minimal", nodeLayout: "tree" });
+  assert.equal(state.screenLayout, null); assert.equal(fits, 1);
+  state.screenLayout = saved;
+  env.applyTreePreferences({ nodeStyle: "invalid", nodeLayout: "invalid" });
+  assert.equal(state.screenLayout, saved); assert.equal(state.nodeStyle, "minimal"); assert.equal(fits, 1);
+  env.applyTreePreferences({ orbitTrails: true, extraGlow: true });
+  assert.equal(state.orbitTrails, true); assert.equal(state.extraGlow, true);
+  assert.equal(state.screenLayout, saved); assert.equal(fits, 1, "effects cannot reflow fixed anchors");
+  env.applyTreePreferences({ orbitTrails: "false" });
+  assert.equal(state.orbitTrails, true, "invalid effect values cannot silently change a saved preference");
+});
+
+test("blue work orbits are optional, truthful and static for reduced motion", () => {
+  const state = { orbitTrails: false }, arcs = [];
+  const env = vm.createContext({ state, Math });
+  vm.runInContext(section("function drawWorkOrbit(", "function graphLayoutSeeds("), env);
+  const ctx = { save() {}, restore() {}, beginPath() {}, arc: (...args) => arcs.push(args), stroke() {} };
+  const node = { id: "work", kind: "task", _workLabel: "Running", x: 3, y: 4, z: 5 };
+  env.drawWorkOrbit(ctx, node, { x: 50, y: 50 }, 12, 100, false);
+  assert.equal(arcs.length, 0); assert.equal(node._orbitTrail, null);
+  state.orbitTrails = true;
+  env.drawWorkOrbit(ctx, node, { x: 50, y: 50 }, 12, 100, false);
+  const first = node._orbitTrail.phase;
+  assert.equal(arcs.length, 4); assert.equal(node._orbitTrail.segments, 3); assert.equal(node._orbitTrail.radius, 21);
+  env.drawWorkOrbit(ctx, node, { x: 50, y: 50 }, 12, 200, false);
+  assert.ok(node._orbitTrail.phase > first);
+  env.drawWorkOrbit(ctx, node, { x: 50, y: 50 }, 12, 300, true);
+  const still = node._orbitTrail.phase;
+  env.drawWorkOrbit(ctx, node, { x: 50, y: 50 }, 12, 8000, true);
+  assert.equal(node._orbitTrail.phase, still); assert.equal(node._orbitTrail.animated, false);
+  assert.deepEqual([node.x, node.y, node.z], [3, 4, 5]);
+  for (const label of [null, "Done", "Blocked"]) { node._workLabel = label; env.drawWorkOrbit(ctx, node, { x: 50, y: 50 }, 12, 9000, false); assert.equal(node._orbitTrail, null); }
+  node._workLabel = "Next";
+  env.drawWorkOrbit(ctx, node, { x: 50, y: 50 }, 12, 1000, false);
+  assert.ok(node._orbitTrail.drawn, "explicit queued work retains the old blue indicator");
+});
+
+test("Extra glow adds a bounded visible halo to every chosen style without changing geometry", () => {
+  const state = { extraGlow: false };
+  const env = vm.createContext({ state, Math, rgba: (_tint, alpha) => `rgba(220,180,110,${alpha})` });
+  vm.runInContext(section("function traceNodeSurface(", "function drawWorkOrbit("), env);
+  const node = { id: "task", kind: "task", x: 10, y: 20, z: 30 };
+  for (const style of ["orbs", "glass", "minimal"]) {
+    const radii = [];
+    const ctx = { save() {}, restore() {}, beginPath() {}, arc() {}, fill() {}, stroke() {}, createRadialGradient(...args) { radii.push(args[5]); return { addColorStop() {} }; }, createLinearGradient: () => ({ addColorStop() {} }) };
+    state.nodeStyle = style; state.extraGlow = false;
+    env.drawNodeSurface(ctx, node, { x: 100, y: 100 }, 12, [220, 180, 110]); const normal = radii.length;
+    state.extraGlow = true; env.drawNodeSurface(ctx, node, { x: 100, y: 100 }, 12, [220, 180, 110]);
+    assert.equal(radii.length - normal, normal + 1); assert.equal(node._extraGlow, true);
+    assert.ok(radii.some((radius) => radius > 12 && radius <= 12 * 2.25)); assert.ok(Math.max(...radii) <= 12 * 2.25, "glow leaves a crisp edge instead of filling the surrounding branch");
+  }
+  assert.deepEqual([node.x, node.y, node.z], [10, 20, 30]);
+});
+
+test("Branches follows real parent edges, Rings uses separate concentric slots, and layouts retain surviving points", () => {
+  const { env, state } = graphContext(); Object.assign(state, { fit: 1, nodeLayout: "tree", nodeStyle: "orbs", tasks: [] });
+  vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+  const nodes = [{ id: "root", kind: "root", x: 0, y: 0, z: 0 }, { id: "session", kind: "session", x: 1, y: 1, z: 1 }, { id: "assistant", kind: "assistant", x: 2, y: 2, z: 2 }, ...Array.from({ length: 12 }, (_, index) => ({ id: `task:${index}`, kind: "task", x: 3 + index, y: 3, z: 3 + index }))];
+  const edgesFor = (list) => list.slice(1).map((node) => ({ a: list.findIndex((candidate) => candidate.id === (node.kind === "task" ? "session" : "root")), b: list.indexOf(node) }));
+  const run = (list) => { state.edges = edgesFor(list); const projected = list.map((node) => ({ node, p: env.project(node) })); env.layoutProjectedGraph(projected, env.usableArea(), "orbit"); return new Map(projected.map(({ node, p }) => [node.id, [p.x, p.y]])); };
+  const branches = run(nodes);
+  assert.ok(branches.get("session")[1] > branches.get("root")[1]);
+  assert.ok(branches.get("task:0")[1] > branches.get("session")[1]);
+  const added = run([...nodes.slice().reverse(), { id: "task:new", kind: "task", x: 12, y: 0, z: 8 }]);
+  for (const [id, point] of branches) assert.deepEqual(added.get(id), point);
+  state.nodeLayout = "radial"; const rings = run(nodes);
+  assert.ok(nodes.filter((node) => Math.hypot(...rings.get(node.id).map((value, index) => value - branches.get(node.id)[index])) > 8).length >= 10);
+  assert.notDeepEqual(rings.get("session"), rings.get("assistant"), "ring1 shares a slot pool across node kinds");
+});
+
+test("Constellation balances loose tasks around its hub and keeps related work in short branch sectors", () => {
+  const { env } = graphContext();
+  vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+  const area = { x: 40, y: 260, w: 1560, h: 760 };
+  const nodes = [{ id: "root", kind: "root" }, { id: "assistant", kind: "assistant" }, { id: "music", kind: "music" }];
+  const parents = new Map([["assistant", "root"]]);
+  for (let branch = 0; branch < 6; branch += 1) {
+    const id = `session:${branch}`; nodes.push({ id, kind: "session" }); parents.set(id, "root");
+    for (let index = 0; index < 3; index += 1) { const child = `${id}:step:${index}`; nodes.push({ id: child, kind: "todo" }); parents.set(child, id); }
+  }
+  for (let index = 0; index < 12; index += 1) nodes.push({ id: `task:${index}`, kind: "task" });
+  const projected = nodes.map((node) => ({ node, p: {} }));
+  const seeds = env.graphLayoutSeeds(projected, area, "constellation", parents, new Map());
+  const root = seeds.get("root");
+  assert.equal(root.x, area.x + area.w / 2); assert.equal(root.y, area.y + area.h / 2);
+  const reversed = env.graphLayoutSeeds([...projected].reverse(), area, "constellation", parents, new Map());
+  for (const [id, point] of seeds) {
+    assert.deepEqual(reversed.get(id), point, "board recency cannot change a fresh arrangement");
+    assert.ok(point.x > area.x + 32 && point.x < area.x + area.w - 32 && point.y > area.y + 32 && point.y < area.y + area.h - 32);
+    if (id.startsWith("task:")) assert.ok(Math.hypot(point.x - root.x, point.y - root.y) > 170, "loose tasks do not share a cramped center ring");
+    const parent = parents.get(id);
+    if (parent && parent !== "root") {
+      const host = seeds.get(parent);
+      assert.ok(Math.hypot(point.x - host.x, point.y - host.y) < area.w * 0.22, "a child's connection remains local to its branch");
+    }
+  }
+  // Existing positions win when another child arrives. The new child follows
+  // its established parent instead of a rebalanced imaginary branch center.
+  const fixed = new Map([["session:0", { x: 400, y: 500 }]]);
+  const shifted = env.graphLayoutSeeds(projected, area, "constellation", parents, new Map(), fixed);
+  assert.deepEqual(shifted.get("session:0"), fixed.get("session:0"));
+  const child = "session:0:step:0", original = seeds.get(child), host = seeds.get("session:0");
+  assert.ok(Math.abs(shifted.get(child).x - original.x - (400 - host.x)) < 1e-7);
+  assert.ok(Math.abs(shifted.get(child).y - original.y - (500 - host.y)) < 1e-7);
+});
+
+test("managed layout anchors transform coherently under zoom and Follow targets the displayed work", () => {
+  for (const view of ["2d", "3d"]) {
+    const { env, state } = graphContext(); Object.assign(state, { fit: 1, zoom: 1, view, nodeLayout: "radial", tasks: [], edges: [] });
+    vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+    vm.runInContext(section("function followFrame(", "function updateFollowCamera("), env);
+    const task = { id: "task:zoom", kind: "task", x: 200, y: -100, z: 120 };
+    const area = env.usableArea(); const first = [{ node: task, p: env.project(task) }];
+    env.layoutProjectedGraph(first, area, "orbit");
+    const anchor = { ...task._layoutAnchor }, projected = env.project(anchor);
+    assert.ok(Math.abs(projected.x - first[0].p.x) < 1e-7 && Math.abs(projected.y - first[0].p.y) < 1e-7);
+    state.zoom = 1.4; state.camera.x = 20; state.camera.y = -15;
+    const next = [{ node: task, p: env.project(task) }]; env.layoutProjectedGraph(next, area, "free");
+    const expected = env.project(anchor);
+    assert.ok(Math.abs(expected.x - next[0].p.x) < 1e-7 && Math.abs(expected.y - next[0].p.y) < 1e-7);
+    const follow = env.followFrame({ node: task, context: [task] }, area, state);
+    assert.ok(Math.abs(follow.x + anchor.x) < 1e-7 && Math.abs(follow.y + anchor.y) < 1e-7 && Math.abs(follow.z + anchor.z) < 1e-7);
+  }
+});
+
+test("tidy Branches centers parent groups, uses the available height and separates dense sibling rows", () => {
+  const { env } = graphContext();
+  vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+  const nodes = [{ id: "root", kind: "root" }], parents = new Map();
+  for (let session = 0; session < 4; session += 1) {
+    const id = `session:${session}`; nodes.push({ id, kind: "session" }); parents.set(id, "root");
+    for (let child = 0; child < 6; child += 1) { const tid = `${id}:todo:${child}`; nodes.push({ id: tid, kind: "todo" }); parents.set(tid, id); }
+  }
+  const projected = nodes.map((node) => ({ node, p: {} }));
+  for (const width of [920, 500, 306]) {
+    const area = { x: 20, y: 40, w: width, h: 680 };
+    const points = env.graphLayoutSeeds(projected, area, "tree", parents, new Map());
+    const again = env.graphLayoutSeeds([...projected].reverse(), area, "tree", parents, new Map());
+    for (const [id, point] of points) assert.deepEqual(again.get(id), point, "input recency must not reorder a fresh tree");
+    for (const node of nodes) {
+      const point = points.get(node.id), radius = node.kind === "todo" ? 6 : 15;
+      assert.ok(point.x - radius >= area.x && point.x + radius <= area.x + area.w);
+      assert.ok(point.y - radius >= area.y && point.y + radius <= area.y + area.h);
+      const parent = parents.get(node.id);
+      if (parent) assert.ok(point.y > points.get(parent).y, "every primary child stays below its parent");
+    }
+    for (let session = 0; session < 4; session += 1) {
+      const id = `session:${session}`, parent = points.get(id);
+      const children = [...parents].filter(([, pid]) => pid === id).map(([child]) => points.get(child));
+      assert.ok(Math.abs(parent.x - (Math.min(...children.map((p) => p.x)) + Math.max(...children.map((p) => p.x))) / 2) < 0.001);
+    }
+    const values = [...points.values()];
+    assert.ok(Math.max(...values.map((p) => p.y)) - Math.min(...values.map((p) => p.y)) > area.h * 0.8, "branches use the canvas height instead of crowding its top");
+    for (let a = 0; a < nodes.length; a += 1) for (let b = a + 1; b < nodes.length; b += 1) {
+      const pa = points.get(nodes[a].id), pb = points.get(nodes[b].id);
+      const min = (nodes[a].kind === "todo" ? 6 : 15) + (nodes[b].kind === "todo" ? 6 : 15);
+      assert.ok(Math.hypot(pa.x - pb.x, pa.y - pb.y) > min, "visible sibling orbs do not overlap");
+    }
+  }
+});
+
+test("Branches chooses actual session parents deterministically and refuses secondary-link cycles", () => {
+  const { env } = graphContext(); vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+  const projected = [{ node: { id: "root", kind: "root" } }, { node: { id: "session", kind: "session" } }, { node: { id: "task", kind: "task", anchorSessionId: "session" } }];
+  const edges = [{ a: 0, b: 1 }, { a: 0, b: 2 }, { a: 1, b: 2 }, { a: 2, b: 0 }];
+  const parents = env.primaryBranchParents(projected, edges);
+  assert.equal(parents.get("task"), "session");
+  for (const id of parents.keys()) {
+    const seen = new Set(); let cursor = id;
+    while (cursor) { assert.equal(seen.has(cursor), false); seen.add(cursor); cursor = parents.get(cursor); }
+  }
+  assert.deepEqual([...env.primaryBranchParents(projected, [...edges].reverse())], [...parents]);
+});
+
+test("managed display anchors survive role arrivals, removal, status changes and temporary task filtering", () => {
+  const area = { x: 300, y: 150, w: 800, h: 600 };
+  const state = { tasks: [{ id: "a" }, { id: "b" }], view: "2d" };
+  const project = (world) => ({ x: 600 + world.x, y: 400 + world.y, depth: 800, k: 1 });
+  const env = vm.createContext({ state, project, unprojectForLayout: (p, world) => ({ x: p.x - 600, y: p.y - 400, z: world.z }), Map, Set, Number, Math, String });
+  vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+  const a = { id: "task:a", kind: "task", x: 0, y: 0, z: 1 };
+  const b = { id: "task:b", kind: "task", x: 2, y: 4, z: 2 };
+  const session = { id: "session", kind: "session", x: -40, y: -40, z: 0 };
+  const run = (nodes, cardIds = new Set(["task:a"])) => {
+    const projected = nodes.map((node) => ({ node, p: project(node) }));
+    env.layoutProjectedGraph(projected, area, "orbit", cardIds);
+    return new Map(projected.map(({ node, p }) => [node.id, [p.x, p.y]]));
+  };
+  const before = run([a, b, session]);
+  const helper = { id: "__agent__:watcher", kind: "agent", x: 1, y: 2, z: 4 };
+  const joined = run([helper, b, session, a]);
+  for (const [id, position] of before) assert.deepEqual(joined.get(id), position, `${id} does not move when a helper joins`);
+  const filtered = run([a, session]);
+  for (const [id, position] of filtered) assert.deepEqual(position, before.get(id));
+  assert.ok(state.screenLayout.nodes.has("task:b"), "a saved task keeps its place outside the visible subset");
+  assert.equal(state.screenLayout.nodes.has(helper.id), false, "retired roles release their slot");
+  a.state = "task"; b.state = "active";
+  const changed = run([b, a, session], new Set(["task:b"]));
+  for (const [id, position] of before) assert.deepEqual(changed.get(id), position, `${id} retains its anchor when work changes`);
+  // Incoming simulation positions are not allowed to turn a managed point
+  // into an idle animation; explicit camera projection remains available.
+  session.x += 40; session.y += 20;
+  assert.deepEqual(run([a, b, session]).get("session"), before.get("session"));
+});
+
+test("orb labels paint full clickable bounds and retain truthful compact work status", () => {
+  const { env, el, state } = labelContext();
+  const strings = [];
+  el.ctx.fillText = (value) => strings.push(value);
+  const node = { id: "task:current", kind: "task", label: "Refine navigation", state: "active", _workLabel: "Running", _pr: 12 };
+  const projected = [{ node, p: { x: 720, y: 360, depth: 800, k: 1 } }];
+  env.drawLabels(projected);
+  assert.ok(node._label);
+  assert.equal(node._cardRect, null);
+  assert.ok(strings.includes("RUNNING") && strings.includes("Refine navigation"), "status and the complete title occupy separate lines");
+  assert.equal(strings.some((value) => /%/.test(value)), false);
+  Object.assign(node, { _px: 720, _py: 360 }); state.nodes = [node];
+  vm.runInContext(section("function nodeAt(", "function bubbleAt("), env);
+  assert.equal(env.nodeAt(node._label.x + 3, node._label.y + 3), node);
+});
+
+test("crowded working orbs keep their task titles by using clear whitespace without moving anchors", () => {
+  const { env, el, state } = labelContext();
+  let leaders = 0; el.ctx.lineTo = () => { leaders += 1; };
+  const tasks = [0, 1, 2].map((index) => ({ node: { id: `task:busy:${index}`, kind: "task", label: `Current work ${index}`, state: "active", _workLabel: "Running", _pr: 15 }, p: { x: 840 + index * 32, y: 420, depth: 800, k: 1 } }));
+  const crowd = Array.from({ length: 25 }, (_, index) => ({ node: { id: `quiet:${index}`, kind: "task", label: "Quiet", _pr: 11 }, p: { x: 770 + index % 5 * 35, y: 350 + Math.floor(index / 5) * 35, depth: 800, k: 1 } }));
+  const anchors = tasks.map(({ p }) => [p.x, p.y]);
+  env.drawLabels([...tasks, ...crowd]);
+  assert.ok(tasks.every(({ node }) => node._label), "all three actual task titles remain visible");
+  assert.ok(leaders > 0, "displaced labels retain a visible connection to their orb");
+  assert.deepEqual(tasks.map(({ p }) => [p.x, p.y]), anchors);
+  assert.ok(state.labelRects.length <= env.labelBudget());
+  for (let i = 0; i < state.labelRects.length; i += 1) for (let j = i + 1; j < state.labelRects.length; j += 1) assert.equal(env.overlaps(state.labelRects[i], state.labelRects[j]), false);
 });
 
 test("cancelled audio requests cannot restore capture after the toggle was switched off", async () => {
@@ -185,14 +784,17 @@ test("local player analysis reuses the media source and leaves playback connecte
   assert.equal(state.localAudio.analyser, analyser);
 });
 
-test("the rail rebuilds when a running role finishes, without making queued roles look active", async () => {
+test("the rail retains finishing roles without making queued roles look active", async () => {
   const treeSource = await readFile(new URL("../renderer/tree3d.js", import.meta.url), "utf8");
   const assistant = { state: { agents: [{ role: "builder", status: "done" }, { role: "reference", status: "queued" }] } };
   const nodes = [{ id: "assistant", kind: "assistant" }, { id: "old-builder", kind: "agent", role: "builder", status: "running" }];
-  const env = vm.createContext({ assistant, nodes, agentRoster: () => assistant.state.agents, assistantSummary: () => ({ tone: "ok", sublabel: "Ready" }), reconcileMotions() {} });
+  const motions = new Map([["builder", { agent: { role: "builder" }, retiring: true, retired: false }]]);
+  const env = vm.createContext({ assistant, nodes, motions, agentRoster: () => assistant.state.agents, assistantSummary: () => ({ tone: "ok", sublabel: "Ready" }), reconcileMotions() {} });
   vm.runInContext(treeSource.slice(treeSource.indexOf("function agentStateOf("), treeSource.indexOf("function rebuild()")), env);
   assert.equal(env.activeAgentRoster().length, 0);
-  assert.equal(env.syncAssistantNode(), true, "the old orbiting builder needs to leave the graph");
+  assert.equal(env.syncAssistantNode(), false, "a finishing builder must remain while it returns and fades");
+  motions.get("builder").retired = true;
+  assert.equal(env.syncAssistantNode(), true, "only a fully faded builder leaves the graph");
   nodes.pop();
   assert.equal(env.syncAssistantNode(), false);
   assistant.state.agents[1].status = "running";
@@ -392,5 +994,478 @@ test("Follow can refit its task and session after a narrower viewport and expand
     const p = env.project(node);
     assert.ok(p.x > area.x && p.x < area.x + area.w, `${node.id} stays inside the horizontal clear area`);
     assert.ok(p.y > area.y && p.y < area.y + area.h, `${node.id} stays inside the vertical clear area`);
+  }
+});
+
+test("task layout survives priority changes and new arrivals without moving existing work", () => {
+  const env = vm.createContext({ Map, Set, Number, String, Math });
+  vm.runInContext(section("function taskPlacements(", "// Open/active tasks"), env);
+  const tasks = ["a", "b", "c"].map((id) => ({ id, title: `Fixture ${id}` }));
+  const before = env.taskPlacements(tasks, [], []);
+  const after = env.taskPlacements([{ id: "new", title: "Just arrived" }, tasks[2], tasks[0], tasks[1]], [], [], before.layout);
+  const positions = (entries) => new Map(entries.map((entry) => [entry.task.id, [entry.x, entry.y, entry.z]]));
+  const original = positions(before.entries);
+  const changed = positions(after.entries);
+  for (const task of tasks) assert.deepEqual(changed.get(task.id), original.get(task.id));
+  const retired = env.taskPlacements([tasks[2], { id: "replacement", title: "New replacement" }], [], [], after.layout);
+  assert.deepEqual(positions(retired.entries).get("c"), original.get("c"));
+  assert.equal(retired.layout.size, 2, "retired tasks release their layout records");
+  assert.equal(retired.layout.get("replacement").slot, 0, "new work can reuse the freed slot");
+});
+
+test("tasks retain world coordinates when assigned another worker or temporarily filtered out", () => {
+  const env = vm.createContext({ Map, Set, Number, String, Math });
+  vm.runInContext(section("function taskPlacements(", "// Open/active tasks"), env);
+  const task = { id: "stable", title: "Independent task" };
+  const before = env.taskPlacements([task], [], []);
+  const original = before.entries[0];
+  const session = { id: "new-worker", kind: "session", x: 140, y: -60, z: 100, label: "Current worker" };
+  const changed = env.taskPlacements([{ ...task, status: "active", priority: 10 }], [session], [{ taskId: task.id, sessionId: session.id }], before.layout);
+  assert.equal(changed.entries[0].anchor.id, session.id, "the connection updates to the actual worker");
+  assert.deepEqual([changed.entries[0].x, changed.entries[0].y, changed.entries[0].z], [original.x, original.y, original.z]);
+  const hidden = env.taskPlacements([], [], [], changed.layout, new Set([task.id]));
+  assert.ok(hidden.layout.has(task.id));
+  const restored = env.taskPlacements([task], [], [], hidden.layout);
+  assert.deepEqual([restored.entries[0].x, restored.entries[0].y, restored.entries[0].z], [original.x, original.y, original.z]);
+});
+
+test("task connections prefer the actual worker and ignore a single generic matching word", () => {
+  const env = vm.createContext({ Map, Set, Number, String, Math });
+  vm.runInContext(section("function taskPlacements(", "// Open/active tasks"), env);
+  const sessions = [
+    { id: "similar", kind: "session", label: "Polish keyboard navigation", x: 100, y: 0, z: 50 },
+    { id: "actual", kind: "session", label: "Implementation worker", x: -100, y: 30, z: -50 },
+  ];
+  const task = { id: "task", title: "Polish keyboard navigation" };
+  const connected = env.taskPlacements([task], sessions, [{ taskId: "task", sessionId: "actual" }]);
+  assert.equal(connected.entries[0].anchor.id, "actual");
+  assert.equal(env.taskPlacements([{ id: "loose", title: "Polish color contrast" }], sessions, []).entries[0].anchor, null);
+  assert.equal(env.taskPlacements([task], sessions, []).entries[0].anchor.id, "similar", "distinctive shared words still provide a fallback for older tasks");
+});
+
+test("session and active-role slots remain stable through recency reordering and completion", async () => {
+  const tree = await readFile(new URL("../renderer/tree3d.js", import.meta.url), "utf8");
+  const env = vm.createContext({ Map, Set, Number });
+  vm.runInContext(tree.slice(tree.indexOf("function stableNodeSlots("), tree.indexOf("// Agent travel:")), env);
+  const initial = env.stableNodeSlots(["one", "two", "three"]);
+  const reordered = env.stableNodeSlots(["new", "three", "one", "two"], initial);
+  for (const id of ["one", "two", "three"]) assert.equal(reordered.get(id), initial.get(id));
+  const completed = env.stableNodeSlots(["three", "new"], reordered);
+  assert.equal(completed.get("three"), initial.get("three"));
+  assert.equal(completed.get("new"), reordered.get("new"));
+  assert.equal(completed.has("one"), false);
+  assert.equal(new Set(completed.values()).size, completed.size);
+});
+
+test("Follow labels emphasize the working task without repeating its title around every satellite", () => {
+  const { env, state, taskA, taskB, nodes } = followContext();
+  const focus = env.followCandidates(nodes, state.assistant.running, state.touches, 10000)[0];
+  Object.assign(state, { follow: focus, labels: "auto", labelWidths: new Map(), query: "", matchSet: new Set() });
+  const builder = { id: "builder:a", kind: "agent", builder: true, job: { taskId: "a" }, label: "Build garden", status: "running", startedAt: Date.now() - 20000 };
+  const helper = { id: "agent:reference", kind: "agent", role: "reference", label: "reference · Build garden", status: "running", targetId: taskA.id };
+  const quiet = { id: "task:quiet", kind: "task", label: "Queued backlog", state: "task" };
+  const pending = { id: "todo:pending", kind: "todo", sessionId: "sa", label: "Later work", status: "pending" };
+  taskA._workLabel = taskB._workLabel = "Running";
+  const allNodes = [...nodes, builder, helper, quiet, pending, { id: "music", kind: "music", label: "Music" }];
+  vm.runInContext(source.slice(source.indexOf("const LABEL_FONT ="), source.indexOf("// Node life-cycle:")), env);
+  vm.runInContext(section("function followsNode(", "// Animation state belongs"), env);
+  vm.runInContext(section("function measure(ctx", "// ---------- hover tooltip"), env);
+  const projected = allNodes.map((node) => ({ node, p: { k: 1, depth: 800 } }));
+  const labels = () => Array.from(env.labelCandidates(projected), (entry) => entry.node.id);
+  for (const id of [taskA.id, taskB.id, "todo:a", builder.id, helper.id, "music"]) assert.ok(labels().includes(id), `${id} retains context`);
+  for (const id of ["sa", "maintenance", quiet.id, pending.id]) assert.equal(labels().includes(id), false, `${id} does not clutter automatic Follow labels`);
+  assert.equal(env.emphasis(builder), 1);
+  assert.equal(env.emphasis(helper), 1);
+  assert.equal(env.emphasis(quiet), 0.2);
+  const ctx = { measureText: (text) => ({ width: text.length * 6 }) };
+  assert.match(env.labelText(ctx, builder, "font"), /^Builder · \d+s$/);
+  assert.equal(env.labelText(ctx, helper, "font"), "reference");
+  assert.equal(helper.label, "reference · Build garden", "the full target remains available for search and details");
+  state.labels = "all";
+  assert.ok(labels().includes(quiet.id));
+  state.labels = "auto";
+  state.query = "Queued";
+  state.matchSet.add(quiet.id);
+  assert.ok(labels().includes(quiet.id), "search can reveal work outside the followed task");
+});
+
+test("the rounded task frame and its label remain clickable within the graph viewport", () => {
+  const task = { id: "task:a", kind: "task", _px: 100, _py: 100, _pr: 18, _label: { x: 130, y: 90, w: 160, h: 18 } };
+  const state = { camMode: "follow", nodes: [task] };
+  const env = vm.createContext({ Math, state, usableArea: () => ({ x: 50, y: 50, w: 300, h: 200 }) });
+  vm.runInContext(section("function nodeAt(", "function bubbleAt("), env);
+  assert.equal(env.nodeAt(119, 119), task, "a visible frame corner is a task hit");
+  assert.equal(env.nodeAt(200, 100), task, "its title remains a target");
+  assert.equal(env.nodeAt(10, 100), null, "the activity panel cannot accidentally select a clipped node");
+  assert.equal(env.nodeAt(325, 200), null);
+});
+
+test("every layout has real stable 3D depth and an orderly flat 2D counterpart", () => {
+  for (const layout of ["constellation", "tree", "radial", "helix", "layers"]) {
+    const { env, state } = graphContext();
+    Object.assign(state, { fit: 1, view: "3d", nodeLayout: layout, tasks: [] });
+    vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+    const nodes = [{ id: "root", kind: "root", x: 0, y: 0, z: 0 }];
+    for (let group = 0; group < 4; group += 1) {
+      nodes.push({ id: `session:${group}`, kind: "session", x: group * 20, y: 0, z: 0 });
+      for (let item = 0; item < 3; item += 1) nodes.push({ id: `todo:${group}:${item}`, sessionId: `session:${group}`, kind: "todo", x: item * 10, y: group * 10, z: 0 });
+    }
+    state.edges = nodes.slice(1).map((node) => ({ a: nodes.findIndex((candidate) => candidate.id === (node.sessionId ?? "root")), b: nodes.indexOf(node) }));
+    const area = env.usableArea();
+    const run = () => { const projected = nodes.map((node) => ({ node, p: env.project(node) })); env.layoutProjectedGraph(projected, area, "orbit"); return projected; };
+    const initial = run();
+    const depths = initial.map(({ p }) => p.depth);
+    assert.ok(Math.max(...depths) - Math.min(...depths) > 40, `${layout} is a volume, not a flat billboard`);
+    for (const { p } of initial) assert.ok(p.x >= area.x && p.x <= area.x + area.w && p.y >= area.y && p.y <= area.y + area.h, `${layout} fits at rest`);
+    const anchors = new Map(nodes.map((node) => [node.id, { ...node._layoutAnchor }]));
+    state.angle += 0.45;
+    const rotated = run();
+    assert.ok(rotated.some(({ p }, index) => Math.hypot(p.x - initial[index].p.x, p.y - initial[index].p.y) > 12), `${layout} responds to camera rotation`);
+    for (const node of nodes) assert.deepEqual({ ...node._layoutAnchor }, anchors.get(node.id), `${layout} anchors do not drift`);
+    state.view = "2d";
+    const flat = run();
+    assert.ok(flat.every(({ p }) => p.depth === 500), `${layout} retains a genuine flat mode`);
+  }
+});
+
+test("a complete overview orbit keeps fixed nodes clear of panel clipping", () => {
+  for (const layout of ["constellation", "tree", "radial", "helix", "layers"]) {
+    const { env, state } = graphContext({ width: 1920, height: 1170 });
+    Object.assign(state, { fit: 1, view: "3d", nodeLayout: layout, tasks: [] });
+    vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+    const nodes = Array.from({ length: 30 }, (_, i) => ({ id: i ? `task:${i}` : "root", kind: i ? "task" : "root", x: 0, y: 0, z: 0 }));
+    state.edges = nodes.slice(1).map((_, i) => ({ a: Math.floor(i / 4), b: i + 1 }));
+    const area = env.usableArea();
+    const run = (mode = "orbit") => {
+      const points = nodes.map((node) => ({ node, p: env.project(node) }));
+      env.layoutProjectedGraph(points, area, mode);
+      return points;
+    };
+    run();
+    const saved = nodes.map((node) => ({ ...node._layoutAnchor }));
+    for (let step = 0; step <= 32; step++) {
+      state.angle = .5 + step * Math.PI / 16;
+      for (const { p } of run()) assert.ok(p.x - 25 >= area.x - 1e-6 && p.x + 25 <= area.x + area.w + 1e-6 && p.y - 25 >= area.y - 1e-6 && p.y + 25 <= area.y + area.h + 1e-6, `${layout} retains complete node surfaces at step ${step}`);
+      nodes.forEach((node, i) => assert.deepEqual({ ...node._layoutAnchor }, saved[i], "fitting cannot rearrange saved world anchors"));
+    }
+    state.angle = 2;
+    const overview = run();
+    const free = run("free");
+    free.forEach(({ node, p }, i) => {
+      assert.deepEqual({ ...p }, { ...overview[i].p }, "handing control to the user must not jump out of the fitted view");
+      const world = env.unprojectForLayout(p, node._layoutAnchor);
+      const back = env.project(world);
+      assert.ok(Math.hypot(back.x - p.x, back.y - p.y) < 1e-6, "fitted projection remains invertible for new arrivals");
+    });
+    state.camera.x = -10000;
+    assert.ok(run("free").some(({ p }) => p.x < area.x || p.x > area.x + area.w), "manual pan remains under user control");
+  }
+});
+
+test("Halo and Crystal use distinct bounded surfaces while preserving node positions", () => {
+  const env = vm.createContext({ state: { nodeStyle: "halo" }, Math, rgba: (_tint, alpha) => `rgba(120,180,220,${alpha})` });
+  vm.runInContext(section("function traceNodeSurface(", "function drawWorkOrbit("), env);
+  const node = { kind: "task", x: 1, y: 2, z: 3 };
+  for (const style of ["halo", "crystal"]) {
+    const calls = { arcs: 0, lines: 0, saves: 0, restores: 0 };
+    const ctx = { save() { calls.saves++; }, restore() { calls.restores++; }, beginPath() {}, closePath() {}, moveTo() {}, lineTo() { calls.lines++; }, arc() { calls.arcs++; }, stroke() {}, fill() {}, createLinearGradient() { return { addColorStop() {} }; } };
+    env.state.nodeStyle = style;
+    env.drawNodeSurface(ctx, node, { x: 50, y: 50 }, 12, [120,180,220]);
+    assert.equal(calls.saves, calls.restores);
+    assert.ok(style === "halo" ? calls.arcs === 3 && calls.lines === 0 : calls.lines >= 8 && calls.arcs === 0);
+    assert.deepEqual([node.x,node.y,node.z], [1,2,3]);
+  }
+});
+
+test("verification stays distinct from running work even when its saved graph state is active", () => {
+  const state = { selected: null, hoverNode: null };
+  const NODE_RGB = { warm: [230,201,141], verify: [151,179,244], task: [140,155,180], dust: [157,183,255] };
+  const env = vm.createContext({ state, NODE_RGB });
+  vm.runInContext(section("function colorOf(", "function setSettingsPreview("), env);
+  const verifying = { id: "a-check", kind: "task", state: "active", _workLabel: "Verifying", task: { status: "awaiting_verification" } };
+  const running = { id: "z-build", kind: "task", state: "active", _workLabel: "Running" };
+  assert.deepEqual(env.colorOf(verifying), NODE_RGB.verify);
+  assert.deepEqual(env.colorOf(running), NODE_RGB.warm);
+  assert.equal(env.nodeVisualProfile(verifying).prominent, false);
+  assert.equal(env.nodeVisualProfile(running).prominent, true);
+  const labels = labelContext();
+  const projected = [verifying, running].map((node) => ({ node, p: { k: 1, depth: 800 } }));
+  assert.deepEqual(Array.from(labels.env.labelCandidates(projected), ({ node }) => node.id), [running.id, verifying.id]);
+});
+
+test("every node style respects Follow/search dimming and its lifecycle fade", () => {
+  const env = vm.createContext({ state: {}, Math, rgba: (_tint, alpha) => `rgba(120,180,220,${alpha})` });
+  vm.runInContext(section("function traceNodeSurface(", "function drawWorkOrbit("), env);
+  for (const style of ["orbs", "glass", "minimal", "halo", "crystal"]) {
+    const alphas = [];
+    const ctx = { save() {}, restore() {}, beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, arc() {}, fill() { alphas.push(this.globalAlpha); }, stroke() { alphas.push(this.globalAlpha); }, createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }) };
+    env.state.nodeStyle = style;
+    env.drawNodeSurface(ctx, { kind: "task", _fade: 0.5 }, { x: 50, y: 50 }, 12, [120,180,220], { alpha: 0.4 });
+    assert.ok(alphas.length > 0 && alphas.every((alpha) => alpha === 0.2), `${style} preserves both independent fading factors`);
+  }
+});
+
+test("checkpoint click targets cannot be covered by task labels", () => {
+  const { env, state } = labelContext();
+  const note = { id: "session:note", kind: "session", _pr: 10, _bubble: { x: 748, y: 350, w: 22, h: 21 } };
+  const task = { id: "task:busy", kind: "task", label: "Read the evidence", state: "active", _workLabel: "Running", _pr: 12 };
+  env.drawLabels([{ node: task, p: { x: 720, y: 360, k: 1 } }, { node: note, p: { x: 850, y: 420, k: 1 } }]);
+  assert.ok(task._label);
+  assert.ok(state.labelRects.every((rect) => !env.overlaps(rect, note._bubble)), "paint and padding leave note targets available");
+});
+
+function hierarchyLayoutFixture() {
+  // IDs deliberately sort children before their parents and the root last.
+  const nodes = [{ id: "z:root", kind: "root" }], parents = new Map();
+  for (const [branch, count] of [1, 4, 7, 2].entries()) {
+    const id = `parent:${branch}`;
+    nodes.push({ id, kind: "session" }); parents.set(id, "z:root");
+    for (let child = 0; child < count; child += 1) {
+      const childId = `child:${branch}:${child}`;
+      nodes.push({ id: childId, kind: child === 0 ? "task-group" : "task" }); parents.set(childId, id);
+    }
+  }
+  nodes.push({ id: "a:obligation", kind: "task" }); parents.set("a:obligation", "child:1:0");
+  return { nodes, parents, projected: nodes.map((node) => ({ node, p: {} })) };
+}
+
+test("Rings uses the wide canvas and keeps obligations outside their actual parent tier", () => {
+  const { env } = graphContext();
+  vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+  const { projected, parents } = hierarchyLayoutFixture();
+  const area = { x: 28, y: 250, w: 1460, h: 760 };
+  const points = env.graphLayoutSeeds(projected, area, "radial", parents, new Map());
+  const cx = area.x + area.w / 2, cy = area.y + area.h / 2;
+  const reach = (point) => Math.hypot((point.x - cx) / area.w, (point.y - cy) / area.h);
+  assert.ok(reach(points.get("z:root")) < 1e-8, "the root is the shared center");
+  for (const [id, parent] of parents) assert.ok(reach(points.get(id)) > reach(points.get(parent)) + 0.015, `${id} advances beyond its actual parent regardless of node kind`);
+  const xs = [...points.values()].map((point) => point.x);
+  assert.ok(Math.max(...xs) - Math.min(...xs) > area.w * 0.65, "a wide graph does not leave most of its horizontal space unused");
+  const reversed = env.graphLayoutSeeds([...projected].reverse(), area, "radial", parents, new Map());
+  for (const [id, point] of points) assert.deepEqual(reversed.get(id), point, "recency cannot scramble the branch sectors");
+});
+
+test("Helix keeps each branch contiguous with parents before descendants", () => {
+  const { env } = graphContext();
+  vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+  const { projected, parents } = hierarchyLayoutFixture();
+  const area = { x: 40, y: 80, w: 1100, h: 720 };
+  const points = env.graphLayoutSeeds(projected, area, "helix", parents, new Map());
+  const ordered = [...points].sort(([, a], [, b]) => a.y - b.y).map(([id]) => id);
+  assert.equal(ordered[0], "z:root", "the root leads even when its ID sorts last");
+  for (const [id, parent] of parents) assert.ok(points.get(id).y > points.get(parent).y, `${parent} precedes ${id}`);
+  for (let branch = 0; branch < 4; branch += 1) {
+    const root = `parent:${branch}`;
+    const indices = ordered.flatMap((id, index) => {
+      let cursor = id;
+      while (cursor && cursor !== root) cursor = parents.get(cursor);
+      return cursor === root ? [index] : [];
+    });
+    assert.equal(Math.max(...indices) - Math.min(...indices) + 1, indices.length, "unrelated branches cannot split a session from its obligations");
+  }
+  const reversed = env.graphLayoutSeeds([...projected].reverse(), area, "helix", parents, new Map());
+  for (const [id, point] of points) assert.deepEqual(reversed.get(id), point);
+});
+
+test("Terraces has centered level rows distinct from the subtree-centered Branches layout", () => {
+  const { env } = graphContext();
+  vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+  const { projected, parents } = hierarchyLayoutFixture();
+  const area = { x: 40, y: 80, w: 1100, h: 720 };
+  const terraces = env.graphLayoutSeeds(projected, area, "layers", parents, new Map());
+  const branches = env.graphLayoutSeeds(projected, area, "tree", parents, new Map());
+  const levels = new Map();
+  for (const [id, point] of terraces) {
+    let depth = 0, cursor = parents.get(id);
+    while (cursor) { depth += 1; cursor = parents.get(cursor); }
+    if (!levels.has(depth)) levels.set(depth, []);
+    levels.get(depth).push(point);
+    const parent = parents.get(id);
+    if (parent) assert.ok(point.y > terraces.get(parent).y);
+  }
+  for (const row of levels.values()) {
+    const xs = row.map((point) => point.x);
+    assert.ok(Math.abs((Math.min(...xs) + Math.max(...xs)) / 2 - area.x - area.w / 2) < 1, "sparse levels remain centered rather than leaning toward one large subtree");
+  }
+  assert.ok([...terraces].filter(([id, point]) => Math.hypot(point.x - branches.get(id).x, point.y - branches.get(id).y) > 20).length >= 5, "the two layout choices offer visibly different arrangements");
+  const reversed = env.graphLayoutSeeds([...projected].reverse(), area, "layers", parents, new Map());
+  for (const [id, point] of terraces) assert.deepEqual(reversed.get(id), point);
+});
+
+test("all five layouts leave room for working node rings in every style and both views", () => {
+  const { nodes, parents } = hierarchyLayoutFixture();
+  const edges = [...parents].map(([id, parent]) => ({ a: nodes.findIndex((node) => node.id === parent), b: nodes.findIndex((node) => node.id === id) }));
+  for (const width of [1100, 440]) for (const layout of ["constellation", "tree", "radial", "helix", "layers"]) for (const view of ["2d", "3d"]) {
+    let original;
+    for (const style of ["orbs", "glass", "minimal", "halo", "crystal"]) {
+      const { env, state } = graphContext();
+      const area = { x: 28, y: 170, w: width, h: 720 };
+      Object.assign(state, { fit: 1, view, nodeLayout: layout, nodeStyle: style, settingsPreview: area, tasks: [], edges, orbitTrails: true, extraGlow: true });
+      vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+      const projected = nodes.map((node) => ({ node: { ...node, x: 0, y: 0, z: 0, state: "active", _workLabel: "Running" }, p: { x: 0, y: 0 } }));
+      env.layoutProjectedGraph(projected, area, "orbit");
+      const positions = projected.map(({ p }) => [p.x, p.y]);
+      if (original) assert.deepEqual(positions, original, "every style shares the same readable layout spacing");
+      else original = positions;
+      for (const { p } of projected) assert.ok(p.x - 15 >= area.x && p.x + 15 <= area.x + area.w && p.y - 15 >= area.y && p.y + 15 <= area.y + area.h, `${layout}/${view}/${style} fits its node surfaces at ${width}px`);
+      for (let a = 0; a < positions.length; a += 1) for (let b = a + 1; b < positions.length; b += 1) {
+        const distance = Math.hypot(positions[a][0] - positions[b][0], positions[a][1] - positions[b][1]);
+        assert.ok(distance >= 47.9, `${layout}/${view}/${style} leaves distinct working rings at ${width}px (${nodes[a].id}, ${nodes[b].id}: ${distance.toFixed(1)}px)`);
+      }
+    }
+  }
+});
+
+test("newly revealed descendants follow their established parent in every layout", () => {
+  const area = { x: 40, y: 80, w: 1100, h: 720 };
+  for (const layout of ["constellation", "tree", "radial", "helix", "layers"]) {
+    const { env, state } = graphContext();
+    Object.assign(state, { fit: 1, view: "2d", nodeLayout: layout, settingsPreview: area, tasks: [] });
+    vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+    const nodes = [
+      { id: "root", kind: "root", x: 0, y: 0, z: 0 },
+      { id: "session", kind: "session", x: 0, y: 0, z: 0 },
+      { id: "task:child", kind: "task", x: 0, y: 0, z: 0 },
+      { id: "task:obligation", kind: "task", x: 0, y: 0, z: 0 },
+    ];
+    const parents = new Map([["session", "root"], ["task:child", "session"], ["task:obligation", "task:child"]]);
+    const run = (visible) => {
+      state.edges = visible.slice(1).map((node, index) => ({ a: index, b: index + 1 }));
+      const projected = visible.map((node) => ({ node, p: env.project(node) }));
+      env.layoutProjectedGraph(projected, area, "orbit");
+      return new Map(projected.map(({ node, p }) => [node.id, p]));
+    };
+    run(nodes.slice(0, 2));
+    // A parent can already have a different managed position because of a
+    // collision or an earlier, smaller board. Expansion must honor it.
+    const original = env.graphLayoutSeeds(nodes.map((node) => ({ node, p: {} })), area, layout, parents, new Map());
+    const parent = original.get("session"), established = { x: parent.x + 70, y: parent.y - 45 };
+    const saved = env.unprojectForLayout(established, nodes[1]);
+    state.screenLayout.nodes.set("session", { world: saved });
+    const moved = run(nodes);
+    assert.ok(Math.hypot(moved.get("session").x - established.x, moved.get("session").y - established.y) < 1e-7, `${layout} preserves the saved parent`);
+    for (const id of ["task:child", "task:obligation"]) {
+      const before = original.get(id), after = moved.get(id);
+      assert.ok(Math.abs(after.x - before.x - 70) < 1e-7 && Math.abs(after.y - before.y + 45) < 1e-7, `${layout} keeps the incoming ${id} with its established branch`);
+    }
+  }
+});
+
+test("builder satellites clear their host work rim without moving its saved anchor", () => {
+  for (const layout of ["constellation", "tree", "radial", "helix", "layers"]) for (const view of ["2d", "3d"]) {
+    const { env, state } = graphContext();
+    Object.assign(state, { fit: 1, view, nodeLayout: layout, tasks: [], edges: [] });
+    vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+    const host = { id: "task:working", kind: "task", x: 0, y: 0, z: 0, _workLabel: "Running" };
+    const area = env.usableArea();
+    const first = [{ node: host, p: env.project(host) }];
+    env.layoutProjectedGraph(first, area, "orbit");
+    const original = { ...host._layoutAnchor };
+    for (const offset of [0, 1, 10]) {
+      const agent = { id: "agent:builder", kind: "agent", status: "running", hostId: host.id, x: offset, y: 0, z: offset };
+      const projected = [host, agent].map((node) => ({ node, p: env.project(node) }));
+      env.layoutProjectedGraph(projected, area, "orbit");
+      const [hostPoint, agentPoint] = projected.map(({ p }) => p);
+      assert.ok(Math.hypot(hostPoint.x - agentPoint.x, hostPoint.y - agentPoint.y) >= 37.99, `${layout}/${view} keeps the builder outside its host ring`);
+      assert.deepEqual({ ...host._layoutAnchor }, original, "a builder arrival cannot move the task it works on");
+      assert.deepEqual([agent.x, agent.y, agent.z], [offset, 0, offset], "display clearance leaves simulation coordinates intact");
+      assert.equal(agent._layoutAnchor, null, "a moving worker does not acquire a fixed graph slot");
+    }
+  }
+});
+
+test("parallel builder satellites avoid neighboring work and panel edges", () => {
+  const { env, state } = graphContext();
+  const area = { x: 40, y: 80, w: 440, h: 480 };
+  Object.assign(state, { fit: 1, view: "2d", nodeLayout: "constellation", settingsPreview: area, tasks: [], edges: [] });
+  vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+  const host = { id: "task:working", kind: "task", x: 0, y: 0, z: 0 };
+  const neighbor = { id: "task:neighbor", kind: "task", x: 0, y: 0, z: 0 };
+  env.layoutProjectedGraph([host, neighbor].map((node) => ({ node, p: env.project(node) })), area, "orbit");
+  const hostPoint = { x: area.x + area.w - 29, y: area.y + 29 };
+  const neighborPoint = { x: hostPoint.x - 52, y: hostPoint.y };
+  for (const [node, point] of [[host, hostPoint], [neighbor, neighborPoint]]) state.screenLayout.nodes.set(node.id, { world: env.unprojectForLayout(point, node) });
+  const workers = Array.from({ length: 3 }, (_, index) => ({ id: `agent:${index}`, kind: "agent", status: "running", hostId: host.id, x: 0, y: 0, z: 0 }));
+  const projected = [host, neighbor, ...workers].map((node) => ({ node, p: env.project(node) }));
+  env.layoutProjectedGraph(projected, area, "orbit");
+  const agents = projected.slice(2).map(({ p }) => p);
+  for (const point of agents) {
+    assert.ok(point.x - 13 >= area.x && point.x + 13 <= area.x + area.w && point.y - 13 >= area.y && point.y + 13 <= area.y + area.h, "panel boundaries do not clip a builder's surface");
+    for (const task of [hostPoint, neighborPoint]) assert.ok(Math.hypot(point.x - task.x, point.y - task.y) >= 40.99, "workers clear both their host rim and nearby work");
+  }
+  for (let a = 0; a < agents.length; a += 1) for (let b = a + 1; b < agents.length; b += 1) assert.ok(Math.hypot(agents[a].x - agents[b].x, agents[a].y - agents[b].y) >= 28.99, "parallel builders remain separate hit targets");
+  assert.ok(Math.hypot(projected[0].p.x - hostPoint.x, projected[0].p.y - hostPoint.y) < 1e-7);
+  assert.ok(Math.hypot(projected[1].p.x - neighborPoint.x, projected[1].p.y - neighborPoint.y) < 1e-7);
+  const savedHost = { ...host._layoutAnchor };
+  state.camera.x -= 1000;
+  const panned = [host, neighbor, ...workers].map((node) => ({ node, p: env.project(node) }));
+  env.layoutProjectedGraph(panned, area, "free");
+  assert.ok(panned.slice(2).every(({ p }) => p.x + 13 < area.x), "panning a host offscreen carries its builders along instead of pinning them to the panel edge");
+  assert.deepEqual({ ...host._layoutAnchor }, savedHost);
+});
+
+test("dense 277px node trees retain a readable running task name clear of nodes and controls", () => {
+  for (const layout of ["constellation", "tree", "radial", "helix", "layers"]) for (const view of ["2d", "3d"]) {
+    const { env, el, state } = labelContext({ width: 1001, height: 943, chat: true });
+    Object.assign(state, { fit: 1, view, nodeLayout: layout, tasks: [], orbitTrails: true });
+    vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+    const area = env.usableArea();
+    assert.equal(area.w, 277, "the fixture reproduces the canvas left between expanded panels");
+    const nodes = [
+      { id: "root", kind: "root", label: "Workspace" },
+      { id: "assistant", kind: "assistant", label: "Assistant" },
+      { id: "music", kind: "music", label: "Music" },
+      { id: "group:0", kind: "task-group", label: "Project work" },
+      { id: "group:1", kind: "task-group", label: "Review work" },
+    ];
+    const parents = new Map(nodes.slice(1).map((node) => [node.id, "root"]));
+    for (let session = 0; session < 4; session += 1) {
+      const id = `session:${session}`;
+      nodes.push({ id, kind: "session", label: `Session ${session + 1}` }); parents.set(id, "root");
+      for (let todo = 0; todo < 6; todo += 1) {
+        const child = `todo:${session}:${todo}`;
+        nodes.push({ id: child, kind: "todo", sessionId: id, label: `Session step ${todo + 1}` }); parents.set(child, id);
+      }
+    }
+    for (let task = 0; task < 12; task += 1) {
+      const id = `task:${task}`;
+      nodes.push({ id, kind: "task", label: task < 3 ? `Improve renderer ${task + 1}` : `Saved project task ${task + 1}`, state: task < 3 ? "active" : "task", _workLabel: task < 3 ? "Running" : null });
+      parents.set(id, `session:${task % 4}`);
+    }
+    for (let worker = 0; worker < 3; worker += 1) nodes.push({ id: `agent:${worker}`, kind: "agent", status: "running", hostId: `task:${worker}`, label: `Builder ${worker + 1}` });
+    assert.equal(nodes.length, 48);
+    for (const node of nodes) {
+      Object.assign(node, { x: 0, y: 0, z: 0, _pr: node.kind === "todo" ? 5 : node._workLabel === "Running" ? 15 : 11 });
+      if (node._workLabel === "Running") node._orbitTrail = { radius: 24 };
+    }
+    state.nodes = nodes;
+    state.edges = [...parents].map(([id, parent]) => ({ a: nodes.findIndex((node) => node.id === parent), b: nodes.findIndex((node) => node.id === id) }));
+    const painted = [];
+    el.ctx.fillText = (text) => painted.push(text);
+    const run = () => {
+      const projected = nodes.map((node) => ({ node, p: env.project(node) }));
+      env.layoutProjectedGraph(projected, area, "orbit");
+      env.drawLabels(projected);
+      return projected;
+    };
+    const projected = run();
+    assert.ok(nodes.some((node) => node.kind === "task" && node._workLabel === "Running" && node._label && painted.includes(node.label)), `${layout}/${view} must name actual running work in Auto`);
+    const controls = env.hudRects();
+    for (const rect of state.labelRects) {
+      assert.ok(rect.x >= area.x && rect.x + rect.w <= area.x + area.w && rect.y >= area.y && rect.y + rect.h <= area.y + area.h);
+      for (const control of controls) assert.equal(env.overlaps(rect, control), false, "a name cannot cover an opaque control");
+      for (const { node, p } of projected) {
+        const radius = node._orbitTrail?.radius ?? node._pr;
+        const nearestX = Math.max(rect.x, Math.min(p.x, rect.x + rect.w));
+        const nearestY = Math.max(rect.y, Math.min(p.y, rect.y + rect.h));
+        assert.ok(Math.hypot(p.x - nearestX, p.y - nearestY) >= radius, "painted names leave node surfaces and working rings clear");
+      }
+    }
+    for (let a = 0; a < state.labelRects.length; a += 1) for (let b = a + 1; b < state.labelRects.length; b += 1) assert.equal(env.overlaps(state.labelRects[a], state.labelRects[b]), false);
+    const anchors = nodes.filter((node) => node.kind !== "agent").map((node) => [node.id, { ...node._layoutAnchor }]);
+    const labels = state.labelRects.map((rect) => ({ ...rect }));
+    run();
+    for (const [id, anchor] of anchors) assert.deepEqual({ ...nodes.find((node) => node.id === id)._layoutAnchor }, anchor, "label placement and idle redraws cannot move saved work");
+    assert.deepEqual(state.labelRects.map((rect) => ({ ...rect })), labels, "the dense overview retains stable readable names");
   }
 });

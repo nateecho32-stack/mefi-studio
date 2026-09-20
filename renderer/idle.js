@@ -25,6 +25,7 @@
   const NODE_RGB = {
     session: [236, 229, 216], // ivory hub
     warm: [230, 201, 141], // gold: touched / in progress / active
+    verify: [151, 179, 244], // cool periwinkle: a finished attempt being checked
     done: [104, 236, 164], // green: completed
     pending: [138, 128, 108], // dim: pending todo
     stale: [96, 88, 74], // stale session pushed to the outer ring
@@ -50,27 +51,26 @@
   // --sw custom property, `label` is the row text.
   const LEGEND = [
     { key: "session", sw: rgb(NODE_RGB.session), label: "session hub" },
-    { key: "active", sw: rgb(NODE_RGB.warm), label: "in progress · recently touched" },
+    { key: "active", sw: rgb(NODE_RGB.warm), label: "current work — highlighted orb" },
+    { key: "verify", sw: rgb(NODE_RGB.verify), label: "awaiting verification — cool blue rim" },
     { key: "done", sw: rgb(NODE_RGB.done), label: "completed todo" },
     { key: "pending", sw: rgb(NODE_RGB.pending), label: "pending todo" },
     { key: "stale", sw: rgb(NODE_RGB.stale), label: "stale session — pushed to the outer ring" },
-    { key: "task", sw: rgb(NODE_RGB.task), label: "your task — ring in its own colour" },
+    { key: "task", sw: rgb(NODE_RGB.task), label: "saved task — brighter while active" },
     { key: "checkpoint", sw: rgb(NODE_RGB.warm), label: "checkpoint note" },
-    { key: "live", sw: rgba(NODE_RGB.live, 0.75), label: "live activity · last 90 s" },
-    { key: "collision", sw: rgba(NODE_RGB.collision, 0.8), label: "collision · several agents on one path" },
     { key: "pulse", sw: rgb(NODE_RGB.pulse), label: "edit landing" },
     { key: "dust", sw: rgb(NODE_RGB.dust), label: "external read / web" },
-    { key: "focus", sw: rgb(NODE_RGB.warm), label: "search match — dashed ring" },
-    { key: "assistant", sw: rgb(NODE_RGB.assistant), label: "the assistant — its ring breathes while the service runs" },
+    { key: "focus", sw: rgb(NODE_RGB.warm), label: "search match — bright orb and label" },
+    { key: "assistant", sw: rgb(NODE_RGB.assistant), label: "the Studio assistant — M orb" },
     { key: "folded", sw: rgb(NODE_RGB.done), label: "finished sessions, folded into one node" },
     { key: "absorbed", sw: rgba(NODE_RGB.done, 0.8), label: "finished work — sinks into its host, readable on its card" },
-    { key: "done-hold", sw: rgba(NODE_RGB.done, 0.95), label: "just finished — pulses until you read it, then sinks in" },
-    { key: "work-pin", sw: "#7db2ff", label: "work on it — blue loop: next in the queue, looping while it builds" },
-    { key: "meter", sw: "linear-gradient(90deg, #68eca4 62%, rgba(236,229,216,0.25) 62%)", label: "work-left meter — slim bar under a node: share of its todos done" },
+    { key: "done-hold", sw: rgba(NODE_RGB.done, 0.95), label: "just finished — click ! to read its work" },
+    { key: "work-pin", sw: "#7db2ff", label: "work on it — Next or Running label" },
+    { key: "meter", sw: "linear-gradient(90deg, #e6c98d 62%, rgba(236,229,216,0.25) 62%)", label: "reported progress — shown only when known for active or inspected work" },
     {
       key: "agent",
       sw: agentSwatch(),
-      label: "active assistant agent — colour identifies its role; finished and waiting agents stay in the activity history",
+      label: "active assistant agent — orb in its role colour; finished and waiting agents stay in the activity history",
     },
   ];
   const AGENT_STATES = new Set(["running", "queued", "error", "done"]);
@@ -85,7 +85,7 @@
   const LABEL_MAX_PX = 230; // measureText clamp
   const LABEL_CANDIDATES = 60; // most nodes considered per frame
   const LABEL_BUDGET = 40; // most labels drawn per frame
-  const LABEL_PAD = 5; // rect padding used for collision tests
+  const LABEL_PAD = 8; // leave air between chips as well as their text
   const LABEL_HEIGHT = 16; // tallest label line box
   const LABEL_SLOTS = ["right", "left", "below", "above"];
   const LABEL_CACHE_MAX = 400;
@@ -114,15 +114,15 @@
   // the far sky drifts slowly against the constellation. Positions are hashed
   // from seed+index — stable across frames and resizes, no stored array.
   const STAR_LAYERS = [
-    { count: 110, seed: 11.3, spin: 0.012, tempo: 3400, size: 0.8, alpha: 0.45 },
-    { count: 64, seed: 47.7, spin: 0.03, tempo: 2500, size: 1.3, alpha: 0.7 },
-    { count: 18, seed: 91.1, spin: 0.055, tempo: 1900, size: 1.9, alpha: 0.95, flare: true },
+    { count: 52, seed: 11.3, spin: 0.012, tempo: 3400, size: 0.7, alpha: 0.22 },
+    { count: 18, seed: 47.7, spin: 0.03, tempo: 2500, size: 1, alpha: 0.28 },
   ];
   const ROTATE_SPEED = 0.005; // right-drag: radians per pixel
   const PITCH_MAX = 0.55; // right-drag vertical tilt clamp
   const CAMERA_EASE = 0.045;
   const POPUP_MS = 45000; // evidence popup interval
   const HUD_DIM_MS = 6000;
+  const AMBIENT_ZEN_MS = 30000;
   const DEFAULT_HINT = "click a node to zoom in · drag to pan · right-drag to orbit · wheel to zoom · V 2D/3D · Esc leaves";
   const LABEL_MODES = ["auto", "all", "none"];
 
@@ -156,12 +156,14 @@
     pulses: [],
     particles: [],
     touches: new Map(),
+    collisionSessions: new Set(),
     popups: [],
     pngs: [],
     popupAt: 0,
     lastTouch: 0,
     energy: 0.4,
     fit: 1.6,
+    overviewScale: 1,
     audio: null,
     bus: null,
     analyser: null,
@@ -172,7 +174,13 @@
     lastInput: Date.now(),
     checkpoints: {},
     hudTimer: null,
+    ambientZen: false,
+    zenRestore: null,
     tasks: [],
+    allTasks: [],
+    taskGroups: [],
+    expandedTaskGroups: new Set(),
+    taskLayout: new Map(),
     telemetryAt: 0,
     telemetry: "",
     selected: null,
@@ -189,12 +197,17 @@
     frameError: false,
     // Command-hub state
     ambient: true,
-    orbit: "auto",
+    orbit: "paused",
+    nodeStyle: "orbs",
+    nodeLayout: "constellation",
+    orbitTrails: false,
+    extraGlow: false,
     orbitVel: 0,
     settleUntil: 0,
     labels: LABEL_MODES.includes(storedLabels) ? storedLabels : "auto",
     legendOpen: readStore("mefiStudio.cmdLegend") === "1",
     feedMenuOpen: readStore("mefiStudio.cmdFeedMenu") === "1",
+    feedCollapsed: readStore("mefiStudio.cmdFeedCollapsed") === "1",
     query: "",
     matches: [],
     matchSet: new Set(),
@@ -221,6 +234,7 @@
     // Per role: the last pulse / spark / done counters taken from the tree's
     // agent simulation, so each is rendered here exactly once.
     agentSeq: {},
+    agentLayout: new Map(), // displayed positions survive graph/status rebuilds
     feed: [],
     feedDirty: true,
     backlog: null,
@@ -596,7 +610,7 @@
 
   // ---------- layout / projection ----------
   function visibleGraphSnapshot(snapshot, candidates = snapshot.nodes) {
-    const nodes = candidates.filter((node) => node.kind !== "agent" || node.status === "running");
+    const nodes = candidates.filter((node) => node.kind !== "agent" || node.status === "running" || node.retiring);
     const indices = new Map(nodes.map((node, index) => [node.id, index]));
     const edges = snapshot.edges.map((edge) => ({ ...edge, a: indices.get(snapshot.nodes[edge.a]?.id), b: indices.get(snapshot.nodes[edge.b]?.id) }))
       .filter((edge) => edge.a != null && edge.b != null);
@@ -647,6 +661,7 @@
     appendDoneHoldNodes();
     appendBuilderNodes();
     sweepFx();
+    const firstGraph = !state.graphSeeded;
     state.graphSeeded = true;
     // The hub wears the whole board on its own meter: how much of the
     // sessions' work is done, at a glance.
@@ -660,7 +675,7 @@
         .filter((node) => node.kind === "task" && !node.dying)
         .map((node) => ({ id: node.id, kind: "task", label: node.label, x: node.x, y: node.y, z: node.z, anchorSessionId: node.anchorSessionId ?? null }))
     );
-    autoFit();
+    if (firstGraph) autoFit();
     // Every node object is new: re-point the selection and the hover at the
     // live ones, and drop them when their node left the graph — a selection
     // pointing at a vanished node dims the whole constellation and stops orbit.
@@ -718,55 +733,88 @@
     renderMusicStatus(true);
   }
 
+  // Reserve stable positions for visible tasks. A priority/status update may
+  // change which cards lead the queue, but must not shuffle every node around.
+  function taskPlacements(tasks, graphNodes, jobs, previous = new Map(), retainedIds = new Set(tasks.map((task) => task.id))) {
+    const sessions = graphNodes.filter((node) => node.kind === "session");
+    const keys = (text) => new Set((String(text).toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).slice(0, 8));
+    const entries = tasks.map((task) => {
+      const sessionId = jobs.find((job) => job.taskId === task.id)?.sessionId ?? task.run?.sessionId;
+      let anchor = sessions.find((session) => sessionId && (session.id === sessionId || session.sessionId === sessionId)) ?? null;
+      if (!anchor) {
+        const taskKeys = keys(`${task.title} ${task.prompt ?? ""}`);
+        let best = 1; // a single generic word is not enough to claim a relationship.
+        for (const session of sessions) {
+          const words = keys(session.label);
+          const score = [...taskKeys].filter((word) => words.has(word)).length;
+          if (score > best) { best = score; anchor = session; }
+        }
+      }
+      return { task, anchor, group: anchor?.id ?? "__loose__" };
+    });
+    const used = new Map();
+    const reserve = (group, slot) => {
+      const slots = used.get(group) ?? new Set();
+      slots.add(slot); used.set(group, slots);
+    };
+    const layout = new Map([...previous].filter(([id]) => retainedIds.has(id)));
+    for (const prior of layout.values()) reserve(prior.group, prior.slot);
+    for (const entry of entries) {
+      const prior = previous.get(entry.task.id);
+      if (prior && Number.isInteger(prior.slot) && prior.slot >= 0) {
+        entry.slot = prior.slot; entry.group = prior.group; reserve(entry.group, prior.slot);
+      }
+    }
+    for (const entry of entries) {
+      if (entry.slot == null) {
+        let slot = 0;
+        while (used.get(entry.group)?.has(slot)) slot += 1;
+        entry.slot = slot; reserve(entry.group, slot);
+      }
+      const { anchor, slot } = entry;
+      const angle = slot * 2.399963;
+      const radius = anchor ? 78 + Math.floor(slot / 4) * 32 : 215 + Math.floor(slot / 12) * 34;
+      const prior = previous.get(entry.task.id);
+      entry.x = Number.isFinite(prior?.x) ? prior.x : (anchor?.x ?? 0) + Math.cos(angle) * radius;
+      entry.y = Number.isFinite(prior?.y) ? prior.y : (anchor?.y ?? 0) + 48 + (slot % 3) * 34;
+      entry.z = Number.isFinite(prior?.z) ? prior.z : (anchor?.z ?? 0) + Math.sin(angle) * radius;
+      layout.set(entry.task.id, { group: entry.group, slot, x: entry.x, y: entry.y, z: entry.z });
+    }
+    return { entries, layout };
+  }
+
   // Open/active tasks join the constellation: anchored to a matching session
   // when the title overlaps it, otherwise spread on an outer ring. With a long
   // backlog the graph drowns in task nodes. Show active and explicitly pinned
   // work before the latest tasks; the full board stays available in Tasks.
   function appendTaskNodes() {
-    const keys = (text) => new Set((String(text).toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).slice(0, 8));
     const runningTasks = new Set(autopilotJobs(state.assistant).map((job) => job.taskId).filter(Boolean));
     const rank = (task) => runningTasks.has(task.id) ? 0 : task.status === "active" ? 1 : task.workPin || task.pinnedAt ? 2 : 3;
-    const tasks = [...(state.tasks ?? [])]
+    const entries = window.MefiTaskGroups?.graphTasks(state.allTasks, { groups: state.taskGroups, runningIds: runningTasks, expanded: state.expandedTaskGroups }) ?? [...(state.tasks ?? [])]
       .sort((a, b) => rank(a) - rank(b) || (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0))
-      .slice(0, 12);
-    const anchorSlots = new Map();
-    tasks.forEach((task, index) => {
-      const taskKeys = keys(`${task.title} ${task.prompt ?? ""}`);
-      let anchor = null;
-      let best = 0;
-      for (const node of state.nodes) {
-        if (node.kind !== "session") continue;
-        const label = String(node.label ?? "").toLowerCase();
-        let score = 0;
-        for (const key of taskKeys) if (label.includes(key)) score += 1;
-        if (score > best) {
-          best = score;
-          anchor = node;
-        }
-      }
-      const ring = (index / Math.max(1, tasks.length)) * Math.PI * 2;
-      // Unanchored work rides its own outer shell, past the todo rings (which
-      // reach ~166 from the root), so the constellation reads in bands:
-      // sessions and their todos, then the workbench of loose tasks.
-      const slot = anchor ? anchorSlots.get(anchor.id) ?? 0 : index;
-      if (anchor) anchorSlots.set(anchor.id, slot + 1);
-      const taskAngle = anchor ? slot * 2.399963 : ring;
-      const taskRadius = anchor ? 78 + Math.floor(slot / 4) * 32 : 215;
-      const bx = (anchor?.x ?? 0) + Math.cos(taskAngle) * taskRadius;
-      const by = (anchor?.y ?? 0) + 48 + (slot % 3) * 34;
-      const bz = (anchor?.z ?? 0) + Math.sin(taskAngle) * taskRadius;
+      .slice(0, 12).map((task) => ({ task }));
+    const metadata = new Map(entries.map((entry) => [entry.task.id, entry]));
+    const retained = new Set([...(state.allTasks ?? state.tasks ?? []).map((task) => task.id), ...state.taskGroups.map((group) => group.id), ...state.taskGroups.flatMap((group) => group.members.map((member) => member.id))]);
+    const placed = taskPlacements(entries.map((entry) => entry.task), state.nodes, autopilotJobs(state.assistant), state.taskLayout, retained);
+    state.taskLayout = placed.layout;
+    placed.entries.forEach(({ task, anchor, x: bx, y: by, z: bz }) => {
+      const entry = metadata.get(task.id);
       const node = {
         id: `task:${task.id}`,
-        kind: "task",
+        kind: entry.taskGroup?.kind === "approved-plan" ? "task-group" : "task",
         label: task.title,
         task,
+        taskGroup: entry.taskGroup ?? null,
+        groupParentId: entry.groupParentId ?? null,
+        groupMember: entry.member ?? null,
+        readOnly: Boolean(entry.readOnly),
         // The anchor lives on the node as well as on the edge: the card, the
         // arrow keys and the branch highlight all need it, and `sessionId`
         // must stay "this node belongs to that session".
         anchorSessionId: anchor ? anchor.id : null,
         color: task.color ?? null,
-        state: task.status === "active" ? "active" : "task",
-        r: 7,
+        state: ["active", "awaiting_verification"].includes(task.status) ? "active" : "task",
+        r: entry.taskGroup ? 10 : 7,
         x: bx,
         y: by,
         z: bz,
@@ -775,6 +823,11 @@
         bz,
       };
       state.nodes.push(node);
+      const groupParent = node.groupParentId ? state.nodes.find((candidate) => candidate.id === node.groupParentId) : null;
+      const edgeAnchor = groupParent ?? anchor;
+      if (edgeAnchor) state.edges.push({ a: state.nodes.indexOf(edgeAnchor), b: state.nodes.length - 1, sessionId: anchor?.id, task: true, taskGroup: Boolean(groupParent) });
+      // Saved obligations are read-only leaves, not new task lifecycle events.
+      if (node.readOnly) return;
       // The life-cycle entry: pop-out and absorb both run against this host —
       // the session it echoes, or the assistant that handed the work out.
       const fx = ensureFx(node.id);
@@ -783,9 +836,16 @@
       fx.anchorId = anchor?.id ?? absorbFallback()?.id ?? null;
       fx.seen = true;
       fx.wasRendered = true;
-      const anchorIndex = anchor ? state.nodes.indexOf(anchor) : -1;
-      if (anchorIndex >= 0) state.edges.push({ a: anchorIndex, b: state.nodes.length - 1, sessionId: anchor.id, task: true });
     });
+  }
+
+  function toggleTaskGroup(node) {
+    const id = node?.taskGroup?.id;
+    if (!id) return;
+    if (state.expandedTaskGroups.has(id)) state.expandedTaskGroups.delete(id);
+    else state.expandedTaskGroups.add(id);
+    refreshGraph();
+    renderInfo();
   }
 
   // Loose words from a title, for matching a request against a node on the
@@ -833,33 +893,39 @@
     const jobs = autopilotJobs(state.assistant);
     if (!jobs.length) return;
     const hub = state.nodes.find((node) => node.kind === "assistant") ?? null;
-    const homeless = jobs.filter((job) => !hostForJob(job));
     let loose = 0;
     jobs.forEach((job) => {
       const host = hostForJob(job);
       const anchor = host ?? hub;
       if (!anchor) return;
+      const id = `builder:${job.taskId ?? job.sessionId ?? job.title ?? loose++}`;
+      const fx = ensureFx(id, { pop: true });
+      // Slots belong to a worker, not to its current index in a status poll.
+      // A peer starting, finishing or being reordered cannot move this orbit.
+      if (fx.orbitSlot == null || fx.anchorId !== anchor.id) {
+        const used = new Set([...state.fx.entries()].filter(([key, entry]) => key !== id && entry.builder && entry.anchorId === anchor.id).map(([, entry]) => entry.orbitSlot));
+        fx.orbitSlot = 0;
+        while (used.has(fx.orbitSlot)) fx.orbitSlot += 1;
+      }
       let ring;
       let radius;
       let lift;
       if (host) {
         // Several builders can share one host (three slots, one plan), so each
         // takes its own angle rather than stacking on the same point.
-        const siblings = jobs.filter((other) => hostForJob(other) === host);
-        ring = (siblings.indexOf(job) / Math.max(1, siblings.length)) * Math.PI * 2;
+        ring = fx.orbitSlot * Math.PI * 2 / 3;
         radius = BUILDER_ORBIT;
         lift = 8;
       } else {
         // No home on the board: take a slot in a wide ring around the assistant,
         // evenly spaced and staggered in height so three read as three agents
         // out working rather than one smudge on the hub.
-        ring = (loose / Math.max(1, homeless.length)) * Math.PI * 2 + Math.PI / 6;
+        ring = fx.orbitSlot * Math.PI * 2 / 3 + Math.PI / 6;
         radius = BUILDER_FIELD;
-        lift = 14 + (loose % 2) * 16;
-        loose += 1;
+        lift = 14 + (fx.orbitSlot % 2) * 16;
       }
       const node = {
-        id: `builder:${job.taskId ?? job.sessionId ?? job.title ?? loose}`,
+        id,
         kind: "agent",
         role: "builder",
         label: job.title ?? "building",
@@ -881,14 +947,21 @@
         // there is work to point at, to the assistant that sent it out otherwise.
         targetNode: anchor,
         r: 3.6,
-        x: anchor.x + Math.cos(ring) * radius,
-        y: anchor.y - lift,
-        z: anchor.z + Math.sin(ring) * radius,
+        x: fx.lastX ?? anchor.x + Math.cos(ring) * radius,
+        y: fx.lastY ?? anchor.y - lift,
+        z: fx.lastZ ?? anchor.z + Math.sin(ring) * radius,
       };
       state.nodes.push(node);
       // Same life-cycle as a task: the builder pops out of its host when the
       // job starts and flies home into it when the run ends.
-      const fx = ensureFx(node.id, { pop: true });
+      // A brief gap in the job list can reverse an exit. Reuse the same
+      // visible worker instead of adding a duplicate ghost or restarting it.
+      if (fx.absorbAt != null) {
+        const t = Math.max(0, Math.min(1, (Date.now() - fx.absorbAt) / NODE_ABSORB_MS));
+        fx.resumeOpacity = 1 - smoothStep(t);
+        fx.resumeAt = Date.now();
+      }
+      fx.absorbAt = null;
       fx.builder = true;
       fx.label = job.title ?? "building";
       fx.anchorId = anchor.id;
@@ -1106,8 +1179,8 @@
   // position lerp runs host → slot on the way out and spot → host on the way in.
   function stepFx(now) {
     for (const node of state.nodes) {
-      node._scale = 1;
-      node._fade = 1;
+      node._scale = node.kind === "agent" ? node.motionOpacity ?? 1 : 1;
+      node._fade = node._scale;
       const fx = state.fx.get(node.id);
       if (!fx) continue;
       if (fx.absorbAt != null) {
@@ -1125,6 +1198,12 @@
         node._scale = Math.max(0, 1 - e);
         node._fade = node._scale;
         if (t >= 1) finalizeAbsorb(node.id, fx);
+        continue;
+      }
+      if (fx.resumeAt != null) {
+        const t = Math.max(0, Math.min(1, (now - fx.resumeAt) / 240));
+        node._scale = node._fade = fx.resumeOpacity + (1 - fx.resumeOpacity) * smoothStep(t);
+        if (t >= 1) fx.resumeAt = null;
         continue;
       }
       const age = fx.bornAt == null ? Infinity : now - fx.bornAt;
@@ -1169,7 +1248,12 @@
 
   function takeTasks(tasks) {
     const all = Array.isArray(tasks) ? tasks : [];
-    const open = all.filter((task) => task.status === "open" || task.status === "active");
+    state.allTasks = all;
+    state.taskGroups = window.MefiTaskGroups?.groupTasks(all) ?? [];
+    const groupIds = new Set(state.taskGroups.map((group) => group.id));
+    for (const id of state.expandedTaskGroups) if (!groupIds.has(id)) state.expandedTaskGroups.delete(id);
+    const members = new Set(state.taskGroups.flatMap((group) => group.members.map((member) => `task:${member.id}`)));
+    const open = all.filter((task) => ["open", "active", "awaiting_verification"].includes(task.status));
     const openIds = new Set(open.map((task) => `task:${task.id}`));
     const byId = new Map(all.map((task) => [`task:${task.id}`, task]));
     const now = Date.now();
@@ -1193,6 +1277,7 @@
       }
     }
     for (const [id, fx] of state.fx) {
+      if (members.has(id)) { state.fx.delete(id); state.doneHold.delete(id); continue; }
       if (fx.builder || fx.absorbAt != null || openIds.has(id)) continue;
       // Left the open set (done, archived, deleted): fly home and be absorbed.
       const stored = byId.get(id);
@@ -1476,6 +1561,7 @@
     el.chatLogToggle?.setAttribute("title", state.chatLogOpen ? "Collapse the chat log" : "Expand the chat log");
     if (el.chatLogToggle) el.chatLogToggle.textContent = state.chatLogOpen ? "–" : "+";
     el.hud?.classList.toggle("chat-log-open", state.chatLogOpen);
+    state.graphAreaAt = 0;
     state.hudRectsAt = 0;
   }
 
@@ -1597,13 +1683,14 @@
 
   // Fit stable task/session/todo anchors. Orbiting worker positions are omitted
   // from the bounds, so their animation cannot pump the camera's zoom.
-  function followFrame(target, area, { view, angle, pitch, fit }) {
-    const points = target.context.length ? target.context : [target.node];
+  function followFrame(target, area, { view, angle, pitch, fit, overviewScale = 1 }) {
+    const points = (target.context.length ? target.context : [target.node]).map((node) => node._layoutAnchor ?? node);
+    const targetPoint = target.node._layoutAnchor ?? target.node;
     const bounds = (axis) => [Math.min(...points.map((node) => node[axis] || 0)), Math.max(...points.map((node) => node[axis] || 0))];
     const center = {};
     for (const axis of ["x", "y", "z"]) {
       const [low, high] = bounds(axis);
-      center[axis] = (target.node[axis] || 0) * 0.6 + (low + high) * 0.2;
+      center[axis] = (targetPoint[axis] || 0) * 0.6 + (low + high) * 0.2;
     }
     let reachX = 48;
     let reachY = 38;
@@ -1618,7 +1705,7 @@
       reachY = Math.max(reachY, Math.abs(ry) + 26);
     }
     const scale = Math.min(Math.max(100, area.w - 180) / (reachX * 2.5), Math.max(90, area.h - 120) / (reachY * 2.5));
-    return { x: -center.x, y: -center.y, z: -center.z, zoom: Math.max(0.65, Math.min(2.35, scale / Math.max(0.1, fit))) };
+    return { x: -center.x, y: -center.y, z: -center.z, zoom: Math.max(0.65, Math.min(2.35, scale / Math.max(0.01, fit * overviewScale))) };
   }
 
   function updateFollowCamera(now = Date.now(), force = false) {
@@ -1734,7 +1821,7 @@
     const roster = assistantFull()?.agents;
     if (!Array.isArray(roster)) return;
     for (const node of state.nodes) {
-      if (node.kind !== "agent") continue;
+      if (node.kind !== "agent" || node.builder || node.dying) continue;
       const agent = roster.find((entry) => entry.role === node.role);
       if (!agent) continue;
       node.status = AGENT_STATES.has(agent.status) ? agent.status : "idle";
@@ -1781,8 +1868,8 @@
     }
     try {
       const result = await window.mefiStudio.assistantAutopilot(patch);
-      if (result?.ok === false) {
-        window.MefiToast?.(`${label} not saved`, "bad");
+      if (!result || result.ok === false) {
+        window.MefiToast?.(`${label} not saved${result?.error ? ` · ${result.error}` : ""}`, "bad");
         return null;
       }
       if (result) state.assistant = { ...(state.assistant ?? {}), ...result };
@@ -1790,10 +1877,10 @@
       if (state.selected?.kind === "assistant") renderInfo();
       state.feedDirty = true;
       if (state.active) renderFeed();
-      window.MefiToast?.(`${label} · ${result?.parallel ?? patch.parallel ?? "?"} at once`, "good");
+      window.MefiToast?.(Object.hasOwn(patch, "autoBuild") ? `${label} · ${result?.autoBuild === false ? "Verify first" : "Auto build"}` : `${label} · ${result?.parallel ?? patch.parallel ?? "?"} at once`, "good");
       return result;
     } catch (error) {
-      window.MefiToast?.(`${label} not saved · ${String(error?.message ?? error)}`, "bad");
+      window.MefiToast?.(`${label} ${Object.hasOwn(patch, "autoBuild") ? "update could not be confirmed" : "not saved"} · ${String(error?.message ?? error)}`, "bad");
       return null;
     }
   }
@@ -1856,7 +1943,7 @@
   // the blue work ring on the node starts with this call and loops until the
   // work is done.
   async function workOnNode(node) {
-    if (state.workOnBusy) return;
+    if (state.workOnBusy || node?.readOnly || node?.kind === "task-group") return;
     state.workOnBusy = true;
     const label = String(node.label ?? node.task?.title ?? node.id).slice(0, 60);
     const target =
@@ -2113,7 +2200,7 @@
   // windows and an expanded conversation. Cache measurements between frames.
   function feedVisible() {
     // offsetWidth collapses to 0 when the ≤900px media query hides the panel
-    return state.active && !!el.feed && !el.feed.hidden && el.feed.offsetWidth > 0;
+    return state.active && !state.feedCollapsed && !!el.feed && !el.feed.hidden && el.feed.offsetWidth > 0;
   }
 
   function centerX() {
@@ -2128,11 +2215,12 @@
 
   function project(node) {
     const scale = state.fit * state.zoom;
+    const framing = state.overviewScale ?? 1;
     if (state.view === "2d") {
       // flat top-down map: x → screen x, z → screen y, no rotation or depth
       return {
-        x: centerX() + (node.x + state.camera.x) * scale,
-        y: centerY() + (node.z + state.camera.z) * scale,
+        x: centerX() + (node.x + state.camera.x) * scale * framing,
+        y: centerY() + (node.z + state.camera.z) * scale * framing,
         k: 1,
         depth: 500,
       };
@@ -2152,11 +2240,29 @@
     const distance = 900 * Math.max(1, scale / 1.6);
     const raw = rz + distance;
     const k = distance / Math.max(distance * 0.2, raw);
-    return { x: centerX() + rx * k, y: centerY() + ry * k, k, depth: (raw * 900) / distance };
+    return { x: centerX() + rx * k * framing, y: centerY() + ry * k * framing, k, depth: (raw * 900) / distance };
+  }
+
+  function unprojectForLayout(point, source) {
+    const scale = Math.max(0.01, state.fit * state.zoom);
+    const framing = state.overviewScale ?? 1;
+    if (state.view === "2d") return { x: (point.x - centerX()) / (scale * framing) - state.camera.x, y: source.y, z: (point.y - centerY()) / (scale * framing) - state.camera.z };
+    const base = project(source);
+    const distance = 900 * Math.max(1, scale / 1.6);
+    const rz = base.depth * distance / 900 - distance;
+    const rx = (point.x - centerX()) / (base.k * framing), ry = (point.y - centerY()) / (base.k * framing);
+    const cos = Math.cos(state.angle), sin = Math.sin(state.angle);
+    const tilt = Math.sin(state.angle * 0.37) * 0.35 + state.pitch;
+    return { x: (rx * cos + rz * sin) / scale - state.camera.x, y: (ry + rz * Math.sin(tilt) * 0.4) / Math.cos(tilt) / scale - state.camera.y, z: (-rx * sin + rz * cos) / scale - state.camera.z };
   }
 
   // The HUD owns the top and bottom strips; fit against what is left.
   function usableArea() {
+    if (state.settingsPreview) {
+      const area = state.settingsPreview;
+      return { x: area.x, y: area.y, w: area.w, h: area.h };
+    }
+    if (state.ambientZen) return { x: 28, y: 28, w: Math.max(1, el.width - 56), h: Math.max(1, el.height - 56) };
     const now = Date.now();
     if (state.graphArea && now - state.graphAreaAt < 250) return state.graphArea;
     const visibleBox = (node) => {
@@ -2171,11 +2277,15 @@
     const header = visibleBox(el.top);
     const dock = visibleBox(el.bottom);
     const feed = visibleBox(el.feed);
-    const chat = state.chatLogOpen ? visibleBox(el.chatLog) : null;
+    const chat = visibleBox(el.chatLog);
     if (header) top = Math.max(top, header.bottom + 20);
     if (dock) bottom = Math.min(bottom, dock.top - 24);
-    if (feed && feed.left < el.width / 2) left = Math.max(left, feed.right + 28);
-    if (chat && chat.left > el.width / 2) right = Math.min(right, chat.left - 28);
+    if (feed && !state.feedCollapsed && feed.left < el.width / 2) left = Math.max(left, feed.right + 28);
+    if (chat && state.chatLogOpen && chat.left > el.width / 2) right = Math.min(right, chat.left - 28);
+    // Collapsing a panel returns its side gutter, but its visible header is
+    // still an obstruction. Begin the free canvas below those short headers.
+    if (feed && state.feedCollapsed) top = Math.max(top, feed.bottom + 24);
+    if (chat && !state.chatLogOpen) top = Math.max(top, chat.bottom + 24);
     // At compact widths CSS can put the feed above the map. Only reserve a
     // side panel if it leaves enough room for an actual interactive graph.
     if (right - left < 220) {
@@ -2184,7 +2294,24 @@
       if (feed && feed.height < el.height * 0.48) top = Math.max(top, feed.bottom + 20);
     }
     if (bottom - top < 160) top = Math.max(20, bottom - 160);
-    state.graphArea = { x: left, y: top, w: Math.max(160, right - left), h: Math.max(160, bottom - top) };
+    let spaces = [{ x: left, y: top, w: Math.max(160, right - left), h: Math.max(160, bottom - top) }];
+    // Details, menus and the Follow banner can extend into the space between
+    // the main rails. Fit the graph into the largest remaining clear rectangle
+    // instead of merely hiding its labels behind those panels.
+    for (const panel of [feed, chat, visibleBox(el.info), visibleBox(el.followStatus), visibleBox(el.legend), visibleBox(el.pop)]) {
+      if (!panel) continue;
+      const x = panel.left - 20, y = panel.top - 20, rightEdge = panel.right + 20, bottomEdge = panel.bottom + 20;
+      spaces = spaces.flatMap((area) => {
+        const r = area.x + area.w, b = area.y + area.h;
+        if (x >= r || rightEdge <= area.x || y >= b || bottomEdge <= area.y) return [area];
+        return [
+          { ...area, w: x - area.x }, { ...area, x: rightEdge, w: r - rightEdge },
+          { ...area, h: y - area.y }, { ...area, y: bottomEdge, h: b - bottomEdge },
+        ].filter((space) => space.w > 0 && space.h > 0);
+      });
+    }
+    const usable = spaces.filter((area) => area.w >= 160 && area.h >= 160);
+    state.graphArea = (usable.length ? usable : spaces).sort((a, b) => b.w * b.h - a.w * a.h)[0] ?? { x: left, y: top, w: 1, h: 1 };
     state.graphAreaAt = now;
     return state.graphArea;
   }
@@ -2221,17 +2348,19 @@
   }
 
   function fitAll() {
+    state.screenLayout = null;
+    state.overviewScale = 1;
     state.camera.tx = 0;
     state.camera.ty = 0;
     state.camera.tz = 0;
     state.pitch = 0;
     setZoom(1);
     autoFit();
-    if (noMotion()) {
-      state.camera.x = 0;
-      state.camera.y = 0;
-      state.camera.z = 0;
-    }
+    // A fit creates new managed anchors immediately. Seed them against the
+    // final camera, otherwise its later easing carries edge nodes out of view.
+    state.camera.x = 0;
+    state.camera.y = 0;
+    state.camera.z = 0;
     hideTip();
   }
 
@@ -2253,6 +2382,9 @@
       if (node.status === "queued") return NODE_RGB.pending;
       return agentRgb(node.role);
     }
+    if (node._workLabel === "Verifying" || node.task?.status === "awaiting_verification") return NODE_RGB.verify;
+    if (node._workLabel === "Running") return NODE_RGB.warm;
+    if (node._workLabel === "Next") return NODE_RGB.dust;
     if (node.state === "stale") return NODE_RGB.stale;
     if (node.state === "done") return NODE_RGB.done;
     if (node.state === "active") return NODE_RGB.warm;
@@ -2261,35 +2393,582 @@
     return NODE_RGB.session;
   }
 
-  // Soft halo with a white-hot core, like the reference constellation. The
-  // halo composites additively so overlapping glows bloom instead of fogging
-  // over; the crisp core is drawn normally on top.
-  function glowNode(ctx, x, y, radius, tint, { alpha = 1, spread = 6, white = 0.9 } = {}) {
-    // The halo is additive but tight: a wide fog washed out the rims, the task
-    // rings and the edge work, and read as overexposed where hubs clustered.
-    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius * spread);
-    gradient.addColorStop(0, `rgba(255,255,255,${0.6 * alpha * white})`);
-    gradient.addColorStop(0.18, `rgba(${tint},${0.5 * alpha})`);
-    gradient.addColorStop(0.42, `rgba(${tint},${0.16 * alpha})`);
-    gradient.addColorStop(0.7, `rgba(${tint},${0.04 * alpha})`);
-    gradient.addColorStop(1, `rgba(${tint},0)`);
+  function nodeVisualProfile(node) {
+    const focused = state.hoverNode === node || Boolean(state.selected && state.selected.id === node.id);
+    const verifying = node._workLabel === "Verifying" || node.task?.status === "awaiting_verification";
+    const working = !verifying && (node._workLabel === "Running" || node.state === "active") || node.kind === "agent" && node.status === "running";
+    const prominent = focused || working || node.kind === "assistant";
+    return { prominent, maxRadius: prominent ? 15 : 11, alpha: prominent ? 1 : 0.65, shape: "circle" };
+  }
+
+  function setSettingsPreview(rect) {
+    if (state.ambientZen) setAmbientZen(false);
+    if (rect && [rect.x, rect.y, rect.w, rect.h].every(Number.isFinite) && rect.w >= 160 && rect.h >= 160) {
+      const next = { x: Math.max(0, rect.x), y: Math.max(0, rect.y), w: rect.w, h: rect.h };
+      if (!state.previewRestore) state.previewRestore = { wasActive: state.active, camera: { ...state.camera }, camMode: state.camMode, fit: state.fit, zoom: state.zoom, overviewScale: state.overviewScale ?? 1, angle: state.angle, pitch: state.pitch, follow: state.follow, followZoomTarget: state.followZoomTarget, screenLayout: state.screenLayout, nodeLayout: state.nodeLayout };
+      const changed = !state.settingsPreview || Object.keys(next).some((key) => next[key] !== state.settingsPreview[key]);
+      state.settingsPreview = next;
+      state.graphArea = null; state.graphAreaAt = 0;
+      if (!state.active) enter(true);
+      if (changed) {
+        // The settings preview frames the real graph without overwriting the
+        // saved camera mode. Its former view is restored when the panel closes.
+        state.camMode = "orbit"; state.orbitVel = 0; fitAll();
+      }
+      return;
+    }
+    if (rect) return;
+    const previous = state.previewRestore;
+    state.settingsPreview = null; state.previewRestore = null;
+    state.graphArea = null; state.graphAreaAt = 0;
+    if (!previous) return;
+    for (const key of ["camera", "camMode", "fit", "zoom", "overviewScale", "angle", "pitch", "follow", "followZoomTarget"]) state[key] = previous[key];
+    state.screenLayout = previous.nodeLayout === state.nodeLayout ? previous.screenLayout : null;
+    if (!previous.wasActive) exit();
+    else { syncViewControls(); renderHint(); }
+  }
+
+  function applyTreePreferences(preferences = {}) {
+    if (typeof preferences.orbitTrails === "boolean") state.orbitTrails = preferences.orbitTrails;
+    if (typeof preferences.extraGlow === "boolean") state.extraGlow = preferences.extraGlow;
+    const style = ["orbs", "glass", "minimal", "halo", "crystal"].includes(preferences.nodeStyle) ? preferences.nodeStyle : state.nodeStyle;
+    const layout = ["constellation", "tree", "radial", "helix", "layers"].includes(preferences.nodeLayout) ? preferences.nodeLayout : state.nodeLayout;
+    state.nodeStyle = style;
+    if (layout === state.nodeLayout) return;
+    state.nodeLayout = layout;
+    state.screenLayout = null;
+    if (state.active && el.width && el.height) fitAll();
+  }
+
+  function traceNodeSurface(ctx, _shape, x, y, radius) {
+    ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2);
+  }
+
+  function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1 } = {}) {
     ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(x, y, radius * spread, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.globalAlpha = (node._fade ?? 1) * alpha;
+    node._extraGlow = state.extraGlow === true;
+    if (node._extraGlow) {
+      const spread = radius * (active || selected ? 2.25 : 1.8);
+      const glow = ctx.createRadialGradient(p.x, p.y, radius * 0.25, p.x, p.y, spread);
+      glow.addColorStop(0, rgba(tint, active || selected ? 0.32 : 0.16));
+      glow.addColorStop(0.45, rgba(tint, active || selected ? 0.14 : 0.05));
+      glow.addColorStop(1, rgba(tint, 0));
+      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, spread, 0, Math.PI * 2); ctx.fill();
+    }
+    const style = state.nodeStyle ?? "orbs";
+    if (style === "halo") {
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(10,17,28,0.82)"; ctx.fill();
+      ctx.strokeStyle = rgba(tint, active || selected ? 0.95 : 0.68); ctx.lineWidth = active || selected ? 2 : 1.4;
+      ctx.shadowColor = rgba(tint, 0.6); ctx.shadowBlur = active || selected ? 12 : 6; ctx.stroke(); ctx.shadowBlur = 0;
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.6, 0, Math.PI * 2); ctx.strokeStyle = rgba(tint, 0.24); ctx.lineWidth = 0.8; ctx.stroke();
+      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1.5, radius * 0.16), 0, Math.PI * 2); ctx.fillStyle = rgba(tint, 0.9); ctx.fill();
+      ctx.restore(); return;
+    }
+    if (style === "crystal") {
+      const points = Array.from({ length: 6 }, (_, index) => ({ x: p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, y: p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius }));
+      ctx.beginPath(); points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y)); ctx.closePath();
+      const gem = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
+      gem.addColorStop(0, rgba(tint, 0.8)); gem.addColorStop(0.45, rgba(tint, 0.28)); gem.addColorStop(1, "rgba(12,19,31,0.96)");
+      ctx.fillStyle = gem; ctx.fill(); ctx.strokeStyle = rgba(tint, active || selected ? 0.95 : 0.6); ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
+      ctx.beginPath(); for (const point of points.filter((_, index) => index % 2 === 0)) { ctx.moveTo(p.x, p.y); ctx.lineTo(point.x, point.y); }
+      ctx.strokeStyle = rgba(tint, 0.35); ctx.lineWidth = 0.7; ctx.stroke();
+      ctx.restore(); return;
+    }
+    if (style === "minimal") {
+      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(3, radius * (active ? 0.65 : 0.48)), 0, Math.PI * 2);
+      ctx.fillStyle = rgba(tint, selected || active ? 0.95 : 0.6); ctx.fill();
+      if (selected) { ctx.strokeStyle = "#eef3fa"; ctx.lineWidth = 1.5; ctx.stroke(); }
+      ctx.restore(); return;
+    }
+    if (style === "glass") {
+      traceNodeSurface(ctx, "circle", p.x, p.y, radius);
+      ctx.fillStyle = "#172331"; ctx.fill();
+      const glass = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
+      glass.addColorStop(0, rgba(tint, active || selected ? 0.42 : 0.22)); glass.addColorStop(0.55, "rgba(31,43,59,0.15)"); glass.addColorStop(1, rgba(tint, 0.06));
+      ctx.fillStyle = glass; ctx.fill(); ctx.strokeStyle = rgba(tint, selected ? 0.95 : active ? 0.72 : 0.42); ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
+      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, radius - 3), Math.PI * 1.13, Math.PI * 1.6);
+      ctx.strokeStyle = "rgba(231,243,255,0.55)"; ctx.lineWidth = 1; ctx.stroke();
+      ctx.restore(); return;
+    }
+    const glowRadius = radius * (active || selected ? 1.9 : 1.45);
+    const halo = ctx.createRadialGradient(p.x, p.y, radius * 0.45, p.x, p.y, glowRadius);
+    halo.addColorStop(0, rgba(tint, active ? 0.22 : 0.1));
+    halo.addColorStop(1, rgba(tint, 0));
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(p.x, p.y, glowRadius, 0, Math.PI * 2); ctx.fill();
+    // A luminous orb with an opaque centre: restrained halo, one clear rim.
+    traceNodeSurface(ctx, "circle", p.x, p.y, radius);
+    ctx.fillStyle = "#151a22"; ctx.fill();
+    const body = ctx.createRadialGradient(p.x - radius * 0.25, p.y - radius * 0.3, 0, p.x, p.y, radius);
+    body.addColorStop(0, rgba(tint, 0.95));
+    body.addColorStop(0.42, rgba(tint, 0.48));
+    body.addColorStop(1, rgba(tint, 0.1));
+    ctx.fillStyle = body; ctx.fill();
+    ctx.strokeStyle = rgba(tint, selected ? 1 : active ? 0.85 : 0.55);
+    ctx.lineWidth = selected ? 1.8 : active ? 1.3 : 0.8; ctx.stroke();
+    if (!["assistant", "music"].includes(node.kind)) {
+      ctx.fillStyle = "rgba(242,249,255,0.62)"; ctx.beginPath(); ctx.arc(p.x - radius * 0.25, p.y - radius * 0.3, Math.max(1, radius * 0.13), 0, Math.PI * 2); ctx.fill();
+    }
+    if (node.kind === "assistant" || node.kind === "music") {
+      ctx.font = '600 10px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillStyle = "#edf0f5"; ctx.fillText(node.kind === "music" ? "♪" : "M", p.x, p.y + 0.5);
+    }
     ctx.restore();
-    // a tinted body with a small white heart: the node's colour stays readable
-    // at every depth and the crisp edge keeps the ring language legible
-    ctx.fillStyle = `rgba(${tint},${0.85 * alpha})`;
-    ctx.beginPath();
-    ctx.arc(x, y, Math.max(1.4, radius * 0.72), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = `rgba(255,255,255,${0.8 * alpha * white})`;
-    ctx.beginPath();
-    ctx.arc(x, y, Math.max(0.8, radius * 0.34), 0, Math.PI * 2);
-    ctx.fill();
+  }
+
+  function drawWorkOrbit(ctx, node, p, radius, time, still) {
+    node._orbitTrail = null;
+    if (!state.orbitTrails || !["Running", "Next"].includes(node._workLabel) || node.kind === "agent") return;
+    const running = node._workLabel === "Running";
+    const phase = still ? Math.PI / 3 : time / (running ? 1100 : 2400) * Math.PI * 2;
+    const ring = radius + 9;
+    ctx.save(); ctx.lineCap = "round";
+    ctx.strokeStyle = "rgba(125,178,255,0.22)"; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI * 2); ctx.stroke();
+    for (let segment = 2; segment >= 0; segment -= 1) {
+      ctx.strokeStyle = `rgba(125,178,255,${0.8 - segment * 0.24})`; ctx.lineWidth = 2.6 - segment * 0.6;
+      ctx.beginPath(); ctx.arc(p.x, p.y, ring, phase - (segment + 1) * 0.62, phase - segment * 0.62); ctx.stroke();
+    }
+    ctx.restore();
+    node._orbitTrail = { drawn: true, animated: !still, segments: 3, phase, radius: ring };
+  }
+
+  function graphLayoutSeeds(projected, area, layout, parentIds, slots, fixed = new Map()) {
+    if (layout === "tree") return tidyBranchSeeds(projected, area, parentIds, fixed);
+    if (layout === "layers") return terraceSeeds(projected, area, parentIds, fixed);
+    if (layout === "constellation") return constellationSeeds(projected, area, parentIds, slots, fixed);
+    const forest = layoutForest(projected, parentIds);
+    const tree = tidyBranchSeeds(projected, area, forest.parents, new Map());
+    const maxDepth = Math.max(1, ...[...tree.values()].map((point) => point.depth));
+    const cx = area.x + area.w / 2, cy = area.y + area.h / 2;
+    const rx = Math.max(24, (area.w - 100) / 2), ry = Math.max(24, (area.h - 100) / 2);
+    const seeds = new Map();
+    forest.order.forEach((id, index) => {
+      const branch = tree.get(id);
+      let point;
+      if (layout === "helix") {
+        // Walk each branch together instead of scattering children by ID.
+        const progress = forest.order.length > 1 ? index / (forest.order.length - 1) : 0.5;
+        const phase = progress * Math.PI * 4 - Math.PI / 2;
+        point = { x: cx + Math.cos(phase) * rx * 0.9, y: area.y + 50 + progress * Math.max(1, area.h - 100), depth: branch.depth, phase };
+      } else {
+        // Elliptical rings follow dependency depth and the same angular
+        // sector for each branch, using both dimensions of the viewport.
+        const phase = (branch.x - area.x - 32) / Math.max(1, area.w - 64) * Math.PI * 2 - Math.PI / 2;
+        const radius = Math.sqrt(branch.depth / maxDepth);
+        point = { x: cx + Math.cos(phase) * rx * radius, y: cy + Math.sin(phase) * ry * radius, depth: branch.depth, phase };
+      }
+      seeds.set(id, fixed.get(id) ?? point);
+    });
+    return seeds;
+  }
+
+  function layoutForest(projected, parentIds) {
+    const nodes = new Map(projected.map(({ node }) => [node.id, node]));
+    const parents = new Map([...parentIds].filter(([child, parent]) => nodes.has(child) && nodes.has(parent) && child !== parent));
+    const ids = [...nodes.keys()].sort((a, b) => Number(nodes.get(b).kind === "root") - Number(nodes.get(a).kind === "root") || String(a).localeCompare(String(b)));
+    const root = ids.find((id) => nodes.get(id).kind === "root");
+    if (root) for (const id of ids) if (id !== root && !parents.has(id)) parents.set(id, root);
+    const children = new Map(ids.map((id) => [id, []]));
+    for (const id of ids) if (parents.has(id)) children.get(parents.get(id)).push(id);
+    const order = [], seen = new Set();
+    const visit = (id) => { if (seen.has(id)) return; seen.add(id); order.push(id); for (const child of children.get(id)) visit(child); };
+    for (const id of ids) if (!parents.has(id)) visit(id);
+    for (const id of ids) visit(id);
+    return { nodes, parents, children, order, root };
+  }
+
+  function terraceSeeds(projected, area, parentIds, fixed) {
+    const forest = layoutForest(projected, parentIds);
+    const tree = tidyBranchSeeds(projected, area, forest.parents, new Map());
+    const levels = new Map();
+    for (const id of forest.order) {
+      const depth = tree.get(id).depth;
+      if (!levels.has(depth)) levels.set(depth, []);
+      levels.get(depth).push(id);
+    }
+    // Centered shelves distinguish Terraces from the subtree columns in
+    // Branches. Dense shelves wrap before neighbouring orbs can touch.
+    const maxDepth = Math.max(1, ...levels.keys());
+    const bands = [...levels].sort(([a], [b]) => a - b).map(([depth, ids]) => {
+      const width = Math.max(52, area.w - 100) * (0.65 + 0.35 * depth / maxDepth);
+      const xs = ids.map((id) => tree.get(id).x), left = Math.min(...xs), right = Math.max(...xs);
+      const rows = [];
+      // Keep each sibling group in its own columns when a shelf wraps.
+      // Restarting x at the left edge on every row interleaved branches.
+      const entries = [...ids].sort((a, b) => tree.get(a).x - tree.get(b).x || String(a).localeCompare(String(b))).map((id) => {
+        const x = area.x + area.w / 2 + (right > left ? (tree.get(id).x - (left + right) / 2) / (right - left) * width : 0);
+        const radius = forest.nodes.get(id).kind === "todo" ? 8 : 21;
+        let row = rows.findIndex((last) => x - radius - 12 >= last);
+        if (row < 0) row = rows.length;
+        rows[row] = x + radius;
+        return { id, x, row };
+      });
+      return { depth, entries, rows: rows.length };
+    });
+    const units = Math.max(1, bands.reduce((sum, band) => sum + band.rows, 0) - 1 + Math.max(0, bands.length - 1));
+    const seeds = new Map();
+    let top = 0;
+    for (const band of bands) {
+      band.entries.forEach(({ id, x, row }) => {
+        const point = { x,
+          y: area.y + 50 + (top + row) * Math.max(1, area.h - 100) / units, depth: band.depth };
+        seeds.set(id, fixed.get(id) ?? point);
+      });
+      top += band.rows + 1;
+    }
+    return seeds;
+  }
+
+  function constellationSeeds(projected, area, parentIds, slots, fixed) {
+    const nodes = new Map(projected.map(({ node }) => [node.id, node]));
+    const root = [...nodes.values()].filter((node) => node.kind === "root").sort((a, b) => String(a.id).localeCompare(String(b.id)))[0];
+    const parents = new Map(parentIds);
+    // Loose backlog and landmarks get separate sectors around the same hub.
+    // They used to share a tiny central ring and collide into a diagonal pile.
+    if (root) for (const node of nodes.values()) if (node.id !== root.id && !parents.has(node.id)) parents.set(node.id, root.id);
+    const tree = tidyBranchSeeds(projected, area, parents, new Map());
+    const depths = [...tree.entries()].filter(([id]) => id !== root?.id).map(([, point]) => point.depth);
+    const minDepth = Math.min(...depths, 1), maxDepth = Math.max(...depths, minDepth + 1);
+    const cx = area.x + area.w / 2, cy = area.y + area.h / 2;
+    const rx = Math.max(24, (area.w - 96) / 2), ry = Math.max(24, (area.h - 96) / 2);
+    const branchIds = new Set(parents.values());
+    const points = new Map();
+    for (const [id, point] of tree) {
+      if (!slots.has(id)) slots.set(id, { group: parents.get(id) ?? "__roots__", slot: slots.size });
+      if (id === root?.id) { points.set(id, { x: cx, y: cy, depth: 0 }); continue; }
+      const phase = (point.x - area.x - 32) / Math.max(1, area.w - 64) * Math.PI * 2 - Math.PI / 2;
+      const radius = !branchIds.has(id) && parents.get(id) === root?.id ? 0.86
+        : 0.58 + 0.36 * Math.max(0, point.depth - minDepth) / Math.max(1, maxDepth - minDepth);
+      points.set(id, { x: cx + Math.cos(phase) * rx * radius, y: cy + Math.sin(phase) * ry * radius, depth: point.depth, phase });
+    }
+    const adjusted = new Map();
+    for (const [id, point] of points) {
+      if (fixed.has(id)) { adjusted.set(id, fixed.get(id)); continue; }
+      let parent = parents.get(id);
+      const seen = new Set([id]);
+      while (parent && !seen.has(parent) && !fixed.has(parent)) { seen.add(parent); parent = parents.get(parent); }
+      const original = points.get(parent), anchor = fixed.get(parent);
+      adjusted.set(id, original && anchor ? { ...point, x: point.x + anchor.x - original.x, y: point.y + anchor.y - original.y } : point);
+    }
+    return adjusted;
+  }
+
+  function primaryBranchParents(projected, edges) {
+    const nodes = new Map(projected.map(({ node }) => [node.id, node]));
+    const candidates = new Map();
+    for (const edge of edges) {
+      const parent = projected[edge.a]?.node, child = projected[edge.b]?.node;
+      if (!parent || !child || parent.kind === "agent" || child.kind === "agent" || child.kind === "root" || parent.id === child.id) continue;
+      if (!candidates.has(child.id)) candidates.set(child.id, []);
+      candidates.get(child.id).push(parent.id);
+    }
+    const parents = new Map();
+    for (const [id, choices] of [...candidates].sort(([a], [b]) => String(a).localeCompare(String(b)))) {
+      const node = nodes.get(id), preferred = node.groupParentId ?? node.sessionId ?? node.anchorSessionId;
+      const ordered = [...new Set(choices)].sort((a, b) => Number(b === preferred) - Number(a === preferred) || String(a).localeCompare(String(b)));
+      for (const parent of ordered) {
+        const seen = new Set([id]); let cursor = parent;
+        while (cursor && !seen.has(cursor)) { seen.add(cursor); cursor = parents.get(cursor); }
+        if (cursor) continue;
+        parents.set(id, parent); break;
+      }
+    }
+    return parents;
+  }
+
+  // Each layout has a real, deterministic volume. The initial screen spacing
+  // stays readable; rotating the camera reveals separated branches and tiers.
+  function layoutDepthSource(node, seed, area, layout, parents) {
+    if (state.view === "2d") return { x: 0, y: 0, z: 0 };
+    let branch = node.id, cursor = parents.get(branch), level = 0;
+    const seen = new Set([branch]);
+    while (cursor && !seen.has(cursor)) { seen.add(cursor); level += 1; if (parents.has(cursor)) branch = cursor; cursor = parents.get(cursor); }
+    let hash = 0; for (const letter of String(branch)) hash = (hash * 31 + letter.charCodeAt(0)) >>> 0;
+    const lane = (hash % 997) / 996 * 2 - 1;
+    const span = Math.min(area.w, area.h) * 0.36;
+    let depth = lane * span * 0.65 + Math.min(4, level) * span * 0.09;
+    if (layout === "helix") depth = Math.sin(seed?.phase ?? 0) * span;
+    else if (layout === "layers") depth = (Math.min(4, seed?.depth ?? level) - 1.5) * span * 0.42 + lane * span * 0.28;
+    else if (layout === "radial") depth = Math.sin((seed?.x - area.x) / Math.max(1, area.w) * Math.PI * 2) * span * 0.7 + ((seed?.depth ?? 0) - 1) * span * 0.18;
+    if (node.kind === "root") depth = 0;
+    const scale = Math.max(0.01, state.fit * state.zoom);
+    return { x: Math.sin(state.angle) * depth / scale - state.camera.x, y: -state.camera.y, z: Math.cos(state.angle) * depth / scale - state.camera.z };
+  }
+
+  function tidyBranchSeeds(projected, area, parentIds, fixed) {
+    const nodes = new Map(projected.map(({ node }) => [node.id, node]));
+    const children = new Map([...nodes.keys()].map((id) => [id, []]));
+    const roots = [];
+    for (const id of [...nodes.keys()].sort()) {
+      const parent = parentIds.get(id);
+      if (parent && parent !== id && nodes.has(parent)) children.get(parent).push(id);
+      else roots.push(id);
+    }
+    const spans = new Map(), levels = new Map(), seeds = new Map(), visiting = new Set();
+    const measure = (id) => {
+      if (spans.has(id)) return spans.get(id);
+      if (visiting.has(id)) return 28;
+      visiting.add(id);
+      const kids = children.get(id) ?? [];
+      const width = Math.max(nodes.get(id)?.kind === "todo" ? 24 : 48, kids.reduce((sum, child) => sum + measure(child), 0) + Math.max(0, kids.length - 1) * 12);
+      visiting.delete(id); spans.set(id, width); return width;
+    };
+    // A malformed disconnected cycle is still visible as a bounded forest.
+    for (const id of nodes.keys()) measure(id);
+    const reached = new Set();
+    const mark = (id) => { if (reached.has(id)) return; reached.add(id); for (const child of children.get(id) ?? []) mark(child); };
+    for (const id of roots) mark(id);
+    for (const id of nodes.keys()) if (!reached.has(id)) { roots.push(id); mark(id); }
+    const total = roots.reduce((sum, id) => sum + spans.get(id), 0) + Math.max(0, roots.length - 1) * 22;
+    const scale = Math.max(1, area.w - 64) / Math.max(1, total);
+    const place = (id, left, depth, seen = new Set()) => {
+      if (seen.has(id) || seeds.has(id)) return;
+      const nextSeen = new Set([...seen, id]), kids = children.get(id) ?? [];
+      const width = spans.get(id);
+      let cursor = left;
+      for (const child of kids) { place(child, cursor, depth + 1, nextSeen); cursor += spans.get(child) + 12; }
+      const childPoints = kids.map((child) => seeds.get(child)).filter(Boolean);
+      const x = childPoints.length ? (childPoints[0].x + childPoints.at(-1).x) / 2 : area.x + 32 + (left + width / 2) * scale;
+      const point = { x, y: 0, depth };
+      seeds.set(id, point);
+      if (!levels.has(depth)) levels.set(depth, []);
+      levels.get(depth).push(id);
+    };
+    let cursor = 0;
+    for (const id of roots) {
+      const kind = nodes.get(id).kind;
+      place(id, cursor, kind === "root" ? 0 : ["session", "assistant", "music"].includes(kind) ? 1 : 2);
+      cursor += spans.get(id) + 22;
+    }
+    // Dense sibling rows wrap vertically within their level, preserving their
+    // left-to-right subtree order instead of spiralling through other branches.
+    const groups = [];
+    for (const [depth, ids] of [...levels].sort(([a], [b]) => a - b)) {
+      const rows = [];
+      for (const id of ids.sort((a, b) => seeds.get(a).x - seeds.get(b).x || String(a).localeCompare(String(b)))) {
+        const point = seeds.get(id), radius = nodes.get(id).kind === "todo" ? 8 : 21;
+        let row = rows.findIndex((last) => point.x - radius - 12 >= last);
+        if (row < 0) row = rows.length;
+        rows[row] = point.x + radius; point.row = row;
+      }
+      groups.push({ depth, ids, rows: rows.length });
+    }
+    const units = Math.max(1, groups.reduce((sum, group) => sum + group.rows, 0) - 1 + Math.max(0, groups.length - 1) * 0.85);
+    let levelTop = 0;
+    for (const group of groups) {
+      for (const id of group.ids) {
+        const point = seeds.get(id);
+        point.y = area.y + 40 + (levelTop + point.row) * Math.max(1, area.h - 80) / units;
+        if (fixed.has(id)) Object.assign(point, fixed.get(id));
+      }
+      levelTop += group.rows + 0.85;
+    }
+    return seeds;
+  }
+
+  function arrangeProjectedNodes(projected, area, { mode = "orbit", fixedIds = new Set() } = {}) {
+    const visible = projected.filter(({ node, p }) => !node.dying && !node._absorbed && Number.isFinite(p.x) && Number.isFinite(p.y));
+    if (!visible.length) return projected;
+    const entries = [...visible].sort((a, b) => Number(fixedIds.has(b.node.id)) - Number(fixedIds.has(a.node.id)) || String(a.node.id).localeCompare(String(b.node.id)));
+    if (mode === "orbit" && !fixedIds.size) {
+      const xs = visible.map(({ p }) => p.x), ys = visible.map(({ p }) => p.y);
+      const left = Math.min(...xs), top = Math.min(...ys), w = Math.max(1, Math.max(...xs) - left), h = Math.max(1, Math.max(...ys) - top);
+      const scale = Math.max(0.8, Math.min(1.55, (area.w - 100) / w, (area.h - 100) / h));
+      for (const { p } of visible) { p.x = area.x + area.w / 2 + (p.x - left - w / 2) * scale; p.y = area.y + area.h / 2 + (p.y - top - h / 2) * scale; }
+
+    }
+    const cells = new Map();
+    const keys = (rect) => {
+      const result = [];
+      for (let x = Math.floor(rect.x / 64); x <= Math.floor((rect.x + rect.w) / 64); x += 1)
+        for (let y = Math.floor(rect.y / 64); y <= Math.floor((rect.y + rect.h) / 64); y += 1) result.push(`${x}:${y}`);
+      return result;
+    };
+    const placed = (rect) => keys(rect).some((key) => (cells.get(key) ?? []).some((other) => rect.x < other.x + other.w && rect.x + rect.w > other.x && rect.y < other.y + other.h && rect.y + rect.h > other.y));
+    for (const { node, p } of entries) {
+      // Reserve the largest work rim even while idle. Appearance/effect or
+      // status changes must never trigger a reflow of established anchors.
+      const size = { w: node.kind === "todo" ? 14 : 38, h: node.kind === "todo" ? 14 : 38 };
+      const bounds = (x, y) => ({ x: x - size.w / 2 - 7, y: y - size.h / 2 - 7, w: size.w + 14, h: size.h + 14 });
+      if (fixedIds.has(node.id)) {
+        const rect = bounds(p.x, p.y);
+        for (const key of keys(rect)) { if (!cells.has(key)) cells.set(key, []); cells.get(key).push(rect); }
+        continue;
+      }
+      let best = null;
+      // A deterministic spiral gives crowded clusters room without changing
+      // their persisted positions or introducing random frame-to-frame jitter.
+      for (let attempt = 0; attempt < 73; attempt += 1) {
+        const distance = attempt ? 20 * Math.ceil(attempt / 12) : 0;
+        const turn = (attempt % 12) * Math.PI / 6;
+        const x = Math.min(area.x + area.w - size.w / 2 - 10, Math.max(area.x + size.w / 2 + 10, p.x + Math.cos(turn) * distance));
+        const y = Math.min(area.y + area.h - size.h / 2 - 10, Math.max(area.y + size.h / 2 + 10, p.y + Math.sin(turn) * distance));
+        const rect = bounds(x, y);
+        if (!placed(rect)) { best = { x, y, rect }; break; }
+      }
+      if (!best) {
+        let nearest = Infinity;
+        for (let y = area.y + size.h / 2 + 10; y <= area.y + area.h - size.h / 2 - 10; y += size.h + 16) {
+          for (let x = area.x + size.w / 2 + 10; x <= area.x + area.w - size.w / 2 - 10; x += size.w + 16) {
+            const distance = (x - p.x) ** 2 + (y - p.y) ** 2;
+            if (distance >= nearest) continue;
+            const rect = bounds(x, y);
+            if (!placed(rect)) { best = { x, y, rect }; nearest = distance; }
+          }
+        }
+      }
+      if (!best) best = { x: p.x, y: p.y, rect: bounds(p.x, p.y) };
+      p.x = best.x; p.y = best.y;
+      for (const key of keys(best.rect)) { if (!cells.has(key)) cells.set(key, []); cells.get(key).push(best.rect); }
+    }
+    return projected;
+  }
+
+  function layoutProjectedGraph(projected, area, mode, animationTime = Date.now(), still = false) {
+    const layoutName = state.nodeLayout ?? "constellation";
+    const key = `${layoutName}|${state.view}|${area.x},${area.y},${area.w},${area.h}`;
+    if (state.screenLayout?.key !== key) {
+      state.screenLayout = { key, nodes: new Map(), slots: new Map() };
+      state.overviewScale = 1;
+    }
+    const layout = state.screenLayout.nodes;
+    const anchors = projected.filter(({ node }) => node.kind !== "agent");
+    const retained = new Set([...anchors.map(({ node }) => node.id), ...(state.allTasks ?? state.tasks ?? []).map((task) => `task:${task.id}`), ...(state.taskGroups ?? []).flatMap((group) => [`task:${group.id}`, ...group.members.map((member) => `task:${member.id}`)])]);
+    for (const id of layout.keys()) if (!retained.has(id)) layout.delete(id);
+    for (const id of state.screenLayout.slots.keys()) if (!retained.has(id)) state.screenLayout.slots.delete(id);
+    const fixedIds = new Set();
+    for (const { node, p } of anchors) {
+      const saved = layout.get(node.id);
+      const world = saved?.world ?? { x: node.x, y: node.y, z: node.z };
+      const source = saved ? project(world) : { ...p };
+      if (saved) { Object.assign(p, source); fixedIds.add(node.id); }
+      node._layoutAnchor = { ...world };
+    }
+    const parentIds = primaryBranchParents(projected, state.edges ?? []);
+    state.branchParents = parentIds;
+    // A narrow tree needs clear bands where active task names can fit.
+    // Filling every last gap with orbs otherwise leaves Auto with no labels.
+    const labelGutter = area.w < 480 ? Math.max(0, Math.min(64, (area.h - 240) / 2)) : 0;
+    const nodeArea = { ...area, y: area.y + labelGutter, h: area.h - labelGutter * 2 };
+    let seeds = new Map();
+    if (fixedIds.size !== anchors.length) {
+      const fixed = new Map(anchors.filter(({ node }) => fixedIds.has(node.id)).map(({ node, p }) => [node.id, { x: p.x, y: p.y }]));
+      seeds = graphLayoutSeeds(anchors, nodeArea, layoutName, parentIds, state.screenLayout.slots);
+      for (const { node, p } of anchors) {
+        if (fixedIds.has(node.id) || !seeds.has(node.id)) continue;
+        const seed = seeds.get(node.id);
+        // A new child joins its established branch. Rebalancing a fresh
+        // imaginary tree must not send it across the saved parent's branch.
+        let parent = parentIds.get(node.id);
+        const seen = new Set([node.id]);
+        while (parent && !seen.has(parent) && !fixed.has(parent)) { seen.add(parent); parent = parentIds.get(parent); }
+        const original = seeds.get(parent), saved = fixed.get(parent);
+        p.x = seed.x + (original && saved ? saved.x - original.x : 0);
+        p.y = seed.y + (original && saved ? saved.y - original.y : 0);
+      }
+    }
+    // Saved anchors only need projection. Rebuilding the collision grid for
+    // an entirely fixed graph cannot move a node and wastes every idle frame.
+    if (fixedIds.size !== anchors.length) arrangeProjectedNodes(anchors, nodeArea, { mode: "free", fixedIds });
+    for (const { node, p } of anchors) {
+      if (layout.has(node.id)) continue;
+      const depthSource = layoutDepthSource(node, seeds.get(node.id), area, layoutName, parentIds);
+      const anchor = unprojectForLayout(p, depthSource);
+      layout.set(node.id, { world: anchor }); node._layoutAnchor = { ...anchor };
+      Object.assign(p, project(anchor));
+    }
+    // Fixed world anchors can project beyond their initial frame as a 3D
+    // orbit turns. Back the overview off as a whole, preserving perspective
+    // and anchors, so panel clipping never removes work from the overview.
+    // Free/Follow retain their intentional pan and zoom into part of the tree.
+    if (mode === "orbit") {
+      const cx = area.x + area.w / 2, cy = area.y + area.h / 2;
+      const halfW = Math.max(1, area.w / 2 - 28), halfH = Math.max(1, area.h / 2 - 28);
+      const previousScale = state.overviewScale ?? 1;
+      let scale = 1;
+      for (const { node, p } of anchors) {
+        if (node.dying || node._absorbed) continue;
+        scale = Math.min(scale, halfW / Math.max(1, Math.abs(p.x - cx) / previousScale), halfH / Math.max(1, Math.abs(p.y - cy) / previousScale));
+      }
+      state.overviewScale = scale;
+      if (scale !== previousScale) for (const { node, p } of anchors) Object.assign(p, project(node._layoutAnchor));
+    }
+    const occupied = anchors.filter(({ node }) => !node.dying && !node._absorbed).map(({ node, p }) => ({ x: p.x, y: p.y, radius: node.kind === "todo" ? 8 : 25 }));
+    const agentLayout = state.agentLayout ??= new Map();
+    const agents = projected.filter(({ node }) => node.kind === "agent" && !node._absorbed).sort((a, b) => a.node.id.localeCompare(b.node.id));
+    const visibleAgents = new Set(agents.map(({ node }) => node.id));
+    for (const id of agentLayout.keys()) if (!visibleAgents.has(id)) agentLayout.delete(id);
+    for (const { node, p } of agents) {
+      Object.assign(p, project(node));
+      const fx = state.fx?.get(node.id);
+      const targetId = node.dying ? absorbHost(fx)?.id : node.targetNode?.id ?? node.targetId ?? node.hostId;
+      const host = anchors.find((entry) => entry.node.id === targetId) ?? anchors.find((entry) => entry.node.kind === "assistant");
+      if (host) {
+        let saved = agentLayout.get(node.id);
+        // Carry camera movement through immediately. Only a worker changing
+        // its destination or clearance slot should ease across the scene.
+        if (saved?.hostId === host.node.id && saved.layoutKey === key) {
+          const dx = host.p.x - saved.hostX, dy = host.p.y - saved.hostY;
+          saved.x += dx; saved.y += dy;
+          if (saved.returnFrom) { saved.returnFrom.x += dx; saved.returnFrom.y += dy; }
+        }
+        const original = project(host.node);
+        const dx = p.x - original.x, dy = p.y - original.y;
+        // The distance still left in a flight is not the destination's orbit.
+        const radius = Math.max(42, Math.min(72, Math.hypot(dx, dy))), phase = Math.atan2(dy, dx);
+        const offset = saved?.hostId === host.node.id ? saved.offset ?? 0 : 0;
+        const hostInView = host.p.x >= area.x && host.p.x <= area.x + area.w && host.p.y >= area.y && host.p.y <= area.y + area.h;
+        let best = null, bestClearance = -Infinity;
+        // Keep the worker beside its host, clear of neighbouring work rims
+        // and panel edges. Only satellites move; task anchors stay fixed.
+        for (let attempt = 0; attempt < 48; attempt += 1) {
+          const step = attempt % 12;
+          const turn = offset + Math.ceil(step / 2) * (step % 2 ? 1 : -1) * Math.PI / 6;
+          const angle = phase + turn;
+          const distance = radius + Math.floor(attempt / 12) * 18;
+          const rawX = host.p.x + Math.cos(angle) * distance, rawY = host.p.y + Math.sin(angle) * distance;
+          // Panning a host offscreen takes its workers with it instead of
+          // pinning unrelated satellites to the edge of the current view.
+          const x = hostInView ? Math.max(nodeArea.x + 14, Math.min(nodeArea.x + nodeArea.w - 14, rawX)) : rawX;
+          const y = hostInView ? Math.max(nodeArea.y + 14, Math.min(nodeArea.y + nodeArea.h - 14, rawY)) : rawY;
+          const clearance = occupied.reduce((gap, other) => Math.min(gap, Math.hypot(x - other.x, y - other.y) - other.radius - 13), Infinity);
+          if (clearance > bestClearance) { best = { x, y, offset: turn }; bestClearance = clearance; }
+          if (clearance >= 3) break;
+        }
+        if (!saved) {
+          const growing = fx && Number.isFinite(fx.bornAt) && Date.now() - fx.bornAt < NODE_GROW_MS;
+          const launch = !still && node.phase === "flying" ? anchors.find((entry) => entry.node.kind === "assistant")?.p : null;
+          const start = launch ?? (growing && !still ? host.p : best);
+          saved = { x: start.x, y: start.y, at: animationTime };
+          agentLayout.set(node.id, saved);
+        }
+        if (node.dying && fx) {
+          // Return from the point actually drawn, including its clearance
+          // offset. Fading workers may reach the hub instead of its outer ring.
+          saved.returnFrom ??= { x: saved.x, y: saved.y };
+          const t = still ? 1 : Math.max(0, Math.min(1, (Date.now() - fx.absorbAt) / NODE_ABSORB_MS));
+          const ease = t * t * (3 - 2 * t);
+          saved.x = saved.returnFrom.x + (host.p.x - saved.returnFrom.x) * ease;
+          saved.y = saved.returnFrom.y + (host.p.y - saved.returnFrom.y) * ease;
+        } else {
+          saved.returnFrom = null;
+          const returning = node.retiring && ["returning", "home"].includes(node.phase);
+          const destination = returning ? host.p : best;
+          // Time-based interpolation keeps the same feel at different frame
+          // rates. A resumed/slow frame cannot skip the whole transition.
+          const dt = Math.max(0, Math.min(64, animationTime - saved.at));
+          const blend = still ? 1 : 1 - Math.exp(-dt / 180);
+          saved.x += (destination.x - saved.x) * blend;
+          saved.y += (destination.y - saved.y) * blend;
+        }
+        Object.assign(saved, { at: animationTime, hostId: host.node.id, hostX: host.p.x, hostY: host.p.y, offset: best.offset, layoutKey: key });
+        p.x = saved.x; p.y = saved.y;
+        occupied.push({ x: p.x, y: p.y, radius: 13 });
+      }
+      node._layoutAnchor = null;
+    }
   }
 
   function hexToRgb(hex) {
@@ -2305,17 +2984,23 @@
       const value = style.getPropertyValue(name).trim();
       return /^#[\da-f]{3}(?:[\da-f]{3})?$/i.test(value) ? hexToRgb(value) : fallback;
     };
-    NODE_RGB.warm = color("--gold-bright", NODE_RGB.warm);
+    const palette = window.MefiMusic?.themePalette?.()?.canvas;
+    state.canvasPalette = palette ?? null;
+    NODE_RGB.warm = palette?.bright ? hexToRgb(palette.bright) : color("--gold-bright", NODE_RGB.warm);
     NODE_RGB.task = [...NODE_RGB.warm];
     NODE_RGB.assistant = [...NODE_RGB.warm];
-    NODE_RGB.session = color("--ivory", NODE_RGB.session);
-    NODE_RGB.pending = color("--muted", NODE_RGB.pending);
-    NODE_RGB.stale = color("--dim", NODE_RGB.stale);
+    NODE_RGB.session = palette?.text ? hexToRgb(palette.text) : color("--ivory", NODE_RGB.session);
+    NODE_RGB.pending = palette?.muted ? hexToRgb(palette.muted) : color("--muted", NODE_RGB.pending);
+    NODE_RGB.stale = palette?.dim ? hexToRgb(palette.dim) : color("--dim", NODE_RGB.stale);
+    const bg = hexToRgb(palette?.background ?? "#050507");
+    NODE_RGB.verify = bg[0] * 0.2126 + bg[1] * 0.7152 + bg[2] * 0.0722 > 145 ? [59, 86, 160] : [151, 179, 244];
+    NODE_RGB.task = NODE_RGB.pending.map((value, index) => Math.round(value * 0.6 + NODE_RGB.verify[index] * 0.4));
     state.canvasAccent = NODE_RGB.warm.join(",");
-    for (const key of ["active", "task", "checkpoint", "focus", "assistant"]) {
+    for (const key of ["active", "task", "verify", "checkpoint", "focus", "assistant"]) {
+      const tint = key === "verify" ? NODE_RGB.verify : key === "task" || key === "checkpoint" ? NODE_RGB.task : NODE_RGB.warm;
       const entry = LEGEND.find((item) => item.key === key);
-      if (entry) entry.sw = rgb(NODE_RGB.warm);
-      el.legendList?.querySelector(`[data-sw="${key}"]`)?.style.setProperty("--sw", rgb(NODE_RGB.warm));
+      if (entry) entry.sw = rgb(tint);
+      el.legendList?.querySelector(`[data-sw="${key}"]`)?.style.setProperty("--sw", rgb(tint));
     }
   }
 
@@ -2414,22 +3099,19 @@
   }
 
   function drawBubble(ctx, x, y, scale, alpha) {
-    const w = 15 * scale;
-    const h = 10.5 * scale;
+    const w = 11 * scale;
+    const h = 10 * scale;
+    ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = "#e6c98d";
+    ctx.fillStyle = state.canvasPalette?.background ?? "#101620";
     ctx.beginPath();
-    ctx.roundRect(x, y, w, h, 4 * scale);
+    ctx.roundRect(x, y, w, h, 2.5 * scale);
     ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(x + 3 * scale, y + h - 1);
-    ctx.lineTo(x + 2 * scale, y + h + 5 * scale);
-    ctx.lineTo(x + 7.5 * scale, y + h - 1);
-    ctx.fill();
-    ctx.fillStyle = "#171307";
-    ctx.fillRect(x + 3.2 * scale, y + 3.2 * scale, 3.2 * scale, 1.6 * scale);
-    ctx.fillRect(x + 8.4 * scale, y + 3.2 * scale, 3.2 * scale, 1.6 * scale);
-    ctx.globalAlpha = 1;
+    ctx.strokeStyle = rgba(NODE_RGB.pending, 0.75); ctx.lineWidth = 0.9; ctx.stroke();
+    ctx.fillStyle = rgba(NODE_RGB.session, 0.75);
+    ctx.fillRect(x + 3 * scale, y + 3 * scale, 5 * scale, scale);
+    ctx.fillRect(x + 3 * scale, y + 6 * scale, 3.5 * scale, scale);
+    ctx.restore();
   }
 
   // ---------- graph helpers ----------
@@ -2459,7 +3141,7 @@
   }
 
   function taskNodes() {
-    return state.nodes.filter((node) => node.kind === "task" && !node.dying).sort((a, b) => (b.task?.updatedAt ?? 0) - (a.task?.updatedAt ?? 0));
+    return state.nodes.filter((node) => ["task", "task-group"].includes(node.kind) && !node.dying).sort((a, b) => (b.task?.updatedAt ?? 0) - (a.task?.updatedAt ?? 0));
   }
 
   function childrenOf(sessionId) {
@@ -2532,18 +3214,30 @@
 
   // Readiness comes from the same scheduler snapshot as the board. Reading it
   // is observational: opening Command never starts or reprioritizes a job.
-  async function refreshCommandBacklog() {
-    if (!state.active || !window.mefiStudio?.backlogStatus || state.backlogReadPending || Date.now() - state.backlogReadAt < 3500) return;
+  async function refreshCommandBacklog(force = false) {
+    if (!state.active || !window.mefiStudio?.backlogStatus || state.backlogReadPending || (!force && Date.now() - state.backlogReadAt < 3500)) return;
     const revision = state.backlogRevision;
     state.backlogReadPending = true;
     state.backlogReadAt = Date.now();
+    let timeout;
     try {
-      const result = await window.mefiStudio.backlogStatus();
+      // This is a read-only snapshot. An unanswered IPC must not permanently
+      // hold the refresh gate; late replies cannot mutate state after the race.
+      const result = await Promise.race([
+        window.mefiStudio.backlogStatus(),
+        new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("Queue status took too long to respond. Refresh to try again.")), 12000); }),
+      ]);
       if (revision !== state.backlogRevision) return;
       state.backlog = result?.ok ? result : null;
-    } catch {
-      if (revision === state.backlogRevision) state.backlog = null;
+      state.backlogError = result?.ok ? null : result?.error || "Queue status could not be loaded.";
+    } catch (error) {
+      if (revision === state.backlogRevision) {
+        state.backlog = null;
+        state.backlogError = error?.message || "Queue status could not be loaded.";
+      }
     } finally {
+      clearTimeout(timeout);
+      if (revision === state.backlogRevision) state.backlogReadAt = Date.now();
       state.backlogReadPending = false;
       state.feedDirty = true;
       if (state.active) renderFeed();
@@ -2563,8 +3257,8 @@
     const progress = typeof job.progress === "number" && Number.isFinite(job.progress) ? Math.max(0, Math.min(1, job.progress)) : null;
     return {
       title: String(job.title || "Untitled task"),
-      stage: current?.label ? String(current.label) : progress === 1 ? "Reported steps complete · finishing the run" : "Worker is running · waiting for its next update",
-      progress,
+      stage: job.stopping ? `Stopping worker safely · ${job.stopping.reason || "waiting for the worker to exit"}${job.stopping.error ? ` · ${job.stopping.error}` : ""}` : current?.label ? String(current.label) : progress === 1 ? "Reported steps complete · finishing the run" : "Worker is running · waiting for its next update",
+      progress: job.stopping ? null : progress,
       elapsed: elapsedLabel(job.startedAt),
     };
   }
@@ -2572,7 +3266,8 @@
   function commandQueue(assistant, requests, backlog) {
     const jobs = autopilotJobs(assistant);
     const runningTitles = new Set(jobs.map((job) => String(job.title ?? "").trim().toLowerCase()).filter(Boolean));
-    if (Array.isArray(backlog?.next)) return backlog.next.filter((item) => !runningTitles.has(String(item.title ?? "").trim().toLowerCase()));
+    if (Array.isArray(backlog?.next)) return backlog.next.filter((item) => item.stage !== "approval" && !runningTitles.has(String(item.title ?? "").trim().toLowerCase()));
+    if (assistant?.autoBuild === false) return [];
     return (Array.isArray(requests) ? requests : []).filter((request) => request &&
       (!request.status || ["open", "pending", "queued"].includes(request.status)) &&
       !runningTitles.has(String(request.title ?? request.prompt ?? "").trim().toLowerCase())
@@ -2587,7 +3282,7 @@
     head.className = "feed-current-head";
     const badge = document.createElement("span");
     badge.className = "feed-current-label";
-    badge.textContent = "Working now";
+    badge.textContent = job.stopping ? "Stopping safely" : "Working now";
     const time = document.createElement("span");
     time.className = "feed-current-time";
     time.textContent = detail.elapsed;
@@ -2640,6 +3335,118 @@
     }
   }
 
+  function renderBuildModeControl() {
+    if (!el.feedBuildMode) return;
+    const known = typeof state.assistant?.autoBuild === "boolean";
+    el.feedBuildMode.disabled = Boolean(state.buildModeSaving) || !known || !window.mefiStudio?.assistantAutopilot;
+    if (!state.buildModeSaving) el.feedBuildMode.value = state.assistant?.autoBuild === false ? "verify" : "auto";
+    el.feedBuildMode.setAttribute("aria-busy", String(Boolean(state.buildModeSaving)));
+    el.feedBuildMode.title = "Auto build starts eligible tasks automatically. Verify first holds each new or changed brief for your approval. Running work continues.";
+  }
+
+  async function changeBuildMode(value) {
+    if (state.buildModeSaving) return false;
+    if (!["auto", "verify"].includes(value)) { renderBuildModeControl(); return false; }
+    state.buildModeSaving = true;
+    renderBuildModeControl();
+    try {
+      const result = await autopilotPrefs({ autoBuild: value === "auto" }, "Build mode");
+      if (!result && window.mefiStudio?.assistantStatus) {
+        // A lost acknowledgement may still have saved the mode. Read it back;
+        // a newer status push takes precedence over this recovery snapshot.
+        const previous = state.assistant;
+        let timeout;
+        try {
+          const fresh = await Promise.race([
+            window.mefiStudio.assistantStatus(),
+            new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("Build mode status is unavailable.")), 12000); }),
+          ]);
+          const status = fresh?.status ?? fresh;
+          if (fresh?.ok !== false && typeof status?.autoBuild === "boolean" && state.assistant === previous) {
+            state.assistant = { ...(state.assistant ?? {}), ...status };
+            state.feedDirty = true;
+            if (state.active) renderFeed();
+          }
+        } catch { /* Keep the latest saved status when the read also fails. */ }
+        finally { clearTimeout(timeout); }
+      }
+      if (result) await refreshCommandBacklog(true);
+      return Boolean(result);
+    } finally {
+      state.buildModeSaving = false;
+      renderBuildModeControl();
+    }
+  }
+
+  function retryTimeLabel(at) {
+    if (!Number.isFinite(Number(at)) || Number(at) <= 0) return "";
+    const seconds = Math.max(0, Math.ceil((Number(at) - Date.now()) / 1000));
+    if (!seconds) return "Retry is due; waiting for the next scheduling pass.";
+    return `Next automatic retry in ${seconds < 60 ? `${seconds}s` : `${Math.ceil(seconds / 60)}m`}.`;
+  }
+
+  function renderCommandAttention() {
+    if (!el.feedAttention) return;
+    const approvals = Array.isArray(state.backlog?.approval) ? state.backlog.approval : [];
+    const blocked = [...approvals, ...(Array.isArray(state.backlog?.blocked) ? state.backlog.blocked : [])];
+    const countAttention = (state.backlog?.counts?.blocked ?? blocked.length - approvals.length) + (state.backlog?.counts?.approval ?? approvals.length);
+    const retry = retryTimeLabel(state.backlog?.nextRetryAt);
+    const signature = JSON.stringify([blocked.slice(0, 3), countAttention, retry, state.backlogError]);
+    if (signature === state.feedAttentionSignature) return;
+    state.feedAttentionSignature = signature;
+    el.feedAttention.textContent = "";
+    if (blocked.length) {
+      const head = document.createElement("div");
+      head.className = "feed-section-head";
+      const heading = document.createElement("h3");
+      heading.textContent = "Needs attention";
+      const count = document.createElement("span");
+      count.textContent = String(countAttention);
+      heading.append(count);
+      const review = document.createElement("button");
+      review.className = "ghost mini feed-review";
+      review.textContent = "Review all";
+      review.setAttribute("aria-label", approvals.length ? "Review all tasks needing attention or approval" : "Review all blocked tasks");
+      review.addEventListener("click", () => nav("tasks", { filter: "all", readiness: "blocked" }));
+      head.append(heading, review);
+      el.feedAttention.append(head);
+    }
+    if (state.backlogError) {
+      const message = document.createElement("p");
+      message.className = "feed-attention-note";
+      message.textContent = `Queue status unavailable · ${state.backlogError}`;
+      const refresh = document.createElement("button");
+      refresh.className = "ghost mini";
+      refresh.textContent = "Refresh status";
+      refresh.addEventListener("click", async () => {
+        refresh.disabled = true;
+        try { await refreshCommandBacklog(true); } finally { refresh.disabled = false; }
+      });
+      el.feedAttention.append(message, refresh);
+    }
+    for (const item of blocked.slice(0, 3)) {
+      const row = document.createElement("div");
+      row.className = "feed-attention-row";
+      const title = document.createElement("button");
+      title.className = "feed-attention-title";
+      title.textContent = item.title;
+      title.title = item.stage === "approval" ? "Review this brief and approve its build" : "Open this work to review its result or correct its prerequisites";
+      title.addEventListener("click", () => item.kind === "task" ? nav("tasks", { taskId: item.id, filter: "all" }) : nav("explorer", { assistant: true }));
+      const reason = document.createElement("p");
+      reason.className = "feed-attention-reason";
+      reason.textContent = item.reason || "This work needs your review.";
+      row.append(title, reason);
+      el.feedAttention.append(row);
+    }
+    if (retry) {
+      const note = document.createElement("p");
+      note.className = "feed-attention-note";
+      note.textContent = retry;
+      el.feedAttention.append(note);
+    }
+    el.feedAttention.hidden = !blocked.length && !retry && !state.backlogError;
+  }
+
   function renderFeed() {
     if (!el.feed || !state.feedDirty) return;
     state.feedDirty = false;
@@ -2651,6 +3458,8 @@
     const recentPass = Boolean(assistant?.lastPassAt) && Date.now() - assistant.lastPassAt < 10 * 60 * 1000;
     refreshCommandBacklog();
     renderParallelControl();
+    renderBuildModeControl();
+    renderCommandAttention();
 
     let dot = "off";
     let text = "…";
@@ -2717,17 +3526,18 @@
       el.feedMetrics.textContent = "";
       const counts = state.backlog?.counts;
       if (counts) {
-        for (const [kind, value, label, filter] of [["ready", counts.ready, "Ready", "open"], ["review", counts.review, "Verifying", "review"], ["blocked", (counts.blocked ?? 0) + (counts.waiting ?? 0) + (counts.cooling ?? 0), "Waiting", "all"]]) {
+        for (const [kind, value, label] of [["ready", counts.ready, "Ready"], ["review", counts.review, "Verifying"], ["waiting", (counts.waiting ?? 0) + (counts.cooling ?? 0), "Waiting"], ["blocked", (counts.blocked ?? 0) + (counts.approval ?? 0), "Needs attention"]]) {
           const metric = document.createElement("button");
           metric.className = "feed-metric";
           metric.dataset.state = kind;
+          metric.dataset.empty = String(!(value > 0));
           const number = document.createElement("strong");
           number.textContent = String(value ?? 0);
           const name = document.createElement("span");
           name.textContent = label;
           metric.append(number, name);
-          metric.title = kind === "blocked" ? "Open the board to inspect prerequisites, retry holds and blocked tasks" : "Open the task board";
-          metric.addEventListener("click", () => nav("tasks", { filter }));
+          metric.title = kind === "blocked" ? "Review build approvals, failures and missing or cyclic prerequisites" : kind === "waiting" ? "Inspect prerequisite waits and scheduled retries" : "Open matching tasks on the board";
+          metric.addEventListener("click", () => nav("tasks", { filter: "all", readiness: kind }));
           el.feedMetrics.append(metric);
         }
       }
@@ -2736,7 +3546,7 @@
 
     const queued = commandQueue(assistant, state.requests, state.backlog);
     const nextCount = state.backlog?.counts?.ready ?? queued.length;
-    const queueSignature = JSON.stringify([queued, nextCount, state.feedMenuOpen, Boolean(state.backlog)]);
+    const queueSignature = JSON.stringify([queued, nextCount, state.feedMenuOpen, Boolean(state.backlog), state.backlogError]);
     if ((el.feedQueue || el.feedDrop) && state.feedQueueSignature !== queueSignature) {
       state.feedQueueSignature = queueSignature;
       const queueRow = (item, index) => {
@@ -2764,7 +3574,7 @@
         if (!queued.length) {
           const li = document.createElement("li");
           li.className = "more";
-          li.textContent = state.backlog ? "No ready tasks waiting" : "No requests waiting";
+          li.textContent = state.backlogError ? "Queue status unavailable" : state.backlog ? "No ready tasks waiting" : "No requests waiting";
           el.feedQueue.append(li);
         }
       }
@@ -3016,9 +3826,10 @@
 
   // ---------- activity -> world ----------
   function focusOn(node) {
-    state.camera.tx = -node.x;
-    state.camera.ty = -node.y;
-    state.camera.tz = -node.z;
+    const point = node._layoutAnchor ?? node;
+    state.camera.tx = -point.x;
+    state.camera.ty = -point.y;
+    state.camera.tz = -point.z;
   }
 
   function focusNode(node, { zoom } = {}) {
@@ -3080,12 +3891,13 @@
     if (state.particles.length > 600) state.particles.splice(0, state.particles.length - 600);
   }
 
-  // The tree runs the agents' flights; this surface draws them with its own
-  // projection. Positions come in every frame, the counters say when to pulse,
+  // The tree owns the agents' flights; this surface advances them while its
+  // canvas is visible, including when the small tree rail is asleep.
+  // Positions come in every frame; the counters say when to pulse,
   // spark, or fire the bright "done" pulse — each rendered here exactly once.
-  function syncAgentMotion(now) {
-    const live = window.MefiTree?.agentPositions?.();
-    if (!live) return;
+  function syncAgentMotion(now, animationTime) {
+    // Flights use the animation clock; Command's dated work effects use now.
+    const live = window.MefiTree?.advanceAgents?.(animationTime) ?? window.MefiTree?.agentPositions?.() ?? {};
     const hub = assistantNode();
     for (const node of state.nodes) {
       if (node.kind !== "agent" || node.dying) continue; // ghosts keep their own flight
@@ -3098,9 +3910,9 @@
         if (anchor) {
           const radius = node.radius ?? BUILDER_ORBIT;
           const speed = node.onHost ? 2600 : 7200;
-          const angle = node.orbit + (noMotion() ? 0 : now / speed);
+          const angle = node.orbit + (noMotion() ? 0 : animationTime / speed);
           node.x = anchor.x + Math.cos(angle) * radius;
-          node.y = anchor.y - (node.lift ?? 8) + (noMotion() ? 0 : Math.sin(now / 1400 + node.orbit) * 2);
+          node.y = anchor.y - (node.lift ?? 8) + (noMotion() ? 0 : Math.sin(animationTime / 1400 + node.orbit) * 2);
           node.z = anchor.z + Math.sin(angle) * radius;
           node.targetNode = anchor;
         }
@@ -3113,6 +3925,8 @@
         continue;
       }
       const motion = live[node.role];
+      node.motionOpacity = motion?.opacity ?? (motion ? 1 : 0);
+      node.retiring = Boolean(motion?.retiring);
       if (!motion) continue;
       node.x = motion.x;
       node.y = motion.y;
@@ -3170,6 +3984,7 @@
 
   // ---------- render ----------
   function orbitTarget(energy) {
+    if (state.ambientZen) return noMotion() || state.view === "2d" ? 0 : ORBIT_BASE * 0.65;
     if (state.camMode === "follow") return 0; // the working branch stays readable while its agents move.
     if (state.view === "2d") return 0; // the flat map does not revolve
     if (noMotion() || state.orbit === "paused") return 0;
@@ -3195,11 +4010,20 @@
 
   // One multiplier per node/edge per frame: dim what the query or the selected
   // branch is not about.
+  function followsNode(node, focus) {
+    if (!focus) return false;
+    if (focus.context?.some((entry) => entry.id === node.id)) return true;
+    if (node.kind !== "agent") return false;
+    const ids = new Set([focus.key, focus.taskId, focus.sessionId].filter(Boolean));
+    return [node.hostId, node.targetId, node.targetNode?.id, node.job?.taskId, node.job?.sessionId].some((id) => id && ids.has(id));
+  }
+
   function emphasis(node) {
     if (state.query) return state.matchSet.has(node.id) ? 1 : 0.25;
     if (state.camMode === "follow" && state.follow) {
-      const focused = state.follow.context.some((entry) => entry.id === node.id) || node.hostId === state.follow.key || node.targetId === state.follow.key;
-      return focused ? 1 : node.kind === "music" || node.kind === "assistant" ? 0.85 : 0.5;
+      if (followsNode(node, state.follow)) return 1;
+      if (node.kind === "music" || node.kind === "assistant") return 0.7;
+      return node._workLabel === "Running" ? 0.45 : 0.2;
     }
     if (!state.branch) return 1;
     const sid = node.sessionId ?? node.anchorSessionId ?? node.id;
@@ -3207,24 +4031,12 @@
     return 0.55;
   }
 
-  // The circle a node's children ride, traced point by point through project()
-  // so the ring carries the same tilt and perspective as the nodes on it.
-  function traceRing(ctx, node, radius, yOffset = 0) {
-    ctx.beginPath();
-    const SEGMENTS = 44;
-    for (let index = 0; index <= SEGMENTS; index += 1) {
-      const t = (index / SEGMENTS) * Math.PI * 2;
-      const p = project({ x: node.x + Math.cos(t) * radius, y: node.y + yOffset, z: node.z + Math.sin(t) * radius });
-      if (index === 0) ctx.moveTo(p.x, p.y);
-      else ctx.lineTo(p.x, p.y);
-    }
-  }
-
+  // Animation state belongs to the scheduler, independent of graph styling.
   let lastFrameAt = 0;
   let frameRequest = 0;
   function frame(time) {
     if (!state.active) return;
-    if (document.body.dataset.sheet) {
+    if (document.body.dataset.sheet && !(state.settingsPreview && document.body.dataset.sheet === "music")) {
       frameRequest = requestAnimationFrame(frame);
       return;
     }
@@ -3277,12 +4089,14 @@
     const { ctx } = el;
     ctx.clearRect(0, 0, el.width, el.height);
 
-    // backdrop: near-black with a faint indigo cast — flat black read as dead
-    // space behind the constellation
+    // The canvas paints its own backdrop, so CSS alone cannot apply a theme.
+    // Keep the wash close to the selected background in light and dark palettes.
+    const backdrop = hexToRgb(state.canvasPalette?.background ?? "#050507");
+    const skyTint = backdrop.map((channel, index) => Math.round(channel * 0.96 + NODE_RGB.warm[index] * 0.04));
     const sky = ctx.createLinearGradient(0, 0, 0, el.height);
-    sky.addColorStop(0, "#070912");
-    sky.addColorStop(0.55, "#04050a");
-    sky.addColorStop(1, "#030304");
+    sky.addColorStop(0, rgb(skyTint));
+    sky.addColorStop(0.55, rgb(backdrop));
+    sky.addColorStop(1, rgb(backdrop.map((channel) => Math.round(channel * 0.98))));
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, el.width, el.height);
 
@@ -3297,8 +4111,8 @@
       ctx.fillRect(x - r, y - r, r * 2, r * 2);
     };
     const diagonal = Math.hypot(el.width, el.height);
-    nebula(el.width * 0.2, el.height * 0.14, diagonal * 0.4, "86,100,180", 0.05 + breathe * 0.02);
-    nebula(el.width * 0.86, el.height * 0.84, diagonal * 0.34, "150,110,60", 0.03 + (still ? 0 : (1 - breathe) * 0.012));
+    nebula(el.width * 0.2, el.height * 0.14, diagonal * 0.4, NODE_RGB.pending.join(","), 0.03 + breathe * 0.012);
+    nebula(el.width * 0.86, el.height * 0.84, diagonal * 0.34, NODE_RGB.warm.join(","), 0.03 + (still ? 0 : (1 - breathe) * 0.012));
 
     // starfield: three depth bands wheeling at a fraction of the orbit rate,
     // so the sky drifts against the constellation; sizes and tones vary, and
@@ -3346,138 +4160,69 @@
     // vignette: the constellation sits in the middle of the frame, the edges fall away
     const outer = diagonal / 2;
     const vignette = ctx.createRadialGradient(el.width / 2, el.height / 2, outer * 0.45, el.width / 2, el.height / 2, outer);
-    vignette.addColorStop(0, "rgba(3,3,6,0)");
-    vignette.addColorStop(1, "rgba(2,2,6,0.6)");
+    vignette.addColorStop(0, rgba(backdrop, 0));
+    vignette.addColorStop(1, rgba(backdrop, 0.55));
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, el.width, el.height);
 
     // A followed branch can be zoomed past the rest of the constellation.
     // Keep those distant nodes from drawing through the header and work rails.
     ctx.save();
-    if (state.camMode === "follow") {
-      ctx.beginPath();
-      ctx.rect(graphArea.x, graphArea.y, graphArea.w, graphArea.h);
-      ctx.clip();
-    }
+    ctx.beginPath();
+    ctx.rect(graphArea.x, graphArea.y, graphArea.w, graphArea.h);
+    ctx.clip();
 
-    syncAgentMotion(Date.now());
+    syncAgentMotion(Date.now(), time);
     stepFx(Date.now());
     stepDoneHold(Date.now());
     const projected = state.nodes.map((node) => ({ node, p: project(node) }));
+    const runningIds = autopilotBusyIds(state.assistant);
+    const runningJobs = autopilotJobs(state.assistant);
+    for (const { node } of projected) {
+      node._orbitTrail = null; node._extraGlow = false;
+      node._bubble = null; node._bubblePaint = null;
+      const ids = [node.id, node.sessionId, node.task?.id].filter(Boolean).map(String);
+      node._workLabel = node.task?.status === "awaiting_verification" ? "Verifying" : (node.kind === "todo" ? node.status === "in_progress" : ids.some((id) => runningIds.has(id))) ? "Running" : ids.some((id) => pinnedIds.has(id)) ? "Next" : null;
+      if (node.kind === "task") {
+        const job = runningJobs.find((entry) => entry.taskId === node.task?.id);
+        node.progress = typeof job?.progress === "number" && Number.isFinite(job.progress) ? job.progress : null;
+      }
+    }
+    layoutProjectedGraph(projected, graphArea, state.camMode, time, still);
+    const screenPoints = new Map(projected.map(({ node, p }) => [node.id, p]));
     computeBranch();
 
-    // orbit paths: hairline rings where children actually circle — todos ring
-    // their session at r=46 (+34 below it), the agents ring the assistant at
-    // r=34, and the sessions ride r=120 around the root
-    {
-      const root = rootNode();
-      if (root) {
-        traceRing(ctx, root, 120, 40); // session y wobbles ±30 around y=0
-        ctx.strokeStyle = rgba(NODE_RGB.warm, 0.08 * (state.query ? 0.5 : 1));
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-      const hub = assistantNode();
-      if (hub && state.nodes.some((node) => node.kind === "agent")) {
-        traceRing(ctx, hub, 34);
-        ctx.strokeStyle = rgba(NODE_RGB.warm, 0.12 * emphasis(hub));
-        ctx.stroke();
-      }
-      for (const { node } of projected) {
-        if (node.kind !== "session" || node.stale) continue;
-        if (!state.nodes.some((entry) => entry.kind === "todo" && entry.sessionId === node.id)) continue;
-        const { fresh } = nodeState(node);
-        traceRing(ctx, node, 46, 34);
-        ctx.strokeStyle = rgba(NODE_RGB.warm, (0.08 + fresh * 0.12) * emphasis(node));
-        ctx.stroke();
-      }
-    }
-
-    // edges (stems): hairlines that carry the tree shape — root → session and
-    // root → assistant trunks are a touch heavier so the skeleton reads first,
-    // brightness climbs along recently touched paths
+    // Only actual work and inspected branches brighten a connection. Recent
+    // historical activity alone must not make the whole graph look busy.
     for (const edge of state.edges) {
-      const a = projected[edge.a];
-      const b = projected[edge.b];
+      const a = projected[edge.a], b = projected[edge.b];
       if (!a || !b || a.node._absorbed || b.node._absorbed) continue;
+      const lifetime = Math.min(a.node._fade ?? 1, b.node._fade ?? 1);
+      if (lifetime <= 0.02) continue;
       const sessionId = edge.sessionId ?? b.node.sessionId;
-      const { touch, fresh } = nodeState(b.node);
-      const factor = emphasis(b.node);
-      // The far side of the orbit fades — depth runs ~500 near to ~1300 far.
-      const depthFade = 1 - Math.min(1, Math.max(0, ((a.p.depth + b.p.depth) / 2 - 640) / 700)) * 0.42;
-      const trunk = b.node.kind === "session" || b.node.kind === "assistant" || b.node.kind === "folded";
-      const base = (0.17 + energy * 0.04 + musicBands.mid * 0.19 + (state.view === "2d" ? 0.05 : 0)) * factor * depthFade * (trunk ? 1.2 : 1);
-      const glow = fresh * Math.min(1, (touch?.count ?? 0) / 4) * 0.8 * factor;
-      // A selection lights its branch through state.branch; a hover does the
-      // same through the hovered node's own session so edges answer the cursor.
-      const hoverBranch = state.hoverNode
-        ? state.hoverNode.sessionId ?? state.hoverNode.anchorSessionId ?? state.hoverNode.id
-        : null;
-      const inBranch = !state.query && ((state.branch && sessionId === state.branch) || (hoverBranch && sessionId === hoverBranch));
-      const gradient = ctx.createLinearGradient(a.p.x, a.p.y, b.p.x, b.p.y);
-      gradient.addColorStop(0, `rgba(236,229,216,${base})`);
-      gradient.addColorStop(
-        1,
-        inBranch
-          ? rgba(NODE_RGB.warm, Math.min(1, base + glow + 0.32))
-          : rgba(fresh > 0.4 ? NODE_RGB.warm : NODE_RGB.pending, base + glow)
-      );
-      ctx.strokeStyle = gradient;
-      ctx.lineWidth = (trunk ? 1.4 : 1) + glow * 2.2;
-      ctx.beginPath();
-      ctx.moveTo(a.p.x, a.p.y);
-      ctx.lineTo(b.p.x, b.p.y);
+      const inspected = state.branch && sessionId === state.branch || state.hoverNode === a.node || state.hoverNode === b.node;
+      const active = b.node._workLabel !== "Verifying" && (isBusyNode(b.node, runningIds) || b.node.kind === "agent" && b.node.status === "running");
+      const branches = state.nodeLayout === "tree" || state.nodeLayout === "layers";
+      const primary = state.branchParents?.get(b.node.id) === a.node.id;
+      const tint = active || inspected ? colorOf(b.node) : NODE_RGB.task;
+      ctx.strokeStyle = rgba(tint, lifetime * (!primary && !inspected ? 0.075 : inspected ? 0.65 : active ? 0.5 : 0.32));
+      ctx.lineWidth = !primary && !inspected ? 0.65 : active || inspected ? 1.3 : 0.9;
+      ctx.beginPath(); ctx.moveTo(a.p.x, a.p.y);
+      if (primary && branches) {
+        const middle = (a.p.y + b.p.y) / 2;
+        ctx.bezierCurveTo(a.p.x, middle, b.p.x, middle, b.p.x, b.p.y);
+      } else ctx.lineTo(b.p.x, b.p.y);
       ctx.stroke();
     }
 
-    // tethers: a travelling agent stays tied to the node it works on
+    // Real worker assignments remain visible as quiet, solid role-colour links.
     for (const { node, p } of projected) {
-      if (node.kind !== "agent" || !node.targetNode) continue;
+      if (node.kind !== "agent" || !node.targetNode || (node._fade ?? 1) <= 0.02) continue;
       const target = projected.find((entry) => entry.node === node.targetNode);
       if (!target) continue;
-      const tint = agentRgb(node.role).join(",");
-      ctx.save();
-      ctx.setLineDash([4, 4]);
-      ctx.lineDashOffset = still ? 0 : -((time / 40) % 8);
-      ctx.strokeStyle = `rgba(${tint},0.55)`;
+      ctx.strokeStyle = rgba(agentRgb(node.role), (node._fade ?? 1) * (state.nodeLayout === "tree" ? 0.18 : 0.38));
       ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
-      ctx.lineTo(target.p.x, target.p.y);
-      ctx.stroke();
-      ctx.restore();
-      const glow = ctx.createRadialGradient(target.p.x, target.p.y, 0, target.p.x, target.p.y, 8);
-      glow.addColorStop(0, `rgba(${tint},0.9)`);
-      glow.addColorStop(1, `rgba(${tint},0)`);
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(target.p.x, target.p.y, 8, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Hot paths get marching ants: dashes flow parent -> child, the direction
-    // of work. A path is hot while its session was touched in the last 90 s or
-    // the autopilot is running on it.
-    {
-      const runningIds = autopilotBusyIds(state.assistant);
-      ctx.setLineDash([3, 7]);
-      ctx.lineDashOffset = -(time / 60);
-      ctx.lineWidth = 1.2;
-      for (const edge of state.edges) {
-        const a = projected[edge.a];
-        const b = projected[edge.b];
-        if (!a || !b || a.node._absorbed || b.node._absorbed) continue;
-        const { fresh } = nodeState(b.node);
-        const hot = fresh > 0.15 || isBusyNode(b.node, runningIds);
-        if (!hot) continue;
-        ctx.beginPath();
-        ctx.moveTo(a.p.x, a.p.y);
-        ctx.lineTo(b.p.x, b.p.y);
-        ctx.strokeStyle = `rgba(230,201,141,${0.25 + fresh * 0.45})`;
-        ctx.stroke();
-      }
-      ctx.setLineDash([]);
-      ctx.lineDashOffset = 0;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(target.p.x, target.p.y); ctx.stroke();
     }
 
     // pulses: bright travelling dots on the working path — a line that ends
@@ -3485,8 +4230,8 @@
     const now = Date.now();
     state.pulses = state.pulses.filter((pulse) => now - pulse.start < pulse.duration);
     for (const pulse of state.pulses) {
-      const from = project(pulse.from);
-      const to = project(pulse.to);
+      const from = screenPoints.get(pulse.from.id) ?? project(pulse.from);
+      const to = screenPoints.get(pulse.to.id) ?? project(pulse.to);
       const t = still ? 1 : Math.min(1, (now - pulse.start) / pulse.duration);
       if (pulse.wave) {
         surgeLine(ctx, from, to, t, pulse, still);
@@ -3504,7 +4249,7 @@
         trail.addColorStop(0, `rgba(${pr},${pg},${pb},0)`);
         trail.addColorStop(1, `rgba(${pr},${pg},${pb},0.55)`);
         ctx.strokeStyle = trail;
-        ctx.lineWidth = pulse.small ? 1.4 : 2.4;
+        ctx.lineWidth = pulse.small ? 0.8 : 1.2;
         ctx.lineCap = "round";
         ctx.beginPath();
         ctx.moveTo(tx, ty);
@@ -3512,11 +4257,11 @@
         ctx.stroke();
       }
       ctx.beginPath();
-      ctx.arc(x, y, pulse.small ? 2.4 : 4 + energy * 2 + musicBands.bass * 3, 0, Math.PI * 2);
+      ctx.arc(x, y, pulse.small ? 1.5 : 2.2 + musicBands.bass * 0.5, 0, Math.PI * 2);
       ctx.fillStyle = pulse.color ?? "#a9ffcd";
       if (!still) {
         ctx.shadowColor = pulse.glow ?? "#57ff9a";
-        ctx.shadowBlur = 22;
+        ctx.shadowBlur = 3;
       }
       ctx.fill();
       ctx.shadowBlur = 0;
@@ -3538,321 +4283,79 @@
       ctx.fillStyle = particle.tint ? `rgba(${particle.tint},${life * 0.9})` : particle.gold ? `rgba(241,220,174,${life * 0.9})` : particle.blue ? `rgba(157,183,255,${life * 0.85})` : `rgba(255,255,255,${life * 0.8})`;
       if (!still) {
         ctx.shadowColor = particle.tint ? `rgb(${particle.tint})` : particle.gold ? "#e6c98d" : particle.blue ? "#9db7ff" : "#ffffff";
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 2;
       }
       ctx.fill();
       ctx.shadowBlur = 0;
     }
     if (still) state.particles = [];
 
-    // nodes: white-hot hubs, gold activity, green completions
+    // Familiar luminous orbs: one restrained halo and one status rim.
+    // Managed anchors stay fixed while work and compact labels update.
     const ordered = [...projected].sort((a, b) => b.p.depth - a.p.depth);
-    const assistantRing = assistantTone();
     for (const { node, p } of ordered) {
       if (node._absorbed) continue;
       const nodeScale = node._scale ?? 1;
       if (nodeScale <= 0.02) continue;
-      const { touch, fresh } = nodeState(node);
-      let [red, green, blue] = colorOf(node);
-      if (node.kind === "task" && node.color) [red, green, blue] = hexToRgb(node.color);
+      const visual = nodeVisualProfile(node);
+      const active = node._workLabel !== "Verifying" && (isBusyNode(node, runningIds) || node.state === "active" || node.kind === "agent" && node.status === "running");
+      // Live file clash: checkCollisions only holds sessions with active
+      // edits, so this boost never fires for settled, idle-only groups.
+      const colliding = state.collisionSessions.size > 0 && Boolean(node.sessionId) && state.collisionSessions.has(node.sessionId);
+      const selected = state.selected?.id === node.id || state.hoverNode === node || state.query && state.matchSet.has(node.id);
       const hold = node.doneHold ? state.doneHold.get(node.id) ?? null : null;
-      if (hold) [red, green, blue] = NODE_RGB.done; // finished work reads green while it waits to be read
-      const isSession = node.kind === "session" || node.kind === "root";
-      const isAssistant = node.kind === "assistant";
-      const isFolded = node.kind === "folded";
-      const isAgent = node.kind === "agent";
-      if (isSession) {
-        // hubs warm from ivory toward gold as they are touched
-        const warm = Math.min(1, fresh * 0.8 + (touch?.count ?? 0) * 0.12);
-        [red, green, blue] = NODE_RGB.session.map((value, index) => Math.round(value + (NODE_RGB.warm[index] - value) * warm));
-      }
+      const tint = hold ? NODE_RGB.done : colliding && active && node.kind !== "agent" ? NODE_RGB.collision : colorOf(node);
       const factor = emphasis(node);
-      const boost = 1 + Math.min(0.9, (touch?.count ?? 0) * 0.16) * fresh;
-      const softness = Math.min(1, Math.max(0, (p.depth - 420) / 620));
-      const important = isAssistant || node.state === "active" || isAgent && node.status === "running";
-      const baseR = Math.min(important ? 19 : 14, (node.kind === "root" ? 1.9 : isAssistant ? 2.1 : node.kind === "task" || isFolded ? 1.55 : isSession ? 1.8 : isAgent && node.status === "running" ? 1.7 : 1.25) * node.r * p.k);
-      // A running agent swells like an in-progress todo.
-      const agentBeat = isAgent && node.status === "running" && !still ? 1 + Math.sin(time / 260) * 0.14 : 1;
-      // A finished task under its grace breathes on its own rhythm.
-      const doneBeat = hold && !hold.ackedAt && !still ? 1 + Math.sin(time / 300) * 0.12 : 1;
-      // Audio and touch swell the hub gently: at full energy the old factors
-      // doubled the halo and the cluster fused into one bloom.
-      const radius = Math.max(0.4, baseR * boost * (1 + energy * 0.05 + musicBands.bass * 0.17 + musicBeat * (important ? 0.12 : 0.07)) * agentBeat * doneBeat * nodeScale);
-      // A stale session is still there, at less than half strength; an agent is
-      // as bright as its status.
-      const agentGlow = !isAgent ? 1 : node.status === "running" ? 1 : node.status === "error" ? 0.9 : node.status === "queued" ? 0.7 : node.status === "done" ? 0.55 : 0.45;
-      const alpha = (0.45 + 0.4 * Math.min(1, (isAssistant ? 1 : fresh) + 0.25)) * (1 - softness * 0.42) * factor * (node.stale ? 0.5 : 1) * agentGlow * (node._fade ?? 1);
-      glowNode(ctx, p.x, p.y, radius, `${red},${green},${blue}`, {
-        alpha,
-        spread: (important ? 2.8 : 2.1) + softness * 0.3 + musicBeat * 0.6,
-        white: (isAssistant ? 0.7 : isSession ? 0.5 : node.kind === "task" || isFolded ? 0.35 : isAgent ? 0.3 * agentGlow : 0.3) * (factor < 1 || node.stale ? 0.4 : 1),
-      });
-      node._px = p.x;
-      node._py = p.y;
-      node._pr = radius;
-      if (node.kind === "music") {
-        ctx.save();
-        ctx.font = '600 17px system-ui, "Segoe UI", sans-serif';
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = rgb(NODE_RGB.session);
-        ctx.fillText("♪", p.x, p.y);
-        ctx.restore();
+      const base = node.kind === "todo" ? 4.5 : node.kind === "assistant" ? 15 : node.kind === "agent" ? 10 : node.kind === "task" ? 12 : 11;
+      const radius = Math.max(2, Math.min(visual.maxRadius, base * Math.max(0.75, Math.min(1.15, p.k))) * nodeScale);
+      node._px = p.x; node._py = p.y; node._pr = radius;
+      drawNodeSurface(ctx, node, p, radius, tint, { selected: Boolean(selected), active, alpha: Math.max(0.35, visual.alpha * factor) });
+      drawWorkOrbit(ctx, node, p, radius, time, still);
+      // Work-left meter: only a known worker fraction, never inferred activity.
+      if ((active || selected) && typeof node.progress === "number" && Number.isFinite(node.progress)) {
+        const fraction = Math.max(0, Math.min(1, node.progress));
+        ctx.fillStyle = "#303947"; ctx.fillRect(p.x - 9, p.y + radius + 5, 18, 1.5);
+        ctx.fillStyle = rgba(tint, 0.8); ctx.fillRect(p.x - 9, p.y + radius + 5, 18 * fraction, 1.5);
       }
-      // Beat rings are decorative only: they never move the hit target or
-      // pretend a task has progressed. Work status keeps its own ring colour.
-      if (musicBeat > 0.08 && (isAssistant || isSession || node.state === "active")) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 6 + (1 - musicBeat) * 22, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(${red},${green},${blue},${musicBeat * 0.3 * factor})`;
-        ctx.lineWidth = 1;
-        ctx.stroke();
+      // A restrained music highlight lives on the existing face, never as a
+      // second ring expanding over its neighbours.
+      if (musicBeat > 0.08 && (active || node.kind === "music")) {
+        traceNodeSurface(ctx, visual.shape, p.x, p.y, radius);
+        ctx.fillStyle = rgba(tint, musicBeat * 0.1); ctx.fill();
       }
-      // A hairline rim in the node's own colour separates the hub from its
-      // halo, so the ring language (task colour, selection, focus) sits on a
-      // crisp edge instead of dissolving into glow.
-      if (isSession || isAssistant) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 1.2, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba([red, green, blue], 0.5 * factor * (node._fade ?? 1));
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-      if (node.kind === "root") {
-        // the anchor of the whole tree: a quiet gold collar, always visible
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 2.5, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(NODE_RGB.warm, 0.45 * factor);
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-      if (isAssistant) {
-        // Gold and breathing while the service runs, still and grey when it is
-        // paused, amber when the tone asks for attention.
-        const { tone, running } = assistantRing;
-        const breath = running && !still ? (Math.sin(time / 900) + 1) / 2 : 0.5;
-        const ring = tone === "warn" || tone === "offline" ? NODE_RGB.amber : !running || tone === "paused" ? NODE_RGB.pending : NODE_RGB.assistant;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 5 + breath * 4, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(ring, (running ? 0.4 + breath * 0.45 : 0.6) * factor);
-        ctx.lineWidth = 1.4;
-        ctx.stroke();
-      }
-      if (isAgent && node.status === "running" && !node.dying) {
-        // A running agent breathes a ring in its role colour, so the crew that
-        // is actually working can be spotted across the constellation.
-        const breath = still ? 0.5 : (Math.sin(time / 700) + 1) / 2;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 4 + breath * 3, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(agentRgb(node.role), (0.3 + breath * 0.4) * factor);
-        ctx.lineWidth = 1.1;
-        ctx.stroke();
-      }
-      if (isFolded) {
-        for (const [gap, ringAlpha] of [[3.5, 0.55], [7, 0.3]]) {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, radius + gap, 0, Math.PI * 2);
-          ctx.strokeStyle = rgba(NODE_RGB.done, ringAlpha * factor);
-          ctx.lineWidth = 1;
-          ctx.stroke();
-        }
-      }
-      if (node.kind === "task") {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 3.5, 0, Math.PI * 2);
-        // the ring carries the status too: an active task wears it bright, an
-        // open one waits dimmer, finished work turns the whole node green
-        ctx.strokeStyle = rgba(node.color ? hexToRgb(node.color) : NODE_RGB.task, node.task?.status === "active" ? 0.8 : 0.46);
+      // Collision boost: a thin amber rim, same restraint as the music beat —
+      // the clash color marks the session while the fight is still live.
+      if (colliding && (active || selected)) {
+        traceNodeSurface(ctx, visual.shape, p.x, p.y, radius + 2.5);
+        ctx.strokeStyle = rgba(NODE_RGB.collision, 0.55);
         ctx.lineWidth = 1.2;
         ctx.stroke();
       }
-      if (hold) {
-        // The finished pulse: a breathing green ring — calm once the node has
-        // been read, then only a short beat before it sinks in.
-        const breath = still ? 0.5 : (Math.sin(time / 480) + 1) / 2;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 4 + breath * 4, 0, Math.PI * 2);
-        ctx.strokeStyle = rgba(NODE_RGB.done, (hold.ackedAt ? 0.22 + breath * 0.12 : 0.34 + breath * 0.4) * factor);
-        ctx.lineWidth = 1.3;
-        ctx.stroke();
-        if (!hold.ackedAt) {
-          // The "!" of a finished task, rocking next to the node — click it
-          // (or the node) to read the work before it is absorbed.
-          const bx = p.x + node._pr + 12;
-          const by = p.y - node._pr - 12;
-          ctx.save();
-          ctx.translate(bx, by);
-          if (!still) ctx.rotate(Math.sin(time / 110) * 0.3);
-          ctx.beginPath();
-          ctx.arc(0, 0, 7.5, 0, Math.PI * 2);
-          ctx.fillStyle = "rgba(7,10,8,0.94)";
-          ctx.fill();
-          ctx.strokeStyle = rgba(NODE_RGB.done, 0.85);
-          ctx.lineWidth = 1.4;
-          ctx.stroke();
-          ctx.fillStyle = "#b8ffd9";
-          ctx.font = '700 10px system-ui, "Segoe UI", sans-serif';
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText("!", 0, 0.5);
-          ctx.restore();
-          node._excl = { x: bx, y: by, r: 11 };
-        } else node._excl = null;
-      } else if (node._excl) node._excl = null;
-      if (node.kind === "session" && fresh > 0.5) {
-        // A live session breathes sonar rings; a still frame keeps one circle.
-        if (still) {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, radius * 2.1, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(87,255,154,${fresh * 0.45})`;
-          ctx.lineWidth = 1;
-          ctx.stroke();
-        } else {
-          for (const phase of [0, 0.5]) {
-            const cycle = ((time / 1600 + phase) % 1 + 1) % 1;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, radius * (1.3 + cycle * 2.2), 0, Math.PI * 2);
-            ctx.strokeStyle = `rgba(87,255,154,${fresh * 0.4 * (1 - cycle)})`;
-            ctx.lineWidth = 1;
-            ctx.stroke();
-          }
-        }
-      }
-      if (state.query && state.matchSet.has(node.id)) {
-        ctx.setLineDash([3, 4]);
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 6, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(230,201,141,0.85)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-      if (state.hoverNode === node) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 6, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(236,229,216,0.55)";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-      if (state.selected?.id === node.id) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 8, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(230,201,141,0.95)";
-        ctx.lineWidth = 1.6;
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 14, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(201,168,106,0.28)";
-        ctx.lineWidth = 6;
-        ctx.stroke();
-        ctx.lineWidth = 1;
-      }
-      // Each autopilot session wears a rotating dashed gold ring so it can be
-      // spotted working from across the constellation; its hub is labelled.
-      const runningIds = autopilotBusyIds(state.assistant);
-      if (isBusyNode(node, runningIds)) {
-        ctx.setLineDash([4, 5]);
-        ctx.lineDashOffset = -(time / 45);
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 10, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(230,201,141,0.7)";
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.lineDashOffset = 0;
-      }
-      // Work on it: a blue circle with a comet trail looping the node. Slow
-      // drift while the ask sits queued, quick loop once the executor holds
-      // it; the ring stops when the work finishes — the pin goes with the
-      // task, the request leaves the queue, and the run's node ages out.
-      const nodeIds = [String(node.id ?? ""), String(node.sessionId ?? ""), String(node.task?.id ?? "")].filter(Boolean);
-      const pinQueued = nodeIds.some((id) => pinnedIds.has(id));
-      const pinRunning = !pinQueued && nodeIds.some((id) => runningIds.has(id)) && nodeIds.some((id) => state.workPinSeen?.has(id));
-      const runningLabel = node.kind === "todo" ? node.status === "in_progress" : nodeIds.some((id) => runningIds.has(id));
-      node._workLabel = runningLabel ? "Running" : pinQueued ? "Next" : null;
-      if (pinQueued || pinRunning) {
-        const ringRadius = radius + 13;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, ringRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(125,178,255,0.22)";
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-        // The comet: three fading arcs chasing one head around the circle —
-        // fast once the executor actually holds this node, drifting while it
-        // waits.
-        const period = nodeIds.some((id) => runningIds.has(id)) ? 1100 : 2400;
-        const head = still ? Math.PI / 3 : ((time % period) / period) * Math.PI * 2;
-        for (let i = 0; i < 3; i += 1) {
-          const a1 = head - i * 0.62;
-          const a0 = a1 - 0.62;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, ringRadius, a0, a1);
-          ctx.strokeStyle = `rgba(125,178,255,${0.9 - i * 0.27})`;
-          ctx.lineWidth = 2.6 - i * 0.6;
-          ctx.stroke();
-        }
-      }
-      // Work-left meter: a slim bar under anything with a known fraction —
-      // sessions by their todos, the assistant by the whole board, agents by
-      // their own progress. The empty track is the work still to do; a full
-      // green bar says none of it is.
-      const meter = !node.dying && typeof node.progress === "number" && Number.isFinite(node.progress) ? Math.min(1, Math.max(0, node.progress)) : null;
-      if (meter != null) {
-        const trackW = Math.max(14, Math.min(30, radius * 4.5));
-        const trackH = 2.4;
-        const mx = p.x - trackW / 2;
-        const my = p.y + radius + 5;
-        ctx.globalAlpha = 0.8 * factor;
-        ctx.fillStyle = "rgba(236,229,216,0.16)";
-        ctx.beginPath();
-        ctx.roundRect(mx, my, trackW, trackH, trackH / 2);
-        ctx.fill();
-        if (meter > 0) {
-          ctx.fillStyle = meter >= 1 ? rgba(NODE_RGB.done, 0.95) : `rgba(${red},${green},${blue},0.95)`;
-          ctx.beginPath();
-          ctx.roundRect(mx, my, Math.max(trackH, trackW * meter), trackH, trackH / 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
+      node._excl = null;
+      if (hold && !hold.ackedAt) {
+        const bx = p.x + radius + 6, by = p.y - radius - 5;
+        ctx.beginPath(); ctx.roundRect(bx - 6, by - 6, 12, 12, 3);
+        ctx.fillStyle = "#173025"; ctx.fill(); ctx.strokeStyle = rgba(NODE_RGB.done, 0.8); ctx.lineWidth = 1; ctx.stroke();
+        ctx.fillStyle = "#a7e5c0"; ctx.font = '600 9px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("!", bx, by);
+        node._excl = { x: bx, y: by, r: 9 };
       }
     }
 
-    // checkpoint bubbles: gold message icons floating off session nodes
+    // Checkpoint notes stay discoverable without competing with current work.
+    const badgeExclusions = [...hudRects()];
     for (const { node, p } of projected) {
       if (node.kind !== "session" || !node._pr) continue;
       const notes = state.checkpoints?.[node.id];
       if (!notes?.length) continue;
-      const scale = Math.max(0.6, Math.min(1.5, p.k * 1.5));
-      const bx = p.x + node._pr + 7 * scale;
-      const by = p.y - node._pr - 17 * scale;
-      drawBubble(ctx, bx, by, scale, 0.92);
-      node._bubble = { x: bx, y: by, w: 15 * scale, h: 15 * scale, node };
-    }
-
-    // collision partners glow brighter: multiple agents on one path
-    if (state.collisionSessions?.size) {
-      for (const { node, p } of projected) {
-        if (!state.collisionSessions.has(node.sessionId)) continue;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 22 + energy * 4 + musicBands.bass * 4, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(255,212,121,0.22)";
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-      }
-    }
-
-    // While the autopilot runs, each of its sessions exhales a slow trickle
-    // of dust.
-    if (time - state.lastTrickle > 900) {
-      const busy = autopilotBusyIds(state.assistant);
-      if (busy.size) {
-        state.lastTrickle = time;
-        for (const id of busy) {
-          const runningNode =
-            nodeForSession(id) ?? state.nodes.find((node) => node.sessionId === id || node.id === id || node.task?.id === id);
-          if (runningNode) spawnParticles(runningNode, 3);
-        }
-      }
+      const scale = Math.max(0.85, Math.min(1.05, p.k));
+      const bx = p.x + node._pr + 4, by = p.y - node._pr - 7;
+      const paint = { x: bx, y: by, w: 11 * scale, h: 10 * scale };
+      const hit = { x: bx - 5, y: by - 5, w: paint.w + 10, h: paint.h + 10, node };
+      if (hit.x < graphArea.x || hit.y < graphArea.y || hit.x + hit.w > graphArea.x + graphArea.w || hit.y + hit.h > graphArea.y + graphArea.h || badgeExclusions.some((zone) => overlaps(hit, zone))) continue;
+      if (projected.some((other) => other.node !== node && !other.node._absorbed && overlaps(hit, { x: other.p.x - (other.node._pr ?? 4), y: other.p.y - (other.node._pr ?? 4), w: (other.node._pr ?? 4) * 2, h: (other.node._pr ?? 4) * 2 }))) continue;
+      drawBubble(ctx, bx, by, scale, state.hoverNode === node || state.hoverBubble === node ? 1 : 0.65);
+      node._bubble = hit; node._bubblePaint = paint;
+      badgeExclusions.push(hit);
     }
 
     drawLabels(projected);
@@ -3894,64 +4397,107 @@
     return `rgba(154,143,125,${alpha})`;
   }
 
-  function labelText(ctx, node, font) {
+  function labelText(ctx, node, font, { separateStatus = false } = {}) {
     // a travelling agent's label carries its target ("reference · Crafting bench recipes")
     const cap = node.kind === "session" || node.kind === "task" ? 44 : node.kind === "root" ? 12 : node.kind === "assistant" ? 16 : node.kind === "folded" ? 20 : node.kind === "agent" ? (node.targetNode ? 36 : 14) : 34;
     let text = String(node.label ?? "").trim();
     if (!text) return "";
+    if (node.kind === "agent" && state.labels === "auto") {
+      if (node.builder) {
+        const seconds = node.startedAt ? Math.max(0, Math.round((Date.now() - node.startedAt) / 1000)) : null;
+        text = `Builder${seconds != null ? ` · ${seconds < 90 ? `${seconds}s` : `${Math.round(seconds / 60)}m`}` : ""}`;
+      } else text = String(node.role || text.split(" · ")[0]);
+    }
     if (node.kind === "root") text = text.toUpperCase();
-    else if (node._workLabel && node.kind !== "agent") text = `${node._workLabel} · ${text}`;
-    let clipped = text.length > cap;
-    if (clipped) text = text.slice(0, cap);
-    while (text.length > 1 && measure(ctx, font, `${text}${clipped ? "…" : ""}`) > LABEL_MAX_PX) {
+    else if (node._workLabel && node.kind !== "agent" && !separateStatus) text = `${node._workLabel} · ${text}`;
+    if (node.taskGroup) text = `${state.expandedTaskGroups.has(node.taskGroup.id) ? "−" : "+"} ${node.taskGroup.members.length} · ${text}`;
+    const compact = state.labels === "auto" && state.selected?.id !== node.id && state.hoverNode !== node;
+    const charLimit = compact ? Math.min(cap, 32) : cap;
+    // Side panels can leave less than 300px for the graph. Shorten overview
+    // titles to that clear width so crowded work still has room for a name.
+    const widthLimit = compact ? Math.min(180, LABEL_MAX_PX, Math.max(80, usableArea().w * 0.4)) : LABEL_MAX_PX;
+    let clipped = text.length > charLimit;
+    if (clipped) text = text.slice(0, charLimit);
+    while (text.length > 1 && measure(ctx, font, `${text}${clipped ? "…" : ""}`) > widthLimit) {
       text = text.slice(0, -1);
       clipped = true;
     }
     return clipped ? `${text}…` : text;
   }
 
+  function labelBudget() {
+    if (state.labels !== "auto") return LABEL_BUDGET;
+    const area = usableArea();
+    // Auto is an overview, including in Orbit and Free view. Base its density
+    // on the actual clear canvas, so opening a panel cannot leave a text wall.
+    if (area.w < 480 || area.h < 400) return 4;
+    return area.w < 800 || area.h < 480 ? 6 : 8;
+  }
+
   function labelCandidates(projected) {
     const mode = state.labels;
     const selectedId = state.selected?.id ?? null;
+    const focus = state.camMode === "follow" ? state.follow : null;
+    const hasWorkerTask = projected.some(({ node }) => node.kind === "task" && !node.dying && !node._absorbed && node._workLabel !== "Verifying" && (node.state === "active" || node._workLabel === "Running"));
     const list = [];
     for (const item of projected) {
       const node = item.node;
-      if (node.dying || node._absorbed) continue; // ghosts do not get a name
+      if (node.dying || node._absorbed || (node._fade ?? 1) <= 0.02) continue; // ghosts do not get a name
       let priority = -1;
       if (node.id === selectedId) priority = 0;
       else if (state.hoverNode === node) priority = 1;
       else if (state.camMode === "follow" && state.follow?.key === node.id) priority = 1.5;
       else if (state.query && state.matchSet.has(node.id)) priority = 2;
       else if (mode !== "none") {
-        if (node._workLabel === "Running" || node.kind === "task" && node.state === "active" || node.builder && node.status === "running") priority = 2.2;
-        else if (node._workLabel === "Next") priority = 2.4;
-        else if (node.kind === "assistant") priority = 2.5; // always named, ahead of every session
+        if (node.kind === "task" && node._workLabel !== "Verifying" && (node._workLabel === "Running" || node.state === "active")) priority = 2.15;
+        else if (node.kind === "assistant") priority = 2.22;
+        else if (node._workLabel === "Verifying") priority = 2.45;
+        else if (node._workLabel === "Next") priority = 2.55;
+        else if (node.kind !== "todo" && node._workLabel === "Running" || node.builder && node.status === "running") priority = 2.6;
         else if (node.kind === "music") priority = 2.7;
+        else if (node.taskGroup) priority = 2.9;
         else if (node.kind === "session") priority = 3;
         else if (node.kind === "task" || node.kind === "folded") priority = 4;
         else if (node.kind === "root") priority = 5;
-        else if (node.kind === "todo" && node.status === "in_progress") priority = 6;
+        else if (node.kind === "todo" && node.status === "in_progress") priority = 3.2;
         else if (node.kind === "todo" && state.branch && node.sessionId === state.branch) priority = 7;
         else if (node.kind === "agent") priority = node.status === "running" ? 2.8 : node.targetNode ? 4.5 : mode === "all" ? 9 : -1;
         else if (mode === "all") priority = 8;
       }
       if (priority < 0) continue;
+      if (mode === "auto" && priority > 2) {
+        // The saved tree stays intact. Quiet names become available on hover,
+        // selection, search, or All; they do not compete with current work.
+        const landmark = node.kind === "assistant" || node.kind === "music" || Boolean(node.taskGroup);
+        const activeTask = node.kind === "task" && (node.state === "active" || ["Running", "Verifying", "Next"].includes(node._workLabel));
+        const activeAgent = node.kind === "agent" && node.status === "running";
+        const related = focus ? followsNode(node, focus) : Boolean(state.branch && node.sessionId === state.branch || selectedId && node.sessionId === selectedId);
+        const step = node.kind === "todo" && node.status === "in_progress" && related;
+        const session = node.kind === "session" && !hasWorkerTask && !focus;
+        if (!landmark && !activeTask && !activeAgent && !step && !session) continue;
+        if (focus && activeAgent && !followsNode(node, focus)) continue;
+      }
       if (priority > 2 && item.p.k < 0.55) continue; // far nodes stop shouting
       list.push({ node, p: item.p, priority });
     }
-    list.sort((a, b) => a.priority - b.priority || a.p.depth - b.p.depth);
+    // Stable ties keep Orbit from constantly swapping the labels being read.
+    list.sort((a, b) => a.priority - b.priority || String(a.node.id).localeCompare(String(b.node.id)));
+    if (mode === "auto") {
+      let quietSessions = 0;
+      const budget = labelBudget();
+      return list.filter(({ node, priority }) => priority <= 2 || node.kind !== "session" || ++quietSessions <= 2).slice(0, budget);
+    }
     return list.length > LABEL_CANDIDATES ? list.slice(0, LABEL_CANDIDATES) : list;
   }
 
-  function slotRect(slot, p, radius, width) {
-    const h = LABEL_HEIGHT;
+  function slotRect(slot, p, radius, width, h = LABEL_HEIGHT) {
     if (slot === "left") {
       const tx = p.x - radius - 8;
-      const ty = p.y + 4;
+      const ty = p.y + h / 2 - 4;
       return { x: tx - width, y: ty - h + 3, w: width, h, tx, ty, align: "right" };
     }
     if (slot === "below") {
-      const ty = p.y + radius + 14;
+      const ty = p.y + radius + h - 2;
       return { x: p.x - width / 2, y: ty - h + 3, w: width, h, tx: p.x, ty, align: "center" };
     }
     if (slot === "above") {
@@ -3959,7 +4505,7 @@
       return { x: p.x - width / 2, y: ty - h + 3, w: width, h, tx: p.x, ty, align: "center" };
     }
     const tx = p.x + radius + 8;
-    const ty = p.y + 4;
+    const ty = p.y + h / 2 - 4;
     return { x: tx, y: ty - h + 3, w: width, h, tx, ty, align: "left" };
   }
 
@@ -3974,7 +4520,7 @@
 
   function blocked(rect, excluded) {
     if (rect.x < 12 || rect.y < 12 || rect.x + rect.w > el.width - 12 || rect.y + rect.h > el.height - 12) return true;
-    if (state.camMode === "follow") {
+    if (state.camMode === "follow" || state.labels === "auto" || state.settingsPreview) {
       const area = usableArea();
       if (rect.x < area.x + 5 || rect.y < area.y + 5 || rect.x + rect.w > area.x + area.w - 5 || rect.y + rect.h > area.y + area.h - 5) return true;
     }
@@ -3983,9 +4529,48 @@
     return false;
   }
 
+  // Important labels can search hundreds of free slots. Only nearby nodes
+  // can obstruct one; keep the exact padded overlap test inside those cells.
+  function nodeLabelBlocker(projected) {
+    const cells = new Map(), broad = [], rects = [];
+    const cellSize = 64;
+    for (const { node, p } of projected) {
+      if (node.dying || node._absorbed || (node._fade ?? 1) <= 0.02) continue;
+      const radius = Math.max(5, node._orbitTrail?.radius ?? node._pr ?? 4) + 3;
+      const rect = { node, x: p.x - radius, y: p.y - radius, w: radius * 2, h: radius * 2 };
+      rects.push(rect);
+      const left = Math.floor(rect.x / cellSize), right = Math.floor((rect.x + rect.w) / cellSize);
+      const top = Math.floor(rect.y / cellSize), bottom = Math.floor((rect.y + rect.h) / cellSize);
+      // A malformed or unusually large bound must never grow an unbounded grid.
+      if (!Number.isFinite(left + right + top + bottom) || (right - left + 1) * (bottom - top + 1) > 64) { broad.push(rect); continue; }
+      for (let x = left; x <= right; x += 1) {
+        if (!cells.has(x)) cells.set(x, new Map());
+        const column = cells.get(x);
+        for (let y = top; y <= bottom; y += 1) {
+          if (!column.has(y)) column.set(y, []);
+          column.get(y).push(rect);
+        }
+      }
+    }
+    return (surface, node) => {
+      const left = Math.floor((surface.x - LABEL_PAD) / cellSize), right = Math.floor((surface.x + surface.w + LABEL_PAD) / cellSize);
+      const top = Math.floor((surface.y - LABEL_PAD) / cellSize), bottom = Math.floor((surface.y + surface.h + LABEL_PAD) / cellSize);
+      const hits = (rect) => rect.node !== node && overlaps(surface, rect);
+      if (!Number.isFinite(left + right + top + bottom) || (right - left + 1) * (bottom - top + 1) > 256) return rects.some(hits);
+      if (broad.some(hits)) return true;
+      for (let x = left; x <= right; x += 1) {
+        const column = cells.get(x);
+        if (!column) continue;
+        for (let y = top; y <= bottom; y += 1) if (column.get(y)?.some(hits)) return true;
+      }
+      return false;
+    };
+  }
+
   // Panels are opaque; labels step around them instead of the constellation
   // moving out of the way. Rects are CSS pixels, the canvas coordinate space.
   function hudRects() {
+    if (state.ambientZen) return [];
     const now = Date.now();
     if (now - state.hudRectsAt < 250) return state.hudRects;
     state.hudRectsAt = now;
@@ -4009,75 +4594,75 @@
   }
 
   function drawLabels(projected) {
-    for (const { node } of projected) node._label = null;
+    for (const { node } of projected) { node._label = null; node._cardRect = null; }
     const ctx = el.ctx;
     if (!ctx) return;
     state.labelRects.length = 0;
-    const excluded = hudRects();
+    const excluded = [...hudRects(), ...projected.flatMap(({ node }) => node._bubble ? [node._bubble] : [])];
     const candidates = labelCandidates(projected);
-    const nodeRects = projected.filter(({ node }) => !node.dying && !node._absorbed).map(({ node, p }) => {
-      const radius = Math.max(5, node._pr ?? 4) + 3;
-      return { node, x: p.x - radius, y: p.y - radius, w: radius * 2, h: radius * 2 };
-    });
+    const budget = labelBudget();
+    const hitsNode = nodeLabelBlocker(projected);
     let drawn = 0;
     for (const { node, p, priority } of candidates) {
-      if (drawn >= LABEL_BUDGET) break;
-      const font = fontFor(node);
-      const text = labelText(ctx, node, font);
+      if (drawn >= budget) break;
+      const workStatus = node.kind === "task" && ["Running", "Verifying", "Next"].includes(node._workLabel) ? node._workLabel : null;
+      const font = fontFor(node), text = labelText(ctx, node, font, { separateStatus: Boolean(workStatus) });
       if (!text) continue;
-      const width = measure(ctx, font, text);
-      const radius = node._pr ?? 4;
-      let rect = null;
-      for (const distance of [0, 18, 36]) {
+      const height = workStatus ? 33 : LABEL_HEIGHT;
+      const width = Math.max(measure(ctx, font, text), workStatus ? 72 : 0), radius = node._orbitTrail?.radius ?? node._pr ?? 4;
+      let rect = null, paint = null;
+      const needsName = priority <= 2.15 || node.kind === "task" && node._workLabel === "Running";
+      for (const distance of needsName ? [0, 20, 40, 80, 120, 180] : [0, 20, 40]) {
         for (const slot of LABEL_SLOTS) {
-          const candidate = slotRect(slot, p, radius + distance, width);
-          if (!blocked(candidate, excluded) && !nodeRects.some((zone) => zone.node !== node && overlaps(candidate, zone))) {
-            rect = candidate;
-            break;
-          }
+          const candidate = slotRect(slot, p, radius + distance, width, height);
+          const surface = { x: candidate.x - 7, y: candidate.y - 4, w: candidate.w + 14, h: candidate.h + 8 };
+          if (!blocked(surface, excluded) && !hitsNode(surface, node)) { rect = candidate; paint = surface; break; }
         }
         if (rect) break;
       }
-      // Selected nodes still have their readable detail card. Never force a
-      // name over another label or an opaque control just to hit a budget.
-      if (!rect) continue;
-      // Depth runs ~500 (nearest) to ~1300 (farthest) around the 900 pivot. Fading
-      // from 700 keeps the front half of the orbit at full strength; the old 420
-      // origin left mid-depth labels under half alpha, which read as muddy.
-      const softness = Math.min(1, Math.max(0, (p.depth - 700) / 700));
-      const alpha = priority <= 2.8 ? 1 : Math.max(0.5, Math.min(1, (0.98 - softness * 0.3) * emphasis(node)));
-      ctx.font = font;
-      ctx.textBaseline = "alphabetic";
-      ctx.textAlign = rect.align;
-      if (priority <= 2.8) {
-        // the chip carries the node's colour on its border so a selected or
-        // matched label reads as "that node", not just "highlighted"
-        const [cr, cg, cb] = colorOf(node);
-        ctx.fillStyle = "rgba(5,5,7,0.82)";
-        ctx.strokeStyle = `rgba(${cr},${cg},${cb},0.55)`;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(rect.x - 5, rect.y - 3, rect.w + 10, rect.h + 6, 6);
-        ctx.fill();
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = "rgba(7,10,15,0.72)";
-        ctx.beginPath();
-        ctx.roundRect(rect.x - 3, rect.y - 2, rect.w + 6, rect.h + 4, 4);
-        ctx.fill();
+      if (!rect && needsName) {
+        const area = usableArea();
+        const w = width + 14, h = height + 8;
+        let nearest = Infinity;
+        for (let y = area.y + 12; y + h <= area.y + area.h - 12; y += 28) {
+          for (let x = area.x + 12; x + w <= area.x + area.w - 12; x += 32) {
+            const distance = (x + w / 2 - p.x) ** 2 + (y + h / 2 - p.y) ** 2;
+            if (distance >= nearest) continue;
+            const surface = { x, y, w, h };
+            if (blocked(surface, excluded) || hitsNode(surface, node)) continue;
+            nearest = distance; paint = surface;
+            rect = { x: x + 7, y: y + 4, w: width, h: height, tx: x + 7, ty: y + h - 7, align: "left" };
+          }
+        }
       }
-      ctx.lineJoin = "round";
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = "rgba(3,3,4,0.9)";
-      ctx.strokeText(text, rect.tx, rect.ty);
-      ctx.fillStyle = labelColour(node, alpha);
-      ctx.fillText(text, rect.tx, rect.ty);
-      state.labelRects.push(rect);
-      node._label = { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
-      drawn += 1;
+      if (!rect) continue;
+      const alpha = priority <= 2 ? 1 : Math.max(0.6, Math.min(1, emphasis(node)));
+      const endX = Math.max(paint.x, Math.min(p.x, paint.x + paint.w));
+      const endY = Math.max(paint.y, Math.min(p.y, paint.y + paint.h));
+      const previousAlpha = ctx.globalAlpha;
+      ctx.globalAlpha = node._fade ?? 1;
+      const gap = Math.hypot(endX - p.x, endY - p.y);
+      if (gap > radius + 14) {
+        ctx.strokeStyle = "rgba(172,185,202,0.32)"; ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.moveTo(p.x + (endX - p.x) * (radius + 2) / gap, p.y + (endY - p.y) * (radius + 2) / gap);
+        ctx.lineTo(endX, endY); ctx.stroke();
+      }
+      ctx.beginPath(); ctx.roundRect(paint.x, paint.y, paint.w, paint.h, 7);
+      ctx.fillStyle = state.canvasPalette?.background ?? "#101620"; ctx.fill();
+      ctx.fillStyle = rgba(NODE_RGB.session, 0.045); ctx.fill();
+      ctx.strokeStyle = rgba(workStatus ? colorOf(node) : NODE_RGB.pending, priority <= 2 ? 0.75 : workStatus === "Running" ? 0.45 : 0.25); ctx.lineWidth = 1; ctx.stroke();
+      if (workStatus) {
+        ctx.font = '600 9px system-ui, "Segoe UI", sans-serif'; ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
+        ctx.fillStyle = rgba(colorOf(node), alpha);
+        ctx.fillText(workStatus === "Verifying" ? "VERIFYING" : workStatus === "Next" ? "UP NEXT" : "RUNNING", paint.x + 8, paint.y + 13);
+      }
+      ctx.font = font; ctx.textBaseline = "alphabetic"; ctx.textAlign = rect.align;
+      ctx.fillStyle = state.canvasPalette ? rgba(NODE_RGB.session, alpha) : node.kind === "agent" ? labelColour(node, alpha) : `rgba(222,229,239,${alpha})`;
+      ctx.fillText(text, rect.tx, workStatus ? paint.y + 30 : rect.ty);
+      ctx.globalAlpha = previousAlpha ?? 1;
+      state.labelRects.push(paint); node._label = { ...paint }; drawn += 1;
     }
-    ctx.lineWidth = 1;
-    ctx.textAlign = "left";
+    ctx.lineWidth = 1; ctx.textAlign = "left";
   }
 
   // ---------- hover tooltip ----------
@@ -4161,15 +4746,14 @@
 
   // ---------- interaction ----------
   function nodeAt(x, y) {
-    if (state.camMode === "follow") {
-      const area = usableArea();
-      if (x < area.x || y < area.y || x > area.x + area.w || y > area.y + area.h) return null;
-    }
+    const area = usableArea();
+    if (x < area.x || y < area.y || x > area.x + area.w || y > area.y + area.h) return null;
     let best = null;
     for (const node of state.nodes) {
-      if (node._px == null || node.dying || node._absorbed) continue;
+      if (node._px == null || node.dying || node._absorbed || (node._fade ?? 1) <= 0.02) continue;
       const distance = Math.hypot(node._px - x, node._py - y);
-      if (distance <= node._pr + 8 && (!best || distance < best.distance)) best = { node, distance };
+      const hit = node.kind === "task" ? Math.abs(node._px - x) <= node._pr + 6 && Math.abs(node._py - y) <= node._pr + 6 : distance <= node._pr + 8;
+      if (hit && (!best || distance < best.distance)) best = { node, distance };
     }
     if (best) return best.node;
     // labels are part of the node: clicking the text selects it
@@ -4240,7 +4824,7 @@
     const focusInCard = !node && Boolean(el.info?.contains(document.activeElement));
     state.selected = node ? { id: node.id, kind: node.kind, node, via: options.via ?? "pointer" } : null;
     if (node?.doneHold) ackDoneHold(node.id); // the click is the read
-    if (node && (node.kind === "session" || node.kind === "todo" || node.kind === "task")) focusAssistant(node);
+    if (node && !node.readOnly && (node.kind === "session" || node.kind === "todo" || node.kind === "task")) focusAssistant(node);
     if (node) dropPopups();
     computeBranch();
     renderInfo();
@@ -4325,6 +4909,8 @@
 
   function primaryAction(node) {
     if (!node) return;
+    if (node.kind === "task-group") { toggleTaskGroup(node); return; }
+    if (node.groupMember?.canonical === false) return;
     if (node.kind === "task") {
       nav("tasks", { taskId: node.task?.id });
       return;
@@ -4366,6 +4952,7 @@
   }
 
   function statusBadge(node) {
+    if (node.kind === "task-group") return { text: `${node.taskGroup.members.length} tasks`, className: "badge" };
     if (node.kind === "root") {
       return { text: `${state.nodes.filter((entry) => entry.kind === "session").length} sessions`, className: "badge" };
     }
@@ -4402,7 +4989,62 @@
     }
     const status = node.task?.status ?? "open";
     const className = status === "active" ? "badge premium" : status === "done" ? "badge free" : "badge";
-    return { text: status, className };
+    return { text: status === "awaiting_verification" ? "Verifying" : status, className };
+  }
+
+  function appendTaskGroupInfo(info, node) {
+    const group = node.taskGroup;
+    if (!group) return;
+    const toggle = document.createElement("button");
+    toggle.className = "ghost";
+    toggle.dataset.taskGroupToggle = group.id;
+    const expanded = state.expandedTaskGroups.has(group.id);
+    toggle.textContent = `${expanded ? "Collapse" : "Expand"} ${group.members.length} tasks`;
+    toggle.setAttribute("aria-expanded", String(expanded));
+    toggle.addEventListener("click", () => toggleTaskGroup(node));
+    const note = document.createElement("p");
+    note.className = "muted";
+    note.textContent = "Running work stays visible. Saved member details remain here even when the graph is collapsed.";
+    info.append(toggle, note);
+    const list = document.createElement("div");
+    list.className = "task-group-members";
+    for (const member of group.members) {
+      const task = member.task;
+      const details = document.createElement("details");
+      details.className = "card-cps";
+      details.dataset.taskGroupMember = member.id;
+      const summary = document.createElement("summary");
+      const status = task.status === "awaiting_verification" ? "Verifying" : task.status ?? "saved";
+      summary.textContent = `${task.title || member.id} · ${status}`;
+      const prompt = document.createElement("p");
+      prompt.className = "muted";
+      prompt.style.whiteSpace = "pre-wrap";
+      prompt.textContent = task.prompt || member.snapshot?.prompt || "No additional brief.";
+      details.append(summary, prompt);
+      const context = Object.fromEntries(["refs", "ideas", "files", "dependsOn", "acceptance", "acceptanceCriteria", "contextHistory", "handoff", "logs"].flatMap((key) => {
+        const value = task[key] ?? member.snapshot?.[key];
+        return value != null && (!Array.isArray(value) || value.length) ? [[key, value]] : [];
+      }));
+      if (Object.keys(context).length) {
+        const saved = document.createElement("details");
+        const heading = document.createElement("summary");
+        heading.textContent = "Saved context and history";
+        const history = document.createElement("pre");
+        history.style.whiteSpace = "pre-wrap";
+        history.style.overflowWrap = "anywhere";
+        history.textContent = JSON.stringify(context, null, 2);
+        saved.append(heading, history);
+        details.append(saved);
+      }
+      if (member.canonical) {
+        const open = document.createElement("button");
+        open.className = "ghost mini"; open.textContent = "Open in Tasks";
+        open.addEventListener("click", () => nav("tasks", { taskId: member.id, filter: "all" }));
+        details.append(open);
+      }
+      list.append(details);
+    }
+    info.append(list);
   }
 
   // Work that finished while this node hosted it: the absorbed brief stays
@@ -4527,6 +5169,8 @@
 
   function renderInfo({ clearDraft = false } = {}) {
     if (!el.info) return;
+    state.graphAreaAt = 0;
+    state.hudRectsAt = 0;
     const selected = state.selected;
     // The assistant's surface moved into the A-Eyes rail; the floating card is
     // only the fallback for the narrow layout where the rail is hidden.
@@ -4556,13 +5200,13 @@
     el.info.hidden = false;
     const node = selected.node;
     const info = el.info;
-    const kinds = { root: "Constellation", session: "Session", todo: "Todo", task: "Task", assistant: "Assistant", folded: "Finished sessions", agent: "Agent" };
+    const kinds = { root: "Constellation", session: "Session", todo: "Todo", task: "Task", "task-group": "Task group", assistant: "Assistant", folded: "Finished sessions", agent: "Agent" };
 
     const kicker = document.createElement("div");
     kicker.className = "card-kicker";
     const eyebrow = document.createElement("span");
     eyebrow.className = "eyebrow";
-    eyebrow.textContent = kinds[node.kind] ?? "Node";
+    eyebrow.textContent = node.taskGroup ? "Task group" : node.groupMember ? "Saved group member" : kinds[node.kind] ?? "Node";
     const badgeInfo = statusBadge(node);
     const badge = document.createElement("span");
     badge.className = badgeInfo.className;
@@ -4908,10 +5552,17 @@
       text.textContent = String((node.status === "error" && node.error) || node.text || "nothing yet");
       info.append(text);
       action("Assistant", () => primaryAction(node), { primary: true, title: "Select the assistant (M)" });
+    } else if (node.kind === "task-group") {
+      row("tasks", node.taskGroup.members.length);
+      row("source", "approved plan");
+      info.append(kv);
+      appendTaskGroupInfo(info, node);
+      action("Open Tasks", () => nav("tasks"));
     } else if (node.kind === "task") {
       const task = node.task;
       const anchor = node.anchorSessionId ? nodeForSession(node.anchorSessionId) : null;
-      row("status", task.status);
+      row("status", task.status === "awaiting_verification" ? "Verifying" : task.status);
+      if (node.readOnly) row("view", "read-only group member");
       const hold = node.doneHold ? state.doneHold.get(node.id) : null;
       if (hold) row("absorb", hold.ackedAt ? "read — sinking in" : "finished — click to read before it sinks");
       row("refs", (task.refs ?? []).length);
@@ -4926,15 +5577,17 @@
       if (taskFocus?.kind === "task" && taskFocus.id === node.id) linkRow("assistant", "focused on this · unfocus", () => focusAssistant(null));
       else row("assistant", taskFocus?.id ? `on "${String(taskFocus.label || taskFocus.id).slice(0, 30)}"` : "—");
       const prompt = document.createElement("p");
-      prompt.className = "muted clamp-3";
+      prompt.className = node.readOnly ? "muted" : "muted clamp-3";
       prompt.textContent = task.prompt ?? "";
       info.append(kv, prompt);
-      appendNodeFolder(info, node);
-      action("Open in Tasks", () => primaryAction(node), { primary: true, title: "Tasks (T)" });
+      appendTaskGroupInfo(info, node);
+      if (!node.readOnly) appendNodeFolder(info, node);
+      if (node.groupMember?.canonical !== false) action("Open in Tasks", () => primaryAction(node), { primary: true, title: "Tasks (T)" });
+      if (!node.readOnly) {
       action("Work on it", () => workOnNode(node), {
         title: "Make this task the assistant's next piece of work — pinned to the front, the executor starts it as soon as a slot frees",
       });
-      if (task.status !== "active") {
+      if (task.status === "open") {
         action("Activate", async () => {
           if (!(await patchTask(task.id, { status: "active" }))) {
             window.MefiToast?.(`${task.title} · not saved, the task store could not be read`, "bad");
@@ -4960,6 +5613,7 @@
         { extra: "good" }
       );
       action("Gather references", () => nav("tasks", { taskId: task.id, gather: true }));
+      }
       if (anchor) {
         action("Go to session", () => {
           selectNode(anchor);
@@ -5221,7 +5875,7 @@
       el.labelsBtn.dataset.labels = state.labels;
       const label = el.labelsBtn.querySelector(".label");
       if (label) label.textContent = state.labels;
-      el.labelsBtn.title = `Node labels: ${state.labels} (L cycles auto / all / none)`;
+      el.labelsBtn.title = state.labels === "auto" ? "Auto labels: current work and inspected nodes · hover or search for more (L cycles labels)" : `Node labels: ${state.labels} (L cycles auto / all / none)`;
     }
   }
 
@@ -5312,6 +5966,7 @@
 
   function setView(mode) {
     const next = mode === "2d" ? "2d" : "3d";
+    if (next === state.view) return;
     state.view = next;
     writeStore("mefiStudio.cmdView", next);
     if (next === "2d") state.orbitVel = 0; // no easing tail into the flat map
@@ -5319,7 +5974,8 @@
     renderHint();
     fitAll();
     if (state.camMode === "follow") applyCamMode(); // refit recentered; go back to the work node
-    window.MefiToast?.(next === "2d" ? "2D map view" : "3D orbit view", "info");
+    window.dispatchEvent(new CustomEvent("mefi-tree-view", { detail: { view: next } }));
+    if (!state.settingsPreview) window.MefiToast?.(next === "2d" ? "2D map view" : "3D orbit view", "info");
   }
 
   function onAmbienceOutside(event) {
@@ -5508,6 +6164,71 @@
   }
 
   // ---------- lifecycle ----------
+  function canAmbientZen() {
+    const top = window.MefiNav?.top?.();
+    const focus = document.activeElement;
+    return Boolean(state.active && !document.hidden && !state.settingsPreview &&
+      !document.body.dataset.sheet && (!top || top === "command") &&
+      !state.panning && !state.rotating && !state.query &&
+      el.pop?.hidden !== false && (!state.feedMenuOpen || state.feedCollapsed) &&
+      !Array.from(document.querySelectorAll?.("#idle-hud details[open]") ?? []).some((node) => !node.closest?.("[hidden]")) &&
+      !focus?.matches?.("input, textarea, select, [contenteditable='true']"));
+  }
+
+  function setAmbientZen(active) {
+    const next = Boolean(active);
+    if (next === state.ambientZen || (next && !canAmbientZen())) return false;
+    state.ambientZen = next;
+    if (next) {
+      state.zenRestore = { camera: { ...state.camera }, camMode: state.camMode, orbit: state.orbit, orbitVel: state.orbitVel, angle: state.angle, pitch: state.pitch, follow: state.follow, followZoomTarget: state.followZoomTarget };
+      state.camMode = "orbit";
+      state.orbit = noMotion() ? "paused" : "auto";
+      state.orbitVel = 0;
+      // Preserve managed anchors and framing. Ambient mode is a temporary
+      // camera movement, never a layout change or an audio/capture gesture.
+      hideTip();
+    } else if (state.zenRestore) {
+      // Resume the prior camera mode from this angle. Rewinding the ambient
+      // orbit on the first mouse move would make every fixed point jump.
+      const currentView = { camera: state.camera, angle: state.angle, pitch: state.pitch, orbitVel: 0 };
+      Object.assign(state, state.zenRestore, currentView);
+      state.zenRestore = null;
+    }
+    document.body.classList.toggle("command-zen", next);
+    state.graphAreaAt = 0;
+    state.hudRectsAt = 0;
+    if (el.hud) { el.hud.inert = next; el.hud.classList.remove("dim"); }
+    syncViewControls();
+    return true;
+  }
+
+  function wakeAmbientZen(now = Date.now()) {
+    state.lastInput = now;
+    return setAmbientZen(false);
+  }
+
+  function checkAmbientZen(now = Date.now()) {
+    if (!canAmbientZen()) {
+      if (state.ambientZen) setAmbientZen(false);
+      state.lastInput = now;
+      return false;
+    }
+    if (!state.ambientZen && now - state.lastInput >= AMBIENT_ZEN_MS) setAmbientZen(true);
+    return state.ambientZen;
+  }
+
+  function setFeedCollapsed(collapsed, save = true) {
+    state.feedCollapsed = Boolean(collapsed);
+    el.feed?.classList.toggle("collapsed", state.feedCollapsed);
+    if (el.feedContent) el.feedContent.hidden = state.feedCollapsed;
+    el.feedToggle?.setAttribute("aria-expanded", String(!state.feedCollapsed));
+    if (el.feedToggle) el.feedToggle.title = state.feedCollapsed ? "Expand live work" : "Collapse live work";
+    if (save) writeStore("mefiStudio.cmdFeedCollapsed", state.feedCollapsed ? "1" : "0");
+    state.graphAreaAt = 0;
+    state.hudRectsAt = 0;
+    if (state.selected?.kind === "assistant") { state.feedDirty = true; renderInfo(); renderFeed(); }
+  }
+
   function canDim() {
     return (
       state.active &&
@@ -5563,9 +6284,10 @@
       return;
     }
     state.active = true;
+    state.lastInput = Date.now();
     state.frameError = false;
     state.ambient = !force;
-    state.orbit = "auto";
+    // Keep the user's orbit choice; a fresh view starts with fixed points.
     state.orbitVel = 0;
     state.settleUntil = 0;
     state.rotating = null;
@@ -5644,7 +6366,7 @@
     bumpHud();
     state.lastTouch = Date.now();
     state.popupAt = Date.now() + 6000;
-    if (state.zen) {
+    if (state.zen && !state.settingsPreview) {
       bell({ long: true, low: true, level: 1 });
       bell({ quick: true, level: 0.7 });
     }
@@ -5653,7 +6375,7 @@
     // chime. Display capture needs a user gesture, so a gestureless auto-enter
     // can leave this pending — the input listener below retries on the first
     // real key/click.
-    if (state.reactive) ensureReactiveInput();
+    if (state.reactive && !state.settingsPreview) ensureReactiveInput();
     frameRequest = requestAnimationFrame(frame);
     state.timers.refresh = setInterval(tick, 4000);
     // A sheet may already cover the constellation (the quiet clock can open it
@@ -5664,6 +6386,7 @@
 
   function exit() {
     if (!state.active) return;
+    setAmbientZen(false);
     state.active = false;
     cancelAnimationFrame(frameRequest);
     frameRequest = 0;
@@ -5710,7 +6433,7 @@
 
   function tick() {
     if (!state.active) return;
-    if (document.body.dataset.sheet) return; // a sheet covers Command: do no work
+    if (document.body.dataset.sheet && !(state.settingsPreview && document.body.dataset.sheet === "music")) return;
     if (document.hidden) return; // hidden app: make no fetch; the visibilitychange listener snaps the view back on show
     refreshCommandBacklog();
     refreshGraph();
@@ -5718,7 +6441,7 @@
     updateTelemetry();
     if (autopilotJobs(state.assistant).length || chatMode()) state.feedDirty = true; // "running: … · Ns" and the chat status line age between status pushes
     renderFeed();
-    if (state.ambient && Date.now() - state.popupAt > POPUP_MS) {
+    if (state.ambient && !state.settingsPreview && Date.now() - state.popupAt > POPUP_MS) {
       state.popupAt = Date.now();
       popup();
     }
@@ -5727,12 +6450,19 @@
   async function checkCollisions() {
     try {
       const result = await window.mefiStudio?.eyesCollisions?.();
+      // Only live activity keeps the collision tint. An idle-only group is
+      // history — the fix flow already treats it as "finish and merge" — so
+      // sessions with no active edit must never enter the live set.
       const colliding = (result?.collisions ?? []).flatMap((collision) =>
-        (collision.sessions ?? []).map((entry) => (typeof entry === "string" ? entry : entry.sessionId))
+        (collision.sessions ?? [])
+          .filter((entry) => entry && typeof entry === "object" && entry.active === true)
+          .map((entry) => entry.sessionId)
       );
       const liveColliding = (result?.presence ?? [])
         .filter((row) => row?.colliding)
-        .flatMap((row) => (row.editors ?? []).map((entry) => (typeof entry === "string" ? entry : entry.sessionId)));
+        .flatMap((row) => (row.editors ?? [])
+          .filter((entry) => entry && typeof entry === "object" && entry.active === true)
+          .map((entry) => entry.sessionId));
       state.collisionSessions = new Set([...colliding, ...liveColliding].filter(Boolean));
     } catch {
       state.collisionSessions = new Set();
@@ -5757,11 +6487,12 @@
   }
 
   function armIdleTimer() {
+    if (state.timers.idle) clearInterval(state.timers.idle);
     state.timers.idle = setInterval(() => {
-      if (state.active) return;
+      if (state.active) { checkAmbientZen(); return; }
       if (document.hidden) return; // a hidden window never idles into Command: no capture, bells or fetch work off-screen
       if (Date.now() - state.lastInput > IDLE_MS) enter();
-    }, 10000);
+    }, 1000);
   }
 
   function simulate({ pulses = 2, particles = 2, popup: withPopup = true } = {}) {
@@ -5865,12 +6596,16 @@
     el.labelsBtn = document.getElementById("idle-labels");
     el.viewBtn = document.getElementById("idle-view");
     el.feed = document.getElementById("idle-feed");
+    el.feedToggle = document.getElementById("idle-feed-toggle");
+    el.feedContent = document.getElementById("idle-feed-content");
     el.feedDot = document.getElementById("idle-feed-dot");
     el.feedState = document.getElementById("idle-feed-state");
     el.feedParallel = document.getElementById("idle-feed-parallel");
+    el.feedBuildMode = document.getElementById("idle-feed-build-mode");
     el.feedNow = document.getElementById("idle-feed-now");
     el.feedMetrics = document.getElementById("idle-feed-metrics");
     el.feedQueue = document.getElementById("idle-feed-queue");
+    el.feedAttention = document.getElementById("idle-feed-attention");
     el.feedQueueCount = document.getElementById("idle-feed-queue-count");
     el.feedAgents = document.getElementById("idle-feed-agents");
     el.feedAgentsCount = document.getElementById("idle-feed-agents-count");
@@ -6046,12 +6781,21 @@
     el.ambienceBtn?.addEventListener("click", toggleAmbience);
     el.legendToggle?.addEventListener("click", () => setLegend(!state.legendOpen));
     el.feedMenu?.addEventListener("click", () => setFeedMenu(!state.feedMenuOpen));
+    el.feedToggle?.addEventListener("click", () => setFeedCollapsed(!state.feedCollapsed));
+    setFeedCollapsed(state.feedCollapsed, false);
     el.feedParallel?.addEventListener("change", () => void changeBuildParallel(el.feedParallel.value));
+    el.feedBuildMode?.addEventListener("change", () => void changeBuildMode(el.feedBuildMode.value));
     setFeedMenu(state.feedMenuOpen);
     window.addEventListener("mefi:project-changed", () => {
+      state.screenLayout = null;
+      state.agentLayout.clear();
+      state.agentSeq = {};
+      state.taskLayout = new Map();
+      state.graphSeeded = false;
       state.backlogRevision += 1;
       state.backlogReadAt = 0;
       state.backlog = null;
+      state.backlogError = null;
       state.feedDirty = true;
       if (state.active) renderFeed();
     });
@@ -6159,7 +6903,7 @@
           setCamMode("free", { quiet: true }); // a drag is the user's camera now
           hideTip();
         }
-        const scale = Math.max(0.2, state.fit * state.zoom);
+        const scale = Math.max(0.01, state.fit * state.zoom * (state.overviewScale ?? 1));
         const dx = (event.clientX - state.panning.x) / scale;
         const dy = (event.clientY - state.panning.y) / scale;
         const base = state.panning.cam;
@@ -6258,7 +7002,7 @@
       // The builder nodes are built from this list, so any change to which jobs
       // are in flight has to redraw the graph — otherwise a run shows no agent
       // at all, or a finished one keeps orbiting a task nobody is building.
-      const signature = jobs.map((job) => job.taskId ?? job.sessionId ?? job.title).join("|");
+      const signature = jobs.map((job) => job.taskId ?? job.sessionId ?? job.title).sort().join("|");
       if (signature !== state.builderSignature) {
         // A job id the last push did not carry is a builder the assistant just
         // sent out: mark it before the rebuild, pulse it after.
@@ -6354,6 +7098,7 @@
     // auto-enter); one pass on show snaps the view and the quiet clock back
     // within a tick instead of waiting out the next interval.
     document.addEventListener("visibilitychange", () => {
+      wakeAmbientZen();
       if (document.hidden) return;
       if (state.active) tick();
       else if (Date.now() - state.lastInput > IDLE_MS) enter();
@@ -6362,26 +7107,28 @@
 
   // Any interaction resets the quiet clock; a key, wheel or touch also turns the
   // screensaver into a menu (a bare mouse move must not).
-  ["mousemove", "wheel", "touchstart", "keydown"].forEach((type) =>
+  ["mousemove", "pointerdown", "wheel", "touchstart", "keydown", "focusin"].forEach((type) =>
     window.addEventListener(
       type,
       () => {
-        state.lastInput = Date.now();
+        const woke = wakeAmbientZen();
         if (state.active && type !== "mousemove") {
           state.ambient = false;
           el.hud?.classList.add("forced");
           // A gestureless auto-enter can leave a pending display-capture
           // request refused; a real key or click is the retry point.
-          if (state.reactive && !state.inputStream && !state.inputPending) ensureReactiveInput();
+          if (!woke && type !== "focusin" && type !== "pointerdown" && state.reactive && !state.settingsPreview && !state.inputStream && !state.inputPending) ensureReactiveInput();
         }
         bumpHud();
       },
-      { passive: true }
+      { passive: true, capture: true }
     )
   );
 
   window.addEventListener("mefi-music-change", syncMusicNode);
   window.addEventListener("mefi-theme-change", syncGraphTheme);
+  window.addEventListener("mefi-tree-preferences", (event) => applyTreePreferences(event.detail ?? {}));
+  applyTreePreferences(window.MefiMusic?.graphPreferences?.() ?? {});
 
   window.MefiIdle = {
     init,
@@ -6390,8 +7137,17 @@
     simulate,
     profiles: PROFILES,
     selectFirst,
-    debugNodes: () => state.nodes.map((node) => ({ id: node.id, kind: node.kind, label: node.label, x: node._px, y: node._py, radius: node._pr, labelRect: node._label ? { ...node._label } : null })),
+    agentMotionStatus: () => state.nodes.filter((node) => node.kind === "agent").map((node) => ({
+      id: node.id, role: node.role, phase: node.phase ?? null, retiring: Boolean(node.retiring), dying: Boolean(node.dying),
+      opacity: node._absorbed ? 0 : node._fade ?? node.opacity ?? 1,
+      world: { x: node.x, y: node.y, z: node.z }, screen: { x: node._px, y: node._py },
+    })),
+    debugNodes: () => state.nodes.map((node) => ({ id: node.id, kind: node.kind, label: node.label, workStatus: node._workLabel, x: node._px, y: node._py, radius: node._pr, layoutAnchor: node._layoutAnchor ? { ...node._layoutAnchor } : null, labelRect: node._label ? { ...node._label } : null, cardRect: node._cardRect ? { ...node._cardRect } : null, bubbleRect: node._bubblePaint ? { ...node._bubblePaint } : null, bubbleHitRect: node._bubble ? { x: node._bubble.x, y: node._bubble.y, w: node._bubble.w, h: node._bubble.h } : null, shape: nodeVisualProfile(node).shape, visualStyle: state.nodeStyle, orbitTrail: node._orbitTrail ? { ...node._orbitTrail } : null, extraGlow: node._extraGlow === true })),
     graphViewport: () => ({ ...usableArea() }),
+    geometryStatus: () => ({ view: state.view, angle: state.angle, pitch: state.pitch, nodes: state.nodes.map((node) => ({ id: node.id, anchor: node._layoutAnchor ? { ...node._layoutAnchor } : null, world: { x: node.x, y: node.y, z: node.z }, projected: project(node._layoutAnchor ?? node) })) }),
+    setSettingsPreview,
+    ambientZenStatus: () => ({ active: state.ambientZen, delayMs: AMBIENT_ZEN_MS, idleMs: Math.max(0, Date.now() - state.lastInput), eligible: canAmbientZen(), feedCollapsed: state.feedCollapsed }),
+    settingsPreviewStatus: () => ({ active: Boolean(state.settingsPreview), viewport: state.settingsPreview ? { ...state.settingsPreview } : null, camera: { ...state.camera }, zoom: state.zoom, fit: state.fit, previousWasActive: state.previewRestore?.wasActive ?? null }),
     followStatus: () => ({ mode: state.camMode, taskId: state.follow?.taskId ?? null, nodeId: state.follow?.key ?? null, title: state.follow?.title ?? null, stage: state.follow?.stage ?? null, reason: state.follow?.reason ?? null, since: state.follow?.since ?? null, zoom: state.zoom, targetZoom: state.followZoomTarget }),
     audioStatus: () => ({ reactive: state.reactive, source: state.localAudio ? "local" : state.audioSource, listening: Boolean(state.inputStream || state.localAudio), pending: Boolean(state.inputPending), error: state.inputError, bands: { ...state.bands }, energy: state.music?.energy ?? 0, beat: state.music?.beat ?? 0 }),
     isActive: () => state.active,
@@ -6403,6 +7159,7 @@
     select,
     fitAll,
     setOrbit,
+    setView,
     setLabels,
     setAudioSource,
     search,
@@ -6413,6 +7170,13 @@
       active: state.active,
       ambient: state.ambient,
       orbit: state.orbit,
+      view: state.view,
+      nodeStyle: state.nodeStyle,
+      nodeLayout: state.nodeLayout,
+      orbitTrails: state.orbitTrails,
+      extraGlow: state.extraGlow,
+      ambientZen: state.ambientZen,
+      feedCollapsed: state.feedCollapsed,
       labels: state.labels,
       query: state.query,
       matches: state.matches.length,

@@ -47,14 +47,38 @@ class MefiStudioIdleTests(unittest.TestCase):
             "collisionSessions",
             "liveColliding",
             "touches.set(",
-            "Math.min(1, (touch?.count ?? 0) / 4)",
+            "drawNodeSurface(ctx, node, p, radius, tint",
+            'const active = b.node._workLabel !== "Verifying" && (isBusyNode(b.node, runningIds)',
             "state.touches.get(node.sessionId)",
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.idle)
 
+    def test_collision_boost_only_marks_live_activity(self):
+        # Negative case for the idle view's collision read: an idle-only
+        # collision group is settled history (eyes.mjs flags every session
+        # inactive and the fix flow says "finish and merge"), so
+        # checkCollisions must adopt only entries whose live-activity flag
+        # is set — the old shape took every id regardless — and the render
+        # loop may only boost nodes whose session the live set holds.
+        collisions = self.idle[self.idle.index("async function checkCollisions") : self.idle.index("function resize()")]
+        self.assertIn("entry.active === true", collisions)
+        self.assertNotIn(
+            'typeof entry === "string" ? entry : entry.sessionId',
+            collisions,
+            "idle-only groups must not enter the live set through the legacy string shape",
+        )
+        self.assertEqual(2, collisions.count("entry.active === true"), "collision groups and presence editors both filter on live activity")
+        self.assertIn("state.collisionSessions = new Set(", collisions)
+        # The boost is actually wired: the loop consumes the set, wears the
+        # collision hue, and draws the restrained amber rim.
+        self.assertIn("state.collisionSessions.size > 0", self.idle)
+        self.assertIn("state.collisionSessions.has(node.sessionId)", self.idle)
+        self.assertIn("colliding && active && node.kind !== \"agent\" ? NODE_RGB.collision", self.idle)
+        self.assertIn("rgba(NODE_RGB.collision, 0.55)", self.idle)
+
     def test_wiring_snapshot_bundle_template_autoplay(self):
-        self.assertIn("snapshot: () => ({", self.tree)
+        self.assertRegex(self.tree, r"snapshot:\s*\(\)\s*=>\s*\(?\s*\{")
         self.assertIn('readFile(path.join(RENDERER, "idle.js")', self.build)
         for element_id in ("idle-layer", "idle-hud", "idle-profile", "idle-zen", "idle-reactive", "idle-exit", "idle-open"):
             with self.subTest(element_id=element_id):
@@ -188,8 +212,10 @@ class MefiStudioIdleTests(unittest.TestCase):
 
     def test_chat_log_is_opaque_and_labels_step_around_it(self):
         styles = (STUDIO / "renderer" / "styles.css").read_text(encoding="utf-8")
-        glass = styles[styles.index(".glass-hard") : styles.index(".glass-soft")]
-        self.assertIn(".cmd-chat", glass)
+        chat = re.search(r"(?m)^\.cmd-chat\s*\{([^}]*)\}", styles)
+        self.assertIsNotNone(chat, "the chat panel has its own surface rule")
+        self.assertIn("background: var(--panel-solid)", chat.group(1))
+        self.assertIn("backdrop-filter: none", chat.group(1))
         hud = self.idle[self.idle.index("function hudRects()") : self.idle.index("function drawLabels")]
         self.assertIn("push(el.chatLog)", hud)
         self.assertIn("push(el.feed)", hud)

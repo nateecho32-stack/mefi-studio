@@ -58,6 +58,7 @@
       commandPrimary: true,
       group: "surfaces", key: "H", glyph: "g-command", badge: null,
       desc: "Projects, your companion, and work from idea to done",
+      searchTerms: "home project folder conversation chat give task review done",
       showIn: showIn({ dock: true, palette: true, help: true, footer: true }),
       open: () => window.MefiWorkspace?.enter?.(), close: () => window.MefiWorkspace?.exit?.(),
       isOpen: () => Boolean(window.MefiWorkspace?.isActive?.()),
@@ -72,7 +73,8 @@
       key: "D",
       glyph: "g-command",
       badge: "progress",
-      desc: "The constellation — sessions, todos and tasks",
+      desc: "The node tree / constellation — sessions, agents, todos and tasks",
+      searchTerms: "node tree live work monitor progress workers",
       showIn: showIn({ palette: true, help: true, footer: true }),
       open: (params) => window.MefiIdle?.enter?.(true, params),
       close: () => window.MefiIdle?.exit?.(),
@@ -80,8 +82,8 @@
     },
     {
       id: "booklet",
-      label: "Booklet",
-      short: "Booklet",
+      label: "Model catalog",
+      short: "Model catalog",
       kind: "tab",
       layer: null,
       group: "surfaces",
@@ -95,45 +97,46 @@
     },
     {
       id: "graph",
-      label: "Graph",
-      short: "Graph",
+      label: "Model Lab",
+      short: "Model Lab",
       kind: "tab",
       layer: null,
       group: "surfaces",
       key: "2",
       glyph: "g-graph",
       badge: null,
-      desc: "Quality against cost for the whole roster",
+      desc: "Measured model performance, usage and context; published catalog tools",
       showIn: showIn({ dock: true, palette: true, help: true }),
       open: () => window.MefiBooklet?.showTab?.("graph"),
       isOpen: () => tabOpen("graph"),
     },
     {
       id: "eyes",
-      label: "A-Eyes",
-      short: "A-Eyes",
+      label: "Activity & evidence",
+      short: "Activity",
       kind: "tab",
       layer: null,
       group: "surfaces",
       key: "3",
       glyph: "g-eyes",
       badge: "progress",
-      desc: "Live agent activity, diffs, evidence PNGs and pins",
+      desc: "A-Eyes: live agent activity, diffs, evidence PNGs and pins",
       showIn: showIn({ dock: true, palette: true, help: true }),
       open: () => window.MefiBooklet?.showTab?.("eyes"),
       isOpen: () => tabOpen("eyes"),
     },
     {
       id: "studio",
-      label: "Studio",
-      short: "Studio",
+      label: "Settings & connections",
+      short: "Settings",
       kind: "tab",
       layer: null,
       group: "surfaces",
       key: "4",
       glyph: "g-studio",
       badge: null,
-      desc: "Launcher, API key, speed probe and app updates",
+      desc: "Assistant and coding providers, API keys, optional integrations and app updates",
+      searchTerms: "settings connections api key login setup provider workers",
       showIn: showIn({ dock: true, palette: true, help: true }),
       open: () => window.MefiBooklet?.showTab?.("studio"),
       isOpen: () => tabOpen("studio"),
@@ -161,8 +164,8 @@
     {
       id: "tasks",
       commandPrimary: true,
-      label: "Tasks",
-      short: "Tasks",
+      label: "Task board",
+      short: "Task board",
       kind: "overlay",
       layer: "sheet",
       group: "tools",
@@ -176,6 +179,26 @@
       open: (params) => window.MefiTasks?.open?.(params),
       close: () => window.MefiTasks?.close?.(),
       isOpen: () => overlayOpen("tasks-overlay"),
+    },
+    {
+      id: "plans",
+      commandPrimary: true,
+      label: "Plans",
+      short: "Plans",
+      kind: "overlay",
+      layer: "sheet",
+      group: "tools",
+      key: null,
+      glyph: "g-ideas",
+      badge: null,
+      desc: "Explore an idea, settle decisions, and create reviewed tasks",
+      searchTerms: "plan an idea planning questions specification approval",
+      showIn: showIn({ tools: true, dock: true, palette: true, help: true }),
+      element: "plans-overlay",
+      focus: "#plans-new",
+      open: (params) => window.MefiPlanning?.open?.(params),
+      close: () => window.MefiPlanning?.close?.(),
+      isOpen: () => overlayOpen("plans-overlay"),
     },
     {
       id: "ideas",
@@ -256,10 +279,21 @@
       id: "music", label: "Music & themes", short: "Music", kind: "overlay", layer: "sheet",
       group: "tools", glyph: "g-music", badge: null, commandPrimary: true,
       desc: "Local music, Spotify links, AI suggestions, and Studio themes",
+      searchTerms: "color colour appearance accent theme sound audio background",
       showIn: showIn({ dock: true, palette: true, help: true }),
       element: "music-overlay", focus: "#music-close",
       open: (params) => window.MefiMusic?.open?.(params), close: () => window.MefiMusic?.close?.(),
       isOpen: () => overlayOpen("music-overlay"),
+    },
+    {
+      id: "onboarding", label: "Start here · walkthrough", short: "Start here", kind: "overlay", layer: "transient",
+      group: "system", key: null, glyph: "g-help", badge: null,
+      desc: "Get started: project, connections, task or plan, monitoring and review",
+      searchTerms: "getting started guide tutorial help welcome onboarding",
+      showIn: showIn({ dock: true, tools: true, palette: true }),
+      element: "walkthrough-overlay", focus: "#walkthrough-title",
+      open: () => window.MefiOnboarding?.open?.(), close: () => window.MefiOnboarding?.close?.(),
+      isOpen: () => overlayOpen("walkthrough-overlay"),
     },
     {
       id: "help",
@@ -478,12 +512,15 @@
     }
     if (state.transient === id) state.transient = null;
     let saved = layer ? state.focusReturn[layer] : null;
+    const sidebarReturn = Boolean(saved?.closest?.("#workspace-sidebar-panel[inert]"));
     const closedMenu = saved?.closest?.("details:not([open])");
     if (closedMenu) saved = closedMenu.querySelector("summary");
     // <body> passes every visibility test but cannot take focus, so an overlay
     // opened with nothing focused would otherwise close to nowhere.
-    const usable = Boolean(saved && saved !== document.body && saved.isConnected && !saved.hidden && !saved.closest?.("[hidden]"));
-    if (idleActive() && state.sheet === null && state.transient === null) {
+    const usable = Boolean(saved && saved !== document.body && saved.isConnected && !saved.hidden && !saved.closest?.("[hidden], [inert]"));
+    if (sidebarReturn && !state.transient) {
+      window.MefiSidebar?.focusToggle?.();
+    } else if (idleActive() && state.sheet === null && state.transient === null) {
       focusIdle();
       window.MefiIdle?.bumpHud?.();
     } else if (usable) {
@@ -729,6 +766,40 @@
     return element;
   }
 
+  function menuGroup(dest) {
+    if (["workspace", "tasks", "plans", "ideas"].includes(dest.id)) return "Work";
+    if (["command", "eyes", "explorer", "overhead", "analyzer"].includes(dest.id)) return "Monitor & inspect";
+    if (["booklet", "graph"].includes(dest.id)) return "Models";
+    return "Settings & help";
+  }
+
+  function appendGrouped(target, destinations, buttonClass) {
+    for (const label of ["Work", "Monitor & inspect", "Models", "Settings & help"]) {
+      const items = destinations.filter((dest) => menuGroup(dest) === label);
+      if (!items.length) continue;
+      const group = document.createElement("div");
+      group.className = "nav-menu-group";
+      group.setAttribute("role", "group");
+      group.setAttribute("aria-label", label);
+      const title = document.createElement("span");
+      title.className = "nav-menu-heading";
+      title.textContent = label;
+      group.append(title);
+      for (const dest of items) group.append(navButton(dest, buttonClass));
+      target.append(group);
+    }
+  }
+
+  function renderWorkspaceTools(target) {
+    const element = target ?? document.getElementById("workspace-tool-links");
+    if (!element) return;
+    element.textContent = "";
+    appendGrouped(element, list().filter((dest) =>
+      !["workspace", "command", "studio", "music"].includes(dest.id) &&
+      dest.kind !== "action" && dest.layer !== "transient"), "ghost");
+    paintBadges(element);
+  }
+
   function renderDock(target) {
     const element = target ?? document.getElementById("cmd-dock");
     if (!element) return;
@@ -744,7 +815,7 @@
     summary.textContent = "More tools";
     const links = document.createElement("div");
     links.className = "cmd-more-links";
-    for (const dest of destinations.filter((item) => !item.commandPrimary)) links.append(navButton(dest, "dock-item"));
+    appendGrouped(links, destinations.filter((item) => !item.commandPrimary), "dock-item");
     more.append(summary, links);
     element.append(more);
     paintBadges(element);
@@ -754,12 +825,7 @@
     const element = target ?? document.getElementById("nav-tools");
     if (!element) return;
     element.textContent = "";
-    for (const dest of list({ showIn: "tools" })) {
-      const isPalette = dest.id === "palette";
-      element.append(
-        navButton(dest, isPalette ? "tool icon" : "tool", isPalette ? { label: false, keyText: "⌃K" } : {})
-      );
-    }
+    appendGrouped(element, list({ showIn: "tools" }), "tool");
     paintBadges(element);
     watchToolsWidth(element);
   }
@@ -807,10 +873,7 @@
       menu.append(summary);
       const links = document.createElement("div");
       links.className = "studio-more-links";
-      for (const dest of list({ showIn: "tools" })) {
-        if (dest.layer !== "sheet" || dest.id === self) continue;
-        links.append(navButton(dest, "dock-item small", { key: false }));
-      }
+      appendGrouped(links, list({ showIn: "tools" }).filter((dest) => dest.layer === "sheet" && dest.id !== self), "dock-item small");
       menu.append(links);
       container.append(menu);
       paintBadges(container);
@@ -843,7 +906,7 @@
       heading.className = "help-group";
       heading.textContent = title;
       element.append(heading);
-      for (const dest of items) element.append(helpRow(dest.key, dest.label));
+      for (const dest of items) if (dest.key) element.append(helpRow(dest.key, dest.label));
       // Escape has no destination, so it is the one hard-coded row.
       if (title === "System") element.append(helpRow("Esc", ESC_HELP));
     }
@@ -930,8 +993,9 @@
   // ---- input -------------------------------------------------------------
 
   document.addEventListener("click", (event) => {
-    const more = document.getElementById("cmd-more-tools");
-    if (more?.open && !more.contains(event.target)) more.open = false;
+    for (const menu of document.querySelectorAll(".studio-more[open], .cmd-more-tools[open], #workspace-tools[open]")) {
+      if (!menu.contains(event.target)) menu.open = false;
+    }
     const button = event.target?.closest?.("[data-nav], [data-nav-close]");
     if (!button) return;
     const closeId = button.dataset.navClose;
@@ -983,7 +1047,12 @@
   }
 
   function handleKey(event) {
-    const more = document.getElementById("cmd-more-tools");
+    if (event.key === "Escape" && !state.transient && window.MefiSidebar?.isOpen?.()) {
+      event.preventDefault();
+      window.MefiSidebar.close({ restoreFocus: true });
+      return;
+    }
+    const more = document.activeElement?.closest?.(".studio-more[open], .cmd-more-tools[open], #workspace-tools[open]") ?? document.getElementById("cmd-more-tools");
     if (event.key === "Escape" && more?.open) {
       event.preventDefault();
       more.open = false;
@@ -1020,6 +1089,7 @@
     }
     if (state.transient === "palette") return;
     if (state.transient === "help" && event.key !== "?") return;
+    if (state.transient === "onboarding") return;
     // Native controls own their activation keys even while the canvas is open.
     if ((event.key === "Enter" || event.key === " ") && event.target?.closest?.("button, summary, a, [role=button]")) return;
     if (idleActive() && state.sheet === null && window.MefiIdle?.handleKey?.(event)) {
@@ -1135,6 +1205,11 @@
         line: `updated in place · ${what}`,
       };
     }
+    if (phase === "held" && reason === "incomplete source files") {
+      return { hidden: false, state: "pending", label: "Waiting for files",
+        title: `${error} · Studio keeps the current version until the source is complete`,
+        line: `update waiting · ${error}` };
+    }
     if (phase === "held" || phase === "error") {
       return {
         hidden: false,
@@ -1180,12 +1255,12 @@
       // for a pause can be applied at once from here.
       apply.textContent = status?.kind === "restart" ? "Restart now" : "Apply update";
       const held = status?.phase === "held" && (status?.files?.length ?? 0) > 0;
-      apply.disabled = !(status?.phase === "pending" || status?.phase === "waiting" || held);
+      apply.disabled = status?.reason === "incomplete source files" || !(status?.phase === "pending" || status?.phase === "waiting" || held);
     }
     const line = document.querySelector("#update-status");
     if (line) {
       line.textContent = view.line;
-      line.classList.toggle("bad-text", status?.phase === "held" || status?.phase === "error");
+      line.classList.toggle("bad-text", (status?.phase === "held" && status?.reason !== "incomplete source files") || status?.phase === "error");
     }
   }
 
@@ -1208,6 +1283,7 @@
       const modules = Array.isArray(payload.modules) ? payload.modules.length : count;
       window.MefiToast?.(`Updated in place · ${plural(modules, "module")}`, "good");
     } else if (phase === "held") {
+      if (payload.reason === "incomplete source files") return;
       window.MefiToast?.(`Update held · ${payload.reason ?? "unknown"}`, "bad");
     } else if (phase === "error") {
       window.MefiToast?.(`Update failed · ${payload.error ?? payload.reason ?? "unknown"}`, "bad");
@@ -1497,6 +1573,7 @@
     paintBadges,
     renderDock,
     renderTools,
+    renderWorkspaceTools,
     renderSheetLinks,
     renderHelp,
     renderFooter,

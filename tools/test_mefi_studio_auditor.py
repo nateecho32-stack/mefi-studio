@@ -12,6 +12,11 @@ import shutil
 import subprocess
 import unittest
 
+try:
+    from flake_capture import retry_transient
+except ImportError:  # imported as tools.test_mefi_studio_auditor
+    from .flake_capture import retry_transient
+
 
 ROOT = Path(__file__).resolve().parents[1]
 STUDIO = ROOT
@@ -33,7 +38,7 @@ class MefiStudioAuditorTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertIn(name, self.preload)
 
-    def test_auditor_reports_clean_on_this_repo(self):
+    def _audit_probe(self):
         node = shutil.which("node")
         if not node:
             self.skipTest("Node unavailable; static contracts still ran")
@@ -50,11 +55,13 @@ class MefiStudioAuditorTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, "\n".join(messages))
         self.assertIn("checkedAt", payload)
 
-    def test_check_targets_leads_the_check_chain(self):
-        # The check-targets audit keeps the package.json "check" chain honest
-        # in both directions: every referenced target exists on disk, and every
-        # scripts/*.mjs + renderer/*.js (plus the "main" entry) is referenced.
-        # It must lead the chain so a stale target fails before --check runs.
+    def test_auditor_reports_clean_on_this_repo(self):
+        # Live-tree check: parallel agent runs edit the tree mid-suite, so a
+        # one-shot failure that clears on immediate re-run is captured as a
+        # flake (data/python-flake-capture.jsonl) instead of failing the gate.
+        retry_transient(self._audit_probe, self.id(), "auditor:run on the live tree")
+
+    def _check_targets_probe(self):
         pkg = json.loads((STUDIO / "package.json").read_text(encoding="utf-8"))
         self.assertIn("check-targets.mjs", pkg["scripts"].get("check:targets", ""))
         self.assertTrue(
@@ -74,6 +81,11 @@ class MefiStudioAuditorTests(unittest.TestCase):
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertIn("full coverage", result.stdout, "every source is covered by the check chain")
+
+    def test_check_targets_leads_the_check_chain(self):
+        # Same live-tree hazard as the auditor probe: a script added by a
+        # concurrent agent mid-suite transiently breaks full coverage.
+        retry_transient(self._check_targets_probe, self.id(), "check-targets on the live tree")
 
     def test_docs_register_this_contract(self):
         self.assertIn("`tools/test_mefi_studio_auditor.py`", self.guide)

@@ -37,7 +37,7 @@ function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = nu
   for (const filter of ["all", "open", "done"]) {
     const button = new Element("button"); button.dataset.filter = filter; get("task-filters").append(button);
   }
-  const saved = []; const notifications = []; let onTasks;
+  const saved = []; const notifications = []; let onTasks, onProjects;
   const prefs = { taskFilter: filter, autoReference: false };
   const context = vm.createContext({
     window: {
@@ -47,6 +47,7 @@ function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = nu
         prefsGet: async () => { if (prefsWait) await prefsWait; return { ok: true, prefs }; },
         prefsSet: async (patch) => { Object.assign(prefs, patch); return { ok: true, prefs }; },
         onTasks: (fn) => { onTasks = fn; },
+        onProjects: (fn) => { onProjects = fn; },
         ...bridge,
       },
       MefiNav: { setBadge() {}, claim() {}, release() {} },
@@ -57,7 +58,7 @@ function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = nu
   });
   vm.runInContext(source, context);
   const api = context.window.MefiTasks; api.init();
-  return { api, get, saved, notifications, broadcast: (rows) => onTasks(rows) };
+  return { api, get, saved, notifications, broadcast: (rows) => onTasks(rows), project: (activeId) => onProjects({ activeId }) };
 }
 
 const rows = [
@@ -288,4 +289,185 @@ test("failed reference attachment preserves the old task and explains that found
   assert.match(env.get("reference-status").textContent, /found, but not saved/);
   assert.match(env.notifications.at(-1), /found, but not saved/);
   assert(!env.notifications.some((message) => /^References gathered/.test(message)));
+});
+
+test("scheduling filters distinguish blockers, approvals, verification and timed retries, and task links clear the filter", async () => {
+  const tasks = ["ready", "blocked", "approval", "waiting", "cooling", "review"].map((stage) => ({ id: stage, title: `Task ${stage}`, status: stage === "review" ? "awaiting_verification" : "open", projectId: "p" }));
+  const backlog = { ok: true, projectId: "p", taskStates: tasks.map((task) => ({ id: task.id, stage: task.id, reason: `Reason for ${task.id}`, ...(task.id === "cooling" ? { retryAt: Date.now() + 60000 } : {}) })) };
+  const env = environment({ tasks, bridge: { backlogStatus: async () => backlog } });
+  await env.api.open({ filter: "all", readiness: "blocked" });
+  assert.match(env.get("task-list").textContent, /Task blocked.*Reason for blocked/);
+  assert.match(env.get("task-list").textContent, /AWAITING APPROVAL.*Task approval.*Reason for approval/);
+  assert.doesNotMatch(env.get("task-list").textContent, /Task ready|Task waiting|Task review/);
+  await env.api.open({ readiness: "waiting" });
+  assert.match(env.get("task-list").textContent, /Task waiting/);
+  assert.match(env.get("task-list").textContent, /Task cooling.*Automatic retry in/);
+  assert.doesNotMatch(env.get("task-list").textContent, /Task blocked|Task approval|Task review/);
+  await env.api.open({ taskId: "ready" });
+  assert.equal(env.api.state.readiness, "all");
+  assert.match(env.get("task-list").textContent, /Task ready/);
+  const select = descendants(env.get("task-filters")).find((item) => item.tagName === "select");
+  select.value = "review"; select.listeners.change[0]();
+  assert.match(env.get("task-list").textContent, /Task review/);
+  assert.doesNotMatch(env.get("task-list").textContent, /Task ready|Task blocked/);
+});
+
+test("Approve build reviews the full saved brief and authorizes only its displayed scope while preserving pause", async () => {
+  const calls = []; let finish;
+  const pending = new Promise((resolve) => { finish = resolve; });
+  const task = { id: "approval", projectId: "p", title: "Add export", status: "open", buildScope: "shown-scope", prompt: `Export each task.\n${"Keep the complete brief. ".repeat(100)}Final acceptance check.`, files: ["renderer/tasks.js"], dependsOn: ["prerequisite"] };
+  const backlog = { ok: true, projectId: "p", paused: true, autoBuild: false, taskStates: [{ id: task.id, stage: "approval", canApprove: true, reason: "Review and approve this brief before building.", buildScope: task.buildScope }] };
+  const env = environment({ tasks: [task, { id: "prerequisite", title: "Prepare export format", status: "done" }], bridge: { backlogStatus: async () => backlog, backlogControl: (payload) => { calls.push(payload); return pending; } } });
+  await env.api.open({ taskId: task.id });
+  assert.match(env.get("task-detail").textContent, /Build brief to review/);
+  assert.ok(env.get("task-detail").textContent.includes(task.prompt));
+  assert.match(env.get("task-detail").textContent, /Files in scope: renderer\/tasks.js/);
+  assert.match(env.get("task-detail").textContent, /Prerequisites: Prepare export format/);
+  assert.match(env.get("task-detail").textContent, /Leave this task here to decide later/);
+  const approve = env.get("task-status-row").children.find((item) => item.dataset.taskAction === "approve");
+  assert.equal(approve.textContent, "Approve build");
+  assert.equal(approve.disabled, false);
+  assert(!env.get("task-status-row").children.some((item) => item.textContent === "Do next"));
+  approve.click(); approve.click();
+  assert.equal(calls.length, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), { taskId: task.id, projectId: "p", action: "approve", expectedScope: "shown-scope" });
+  assert.equal(env.api.state.tasks.find((item) => item.id === task.id).buildApproval, undefined, "approval is not invented before storage accepts it");
+  finish({ ok: true, task: { ...task, buildApproval: { scope: task.buildScope } }, backlog: { ...backlog, taskStates: [{ id: task.id, stage: "ready", reason: "Ready when scheduling resumes." }] } });
+  await settle();
+  assert.equal(env.api.state.backlog.paused, true);
+  assert.match(env.get("task-detail").textContent, /Build approved for this brief/);
+  assert(!env.get("task-status-row").children.some((item) => item.dataset.taskAction === "approve"));
+});
+
+test("stale build approval submits the displayed task scope and surfaces rejection without releasing the hold", async () => {
+  const calls = [];
+  const task = { id: "approval", projectId: "p", title: "Displayed brief", prompt: "Scope the user has read", status: "open", buildScope: "old-displayed-scope" };
+  const backlog = { ok: true, projectId: "p", taskStates: [{ id: task.id, stage: "approval", canApprove: true, buildScope: "newer-backlog-scope", reason: "Approval required" }] };
+  const env = environment({ tasks: [task], bridge: { backlogStatus: async () => backlog, backlogControl: async (payload) => { calls.push(payload); return { ok: false, error: "This brief changed. Refresh and review it before approving." }; } } });
+  await env.api.open({ taskId: task.id });
+  env.get("task-status-row").children.find((item) => item.dataset.taskAction === "approve").click(); await settle();
+  assert.equal(calls[0].expectedScope, "old-displayed-scope");
+  assert.match(env.get("task-detail").textContent, /This brief changed/);
+  assert.equal(env.api.state.backlog.taskStates[0].stage, "approval");
+  assert.equal(env.api.state.tasks[0].buildApproval, undefined);
+  assert.equal(env.get("task-status-row").children.find((item) => item.dataset.taskAction === "approve").disabled, false);
+  env.broadcast([{ ...task, buildScope: undefined }]); await settle();
+  assert.equal(env.get("task-status-row").children.find((item) => item.dataset.taskAction === "approve").disabled, true, "a legacy or incomplete task response cannot approve a brief it did not identify");
+});
+
+test("a delayed approval cannot restore the previous project while the new backlog is loading", async () => {
+  let project = "p", finishApproval, finishBacklog;
+  const pendingApproval = new Promise((resolve) => { finishApproval = resolve; });
+  const nextBacklog = new Promise((resolve) => { finishBacklog = resolve; });
+  const oldTask = { id: "shared-id", projectId: "p", title: "First project brief", prompt: "First scope", buildScope: "scope-p", status: "open" };
+  const currentTask = { ...oldTask, projectId: "q", title: "Current project brief", prompt: "Current scope", buildScope: "scope-q" };
+  const oldBacklog = { ok: true, projectId: "p", taskStates: [{ id: oldTask.id, stage: "approval", canApprove: true }] };
+  const env = environment({ bridge: {
+    tasksList: async () => ({ ok: true, projectId: project, tasks: [project === "p" ? oldTask : currentTask] }),
+    backlogStatus: () => project === "p" ? Promise.resolve(oldBacklog) : nextBacklog,
+    backlogControl: () => pendingApproval,
+  } });
+  await env.api.open({ taskId: oldTask.id });
+  env.get("task-status-row").children.find((item) => item.dataset.taskAction === "approve").click();
+  project = "q"; env.project(project); await settle();
+  assert.equal(env.api.state.backlog, null);
+  finishApproval({ ok: true, task: oldTask, backlog: { ...oldBacklog, taskStates: [{ id: oldTask.id, stage: "ready" }] } }); await settle();
+  assert.equal(env.api.state.projectId, "q");
+  assert.equal(env.api.state.backlog, null, "the previous project reply cannot repopulate this slot during project load");
+  assert.equal(env.api.state.tasks.length, 0);
+  finishBacklog({ ok: true, projectId: "q", taskStates: [{ id: currentTask.id, stage: "approval", canApprove: true }] }); await settle();
+  env.api.selectTask(currentTask.id);
+  assert.match(env.get("task-detail").textContent, /Current scope/);
+  assert.doesNotMatch(env.get("task-detail").textContent, /First scope|Build approved for this brief/);
+});
+
+test("late context reads cannot pair an old brief with the approval token of a newly broadcast scope", async () => {
+  let finishContext, reads = 0;
+  const calls = [], lateContext = new Promise((resolve) => { finishContext = resolve; });
+  const oldTask = { id: "task", projectId: "p", title: "Read this brief", prompt: "Old requirements", buildScope: "old-scope", status: "open" };
+  const currentTask = { ...oldTask, prompt: "New requirements", buildScope: "new-scope" };
+  const env = environment({ tasks: [oldTask], bridge: {
+    backlogStatus: async () => ({ ok: true, projectId: "p", taskStates: [{ id: oldTask.id, stage: "approval", canApprove: true }] }),
+    tasksHistory: async () => ({ ok: true, entries: [] }),
+    tasksHandoff: () => ++reads === 1 ? lateContext : Promise.resolve({ ok: true, text: "Context for new requirements" }),
+    backlogControl: async (payload) => { calls.push(payload); return { ok: false, error: "Held for assertion" }; },
+  } });
+  await env.api.open({ taskId: oldTask.id });
+  env.broadcast([currentTask]); await settle();
+  finishContext({ ok: true, text: "Context for old requirements" }); await settle();
+  assert.match(env.get("task-detail").textContent, /New requirements.*Context for new requirements/);
+  assert.doesNotMatch(env.get("task-detail").textContent, /Old requirements|Context for old requirements/);
+  env.get("task-status-row").children.find((item) => item.dataset.taskAction === "approve").click(); await settle();
+  assert.equal(calls[0].expectedScope, "new-scope");
+});
+
+test("cooling tasks offer a targeted retry while prerequisite blockers do not offer misleading priority", async () => {
+  const cooling = { id: "cooling", projectId: "p", title: "Retry the export", status: "open", runFailures: 1, nextRunAt: Date.now() + 120000 };
+  const blocked = { id: "blocked", projectId: "p", title: "Repair prerequisite", status: "open", dependsOn: ["gone"] };
+  const calls = [];
+  const backlog = { ok: true, projectId: "p", taskStates: [{ id: "cooling", stage: "cooling", reason: "Waiting before another attempt", retryAt: cooling.nextRunAt }, { id: "blocked", stage: "blocked", blockedBy: "dependencies", canRetry: false, reason: "Missing prerequisite: gone" }] };
+  const env = environment({ tasks: [cooling, blocked], bridge: { backlogStatus: async () => backlog, backlogControl: async () => { throw new Error("Blocked priority must not be offered"); }, tasksAction: async (payload) => { calls.push(payload); return { ok: false, error: "Project is paused. Retry remains available." }; } } });
+  await env.api.open({ taskId: "cooling" });
+  assert.match(env.get("task-detail").textContent, /Automatic retry in 2m/);
+  env.get("task-status-row").children.find((item) => item.textContent === "Retry now").click();
+  await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ taskId: "cooling", projectId: "p", action: "retry" }]);
+  await env.api.open({ taskId: "blocked" });
+  assert(!env.get("task-status-row").children.some((item) => ["Do next", "Retry now"].includes(item.textContent)));
+});
+
+test("board Add creates an explicit project task once, preserves newer typing and never routes through chat", async () => {
+  const calls = []; let finish;
+  const pending = new Promise((resolve) => { finish = resolve; });
+  const env = environment({ bridge: {
+    tasksList: async () => ({ ok: true, projectId: "p", tasks: [] }),
+    backlogStatus: async () => ({ ok: true, projectId: "p", paused: true, taskStates: [] }),
+    tasksCreate: async (payload) => { calls.push(payload); return pending; },
+    assistantMessage: () => { throw new Error("Explicit Add must not become discussion"); },
+  } });
+  await env.api.open();
+  const input = env.get("task-new"), button = env.get("task-add");
+  input.value = "Could the export include a timestamp?";
+  button.click(); button.click(); await settle();
+  assert.equal(button.disabled, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ title: input.value, prompt: input.value, projectId: "p" }]);
+  input.value = "A second task I am still drafting"; input.listeners.input[0]();
+  finish({ ok: true, projectId: "p", task: { id: "created", projectId: "p", title: calls[0].title, status: "open" } });
+  await settle();
+  assert.equal(input.value, "A second task I am still drafting");
+  assert.equal(button.disabled, false);
+  assert.equal(env.api.state.tasks[0].id, "created");
+  assert.equal(env.api.state.selected, "created");
+  assert.match(env.notifications.at(-1), /queued until you resume/);
+  assert.equal(env.saved.length, 0, "creation does not overwrite the board snapshot");
+});
+
+test("failed explicit task creation retains the full draft and actual failure without a fake task", async () => {
+  const env = environment({ bridge: { tasksCreate: async () => ({ ok: false, error: "An unfinished task with this title already exists." }) } });
+  await env.api.open();
+  env.get("task-new").value = "Keep this task brief"; env.get("task-add").click(); await settle();
+  assert.equal(env.get("task-new").value, "Keep this task brief");
+  assert.equal(env.api.state.tasks.length, 0);
+  assert.match(env.get("reference-status").textContent, /unfinished task with this title already exists/);
+  assert.equal(env.get("task-add").disabled, false);
+});
+
+test("a creation response from another project cannot leak its task or clear the current draft", async () => {
+  let project = "p", finish;
+  const pending = new Promise((resolve) => { finish = resolve; });
+  const env = environment({ bridge: {
+    tasksList: async () => ({ ok: true, projectId: project, tasks: [] }),
+    backlogStatus: async () => ({ ok: true, projectId: project, taskStates: [] }),
+    tasksCreate: async () => pending,
+  } });
+  await env.api.open();
+  env.get("task-new").value = "Task for first project"; env.get("task-add").click(); await settle();
+  project = "q"; env.project("q"); await settle();
+  env.get("task-new").value = "Second project draft"; env.get("task-new").listeners.input[0]();
+  finish({ ok: true, projectId: "p", task: { id: "old", projectId: "p", title: "Task for first project", status: "open" } });
+  await settle();
+  assert.equal(env.api.state.projectId, "q");
+  assert.equal(env.api.state.tasks.length, 0);
+  assert.equal(env.get("task-new").value, "Second project draft");
+  assert(!env.notifications.some((message) => /^Task created/.test(message)));
 });

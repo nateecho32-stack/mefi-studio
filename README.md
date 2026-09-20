@@ -1,12 +1,77 @@
 # Mefi's Studio AI+
 
+**New here?** The in-app walkthrough opens automatically on your first launch.
+It explains how to choose a project folder, connect your tools, create one clear
+task, follow its activity and review its result. Close it whenever you want;
+it remembers your place and stays closed on later launches. Open **Start here**
+to continue at any time, or follow the [first-project walkthrough](GETTING_STARTED.md).
+
+For source installs, run `npm ci`, `npm run build-booklet`, then `npm start`
+from this directory. Windows portable downloads must be extracted in full
+before opening `Mefi Studio AI+.exe`.
+
+**Preparing a GitHub download:** run `npm run check`, `npm test` and
+`npm run audit`, then `npm run package:release`. This creates a fresh folder
+under `dist/releases/` with only the two public catalogs in its data directory.
+Zip that entire application folder before opening it. Keep your everyday
+portable build separate: `npm run package` preserves that build's own data.
+Neither packaging path seeds a new build with your source installation's
+settings, tasks, conversations, credentials or caches. Release publishing and
+code signing are separate steps; this command does not upload anything.
+
 A personal desktop workspace for working with your assistant across projects.
 Pick a project, talk an idea through, or choose **Give a task** to create real
 work on its board. The companion moves between Listen, Make, and Review as
 actual work changes; its narration and activity drawer show what is happening.
 
+**Plan an idea** opens **Plans** for work whose route is still unclear. Give the
+plan a destination and an out-of-scope boundary, collect unknowns, and turn them
+into discussion, research, prototype, or prerequisite questions. Questions can
+depend on earlier decisions; only unblocked questions can be resolved. Record
+your own answer and supporting evidence, or use **Ask Mefi** to explore the
+tradeoffs first. Assistant suggestions and discussion never resolve a question.
+
+Once the questions and unknowns are settled, write or request a specification
+with small implementation tasks, acceptance checks, and prerequisites. Review
+the draft, approve it, then explicitly create its tasks. They enter the existing
+queue and follow its current Pause and scheduling settings. Small, clear fixes
+can still go straight through **Give a task**. Planning itself cannot launch
+coding workers, provision services, or create a prototype; research sources and
+prototype artifacts can be recorded as evidence for your decision.
+
+The companion can summarize your saved plans and next open questions. Created
+tasks appear in the existing Command view and work board, with a **View approved
+plan** link back to their decisions. Planning AI usage is recorded in Model Lab;
+questions and draft plans remain separate from runnable work counts.
+
+Plans, discussion, decisions, and their revision history stay in each project's
+ignored local `planning.json`. Changing a decision reopens affected dependent
+questions and invalidates the specification approval. Changing the destination
+reopens all decisions. Interrupted task creation can be retried without creating
+duplicates; plans that have entered task creation are retained as an immutable
+record of the approved scope. Start a new plan for subsequent scope.
+
+AI planning runs only when requested and uses Studio's saved z.ai or OpenCode Go
+HTTP connection, with local code references and optional explicitly requested
+web references. It has no coding tools. A Grok-only setup needs a saved HTTP key
+for these suggestions; all manual planning controls work without an AI key.
+
+The visual path in **Plans** follows the idea through exploration, decisions,
+specification, approval, building and verification. Its question map shows what
+is ready to discuss, what is waiting on another answer, and what is settled.
+Click a stage or question to reach its controls. Working indicators appear only
+during a real planning request; after task creation, the view reads the actual
+task board to show queued work, active workers, review and completion. Planning
+questions remain separate from execution, and suggestions never approve work.
+
 **Projects** keeps each folder's tasks, conversations, drafts, references, and
-work logs together. Use **+** in the sidebar to add an existing folder. Running
+work logs together. Move the mouse to the left edge to reveal the Studio
+sidebar from any view. There is no visible tab. Moving off the menu closes it,
+including after clicking a control. It follows your selected theme and also
+supports keyboard access: Tab to the edge control to open it, and use **×** or
+Escape to close it without leaving the current view.
+
+Use **+** in the sidebar to add an existing folder. Running
 work must finish before changing projects; **Pause** stops new scheduling while
 current jobs finish. The selected folder is captured by jobs and store writes,
 so a project switch cannot redirect work into a different checkout.
@@ -16,6 +81,16 @@ verified or manually confirmed **Done** tasks. Click a card for its result,
 evidence, and follow-up controls. Archived completions remain visible. Verified
 direct inbox requests now become durable Done entries instead of disappearing.
 An older successful worker exit alone is not proof that verification passed.
+
+**Auto build** above **Your work** chooses how work starts. It stays on by
+default, including existing installations. Turn it off for **Verify first**:
+unapproved tasks wait in **Review** until you open their full brief and choose
+**Approve build**. Leave a task waiting if you do not want it built. The choice
+is saved across restarts for all projects, appears in the first-run guide, and
+is also available as **Build mode** in Command. Approval covers the saved task
+scope; changing that scope or explicitly retrying requires approval again.
+Pause and prerequisites still apply, and current workers finish normally.
+Result verification still runs after a build in either mode.
 
 **Work through backlog** gives the assistant the project's existing work first.
 It keeps a small buffer of up to three runnable tasks when admitting saved
@@ -28,6 +103,16 @@ idea explicitly. Raw chat notes need this explicit action (or **Keep**) before
 automatic admission. Failed work stays available for review and explicit retry;
 repeated attempts cannot silently reset their failure budget.
 
+Choose **All** in **Your work** to browse tasks and ideas together. Search names
+the current view and shows matching counts on every filter; if a match lives in
+another view, **Search all work** finds it without retyping. **Clear** resets the
+search. The sidebar also opens **Task board** and **Plans** directly.
+
+**Ctrl K** finds tools by familiar terms such as “node tree,” “API key,” or
+“color,” as well as tasks in the current project, even before opening the board.
+Descriptions help distinguish results. Use the arrow keys and Enter to open a
+result, or **Close** / Escape to return to where you were.
+
 The existing task board holds prerequisites, handoff context, and task history.
 These features run in Studio using local project storage, with no additional
 package, terminal, account, or hosted database. Coding still uses the configured
@@ -38,15 +123,46 @@ context when you recover a brief. Recovering a brief adds a revision without
 rolling back project files or marking work complete.
 
 Use **Make yourself at home** to set your name, companion name, accent, and
-movement preference. **Studio tools** holds the constellation, full task board,
+movement preference. **Node tree** in the sidebar opens the Command constellation
+directly (or press **D** outside a text field; **F** fits the tree). **Studio tools** holds the full task board,
 session explorer, model booklet, value graphs, ideas, and diagnostics. API keys,
 Jev, coding providers, and the optional Ruins Runner launcher live in **Settings
 & connections**. Press **H** to return home or **Ctrl K** to find a tool.
 
+**Model Lab** records model performance within the current project. It shows
+observed response time, delivered tokens per second, errors, reported token
+usage and USD cost, with human and model ratings kept separate. Missing usage
+or billing remains unknown; subscription limits and balances are not inferred.
+Task-type filters and effort breakdowns help compare similar work. The catalog
+map remains available below the measured results; its request quota is capacity,
+not measured speed. Measurements start with this version and cover Studio's
+HTTP/Grok assistant calls and speed probes, not external coding CLI sessions.
+
+The **Context** view previews the current task brief, grouped requirements,
+unresolved obligations, prerequisites, references, evidence and recent notes
+within a chosen estimated token budget. It reports excluded or shortened
+sections and leaves the saved task intact. This preview does not yet replace
+every worker's context assembly. Multiagent demo execution, model judging and
+automatic effort escalation are planned integrations. Model selection can use
+Jev to choose within your configured provider, using the catalog and Model Lab
+evidence. Explicit model overrides take priority; **Fixed defaults** disables
+Jev selection. Effort-selection helpers do not change the requested effort.
+
+If Electron loses its renderer, Studio attempts two view recoveries within a
+minute before offering **Reload Studio**. Saved board data stays in the host's
+stores. Content-free diagnostics are kept locally in `data/renderer-health.jsonl`.
+An unresponsive view cannot indefinitely block update/reload checks. Updates
+wait for current builders and pending result saves, holding new dispatches
+without changing the saved Pause preference.
+
+See [FEATURE_AUDIT.md](FEATURE_AUDIT.md) for the verified scope and remaining
+gaps in the capabilities described in the supplied screenshots.
+
 **Command center** puts the current worker and its reported step in **Live work**,
 with readiness counts and a ranked queue underneath. Agent details and technical
-logs expand when needed. Only actively running agents appear around the Assistant;
-role colors distinguish their work. Verification and claim recovery run before
+logs expand when needed. Active agents move smoothly between their work and the
+Assistant; finished agents return and fade away. Their positions survive status
+refreshes, and role colors distinguish their work. Verification and claim recovery run before
 the next dispatch, including ordinary automatic work outside backlog mode.
 **Parallel builds** chooses one to three coding workers. Independent file claims
 can run together; overlapping work waits. The separate assistant agent and AI
@@ -60,6 +176,56 @@ activity and moves between parallel jobs after a short dwell, then leaves a
 finished task for the next active one. Panning, zooming or selecting something
 manually takes control; choose Follow again to resume. A quiet board holds its
 last view, and reduced motion disables timed cycling between workers.
+**Auto labels** shows at most four to eight labels, depending on the available
+graph area, in Orbit, Free and Follow. Current work and inspected nodes take
+priority. Hover, selection and search reveal details; **All** keeps the expanded
+label option. The glowing orb style remains, with softer halos and distinct agent
+colors. Running work uses the theme accent; attempts awaiting verification use
+a quieter blue rim. Their compact labels put status above the task title, so
+the useful name has more room. Checkpoint notes use small outlined marks with
+larger click targets. Constellation groups related work around a centered hub,
+and collapsed panel headers retain clear space above the graph.
+The overview starts still: task and session anchors stay fixed as work
+updates, while active agents can travel between them. **Space** toggles rotation;
+**F** refits the tree. These managed positions last for the current view session;
+a reload starts a fresh layout, and resizing can adjust its spacing.
+
+Click the **Live work** heading to collapse or expand the panel. After 30 seconds
+without input in Command, **idle Zen** fades the panels and gently orbits the tree.
+Move the mouse, scroll, touch, or press a key to bring the controls back. Open menus,
+text entry and dragging keep Zen from interrupting an interaction. Reduced motion
+keeps the quiet view still; this does not enable Zen audio or microphone capture.
+The overview keeps node surfaces inside the space left by visible panels,
+including task details, throughout a full 3D orbit. Faded Zen panels release
+their space; waking restores the panel boundaries. Taking manual camera control
+continues from the fitted view without a jump.
+
+**Music & themes** separates the Studio color theme from the node tree's
+appearance and arrangement. Pick **Classic orbs**, **Soft glass**, **Minimal**,
+**Halo**, or **Crystal** for the nodes. Arrange them as **Constellation**,
+**Branches**, **Rings**, **Helix**, or **Terraces**.
+These choices are remembered. Changing style keeps the current arrangement;
+choosing another layout explicitly rearranges the tree. Branches groups children
+under centered parents in spaced rows, with quieter secondary connections.
+Constellation gives loose work more of the available space. Rings follows
+dependency depth in branch sectors, Helix keeps each branch together, and
+Terraces uses centered shelves with sibling columns. Narrow views leave clear
+space for active task labels. Worker satellites stay clear of task nodes and
+panel edges, and newly revealed children join their parent's existing position.
+Every layout has a flat 2D view and a real 3D volume: orbiting reveals depth
+between branches, rings or tiers while their world positions remain fixed.
+Saved task groups can be expanded to inspect their members. Running and
+verifying children stay visible even when the group is collapsed; saved member
+briefs and history remain available without creating another runnable task.
+**Blue orbit trails** brings back the circling blue accents on queued/running
+work, and **Extra glow** adds brighter halos and luminous cores. These effects
+are saved separately and animate around fixed anchors; reduced motion keeps
+the trails still.
+The settings open beside the live tree so changes can be seen immediately.
+Switch between **2D** and **3D** beside the preview; **Fit** brings the whole
+tree back into view after panning or zooming. Changing an already selected view
+keeps the camera in place, and preview controls do not stack notifications.
+Closing the settings returns to the previous view and camera framing.
 
 Open **Music & themes** from the sidebar, Command dock, or the tree's music node.
 Add local audio files to a queue with play/pause, previous/next, seeking and volume.
@@ -70,8 +236,11 @@ official embedded player; Spotify controls available playback, previews and sign
 AI music suggestions use Studio's configured AI provider only when requested;
 suggestions offer Spotify searches and cannot create tasks or control agents.
 
-Choose **Studio gold**, **Midnight**, **Forest**, **Violet** or **Ember** to recolor
-Studio and the node tree. The tree's music toggle follows local tracks directly.
+Choose **Studio gold**, **Midnight**, **Forest**, **Violet**, **Ember**, **Aurora**,
+or **Rose** to recolor Studio and the node tree. **Custom palette** saves your
+own accent, background, panel and text colors through color pickers or hex
+inputs. Derived text colors keep controls and graph labels readable against
+their own surfaces. The tree's music toggle follows local tracks directly.
 Desktop or microphone audio is optional and starts only after an explicit control
 gesture. Bass, mids, treble and beat envelopes affect the scene without speeding
 up its orbit or moving labels; reduced-motion preferences remain respected.
@@ -153,6 +322,16 @@ UI re-renders; if the schema changed the page reloads once. Window focus
 re-checks after six stale hours. Missing quality benchmarks stay `—`; the
 catalog never guesses.
 
+Catalog searches reuse formatted cards and preserve expanded details when the
+results are unchanged. Settings loads its connection and installed-tool checks
+when first opened. Catalog refresh fetches its independent sources concurrently,
+shares overlapping requests, and retains the last complete file until its
+replacement is ready. Offline or failed metadata refreshes preserve known
+prices and capabilities. Model Lab reuses unchanged local measurements while
+checking for new calls, ratings and file changes on each read; opening it does
+not run paid measurements. Speed probes run one at a time from Settings and
+update the displayed measurements when complete.
+
 ## A-Eyes
 
 A-Eyes reads the live OpenCode session store **read-only** (`node:sqlite`):
@@ -186,12 +365,14 @@ reloads the visual state captured with it, **Expand** drafts follow-up work.
 
 ### Assistant
 
-A-Eyes' assistant prefers your **z.ai GLM Coding Plan**: routine passes
-(briefings, chat replies, checkpoint reviews) ride **GLM 5.3 Flash**, and the
-heavy passes that earn deeper reasoning (the playbook improver, the overseer,
-the analyzer's AI read) ride **GLM 5.3** — billed to z.ai, never the OpenCode
-balance. With no z.ai key saved it falls back to **DeepSeek V4.1 Flash** on
-OpenCode Go. Proactive
+A-Eyes' assistant prefers your **z.ai GLM Coding Plan**. With **Jev — task fit,
+speed & cost** model selection and a gateway key, Jev picks an available model
+within that provider for each task. Without Jev, routine passes (briefings,
+chat replies, checkpoint reviews) use **GLM 5.3 Flash**, and heavy passes (the
+playbook improver, overseer and analyzer's AI read) use **GLM 5.3**. With no
+z.ai key saved, Auto uses OpenCode Go, whose usual default is **DeepSeek V4.1
+Flash**. Provider choice and the explicit fallback setting still determine
+which account pays. Proactive
 mode is remembered across restarts: with it on, the always-on service (next
 section) adds an AI brief every five minutes, where collisions, auditor
 findings and machine state become inbox requests and briefing facts. The
@@ -208,10 +389,20 @@ the only key), *z.ai only* (never bill OpenCode; a missing key is an error,
 not a fallback), *OpenCode Go only* or *Grok CLI* (the assistant answers
 through the installed `grok` CLI on its own login — no key field involved) —
 plus an opt-in **OpenCode fallback on z.ai failure** toggle that is off by
-default. Two **model fields** beside the row make the assistant's own model a
-choice rather than a constant: a routine id and a heavy id (free text — the
-model list drifts weekly), empty meaning the route default; the id is sent
-verbatim, and the Grok route passes it with `-m`. OpenCode requests carry a
+default. **Model selection** defaults to Jev and can be changed to **Fixed
+defaults**. Jev evaluates task fit using the catalog's quality and estimated
+prices alongside the current project's measured timing, errors, human/model
+ratings and reported cost. Unknown speed, quality or cost stays unknown;
+catalog estimates are distinct from billed cost and do not establish z.ai
+subscription charges or CLI-worker performance. Selection uses a small billed
+gateway evaluation request. Without a gateway key, on timeout, or on an
+unusable result, Studio uses the usual provider default. **Refresh selection**
+shows the latest chosen model, task type and reason without starting a model
+request.
+
+Two **model override fields** accept routine and heavy model ids. A nonempty
+override takes priority over Jev; clearing it restores the selected mode. Grok
+uses an explicit model with `-m` or its CLI default. OpenCode requests carry a
 stable `x-opencode-session` id (z.ai calls never see it), and the assistant
 verifies itself with
 `electron . --assistant-brief | --assistant-improve | --assistant-grow |
@@ -221,10 +412,11 @@ The same routing governs the autopilot's build jobs, and **who runs them is a
 choice too**: *Builders run on* picks `opencode run` (the default, with the
 Studio-managed `mefi-zai` provider injected per process when a z.ai key is
 saved — `OPENCODE_CONFIG_CONTENT` + `MEFI_ZAI_API_KEY`, the key never written
-to OpenCode's auth store — running `mefi-zai/glm-5.3-flash`) or the **Grok
+to OpenCode's auth store — using Jev's selected z.ai model or the usual
+`mefi-zai/glm-5.3-flash` default) or the **Grok
 CLI**, which takes the same prompt and the same done-sentinel protocol on its
 own login (positional prompt, tools auto-approved, a turn cap so a wedged run
-cannot outlive the kill timer), with an optional **Builder model** id passed
+cannot outlive the kill timer), with an optional **Grok builder model** id passed
 as `-m`. Grok is never a single point of failure: with builders on grok, a
 missing CLI resolves straight to the opencode route, and a grok run that dies
 before saying anything — a spawn failure, a wedged start, a silent nonzero
@@ -265,7 +457,7 @@ header when the canvas is wanted). All of them behave like a chatbot: a
 multiline composer that grows as you type (`Enter` sends, `Shift+Enter` makes
 a new
 line), quick-ask chips for *Status* / *What next?* / *Log* / *Help*, and a thinking
-bubble that shows the agent's inner monologue — it reads the activity log,
+ bubble that summarizes the agent's activity — it reads the activity log,
 says what it is considering, and a reply always comes back, from
 your routed model (z.ai GLM by default, or the Grok CLI) when a route is
 saved and the model answers, otherwise a
@@ -358,10 +550,16 @@ box, and kicks the foreman when the board is idle and a real pick is waiting),
 **briefer** (the AI brief,
 every five with Proactive and a key), **responder** (one job per message, top
 priority, so a reply never waits for a tick) and the on-demand **improver**,
-**grower**, **ideas** and **reference**. A role never runs twice at once; a
-job that takes more than 150 s is marked error and its role freed. *Parallel
-agents* (1–12) and *AI in parallel* (1–6) set the pool's width from the
-assistant card or `assistantPrefs`, and *Autopilot jobs* (1–12, same card)
+**grower**, **ideas** and **reference**. Cadence roles are singletons; replies
+have a separate lane of at most two jobs, capped by the AI width, and the
+foreman has one independent slot. Queue aging prevents steady replies from
+starving maintenance. A job that takes more than 150 s reports a timeout but
+keeps its slot and saved journal until its underlying operation settles. New
+work for that role waits; unrelated roles can continue. A permanently stuck
+operation needs an app restart. This is ownership retention, not cancellation.
+*Parallel
+agents* (1–12) and *AI in parallel* (1–6) set the background pool's width from the
+assistant card or `assistantPrefs`, and *Autopilot jobs* (1–3, same card)
 sets how many queued requests and open tasks the executor runs at once —
 each in-flight job claims its work in the store (requests flip to
 `running`, tasks to `active`) under a lock that re-reads first, so two
@@ -414,31 +612,22 @@ runnable and no job is building, the foreman wakes the **compactor** (which
 folds loose ideas into plans and re-asks when a plan is runnable) and, when
 its last scan has gone cold, the **ideas** agent — so a dry board grows work
 instead of waiting. The executor's default width scales with the machine:
-one job per logical core (at least 4, at most 12); a saved width — narrow
-included — is the operator's setting and always wins, and every spawn still
+two jobs by default (one on a single-core machine); a saved width within the
+one-to-three limit is the operator's setting and wins, and every spawn still
 yields to an exclusive test lease.
 
 **Board integrity.** Every writer of requests, tasks and ideas — queue
 filings, promotion, chat tasks, the compactor, the keeper, housekeeping,
 repairs, pins, the idea scan — goes through one **board gateway**: a lock
 that re-reads all three stores, applies the change, and writes only what
-moved. The three stores are also **relational** (ideas link to tasks, run
-claims span stores, one logical action touches several rows), so their
-authority is a **SQLite database** — `~/.local/share/mefi-studio/board.db`
-(deliberately *outside* the OneDrive-synced `data/`; `MEFI_STUDIO_BOARD_DB`
-overrides). Host reads are served by the database; every committed change
-rewrites the JSON files as exported **views**, and `readJson`/`writeJson`
-are intercepted in `scripts/eyes.mjs` so every existing caller — renderer
-IPC, CLI tools, the offline reconcile — keeps its JSON-array contract. On
-first run the existing JSON backlog is imported wholesale; after that the
-database wins (a hand-edited view is a stale export, never a second
-authority). Reads and writes of a pass happen inside one `BEGIN IMMEDIATE`
-transaction (WAL, `busy_timeout`, retry), so the compare-then-write of every
-mutation is atomic even across processes; a mutator that throws rolls the
-whole pass back. If the database cannot open at all, the store degrades once
-to plain-file mode for that process and carries on. Each write still lands
-as a temp file renamed over the view target, so a crash can never leave torn
-JSON. Nothing holds a mutable store across an AI call
+moved. The live project host currently uses local JSON stores, with serialized
+mutations and each file written through a temporary file and rename. This
+protects individual files and concurrent jobs in the host, but is not one
+atomic transaction spanning all three files or independent processes.
+An optional SQLite board store and its transaction tests exist in
+`scripts/eyes.mjs`; it is not enabled by `getEyes()` in the live project host.
+Studio does not migrate the existing board just by opening a project.
+Nothing holds a mutable store across an AI call
 any more: the idea scan collects additions first and applies them as a
 validated delta against the latest store afterwards, so a slow model can no
 longer resurrect promoted work. Settlement is **fenced**: a run closes or
@@ -447,9 +636,14 @@ the in-flight job is released only after the store write — a re-queue that
 lands in the same instant wins. "The run said done" is not "done": a
 finished task settles to `awaiting_verification` with the attempt's
 evidence attached (sentinel, exit code, spawned session), and housekeeping
-verifies it after a short dwell — sentinel plus recorded file changes marks
-it done, while a claimed success with nothing to show for it is reopened
-with a note. Compaction preserves intent while collapsing representations:
+verifies it after a short dwell. Claimed checks require recorded successful
+execution in that attempt's session and time window. Failed or pending checks
+block completion; unavailable evidence waits without consuming a retry. An
+edit-only attempt can pass on attributable completed edits, so this still does
+not independently certify every acceptance criterion. Tracked delegated work
+gets durable child cards; parents wait until those exact children finish, and
+exhausted children hold their parents for review while unrelated work proceeds.
+Compaction preserves intent while collapsing representations:
 same-theme plans merge into one task whose membership is unioned, whose
 prompt is rebuilt from the surviving obligation set, and whose ideas are
 rewired to the survivor; an expired plan's ideas go back to visible `new`
@@ -514,13 +708,17 @@ conservative proposals: only an exact `same_obligation` may attach an
 observation to existing work (as evidence, never a record merge), an
 `adds_scope` becomes a proposed linked follow-up, and every uncertain answer
 holds for review — a claimed resolution routes to verification, it is never
-itself evidence. The first job is wired **shadow-mode**: every inbox
-admission (`queueRequests`) is retrieved against the closest existing work by
+itself evidence. Intake runs in **shadow mode**: new inbox requests, direct chat
+tasks and tasks created from an approved plan are compared with existing work by
 title-key overlap and classified in one batched evaluation call, and the
 answer lands in the experience store as a `jev-proposal` event — a record,
 never an instruction. Admission never waits on a classifier. A bounded queue
 retains up to 48 observations arriving during a call or its cooldown, compares
 up to three at once, and excludes each new request from its own candidates.
+Planning questions and human decisions never go to Jev for approval; planning
+honors routine/heavy model overrides or the selected Jev/default mode for
+discussion and specifications. Planning calls retain their own provenance in Model Lab, while
+Jev calls use the improvement-budget ledger.
 Calls are spaced two minutes apart; two consecutive failures trigger an hour's
 backoff, and an observation gets at most three attempts. Failed calls count
 toward recorded usage. If a usage-ledger write fails, its charge is retried
@@ -533,8 +731,11 @@ suppress work, merge tasks, or spawn agents. Model id
 jev:status` / `jev:models` / `jev:probe` check the route through the stored
 key without printing it.
 
-The **Studio** tab has a Jev key field, classification switch, queue status,
-and **Test Jev connection** button. Keys are encrypted using the OS key store;
+The **Studio** tab's **Jev connection & optional task suggestions** section has
+a gateway key field, intake-classification switch, queue status, and **Test Jev
+connection** button. The gateway key also enables Jev model selection; the
+intake-classification switch only controls task suggestions. **Model selection**
+controls routing separately. Keys are encrypted using the OS key store;
 only connection status crosses into the renderer. `AI_GATEWAY_API_KEY` or
 `MEFI_STUDIO_GATEWAY_KEY` can supply the key through the environment. Ordinary
 tests are offline; the optional live test requires both `MEFI_JEV_LIVE_TEST=1`
@@ -738,9 +939,10 @@ restarts inside a minute also hold, as does a `devDependencies.electron` bump
 in the packaged app (run `npm run package` for that one). The payload's `data/`
 directory — your tasks, ideas, checkpoints, pins, requests and the assistant's
 state — is never written by the updater. `npm run package` follows the same
-rule: it refreshes the catalog files (`curated.json`, `models*.json`, `cache/`)
-but seeds live-state files only on a first install and leaves existing ones
-alone, and `--clean` carries the payload's `data/` across the wipe.
+rule: it refreshes only `curated.json` and `models.json`, never copies local
+state or caches from the source installation, and leaves existing payload
+state alone. `--clean` carries the payload's `data/` across the wipe.
+`npm run package:release` instead creates a separate, fresh distribution folder.
 
 The header carries a **Live update** pill: green watching, gold while it
 rebuilds or updates in place, amber when an update is ready and waiting for a

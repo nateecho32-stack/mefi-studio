@@ -54,13 +54,13 @@ export function classifyPath(relPath) {
   if (IGNORED_TOP.has(segments[0])) return "ignore";
   if (TEMP_NAME.test(segments[segments.length - 1])) return "ignore";
   if (rel === GENERATED) return "ignore";
-  if (rel === "renderer/styles.css") return "style";
+  if (/^renderer\/[^/]+\.css$/.test(rel)) return "style";
   // A changed build script can change the built page, so it is a reload too.
   if (rel === "renderer/booklet.template.html" || rel === "scripts/build-booklet.mjs" || /^renderer\/[^/]+\.js$/.test(rel)) return "reload";
   // Electron runs the preload from disk on every page load: a reload is enough.
   if (rel === "preload.cjs") return "reload";
   // Root paths are startup constants, and CommonJS keeps the resolver cached.
-  if (rel === "main.cjs" || rel === "scripts/paths.cjs") return "restart";
+  if (rel === "main.cjs" || /^scripts\/.*\.cjs$/.test(rel)) return "restart";
   if (rel === "package.json") return "sync";
   if (segments.length > 1 && segments[0] === "scripts") return /\.(mjs|cjs|js)$/.test(rel) ? "modules" : "sync";
   if (segments.length > 1 && segments[0] === "assets") return "sync";
@@ -491,8 +491,20 @@ export function createUpdater({
         }
       }
       emit("building");
-      const buildFn = build ?? (await loadBuild(sourceRoot));
-      await buildFn({ root: sourceRoot });
+      try {
+        const buildFn = build ?? (await loadBuild(sourceRoot));
+        await buildFn({ root: sourceRoot });
+      } catch (error) {
+        // A multi-file edit can register a renderer input before its writer
+        // creates it. Keep the last complete payload and retry on the next
+        // source change; never sync or restart into this incomplete build.
+        const missing = error?.code === "ENOENT" && typeof error.path === "string"
+          ? normalizeRel(path.relative(sourceRoot, error.path)) : null;
+        if (!missing || missing.startsWith("../") || path.isAbsolute(missing) || /^[A-Za-z]:/.test(missing)) throw error;
+        emit("held", { reason: "incomplete source files", error: `Waiting for ${missing}` });
+        outcome = { ok: false, applied: false, phase: "held", kind, files, reason: state.reason, error: state.error };
+        return outcome;
+      }
       if (!sameRoot) {
         emit("syncing");
         const sync = await syncPayload({ sourceRoot, appRoot, relPaths: [...files, GENERATED] });

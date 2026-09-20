@@ -34,7 +34,7 @@ test("backlog counts match actual dispatch states and do not double-count promot
     { id: "promoted", title: "Already queued", taskId: "next", status: "new" },
   ];
   const snapshot = backlog.summarizeBacklog({ tasks, requests, ideas, now, ideaEligible: assistant.backlogIdeaEligible });
-  assert.deepEqual(snapshot.counts, { ready: 3, running: 1, review: 1, blocked: 2, cooling: 1, done: 1, grouped: 0, waiting: 0, requests: 1, ideas: 2, eligibleIdeas: 1, ideaNotes: 1 });
+  assert.deepEqual(snapshot.counts, { ready: 3, running: 1, review: 1, blocked: 2, cooling: 1, done: 1, grouped: 0, waiting: 0, approval: 0, requests: 1, ideas: 2, eligibleIdeas: 1, ideaNotes: 1 });
   assert.deepEqual(snapshot.next.map((item) => item.title), ["Older", "A task", "Unique request"]);
   assert.equal(snapshot.nextRetryAt, 2000);
   assert.equal(snapshot.blocked.find((item) => item.id === "verify").stage, "blocked");
@@ -133,7 +133,7 @@ test("pause clears a timed restart and retry refuses to double-run a live or rev
 test("the actual executor will not dispatch exhausted verification tasks or requests", async () => {
   const records = { tasks: [{ id: "task", title: "Task", status: "open", verifyAttempts: 3 }], requests: [{ title: "Request", verifyAttempts: 3 }] };
   const env = vm.createContext({
-    Date, console, backlog, projectSwitching: false, assistantState: { status: "running" }, assistantModule: null,
+    Date, console, backlog, projectSwitching: false, assistantState: { status: "running" }, assistantModule: null, executorUpdateHold: () => null,
     projects: { current: () => ({ id: "fixture", path: "/fixture" }) }, projectRoot: () => "/fixture",
     autopilot: { execute: true, jobs: [] }, getMachine: async () => ({ leaseStatus: async () => null }),
     executorRunEnv: async () => ({ via: "fixture" }), getEyes: async () => ({ readJson: async (key) => records[key] }),
@@ -165,7 +165,7 @@ test("promoting a request preserves its retry budget, pin, evidence and remainin
     Date, backlog, projects: { current: () => ({ id: "fixture" }) }, projectRoot: () => "/fixture",
     crypto: { randomBytes: () => ({ toString: () => "fake-id" }) },
     mutateBoard: async (fn) => ({ ...fn(board, {}), ...board }),
-    taskPriority: () => 1, workTitleKey: (value) => value,
+    compareWork: (a, b) => (a.at ?? 0) - (b.at ?? 0), workTitleKey: (value) => value,
     workPlanTheme: () => null, isFixWork: () => false,
   });
   vm.runInContext(section("async function promoteRequestsToTasks()", "// Chat work lands straight on the task board."), env);
@@ -304,7 +304,7 @@ test("dispatch rechecks prerequisites inside the claim lock and loses the claim 
   const records = { tasks: [{ id: "pre", title: "Prerequisite", status: "done", doneAt: 1 }, { id: "next", title: "Dependent", status: "open", dependsOn: ["pre"] }], requests: [] };
   let claims = 0;
   const env = vm.createContext({
-    Date, console, backlog, projectSwitching: false, assistantState: { status: "running" }, assistantModule: null,
+    Date, console, backlog, projectSwitching: false, assistantState: { status: "running" }, assistantModule: null, executorUpdateHold: () => null,
     projects: { current: () => ({ id: "fixture", path: "/fixture" }) }, projectRoot: () => "/fixture",
     autopilot: { execute: true, jobs: [] }, autopilotJobSeq: 0,
     getMachine: async () => ({ leaseStatus: async () => null }), executorRunEnv: async () => ({ via: "fixture" }),

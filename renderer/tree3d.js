@@ -17,6 +17,7 @@
   const ctx = canvas.getContext("2d");
   let width = 0;
   let height = 0;
+  let pixelRatio = 0;
   let nodes = [];
   let edges = [];
   let pulses = [];
@@ -51,7 +52,7 @@
     amber: "#ffd479",
     grey: "#8a8070",
     stale: "#4a463e",
-    edge: "rgba(201, 168, 106, 0.3)",
+    edge: "rgba(137, 153, 177, 0.22)",
     edgeActive: "rgba(201, 168, 106, 0.62)",
   };
   const ASSISTANT_PULSE_KINDS = new Set(["tick", "organize", "tidy", "fix", "audit", "brief", "message", "reply", "think"]);
@@ -117,6 +118,24 @@
   const AGENT_RING = 34;
   // The last store answer, so a roster change can rebuild without a re-read.
   const cache = { sessions: [], todos: [], fallback: null };
+  let sessionSlots = new Map();
+  let agentSlots = new Map();
+
+  function stableNodeSlots(ids, previous = new Map()) {
+    const slots = new Map();
+    const used = new Set();
+    for (const id of ids) {
+      const slot = previous.get(id);
+      if (Number.isInteger(slot) && slot >= 0 && !used.has(slot)) { slots.set(id, slot); used.add(slot); }
+    }
+    for (const id of ids) {
+      if (slots.has(id)) continue;
+      let slot = 0;
+      while (used.has(slot)) slot += 1;
+      slots.set(id, slot); used.add(slot);
+    }
+    return slots;
+  }
   // Agent travel: one motion record per role, kept across rebuilds; the Command
   // view registers its task nodes here so a reference agent can fly to one.
   const FLY_MS = 650;
@@ -126,6 +145,9 @@
   // hundred milliseconds after they start; the satellite still finishes its
   // flight and spends this long at the target before it heads home.
   const MIN_VISIT_MS = 1400;
+  const AGENT_FADE_MS = 320;
+  const ORBIT_EASE_MS = 400;
+  const TARGET_FOLLOW_MS = 180;
   const HOVER_LIFT = 26;
   const ORBIT_R = 9;
   // Agents at home are never quite still: the whole ring turns at this rate
@@ -154,11 +176,20 @@
 
   function resize() {
     const dpr = window.devicePixelRatio || 1;
-    width = rail.clientWidth;
-    height = rail.clientHeight;
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const nextWidth = rail.clientWidth;
+    const nextHeight = rail.clientHeight;
+    // Window resize and ResizeObserver can report the same geometry. Writing
+    // either bitmap dimension clears the canvas, even if it did not change.
+    if (width !== nextWidth || height !== nextHeight || pixelRatio !== dpr) {
+      width = nextWidth;
+      height = nextHeight;
+      pixelRatio = dpr;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      lastDraw = -Infinity;
+    }
+    syncAnimation();
   }
 
   function seedStars() {
@@ -274,6 +305,18 @@
     return agentRoster().filter((agent) => agentStateOf(agent) === "running");
   }
 
+  // A finished role keeps its existing satellite until its visit, return and
+  // fade finish. Idle roles that have never appeared still stay off the graph.
+  function visibleAgentRoster() {
+    const roster = agentRoster();
+    const visible = new Map(activeAgentRoster().map((agent) => [agent.role, agent]));
+    for (const [role, motion] of motions) {
+      if (visible.has(role) || motion.retired) continue;
+      visible.set(role, roster.find((agent) => agent.role === role) ?? { ...motion.agent, role, status: "idle" });
+    }
+    return [...visible.values()];
+  }
+
   // Keeps the assistant node's tone and the agents' statuses in step between
   // rebuilds. A roster whose roles changed needs the layout redone.
   function syncAssistantNode() {
@@ -283,7 +326,7 @@
     node.state = summary.tone;
     node.tone = summary.tone;
     node.sublabel = summary.sublabel;
-    const roster = activeAgentRoster();
+    const roster = visibleAgentRoster();
     const satellites = nodes.filter((entry) => entry.kind === "agent");
     if (roster.length !== satellites.length || roster.some((agent) => !satellites.some((entry) => entry.role === agent.role))) return true;
     for (const agent of roster) {
@@ -336,9 +379,9 @@
     if (!motion) {
       motion = {
         role: node.role,
-        x: node.home.x,
-        y: node.home.y,
-        z: node.home.z,
+        x: node.x,
+        y: node.y,
+        z: node.z,
         home: node.home,
         from: null,
         to: null,
@@ -358,6 +401,13 @@
         doneSeq: 0,
         // Set by requestReturn() while a finished job waits out MIN_VISIT_MS.
         pendingReturn: null,
+        agent: { role: node.role, status: node.status, text: node.text },
+        opacity: noMotion() ? 1 : 0,
+        retiring: false,
+        retired: false,
+        fadeStartedAt: null,
+        fadeFrom: 1,
+        lastAdvancedAt: performance.now(),
       };
       motions.set(node.role, motion);
     }
@@ -491,7 +541,7 @@
     motion.sparkSeq += 1;
     const to = tetherNode(motion.targetId);
     const tint = agentColor(node.role);
-    if (to) pulses.push({ from: node, to, start: now, duration: 320, color: tint, glow: tint, small: true, wave: true });
+    if (to) queuePulse({ from: node, to, start: now, duration: 320, color: tint, glow: tint, small: true, wave: true });
   }
 
   // A return that requestReturn() held back leaves the moment the agent has
@@ -500,7 +550,7 @@
     if (!motion.pendingReturn || now - motion.hoverStart < MIN_VISIT_MS) return false;
     const bright = Boolean(motion.pendingReturn.bright);
     motion.pendingReturn = null;
-    returnHome(role, bright);
+    returnHome(role, bright, now);
     return true;
   }
 
@@ -534,22 +584,21 @@
     // Running again: whatever return was waiting on this visit is off.
     motion.pendingReturn = null;
     const same = motion.targets.length === list.length && motion.targets.every((id, index) => id === list[index]);
-    if (same && (motion.phase === "flying" || motion.phase === "hovering")) return;
+    if (same && (motion.phase === "flying" || motion.phase === "hovering" || motion.phase === "running")) return;
     motion.targets = list;
     motion.index = 0;
     flyTo(motion, list[0], performance.now());
   }
 
-  function returnHome(role, bright) {
+  function returnHome(role, bright, now = performance.now()) {
     const motion = motions.get(role);
     if (!motion || motion.phase === "home" || motion.phase === "returning") return;
-    const now = performance.now();
     if (bright) {
       // One bright surge from the work back to the assistant: done.
       motion.doneSeq += 1;
       const from = tetherNode(motion.targetId);
       const hub = findNodeById("__assistant__");
-      if (from && hub) pulses.push({ from, to: hub, start: now, duration: 700, color: "#fff2cc", glow: "#f1dcae", wave: true });
+      if (from && hub) queuePulse({ from, to: hub, start: now, duration: 700, color: "#fff2cc", glow: "#f1dcae", wave: true });
     }
     motion.pendingReturn = null;
     motion.lastTargetId = motion.targetId;
@@ -583,8 +632,8 @@
     if (!motion || motion.phase === "home" || motion.phase === "returning") return;
     const visiting = motion.phase === "hovering" || motion.phase === "running";
     const spent = visiting ? performance.now() - motion.hoverStart : 0;
-    if (!visiting || spent < MIN_VISIT_MS) {
-      motion.pendingReturn = { bright: Boolean(bright) };
+    if (!noMotion() && (!visiting || spent < MIN_VISIT_MS)) {
+      motion.pendingReturn = { bright: Boolean(bright || motion.pendingReturn?.bright) };
       // Hold it on the target it is on: no hopping to the next one now.
       motion.targets = motion.wantedId ? [motion.wantedId] : [];
       motion.index = 0;
@@ -597,14 +646,24 @@
   // a row that stopped comes home.
   function reconcileMotions(roster) {
     for (const agent of roster) {
-      const phase = motions.get(agent.role)?.phase ?? "home";
+      const node = agentNodeOf(agent.role);
+      if (!node) continue;
+      const motion = ensureMotion(node);
+      const phase = motion.phase;
+      motion.agent = { ...agent };
+      motion.retiring = agent.status !== "running";
       if (agent.status === "running") {
+        motion.retired = false;
+        motion.fadeStartedAt = null;
+        motion.pendingReturn = null;
         const ids = eventTargets(null, agent);
         if (ids) setAgentTargets(agent.role, ids);
-        else if (phase === "home") setAgentTargets(agent.role, deriveTargets(agent.role, agent.text));
-      } else if (agent.status !== "queued" && phase !== "home" && phase !== "returning") {
+        else if (phase === "home" || phase === "returning") setAgentTargets(agent.role, deriveTargets(agent.role, agent.text));
+      } else if (phase !== "home" && phase !== "returning") {
         requestReturn(agent.role, agent.status === "done");
       }
+      node.retiring = motion.retiring;
+      node.opacity = motion.opacity;
     }
   }
 
@@ -612,10 +671,14 @@
   // The rail's frame cadence does not control Command's animation cadence.
   function advanceMotion(now) {
     const still = noMotion();
+    const retired = new Set();
     for (const node of nodes) {
       if (node.kind !== "agent") continue;
       // Every agent gets a motion record, idle ones included: home drifts too.
       const motion = motions.get(node.role) ?? ensureMotion(node);
+      const elapsed = Math.max(0, now - motion.lastAdvancedAt);
+      const follow = still ? 1 : 1 - Math.exp(-Math.min(64, elapsed) / TARGET_FOLLOW_MS);
+      motion.lastAdvancedAt = now;
       motion.home = node.home;
       const home = homePoint(motion.home, now);
       if (motion.phase === "home") {
@@ -638,9 +701,13 @@
         } else {
           const age = (now - motion.hoverStart) / 1000;
           const spin = still ? 0 : age * Math.PI;
-          motion.x = home.x + (still ? 0 : Math.cos(spin) * RUN_ORBIT_R);
-          motion.y = home.y - RUN_LIFT;
-          motion.z = home.z + (still ? 0 : Math.sin(spin) * RUN_ORBIT_R);
+          const arrival = still ? 1 : easeInOut(Math.min(1, Math.max(0, (now - motion.startedAt) / FLY_MS)));
+          const destination = {
+            x: home.x + (still ? 0 : Math.cos(spin) * RUN_ORBIT_R),
+            y: home.y - RUN_LIFT,
+            z: home.z + (still ? 0 : Math.sin(spin) * RUN_ORBIT_R),
+          };
+          for (const axis of ["x", "y", "z"]) motion[axis] = motion.from[axis] + (destination[axis] - motion.from[axis]) * arrival;
           emitWork(motion, node, now);
           if (!settleIfDue(motion, node.role, now) && motion.targets.length > 1 && now >= motion.dwellUntil) {
             motion.index = (motion.index + 1) % motion.targets.length;
@@ -650,14 +717,14 @@
       } else {
         const resolved = resolveTarget(motion.wantedId);
         if (!resolved) {
-          returnHome(node.role, false);
+          returnHome(node.role, false, now);
         } else {
           // A task node the Command view placed after take-off: re-aim at it.
           if (resolved.id !== motion.targetId) flyTo(motion, motion.wantedId, now);
           motion.targetLabel = resolved.label;
           const anchor = hoverPoint(resolved);
+          for (const axis of ["x", "y", "z"]) motion.to[axis] += (anchor[axis] - motion.to[axis]) * follow;
           if (motion.phase === "flying") {
-            motion.to = anchor;
             const t = still ? 1 : Math.min(1, (now - motion.startedAt) / FLY_MS);
             const e = easeInOut(t);
             motion.x = motion.from.x + (motion.to.x - motion.from.x) * e;
@@ -667,10 +734,11 @@
           } else if (motion.phase === "hovering") {
             const age = (now - motion.hoverStart) / 1000;
             const spin = still ? 0 : age * Math.PI; // half a revolution per second
-            const bob = still ? 0 : Math.sin(age * Math.PI * 2 * 1.2) * 3;
-            motion.x = anchor.x + Math.cos(spin) * ORBIT_R;
-            motion.y = anchor.y + bob;
-            motion.z = anchor.z + Math.sin(spin) * ORBIT_R;
+            const orbit = still ? 0 : easeInOut(Math.min(1, Math.max(0, age * 1000 / ORBIT_EASE_MS)));
+            const bob = still ? 0 : Math.sin(age * Math.PI * 2 * 1.2) * 3 * orbit;
+            motion.x = motion.to.x + Math.cos(spin) * ORBIT_R * orbit;
+            motion.y = motion.to.y + bob;
+            motion.z = motion.to.z + Math.sin(spin) * ORBIT_R * orbit;
             emitWork(motion, node, now);
             // The job may have finished already: the visit still runs its
             // MIN_VISIT_MS, and only then does the agent head home.
@@ -681,12 +749,28 @@
           }
         }
       }
+      if (motion.retiring && motion.phase === "home") {
+        if (motion.fadeStartedAt == null) { motion.fadeStartedAt = now; motion.fadeFrom = motion.opacity; }
+        const fade = still ? 1 : Math.min(1, Math.max(0, (now - motion.fadeStartedAt) / AGENT_FADE_MS));
+        motion.opacity = motion.fadeFrom * (1 - easeInOut(fade));
+        if (fade >= 1) { motion.retired = true; retired.add(node); }
+      } else {
+        motion.opacity = still ? 1 : Math.min(1, motion.opacity + elapsed / AGENT_FADE_MS);
+      }
       node.x = motion.x;
       node.y = motion.y;
       node.z = motion.z;
       node.phase = motion.phase;
       node.targetId = motion.targetId;
       node.targetLabel = motion.targetLabel;
+      node.retiring = motion.retiring;
+      node.opacity = motion.opacity;
+    }
+    if (retired.size) {
+      nodes = nodes.filter((node) => !retired.has(node));
+      edges = edges.filter((edge) => !retired.has(edge.a) && !retired.has(edge.b));
+      if (retired.has(hover)) hover = null;
+      if (retired.has(kbdFocus)) setKbdFocus(null);
     }
   }
 
@@ -707,6 +791,9 @@
         pulseSeq: motion?.pulseSeq ?? 0,
         sparkSeq: motion?.sparkSeq ?? 0,
         doneSeq: motion?.doneSeq ?? 0,
+        retiring: motion?.retiring ?? false,
+        opacity: motion?.opacity ?? 1,
+        slot: node.home?.index ?? 0,
       };
     }
     return out;
@@ -717,6 +804,7 @@
   // root and the assistant node are built either way, so the assistant stays
   // visible and selectable whatever the store is doing.
   function buildGraph(sessions, todos, fallback = { status: "empty", text: "no recent sessions", stats: "no recent sessions" }) {
+    const roster = visibleAgentRoster();
     cache.sessions = sessions;
     cache.todos = todos;
     cache.fallback = fallback;
@@ -742,10 +830,17 @@
       ? organized.slice(0, maxSessions)
       : sessions.filter(recent).sort((a, b) => (b.timeUpdated ?? 0) - (a.timeUpdated ?? 0)).slice(0, maxSessions);
 
+    // Index only the displayed sessions in one pass; store history can contain
+    // many more todos than the handful of sessions visible in the rail.
+    const todosBySession = new Map(roots.map((session) => [session.id, []]));
+    for (const todo of todos) todosBySession.get(todo.sessionId)?.push(todo);
+
     const rootNode = { id: "__root__", kind: "root", label: "sessions", x: 0, y: -40, z: 0, state: "session", r: 5 };
     nodes.push(rootNode);
     const golden = Math.PI * (3 - Math.sqrt(5));
-    roots.forEach((session, index) => {
+    sessionSlots = stableNodeSlots(roots.map((session) => session.id), sessionSlots);
+    roots.forEach((session) => {
+      const index = sessionSlots.get(session.id);
       const baseAngle = index * golden;
       const radius = 120;
       const stale = staleSet.has(session.id);
@@ -766,8 +861,7 @@
       };
       nodes.push(node);
       edges.push({ a: rootNode, b: node });
-      const sessionTodos = todos
-        .filter((todo) => todo.sessionId === session.id)
+      const sessionTodos = (todosBySession.get(session.id) ?? [])
         .sort((a, b) => a.position - b.position)
         .slice(0, maxTodos);
       // A stale session keeps its colour from its todos but draws none of them.
@@ -833,11 +927,12 @@
     };
     nodes.push(assistantNode);
     edges.push({ a: rootNode, b: assistantNode, assistant: true });
-    // Only agents doing work orbit the assistant. Idle, queued and completed
-    // roles stay in the activity/history views instead of looking busy here.
-    const roster = activeAgentRoster();
-    roster.forEach((agent, index) => {
-      const spin = (index / Math.max(1, roster.length)) * Math.PI * 2;
+    // Slots belong to roles for this view session, including while a role is
+    // absent. Finishing work returns and fades without shuffling its peers.
+    agentSlots = stableNodeSlots([...new Set([...agentSlots.keys(), ...roster.map((agent) => agent.role)])], agentSlots);
+    roster.forEach((agent) => {
+      const index = agentSlots.get(agent.role);
+      const spin = index * golden;
       // The overseer is the R&D layer above the assistant, not a worker in the
       // ring — it hovers overhead and slowly turns around its own hub.
       const above = agent.role === "overseer";
@@ -851,10 +946,9 @@
         hub: { x: assistantNode.x, y: assistantNode.y, z: assistantNode.z },
         index,
       };
-      // A satellite away from home keeps its place across a rebuild.
+      // Rebuilds replace graph objects, never the live motion coordinates.
       const motion = motions.get(agent.role) ?? null;
-      const away = motion && motion.phase !== "home";
-      const spot = away ? motion : homePoint(home, performance.now());
+      const spot = motion ?? homePoint(home, performance.now());
       const agentNode = {
         id: `__agent__:${agent.role}`,
         kind: "agent",
@@ -868,6 +962,9 @@
         since: agent.since ?? 0,
         runs: agent.runs ?? 0,
         progress: typeof agent.progress === "number" ? agent.progress : null,
+        retiring: agent.status !== "running",
+        opacity: motion?.opacity ?? (noMotion() ? 1 : 0),
+        slot: index,
         home,
         phase: motion?.phase ?? "home",
         targetId: motion?.targetId ?? null,
@@ -928,7 +1025,8 @@
   }
 
   function colorOf(node) {
-    if (node.kind === "assistant") return COLORS.assistant;
+    const palette = window.MefiMusic?.themePalette?.()?.canvas;
+    if (node.kind === "assistant") return palette?.bright ?? COLORS.assistant;
     if (node.kind === "agent") {
       // status first: amber on error, green when the last job is done, dim
       // slate while queued; a running or idle satellite wears the role colour
@@ -937,11 +1035,11 @@
       if (node.status === "queued") return COLORS.pending;
       return agentColor(node.role);
     }
-    if (node.state === "stale") return COLORS.stale;
+    if (node.state === "stale") return palette?.dim ?? COLORS.stale;
     if (node.state === "done") return COLORS.done;
-    if (node.state === "active") return COLORS.active;
-    if (node.state === "session") return node.progress === 1 ? COLORS.done : node.progress ? COLORS.active : COLORS.session;
-    return COLORS.pending;
+    if (node.state === "active") return palette?.bright ?? COLORS.active;
+    if (node.state === "session") return node.progress === 1 ? COLORS.done : node.progress ? palette?.bright ?? COLORS.active : palette?.text ?? COLORS.session;
+    return palette?.muted ?? COLORS.pending;
   }
 
   const hexRgb = (hex) => {
@@ -1034,6 +1132,7 @@
       const a = projected.get(edge.a);
       const b = projected.get(edge.b);
       if (a.depth < 60 || b.depth < 60) continue;
+      ctx.globalAlpha = edge.agent ? edge.b.opacity ?? 1 : 1;
       ctx.strokeStyle = edge.sessionId && edge.sessionId === activeSessionId ? COLORS.edgeActive : COLORS.edge;
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -1041,6 +1140,7 @@
       ctx.lineTo(b.x, b.y);
       ctx.stroke();
     }
+    ctx.globalAlpha = 1;
 
     // pulses — a line that ends at an agent carries the signal itself
     // (wave, see surgeLine); the rest stay travelling dots
@@ -1061,7 +1161,7 @@
       ctx.arc(px, py, pulse.small ? 2.2 : 3.4, 0, Math.PI * 2);
       ctx.fillStyle = pulse.color ?? "#a9ffcd";
       ctx.shadowColor = pulse.glow ?? "#57ff9a";
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = 2;
       ctx.fill();
       ctx.shadowBlur = 0;
     }
@@ -1077,22 +1177,17 @@
       if (!a || !b || a.depth < 60 || b.depth < 60) continue;
       const tint = hexRgb(agentColor(node.role));
       ctx.save();
-      ctx.setLineDash([4, 4]);
-      ctx.lineDashOffset = noMotion() ? 0 : -((time / 40) % 8);
-      ctx.strokeStyle = `rgba(${tint}, 0.55)`;
+      ctx.globalAlpha = node.opacity ?? 1;
+      ctx.setLineDash([]);
+      ctx.lineDashOffset = 0;
+      ctx.strokeStyle = `rgba(${tint}, 0.38)`;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
       ctx.stroke();
       ctx.restore();
-      const glow = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, 7);
-      glow.addColorStop(0, `rgba(${tint}, 0.9)`);
-      glow.addColorStop(1, `rgba(${tint}, 0)`);
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, 7, 0, Math.PI * 2);
-      ctx.fill();
+
     }
 
     // nodes, far to near
@@ -1105,9 +1200,12 @@
       const isAssistant = node.kind === "assistant";
       const isFolded = node.kind === "folded";
       const isAgent = node.kind === "agent";
+      const visibility = isAgent ? node.opacity ?? 1 : 1;
+      ctx.save();
+      ctx.globalAlpha = visibility;
       const working = node.state === "active" || (isAgent && node.status === "running");
-      const wobble = working && !noMotion() ? 1 + Math.sin(time / 260) * 0.14 : 1;
-      const radius = Math.max(1.8, node.r * p.k * (isHover ? 1.6 : 1) * wobble);
+      const wobble = working && !noMotion() ? 1 + Math.sin(time / 520) * 0.07 : 1;
+      const radius = Math.max(1.8, node.r * p.k * (isHover ? 1.35 : 1) * wobble);
       const color = colorOf(node);
       // Freshness: other concurrent sessions share this constellation, so fade
       // anything that has not been touched recently. The assistant is always
@@ -1127,73 +1225,70 @@
                   ? 0.55
                   : 0.4;
       if (node.stale) fresh = Math.min(fresh, 0.45);
-      // A tight halo over a solid core: wide gradients turned the small rail
-      // nodes into one soft smear where the tree met the assistant ring.
-      const gradient = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 2.6);
-      gradient.addColorStop(0, color);
-      gradient.addColorStop(0.45, color + "99");
-      gradient.addColorStop(1, "transparent");
-      ctx.globalAlpha = 0.9 * fresh;
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, radius * 2.6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = fresh;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      if (node.kind === "session" && node.id === activeSessionId) {
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 5, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(236, 229, 216, 0.85)";
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      }
       const focused = assistant.state?.focus;
-      if (focused && node.kind === focused.kind && node.id === focused.id) {
-        // The node the assistant was pointed at: a thin gold ring outside the
-        // selection ring, breathing gently while the service runs.
-        const breath = running && !noMotion() ? (Math.sin(time / 1200) + 1) / 2 : 0.5;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 9 + breath * 2, 0, Math.PI * 2);
-        ctx.strokeStyle = COLORS.assistant;
-        ctx.globalAlpha = 0.3 + breath * 0.35;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        ctx.globalAlpha = 1;
+      const selected = isHover || node.kind === "session" && node.id === activeSessionId || focused && node.kind === focused.kind && node.id === focused.id;
+      const appearance = window.MefiMusic?.graphPreferences?.() ?? {};
+      const nodeStyle = appearance.nodeStyle ?? "orbs";
+      if (appearance.extraGlow === true) {
+        const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 2.8);
+        glow.addColorStop(0, color + "77"); glow.addColorStop(0.45, color + "33"); glow.addColorStop(1, color + "00");
+        ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, radius * 2.8, 0, Math.PI * 2); ctx.fill();
       }
-      if (isAssistant) {
-        // A slow breathing gold ring while the service runs, a still grey ring
-        // when paused, amber whenever the tone asks for attention.
-        const tone = node.tone;
-        const breath = running && !noMotion() ? (Math.sin(time / 900) + 1) / 2 : 0.5;
-        const ringColor = tone === "warn" || tone === "offline" ? COLORS.amber : !running || tone === "paused" ? COLORS.grey : COLORS.assistant;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius + 4 + breath * 4, 0, Math.PI * 2);
-        ctx.strokeStyle = ringColor;
-        ctx.globalAlpha = running ? 0.35 + breath * 0.45 : 0.55;
-        ctx.lineWidth = 1.4;
-        ctx.stroke();
-        ctx.globalAlpha = 1;
+      if (nodeStyle === "minimal") {
+        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, radius * (working ? 0.65 : 0.48)), 0, Math.PI * 2);
+        ctx.fillStyle = color; ctx.globalAlpha = (selected || working ? 0.95 : 0.6) * visibility; ctx.fill(); ctx.globalAlpha = visibility;
+        if (selected) { ctx.strokeStyle = "#eef3fa"; ctx.lineWidth = 1.5; ctx.stroke(); }
+      } else if (nodeStyle === "halo") {
+        ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = "#101822"; ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = working || selected ? 2 : 1.4;
+        ctx.shadowColor = color; ctx.shadowBlur = working || selected ? 10 : 5; ctx.stroke(); ctx.shadowBlur = 0;
+        ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.6, 0, Math.PI * 2); ctx.globalAlpha = 0.3 * visibility; ctx.lineWidth = 0.8; ctx.stroke(); ctx.globalAlpha = visibility;
+        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1.5, radius * 0.16), 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill(); ctx.restore();
+      } else if (nodeStyle === "crystal") {
+        ctx.save(); const points = Array.from({ length: 6 }, (_, index) => ({ x: p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, y: p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius }));
+        ctx.beginPath(); points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y)); ctx.closePath();
+        const gem = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
+        gem.addColorStop(0, color + "cc"); gem.addColorStop(0.45, color + "44"); gem.addColorStop(1, "#0c131f");
+        ctx.fillStyle = gem; ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
+        ctx.globalAlpha = 0.35 * visibility; ctx.beginPath(); points.filter((_, index) => index % 2 === 0).forEach((point) => { ctx.moveTo(p.x, p.y); ctx.lineTo(point.x, point.y); }); ctx.lineWidth = 0.7; ctx.stroke(); ctx.restore();
+      } else if (nodeStyle === "glass") {
+        ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2); ctx.fillStyle = "#172331"; ctx.fill();
+        const glass = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
+        glass.addColorStop(0, color + "66"); glass.addColorStop(1, color + "08"); ctx.fillStyle = glass; ctx.fill();
+        ctx.strokeStyle = color; ctx.globalAlpha = (selected ? 0.95 : working ? 0.72 : 0.42) * visibility; ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke(); ctx.globalAlpha = visibility;
+        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, radius - 2), Math.PI * 1.13, Math.PI * 1.6);
+        ctx.strokeStyle = "rgba(231,243,255,0.55)"; ctx.lineWidth = 1; ctx.stroke();
+      } else {
+        // Restrained luminous orbs retain the constellation's visual identity.
+        const spread = working || selected ? 2.4 : 1.8;
+        const halo = ctx.createRadialGradient(p.x, p.y, radius * 0.4, p.x, p.y, radius * spread);
+        halo.addColorStop(0, color + (working ? "44" : "20")); halo.addColorStop(1, color + "00");
+        ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(p.x, p.y, radius * spread, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = "#151a22"; ctx.fill();
+        const body = ctx.createRadialGradient(p.x - radius * 0.25, p.y - radius * 0.3, 0, p.x, p.y, radius);
+        body.addColorStop(0, color + "dd"); body.addColorStop(0.5, color + "88"); body.addColorStop(1, color + "22");
+        ctx.globalAlpha = Math.max(0.5, fresh) * visibility; ctx.fillStyle = body; ctx.fill(); ctx.globalAlpha = visibility;
+        ctx.strokeStyle = color; ctx.globalAlpha = (selected ? 0.95 : working ? 0.8 : 0.35) * visibility;
+        ctx.lineWidth = selected ? 1.6 : 1; ctx.stroke(); ctx.globalAlpha = visibility;
       }
-      if (isFolded) {
-        // Two thin rings: one node standing for several sessions.
-        for (const [gap, alpha] of [[3, 0.5], [6, 0.28]]) {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, radius + gap, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(87, 255, 154, ${alpha})`;
-          ctx.lineWidth = 1;
-          ctx.stroke();
+      if (appearance.orbitTrails === true && !isAgent && working) {
+        const phase = noMotion() ? Math.PI / 3 : time / 1100 * Math.PI * 2;
+        ctx.save(); ctx.lineCap = "round";
+        ctx.strokeStyle = "rgba(125,178,255,0.22)"; ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.arc(p.x, p.y, radius + 9, 0, Math.PI * 2); ctx.stroke();
+        for (let segment = 2; segment >= 0; segment -= 1) {
+          ctx.strokeStyle = `rgba(125,178,255,${0.8 - segment * 0.24})`; ctx.lineWidth = 2.6 - segment * 0.6;
+          ctx.beginPath(); ctx.arc(p.x, p.y, radius + 9, phase - (segment + 1) * 0.62, phase - segment * 0.62); ctx.stroke();
         }
+        ctx.restore();
       }
       const notes = node.kind === "session" ? checkpoints[node.id] : null;
       if (notes?.length) {
         const size = Math.max(5, 7 * p.k * (isHover ? 1.35 : 1));
         const bx = p.x + radius + 5;
         const by = p.y - radius - size * 1.8;
-        ctx.globalAlpha = fresh;
+        ctx.globalAlpha = fresh * visibility;
         ctx.fillStyle = "#c9a86a";
         ctx.beginPath();
         ctx.roundRect(bx, by, size * 1.5, size, size * 0.35);
@@ -1203,7 +1298,7 @@
         ctx.lineTo(bx + size * 0.2, by + size * 1.55);
         ctx.lineTo(bx + size * 0.75, by + size);
         ctx.fill();
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = visibility;
       }
       node._px = p.x;
       node._py = p.y;
@@ -1213,12 +1308,12 @@
       // by the whole board. The empty track is the work still to do; a full
       // green bar says none of it is.
       const meter = typeof node.progress === "number" && Number.isFinite(node.progress) ? Math.min(1, Math.max(0, node.progress)) : null;
-      if (meter != null) {
+      if (meter != null && (working || isHover)) {
         const trackW = Math.max(10, Math.min(24, radius * 4));
         const trackH = 2;
         const mx = p.x - trackW / 2;
         const my = p.y + radius + 4;
-        ctx.globalAlpha = 0.85 * fresh;
+        ctx.globalAlpha = 0.85 * fresh * visibility;
         ctx.fillStyle = "rgba(236, 229, 216, 0.16)";
         ctx.beginPath();
         ctx.roundRect(mx, my, trackW, trackH, trackH / 2);
@@ -1229,8 +1324,9 @@
           ctx.roundRect(mx, my, Math.max(trackH, trackW * meter), trackH, trackH / 2);
           ctx.fill();
         }
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = visibility;
       }
+      ctx.restore();
     }
 
     // sparks: a hovering agent throws off a few gold specks every pulse
@@ -1242,7 +1338,7 @@
       if (motion.sparkSeq <= seen) continue;
       sparkSeen[node.role] = motion.sparkSeq;
       if (noMotion()) continue;
-      const count = 2 + Math.round(Math.random());
+      const count = 1;
       const tint = agentColor(node.role);
       for (let index = 0; index < count; index += 1) {
         sparks.push({ x: node._px, y: node._py, vx: (Math.random() - 0.5) * 1.8, vy: -0.5 - Math.random() * 1.2, born: time, color: tint });
@@ -1301,18 +1397,46 @@
     }
   }
 
-  let lastDraw = 0;
+  let lastDraw = -Infinity;
+  let animationFrame = null;
+
+  function railVisible() {
+    return !document.hidden && width > 0 && height > 0 &&
+      !document.body.classList.contains("workspace-active") &&
+      !document.body.classList.contains("command-active");
+  }
+
+  function queuePulse(pulse) {
+    // Agent counters still reach Command while this canvas is covered. Keeping
+    // its invisible pulse objects until a future draw would accumulate history.
+    if (railVisible()) pulses.push(pulse);
+  }
+
+  function syncAnimation() {
+    if (!initialized) return;
+    if (!railVisible()) {
+      if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+      animationFrame = null;
+      lastDraw = -Infinity;
+      pulses = [];
+      sparks = [];
+      return;
+    }
+    if (animationFrame === null) animationFrame = requestAnimationFrame(loop);
+  }
+
   function loop(time) {
-    // The rail is always on screen; 30fps is plenty for an ambient tree and
-    // halves both its animation updates and canvas cost. Hidden windows skip
-    // all animation work; time-based flights catch up when they are shown.
-    if (!document.hidden && time - lastDraw >= 33) {
-      if (!noMotion()) angle += 0.0016 * Math.min(3, (time - lastDraw) / 16.67);
+    animationFrame = null;
+    // Home and Command cover this rail. Command advances its own shared agent
+    // flights; a covered rail needs neither canvas work nor animation callbacks.
+    if (!railVisible()) return;
+    if (time - lastDraw >= 33) {
+      // Stable viewing angle: work updates do not rotate the rail by themselves.
       lastDraw = time;
       advanceMotion(time);
       draw(time);
     }
-    requestAnimationFrame(loop);
+    syncAnimation();
   }
 
   function hitTest(x, y) {
@@ -1482,11 +1606,11 @@
     const target = nodes.find((node) => node.id === sessionId && node.kind === "session");
     if (!target) return;
     const from = nodes.find((node) => node.kind === "root") ?? target;
-    pulses.push({ from, to: target, start: performance.now(), duration: 900 });
+    queuePulse({ from, to: target, start: performance.now(), duration: 900 });
     // second hop: session -> a todo, so a long task visibly "bounces"
     const todo = target.todos?.find((item) => item.status === "in_progress") ?? target.todos?.[0];
     const todoNode = todo ? nodes.find((node) => node.sessionId === sessionId && node.label === todo.content) : null;
-    if (todoNode) pulses.push({ from: target, to: todoNode, start: performance.now() + 420, duration: 700 });
+    if (todoNode) queuePulse({ from: target, to: todoNode, start: performance.now() + 420, duration: 700 });
   }
 
   // One entry point for every assistant state the renderer sees: the
@@ -1512,12 +1636,12 @@
     if (root && target && ASSISTANT_PULSE_KINDS.has(event.kind)) {
       // Work the service did travels root → assistant; the thread travels back.
       const inbound = event.kind === "message" || event.kind === "reply";
-      pulses.push({ from: inbound ? target : root, to: inbound ? root : target, start: performance.now(), duration: 900, color: "#f1dcae", glow: "#e6c98d" });
+      queuePulse({ from: inbound ? target : root, to: inbound ? root : target, start: performance.now(), duration: 900, color: "#f1dcae", glow: "#e6c98d" });
     }
     if (target && event.kind === "focus" && event.focus?.id) {
       // "focused on X": the assistant's attention lands on the node.
       const node = nodes.find((entry) => entry.kind === event.focus.kind && entry.id === event.focus.id);
-      if (node && node !== target) pulses.push({ from: target, to: node, start: performance.now(), duration: 900, color: "#f1dcae", glow: "#e6c98d" });
+      if (node && node !== target) queuePulse({ from: target, to: node, start: performance.now(), duration: 900, color: "#f1dcae", glow: "#e6c98d" });
     }
     if (target && event.kind === "agent") {
       // "auditor started" / "briefer failed · …": the role leads the text.
@@ -1530,7 +1654,7 @@
       const row = agentRoster().find((agent) => agent.role === role) ?? null;
       const failed = /\bfailed\b|\berror\b/.test(text);
       const tint = agentColor(role);
-      if (satellite) pulses.push({ from: target, to: satellite, start: performance.now(), duration: 600, color: failed ? COLORS.amber : tint, glow: failed ? COLORS.amber : tint, wave: true });
+      if (satellite) queuePulse({ from: target, to: satellite, start: performance.now(), duration: 600, color: failed ? COLORS.amber : tint, glow: failed ? COLORS.amber : tint, wave: true });
       // The event says where the agent works; a host that names no target gets
       // one derived from the role, so the satellite always visibly goes to work.
       const named = ["running", "queued", "done", "error", "idle"].includes(event.status) ? event.status : null;
@@ -1614,6 +1738,11 @@
     setPinned(pinned);
     document.getElementById("tree-pin")?.addEventListener("click", () => togglePin());
     window.addEventListener("resize", () => resize());
+    document.addEventListener?.("visibilitychange", syncAnimation);
+    window.addEventListener("mefi:nav", syncAnimation);
+    if (typeof MutationObserver !== "undefined") {
+      new MutationObserver(syncAnimation).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
     // The rail animates its width; the canvas bitmap must follow or the tree
     // renders stretched while expanding.
     if (typeof ResizeObserver !== "undefined") {
@@ -1628,10 +1757,13 @@
     kbdProxy = document.createElement("div");
     kbdProxy.id = "tree-kbd-item";
     kbdProxy.setAttribute("role", "treeitem");
+    // Labeled from the first paint: the owned treeitem must never read as an
+    // anonymous stop, even before the arrows have moved anywhere.
+    kbdProxy.setAttribute("aria-label", "no node focused");
     kbdProxy.style.cssText = "position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;";
     rail.append(kbdProxy);
     canvas.setAttribute("aria-owns", "tree-kbd-item");
-    requestAnimationFrame(loop);
+    syncAnimation();
     // Fetch organisation and sessions together, then build once with both.
     // Command waits for this promise before taking its initial snapshot.
     const checkpointRead = read("eyesCheckpointsRead").catch(() => null);
@@ -1658,7 +1790,7 @@
     });
     window.mefiStudio?.onEyesActivity?.((data) => {
       for (const item of data.activity ?? []) spawnPulse(item.sessionId);
-      if (data.todos) load().catch(() => {}).then(() => requestAnimationFrame(() => draw(performance.now())));
+      if (data.todos) load().catch(() => {});
     });
     window.mefiStudio?.onAssistant?.((payload) => applyAssistant(payload));
     try {
@@ -1678,57 +1810,60 @@
         .filter((node) => node._px != null)
         .map((node) => ({ id: node.id, kind: node.kind, label: node.label, x: Math.round(node._px), y: Math.round(node._py), r: node._pr })),
     // Raw 3D graph for the idle/dream view (its own camera and layout scale).
-    snapshot: () => ({
-      nodes: nodes.map((node) => ({
-        id: node.id,
-        kind: node.kind,
-        label: node.label,
-        agent: node.agent ?? null,
-        model: node.model ?? null,
-        updated: node.updated ?? null,
-        progress: node.progress ?? null,
-        sessionId: node.sessionId ?? node.id,
-        status: node.status ?? null,
-        state: node.state,
-        stale: node.stale ?? false,
-        count: node.count ?? null,
-        sessionIds: node.sessionIds ?? null,
-        titles: node.titles ?? null,
-        tone: node.tone ?? null,
-        sublabel: node.sublabel ?? null,
-        role: node.role ?? null,
-        text: node.text ?? null,
-        error: node.error ?? null,
-        lastRunAt: node.lastRunAt ?? null,
-        since: node.since ?? null,
-        runs: node.runs ?? null,
-        ...(node.kind === "agent" ? { phase: node.phase ?? "home", targetId: node.targetId ?? null, targetLabel: node.targetLabel ?? null, progress: node.progress ?? null } : {}),
-        r: node.r,
-        x: node.x,
-        y: node.y,
-        z: node.z,
-      })),
-      edges: edges
-        .map((edge) => ({
-          a: nodes.indexOf(edge.a),
-          b: nodes.indexOf(edge.b),
-          sessionId: edge.sessionId ?? null,
-        }))
-        .filter((edge) => edge.a >= 0 && edge.b >= 0),
-      assistant: (() => {
-        const summary = assistantSummary(assistant.state);
-        const roster = agentRoster();
-        return {
-          status: assistant.state?.status ?? null,
-          tone: summary.tone,
-          sublabel: summary.sublabel,
-          unread: Number(assistant.state?.unread) || 0,
-          agents: roster.length,
-          running: roster.filter((agent) => agent.status === "running").length,
-          queued: roster.filter((agent) => agent.status === "queued").length,
-        };
-      })(),
-    }),
+    snapshot: () => {
+      const indexes = new Map(nodes.map((node, index) => [node, index]));
+      return {
+        nodes: nodes.map((node) => ({
+          id: node.id,
+          kind: node.kind,
+          label: node.label,
+          agent: node.agent ?? null,
+          model: node.model ?? null,
+          updated: node.updated ?? null,
+          progress: node.progress ?? null,
+          sessionId: node.sessionId ?? node.id,
+          status: node.status ?? null,
+          state: node.state,
+          stale: node.stale ?? false,
+          count: node.count ?? null,
+          sessionIds: node.sessionIds ?? null,
+          titles: node.titles ?? null,
+          tone: node.tone ?? null,
+          sublabel: node.sublabel ?? null,
+          role: node.role ?? null,
+          text: node.text ?? null,
+          error: node.error ?? null,
+          lastRunAt: node.lastRunAt ?? null,
+          since: node.since ?? null,
+          runs: node.runs ?? null,
+          ...(node.kind === "agent" ? { phase: node.phase ?? "home", targetId: node.targetId ?? null, targetLabel: node.targetLabel ?? null, progress: node.progress ?? null, retiring: node.retiring ?? false, opacity: node.opacity ?? 1, slot: node.slot ?? 0 } : {}),
+          r: node.r,
+          x: node.x,
+          y: node.y,
+          z: node.z,
+        })),
+        edges: edges
+          .map((edge) => ({
+            a: indexes.get(edge.a),
+            b: indexes.get(edge.b),
+            sessionId: edge.sessionId ?? null,
+          }))
+          .filter((edge) => edge.a >= 0 && edge.b >= 0),
+        assistant: (() => {
+          const summary = assistantSummary(assistant.state);
+          const roster = agentRoster();
+          return {
+            status: assistant.state?.status ?? null,
+            tone: summary.tone,
+            sublabel: summary.sublabel,
+            unread: Number(assistant.state?.unread) || 0,
+            agents: roster.length,
+            running: roster.filter((agent) => agent.status === "running").length,
+            queued: roster.filter((agent) => agent.status === "queued").length,
+          };
+        })(),
+      };
+    },
     // The assistant service as the renderer knows it. assistantSummary() with
     // no argument reads the current state; idle, explorer, nav and the palette
     // reuse it instead of carrying their own copy of the rules.

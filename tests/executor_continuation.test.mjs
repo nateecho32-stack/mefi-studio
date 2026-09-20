@@ -8,6 +8,7 @@ import { readFile } from "node:fs/promises";
 import * as assistant from "../scripts/assistant.mjs";
 import * as history from "../scripts/task-history.mjs";
 import backlog from "../scripts/backlog.cjs";
+import taskHandoffs from "../scripts/task-handoffs.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const section = (start, end) => {
@@ -23,7 +24,7 @@ function verificationHost({ tasks = [], requests = [], unavailable = [], changes
   let board = { tasks: copy(tasks), requests: copy(requests) };
   const notes = [];
   const env = vm.createContext({
-    Date: clock, crypto, process: { pid: 1 }, autopilot: { jobs: [] }, assistantState: { prefs: {} }, assistantModule: assistant,
+    Date: clock, crypto, taskHandoffs, process: { pid: 1 }, EXECUTOR_PARALLEL_CAP: 3, autopilot: { jobs: [] }, assistantState: { prefs: {} }, assistantModule: assistant,
     getAssistant: async () => assistant, loadModule: async () => history,
     getEyes: async () => ({ listChanges: ({ sessionId }) => {
       if (unavailable.includes(sessionId)) throw new Error("fixture evidence store unavailable");
@@ -44,7 +45,7 @@ function verificationHost({ tasks = [], requests = [], unavailable = [], changes
 }
 
 test("each ordinary foreman pass verifies prerequisites before dispatching the next task", async () => {
-  const first = { id: "first", title: "First task", status: "awaiting_verification", lastAttempt: { at: 1, code: 0, sessionId: "first-session" } };
+  const first = { id: "first", title: "First task", status: "awaiting_verification", lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "first-session" } };
   const second = { id: "second", title: "Next task", status: "open", dependsOn: ["first"] };
   const { env, board } = verificationHost({ tasks: [first, second] });
   const order = [];
@@ -70,7 +71,7 @@ test("each ordinary foreman pass verifies prerequisites before dispatching the n
 });
 
 test("one unavailable session leaves its verification budget intact while other work settles", async () => {
-  const attempt = (sessionId) => ({ at: 1, code: 0, sessionId, runId: sessionId });
+  const attempt = (sessionId) => ({ startedAt: 1, at: 2, code: 0, sessionId, runId: sessionId });
   const { env, board, notes } = verificationHost({
     tasks: [
       { id: "blocked", title: "Waiting on evidence", status: "awaiting_verification", verifyAttempts: 2, lastAttempt: attempt("missing") },
@@ -97,7 +98,7 @@ test("malformed review rows recover through the bounded retry gate instead of wa
   const { env, board } = verificationHost({ tasks: [
     { id: "orphan", title: "Review without attempt", status: "awaiting_verification" },
     { id: "exhausted", title: "Last review attempt", status: "awaiting_verification", verifyAttempts: 2 },
-    { id: "fresh", title: "Flushing session", status: "awaiting_verification", lastAttempt: { at: NOW - 1000, code: 0, sessionId: "fresh" } },
+    { id: "fresh", title: "Flushing session", status: "awaiting_verification", lastAttempt: { startedAt: NOW - 2000, at: NOW - 1000, code: 0, sessionId: "fresh" } },
   ] });
   await env.autopilotHousekeeping();
   assert.equal(board().tasks[0].status, "open");
@@ -107,6 +108,19 @@ test("malformed review rows recover through the bounded retry gate instead of wa
   assert.equal(board().tasks[1].verification.state, "failed");
   assert.equal(backlog.workState(board().tasks[1], NOW).stage, "blocked");
   assert.equal(board().tasks[2].status, "awaiting_verification", "fresh evidence retains the flush dwell");
+});
+
+test("a direct request cannot verify while its handed-on obligations remain open", async () => {
+  const { env, board } = verificationHost({ requests: [{
+    title: "Partially implemented request", at: 5, status: "verifying", remaining: ["Finish the requested integration"],
+    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "partial-session", runId: "partial-run", result: { parts: { remaining: "none" } } },
+  }] });
+  await env.autopilotHousekeeping();
+  assert.equal(board().requests.length, 1, "a partial request stays on the board for retry or review");
+  assert.equal(board().requests[0].verifyAttempts, 1);
+  assert.equal(board().requests[0].nextRunAt, NOW + 60000);
+  assert.deepEqual(board().requests[0].remaining, ["Finish the requested integration"]);
+  assert.equal(board().tasks.length, 0, "no durable Done entry is invented for unfinished work");
 });
 
 test("completion reports distinguish no remaining work from real obligations", () => {
@@ -120,7 +134,7 @@ test("completion reports distinguish no remaining work from real obligations", (
 });
 
 test("failed or pending edit tools are not treated as completed file changes", async () => {
-  const { env, board } = verificationHost({ tasks: [{ id: "task", title: "Edit rejected", status: "awaiting_verification", lastAttempt: { at: 1, sessionId: "edit-session", code: 0 } }],
+  const { env, board } = verificationHost({ tasks: [{ id: "task", title: "Edit rejected", status: "awaiting_verification", lastAttempt: { startedAt: 1, at: 2, sessionId: "edit-session", code: 0 } }],
     changes: [{ file: "failed.js", status: "error" }, { file: "pending.js", status: "running" }, { file: null, files: [], status: "completed" }],
   });
   await env.autopilotHousekeeping();
@@ -140,14 +154,16 @@ test("failed or skipped checks cannot become completion evidence under another f
       assert.equal(skipped.evidence.namedChecks, false);
     }
   }
-  assert.equal(assistant.verifyCompletion({ verdictOk: true, resultNote: { parts: { tests: "npm test: 20 passed, 0 failed" } } }).state, "verified");
+  assert.equal(assistant.verifyCompletion({ verdictOk: true, resultNote: { parts: { tests: "npm test: 20 passed, 0 failed" } } }).state, "unverified", "passing prose alone is not execution evidence");
+  assert.equal(assistant.verifyCompletion({ verdictOk: true, hasSession: true, observedChecks: [{ command: "npm test", status: "completed", exitCode: 0, passed: true, startedAt: 1000 }], resultNote: { parts: { tests: "npm test: 20 passed, 0 failed" } } }).state, "verified");
   assert.equal(assistant.verifyCompletion({ verdictOk: true, resultNote: { parts: { tests: "npm test passed", audit: "failed" } } }).state, "unverified", "all reported check fields are considered");
 });
 
 test("live worker status excludes finished entries and never exposes an invalid progress fraction", () => {
+  const stopping = { since: 1000, reason: "time budget", error: "access denied", retryAt: 16000 };
   const env = vm.createContext({
     EXECUTOR_PARALLEL_CAP: 3, autopilot: { jobs: [
-      { title: "Still running", taskId: "current", progress: .3, pid: 123 },
+      { title: "Still running", taskId: "current", progress: .3, pid: 123, stopping },
       { title: "Finished and saving", finished: true, progress: 1 },
       { title: "Unknown progress", progress: NaN },
       { title: "Out of bounds", progress: 4 },
@@ -158,6 +174,8 @@ test("live worker status excludes finished entries and never exposes an invalid 
   assert.equal(status.running.length, 3);
   assert.equal(status.running[0].progress, .3);
   assert.equal(status.running[0].pid, undefined);
+  assert.deepEqual({ ...status.running[0].stopping }, stopping);
+  assert.notEqual(status.running[0].stopping, stopping, "status cannot mutate the recovery controller");
   assert.equal(status.running[1].progress, undefined);
   assert.equal(status.running[2].progress, 1);
 });

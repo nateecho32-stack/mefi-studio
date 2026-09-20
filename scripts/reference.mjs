@@ -11,6 +11,7 @@
 import { fileURLToPath } from "node:url";
 import studioPaths from "./paths.cjs";
 import path from "node:path";
+import { isExtractionArtifact } from "./assistant.mjs";
 
 const STOPWORDS = new Set("the and for with that this from into about they them their will would should could what when where which while have has had add make use using new now out over more most some any all not but also just like work idea fix task feature build".split(/\s+/));
 
@@ -126,6 +127,10 @@ export function scanIdeas(chatTexts, { limit = 60 } = {}) {
       const line = rawLine.replace(/^[-*\d.\s]+/, "").trim();
       if (line.length < 30 || line.length > 220) continue;
       if (!IDEA_PATTERN.test(line)) continue;
+      // Narration is not a proposal: progress chatter, status reports and
+      // questions must not become candidate ideas — the model can only mint
+      // what it is shown, and every candidate costs review budget.
+      if (isExtractionArtifact(line)) continue;
       const normalized = line.toLowerCase().replace(/\s+/g, " ").slice(0, 140);
       if (seen.has(normalized)) continue;
       seen.add(normalized);

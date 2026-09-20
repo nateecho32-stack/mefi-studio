@@ -3,7 +3,7 @@
 (function () {
   "use strict";
 
-  const state = { items: [], filtered: [], index: 0, opener: null };
+  const state = { items: [], filtered: [], index: 0, opener: null, projectId: null, taskRecords: [], taskStatus: "", taskRead: 0 };
   const el = {};
   let initialized = false;
 
@@ -20,6 +20,18 @@
     }
     return score;
   };
+
+  function matchScore(query, item) {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const label = String(item.label || "").toLowerCase();
+    const terms = `${item.kind} ${label} ${item.description || ""} ${item.searchTerms || ""}`.toLowerCase();
+    // Natural phrases and words are useful before the user knows a tool's
+    // official name. Keep literal title matches ahead of descriptive matches.
+    if (label === query.toLowerCase()) return 1000;
+    if (label.includes(query.toLowerCase())) return 800;
+    if (words.every((word) => terms.includes(word))) return 500 + words.filter((word) => label.includes(word)).length;
+    return subsequenceScore(query, `${item.kind} ${label}`);
+  }
 
   function models() {
     try {
@@ -59,6 +71,8 @@
       .map((dest) => ({
         kind: dest.group, // surfaces | tools | system | command | assistant
         label: dest.label,
+        description: dest.desc || "",
+        searchTerms: dest.searchTerms || "",
         hint: dest.key ?? (dest.group === "assistant" ? serviceLine() : ""),
         keyHint: Boolean(dest.key),
         count: dest.badge ? Number(nav.badges?.[dest.badge]) || 0 : 0,
@@ -125,14 +139,72 @@
   }
 
   function tasks() {
-    return (window.MefiTasks?.state?.tasks ?? []).map((task) => ({
+    const projectId = currentProject();
+    return state.taskRecords.map((task) => ({
       kind: "task",
       label: task.title,
+      description: task.prompt || task.description || "",
       hint: task.status,
       keyHint: false,
       count: 0,
-      run: () => window.MefiNav?.go?.("tasks", { taskId: task.id }),
+      run: () => {
+        if (currentProject() === projectId) window.MefiNav?.go?.("tasks", { taskId: task.id });
+      },
     }));
+  }
+
+  function currentProject() {
+    return state.projectId || window.MefiTasks?.state?.projectId || null;
+  }
+
+  function updateTaskResults() {
+    if (el.overlay.hidden) return;
+    build();
+    filter(true);
+  }
+
+  async function loadTasks() {
+    const read = ++state.taskRead;
+    const projectId = currentProject();
+    const api = window.mefiStudio;
+    state.taskRecords = [];
+    if (!api?.tasksList) {
+      state.taskRecords = (window.MefiTasks?.state?.tasks || []).filter((task) => !task.projectId || !projectId || task.projectId === projectId);
+      state.taskStatus = "";
+      updateTaskResults();
+      return;
+    }
+    state.taskStatus = "loading";
+    updateTaskResults();
+    let timeout;
+    try {
+      const result = await Promise.race([
+        Promise.resolve().then(() => api.tasksList()),
+        new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("Task search timed out")), 8000); }),
+      ]);
+      if (read !== state.taskRead || el.overlay.hidden || currentProject() !== projectId) return;
+      if (result?.ok === false || !Array.isArray(result?.tasks)) throw new Error("Tasks unavailable");
+      if (projectId && result.projectId && result.projectId !== projectId) throw new Error("Project changed");
+      if (!result.projectId && !projectId) throw new Error("Project unavailable");
+      state.projectId = result.projectId || projectId;
+      state.taskRecords = result.tasks.filter((task) => !task.projectId || !state.projectId || task.projectId === state.projectId);
+      state.taskStatus = "ready";
+    } catch {
+      if (read !== state.taskRead || el.overlay.hidden || currentProject() !== projectId) return;
+      state.taskStatus = "error";
+    } finally {
+      clearTimeout(timeout);
+    }
+    updateTaskResults();
+  }
+
+  function changeProject(projectId) {
+    if (!projectId || projectId === state.projectId) return;
+    state.projectId = projectId;
+    state.taskRead += 1;
+    state.taskRecords = [];
+    state.taskStatus = "";
+    if (!el.overlay.hidden) loadTasks();
   }
 
   // The field promises nodes, so the constellation is searchable from here
@@ -172,10 +244,16 @@
   function render() {
     el.list.textContent = "";
     const items = state.filtered.slice(0, 40);
+    if (el.status) {
+      const count = state.filtered.length;
+      const results = count > 40 ? `Showing 40 of ${count} results. Keep typing to narrow them.` : `${count} result${count === 1 ? "" : "s"}.`;
+      const taskStatus = state.taskStatus === "loading" ? " Loading project tasks…" : state.taskStatus === "error" ? " Tasks couldn't be loaded. Close and reopen Search to retry." : "";
+      el.status.textContent = results + taskStatus;
+    }
     if (!items.length) {
       const li = document.createElement("li");
       li.className = "muted";
-      li.textContent = "No matches.";
+      li.textContent = state.taskStatus === "loading" ? "No tool matches yet. Loading project tasks…" : "No matches. Try a task title, settings, node tree or themes.";
       el.list.append(li);
       setActiveOption();
       return;
@@ -185,6 +263,10 @@
       li.id = `palette-option-${index}`;
       li.setAttribute("role", "option");
       li.setAttribute("aria-selected", String(index === state.index));
+      // Position in the full result set (not just the 40 shown), so screen
+      // readers announce "3 of 128" correctly while a query narrows the list.
+      li.setAttribute("aria-posinset", String(index + 1));
+      li.setAttribute("aria-setsize", String(state.filtered.length));
       if (index === state.index) li.classList.add("active");
       const kind = document.createElement("span");
       kind.className = "kind";
@@ -192,7 +274,16 @@
       const label = document.createElement("span");
       label.className = "label";
       label.textContent = item.label;
-      li.append(kind, label);
+      const copy = document.createElement("span");
+      copy.className = "palette-result-copy";
+      copy.append(label);
+      if (item.description) {
+        const description = document.createElement("span");
+        description.className = "description";
+        description.textContent = String(item.description).replace(/\s+/g, " ").slice(0, 200);
+        copy.append(description);
+      }
+      li.append(kind, copy);
       if (item.count > 0) {
         const count = document.createElement("span");
         count.className = "count";
@@ -222,18 +313,20 @@
     setActiveOption();
   }
 
-  function filter() {
+  function filter(preserveSelection = false) {
+    const selected = preserveSelection ? state.filtered[state.index] : null;
     const query = el.input.value.trim();
     if (!query) {
-      state.filtered = state.items.slice(0, 40);
+      state.filtered = state.items;
     } else {
       state.filtered = state.items
-        .map((item) => ({ item, score: subsequenceScore(query, `${item.kind} ${item.label}`) }))
+        .map((item) => ({ item, score: matchScore(query, item) }))
         .filter((entry) => entry.score > 0)
         .sort((a, b) => b.score - a.score)
         .map((entry) => entry.item);
     }
-    state.index = 0;
+    const retained = selected ? state.filtered.findIndex((item) => item.kind === selected.kind && item.label === selected.label) : -1;
+    state.index = retained >= 0 && retained < 40 ? retained : 0;
     render();
   }
 
@@ -256,10 +349,12 @@
     el.input.value = "";
     filter();
     el.input.focus();
+    loadTasks();
   }
 
   function close() {
     if (el.overlay.hidden) return;
+    state.taskRead += 1;
     el.overlay.hidden = true;
     el.input.setAttribute("aria-expanded", "false");
     el.input.removeAttribute("aria-activedescendant");
@@ -287,6 +382,8 @@
     el.overlay = document.getElementById("palette-overlay");
     el.input = document.getElementById("palette-input");
     el.list = document.getElementById("palette-list");
+    el.close = document.getElementById("palette-close");
+    el.status = document.getElementById("palette-status");
     if (!el.overlay) return;
     // The focused input is the combobox; the listbox it controls stays below.
     // aria-activedescendant on it (set per option in setActiveOption) is what
@@ -295,9 +392,28 @@
     el.input.setAttribute("aria-expanded", "false");
     el.input.setAttribute("aria-autocomplete", "list");
     registerAssistantCommands();
+    el.close?.addEventListener("click", close);
+    window.addEventListener("mefi:project-changed", (event) => changeProject(event.detail?.projectId));
+    window.mefiStudio?.onProjects?.((result) => changeProject(result?.activeId));
+    window.mefiStudio?.onTasks?.((rows) => {
+      if (el.overlay.hidden || !Array.isArray(rows)) return;
+      const projectId = currentProject();
+      if (!projectId || rows.some((task) => task.projectId && task.projectId !== projectId)) return;
+      state.taskRead += 1;
+      state.taskRecords = rows;
+      state.taskStatus = "ready";
+      updateTaskResults();
+    });
     window.addEventListener("keydown", (event) => {
       if (el.overlay.hidden) return; // nav owns Ctrl/Cmd+K (spec 2.8); palette drives arrows/Enter/Escape
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (event.key === "Tab") {
+        const controls = [el.input, el.close].filter((control) => control && !control.hidden && !control.disabled);
+        const at = controls.indexOf(document.activeElement);
+        const next = event.shiftKey ? (at <= 0 ? controls.length - 1 : at - 1) : (at + 1) % controls.length;
+        event.preventDefault();
+        controls[next]?.focus();
+      } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        if (document.activeElement !== el.input) return;
         event.preventDefault();
         // The list is a cycle: Down past the last option lands on the first,
         // Up from the first lands on the last. Wrap within the 40 shown.
@@ -305,7 +421,19 @@
         if (!span) return;
         state.index = event.key === "ArrowDown" ? (state.index + 1) % span : (state.index - 1 + span) % span;
         render();
+      } else if (event.key === "Home" || event.key === "End") {
+        if (document.activeElement !== el.input) return;
+        // Home/End jump straight to the first/last option of the cycle. With a
+        // query typed they keep their native caret role in the field, so the
+        // jump only applies while browsing the default list.
+        if (el.input.value.trim()) return;
+        const span = Math.min(40, state.filtered.length);
+        if (!span) return;
+        event.preventDefault();
+        state.index = event.key === "Home" ? 0 : span - 1;
+        render();
       } else if (event.key === "Enter") {
+        if (document.activeElement !== el.input) return;
         event.preventDefault();
         run(state.index);
       } else if (event.key === "Escape") {
@@ -315,7 +443,7 @@
         close();
       }
     });
-    el.input.addEventListener("input", filter);
+    el.input.addEventListener("input", () => filter());
     el.overlay.addEventListener("click", (event) => {
       if (event.target === el.overlay) close();
     });

@@ -113,6 +113,21 @@ function createProjects({ defaultRoot, studioRoot, saved = {}, preferredRoot = n
         return eyes.writePins(target, value);
       };
       if (eyes.listSessions) scoped.listSessions = (options = {}) => sessions(options).slice(0, options.limit || 40);
+      if (eyes.findRunSession) scoped.findRunSession = (options = {}) => {
+        const session = eyes.findRunSession(options);
+        return session && containsPath(project.path, session.directory) ? session : null;
+      };
+      if (eyes.listSessionChecks) scoped.listSessionChecks = (options = {}) => {
+        // Check one exact session directly rather than relying on the recent
+        // 400-session UI cache: verification may resume after a long outage.
+        try {
+          const row = eyes.openDb(options.dbPath).prepare("select directory from session where id = ?").get(options.sessionId ?? "");
+          if (!row || !containsPath(project.path, row.directory)) return { available: false, checks: [], truncated: false, error: "Session check evidence is unavailable for this project" };
+          return eyes.listSessionChecks(options);
+        } catch {
+          return { available: false, checks: [], truncated: false, error: "Session check evidence is unavailable for this project" };
+        }
+      };
       for (const method of ["listTodos", "listChanges", "listChatTexts", "activitySince"]) {
         if (typeof eyes[method] !== "function") continue;
         scoped[method] = (options = {}) => {

@@ -183,6 +183,23 @@ test("validated intake records one advisory event without modifying its source w
   assert.equal(JSON.stringify(records).includes(secret), false);
 });
 
+test("approved plan tasks reach Jev as advisory comparisons and retain their approved scope", async () => {
+  const planned = { ...incoming, id: "planned-task", kind: "task", source: "planning", status: "open", planningId: "approved-plan", planningSpecId: "reviewed-spec", dependsOn: ["prerequisite"] };
+  const tasks = structuredClone([existing, planned]);
+  const { context, calls, charges, records } = host({ requests: [], tasks,
+    fetchImpl: async () => reply({ rel_0: { type: "choice", choice: "conflicts_with_existing" } }),
+  });
+  const result = await context.runJevIntake([planned]);
+  assert.equal(result.proposals, 1);
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].questions[0].prompt, /planning/);
+  assert.equal(charges[0].purpose, "jev-shadow-intake");
+  assert.equal(records[0].observation.source, "planning");
+  assert.equal(records[0].candidate.title, existing.title, "an admitted task cannot compare itself");
+  assert.equal(records[0].answer, "conflicts_with_existing");
+  assert.deepEqual(tasks, [existing, planned], "even a conflict proposal cannot change approved tasks or dependencies");
+});
+
 test("connection checks coalesce in flight, charge once, and expose only safe metadata", async () => {
   const response = deferred();
   const { context, calls, charges, records } = host({ fetchImpl: () => response.promise });

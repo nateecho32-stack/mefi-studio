@@ -9,7 +9,50 @@
     forest: { name: "Forest", accent: "#85bca3", bright: "#b4e1c9", rgb: "133,188,163", bg: "#050d0b", panel: "#0d1915", muted: "#a2b8ae" },
     violet: { name: "Violet", accent: "#b297de", bright: "#dcc4ff", rgb: "178,151,222", bg: "#0c0711", panel: "#181120", muted: "#b5a7c4" },
     ember: { name: "Ember", accent: "#dd997a", bright: "#ffc5a9", rgb: "221,153,122", bg: "#100805", panel: "#21150f", muted: "#c0ab9d" },
+    aurora: { name: "Aurora", accent: "#71cbb7", bright: "#a7f3da", rgb: "113,203,183", bg: "#050d13", panel: "#101f29", muted: "#abc4c9", text: "#e7f5ee" },
+    rose: { name: "Rose", accent: "#dc96af", bright: "#ffbed3", rgb: "220,150,175", bg: "#10080f", panel: "#23141e", muted: "#c6aebc", text: "#f7e5ea" },
   };
+  const NODE_STYLES = {
+    orbs: { name: "Classic orbs", detail: "Luminous circles" },
+    glass: { name: "Soft glass", detail: "Translucent surfaces" },
+    minimal: { name: "Minimal", detail: "Quiet points" },
+    halo: { name: "Halo", detail: "Luminous rings" },
+    crystal: { name: "Crystal", detail: "Faceted gems" },
+  };
+  const NODE_LAYOUTS = {
+    constellation: { name: "Constellation", detail: "An open arrangement" },
+    tree: { name: "Branches", detail: "A clear hierarchy" },
+    radial: { name: "Rings", detail: "Concentric groups" },
+    helix: { name: "Helix", detail: "A rising spiral" },
+    layers: { name: "Terraces", detail: "Stacked levels" },
+  };
+  const CUSTOM_DEFAULTS = Object.freeze({ accent: "#C9A86A", background: "#050507", surface: "#0D0E12", text: "#ECE5D8" });
+  const hexColor = (value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim().toUpperCase() : null;
+  const safeCustomColors = (value) => Object.fromEntries(Object.entries(CUSTOM_DEFAULTS).map(([key, fallback]) => [key, hexColor(value?.[key]) || fallback]));
+  const channels = (color) => [1, 3, 5].map((index) => parseInt(color.slice(index, index + 2), 16));
+  const mixColor = (a, b, amount) => `#${channels(a).map((value, index) => Math.round(value + (channels(b)[index] - value) * amount).toString(16).padStart(2, "0")).join("")}`;
+  const luminance = (color) => channels(color).map((value) => { const n = value / 255; return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4; }).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+  const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + .05) / (Math.min(luminance(a), luminance(b)) + .05);
+  function readableColor(color, background, minimum = 4.5) {
+    if (contrast(color, background) >= minimum) return color;
+    const target = contrast("#FFFFFF", background) >= contrast("#000000", background) ? "#FFFFFF" : "#000000";
+    for (let step = 1; step <= 40; step += 1) { const candidate = mixColor(color, target, step / 40); if (contrast(candidate, background) >= minimum) return candidate; }
+    return target;
+  }
+  function resolvePalette(theme, customColors) {
+    const custom = safeCustomColors(customColors);
+    const base = theme === "custom" ? { accent: custom.accent, bright: mixColor(custom.accent, "#FFFFFF", .3), bg: custom.background, panel: custom.surface, text: custom.text } : THEMES[theme] || THEMES.gold;
+    const text = readableColor(base.text || "#ece5d8", base.panel);
+    const bright = readableColor(base.bright, base.panel, 3);
+    const muted = readableColor(base.muted || mixColor(text, base.panel, .32), base.panel);
+    const dim = readableColor(mixColor(text, base.panel, .5), base.panel, 3);
+    const border = readableColor(mixColor(base.accent, base.panel, .6), base.panel, 3);
+    const canvasText = readableColor(base.text || "#ece5d8", base.bg);
+    return { accent: base.accent, bright, background: base.bg, surface: base.panel, text, muted, dim, border,
+      rgb: channels(base.accent).join(","), surfaceRgb: channels(base.panel).join(","),
+      onAccent: contrast("#FFFFFF", base.accent) > contrast("#000000", base.accent) ? "#FFFFFF" : "#000000",
+      canvas: { background: base.bg, accent: base.accent, bright: readableColor(base.bright, base.bg, 3), text: canvasText, muted: readableColor(mixColor(canvasText, base.bg, .32), base.bg), dim: readableColor(mixColor(canvasText, base.bg, .5), base.bg, 3) } };
+  }
 
   function spotifyLink(raw) {
     const value = String(raw ?? "").trim();
@@ -30,7 +73,10 @@
     const raw = value && typeof value === "object" ? value : {};
     const volume = Number(raw.volume);
     const spotify = [...new Set((Array.isArray(raw.spotify) ? raw.spotify : []).map((item) => spotifyLink(item)?.url).filter(Boolean))].slice(0, 6);
-    return { theme: Object.hasOwn(THEMES, raw.theme) ? raw.theme : "gold", volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, spotify };
+    return { theme: raw.theme === "custom" || Object.hasOwn(THEMES, raw.theme) ? raw.theme : "gold", customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, spotify,
+      nodeStyle: Object.hasOwn(NODE_STYLES, raw.nodeStyle) ? raw.nodeStyle : "orbs",
+      nodeLayout: Object.hasOwn(NODE_LAYOUTS, raw.nodeLayout) ? raw.nodeLayout : "constellation",
+      orbitTrails: raw.orbitTrails === true, extraGlow: raw.extraGlow === true };
   }
   function audioFile(file) { return Boolean(file && (String(file.type || "").startsWith("audio/") || /\.(mp3|m4a|aac|flac|wav|ogg|opus|webm)$/i.test(file.name || ""))); }
   function trackName(name) { return String(name || "Untitled audio").replace(/\.[^.]+$/, "").replace(/[_]+/g, " "); }
@@ -52,13 +98,15 @@
   let initialized = false;
   let recommender = null;
   let priorFocus = null;
+  let previewFrame = 0;
+  let restoreWorkspace = false;
 
   const persist = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(safePreferences(prefs))); } catch {} };
   const event = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
   function status() {
     const track = state.tracks[state.selected];
     const title = state.source === "spotify" ? state.spotify ? `Spotify ${state.spotify.type}` : "Choose Spotify music" : track?.title || "Choose your music";
-    return { source: state.source, playing: state.source === "local" && Boolean(audio?.src) && !audio.paused && !audio.ended, title, track: title, theme: prefs.theme, queueLength: state.tracks.length, externalPlayback: state.source === "spotify", supported: true };
+    return { source: state.source, playing: state.source === "local" && Boolean(audio?.src) && !audio.paused && !audio.ended, title, track: title, theme: prefs.theme, ...graphPreferences(), queueLength: state.tracks.length, externalPlayback: state.source === "spotify", supported: true };
   }
   const announce = () => event("mefi-music-change", status());
   function note(text, error = false) {
@@ -66,17 +114,60 @@
     if (els.notice) { els.notice.textContent = state.notice; els.notice.dataset.error = String(error); }
   }
   function applyTheme(theme, save = true) {
-    const key = Object.hasOwn(THEMES, theme) ? theme : "gold";
-    const palette = THEMES[key];
+    const key = theme === "custom" || Object.hasOwn(THEMES, theme) ? theme : "gold";
+    const palette = resolvePalette(key, prefs.customColors);
     prefs.theme = key;
-    const tokens = { "--gold": palette.accent, "--gold-bright": palette.bright, "--gold-dim": `rgba(${palette.rgb},.32)`, "--hairline": `rgba(${palette.rgb},.18)`, "--hairline-strong": `rgba(${palette.rgb},.4)`, "--tint-gold-1": `rgba(${palette.rgb},.06)`, "--tint-gold-2": `rgba(${palette.rgb},.09)`, "--tint-gold-3": `rgba(${palette.rgb},.14)`, "--ring": `0 0 0 3px rgba(${palette.rgb},.15)`, "--glow-gold": `0 0 14px rgba(${palette.rgb},.3)`, "--bg": palette.bg, "--bg-deep": palette.bg, "--cmd-bg": palette.bg, "--panel-solid": palette.panel, "--muted": palette.muted };
+    const tokens = { "--gold": palette.accent, "--gold-bright": palette.bright, "--gold-dim": `rgba(${palette.rgb},.32)`, "--hairline": `rgba(${channels(palette.border).join(",")},.5)`, "--hairline-strong": palette.border, "--tint-gold-1": `rgba(${palette.rgb},.06)`, "--tint-gold-2": `rgba(${palette.rgb},.09)`, "--tint-gold-3": `rgba(${palette.rgb},.14)`, "--ring": `0 0 0 3px rgba(${palette.rgb},.15)`, "--glow-gold": `0 0 14px rgba(${palette.rgb},.3)`, "--bg": palette.background, "--bg-deep": palette.background, "--cmd-bg": palette.background, "--panel-solid": palette.surface, "--panel": `rgba(${palette.surfaceRgb},.85)`, "--glass": `rgba(${palette.surfaceRgb},.76)`, "--glass-hard": `rgba(${palette.surfaceRgb},.94)`, "--glass-soft": `rgba(${palette.surfaceRgb},.7)`, "--ivory": palette.text, "--muted": palette.muted, "--dim": palette.dim, "--ink": palette.onAccent };
     for (const [name, value] of Object.entries(tokens)) document.documentElement.style.setProperty(name, value);
+    for (const [name, value] of Object.entries(palette.canvas)) document.documentElement.style.setProperty(`--canvas-${name}`, value);
     document.documentElement.style.setProperty("--studio-accent-rgb", palette.rgb);
     document.documentElement.dataset.studioTheme = key;
-    for (const button of els.themes?.children || []) button.setAttribute("aria-pressed", String(button.dataset.theme === key));
+    for (const button of els.themes?.children || []) {
+      button.setAttribute("aria-pressed", String(button.dataset.theme === key));
+      if (button.dataset.theme === "custom") button.style.setProperty("--swatch", prefs.customColors.accent);
+    }
+    if (els.customPalette) els.customPalette.hidden = key !== "custom";
+    for (const [name, pair] of Object.entries(els.customInputs || {})) {
+      pair.picker.value = prefs.customColors[name]; pair.hex.value = prefs.customColors[name]; pair.hex.setAttribute("aria-invalid", "false");
+    }
     if (save) persist();
-    event("mefi-theme-change", { theme: key, accent: palette.accent, bright: palette.bright, background: palette.bg });
+    event("mefi-theme-change", { theme: key, ...palette, tokens });
     return key;
+  }
+  function applyCustomColors(patch, save = true) {
+    const entries = Object.entries(patch && typeof patch === "object" ? patch : {}).filter(([key]) => Object.hasOwn(CUSTOM_DEFAULTS, key));
+    if (!entries.length || entries.some(([, value]) => !hexColor(value))) return false;
+    prefs.customColors = { ...prefs.customColors, ...Object.fromEntries(entries.map(([key, value]) => [key, hexColor(value)])) };
+    applyTheme("custom", save);
+    return true;
+  }
+  function graphPreferences() { return { nodeStyle: prefs.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
+  function syncTreePreferences(save) {
+    const value = graphPreferences();
+    Object.assign(document.documentElement.dataset, value);
+    for (const choice of els.nodeStyles?.children || []) choice.setAttribute("aria-pressed", String(choice.dataset.nodeStyle === value.nodeStyle));
+    for (const choice of els.nodeLayouts?.children || []) choice.setAttribute("aria-pressed", String(choice.dataset.nodeLayout === value.nodeLayout));
+    if (els.orbitTrails) els.orbitTrails.checked = value.orbitTrails;
+    if (els.extraGlow) els.extraGlow.checked = value.extraGlow;
+    if (save) persist();
+    event("mefi-tree-preferences", value);
+  }
+  function applyNodeStyle(style, save = true) {
+    prefs.nodeStyle = Object.hasOwn(NODE_STYLES, style) ? style : "orbs";
+    syncTreePreferences(save);
+    return prefs.nodeStyle;
+  }
+  function applyNodeLayout(layout, save = true) {
+    prefs.nodeLayout = Object.hasOwn(NODE_LAYOUTS, layout) ? layout : "constellation";
+    syncTreePreferences(save);
+    return prefs.nodeLayout;
+  }
+  function applyNodeEffects(effects, save = true) {
+    if (effects && typeof effects === "object") {
+      for (const key of ["orbitTrails", "extraGlow"]) if (Object.hasOwn(effects, key)) prefs[key] = effects[key] === true;
+    }
+    syncTreePreferences(save);
+    return graphPreferences();
   }
   function element(tag, className, text, parent) {
     const node = document.createElement(tag);
@@ -91,6 +182,24 @@
     if (id) node.id = id;
     node.addEventListener("click", action);
     return node;
+  }
+  function graphChoices(parent, kind, choices, selected, apply) {
+    const title = element("h4", "music-node-label", kind === "style" ? "Node style" : "Layout", parent);
+    title.id = `music-node-${kind}-label`;
+    const group = element("div", "music-node-choices", null, parent);
+    group.id = `music-node-${kind}s`;
+    group.setAttribute("role", "group"); group.setAttribute("aria-labelledby", title.id);
+    for (const [key, option] of Object.entries(choices)) {
+      const choice = button(null, `music-node-choice music-node-${kind}`, group, () => apply(key), `music-node-${kind}-${key}`);
+      choice.dataset[kind === "style" ? "nodeStyle" : "nodeLayout"] = key;
+      choice.setAttribute("aria-pressed", String(selected === key));
+      const preview = element("span", `music-node-preview music-preview-${key}`, null, choice);
+      preview.setAttribute("aria-hidden", "true");
+      for (let index = 0; index < (kind === "style" ? 3 : 5); index += 1) element("i", null, null, preview);
+      element("strong", null, option.name, choice);
+      element("small", null, option.detail, choice);
+    }
+    return group;
   }
   function setSource(source) {
     const next = source === "spotify" ? "spotify" : "local";
@@ -265,14 +374,15 @@
     els.overlay = element("div", "music-overlay", null, document.body);
     els.overlay.id = "music-overlay"; els.overlay.hidden = true;
     const sheet = element("section", "sheet music-sheet", null, els.overlay);
-    sheet.tabIndex = -1; sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-modal", "true"); sheet.setAttribute("aria-labelledby", "music-heading");
+    sheet.tabIndex = -1; sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-modal", "false"); sheet.setAttribute("aria-labelledby", "music-heading");
     els.sheet = sheet;
     const header = element("header", "music-header", null, sheet);
     const heading = element("div", null, null, header);
-    element("span", "eyebrow", "Make room for a little rhythm", heading);
-    const title = element("h2", null, "Music & atmosphere", heading); title.id = "music-heading";
+    element("span", "eyebrow", "Your sound. Your space.", heading);
+    const title = element("h2", null, "Music & themes", heading); title.id = "music-heading";
     button("Close", "ghost", header, close, "music-close");
     const body = element("div", "music-body", null, sheet);
+    const settings = element("div", "music-settings", null, body);
     const main = element("main", "music-main", null, body);
     const tabs = element("div", "music-tabs", null, main); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Music source");
     els.localTab = button("Local music", "music-tab", tabs, () => setSource("local"), "music-local-tab");
@@ -324,14 +434,61 @@
     els.recent = element("div", "music-recent", null, els.spotify);
     els.spotifyPlayer = element("div", "music-spotify-player", null, els.spotify);
     element("p", "music-fineprint", "Spotify manages playback and may offer previews or ask you to sign in. Local player controls do not control Spotify.", els.spotify);
+    const nodeSection = element("section", "music-node-settings", null, settings);
+    nodeSection.setAttribute("aria-labelledby", "music-node-heading");
+    const nodeHeading = element("h3", null, "Node tree", nodeSection); nodeHeading.id = "music-node-heading";
+    element("p", "music-node-intro", "See your changes in the live tree. Appearance and arrangement are independent.", nodeSection);
+    els.nodeStyles = graphChoices(nodeSection, "style", NODE_STYLES, prefs.nodeStyle, applyNodeStyle);
+    els.nodeLayouts = graphChoices(nodeSection, "layout", NODE_LAYOUTS, prefs.nodeLayout, applyNodeLayout);
+    const layoutHint = element("p", "music-fineprint", "Choosing a layout rearranges the tree. Existing nodes keep their places as work updates.", nodeSection);
+    layoutHint.id = "music-node-layout-hint";
+    els.nodeLayouts.setAttribute("aria-describedby", layoutHint.id);
+    const effectsHeading = element("h4", "music-node-label", "Effects", nodeSection); effectsHeading.id = "music-effects-label";
+    const effects = element("div", "music-effects", null, nodeSection); effects.setAttribute("role", "group"); effects.setAttribute("aria-labelledby", effectsHeading.id);
+    for (const [key, id, title, hint] of [
+      ["orbitTrails", "music-orbit-trails", "Blue orbit trails", "Circle queued and running work."],
+      ["extraGlow", "music-extra-glow", "Extra glow", "Brighter halos and luminous cores."],
+    ]) {
+      const row = element("label", `music-effect music-effect-${key}`, null, effects);
+      const sample = element("span", "music-effect-sample", null, row); sample.setAttribute("aria-hidden", "true");
+      const copy = element("span", "music-effect-copy", null, row);
+      element("strong", null, title, copy);
+      const description = element("small", null, hint, copy); description.id = `${id}-hint`;
+      const input = element("input", null, null, row); input.type = "checkbox"; input.id = id; input.checked = prefs[key];
+      input.setAttribute("aria-label", title); input.setAttribute("aria-describedby", description.id);
+      input.addEventListener("change", () => applyNodeEffects({ [key]: input.checked }));
+      els[key] = input;
+    }
+    element("p", "music-fineprint", "Decorative effects keep work nodes in place. Reduced motion pauses the orbit trails.", nodeSection);
     const aside = element("aside", "music-side", null, body);
-    const themeSection = element("section", "music-section", null, aside);
-    element("span", "eyebrow", "Set the mood", themeSection); element("h3", null, "Studio theme", themeSection);
+    const themeSection = element("section", "music-section music-colors", null, settings);
+    element("span", "eyebrow", "Set the mood", themeSection); element("h3", null, "Color theme", themeSection);
     els.themes = element("div", "music-themes", null, themeSection);
-    for (const [key, palette] of Object.entries(THEMES)) {
+    els.themes.setAttribute("role", "group"); els.themes.setAttribute("aria-label", "Color theme");
+    for (const [key, palette] of [...Object.entries(THEMES), ["custom", { name: "Custom palette", bright: prefs.customColors.accent }]]) {
       const choice = button(palette.name, "music-theme", els.themes, () => applyTheme(key));
       choice.dataset.theme = key; choice.style.setProperty("--swatch", palette.bright); choice.setAttribute("aria-pressed", String(prefs.theme === key));
     }
+    els.customPalette = element("fieldset", "music-custom-palette", null, themeSection); els.customPalette.id = "music-custom-palette";
+    element("legend", null, "Your colors", els.customPalette);
+    const help = element("p", "music-fineprint", "Choose a color or enter #RRGGBB. Studio adjusts text and borders when needed for readability.", els.customPalette); help.id = "music-custom-help";
+    els.customInputs = {};
+    for (const [key, title] of [["accent", "Accent"], ["background", "Background"], ["surface", "Panels"], ["text", "Text"]]) {
+      const row = element("div", "music-color-row", null, els.customPalette);
+      const label = element("label", null, title, row); label.htmlFor = `music-color-${key}-hex`;
+      const picker = element("input", "music-color-picker", null, row); picker.type = "color"; picker.id = `music-color-${key}`; picker.value = prefs.customColors[key];
+      picker.setAttribute("aria-label", `${title} color`); picker.setAttribute("aria-describedby", help.id);
+      const hex = element("input", "music-color-hex", null, row); hex.type = "text"; hex.id = `music-color-${key}-hex`; hex.value = prefs.customColors[key]; hex.maxLength = 7; hex.spellcheck = false;
+      hex.setAttribute("aria-label", `${title} hex color`); hex.setAttribute("aria-describedby", help.id); hex.setAttribute("pattern", "#[0-9A-Fa-f]{6}");
+      picker.addEventListener("input", () => applyCustomColors({ [key]: picker.value }));
+      hex.addEventListener("input", () => {
+        const valid = Boolean(hexColor(hex.value)); hex.setAttribute("aria-invalid", String(!valid));
+        if (valid) applyCustomColors({ [key]: hex.value });
+      });
+      els.customInputs[key] = { picker, hex };
+    }
+    button("Reset custom colors", "ghost music-custom-reset", els.customPalette, () => applyCustomColors(CUSTOM_DEFAULTS), "music-custom-reset");
+    element("p", "music-fineprint", "Colors are separate from node style and layout.", themeSection);
     const ai = element("section", "music-section music-ai", null, aside);
     element("span", "eyebrow", "A listening companion", ai); element("h3", null, "Find your next sound", ai);
     const moodLabel = element("label", "music-mood-label", "What are you in the mood for?", ai);
@@ -340,16 +497,48 @@
     els.aiHint = element("p", "music-fineprint", null, ai);
     els.recommendation = element("div", "music-recommendation", "", ai); els.recommendation.id = "music-recommendation"; els.recommendation.setAttribute("aria-live", "polite");
     els.notice = element("p", "music-notice", "", sheet); els.notice.setAttribute("role", "status");
-    els.overlay.addEventListener("click", (event) => { if (event.target === els.overlay) close(); });
+    const preview = element("section", "music-preview", null, els.overlay);
+    preview.setAttribute("aria-labelledby", "music-preview-heading");
+    const previewHeader = element("header", "music-preview-header", null, preview);
+    const previewTitle = element("h3", null, "Live node tree", previewHeader); previewTitle.id = "music-preview-heading";
+    els.previewViews = element("div", "music-preview-views", null, previewHeader); els.previewViews.setAttribute("role", "group"); els.previewViews.setAttribute("aria-label", "Node tree view");
+    for (const view of ["2d", "3d"]) {
+      const choice = button(view.toUpperCase(), "ghost", els.previewViews, () => { window.MefiIdle?.setView?.(view); syncTreeView(view); schedulePreview(); }, `music-tree-view-${view}`);
+      choice.dataset.view = view; choice.setAttribute("aria-label", view === "2d" ? "Flat 2D node tree" : "Perspective 3D node tree");
+    }
+    els.previewFit = button("Fit", "ghost music-preview-fit", els.previewViews, () => window.MefiIdle?.fitAll?.(), "music-tree-fit");
+    els.previewFit.setAttribute("aria-label", "Fit the node tree in the preview");
+    els.previewHint = element("p", null, null, previewHeader);
+    syncTreeView();
+    // This transparent region measures the available canvas space. The graph
+    // remains the existing Command canvas, including its normal interactions.
+    els.preview = element("div", "music-tree-preview", null, preview); els.preview.id = "music-tree-preview";
+    els.preview.setAttribute("aria-hidden", "true");
     sheet.addEventListener("keydown", (event) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }
-      if (event.key === "Tab" && !window.MefiNav?.claim) {
-        const focusable = [...sheet.querySelectorAll("button, input, textarea, iframe")].filter((node) => !node.disabled && !node.hidden && node.offsetParent !== null);
-        const first = focusable[0]; const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-      }
     });
+  }
+  function updatePreview() {
+    previewFrame = 0;
+    if (!state.opened || !window.MefiIdle?.setSettingsPreview) return;
+    const rect = els.preview?.getBoundingClientRect?.();
+    if (!rect || rect.width < 160 || rect.height < 160) return;
+    window.MefiIdle.setSettingsPreview({ x: rect.x, y: rect.y, w: rect.width, h: rect.height });
+  }
+  function schedulePreview() {
+    if (!state.opened || previewFrame) return;
+    if (typeof window.requestAnimationFrame === "function") previewFrame = window.requestAnimationFrame(updatePreview);
+    else updatePreview();
+  }
+  function syncTreeView(view = null) {
+    const selected = view || window.MefiIdle?.status?.()?.view || window.MefiIdle?.geometryStatus?.()?.view || "3d";
+    for (const choice of els.previewViews?.children || []) {
+      if (!choice.dataset.view) continue;
+      choice.setAttribute("aria-pressed", String(choice.dataset.view === selected));
+      choice.disabled = typeof window.MefiIdle?.setView !== "function";
+    }
+    if (els.previewFit) els.previewFit.disabled = typeof window.MefiIdle?.fitAll !== "function";
+    if (els.previewHint) els.previewHint.textContent = selected === "2d" ? "Drag to pan · Scroll to zoom · Fit to see the whole tree" : "Drag to pan · Right-drag to orbit · Scroll to zoom";
   }
   function init() {
     if (initialized) return;
@@ -360,21 +549,39 @@
     audio.addEventListener("ended", () => move(1, false));
     audio.addEventListener("timeupdate", renderTransport); audio.addEventListener("loadedmetadata", renderTransport); audio.addEventListener("durationchange", renderTransport);
     audio.addEventListener("error", () => { if (audio.src) note("This audio file could not be played. Try another format.", true); renderTransport(); announce(); });
-    build(); applyTheme(prefs.theme, false); render();
+    build(); applyTheme(prefs.theme, false); syncTreePreferences(false); render();
+    window.addEventListener("resize", schedulePreview);
+    window.addEventListener("mefi-tree-view", (event) => syncTreeView(event.detail?.view));
+    if (typeof window.ResizeObserver === "function") new window.ResizeObserver(schedulePreview).observe(els.preview);
     window.addEventListener("beforeunload", () => { for (const track of state.tracks) URL.revokeObjectURL(track.url); });
   }
   function open() {
-    init(); priorFocus = document.activeElement; state.opened = true; els.overlay.hidden = false;
+    init();
+    if (state.opened) { els.sheet.focus(); schedulePreview(); return; }
+    priorFocus = document.activeElement;
+    restoreWorkspace = Boolean(window.MefiIdle?.setSettingsPreview && window.MefiWorkspace?.isActive?.());
+    state.opened = true; els.overlay.hidden = false;
+    // Claim before opening the canvas, so navigation retains the true origin.
     window.MefiNav?.claim?.("music");
-    render(); els.sheet.focus();
+    els.sheet.setAttribute("aria-modal", "false");
+    if (restoreWorkspace) window.MefiWorkspace.exit();
+    document.body.classList.add("music-preview-active");
+    render(); syncTreeView(); els.sheet.focus(); schedulePreview();
   }
   function close() {
     if (!els.overlay || els.overlay.hidden) return;
     state.opened = false; els.overlay.hidden = true;
+    if (previewFrame) window.cancelAnimationFrame?.(previewFrame);
+    previewFrame = 0;
+    window.MefiIdle?.setSettingsPreview?.(null);
+    document.body.classList.remove("music-preview-active");
+    if (restoreWorkspace) window.MefiWorkspace?.enter?.();
+    restoreWorkspace = false;
     window.MefiNav?.release?.("music");
     if (!window.MefiNav?.release) priorFocus?.focus?.();
   }
-  window.MefiMusic = { init, open, close, status, getAudioElement: () => { init(); return audio; }, setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, loadSpotify, setSource, applyTheme };
+  window.MefiMusic = { init, open, close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return audio; }, setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, loadSpotify, setSource, applyTheme, applyCustomColors,
+    customColors: () => ({ ...prefs.customColors }), themePalette: () => ({ theme: prefs.theme, ...resolvePalette(prefs.theme, prefs.customColors) }) };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();

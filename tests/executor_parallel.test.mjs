@@ -85,15 +85,15 @@ test("real selection, file claims and fill loop run independent tasks together b
   const launched = [];
   const autopilot = { execute: true, parallel: 2, jobs: [] };
   const env = vm.createContext({
-    Date, console, process: { pid: 321 }, backlog, assistantModule: assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
-    projectSwitching: false, assistantState: { status: "running" }, SMOKE: false, CAPTURE: false, CLI_MODE: false,
+    Date, console, path, process: { pid: 321 }, backlog, assistantModule: assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
+    projectSwitching: false, assistantState: { status: "running" }, SMOKE: false, CAPTURE: false, CLI_MODE: false, executorUpdateHold: () => null,
     projects: { current: () => ({ id: "fixture", path: "C:/fixture" }) }, projectRoot: () => "C:/fixture",
     getMachine: async () => ({ leaseStatus: async () => ({ exclusive: false }) }), executorRunEnv: async () => ({ cli: "fixture" }),
     getEyes: async () => ({ readJson: async (key) => structuredClone(board[key]) }),
     getPolicyModule: async () => null, warmPolicyBaseline() {}, resolveActivePolicyIdentity: async () => null,
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", workTitleKey: (value) => value,
     conflictsWithLiveFix: () => false, queuedWorkCount: () => board.tasks.filter((task) => task.status === "open").length,
-    compareWork: (a, b) => a.createdAt - b.createdAt, mutateBoard: async (fn) => fn(board),
+    compareWork: (a, b) => a.createdAt - b.createdAt, mutateBoard: async (fn) => fn(board), withBoardLock: async (fn) => fn(),
     logLine() {}, setAutopilotWaiting: (reason) => { autopilot.waiting = reason; }, pushAutopilotHistory() {},
     EXECUTOR_STAGGER_MS: 3000, setTimeout: (fn) => { queueMicrotask(fn); return { unref() {} }; },
     fakeSpawn: (entry) => { launched.push(entry.taskId); return "spawned"; },
@@ -108,10 +108,13 @@ test("real selection, file claims and fill loop run independent tasks together b
   assert.equal(board.tasks[1].status, "open", "slash spelling does not bypass another worker's file claim");
   await env.executeNextRequest();
   assert.equal(launched.length, 2, "a full configured pool cannot overspawn");
-  autopilot.jobs = autopilot.jobs.filter((job) => job.taskId !== "a");
+  const finished = autopilot.jobs.find((job) => job.taskId === "a");
+  assistant.releaseWrite?.([], finished.id);
+  autopilot.jobs = autopilot.jobs.filter((job) => job !== finished);
   board.tasks[0].status = "done";
   await env.executeNextRequest();
   assert.deepEqual(launched, ["a", "b", "overlap"], "the held file becomes eligible after its owner finishes");
+  for (const job of autopilot.jobs) assistant.releaseWrite?.([], job.id);
 });
 
 test("session tool edits remain attributable without snapshot hashes or diffs", async () => {

@@ -5,17 +5,23 @@ import vm from "node:vm";
 
 const source = await readFile(new URL("../renderer/music.js", import.meta.url), "utf8");
 const pure = vm.createContext({ URL });
-vm.runInContext(`${source.slice(source.indexOf("  const THEMES"), source.indexOf("  let stored;"))}\nthis.api = {spotifyLink, safePreferences, audioFile, nextIndex, timeLabel};`, pure);
+vm.runInContext(`${source.slice(source.indexOf("  const THEMES"), source.indexOf("  let stored;"))}\nthis.api = {spotifyLink, safePreferences, audioFile, nextIndex, timeLabel, hexColor, resolvePalette, contrast};`, pure);
 const helpers = pure.api;
 const flush = async () => { for (let index = 0; index < 15; index += 1) await Promise.resolve(); };
 
-function environment({ saved = null, recommend } = {}) {
+function environment({ saved = null, recommend, preview = false, workspaceActive = false } = {}) {
   const ids = new Map();
   const events = [];
   const revoked = [];
   const opened = [];
   const styles = new Map();
   const storage = new Map(saved ? [["mefiStudio.music.v1", JSON.stringify(saved)]] : []);
+  const lifecycle = [];
+  const frames = new Map();
+  const listeners = new Map();
+  let frameId = 0;
+  let previewRect = { x: 400, y: 80, width: 600, height: 640 };
+  let treeView = "3d";
   let audio;
   let blob = 0;
   let document;
@@ -33,6 +39,7 @@ function environment({ saved = null, recommend } = {}) {
     dispatch(key, payload = {}) { for (const fn of this.listeners[key] || []) fn({ target: this, preventDefault() {}, stopPropagation() {}, ...payload }); }
     click() { if (!this.disabled) this.dispatch("click"); }
     focus() { document.activeElement = this; }
+    getBoundingClientRect() { return previewRect; }
   }
   class Audio extends Element {
     constructor() { super("audio"); this.paused = true; this.ended = false; this.currentTime = 0; this.duration = 120; this.volume = 1; this.src = ""; }
@@ -52,12 +59,25 @@ function environment({ saved = null, recommend } = {}) {
     URL: RuntimeURL, document,
     localStorage: { getItem: (key) => storage.get(key), setItem: (key, value) => storage.set(key, value) },
     CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } },
-    window: { dispatchEvent: (event) => events.push(event), addEventListener() {}, open: (url) => opened.push(url), MefiNav: { claim() {}, release() {} }, mefiStudio: { ...(recommend ? { musicRecommend: recommend } : {}), openExternal: (url) => { opened.push(url); return Promise.resolve(); } } },
+    window: {
+      dispatchEvent: (event) => events.push(event), addEventListener: (type, callback) => listeners.set(type, callback), open: (url) => opened.push(url),
+      requestAnimationFrame: (callback) => { frames.set(++frameId, callback); return frameId; }, cancelAnimationFrame: (id) => frames.delete(id),
+      MefiNav: { claim: (id) => lifecycle.push(`claim:${id}`), release: (id) => lifecycle.push(`release:${id}`) },
+      ...(preview ? {
+        MefiIdle: { setSettingsPreview: (rect) => lifecycle.push(rect ? { ...rect } : "preview:close"), status: () => ({ view: treeView }), setView: (view) => { treeView = view; listeners.get("mefi-tree-view")?.({ detail: { view } }); } },
+        MefiWorkspace: { isActive: () => workspaceActive, exit: () => { workspaceActive = false; lifecycle.push("workspace:exit"); }, enter: () => { workspaceActive = true; lifecycle.push("workspace:enter"); } },
+      } : {}),
+      mefiStudio: { ...(recommend ? { musicRecommend: recommend } : {}), openExternal: (url) => { opened.push(url); return Promise.resolve(); } },
+    },
   });
   vm.runInContext(source, context);
   const music = context.window.MefiMusic;
   music.init();
-  return { music, ids, events, revoked, opened, styles, storage, document, audio };
+  return { music, ids, events, revoked, opened, styles, storage, document, audio, lifecycle,
+    frames: () => { const pending = [...frames.values()]; frames.clear(); pending.forEach((callback) => callback()); },
+    resize: (rect) => { previewRect = rect; listeners.get("resize")?.(); },
+    view: (view) => { treeView = view; listeners.get("mefi-tree-view")?.({ detail: { view } }); },
+  };
 }
 const file = (name, size = 12, type = "audio/mpeg") => ({ name, size, type, lastModified: 1 });
 
@@ -74,7 +94,7 @@ test("Saved music preferences are bounded and never contain local files or trans
   const value = helpers.safePreferences({ theme: "untrusted", volume: 8, spotify: [link, link, "blob:private", "https://evil.test"], tracks: ["C:/private.mp3"], selected: "blob:private" });
   assert.equal(value.theme, "gold"); assert.equal(value.volume, 1);
   assert.deepEqual(Array.from(value.spotify), [link]);
-  assert.deepEqual(Object.keys(value).sort(), ["spotify", "theme", "volume"]);
+  assert.deepEqual(Object.keys(value).sort(), ["customColors", "extraGlow", "nodeLayout", "nodeStyle", "orbitTrails", "spotify", "theme", "volume"]);
   assert.equal(helpers.safePreferences(null).volume, .7);
   assert.equal(helpers.audioFile(file("track.flac", 1, "")), true);
   assert.equal(helpers.audioFile(file("notes.html", 1, "text/html")), false);
@@ -142,6 +162,166 @@ test("Theme selection updates global tokens, emits graph palette changes and sur
   assert.equal(restored.music.status().queueLength, 0);
 });
 
+test("Node preferences default to classic orbs and constellation and reject unsupported saved values", () => {
+  for (const saved of [null, { nodeStyle: "untrusted", nodeLayout: "columns" }, { nodeStyle: "__proto__", nodeLayout: "toString" }]) {
+    const env = environment({ saved });
+    assert.equal(env.music.status().nodeStyle, "orbs");
+    assert.equal(env.music.status().nodeLayout, "constellation");
+    assert.equal(env.document.documentElement.dataset.nodeStyle, "orbs");
+    assert.equal(env.document.documentElement.dataset.nodeLayout, "constellation");
+    const events = env.events.filter((event) => event.type === "mefi-tree-preferences");
+    assert.equal(events.length, 1, "initialization publishes the saved choices exactly once");
+    assert.equal(events[0].detail.nodeStyle, "orbs");
+    assert.equal(events[0].detail.nodeLayout, "constellation");
+    assert.equal(env.ids.get("music-node-style-orbs").attrs["aria-pressed"], "true");
+    assert.equal(env.ids.get("music-node-layout-constellation").attrs["aria-pressed"], "true");
+  }
+});
+
+test("Node controls persist independent style and layout choices and accurately expose selection", () => {
+  const env = environment();
+  env.ids.get("music-node-layout-tree").click();
+  env.ids.get("music-node-style-glass").click();
+  assert.equal(env.music.status().nodeStyle, "glass");
+  assert.equal(env.music.status().nodeLayout, "tree", "style selection must not rearrange the layout");
+  env.ids.get("music-node-layout-radial").click();
+  assert.equal(env.music.status().nodeStyle, "glass", "layout selection must retain the visual style");
+  for (const [groupId, selected] of [["music-node-styles", "music-node-style-glass"], ["music-node-layouts", "music-node-layout-radial"]]) {
+    const group = env.ids.get(groupId);
+    assert.equal(group.attrs.role, "group");
+    assert.ok(group.attrs["aria-labelledby"]);
+    assert.deepEqual(group.children.filter((choice) => choice.attrs["aria-pressed"] === "true").map((choice) => choice.id), [selected]);
+    assert.ok(group.children.every((choice) => choice.tagName === "button" && choice.type === "button"));
+    assert.ok(group.children.every((choice) => choice.children[0].attrs["aria-hidden"] === "true"), "decorative previews do not repeat the accessible label");
+  }
+  const last = env.events.filter((event) => event.type === "mefi-tree-preferences").at(-1);
+  assert.equal(last.detail.nodeStyle, "glass");
+  assert.equal(last.detail.nodeLayout, "radial");
+  const persisted = JSON.parse(env.storage.get("mefiStudio.music.v1"));
+  const restored = environment({ saved: persisted });
+  assert.equal(restored.music.graphPreferences().nodeStyle, "glass");
+  assert.equal(restored.music.graphPreferences().nodeLayout, "radial");
+  const copy = restored.music.graphPreferences();
+  copy.nodeStyle = "minimal";
+  assert.equal(restored.music.graphPreferences().nodeStyle, "glass", "readers cannot mutate the stored preference object");
+});
+
+test("Node preferences preserve color, volume, Spotify links and live playback across changes", async () => {
+  const link = "https://open.spotify.com/playlist/37i9dQZF1DX7zqr9q1MPG7";
+  const env = environment({ saved: { theme: "forest", volume: .35, spotify: [link], nodeStyle: "glass", nodeLayout: "radial" } });
+  env.music.addFiles([file("Independent music.mp3")]);
+  env.ids.get("music-play").click(); await flush();
+  env.music.applyNodeStyle("minimal");
+  env.music.applyNodeLayout("tree");
+  assert.equal(env.music.status().playing, true);
+  assert.equal(env.audio.volume, .35);
+  assert.equal(env.music.status().theme, "forest");
+  const treeEvents = env.events.filter((event) => event.type === "mefi-tree-preferences").length;
+  env.music.applyTheme("violet");
+  assert.equal(env.events.filter((event) => event.type === "mefi-tree-preferences").length, treeEvents, "color changes cannot trigger a layout event");
+  const saved = JSON.parse(env.storage.get("mefiStudio.music.v1"));
+  assert.deepEqual(saved, { theme: "violet", customColors: { ...env.music.customColors() }, volume: .35, spotify: [link], nodeStyle: "minimal", nodeLayout: "tree", orbitTrails: false, extraGlow: false });
+  assert.equal(env.music.status().nodeStyle, "minimal");
+  assert.equal(env.music.status().nodeLayout, "tree");
+});
+
+test("Preference setters validate input and optional previews do not overwrite persisted choices", () => {
+  const saved = { theme: "midnight", volume: .6, spotify: [], nodeStyle: "glass", nodeLayout: "radial" };
+  const env = environment({ saved });
+  const before = env.storage.get("mefiStudio.music.v1");
+  assert.equal(env.music.applyNodeStyle("unsupported", false), "orbs");
+  assert.equal(env.music.applyNodeLayout("constructor", false), "constellation");
+  assert.equal(env.storage.get("mefiStudio.music.v1"), before);
+  assert.equal(env.music.status().theme, "midnight");
+  assert.equal(env.audio.volume, .6);
+  assert.equal(env.document.documentElement.dataset.nodeStyle, "orbs");
+  assert.equal(env.document.documentElement.dataset.nodeLayout, "constellation");
+});
+
+test("Graph effects are opt-in Boolean preferences with accessible native checkboxes", () => {
+  for (const saved of [null, { orbitTrails: "true", extraGlow: "1" }, { orbitTrails: 1, extraGlow: {} }]) {
+    const env = environment({ saved });
+    for (const [key, id] of [["orbitTrails", "music-orbit-trails"], ["extraGlow", "music-extra-glow"]]) {
+      assert.equal(env.music.status()[key], false);
+      assert.equal(env.music.graphPreferences()[key], false);
+      const input = env.ids.get(id);
+      assert.equal(input.tagName, "input");
+      assert.equal(input.type, "checkbox");
+      assert.equal(input.checked, false);
+      assert.ok(input.attrs["aria-label"]);
+      assert.ok(env.ids.get(input.attrs["aria-describedby"]), "effect has an associated explanatory description");
+      assert.equal(env.events.find((event) => event.type === "mefi-tree-preferences").detail[key], false);
+    }
+  }
+});
+
+test("Graph effects update independently, persist and never start playback or recommendations", async () => {
+  let requests = 0;
+  const link = "https://open.spotify.com/playlist/37i9dQZF1DX7zqr9q1MPG7";
+  const env = environment({ saved: { theme: "forest", volume: .35, spotify: [link], nodeStyle: "minimal", nodeLayout: "radial" }, recommend: async () => { requests += 1; return { ok: true, text: "Unused" }; } });
+  env.music.addFiles([file("Quiet track.mp3")]);
+  env.audio.currentTime = 17;
+  const playerEvents = env.events.filter((event) => event.type === "mefi-music-change").length;
+  for (const id of ["music-orbit-trails", "music-extra-glow"]) {
+    const input = env.ids.get(id); input.checked = true; input.dispatch("change");
+  }
+  await flush();
+  assert.deepEqual({ ...env.music.graphPreferences() }, { nodeStyle: "minimal", nodeLayout: "radial", orbitTrails: true, extraGlow: true });
+  assert.deepEqual({ ...env.events.filter((event) => event.type === "mefi-tree-preferences").at(-1).detail }, { nodeStyle: "minimal", nodeLayout: "radial", orbitTrails: true, extraGlow: true });
+  assert.equal(env.events.filter((event) => event.type === "mefi-music-change").length, playerEvents);
+  assert.equal(requests, 0);
+  assert.equal(env.audio.paused, true);
+  assert.equal(env.audio.currentTime, 17);
+  assert.equal(env.audio.volume, .35);
+  assert.equal(env.music.status().queueLength, 1);
+  const saved = JSON.parse(env.storage.get("mefiStudio.music.v1"));
+  assert.deepEqual(saved, { theme: "forest", customColors: { ...env.music.customColors() }, volume: .35, spotify: [link], nodeStyle: "minimal", nodeLayout: "radial", orbitTrails: true, extraGlow: true });
+  const restored = environment({ saved });
+  assert.equal(restored.ids.get("music-orbit-trails").checked, true);
+  assert.equal(restored.ids.get("music-extra-glow").checked, true);
+  restored.music.applyNodeEffects({ orbitTrails: false });
+  assert.equal(restored.music.status().extraGlow, true, "changing one effect retains the other");
+  restored.music.applyNodeStyle("glass"); restored.music.applyNodeLayout("tree"); restored.music.applyTheme("violet");
+  assert.equal(restored.music.status().extraGlow, true, "style, layout and colors retain effect choices");
+  assert.equal(restored.music.status().orbitTrails, false);
+  const persisted = restored.storage.get("mefiStudio.music.v1");
+  restored.music.applyNodeEffects({ extraGlow: "true", injected: true }, false);
+  assert.equal(restored.music.status().extraGlow, false, "only a Boolean true enables effects");
+  assert.equal(restored.storage.get("mefiStudio.music.v1"), persisted, "temporary previews do not overwrite saved effects");
+  assert.equal(Object.hasOwn(restored.music.graphPreferences(), "injected"), false);
+});
+
+test("Live tree settings claim the original view, use measured canvas space and restore Workspace on close", () => {
+  const env = environment({ preview: true, workspaceActive: true });
+  env.music.open();
+  assert.deepEqual(env.lifecycle, ["claim:music", "workspace:exit"], "claim the origin before activating a graph preview");
+  assert.equal(env.ids.get("music-overlay").hidden, false);
+  const sheet = env.ids.get("music-overlay").children[0];
+  assert.equal(sheet.attrs["aria-modal"], "false", "the live graph remains available beside settings");
+  env.frames();
+  assert.deepEqual(env.lifecycle.at(-1), { x: 400, y: 80, w: 600, h: 640 });
+  env.resize({ x: 320, y: 60, width: 306, height: 688 });
+  env.frames();
+  assert.deepEqual(env.lifecycle.at(-1), { x: 320, y: 60, w: 306, h: 688 });
+  env.music.open(); env.frames();
+  assert.equal(env.lifecycle.filter((item) => item === "claim:music").length, 1, "reopening does not replace the saved origin");
+  env.music.close();
+  assert.deepEqual(env.lifecycle.slice(-3), ["preview:close", "workspace:enter", "release:music"]);
+  assert.equal(env.ids.get("music-overlay").hidden, true);
+});
+
+test("Closing settings cancels pending canvas activation and non-Workspace origins stay unchanged", () => {
+  const env = environment({ preview: true });
+  env.music.open(); env.music.close(); env.frames();
+  assert.deepEqual(env.lifecycle, ["claim:music", "preview:close", "release:music"]);
+  env.resize({ x: 20, y: 40, width: 400, height: 220 }); env.frames();
+  assert.equal(env.lifecycle.length, 3, "a closed panel cannot reactivate the graph on resize");
+  env.music.open(); env.frames();
+  assert.deepEqual(env.lifecycle.at(-1), { x: 20, y: 40, w: 400, h: 220 });
+  env.music.close();
+  assert.equal(env.lifecycle.includes("workspace:enter"), false);
+});
+
 test("Music recommendations call only the dedicated safe service and construct trusted Spotify searches", async () => {
   const asks = [];
   const env = environment({ recommend: async (request) => { asks.push(request); return { ok: true, suggestions: [{ title: "Fixture Song", artist: "An artist", reason: "Quiet texture", query: "Fixture Song An artist", url: "javascript:alert(1)" }] }; } });
@@ -156,4 +336,93 @@ test("Music recommendations call only the dedicated safe service and construct t
   assert.deepEqual(env.opened, ["https://open.spotify.com/search/Fixture%20Song%20An%20artist"]);
   const disconnected = environment();
   assert.equal(disconnected.ids.get("music-recommend").disabled, true);
+});
+
+test("expanded node choices persist without disturbing effects, colors, or playback", () => {
+  const env = environment({ saved: { theme: "aurora", orbitTrails: true, extraGlow: true } });
+  for (const style of ["halo", "crystal"]) {
+    env.ids.get(`music-node-style-${style}`).click();
+    assert.equal(env.music.graphPreferences().nodeStyle, style);
+    assert.equal(env.ids.get(`music-node-style-${style}`).attrs["aria-pressed"], "true");
+  }
+  for (const layout of ["helix", "layers"]) {
+    env.ids.get(`music-node-layout-${layout}`).click();
+    assert.equal(env.music.graphPreferences().nodeLayout, layout);
+    assert.equal(env.music.graphPreferences().nodeStyle, "crystal");
+  }
+  const restored = environment({ saved: JSON.parse(env.storage.get("mefiStudio.music.v1")) });
+  assert.deepEqual({ ...restored.music.graphPreferences() }, { nodeStyle: "crystal", nodeLayout: "layers", orbitTrails: true, extraGlow: true });
+  assert.equal(restored.music.status().theme, "aurora");assert.equal(restored.music.status().playing, false);
+});
+
+test("custom palettes accept only six-digit colors and preserve unrelated settings", () => {
+  for (const invalid of ["red", "#fff", "#12345678", "url(http://x)", "var(--x)", "#GGGGGG", 123456]) assert.equal(helpers.hexColor(invalid), null);
+  assert.equal(helpers.hexColor(" #a1b2c3 "), "#A1B2C3");
+  const env = environment({ saved: { theme: "rose", volume: .4, nodeStyle: "halo", nodeLayout: "helix", customColors: { accent: "#83cbaa", background: "invalid", injected: "#123456" } } });
+  assert.equal(env.music.customColors().accent, "#83CBAA");assert.equal(env.music.customColors().background, "#050507");
+  const before = JSON.stringify(env.music.customColors());
+  assert.equal(env.music.applyCustomColors({ accent: "#AA00BB", surface: "invalid" }), false);
+  assert.equal(JSON.stringify(env.music.customColors()), before, "invalid batches make no partial changes");
+  assert.equal(env.music.status().theme, "rose");
+  assert.equal(env.music.applyCustomColors({ accent: "#22bbaa", injected: "javascript:bad" }), true);
+  assert.equal(env.music.status().theme, "custom");assert.equal(env.music.status().nodeStyle, "halo");
+  assert.equal(env.music.status().nodeLayout, "helix");assert.equal(env.audio.volume, .4);
+  const copy = env.music.customColors();copy.accent = "#000000";
+  assert.equal(env.music.customColors().accent, "#22BBAA");
+  assert.equal(Object.hasOwn(env.music.customColors(), "injected"), false);
+});
+
+test("accessible custom color controls live-apply, reject incomplete hex, reset, and survive reload", () => {
+  const env = environment();env.music.applyTheme("custom");
+  assert.equal(env.ids.get("music-custom-palette").hidden, false);
+  const hex = env.ids.get("music-color-accent-hex"), picker = env.ids.get("music-color-accent");
+  assert.equal(picker.type, "color");assert.ok(picker.attrs["aria-label"]);assert.ok(hex.attrs["aria-describedby"]);
+  hex.value = "#12";hex.dispatch("input");
+  assert.equal(hex.attrs["aria-invalid"], "true");assert.equal(env.music.customColors().accent, "#C9A86A");
+  hex.value = "#63aece";hex.dispatch("input");
+  assert.equal(hex.attrs["aria-invalid"], "false");assert.equal(picker.value, "#63AECE");
+  picker.value = "#BD88DC";picker.dispatch("input");assert.equal(hex.value, "#BD88DC");
+  const restored = environment({ saved: JSON.parse(env.storage.get("mefiStudio.music.v1")) });
+  assert.equal(restored.music.status().theme, "custom");assert.equal(restored.music.customColors().accent, "#BD88DC");
+  restored.music.applyTheme("aurora");assert.equal(restored.ids.get("music-custom-palette").hidden, true);
+  restored.music.applyTheme("custom");assert.equal(restored.music.customColors().accent, "#BD88DC", "presets do not discard custom colors");
+  restored.ids.get("music-custom-reset").click();assert.equal(restored.music.customColors().accent, "#C9A86A");
+});
+
+test("theme events carry readable UI and canvas palettes without changing graph layout or requesting audio", () => {
+  let requests = 0;
+  const env = environment({ recommend: () => { requests++; } });
+  const graphEvents = env.events.filter((event) => event.type === "mefi-tree-preferences").length;
+  const playerEvents = env.events.filter((event) => event.type === "mefi-music-change").length;
+  for (const theme of ["aurora", "rose"]) {
+    env.music.applyTheme(theme);
+    const palette = env.music.themePalette();
+    assert.equal(palette.theme, theme);assert(helpers.contrast(palette.text, palette.surface) >= 4.5);
+  }
+  // Opposing canvas/panel colors require separately derived foregrounds.
+  env.music.applyCustomColors({ accent: "#777777", background: "#FFFFFF", surface: "#000000", text: "#222222" });
+  const event = env.events.filter((entry) => entry.type === "mefi-theme-change").at(-1).detail;
+  assert.equal(event.background, "#FFFFFF");assert.equal(event.surface, "#000000");
+  assert(helpers.contrast(event.text, event.surface) >= 4.5);
+  assert(helpers.contrast(event.muted, event.surface) >= 4.5);
+  assert(helpers.contrast(event.border, event.surface) >= 3);
+  assert(helpers.contrast(event.canvas.text, event.canvas.background) >= 4.5);
+  assert(helpers.contrast(event.canvas.muted, event.canvas.background) >= 4.5);
+  assert.equal(event.tokens["--ivory"], event.text);assert.equal(env.styles.get("--cmd-bg"), event.canvas.background);
+  assert.equal(env.styles.get("--canvas-text"), event.canvas.text);assert.equal(env.styles.get("--canvas-muted"), event.canvas.muted);
+  assert.equal(env.events.filter((entry) => entry.type === "mefi-tree-preferences").length, graphEvents);
+  assert.equal(env.events.filter((entry) => entry.type === "mefi-music-change").length, playerEvents);
+  assert.equal(env.audio.paused, true);assert.equal(requests, 0);
+  assert.equal(env.music.customColors().text, "#222222", "the chosen color remains saved even when displayed text needs contrast correction");
+});
+
+test("live preview view controls change the real tree and follow external view changes", () => {
+  const env = environment({ preview: true });env.music.open();
+  const flat=env.ids.get("music-tree-view-2d"),solid=env.ids.get("music-tree-view-3d");
+  assert.equal(flat.attrs["aria-pressed"],"false");assert.equal(solid.attrs["aria-pressed"],"true");
+  assert.equal(flat.disabled,false);assert.ok(flat.attrs["aria-label"]);
+  flat.click();assert.equal(flat.attrs["aria-pressed"],"true");assert.equal(solid.attrs["aria-pressed"],"false");
+  env.view("3d");assert.equal(solid.attrs["aria-pressed"],"true");
+  assert.equal(env.music.status().nodeLayout,"constellation");assert.equal(env.music.status().playing,false);
+  const noGraph=environment();assert.equal(noGraph.ids.get("music-tree-view-2d").disabled,true,"unavailable canvas is not offered as a working control");
 });

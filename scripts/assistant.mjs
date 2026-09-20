@@ -25,7 +25,7 @@ export const PARALLEL_MAX = 12;
 export const AI_PARALLEL_MAX = 6;
 export const DEFAULT_PREFS = { proactive: true, keepAwake: true, background: true, backlogMode: false, foldAfterMinutes: 60, staleAfterHours: 24, tidyDoneAfterHours: 24, parallel: 8, aiParallel: 4 };
 const PREF_RANGES = { parallel: [1, PARALLEL_MAX], aiParallel: [1, AI_PARALLEL_MAX] }; // integer prefs clamped into a range
-export const INTENTS = ["status", "tasks", "ideas", "collisions", "machine", "agents", "suggest", "tidy", "fix", "organize", "pause", "resume", "resume-work", "help", "request", "chat", "overseer", "compact", "builder", "log"];
+export const INTENTS = ["status", "tasks", "ideas", "collisions", "machine", "agents", "suggest", "tidy", "fix", "organize", "pause", "resume", "resume-work", "help", "request", "chat", "overseer", "compact", "builder", "log", "planning-status"];
 export const ACTION_KINDS = ["idle", "tick", "audit", "brief", "fix", "tidy", "organize", "message", "overseer"];
 export const LOG_KINDS = ["tick", "message", "reply", "fix", "tidy", "organize", "audit", "brief", "collision", "machine", "error", "control", "overseer", "think"];
 export const THINKING_KEEP = 8; // committed inner-monologue bubbles kept in the thread
@@ -46,7 +46,7 @@ export const PROBLEM_ROLES = {
 };
 // The work journal: in-flight jobs only, written to disk at every start and
 // finish so a crash leaves the truth on disk for the next boot to restart.
-export const WORK_KINDS = ["responder", "improve", "grow", "explore", "expand", "audit", "brief", "ideas", "reference", "analyzer", "overseer", "compact", "dispatch"];
+export const WORK_KINDS = ["responder", "improve", "grow", "explore", "expand", "audit", "brief", "ideas", "reference", "analyzer", "overseer", "compact", "dispatch", "role"];
 export const WORK_STALE_MS = 10 * MINUTE; // a journal entry older than this is a `work-stale` problem
 export const WORK_MAX_ATTEMPTS = 3; // a job restarted this often is dropped
 const KIND_ROLES = { responder: "responder", improve: "improver", grow: "grower", explore: "improver", expand: "grower", audit: "auditor", brief: "briefer", ideas: "ideas", reference: "reference", analyzer: "reference", overseer: "overseer", compact: "compactor", dispatch: "foreman" };
@@ -1305,7 +1305,7 @@ function tidyRequests(requests, { now, collisions, audit, duplicates }, report) 
     ? new Set(duplicates.findings.map((row) => (isObject(row) ? row.file : row)).filter((file) => typeof file === "string"))
     : null;
   const cutoff = now - TIDY_LIMITS.autoRequestDays * DAY;
-  const protectedRequest = (request) => !isObject(request) || request.source === "chat" || !AUTO_SOURCES.has(request.source) || request.status === "running" || request.status === "verifying";
+  const protectedRequest = (request) => !isObject(request) || hasHandoffLineage(request) || request.source === "chat" || !AUTO_SOURCES.has(request.source) || request.status === "running" || request.status === "verifying";
   let removed = 0;
   let kept = requests.filter((request) => {
     if (protectedRequest(request)) return true;
@@ -1411,6 +1411,27 @@ export const compactKey = (value) =>
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+// Titles identify a display topic, not the accepted obligation. Cleanup may
+// collapse spelling-only copies, but distinct briefs or file/acceptance scope
+// must survive under their own IDs. Attempts and provenance are not scope.
+export function taskObligationKey(task) {
+  const title = compactKey(task?.title);
+  if (!title) return "";
+  const text = (value) => str(value).replace(/\s+/g, " ").trim();
+  const titleText = (value) => text(value).toLowerCase().replace(/[.!?]+$/, "");
+  const canonical = (value) => Array.isArray(value) ? value.map(canonical) : isObject(value)
+    ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])])) : value;
+  const scope = {};
+  for (const key of ["description", "details", "note", "notes", "context", "ideaDetail", "acceptance", "acceptanceCriteria", "requirements", "constraints", "scope", "projectId", "file"]) {
+    if (task?.[key] != null && task[key] !== "") scope[key] = typeof task[key] === "string" ? text(task[key]) : canonical(task[key]);
+  }
+  for (const key of ["files", "problemFiles", "ideas", "dependsOn", "sessions"]) if (asArray(task?.[key]).length) scope[key] = uniqueStrings(task[key].map(str)).sort();
+  if (asArray(task?.refs).length) scope.refs = task.refs.map((row) => JSON.stringify(canonical(row))).sort();
+  if (asArray(task?.members).length) scope.members = task.members.map((member) => [str(member?.id), text(member?.title), text(member?.prompt)]).sort(([a], [b]) => a.localeCompare(b));
+  const prompt = text(task?.prompt);
+  return JSON.stringify([title, !prompt || titleText(prompt) === titleText(task?.title) ? "" : prompt, scope]);
+}
 
 function collisionFiles(collision) {
   const files = asArray(collision?.files).map(str).filter(Boolean);
@@ -1697,15 +1718,86 @@ export function collaborate({ work = null, collisions = [], presence = [], sessi
   return { action, owner: owner || null, peers, liveEditors, files, ownership, collaborating, advice, featurePeers, handoff };
 }
 
+// Write-lock registry: a claim map keyed by case-normalized absolute path,
+// held around every edit dispatch. Whatever way a session spells the file —
+// relative or absolute, either separator, any case — resolve to one key, so a
+// second session on that path is refused instead of colliding (the A-Eyes
+// test_mefi_studio_eyes.py problem). Claims are in-memory: main.cjs registers
+// at dispatch (claimWrite) and releases when the run finishes (releaseWrite),
+// and no lease file is ever written (that hung dispatch on OneDrive).
+const MODULE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const writeClaims = new Map();
+
+// One spelling of one file: relative paths resolve against the module's repo
+// root, separators collapse, case folds. This is the registry's map key.
+export function writeClaimKey(file) {
+  const raw = String(file ?? "").trim();
+  if (!raw) return "";
+  const absolute = path.isAbsolute(raw) ? raw : path.resolve(MODULE_ROOT, raw);
+  return path.normalize(absolute).replace(/[\\/]+/g, "/").toLowerCase();
+}
+
+// The live claims, each as its normalized absolute key.
+export function heldWritePaths() {
+  return [...writeClaims.keys()];
+}
+
+// Claim `files` for `owner` (a session or run id). `files` is one path or a
+// list. Re-claiming your own path is idempotent; a claim another owner still
+// holds is refused. Every key passes together — a multi-file claim is
+// all-or-nothing.
+export function claimWrite(files, owner = null, { at = Date.now() } = {}) {
+  const keys = uniqueStrings((Array.isArray(files) ? files : [files]).map(str).map(writeClaimKey).filter(Boolean));
+  if (!keys.length) return { action: "proceed", reason: "proceed", held: [], files: [] };
+  const held = keys.filter((key) => {
+    const claim = writeClaims.get(key);
+    return Boolean(claim) && claim.owner !== owner;
+  });
+  if (held.length) {
+    const labels = held.slice(0, 3).map((key) => key.split("/").pop() || key);
+    const extra = held.length > 3 ? ` +${held.length - 3} more` : "";
+    return {
+      action: "refuse",
+      reason: "claimed",
+      held,
+      files: keys,
+      advice: `Another session already claimed ${labels.join(", ")}${extra} — wait for that claim to drop instead of editing the same file.`,
+    };
+  }
+  for (const key of keys) writeClaims.set(key, { owner, at, path: key });
+  return { action: "proceed", reason: "proceed", held: [], files: keys };
+}
+
+// Release `files` held by `owner` (all of an owner's claims when files is
+// empty). Returns how many claims dropped.
+export function releaseWrite(files, owner = null) {
+  const keys = uniqueStrings((Array.isArray(files) ? files : [files]).map(str).map(writeClaimKey).filter(Boolean));
+  let dropped = 0;
+  for (const key of [...writeClaims.keys()]) {
+    if (keys.length && !keys.includes(key)) continue;
+    const claim = writeClaims.get(key);
+    if (owner == null || claim.owner === owner) {
+      writeClaims.delete(key);
+      dropped += 1;
+    }
+  }
+  return dropped;
+}
+
 // Spawn-loop file claim: the same live-editor check as collaborate(), plus
-// in-memory claims from sibling executor jobs. A hit is `defer` so the
-// dispatcher skips this pick and tries the next — it must not park the pool,
-// and it must not write a lease file (that hung dispatch on OneDrive).
-export function claimWork({ work = null, collisions = [], presence = [], sessions = [], todos = [], uncommitted = [], jobs = [] } = {}) {
+// in-memory claims from sibling executor jobs and the write-lock registry. A
+// hit is `defer` so the dispatcher skips this pick and tries the next — it
+// must not park the pool, and it must not write a lease file (that hung
+// dispatch on OneDrive).
+export function claimWork({ work = null, collisions = [], presence = [], sessions = [], todos = [], uncommitted = [], jobs = [], owner = null } = {}) {
   const collab = collaborate({ work, collisions, presence, sessions, todos, uncommitted });
   const named = uniqueStrings([...explicitFiles(isObject(work) ? work : {}), ...collab.files]);
   const held = claimedFiles(jobs);
-  const blockers = named.length && held.length ? held.filter((file) => named.some((item) => sameFile(file, item))) : [];
+  const locked = named.length ? heldWritePaths().filter((key) => named.some((item) => sameFile(key, item))) : [];
+  const blockers = uniqueStrings([
+    ...(named.length && held.length ? held.filter((file) => named.some((item) => sameFile(file, item))) : []),
+    ...locked,
+  ]);
   if (blockers.length) {
     const labels = blockers.slice(0, 3).map((file) => basename(file) || file);
     const extra = blockers.length > 3 ? ` +${blockers.length - 3} more` : "";
@@ -1729,6 +1821,8 @@ const compactWeight = (item) => asArray(item?.logs).length * 2 + asArray(item?.r
 // open work the board must not duplicate or drop.
 const isLiveTask = (task) => task?.status === "open" || task?.status === "active" || task?.status === "awaiting_verification";
 const isFinishedTask = (task) => task?.status === "done" || task?.status === "archived";
+const hasHandoffLineage = (item) => Boolean(str(item?.handoffId) || str(item?.fromRun));
+const handoffIdentity = (item) => str(item?.handoffId) && str(item?.fromRun) ? JSON.stringify([str(item.handoffId), str(item.fromRun)]) : null;
 
 // Dependencies name stable task IDs. A title/theme match cannot authorize
 // deleting either an edge's source or its target; grouping would also change
@@ -1736,6 +1830,9 @@ const isFinishedTask = (task) => task?.status === "done" || task?.status === "ar
 function dependencyProtectedIds(tasks) {
   const protectedIds = new Set();
   for (const task of asArray(tasks)) {
+    // Approved plans link to these exact task IDs. Automatic grouping or title
+    // deduplication must not replace the human-reviewed implementation slices.
+    if ((task?.planningId || hasHandoffLineage(task)) && task?.id) protectedIds.add(str(task.id));
     const dependencies = asArray(task?.dependsOn).map(str).filter(Boolean);
     if (dependencies.length && task?.id) protectedIds.add(str(task.id));
     for (const id of dependencies) protectedIds.add(id);
@@ -1976,6 +2073,18 @@ function obligationSnapshot(task) {
     ideas: uniqueStrings(asArray(task.ideas).map(str)),
     ...(asArray(task.dependsOn).length ? { dependsOn: asArray(task.dependsOn).map(str) } : {}),
     ...(task.contextHistory ? { contextHistory: task.contextHistory } : {}),
+    ...(asArray(task.logs).length ? { logs: asArray(task.logs) } : {}),
+    ...(task.handoff != null ? { handoff: task.handoff } : {}),
+    ...(task.handoffId ? { handoffId: str(task.handoffId) } : {}),
+    ...(task.fromRun ? { fromRun: str(task.fromRun) } : {}),
+    ...(task.parentTaskId ? { parentTaskId: str(task.parentTaskId) } : {}),
+    ...(task.originalTitle ? { originalTitle: str(task.originalTitle) } : {}),
+    ...(task.lastAttempt ? { lastAttempt: task.lastAttempt } : {}),
+    ...(task.verification ? { verification: task.verification } : {}),
+    ...(task.runFailures != null ? { runFailures: task.runFailures } : {}),
+    ...(task.verifyAttempts != null ? { verifyAttempts: task.verifyAttempts } : {}),
+    ...(task.workPin ? { workPin: true } : {}),
+    ...(task.pinnedAt ? { pinnedAt: task.pinnedAt } : {}),
     ...(task.color ? { color: str(task.color) } : {}),
     ...(task.source ? { source: str(task.source) } : {}),
     ...(task.file ? { file: str(task.file) } : {}),
@@ -1996,9 +2105,14 @@ function planTaskGroups(tasks, ideas, groups, now, rules, allocateId = null) {
   const foldable = new Map();
   const protectedIds = dependencyProtectedIds(tasks);
   for (const task of asArray(tasks)) {
-    if (!task || task.status !== "open" || task.runId || str(task.id).startsWith("task_plan_") || protectedIds.has(str(task.id))) continue;
+    if (!task || task.status !== "open" || task.runId || isObject(task.lease) || str(task.id).startsWith("task_plan_") || protectedIds.has(str(task.id))) continue;
+    // A fresh grouped plan must not reset a member's paid-retry budget or
+    // turn failed verification/cooldown into newly runnable work.
+    if (exhaustedAttempts(task, rules.maxFailures) || num(task.runFailures, 0) > 0 || num(task.verifyAttempts, 0) > 0 || num(task.nextRunAt, 0) > now) continue;
     const key = compactKey(task.title);
-    if (key) foldable.set(key, task);
+    // The reviewer supplies titles, not IDs. Ambiguous titles cannot safely
+    // choose one of several different accepted obligations.
+    if (key) foldable.set(key, foldable.has(key) ? null : task);
   }
   const taken = new Set();
   for (const task of asArray(tasks)) {
@@ -2018,10 +2132,12 @@ function planTaskGroups(tasks, ideas, groups, now, rules, allocateId = null) {
     const theme = compactKey(group.title);
     if (!theme || taken.has(theme)) continue;
     const members = [];
+    const memberIds = new Set();
     for (const name of asArray(group.tasks).map(str)) {
       const task = foldable.get(compactKey(name));
-      if (!task || folded.has(str(task.id))) continue;
+      if (!task || folded.has(str(task.id)) || memberIds.has(str(task.id))) continue;
       members.push(task);
+      memberIds.add(str(task.id));
       if (members.length >= rules.planTaskCap) break;
     }
     if (members.length < 2) continue;
@@ -2093,7 +2209,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   // fold candidates again on a later pass, within the fold-attempt cap.
   const reopenedThisPass = new Set();
 
-  // 1. Tasks first: collapse duplicate live titles, richest copy wins — and a
+  // 1. Tasks first: collapse duplicate live obligations, richest copy wins — and a
   //    task the executor is holding (runId set) is never a casualty. Two held
   //    copies of one title are two live attempts: keep both and let the claim
   //    system sort them out rather than "dedupe" a running job out of
@@ -2102,7 +2218,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   const bothClaimed = new Set();
   for (const task of inTasks) {
     if (!isLiveTask(task) || !compactKey(task.title)) continue;
-    const key = compactKey(task.title);
+    const key = taskObligationKey(task);
     const existing = liveByKey.get(key);
     if (existing && existing.runId && task.runId) {
       bothClaimed.add(key);
@@ -2114,7 +2230,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   let outTasks = inTasks.filter((task) => {
     if (protectedIds.has(str(task.id))) return true;
     if (!isLiveTask(task) || !compactKey(task.title) || survivors.has(task)) return true;
-    return bothClaimed.has(compactKey(task.title));
+    return bothClaimed.has(taskObligationKey(task));
   });
   report.duplicateTasks = inTasks.length - outTasks.length;
 
@@ -2299,7 +2415,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
         outTasks = outTasks.map((task) => {
           if (!task || task.status !== "absorbed" || str(task.absorbedInto) !== planId) return task;
           restoredFromRows.add(str(task.id));
-          const { absorbedInto, runId, lastAttempt, verification, nextRunAt, ...rest } = task;
+          const { absorbedInto, runId, lease, ...rest } = task;
           return {
             ...rest,
             status: "open",
@@ -2309,7 +2425,8 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
         });
         // ...and members whose absorbed row is gone are rebuilt from the
         // plan's own obligation snapshot.
-        const missing = members.filter((member) => !restoredFromRows.has(str(member.id)));
+        const presentIds = new Set(outTasks.map((task) => str(task?.id)));
+        const missing = members.filter((member) => !restoredFromRows.has(str(member.id)) && !presentIds.has(str(member.id)));
         if (missing.length) {
           outTasks = [
             ...missing.map((member) => ({
@@ -2319,7 +2436,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
               source: member.source ?? "a-eyes",
               createdAt: num(member.createdAt, now),
               updatedAt: now,
-              logs: [{ at: now, kind: "status", text: `plan ${planId} expired — restored from the grouping's obligation snapshot` }],
+              logs: [...asArray(member.logs), { at: now, kind: "status", text: `plan ${planId} expired — restored from the grouping's obligation snapshot` }].slice(-40),
             })),
             ...outTasks,
           ];
@@ -2440,6 +2557,10 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
     outTasks.filter((task) => task.status !== "archived").map((task) => compactKey(task.title)).filter(Boolean),
   );
   const boardThemes = new Set();
+  // A handoff is an accepted obligation with stable lineage. Titles, prompt
+  // snippets and problem themes cannot prove it was admitted or completed.
+  // Group snapshots also represent a handoff if its absorbed row is missing.
+  const representedHandoffs = new Set(outTasks.flatMap((task) => [task, ...asArray(task.members)]).map(handoffIdentity).filter(Boolean));
   for (const task of outTasks) {
     if (task.status === "archived" || !isFixTicket(task)) continue;
     const theme = fixThemeKey(task);
@@ -2457,6 +2578,11 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
     // A claim in flight — or one mid-verification — is never touched.
     if (request.status === "running" || request.status === "verifying") {
       outRequests.push(request);
+      continue;
+    }
+    if (hasHandoffLineage(request)) {
+      if (representedHandoffs.has(handoffIdentity(request))) report.absorbed += 1;
+      else outRequests.push(request);
       continue;
     }
     const key = compactKey(request.title) || compactKey(request.prompt);
@@ -2501,7 +2627,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
     const groups = new Map();
     const drop = new Set();
     for (const request of outRequests) {
-      if (request.status === "running" || request.status === "verifying" || request.source !== "collision") continue;
+      if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request) || request.source !== "collision") continue;
       const key = sessionSetKey(request);
       if (!key) continue;
       if (runningKeys.has(key)) {
@@ -2541,7 +2667,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
     const live = liveCollisionIndex(collisions);
     const before = outRequests.length;
     outRequests = outRequests.filter((request) => {
-      if (request.status === "running" || request.status === "verifying") return true;
+      if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request)) return true;
       if (request.source === "collision" && !collisionRequestLive(request, live)) return false;
       if (request.source === "overseer" && /^overseer:\s*resolve collision/i.test(str(request.title))) return false;
       return true;
@@ -2557,7 +2683,7 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
   //    touched.
   const staleCutoff = now - rules.staleRequestHours * HOUR;
   const fresh = outRequests.filter((request) => {
-    if (request.status === "running" || request.status === "verifying") return true;
+    if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request)) return true;
     if (request.source === "chat" || !AUTO_SOURCES.has(request.source)) return true;
     const at = num(request.at, 0);
     return at >= staleCutoff;
@@ -2640,23 +2766,62 @@ export const ideaIdentityKeys = (idea) => {
   return keys;
 };
 
+// ---- the chat-noise gate ---------------------------------------------------------
+// Chat lines are conversations, not proposals. The ideas review is contracted to
+// return only genuine, actionable work, but sentence fragments still slipped
+// through as extraction:2 ideas — six narration excerpts landed in the live
+// store in one pass and had to be swept by hand. The ingest path now gates
+// them deterministically, both before the model sees a candidate line
+// (reference.scanIdeas) and before a minted row enters the delta (mergeIdeas),
+// so the store stays clean even when the model relents. Deliberately
+// high-precision: a missed narration line costs one ignored candidate, while a
+// rejected genuine idea is lost work.
+const NARRATION_TEXT = [
+  /\b(?:i'm|i'll|i've|i'd|let me|gonna|wanna|gotta)\b/i,
+  /\bi\s+(?:have|had|think|thought|noticed|see|saw|found|need|wanted?|will|would|started|added|updated|checked|tried|ran|adopted|plan(?:ned)?|keep|kept|missed)\b/i,
+  /\bmy\s+(?:tests?|checks?|row|runs?|branch|edits?|changes|scan|pass|turn)\b/i,
+  /\b(?:tests?|checks?|contracts?|pipelines?|builds?|suites?|smokes?)\s+(?:pass(?:ed|ing)?|fail(?:ed|ing)?|green)\b/i,
+  /\ball\s+(?:green|passing|done|set)\b/i,
+  /\b(?:it|that)\s+passes\b/i,
+  /\bnow\s+(?:executes?|registers?|runs?|passes?|works?|shows?|routes?)\b/i,
+  /\b(?:landed|recon done)\b/i,
+];
+const NARRATION_START = /^(?:now|okay|ok|yes|so|well|anyway|recon done|all green|done|landed|building|running|checking|retrying|starting|reading|gathering|finalizing|exploring|refactoring|adopting|updating|looking|testing|waiting|reviewing)\b/i;
+
+export function isExtractionArtifact(idea) {
+  const text = typeof idea === "string" ? idea : `${str(idea?.title)} ${str(idea?.detail)}`;
+  const flat = text.trim();
+  if (!flat) return false;
+  if (NARRATION_START.test(flat)) return true;
+  if (NARRATION_TEXT.some((pattern) => pattern.test(flat))) return true;
+  // A question addressed to the assistant ("what's left to polish?") is a
+  // prompt for an answer, not a proposal — unless it carries a proposal modal
+  // ("should we retry stale checks?"), which is a genuine idea shape.
+  return /\?\s*$/.test(flat) && !/\b(?:should|could|would|can|may|might|what if|maybe|whether)\b/i.test(flat);
+}
+
 export function mergeIdeas(existing, additions, { cap = 400 } = {}) {
   const current = asArray(existing).filter(isObject);
   const seen = new Set();
   for (const idea of current) for (const key of ideaIdentityKeys(idea)) seen.add(key);
   const fresh = [];
+  let rejected = 0;
   for (const addition of asArray(additions).filter(isObject)) {
+    if (isExtractionArtifact(addition)) {
+      rejected += 1;
+      continue;
+    }
     const keys = ideaIdentityKeys(addition);
     if (!keys.length) continue;
     if (keys.some((key) => seen.has(key))) continue;
     for (const key of keys) seen.add(key);
     fresh.push(addition);
   }
-  if (!fresh.length) return { ideas: current, added: 0 };
+  if (!fresh.length) return { ideas: current, added: 0, rejected };
   // `cap` remains accepted for old callers, but ingestion must never evict
   // existing obligations or pretend an accepted addition was saved when it
   // was sliced off. Builder admission, not storage, is bounded.
-  return { ideas: [...fresh, ...current], added: fresh.length };
+  return { ideas: [...fresh, ...current], added: fresh.length, rejected };
 }
 
 export function exhaustedAttempts(item, maxFailures = 5) {
@@ -2761,11 +2926,10 @@ export function parseExecutorResult(line, mark = "MEFI_RESULT:") {
 // attempt's acceptance contract:
 //   • partial work (a nonempty remaining list, or the worker's own
 //     MEFI_RESULT "remaining:" text) is never verified;
-//   • a session-attributed attempt needs the store to show its edits — a
-//     test/audit-only attempt may instead name the checks it ran;
-//   • an attempt with NO session cannot borrow the verdict: without edits the
-//     worker must at least name the checks it ran, or completion stays
-//     unverified;
+//   • a session-attributed attempt needs the store to show its edits; reported
+//     tests require recorded command outcomes from that same attempt;
+//   • a test/audit-only attempt needs actual successful check executions;
+//   • an attempt with NO session cannot borrow a worker's prose as evidence;
 //   • a reported check FAILURE ("tests: failed") is never evidence.
 // Missing evidence stays `unverified` and the attempt is retried on a bounded
 // budget (VERIFY_MAX_ATTEMPTS); past the bound the state is `failed` and the
@@ -2780,16 +2944,50 @@ const noRemainingWork = (text) => /^(?:none|nothing|nil|n\/a|no (?:remaining|out
 const namesCheck = (text) => !/^(?:none|nothing|n\/a|not (?:run|tested)|skipped|unavailable|pending|passed|ok|done)[.!\s]*$/i.test(text)
   && !/\b(?:not run|not tested|did not run|didn't run|could not run|couldn't run|unable to run|skipped)\b/i.test(text);
 
-export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSession = false, remaining = [], resultNote = null, priorAttempts = 0 } = {}) {
+// A terminal exiting successfully is not necessarily a check. Keep this
+// deliberately conservative: quoted prose, `echo npm test`, shell wrappers,
+// pipelines and failure-masking command chains cannot prove a test passed.
+export function isVerificationCommand(value) {
+  let command = str(value).trim();
+  command = command.replace(/^cd\s+(?:"[^"\r\n]+"|'[^'\r\n]+'|[^&;\r\n]+)\s*&&\s*/i, "");
+  if (!command || /[\r\n;|&`<>]/.test(command)) return false;
+  return /^(?:npm|pnpm|yarn)(?:\.cmd)?\s+(?:test\b|(?:run\s+)?(?:test|check|audit|lint|typecheck|build|build-booklet)(?::[\w-]+)?\b)/i.test(command)
+    || /^node(?:\.exe)?\s+(?:--test\b|--check\b|(?:["']?[^\s"']*[\\/])?(?:test[_-]|verify[_-])[^\s"']+\.[cm]?js["']?(?:\s|$))/i.test(command)
+    || /^(?:python[\d.]*|py)(?:\.exe)?\s+(?:-m\s+(?:pytest|unittest|compileall)\b|(?:["']?[^\s"']*[\\/])?(?:test[_-]|verify[_-])[^\s"']+\.py["']?(?:\s|$))/i.test(command)
+    || /^(?:pytest|ruff|eslint|tsc|vitest|jest)(?:\.cmd|\.exe)?(?:\s|$)/i.test(command)
+    || /^(?:cargo\s+(?:test|check|clippy)|go\s+(?:test|vet)|dotnet\s+test)\b/i.test(command);
+}
+
+export function summarizeObservedChecks(checks = []) {
+  const latest = new Map();
+  for (const check of asArray(checks)) {
+    if (!isObject(check) || check.commandTruncated || !isVerificationCommand(check.command)) continue;
+    const key = str(check.command).trim().replace(/\s+/g, " ");
+    const at = Number(check.startedAt);
+    if (!Number.isFinite(at) || at <= 0) continue;
+    const previous = latest.get(key);
+    if (previous && Number(previous.startedAt) > at) continue;
+    latest.set(key, check);
+  }
+  const rows = [...latest.values()];
+  const passed = rows.filter((row) => row.status === "completed" && row.exitCode === 0 && row.passed === true).length;
+  const failed = rows.filter((row) => row.status === "error" || (Number.isInteger(row.exitCode) && row.exitCode !== 0)).length;
+  return { total: rows.length, passed, failed, pending: rows.length - passed - failed };
+}
+
+export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSession = false, observedChecks = [], resolvedHandoffs = [], remaining = [], resultNote = null, priorAttempts = 0 } = {}) {
   const parts = (resultNote && isObject(resultNote) ? resultNote.parts : null) ?? {};
   const namedChecks = checkReports(parts).some(namesCheck);
   const remainingText = str(parts.remaining);
-  const outstanding = (remainingText.length > 0 && !noRemainingWork(remainingText)) || asArray(remaining).length > 0;
+  const remainingKey = (value) => str(value).toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  const handedOffAndFinished = remainingKey(remainingText) && asArray(resolvedHandoffs).some((title) => remainingKey(title) === remainingKey(remainingText));
+  const outstanding = (remainingText.length > 0 && !noRemainingWork(remainingText) && !handedOffAndFinished) || asArray(remaining).length > 0;
   const evidence = {
     verdictOk: verdictOk === true,
     changedFiles: Math.max(0, Number(changedFiles) || 0),
     hasSession: hasSession === true,
     namedChecks,
+    observedChecks: hasSession === true ? summarizeObservedChecks(observedChecks) : { total: 0, passed: 0, failed: 0, pending: 0 },
     outstanding,
   };
   const fail = (reason) => {
@@ -2798,15 +2996,17 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSessi
   };
   const pass = (reason) => ({ state: "verified", reason, evidence });
   if (reportedCheckFailure(parts)) return fail("the attempt reported failing checks");
+  if (evidence.observedChecks.failed) return fail("recorded checks failed in the attempt's session");
+  if (evidence.observedChecks.pending) return fail("recorded checks have no completed exit result");
   if (!evidence.verdictOk) return fail("the run did not report success");
   if (outstanding) return fail("outstanding obligations remain");
   if (evidence.hasSession) {
+    if (evidence.namedChecks && !evidence.observedChecks.passed) return fail("reported checks have no recorded passing execution");
+    if (evidence.observedChecks.passed) return pass(`${evidence.observedChecks.passed} recorded check(s) passed in the attempt's session`);
     if (evidence.changedFiles > 0) return pass(`${evidence.changedFiles} changed file(s) in the attempt's session`);
-    if (evidence.namedChecks) return pass("no edits, but the attempt named the checks it ran");
     return fail("no attributable edits and no named checks");
   }
-  if (evidence.namedChecks) return pass("no session, but the attempt named the checks it ran");
-  return fail("no session and no named checks");
+  return fail("no session-attributed completion evidence");
 }
 
 // A run that has registered no OpenCode session and printed nothing is not
@@ -2859,7 +3059,7 @@ export function advanceCursor(rows, cursor = { at: 0, id: "" }) {
 // task.
 const DEFAULT_LEASE_STALE_MS = 30 * MINUTE;
 
-function leaseHeldElsewhere(row, { pid, now, leaseStaleMs }) {
+export function leaseHeldElsewhere(row, { pid = (typeof process !== "undefined" && process.pid) || 0, now = Date.now(), leaseStaleMs = DEFAULT_LEASE_STALE_MS } = {}) {
   const lease = row?.lease;
   if (!isObject(lease) || !Number.isFinite(lease.at)) return false; // no lease stamp: pre-lease record, old rules
   if (lease.pid === pid) return false; // ours — liveRuns decides
@@ -2890,7 +3090,7 @@ export function housekeepingSweep({ requests = [], tasks = [], liveRuns = new Se
   });
   const beforePrune = outRequests.length;
   outRequests = outRequests.filter((request) => {
-    if (request.status === "running" || request.status === "verifying") return true;
+    if (request.status === "running" || request.status === "verifying" || hasHandoffLineage(request)) return true;
     if (str(request.source) === "chat" || !AUTO_SOURCES.has(request.source)) return true;
     return !(num(request.at, 0) && num(request.at, 0) < requestCutoff);
   });
@@ -2957,7 +3157,9 @@ export function housekeepingSweep({ requests = [], tasks = [], liveRuns = new Se
   });
   // No queue-length truncation: all accepted backlog tasks remain available.
 
-  // Same-title copies collapse to the keeper. A claimed row is never dropped
+  // Only copies of the same obligation collapse. A shared title alone cannot
+  // erase different prompts, files, prerequisites or acceptance criteria.
+  // A claimed row is never dropped
   // (it is live work); when a claimed copy shares a title with unclaimed
   // copies, the claim wins and the unclaimed stragglers go. Only two or more
   // claimed copies of one title — two live attempts, which the executor's
@@ -2968,7 +3170,7 @@ export function housekeepingSweep({ requests = [], tasks = [], liveRuns = new Se
   const claimCount = new Map();
   for (const task of outTasks) {
     if (!isLiveTask(task)) continue;
-    const key = compactKey(task?.title);
+    const key = taskObligationKey(task);
     if (!key) continue;
     if (task.runId) {
       claimCount.set(key, (claimCount.get(key) ?? 0) + 1);
@@ -2980,7 +3182,7 @@ export function housekeepingSweep({ requests = [], tasks = [], liveRuns = new Se
   outTasks = outTasks.filter((task) => {
     if (protectedIds.has(str(task.id))) return true;
     if (!isLiveTask(task)) return true;
-    const key = compactKey(task?.title);
+    const key = taskObligationKey(task);
     if (!key) return true;
     if (task.runId) return true; // a live claim is never housekept away
     // Unclaimed: keep only when no claim holds the title and this is the
@@ -3138,8 +3340,12 @@ const BUILD_VERBS = new Set(["build", "implement", "add", "create", "write", "im
 const IMPERATIVES = new Set([...DO_VERBS, ...QUERY_VERBS]);
 // Intents that only report state. A work verb in front of one ("work on the
 // agent task", "fix the ideas list") is an instruction, not a question.
-const QUERY_INTENTS = new Set(["status", "tasks", "ideas", "collisions", "machine", "agents", "log"]);
+const QUERY_INTENTS = new Set(["status", "tasks", "ideas", "collisions", "machine", "agents", "log", "planning-status"]);
 const INTENT_RULES = [
+  // Match explicit requests to inspect saved plans, not a mention of "plan"
+  // inside a build instruction. Whole-message matching also leaves mixed work
+  // requests such as "show my plans and build the first one" on the old route.
+  ["planning-status", /^(?:(?:please|pls|hey|hi|ok|okay|can you|could you|would you|will you)\s+)*(?:(?:show|list|open)(?: me)? (?:my |the |our )?(?:saved )?plans|(?:(?:what is|whats|show(?: me)?) (?:the |my )?)?planning status|what (?:saved )?plans do (?:i|we) have|(?:show(?: me)? |what are )?(?:the )?open questions in (?:my|our|the) plans)(?: please)?$/],
   ["resume-work", /\b(?:restart|resume|continue|retry|redo|pick up|carry on|keep going)\b.*\b(?:work|jobs?|interrupted|left off)\b|\binterrupted (?:work|jobs?)\b/],
   // The Auto Builder feed: mentioning the builder (or its feed) asks about
   // that machinery, so the reply reads the executor's own facts — what is
@@ -3627,6 +3833,30 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
   // the words the user typed; main builds the inbox request from this.
   let request = null;
   switch (kind) {
+    case "planning-status": {
+      const planning = planningSummaryFacts(source.planning);
+      if (!planning || planning.total === null) {
+        lines.push("I could not read the saved plans for this project. Open Plans to check them.");
+        break;
+      }
+      if (planning.total === 0) {
+        lines.push("No saved plans in this project. Choose Plan an idea to work through an outcome and its unanswered questions before creating tasks.");
+        break;
+      }
+      const counts = [["active", "active"], ["ready", "ready to create tasks"], ["converting", "creating tasks"], ["converted", "handed to the task board"]]
+        .filter(([key]) => planning[key] !== null).map(([key, label]) => `${planning[key]} ${label}`);
+      lines.push(`${plural(planning.total, "saved plan")}${counts.length ? `: ${counts.join("; ")}` : ""}.`);
+      lines.push("Open Plans to review decisions and explicitly create approved tasks.");
+      if (planning.plans.length) lines.push(`Plans: ${planning.plans.slice(0, 3).map((plan) => `"${clip(plan.title, 40)}"`).join(", ")}.`);
+      const next = planning.plans.find((plan) => plan.readyQuestions.length > 0);
+      if (next) lines.push(`Next question in "${clip(next.title, 35)}": ${clip(next.readyQuestions[0].question, 120)}`);
+      else {
+        const uncertain = planning.plans.find((plan) => plan.unknowns > 0);
+        if (uncertain) lines.push(`"${clip(uncertain.title, 35)}" has ${plural(uncertain.unknowns, "unknown")} to clarify.`);
+      }
+      if (planning.truncated > 0) lines.push(`${planning.truncated} more saved plans are available in Plans.`);
+      break;
+    }
     case "status": {
       if (sessions) {
         const active = sessions.filter(isActiveFact);
@@ -4039,9 +4269,26 @@ export function summarizeForTree(state, now = Date.now()) {
   return { label, sublabel: `running · next ${next ? relative(next - now) : "soon"}`, tone: "ok", pulse };
 }
 
+// A read-only summary: keep whole-store counts supplied by the host while
+// bounding model context. Do not expose mutable plan documents or infer empty
+// storage from missing/unreadable data.
+function planningSummaryFacts(value) {
+  if (!isObject(value) || !Array.isArray(value.plans)) return null;
+  const count = (number) => Number.isSafeInteger(number) && number >= 0 ? number : null;
+  const plans = value.plans.filter((plan) => isObject(plan) && typeof plan.id === "string" && ["planning", "ready", "converting", "converted"].includes(plan.status)).slice(0, 5).map((plan) => ({
+    id: clip(plan.id, 160), title: clip(str(plan.title), 180), status: plan.status, destination: clip(str(plan.destination), 400),
+    openQuestions: count(plan.openQuestions), unknowns: count(plan.unknowns),
+    readyQuestions: asArray(plan.readyQuestions).filter((question) => isObject(question) && typeof question.id === "string" && typeof question.question === "string").slice(0, 2).map((question) => ({ id: clip(question.id, 160), question: clip(question.question, 250) })),
+  }));
+  return {
+    total: count(value.total), active: count(value.active), ready: count(value.ready), converting: count(value.converting), converted: count(value.converted),
+    plans, truncated: (count(value.truncated) ?? 0) + Math.max(0, value.plans.length - plans.length),
+  };
+}
+
 // The facts shape localReply reads, from the raw store rows. main.cjs builds
 // the same shape (each source guarded, null when unreadable); the CLI uses it.
-export function buildFacts({ sessions = null, todos = null, collisions = null, presence = null, uncommitted = null, tasks = null, ideas = null, requests = null, executor = null, backlog = null, machine = null, audit = null, briefing = null, update = null, work = null, resumed = null, focus = null, nodeFolders = null, lessons = null, log = null, query = "", now = Date.now() } = {}) {
+export function buildFacts({ sessions = null, todos = null, collisions = null, presence = null, uncommitted = null, tasks = null, ideas = null, requests = null, executor = null, backlog = null, planning = null, machine = null, audit = null, briefing = null, update = null, work = null, resumed = null, focus = null, nodeFolders = null, lessons = null, log = null, query = "", now = Date.now() } = {}) {
   const todoRows = asArray(todos).filter((todo) => isObject(todo) && typeof todo.sessionId === "string");
   const focusRow = normalizeFocus(focus);
   const folderKey = focusRow ? nodeKeyOf(focusRow) : null;
@@ -4060,6 +4307,7 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
       ? { key: folderKey, count: asArray(folder.entries).filter(isObject).length, lines: nodeFolderLines(nodeFolders, folderKey, { limit: 4, now }) }
       : null,
     memory: compiled.primer.length ? { primer: compiled.primer, flags: compiled.flags, dig: compiled.dig } : null,
+    planning: planningSummaryFacts(planning),
     sessions: Array.isArray(sessions)
       ? sessions
           .filter((session) => isObject(session) && typeof session.id === "string" && !session.parentId && num(session.timeUpdated, 0) > now - RAIL_WINDOW_MS)

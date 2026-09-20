@@ -40,24 +40,34 @@
   <symbol id="g-plane" viewBox="0 0 16 16"><path d="M8 2.6 13.8 6v4L8 13.4 2.2 10V6z"/><path d="M2.2 6 8 9.2 13.8 6M8 9.2v4.2"/></symbol>
   <symbol id="g-chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
 </svg>
-<section id="workspace-layer" class="workspace" aria-label="Your project workspace" hidden tabindex="-1">
-  <aside class="ws-sidebar" aria-label="Projects and tools">
+<div id="workspace-sidebar" class="workspace studio-sidebar" data-open="false">
+  <button id="workspace-sidebar-toggle" class="sidebar-edge" type="button" aria-label="Open studio sidebar" aria-controls="workspace-sidebar-panel" aria-expanded="false"></button>
+  <aside id="workspace-sidebar-panel" class="ws-sidebar" aria-label="Projects and tools" aria-hidden="true" inert>
+    <div class="sidebar-heading"><span>YOUR STUDIO</span><button id="workspace-sidebar-close" class="ghost mini" type="button" aria-label="Close studio sidebar" title="Close sidebar (Esc)">×</button></div>
     <a class="ws-brand" href="#" data-nav="workspace"><span class="ws-brand-mark">m<span>+</span></span><span>Mefi's Studio<small>MAKE SOMETHING YOURS</small></span></a>
     <button class="ws-home" data-nav="workspace"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg>Your workspace <kbd>H</kbd></button>
+    <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open the node tree / Command view (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg>Node tree <kbd>D</kbd></button>
+    <button class="ws-home ws-shortcut" data-nav="tasks" title="Open your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg>Task board <kbd>T</kbd></button>
+    <button class="ws-home ws-shortcut" data-nav="plans" title="Explore an idea and review its plan"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg>Plans</button>
     <div class="ws-section-label"><span>PROJECTS</span><button id="workspace-add-project" class="ghost mini" title="Add an existing project folder" aria-label="Add project">+</button></div>
     <div id="workspace-projects" class="ws-projects" aria-label="Choose a project"></div>
     <p class="ws-sidebar-note">One space for each idea.<br>Its own work, its own conversation.</p>
+    <p id="workspace-sidebar-feedback" class="sidebar-feedback" role="status" aria-live="polite"></p>
     <div class="ws-sidebar-bottom">
       <details class="ws-tools" id="workspace-tools"><summary><svg class="glyph" aria-hidden="true"><use href="#g-overhead"/></svg>Studio tools<span>⌄</span></summary><div id="workspace-tool-links"></div></details>
       <button class="ghost ws-settings" data-nav="studio"><svg class="glyph" aria-hidden="true"><use href="#g-ambience"/></svg>Settings & connections</button>
       <button class="ghost ws-settings" data-nav="music"><svg class="glyph" aria-hidden="true"><use href="#g-music"/></svg>Music & themes</button>
+      <button class="ghost ws-settings" data-nav="onboarding"><svg class="glyph" aria-hidden="true"><use href="#g-help"/></svg>Start here</button>
       <details class="ws-personal"><summary>Make yourself at home <span>✧</span></summary><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Studio theme<select id="workspace-accent"><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></details>
       <span class="ws-local-note"><i></i> A little studio. A lot of possibility.</span>
     </div>
   </aside>
+</div>
+<section id="workspace-layer" class="workspace" aria-label="Your project workspace" hidden tabindex="-1">
   <div class="ws-main">
     <div class="ws-topbar"><div class="ws-project-heading"><span class="ws-kicker">WORKSPACE /</span><strong id="workspace-project-name">Opening your project…</strong></div><div class="ws-top-actions"><button id="workspace-reveal" class="ghost mini" title="Show the project folder">Open folder ↗</button><button class="ghost mini" data-nav="palette" aria-label="Find a tool or command">Search <kbd>Ctrl K</kbd></button></div></div>
     <div class="ws-heading"><div><p class="ws-kicker" id="workspace-greeting">YOUR SPACE TO CREATE</p><h1>What are we making?</h1><p id="workspace-project-path" class="ws-project-path"></p></div><span id="workspace-connection" class="ws-connection">Connecting…</span></div>
+    <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">A little guidance for your first project.</strong><p>Choose a project, connect your tools, create work and follow it through review.</p></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start walkthrough</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays in the sidebar">Not now</button></div></section>
     <div class="ws-columns">
       <section class="ws-conversation" aria-label="Conversation with your companion">
         <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div><button id="workspace-pause" class="ghost mini" title="Pause new work. Running jobs finish normally.">Pause</button></div>
@@ -65,21 +75,27 @@
         <form id="workspace-form" class="ws-composer">
           <div class="ws-compose-top"><div class="ws-modes" role="group" aria-label="Message purpose"><button type="button" id="workspace-mode-chat" aria-pressed="true">Talk together</button><button type="button" id="workspace-mode-work" aria-pressed="false">Give a task</button></div><span id="workspace-composer-context"></span></div>
           <label class="sr-only" for="workspace-input">Message or task for this project</label><textarea id="workspace-input" rows="3" placeholder="Ask a question, think through an idea, or tell me where you're stuck…"></textarea>
-          <div class="ws-compose-bottom"><span id="workspace-compose-hint">Enter to send · Shift + Enter for a new line</span><button id="workspace-send" class="primary" type="submit">Send message <span aria-hidden="true">↗</span></button></div>
+          <div class="ws-compose-bottom"><span id="workspace-compose-hint">Enter to send · Shift + Enter for a new line</span><button id="workspace-task-outline" class="ghost mini" type="button" hidden>Use a task outline</button><button id="workspace-plan-idea" class="ghost" type="button">Plan an idea</button><button id="workspace-send" class="primary" type="submit">Send message <span aria-hidden="true">↗</span></button></div>
         </form>
-        <div class="ws-feedback-row"><p id="workspace-feedback" class="ws-feedback" role="status"></p><button id="workspace-retry" class="ghost mini" type="button" hidden>Retry loading</button></div>
+        <div class="ws-feedback-row"><p id="workspace-feedback" class="ws-feedback" role="status"></p><button id="workspace-created-task" class="ghost mini" type="button" hidden>View task</button><button id="workspace-retry" class="ghost mini" type="button" hidden>Retry loading</button></div>
       </section>
       <aside class="ws-work" aria-label="Project work and results">
         <div class="ws-work-heading"><div><p class="ws-kicker">FROM IDEA TO DONE</p><h2>Your work</h2></div><button class="ghost mini" data-nav="tasks" title="Open full task board">View board ↗</button></div>
         <section class="ws-backlog" aria-label="Backlog controls">
+          <div class="build-mode-control">
+            <label class="switch" for="workspace-auto-build"><input type="checkbox" id="workspace-auto-build" checked disabled aria-describedby="workspace-build-mode-note"><span class="track"></span><span>Auto build</span></label>
+            <strong id="workspace-build-mode-label">Loading preference…</strong>
+            <p id="workspace-build-mode-note">Choose whether queued work starts automatically or waits for your approval.</p>
+          </div>
           <div class="ws-backlog-heading"><span class="ws-backlog-light" aria-hidden="true"></span><strong id="workspace-backlog-title">A little progress, every pass</strong></div>
           <p id="workspace-backlog-summary">Checking your project's backlog…</p>
           <div id="workspace-backlog-metrics" class="ws-backlog-metrics" aria-label="Backlog counts"></div>
           <p id="workspace-backlog-next" class="ws-backlog-next"></p>
           <button id="workspace-run-backlog" class="primary" type="button">Work through backlog <span aria-hidden="true">↗</span></button>
         </section>
-        <div class="ws-work-tabs" role="group" aria-label="Filter work"><button id="workspace-open" data-work-filter="open" aria-pressed="true">Queue <span>0</span></button><button id="workspace-ideas" data-work-filter="ideas" aria-pressed="false">Ideas <span>0</span></button><button id="workspace-review" data-work-filter="review" aria-pressed="false" title="Finished runs and tasks needing attention">Review <span>0</span></button><button id="workspace-done" data-work-filter="done" aria-pressed="false">Done <span>0</span></button></div>
-        <label class="ws-work-search"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><input id="workspace-work-search" type="search" placeholder="Find a task or idea…" aria-label="Search work and ideas"></label>
+        <div class="ws-work-tabs" role="group" aria-label="Filter work"><button id="workspace-all" data-work-filter="all" aria-pressed="false">All <span>0</span></button><button id="workspace-open" data-work-filter="open" aria-pressed="true">Queue <span>0</span></button><button id="workspace-ideas" data-work-filter="ideas" aria-pressed="false">Ideas <span>0</span></button><button id="workspace-review" data-work-filter="review" aria-pressed="false" title="Finished runs and tasks needing attention">Review <span>0</span></button><button id="workspace-done" data-work-filter="done" aria-pressed="false">Done <span>0</span></button></div>
+        <div class="ws-work-search"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><input id="workspace-work-search" type="search" placeholder="Search queue…" aria-label="Search queue" aria-describedby="workspace-work-summary"><button id="workspace-clear-search" class="ghost mini" type="button" aria-label="Clear work search" hidden>Clear</button></div>
+        <p id="workspace-work-summary" class="ws-work-summary-line" role="status" aria-live="polite"></p>
         <div id="workspace-work-list" class="ws-work-list"></div>
         <button id="workspace-show-more" class="ghost mini ws-show-more" type="button" hidden>Show more</button>
         <details class="ws-activity"><summary>Behind the scenes <span id="workspace-activity-count"></span></summary><ol id="workspace-activity-list"></ol></details><div class="ws-jeV" id="workspace-jev">Jev · checking connection</div>
@@ -109,10 +125,10 @@
   <button class="home-tab" data-nav="workspace" title="Your workspace (H)">← Workspace</button>
   <button id="nav-command" class="home-tab" data-nav="command" data-return-label="Back to Command" title="Command view (D)"><svg class="glyph glyph-home" aria-hidden="true" focusable="false"><use href="#g-command"/></svg><svg class="glyph glyph-back" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span><kbd class="key">D</kbd><span class="dot live" data-badge="progress" data-badge-mode="dot" hidden></span></button>
   <span class="tabs-sep" aria-hidden="true"></span>
-  <button class="tab active" data-tab="booklet" title="Booklet (1)"><span class="label">Booklet</span><kbd class="key">1</kbd></button>
-  <button class="tab" data-tab="graph" title="Graph (2)"><span class="label">Graph</span><kbd class="key">2</kbd></button>
-  <button class="tab" data-tab="eyes" title="A-Eyes (3)"><span class="label">A-Eyes</span><kbd class="key">3</kbd></button>
-  <button class="tab" data-tab="studio" title="Studio (4)"><span class="label">Studio</span><kbd class="key">4</kbd></button>
+  <button class="tab active" data-tab="booklet" title="Model catalog (1)"><span class="label">Model catalog</span><kbd class="key">1</kbd></button>
+  <button class="tab" data-tab="graph" title="Model Lab (2)"><span class="label">Model Lab</span><kbd class="key">2</kbd></button>
+  <button class="tab" data-tab="eyes" title="Activity & evidence · A-Eyes (3)"><span class="label">Activity & evidence</span><kbd class="key">3</kbd></button>
+  <button class="tab" data-tab="studio" title="Settings & connections (4)"><span class="label">Settings</span><kbd class="key">4</kbd></button>
   <span class="spacer" aria-hidden="true"></span>
   <details class="studio-more"><summary>More tools</summary><div id="nav-tools" class="tools-cluster" role="group" aria-label="Tools"></div></details>
 </nav>
@@ -136,6 +152,30 @@
     <p id="count" class="muted"></p>
   </section>
   <section id="tab-graph" hidden>
+    <section id="model-lab" class="model-lab" aria-label="Model Lab">
+      <header class="lab-head"><div><p class="eyebrow">Your models, measured</p><h2>Model Lab</h2><p class="muted">See what works for your tasks, what it costs, and the context it receives.</p></div><button id="model-lab-refresh" class="ghost">Refresh measurements</button></header>
+      <div id="model-lab-summary" class="lab-summary"></div>
+      <div class="lab-tabs" role="tablist" aria-label="Model Lab views">
+        <button id="model-lab-tab-rankings" role="tab" aria-selected="true" aria-controls="model-lab-rankings" data-lab-view="rankings">Rankings</button>
+        <button id="model-lab-tab-usage" role="tab" aria-selected="false" aria-controls="model-lab-usage" tabindex="-1" data-lab-view="usage">Usage</button>
+        <button id="model-lab-tab-context" role="tab" aria-selected="false" aria-controls="model-lab-context" tabindex="-1" data-lab-view="context">Context</button>
+        <button id="model-lab-tab-compare" role="tab" aria-selected="false" aria-controls="model-lab-compare" tabindex="-1" data-lab-view="compare">Compare <span class="lab-soon">Planned</span></button>
+      </div>
+      <p id="model-lab-status" class="lab-status" role="status" aria-live="polite"></p>
+      <section id="model-lab-rankings" role="tabpanel" aria-labelledby="model-lab-tab-rankings">
+        <div class="lab-toolbar"><div><h3>Performance on your work</h3><p class="muted">Measured calls and your ratings. Published benchmarks stay in the catalog below.</p></div><label>Task type <select id="model-lab-task-type"><option value="">All task types</option></select></label></div>
+        <div id="model-lab-ranking-notes" class="lab-note"></div>
+        <div id="model-lab-ranking-list" class="lab-table-wrap"></div>
+        <details id="model-lab-ratings" class="lab-disclosure"><summary>Rate recent work</summary><p class="muted">Rate a result you have reviewed. Your score stays separate from model judging and error counts.</p><div id="model-lab-recent"></div></details>
+      </section>
+      <section id="model-lab-usage" role="tabpanel" aria-labelledby="model-lab-tab-usage" hidden><h3>Recorded usage</h3><p id="model-lab-usage-coverage" class="muted">Missing provider usage stays unknown. These totals cover calls recorded by Studio; they are not an account balance.</p><p id="model-lab-usage-range" class="lab-status"></p><div id="model-lab-usage-totals" class="lab-usage-grid"></div><div id="model-lab-usage-list" class="lab-table-wrap"></div></section>
+      <section id="model-lab-context" role="tabpanel" aria-labelledby="model-lab-tab-context" hidden>
+        <div class="lab-toolbar"><div><h3>Context preview</h3><p class="muted">Inspect the saved material a task can carry. Token counts are estimates.</p></div><div class="lab-context-controls"><label>Task <select id="model-lab-context-task"><option value="">Choose a task…</option></select></label><label>Preview budget <select id="model-lab-context-budget"><option value="1000">1,000 tokens</option><option value="2000">2,000 tokens</option><option value="4000" selected>4,000 tokens</option><option value="8000">8,000 tokens</option></select></label><button id="model-lab-context-refresh" class="ghost">Preview context</button></div></div>
+        <p id="model-lab-context-status" class="lab-status" role="status"></p><div id="model-lab-context-sections" class="lab-context-sections"></div>
+      </section>
+      <section id="model-lab-compare" role="tabpanel" aria-labelledby="model-lab-tab-compare" hidden><div class="lab-empty"><span class="eyebrow">Planned</span><h3>Compare models on one brief</h3><p>Compare model results with separate human and model ratings. Demo format is being selected; no comparison runs or paid calls start from this view yet.</p></div></section>
+    </section>
+    <details id="model-lab-catalog" class="lab-catalog"><summary>Catalog tools <span>Published benchmarks, pricing and plan capacity</span></summary>
     <div class="graph-grid">
       <section class="panel">
         <h2>Value map</h2>
@@ -156,8 +196,8 @@
       <canvas id="heat" height="420"></canvas>
     </section>
     <section class="panel">
-      <h2>Pools &amp; throughput</h2>
-      <p class="muted">Requests per month per model (log scale). Bars show how long each pool actually lasts.</p>
+      <h2>Pools &amp; request capacity</h2>
+      <p class="muted">Estimated requests per month per model (log scale). Plan capacity is separate from measured response speed.</p>
       <canvas id="pools" height="560"></canvas>
     </section>
     <section class="panel">
@@ -178,6 +218,7 @@
         </table>
       </div>
     </section>
+    </details>
   </section>
   <section id="tab-eyes" hidden>
     <div class="eyes-grid">
@@ -243,33 +284,21 @@
   </section>
   <section id="tab-studio" hidden>
     <div class="panel">
-      <h2>Love2D Studio</h2>
-      <p class="muted">Launches <code>dev/dev_tool_love_project</code> on the cached LÖVE 11.5 runtime — exactly what <code>Run Dev Tool (LOVE2D).cmd</code> does. Smoke runs the sanctioned <code>--smoke</code> console session.</p>
-      <div class="row studio-actions" id="studio-actions">
-        <button class="primary" data-action="launch">Launch Love2D studio</button>
-        <button data-action="smoke">Run smoke</button>
-        <button data-action="game">Launch Ruins Runner</button>
-        <button data-action="stop">Stop</button>
-      </div>
+      <div class="settings-heading"><div><h2>Settings & connections</h2><p class="muted">Connect your assistant, choose your coding workers, and manage optional tools.</p></div><button class="ghost" data-nav="onboarding">Start here</button></div>
       <div id="studio-desktop">
+        <section class="settings-group" aria-labelledby="settings-assistant-heading">
+        <h3 id="settings-assistant-heading">Assistant connection</h3>
+        <p class="muted">Save a key for the provider you use, then choose its routing below. Grok uses the CLI's own login.</p>
         <div class="row">
-          <input type="password" id="zai-key" placeholder="z.ai Coding Plan API key — GLM 5.3 / 5.3 Flash (stored encrypted)" autocomplete="off">
-          <button id="save-zai-key">Save key</button>
+          <input type="password" id="zai-key" placeholder="z.ai Coding Plan API key (stored encrypted)" autocomplete="off" aria-label="z.ai Coding Plan API key">
+          <button id="save-zai-key">Save z.ai key</button>
           <span class="muted" id="zai-key-status">checking…</span>
         </div>
         <div class="row">
-          <input type="password" id="api-key" placeholder="OpenCode Go API key (stored encrypted)" autocomplete="off">
-          <button id="save-key">Save key</button>
+          <input type="password" id="api-key" placeholder="OpenCode Go API key (stored encrypted)" autocomplete="off" aria-label="OpenCode Go API key">
+          <button id="save-key">Save OpenCode key</button>
           <span class="muted" id="key-status">checking…</span>
         </div>
-        <div class="row">
-          <input type="password" id="jev-key" placeholder="Jev gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev gateway API key">
-          <button id="save-jev-key">Save Jev key</button>
-          <button id="test-jev">Test Jev connection</button>
-          <label class="switch"><input type="checkbox" id="jev-enabled"><span class="track"></span><span>Jev classification</span></label>
-        </div>
-        <p class="muted" id="jev-status" role="status">Checking Jev…</p>
-        <p class="muted">Jev compares incoming work with existing tasks and records suggestions for the assistant. Your chat and coding models remain selected below.</p>
         <div class="row">
           <label class="muted">AI routing
             <select id="ai-provider">
@@ -279,14 +308,31 @@
               <option value="grok">Grok CLI — the assistant answers through the grok CLI's own login</option>
             </select>
           </label>
-          <label class="muted">Assistant model
-            <input type="text" id="ai-model-routine" placeholder="routine (default)" spellcheck="false" autocomplete="off" title="Model id for the routine passes (replies, briefs, chat). Empty = route default." style="width: 15em">
+          <label class="muted">Assistant model override
+            <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model id for routine passes (replies, briefs, chat). Empty = selected model-selection mode." style="width: 15em">
           </label>
-          <label class="muted">Heavy model
-            <input type="text" id="ai-model-heavy" placeholder="heavy (default)" spellcheck="false" autocomplete="off" title="Model id for the heavy passes (overseer, improver, analyzer read). Empty = route default." style="width: 15em">
+          <label class="muted">Heavy model override
+            <input type="text" id="ai-model-heavy" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model id for heavy passes (overseer, improver, analyzer read). Empty = selected model-selection mode." style="width: 15em">
           </label>
           <label class="switch" title="Off by default: when z.ai fails, retry once on OpenCode Go (this bills OpenCode)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>OpenCode fallback on z.ai failure</span></label>
         </div>
+        <div class="row">
+          <label class="muted">Model selection
+            <select id="ai-model-selection" aria-describedby="ai-routing-help">
+              <option value="jev">Jev — task fit, speed & cost</option>
+              <option value="fixed">Fixed defaults</option>
+            </select>
+          </label>
+          <button class="ghost" id="ai-routing-refresh">Refresh selection</button>
+        </div>
+        <p class="muted" id="ai-routing-help">Jev ranks available models within your chosen provider for each task using catalog quality and estimated prices, plus your project's measured timing, errors, ratings and reported costs. Missing evidence stays unknown. Selection uses a small billed gateway request. Save a Jev gateway key below to enable it; a timeout or unavailable Jev uses the usual default. Model overrides take priority. Grok CLI uses its explicit model or CLI default.</p>
+        <p class="muted" id="ai-routing-status" role="status">Checking model selection…</p>
+        <p class="muted" id="ai-routing-decision" role="status">No selection recorded yet.</p>
+        <p class="muted" id="ai-routing-evidence" hidden></p>
+        </section>
+        <section class="settings-group" aria-labelledby="settings-workers-heading">
+        <h3 id="settings-workers-heading">Coding workers</h3>
+        <p class="muted">Workers carry out queued tasks in your selected project. Choose a provider whose CLI is installed and signed in. Jev model selection also applies to Studio's z.ai coding workers; other CLI accounts keep their usual model.</p>
         <div class="row">
           <label class="muted">Builders run on
             <select id="executor-cli">
@@ -294,7 +340,7 @@
               <option value="grok">Grok CLI — grok builds every queued job on its own login</option>
             </select>
           </label>
-          <label class="muted">Builder model
+          <label class="muted">Grok builder model
             <input type="text" id="executor-model" placeholder="grok default" spellcheck="false" autocomplete="off" title="Model id the builder CLI runs with (grok -m). Empty = CLI default." style="width: 15em">
           </label>
         </div>
@@ -307,6 +353,13 @@
           <button class="ghost" id="cli-test-zai" title="Verify OpenCode sees the Studio-managed mefi-zai GLM provider">Test z.ai link</button>
           <span class="muted" id="cli-status">checking…</span>
         </div>
+        </section>
+        <details class="settings-optional"><summary>Jev connection & optional task suggestions</summary>
+          <p class="muted">The gateway key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
+          <div class="row"><input type="password" id="jev-key" placeholder="Jev gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev gateway API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled"><span class="track"></span><span>Intake classification</span></label></div>
+          <p class="muted" id="jev-status" role="status">Checking Jev…</p>
+        </details>
+        <details class="settings-optional"><summary>Diagnostics & app updates</summary>
         <div class="row">
           <label class="muted">Speed probe <select id="speed-model"></select></label>
           <button id="speed-go">Measure tokens/s</button>
@@ -314,16 +367,17 @@
         </div>
         <div class="update-block" data-update-block>
           <h3 class="mt">App updates</h3>
-          <p class="muted">Edits to the source tree apply themselves: <code>styles.css</code> is restyled in place, <code>scripts/*.mjs</code> modules are swapped inside the running app, renderer and <code>preload.cjs</code> edits reload the page once you pause (what you typed, your scroll and your selection come back), and only a <code>main.cjs</code> edit restarts the app — after a pause, with the window where it was.</p>
+          <p class="muted">In development, Studio watches its source files and applies local changes. Reloads wait for active builders and result saves. This control does not download releases from GitHub.</p>
           <div class="row tight update-row">
             <label class="switch" title="Apply updates on their own: in place at once, or after a pause when the page must reload (renderer, preload) or the app must restart (main.cjs)"><input type="checkbox" id="update-auto" checked><span class="track"></span><span>Apply updates automatically</span></label>
             <button id="update-apply" class="ghost" disabled>Apply update</button>
             <span class="eyes-status" id="update-status" role="status">not watching</span>
           </div>
         </div>
+        </details>
       </div>
-      <p class="muted" id="studio-hint"></p>
-      <pre class="log" id="studio-log">studio log</pre>
+      <details class="settings-optional"><summary>Optional · Ruins Runner & Love2D</summary><p class="muted">Requires a separate game project and its LÖVE runtime. This integration is optional for Studio.</p><div class="row studio-actions" id="studio-actions"><button data-action="launch">Launch Love2D studio</button><button data-action="smoke">Run smoke</button><button data-action="game">Launch Ruins Runner</button><button data-action="stop">Stop game</button></div><p class="muted" id="studio-hint"></p></details>
+      <details class="settings-optional"><summary>Connection & tool log</summary><pre class="log" id="studio-log" aria-label="Connection and tool log">No activity yet.</pre></details>
     </div>
   </section>
 </main>
@@ -429,15 +483,26 @@
   </aside>
   <aside id="idle-feed" class="cmd-feed" role="region" aria-label="Live work">
     <header class="feed-head">
-      <i id="idle-feed-dot" class="feed-dot" aria-hidden="true"></i>
-      <h2 class="feed-title">Live work</h2>
-      <span id="idle-feed-state" class="feed-state">idle</span>
-      <label class="switch mini" title="Autopilot: queue and run Auto Builder requests"><input type="checkbox" id="idle-autopilot"><span class="track"></span></label>
+      <h2 class="feed-title"><button id="idle-feed-toggle" class="feed-toggle" type="button" aria-expanded="true" aria-controls="idle-feed-content" title="Collapse live work">
+        <i id="idle-feed-dot" class="feed-dot" aria-hidden="true"></i>
+        <span>Live work</span><span id="idle-feed-state" class="feed-state">idle</span>
+        <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg>
+      </button></h2>
     </header>
+    <div id="idle-feed-content" class="feed-content">
     <div id="idle-feed-metrics" class="feed-metrics" aria-label="Work readiness"></div>
-    <label class="feed-capacity">Parallel builds <select id="idle-feed-parallel" aria-label="Maximum concurrent builds"><option value="1">1 worker</option><option value="2">2 workers</option><option value="3">3 workers</option></select></label>
-    <div id="idle-feed-now" class="feed-now" aria-live="polite"></div>
+    <div class="feed-controls">
+      <label class="switch mini feed-autopilot" title="Autopilot: queue and run Auto Builder requests"><input type="checkbox" id="idle-autopilot"><span class="track"></span><span>Autopilot</span></label>
+      <label class="feed-capacity">Parallel builds <select id="idle-feed-parallel" aria-label="Maximum concurrent builds"><option value="1">1 worker</option><option value="2">2 workers</option><option value="3">3 workers</option></select></label>
+      <label class="feed-capacity">Build mode <select id="idle-feed-build-mode" aria-label="Build approval mode"><option value="auto">Auto build</option><option value="verify">Verify first</option></select></label>
+    </div>
+    <div id="idle-feed-scroll" class="feed-scroll" tabindex="0" role="region" aria-label="Current work and queue">
+    <section class="feed-current" aria-label="Current work">
+      <div class="feed-section-head"><h3>Current work</h3></div>
+      <div id="idle-feed-now" class="feed-now" aria-live="polite"></div>
+    </section>
     <div id="idle-feed-activity" class="feed-activity">
+      <section id="idle-feed-attention" class="feed-attention" aria-label="Needs attention and retries" hidden></section>
       <section class="feed-upnext" aria-label="Queued work">
         <div class="feed-section-head"><h3>Up next <span id="idle-feed-queue-count"></span></h3><button id="idle-feed-menu" class="ghost mini feed-menu" aria-expanded="false" aria-controls="idle-feed-drop" title="Show more queued work"><span class="label">Show more</span><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></button></div>
         <ul id="idle-feed-queue" class="feed-queue"></ul>
@@ -446,6 +511,7 @@
       <details id="idle-feed-agent-section" class="feed-section"><summary>Agent activity <span id="idle-feed-agents-count"></span></summary><ul id="idle-feed-agents" class="pin-list assistant-activity assistant-roster feed-agents" aria-label="Agent roster"></ul></details>
       <details id="idle-feed-log-section" class="feed-section feed-technical"><summary>Technical log</summary><ul id="idle-feed-list" class="feed-list"></ul></details>
       <p id="idle-feed-meta" class="feed-meta"></p>
+    </div>
     </div>
     <div id="idle-feed-chat" class="feed-chat" hidden>
       <p id="idle-chat-status" class="eyes-status assistant-service" role="status">assistant</p>
@@ -468,6 +534,7 @@
         <button id="idle-chat-pause" class="ghost mini" title="Pause or resume the assistant service">Pause</button>
         <button id="idle-chat-explorer" class="ghost mini" title="The full assistant surface in the Session explorer (E)">Explorer</button>
       </div>
+    </div>
     </div>
   </aside>
   <div id="cmd-legend" class="cmd-legend">
@@ -494,9 +561,24 @@
 </div>
 <div class="overlay" id="palette-overlay" hidden>
   <div class="palette-sheet" role="dialog" aria-modal="true" aria-label="Command palette">
-    <input id="palette-input" type="text" placeholder="Jump to a surface, tool, action, task, node or model…" aria-label="Command palette" aria-controls="palette-list" autocomplete="off" spellcheck="false">
+    <div class="palette-search-row"><input id="palette-input" type="text" placeholder="Find a tool, task, or setting…" aria-label="Command palette" aria-controls="palette-list" aria-describedby="palette-status palette-hint" autocomplete="off" spellcheck="false"><button id="palette-close" class="ghost mini" type="button">Close <kbd>Esc</kbd></button></div>
     <ul id="palette-list" role="listbox" aria-label="Results"></ul>
+    <div class="palette-footer"><p id="palette-status" role="status" aria-live="polite"></p><p id="palette-hint">↑ ↓ to choose · Enter to open · Esc to close</p></div>
   </div>
+</div>
+<div class="planning-overlay" id="plans-overlay" hidden>
+  <section class="planning-sheet sheet" id="plans-sheet" role="dialog" aria-modal="true" aria-labelledby="plans-heading" tabindex="-1">
+    <header class="planning-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="plans" title="Back to workspace (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-back"/></svg><span class="label">Workspace</span></button>
+      <div class="sheet-title"><span class="eyebrow" id="plans-project">YOUR PROJECT</span><h2 id="plans-heading">Make room for the idea.</h2><p>Set the destination. Explore the questions. Choose what to build.</p></div>
+      <button id="plans-close" class="ghost" type="button">Close <kbd>Esc</kbd></button>
+    </header>
+    <p id="plans-notice" class="planning-notice" role="status" aria-live="polite"></p>
+    <div class="planning-body">
+      <aside class="planning-sidebar" aria-label="Project plans"><button id="plans-new" class="primary" type="button">+ Plan an idea</button><button id="plans-refresh" class="ghost mini" type="button">Refresh plans</button><div id="plans-list" class="planning-list"></div></aside>
+      <div id="plans-detail" class="planning-detail"></div>
+    </div>
+  </section>
 </div>
 <div class="overlay explorer" id="tasks-overlay" hidden>
   <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="tasks-heading" tabindex="-1">
@@ -732,6 +814,21 @@
     </div>
   </div>
 </div>
+<div class="overlay" id="walkthrough-overlay" hidden>
+  <section class="sheet walkthrough-sheet" id="walkthrough-sheet" role="dialog" aria-modal="true" aria-labelledby="walkthrough-title" aria-describedby="walkthrough-copy" tabindex="-1">
+    <header class="sheet-head plain"><div class="sheet-title"><span class="eyebrow">START HERE</span><p id="walkthrough-progress" role="status">Step 1 of 5</p></div><button class="ghost mini" type="button" data-nav-close="onboarding">Save & close <kbd>Esc</kbd></button></header>
+    <nav class="walkthrough-steps" id="walkthrough-steps" aria-label="Walkthrough steps"></nav>
+    <div class="walkthrough-content"><h2 id="walkthrough-title" tabindex="-1"></h2><p id="walkthrough-copy"></p><ul id="walkthrough-points"></ul>
+      <div id="walkthrough-build-mode" class="build-mode-control">
+        <label class="switch" for="walkthrough-auto-build"><input type="checkbox" id="walkthrough-auto-build" checked disabled aria-describedby="walkthrough-build-mode-note"><span class="track"></span><span>Auto build</span></label>
+        <strong id="walkthrough-build-mode-label">Loading preference…</strong>
+        <p id="walkthrough-build-mode-note">Choose how work starts. You can change this above Your work at any time.</p>
+        <p id="walkthrough-build-mode-feedback" role="status"></p>
+      </div>
+      <div class="walkthrough-destinations"><button class="primary" id="walkthrough-action" type="button"></button><button class="ghost" id="walkthrough-secondary" type="button" hidden></button></div><p id="walkthrough-note" class="muted"></p></div>
+    <footer class="walkthrough-footer"><span>Your place is saved on this device.</span><div><button class="ghost" id="walkthrough-back" type="button">Back</button><button class="primary" id="walkthrough-next" type="button">Next step</button></div></footer>
+  </section>
+</div>
 <div class="overlay" id="help-overlay" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="help-heading" tabindex="-1">
     <header class="sheet-head plain">
@@ -743,6 +840,7 @@
         <button class="ghost sheet-close" data-nav-close="help" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>
     </header>
+    <p class="help-start">New to Studio? <button class="ghost mini" data-nav="onboarding">Open the walkthrough</button></p>
     <div class="shortcut-grid" id="help-grid"></div>
   </div>
 </div>

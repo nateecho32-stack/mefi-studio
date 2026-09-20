@@ -304,27 +304,31 @@
     }
   }
 
-  let logTimer = null;
-
+  let fallbackLogTimer = null;
   function setMode(mode) {
     state.mode = mode;
     document.querySelectorAll(".mode-row .chip").forEach((chip) => chip.classList.toggle("on", chip.dataset.mode === mode));
     els.modePng.hidden = mode !== "png";
     els.modeDiff.hidden = mode !== "diff";
     els.modeLog.hidden = mode !== "log";
-    if (logTimer) {
-      clearInterval(logTimer);
-      logTimer = null;
-    }
+    window.MefiBoot?.pollStop?.("eyes.log");
+    if (fallbackLogTimer) clearInterval(fallbackLogTimer);
+    fallbackLogTimer = null;
     if (mode === "log") {
       refreshLog();
-      logTimer = setInterval(refreshLog, 5000);
+      if (window.MefiBoot?.pollStart) window.MefiBoot.pollStart("eyes.log", refreshLog, 5000);
+      else fallbackLogTimer = setInterval(refreshLog, 5000);
     }
     if (mode === "png") requestAnimationFrame(drawPins);
   }
 
   async function refreshLog() {
     if (document.hidden) return;
+    // The shared guard only sees the window's visibility; the tick itself
+    // also gates on the eyes tab, so a booklet, graph or studio view in
+    // front makes no log fetches either — the same own-container gate the
+    // tasks and explorer ticks hold under their guards.
+    if (els.tab?.hidden) return;
     if (!window.mefiStudio?.eyesLog) return;
     const result = await window.mefiStudio.eyesLog(220);
     els.log.textContent = result.ok ? result.text : `log unavailable: ${result.error}`;
@@ -402,8 +406,9 @@
       if (file?.path) loadPng(file.path);
     });
     document.querySelectorAll(".mode-row .chip").forEach((chip) => chip.addEventListener("click", () => setMode(chip.dataset.mode)));
-    // The 5s log tail pauses while the window is hidden (refreshLog bails) and
-    // snaps back the moment the window is shown, so no tick is spent on a
+    // The 5s log tail pauses while the window is hidden (refreshLog bails) or
+    // another tab sits in front (the tick gates on #tab-eyes), and snaps back
+    // the moment the eyes view is visible again, so no tick is spent on a
     // fetch nobody can see.
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden && state.mode === "log") refreshLog();
@@ -442,6 +447,7 @@
     if (initialized) return;
     initialized = true;
     for (const [key, id] of Object.entries({
+      tab: "tab-eyes",
       status: "eyes-status",
       session: "eyes-session",
       agent: "eyes-agent",

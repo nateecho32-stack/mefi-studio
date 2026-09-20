@@ -17,8 +17,8 @@ class Element {
   closest() { return null; }
   click() { return this.listeners.click?.(); }
 }
-function environment({ assistant = {}, full = {}, backlog = null, requests = [], nodes = [], bridge = {} } = {}) {
-  const el = Object.fromEntries(["feed", "feedDot", "feedState", "feedNow", "feedMetrics", "feedQueue", "feedQueueCount", "feedAgents", "feedAgentsCount", "feedMenu", "feedDrop", "feedList", "feedMeta", "feedActivity", "feedParallel"].map((key) => [key, new Element()]));
+function environment({ assistant = {}, full = {}, backlog = null, requests = [], nodes = [], bridge = {}, timers = {} } = {}) {
+  const el = Object.fromEntries(["feed", "feedDot", "feedState", "feedNow", "feedMetrics", "feedAttention", "feedQueue", "feedQueueCount", "feedAgents", "feedAgentsCount", "feedMenu", "feedDrop", "feedList", "feedMeta", "feedActivity", "feedParallel", "feedBuildMode"].map((key) => [key, new Element()]));
   const state = { active: false, feedDirty: true, assistant, requests, nodes, feed: [], tasks: [], backlog, backlogRevision: 0, backlogReadAt: 0, backlogReadPending: false, feedMenuOpen: false };
   const navigations = [];
   const context = vm.createContext({
@@ -28,8 +28,9 @@ function environment({ assistant = {}, full = {}, backlog = null, requests = [],
     assistantFull: () => full, agentHex: () => "#abc", agoShort: () => "just now", agoLabel: () => "just now",
     chatMode: () => false, paintChatLog() {}, nav: (...args) => navigations.push(args), setFeedMenu() {},
     updateAssistantPill() {}, renderInfo() {},
+    setTimeout: timers.setTimeout || setTimeout, clearTimeout: timers.clearTimeout || clearTimeout,
   });
-  vm.runInContext(`${preferenceSource}\n${chatSource}\n${feedSource}\nthis.api = { commandJobDetail, commandQueue, renderFeed, refreshCommandBacklog, commandChatActivity, changeBuildParallel };`, context);
+  vm.runInContext(`${preferenceSource}\n${chatSource}\n${feedSource}\nthis.api = { commandJobDetail, commandQueue, renderFeed, refreshCommandBacklog, commandChatActivity, changeBuildParallel, changeBuildMode };`, context);
   return { ...context.api, state, el, navigations };
 }
 const descendants = (element) => [element, ...element.children.flatMap(descendants)];
@@ -78,7 +79,8 @@ test("Command shows the actual job once, continues the queue without duplication
   assert.ok(!env.el.feedQueue.textContent.includes("Fix the Command menu"));
   assert.ok(!env.el.feedDrop.textContent.includes("Next task 0"));
   assert.equal(env.el.feedQueueCount.textContent, "12");
-  assert.equal(env.el.feedMetrics.children[2].textContent, "5Waiting");
+  assert.equal(env.el.feedMetrics.children[2].textContent, "4Waiting");
+  assert.equal(env.el.feedMetrics.children[3].textContent, "1Needs attention");
   const focusedCurrent = byClass(env.el.feedNow, "feed-current-title");
   const focusedQueue = env.el.feedQueue.children[0].children[1];
   const focusedMetric = env.el.feedMetrics.children[0];
@@ -177,6 +179,80 @@ test("Parallel build errors restore the authoritative value and reject out-of-ra
   assert.equal(calls, 1);
 });
 
+test("Build mode saves only approval preference, serializes input and keeps scheduling paused", async () => {
+  const calls = []; let finish;
+  const result = new Promise((resolve) => { finish = resolve; });
+  const env = environment({ assistant: { autoBuild: true, enabled: false, execute: false }, bridge: { assistantAutopilot: (patch) => { calls.push(patch); return result; } } });
+  env.renderFeed();
+  assert.equal(env.el.feedBuildMode.value, "auto");
+  env.el.feedBuildMode.value = "verify";
+  const saving = env.changeBuildMode("verify");
+  assert.equal(env.el.feedBuildMode.disabled, true);
+  assert.equal(env.el.feedBuildMode.attrs["aria-busy"], "true");
+  assert.equal(await env.changeBuildMode("auto"), false);
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ autoBuild: false }]);
+  finish({ autoBuild: false, enabled: false, execute: false });
+  assert.equal(await saving, true);
+  assert.equal(env.el.feedBuildMode.value, "verify");
+  assert.equal(env.el.feedBuildMode.disabled, false);
+  assert.equal(env.state.assistant.execute, false);
+  assert.equal(env.state.assistant.enabled, false);
+});
+
+test("Failed mode saves restore the saved choice; Verify first never guesses pending requests are ready", async () => {
+  let calls = 0;
+  const env = environment({ assistant: { autoBuild: false }, bridge: { assistantAutopilot: async () => { calls += 1; throw new Error("Connection interrupted"); } } });
+  env.renderFeed();
+  env.el.feedBuildMode.value = "auto";
+  assert.equal(await env.changeBuildMode("auto"), false);
+  assert.equal(env.el.feedBuildMode.value, "verify");
+  assert.equal(env.el.feedBuildMode.disabled, false);
+  assert.equal(await env.changeBuildMode("unknown"), false);
+  assert.equal(calls, 1);
+  assert.equal(env.commandQueue({ autoBuild: false }, [{ id: "unapproved", status: "open", title: "Needs review" }], null).length, 0);
+});
+
+test("a lost build-mode acknowledgement recovers the actual saved mode through a read-only status request", async () => {
+  let reads = 0;
+  const env = environment({ assistant: { autoBuild: true, execute: false }, bridge: {
+    assistantAutopilot: async () => { throw new Error("Acknowledgement lost"); },
+    assistantStatus: async () => { reads += 1; return { ok: true, status: { autoBuild: false, execute: false } }; },
+  } });
+  assert.equal(await env.changeBuildMode("verify"), false);
+  assert.equal(reads, 1);
+  assert.equal(env.el.feedBuildMode.value, "verify");
+  assert.equal(env.el.feedBuildMode.disabled, false);
+  assert.equal(env.state.assistant.execute, false);
+});
+
+test("a failed mode recovery cannot overwrite a newer pushed status", async () => {
+  let finishStatus;
+  const lateStatus = new Promise((resolve) => { finishStatus = resolve; });
+  const env = environment({ assistant: { autoBuild: true }, bridge: {
+    assistantAutopilot: async () => ({ ok: false, error: "Write interrupted" }),
+    assistantStatus: () => lateStatus,
+  } });
+  const saving = env.changeBuildMode("verify"); await flush();
+  env.state.assistant = { autoBuild: false, execute: false };
+  finishStatus({ ok: true, status: { autoBuild: true, execute: true } });
+  assert.equal(await saving, false);
+  assert.equal(env.el.feedBuildMode.value, "verify");
+  assert.equal(env.state.assistant.execute, false);
+});
+
+test("Command exposes held builds under Needs attention and opens the approval brief", () => {
+  const approval = [{ id: "needs-approval", kind: "task", stage: "approval", title: "Review export scope", reason: "Review and approve this brief before building." }];
+  const env = environment({ assistant: { autoBuild: false }, backlog: { counts: { ready: 0, blocked: 1, approval: 1 }, approval, blocked: [{ kind: "task", id: "broken", title: "Missing prerequisite", reason: "Prerequisite is missing." }], next: [] } });
+  env.renderFeed();
+  assert.equal(env.el.feedMetrics.children[3].textContent, "2Needs attention");
+  assert.match(env.el.feedAttention.textContent, /Review export scope.*Review and approve this brief/);
+  assert.doesNotMatch(env.el.feedQueue.textContent, /Review export scope/);
+  byClass(env.el.feedAttention, "feed-attention-title").click();
+  assert.deepEqual(JSON.parse(JSON.stringify(env.navigations.at(-1))), ["tasks", { taskId: "needs-approval", filter: "all" }]);
+  descendants(env.el.feedAttention).find((item) => item.attrs["aria-label"] === "Review all tasks needing attention or approval").click();
+  assert.equal(env.navigations.at(-1)[1].readiness, "blocked");
+});
+
 test("All concurrent builders have separate current-work cards and actual slot counts", () => {
   const running = Array.from({ length: 3 }, (_, index) => ({ title: `Independent build ${index + 1}`, taskId: `build_${index}`, startedAt: Date.now() - 5000 }));
   const env = environment({ assistant: { parallel: 3, enabled: true, execute: true, running } });
@@ -184,4 +260,77 @@ test("All concurrent builders have separate current-work cards and actual slot c
   assert.equal(env.el.feedNow.children.length, 3);
   for (const job of running) assert.match(env.el.feedNow.textContent, new RegExp(job.title));
   assert.equal(env.el.feedMeta.textContent, "3 of 3 worker slots in use");
+});
+
+test("Command separates actionable blockers from automatic waits and opens the matching board state", () => {
+  const blocked = Array.from({ length: 4 }, (_, index) => ({ id: `blocked_${index}`, kind: "task", title: `Held task ${index}`, reason: index ? "Completion checks failed. Review the result." : "Missing prerequisite: deleted-task" }));
+  const env = environment({ backlog: { counts: { ready: 2, review: 1, waiting: 3, cooling: 1, blocked: 4 }, blocked, nextRetryAt: Date.now() + 120000, next: [] } });
+  env.renderFeed();
+  assert.equal(env.el.feedMetrics.children[2].textContent, "4Waiting");
+  assert.equal(env.el.feedMetrics.children[3].textContent, "4Needs attention");
+  env.el.feedMetrics.children[3].click();
+  assert.deepEqual(JSON.parse(JSON.stringify(env.navigations.at(-1))), ["tasks", { filter: "all", readiness: "blocked" }]);
+  assert.match(env.el.feedAttention.textContent, /Missing prerequisite: deleted-task/);
+  assert.match(env.el.feedAttention.textContent, /Next automatic retry in 2m/);
+  assert.doesNotMatch(env.el.feedAttention.textContent, /Held task 3/);
+  byClass(env.el.feedAttention, "feed-attention-title").click();
+  assert.equal(env.navigations.at(-1)[1].taskId, "blocked_0");
+  descendants(env.el.feedAttention).find((item) => item.attrs["aria-label"] === "Review all blocked tasks").click();
+  assert.equal(env.navigations.at(-1)[1].readiness, "blocked");
+  const retained = byClass(env.el.feedAttention, "feed-attention-title");
+  env.state.feedDirty = true; env.renderFeed();
+  assert.equal(byClass(env.el.feedAttention, "feed-attention-title"), retained, "unrelated activity preserves focused recovery links");
+});
+
+test("Command explains a failed status read and offers a coalesced read-only refresh", async () => {
+  let calls = 0;
+  const env = environment({ bridge: { backlogStatus: async () => ++calls === 1 ? { ok: false, error: "Project store is unavailable" } : { ok: true, counts: { ready: 1 }, next: [] } } });
+  env.state.active = true;
+  await env.refreshCommandBacklog();
+  assert.match(env.el.feedAttention.textContent, /Queue status unavailable.*Project store is unavailable/);
+  assert.match(env.el.feedQueue.textContent, /Queue status unavailable/);
+  const refresh = descendants(env.el.feedAttention).find((item) => item.textContent === "Refresh status");
+  await refresh.click();
+  assert.equal(calls, 2, "manual retry bypasses the poll cooldown without scheduling work");
+  assert.equal(env.el.feedAttention.hidden, true);
+  assert.equal(env.el.feedMetrics.children[0].textContent, "1Ready");
+});
+
+test("A worker awaiting safe termination remains in use and never reports completed progress", () => {
+  const env = environment({ assistant: { parallel: 1, running: [{ taskId: "stuck", title: "Slow worker", progress: 1, startedAt: Date.now() - 80000, stopping: { since: Date.now() - 5000, reason: "No activity before the deadline", error: "Stop command failed; retry scheduled" } }] } });
+  env.renderFeed();
+  assert.match(env.el.feedNow.textContent, /Stopping safely/);
+  assert.match(env.el.feedNow.textContent, /No activity before the deadline/);
+  assert.match(env.el.feedNow.textContent, /Stop command failed; retry scheduled/);
+  assert.equal(byClass(env.el.feedNow, "feed-current-progress"), undefined);
+  assert.equal(env.el.feedMeta.textContent, "1 of 1 worker slots in use");
+});
+
+test("an unanswered readiness read releases its gate at the deadline and ignores a late reply after recovery", async () => {
+  const callbacks = new Map(); let timerId = 0, calls = 0, resolveLate;
+  const delays = [];
+  const stuck = new Promise((resolve) => { resolveLate = resolve; });
+  const env = environment({ timers: {
+    setTimeout: (callback, ms) => { callbacks.set(++timerId, callback); delays.push(ms); return timerId; },
+    clearTimeout: (id) => callbacks.delete(id),
+  }, bridge: { backlogStatus: () => ++calls === 1 ? stuck : Promise.resolve({ ok: true, summary: "Recovered snapshot", counts: { ready: 2 }, next: [] }) } });
+  env.state.active = true;
+  const pending = env.refreshCommandBacklog();
+  await env.refreshCommandBacklog(true);
+  assert.equal(calls, 1, "the in-flight read remains coalesced before its deadline");
+  assert.deepEqual(delays, [12000]);
+  callbacks.get(1)(); await pending;
+  assert.equal(env.state.backlogReadPending, false);
+  assert.match(env.el.feedAttention.textContent, /took too long to respond/);
+  assert.equal(callbacks.size, 0);
+  const refresh = descendants(env.el.feedAttention).find((item) => item.textContent === "Refresh status");
+  await refresh.click();
+  assert.equal(calls, 2);
+  assert.equal(env.state.backlog.summary, "Recovered snapshot");
+  assert.equal(env.state.backlogReadPending, false);
+  assert.equal(callbacks.size, 0, "successful reads clear their deadline timer");
+  resolveLate({ ok: true, summary: "Late obsolete snapshot", counts: { ready: 90 }, next: [] });
+  await flush();
+  assert.equal(env.state.backlog.summary, "Recovered snapshot");
+  assert.equal(env.el.feedMetrics.children[0].textContent, "2Ready");
 });

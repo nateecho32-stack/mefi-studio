@@ -9,6 +9,7 @@ No PowerShell or LOVE is launched here.
 from pathlib import Path
 import datetime
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -89,7 +90,7 @@ class MefiStudioMachineTests(unittest.TestCase):
             repo = Path(directory) / "repo"
             lease_dir = repo / "tools" / "logs" / "_lease"
             lease_dir.mkdir(parents=True)
-            fresh = datetime.datetime.utcfromtimestamp((now - 10 * 60_000) / 1000).isoformat() + "Z"
+            fresh = datetime.datetime.fromtimestamp((now - 10 * 60_000) / 1000, tz=datetime.UTC).replace(tzinfo=None).isoformat() + "Z"
             (lease_dir / "111-aaaa.json").write_text(
                 json.dumps(
                     {
@@ -131,6 +132,52 @@ class MefiStudioMachineTests(unittest.TestCase):
         self.assertEqual(1, len(payload["staleHolders"]))
         self.assertEqual(222, payload["staleHolders"][0]["pid"])
         self.assertFalse(payload["staleHolders"][0]["alive"], "staleness here comes from the dead pid, not age")
+
+    def test_fixtures_use_unique_per_run_temp_dirs(self):
+        # The lease fixture once made concurrent suite runs collide on shared
+        # fixture paths. Both machine fixtures must keep their per-run
+        # tempfile.TemporaryDirectory() blocks: every fixture hand-off to
+        # scripts/machine.mjs reads a path derived from that run's own temp
+        # directory, never a shared repo or evidence-tree path. Mirrors
+        # test_mefi_studio_eyes.py's
+        # test_fixture_databases_use_unique_per_run_temp_dirs; generalized
+        # across all suites by tools/test_mefi_studio_fixture_paths.py.
+        source = Path(__file__).resolve().read_text(encoding="utf-8")
+        flags = re.findall(r'"(--(?:classify|leases)-fixture)", str\(', source)
+        self.assertEqual(
+            ["--classify-fixture", "--leases-fixture"],
+            sorted(flags),
+            "fixtures reach machine.mjs only through the two fixture flags",
+        )
+        blocks = re.findall(r"with tempfile\.TemporaryDirectory\(\) as directory:", source)
+        self.assertGreaterEqual(len(blocks), 2, "both fixture tests keep their per-run blocks")
+        self.assertEqual(
+            len(blocks),
+            len(flags),
+            "every fixture hand-off sits inside its own per-run TemporaryDirectory block",
+        )
+        derivations = re.findall(r"Path\(directory\) / ", source)
+        self.assertGreaterEqual(
+            len(derivations),
+            len(blocks),
+            "every fixture path is derived from the per-run temp directory",
+        )
+        self.assertNotIn("tools/" + "logs", source, "the suite never writes fixtures into the shared evidence tree")
+        self.assertFalse(
+            re.search(r'(?:ROOT|STUDIO) / ["\'][^"\']*\.db', source),
+            "no fixture path is anchored inside the repository tree",
+        )
+        stem = Path(__file__).stem.lower()
+        siblings = {
+            path.stem.lower()
+            for path in Path(__file__).resolve().parent.iterdir()
+            if path != Path(__file__).resolve()
+        }
+        self.assertNotIn(
+            stem,
+            siblings,
+            "no sibling spec shares this basename — a duplicate shadows unittest discovery (guarded repo-wide by check:specs)",
+        )
 
     def test_docs_register_this_contract(self):
         self.assertIn("`tools/test_mefi_studio_machine.py`", self.guide)

@@ -7,13 +7,13 @@
 // learning layer (the Policy Lab) may read them, never write them.
 //
 // The trust split is the point (build brief, "Verification prerequisite"):
-// the board's verifyCompletion() can still settle a card on worker-NAMED
-// checks. That is a display/settlement decision. For LEARNING, only
+// current verification requires recorded execution for worker-named checks.
+// Historical receipts may contain prose-only claims. For LEARNING, only
 // runner-observed evidence counts as a positive label:
 //
-//   trust "trusted"      — the runner observed session-attributed file changes
-//                          and the acceptance contract was satisfied. A
-//                          positive completion label for policy evaluation.
+//   trust "trusted"      — the verifier accepted session-attributed edits or
+//                          recorded checks, with no outstanding obligations.
+//                          This does not certify every acceptance criterion.
 //   trust "self-reported"— the worker's own prose named checks; the runner
 //                          observed nothing. NEVER a positive learning label.
 //   trust null           — failed, unverified, or missing evidence.
@@ -50,7 +50,8 @@ export function acceptanceSpec({ title = "", prompt = "", remaining = [] } = {})
 
 // Derive the evidence kind from what the runner actually observed. The worker
 // believing it ran checks is evidence about the worker, not about the work.
-export function evidenceKind({ state = "", changedFiles = 0, hasSession = false, namedChecks = false } = {}) {
+export function evidenceKind({ state = "", changedFiles = 0, hasSession = false, namedChecks = false, observedChecks = null } = {}) {
+  if (state === "verified" && hasSession && observedChecks?.passed > 0 && !observedChecks.failed && !observedChecks.pending) return "runner-observed-checks";
   if (state === "verified" && hasSession && intOrZero(changedFiles) > 0) return "runner-observed-edits";
   if (state === "verified" && namedChecks) return "worker-named-checks";
   return "none";
@@ -79,7 +80,8 @@ export function buildReceipt({
   const prompt = String(workItem.prompt ?? "");
   const spec = acceptanceSpec({ title, prompt, remaining });
   const namedChecks = Boolean(verdict.evidence?.namedChecks);
-  const kind = evidenceKind({ state: verdict.state, changedFiles, hasSession: Boolean(attempt.sessionId), namedChecks });
+  const observedChecks = verdict.evidence?.observedChecks ?? null;
+  const kind = evidenceKind({ state: verdict.state, changedFiles, hasSession: Boolean(attempt.sessionId), namedChecks, observedChecks });
   const receipt = {
     schema: RECEIPT_SCHEMA,
     id: `rcp_${sha256Hex(`${runId}|${verdict.state}|${intOrZero(now)}`).slice(0, 16)}`,
@@ -115,6 +117,7 @@ export function buildReceipt({
       kind,
       changedFiles: intOrZero(changedFiles),
       sessionId: clipText(attempt.sessionId, 80) || null,
+      ...(observedChecks ? { checks: { passed: intOrZero(observedChecks.passed), failed: intOrZero(observedChecks.failed), pending: intOrZero(observedChecks.pending) } } : {}),
       outstandingObligations: spec.remaining.length,
     },
     // The board's settlement verdict, recorded verbatim. Learning labels come
@@ -132,6 +135,7 @@ export function buildReceipt({
 export function receiptTrust(receipt) {
   if (!receipt || receipt.schema !== RECEIPT_SCHEMA) return null;
   if (receipt.result !== "verified") return null;
+  if (receipt.evidence?.kind === "runner-observed-checks" && receipt.evidence.checks?.passed > 0 && !receipt.evidence.checks.failed && !receipt.evidence.checks.pending && intOrZero(receipt.evidence.outstandingObligations) === 0) return "trusted";
   if (receipt.evidence?.kind === "runner-observed-edits" && intOrZero(receipt.evidence?.outstandingObligations) === 0) return "trusted";
   if (receipt.evidence?.kind === "worker-named-checks") return "self-reported";
   return null;

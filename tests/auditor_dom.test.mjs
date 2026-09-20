@@ -37,7 +37,10 @@ test("a runtime-assigned id that is later looked up is not a false positive", as
     script: [
       'const more = document.createElement("details");',
       'more.id = "cmd-more-tools";',
+      "const quoted = document.createElement('div');",
+      "quoted.id = 'cmd-single-quoted';",
       'const existing = document.getElementById("cmd-more-tools");',
+      'const other = document.getElementById("cmd-single-quoted");',
     ].join("\n"),
     template: '<div id="cmd-dock"></div>',
   });
@@ -52,4 +55,28 @@ test("a lookup with no template id and no runtime assignment is still flagged", 
   assert.equal(findings.length, 1);
   assert.match(findings[0].message, /#ghost-panel/);
   assert.equal(findings[0].level, "error");
+});
+
+test("single-quoted getElementById lookups are audited too", async () => {
+  const findings = await domFindings({
+    script: "const ghost = document.getElementById('ghost-panel');",
+    template: '<div id="cmd-dock"></div>',
+  });
+  assert.equal(findings.length, 1);
+  assert.match(findings[0].message, /#ghost-panel/);
+});
+
+test("querySelector id lookups are audited; dynamic selectors are skipped", async () => {
+  const findings = await domFindings({
+    script: [
+      'document.querySelector("#ghost-panel").remove();',
+      'document.querySelectorAll("#other-ghost, #cmd-dock").forEach(() => {});',
+      "const section = document.querySelector(`#tab-${name}`);",
+    ].join("\n"),
+    template: '<div id="cmd-dock"></div>',
+  });
+  const messages = findings.map((finding) => finding.message);
+  assert.equal(messages.length, 2, messages.join("; "));
+  assert.ok(messages.some((message) => message.includes("#ghost-panel")));
+  assert.ok(messages.some((message) => message.includes("#other-ghost")));
 });

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
-const { snapshotTask, recordTaskRevision, taskHistory, restoreTaskRevision, buildTaskHandoff } = require("../scripts/task-context.cjs");
+const { snapshotTask, recordTaskRevision, taskHistory, restoreTaskRevision, buildTaskHandoff, resolveStaleFileScope } = require("../scripts/task-context.cjs");
 
 const original = { id: "task-one", title: "Build workspace", prompt: "Preserve every requirement. ".repeat(600), status: "open", projectId: "project-a", projectPath: "C:/project-a", dependsOn: ["task-before"], refs: [{ kind: "file", detail: "src/board.js" }], logs: [{ at: 1, text: "Initial work" }], createdAt: 1, updatedAt: 1 };
 
@@ -98,4 +98,28 @@ test("model-facing excerpts are bounded and disclosed while saved context stays 
   assert.ok(workerPrompt.includes("C:/studio/data/tasks.json"));
   assert.ok(workerPrompt.includes("select task ID task-one"));
   assert.ok(buildTaskHandoff(task, { maxChars: 240 }).length <= 240, "the final executor budget is honored even when small");
+});
+
+test("stale file scope re-anchors to an existing basename while unresolvable entries stay saved", () => {
+  const moved = { ...original, file: "C:/old-checkout/tools/test_mefi_studio_eyes.py", files: ["C:/old-checkout/tools/test_mefi_studio_eyes.py", "C:/project-a/src/board.js"] };
+  const exists = (candidate) => candidate === "C:/project-a/src/board.js" || candidate === "C:/project-a/tools/test_mefi_studio_eyes.py";
+  const locate = (base, task) => task?.projectPath ? `${task.projectPath}/tools/${base}` : null;
+  const healed = resolveStaleFileScope(moved, { exists, locate });
+  assert.equal(healed.changed, true);
+  assert.deepEqual(healed.files, ["C:/project-a/tools/test_mefi_studio_eyes.py", "C:/project-a/src/board.js"]);
+  assert.equal(healed.file, "C:/project-a/tools/test_mefi_studio_eyes.py");
+  assert.deepEqual(healed.healed, [{ from: "C:/old-checkout/tools/test_mefi_studio_eyes.py", to: "C:/project-a/tools/test_mefi_studio_eyes.py" }]);
+  assert.deepEqual(healed.missing, []);
+  // The saved task row is never mutated by the resolver — the caller persists.
+  assert.equal(moved.file, "C:/old-checkout/tools/test_mefi_studio_eyes.py");
+  // Without a working locator (or with no filesystem checker at all) the saved
+  // scope is kept as-is and reported, never dropped.
+  const stranded = resolveStaleFileScope({ ...moved, files: ["C:/gone/elsewhere.lua"], file: "C:/gone/elsewhere.lua" }, { exists, locate: () => null });
+  assert.equal(stranded.changed, false);
+  assert.deepEqual(stranded.missing, ["C:/gone/elsewhere.lua"]);
+  assert.equal(stranded.file, "C:/gone/elsewhere.lua");
+  const trusted = resolveStaleFileScope(moved);
+  assert.equal(trusted.changed, false);
+  assert.deepEqual(trusted.files, moved.files);
+  assert.equal(resolveStaleFileScope({ ...original }).changed, false, "a task with no file scope is untouched");
 });

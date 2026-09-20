@@ -344,7 +344,9 @@ class MefiStudioAssistantTests(unittest.TestCase):
 
     def test_fresh_clone_catalog_and_csp_fallbacks(self):
         self.assertNotIn('models.snapshot.json', self.main, "the snapshot is retired; catalog:read reads the committed models.json")
-        self.assertIn('readFile(path.join(dataDir, "models.json")', self.main)
+        self.assertIn('const catalogDocument = createCatalogFileReader("models.json")', self.main)
+        self.assertIn('ipcMain.handle("catalog:read", () => catalogDocument.read())', self.main)
+        self.assertIn('path.join(STUDIO_ROOT, "data", fileName)', self.main)
         self.assertIn('http-equiv="Content-Security-Policy"', self.template)
 
     def test_service_boots_from_when_ready_with_a_timeout_chain(self):
@@ -509,6 +511,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         script = (
             "import { duplicateDeclarations, requestsFromDuplicates } from './scripts/eyes.mjs';"
             "import { readFile } from 'node:fs/promises';"
+            "import { setTimeout as sleep } from 'node:timers/promises';"
             "const dirty = ["
             "  'function foo() {}',"
             "  'const x = 1;',"
@@ -519,7 +522,18 @@ class MefiStudioAssistantTests(unittest.TestCase):
             "const hits = duplicateDeclarations(dirty);"
             "if (!hits.some((row) => row.name === 'foo' && row.lines.length === 2)) throw new Error('foo ' + JSON.stringify(hits));"
             "if (!hits.some((row) => row.name === 'EXECUTOR_PARALLEL_MAX' && row.lines.length === 2)) throw new Error('const ' + JSON.stringify(hits));"
-            "const live = duplicateDeclarations(await readFile('main.cjs', 'utf8'));"
+            # The live scan re-reads main.cjs through a short settle: the full
+            # suite runs while sibling autopilot sessions edit the same tree,
+            # and an in-flight patch can transiently hold two copies of one
+            # declaration (run_1789855386972_4 saw the suite one-shot
+            # failures=1 in exactly that window). A real merge corruption
+            # persists across the settle and still fails the run.
+            "let live = [];"
+            "for (let attempt = 0; attempt < 3; attempt += 1) {"
+            "  live = duplicateDeclarations(await readFile('main.cjs', 'utf8'));"
+            "  if (!live.length) break;"
+            "  await sleep(1500);"
+            "}"
             "if (live.length) throw new Error('main.cjs duplicates ' + JSON.stringify(live));"
             "const file = 'C:/repo/mefi-studio/main.cjs';"
             "const queued = requestsFromDuplicates([{ file, duplicates: hits }], []);"
@@ -812,6 +826,19 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn("lastId", scan, "the part id rides with the timestamp so duplicate stamps cannot skip rows")
         self.assertIn("sourceKey", scan, "the scan stamps the source line so a re-scanned note dedupes")
 
+    def test_keyless_ideas_scan_never_mints_chat_rows(self):
+        # The regex harvest used to mint a store row per candidate chat line
+        # (71 chat-noise excerpts had to be swept out of the backlog). The
+        # keyless pass may only consume the cursor window; chat lines reach
+        # the AI review as candidates, and only its additions — stamped
+        # source: "ai" — may enter the ideas store.
+        scan = _function_body(self.main, "scanIdeasInternal")
+        self.assertNotIn('pushAddition(idea, "chat")', scan, "the keyless scan mints chat rows again")
+        self.assertNotIn('source: "chat"', scan, "the scan itself cannot stamp chat provenance into the store")
+        self.assertIn('pushAddition(idea, "ai")', scan, "only the AI review's additions reach the store")
+        self.assertIn("no new chat material since the last scan", scan, "a quiet window is consumed, not re-scanned")
+        self.assertIn('idea.source !== "chat"', self.module, "a stray chat row still cannot auto-promote from the backlog")
+
     def test_real_work_outranks_the_assistants_own_upkeep(self):
         # The overseer files upkeep chores by the dozen. Picking on
         # source == "a-eyes" meant those took every executor slot the moment it
@@ -897,7 +924,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn('"executor"', self.module, "the problem kind is part of the contract")
         # A finished job compacts behind itself, so the board reshapes every time.
         finish = _function_body(self.main, "spawnNextJob")
-        self.assertIn('assistantEnqueueRole("compactor", ASSISTANT_PRIORITY.demand)', finish)
+        self.assertIn('assistantEnqueueRole("compactor", ASSISTANT_PRIORITY.demand, { automatic: true })', finish)
         # A tripped breaker is a pause, not a power-off.
         self.assertIn("autopilot.parkedUntil && Date.now() >= autopilot.parkedUntil", self.main)
         self.assertIn("autopilot.execute = true", _function_body(self.main, "executeNextRequest"))

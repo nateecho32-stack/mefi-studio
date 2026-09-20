@@ -13,6 +13,7 @@ data/*
 !data/models.json
 tools/logs/
 .local-migration/
+.codex-remote-attachments/
 
 # Local credentials, environment and editor/runtime output
 .env

@@ -49,7 +49,12 @@
     graph: null,
     source: "baked",
     speeds: {},
+    studioInitialized: false,
   };
+  let cardCache = new WeakMap();
+  let searchCache = new WeakMap();
+  let cardFrame = null;
+  let renderedCardMarkup = null;
 
   const els = {
     status: document.getElementById("status"),
@@ -155,10 +160,8 @@
         if (filter && !filter.test(model)) return false;
       }
       if (!query) return true;
-      return [model.name, model.vendor, model.id, model.verdict, ...(model.tags ?? [])]
-        .join(" ")
-        .toLowerCase()
-        .includes(query);
+      if (!searchCache.has(model)) searchCache.set(model, [model.name, model.vendor, model.id, model.verdict, ...(model.tags ?? [])].join(" ").toLowerCase());
+      return searchCache.get(model).includes(query);
     });
     const num = (v) => (v == null ? -Infinity : typeof v === "number" ? v : v === "unlimited" ? Infinity : -Infinity);
     const sorters = {
@@ -193,8 +196,17 @@
   }
 
   function renderCards() {
+    if (cardFrame !== null) { cancelAnimationFrame(cardFrame); cardFrame = null; }
     const models = visibleModels();
-    els.cards.innerHTML = models.map(cardHtml).join("");
+    const markup = models.map((model) => {
+      if (!cardCache.has(model)) cardCache.set(model, cardHtml(model));
+      return cardCache.get(model);
+    }).join("");
+    // Keep expanded details and focus when a refresh returns identical data.
+    if (renderedCardMarkup !== markup) {
+      els.cards.innerHTML = markup;
+      renderedCardMarkup = markup;
+    }
     els.count.textContent = `${models.length} of ${state.doc.models.length} models shown`;
   }
 
@@ -209,24 +221,41 @@
   function applyDoc(doc, source) {
     state.doc = doc;
     state.source = source;
+    cardCache = new WeakMap();
+    searchCache = new WeakMap();
+    state.graph?.setDoc?.(doc);
+    if (state.studioInitialized) updateSpeedModels();
     renderAll();
-    loadSpeeds().then(renderCards);
+    loadSpeeds().then((changed) => { if (changed) renderCards(); });
   }
 
-  async function loadSpeeds() {
+  let speedsPending = null;
+  function loadSpeeds() {
+    if (speedsPending) return speedsPending;
+    speedsPending = readSpeeds().finally(() => { speedsPending = null; });
+    return speedsPending;
+  }
+  async function readSpeeds() {
+    let next;
     try {
       if (window.mefiStudio?.speedMeasurements) {
         const result = await window.mefiStudio.speedMeasurements();
-        state.speeds = result?.ok ? result.measurements ?? {} : {};
+        if (!result?.ok) return false;
+        next = result.measurements ?? {};
       } else {
         const url = new URL("../data/speed-measurements.json", window.location.href).href;
         const response = await fetch(`${url}?t=${Date.now()}`, { cache: "no-store" });
-        state.speeds = response.ok ? await response.json() : {};
+        if (!response.ok) return false;
+        next = await response.json();
       }
     } catch {
-      state.speeds = {};
+      return false;
     }
+    if (JSON.stringify(state.speeds) === JSON.stringify(next)) return false;
+    state.speeds = next;
+    cardCache = new WeakMap();
     state.graph?.setSpeeds?.(state.speeds);
+    return true;
   }
 
   // ---- refresh-on-open ----
@@ -280,9 +309,11 @@
     document.getElementById("tab-studio").hidden = name !== "studio";
     if (name === "graph") {
       if (!state.graph) state.graph = window.MefiGraph.mount(state.doc, { speeds: state.speeds });
+      window.MefiModelLab?.open?.();
       requestAnimationFrame(() => state.graph.redraw());
     }
     if (name === "eyes") window.MefiEyes?.init();
+    if (name === "studio") initStudio();
     writeStore("mefiStudio.tab", name);
   }
 
@@ -293,26 +324,36 @@
     log.scrollTop = log.scrollHeight;
   }
 
+  function updateSpeedModels() {
+    const select = document.getElementById("speed-model");
+    const selected = select.value;
+    const models = new Map([
+      ["glm-5.3-flash", "GLM-5.3 Flash (z.ai)"],
+      ["glm-5.3", "GLM-5.3 (z.ai)"],
+    ]);
+    for (const model of state.doc.models) if (model.onRoster && !model.legacy && !models.has(model.id)) models.set(model.id, model.name);
+    select.replaceChildren(...[...models].map(([id, name]) => {
+      const option = document.createElement("option"); option.value = id; option.textContent = name; return option;
+    }));
+    select.value = models.has(selected) ? selected : models.has("deepseek-v4.1-flash") ? "deepseek-v4.1-flash" : models.keys().next().value;
+  }
+
   function initStudio() {
+    if (state.studioInitialized) return;
+    state.studioInitialized = true;
     const actions = document.getElementById("studio-actions");
     const hint = document.getElementById("studio-hint");
     if (!window.mefiStudio?.launchStudio) {
-      hint.textContent = "Desktop launcher not available in a plain browser. Run `npm start` inside mefi-studio to launch LÖVE directly from here.";
+      hint.textContent = "Open the desktop app to connect providers or use the optional game launcher.";
       actions.querySelectorAll("button").forEach((b) => (b.disabled = true));
       document.getElementById("studio-desktop").hidden = true;
       return;
     }
-    hint.textContent = "Uses the repo's cached LÖVE runtime; smoke goes through Run Dev Tool (LOVE2D).cmd --smoke.";
+    hint.textContent = "Uses the separate game project's cached LÖVE runtime and documented smoke-test script when available.";
     window.mefiStudio.onStudioLog((line) => studioLog(line));
 
     const speedModel = document.getElementById("speed-model");
-    speedModel.innerHTML =
-      `<option value="glm-5.3-flash">GLM-5.3 Flash (z.ai)</option>` +
-      `<option value="glm-5.3">GLM-5.3 (z.ai)</option>` +
-      state.doc.models
-        .filter((m) => m.onRoster && !m.legacy)
-        .map((m) => `<option value="${m.id}" ${m.id === "deepseek-v4.1-flash" ? "selected" : ""}>${m.name}</option>`)
-        .join("");
+    updateSpeedModels();
 
     const keyStatus = document.getElementById("key-status");
     const zaiKeyStatus = document.getElementById("zai-key-status");
@@ -330,6 +371,7 @@
       const result = await window.mefiStudio.setApiKey(value, "opencode");
       keyStatus.textContent = result?.ok ? (value ? "key saved (encrypted)" : "key cleared") : `save failed: ${result?.error ?? "unknown"}`;
       document.getElementById("api-key").value = "";
+      await loadAiRouting();
     });
 
     document.getElementById("save-zai-key").addEventListener("click", async () => {
@@ -337,7 +379,7 @@
       const result = await window.mefiStudio.setApiKey(value, "zai");
       zaiKeyStatus.textContent = result?.ok ? (value ? "key saved (encrypted)" : "key cleared") : `save failed: ${result?.error ?? "unknown"}`;
       document.getElementById("zai-key").value = "";
-      loadAiRouting();
+      await loadAiRouting();
     });
 
     const jevStatus = document.getElementById("jev-status");
@@ -360,6 +402,7 @@
         input.value = "";
         if (!result?.ok) { jevStatus.textContent = `Save failed: ${result?.error ?? "unknown"}`; return; }
         await refreshJev();
+        await loadAiRouting();
       } catch { input.value = ""; jevStatus.textContent = "Could not save Jev key"; }
     });
     jevEnabled.addEventListener("change", async () => {
@@ -379,42 +422,103 @@
 
     // AI routing: who pays for assistant calls. Auto prefers the z.ai plan;
     // the OpenCode fallback switch exists so nothing bills OpenCode by surprise.
-    // The model fields make the assistant's own model a choice: free-text ids
-    // per role (routine / heavy), empty = the route's default; Grok routes the
-    // passes through the grok CLI instead of an HTTP endpoint. "Builders run
-    // on" moves the executor's build jobs between opencode run and the grok CLI.
+    // Provider choice and model selection are independent; explicit role models
+    // take priority over Jev. Status refreshes never erase unsaved model inputs.
     const providerSelect = document.getElementById("ai-provider");
+    const modelSelection = document.getElementById("ai-model-selection");
+    const routingStatus = document.getElementById("ai-routing-status");
+    const routingDecision = document.getElementById("ai-routing-decision");
+    const routingEvidence = document.getElementById("ai-routing-evidence");
+    const routingRefresh = document.getElementById("ai-routing-refresh");
     const fallbackToggle = document.getElementById("ai-fallback");
     const modelRoutine = document.getElementById("ai-model-routine");
     const modelHeavy = document.getElementById("ai-model-heavy");
     const executorCli = document.getElementById("executor-cli");
     const executorModel = document.getElementById("executor-model");
-    async function loadAiRouting() {
+    function evidenceText(evidence, taskType) {
+      const workerNote = taskType === "coding" ? " Available measurements describe Studio HTTP requests; CLI worker timing and billing are not measured." : "";
+      if (!evidence) return `No measured evidence recorded for this selection.${workerNote}`;
+      const known = (value) => typeof value === "number" && Number.isFinite(value);
+      const task = evidence.measured?.task;
+      const measured = task?.samples > 0 ? task : evidence.measured?.overall;
+      const scope = task?.samples > 0 ? "this task type" : "all task types";
+      const latency = measured?.latencyMs?.median;
+      const speed = measured?.throughputTokensPerSecond?.median;
+      const cost = measured?.costUsd?.mean;
+      const quality = measured?.quality;
+      const human = quality?.human?.meanOutOf5;
+      const model = quality?.model?.meanOutOf5;
+      const money = (value) => `$${value.toLocaleString(undefined, { maximumFractionDigits: 6 })}`;
+      const coverage = known(cost) ? ` (${measured.costUsd.samples ?? 0} reported, ${measured.costUsd.unknownRecords ?? 0} unknown)` : "";
+      const observed = `Measured (${scope}, ${measured?.samples ?? 0} calls): response ${known(latency) ? `${(latency / 1000).toFixed(2)} s` : "unknown"}; speed ${known(speed) ? `${speed.toFixed(1)} tokens/s` : "unknown"}; errors ${known(measured?.errors) ? measured.errors : "unknown"}; mean reported cost ${known(cost) ? money(cost) : "unknown"}${coverage}; human rating ${known(human) ? `${human.toFixed(1)}/5 (${quality.human.samples ?? 0} rated)` : "unknown"}; model rating ${known(model) ? `${model.toFixed(1)}/5 (${quality.model.samples ?? 0} rated)` : "unknown"}.`;
+      const catalog = evidence.catalog;
+      const price = catalog?.pricingEstimate?.default;
+      const estimate = price && known(price.input) && known(price.output) ? `${money(price.input)} input / ${money(price.output)} output per million tokens${price.condition ? ` (${price.condition})` : ""}` : "unknown";
+      const benchmark = known(catalog?.quality?.index) ? `${catalog.quality.index} (${catalog.quality.source ?? "source unknown"} ${catalog.quality.version ?? ""})` : "unknown";
+      return `${observed} Catalog quality: ${benchmark}; catalog price estimate: ${estimate}. Estimates are separate from your billed cost.${workerNote}`;
+    }
+    let routingRead = 0;
+    async function loadAiRouting({ syncControls = false } = {}) {
+      const read = ++routingRead;
+      routingRefresh.disabled = true;
       try {
         const routing = await window.mefiStudio.getAiRouting();
-        providerSelect.value = routing.provider;
-        fallbackToggle.checked = routing.fallbackOpenCode;
-        modelRoutine.value = routing.models?.routine ?? "";
-        modelHeavy.value = routing.models?.heavy ?? "";
-        executorCli.value = routing.executorCli ?? "opencode";
-        executorModel.value = routing.executorModel ?? "";
-      } catch {}
+        if (read !== routingRead) return;
+        if (syncControls) {
+          providerSelect.value = routing.provider;
+          modelSelection.value = routing.modelSelection ?? "jev";
+          fallbackToggle.checked = routing.fallbackOpenCode;
+          modelRoutine.value = routing.models?.routine ?? "";
+          modelHeavy.value = routing.models?.heavy ?? "";
+          executorCli.value = routing.executorCli ?? "opencode";
+          executorModel.value = routing.executorModel ?? "";
+        }
+        const selection = routing.modelSelection ?? "jev";
+        routingStatus.textContent = selection === "fixed"
+          ? "Fixed defaults enabled. Explicit model overrides take priority."
+          : routing.provider === "grok"
+            ? "Grok CLI uses your explicit model or its CLI default. Jev selection is available for HTTP calls and z.ai coding workers."
+            : routing.jevConfigured
+              ? "Jev model selection ready · task fit, speed and cost. Explicit model overrides take priority."
+              : "Jev model selection is waiting for a gateway key. Save a Jev key below; usual defaults apply until connected.";
+        const decision = routing.routingDecision;
+        routingEvidence.hidden = !decision;
+        routingEvidence.textContent = decision ? evidenceText(decision.evidence, decision.taskType) : "";
+        if (!decision) routingDecision.textContent = "No selection recorded yet. Start a task, then refresh to see its model and reason.";
+        else {
+          const method = { jev: "Jev selected", default: "Default selected", override: "Model override" }[decision.method] ?? "Selected";
+          const when = new Date(decision.at);
+          const stamp = decision.at && Number.isFinite(when.getTime()) ? ` · ${when.toLocaleString()}` : "";
+          routingDecision.textContent = `Last selection: ${method} · ${decision.provider} / ${decision.model} · ${decision.taskType}${stamp}. ${decision.reason || "No reason recorded."}`;
+        }
+      } catch {
+        if (read === routingRead) routingStatus.textContent = "Model selection status unavailable. Refresh to try again.";
+      } finally {
+        if (read === routingRead) routingRefresh.disabled = false;
+      }
     }
-    loadAiRouting();
-    providerSelect.addEventListener("change", async () => {
-      const result = await window.mefiStudio.setAiRouting({ provider: providerSelect.value });
-      if (!result?.ok) studioLog(`! routing: ${result?.error ?? "save failed"}`);
-      else studioLog(`> assistant answers via ${providerSelect.value}`);
+    const routingControls = [providerSelect, modelSelection, fallbackToggle, modelRoutine, modelHeavy, executorCli, executorModel];
+    for (const control of routingControls) control.disabled = true;
+    loadAiRouting({ syncControls: true }).finally(() => {
+      for (const control of routingControls) control.disabled = false;
     });
-    fallbackToggle.addEventListener("change", async () => {
-      const result = await window.mefiStudio.setAiRouting({ fallbackOpenCode: fallbackToggle.checked });
-      if (!result?.ok) studioLog(`! routing: ${result?.error ?? "save failed"}`);
-    });
+    routingRefresh.addEventListener("click", () => loadAiRouting());
+    async function saveRouting(payload, confirmation) {
+      try {
+        const result = await window.mefiStudio.setAiRouting(payload);
+        if (!result?.ok) throw new Error(result?.error ?? "save failed");
+        studioLog(`> ${confirmation}`);
+        await loadAiRouting();
+      } catch (error) {
+        routingStatus.textContent = `Could not save routing: ${error.message}. Your saved selection is unchanged.`;
+        studioLog(`! routing: ${error.message}`);
+      }
+    }
+    providerSelect.addEventListener("change", () => saveRouting({ provider: providerSelect.value }, `assistant answers via ${providerSelect.value}`));
+    modelSelection.addEventListener("change", () => saveRouting({ modelSelection: modelSelection.value }, `model selection: ${modelSelection.value}`));
+    fallbackToggle.addEventListener("change", () => saveRouting({ fallbackOpenCode: fallbackToggle.checked }, "provider fallback saved"));
     const saveModel = (which, value) =>
-      window.mefiStudio.setAiRouting({ models: { [which]: value } }).then((result) => {
-        if (!result?.ok) studioLog(`! routing: ${result?.error ?? "save failed"}`);
-        else studioLog(`> ${which} model ${value.trim() ? `"${value.trim()}"` : "reset to default"}`);
-      });
+      saveRouting({ models: { [which]: value } }, `${which} model ${value.trim() ? `"${value.trim()}"` : "uses model selection"}`);
     for (const [input, role] of [[modelRoutine, "routine"], [modelHeavy, "heavy"]]) {
       input.addEventListener("change", () => saveModel(role, input.value));
       input.addEventListener("keydown", (event) => {
@@ -424,16 +528,8 @@
         }
       });
     }
-    executorCli.addEventListener("change", async () => {
-      const result = await window.mefiStudio.setAiRouting({ executorCli: executorCli.value });
-      if (!result?.ok) studioLog(`! builders: ${result?.error ?? "save failed"}`);
-      else studioLog(`> builders run on ${executorCli.value}`);
-    });
-    executorModel.addEventListener("change", async () => {
-      const result = await window.mefiStudio.setAiRouting({ executorModel: executorModel.value });
-      if (!result?.ok) studioLog(`! builders: ${result?.error ?? "save failed"}`);
-      else studioLog(`> builder model ${executorModel.value.trim() ? `"${executorModel.value.trim()}"` : "reset to default"}`);
-    });
+    executorCli.addEventListener("change", () => saveRouting({ executorCli: executorCli.value }, `builders run on ${executorCli.value}`));
+    executorModel.addEventListener("change", () => saveRouting({ executorModel: executorModel.value }, `builder model ${executorModel.value.trim() ? `"${executorModel.value.trim()}"` : "reset to default"}`));
 
     // Coding CLIs: launch the owner's installed tools in their own terminal.
     // Codex and Claude Code use their own accounts; OpenCode carries the
@@ -466,9 +562,16 @@
     });
 
     document.getElementById("speed-go").addEventListener("click", async () => {
+      const button = document.getElementById("speed-go");
+      if (button.disabled) return;
+      button.disabled = true;
       studioLog(`> speed probe ${speedModel.value}`);
-      const result = await window.mefiStudio.speedProbe(speedModel.value);
-      if (!result?.ok) studioLog(`! speed probe failed${result?.error ? ": " + result.error : ""}`);
+      try {
+        const result = await window.mefiStudio.speedProbe(speedModel.value);
+        if (!result?.ok) studioLog(`! speed probe failed${result?.error ? ": " + result.error : ""}`);
+        else if (await loadSpeeds()) renderCards();
+      } catch (error) { studioLog(`! speed probe failed: ${error.message}`); }
+      finally { button.disabled = false; }
     });
 
     actions.addEventListener("click", async (event) => {
@@ -490,7 +593,7 @@
   // ---- wire up ----
   els.search.addEventListener("input", (event) => {
     state.search = event.target.value;
-    renderCards();
+    if (cardFrame === null) cardFrame = requestAnimationFrame(renderCards);
   });
   els.chips.addEventListener("click", (event) => {
     const chip = event.target.closest(".chip");
@@ -564,14 +667,13 @@
   const smoke = headless.get("smoke") === "1";
   const wantCommand = !capture && !smoke && readStore("mefiStudio.commandHome") !== "0";
 
-  initStudio();
   window.MefiMusic?.init();
   window.MefiTree?.init();
   showTab(readStore("mefiStudio.tab") ?? "booklet");
 
   const paintCatalog = () => {
     renderAll();
-    loadSpeeds().then(renderCards);
+    loadSpeeds().then((changed) => { if (changed) renderCards(); });
     refresh("open");
   };
 
@@ -602,4 +704,5 @@
         .catch(() => {});
     }
   }
+  window.MefiOnboarding?.startup?.({ automatic: !capture && !smoke });
 })();

@@ -56,11 +56,25 @@ expect(eyesSrc.includes("return writeJson(pinsPath, pins)"), "writePins delegate
   const eyes = await import(`file://${path.join(root, "scripts", "eyes.mjs").replace(/\\/g, "/")}`);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "eyes-salvage-"));
   const pinsPath = path.join(dir, "eyes-pins.json");
+  // A writer killed between writeFile and rename orphans its tmp sibling
+  // forever (seen live as machine-status.json.tmp-9148-eyny9w); the next
+  // successful write must reap it once it is older than the age guard, while
+  // a young tmp (a live racing writer) is left alone.
+  const staleTmp = `${pinsPath}.tmp-999999-stale`;
+  const freshTmp = `${pinsPath}.tmp-999999-fresh`;
+  fs.writeFileSync(staleTmp, '{"torn":');
+  const old = new Date(Date.now() - 10 * 60 * 1000);
+  fs.utimesSync(staleTmp, old, old);
   await eyes.writePins(pinsPath, { ses_x: [{ note: "hello" }] });
   const readBack = await eyes.readPins(pinsPath);
   expect(readBack.ses_x && readBack.ses_x[0].note === "hello", "writePins round-trips through the atomic path");
   const leftovers = fs.readdirSync(dir).filter((name) => name.includes(".tmp-"));
-  expect(leftovers.length === 0, `no tmp files left behind (${leftovers.join(", ") || "clean"})`);
+  expect(leftovers.length === 0, `orphaned tmp reaped by the next write (${leftovers.join(", ") || "clean"})`);
+  // A young tmp survives the same write: the sweep only takes stale ones.
+  fs.writeFileSync(freshTmp, '{"live":');
+  await eyes.writePins(pinsPath, { ses_x: [{ note: "hello" }] });
+  expect(fs.existsSync(freshTmp), "young tmp of a live racing writer is not swept");
+  fs.rmSync(freshTmp, { force: true });
   fs.rmSync(dir, { recursive: true, force: true });
   console.log(failures ? `SALVAGE SMOKE: ${failures} failure(s)` : "SALVAGE SMOKE: all pass");
   process.exit(failures ? 1 : 0);

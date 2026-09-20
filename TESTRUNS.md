@@ -1,5 +1,35 @@
 # Test Runs
 
+Model/catalog performance coverage is included in `npm test`:
+
+- `tests/catalog_host.test.mjs`: concurrent read/refresh sharing, file-change
+  detection, in-flight invalidation, and recovery after missing files or failed
+  child processes.
+- `tests/catalog_refresh.test.mjs`: concurrent bounded sources, offline and
+  failed-source metadata preservation, malformed responses, empty rosters,
+  atomic replacement and Windows file-lock recovery in disposable directories.
+- `tests/catalog_renderer.test.mjs`: Settings checks deferred to first use,
+  initial routing-load safety, duplicate speed-probe suppression, batched
+  searches, preserved expanded cards, fresh model choices and lazy catalog maps.
+- `tests/model_performance.test.mjs`: cached reads and summaries remain detached
+  and refresh after ratings, writes, external replacement, deletion or corruption;
+  grouping cost stays bounded as model counts grow.
+
+`python tools/verify_model_lab.py --output tools/logs/model-speed-ui` also checks
+deferred Settings discovery and unchanged expanded cards in real Electron,
+alongside persistent ratings, task filtering, context budgets and narrow layout.
+It uses disposable data and blocks provider requests and workers.
+
+Validated on 2026-09-19: booklet build, `npm run check`, `npm run audit` (zero
+findings), 54 focused catalog/ledger/Model Lab behavior checks, all 211 Python
+contracts and all six normalized-path checks passed. The Electron Model Lab
+tour passed eight checks with no renderer errors or external requests. The
+latest full Node run had 805 passes, one opt-in skip and four failures in
+concurrently changed backlog/build-approval behavior (`backlog_engine`,
+`executor_lifecycle`, `executor_parallel`, `planning_execution`); the full
+`npm test` gate therefore remains unpassed. Logs are retained locally under
+`tools/logs/model-speed-*`.
+
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.
 
 ## Read Before Any Tests
@@ -11,7 +41,7 @@ npm run check
 npm test
 ```
 
-`npm run check` verifies package-script targets and JavaScript syntax and runs the spec-collision audit (`npm run check:specs`, `scripts/spec-collisions.mjs`) that enforces the CONTRIBUTING.md test-file conventions. `npm test` runs the Node behavioral suite in `tests/`, all Python contracts in `tools/`, and the normalized-path lock proof (`node tools/test_normalized_path_lock.mjs`, the A-Eyes overseer directive's named check) as its closing gate. To investigate one layer or one contract:
+`npm run check` verifies package-script targets and JavaScript syntax and runs the spec-collision audit (`npm run check:specs`, `scripts/spec-collisions.mjs`) that enforces the CONTRIBUTING.md test-file conventions. `npm run check:css` (`scripts/check-css.mjs`) is the standalone CSS-refactor safety gate: it computes the cascade-winning declaration for every (selector-context, property, importance) key in a stylesheet and proves a candidate (by default the working copy of `renderer/styles.css`) keeps exactly the same winners as the base ref (by default `HEAD`), reporting missing/changed/new winners and exiting non-zero on divergence. `tests/check_css.test.mjs` pins the winner extraction, cascade-equivalence comparison and the CLI exit codes (`node scripts/check-css.mjs base.css candidate.css` also works on bare files). `npm test` runs the Node behavioral suite in `tests/`, all Python contracts in `tools/`, and the normalized-path lock proof (`node tools/test_normalized_path_lock.mjs`, the A-Eyes overseer directive's named check) as its closing gate. To investigate one layer or one contract:
 
 ```powershell
 node --test "tests/**/*.test.mjs"
@@ -19,6 +49,31 @@ python -m unittest discover -s tools -p "test_mefi_studio_*.py"
 python -m unittest discover -s tools -p "test_mefi_studio_launcher.py"
 npm run audit
 ```
+
+When a worker runs the full Python suite non-interactively, redirect the complete
+output to a file and grep the failure out of that file (for example
+`python -m unittest discover -s tools -p "test_mefi_studio_*.py" > "$env:TEMP\py_suite.txt" 2>&1`),
+never through `Select-Object -Last N`: in run_1789855386972_4 the suite one-shot
+`FAILED (failures=1)` (203 tests) and passed on the two following runs, but the
+`-Last 5` pipe discarded the traceback, so the flaking test name was lost. The
+strongest identified source — the live `main.cjs` duplicate-declaration scan in
+`tools/test_mefi_studio_assistant.py` racing a sibling session's in-flight edit —
+now re-reads the file through a short settle before failing (real merge
+corruption still persists and fails); if a one-shot failure reproduces, capture
+the test name from the saved output and pin its fixture the same way.
+
+Full-suite validation in run_1789862198189_7 (2026-09-19): `npm run check`
+(61 targets, full coverage; 91 specs, unique basenames, no orphans), `npm test`
+(Node 714 tests / 713 pass / 0 fail, Python 211 OK, normalized-path lock proof
+6/6) and `npm run audit` (0 findings) all pass on one working tree, after
+`npm run build-booklet` re-baked the helix working-ring collision fix that
+`renderer/idle.js`'s owner session landed mid-validation. The first full run
+failed deterministically in `tests/command_graph.test.mjs` ("all five layouts
+leave room for working node rings", helix 47.0px < 47.9px at 1100px) while that
+owner session was still editing; per the adopt-don't-clobber rule the edit was
+allowed to settle, the file then passed solo, and only the full chain was
+re-run and recorded here — a mid-edit failure is a handoff signal first, not
+automatically a layout bug.
 
 The Python suite skips Node-dependent checks when Node is unavailable. A hidden Electron smoke runs on Windows when the installed Electron binary exists; its subprocess timeout is 120 seconds. It boots a temporary copy with only the catalog data, isolated Electron profile and board database, and process cleanup disabled in the resource manager. The user's live app state is not used. Install dependencies with `npm ci` before checking or packaging the app.
 
@@ -53,6 +108,18 @@ its own narrow contract must pass (for example
 files that exist. A resolved handoff needs no re-edit; say so and cite the
 named checks.
 
+Assistant animation regressions run with `node --test tests/command_motion.test.mjs
+tests/tree3d_performance.test.mjs tests/command_render.test.mjs`. They cover
+frame-rate independent movement, stable positions and orbit slots across roster
+updates, camera pans, short status gaps, interrupted departures, reduced motion,
+and returning/fading agents. The isolated Electron fixture also samples actual
+painted positions while work moves between tasks and completes; it launches no
+workers and makes no external calls.
+
+Validated after the animation changes: rebuilt booklet, `npm run check`,
+`npm test` (809 Node passes, one opt-in skip, 211 Python passes and all six
+normalized-path ownership checks), and `npm run audit` (zero findings).
+
 ## Python contracts
 
 | Contract | Coverage |
@@ -61,12 +128,13 @@ named checks.
 | `tools/test_mefi_studio_booklet.py` | Mefi's Studio AI+ booklet contract: the built `renderer/booklet.html` bakes exactly the snapshot catalog, stays self-contained (no `<script src>`, no `<link>`, no remote resources), keeps the refresh-on-open markers (`no-store`, six-hour focus refresh, `mefiStudio.readCatalog`), and ships print styles; template placeholders and Node syntax checks when Node exists. The behavioral half is `tests/booklet_build.test.mjs` (`node --test tests/booklet_build.test.mjs` from the repository root, part of `npm test`): the real `scripts/build-booklet.mjs` `build()` runs on a fixture root (committed template + styles + renderer scripts, a two-model catalog) and the smoke asserts the output `booklet.html` exists and is non-empty with all three placeholders replaced, non-empty baked style/code blocks, the baked catalog matching the fixture, a rebuild over identical inputs reporting `changed:false`, and a missing renderer input rejecting with no output written. |
 | `tools/test_mefi_studio_launcher.py` | Mefi's Studio AI+ launcher contract: Electron entry `main.cjs` with pinned electron, windowed `love.exe` on `dev/dev_tool_love_project` with the optional game checkout (`GAME_ROOT`) as cwd, never `lovec.exe` for interactive launches, smoke only through `Run Dev Tool (LOVE2D).cmd --smoke`, taskkill cleanup, the `ELECTRON_RUN_AS_NODE` guard, the preload IPC surface (catalog, studio, speed probe, A-Eyes), the `capture` script, and the renderer staying node-free. When Electron is installed on a Windows runner it also boots the real hidden `--smoke` window and asserts the rendered card count. |
 | `tools/test_mefi_studio_eyes.py` | A-Eyes contracts: the OpenCode store is opened read-only, the main process registers the eyes IPC + 1.5 s activity poll, the preload exposes the bridge, the Club Blackout tokens and 3D task-tree rail exist, and a **fixture OpenCode database** is dumped through the real `scripts/eyes.mjs` to pin change math (edit diff `+2/-1`, write content `+3`, patch file sets, reads excluded from changes but present in activity), collision detection with owners and `HH:MM–HH:MM` overlap windows (shared-window prompts, gap-tolerated handoffs labelled edit spans; the explorer rows and detail tooltips show the same ranges), overlap-window validation in request inputs (overlapRangeOf: corrupt/NaN/inverted windows normalize to null, zero-length windows stay real), and boundary coverage (adjacent windows touching at one instant, a gap of exactly overlapMs inclusive vs one past it excluded, contained windows intersecting to the inner session's window, a three-session nested group whose common intersection is the innermost session's single instant, and zero-length single-instant pairs), inactive-owner handoff (confirm before further edits; ownership is not silently reassigned), `assistantFacts()` carrying owner/ownership/presence/handoff and uncommitted-only features vs HEAD (session-touched dirty/untracked files; deletes and untouched dirty files omitted), live `assistantFacts({ root: REPO_ROOT })`, the live store + executor reading that presence, the collisions IPC returning live file presence, the explorer collateral watch listing live solo editors (even with no briefing) plus per-file owners, duplicate-declaration merge-corruption requests, title-overlap adopt-don't-clobber advice, and briefing-to-fix-request conversion; the renderer poll pause — boot.js's shared poll guard (every `pollStart` clears before it sets, so a hidden tab issues no fetch and hide/show toggles never stack intervals) with nav.js's badge poll registered through it, pinned in source and in the built `booklet.html`. Its fixture databases are built only by the shared `_fixture_db`/`_boundary_db` helpers inside per-run `tempfile.TemporaryDirectory()` dirs — unique fixture naming, pinned by the contract itself (`test_fixture_databases_use_unique_per_run_temp_dirs`) so two sessions can run the suite concurrently without re-colliding, and the module pins its own unique basename against the unittest-discovery shadow that `npm run check:specs` guards repo-wide. Node-only half skips cleanly without Node. |
-| `tools/test_mefi_studio_auditor.py` | The third agent's contract: runs the real local auditor (`scripts/auditor.mjs`) against the repo and fails on any error-level finding — un-bundled renderer scripts, preload channels without main handlers, listened events nothing sends, renderer DOM lookups missing from the template, studio tests missing from TESTRUNS/`test_sets.json`, npm script targets that do not exist, and unparseable data files. Also pins the auditor/checkpoint IPC wiring, and the package.json `check` chain leading with the check-targets audit (`scripts/check-targets.mjs`, `npm run check:targets`): every referenced target exists on disk, node paths in other scripts are not stale, and every `scripts/*.mjs` + `renderer/*.js` source (plus the `main` entry) is covered by the chain — the behavioral half is `tests/check_targets.test.mjs` (`node --test tests/` from the repository root, part of `npm test`). No network, no key, no Electron. |
+| `tools/test_mefi_studio_auditor.py` | The third agent's contract: runs the real local auditor (`scripts/auditor.mjs`) against the repo and fails on any error-level finding — un-bundled renderer scripts, preload channels without main handlers, listened events nothing sends, renderer DOM lookups missing from the template, studio tests missing from TESTRUNS/`test_sets.json`, npm script targets that do not exist, and unparseable data files. Also pins the auditor/checkpoint IPC wiring, and the package.json `check` chain leading with the check-targets audit (`scripts/check-targets.mjs`, `npm run check:targets`): every referenced target exists on disk, node paths in other scripts are not stale, and every `scripts/*.mjs` + `renderer/*.js` source (plus the `main` entry) is covered by the chain — the behavioral half is `tests/check_targets.test.mjs` (`node --test tests/` from the repository root, part of `npm test`). Both live-tree probes (the auditor run and the check-targets coverage walk) are guarded by the shared `tools/flake_capture.py` retry: the suite audits a tree that parallel agent runs edit concurrently, so a one-shot failure that clears on immediate re-run is recorded to `data/python-flake-capture.jsonl` (local only) and surfaced as a skip instead of failing the gate — the capture that names which test flaked (the "203 tests, failures=1 then passed twice" occurrence); a failure that reproduces re-raises the original. No network, no key, no Electron. |
 | `tools/test_mefi_studio_analyzer.py` | Analyzer contracts: runs the real engine (`scripts/analyzer.mjs`) against a fixture work tree — file analysis finds outline entries, TODO markers, and referenced paths that exist vs are missing, while idea verification reports related work with evidence hits for grounded ideas and `new`/0% for nonsense. Also pins the analyzer IPC/preload/overlay wiring. No network, no key. |
 | `tools/test_mefi_studio_idle.py` | Dream mode contracts: the five-minute quiet clock and input reset, the four Zen audio profiles with slow/quick tempo mapping, the task-vs-external split (edit/write/patch pulse the path, reads/searches vaporize as blue-white particles), per-path touch brightness that fades and brightens when multiple agents share a path, the `MefiTree.snapshot` API the view renders from, bundled `idle.js`, template HUD ids, and the Electron autoplay policy that lets bells play without a gesture. |
 | `tools/test_mefi_studio_tasks.py` | Task/reference/ideas contracts: the real reference engine (`scripts/reference.mjs`) against fixture data — code hits, matching node-tree sessions, chat idea scanning, PNG name matching, and web staying off unless asked; plus the tasks/ideas/prefs IPC + preload wiring and the tasks/ideas/overhead overlay templates with their toggles (web, node history, blur menu, auto reference). No network. |
-| `tools/test_mefi_studio_machine.py` | Machine coordination contracts: fixtures through the real `scripts/machine.mjs` — live vs dead lease records (a dead exclusive lease must not block width, stale holders are reported not pruned), and process classification into healthy / hang (no CPU progress) / orphan (dead parent) / over-age, with only strays killable. Pins the resource-manager IPC + preload + explorer Machine panel, the briefing facts carrying lease/run state, and the gitignored generated status files. No PowerShell or LOVE is launched. |
-| `tools/test_mefi_studio_updater.py` | Live-update contracts: fixture trees through the real `scripts/updater.mjs` — the reload/restart/ignore classify table (renderer scripts and styles reload, `main.cjs`/`preload.cjs`/`package.json`/`scripts/**`/`assets/**` restart, generated `booklet.html`, `data/`, `dist/`, dotfiles and editor temp files ignored, restart winning over reload), content-hashed snapshot + diff against a cheap stat poll, payload sync that creates and deletes but never touches the payload's live `data/` — and that reports one unreplaceable destination instead of aborting the rest, leaves no `.sync-tmp` behind and holds the update rather than reloading or relaunching into a half-written payload, retrying the whole held set once the lock clears — syntax validation that holds a broken file instead of relaunching into a crash, reading `renderer/*.js` with the booklet's classic-script goal (a top-level `await`/`import`/`export` is held) while `main.cjs` and `scripts/**.mjs` keep `node --check`, the quiet-period debounce restarting on every notify so a write burst longer than the quiet period is still one action, and `maxWaitMs` forcing a pass through an endless burst, the idle safety-net poll pausing while the window is hidden (the host's `hidden` probe) and backing off on unchanged reads toward `POLL_MAX_MS` (`POLL_INTERVAL_MS`/`POLL_BACKOFF_FACTOR` exported, snapped back by any watcher hint or change, so a change made while hidden still applies on the first visible walk and no surface goes stale; `renderer/overhead.js`'s sheet poll carries the same pause/backoff with exported constants, pinned in source and in the built `booklet.html`), manual apply while auto-restart is off (including an apply that lands mid-run, which is queued and still applied), the three-restarts-in-60-seconds loop guard checked before the build so a held restart never leaves the payload ahead of the process, and the packaged Electron-runtime guard. Also builds the booklet into a temp root through the exported `build({ root })` without touching the committed one, and pins the wiring: `update:status`/`update:set`/`update:apply` IPC, the preload names, the template's update ids, the SMOKE/CAPTURE/CLI skip, and the `--updated` relaunch; and runs `main.cjs`'s own `applyRestart` and `update:apply` handler against the engine, so a manual "Restart now" stays out of the restart-loop history (three presses do not hold the next real update), an apply queued behind a run in flight never relaunches the app, and neither does a deferred or held apply. No Electron, no network; the Node half skips cleanly without Node. |
+| `tools/test_mefi_studio_machine.py` | Machine coordination contracts: fixtures through the real `scripts/machine.mjs` — live vs dead lease records (a dead exclusive lease must not block width, stale holders are reported not pruned), and process classification into healthy / hang (no CPU progress) / orphan (dead parent) / over-age, with only strays killable. Pins the resource-manager IPC + preload + explorer Machine panel, the briefing facts carrying lease/run state, and the gitignored generated status files. Both fixtures are built only inside per-run `tempfile.TemporaryDirectory()` dirs — every `--classify-fixture`/`--leases-fixture` hand-off reads a path derived from that run's own temp dir, pinned by the suite itself (`test_fixtures_use_unique_per_run_temp_dirs`) so concurrent runs never share fixture paths. No PowerShell or LOVE is launched. |
+| `tools/test_mefi_studio_fixture_paths.py` | Generalized unique-fixture contract sweeping every sibling `tools/test_mefi_studio_*.py` suite so no contract can regress to shared fixture paths (the recurrence behind the A-Eyes eyes-test collisions and the flaky machine lease fixture): no suite writes a fixture into the repository tree (no repo-anchored `write_*` target, no repo-anchored `.db` path) or the shared `tools/logs` evidence tree, every `tempfile.TemporaryDirectory(` usage is a context-managed per-run block, and no suite shares a discovery basename with a sibling (the unittest-shadow rule `npm run check:specs` guards repo-wide). Generalizes the per-suite pins in `test_mefi_studio_eyes.py` (`test_fixture_databases_use_unique_per_run_temp_dirs`) and `test_mefi_studio_machine.py` (`test_fixtures_use_unique_per_run_temp_dirs`). Pure source scan: no network, no Node. |
+| `tools/test_mefi_studio_updater.py` | Live-update contracts: fixture trees through the real `scripts/updater.mjs` — the reload/restart/ignore classify table (renderer scripts and styles reload, `main.cjs`/`preload.cjs`/`package.json`/`scripts/**`/`assets/**` restart, generated `booklet.html`, `data/`, `dist/`, dotfiles and editor temp files ignored, restart winning over reload), content-hashed snapshot + diff against a cheap stat poll, payload sync that creates and deletes but never touches the payload's live `data/` — and that reports one unreplaceable destination instead of aborting the rest, leaves no `.sync-tmp` behind and holds the update rather than reloading or relaunching into a half-written payload, retrying the whole held set once the lock clears — syntax validation that holds a broken file instead of relaunching into a crash, reading `renderer/*.js` with the booklet's classic-script goal (a top-level `await`/`import`/`export` is held) while `main.cjs` and `scripts/**.mjs` keep `node --check`, the quiet-period debounce restarting on every notify so a write burst longer than the quiet period is still one action, and `maxWaitMs` forcing a pass through an endless burst, the idle safety-net poll pausing while the window is hidden (the host's `hidden` probe) and backing off on unchanged reads toward `POLL_MAX_MS` (`POLL_INTERVAL_MS`/`POLL_BACKOFF_FACTOR` exported, snapped back by any watcher hint or change, so a change made while hidden still applies on the first visible walk and no surface goes stale; `renderer/overhead.js`'s sheet poll carries the same pause/backoff, its `window.MefiOverhead` export pinned only to the `open`/`close` consumer surface (not a verbatim member list) in source and in the built `booklet.html`), manual apply while auto-restart is off (including an apply that lands mid-run, which is queued and still applied), the three-restarts-in-60-seconds loop guard checked before the build so a held restart never leaves the payload ahead of the process, and the packaged Electron-runtime guard. Also builds the booklet into a temp root through the exported `build({ root })` without touching the committed one, and pins the wiring: `update:status`/`update:set`/`update:apply` IPC, the preload names, the template's update ids, the SMOKE/CAPTURE/CLI skip, and the `--updated` relaunch; and runs `main.cjs`'s own `applyRestart` and `update:apply` handler against the engine, so a manual "Restart now" stays out of the restart-loop history (three presses do not hold the next real update), an apply queued behind a run in flight never relaunches the app, and neither does a deferred or held apply. No Electron, no network; the Node half skips cleanly without Node. |
 | `tools/test_mefi_studio_routing.py` | Provider routing and coding-CLI contracts for Mefi's Studio AI+: the z.ai key lives in its own `zaiApiKeyEncrypted` field (headless `MEFI_STUDIO_ZAI_KEY` + `--set-zai-key` included), only a saved/encrypted status crosses `settings:get-key` IPC — never the raw key, which is also never interpolated into logs or prompts; the assistant router prefers z.ai GLM under `auto`, explicit `zai` errors rather than silently billing OpenCode, explicit `opencode` never touches the z.ai key, and the OpenCode fallback requires `auto` + the opt-in toggle + a Go key; glm-5.3-flash is the routine route and glm-5.3 the heavy one (improve/overseer passes) with its own `thinking.type`/`reasoning_effort` shape; autopilot `opencode run` jobs ride the Studio-managed `mefi-zai` provider via `OPENCODE_CONFIG_CONTENT` + `MEFI_ZAI_API_KEY` process env (key never written to OpenCode's auth store); the CLI panel detects `opencode`/`codex`/`claude` via `where.exe`, launches them detached, and the z.ai link probe runs `opencode models mefi-zai` under the injected env; the speed probe splits glm-* models onto `ZAI_API_KEY` + the coding-plan endpoint and keeps the `x-opencode-session` header off z.ai. When `node` and `opencode` are on PATH a live half runs the real `zaiProviderConfig()` through `opencode models mefi-zai --pure`; that half skips cleanly without them. No paid API call is ever made. |
 | `tools/test_mefi_studio_tree_keyboard.py` | Tree-rail keyboard + ARIA contracts for Mefi's Studio AI+ (`renderer/tree3d.js`): the template ships `#tree-canvas` as a labelled, focusable `role="tree"` container and `init()` re-asserts that over one hidden `role="treeitem"` proxy it owns via `aria-owns`; `onCanvasKeyDown` keeps the ArrowUp/Down/Left/Right sibling walk (Home/End to the ends, Escape dropping the focus, every branch preventDefault'd), Enter/Space activate through the same `activateNode` path the click handler uses (selection rides `mefi:tree-select`), and `setKbdFocus` keeps the roving `aria-activedescendant` on `tree-kbd-item` with the focused node's label and `aria-selected` state, cleared on blur and Escape, with `buildGraph` re-pointing the focus after a rebuild. Removing any binding fails the file. The behavioral half is `tests/tree3d_keyboard.test.mjs` (`node --test tests/tree3d_keyboard.test.mjs` from the repository root): tree3d.js runs against a minimal DOM stub, synthetic ArrowDown/ArrowUp/Enter/Space/Home/Escape events drive the rail, and the test asserts the selection moves between two sessions and toggles off, the proxy announces each node's label with `aria-selected` in step, and the activedescendant follows the focus and clears. Re-verified 2026-09-19 in run_1789852550913_2: the behavioral half passes solo, passes in one shared process with the palette suite (`--test-isolation=none`, the `?keyboard-test` import keeps tree3d.js out of the shared module cache), and passes four times concurrently as separate processes; `tests/spec_collisions.test.mjs` is 4/4 and `npm run check:specs` reports 82 specs with unique basenames and no orphans. |
 | `tools/test_mefi_studio_palette.py` | Command palette contracts for Mefi's Studio AI+ (`renderer/palette.js`): the window keydown handler keeps its Escape branch (preventDefault then `close()`, the guarded close that also restores opener focus), and the roving `aria-activedescendant` stays bound to the `#palette-input` element itself — set to the active option id in `setActiveOption`, cleared when the result list empties and again in `close()`, on an input the template ships with `id="palette-input"` and the `combobox` role. The highlight chain is pinned end to end: `render()` writes the `palette-option-N` ids, `aria-selected` and the `.active` class from `state.index` and refreshes `setActiveOption()` on both the empty and populated paths, `setActiveOption` reads the `li.active` row, and the shared ArrowUp/ArrowDown branch preventDefaults, wraps `state.index` around both ends of the filtered list (Down past the last row lands on the first, Up from the first lands on the last, within the 40 rows shown, and an empty list is a no-op) and re-renders in that order. Escape's restore is pinned too: `open()` captures the opener before claiming the layer, `close()` releases the nav layer before `restoreOpener()`, and the restore refocuses only a connected, unhidden, non-body opener once, dropping it afterwards. The pointer path stays focus-free: option rows never take a tabindex and the hover/click handlers never call `.focus()`, while the CSS gives the input and the option rows an outline only under `:focus-visible` (plain `:focus` suppresses the shared input ring instead), pinned in `styles.css` and the built `booklet.html`. Removing any binding fails the file. The behavioral half is `tests/palette_keyboard.test.mjs` (`node --test tests/palette_keyboard.test.mjs` from the repository root): palette.js runs against a minimal DOM stub, synthetic window keydown events drive the list over three destinations, and the test asserts ArrowDown wraps last-to-first and ArrowUp wraps first-to-last with `aria-activedescendant` following, Escape closes and hands focus back to the opener element, and reopening from a second opener then running Enter executes the active destination and restores that opener too. Re-verified 2026-09-19 in run_1789852777607_4: the behavioral half passes solo, passes in one shared process with the tree3d keyboard suite (`--test-isolation=none`, the `?keyboard-test` import keeps palette.js out of the shared module cache), and passes four times concurrently as separate processes. Re-verified 2026-09-19 in run_1789853206630_8 with a strengthened suite: a `type()` helper fires the input listeners for real so the wrap span is exercised against filtered sets too (a one-row `task` query wraps onto itself and a two-row `bo` query wraps ArrowUp first-to-last and back), each followed by an Escape that still restores the opener. Re-verified 2026-09-19 in run_1789854441344_3: the behavioral half passes solo and in one shared process with the tree3d keyboard suite (--test-isolation=none), and the contract half tools/test_mefi_studio_palette.py is 8/8 OK. |
@@ -78,6 +146,56 @@ named checks.
 
 
 ## App commands and captures
+
+Build approval coverage lives in `tests/build_approval.test.mjs`: default-on
+migration, saved Verify first, exact reviewed scopes, restart persistence,
+Pause, explicit retries, task/request admission, follow-up approvals, and
+mode/scope changes during selection and claim. Settings-save failures cannot
+enable automatic builds. Generic task or request writes cannot grant approval.
+The Workspace, onboarding, task UI and Command activity suites cover saved
+toggles, honest failure recovery, review navigation, delayed context reads and
+project switches during approval.
+
+`python tools/verify_workspace.py --output tools/logs/auto-build-approval-workspace`
+also exercises the actual first-use toggle, persisted mode after reload,
+task approval, brief-change invalidation and rejection of stale approval.
+The isolated tour blocks coding workers and external requests. Its layout
+checks keep the guide navigation visible and leave room for scrolling tasks
+on short desktops.
+
+Validated on 2026-09-19: rebuilt booklet, `npm run check`, `npm test`
+(827 Node passes, one opt-in skip, 211 Python passes and all normalized-path
+checks), and `npm run audit` (zero findings). The approval Workspace tour
+passed 27 checks with 27 screenshots and no renderer errors, network attempts
+or worker launches. Its local evidence stays under ignored
+`tools/logs/auto-build-approval-workspace-final-pass/`.
+
+Jev model routing is covered without paid requests by
+`tests/model_routing.test.mjs` (compatible candidates, task-specific measured
+evidence, estimated versus reported cost, bounded strict choices and failures),
+`tests/jev_model_routing_host.test.mjs` (actual host selection, overrides,
+fallback, accounting, caching and settings/project isolation), and
+`tests/jev_routing_ui.test.mjs` (selection controls and status). These suites
+run through `npm test`. Planning retains its existing HTTP-only route and
+explicit provider fallback coverage in `tests/planning_routing.test.mjs`.
+
+Automatic selection uses the existing Jev client with a four-second deadline;
+tests inject its transport. Do not use real gateway credentials for these
+checks. z.ai worker selection uses only the two models advertised by the
+managed provider, before the existing claim/pause checks. External CLI speed,
+quality and billing are still unknown; catalog quota is never treated as speed.
+
+`python tools/verify_workspace.py --routing-only --output
+tools/logs/jev-routing-focused` exercises selection-mode persistence through real
+IPC, missing-key/default status, and the 900px settings layout in an isolated
+Electron profile. It makes no model requests and keeps its captures ignored.
+
+Routing validation on 2026-09-19: booklet build, syntax/target checks and audit
+passed. The final test layers passed separately after concurrent fixture edits:
+827 Node passes with one opt-in skip, 211 Python passes, and all six normalized
+path checks. The routing suites contributed 33 passes. The focused Electron
+tour passed four checks and saved five captures with no network or renderer
+errors. These checks do not benchmark a live paid Jev connection.
 
 `node --test tests/executor_end_to_end.test.mjs` drives the actual host executor
 through dispatch, controlled worker output, settlement, verification, dependent
@@ -223,10 +341,34 @@ fixture stores and fake transport rather than live user state or model calls.
 | `tests/machine_reads.test.mjs` | Shared UI scans, brief cache freshness, fresh enforcement and failure recovery. |
 | `tests/renderer_startup.test.mjs` | Concurrent IPC sharing without stale caching, populated-tree readiness, bounded boot, reduced motion and valid canvas radii. |
 | `tests/boot_poll_visibility.test.mjs` | The shared poll guard's visibility timing contract on a virtual clock: hidden tabs set no interval and fire nothing, hide/show cycles never stack timers (one live interval per key across 25 rapid cycles), resume sets a fresh full interval so hidden time drifts nothing and is never replayed as a catch-up burst, and an in-flight request completing while hidden cannot resurrect the paused timer; source-shape pins hold each tick's hidden bail ahead of its fetch with a show snap-back for nav, eyes.log, tasks.board, explorer.state and idle's Command timers; and the shipped tasks/explorer/idle ticks are extracted verbatim, compiled against stubs and driven through the guard to prove hidden silence, sheet gates and exact cadence for the overlay polls. |
+| `tests/eyes_overlap_boundaries.test.mjs` | The Node-side eyes-contract mirror of `tools/test_mefi_studio_eyes.py`: the real `scripts/eyes.mjs` `collisions()` drives a fixture OpenCode database (built with `node:sqlite` in per-run temp dirs) to pin the temporal-overlap boundary cases — adjacent windows touching at one instant, a gap of exactly `overlapMs` inclusive vs one just past it excluded, a contained window intersecting to the inner session's span, a three-session nested group whose common intersection collapses to the innermost single instant, zero-length single-edit pairs — plus `overlapRangeOf` validation (corrupt/NaN/inverted windows normalize to null; zero-length stays real). Run alone with `node --test tests/eyes_overlap_boundaries.test.mjs`. |
 
 `tools/benchmark_startup.py` measures real Electron loading in an isolated,
 offscreen temporary app. Run `python tools/benchmark_startup.py --runs 3`;
 see `PERFORMANCE.md` for the method, before/after results and limitations.
+
+Performance tuning also adds these isolated checks, included in `npm test`:
+
+| Suite | Behavior covered |
+|---|---|
+| `tests/command_performance.test.mjs` | Exact dense-graph label placement with fewer collision checks, bounded spatial queries, camera/effect changes, stable anchors in all layouts, new arrivals and independent agent animation clocks. |
+| `tests/tree3d_performance.test.mjs` | Hidden/covered rail animation suspension and resumption, one scheduled frame, unchanged canvas sizing, session-todo indexing and snapshot edge indexes. |
+| `tests/eyes_log_tail.test.mjs` | Bounded 512 KiB log I/O, short reads, rotation, truncation, missing files, Unicode boundaries and descriptor cleanup on failure. |
+| `tests/eyes_watch_lifecycle.test.mjs` | Stop/restart during pending activity reads, project-switch cursor isolation, hidden-window silence and retry after failure without duplicate timers. |
+
+The real `tests/command_render.test.mjs` Electron fixture additionally counts
+rail canvas paints on Home and Command (both stay at zero while covered), then
+checks visible-rail resumption. It retains its actual Command pixel, grouping
+and exit/reentry checks. `PERFORMANCE.md` records operation counts and a
+synthetic log benchmark; timing measurements are not pass/fail thresholds.
+
+Performance pass validated on 2026-09-19: rebuilt booklet, `npm run check`,
+`npm test` (704 Node passes, one opt-in skip, 204 Python passes and normalized
+path ownership checks), and `npm run audit`. The isolated Command walkthrough
+passed 24 checks and saved 65 screenshots under ignored
+`tools/logs/performance-tuning/command-verified/`; the narrow Auto-label case
+and hidden-rail paint regression are covered. Synthetic benchmarks and their
+limits are recorded in `PERFORMANCE.md`.
 
 September reliability and Model Lab suites (included in `npm test`):
 
@@ -306,3 +448,93 @@ approved tasks or their dependencies. These checks make no paid calls.
 pending/error planning response, approval gates, conversion, plan/task links,
 live board completion (including manual confirmation), and small-window layout
 using the real Electron view and isolated stores.
+
+Workspace usability coverage includes search across tasks and ideas in **All**,
+matching counts per view, discovery of matches outside the selected view,
+pagination, and clearing search with focus retained. The palette suite covers
+descriptions and familiar search terms, task loading before the board opens,
+failed/late/foreign-project reads, and keyboard focus inside the dialog.
+
+Validated on 2026-09-19: `npm run build-booklet`, `npm run check`, `npm test`
+(658 Node passes, one opt-in skip, 204 Python passes and normalized-path checks),
+and `npm run audit`. `python tools/verify_workspace.py --output
+tools/logs/usability-after` passed 22 checks, including sidebar shortcuts,
+command search, project isolation and narrow/short layouts. Its 20 screenshots
+and report remain ignored; it reported no renderer errors or network attempts.
+
+The left-edge Studio drawer replaces the fixed sidebar. `tests/sidebar.test.mjs`
+covers pointer travel between the invisible left edge and drawer, dismissal
+after leaving even when a menu control has focus, click and
+keyboard access, Escape precedence, inert closed content, transient-dialog
+suppression, project changes and focus restoration. The updater build contract
+also includes the bundled `renderer/sidebar.js` source.
+
+Validated on 2026-09-19: build, check, audit (zero findings), and `npm test`
+(702 Node passes, one opt-in skip, 204 Python passes and normalized-path checks).
+`python tools/verify_workspace.py --output tools/logs/right-sidebar` passed 24
+checks with 23 screenshots, using native pointer movement to verify hover opening
+and leaving. It includes the Aurora theme from the sidebar reference, keyboard
+dismissal over Command, a 600px window, project switching, and the existing
+workspace workflows. No renderer errors or external network attempts occurred;
+the isolated report and screenshots stay under ignored `tools/logs/right-sidebar/`.
+
+The sidebar was moved to the left edge at the user's request. The updated
+Workspace tour checks actual left-edge coordinates for the handle and drawer
+and moves the pointer outside the drawer to verify dismissal. The 24-check,
+23-screenshot rerun passed under ignored `tools/logs/left-sidebar/`.
+Build, syntax/target checks and audit passed. The full Node run encountered an
+unrelated reproducible failure in `tests/board_store.test.mjs`, “stale fork:
+a migrated database missing view rows degrades loudly to file mode” (expected
+two file-backed rows, received zero); the sidebar behavior suite passed.
+
+The visible tab was removed. `python tools/verify_workspace.py --output
+tools/logs/edge-hover-sidebar` passed 24 checks with 24 screenshots. It verifies
+a transparent full-height left-edge hover area with no text, glyph, border or
+shadow, entry at both 10% and 85% of the window height, and closing after moving
+off a menu containing a focused button or preference field. The closed view
+is captured as `01c-left-edge-closed.png`; no renderer errors or external
+network attempts were reported. The eight focused sidebar tests also passed.
+The final required gates passed: build, check, audit, and `npm test` (705 Node
+passes, one opt-in skip, 204 Python passes and normalized-path checks).
+
+Node layout regressions in `tests/command_graph.test.mjs` now cover hierarchy
+depth in Rings, contiguous Helix branches, distinct centered Terraces, work-rim
+spacing in every style and both views, newly revealed children joining fixed
+parents, and worker clearance at panel edges. A dense 277px graph checks actual
+Auto label painting with expanded side panels, including stable anchors and
+unobstructed running-task names.
+
+Run `python tools/verify_command.py --appearance-matrix --output
+tools/logs/node-layout-verified-matrix` for all 50 style/layout/view combinations
+and 10 light-theme cases. Its real Electron checks include worker clearance,
+saved preferences, camera controls and active names in the 650px preview.
+`python tools/verify_command.py --output tools/logs/node-layout-verified-command`
+also exercises the full Command workflow at desktop, short and narrow sizes.
+Both use disposable profiles and fixture work; reports and captures stay ignored.
+
+Validated on 2026-09-19: rebuilt booklet, `npm run check`, `npm test` (714 Node
+passes, one opt-in skip, 211 Python passes and normalized-path ownership
+checks), and `npm run audit` (zero findings). The appearance matrix passed all
+60 cases and 30 orbit checks; the Command workflow passed 24 checks. Resting
+worker bodies cleared fixed nodes in every matrix case, and the 650px preview
+painted all three running task names. Both tours reported zero renderer errors,
+external network attempts or worker launches. Reports and 118 captures remain
+in the two ignored output folders above.
+The focused latest-build pan check also passed: all three running hosts and
+their workers leave the viewport together, and Fit restores the tree. Its
+isolated report is under `tools/logs/node-layout-pan/`.
+
+Panel-occlusion regressions in `tests/command_graph.test.mjs` check visible
+details/Follow bounds, invisible Zen panels, complete rotations in all five
+layouts, stable world anchors, and a continuous handoff to manual camera control.
+The real `tests/fixtures/command-render-electron.cjs` fixture also checks expanded
+and collapsed panels, task details, native 3D rotation in every layout, and
+Zen entry/wake against actual DOM bounds and painted node surfaces.
+
+Panel fix validation: the three focused Command suites passed 80 tests, and
+`python tools/verify_command.py --output tools/logs/panel-occlusion-final`
+passed 24 checks with 69 captures. Build, check and audit passed. The final
+full Node run on the concurrently edited tree passed 805 tests, skipped one,
+and failed four backlog/execution/planning tests; those failures are separate
+from the passing Command renderer checks. Local reports remain under ignored
+`tools/logs/panel-*` paths.

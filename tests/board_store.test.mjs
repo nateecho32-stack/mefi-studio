@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { defaultBoardConfig, enableBoardStore, boardMutate, closeBoardStore, readJson, writeJson, repairBoardView } from "../scripts/eyes.mjs";
+import { defaultBoardConfig, enableBoardStore, boardMutate, boardEnabled, closeBoardStore, readJson, writeJson, repairBoardView } from "../scripts/eyes.mjs";
 import { fileURLToPath } from "node:url";
 
 // Each test gets its own data dir + database: the store keeps one connection
@@ -89,6 +89,27 @@ test("first-run migration imports non-empty views once, then the database wins",
   writeFileSync(board.files.tasks, JSON.stringify(stale, null, 2));
   const reread = await readJson(board.files.tasks, []);
   assert.equal(reread[0].title, "Imported from the view");
+});
+
+test("stale fork: a migrated database missing view rows degrades loudly to file mode", async () => {
+  const board = freshBoard({
+    seedViews: { "eyes-tasks.json": [{ id: "task_old", title: "Pre-fork row", status: "open" }] },
+  });
+  await readJson(board.files.tasks, []); // migrate; the database wins from here
+  assert.equal(boardEnabled(), true);
+
+  // the host later runs plain-file (store never enabled) and the view moves on
+  const forked = [
+    ...board.read("eyes-tasks.json"),
+    { id: "task_new", title: "Only the view knows me", status: "open" },
+  ];
+  writeFileSync(board.files.tasks, JSON.stringify(forked, null, 2));
+  closeBoardStore(); // reopen on the next read → the fork guard fires
+
+  const rows = await readJson(board.files.tasks, []);
+  assert.equal(boardEnabled(), false); // degraded: the files are the authority again
+  assert.equal(rows.length, 2); // the FILE is served, not the stale database
+  assert.equal(rows[1].id, "task_new");
 });
 
 test("boardMutate: in-place row edits persist; a no-op writes nothing", async () => {

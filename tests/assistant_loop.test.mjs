@@ -44,6 +44,7 @@ function animationHost() {
   const events = [];
   const env = host(section("async function assistantHop(", "// The session or task a message"), {
     ...clock,
+    pool: { running: new Map() },
     ASSISTANT_HOP_MS: 900,
     assistantApply() {},
     assistantRowTargets() {},
@@ -236,7 +237,7 @@ function executorHost(parallel) {
   const autopilot = { execute: true, parallel, jobs: [] };
   const env = host(section("let executorFillInFlight = null;", "// Work the assistant does on its own plumbing"), {
     ...clock, SMOKE: false, CAPTURE: false, CLI_MODE: false, autopilot,
-    EXECUTOR_STAGGER_MS: 3000,
+    EXECUTOR_STAGGER_MS: 3000, executorUpdateHold: () => null,
     async spawnNextJob() { spawns += 1; autopilot.jobs.push({ id: spawns }); return "spawned"; },
     setAutopilotWaiting() {}, logLine() {}, pushAutopilotHistory() {},
   });

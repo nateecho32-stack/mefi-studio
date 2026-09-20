@@ -7,7 +7,7 @@ const object = (value) => value && typeof value === "object" && !Array.isArray(v
 const rows = (value) => Array.isArray(value) ? value : [];
 const text = (value) => typeof value === "string" ? value : "";
 const copy = (value) => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
-const FIELDS = ["id", "projectId", "projectPath", "projectName", "title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "ideas", "dependsOn", "members", "lastAttempt", "verification", "verificationReceiptId", "remaining", "blockers", "lastRunError", "runFailures", "verifyAttempts", "status", "doneAt", "completionFromTaskId", "logs", "source", "parent", "parentRunId", "depth", "createdAt", "runId"];
+const FIELDS = ["id", "projectId", "projectPath", "projectName", "title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "ideas", "dependsOn", "members", "lastAttempt", "verification", "verificationReceiptId", "remaining", "blockers", "lastRunError", "runFailures", "verifyAttempts", "status", "doneAt", "completionFromTaskId", "planningId", "planningSpecId", "planningTaskId", "acceptance", "logs", "source", "parent", "parentRunId", "depth", "createdAt", "runId"];
 const RESTORABLE = ["title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "dependsOn"];
 
 function snapshotTask(task) {
@@ -132,4 +132,40 @@ function buildTaskHandoff(task, { tasks = [], maxChars = 24000, contextPath = nu
   return sections.join("\n\n").slice(0, cap);
 }
 
-module.exports = { snapshotTask, recordTaskRevision, taskHistory, restoreTaskRevision, buildTaskHandoff };
+// A collision's saved file scope copies session edit records verbatim, and
+// those records keep a file's OLD absolute path after the project moved —
+// every dispatched worker then burns its run hunting a ghost path that no
+// longer exists. resolveStaleFileScope re-derives the scope from the
+// filesystem: a path that still exists is kept as saved; a missing one is
+// re-anchored to the same basename under the task's project root (the caller
+// supplies the bounded locator); an entry that cannot be re-anchored is kept
+// and reported rather than dropped, so no saved obligation silently loses its
+// file. Pure with respect to saved state: the filesystem is injected, and
+// with no existence checker injected the saved scope is trusted unchanged.
+function resolveStaleFileScope(task, { exists = null, locate = null } = {}) {
+  const savedFiles = rows(task?.files).map(text).filter(Boolean);
+  const savedFile = text(task?.file);
+  const paths = [...new Set(savedFiles.concat(savedFile ? [savedFile] : []))];
+  const untouched = { changed: false, files: savedFiles, ...(savedFile ? { file: savedFile } : {}), healed: [], missing: [] };
+  if (!paths.length || typeof exists !== "function") return untouched;
+  const resolved = new Map();
+  const healed = [], missing = [];
+  for (const entry of paths) {
+    if (exists(entry)) { resolved.set(entry, entry); continue; }
+    const base = entry.split(/[\\/]/).pop();
+    const found = typeof locate === "function" ? locate(base, task) : null;
+    if (found && found !== entry && exists(found)) {
+      resolved.set(entry, found);
+      healed.push({ from: entry, to: found });
+    } else {
+      resolved.set(entry, entry);
+      missing.push(entry);
+    }
+  }
+  const files = [...new Set(savedFiles.map((entry) => resolved.get(entry)))];
+  const file = savedFile ? resolved.get(savedFile) : undefined;
+  const changed = healed.length > 0;
+  return { changed, files, ...(file ? { file } : {}), healed, missing };
+}
+
+module.exports = { snapshotTask, recordTaskRevision, taskHistory, restoreTaskRevision, buildTaskHandoff, resolveStaleFileScope };

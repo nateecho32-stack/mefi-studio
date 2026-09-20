@@ -4,6 +4,7 @@
 
   const COLORS = ["#e6c98d", "#9db7ff", "#57ff9a", "#f2a2e8", "#ffb38a", "#86d1d6", "#c9a8ff", "#ffd479"];
   const FILTERS = ["all", "open", "review", "done"];
+  const READINESS_FILTERS = { all: "All scheduling states", ready: "Ready", running: "Working", review: "Verifying", waiting: "Waiting or retrying", blocked: "Needs attention" };
   // A row that just finished pulses green for a few seconds — the board's
   // echo of the constellation's done pulse — before it settles under the mark.
   const DONE_PULSE_MS = 15000;
@@ -12,7 +13,7 @@
   // shows, and the tick bails while hidden or while the sheet is closed, so a
   // hidden app issues no store reads.
   const TASKS_POLL_MS = 15000;
-  const state = { tasks: [], selected: null, filter: "all", query: "", doneCollapsed: false, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
+  const state = { tasks: [], selected: null, filter: "all", readiness: "all", projectId: null, query: "", doneCollapsed: false, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
   // Two-step delete: the id of the task whose Delete button is armed right now.
   let deleteArmed = null;
   const els = {};
@@ -30,6 +31,9 @@
   const entryPending = new Set();
   let detailBusy = null;
   let backlogRead = 0;
+  let projectEpoch = 0;
+  let createPending = false;
+  const createDrafts = new Map();
   const taskKey = (task) => `${task?.projectId || state.backlog?.projectId || ""}/${task?.id || ""}`;
   const node = (tag, className, text) => Object.assign(document.createElement(tag), { className, textContent: text ?? "" });
 
@@ -66,6 +70,9 @@
     ["unverified", "failed"].includes(task?.verification?.state) || (task?.runFailures ?? 0) >= 5
   );
   const taskStage = (task) => isDone(task) ? "done" : needsReview(task) ? "review" : "open";
+  const scheduledTask = (task) => state.backlog?.taskStates?.find((item) => item.id === task.id);
+  const matchesReadiness = (task) => state.readiness === "all" || (state.readiness === "waiting" ? ["waiting", "cooling"].includes(scheduledTask(task)?.stage) : state.readiness === "blocked" ? ["blocked", "approval"].includes(scheduledTask(task)?.stage) : scheduledTask(task)?.stage === state.readiness);
+  const keepSelectedVisible = () => { const task = selectedTask(); if (task && state.backlog?.taskStates && !matchesReadiness(task)) state.readiness = "all"; };
   const summary = (tasks = state.tasks) => (Array.isArray(tasks) ? tasks : []).reduce((counts, task) => {
     counts.all += 1;
     counts[taskStage(task)] += 1;
@@ -143,6 +150,13 @@
     return { stage, label: task?.status === "active" ? "Working" : "Open", summary: task?.lastRunError || task?.prompt || "Ready for the assistant." };
   }
 
+  function retryDescription(at) {
+    const time = Number(at);
+    if (!Number.isFinite(time) || time <= 0) return "The scheduler will retry when the hold ends.";
+    const seconds = Math.max(0, Math.ceil((time - Date.now()) / 1000));
+    return seconds ? `Automatic retry in ${seconds < 60 ? `${seconds}s` : `${Math.ceil(seconds / 60)}m`} (${new Date(time).toLocaleTimeString()}).` : "Retry is due; waiting for the next scheduling pass.";
+  }
+
   function renderFilters() {
     if (!els.filters) return;
     const counts = summary();
@@ -151,6 +165,10 @@
       chip.classList.toggle("on", which === state.filter);
       chip.textContent = `${which === "review" ? "Review" : which[0].toUpperCase() + which.slice(1)} · ${counts[which] ?? 0}`;
       chip.setAttribute("aria-pressed", String(which === state.filter));
+    }
+    if (els.readinessFilter) {
+      els.readinessFilter.value = state.readiness;
+      els.readinessFilter.disabled = !state.backlog?.taskStates;
     }
   }
 
@@ -163,6 +181,7 @@
 
   function emptyListMessage(finishedCount) {
     if (state.query.trim()) return `No tasks match “${state.query.trim()}”.`;
+    if (state.readiness !== "all") return state.backlog?.taskStates ? `No tasks in “${READINESS_FILTERS[state.readiness]}”.` : "Scheduling status is unavailable. Reopen the board to refresh it.";
     if (state.filter === "open") return "No open tasks.";
     if (state.filter === "review") return "No work needs review. Finished tasks stay in Done.";
     if (state.filter === "all")
@@ -200,8 +219,8 @@
       awaiting_verification: "improver",
     };
     dot.className = `src-tag ${STATUS_TAG[task.status] ?? "collision"}`;
-    const scheduled = state.backlog?.taskStates?.find((item) => item.id === task.id);
-    const readinessLabels = { ready: "READY", waiting: "WAITING", running: "RUNNING", review: "VERIFYING", blocked: "BLOCKED", grouped: "IN PLAN", cooling: "RETRY LATER", done: task.status === "archived" ? "ARCHIVED" : "DONE" };
+    const scheduled = scheduledTask(task);
+    const readinessLabels = { ready: "READY", approval: "AWAITING APPROVAL", waiting: "WAITING", running: "RUNNING", review: "VERIFYING", blocked: "BLOCKED", grouped: "IN PLAN", cooling: "RETRY LATER", done: task.status === "archived" ? "ARCHIVED" : "DONE" };
     dot.textContent = readinessLabels[scheduled?.stage] || (needsReview(task) ? "REVIEW" : String(task.status ?? "open").toUpperCase());
     if (scheduled) { dot.dataset.readiness = scheduled.stage; dot.title = scheduled.reason || ""; li.dataset.readiness = scheduled.stage; }
     const text = document.createElement("span");
@@ -216,10 +235,10 @@
     li.append(dot, text, actions);
     // The brief rides under the title in the Done view — the same digest the
     // detail pane shows, so the list answers "what got done" at a glance.
-    if (isDone(task) || needsReview(task)) {
+    if (isDone(task) || needsReview(task) || ["blocked", "approval", "waiting", "cooling"].includes(scheduled?.stage)) {
       const brief = document.createElement("div");
       brief.className = "who done-brief";
-      brief.textContent = describe(task).summary;
+      brief.textContent = scheduled?.stage === "cooling" ? `${scheduled.reason}. ${retryDescription(scheduled.retryAt)}` : ["blocked", "approval", "waiting"].includes(scheduled?.stage) ? scheduled.reason : describe(task).summary;
       brief.title = task.prompt ?? task.title;
       li.append(brief);
     }
@@ -288,7 +307,7 @@
     // A selected done task must be visible, so unfold the mark it lives under.
     const selected = selectedTask();
     if (selected && isDone(selected)) state.doneCollapsed = false;
-    const visible = state.tasks.filter(matchesQuery);
+    const visible = state.tasks.filter((task) => matchesQuery(task) && matchesReadiness(task));
     const open = visible.filter((task) => !isDone(task) && (state.filter === "all" || taskStage(task) === state.filter)).sort((a, b) => b.updatedAt - a.updatedAt);
     const done = visible.filter(isDone).sort((a, b) => doneStamp(b) - doneStamp(a));
 
@@ -332,22 +351,29 @@
 
   async function load(options = {}) {
     const revision = taskRevision;
+    const epoch = projectEpoch;
     const [tasks, prefs, backlog] = await Promise.all([window.mefiStudio?.tasksList?.(), window.mefiStudio?.prefsGet?.(), Promise.resolve(window.mefiStudio?.backlogStatus?.()).catch(() => null)]);
+    if (epoch !== projectEpoch) return;
     if (tasks?.ok === false || !Array.isArray(tasks?.tasks)) throw new Error(tasks?.error || "Task store unavailable");
+    if (state.projectId && tasks.projectId && state.projectId !== tasks.projectId) return;
+    state.projectId = tasks.projectId || backlog?.projectId || state.projectId;
     // A completion broadcast may arrive while preferences are still loading.
     // Never replace that newer board with the earlier read's snapshot.
     if (revision === taskRevision) state.tasks = tasks.tasks;
-    if (backlog?.ok && revision === taskRevision) state.backlog = backlog;
+    if (revision === taskRevision) state.backlog = backlog?.ok && (!backlog.projectId || !state.projectId || backlog.projectId === state.projectId) ? backlog : null;
     hydrated = true;
     if (prefs?.ok) state.prefs = { ...state.prefs, ...prefs.prefs };
     state.filter = FILTERS.includes(options.filter) ? options.filter : revision === taskRevision && FILTERS.includes(prefs?.prefs?.taskFilter) ? prefs.prefs.taskFilter : state.filter;
+    if (Object.hasOwn(READINESS_FILTERS, options.readiness)) { state.readiness = options.readiness; state.filter = "all"; if (!options.taskId) state.selected = null; }
     if (options.taskId) {
+      state.readiness = "all";
       const task = selectedTask();
       if (task && state.filter !== "all" && taskStage(task) !== state.filter) state.filter = taskStage(task);
       state.query = "";
       if (els.search) els.search.value = "";
     }
     if (FILTERS.includes(options.filter) || options.taskId) setPref("taskFilter", state.filter);
+    keepSelectedVisible();
     syncBadge();
     renderFilters();
     renderList();
@@ -388,6 +414,7 @@
   function selectFilter(filter) {
     if (!FILTERS.includes(filter)) return;
     state.filter = filter;
+    state.readiness = "all";
     // A selected task outside this view must not leave unrelated details on
     // screen while the list says there are no results.
     const task = selectedTask();
@@ -489,18 +516,21 @@
   // button, and the rarer moves sit beside it as ghosts.
   function statusActions(task) {
     const actions = [];
+    const scheduled = scheduledTask(task);
+    const awaitingApproval = scheduled?.stage === "approval";
+    if (awaitingApproval) actions.push({ label: "Approve build", action: "approve", className: "primary", title: "Approve the brief shown here so this task can build when scheduling and prerequisites allow", disabled: !window.mefiStudio?.backlogControl || scheduled.canApprove !== true || !task.buildScope, run: () => runTaskAction(task, "approve", { expectedScope: task.buildScope }) });
     if (isDone(task)) {
       actions.push({ label: "Reopen", className: "primary", title: "Put this task back on the open board", run: () => setTaskStatus(task, "open") });
     } else {
-      actions.push({ label: needsReview(task) ? "Confirm done" : "Mark done", className: "primary", title: "Mark this task complete after reviewing its result", run: () => setTaskStatus(task, "done") });
+      actions.push({ label: needsReview(task) ? "Confirm done" : "Mark done", className: awaitingApproval ? "ghost" : "primary", title: "Mark this task complete after reviewing its result", run: () => setTaskStatus(task, "done") });
     }
-    if (needsReview(task)) actions.push({ label: "Retry", className: "ghost", title: "Return this task to the queue for another attempt", disabled: ["verifying", "awaiting_verification"].includes(task.status), run: () => {
+    if (needsReview(task) || scheduled?.stage === "cooling") actions.push({ label: scheduled?.stage === "cooling" ? "Retry now" : "Retry", className: "ghost", title: scheduled?.blockedBy ? scheduled.reason : "Return this task to the queue for another attempt", disabled: ["verifying", "awaiting_verification"].includes(task.status) || scheduled?.canRetry === false, run: () => {
       if (window.mefiStudio?.tasksAction) return runTaskAction(task, "retry");
       delete task.verification;
       delete task.verifyAttempts;
       setTaskStatus(task, "open");
     } });
-    if (task.status === "open" && window.mefiStudio?.backlogControl) actions.push({ label: "Do next", className: "ghost", title: "Prioritize this task when its prerequisites and a worker are ready", run: () => runTaskAction(task, "prioritize") });
+    if (task.status === "open" && window.mefiStudio?.backlogControl && (!scheduled || scheduled.stage === "ready")) actions.push({ label: "Do next", className: "ghost", title: "Prioritize this task when its prerequisites and a worker are ready", run: () => runTaskAction(task, "prioritize") });
     if (task.status === "active") actions.push({ label: "Back to open", className: "ghost", title: "Release the active claim", run: () => setTaskStatus(task, "open") });
     if (task.status === "absorbed") actions.push({ label: "Restore", className: "ghost", title: "Pull this task out of the grouped plan and back onto the open board", run: () => setTaskStatus(task, "open") });
     if (task.status === "done") actions.push({ label: "Archive", className: "ghost", title: "Shelve the finished task", run: () => setTaskStatus(task, "archived") });
@@ -570,21 +600,25 @@
 
   async function runTaskAction(task, action, patch = {}) {
     if (detailBusy) return false;
+    const epoch = projectEpoch;
     const key = taskKey(task), projectId = task.projectId || state.backlog?.projectId;
     detailBusy = key; renderDetail();
     try {
-      const result = await window.mefiStudio[action === "prioritize" ? "backlogControl" : "tasksAction"]({ taskId: task.id, projectId, action, ...patch });
+      const result = await window.mefiStudio[["prioritize", "approve"].includes(action) ? "backlogControl" : "tasksAction"]({ taskId: task.id, projectId, action, ...patch });
       if (!result?.ok) throw new Error(result?.error || "The task change could not be saved.");
-      if (projectId && state.backlog?.projectId && state.backlog.projectId !== projectId) return true;
+      if (epoch !== projectEpoch || (projectId && state.projectId && state.projectId !== projectId)) return true;
       if (result.task) state.tasks = state.tasks.map((item) => item.id === task.id ? result.task : item);
       if (result.backlog) state.backlog = result.backlog;
+      keepSelectedVisible();
       contextReads.delete(key);
       detailMessages.delete(key);
+      if (action === "approve") detailMessages.set(key, { text: "Build approved for this brief. It can start when scheduling and prerequisites allow." });
       const selected = selectedTask();
       if (selected && state.filter !== "all" && taskStage(selected) !== state.filter) state.filter = taskStage(selected);
       syncBadge(); renderList();
       return true;
     } catch (error) {
+      if (epoch !== projectEpoch) return false;
       detailMessages.set(key, { text: error.message, error: true });
       window.MefiToast?.(error.message, "bad");
       return false;
@@ -660,7 +694,7 @@
   function renderTaskContext(task) {
     const key = taskKey(task), api = window.mefiStudio;
     const scheduled = state.backlog?.taskStates?.find((item) => item.id === task.id);
-    const readiness = node("p", "task-readiness", scheduled?.reason || (isDone(task) ? "This task is complete." : "Readiness will refresh with the project queue."));
+    const readiness = node("p", "task-readiness", scheduled?.stage === "cooling" ? `${scheduled.reason}. ${retryDescription(scheduled.retryAt)}` : scheduled?.reason || (isDone(task) ? "This task is complete." : "Readiness will refresh with the project queue."));
     readiness.dataset.taskReadiness = scheduled?.stage || "unknown";
     els.detail.append(readiness);
     const message = detailMessages.get(key);
@@ -782,6 +816,13 @@
     meta.className = "muted who task-meta";
     meta.textContent = metaLine(task);
     els.detail.append(meta);
+    if (task.planningId) {
+      const origin = node("button", "ghost mini", "View approved plan");
+      origin.type = "button";
+      origin.dataset.taskAction = "view-plan";
+      origin.addEventListener("click", () => window.MefiNav?.go?.("plans", { planId: task.planningId }));
+      els.detail.append(origin);
+    }
     if (needsReview(task)) {
       const review = document.createElement("p");
       review.className = "finding";
@@ -793,6 +834,7 @@
       button.className = action.className;
       button.textContent = action.label;
       button.title = action.title ?? "";
+      if (action.action) button.dataset.taskAction = action.action;
       button.disabled = Boolean(detailBusy) || Boolean(action.disabled) || Boolean(task.runId && !["Rename"].includes(action.label));
       button.addEventListener("click", action.run);
       els.statusRow.append(button);
@@ -803,7 +845,7 @@
       const note = document.createElement("div");
       note.className = "muted";
       const retryIn = task.nextRunAt && task.nextRunAt > Date.now() ? ` · retries in ${Math.ceil((task.nextRunAt - Date.now()) / 60000)}m` : "";
-      const gaveUp = (task.runFailures ?? 0) >= 5 ? " · gave up — reopen it to retry" : "";
+      const gaveUp = (task.runFailures ?? 0) >= 5 ? " · automatic attempts paused; review the error and choose Retry" : "";
       note.textContent = `autopilot: last run failed (${task.lastRunError ?? "?"})${retryIn}${gaveUp}`;
       els.detail.append(note);
     }
@@ -826,8 +868,16 @@
       block.append(copy);
       els.detail.append(block);
     }
+    if (scheduledTask(task)?.stage === "approval") {
+      els.detail.append(node("p", "finding", "Verify first is on. Review this brief and its prerequisites, then choose Approve build. Leave this task here to decide later, or Delete to discard it. Approval keeps any scheduling pause in place."));
+      els.detail.append(node("h4", "", "Build brief to review"));
+      const files = [...new Set([task.file, ...(Array.isArray(task.files) ? task.files : [])].filter(Boolean))];
+      if (files.length) els.detail.append(node("p", "task-context-hint", `Files in scope: ${files.join(", ")}`));
+      if (task.dependsOn?.length) els.detail.append(node("p", "task-context-hint", `Prerequisites: ${task.dependsOn.map((id) => state.tasks.find((item) => item.id === id)?.title || id).join(", ")}`));
+    }
     const prompt = document.createElement("p");
     prompt.className = "muted";
+    prompt.style.whiteSpace = "pre-wrap";
     prompt.textContent = task.prompt ?? "";
     els.detail.append(prompt);
     renderTaskContext(task);
@@ -1042,12 +1092,42 @@
 
   async function addTask(text) {
     if (!text?.trim()) return null;
+    const epoch = projectEpoch;
     await hydrate();
+    if (epoch !== projectEpoch) return null;
     // An unread store cannot take the write, so the task would only live in
     // memory until the next load: say so instead of reporting it created.
     if (!hydrated) {
       window.MefiToast?.("Task not saved · the task store could not be read", "bad");
       return null;
+    }
+    if (window.mefiStudio?.tasksCreate) {
+      const projectId = state.projectId || state.backlog?.projectId;
+      const revision = taskRevision;
+      try {
+        const result = await window.mefiStudio.tasksCreate({ title: text.trim().split("\n")[0].slice(0, 180), prompt: text.trim(), ...(projectId ? { projectId } : {}) });
+        if (!result?.ok || !result.task) throw new Error(result?.error || "The task could not be created.");
+        if (epoch !== projectEpoch || (projectId && result.projectId && projectId !== result.projectId)) return result.task;
+        if (revision === taskRevision && Array.isArray(result.tasks)) state.tasks = result.tasks;
+        else if (!state.tasks.some((task) => task.id === result.task.id)) state.tasks.unshift(result.task);
+        taskRevision += 1;
+        state.selected = result.task.id;
+        state.readiness = "all";
+        state.filter = "all";
+        state.query = "";
+        if (els.search) els.search.value = "";
+        syncBadge(); renderList(); renderDetail(); revealSelected();
+        const message = `Task created · ${state.backlog?.paused ? "queued until you resume" : "added to the project queue"}`;
+        status(message, false);
+        window.MefiToast?.(message, "good");
+        return result.task;
+      } catch (error) {
+        if (epoch === projectEpoch) {
+          status(`Task not saved · ${error.message}`, true);
+          window.MefiToast?.(`Task not saved · ${error.message}`, "bad");
+        }
+        return null;
+      }
     }
     const task = {
       id: `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -1138,6 +1218,22 @@
       review.title = "Finished runs awaiting checks and attempts needing attention";
       els.filters.insertBefore(review, els.filters.querySelector('[data-filter="done"]'));
     }
+    if (els.filters) {
+      const select = document.createElement("select");
+      select.className = "task-readiness-filter";
+      select.setAttribute("aria-label", "Filter tasks by scheduling state");
+      for (const [value, label] of Object.entries(READINESS_FILTERS)) {
+        const option = node("option", "", label); option.value = value; select.append(option);
+      }
+      select.addEventListener("change", () => {
+        state.readiness = Object.hasOwn(READINESS_FILTERS, select.value) ? select.value : "all";
+        state.filter = "all";
+        state.selected = null;
+        setPref("taskFilter", "all");
+        renderList(); renderDetail();
+      });
+      els.filters.append(select); els.readinessFilter = select;
+    }
     els.openButton?.addEventListener("click", open);
     els.close?.addEventListener("click", close);
     els.overlay?.addEventListener("click", (event) => {
@@ -1145,29 +1241,21 @@
     });
     els.add?.addEventListener("click", async () => {
       const text = els.newInput.value;
-      if (!text.trim()) return;
-      // Adding a task is a message to the assistant in the desktop app: it
-      // threads the ask, creates the board task at chat worth and kicks the
-      // executor at once; the board catches up on the eyes:tasks broadcast.
-      // The local write below is the browser-mode fallback.
-      if (window.mefiStudio?.assistantMessage) {
-        els.newInput.value = "";
-        try {
-          const result = await window.mefiStudio.assistantMessage(text.trim());
-          if (result?.ok) {
-            window.MefiToast?.("sent to the assistant · it lands on the board and work is scheduled", "good");
-            return;
-          }
-        } catch {}
-        if (!els.newInput.value) els.newInput.value = text; // hand the text back
-        return;
+      if (!text.trim() || createPending) return;
+      const epoch = projectEpoch, projectId = state.projectId || "";
+      createDrafts.set(projectId, text);
+      createPending = true; els.add.disabled = true; els.add.setAttribute("aria-busy", "true");
+      try {
+        // Explicit Add always creates a durable task, even for a question-shaped
+        // brief. The host captures its project and respects Pause when scheduling.
+        const task = await addTask(text);
+        if (task && createDrafts.get(projectId) === text) createDrafts.delete(projectId);
+        if (epoch === projectEpoch && task && els.newInput.value === text) els.newInput.value = "";
+      } finally {
+        createPending = false; els.add.disabled = false; els.add.setAttribute("aria-busy", "false");
       }
-      // Clear before the await so a second Enter cannot add the same text twice;
-      // hand it back if nothing was saved and the field is still empty.
-      els.newInput.value = "";
-      const task = await addTask(text);
-      if (!task && !els.newInput.value) els.newInput.value = text;
     });
+    els.newInput?.addEventListener("input", () => createDrafts.set(state.projectId || "", els.newInput.value));
     els.newInput?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") els.add.click();
     });
@@ -1191,6 +1279,7 @@
     }
     window.mefiStudio?.onTasks?.((tasks) => {
       if (!Array.isArray(tasks)) return;
+      if (state.projectId && tasks.some((task) => task.projectId && task.projectId !== state.projectId)) return;
       taskRevision += 1;
       state.tasks = tasks;
       hydrated = true;
@@ -1207,9 +1296,22 @@
         Promise.resolve(window.mefiStudio?.backlogStatus?.()).then((result) => {
           if (read !== backlogRead || !result?.ok) return;
           state.backlog = result;
+          keepSelectedVisible();
           if (!els.overlay.hidden) { renderList(); renderDetail(); }
         }).catch(() => {});
       }
+    });
+    window.mefiStudio?.onProjects?.((result) => {
+      if (!result?.activeId || result.activeId === state.projectId) return;
+      createDrafts.set(state.projectId || "", els.newInput?.value || "");
+      projectEpoch += 1; taskRevision += 1; backlogRead += 1;
+      state.projectId = result.activeId; state.tasks = []; state.selected = null; state.backlog = null;
+      state.readiness = "all"; state.query = ""; hydrated = false; hydrating = null;
+      status("", false);
+      if (els.search) els.search.value = "";
+      if (els.newInput) els.newInput.value = createDrafts.get(state.projectId) || "";
+      syncBadge(); renderList(); renderDetail();
+      if (!els.overlay.hidden) load().catch(() => status("Task status could not be refreshed.", true));
     });
     // A quiet backstop poll: the onTasks push above carries live updates in
     // the desktop app, and the browser fallback has none. boot.js's shared
@@ -1238,9 +1340,10 @@
     describe,
     summary,
     // What a live-update reload hands back to open(): the task on screen.
-    saveState: () => ({ taskId: state.selected ?? null, filter: state.filter }),
+    saveState: () => ({ taskId: state.selected ?? null, filter: state.filter, readiness: state.readiness }),
     selectTask: (id) => {
       state.selected = id;
+      state.readiness = "all";
       const task = selectedTask();
       if (task && state.filter !== "all" && taskStage(task) !== state.filter) state.filter = taskStage(task);
       state.query = "";

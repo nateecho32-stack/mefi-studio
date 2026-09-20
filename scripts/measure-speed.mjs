@@ -40,8 +40,8 @@ const response = await fetch(ENDPOINT, {
   method: "POST",
   headers,
   body: JSON.stringify(body),
+  signal: AbortSignal.timeout(120000),
 });
-const elapsedMs = Date.now() - started;
 
 if (!response.ok) {
   console.error(`HTTP ${response.status}: ${(await response.text()).slice(0, 400)}`);
@@ -49,8 +49,9 @@ if (!response.ok) {
 }
 
 const payload = await response.json();
+const elapsedMs = Date.now() - started;
 const usage = payload.usage ?? {};
-const completion = usage.completion_tokens ?? 0;
+const completion = usage.completion_tokens ?? null;
 const tokensPerSecond = completion > 0 ? completion / (elapsedMs / 1000) : null;
 
 console.log(
@@ -60,6 +61,8 @@ console.log(
       elapsedMs,
       promptTokens: usage.prompt_tokens ?? null,
       completionTokens: completion,
+      totalTokens: usage.total_tokens ?? null,
+      costUsd: typeof usage.cost_usd === "number" && Number.isFinite(usage.cost_usd) && usage.cost_usd >= 0 ? usage.cost_usd : null,
       tokensPerSecond: tokensPerSecond == null ? null : Number(tokensPerSecond.toFixed(1)),
       sample: (payload.choices?.[0]?.message?.content ?? "").slice(0, 120),
       measuredAt: new Date().toISOString(),

@@ -14,6 +14,8 @@ const STUDIO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Test registration belongs to Studio's source, even when MEFI_STUDIO_REPO
 // selects another workspace for the assistant to monitor and build.
 const { sourceRoot: SOURCE_ROOT } = studioPaths.resolveStudioPaths({ studioRoot: STUDIO });
+const STANDALONE_PAYLOAD = SOURCE_ROOT === STUDIO &&
+  path.basename(STUDIO) === "app" && path.basename(path.dirname(STUDIO)) === "resources";
 
 async function readdirOrNull(dir) {
   try {
@@ -50,7 +52,7 @@ export async function audit({ root = STUDIO } = {}) {
   const rendererFiles = ((await readdirOrNull(RENDERER)) ?? []).filter((name) => name.endsWith(".js"));
 
   // 1. every renderer script must be inlined by the build (or the app ships without it)
-  const bundled = new Set(matchAll(buildText, /readFile\(path\.join\(RENDERER, "([\w.]+)"\)/g));
+  const bundled = new Set(matchAll(buildText, /readFile\(path\.join\(RENDERER, "([\w.-]+)"\)/g));
   for (const file of rendererFiles) {
     if (!bundled.has(file)) add("error", "build", `renderer/${file} is not inlined by build-booklet.mjs`);
   }
@@ -71,11 +73,19 @@ export async function audit({ root = STUDIO } = {}) {
     if (!invokeChannels.has(channel)) add("info", "ipc", `main.cjs handles "${channel}" but no preload method invokes it`);
   }
 
-  // 3. getElementById targets must exist in the template or in renderer-built UI.
+  // 3. id lookups must exist in the template or in renderer-built UI. Covers
+  // getElementById (any quote style) and static querySelector(All) selectors;
+  // backtick selectors are left alone because they interpolate at runtime.
   const templateIds = new Set(matchAll(templateText, /id="([\w-]+)"/g));
   const scriptText = (await Promise.all(rendererFiles.map((name) => readIfExists(path.join(RENDERER, name))))).join("\n");
-  for (const id of matchAll(scriptText, /\.id\s*=\s*"([\w-]+)"/g)) templateIds.add(id);
-  const usedIds = new Set(matchAll(scriptText, /getElementById\("([\w-]+)"\)/g));
+  for (const id of matchAll(scriptText, /\.id\s*=\s*["'`]([\w-]+)["'`]/g)) templateIds.add(id);
+  const usedIds = new Set(matchAll(scriptText, /getElementById\(\s*["'`]([\w-]+)["'`]\s*\)/g));
+  for (const selector of [
+    ...matchAll(scriptText, /querySelector(?:All)?\(\s*'([^']*)'\s*\)/g),
+    ...matchAll(scriptText, /querySelector(?:All)?\(\s*"([^"]*)"\s*\)/g),
+  ]) {
+    for (const id of matchAll(selector, /#([\w-]+)/g)) usedIds.add(id);
+  }
   for (const id of usedIds) {
     if (!templateIds.has(id)) add("error", "dom", `renderer looks up #${id} but the template has no such id`);
   }
@@ -88,7 +98,13 @@ export async function audit({ root = STUDIO } = {}) {
   const studioTests = (toolFiles ?? []).filter(
     (name) => name.startsWith("test_mefi_studio_") && name.endsWith(".py")
   );
-  if (toolFiles === null) add("warn", "tests", `repo tools/ not reachable from ${testRoot} — registration check skipped`);
+  // A downloadable app intentionally omits the source test suite. Reporting
+  // that as a repairable warning would manufacture coding tasks inside every
+  // fresh distribution. A source checkout (including a portable app linked
+  // back to it) must still report unexpectedly missing test infrastructure.
+  if (toolFiles === null) add(STANDALONE_PAYLOAD ? "info" : "warn", "tests", STANDALONE_PAYLOAD
+    ? "Source test registration is not included in this standalone distribution."
+    : `repo tools/ not reachable from ${testRoot} — registration check skipped`);
   const includePatterns = sets?.sets?.dev?.pythonInclude ?? [];
   for (const test of studioTests) {
     if (!guide.includes(`\`tools/${test}\``)) add("error", "tests", `tools/${test} is missing from TESTRUNS.md`);

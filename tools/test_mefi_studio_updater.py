@@ -15,11 +15,13 @@ The idle safety-net poll is pinned too: it pauses while the window is hidden
 (the host's `hidden` probe), backs off on unchanged reads toward POLL_MAX_MS,
 and snaps back on any activity or change so a change made while hidden still
 applies on the first visible walk — no stale UI; renderer/overhead.js's sheet
-poll carries the same pause/backoff shape with exported constants.
+poll carries the same pause/backoff shape, with the window export pinned only
+to its consumer surface (open/close) rather than a verbatim member list.
 No Electron, no network; the Node half skips cleanly without Node.
 """
 from pathlib import Path
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -227,10 +229,10 @@ console.log(JSON.stringify({ queued, exitsWhileQueued, reloads: calls.reload.map
         self.assertIn("export async function build({ root = ROOT } = {})", self.build)
         self.assertIn('const RENDERER = path.join(root, "renderer");', self.build)
         self.assertIn("path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)", self.build)
-        for name in ("nav.js", "styles.css", "idle.js", "booklet.js"):
+        for name in ("task-groups.js", "nav.js", "sidebar.js", "styles.css", "model-lab.js", "idle.js", "booklet.js"):
             with self.subTest(name=name):
                 self.assertIn(f'readFile(path.join(RENDERER, "{name}")', self.build)
-        self.assertIn("[nav, graph, tree, idle,", self.build)
+        self.assertIn("[taskGroups, nav, sidebar, graph, modelLab, tree, idle,", self.build)
         self.assertNotIn('from "electron"', self.updater)
         self.assertNotIn('require("electron")', self.updater)
         check = self.package.get("scripts", {}).get("check", "")
@@ -725,7 +727,7 @@ console.log(JSON.stringify({
         self.assertGreaterEqual(payload["backedOff"], payload["mark"] * exported["POLL_BACKOFF_FACTOR"], "an unchanged idle read backs the next walk off")
 
     def test_idle_poll_wiring_is_pinned(self):
-        """The engine schedules with re-armed timeouts, main.cjs supplies the visibility probe, and overhead's sheet poll carries the same shape with exported constants."""
+        """The engine schedules with re-armed timeouts, main.cjs supplies the visibility probe, and overhead's sheet poll carries the same shape with its window export pinned only to the open/close consumer surface."""
         for marker in ("export const POLL_INTERVAL_MS", "export const POLL_BACKOFF_FACTOR", "export const POLL_MAX_MS"):
             with self.subTest(source="updater", marker=marker):
                 self.assertIn(marker, self.updater)
@@ -739,14 +741,22 @@ console.log(JSON.stringify({
         for marker in (
             "const POLL_INTERVAL_MS = 5000",
             "const POLL_MAX_MS = 30000",
-            "if (document.hidden)",
+            'if (document.visibilityState !== "visible")',
             "Math.min(pollDelay * 2, POLL_MAX_MS)",
-            "window.MefiOverhead = { init, open, close, POLL_INTERVAL_MS, POLL_MAX_MS }",
         ):
             with self.subTest(source="overhead.js", marker=marker):
                 self.assertIn(marker, self.overhead)
+        # The export is pinned as the consumer surface only: a MefiOverhead
+        # global that exposes open/close. The member list stays free to change
+        # because init and the POLL_* constants have no runtime consumers.
         booklet = read_text(STUDIO / "renderer" / "booklet.html")
-        for marker in ("const POLL_MAX_MS = 30000", "window.MefiOverhead = { init, open, close, POLL_INTERVAL_MS, POLL_MAX_MS }"):
+        for label, source in (("overhead.js", self.overhead), ("built booklet", booklet)):
+            with self.subTest(source=label, marker="window.MefiOverhead exposes open/close"):
+                export = re.search(r"window\.MefiOverhead = \{[^{}]*\}", source)
+                self.assertIsNotNone(export, "the MefiOverhead global assignment must exist")
+                self.assertIn("open", export.group(), "the MefiOverhead export must expose open")
+                self.assertIn("close", export.group(), "the MefiOverhead export must expose close")
+        for marker in ("const POLL_MAX_MS = 30000",):
             with self.subTest(source="built booklet", marker=marker):
                 self.assertIn(marker, booklet, "the shipped page carries the paused, backing-off poll")
 

@@ -11,7 +11,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, mkdirSync } from "node:fs";
-import { readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { open, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
@@ -137,9 +137,46 @@ export function listSessions({ dbPath = DEFAULT_DB, limit = 40 } = {}) {
   }));
 }
 
-export function listChanges({ dbPath = DEFAULT_DB, sessionId = null, limit = 300 } = {}) {
+// A dispatch identifies itself in its initial user prompt. Creation time is
+// only a search bound: concurrent runs and manually opened sessions may start
+// in either order, so their edits must never be attributed by timestamp alone.
+export function findRunSession({ dbPath = DEFAULT_DB, runId, since = 0 } = {}) {
+  if (!/^run_[a-zA-Z0-9_]+$/.test(String(runId ?? ""))) return null;
+  const db = openDb(dbPath);
+  const rows = db.prepare(`
+    select distinct s.id, s.directory, s.time_created
+    from session s
+    join part p on p.session_id = s.id
+    join message m on m.id = p.message_id and m.session_id = s.id
+    where s.parent_id is null and s.time_created >= ?
+      and json_extract(m.data, '$.role') = 'user'
+      and json_extract(p.data, '$.type') = 'text'
+      and (instr(json_extract(p.data, '$.text'), ?) > 0
+        or instr(json_extract(p.data, '$.text'), ?) > 0)
+    limit 2
+  `).all(Number(since) || 0, `This dispatch is run ${runId}.`, `This dispatch is run ${runId} for task `);
+  // Ambiguous/copied dispatches stay unattributed rather than borrowing proof.
+  if (rows.length !== 1) return null;
+  return { id: rows[0].id, directory: rows[0].directory, timeCreated: rows[0].time_created };
+}
+
+export function listChanges({ dbPath = DEFAULT_DB, sessionId = null, limit = 300, since = null, until = null } = {}) {
   const db = openDb(dbPath);
   const where = `json_extract(data,'$.type') in ('tool','patch')`;
+  if (since !== null || until !== null) {
+    // Verification requests a complete attempt window. Older callers omit it
+    // and keep their existing timeline behavior below.
+    if (!finiteTime(since) || !finiteTime(until) || until < since || !sessionId) return [];
+    const rows = db.prepare(`select id, session_id, time_created, data from part
+      where ${where} and session_id = ? and time_created >= ? and time_created <= ?
+      order by time_created desc limit ?`).all(sessionId, since, until, limit);
+    return rows.filter((row) => {
+      let data;try { data = JSON.parse(row.data); } catch { return false; }
+      if (data?.type === "patch") return true; // patch events are timestamped, completed writes
+      const start = data?.state?.time?.start, end = data?.state?.time?.end;
+      return finiteTime(start) && finiteTime(end) && start >= since && end >= start && end <= until;
+    }).map(toChange).filter(Boolean);
+  }
   const rows = sessionId
     ? db
         .prepare(
@@ -154,6 +191,83 @@ export function listChanges({ dbPath = DEFAULT_DB, sessionId = null, limit = 300
         )
         .all(limit);
   return rows.map(toChange).filter(Boolean);
+}
+
+// Recorded process outcomes are evidence; an assistant saying it ran a check
+// is not. This reader deliberately does not decide whether a command tests the
+// task's acceptance criteria. The verifier makes that separate decision.
+const CHECK_COMMAND_LIMIT = 4000;
+const CHECK_OUTPUT_LIMIT = 2000;
+const finiteTime = (value) => Number.isFinite(value) && value >= 0;
+const checkWindow = ({ sessionId, since, until } = {}) => typeof sessionId === "string" && Boolean(sessionId.trim()) && finiteTime(since) && finiteTime(until) && until >= since;
+
+export function sessionCheckEvidence(part, options = {}) {
+  if (!checkWindow(options) || part?.session_id !== options.sessionId || !finiteTime(part?.time_created) || part.time_created < options.since || part.time_created > options.until) return null;
+  let data;
+  try { data = typeof part.data === "string" ? JSON.parse(part.data) : part.data; } catch { return null; }
+  if (data?.type !== "tool" || data.tool !== "bash") return null;
+  const state = data.state ?? {};
+  const command = state.input?.command;
+  if (typeof command !== "string" || !command.trim()) return null;
+  const startedAt = finiteTime(state.time?.start) ? state.time.start : null;
+  const finishedAt = finiteTime(state.time?.end) ? state.time.end : null;
+  // Old sessions and a later reuse of the same session cannot lend this
+  // attempt a passing check. Missing timing never becomes a positive result.
+  if (startedAt !== null && (startedAt < options.since || startedAt > options.until)) return null;
+  if (finishedAt !== null && (finishedAt < options.since || finishedAt > options.until)) return null;
+  const validTiming = startedAt !== null && finishedAt !== null && finishedAt >= startedAt;
+  const exitCode = Number.isSafeInteger(state.metadata?.exit) ? state.metadata.exit : null;
+  const status = ["completed", "error", "running", "pending"].includes(state.status) ? state.status : "unknown";
+  const output = typeof state.output === "string" ? state.output : typeof state.metadata?.output === "string" ? state.metadata.output : "";
+  return {
+    id: typeof part.id === "string" ? part.id : null,
+    sessionId: part.session_id, tool: "bash", command: command.slice(0, CHECK_COMMAND_LIMIT),
+    commandTruncated: command.length > CHECK_COMMAND_LIMIT,
+    status, exitCode, startedAt, finishedAt,
+    outputExcerpt: output.slice(-CHECK_OUTPUT_LIMIT),
+    outputTruncated: state.metadata?.truncated === true || output.length > CHECK_OUTPUT_LIMIT,
+    passed: status === "error" ? false : status === "completed" && validTiming && exitCode !== null ? exitCode === 0 : null,
+  };
+}
+
+export function listSessionChecks({ dbPath = DEFAULT_DB, sessionId, since, until, limit = 200 } = {}) {
+  const unavailable = () => ({ available: false, checks: [], truncated: false, error: "Session check evidence is unavailable" });
+  if (!checkWindow({ sessionId, since, until })) return unavailable();
+  const cap = Number.isFinite(limit) ? Math.min(1000, Math.max(1, Math.floor(limit))) : 200;
+  try {
+    const db = openDb(dbPath);
+    // Clip large command output inside SQLite, before it crosses into the
+    // main process. Keep one extra character/row to report truncation honestly.
+    const rows = db.prepare(`
+      with scoped as (
+        select id, session_id, time_created,
+          case when json_valid(data) then data else '{}' end payload
+        from part where session_id = ? and time_created >= ? and time_created <= ?
+      )
+      select id, session_id, time_created, json_object(
+        'type', 'tool', 'tool', 'bash',
+        'state', json_object(
+          'status', json_extract(payload, '$.state.status'),
+          'input', json_object('command', substr(json_extract(payload, '$.state.input.command'), 1, ?)),
+          'metadata', json_object(
+            'exit', case when json_type(payload, '$.state.metadata.exit') in ('integer', 'real') then json_extract(payload, '$.state.metadata.exit') else null end,
+            'truncated', json(case when json_type(payload, '$.state.metadata.truncated') = 'true' then 'true' else 'false' end)),
+          'time', json_object(
+            'start', case when json_type(payload, '$.state.time.start') in ('integer', 'real') then json_extract(payload, '$.state.time.start') else null end,
+            'end', case when json_type(payload, '$.state.time.end') in ('integer', 'real') then json_extract(payload, '$.state.time.end') else null end),
+          'output', substr(coalesce(json_extract(payload, '$.state.output'), json_extract(payload, '$.state.metadata.output'), ''), -?)
+        )
+      ) data
+      from scoped where json_extract(payload, '$.type') = 'tool' and json_extract(payload, '$.tool') = 'bash' and json_type(payload, '$.state.input.command') = 'text'
+      order by time_created desc, id desc limit ?
+    `).all(sessionId, since, until, CHECK_COMMAND_LIMIT + 1, CHECK_OUTPUT_LIMIT + 1, cap + 1);
+    const checks = rows.slice(0, cap).map((part) => sessionCheckEvidence(part, { sessionId, since, until })).filter(Boolean);
+    return { available: true, checks, truncated: rows.length > cap };
+  } catch {
+    // Missing/locked/corrupt stores are unknown evidence, distinct from an
+    // available store that contains no checks. Do not expose DB paths/output.
+    return unavailable();
+  }
 }
 
 export function listTodos({ dbPath = DEFAULT_DB, sessionId = null } = {}) {
@@ -229,12 +343,39 @@ export async function listPngs({ roots = [], limit = 12 } = {}) {
 }
 
 export async function tailLog({ logPath = DEFAULT_LOG, lines = 220 } = {}) {
-  if (!existsSync(logPath)) return "";
-  const info = await stat(logPath);
-  const start = Math.max(0, info.size - 512 * 1024);
-  const handle = await readFile(logPath);
-  const text = handle.subarray(start).toString("utf8");
-  return text.split("\n").slice(-lines).join("\n");
+  let handle;
+  try {
+    handle = await open(logPath, "r");
+  } catch (error) {
+    if (error.code === "ENOENT" || error.code === "ENOTDIR") return "";
+    throw error;
+  }
+  try {
+    // Stat and read the same descriptor so rotation cannot mix two files.
+    // Bound both allocation and I/O even when the live log is very large.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const info = await handle.stat();
+      const length = Math.min(info.size, 512 * 1024);
+      const start = info.size - length;
+      const buffer = Buffer.allocUnsafe(length);
+      let used = 0;
+      while (used < length) {
+        const { bytesRead } = await handle.read(buffer, used, length - used, start + used);
+        if (!bytesRead) break;
+        used += bytesRead;
+      }
+      // A log truncated below the old offset can be read again once. No
+      // bytes were consumed, so the total read budget remains 512 KiB.
+      if (length && !used && attempt === 0) continue;
+      let offset = 0;
+      // The clipped prefix may begin inside a UTF-8 character.
+      if (start) while (offset < used && (buffer[offset] & 0xc0) === 0x80) offset += 1;
+      const text = buffer.subarray(offset, used).toString("utf8");
+      return text.split("\n").slice(-lines).join("\n");
+    }
+  } finally {
+    await handle.close();
+  }
 }
 
 export async function readPins(pinsPath) {
@@ -251,10 +392,16 @@ export async function writePins(pinsPath, pins) {
 }
 
 export async function readJson(pathname, fallback) {
-  // Board stores route through the SQLite authority when it is enabled
-  // (enableBoardStore); everything else stays a plain file read.
+  // Board stores route through the SQLite authority while it is enabled AND
+  // healthy (enableBoardStore). A store that degraded — open failure, or the
+  // stale-fork guard below — hands the read back to the JSON view: in file
+  // mode the file is the authority again, never an empty fallback.
   const boardKind = boardKindFor(pathname);
-  if (boardKind) return boardRead(boardKind, fallback);
+  if (boardKind && boardEnabled()) {
+    const stored = await boardRead(boardKind, null);
+    if (Array.isArray(stored)) return stored;
+    // the store failed or degraded mid-read — fall through to the view file
+  }
   try {
     return JSON.parse(await readFile(pathname, "utf8"));
   } catch {
@@ -268,19 +415,45 @@ export async function readJson(pathname, fallback) {
 // fresh, parseable document, so every `.broken-*` sibling of it is stale —
 // sweep it as part of the write. This is the only place that touches
 // `.broken-` files, and it only ever deletes them.
+//
+// A writer killed between writeFile and rename (crash, kill -9) can never run
+// its own cleanup, so its `.tmp-<pid>-<rand>` sibling is orphaned forever —
+// seen live as machine-status.json.tmp-9148-eyny9w next to the data store.
+// Sweep those too, but only once they are older than a minute: a live
+// concurrent writer's tmp is always younger, and on Windows the rm of a file
+// another process still holds fails anyway, so the age guard just keeps the
+// sweep from disturbing a healthy racing writer.
+const STALE_TMP_AGE_MS = 60_000;
+
 async function sweepBrokenSiblings(pathname) {
   const dir = path.dirname(pathname);
-  const stem = `${path.basename(pathname, path.extname(pathname))}.broken-`;
+  const fileName = path.basename(pathname);
+  const brokenStem = `${path.basename(fileName, path.extname(fileName))}.broken-`;
+  const tmpStem = `${fileName}.tmp-`;
+  const cutoff = Date.now() - STALE_TMP_AGE_MS;
   let entries;
   try {
     entries = await readdir(dir);
   } catch {
     return;
   }
+  const stale = [];
+  for (const name of entries) {
+    if (name.startsWith(brokenStem)) {
+      stale.push(name);
+      continue;
+    }
+    if (!name.startsWith(tmpStem)) continue;
+    let stats;
+    try {
+      stats = await stat(path.join(dir, name));
+    } catch {
+      continue;
+    }
+    if (stats.mtimeMs <= cutoff) stale.push(name);
+  }
   await Promise.all(
-    entries
-      .filter((name) => name.startsWith(stem))
-      .map((name) => rm(path.join(dir, name), { force: true }).catch(() => {}))
+    stale.map((name) => rm(path.join(dir, name), { force: true }).catch(() => {}))
   );
 }
 
@@ -1566,6 +1739,13 @@ function getBoardDb() {
   }
   state.dbPath = state.config.dbPath;
   migrateBoardFromViews(state.db, state.config.files);
+  if (!guardBoardFork(state.db, state.config.files)) {
+    try { state.db.close(); } catch {}
+    state.db = null;
+    state.dbPath = null;
+    state.config = null;
+    return null;
+  }
   return state.db;
 }
 
@@ -1610,6 +1790,50 @@ function migrateBoardFromViews(db, files) {
     }
     db.prepare("insert or replace into board_meta (key, value) values ('migrated', '1')").run();
   });
+}
+
+// The fork guard: "the database wins for good" assumes the views stopped
+// being written the moment the store was adopted. They did not always — an
+// app that runs plain-file (store never enabled, e.g. this repo's host)
+// keeps evolving the views while a dormant migrated database sits under the
+// home directory. Enabling the store on that machine would export the stale
+// database OVER the fresher views on the first write, silently dropping
+// every row the views gained. Seen live: db 38 tasks/151 drained ideas vs
+// views 43 tasks/22 drained ideas, newest row hours apart. So at open time,
+// if a view holds ids the database has never seen, the database is a stale
+// fork, not an authority: degrade loudly to file mode (the views win) and
+// make the operator reconcile explicitly. The reverse skew (database ahead
+// of its own export, a normal commit in flight) passes.
+function guardBoardFork(db, files) {
+  for (const kind of BOARD_KINDS) {
+    const file = files?.[kind];
+    if (!file || !existsSync(file)) continue;
+    let view = null;
+    try {
+      view = JSON.parse(readFileSync(file, "utf8"));
+    } catch {
+      continue; // torn view: nothing to compare, migration rules already applied
+    }
+    if (!Array.isArray(view)) continue;
+    const dbIds = new Set(
+      readRowsInTx(db, kind).map((row) => String(row?.id ?? "")).filter(Boolean)
+    );
+    if (!dbIds.size) continue; // empty table: first-run migration owns this case
+    const missing = [];
+    for (const row of view) {
+      const id = String(row?.id ?? "");
+      if (id && !dbIds.has(id)) missing.push(id);
+    }
+    if (!missing.length) continue;
+    console.error(
+      `[board-store] stale fork: the ${kind} view holds ${missing.length} row(s) the database has never seen ` +
+      `(e.g. ${missing.slice(0, 3).join(", ")}). Refusing to treat the database as authority — ` +
+      `falling back to the files. Reconcile explicitly before enabling: ` +
+      `node scripts/reconcile-board.mjs --data=<dir> (plain-file pass), or migrate the views into the database.`
+    );
+    return false;
+  }
+  return true;
 }
 
 // BEGIN IMMEDIATE takes the write lock up front, so the reads inside see and
@@ -1702,8 +1926,10 @@ function writeView(kind, rows) {
 export function boardRead(kind, fallback = []) {
   const state = boardState();
   if (!state.config) return fallback;
+  const db = getBoardDb();
+  if (!db) return fallback; // degraded mid-call: the open path logged why
   try {
-    return readRowsInTx(getBoardDb(), kind);
+    return readRowsInTx(db, kind);
   } catch (error) {
     console.error(`[board-store] read failed (${kind}): ${error.message}`);
     return fallback;
@@ -1834,5 +2060,14 @@ export function closeBoardStore() {
     try { state.db.close(); } catch {}
     state.db = null;
     state.dbPath = null;
+  }
+}
+
+// Test/CLI hook: same contract for the read-only store openDb() caches —
+// close it so a temp fixture database is deletable; the next read reopens.
+export function closeReadDb() {
+  if (cached) {
+    try { cached.db.close(); } catch {}
+    cached = null;
   }
 }

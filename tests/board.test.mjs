@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import {
   compact,
   mergeIdeas,
+  isExtractionArtifact,
   housekeepingSweep,
   ownershipFence,
   fixThemeKey,
@@ -418,6 +419,26 @@ test("housekeepingSweep: claimed copies win title collapse; two claims both stay
 
 // ---- identity helpers --------------------------------------------------------
 
+test("housekeeping preserves distinct obligations that share a display title", () => {
+  const now = Date.now();
+  const tasks = [
+    task("csv", "Export results", { prompt: "Export CSV", updatedAt: now }),
+    task("json", "Export results", { prompt: "Export JSON", updatedAt: now }),
+    task("unicode", "Export results", { prompt: "Export JSON", acceptance: ["Preserve Unicode"], updatedAt: now }),
+    task("other-file", "Export results", { prompt: "Export JSON", files: ["other.js"], updatedAt: now }),
+  ];
+  const result = housekeepingSweep({ tasks, requests: [], liveRuns: new Set(), now });
+  assert.deepEqual(result.tasks.map((row) => row.id), tasks.map((row) => row.id));
+});
+
+test("housekeeping keeps an aged delegated request until its durable handoff is resolved", () => {
+  const now = Date.now();
+  const request = { title: "Delegated check", prompt: "Exact child scope", source: "agent", at: now - 72 * 3600000, handoffId: "handoff-one", fromRun: "run-parent" };
+  const result = housekeepingSweep({ tasks: [], requests: [request], liveRuns: new Set(), now });
+  assert.deepEqual(result.requests, [request]);
+  assert.equal(result.report.requestsPruned, 0);
+});
+
 test("planThemeKey: idea counts do not make new themes", () => {
   assert.equal(planThemeKey("Plan: catalog — 6 ideas"), planThemeKey("Plan: catalog — 4 ideas"));
   assert.equal(planThemeKey("Plan: assets — 3 ideas"), "assets");
@@ -589,13 +610,15 @@ test("verifyCompletion: evidence, not edits, decides completion", () => {
   const noEdits = verifyCompletion({ verdictOk: true, changedFiles: 0, hasSession: true });
   assert.equal(noEdits.state, "unverified");
   assert.equal(noEdits.attemptNo, 1);
-  // A successful test/audit run with no edits is legitimate work.
-  assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 0, hasSession: true, resultNote: { parts: { ran: "world smoke" } } }).state, "verified");
+  // A test/audit-only run needs its actual terminal result, not just prose.
+  const observedChecks = [{ command: "npm test", status: "completed", exitCode: 0, passed: true, startedAt: 1000 }];
+  assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 0, hasSession: true, resultNote: { parts: { ran: "npm test" } } }).state, "unverified");
+  assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 0, hasSession: true, observedChecks, resultNote: { parts: { ran: "npm test" } } }).state, "verified");
   // No session: the verdict alone proves nothing.
   assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 0, hasSession: false }).state, "unverified");
   assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 5, hasSession: false }).state, "unverified", "edits without a session are not attributable");
-  // ...but an explicit account of checks run is evidence.
-  assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 0, hasSession: false, resultNote: { parts: { tests: "lua parse pass" } } }).state, "verified");
+  // An account without an attributed session is still only a claim.
+  assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 0, hasSession: false, resultNote: { parts: { tests: "lua parse pass" } } }).state, "unverified");
   // Partial results never verify, whatever the edits say.
   assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 4, hasSession: true, resultNote: { parts: { remaining: "catalog contract" } } }).state, "unverified");
   assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 4, hasSession: true, remaining: ["handoff: follow-up"] }).state, "unverified");
@@ -703,4 +726,39 @@ test("mergeIdeas: sourceKey suppresses a re-scanned note even when title and det
   ];
   const out = mergeIdeas(stored, rescan);
   assert.equal(out.added, 0, "the same source note is not minted twice");
+});
+
+// ---- chat-noise gate ------------------------------------------------------------
+
+test("mergeIdeas rejects chat-noise extraction artifacts before they reach the store", () => {
+  // The shapes that actually landed in the live store (6 rows, extraction:2)
+  // before the manual sweep — narration, status reports, progress chatter.
+  const noise = [
+    { title: "Now update my TESTRUNS row", detail: "Now update my TESTRUNS row and add the missing row for the concurrent session's check (additive only)" },
+    { title: "Python contracts pass", detail: "Python contracts pass. Let me find the exact registered Lua checks next." },
+    { title: "I'll start by exploring", detail: "I'll start by exploring the codebase to understand the existing systems before planning this multi-part feature." },
+    { title: "All green (49 tests)", detail: "All green (49 tests). Adding capture shots for Tasks and Reference, then running the sweep." },
+    { title: "Recon done", detail: "Recon done. Starting with the missing spell registry check and gathering the contract." },
+    { title: "Wave 3 landed", detail: "Wave 3 landed. Two bounded gaps surfaced in the carve path and the world check." },
+    { title: "What's left to polish?", detail: "What's left, needs polish, or still needs more work?" },
+  ];
+  const out = mergeIdeas([], noise);
+  assert.equal(out.added, 0, "narration, status reports and bare questions never become ideas");
+  assert.equal(out.rejected, noise.length);
+  for (const row of noise) assert.equal(isExtractionArtifact(row), true, JSON.stringify(row.title));
+
+  // Genuine proposals — including lowercase detail bodies and real directives —
+  // must still pass the gate.
+  const genuine = [
+    { title: "Fix tar torch descriptions", detail: "tar torch text wrong in catalog" },
+    { title: "Add a collision queue for editing sessions", detail: "add a collision queue for editing sessions" },
+    { title: "Equipment system", detail: "Local coop has no per-player equipment system at all, so bare P2 is consistent" },
+    { title: "Sweep unwired systems", detail: "Look into systems that are not fully wired up or up to date with polish, flag these and make a plan" },
+    { title: "Feature request", detail: "We should improve unique feature number 1 for this project." },
+    { title: "Retry policy", detail: "Should stale checks retry with a warm cache on later boots?" },
+  ];
+  const kept = mergeIdeas([], genuine);
+  assert.equal(kept.added, genuine.length, "genuine proposals pass the gate");
+  assert.equal(kept.rejected, 0);
+  for (const row of genuine) assert.equal(isExtractionArtifact(row), false, JSON.stringify(row.title));
 });

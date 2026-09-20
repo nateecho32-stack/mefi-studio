@@ -24,7 +24,7 @@
   async function poll() {
     pollTimer = null;
     if (!initialized || el.overlay.hidden) return;
-    if (document.hidden) {
+    if (document.visibilityState !== "visible") {
       // Hidden app: skip the fetch; the base cadence rechecks so the view
       // catches up within one interval after the app is shown again.
       pollDelay = POLL_INTERVAL_MS;
@@ -319,7 +319,7 @@
     window.addEventListener("resize", () => !el.overlay.hidden && resize());
   }
 
-  window.MefiOverhead = { init, open, close, POLL_INTERVAL_MS, POLL_MAX_MS };
+  window.MefiOverhead = { open, close };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();

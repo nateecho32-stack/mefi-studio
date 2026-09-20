@@ -401,9 +401,11 @@ def _fixture_db(path):
 def _boundary_db(path):
     """Boundary cases for the temporal-overlap window: adjacent windows that
     touch at one instant, a gap of exactly overlapMs (inclusive), one just past
-    it (excluded), a fully contained window, and two zero-length windows on the
-    same single edit instant. Each case lives on its own file with a distinct
-    session pair, so the groups never merge."""
+    it (excluded), a fully contained window, a three-session nested group whose
+    windows interleave so the common intersection is the innermost session's
+    single instant, and two zero-length windows on the same single edit
+    instant. Each case lives on its own file with distinct sessions, so the
+    groups never merge."""
     db = sqlite3.connect(path)
     db.executescript(_SCHEMA)
     now = FIXTURE_NOW
@@ -445,6 +447,14 @@ def _boundary_db(path):
         edit("b_cont_a2", "s1_cont", "contained.lua", now),
         edit("b_cont_b1", "s2_cont", "contained.lua", now - 200_000),
         edit("b_cont_b2", "s2_cont", "contained.lua", now - 150_000),
+        # Nested three-session group: outer ⊃ mid ⊃ tip. Every pair is inside
+        # overlapMs so one three-session group forms, and the group's common
+        # intersection collapses to the innermost session's single instant.
+        edit("b_nest_o1", "s3_outer", "nested3.lua", now - 300_000),
+        edit("b_nest_o2", "s3_outer", "nested3.lua", now),
+        edit("b_nest_m1", "s3_mid", "nested3.lua", now - 200_000),
+        edit("b_nest_m2", "s3_mid", "nested3.lua", now - 50_000),
+        edit("b_nest_t1", "s3_tip", "nested3.lua", now - 100_000),
         # Zero-length: both sessions each made exactly one edit at the same
         # instant — the smallest possible real collision.
         edit("b_inst_a", "s1_inst", "instant.lua", now - 45_000),
@@ -475,6 +485,7 @@ class MefiStudioEyesTests(unittest.TestCase):
         cls.eyesRenderer = (STUDIO / "renderer" / "eyes.js").read_text(encoding="utf-8")
         cls.boot = (STUDIO / "renderer" / "boot.js").read_text(encoding="utf-8")
         cls.booklet = (STUDIO / "renderer" / "booklet.html").read_text(encoding="utf-8")
+        cls.reconcile = (STUDIO / "scripts" / "reconcile-board.mjs").read_text(encoding="utf-8")
         cls.guide = (ROOT / "TESTRUNS.md").read_text(encoding="utf-8")
 
     def test_eyes_reads_the_store_read_only(self):
@@ -506,6 +517,33 @@ class MefiStudioEyesTests(unittest.TestCase):
         self.assertIn("startEyesWatch", self.main)
         self.assertIn("eyes:activity", self.main)
 
+    def test_settlement_heals_a_stale_saved_file_scope(self):
+        # A collision card's saved scope copies session edit records verbatim;
+        # after a project move those records name a path that no longer exists
+        # and every dispatched worker burns its run hunting a ghost file. The
+        # executor must re-anchor stale entries itself at settlement — Studio
+        # heals its own store, a worker run may not rewrite saved scope.
+        self.assertIn("resolveStaleFileScope", self.main, "settlement consults the scope resolver")
+        self.assertIn("file scope healed", self.main, "the heal is visible on the card's work log")
+        self.assertIn("function findBasenameUnderRoot(root, base", self.main, "the locator is a bounded basename search under the project root")
+        self.assertIn('const SCOPE_WALK_SKIP = new Set(["node_modules", ".git", "dist"', self.main, "the walk never descends into dependency and build trees")
+        self.assertIn("maxEntries = 20000, maxDepth = 6", self.main, "the walk is bounded so it can never hold the board lock long")
+
+    def test_housekeeping_heals_every_stale_saved_file_scope(self):
+        # Settlement only heals the card a run just finished; a done card never
+        # settles again, so its saved scope would name a ghost path forever.
+        # The housekeeping pass re-derives every saved scope from the filesystem
+        # — walk outside the board lock, guarded apply inside the transaction.
+        self.assertIn("async function healBoardFileScopes(", self.main, "a board-wide scope heal exists")
+        self.assertIn('healBoardFileScopes("housekeeping")', self.main, "housekeeping runs the heal before its own mutation")
+        self.assertIn("stillStale", self.main, "the apply re-checks the stale path is still the saved one")
+        # The standalone migration pass carries the same heal so another
+        # install's store can be repaired without the app running.
+        self.assertIn("resolveStaleFileScope", self.reconcile, "reconcile-board re-anchors stale saved scopes")
+        self.assertIn("--scope-heal", self.reconcile, "the focused pass skips compact/tidy side effects")
+        self.assertIn("--data=", self.reconcile, "the pass can target another install's data dir")
+        self.assertIn("SCOPE_WALK_SKIP", self.reconcile, "the script's walk uses the same skip list as the app")
+
     def test_preload_exposes_the_eyes_bridge(self):
         for name in ("eyesState", "eyesChanges", "eyesTodos", "eyesLog", "eyesPinsRead", "eyesPinsWrite", "eyesWatch", "onEyesActivity"):
             with self.subTest(name=name):
@@ -525,9 +563,10 @@ class MefiStudioEyesTests(unittest.TestCase):
         self.assertIn("pollStart, pollStop", self.boot, "MefiBoot exposes the shared guard to the renderer modules")
         self.assertIn('window.MefiBoot.pollStart("nav.badges", badgeTick, BADGE_POLL_MS)', self.nav, "the badge poll's interval itself stops while the window hides, not just its fetch")
         self.assertIn('window.MefiBoot.pollStart("explorer.state", explorerTick, EXPLORER_POLL_MS)', self.explorer, "the explorer poll's interval itself stops while the window hides, not just its fetch")
-        self.assertIn("if (!document.hidden && !els.overlay.hidden) load();", self.explorer, "the explorer poll makes no fetch while hidden or while the sheet is closed")
+        self.assertIn('if (document.visibilityState === "visible" && !els.overlay.hidden) load();', self.explorer, "the explorer poll reads the visibility state before each fetch while the sheet is open")
         self.assertIn('window.MefiBoot.pollStart("tasks.board", tasksTick, TASKS_POLL_MS)', self.tasks, "the tasks poll's interval itself stops while the window hides, not just its fetch")
         self.assertIn("if (!document.hidden && !els.overlay.hidden) load();", self.tasks, "the tasks poll makes no fetch while hidden or while the sheet is closed")
+        self.assertIn('window.MefiBoot.pollStart("eyes.log", refreshLog, 5000)', self.eyesRenderer, "the eyes log poll's interval itself stops while the window hides, not just its fetch")
         # The built page bakes the renderer sources: the shared guard and the
         # badge poll's registration through it must survive the build.
         for marker in (
@@ -536,14 +575,191 @@ class MefiStudioEyesTests(unittest.TestCase):
             'window.MefiBoot.pollStart("nav.badges", badgeTick, BADGE_POLL_MS)',
             'window.MefiBoot.pollStart("explorer.state", explorerTick, EXPLORER_POLL_MS)',
             'window.MefiBoot.pollStart("tasks.board", tasksTick, TASKS_POLL_MS)',
+            'window.MefiBoot.pollStart("eyes.log", refreshLog, 5000)',
         ):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.booklet, "the built booklet.html carries the shared poll guard")
         self.assertIn("POLL_INTERVAL_MS", self.overhead, "the overhead poll resets to its base cadence while hidden")
+        self.assertIn('if (document.visibilityState !== "visible") {', self.overhead, "the overhead poll reads the visibility state before each fetch")
         self.assertIn("if (document.hidden || !initialized || el.overlay.hidden) return;", self.overhead, "the overhead poll snaps back on show")
         self.assertIn("if (document.hidden) return; // hidden app: make no fetch", self.idle, "the 4s refresh tick makes no fetch while hidden")
         self.assertIn("if (document.hidden) return; // a hidden window never idles into Command", self.idle, "the idle auto-enter waits for a visible window")
         self.assertIn("if (state.active) tick();", self.idle, "the refresh pass runs the moment Command is shown again")
+
+    def test_hidden_window_makes_zero_poll_fetches(self):
+        """Fires visibilitychange against the real modules: the overhead timer and the explorer's shared-guard tick issue zero store reads while hidden, and resume on show."""
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("Node unavailable; static contracts still ran")
+        script = r"""
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
+
+process.on("unhandledRejection", () => {});
+
+function makeSandbox() {
+  const stats = { fetches: 0 };
+  const listeners = {};
+  const timers = new Map();
+  const ticks = {};
+  let seq = 0;
+  const byId = {};
+  const noopCtx = new Proxy({}, {
+    get: (target, key) => (key in target ? target[key] : () => {}),
+    set: (target, key, value) => { target[key] = value; return true; },
+  });
+  const makeElement = (id) => {
+    const el = {
+      id, hidden: false, textContent: "", title: "", value: "", placeholder: "",
+      checked: false, disabled: false, className: "", dataset: {}, children: [],
+      style: { setProperty() {}, removeProperty() {}, width: "", height: "", cursor: "" },
+      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      append(...nodes) { el.children.push(...nodes); },
+      appendChild(node) { el.children.push(node); return node; },
+      addEventListener(type, fn) { (el._listeners ??= {})[type] ??= []; el._listeners[type].push(fn); },
+      removeEventListener() {},
+      click() { for (const fn of el._listeners?.click ?? []) fn({ target: el, preventDefault() {}, stopPropagation() {} }); },
+      focus() {},
+      getContext: () => noopCtx,
+      getBoundingClientRect: () => ({ left: 0, top: 0, x: 0, y: 0, width: 800, height: 560 }),
+      closest: () => null,
+      querySelector: () => null,
+      clientWidth: 800,
+      clientHeight: 560,
+      scrollTop: 0,
+      scrollHeight: 0,
+    };
+    el.parentElement = { clientWidth: 800 };
+    return el;
+  };
+  const doc = {
+    readyState: "complete",
+    body: null,
+    activeElement: null,
+    _vis: "visible",
+    get hidden() { return doc._vis !== "visible"; },
+    get visibilityState() { return doc._vis; },
+    addEventListener(type, fn) { (listeners[type] ??= []).push(fn); },
+    getElementById: (id) => (byId[id] ??= makeElement(id)),
+    createElement: () => makeElement("created"),
+    createTextNode: (text) => ({ text, textContent: text }),
+  };
+  doc.body = makeElement("body");
+  const win = {
+    devicePixelRatio: 1,
+    MefiNav: { noMotion: () => true, claim() {}, release() {}, go() {} },
+    MefiTree: { snapshot: () => ({ nodes: [], edges: [] }) },
+    MefiBoot: { pollStart: (key, fn) => { ticks[key] = fn; }, pollStop: () => {} },
+    mefiStudio: {
+      async tasksList() { stats.fetches += 1; return { tasks: [] }; },
+      async eyesState() { stats.fetches += 1; return { ok: true, sessions: [], todos: [], changes: [] }; },
+      async eyesRequestsRead() { return null; },
+      async eyesCheckpointsRead() { return null; },
+      async eyesBriefingRead() { return null; },
+      async eyesCollisions() { return { collisions: [], presence: [] }; },
+      async assistantState() { return null; },
+      async machineStatus() { return { ok: true, status: {} }; },
+      async machineSet() { return { ok: true, machine: { autoKill: true } }; },
+      onAssistant() {},
+      onMachineStatus() {},
+      onCheckpoints() {},
+      onBriefing() {},
+      onRequests() {},
+    },
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  const sandbox = {
+    document: doc,
+    window: win,
+    requestAnimationFrame: () => 0,
+    cancelAnimationFrame() {},
+    setTimeout: (fn) => { const id = ++seq; timers.set(id, fn); return id; },
+    clearTimeout: (id) => timers.delete(id),
+    setInterval: (fn) => { const id = ++seq; timers.set(id, fn); return id; },
+    clearInterval: (id) => timers.delete(id),
+    console,
+    __stats: stats,
+    __ticks: ticks,
+    __fire: (type) => { for (const fn of listeners[type] ?? []) fn(); },
+    __pump: (times) => {
+      for (let i = 0; i < times; i += 1) {
+        const due = [...timers.values()];
+        timers.clear();
+        for (const fn of due) fn();
+      }
+    },
+    __flush: flush,
+  };
+  return { sandbox, context: vm.createContext(sandbox) };
+}
+
+function boot(path) {
+  const { sandbox, context } = makeSandbox();
+  vm.runInContext(readFileSync(path, "utf8"), context, { filename: path });
+  return sandbox;
+}
+
+// Overhead: the sheet owns a re-arming timer; each pass reads the visibility
+// state before fetching, so a hidden window pumps the timer with zero reads.
+const overhead = boot(__OVERHEAD__);
+await overhead.window.MefiOverhead.open();
+await overhead.__flush();
+const overheadOpen = overhead.__stats.fetches;
+overhead.__pump(1);
+await overhead.__flush();
+const overheadVisible = overhead.__stats.fetches;
+overhead.document._vis = "hidden";
+overhead.__fire("visibilitychange");
+overhead.__pump(8);
+await overhead.__flush();
+const overheadHidden = overhead.__stats.fetches;
+overhead.document._vis = "visible";
+overhead.__fire("visibilitychange");
+await overhead.__flush();
+const overheadResumed = overhead.__stats.fetches;
+
+// Explorer: its tick registers through boot.js's shared poll guard; fire the
+// captured tick and the visibilitychange listener at each visibility state.
+const explorer = boot(__EXPLORER__);
+explorer.document.getElementById("explorer-overlay").hidden = false;
+const explorerOpen = explorer.__stats.fetches;
+explorer.__ticks["explorer.state"]();
+await explorer.__flush();
+const explorerVisible = explorer.__stats.fetches;
+explorer.document._vis = "hidden";
+explorer.__fire("visibilitychange");
+explorer.__ticks["explorer.state"]();
+await explorer.__flush();
+const explorerHidden = explorer.__stats.fetches;
+explorer.document._vis = "visible";
+explorer.__fire("visibilitychange");
+await explorer.__flush();
+const explorerResumed = explorer.__stats.fetches;
+
+console.log(JSON.stringify({
+  overhead: { open: overheadOpen, visible: overheadVisible, hidden: overheadHidden, resumed: overheadResumed },
+  explorer: { open: explorerOpen, visible: explorerVisible, hidden: explorerHidden, resumed: explorerResumed },
+}));
+"""
+        replacements = {
+            "OVERHEAD": STUDIO / "renderer" / "overhead.js",
+            "EXPLORER": STUDIO / "renderer" / "explorer.js",
+        }
+        for key, value in replacements.items():
+            script = script.replace(f"__{key}__", json.dumps(str(value)))
+        result = subprocess.run([node, "--input-type=module", "-"], input=script, cwd=STUDIO, capture_output=True, text=True, timeout=120)
+        self.assertEqual(0, result.returncode, result.stderr)
+        payload = json.loads(result.stdout.strip().splitlines()[-1])
+        self.assertEqual(1, payload["overhead"]["open"], "opening the overhead sheet reads the task list once")
+        self.assertEqual(2, payload["overhead"]["visible"], "a visible window fetches on every timer pass")
+        self.assertEqual(2, payload["overhead"]["hidden"], "a hidden window fires the timer eight times with zero fetches")
+        self.assertEqual(3, payload["overhead"]["resumed"], "the visibilitychange snap-back fetches the moment the window shows")
+        self.assertEqual(0, payload["explorer"]["open"], "the explorer tick sits idle until the shared guard calls it")
+        self.assertEqual(1, payload["explorer"]["visible"], "a visible window's shared-guard tick reads the eyes store")
+        self.assertEqual(1, payload["explorer"]["hidden"], "a hidden window's shared-guard tick fires with zero fetches")
+        self.assertEqual(2, payload["explorer"]["resumed"], "the visibilitychange listener fetches the moment the window shows")
 
     def test_club_blackout_tokens_and_rail_exist(self):
         for marker in ("--gold", "--live", "backdrop-filter", "#tree-rail"):
@@ -989,6 +1205,17 @@ class MefiStudioEyesTests(unittest.TestCase):
             contained["overlap"],
             "a contained window intersects to exactly the inner session's window",
         )
+        # Nested three-session group: every pair sits inside overlapMs, so one
+        # group holds all three, and the common intersection collapses to the
+        # innermost session's single instant — a real zero-length window.
+        nested = by_file.get("C:/fixture/nested3.lua")
+        self.assertIsNotNone(nested, "three nested windows form one group")
+        self.assertEqual(3, len(nested["sessions"]), "all three nested sessions join the group")
+        self.assertEqual(
+            {"first": now - 100_000, "last": now - 100_000},
+            nested["overlap"],
+            "nested windows intersect at the innermost session's single instant",
+        )
         # Zero-length: two single-edit sessions on the same instant.
         instant = by_file.get("C:/fixture/instant.lua")
         self.assertIsNotNone(instant, "two single-edit sessions on the same instant collide")
@@ -1004,10 +1231,17 @@ class MefiStudioEyesTests(unittest.TestCase):
         self.assertIsNone(exact_request["overlap"], "an inclusive-gap pair cites an edit span, not a shared window")
         self.assertRegex(exact_request["prompt"], r"Edit span: \d{2}:\d{2}–\d{2}:\d{2} — the sessions never actually co-edited")
         self.assertEqual(
-            4,
+            5,
             len(requests),
-            "adjacent, exact-gap, contained, and instant pairs queue once each; the past-gap pair does not",
+            "adjacent, exact-gap, contained, instant, and the nested three-session pair-set queue once each; the past-gap pair does not",
         )
+        nested_request = requests[("s3_mid", "s3_outer", "s3_tip")]
+        self.assertEqual(
+            {"first": now - 100_000, "last": now - 100_000},
+            nested_request["overlap"],
+            "the nested group's zero-length intersection is real, so the request keeps it",
+        )
+        self.assertRegex(nested_request["prompt"], r"Overlap window: \d{2}:\d{2}–\d{2}:\d{2}\.")
 
     def test_explorer_collision_list_names_owner_and_activity(self):
         self.assertIn(" · owner ", self.explorer, "the collision list names the owner")
@@ -1017,6 +1251,8 @@ class MefiStudioEyesTests(unittest.TestCase):
         self.assertIn(" (active)", self.explorer)
         self.assertIn("idle", self.explorer)
         self.assertIn("liveSolo", self.explorer, "collateral watch lists live solo editors beside collisions")
+        self.assertIn("collisionIsLive", self.explorer, "the same live rule idle.js applies: an idle-only collision group is history and must not suppress live solo editors on its files")
+        self.assertIn("entry.active === true", self.explorer, "only sessions with an active edit count a collision as live here")
         self.assertIn("No live editors or file collisions.", self.explorer)
         self.assertIn("state.presence = collisions?.presence ?? []", self.explorer)
         self.assertIn("collisions still paint when the brief column is empty", self.explorer)
@@ -1067,6 +1303,56 @@ class MefiStudioEyesTests(unittest.TestCase):
         self.assertIn("export function sameFixProblem", self.eyes)
         self.assertIn("export function alertProblem", self.eyes)
         self.assertIn("sameFixProblem(request,", self.eyes)
+
+    def test_fixture_databases_use_unique_per_run_temp_dirs(self):
+        # The A-Eyes eyes-test collisions recurred because parallel sessions
+        # ran this suite against the same fixture paths. The durable fix is
+        # unique fixture naming: every fixture database is built inside its
+        # own per-run tempfile.TemporaryDirectory(), so two concurrent runs
+        # (or sessions) never share a fixture path, and no fixture ever lands
+        # inside the repository tree. See CONTRIBUTING.md "Test file
+        # conventions" and the spec-collisions guard (`npm run check:specs`).
+        source = Path(__file__).resolve().read_text(encoding="utf-8")
+        self.assertEqual(
+            ["_boundary_db", "_fixture_db"],
+            sorted(re.findall(r"^def (_(?:fixture|boundary)_db)\(path\):", source, re.M)),
+            "fixture databases are built only by the two shared helpers",
+        )
+        self.assertEqual(
+            2,
+            len(re.findall(r"sqlite3\.connect\(path\)", source)),
+            "no ad-hoc fixture connection escapes the shared helpers",
+        )
+        with_blocks = re.findall(r"with tempfile\.TemporaryDirectory\(\) as directory:", source)
+        call_sites = re.findall(r"^ {12}_(?:fixture|boundary)_db\(db_path\)", source, re.M)
+        db_paths = re.findall(r"db_path = Path\(directory\) / ", source)
+        self.assertGreaterEqual(len(with_blocks), 4, "the fixture-backed tests keep their per-run blocks")
+        self.assertEqual(
+            len(with_blocks),
+            len(call_sites),
+            "every fixture db call site sits inside its own per-run TemporaryDirectory block",
+        )
+        self.assertEqual(
+            len(with_blocks),
+            len(db_paths),
+            "every fixture db path is derived from that per-run temp directory",
+        )
+        self.assertNotIn("tools/" + "logs", source, "the suite never writes fixtures into the shared evidence tree")
+        self.assertFalse(
+            re.search(r'(?:ROOT|STUDIO) / ["\'][^"\']*\.db', source),
+            "no fixture database path is anchored inside the repository tree",
+        )
+        stem = Path(__file__).stem.lower()
+        siblings = {
+            path.stem.lower()
+            for path in Path(__file__).resolve().parent.iterdir()
+            if path != Path(__file__).resolve()
+        }
+        self.assertNotIn(
+            stem,
+            siblings,
+            "no sibling spec shares this basename — a duplicate shadows unittest discovery (the recurrence behind the eyes collisions; guarded repo-wide by check:specs)",
+        )
 
     def test_docs_register_this_contract(self):
         self.assertIn("`tools/test_mefi_studio_eyes.py`", self.guide)

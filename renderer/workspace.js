@@ -14,6 +14,9 @@
   let backlogTimer = null;
   let readSequence = 0;
   let readFailure = false;
+  let createdTask = null;
+  let buildModeSaving = false;
+  const buildMode = () => ({ autoBuild: state.status.autoBuild !== false, loaded: typeof state.status.autoBuild === "boolean", saving: buildModeSaving });
   const storage = {
     get(key, fallback = "") { try { return localStorage.getItem(`mefiStudio.workspace.${key}`) ?? fallback; } catch { return fallback; } },
     set(key, value) { try { localStorage.setItem(`mefiStudio.workspace.${key}`, value); } catch { /* private store */ } },
@@ -25,8 +28,21 @@
   const done = (task) => ["done", "archived", "completed"].includes(task.status);
   const describe = (task) => window.MefiTasks?.describe?.(task) ?? { stage: done(task) ? "done" : task.status === "awaiting_verification" ? "review" : "open", label: task.status === "active" ? "Working" : done(task) ? "Completed" : task.status === "awaiting_verification" ? "Needs review" : "Queued", summary: task.result?.summary || task.logs?.at(-1)?.text || "" };
   const when = (at) => { const value = new Date(at); return Number.isFinite(value.getTime()) ? value.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""; };
-  function feedback(message, error = false, source = "action") { readFailure = source === "read"; $("feedback").textContent = message; $("feedback").classList.toggle("error", error); }
+  function feedback(message, error = false, source = "action") {
+    readFailure = source === "read"; $("feedback").textContent = message; $("feedback").classList.toggle("error", error);
+    const sidebarFeedback = $("sidebar-feedback");
+    if (sidebarFeedback && (source === "sidebar" || window.MefiSidebar?.isOpen?.())) {
+      sidebarFeedback.textContent = message; sidebarFeedback.classList.toggle("error", error);
+    }
+  }
   function guard(result) { if (!result?.ok) throw new Error(result?.error || "The app couldn't complete that action. Try again."); return result; }
+  function readWithDeadline(read) {
+    // Status reads can fail independently. One unanswered IPC must not freeze
+    // all six panels or keep a successfully created task's composer disabled.
+    let timer;
+    const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Status read timed out")), 12000); });
+    return Promise.race([Promise.resolve().then(read), timeout]).finally(() => clearTimeout(timer));
+  }
   function active() { return Boolean($("layer") && !$("layer").hidden); }
   function controls() {
     const unavailable = !api()?.projectsList || !state.activeId;
@@ -35,7 +51,10 @@
     $("add-project").disabled = state.pending || Boolean(state.busyAction) || state.switching || !api()?.projectsAdd;
     for (const button of $("projects").querySelectorAll("button")) button.disabled = state.pending || Boolean(state.busyAction) || state.switching;
     $("mode-chat").disabled = $("mode-work").disabled = state.pending;
+    if ($("task-outline")) $("task-outline").disabled = state.pending || state.switching || unavailable;
+    if ($("plan-idea")) $("plan-idea").disabled = state.pending || state.switching || unavailable;
     $("pause").disabled = !api()?.assistantControl || state.switching;
+    if ($("auto-build")) $("auto-build").disabled = !api()?.assistantAutopilot || !buildMode().loaded || buildModeSaving || state.switching;
     $("reveal").disabled = !project()?.path || !api()?.shellReveal;
     $("run-backlog").disabled = !state.activeId || !state.backlog || state.backlogUnavailable || !api()?.backlogControl || state.switching || Boolean(state.busyAction);
     for (const button of $("work-list").querySelectorAll("button")) {
@@ -47,6 +66,10 @@
     $("greeting").textContent = `GOOD ${hour < 12 ? "MORNING" : hour < 18 ? "AFTERNOON" : "EVENING"}${person() ? `, ${person()}` : ""}`;
     $("layer").dataset.accent = storage.get("accent", "gold");
     $("layer").classList.toggle("ws-still", storage.get("motion", "1") === "0");
+    if ($("sidebar")) {
+      $("sidebar").dataset.accent = storage.get("accent", "gold");
+      $("sidebar").classList.toggle("ws-still", storage.get("motion", "1") === "0");
+    }
     threadSignature = "";
     renderThread(); renderCompanion();
   }
@@ -80,12 +103,16 @@
     state.projects = result.projects;
     state.activeId = result.activeId;
     if (oldId !== state.activeId) {
-      if (oldId) storage.set(`draft.${oldId}`, $("input").value);
+      if (oldId) saveDraft(oldId);
       state.epoch += 1;
       state.tasks = []; state.ideas = []; state.backlog = null; state.backlogUnavailable = false; state.assistant = {}; state.status = {};
       state.filter = "open"; state.query = ""; state.limit = 20;
       $("work-search").value = "";
-      $("input").value = storage.get(`draft.${state.activeId}`);
+      state.mode = storage.get(`mode.${state.activeId}`, "chat") === "work" ? "work" : "chat";
+      $("input").value = readDraft(state.activeId, state.mode);
+      renderMode();
+      createdTask = null;
+      if ($("created-task")) $("created-task").hidden = true;
       threadSignature = ""; workSignature = "";
       renderThread(); renderWork(); renderCompanion(); renderBacklog();
       window.dispatchEvent(new CustomEvent("mefi:project-changed", { detail: { projectId: state.activeId } }));
@@ -94,12 +121,12 @@
   }
   async function selectProject(id) {
     if (state.pending || state.busyAction || state.switching || id === state.activeId) return;
-    state.switching = true; controls(); feedback("Opening project…");
+    state.switching = true; controls(); feedback("Opening project…", false, "sidebar");
     try {
       if (refreshFlight) await refreshFlight;
       adoptProjects(guard(await api().projectsSelect(id)));
-      if (await refresh(true)) feedback(`You're in ${project()?.name || "your project"}.`);
-    } catch (error) { feedback(error.message, true); }
+      if (await refresh(true)) feedback(`You're in ${project()?.name || "your project"}.`, false, "sidebar");
+    } catch (error) { feedback(error.message, true, "sidebar"); }
     finally { state.switching = false; controls(); }
   }
   function renderThread() {
@@ -134,12 +161,20 @@
     list.scrollTop = pinned ? list.scrollHeight : oldTop;
   }
   const scoped = (rows) => rows.filter((row) => !row.projectId || row.projectId === state.activeId);
+  const workLabels = { all: "All work", open: "Queue", ideas: "Ideas", review: "Review", done: "Done" };
+  function selectWorkFilter(filter) {
+    state.filter = filter; state.limit = 20; $("work-list").scrollTop = 0; renderWork();
+  }
+  function clearWorkSearch() {
+    state.query = ""; $("work-search").value = ""; state.limit = 20;
+    $("work-list").scrollTop = 0; renderWork(); $("work-search").focus();
+  }
   function taskView(task) {
     const description = describe(task);
     const scheduled = state.backlog?.taskStates?.find((item) => item.id === task.id);
     const stage = done(task) ? "done" : task.status === "active" ? "running" : scheduled?.stage || (description.stage === "review" ? "review" : "ready");
-    const filter = stage === "done" ? "done" : ["review", "blocked"].includes(stage) ? "review" : "open";
-    const labels = { ready: "Ready", running: "Working", review: "Awaiting verification", blocked: "Needs attention", cooling: "Retry scheduled", waiting: "Waiting on prerequisites", grouped: "Included in a plan", done: "Done" };
+    const filter = stage === "done" ? "done" : ["review", "blocked", "approval"].includes(stage) ? "review" : "open";
+    const labels = { ready: "Ready", running: "Working", approval: "Awaiting build approval", review: "Awaiting verification", blocked: "Needs attention", cooling: "Retry scheduled", waiting: "Waiting on prerequisites", grouped: "Included in a plan", done: "Done" };
     return { stage, filter, label: labels[stage] || description.label, summary: stage === "ready" ? task.prompt || description.summary || scheduled?.reason : scheduled?.reason || description.summary, retryAt: scheduled?.retryAt, groupId: scheduled?.groupId, dependencies: scheduled?.dependencies, canRetry: scheduled?.canRetry };
   }
   function cardAction(label, action, payload) {
@@ -150,27 +185,36 @@
   }
   function renderWork() {
     const tasks = scoped(state.tasks), ideas = scoped(state.ideas);
-    const counts = { open: 0, review: 0, done: 0, ideas: ideas.length };
-    for (const task of tasks) counts[taskView(task).filter] += 1;
+    const matches = (row) => !state.query || `${row.title || ""} ${row.prompt || ""} ${row.detail || ""} ${(row.tags || []).join(" ")}`.toLowerCase().includes(state.query);
+    const matchingTasks = tasks.filter(matches), matchingIdeas = ideas.filter(matches);
+    const counts = { all: matchingTasks.length + matchingIdeas.length, open: 0, review: 0, done: 0, ideas: matchingIdeas.length };
+    for (const task of matchingTasks) counts[taskView(task).filter] += 1;
     for (const button of $("layer").querySelectorAll("[data-work-filter]")) {
       button.setAttribute("aria-pressed", String(button.dataset.workFilter === state.filter));
       button.querySelector("span").textContent = counts[button.dataset.workFilter] || 0;
+      button.setAttribute("aria-label", `${workLabels[button.dataset.workFilter]}: ${counts[button.dataset.workFilter] || 0}${state.query ? " matches" : " items"}`);
     }
     const ranks = new Map((state.backlog?.next || []).map((item, index) => [item.id, index]));
-    const matches = (row) => !state.query || `${row.title || ""} ${row.prompt || ""} ${row.detail || ""} ${(row.tags || []).join(" ")}`.toLowerCase().includes(state.query);
-    const visible = (state.filter === "ideas"
-      ? ideas.filter(matches).sort((a, b) => Number(a.status === "done") - Number(b.status === "done") || Number(Boolean(a.taskId)) - Number(Boolean(b.taskId)) || (a.at || 0) - (b.at || 0))
-      : tasks.filter((task) => taskView(task).filter === state.filter && matches(task)).sort((a, b) => state.filter === "open" ? Number(b.status === "active") - Number(a.status === "active") || (ranks.get(a.id) ?? 99999) - (ranks.get(b.id) ?? 99999) || (a.createdAt || 0) - (b.createdAt || 0) : (b.doneAt || b.updatedAt || b.createdAt || 0) - (a.doneAt || a.updatedAt || a.createdAt || 0)));
+    const taskRows = matchingTasks.filter((task) => state.filter === "all" || taskView(task).filter === state.filter)
+      .sort((a, b) => ["open", "all"].includes(state.filter) ? Number(b.status === "active") - Number(a.status === "active") || (ranks.get(a.id) ?? 99999) - (ranks.get(b.id) ?? 99999) || (a.createdAt || 0) - (b.createdAt || 0) : (b.doneAt || b.updatedAt || b.createdAt || 0) - (a.doneAt || a.updatedAt || a.createdAt || 0))
+      .map((item) => ({ item, isIdea: false }));
+    const ideaRows = matchingIdeas.sort((a, b) => Number(a.status === "done") - Number(b.status === "done") || Number(Boolean(a.taskId)) - Number(Boolean(b.taskId)) || (a.at || 0) - (b.at || 0))
+      .map((item) => ({ item, isIdea: true }));
+    const visible = state.filter === "all" ? [...taskRows, ...ideaRows] : state.filter === "ideas" ? ideaRows : taskRows;
     const page = visible.slice(0, state.limit);
-    const signature = JSON.stringify([page, state.filter, state.query, state.limit, state.backlog?.taskStates, state.backlog?.next, state.status.running, companion()]);
+    const signature = JSON.stringify([page, counts, state.filter, state.query, state.limit, state.backlog?.taskStates, state.backlog?.next, state.status.running, companion()]);
+    $("work-search").placeholder = state.filter === "all" ? "Search all tasks and ideas…" : `Search ${workLabels[state.filter].toLowerCase()}…`;
+    $("work-search").setAttribute("aria-label", `Search ${workLabels[state.filter].toLowerCase()}`);
+    $("clear-search").hidden = !state.query;
+    const summary = `${workLabels[state.filter]} · ${visible.length > page.length ? `${page.length} of ` : ""}${visible.length} ${state.query ? visible.length === 1 ? "match" : "matches" : visible.length === 1 ? "item" : "items"}`;
+    if ($("work-summary").textContent !== summary) $("work-summary").textContent = summary;
     $("show-more").hidden = visible.length <= state.limit;
     $("show-more").textContent = `Show ${Math.min(20, Math.max(0, visible.length - state.limit))} more · ${Math.max(0, visible.length - state.limit)} remaining`;
     if (signature === workSignature) return;
     workSignature = signature;
     const top = $("work-list").scrollTop;
     $("work-list").replaceChildren();
-    for (const item of page) {
-      const isIdea = state.filter === "ideas";
+    for (const { item, isIdea } of page) {
       const view = isIdea ? { stage: item.status === "done" ? "done" : "idea", filter: "ideas", label: item.status === "done" ? "Idea completed" : item.taskId ? "Linked to a task" : "Ready to shape", summary: item.detail || "" } : taskView(item);
       const row = text("article", `ws-work-card ${view.filter}${isIdea ? " ws-idea-card" : ""}`, "");
       row.dataset.stage = view.stage; row.dataset.status = view.stage;
@@ -194,6 +238,11 @@
           const linked = text("button", "ghost mini", "View task ↗"); linked.addEventListener("click", () => window.MefiNav?.go("tasks", { taskId: item.taskId })); actions.append(linked);
         } else actions.append(cardAction("Turn into task ↗", "promote", { ideaId: item.id }));
       } else if (view.stage === "ready") actions.append(cardAction(item.pin ? "Prioritized" : "Do next", "prioritize", { taskId: item.id }));
+      else if (view.stage === "approval") {
+        const review = text("button", "ghost mini", "Review build ↗");
+        review.addEventListener("click", () => window.MefiNav?.go("tasks", { taskId: item.id, filter: "all" }));
+        actions.append(review);
+      }
       else if (view.stage === "blocked" && view.canRetry !== false && !view.dependencies?.some((dependency) => !dependency.done)) actions.append(cardAction("Try again", "retry", { taskId: item.id }));
       else if (view.stage === "grouped" && tasks.some((task) => task.id === view.groupId)) {
         const plan = text("button", "ghost mini", "View plan ↗"); plan.addEventListener("click", () => window.MefiNav?.go("tasks", { taskId: view.groupId, filter: "all" })); actions.append(plan);
@@ -203,17 +252,20 @@
     }
     if (!visible.length) {
       const empty = text("div", "ws-work-empty", "");
-      const headings = { done: "A home for finished work", review: "Nothing waiting for review", ideas: "Space for your next idea", open: "A clear runway" };
-      const hints = { done: "Verified and archived tasks stay here. Finished runs awaiting checks appear in Review.", review: "Finished runs and tasks needing your attention will appear here.", ideas: "Collected ideas stay here until you turn them into tasks. Older ideas are kept, too.", open: "Your queue is clear. Start with an idea, or use Give a task to add something new." };
-      empty.append(text("span", "ws-empty-symbol", state.filter === "done" ? "✓" : "◇"), text("h3", "", state.query ? "No matches in this view" : headings[state.filter]), text("p", "", state.query ? "Try another search or switch to a different view." : hints[state.filter]));
-      if (state.query) { const clear = text("button", "ghost", "Clear search"); clear.addEventListener("click", () => { state.query = ""; $("work-search").value = ""; renderWork(); }); empty.append(clear); }
-      else if (state.filter === "open") { const button = text("button", "ghost", "Give a task ↗"); button.addEventListener("click", () => { setMode("work"); $("input").focus(); }); empty.append(button); }
+      const headings = { all: "Your work starts here", done: "A home for finished work", review: "Nothing waiting for review", ideas: "Space for your next idea", open: "A clear runway" };
+      const hints = { all: "Create a task or plan an idea. Everything you save in this project will appear here.", done: "Verified and archived tasks stay here. Finished runs awaiting checks appear in Review.", review: "Finished runs and tasks needing your attention will appear here.", ideas: "Collected ideas stay here until you turn them into tasks. Older ideas are kept, too.", open: "Your queue is clear. Start with an idea, or use Give a task to add something new." };
+      const elsewhere = state.query && state.filter !== "all" && counts.all > 0;
+      empty.append(text("span", "ws-empty-symbol", state.filter === "done" ? "✓" : "◇"), text("h3", "", state.query ? `No matches in ${workLabels[state.filter].toLowerCase()}` : headings[state.filter]), text("p", "", state.query ? elsewhere ? `${counts.all} ${counts.all === 1 ? "match is" : "matches are"} available in other views.` : "Try a different word or clear your search." : hints[state.filter]));
+      if (elsewhere) { const all = text("button", "ghost", "Search all work"); all.addEventListener("click", () => { selectWorkFilter("all"); $("all").focus(); }); empty.append(all); }
+      else if (state.query) { const clear = text("button", "ghost", "Clear search"); clear.addEventListener("click", clearWorkSearch); empty.append(clear); }
+      else if (["open", "all"].includes(state.filter)) { const button = text("button", "ghost", "Give a task ↗"); button.addEventListener("click", () => { setMode("work"); $("input").focus(); }); empty.append(button); }
       $("work-list").append(empty);
     }
     $("work-list").scrollTop = top;
     controls();
   }
   function renderBacklog() {
+    renderBuildMode();
     const backlog = state.backlog;
     const counts = backlog?.counts || {};
     const paused = backlog?.paused || state.assistant.status === "paused";
@@ -222,8 +274,8 @@
     $("backlog-title").textContent = state.backlogUnavailable ? "Backlog status unavailable" : paused ? "Ready when you are" : draining ? "One step closer" : "A little progress, every pass";
     $("backlog-summary").textContent = state.backlogUnavailable ? "Couldn't refresh the queue. Use Retry loading below the conversation." : backlog?.summary || (backlog ? paused ? "New work is paused. Running jobs finish normally." : "Work through existing tasks and ideas in small batches." : api()?.backlogStatus ? "Checking your project's backlog…" : "Open the updated desktop app to manage the backlog.");
     $("backlog-metrics").replaceChildren();
-    for (const [key, label] of [["ready", "ready"], ["running", "working"], ["waiting", "waiting"], ["blocked", "need attention"]]) {
-      if (key === "waiting" && !counts.waiting) continue;
+    for (const [key, label] of [["ready", "ready"], ["running", "working"], ["approval", "to approve"], ["waiting", "waiting"], ["blocked", "need attention"]]) {
+      if (["waiting", "approval"].includes(key) && !counts[key]) continue;
       const item = text("span", `ws-backlog-metric ${key}`, "");
       if (key === "ready" && counts.requests) item.title = "Includes tasks and requests in this project's inbox";
       item.append(text("strong", "", counts[key] ?? "—"), text("span", "", label)); $("backlog-metrics").append(item);
@@ -233,6 +285,41 @@
     $("backlog-next").textContent = hold && hold !== backlog?.summary ? hold : next ? `Up next: ${next.title}` : counts.cooling ? `Retry scheduled${backlog.nextRetryAt ? ` · ${when(backlog.nextRetryAt)}` : ""}` : counts.eligibleIdeas ? `${counts.eligibleIdeas} idea${counts.eligibleIdeas === 1 ? "" : "s"} waiting to become work.` : counts.waiting ? "Prerequisites must finish before these tasks can start." : "";
     $("backlog-title").parentElement?.parentElement?.setAttribute("data-state", paused ? "paused" : counts.running ? "running" : counts.blocked ? "blocked" : "ready");
     controls();
+  }
+  function renderBuildMode() {
+    const mode = buildMode();
+    if ($("auto-build")) $("auto-build").checked = mode.autoBuild;
+    if ($("build-mode-label")) $("build-mode-label").textContent = mode.saving ? "Saving…" : !mode.loaded ? "Loading preference…" : mode.autoBuild ? "Automatic" : "Verify first";
+    if ($("build-mode-note")) $("build-mode-note").textContent = mode.autoBuild
+      ? "Turn off to review builds first. Applies to all projects."
+      : "Open Review to approve builds. All projects; current workers finish.";
+    window.dispatchEvent(new CustomEvent("mefi:build-mode", { detail: mode }));
+  }
+  async function setAutoBuild(autoBuild) {
+    if (!api()?.assistantAutopilot || !buildMode().loaded) throw new Error("Build settings aren't ready. Retry loading first.");
+    if (buildModeSaving || state.switching) throw new Error("Wait for the current setting or project change to finish.");
+    buildModeSaving = true; renderBuildMode(); controls();
+    try {
+      const result = guard(await api().assistantAutopilot({ autoBuild }));
+      revisions.status += 1;
+      state.status = { ...state.status, autoBuild: result.status?.autoBuild ?? result.autoBuild ?? autoBuild };
+      renderBuildMode();
+      const message = autoBuild ? "Auto build is on. Queued work follows your Pause and worker settings." : "Verify first is on. Review each task before approving its build; current workers finish.";
+      feedback(message);
+      await refresh(true);
+      return { ...buildMode(), message };
+    } catch (error) {
+      // A failed disk save can still hold dispatch immediately. Read the
+      // host's current mode before restoring the control after the failure.
+      try {
+        const result = await readWithDeadline(() => api().assistantStatus());
+        if (typeof result?.status?.autoBuild === "boolean") {
+          revisions.status += 1;
+          state.status = { ...state.status, autoBuild: result.status.autoBuild };
+        }
+      } catch {}
+      throw error;
+    } finally { buildModeSaving = false; renderBuildMode(); controls(); }
   }
   async function controlBacklog(action, payload = {}) {
     if (!api()?.backlogControl || !state.activeId || state.switching || state.busyAction) return;
@@ -256,6 +343,7 @@
   function renderCompanion() {
     const assistant = state.assistant;
     const paused = assistant.status === "paused" || assistant.prefs?.paused;
+    const workersOff = state.status.execute === false;
     const running = state.status.running || [];
     const working = running.length > 0;
     const reviewing = state.tasks.some((task) => taskView(task).filter === "review");
@@ -264,11 +352,11 @@
     const action = assistant.action;
     const waiting = state.backlog?.waiting || state.status.waiting;
     const narration = working ? `Working on ${running[0].title || "your task"}${running.length > 1 ? ` · ${running.length} jobs running` : ""}.` : paused ? "New work is paused. Any running jobs will finish normally." : state.pending ? "I'm listening. Your message is on its way." : waiting ? (typeof waiting === "string" ? waiting : waiting.text || waiting.reason || "Work is queued and waiting for an available worker.") : state.backlog?.draining && state.backlog?.next?.length ? `Next I'll pick up ${state.backlog.next[0].title}.` : reviewing ? "There's work that needs a closer look. Open Review to see results and blockers." : action?.text && !["idle", "listening"].includes(action.text) ? action.text : "Tell me what you have in mind. We can take it one step at a time.";
-    $("narration").textContent = narration;
+    $("narration").textContent = !working && !paused && workersOff ? "Coding workers are off. Your tasks are saved; use Work through backlog when you're ready to start them." : narration;
     $("companion-track").dataset.station = working ? "make" : reviewing ? "review" : "listen";
     $("companion-track").classList.toggle("busy", working || state.pending);
     $("pause").textContent = paused ? "Resume" : "Pause";
-    $("connection").textContent = !api() ? "Browser preview" : paused ? "New work paused" : assistant.ai?.keyPresent === false ? "Connect an AI in Settings" : working ? "Working with you" : "Ready when you are";
+    $("connection").textContent = !api() ? "Browser preview" : paused ? "New work paused" : workersOff ? "Coding workers off" : assistant.ai?.keyPresent === false ? "Connect an AI in Settings" : working ? "Working with you" : "Ready when you are";
     $("connection").classList.toggle("working", working);
     const logs = (assistant.log || []).filter((entry) => entry.kind !== "tick").slice(-8).reverse();
     const signature = JSON.stringify(logs);
@@ -289,29 +377,63 @@
     $("jev").title = status?.lastError || "Jev advises on related tasks. Your work stays on the board.";
   }
   function setMode(mode) {
-    if (state.pending) return;
-    state.mode = mode;
+    if (state.pending || state.switching) return;
+    mode = mode === "work" ? "work" : "chat";
+    if (mode !== state.mode) {
+      saveDraft();
+      state.mode = mode;
+      $("input").value = readDraft(state.activeId, mode);
+    }
+    if (state.activeId) storage.set(`mode.${state.activeId}`, mode);
+    renderMode();
+  }
+  function renderMode() {
+    const mode = state.mode;
     $("mode-chat").setAttribute("aria-pressed", String(mode === "chat")); $("mode-work").setAttribute("aria-pressed", String(mode === "work"));
     $("input").placeholder = mode === "work" ? "What should we build or improve? Include what a good result looks like…" : "Ask a question, think through an idea, or tell me where you're stuck…";
-    $("compose-hint").textContent = mode === "work" ? "Creates a task in this project · Enter to add" : "Enter to send · Shift + Enter for a new line";
+    $("compose-hint").textContent = mode === "work" ? "Enter to create · Shift + Enter for a new line" : "Enter to send · Shift + Enter for a new line";
+    if ($("task-outline")) $("task-outline").hidden = mode !== "work";
     controls();
   }
-  function saveDraft() { if (state.activeId) storage.set(`draft.${state.activeId}`, $("input").value); }
+  function readDraft(id, mode) {
+    // Old versions had one draft; retain it in chat until it has been saved
+    // in the new per-purpose slot. An explicitly empty slot stays empty.
+    return storage.get(`draft.${id}.${mode}`, mode === "chat" ? storage.get(`draft.${id}`) : "");
+  }
+  function saveDraft(id = state.activeId) {
+    if (!id) return;
+    storage.set(`draft.${id}.${state.mode}`, $("input").value);
+    if (state.mode === "chat") storage.set(`draft.${id}`, $("input").value);
+  }
   async function submit(event) {
     event?.preventDefault();
     const value = $("input").value.trim();
     if (!value || state.pending || state.switching || !state.activeId || !api()) return;
     const id = state.activeId; const mode = state.mode;
     state.pending = true; controls(); renderCompanion(); feedback(mode === "work" ? "Adding your task…" : "Waiting for a reply…");
+    createdTask = null;
+    if ($("created-task")) $("created-task").hidden = true;
+    let saved = false;
     try {
       const result = guard(await (mode === "work" ? api().tasksCreate({ title: value.split("\n")[0].slice(0, 180), prompt: value, projectId: id }) : api().assistantMessage(value, id)));
+      saved = true;
       if (id !== state.activeId) return;
       if ($("input").value.trim() === value) $("input").value = "";
       saveDraft();
       if (result.state) { state.assistant = result.state; renderThread(); }
-      if (mode === "work") state.filter = "open";
-      if (await refresh(true)) feedback(mode === "work" ? "Task added. Follow it in Your work; open it for details." : "Reply received.");
-    } catch (error) { feedback(`${error.message} Your draft is still here.`, true); }
+      if (mode === "work") {
+        state.filter = "open"; state.query = ""; state.limit = 20; $("work-search").value = "";
+        createdTask = result.task?.id ? { id: result.task.id, projectId: id } : null;
+        if ($("created-task")) $("created-task").hidden = !createdTask;
+      }
+      const refreshed = await refresh(true);
+      if (mode === "work") {
+        const savedMessage = state.status.autoBuild === false ? "Task added for approval. Open View task to review its scope and approve the build when you're ready." : state.assistant.status === "paused" ? "Task added. New work is paused; Resume when you're ready. Open View task for details." : state.backlog?.paused ? "Task added. Coding workers are off; use Work through backlog when you're ready. Open View task for details." : "Task added. Follow it in Your work; open it for details.";
+        if (state.status.autoBuild === false) { state.filter = "review"; renderWork(); }
+        feedback(refreshed ? savedMessage : "Task added, but the board couldn't refresh. Use View task or Retry loading; you don't need to add it again.", !refreshed, refreshed ? "action" : "read");
+      }
+      else if (refreshed) feedback("Reply received.");
+    } catch (error) { feedback(saved ? `${mode === "work" ? "Task added" : "Message sent"}, but the view couldn't refresh. Retry loading to see it.` : `${error.message} Your draft is still here.`, true); }
     finally { state.pending = false; controls(); renderCompanion(); }
   }
   async function refresh(force = false) {
@@ -321,7 +443,7 @@
     const sequence = ++readSequence;
     const before = { ...revisions };
     const belongs = (value) => !value?.projectId || value.projectId === state.activeId;
-    const run = Promise.allSettled([api().tasksList?.(), api().assistantState?.(), api().assistantStatus?.(), api().jevStatus?.(), api().ideasList?.(), api().backlogStatus?.()]).then((results) => {
+    const run = Promise.allSettled(["tasksList", "assistantState", "assistantStatus", "jevStatus", "ideasList", "backlogStatus"].map((method) => readWithDeadline(() => api()[method]?.()))).then((results) => {
       if (epoch !== state.epoch || sequence !== readSequence) return;
       if (before.tasks === revisions.tasks && results[0].status === "fulfilled" && results[0].value?.tasks && belongs(results[0].value)) state.tasks = results[0].value.tasks;
       if (before.assistant === revisions.assistant && results[1].status === "fulfilled" && results[1].value?.state && belongs(results[1].value.state)) state.assistant = results[1].value.state;
@@ -353,18 +475,33 @@
     if (initialized || !$("layer")) return; initialized = true;
     $("form").addEventListener("submit", submit);
     $("retry").addEventListener("click", () => refresh(true));
-    $("input").addEventListener("input", saveDraft);
+    $("input").addEventListener("input", () => saveDraft());
+    $("task-outline")?.addEventListener("click", () => {
+      if (state.pending || state.switching || state.mode !== "work") return;
+      const outline = "Goal:\n\nDone when:\n- \n\nKeep unchanged:\n";
+      $("input").value = $("input").value.trim() ? `${$("input").value.trimEnd()}\n\nDone when:\n- \n\nKeep unchanged:\n` : outline;
+      saveDraft(); $("input").focus();
+    });
+    $("created-task")?.addEventListener("click", () => {
+      if (createdTask?.projectId === state.activeId) window.MefiNav?.go?.("tasks", { taskId: createdTask.id, filter: "all" });
+    });
     $("input").addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); submit(); } });
     $("mode-chat").addEventListener("click", () => setMode("chat")); $("mode-work").addEventListener("click", () => setMode("work"));
-    for (const button of $("layer").querySelectorAll("[data-work-filter]")) button.addEventListener("click", () => { state.filter = button.dataset.workFilter; state.limit = 20; $("work-list").scrollTop = 0; renderWork(); });
+    $("plan-idea")?.addEventListener("click", () => window.MefiNav?.go?.("plans", { create: true, destination: $("input").value.trim() }));
+    for (const button of $("layer").querySelectorAll("[data-work-filter]")) button.addEventListener("click", () => selectWorkFilter(button.dataset.workFilter));
     $("work-search").addEventListener("input", () => { state.query = $("work-search").value.trim().toLowerCase(); state.limit = 20; $("work-list").scrollTop = 0; renderWork(); });
+    $("clear-search").addEventListener("click", clearWorkSearch);
     $("show-more").addEventListener("click", () => { state.limit += 20; renderWork(); });
     $("run-backlog").addEventListener("click", () => controlBacklog(state.backlog?.draining && !state.backlog?.paused ? "pause" : "run"));
+    $("auto-build")?.addEventListener("change", async () => {
+      try { await setAutoBuild($("auto-build").checked); }
+      catch (error) { feedback(error.message, true); renderBuildMode(); controls(); }
+    });
     $("add-project").addEventListener("click", async () => {
       if (state.pending || state.busyAction || state.switching) return;
       state.switching = true; controls();
-      try { const result = await api().projectsAdd(); if (result?.canceled || result?.cancelled) return; adoptProjects(guard(result)); await refresh(true); feedback("Project added. Select it in the sidebar to start working."); }
-      catch (error) { feedback(error.message, true); } finally { state.switching = false; controls(); }
+      try { const result = await api().projectsAdd(); if (result?.canceled || result?.cancelled) return; adoptProjects(guard(result)); await refresh(true); feedback("Project added. Select it in the sidebar to start working.", false, "sidebar"); }
+      catch (error) { feedback(error.message, true, "sidebar"); } finally { state.switching = false; controls(); }
     });
     $("reveal").addEventListener("click", () => api()?.shellReveal(project()?.path));
     $("pause").addEventListener("click", async () => {
@@ -388,21 +525,18 @@
     syncThemeChoice();
     $("motion").checked = storage.get("motion", "1") !== "0";
     $("motion").addEventListener("change", () => { storage.set("motion", $("motion").checked ? "1" : "0"); personalize(); });
-    for (const dest of window.MefiNav?.list?.() || []) {
-      if (dest.id === "workspace" || dest.id === "studio" || dest.kind === "action" || dest.layer === "transient") continue;
-      const button = text("button", "ghost", ""); button.dataset.nav = dest.id; button.append(text("span", "", dest.short), text("kbd", "", dest.key || "")); $("tool-links").append(button);
-    }
+    window.MefiNav?.renderWorkspaceTools?.($("tool-links"));
     api()?.onProjects?.((result) => { adoptProjects(result); refresh(true); });
     api()?.onTasks?.((tasks) => { if (tasks?.some((task) => task.projectId && task.projectId !== state.activeId)) return; revisions.tasks += 1; state.tasks = tasks || []; if (active()) { renderWork(); renderCompanion(); } scheduleBacklogRead(); });
     api()?.onIdeas?.((ideas) => { if (ideas?.some((idea) => idea.projectId && idea.projectId !== state.activeId)) return; revisions.ideas += 1; state.ideas = ideas || []; if (active()) renderWork(); scheduleBacklogRead(); });
     api()?.onAssistant?.((payload) => { if (payload?.state?.projectId && payload.state.projectId !== state.activeId) return; revisions.assistant += 1; if (payload?.state) state.assistant = payload.state; if (active()) { renderThread(); renderCompanion(); } });
-    api()?.onAssistantStatus?.((status) => { if (status?.projectId && status.projectId !== state.activeId) return; revisions.status += 1; state.status = status || {}; if (active()) { renderCompanion(); renderWork(); } scheduleBacklogRead(); });
+    api()?.onAssistantStatus?.((status) => { if (status?.projectId && status.projectId !== state.activeId) return; revisions.status += 1; state.status = status || {}; renderBuildMode(); controls(); if (active()) { renderCompanion(); renderWork(); } scheduleBacklogRead(); });
     personalize(); renderProjects(); renderWork(); renderBacklog();
     api()?.projectsList?.().then((result) => { adoptProjects(guard(result)); return refresh(true); }).catch((error) => feedback(error.message, true));
     if (!api()) $("jev").textContent = "Desktop app connects your tools";
     window.MefiBoot?.pollStart?.("workspace.refresh", () => { if (!document.hidden && active()) refresh(); }, 15000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden && active()) refresh(); });
   }
-  window.MefiWorkspace = { enter, exit, init, refresh, isActive: active, describe };
+  window.MefiWorkspace = { enter, exit, refresh, isActive: active, buildMode, setAutoBuild };
   init();
 })();
