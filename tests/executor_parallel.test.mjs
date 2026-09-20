@@ -106,10 +106,11 @@ test("real selection, file claims and fill loop run independent tasks together b
   const launched = [];
   const autopilot = { execute: true, parallel: 2, jobs: [] };
   const env = vm.createContext({
-    Date, console, path, process: { pid: 321 }, backlog, executorResume, assistantModule: assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
+    Date, console, path, process: { pid: 321 }, backlog, executorResume, assistantModule: assistant, getAssistant: async () => assistant, assistantCache: { store: {} }, autopilot, autopilotJobSeq: 0,
     projectSwitching: false, assistantState: { status: "running" }, SMOKE: false, CAPTURE: false, CLI_MODE: false, executorUpdateHold: () => null,
     projects: { current: () => ({ id: "fixture", path: "C:/fixture" }), open: () => ({ id: "fixture", path: "C:/fixture" }) }, projectRoot: () => "C:/fixture",
-    measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => ({ exclusive: false }) }), executorRunEnv: async () => ({ cli: "fixture" }),
+    measureWorkerLag: async () => 0, getAssistant: async () => assistant, machineLagGate: null,
+    getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => ({ exclusive: false }) }), executorRunEnv: async () => ({ cli: "fixture" }),
     getEyes: async () => ({ readJson: async (key) => structuredClone(board[key]) }),
     getPolicyModule: async () => null, warmPolicyBaseline() {}, resolveActivePolicyIdentity: async () => null,
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", workTitleKey: (value) => value,

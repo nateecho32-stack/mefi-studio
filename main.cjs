@@ -378,6 +378,16 @@ async function measureWorkerLag({ force = false } = {}) {
   return pending.promise;
 }
 
+// Foreman-side lag gate (scripts/assistant.mjs createMachineLagGate): the
+// foreman counts its own renderer-lag samples. One spike above the busy
+// threshold is only a resample; two consecutive readings hold new worker
+// starts even while machine.mjs's sampler is still returning a cached settled
+// sample. The sampler's latched hold stays in charge of host lag, single
+// critical spikes and recovery hysteresis; this gate is a second,
+// cache-independent factor, recreated when assistant.mjs is hot-swapped.
+let machineLagGate = null;
+function resetMachineLagGate() { machineLagGate = null; }
+
 // The renderer writes localStorage["mefiStudio.resume"] so the next boot lands
 // back on the Command view / sheet the user was looking at. Awaited, so the
 // write always happens before the page goes away.
@@ -427,6 +437,7 @@ async function applyStyle(files) {
 async function applyModules(rels) {
   const swapped = invalidateModules(rels);
   if (swapped.includes("scripts/assistant.mjs")) {
+    resetMachineLagGate();
     try {
       await getAssistant();
       assistantLog("control", "swapped scripts/assistant.mjs");
@@ -7276,8 +7287,17 @@ async function spawnNextJob() {
     let capacity;
     try {
       const machine = await getMachine();
+      const assistant = await getAssistant();
       const lagMs = await measureWorkerLag({ force });
       capacity = await machine.workerCapacity({ running, force, lagMs });
+      // The gate threshold mirrors the sampler's lagBusyMs: the same busy bar,
+      // counted over the foreman's own samples instead of the sampler's cache.
+      machineLagGate ??= assistant.createMachineLagGate({ threshold: 100 });
+      const lagGate = machineLagGate(lagMs);
+      capacity = { ...capacity, lagGate };
+      if (lagGate.hold) {
+        capacity = { ...capacity, canStart: false, reason: `Renderer responsiveness is high two samples in a row (${Math.round(lagMs)} ms); waiting for a responsive reading.` };
+      }
     } catch {
       capacity = { canStart: false, reason: "machine measurements unavailable; retrying", resources: null };
     }

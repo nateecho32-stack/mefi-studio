@@ -71,7 +71,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     projects: { current: () => ({ id: "fixture", path: root }), active: () => ({ id: "fixture", path: root }), open: () => ({ id: "fixture", path: root }), run: (_project, fn) => fn() },
     projectRoot: () => root, projectDataPath: (key) => path.join(root, key),
     getMachine: async () => machine,
-    measureWorkerLag: async () => 0,
+    measureWorkerLag: async () => 0, machineLagGate: null,
     getEyes: async () => eyes, getAssistant: async () => env.assistantModule,
     getAnalyzer: async () => ({ verifyIdea: async (text, options) => { contextCalls.push({ text, ...options }); return { hits: [] }; } }),
     resolveAiRoute: async (role, options) => { routeCalls.push({ role, ...options }); return { ok: true, provider: "fixture-http", model: "fixture-model" }; },

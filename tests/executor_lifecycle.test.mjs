@@ -328,21 +328,25 @@ function dispatchHost({ interrupt = null, refuse = false, throwClaim = false, ed
   const registered = new Map(), askedPaths = [], releases = [];
   let leases = 0, mutations = 0, hold = null;
   const autopilot = { execute: true, jobs: [], parallel: 1 };
+  // readCapacity consults the assistant module's foreman-side lag gate, so the
+  // fixture serves the same module (with the claim overrides) the real host does.
+  const assistantModule = { ...assistant,
+    claimWrite: (files, owner) => {
+      askedPaths.push(...files);
+      if (throwClaim) throw new Error("fixture registry unavailable");
+      if (refuse) return { action: "refuse" };
+      for (const file of files) registered.set(file, owner);
+      return { action: "proceed" };
+    },
+    releaseWrite: (files, owner) => { releases.push(owner); for (const file of files) if (registered.get(file) === owner) registered.delete(file); },
+  };
   const env = vm.createContext({
     Date, path, process: { pid: 999 }, backlog, executorResume, autopilot, autopilotJobSeq: 0, assistantCache: { store: {} },
-    assistantModule: { ...assistant,
-      claimWrite: (files, owner) => {
-        askedPaths.push(...files);
-        if (throwClaim) throw new Error("fixture registry unavailable");
-        if (refuse) return { action: "refuse" };
-        for (const file of files) registered.set(file, owner);
-        return { action: "proceed" };
-      },
-      releaseWrite: (files, owner) => { releases.push(owner); for (const file of files) if (registered.get(file) === owner) registered.delete(file); },
-    },
+    assistantModule, getAssistant: async () => assistantModule,
     projectSwitching: false, assistantState: { status: "running" }, executorUpdateHold: () => hold,
     projects: { current: () => ({ id: "external", path: root }), open: () => ({ id: "external", path: root }) }, projectRoot: () => root,
-    measureWorkerLag: async () => 0, getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => {
+    measureWorkerLag: async () => 0, getAssistant: async () => assistantModule, machineLagGate: null,
+    getMachine: async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => {
       leases += 1;
       if (leases === 2 && interrupt === "after-claim") hold = "waiting for workers before restart";
       if (leases === 2 && interrupt === "pause") autopilot.execute = false;
