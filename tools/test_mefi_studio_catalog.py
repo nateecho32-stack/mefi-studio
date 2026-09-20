@@ -8,6 +8,11 @@ from pathlib import Path
 import json
 import unittest
 
+try:
+    from flake_capture import retry_transient
+except ImportError:  # imported as tools.test_mefi_studio_catalog
+    from .flake_capture import retry_transient
+
 
 ROOT = Path(__file__).resolve().parents[1]
 STUDIO = ROOT
@@ -17,14 +22,31 @@ VALID_CAPS = {None, 15, 30, 60, "unlimited"}
 
 
 def _load(path):
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    except OSError as error:
+        # A concurrent catalog rebuild can hold or swap the live file for a
+        # moment (atomic rename, OneDrive hydration); surface it to the
+        # retry helper's transient contract.
+        raise ValueError(f"transient read of {path}: {error}") from error
 
 
 class MefiStudioCatalogTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.catalog = _load(CATALOG)
-        cls.curated = _load(CURATED)
+        # Live committed-catalog reads: parallel agent runs can be caught
+        # mid-write. A failure that clears on immediate re-run is captured
+        # as a flake (data/python-flake-capture.jsonl); a failure that
+        # reproduces re-raises the original so the gate keeps failing.
+        def load_live_catalog():
+            cls.catalog = _load(CATALOG)
+            cls.curated = _load(CURATED)
+
+        retry_transient(
+            load_live_catalog,
+            f"{__name__}.MefiStudioCatalogTests.setUpClass",
+            "live data/models.json + data/curated.json reads",
+        )
         cls.guide = (ROOT / "TESTRUNS.md").read_text(encoding="utf-8")
 
     def test_catalog_shape(self):

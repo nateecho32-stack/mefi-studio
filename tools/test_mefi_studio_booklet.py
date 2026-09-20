@@ -25,7 +25,7 @@ class MefiStudioBookletTests(unittest.TestCase):
     def setUpClass(cls):
         cls.booklet = BOOKLET.read_text(encoding="utf-8")
         cls.template = TEMPLATE.read_text(encoding="utf-8")
-        cls.catalog = json.loads(CATALOG.read_text(encoding="utf-8"))
+        cls.catalog = json.loads(CATALOG.read_text(encoding="utf-8-sig"))
         cls.guide = (ROOT / "TESTRUNS.md").read_text(encoding="utf-8")
 
     def test_template_placeholders_are_documented(self):

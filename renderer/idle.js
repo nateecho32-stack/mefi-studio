@@ -138,9 +138,10 @@
     zen: readStore("mefiStudio.zen") !== "0",
     profile: PROFILES[readStore("mefiStudio.zenProfile")] ? readStore("mefiStudio.zenProfile") : "zen",
     reactive: readStore("mefiStudio.zenReactive") === "1",
-    audioSource: readStore("mefiStudio.zenSource") === "mic" ? "mic" : "desktop",
+    audioSource: ["auto", "local", "desktop", "mic"].includes(readStore("mefiStudio.audioSource.v2")) ? readStore("mefiStudio.audioSource.v2") : readStore("mefiStudio.zenSource") === "mic" ? "mic" : "auto",
     bands: { bass: 0, mid: 0, treble: 0 },
     music: null,
+    audioResponse: Math.max(0.25, Math.min(2, Number(readStore("mefiStudio.audioResponse")) || 1)),
     spectrumBuffer: null,
     inputSource: null,
     inputError: null,
@@ -174,6 +175,7 @@
     lastInput: Date.now(),
     checkpoints: {},
     hudTimer: null,
+    ambientZenEnabled: readStore("mefiStudio.ambientZen") === "1",
     ambientZen: false,
     zenRestore: null,
     tasks: [],
@@ -317,21 +319,22 @@
     return state.audio;
   }
 
-  // Reactive glow listens to desktop audio (system loopback, via
-  // getDisplayMedia + the main-process handler) unless the ambience popover
-  // switches it to the microphone. The input stream feeds a dedicated analyser
-  // that never reaches the speakers — the glow reads it, nothing monitors it.
+  // Auto follows the Studio player when a local track is loaded. Explicit
+  // Desktop and Microphone choices keep their source even as the queue changes.
+  // Captured input feeds an analyser without monitoring it through the speakers.
   function useReactiveInput() {
     // inputStream only lands when the request resolves; inputPending holds the
     // source kind in flight so a same-source caller cannot double-request while
     // a source switch can still supersede a stale pending request.
     if (!state.reactive || !state.active) return;
-    const mic = state.audioSource === "mic";
+    const selection = state.audioSource;
+    const mic = selection === "mic";
     const kind = mic ? "mic" : "desktop";
     // Imported tracks can feed the analyser directly, without a second audio
     // capture request. Spotify stays external because its frame is isolated.
-    const localElement = !mic ? localMusicElement() : null;
+    const localElement = selection === "auto" || selection === "local" ? localMusicElement() : null;
     if (state.audio && localElement) { useLocalMusicInput(localElement); return; }
+    if (selection === "local") { renderMusicStatus(true); return; }
     if (!state.audio || !state.captureArmed || state.inputStream || state.inputPending === kind || state.inputError) return;
     const generation = ++state.inputGeneration;
     let request;
@@ -357,7 +360,7 @@
         // The request can resolve after the switch went off, after the view
         // was left, or after the source select moved on: hand the device
         // straight back instead of glowing to a source nobody asked for.
-        if (generation !== state.inputGeneration || !state.reactive || !state.active || state.audioSource !== kind) {
+        if (generation !== state.inputGeneration || !state.reactive || !state.active || state.audioSource !== selection) {
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
@@ -383,7 +386,7 @@
         for (const track of stream.getAudioTracks()) track.addEventListener?.("ended", () => {
           if (state.inputStream !== stream) return;
           releaseReactiveInput();
-          state.inputError = "Audio source disconnected. Turn music off and on to reconnect";
+          state.inputError = "Audio source disconnected. Click Connect audio to reconnect";
           renderMusicStatus(true);
         }, { once: true });
         renderMusicStatus(true);
@@ -392,7 +395,7 @@
         if (generation !== state.inputGeneration) return;
         state.inputPending = null;
         if (state.inputStream) releaseReactiveInput();
-        state.inputError = error?.name === "NotAllowedError" ? "Audio access was not allowed. Turn music off and on to try again" : String(error?.message ?? "Audio capture could not start");
+        state.inputError = error?.name === "NotAllowedError" ? "Audio access was not allowed. Click Connect audio to try again" : String(error?.message ?? "Audio capture could not start");
         renderMusicStatus(true);
       });
   }
@@ -469,11 +472,12 @@
   }
 
   function setAudioSource(source) {
-    const next = source === "mic" ? "mic" : "desktop";
+    const next = ["auto", "local", "desktop", "mic"].includes(source) ? source : "auto";
     if (next === state.audioSource) return;
     state.audioSource = next;
     state.inputError = null;
-    writeStore("mefiStudio.zenSource", next);
+    writeStore("mefiStudio.audioSource.v2", next);
+    if (el.source) el.source.value = next;
     if (state.reactive && state.active) {
       releaseReactiveInput();
       state.captureArmed = true;
@@ -488,7 +492,7 @@
     state.inputError = null;
     writeStore("mefiStudio.zenReactive", state.reactive ? "1" : "0");
     if (el.reactive) el.reactive.checked = state.reactive;
-    if (el.source) el.source.disabled = !state.reactive;
+    if (el.source) el.source.disabled = false;
     if (state.reactive && state.active) ensureReactiveInput();
     else releaseReactiveInput();
     renderMusicStatus(true);
@@ -498,14 +502,15 @@
     const now = Date.now();
     if (!force && now - state.musicUiAt < 100) return;
     state.musicUiAt = now;
-    const listening = Boolean(state.inputStream || state.localAudio);
-    const source = state.audioSource === "mic" ? "Mic" : state.localAudio ? "Track" : "Music";
-    const text = !state.reactive ? "Music off" : state.inputError ? "Audio unavailable" : state.inputPending ? "Connecting audio…" : listening ? (state.music?.energy > 0.035 ? `${source} linked` : "Listening · quiet") : "Connect audio";
-    if (el.musicStatus) el.musicStatus.textContent = text;
+    const status = audioStatus();
+    const { listening } = status;
+    const enabled = state.reactive && (listening || state.inputPending || state.audioSource === "local" && !state.inputError);
+    if (el.musicStatus) el.musicStatus.textContent = status.text;
     if (el.musicToggle) {
-      el.musicToggle.setAttribute("aria-pressed", String(Boolean(state.reactive && (listening || state.inputPending))));
+      el.musicToggle.setAttribute("aria-pressed", String(Boolean(enabled)));
       el.musicToggle.dataset.state = state.inputError ? "error" : listening ? "listening" : state.inputPending ? "pending" : "off";
-      el.musicToggle.title = state.inputError || (state.reactive && listening ? `Following ${state.audioSource === "mic" ? "microphone" : state.localAudio ? "the Studio player" : "desktop audio"}. Click to stop listening. Change source in Ambience.` : "React to the Studio player or desktop music. Audio stays on this device. Click to connect; change source in Ambience.");
+      el.musicToggle.title = `${status.description} ${enabled ? "Click to stop linking." : "Click to connect."} Change source in Music & themes.`;
+      el.musicToggle.setAttribute("aria-label", status.text);
     }
     if (el.musicLevel) {
       el.musicLevel.style.setProperty("--music-level", String(listening && !noMotion() ? state.music?.energy ?? 0 : 0));
@@ -514,6 +519,25 @@
         if (bar) bar.style.setProperty("--band-level", String(listening && !noMotion() ? state.bands[band] : 0));
       }
     }
+    // Publish connection/player transitions, not every FFT frame. Controls can
+    // stay synchronized without a separate polling loop or noisy live region.
+    const key = JSON.stringify([status.reactive, status.selection, status.source, status.phase, status.text, status.error, status.response]);
+    if (key !== state.audioUiKey) {
+      state.audioUiKey = key;
+      if (typeof CustomEvent === "function") window.dispatchEvent?.(new CustomEvent("mefi-audio-change", { detail: status }));
+    }
+  }
+
+  function audioStatus() {
+    const listening = Boolean(state.inputStream || state.localAudio);
+    const pending = Boolean(state.inputPending);
+    const source = state.localAudio ? "local" : state.inputStream || pending ? state.audioSource === "mic" ? "mic" : "desktop" : state.audioSource;
+    const paused = Boolean(state.localAudio?.element?.paused || state.localAudio?.element?.ended);
+    const sourceName = source === "mic" ? "Microphone" : source === "local" ? "Studio player" : "Desktop audio";
+    const phase = !state.reactive ? "off" : state.inputError ? "error" : pending ? "pending" : listening ? paused ? "paused" : "listening" : "ready";
+    const text = phase === "off" ? "Audio link off" : phase === "error" ? "Audio unavailable" : phase === "pending" ? "Connecting audio…" : phase === "paused" ? "Track paused" : phase === "listening" ? (state.music?.energy > 0.035 ? `${source === "local" ? "Track" : source === "mic" ? "Mic" : "Desktop"} linked` : "Listening · quiet") : state.audioSource === "local" ? "Add a track to link" : "Connect audio";
+    const description = state.inputError || (listening ? paused ? "Studio track is paused. Play it to animate the nodes." : `Following ${sourceName.toLowerCase()}. Bass, mids and treble animate the nodes and connections.` : pending ? `Connecting to ${sourceName.toLowerCase()}…` : state.audioSource === "local" ? "Add a local track, then play it to animate the nodes." : state.audioSource === "auto" ? "Follows loaded Studio tracks directly. Connect to desktop audio when no track is loaded." : `Connect to ${sourceName.toLowerCase()} to animate the nodes.`);
+    return { reactive: state.reactive, selection: state.audioSource, source, listening, pending, error: state.inputError, phase, text, label: text, description, response: state.audioResponse ?? 1, bands: { ...state.bands }, energy: state.music?.energy ?? 0, beat: state.music?.beat ?? 0 };
   }
 
   function bell({ low = false, long = false, quick = false, level = 1 }) {
@@ -724,7 +748,7 @@
     if (details?.music.playing && state.audio?.state === "suspended") state.audio.resume().catch(() => {});
     if (!state.reactive || !state.active) return;
     const element = localMusicElement();
-    if (element && state.audioSource !== "mic") {
+    if (element && (state.audioSource === "auto" || state.audioSource === "local")) {
       state.inputError = null;
       ensureReactiveInput();
     } else if (state.localAudio) {
@@ -758,9 +782,12 @@
       slots.add(slot); used.set(group, slots);
     };
     const layout = new Map([...previous].filter(([id]) => retainedIds.has(id)));
+    // A real assignment change moves the task into its new branch and frees
+    // the old slot. Status and priority changes retain the same position.
+    for (const entry of entries) if (layout.get(entry.task.id)?.group !== entry.group) layout.delete(entry.task.id);
     for (const prior of layout.values()) reserve(prior.group, prior.slot);
     for (const entry of entries) {
-      const prior = previous.get(entry.task.id);
+      const prior = layout.get(entry.task.id);
       if (prior && Number.isInteger(prior.slot) && prior.slot >= 0) {
         entry.slot = prior.slot; entry.group = prior.group; reserve(entry.group, prior.slot);
       }
@@ -774,7 +801,7 @@
       const { anchor, slot } = entry;
       const angle = slot * 2.399963;
       const radius = anchor ? 78 + Math.floor(slot / 4) * 32 : 215 + Math.floor(slot / 12) * 34;
-      const prior = previous.get(entry.task.id);
+      const prior = layout.get(entry.task.id);
       entry.x = Number.isFinite(prior?.x) ? prior.x : (anchor?.x ?? 0) + Math.cos(angle) * radius;
       entry.y = Number.isFinite(prior?.y) ? prior.y : (anchor?.y ?? 0) + 48 + (slot % 3) * 34;
       entry.z = Number.isFinite(prior?.z) ? prior.z : (anchor?.z ?? 0) + Math.sin(angle) * radius;
@@ -2540,6 +2567,7 @@
     if (layout === "constellation") return constellationSeeds(projected, area, parentIds, slots, fixed);
     const forest = layoutForest(projected, parentIds);
     const tree = tidyBranchSeeds(projected, area, forest.parents, new Map());
+    const phases = layout === "helix" ? null : branchSectorPhases(tree, area, forest.parents, forest.root);
     const maxDepth = Math.max(1, ...[...tree.values()].map((point) => point.depth));
     const cx = area.x + area.w / 2, cy = area.y + area.h / 2;
     const rx = Math.max(24, (area.w - 100) / 2), ry = Math.max(24, (area.h - 100) / 2);
@@ -2555,7 +2583,7 @@
       } else {
         // Elliptical rings follow dependency depth and the same angular
         // sector for each branch, using both dimensions of the viewport.
-        const phase = (branch.x - area.x - 32) / Math.max(1, area.w - 64) * Math.PI * 2 - Math.PI / 2;
+        const phase = phases.get(id);
         const radius = Math.sqrt(branch.depth / maxDepth);
         point = { x: cx + Math.cos(phase) * rx * radius, y: cy + Math.sin(phase) * ry * radius, depth: branch.depth, phase };
       }
@@ -2629,6 +2657,7 @@
     // They used to share a tiny central ring and collide into a diagonal pile.
     if (root) for (const node of nodes.values()) if (node.id !== root.id && !parents.has(node.id)) parents.set(node.id, root.id);
     const tree = tidyBranchSeeds(projected, area, parents, new Map());
+    const phases = branchSectorPhases(tree, area, parents, root?.id);
     const depths = [...tree.entries()].filter(([id]) => id !== root?.id).map(([, point]) => point.depth);
     const minDepth = Math.min(...depths, 1), maxDepth = Math.max(...depths, minDepth + 1);
     const cx = area.x + area.w / 2, cy = area.y + area.h / 2;
@@ -2638,7 +2667,7 @@
     for (const [id, point] of tree) {
       if (!slots.has(id)) slots.set(id, { group: parents.get(id) ?? "__roots__", slot: slots.size });
       if (id === root?.id) { points.set(id, { x: cx, y: cy, depth: 0 }); continue; }
-      const phase = (point.x - area.x - 32) / Math.max(1, area.w - 64) * Math.PI * 2 - Math.PI / 2;
+      const phase = phases.get(id);
       const radius = !branchIds.has(id) && parents.get(id) === root?.id ? 0.86
         : 0.58 + 0.36 * Math.max(0, point.depth - minDepth) / Math.max(1, maxDepth - minDepth);
       points.set(id, { x: cx + Math.cos(phase) * rx * radius, y: cy + Math.sin(phase) * ry * radius, depth: point.depth, phase });
@@ -2653,6 +2682,30 @@
       adjusted.set(id, original && anchor ? { ...point, x: point.x + anchor.x - original.x, y: point.y + anchor.y - original.y } : point);
     }
     return adjusted;
+  }
+
+  function branchSectorPhases(tree, area, parents, root) {
+    const phases = new Map([...tree].map(([id, point]) => [id,
+      (point.x - area.x - 32) / Math.max(1, area.w - 64) * Math.PI * 2 - Math.PI / 2]));
+    const branches = new Map(), extents = new Map();
+    for (const id of tree.keys()) {
+      let branch = id, parent = parents.get(branch);
+      const seen = new Set([id]);
+      while (parent && parent !== root && tree.has(parent) && !seen.has(parent)) {
+        seen.add(parent); branch = parent; parent = parents.get(branch);
+      }
+      branches.set(id, branch);
+      extents.set(branch, Math.max(extents.get(branch) ?? 0, Math.abs(phases.get(id) - phases.get(branch))));
+    }
+    // A dominant session can occupy nearly the whole tidy row. Wrapping that
+    // row around a full circle puts its outer children behind their parent.
+    // Contract only oversized sectors around their existing branch anchor,
+    // retaining sibling order and the gaps between unrelated branches.
+    return new Map([...phases].map(([id, phase]) => {
+      const branch = branches.get(id), anchor = phases.get(branch);
+      const scale = Math.min(1, (Math.PI / 3) / Math.max(0.001, extents.get(branch)));
+      return [id, anchor + (phase - anchor) * scale];
+    }));
   }
 
   function primaryBranchParents(projected, edges) {
@@ -2838,6 +2891,28 @@
     const retained = new Set([...anchors.map(({ node }) => node.id), ...(state.allTasks ?? state.tasks ?? []).map((task) => `task:${task.id}`), ...(state.taskGroups ?? []).flatMap((group) => [`task:${group.id}`, ...group.members.map((member) => `task:${member.id}`)])]);
     for (const id of layout.keys()) if (!retained.has(id)) layout.delete(id);
     for (const id of state.screenLayout.slots.keys()) if (!retained.has(id)) state.screenLayout.slots.delete(id);
+    const parentIds = primaryBranchParents(projected, state.edges ?? []);
+    state.branchParents = parentIds;
+    const previousParents = state.screenLayout.parents ??= new Map();
+    for (const id of previousParents.keys()) if (!retained.has(id)) previousParents.delete(id);
+    const relocated = new Set();
+    for (const { node } of anchors) {
+      if (!node.dying && previousParents.has(node.id) && previousParents.get(node.id) !== (parentIds.get(node.id) ?? null)) relocated.add(node.id);
+    }
+    // Release the whole affected subtree, including temporarily hidden group
+    // members. Keeping their old anchors stretches links across the scene
+    // when a task gains a session or an approved plan changes its grouping.
+    let changed = relocated.size > 0;
+    while (changed) {
+      changed = false;
+      for (const [id, parent] of previousParents) {
+        if (!relocated.has(id) && (relocated.has(parent) || relocated.has(parentIds.get(id)))) {
+          relocated.add(id); changed = true;
+        }
+      }
+    }
+    for (const id of relocated) { layout.delete(id); state.screenLayout.slots.delete(id); }
+    for (const { node } of anchors) previousParents.set(node.id, parentIds.get(node.id) ?? null);
     const fixedIds = new Set();
     for (const { node, p } of anchors) {
       const saved = layout.get(node.id);
@@ -2846,8 +2921,6 @@
       if (saved) { Object.assign(p, source); fixedIds.add(node.id); }
       node._layoutAnchor = { ...world };
     }
-    const parentIds = primaryBranchParents(projected, state.edges ?? []);
-    state.branchParents = parentIds;
     // A narrow tree needs clear bands where active task names can fit.
     // Filling every last gap with orbs otherwise leaves Auto with no labels.
     const labelGutter = area.w < 480 ? Math.max(0, Math.min(64, (area.h - 240) / 2)) : 0;
@@ -4054,6 +4127,94 @@
     frameRequest = requestAnimationFrame(frame);
   }
 
+  function setAudioResponse(value) {
+    const next = Number(value);
+    if (!Number.isFinite(next)) return;
+    state.audioResponse = Math.max(0.25, Math.min(2, next));
+    writeStore("mefiStudio.audioResponse", String(state.audioResponse));
+    renderMusicStatus(true);
+  }
+
+  // A node keeps its frequency voice across sorting, camera moves and rebuilds.
+  // Music changes light within the existing surface, never its layout or status.
+  function nodeAudioResponse(node, music, enabled, response = 1) {
+    let band = "mid";
+    if (["root", "assistant", "music"].includes(node.kind)) band = "bass";
+    else if (["todo", "agent", "checkpoint"].includes(node.kind)) band = "treble";
+    else if (node.kind === "task" && !node.taskGroup) {
+      let hash = 0;
+      for (const char of String(node.id)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+      band = ["bass", "mid", "treble"][hash % 3];
+    }
+    const clamp = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+    const strength = Math.max(0.25, Math.min(2, Number(response) || 1));
+    const beat = enabled ? clamp(clamp(music?.beat) * strength) : 0;
+    const level = enabled ? clamp((clamp(music?.[band]) * 0.82 + clamp(music?.energy) * 0.18) * strength) : 0;
+    return { band, level, beat };
+  }
+
+  function drawNodeAudio(ctx, node, p, radius, tint, response) {
+    const { level, beat } = response;
+    if (level < 0.005 && beat < 0.005) return;
+    ctx.save();
+    ctx.globalAlpha = (node._fade ?? 1) * emphasis(node);
+    // Leave the status rim and central music/assistant glyph readable.
+    const core = radius * (0.28 + level * 0.42 + beat * 0.1);
+    const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, Math.max(1, core));
+    glow.addColorStop(0, rgba(tint, level * 0.42 + beat * 0.22));
+    glow.addColorStop(1, rgba(tint, 0));
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, core), 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = rgba(tint, level * 0.6 + beat * 0.24);
+    ctx.lineWidth = Math.min(1.8, radius * 0.14);
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius * (0.72 + level * 0.12), 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawGraphConnections(ctx, projected, runningIds, audioLinked = false) {
+    // Work sets the connection's color; audio only modulates its light.
+    for (const edge of state.edges) {
+      const a = projected[edge.a], b = projected[edge.b];
+      if (!a || !b || a.node._absorbed || b.node._absorbed || a.node.kind === "agent" || b.node.kind === "agent") continue;
+      const lifetime = Math.min(a.node._fade ?? 1, b.node._fade ?? 1);
+      if (lifetime <= 0.02) continue;
+      const sessionId = edge.sessionId ?? b.node.sessionId;
+      const inspected = state.branch && sessionId === state.branch || state.hoverNode === a.node || state.hoverNode === b.node;
+      const active = b.node._workLabel !== "Verifying" && isBusyNode(b.node, runningIds);
+      const branches = state.nodeLayout === "tree" || state.nodeLayout === "layers";
+      const primary = state.branchParents?.get(b.node.id) === a.node.id;
+      const tint = active || inspected ? colorOf(b.node) : NODE_RGB.task;
+      const response = audioLinked ? b.node._audioResponse : null;
+      const light = response ? response.level * 0.24 + response.beat * 0.12 : 0;
+      ctx.strokeStyle = rgba(tint, lifetime * Math.min(0.95, (!primary && !inspected ? 0.075 : inspected ? 0.65 : active ? 0.5 : 0.32) + light));
+      ctx.lineWidth = (!primary && !inspected ? 0.65 : active || inspected ? 1.3 : 0.9) + light * 1.8;
+      ctx.beginPath(); ctx.moveTo(a.p.x, a.p.y);
+      if (primary && branches) {
+        const middle = (a.p.y + b.p.y) / 2;
+        ctx.bezierCurveTo(a.p.x, middle, b.p.x, middle, b.p.x, b.p.y);
+      } else ctx.lineTo(b.p.x, b.p.y);
+      ctx.stroke();
+    }
+
+    // The managed host follows assignments and return flights. Draw one link
+    // to that host instead of also retaining the original Assistant tether.
+    const byId = new Map(projected.map((entry) => [entry.node.id, entry]));
+    const assistant = projected.find(({ node }) => node.kind === "assistant");
+    for (const { node, p } of projected) {
+      if (node.kind !== "agent" || node._absorbed || (node._fade ?? 1) <= 0.02) continue;
+      const hostId = state.agentLayout?.get(node.id)?.hostId ?? node.targetNode?.id ?? node.targetId ?? node.hostId;
+      const target = byId.get(hostId) ?? assistant;
+      if (!target || target.node._absorbed || target.node === node) continue;
+      const lifetime = Math.min(node._fade ?? 1, target.node._fade ?? 1);
+      if (lifetime <= 0.02) continue;
+      const response = audioLinked ? node._audioResponse : null;
+      const light = response ? response.level * 0.24 + response.beat * 0.12 : 0;
+      ctx.strokeStyle = rgba(agentRgb(node.role), lifetime * ((state.nodeLayout === "tree" ? 0.18 : 0.38) + light));
+      ctx.lineWidth = 1 + light * 1.8;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(target.p.x, target.p.y); ctx.stroke();
+    }
+  }
+
   function drawFrame(time) {
     if (!state.lastFrame) state.lastFrame = time;
     const still = noMotion();
@@ -4061,6 +4222,7 @@
     const energy = still ? 0 : measuredEnergy;
     const musicBands = still ? { bass: 0, mid: 0, treble: 0 } : state.bands;
     const musicBeat = still || !state.reactive || !state.inputStream && !state.localAudio ? 0 : state.music?.beat ?? 0;
+    const audioLinked = !still && state.reactive && Boolean(state.inputStream || state.localAudio);
     // Nodes the assistant has been told to work on (Work on it): pinned board
     // tasks plus pinned, still-queued inbox requests. One set per frame.
     const pinnedIds = workPinIds();
@@ -4180,6 +4342,7 @@
     const runningJobs = autopilotJobs(state.assistant);
     for (const { node } of projected) {
       node._orbitTrail = null; node._extraGlow = false;
+      node._audioResponse = nodeAudioResponse(node, state.music, audioLinked, state.audioResponse);
       node._bubble = null; node._bubblePaint = null;
       const ids = [node.id, node.sessionId, node.task?.id].filter(Boolean).map(String);
       node._workLabel = node.task?.status === "awaiting_verification" ? "Verifying" : (node.kind === "todo" ? node.status === "in_progress" : ids.some((id) => runningIds.has(id))) ? "Running" : ids.some((id) => pinnedIds.has(id)) ? "Next" : null;
@@ -4192,38 +4355,7 @@
     const screenPoints = new Map(projected.map(({ node, p }) => [node.id, p]));
     computeBranch();
 
-    // Only actual work and inspected branches brighten a connection. Recent
-    // historical activity alone must not make the whole graph look busy.
-    for (const edge of state.edges) {
-      const a = projected[edge.a], b = projected[edge.b];
-      if (!a || !b || a.node._absorbed || b.node._absorbed) continue;
-      const lifetime = Math.min(a.node._fade ?? 1, b.node._fade ?? 1);
-      if (lifetime <= 0.02) continue;
-      const sessionId = edge.sessionId ?? b.node.sessionId;
-      const inspected = state.branch && sessionId === state.branch || state.hoverNode === a.node || state.hoverNode === b.node;
-      const active = b.node._workLabel !== "Verifying" && (isBusyNode(b.node, runningIds) || b.node.kind === "agent" && b.node.status === "running");
-      const branches = state.nodeLayout === "tree" || state.nodeLayout === "layers";
-      const primary = state.branchParents?.get(b.node.id) === a.node.id;
-      const tint = active || inspected ? colorOf(b.node) : NODE_RGB.task;
-      ctx.strokeStyle = rgba(tint, lifetime * (!primary && !inspected ? 0.075 : inspected ? 0.65 : active ? 0.5 : 0.32));
-      ctx.lineWidth = !primary && !inspected ? 0.65 : active || inspected ? 1.3 : 0.9;
-      ctx.beginPath(); ctx.moveTo(a.p.x, a.p.y);
-      if (primary && branches) {
-        const middle = (a.p.y + b.p.y) / 2;
-        ctx.bezierCurveTo(a.p.x, middle, b.p.x, middle, b.p.x, b.p.y);
-      } else ctx.lineTo(b.p.x, b.p.y);
-      ctx.stroke();
-    }
-
-    // Real worker assignments remain visible as quiet, solid role-colour links.
-    for (const { node, p } of projected) {
-      if (node.kind !== "agent" || !node.targetNode || (node._fade ?? 1) <= 0.02) continue;
-      const target = projected.find((entry) => entry.node === node.targetNode);
-      if (!target) continue;
-      ctx.strokeStyle = rgba(agentRgb(node.role), (node._fade ?? 1) * (state.nodeLayout === "tree" ? 0.18 : 0.38));
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(target.p.x, target.p.y); ctx.stroke();
-    }
+    drawGraphConnections(ctx, projected, runningIds, audioLinked);
 
     // pulses: bright travelling dots on the working path — a line that ends
     // at an agent carries the signal itself instead (wave, see surgeLine)
@@ -4317,12 +4449,7 @@
         ctx.fillStyle = "#303947"; ctx.fillRect(p.x - 9, p.y + radius + 5, 18, 1.5);
         ctx.fillStyle = rgba(tint, 0.8); ctx.fillRect(p.x - 9, p.y + radius + 5, 18 * fraction, 1.5);
       }
-      // A restrained music highlight lives on the existing face, never as a
-      // second ring expanding over its neighbours.
-      if (musicBeat > 0.08 && (active || node.kind === "music")) {
-        traceNodeSurface(ctx, visual.shape, p.x, p.y, radius);
-        ctx.fillStyle = rgba(tint, musicBeat * 0.1); ctx.fill();
-      }
+      drawNodeAudio(ctx, node, p, radius, tint, node._audioResponse);
       // Collision boost: a thin amber rim, same restraint as the music beat —
       // the clash color marks the session while the fight is still live.
       if (colliding && (active || selected)) {
@@ -6167,7 +6294,7 @@
   function canAmbientZen() {
     const top = window.MefiNav?.top?.();
     const focus = document.activeElement;
-    return Boolean(state.active && !document.hidden && !state.settingsPreview &&
+    return Boolean(state.ambientZenEnabled && state.active && !document.hidden && !state.settingsPreview &&
       !document.body.dataset.sheet && (!top || top === "command") &&
       !state.panning && !state.rotating && !state.query &&
       el.pop?.hidden !== false && (!state.feedMenuOpen || state.feedCollapsed) &&
@@ -6205,6 +6332,14 @@
   function wakeAmbientZen(now = Date.now()) {
     state.lastInput = now;
     return setAmbientZen(false);
+  }
+
+  function setAmbientZenEnabled(enabled) {
+    state.ambientZenEnabled = Boolean(enabled);
+    writeStore("mefiStudio.ambientZen", state.ambientZenEnabled ? "1" : "0");
+    if (el.ambientZen) el.ambientZen.checked = state.ambientZenEnabled;
+    wakeAmbientZen();
+    bumpHud();
   }
 
   function checkAmbientZen(now = Date.now()) {
@@ -6577,6 +6712,7 @@
     el.taskAdd = document.getElementById("idle-task-add");
     el.home = document.getElementById("idle-home");
     el.zen = document.getElementById("idle-zen");
+    el.ambientZen = document.getElementById("idle-ambient-zen");
     el.reactive = document.getElementById("idle-reactive");
     el.musicToggle = document.getElementById("idle-music-toggle");
     el.musicStatus = document.getElementById("idle-music-status");
@@ -6650,6 +6786,10 @@
         bell({ quick: true, level: 0.8 });
       });
     }
+    if (el.ambientZen) {
+      el.ambientZen.checked = state.ambientZenEnabled;
+      el.ambientZen.addEventListener("change", () => setAmbientZenEnabled(el.ambientZen.checked));
+    }
     if (el.zen) {
       el.zen.checked = state.zen;
       el.zen.addEventListener("change", () => {
@@ -6663,11 +6803,11 @@
       el.reactive.checked = state.reactive;
       el.reactive.addEventListener("change", () => setMusicReactive(el.reactive.checked));
     }
-    el.musicToggle?.addEventListener("click", () => setMusicReactive(!state.reactive || !state.inputStream && !state.localAudio && !state.inputPending));
+    el.musicToggle?.addEventListener("click", () => setMusicReactive(!state.reactive || !state.inputStream && !state.localAudio && !state.inputPending && (state.audioSource !== "local" || Boolean(state.inputError))));
     renderMusicStatus(true);
     if (el.source) {
       el.source.value = state.audioSource;
-      el.source.disabled = !state.reactive;
+      el.source.disabled = false;
       el.source.addEventListener("change", () => setAudioSource(el.source.value));
     }
     el.exitBtn?.addEventListener("click", exit);
@@ -7142,14 +7282,14 @@
       opacity: node._absorbed ? 0 : node._fade ?? node.opacity ?? 1,
       world: { x: node.x, y: node.y, z: node.z }, screen: { x: node._px, y: node._py },
     })),
-    debugNodes: () => state.nodes.map((node) => ({ id: node.id, kind: node.kind, label: node.label, workStatus: node._workLabel, x: node._px, y: node._py, radius: node._pr, layoutAnchor: node._layoutAnchor ? { ...node._layoutAnchor } : null, labelRect: node._label ? { ...node._label } : null, cardRect: node._cardRect ? { ...node._cardRect } : null, bubbleRect: node._bubblePaint ? { ...node._bubblePaint } : null, bubbleHitRect: node._bubble ? { x: node._bubble.x, y: node._bubble.y, w: node._bubble.w, h: node._bubble.h } : null, shape: nodeVisualProfile(node).shape, visualStyle: state.nodeStyle, orbitTrail: node._orbitTrail ? { ...node._orbitTrail } : null, extraGlow: node._extraGlow === true })),
+    debugNodes: () => state.nodes.map((node) => ({ id: node.id, kind: node.kind, label: node.label, workStatus: node._workLabel, x: node._px, y: node._py, radius: node._pr, layoutAnchor: node._layoutAnchor ? { ...node._layoutAnchor } : null, labelRect: node._label ? { ...node._label } : null, cardRect: node._cardRect ? { ...node._cardRect } : null, bubbleRect: node._bubblePaint ? { ...node._bubblePaint } : null, bubbleHitRect: node._bubble ? { x: node._bubble.x, y: node._bubble.y, w: node._bubble.w, h: node._bubble.h } : null, shape: nodeVisualProfile(node).shape, visualStyle: state.nodeStyle, audioResponse: node._audioResponse ? { ...node._audioResponse } : null, orbitTrail: node._orbitTrail ? { ...node._orbitTrail } : null, extraGlow: node._extraGlow === true })),
     graphViewport: () => ({ ...usableArea() }),
     geometryStatus: () => ({ view: state.view, angle: state.angle, pitch: state.pitch, nodes: state.nodes.map((node) => ({ id: node.id, anchor: node._layoutAnchor ? { ...node._layoutAnchor } : null, world: { x: node.x, y: node.y, z: node.z }, projected: project(node._layoutAnchor ?? node) })) }),
     setSettingsPreview,
-    ambientZenStatus: () => ({ active: state.ambientZen, delayMs: AMBIENT_ZEN_MS, idleMs: Math.max(0, Date.now() - state.lastInput), eligible: canAmbientZen(), feedCollapsed: state.feedCollapsed }),
+    ambientZenStatus: () => ({ enabled: state.ambientZenEnabled, active: state.ambientZen, delayMs: AMBIENT_ZEN_MS, idleMs: Math.max(0, Date.now() - state.lastInput), eligible: canAmbientZen(), feedCollapsed: state.feedCollapsed }),
     settingsPreviewStatus: () => ({ active: Boolean(state.settingsPreview), viewport: state.settingsPreview ? { ...state.settingsPreview } : null, camera: { ...state.camera }, zoom: state.zoom, fit: state.fit, previousWasActive: state.previewRestore?.wasActive ?? null }),
     followStatus: () => ({ mode: state.camMode, taskId: state.follow?.taskId ?? null, nodeId: state.follow?.key ?? null, title: state.follow?.title ?? null, stage: state.follow?.stage ?? null, reason: state.follow?.reason ?? null, since: state.follow?.since ?? null, zoom: state.zoom, targetZoom: state.followZoomTarget }),
-    audioStatus: () => ({ reactive: state.reactive, source: state.localAudio ? "local" : state.audioSource, listening: Boolean(state.inputStream || state.localAudio), pending: Boolean(state.inputPending), error: state.inputError, bands: { ...state.bands }, energy: state.music?.energy ?? 0, beat: state.music?.beat ?? 0 }),
+    audioStatus,
     isActive: () => state.active,
     escape,
     handleKey,
@@ -7162,6 +7302,8 @@
     setView,
     setLabels,
     setAudioSource,
+    setMusicReactive,
+    setAudioResponse,
     search,
     selectAssistant,
     saveState,
@@ -7176,6 +7318,7 @@
       orbitTrails: state.orbitTrails,
       extraGlow: state.extraGlow,
       ambientZen: state.ambientZen,
+      ambientZenEnabled: state.ambientZenEnabled,
       feedCollapsed: state.feedCollapsed,
       labels: state.labels,
       query: state.query,

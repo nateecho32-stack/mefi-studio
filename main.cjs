@@ -125,7 +125,9 @@ async function getEyes() {
   // DECISION (store fork, task_14a706e1968b2813): for this repo app the
   // authoritative board is data/*.json. The home board.db
   // (~/.local/share/mefi-studio/board.db) is a stale fork — 38 tasks/151
-  // already-drained ideas, newest row hours older than the views' 43/22 —
+  // already-drained ideas, newest row over a day older than the views, which
+  // keep evolving past it (43→50 tasks since the fork was measured; follow-up
+  // task_56bf97ef33e2a68e re-checked) —
   // and its migrated=1 flag would make it win (and export itself over the
   // fresher views) the moment the store were enabled. So the store stays
   // OFF here. Its code is complete (schema v3, round-trip + contested-writer
@@ -135,6 +137,9 @@ async function getEyes() {
   // instead of clobbering the views. Enabling requires an explicit fresh
   // migration: archive the stale board.db, then
   //   eyes.enableBoardStore(eyes.defaultBoardConfig(STUDIO_ROOT));
+  // — the guard then imports the current views into the fresh database, the
+  // recovery path tests/board_store.test.mjs covers end-to-end ("fresh
+  // migration: archive the stale fork").
   return projects.eyes(await loadModule("scripts/eyes.mjs"), project);
 }
 

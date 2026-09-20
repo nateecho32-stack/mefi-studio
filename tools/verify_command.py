@@ -978,6 +978,12 @@ VERIFY_METHOD = r'''
     const feed=()=>this.run("const box=document.getElementById('idle-feed').getBoundingClientRect();return {status:window.MefiIdle.ambientZenStatus(),expanded:document.getElementById('idle-feed-toggle').getAttribute('aria-expanded'),hidden:document.getElementById('idle-feed-content').hidden,height:box.height,area:window.MefiIdle.graphViewport()};");
     const expanded=await feed();
     assert.equal(expanded.expanded,'true');
+    assert.equal(expanded.status.enabled,false,'Zen is off in a fresh profile');
+    assert.equal(await this.run("return document.getElementById('idle-ambient-zen').checked;"),false);
+    await this.click('#idle-ambience');
+    await this.click('#idle-ambient-zen');
+    await this.click('#idle-ambience');
+    assert.equal(await this.run("return window.MefiIdle.ambientZenStatus().enabled;"),true,'the Ambience toggle opts into Zen');
     await this.click('#idle-feed-toggle');
     await this.until("window.MefiIdle.ambientZenStatus().feedCollapsed && document.getElementById('idle-feed-content').hidden",'Live work collapses its contents');
     await sleep(400);
@@ -991,6 +997,7 @@ VERIFY_METHOD = r'''
     await this.run("window.MefiNav.go('command');");
     await this.until("window.MefiIdle.isActive() && window.MefiIdle.ambientZenStatus().feedCollapsed",'Live work remains collapsed after reload');
     assert.equal((await feed()).expanded,'false');
+    assert.equal(await this.run("return window.MefiIdle.ambientZenStatus().enabled && document.getElementById('idle-ambient-zen').checked;"),true,'the Zen opt-in survives reload');
     await this.click('#idle-feed-toggle');
     await this.until("!window.MefiIdle.ambientZenStatus().feedCollapsed",'Live work expands again');
     await sleep(400);
@@ -1056,7 +1063,12 @@ VERIFY_METHOD = r'''
     assert(Number(after.hudOpacity)>.9,'Command panels return visibly after mouse movement');
     report.zen={elapsedMs:elapsed,before,zen,after};
     await this.capture('22-idle-zen-restored');
-    this.check("Thirty seconds of real inactivity fades Command into Zen; mouse movement restores the panels, previous camera mode and orbit choice");
+    await this.click('#idle-ambience');
+    await this.click('#idle-ambient-zen');
+    await this.click('#idle-ambience');
+    assert.equal(await this.run("return window.MefiIdle.ambientZenStatus().enabled;"),false);
+    assert.equal(await this.run("return localStorage.getItem('mefiStudio.ambientZen');"),'0');
+    this.check("Zen defaults off, saves its Ambience toggle across reload, enters after thirty seconds when enabled, and restores the panels and camera on mouse movement");
     await this.run("window.MefiNav.go('workspace');");
     await this.until("window.MefiWorkspace.isActive()&&!window.MefiIdle.isActive()",'Workspace is restored before its music preview');
     await this.run("window.MefiNav.go('music');");
@@ -1173,7 +1185,7 @@ VERIFY_METHOD = r'''
       assert.equal(await this.run("return document.getElementById('idle-music-toggle').getAttribute('aria-pressed');"), 'false', "audio capture starts off");
       await this.click('#idle-ambience');
       await this.until("!document.getElementById('idle-ambience-pop').hidden", "Ambience opens");
-      assert.equal(await this.run("return document.getElementById('idle-source').value;"), 'desktop', "music source is explicit");
+      assert.equal(await this.run("return document.getElementById('idle-source').value;"), 'auto', "audio defaults to automatic Studio-track linking");
       assert.equal(await this.run("return document.getElementById('idle-reactive').checked;"), false, "opening settings does not enable capture");
       await this.capture('07b-music-settings');
       await this.click('#idle-ambience');
@@ -1243,9 +1255,13 @@ const fixtureAssistantPromise = import('./scripts/assistant.mjs').then(module =>
   Object.assign(state, config.fixture.assistant);
   return state;
 });
-const childProcess = require('node:child_process');
 ''')
-    prefix = prefix.replace("const report = { checks: [], screenshots: [], networkAttempts: [], consoleErrors: [] };", "const report = { checks: [], screenshots: [], networkAttempts: [], consoleErrors: [], workerAttempts: [] };\nchildProcess.spawn = (...args) => { report.workerAttempts.push(String(args[0])); throw new Error('Process launching is disabled by the isolated Command fixture'); };")
+    # Reuse the shared childProcess/report bindings, then strengthen its worker
+    # guard after installation: Command's synthetic fixture needs no processes.
+    spawn_guard_marker = "let failNextMessage = false;"
+    if prefix.count(spawn_guard_marker) != 1:
+        raise RuntimeError("Workspace process guard changed; update the isolated Command fixture before running.")
+    prefix = prefix.replace(spawn_guard_marker, "childProcess.spawn = (...args) => { report.workerAttempts.push(String(args[0])); throw new Error('Process launching is disabled by the isolated Command fixture'); };\n" + spawn_guard_marker, 1)
     marker = '  if (channel === "assistant:message" && failNextMessage) {'
     fixture_reads = r'''
   if (channel === 'eyes:state') return {ok:true,...config.fixture.store};
@@ -1358,7 +1374,7 @@ def verify(source, output, baseline=False, interactive=False, palette_only=False
         write_json(app_root / "data/eyes-tasks.json", tasks)
         write_json(app_root / "data/eyes-feature-ideas.json", ideas)
         write_json(app_root / "data/eyes-requests.json", [{"title": f"Verify backlog work {i + 1}", "prompt": "Keep the stored acceptance checks.", "source": "chat", "at": now - i * 60000} for i in range(8)])
-        package = json.loads((source / "package.json").read_text(encoding="utf-8"))
+        package = json.loads((source / "package.json").read_text(encoding="utf-8-sig"))
         package["main"] = "command-verify-entry.cjs"
         write_json(app_root / "package.json", package)
         config = {"profile": str(profile), "appRoot": str(app_root), "output": str(destination), "alpha": project_info, "baseline": baseline, "fixture": data, "interactive": interactive, "paletteOnly": palette_only, "appearanceMatrix": appearance_matrix, "collapsedPolish": collapsed_polish}

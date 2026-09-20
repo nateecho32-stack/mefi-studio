@@ -432,7 +432,7 @@ def verify(source, output):
             "projects": {"activeId": alpha_info["id"], "items": [alpha_info, beta_info]},
             "ui": {"useWeb": False, "autoReference": False, "autopilot": {"enabled": False, "execute": False}},
         })
-        package = json.loads((source / "package.json").read_text(encoding="utf-8"))
+        package = json.loads((source / "package.json").read_text(encoding="utf-8-sig"))
         package["main"] = "planning-verify-entry.cjs"
         write_json(app_root / "package.json", package)
         config = {"profile": str(profile), "appRoot": str(app_root), "output": str(output), "alpha": alpha_info, "beta": beta_info}

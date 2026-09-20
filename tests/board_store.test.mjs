@@ -112,6 +112,35 @@ test("stale fork: a migrated database missing view rows degrades loudly to file 
   assert.equal(rows[1].id, "task_new");
 });
 
+test("fresh migration: archive the stale fork, re-enable, and the evolved views import wholesale", async () => {
+  const board = freshBoard({
+    seedViews: { "eyes-tasks.json": [{ id: "task_old", title: "Pre-fork row", status: "open" }] },
+  });
+  const dbPath = path.join(board.dir, "board", "board.db");
+  await readJson(board.files.tasks, []); // migrate; the database wins from here
+
+  // the host keeps running plain-file; the views evolve past the dormant db
+  const evolved = [
+    ...board.read("eyes-tasks.json"),
+    { id: "task_new", title: "Only the view knows me", status: "open" },
+  ];
+  writeFileSync(board.files.tasks, JSON.stringify(evolved, null, 2));
+  closeBoardStore();
+  await readJson(board.files.tasks, []); // reopen → the fork guard degrades
+  assert.equal(boardEnabled(), false);
+
+  // the documented cutover (main.cjs): archive the stale database, then
+  // enable the store again — the fresh database imports the evolved views
+  closeBoardStore();
+  for (const suffix of ["", "-wal", "-shm"]) rmSync(dbPath + suffix, { force: true });
+  enableBoardStore({ dbPath, files: board.files });
+
+  const fresh = await readJson(board.files.tasks, []);
+  assert.equal(boardEnabled(), true, "the fresh database is no fork — the guard passes");
+  assert.deepEqual(fresh.map((row) => row.id), ["task_old", "task_new"], "the evolved views import wholesale");
+  assert.deepEqual(board.read("eyes-tasks.json").map((row) => row.id), ["task_old", "task_new"], "the export agrees with the new authority");
+});
+
 test("boardMutate: in-place row edits persist; a no-op writes nothing", async () => {
   const board = freshBoard({
     seedViews: { "eyes-tasks.json": [{ id: "task_1", title: "A", status: "open", logs: [] }] },

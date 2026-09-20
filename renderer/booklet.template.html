@@ -450,10 +450,11 @@
   </div>
   <div id="idle-ambience-pop" class="pop" role="dialog" aria-label="Ambience and startup" hidden>
     <div class="eyebrow">Ambience</div>
+    <label class="switch pop-row" title="Fade the panels and gently orbit the tree after 30 seconds without input. Move the mouse or press a key to wake."><span class="grow">Zen mode</span><input type="checkbox" id="idle-ambient-zen"><span class="track"></span></label>
     <label class="switch pop-row" title="Dynamic bells keyed to agent tempo"><span class="grow">Zen bells</span><input type="checkbox" id="idle-zen"><span class="track"></span></label>
     <label class="pop-row" title="Audio profile"><span class="grow">Profile</span><select id="idle-profile"></select></label>
-    <label class="switch pop-row" title="Drive the glow from desktop audio or the microphone"><span class="grow">Reactive glow</span><input type="checkbox" id="idle-reactive"><span class="track"></span></label>
-    <label class="pop-row" title="What reactive glow listens to"><span class="grow">Listen to</span><select id="idle-source"><option value="desktop">Desktop audio</option><option value="mic">Microphone</option></select></label>
+    <label class="switch pop-row" title="Let the nodes and connections respond to audio"><span class="grow">Audio link</span><input type="checkbox" id="idle-reactive"><span class="track"></span></label>
+    <label class="pop-row" title="What the nodes listen to"><span class="grow">Listen to</span><select id="idle-source"><option value="auto">Auto · local or desktop</option><option value="local">Local player</option><option value="desktop">Desktop audio / Spotify</option><option value="mic">Microphone</option></select></label>
     <hr class="pop-sep">
     <div class="eyebrow">Startup</div>
     <label class="switch pop-row" title="Open your project workspace on launch"><span class="grow">Open Workspace on launch</span><input type="checkbox" id="idle-home"><span class="track"></span></label>

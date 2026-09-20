@@ -81,6 +81,15 @@
 .music-spotify-frame { width: 100%; height: 352px; border: 0; border-radius: 12px; }
 .music-local.drag-over { outline: 2px dashed var(--gold); outline-offset: 10px; border-radius: 12px; }
 .music-node-settings { margin: 0; }
+.music-audio-link { margin: 0 0 22px; padding-bottom: 18px; border-bottom: 1px solid var(--hairline); }
+.music-audio-link h3 { margin: 0; font: 600 16px/1.4 var(--font-ui); color: var(--ivory); }
+.music-audio-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.music-audio-controls label { display: grid; gap: 5px; flex: 1 1 150px; min-width: 0; color: var(--muted); font-size: 12px; }
+.music-audio-controls select { width: 100%; min-width: 0; }
+.music-audio-state { margin: 10px 0 0; font-size: 12px; color: var(--gold-bright); }
+.music-audio-response { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.music-audio-response input { flex: 1; min-width: 50px; width: 100%; accent-color: var(--gold-bright); }
+.music-audio-response output { min-width: 4ch; font-variant-numeric: tabular-nums; }
 .music-node-settings > h3 { margin: 0; font: 600 16px/1.4 var(--font-ui); color: var(--ivory); }
 .music-node-intro { margin: 7px 0 16px; font-size: 12px; line-height: 1.6; color: var(--muted); }
 .music-node-label { margin: 18px 0 9px; font: 600 11px/1.4 var(--font-ui); letter-spacing: .03em; color: var(--muted); }

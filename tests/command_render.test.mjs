@@ -48,6 +48,13 @@ const runFixture = async () => {
     assert.equal(report.motion.completed, true);
     assert.ok(report.motion.samples >= 6 && report.motion.travel > 3 && report.motion.maxFrameStep <= report.motion.travel * 0.4);
     assert.deepEqual(report.grouping, { members: 2, expanded: true, verifyingVisible: true });
+    assert.equal(report.audio.playing.audio.source, "local");
+    assert.equal(report.audio.playing.playing, true);
+    assert.equal(report.audio.paused.playing, false);
+    assert.equal(report.audio.stableGeometry, true);
+    assert.ok(report.audio.playing.audio.energy > 0.15 && report.audio.paused.audio.energy < 0.02);
+    assert.ok(report.audio.playing.luminance > report.audio.quiet.luminance + 2 && report.audio.playing.luminance > report.audio.paused.luminance + 2,
+      "real player audio visibly brightens stationary node bodies and releases on pause");
     for (const snapshot of [report.first, report.reentered]) {
       assert.ok(snapshot.finiteNodes >= 3);
       assert.ok(snapshot.taskPixels > 8, "a real task node must paint pixels above the dark backdrop");

@@ -79,6 +79,16 @@ Workers may run in parallel against this repository. Before editing:
 - Adopt the existing owner's work and integrate missing pieces; never clobber
   a competing session's edits. A collision notice assigns ownership by edit
   history — rebase onto that work instead of pushing rival edits.
+- After resolving any `renderer/styles.css` merge conflict (two sessions
+  restyled it in parallel), verify the resolution against **both sides and
+  the merge base** with `npm run check:css:merge`
+  (`scripts/check-css.mjs --merge`): it diffs each side's cascade winners
+  against the merge base and fails when the resolved file drops a winner one
+  side changed, resurrects a winner a side deleted, or settles a both-sides
+  change on neither side's value. The gate runs as part of `npm run check`
+  and is a no-op (exit 0, `MERGE-CSS-SKIP`) when no merge is in progress;
+  pass `--theirs <ref>` to audit any branch pair without a live merge.
+  Guarded by `tests/check_css_merge.test.mjs`.
 - Workers must not rewrite Studio's own task store (`data/` in the app, and
   the portable build's separate `dist/` data). Task-history edits belong to
   Studio's own code paths.

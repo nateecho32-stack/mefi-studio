@@ -2780,7 +2780,6 @@ const NARRATION_TEXT = [
   /\b(?:i'm|i'll|i've|i'd|let me|gonna|wanna|gotta)\b/i,
   /\bi\s+(?:have|had|think|thought|noticed|see|saw|found|need|wanted?|will|would|started|added|updated|checked|tried|ran|adopted|plan(?:ned)?|keep|kept|missed)\b/i,
   /\bmy\s+(?:tests?|checks?|row|runs?|branch|edits?|changes|scan|pass|turn)\b/i,
-  /\b(?:tests?|checks?|contracts?|pipelines?|builds?|suites?|smokes?)\s+(?:pass(?:ed|ing)?|fail(?:ed|ing)?|green)\b/i,
   /\ball\s+(?:green|passing|done|set)\b/i,
   /\b(?:it|that)\s+passes\b/i,
   /\bnow\s+(?:executes?|registers?|runs?|passes?|works?|shows?|routes?)\b/i,
@@ -2788,12 +2787,33 @@ const NARRATION_TEXT = [
 ];
 const NARRATION_START = /^(?:now|okay|ok|yes|so|well|anyway|recon done|all green|done|landed|building|running|checking|retrying|starting|reading|gathering|finalizing|exploring|refactoring|adopting|updating|looking|testing|waiting|reviewing)\b/i;
 
+// The status-report arm is clause-scoped: "contract tests pass" narrates only
+// from the main clause. The same words inside a subordinate tail — "add the
+// smoke after contract tests pass" — are a precondition attached to a genuine
+// proposal, and flagging them anywhere in the text once cost real planned work
+// (idea_1789701012846_a89e1). An occurrence flags only when the words between
+// the previous clause break and the match carry no subordinating conjunction.
+const STATUS_REPORT = /\b(?:tests?|checks?|contracts?|pipelines?|builds?|suites?|smokes?)\s+(?:pass(?:ed|ing)?|fail(?:ed|ing)?|green)\b/i;
+const SUBORDINATE_TAIL = /\b(?:after|once|when|whenever|until|till|before|if|unless|while|where|wherever|provided|providing|assuming|given|lest)\b|\bso\s+that\b|\bas\s+(?:soon|long)\s+as\b|\bin\s+case\b/i;
+const CLAUSE_BREAK = /[.;:!?—–\n\r]/;
+
+const mainClauseStatusReport = (flat) => {
+  for (const match of flat.matchAll(new RegExp(STATUS_REPORT.source, "gi"))) {
+    const head = flat.slice(0, match.index);
+    let start = 0;
+    for (let index = 0; index < head.length; index += 1) if (CLAUSE_BREAK.test(head[index])) start = index + 1;
+    if (!SUBORDINATE_TAIL.test(head.slice(start))) return true;
+  }
+  return false;
+};
+
 export function isExtractionArtifact(idea) {
   const text = typeof idea === "string" ? idea : `${str(idea?.title)} ${str(idea?.detail)}`;
   const flat = text.trim();
   if (!flat) return false;
   if (NARRATION_START.test(flat)) return true;
   if (NARRATION_TEXT.some((pattern) => pattern.test(flat))) return true;
+  if (mainClauseStatusReport(flat)) return true;
   // A question addressed to the assistant ("what's left to polish?") is a
   // prompt for an answer, not a proposal — unless it carries a proposal modal
   // ("should we retry stale checks?"), which is a genuine idea shape.

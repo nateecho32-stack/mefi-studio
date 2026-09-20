@@ -28,7 +28,7 @@ class MefiStudioLauncherTests(unittest.TestCase):
         cls.main = (STUDIO / "main.cjs").read_text(encoding="utf-8")
         cls.preload = (STUDIO / "preload.cjs").read_text(encoding="utf-8")
         cls.booklet_js = (STUDIO / "renderer" / "booklet.js").read_text(encoding="utf-8")
-        cls.package = json.loads((STUDIO / "package.json").read_text(encoding="utf-8"))
+        cls.package = json.loads((STUDIO / "package.json").read_text(encoding="utf-8-sig"))
         cls.guide = (ROOT / "TESTRUNS.md").read_text(encoding="utf-8")
 
     def test_package_entry_and_pinned_electron(self):

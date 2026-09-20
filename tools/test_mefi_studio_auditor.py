@@ -62,7 +62,7 @@ class MefiStudioAuditorTests(unittest.TestCase):
         retry_transient(self._audit_probe, self.id(), "auditor:run on the live tree")
 
     def _check_targets_probe(self):
-        pkg = json.loads((STUDIO / "package.json").read_text(encoding="utf-8"))
+        pkg = json.loads((STUDIO / "package.json").read_text(encoding="utf-8-sig"))
         self.assertIn("check-targets.mjs", pkg["scripts"].get("check:targets", ""))
         self.assertTrue(
             pkg["scripts"]["check"].startswith("node scripts/check-targets.mjs && "),

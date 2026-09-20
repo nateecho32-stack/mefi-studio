@@ -59,18 +59,22 @@ test("the complete Command module can enter and draw while preserving the defaul
   const classes = { add() {}, remove() {}, toggle() {}, contains: () => false };
   const document = { readyState: "loading", hidden: false, addEventListener() {}, body: { dataset: {}, classList: classes } };
   const window = { addEventListener() {}, dispatchEvent() {}, __draw: (time) => draws.push(time), __audioRequests: 0 };
-  const hook = `window.__graphTest = { state, el, prepare() {
+  const hook = `window.__graphTest = { state, el, setAmbientZenEnabled, prepare() {
     closeAmbience = resize = renderLegend = syncViewControls = setCamMode = loadPngs = updateTelemetry = renderFeed = renderHint = bumpHud = refreshGraph = selectNode = applyEnterParams = () => {};
     refreshTasks = () => Promise.resolve();
     drawFrame = window.__draw;
     bell = ensureReactiveInput = () => { window.__audioRequests += 1; };
   }};`;
-  const env = vm.createContext({ window, document, Promise, Date, Math, Map, Set, WeakMap, localStorage: { getItem: () => null, setItem() {} }, CustomEvent: class { constructor(type, details) { this.type = type; this.detail = details.detail; } }, requestAnimationFrame: (callback) => { callbacks.push(callback); return callbacks.length; }, setInterval: () => 1, console: { error: (...args) => errors.push(args) } });
-  vm.runInContext(source.replace("  window.MefiIdle = {", `${hook}\n  window.MefiIdle = {`), env);
+  const saved = new Map();
+  const env = vm.createContext({ window, document, Promise, Date, Math, Map, Set, WeakMap, localStorage: { getItem: (key) => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) }, CustomEvent: class { constructor(type, details) { this.type = type; this.detail = details.detail; } }, requestAnimationFrame: (callback) => { callbacks.push(callback); return callbacks.length; }, setInterval: () => 1, console: { error: (...args) => errors.push(args) } });
+  const load = () => vm.runInContext(source.replace("  window.MefiIdle = {", `${hook}\n  window.MefiIdle = {`), env);
+  load();
   const { state, el, prepare } = window.__graphTest;
   prepare(); state.zen = false;
   el.canvas = { focus() {} }; el.hud = { classList: classes };
   assert.equal(window.MefiIdle.status().orbit, "paused");
+  assert.equal(window.MefiIdle.status().ambientZenEnabled, false, "Zen starts disabled without a saved opt-in");
+  assert.equal(window.MefiIdle.ambientZenStatus().enabled, false);
   window.MefiIdle.enter(true);
   await state.readyPromise;
   assert.equal(window.MefiIdle.status().orbit, "paused", "enter must not override the fixed default");
@@ -84,6 +88,12 @@ test("the complete Command module can enter and draw while preserving the defaul
   state.active = false; state.zen = true; state.reactive = true; state.settingsPreview = { x: 600, y: 0, w: 600, h: 800 };
   window.MefiIdle.enter(true); await state.readyPromise;
   assert.equal(window.__audioRequests, 0, "opening a settings preview cannot start bells or audio capture");
+  window.__graphTest.setAmbientZenEnabled(true);
+  load();
+  assert.equal(window.MefiIdle.ambientZenStatus().enabled, true, "reloading restores an explicit Zen opt-in");
+  window.__graphTest.setAmbientZenEnabled(false);
+  load();
+  assert.equal(window.MefiIdle.ambientZenStatus().enabled, false, "reloading preserves a disabled Zen preference");
 });
 
 test("Music preview refreshes real graph snapshots while other sheets remain idle", () => {
@@ -98,35 +108,47 @@ test("Music preview refreshes real graph snapshots while other sheets remain idl
   document.hidden = true; env.tick(); assert.equal(reads, 2);
 });
 
-function zenContext() {
+function zenContext(enabled = true) {
   const classes = new Set(), writes = [];
-  const state = { active: true, ambientZen: false, lastInput: 1000, camera: { x: 1, y: 2, z: 3, tx: 1, ty: 2, tz: 3 }, camMode: "follow", orbit: "paused", orbitVel: 0, angle: 0.5, pitch: 0.1, view: "3d", feedCollapsed: false, screenLayout: { key: "stable", nodes: new Map() } };
+  const state = { active: true, ambientZenEnabled: enabled, ambientZen: false, lastInput: 1000, camera: { x: 1, y: 2, z: 3, tx: 1, ty: 2, tz: 3 }, camMode: "follow", orbit: "paused", orbitVel: 0, angle: 0.5, pitch: 0.1, view: "3d", feedCollapsed: false, screenLayout: { key: "stable", nodes: new Map() } };
   const classList = { toggle: (name, on) => on ? classes.add(name) : classes.delete(name), remove: (name) => classes.delete(name) };
-  const el = { hud: { classList, inert: false }, feed: { classList }, feedContent: { hidden: false }, feedToggle: { attrs: {}, setAttribute(name, value) { this.attrs[name] = value; } } };
+  const el = { ambientZen: { checked: enabled }, hud: { classList, inert: false }, feed: { classList }, feedContent: { hidden: false }, feedToggle: { attrs: {}, setAttribute(name, value) { this.attrs[name] = value; } } };
   const document = { hidden: false, body: { dataset: {}, classList }, activeElement: null, querySelectorAll: () => [] };
   const window = { MefiNav: { top: () => "command" } };
-  const env = vm.createContext({ state, el, document, window, Date, Math, Object, Array, Boolean, String, AMBIENT_ZEN_MS: 30000, ORBIT_BASE: 0.003, ORBIT_ENERGY: 0.001, noMotion: () => false, hideTip() {}, syncViewControls() {}, writeStore: (...args) => writes.push(args) });
+  const env = vm.createContext({ state, el, document, window, Date: class extends Date { static now() { return 31000; } }, Math, Object, Array, Boolean, String, AMBIENT_ZEN_MS: 30000, ORBIT_BASE: 0.003, ORBIT_ENERGY: 0.001, noMotion: () => false, hideTip() {}, bumpHud() {}, syncViewControls() {}, writeStore: (...args) => writes.push(args) });
   vm.runInContext(section("function canAmbientZen()", "function canDim()"), env);
   vm.runInContext(section("function orbitTarget(", "function computeBranch("), env);
   return { state, el, document, window, env, classes, writes };
 }
 
-test("ambient Zen waits thirty idle seconds, preserves anchors, and wakes without rewinding the orbit", () => {
-  const { state, el, env, classes } = zenContext();
+test("ambient Zen requires opt-in, waits thirty idle seconds, and restores the view on wake or disable", () => {
+  const { state, el, env, classes, writes } = zenContext(false);
   const anchors = state.screenLayout;
-  assert.equal(env.checkAmbientZen(30999), false);
-  assert.equal(env.checkAmbientZen(31000), true);
+  assert.equal(env.checkAmbientZen(31000), false, "thirty seconds cannot activate disabled Zen");
+  assert.equal(env.checkAmbientZen(90000), false, "remaining idle does not override the disabled preference");
+  assert.equal(el.hud.inert, false); assert.equal(classes.has("command-zen"), false);
+  env.setAmbientZenEnabled(true);
+  assert.equal(el.ambientZen.checked, true); assert.equal(state.lastInput, 31000, "enabling starts a fresh idle clock");
+  assert.equal(env.checkAmbientZen(60999), false);
+  assert.equal(env.checkAmbientZen(61000), true);
   assert.equal(state.camMode, "orbit"); assert.equal(state.orbit, "auto");
   assert.ok(classes.has("command-zen")); assert.equal(el.hud.inert, true);
   assert.equal(state.screenLayout, anchors);
   assert.ok(env.orbitTarget(0) > 0);
   state.angle = 0.75;
-  assert.equal(env.wakeAmbientZen(32000), true);
+  assert.equal(env.wakeAmbientZen(62000), true);
   assert.equal(state.camMode, "follow"); assert.equal(state.orbit, "paused");
   assert.equal(state.angle, 0.75, "waking preserves the visible angle instead of snapping backwards");
-  assert.equal(state.orbitVel, 0); assert.equal(state.lastInput, 32000);
+  assert.equal(state.orbitVel, 0); assert.equal(state.lastInput, 62000);
   assert.equal(el.hud.inert, false); assert.equal(classes.has("command-zen"), false);
   assert.equal(state.screenLayout, anchors);
+  assert.equal(env.checkAmbientZen(92000), true);
+  env.setAmbientZenEnabled(false);
+  assert.equal(el.ambientZen.checked, false); assert.equal(state.ambientZen, false);
+  assert.equal(el.hud.inert, false); assert.equal(classes.has("command-zen"), false);
+  assert.equal(state.camMode, "follow"); assert.equal(state.orbit, "paused");
+  assert.equal(env.checkAmbientZen(122000), false);
+  assert.deepEqual(writes, [["mefiStudio.ambientZen", "1"], ["mefiStudio.ambientZen", "0"]]);
 });
 
 test("Music, menus, typing, dragging, hidden windows and other views cannot enter ambient Zen", () => {
@@ -541,7 +563,7 @@ test("Branches follows real parent edges, Rings uses separate concentric slots, 
   const { env, state } = graphContext(); Object.assign(state, { fit: 1, nodeLayout: "tree", nodeStyle: "orbs", tasks: [] });
   vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
   const nodes = [{ id: "root", kind: "root", x: 0, y: 0, z: 0 }, { id: "session", kind: "session", x: 1, y: 1, z: 1 }, { id: "assistant", kind: "assistant", x: 2, y: 2, z: 2 }, ...Array.from({ length: 12 }, (_, index) => ({ id: `task:${index}`, kind: "task", x: 3 + index, y: 3, z: 3 + index }))];
-  const edgesFor = (list) => list.slice(1).map((node) => ({ a: list.findIndex((candidate) => candidate.id === (node.kind === "task" ? "session" : "root")), b: list.indexOf(node) }));
+  const edgesFor = (list) => list.filter((node) => node.kind !== "root").map((node) => ({ a: list.findIndex((candidate) => candidate.id === (node.kind === "task" ? "session" : "root")), b: list.indexOf(node) }));
   const run = (list) => { state.edges = edgesFor(list); const projected = list.map((node) => ({ node, p: env.project(node) })); env.layoutProjectedGraph(projected, env.usableArea(), "orbit"); return new Map(projected.map(({ node, p }) => [node.id, [p.x, p.y]])); };
   const branches = run(nodes);
   assert.ok(branches.get("session")[1] > branches.get("root")[1]);
@@ -587,6 +609,38 @@ test("Constellation balances loose tasks around its hub and keeps related work i
   const child = "session:0:step:0", original = seeds.get(child), host = seeds.get("session:0");
   assert.ok(Math.abs(shifted.get(child).x - original.x - (400 - host.x)) < 1e-7);
   assert.ok(Math.abs(shifted.get(child).y - original.y - (500 - host.y)) < 1e-7);
+});
+
+test("dominant circular branches keep children beside their session instead of wrapping around the hub", () => {
+  const { env } = graphContext();
+  vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+  const area = { x: 40, y: 80, w: 1100, h: 700 };
+  for (const layout of ["constellation", "radial"]) for (const sessionCount of [1, 2]) {
+    const nodes = [{ id: "root", kind: "root" }, { id: "assistant", kind: "assistant" }, ...Array.from({ length: 3 }, (_, index) => ({ id: `loose:${index}`, kind: "task" }))];
+    const parents = new Map([["assistant", "root"]]);
+    for (let session = 0; session < sessionCount; session += 1) {
+      const parent = `session:${session}`;
+      nodes.push({ id: parent, kind: "session" }); parents.set(parent, "root");
+      for (let child = 0; child < (session === 0 ? 14 : 2); child += 1) {
+        const id = `${parent}:task:${child}`;
+        nodes.push({ id, kind: "task" }); parents.set(id, parent);
+      }
+    }
+    const projected = nodes.map((node) => ({ node, p: {} }));
+    const points = env.graphLayoutSeeds(projected, area, layout, parents, new Map());
+    const reversed = env.graphLayoutSeeds([...projected].reverse(), area, layout, parents, new Map());
+    const hub = points.get("root");
+    for (const [id, point] of points) {
+      assert.deepEqual(reversed.get(id), point, `${layout} keeps the same sectors when display ordering changes`);
+      const parentId = parents.get(id);
+      if (!parentId?.startsWith("session:")) continue;
+      const parent = points.get(parentId);
+      const parentDirection = { x: (parent.x - hub.x) / area.w, y: (parent.y - hub.y) / area.h };
+      const childDirection = { x: (point.x - hub.x) / area.w, y: (point.y - hub.y) / area.h };
+      assert.ok(parentDirection.x * childDirection.x + parentDirection.y * childDirection.y > 0, `${layout} keeps ${id} on its session's side of the hub`);
+      assert.ok(Math.hypot(point.x - parent.x, point.y - parent.y) < area.w * 0.45, `${layout} avoids a canvas-spanning connection for ${id}`);
+    }
+  }
 });
 
 test("managed layout anchors transform coherently under zoom and Follow targets the displayed work", () => {
@@ -769,7 +823,7 @@ test("local player analysis reuses the media source and leaves playback connecte
   let sources = 0;
   const sourceNode = { connect: (node) => connections.push(node), disconnect: (node) => disconnected.push(node) };
   const audio = { destination: { id: "speakers" }, createMediaElementSource: () => { sources += 1; return sourceNode; }, createAnalyser: () => ({ connect() {} }) };
-  const state = { active: true, reactive: true, audioSource: "desktop", audio, inputGeneration: 0, mediaElements: new WeakMap(), bands: {}, bus: { disconnect() {}, connect() {} } };
+  const state = { active: true, reactive: true, audioSource: "auto", audio, inputGeneration: 0, mediaElements: new WeakMap(), bands: {}, bus: { disconnect() {}, connect() {} } };
   const env = vm.createContext({ Date, Math, Promise, String, Boolean, window: { MefiMusic: { status: () => ({ source: "local", queueLength: 1 }), getAudioElement: () => element } }, state, el: {}, noMotion: () => false, writeStore() {}, ensureAudio() {}, navigator: { mediaDevices: { getDisplayMedia: () => { throw new Error("local music must not start desktop capture"); } } } });
   vm.runInContext(section("function useReactiveInput()", "function bell("), env);
   env.useReactiveInput();
@@ -835,7 +889,7 @@ test("Spotify switches and removing the last track disconnect local analysis wit
   const disconnected = [];
   const sourceNode = { connect() {}, disconnect: (node) => disconnected.push(node) };
   const state = {
-    active: true, reactive: true, captureArmed: false, audioSource: "desktop", inputGeneration: 0, inputError: null,
+    active: true, reactive: true, captureArmed: false, audioSource: "auto", inputGeneration: 0, inputError: null,
     audio: { createMediaElementSource: () => sourceNode, createAnalyser: () => ({ connect() {} }), destination: {} },
     mediaElements: new WeakMap(), bus: { disconnect() {}, connect() {} }, bands: {}, nodes: [],
   };
@@ -1013,7 +1067,7 @@ test("task layout survives priority changes and new arrivals without moving exis
   assert.equal(retired.layout.get("replacement").slot, 0, "new work can reuse the freed slot");
 });
 
-test("tasks retain world coordinates when assigned another worker or temporarily filtered out", () => {
+test("tasks join a newly assigned session and then retain their place through status changes and filtering", () => {
   const env = vm.createContext({ Map, Set, Number, String, Math });
   vm.runInContext(section("function taskPlacements(", "// Open/active tasks"), env);
   const task = { id: "stable", title: "Independent task" };
@@ -1022,11 +1076,16 @@ test("tasks retain world coordinates when assigned another worker or temporarily
   const session = { id: "new-worker", kind: "session", x: 140, y: -60, z: 100, label: "Current worker" };
   const changed = env.taskPlacements([{ ...task, status: "active", priority: 10 }], [session], [{ taskId: task.id, sessionId: session.id }], before.layout);
   assert.equal(changed.entries[0].anchor.id, session.id, "the connection updates to the actual worker");
-  assert.deepEqual([changed.entries[0].x, changed.entries[0].y, changed.entries[0].z], [original.x, original.y, original.z]);
+  assert.notDeepEqual([changed.entries[0].x, changed.entries[0].y, changed.entries[0].z], [original.x, original.y, original.z]);
+  assert.ok(Math.hypot(changed.entries[0].x - session.x, changed.entries[0].z - session.z) <= 78, "new work joins its actual session's local ring");
+  const assigned = { ...task, run: { sessionId: session.id } };
+  const stable = env.taskPlacements([{ ...assigned, status: "awaiting_verification" }], [session], [], changed.layout);
+  const settled = [changed.entries[0].x, changed.entries[0].y, changed.entries[0].z];
+  assert.deepEqual([stable.entries[0].x, stable.entries[0].y, stable.entries[0].z], settled);
   const hidden = env.taskPlacements([], [], [], changed.layout, new Set([task.id]));
   assert.ok(hidden.layout.has(task.id));
-  const restored = env.taskPlacements([task], [], [], hidden.layout);
-  assert.deepEqual([restored.entries[0].x, restored.entries[0].y, restored.entries[0].z], [original.x, original.y, original.z]);
+  const restored = env.taskPlacements([assigned], [session], [], hidden.layout);
+  assert.deepEqual([restored.entries[0].x, restored.entries[0].y, restored.entries[0].z], settled);
 });
 
 test("task connections prefer the actual worker and ignore a single generic matching word", () => {
@@ -1349,6 +1408,83 @@ test("newly revealed descendants follow their established parent in every layout
       assert.ok(Math.abs(after.x - before.x - 70) < 1e-7 && Math.abs(after.y - before.y + 45) < 1e-7, `${layout} keeps the incoming ${id} with its established branch`);
     }
   }
+});
+
+function reassignedBranchFixture(layout, view) {
+  const { env, state } = graphContext();
+  const area = { x: 40, y: 80, w: 1100, h: 720 };
+  Object.assign(state, { fit: 1, view, nodeLayout: layout, settingsPreview: area, tasks: [{ id: "parent" }, { id: "child" }] });
+  vm.runInContext(section("function graphLayoutSeeds(", "function hexToRgb("), env);
+  const nodes = ["root", "a", "b", "task:parent", "task:child", "spare", "zz:child"].map((id, index) => ({
+    id, kind: index === 0 ? "root" : index < 3 ? "session" : "task", x: 0, y: 0, z: 0,
+  }));
+  const parents = new Map([["a", "root"], ["b", "root"], ["task:parent", "a"], ["task:child", "task:parent"], ["spare", "b"], ["zz:child", "spare"]]);
+  const run = (visible = nodes) => {
+    state.nodes = visible;
+    state.edges = [...parents].map(([child, parent]) => ({ a: visible.findIndex((node) => node.id === parent), b: visible.findIndex((node) => node.id === child) })).filter((edge) => edge.a >= 0 && edge.b >= 0);
+    const projected = visible.map((node) => ({ node, p: env.project(node) }));
+    env.layoutProjectedGraph(projected, area, "free", 1000, true);
+    return new Map(projected.map(({ node, p }) => [node.id, { x: p.x, y: p.y }]));
+  };
+  return { nodes, parents, run };
+}
+
+const graphPointDistance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+test("reassigned tasks and their descendants organize beside their new session in every layout and view", () => {
+  for (const layout of ["constellation", "tree", "radial", "helix", "layers"]) for (const view of ["2d", "3d"]) {
+    const { nodes, parents, run } = reassignedBranchFixture(layout, view);
+    const before = run();
+    parents.set("task:parent", "b");
+    const after = run([...nodes].reverse());
+    const oldDistance = graphPointDistance(before.get("task:parent"), before.get("b"));
+    const newDistance = graphPointDistance(after.get("task:parent"), after.get("b"));
+    assert.ok(newDistance < oldDistance * 0.65 && newDistance < 310, `${layout}/${view} shortens the task's new session connection (${oldDistance.toFixed(1)} → ${newDistance.toFixed(1)})`);
+    for (const id of ["task:parent", "task:child"]) assert.ok(graphPointDistance(after.get(id), before.get(id)) > 80, `${layout}/${view} moves ${id} with the reassigned branch`);
+    assert.ok(graphPointDistance(after.get("task:parent"), after.get("task:child")) < 280, `${layout}/${view} keeps obligations beside their task`);
+    for (const id of ["root", "a", "b", "spare", "zz:child"]) assert.ok(graphPointDistance(after.get(id), before.get(id)) < 1e-7, `${layout}/${view} keeps unrelated work still`);
+    nodes[3].state = "active";
+    const agent = { id: "helper", kind: "agent", role: "builder", targetId: "task:parent", x: 10, y: 0, z: 0 };
+    const repeated = run([agent, ...nodes]);
+    for (const [id, point] of after) assert.ok(graphPointDistance(repeated.get(id), point) < 1e-7, `${layout}/${view} status, input order and worker arrival do not restart organization`);
+    const reordered = reassignedBranchFixture(layout, view);
+    reordered.run([...reordered.nodes].reverse());
+    reordered.parents.set("task:parent", "b");
+    const reorderedResult = reordered.run();
+    for (const [id, point] of after) assert.ok(graphPointDistance(reorderedResult.get(id), point) < 1e-7, `${layout}/${view} organizes the same topology deterministically`);
+  }
+});
+
+test("hidden descendants return beside their task after its session changes", () => {
+  for (const layout of ["constellation", "tree", "radial", "helix", "layers"]) for (const view of ["2d", "3d"]) {
+    const { nodes, parents, run } = reassignedBranchFixture(layout, view);
+    const before = run();
+    const collapsed = nodes.filter((node) => node.id !== "task:child");
+    run(collapsed);
+    parents.set("task:parent", "b");
+    const moved = run(collapsed);
+    const restored = run([...nodes].reverse());
+    assert.ok(graphPointDistance(restored.get("task:child"), before.get("task:child")) > 80, `${layout}/${view} does not restore a child to the abandoned branch`);
+    assert.ok(graphPointDistance(restored.get("task:child"), restored.get("task:parent")) < 280, `${layout}/${view} restores a local task connection`);
+    assert.ok(graphPointDistance(restored.get("task:parent"), moved.get("task:parent")) < 1e-7, `${layout}/${view} expansion preserves the task's new position`);
+  }
+});
+
+test("working and returning agents draw one connection to their current host", () => {
+  const assistant = { node: { id: "assistant", kind: "assistant" }, p: { x: 50, y: 80 } };
+  const task = { node: { id: "task", kind: "task" }, p: { x: 850, y: 480 } };
+  const agent = { node: { id: "agent", kind: "agent", role: "builder", targetNode: task.node }, p: { x: 890, y: 480 } };
+  const state = { nodeLayout: "tree", edges: [{ a: 0, b: 1 }, { a: 0, b: 2 }, { a: 1, b: 2 }], branchParents: new Map([["task", "assistant"]]), agentLayout: new Map([["agent", { hostId: "task" }]]) };
+  const env = vm.createContext({ state, Math, Map, NODE_RGB: { task: [1, 2, 3] }, rgba: () => "color", agentRgb: () => [1, 2, 3], colorOf: () => [1, 2, 3], isBusyNode: () => false });
+  vm.runInContext(section("function drawGraphConnections(", "function drawFrame("), env);
+  let paths = [], path;
+  const ctx = { beginPath() { path = []; }, moveTo(x, y) { path.push([x, y]); }, lineTo(x, y) { path.push([x, y]); }, bezierCurveTo(...points) { path.push(points.slice(-2)); }, stroke() { paths.push(path); } };
+  const render = () => { paths = []; env.drawGraphConnections(ctx, [assistant, task, agent], new Set()); return paths; };
+  assert.deepEqual(render(), [[[50, 80], [850, 480]], [[890, 480], [850, 480]]], "the real branch remains and the worker has one local tether, without a distant assistant tether");
+  state.agentLayout.set("agent", { hostId: "assistant" });
+  assert.deepEqual(render(), [[[50, 80], [850, 480]], [[890, 480], [50, 80]]], "return flights use the managed host even while the previous target is still present");
+  agent.node._absorbed = true;
+  assert.deepEqual(render(), [[[50, 80], [850, 480]]], "absorbed workers leave no residual connection");
 });
 
 test("builder satellites clear their host work rim without moving its saved anchor", () => {

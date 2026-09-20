@@ -27,6 +27,35 @@ export function extractNodeRefs(scriptValue) {
   return refs;
 }
 
+// UTF-8 BOM bytes: PowerShell 5.x's Out-File/Set-Content emit these by
+// default, and a BOM in front of JSON breaks JSON.parse and Python's
+// json.loads (which then fails whole unittest modules in setUpClass).
+function hasUtf8Bom(buf) {
+  return buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf;
+}
+
+export function findBommedJson(packageRoot) {
+  const files = ["package.json"];
+  const dataDir = join(packageRoot, "data");
+  if (existsSync(dataDir)) {
+    for (const name of readdirSync(dataDir)) {
+      if (name.endsWith(".json")) files.push(`data/${name}`);
+    }
+  }
+  const bommed = [];
+  for (const rel of files) {
+    const abs = join(packageRoot, rel);
+    if (!existsSync(abs) || !statSync(abs).isFile()) continue;
+    if (hasUtf8Bom(readFileSync(abs))) bommed.push(rel);
+  }
+  return bommed;
+}
+
+function readPackageJson(packageRoot) {
+  const text = readFileSync(join(packageRoot, "package.json"), "utf8").replace(/^\uFEFF/, "");
+  return JSON.parse(text);
+}
+
 export function audit(packageRoot, checkScript) {
   const targets = extractCheckTargets(checkScript);
   const referenced = new Set(targets.map((t) => t.split("\\").join("/")));
@@ -36,7 +65,7 @@ export function audit(packageRoot, checkScript) {
     if (!existsSync(abs) || !statSync(abs).isFile()) missing.push(rel);
   }
 
-  const pkg = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+  const pkg = readPackageJson(packageRoot);
   const scriptMissing = [];
   for (const [name, value] of Object.entries(pkg.scripts || {})) {
     if (name === "check") continue;
@@ -65,20 +94,23 @@ export function audit(packageRoot, checkScript) {
     unreferenced.push(mainEntry);
   }
 
-  return { targets, missing, scriptMissing, unreferenced };
+  return { targets, missing, scriptMissing, unreferenced, bommed: findBommedJson(packageRoot) };
 }
 
 export function main(argv = process.argv.slice(2)) {
   let packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const pkgIdx = argv.indexOf("--package");
   if (pkgIdx !== -1 && argv[pkgIdx + 1]) packageRoot = resolve(argv[pkgIdx + 1]);
-  const pkg = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
+  const pkg = readPackageJson(packageRoot);
   const checkScript = pkg.scripts && pkg.scripts.check;
   if (!checkScript) {
     console.error("check-targets: no scripts.check in package.json");
     return 1;
   }
-  const { missing, scriptMissing, unreferenced } = audit(packageRoot, checkScript);
+  const { missing, scriptMissing, unreferenced, bommed } = audit(packageRoot, checkScript);
+  for (const rel of bommed) {
+    console.error(`check-targets: UTF-8 BOM in ${rel} (rewrite the file as UTF-8 without BOM)`);
+  }
   for (const rel of missing) {
     console.error(`check-targets: MISSING target referenced by "check": ${rel}`);
   }
@@ -88,8 +120,8 @@ export function main(argv = process.argv.slice(2)) {
   for (const rel of unreferenced) {
     console.error(`check-targets: NOT covered by "check" (add node --check ${rel}): ${rel}`);
   }
-  if (missing.length > 0 || scriptMissing.length > 0 || unreferenced.length > 0) {
-    console.error(`check-targets: ${missing.length + scriptMissing.length} missing, ${unreferenced.length} uncovered`);
+  if (bommed.length > 0 || missing.length > 0 || scriptMissing.length > 0 || unreferenced.length > 0) {
+    console.error(`check-targets: ${bommed.length} bommed, ${missing.length + scriptMissing.length} missing, ${unreferenced.length} uncovered`);
     return 1;
   }
   console.log(`check-targets: ok (${extractCheckTargets(checkScript).length} targets, full coverage)`);

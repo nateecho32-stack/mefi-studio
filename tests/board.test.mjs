@@ -741,6 +741,10 @@ test("mergeIdeas rejects chat-noise extraction artifacts before they reach the s
     { title: "Recon done", detail: "Recon done. Starting with the missing spell registry check and gathering the contract." },
     { title: "Wave 3 landed", detail: "Wave 3 landed. Two bounded gaps surfaced in the carve path and the world check." },
     { title: "What's left to polish?", detail: "What's left, needs polish, or still needs more work?" },
+    // Status reports still narrate when the pattern sits in the main clause —
+    // the gate only relaxes for subordinate tails.
+    { title: "Contract tests pass", detail: "Contract tests pass; the next wave starts now." },
+    { title: "Sweep status", detail: "The contract tests pass and the shared gate is green. Queue the follow-ups." },
   ];
   const out = mergeIdeas([], noise);
   assert.equal(out.added, 0, "narration, status reports and bare questions never become ideas");
@@ -748,7 +752,8 @@ test("mergeIdeas rejects chat-noise extraction artifacts before they reach the s
   for (const row of noise) assert.equal(isExtractionArtifact(row), true, JSON.stringify(row.title));
 
   // Genuine proposals — including lowercase detail bodies and real directives —
-  // must still pass the gate.
+  // must still pass the gate. Conditional proposals carry their precondition in
+  // a subordinate tail ("after contract tests pass") and survive the scoping.
   const genuine = [
     { title: "Fix tar torch descriptions", detail: "tar torch text wrong in catalog" },
     { title: "Add a collision queue for editing sessions", detail: "add a collision queue for editing sessions" },
@@ -756,6 +761,10 @@ test("mergeIdeas rejects chat-noise extraction artifacts before they reach the s
     { title: "Sweep unwired systems", detail: "Look into systems that are not fully wired up or up to date with polish, flag these and make a plan" },
     { title: "Feature request", detail: "We should improve unique feature number 1 for this project." },
     { title: "Retry policy", detail: "Should stale checks retry with a warm cache on later boots?" },
+    // The row that motivated the clause scoping (idea_1789701012846_a89e1).
+    { title: "World feature smoke for torch interaction", detail: "Add main-game world feature smoke covering torch and interaction integration after contract tests pass." },
+    { title: "Gate the exporter", detail: "Run the exporter smoke once the contract suite passes." },
+    { title: "Re-check icons", detail: "Re-run the stat-icon check before the suite passes." },
   ];
   const kept = mergeIdeas([], genuine);
   assert.equal(kept.added, genuine.length, "genuine proposals pass the gate");

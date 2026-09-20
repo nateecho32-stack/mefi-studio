@@ -27,6 +27,11 @@ import subprocess
 import tempfile
 import unittest
 
+try:
+    from flake_capture import retry_transient
+except ImportError:  # imported as tools.test_mefi_studio_updater
+    from .flake_capture import retry_transient
+
 
 ROOT = Path(__file__).resolve().parents[1]
 STUDIO = ROOT
@@ -36,7 +41,9 @@ NODE = shutil.which("node")
 
 
 def read_text(path):
-    return path.read_text(encoding="utf-8") if path.is_file() else ""
+    # utf-8-sig strips a UTF-8 BOM if a concurrent PowerShell rewrite left
+    # one behind, and decodes BOM-less files identically.
+    return path.read_text(encoding="utf-8-sig") if path.is_file() else ""
 
 
 class MefiStudioUpdaterTests(unittest.TestCase):
@@ -561,7 +568,7 @@ const make = (options = {}) => createUpdater({
 });
 """
 
-    def test_debounce_coalesces_a_burst_into_one_action(self):
+    def _debounce_probe(self):
         script = self.FIXTURE + """
 await seed(root);
 // The burst outlasts the quiet period twice over, so only a timer that restarts
@@ -639,6 +646,13 @@ console.log(JSON.stringify({ burst, cappedDuring, cappedFiles, stopped: updater.
         self.assertEqual("idle", payload["stopped"]["phase"])
         self.assertFalse(payload["stopped"]["watching"])
 
+    def test_debounce_coalesces_a_burst_into_one_action(self):
+        # Sleep-timing waits on the real engine: a machine loaded by parallel
+        # agent runs can transiently overrun the quiet period. A failure that
+        # clears on immediate re-run is captured as a flake; one that
+        # reproduces re-raises the original so the gate keeps failing.
+        retry_transient(self._debounce_probe, self.id(), "debounce burst timing on the real engine")
+
     def test_auto_off_holds_pending_until_apply_now(self):
         script = self.FIXTURE + """
 await seed(root);
@@ -684,7 +698,7 @@ console.log(JSON.stringify({ pending, applied, after, idleApply, held, lastReloa
         self.assertEqual(["renderer/b.js", "renderer/styles.css"], payload["lastReload"])
         self.assertEqual(2, payload["reloads"])
 
-    def test_idle_poll_pauses_hidden_and_backs_off(self):
+    def _idle_poll_probe(self):
         """The safety-net poll pauses while hidden, backs off on unchanged reads, and still catches a change made while hidden on the first visible walk."""
         script = self.FIXTURE + """
 await seed(root);
@@ -725,6 +739,12 @@ console.log(JSON.stringify({
         self.assertEqual(1000, payload["whileHidden"]["pollMs"], "the hidden pause keeps the base cadence so the pause itself is short")
         self.assertEqual([["renderer/a.js"]], payload["revived"]["reloads"], "the first visible walk applies the change missed while hidden — no stale UI")
         self.assertGreaterEqual(payload["backedOff"], payload["mark"] * exported["POLL_BACKOFF_FACTOR"], "an unchanged idle read backs the next walk off")
+
+    def test_idle_poll_pauses_hidden_and_backs_off(self):
+        # Same flake family as the debounce burst: the backoff sleeps and the
+        # revive loop time a live subprocess, so a one-shot failure that
+        # clears on immediate re-run is captured instead of failing the gate.
+        retry_transient(self._idle_poll_probe, self.id(), "idle-poll pause/backoff timing on the real engine")
 
     def test_idle_poll_wiring_is_pinned(self):
         """The engine schedules with re-armed timeouts, main.cjs supplies the visibility probe, and overhead's sheet poll carries the same shape with its window export pinned only to the open/close consumer surface."""
@@ -1087,9 +1107,15 @@ console.log(JSON.stringify({ first, second }));
             payload = self.run_module(script, ROOT=root)
             built = (root / "renderer" / "booklet.html").read_text(encoding="utf-8")
             self.assertEqual(str(root / "renderer" / "booklet.html"), payload["first"]["out"])
-        catalog = json.loads((STUDIO / "data" / "models.json").read_text(encoding="utf-8"))
-        self.assertEqual(len(catalog["models"]), payload["first"]["models"])
-        self.assertEqual(catalog["hash"], payload["first"]["hash"])
+        # The comparison reads the live committed catalog, which a concurrent
+        # catalog rebuild can be caught mid-writing — same flake family as
+        # test_mefi_studio_catalog's setUpClass loads.
+        def live_catalog_probe():
+            catalog = json.loads((STUDIO / "data" / "models.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(catalog["models"]), payload["first"]["models"])
+            self.assertEqual(catalog["hash"], payload["first"]["hash"])
+
+        retry_transient(live_catalog_probe, self.id(), "live data/models.json read against the temp-root build")
         self.assertTrue(payload["first"]["changed"])
         self.assertFalse(payload["second"]["changed"], "an identical rebuild does not rewrite the file")
         for placeholder in ("__BOOKLET_DATA__", "__BOOKLET_STYLES__", "__BOOKLET_CODE__"):

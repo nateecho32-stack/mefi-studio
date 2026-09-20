@@ -8,7 +8,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { extractCheckTargets, extractNodeRefs, audit, main } from "../scripts/check-targets.mjs";
@@ -118,5 +118,38 @@ test("main() exits 0 on a fully covered package and 1 on drift", () => {
   } finally {
     rmSync(good, { recursive: true, force: true });
     rmSync(bad, { recursive: true, force: true });
+  }
+});
+
+test("audit flags a UTF-8 BOM in package.json and main() still parses and fails cleanly", () => {
+  const root = makeFixturePackage(
+    ["main.cjs", "scripts/a.mjs", "renderer/b.js"],
+    ["main.cjs", "scripts/a.mjs", "renderer/b.js"]
+  );
+  try {
+    const pkgPath = join(root, "package.json");
+    writeFileSync(pkgPath, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), readFileSync(pkgPath)]));
+    const { bommed } = audit(root, "node --check main.cjs");
+    assert.deepEqual(bommed, ["package.json"]);
+    assert.equal(main(["--package", root]), 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("audit flags a UTF-8 BOM in committed data JSON and passes when BOM-free", () => {
+  const root = makeFixturePackage(
+    ["main.cjs", "scripts/a.mjs", "renderer/b.js"],
+    ["main.cjs", "scripts/a.mjs", "renderer/b.js"]
+  );
+  try {
+    mkdirSync(join(root, "data"), { recursive: true });
+    const dataPath = join(root, "data", "models.json");
+    writeFileSync(dataPath, "\uFEFF" + JSON.stringify({ schemaVersion: 1 }));
+    assert.deepEqual(audit(root, "node --check main.cjs").bommed, ["data/models.json"]);
+    writeFileSync(dataPath, JSON.stringify({ schemaVersion: 1 }));
+    assert.deepEqual(audit(root, "node --check main.cjs").bommed, []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

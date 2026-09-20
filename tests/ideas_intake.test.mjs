@@ -121,9 +121,10 @@ test("scanIdeas filters chat narration so the review never sees extraction artif
     "What's left, needs polish, or still needs more work?",
   ];
   const genuine = "Local coop has no per-player equipment system at all, so bare P2 is consistent — we should add shared backpack references.";
-  const chat = { id: "part_001", at: 100, sessionId: "session", text: [...noise, genuine].join("\n") };
+  const conditional = "Add the world feature smoke for torch and interaction integration after contract tests pass.";
+  const chat = { id: "part_001", at: 100, sessionId: "session", text: [...noise, genuine, conditional].join("\n") };
   const candidates = scanIdeas([chat]);
-  assert.deepEqual(candidates.map((idea) => idea.detail), [genuine], "only the genuine proposal survives the gate");
+  assert.deepEqual(candidates.map((idea) => idea.detail), [genuine, conditional], "genuine proposals — including conditional ones — survive the gate");
 });
 
 test("mergeIdeas rejects narration the model relents and mints anyway", () => {

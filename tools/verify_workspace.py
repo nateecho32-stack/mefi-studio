@@ -668,7 +668,7 @@ def verify(source, output, routing_only=False):
             "status": "keep" if index % 10 == 0 else "new", "read": index % 2 == 0,
         } for index in range(100)]
         write_json(app_root / "data" / "eyes-feature-ideas.json", ideas)
-        package = json.loads((source / "package.json").read_text(encoding="utf-8"))
+        package = json.loads((source / "package.json").read_text(encoding="utf-8-sig"))
         package["main"] = "workspace-verify-entry.cjs"
         write_json(app_root / "package.json", package)
         config = {"profile": str(profile), "appRoot": str(app_root), "output": str(output), "alpha": alpha_info, "beta": beta_info, "routingOnly": routing_only}

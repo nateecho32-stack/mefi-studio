@@ -8,6 +8,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import studioPaths from "./paths.cjs";
+import { findUnusedSelectors } from "./check-css.mjs";
 
 const STUDIO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -142,6 +143,24 @@ export async function audit({ root = STUDIO } = {}) {
       add("error", "data", `data/${dataFile} does not parse`);
     }
   }
+
+  // 8. dead CSS selectors: rules that keep winner keys but whose classes never
+  //    appear in renderer html/js/css usage. Cascade equivalence (check-css)
+  //    only proves shadowing; this is the unused-rule half.
+  const rendererEntries = (await readdirOrNull(RENDERER)) ?? [];
+  const cssFiles = rendererEntries.filter((name) => name.endsWith(".css"));
+  const htmlText = (await Promise.all(
+    rendererEntries.filter((name) => name.endsWith(".html")).map((name) => readIfExists(path.join(RENDERER, name)))
+  )).filter(Boolean).join("\n");
+  const cssTexts = await Promise.all(cssFiles.map((name) => readIfExists(path.join(RENDERER, name))));
+  cssFiles.forEach((name, i) => {
+    const otherCss = cssTexts.filter((_, j) => j !== i).filter(Boolean).join("\n");
+    const unused = findUnusedSelectors(cssTexts[i] ?? "", `${htmlText}\n${scriptText}\n${otherCss}`);
+    for (const hit of unused.slice(0, 12)) {
+      add("warn", "css", `renderer/${name} line ${hit.line}: selector "${hit.selector}" keeps winner keys but its classes (${hit.missing.join(" ")}) never appear in renderer html/js/css usage`);
+    }
+    if (unused.length > 12) add("warn", "css", `renderer/${name}: ${unused.length - 12} more selectors with unused classes not listed`);
+  });
 
   const errors = findings.filter((finding) => finding.level === "error").length;
   const warnings = findings.filter((finding) => finding.level === "warn").length;

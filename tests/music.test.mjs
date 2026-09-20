@@ -9,7 +9,7 @@ vm.runInContext(`${source.slice(source.indexOf("  const THEMES"), source.indexOf
 const helpers = pure.api;
 const flush = async () => { for (let index = 0; index < 15; index += 1) await Promise.resolve(); };
 
-function environment({ saved = null, recommend, preview = false, workspaceActive = false } = {}) {
+function environment({ saved = null, recommend, preview = false, workspaceActive = false, audioLink = null } = {}) {
   const ids = new Map();
   const events = [];
   const revoked = [];
@@ -29,7 +29,7 @@ function environment({ saved = null, recommend, preview = false, workspaceActive
     constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.attrs = {}; this.listeners = {}; this.style = { setProperty: (key, value) => styles.set(key, value) }; this.classList = { add() {}, remove() {} }; this.hidden = false; this.disabled = false; this.value = ""; }
     set id(value) { this._id = value; ids.set(value, this); }
     get id() { return this._id; }
-    set textContent(value) { this.text = String(value); this.children = []; }
+    set textContent(value) { this.textWrites = (this.textWrites || 0) + 1; this.text = String(value); this.children = []; }
     get textContent() { return (this.text || "") + this.children.map((child) => child.textContent).join(""); }
     append(...children) { for (const child of children) { child.parentElement = this; this.children.push(child); } }
     remove() { if (this.parentElement) this.parentElement.children = this.parentElement.children.filter((child) => child !== this); }
@@ -63,8 +63,13 @@ function environment({ saved = null, recommend, preview = false, workspaceActive
       dispatchEvent: (event) => events.push(event), addEventListener: (type, callback) => listeners.set(type, callback), open: (url) => opened.push(url),
       requestAnimationFrame: (callback) => { frames.set(++frameId, callback); return frameId; }, cancelAnimationFrame: (id) => frames.delete(id),
       MefiNav: { claim: (id) => lifecycle.push(`claim:${id}`), release: (id) => lifecycle.push(`release:${id}`) },
+      ...(preview || audioLink ? {
+        MefiIdle: {
+          ...(preview ? { setSettingsPreview: (rect) => lifecycle.push(rect ? { ...rect } : "preview:close"), status: () => ({ view: treeView }), setView: (view) => { treeView = view; listeners.get("mefi-tree-view")?.({ detail: { view } }); } } : {}),
+          ...audioLink,
+        },
+      } : {}),
       ...(preview ? {
-        MefiIdle: { setSettingsPreview: (rect) => lifecycle.push(rect ? { ...rect } : "preview:close"), status: () => ({ view: treeView }), setView: (view) => { treeView = view; listeners.get("mefi-tree-view")?.({ detail: { view } }); } },
         MefiWorkspace: { isActive: () => workspaceActive, exit: () => { workspaceActive = false; lifecycle.push("workspace:exit"); }, enter: () => { workspaceActive = true; lifecycle.push("workspace:enter"); } },
       } : {}),
       mefiStudio: { ...(recommend ? { musicRecommend: recommend } : {}), openExternal: (url) => { opened.push(url); return Promise.resolve(); } },
@@ -77,6 +82,7 @@ function environment({ saved = null, recommend, preview = false, workspaceActive
     frames: () => { const pending = [...frames.values()]; frames.clear(); pending.forEach((callback) => callback()); },
     resize: (rect) => { previewRect = rect; listeners.get("resize")?.(); },
     view: (view) => { treeView = view; listeners.get("mefi-tree-view")?.({ detail: { view } }); },
+    emit: (type, detail) => listeners.get(type)?.({ detail }),
   };
 }
 const file = (name, size = 12, type = "audio/mpeg") => ({ name, size, type, lastModified: 1 });
@@ -425,4 +431,91 @@ test("live preview view controls change the real tree and follow external view c
   env.view("3d");assert.equal(solid.attrs["aria-pressed"],"true");
   assert.equal(env.music.status().nodeLayout,"constellation");assert.equal(env.music.status().playing,false);
   const noGraph=environment();assert.equal(noGraph.ids.get("music-tree-view-2d").disabled,true,"unavailable canvas is not offered as a working control");
+});
+
+test("Audio link settings choose their source and response without connecting until the user requests it", () => {
+  const calls = [];
+  let status = { selection: "auto", source: "auto", reactive: false, listening: false, pending: false, error: null, response: 1, label: "Audio link off", description: "Choose a source and connect." };
+  const env = environment({ preview: true, audioLink: {
+    audioStatus: () => status,
+    setAudioSource: (selection) => { calls.push(["source", selection]); status = { ...status, selection }; },
+    setAudioResponse: (response) => { calls.push(["response", response]); status = { ...status, response }; },
+    setMusicReactive: (reactive) => { calls.push(["connect", reactive]); status = { ...status, reactive, pending: reactive && status.selection !== "local", listening: false, label: !reactive ? "Audio link off" : status.selection === "local" ? "Add a track to link" : "Connecting audio…" }; },
+  } });
+  const selector = env.ids.get("music-audio-source"), toggle = env.ids.get("music-audio-toggle"), response = env.ids.get("music-audio-response");
+  env.music.open(); env.frames();
+  assert.deepEqual(calls, [], "opening and painting the settings preview cannot request capture");
+  assert.equal(selector.disabled, false, "a source can be chosen before any capture starts");
+  assert.deepEqual(selector.children.map((option) => option.value), ["auto", "local", "desktop", "mic"]);
+  assert.equal(toggle.textContent, "Connect audio");
+  assert.equal(toggle.attrs["aria-pressed"], "false");
+  selector.value = "mic"; selector.dispatch("change");
+  const announcements = env.ids.get("music-audio-state").textWrites;
+  response.value = "1.65"; response.dispatch("input");
+  assert.equal(env.ids.get("music-audio-state").textWrites, announcements, "response changes do not repeat an unchanged live announcement");
+  assert.deepEqual(calls, [["source", "mic"], ["response", 1.65]]);
+  assert.equal(response.parentElement.children.at(-1).textContent, "165%");
+  assert.equal(response.type, "range");
+  assert.equal(response.min, "0.25"); assert.equal(response.max, "2");
+  assert.equal(selector.attrs["aria-describedby"], "music-audio-hint");
+  toggle.click();
+  assert.deepEqual(calls.at(-1), ["connect", true]);
+  assert.equal(toggle.textContent, "Disconnect", "a pending capture can be cancelled from the same control");
+  assert.equal(toggle.attrs["aria-pressed"], "true");
+  assert.equal(env.ids.get("music-audio-state").textContent, "Connecting audio…");
+  toggle.click();
+  assert.deepEqual(calls.at(-1), ["connect", false]);
+  assert.equal(toggle.textContent, "Connect audio");
+  assert.equal(env.audio.paused, true, "link controls never start local transport");
+  selector.value = "local"; selector.dispatch("change");
+  toggle.click();
+  assert.equal(toggle.textContent, "Disconnect", "an armed local link can be cancelled while waiting for the first track");
+  assert.equal(env.ids.get("music-audio-state").textContent, "Add a track to link");
+  toggle.click();
+  assert.deepEqual(calls.at(-1), ["connect", false]);
+  assert.equal(toggle.attrs["aria-pressed"], "false");
+});
+
+test("Audio link mirrors Command changes, retries failed capture and disconnects without stopping local playback", async () => {
+  const requests = [];
+  let status = { selection: "desktop", source: "desktop", reactive: true, listening: false, pending: false, error: "Access denied", response: .75, label: "Audio unavailable", description: "Audio access was not allowed. Connect to retry." };
+  const env = environment({ audioLink: {
+    audioStatus: () => status,
+    setAudioSource: () => {}, setAudioResponse: () => {},
+    setMusicReactive: (enabled) => {
+      requests.push(enabled);
+      status = { ...status, reactive: enabled, error: null, listening: false, pending: enabled, label: enabled ? "Connecting audio…" : "Audio link off" };
+    },
+  } });
+  const toggle = env.ids.get("music-audio-toggle");
+  env.music.open();
+  assert.equal(toggle.textContent, "Retry audio link");
+  assert.equal(env.ids.get("music-audio-state").attrs.role, "status");
+  assert.match(env.ids.get("music-audio-hint").textContent, /not allowed/);
+  toggle.click();
+  assert.deepEqual(requests, [true]);
+  assert.equal(toggle.textContent, "Disconnect");
+  env.music.addFiles([file("Keep playing.mp3")]);
+  env.ids.get("music-play").click(); await flush();
+  assert.equal(env.audio.paused, false);
+  status = { ...status, selection: "auto", source: "local", listening: true, pending: false, response: 1.3, label: "Track linked", description: "Following the Studio player." };
+  env.emit("mefi-audio-change", status);
+  assert.equal(env.ids.get("music-audio-source").value, "auto");
+  assert.equal(env.ids.get("music-audio-response").value, "1.3");
+  assert.equal(env.ids.get("music-audio-response").parentElement.children.at(-1).textContent, "130%");
+  assert.equal(env.ids.get("music-audio-state").textContent, "Track linked");
+  assert.equal(env.ids.get("music-audio-hint").textContent, "Following the Studio player.");
+  assert.equal(toggle.attrs["aria-pressed"], "true");
+  assert.deepEqual(requests, [true], "a Command status notification does not request capture again");
+  toggle.click();
+  assert.deepEqual(requests, [true, false]);
+  assert.equal(env.audio.paused, false, "disconnecting the nodes leaves the local track playing");
+  assert.equal(toggle.attrs["aria-pressed"], "false");
+});
+
+test("Audio link controls remain unavailable when the Command audio API is absent", () => {
+  const env = environment(); env.music.open();
+  for (const id of ["music-audio-toggle", "music-audio-source", "music-audio-response"]) assert.equal(env.ids.get(id).disabled, true, id);
+  assert.equal(env.ids.get("music-audio-state").textContent, "Audio link off");
+  assert.equal(env.audio.paused, true);
 });

@@ -48,7 +48,7 @@ class MefiStudioIdleTests(unittest.TestCase):
             "liveColliding",
             "touches.set(",
             "drawNodeSurface(ctx, node, p, radius, tint",
-            'const active = b.node._workLabel !== "Verifying" && (isBusyNode(b.node, runningIds)',
+            'const active = b.node._workLabel !== "Verifying" && isBusyNode(b.node, runningIds)',
             "state.touches.get(node.sessionId)",
         ):
             with self.subTest(marker=marker):
@@ -121,11 +121,12 @@ class MefiStudioIdleTests(unittest.TestCase):
         self.assertIn("togglePin", self.tree)
 
     def test_reactive_glow_listens_to_desktop_audio(self):
-        # Reactive glow defaults to system loopback ("desktop"); the
-        # microphone is an opt-in select, and the main process answers
+        # Auto follows loaded Studio tracks and otherwise allows desktop
+        # loopback only after an explicit connect gesture. The main process answers
         # getDisplayMedia with a screen source + "loopback" so no picker opens.
         for marker in (
-            'readStore("mefiStudio.zenSource") === "mic" ? "mic" : "desktop"',
+            'readStore("mefiStudio.zenSource") === "mic" ? "mic" : "auto"',
+            'readStore("mefiStudio.audioSource.v2")',
             "getDisplayMedia?.({ video: true, audio: true })",
             # The mic path asks for the raw signal: the usual phone-call
             # processing (echo cancellation, noise suppression, AGC) would
@@ -144,6 +145,8 @@ class MefiStudioIdleTests(unittest.TestCase):
         self.assertIn('"loopback"', self.main)
         self.assertIn("desktopCapturer", self.main)
         self.assertIn('id="idle-source"', self.template)
+        self.assertIn('value="auto"', self.template)
+        self.assertIn('value="local"', self.template)
         self.assertIn('value="mic"', self.template)
 
     def test_chat_log_panel_does_not_fail_work_on_it(self):

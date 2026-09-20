@@ -326,7 +326,7 @@
     els.local.hidden = !local; els.spotify.hidden = local;
     els.localTab.setAttribute("aria-selected", String(local));
     els.spotifyTab.setAttribute("aria-selected", String(!local));
-    renderTransport(); renderQueue();
+    renderTransport(); renderQueue(); renderAudioLink();
     els.recent.textContent = "";
     for (const url of prefs.spotify) {
       const item = spotifyLink(url);
@@ -336,6 +336,24 @@
     els.recommend.disabled = state.sending || !(recommender || window.mefiStudio?.musicRecommend);
     els.recommend.textContent = state.sending ? "Finding a direction…" : "Ask for recommendations";
     els.aiHint.textContent = recommender || window.mefiStudio?.musicRecommend ? "Uses Studio’s configured assistant. Recommendations appear here." : "Music recommendations need Studio’s assistant connection.";
+  }
+  function renderAudioLink(status = window.MefiIdle?.audioStatus?.()) {
+    if (!els.audioToggle) return;
+    const connected = audioLinkEnabled(status);
+    els.audioToggle.disabled = !window.MefiIdle?.setMusicReactive;
+    els.audioToggle.textContent = connected ? "Disconnect" : status?.error ? "Retry audio link" : "Connect audio";
+    els.audioToggle.setAttribute("aria-pressed", String(connected));
+    const label = status?.label || "Audio link off";
+    if (els.audioState.textContent !== label) els.audioState.textContent = label;
+    els.audioHint.textContent = status?.description || "Connect local music, desktop audio or your microphone to the nodes.";
+    els.audioSource.value = status?.selection || "auto";
+    els.audioSource.disabled = !window.MefiIdle?.setAudioSource;
+    els.audioResponse.value = String(status?.response ?? 1);
+    els.audioResponse.disabled = !window.MefiIdle?.setAudioResponse;
+    els.audioResponseValue.textContent = `${Math.round((status?.response ?? 1) * 100)}%`;
+  }
+  function audioLinkEnabled(status) {
+    return Boolean(status?.reactive && (status.listening || status.pending || status.selection === "local" && !status.error));
   }
   async function recommend() {
     if (state.sending) return;
@@ -383,6 +401,30 @@
     button("Close", "ghost", header, close, "music-close");
     const body = element("div", "music-body", null, sheet);
     const settings = element("div", "music-settings", null, body);
+    const audioLink = element("section", "music-audio-link", null, settings);
+    audioLink.setAttribute("aria-labelledby", "music-audio-heading");
+    const audioHeading = element("h3", null, "Audio link", audioLink); audioHeading.id = "music-audio-heading";
+    element("p", "music-fineprint", "Bass warms the hubs, mids light the branches, and treble picks out smaller nodes. Connections breathe with the music.", audioLink);
+    const audioControls = element("div", "music-audio-controls", null, audioLink);
+    const sourceLabel = element("label", null, "Listen to", audioControls);
+    els.audioSource = element("select", null, null, sourceLabel); els.audioSource.id = "music-audio-source";
+    for (const [value, title] of [["auto", "Auto · local or desktop"], ["local", "Local player"], ["desktop", "Desktop audio / Spotify"], ["mic", "Microphone"]]) {
+      const option = element("option", null, title, els.audioSource); option.value = value;
+    }
+    els.audioSource.addEventListener("change", () => { window.MefiIdle?.setAudioSource?.(els.audioSource.value); renderAudioLink(); });
+    els.audioToggle = button("Connect audio", "ghost", audioControls, () => {
+      const status = window.MefiIdle?.audioStatus?.();
+      window.MefiIdle?.setMusicReactive?.(!audioLinkEnabled(status));
+      renderAudioLink();
+    }, "music-audio-toggle");
+    els.audioState = element("p", "music-audio-state", "Audio link off", audioLink); els.audioState.id = "music-audio-state"; els.audioState.setAttribute("role", "status");
+    els.audioHint = element("p", "music-fineprint", "", audioLink); els.audioHint.id = "music-audio-hint";
+    els.audioSource.setAttribute("aria-describedby", els.audioHint.id);
+    const responseLabel = element("label", "music-audio-response", "Response", audioLink);
+    els.audioResponse = element("input", null, null, responseLabel); els.audioResponse.id = "music-audio-response";
+    els.audioResponse.type = "range"; els.audioResponse.min = "0.25"; els.audioResponse.max = "2"; els.audioResponse.step = "0.05";
+    els.audioResponseValue = element("output", null, "100%", responseLabel); els.audioResponseValue.setAttribute("for", els.audioResponse.id);
+    els.audioResponse.addEventListener("input", () => { window.MefiIdle?.setAudioResponse?.(Number(els.audioResponse.value)); renderAudioLink(); });
     const main = element("main", "music-main", null, body);
     const tabs = element("div", "music-tabs", null, main); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Music source");
     els.localTab = button("Local music", "music-tab", tabs, () => setSource("local"), "music-local-tab");
@@ -552,6 +594,7 @@
     build(); applyTheme(prefs.theme, false); syncTreePreferences(false); render();
     window.addEventListener("resize", schedulePreview);
     window.addEventListener("mefi-tree-view", (event) => syncTreeView(event.detail?.view));
+    window.addEventListener("mefi-audio-change", (event) => renderAudioLink(event.detail));
     if (typeof window.ResizeObserver === "function") new window.ResizeObserver(schedulePreview).observe(els.preview);
     window.addEventListener("beforeunload", () => { for (const track of state.tracks) URL.revokeObjectURL(track.url); });
   }

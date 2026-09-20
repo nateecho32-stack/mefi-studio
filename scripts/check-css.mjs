@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { readFile, readdir } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -112,6 +113,195 @@ export function cascadeEquivalence(baseText, headText) {
   return compareWinners(cascadeWinners(baseText), cascadeWinners(headText));
 }
 
+export function selectorClasses(selector) {
+  const classes = new Set();
+  for (const match of selector.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) classes.add(match[1]);
+  return [...classes];
+}
+
+export function findUnusedSelectors(cssText, usageText, { allow = [] } = {}) {
+  const css = blankComments(cssText);
+  const usage = new Set(usageText.match(/[\w-]+/g) ?? []);
+  const allowed = new Set(allow);
+  const unused = [];
+  (function walk(from, to) {
+    for (const node of parseNodes(css, from, to)) {
+      if (node.header.startsWith("@keyframes")) continue;
+      if (node.isAt) { walk(node.braceStart + 1, node.end - 1); continue; }
+      if (parseDecls(css.slice(node.braceStart + 1, node.end - 1)).length === 0) continue;
+      for (const selector of splitSelectorList(node.header)) {
+        const classes = selectorClasses(selector);
+        const missing = classes.filter((name) => !usage.has(name) && !allowed.has(name));
+        if (classes.length > 0 && missing.length > 0) {
+          unused.push({ selector, missing, line: css.slice(0, node.headerStart).split("\n").length });
+        }
+      }
+    }
+  })(0, css.length);
+  return unused;
+}
+
+// Collision-resolution gate: after a styles.css merge conflict, every winner
+// key at least one side diverged from the merge base on must be honored by
+// the resolution — a one-sided change/addition survives with that side's
+// value, a one-sided deletion stays deleted, and a both-sides change may pick
+// either side's value (recorded as a decision) but never the base value.
+const fmtWinner = (v) => (v === undefined ? "(absent)" : v);
+
+export function mergeResolution(baseText, oursText, theirsText, resolvedText) {
+  const base = cascadeWinners(baseText);
+  const ours = cascadeWinners(oursText);
+  const theirs = cascadeWinners(theirsText);
+  const resolved = cascadeWinners(resolvedText);
+  const problems = [];
+  const decisions = [];
+  const diverged = { ours: 0, theirs: 0 };
+  const keys = new Set([...base.keys(), ...ours.keys(), ...theirs.keys()]);
+  for (const key of keys) {
+    const intentOf = (map) => {
+      const val = map.has(key) ? map.get(key).val : undefined;
+      if (!base.has(key)) return val === undefined ? null : { kind: "add", val };
+      if (val === undefined) return { kind: "delete" };
+      if (val !== base.get(key).val) return { kind: "change", val };
+      return null;
+    };
+    const o = intentOf(ours);
+    const t = intentOf(theirs);
+    if (!o && !t) continue;
+    if (o) diverged.ours++;
+    if (t) diverged.theirs++;
+    const rv = resolved.has(key) ? resolved.get(key).val : undefined;
+    const realized = (intent) => (intent.kind === "delete" ? rv === undefined : rv === intent.val);
+    const baseVal = base.has(key) ? base.get(key).val : undefined;
+    if (o && t) {
+      const same = o.kind === t.kind && o.val === t.val;
+      if (same) {
+        if (realized(o)) continue;
+      } else {
+        if (realized(o)) { decisions.push({ key, picked: "ours", value: fmtWinner(o.val) }); continue; }
+        if (realized(t)) { decisions.push({ key, picked: "theirs", value: fmtWinner(t.val) }); continue; }
+      }
+      problems.push({ kind: "unresolved", key, base: fmtWinner(baseVal), ours: fmtWinner(o.val), theirs: fmtWinner(t.val), resolved: fmtWinner(rv) });
+    } else {
+      const active = o || t;
+      const side = o ? "ours" : "theirs";
+      if (!realized(active)) {
+        problems.push({
+          kind: active.kind === "delete" ? "undeleted" : "dropped",
+          key, side, base: fmtWinner(baseVal), [side]: fmtWinner(active.val), resolved: fmtWinner(rv)
+        });
+      }
+    }
+  }
+  return { problems, decisions, diverged, keys: keys.size };
+}
+
+function shortRef(ref) {
+  return /^[0-9a-f]{7,40}$/.test(ref) ? ref.slice(0, 8) : ref;
+}
+
+function readMergeHead() {
+  try {
+    const gitPath = execFileSync("git", ["rev-parse", "--git-path", "MERGE_HEAD"], { encoding: "utf8" }).trim();
+    const abs = path.isAbsolute(gitPath) ? gitPath : path.resolve(process.cwd(), gitPath);
+    return readFileSync(abs, "utf8").trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function runMerge(files, refs) {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const target = path.resolve(files[0] || path.join(root, "renderer", "styles.css"));
+  const oursRef = refs.ours || "HEAD";
+  const theirsRef = refs.theirs || readMergeHead();
+  if (!theirsRef) {
+    console.log("MERGE-CSS-SKIP: no merge in progress — nothing to check (pass --theirs <ref> to audit a branch pair)");
+    return 0;
+  }
+  let baseRef = refs.base;
+  if (!baseRef) {
+    try {
+      baseRef = execFileSync("git", ["merge-base", oursRef, theirsRef], { encoding: "utf8" }).trim();
+    } catch (err) {
+      console.error(`check-css: cannot compute merge base of ${oursRef} and ${theirsRef}: ${err.message}`);
+      return 2;
+    }
+  }
+  let baseText;
+  let oursText;
+  let theirsText;
+  let resolvedText;
+  try {
+    baseText = readGitBlob(baseRef, target);
+    oursText = readGitBlob(oursRef, target);
+    theirsText = readGitBlob(theirsRef, target);
+    resolvedText = await readFile(target, "utf8");
+  } catch (err) {
+    console.error(`check-css: cannot read merge sides of ${path.relative(process.cwd(), target)}: ${err.message}`);
+    return 2;
+  }
+  console.log(`MERGE-CSS: ${path.relative(process.cwd(), target)} base=${shortRef(baseRef)} ours=${shortRef(oursRef)} theirs=${shortRef(theirsRef)}`);
+  if (/^<{7}/m.test(resolvedText)) {
+    console.log("MERGE-CSS-CONFLICT: conflict markers still present in the working copy — resolve them first");
+    return 1;
+  }
+  const { problems, decisions, diverged } = mergeResolution(baseText, oursText, theirsText, resolvedText);
+  for (const p of problems) {
+    if (p.kind === "dropped") console.log(`MERGE-LOST ${p.side} winner "${p.key}": ${p.side}=${p[p.side]} resolved=${p.resolved} (base=${p.base})`);
+    else if (p.kind === "undeleted") console.log(`MERGE-UNDELETED ${p.side} winner "${p.key}": ${p.side} deleted it but resolved=${p.resolved}`);
+    else console.log(`MERGE-UNRESOLVED winner "${p.key}": ours=${p.ours} theirs=${p.theirs} resolved=${p.resolved} (base=${p.base})`);
+  }
+  for (const d of decisions) console.log(`MERGE-DECISION winner "${d.key}": kept ${d.picked}=${d.value}`);
+  if (problems.length > 0) {
+    console.log(`MERGE-CSS-CONFLICT: ${problems.length} diverged winner key(s) not honored by the resolution (ours ${diverged.ours}, theirs ${diverged.theirs} diverged from the merge base)`);
+    return 1;
+  }
+  console.log(`MERGE-CSS-RESOLVED: resolution honors every diverged winner (ours ${diverged.ours}, theirs ${diverged.theirs} diverged from the merge base, ${decisions.length} both-sides decision(s))`);
+  return 0;
+}
+
+async function runUnused(targets, allow) {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  let sheets = targets;
+  if (!sheets.length) {
+    const renderer = path.join(root, "renderer");
+    let names;
+    try {
+      names = await readdir(renderer);
+    } catch (err) {
+      console.error(`check-css: cannot read ${renderer}: ${err.message}`);
+      return 2;
+    }
+    sheets = names.filter((name) => name.endsWith(".css")).map((name) => path.join(renderer, name)).sort();
+  }
+  let dead = 0;
+  for (const target of sheets.map((file) => path.resolve(file))) {
+    let cssText;
+    let siblings;
+    try {
+      cssText = await readFile(target, "utf8");
+      siblings = (await readdir(path.dirname(target))).filter(
+        (name) => /\.(?:html|js|css)$/.test(name) && path.resolve(path.dirname(target), name) !== target
+      );
+    } catch (err) {
+      console.error(`check-css: cannot read ${target}: ${err.message}`);
+      return 2;
+    }
+    const usageText = (await Promise.all(siblings.map((name) => readFile(path.join(path.dirname(target), name), "utf8")))).join("\n");
+    for (const hit of findUnusedSelectors(cssText, usageText, { allow })) {
+      dead++;
+      console.log(`UNUSED-SELECTOR ${path.relative(process.cwd(), target)}:${hit.line}: ${hit.selector} (missing ${hit.missing.join(" ")})`);
+    }
+  }
+  if (dead > 0) {
+    console.log(`UNUSED-SELECTORS: ${dead} winner-bearing selector(s) whose classes appear in no renderer html/js/css usage`);
+    return 1;
+  }
+  console.log(`ALL-SELECTORS-USED: every class selector appears in renderer html/js/css usage (${sheets.length} stylesheet(s))`);
+  return 0;
+}
+
 function formatProblems(problems) {
   for (const p of problems) {
     if (p.kind === "missing") console.log("MISSING WINNER IN CANDIDATE:", p.key, JSON.stringify(p.base));
@@ -126,19 +316,35 @@ function readGitBlob(gitRef, repoPath) {
 }
 
 export async function main(argv = process.argv.slice(2)) {
-  const usage = "usage: node scripts/check-css.mjs <base.css> <candidate.css>\n       node scripts/check-css.mjs [--git <ref>] [file.css]  (default: --git HEAD renderer/styles.css)";
+  const usage = "usage: node scripts/check-css.mjs <base.css> <candidate.css>\n       node scripts/check-css.mjs [--git <ref>] [file.css]  (default: --git HEAD renderer/styles.css)\n       node scripts/check-css.mjs --merge [--ours <ref>] [--theirs <ref>] [--base <ref>] [file.css]\n            (default: renderer/styles.css; ours HEAD, theirs MERGE_HEAD, base their merge base)\n       node scripts/check-css.mjs --unused [--allow cls,...] [file.css ...]  (default: renderer/*.css)";
   let gitRef = null;
+  let unusedMode = false;
+  let mergeMode = false;
+  let allow = [];
+  const refs = {};
   const files = [];
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--git") {
       if (!argv[i + 1]) { console.error(usage); return 2; }
       gitRef = argv[++i];
+    } else if (argv[i] === "--merge") {
+      mergeMode = true;
+    } else if (argv[i] === "--ours" || argv[i] === "--theirs" || argv[i] === "--base") {
+      if (!argv[i + 1]) { console.error(usage); return 2; }
+      refs[argv[i].slice(2)] = argv[++i];
+    } else if (argv[i] === "--unused") {
+      unusedMode = true;
+    } else if (argv[i] === "--allow") {
+      if (!argv[i + 1]) { console.error(usage); return 2; }
+      allow = argv[++i].split(",").map((name) => name.trim()).filter(Boolean);
     } else if (argv[i] === "-h" || argv[i] === "--help") {
       console.log(usage);
       return 0;
     } else files.push(argv[i]);
   }
-  if (files.length > 2 || (gitRef && files.length > 1)) { console.error(usage); return 2; }
+  if (files.length > 2 || (gitRef && files.length > 1) || (mergeMode && (files.length > 1 || gitRef || unusedMode)) || (unusedMode && mergeMode)) { console.error(usage); return 2; }
+  if (unusedMode) return runUnused(files, allow);
+  if (mergeMode) return runMerge(files, refs);
 
   let baseText;
   let candidateText;

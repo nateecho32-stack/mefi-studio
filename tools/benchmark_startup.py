@@ -36,7 +36,7 @@ def measure(source):
         profile = temporary / "profile"
         (profile / "session").mkdir(parents=True)
         (profile / "settings.json").write_text(json.dumps({"machine": {"autoKill": False}}), encoding="utf-8")
-        package = json.loads((source / "package.json").read_text(encoding="utf-8"))
+        package = json.loads((source / "package.json").read_text(encoding="utf-8-sig"))
         package["main"] = "benchmark-entry.cjs"
         (app_root / "package.json").write_text(json.dumps(package), encoding="utf-8")
         bootstrap = r'''

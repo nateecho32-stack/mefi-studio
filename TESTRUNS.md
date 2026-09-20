@@ -41,7 +41,7 @@ npm run check
 npm test
 ```
 
-`npm run check` verifies package-script targets and JavaScript syntax and runs the spec-collision audit (`npm run check:specs`, `scripts/spec-collisions.mjs`) that enforces the CONTRIBUTING.md test-file conventions. `npm run check:css` (`scripts/check-css.mjs`) is the standalone CSS-refactor safety gate: it computes the cascade-winning declaration for every (selector-context, property, importance) key in a stylesheet and proves a candidate (by default the working copy of `renderer/styles.css`) keeps exactly the same winners as the base ref (by default `HEAD`), reporting missing/changed/new winners and exiting non-zero on divergence. `tests/check_css.test.mjs` pins the winner extraction, cascade-equivalence comparison and the CLI exit codes (`node scripts/check-css.mjs base.css candidate.css` also works on bare files). `npm test` runs the Node behavioral suite in `tests/`, all Python contracts in `tools/`, and the normalized-path lock proof (`node tools/test_normalized_path_lock.mjs`, the A-Eyes overseer directive's named check) as its closing gate. To investigate one layer or one contract:
+`npm run check` verifies package-script targets and JavaScript syntax and runs the spec-collision audit (`npm run check:specs`, `scripts/spec-collisions.mjs`) that enforces the CONTRIBUTING.md test-file conventions. `npm run check:css` (`scripts/check-css.mjs`) is the standalone CSS-refactor safety gate: it computes the cascade-winning declaration for every (selector-context, property, importance) key in a stylesheet and proves a candidate (by default the working copy of `renderer/styles.css`) keeps exactly the same winners as the base ref (by default `HEAD`), reporting missing/changed/new winners and exiting non-zero on divergence. `tests/check_css.test.mjs` pins the winner extraction, cascade-equivalence comparison and the CLI exit codes (`node scripts/check-css.mjs base.css candidate.css` also works on bare files; `npm run check:css -- pre-merge.css post-merge.css` is the same two-file form used to prove a styles.css merge — see "Verifying a session edit-collision handoff" below). `npm run check:css:merge` (`scripts/check-css.mjs --merge`) is the collision-resolution form folded into the same convention: after a styles.css merge conflict it checks **both sides against the merge base** (ours `HEAD`, theirs `MERGE_HEAD`, base their `git merge-base`) and fails when the resolution drops a one-sided winner change, resurrects a one-sided deletion, or settles a both-sides change on neither side's value; it runs inside the `npm run check` chain and is a no-op (`MERGE-CSS-SKIP`, exit 0) when no merge is in progress, with `--theirs <ref>` auditing any branch pair. Guarded by `tests/check_css_merge.test.mjs`. `npm test` runs the Node behavioral suite in `tests/`, all Python contracts in `tools/`, and the normalized-path lock proof (`node tools/test_normalized_path_lock.mjs`, the A-Eyes overseer directive's named check) as its closing gate. To investigate one layer or one contract:
 
 ```powershell
 node --test "tests/**/*.test.mjs"
@@ -108,6 +108,38 @@ its own narrow contract must pass (for example
 files that exist. A resolved handoff needs no re-edit; say so and cite the
 named checks.
 
+For `renderer/styles.css` collisions, prove the merge with the CSS gate
+instead of eyeballing diffs. Snapshot the pre-merge copy before resolving,
+then run:
+
+```powershell
+npm run check:css -- pre-merge.css post-merge.css
+```
+
+The two-file mode compares any two stylesheets winner for winner and exits 0
+only on `CASCADE-EQUIVALENT` (exit 1 lists `MISSING`/`DIFFERENT`/`NEW WINNER`
+lines; exit 2 is a usage or read error). With no file arguments the gate
+defaults to HEAD-vs-worktree: it compares `HEAD:renderer/styles.css` against
+the working copy, which is the check to run before committing a CSS refactor;
+`--git <ref>` selects another base ref and `--unused` flags selectors whose
+classes appear in no renderer html/js/css usage.
+
+For a live merge conflict, `--merge` proves the resolution against both sides
+and the merge base — `npm run check:css:merge` (also a step in the
+`npm run check` chain): ours is `HEAD`, theirs is `MERGE_HEAD` (or
+`--theirs <ref>` for any branch pair), the base is their `git merge-base`,
+and the gate exits 1 with `MERGE-LOST` (a one-sided winner change the
+resolution dropped), `MERGE-UNDELETED` (a one-sided deletion the resolution
+revived) or `MERGE-UNRESOLVED` (a both-sides change settled on neither
+side's value — `MERGE-DECISION` lines record the keys where one side was
+deliberately picked), plus exit 1 while conflict markers are still present.
+It skips with `MERGE-CSS-SKIP`/exit 0 when no merge is in progress, so the
+check chain stays green between merges. Guarded by
+`tests/check_css_merge.test.mjs` (pure winner-intent fixtures plus a
+per-run temp git repo driven through a real conflicted merge). The two-file
+snapshot form above remains the fallback for handoffs already committed
+without a live merge.
+
 Assistant animation regressions run with `node --test tests/command_motion.test.mjs
 tests/tree3d_performance.test.mjs tests/command_render.test.mjs`. They cover
 frame-rate independent movement, stable positions and orbit slots across roster
@@ -119,6 +151,23 @@ workers and makes no external calls.
 Validated after the animation changes: rebuilt booklet, `npm run check`,
 `npm test` (809 Node passes, one opt-in skip, 211 Python passes and all six
 normalized-path ownership checks), and `npm run audit` (zero findings).
+
+Audio-link regression coverage runs with `node --test
+tests/command_audio_sources.test.mjs tests/command_audio_response.test.mjs
+tests/music.test.mjs tests/command_graph.test.mjs tests/command_render.test.mjs`.
+It covers explicit versus automatic sources, late capture cleanup, pause and
+retry status, saved response strength, stable frequency voices and bounded node
+lighting. The isolated Electron fixture plays an in-memory WAV through the real
+local player and analyser, checks brighter node pixels during playback and their
+release on pause, and verifies unchanged positions, labels and work state.
+It never requests OS capture or starts workers. Optional `MEFI_AUDIO_CAPTURE`
+and `MEFI_AUDIO_CONTROLS_CAPTURE` absolute paths save local visual evidence.
+
+Validated on 2026-09-19: rebuilt booklet, `npm run check`, `npm run audit`
+(zero findings), and `npm test` (858 Node passes, one opt-in skip, 211 Python
+passes, six normalized-path checks). The audio fixture also passed in isolation
+with local screenshots. Additional control checks cover disconnecting an empty
+local queue and avoiding repeated live announcements while adjusting Response.
 
 ## Python contracts
 
@@ -321,8 +370,9 @@ handoffs and wheel cancellation. It also checks saved node styles/layouts,
 blue work-orbit trails and extra glow, stable task positions, the live tree
 beside Music settings, and camera restoration. Effects use the real checkboxes
 and painted canvas; reduced motion keeps orbit trails at a fixed phase.
-Live Work collapse, idle Zen entry/wake, and reduced-motion behavior are covered
-by the same isolated UI fixture and focused graph tests.
+Live Work collapse, the saved default-off Zen toggle, idle Zen entry/wake, and
+reduced-motion behavior are covered by the same isolated UI fixture and focused
+graph tests.
 It blocks external requests
 and worker processes and uses a disposable profile and board. Add `--interactive`
 for a visible disposable window suitable for computer-use checks. Live Spotify
@@ -504,6 +554,22 @@ parents, and worker clearance at panel edges. A dense 277px graph checks actual
 Auto label painting with expanded side panels, including stable anchors and
 unobstructed running-task names.
 
+Connection regressions also cover automatic task/subtree relocation after a
+parent changes, restoring hidden descendants beside the moved branch, stable
+anchors during status/order/agent changes, and exactly one worker tether to its
+current host. Reparenting and restoration run across all five layouts in both
+2D and 3D; the fixtures retain unrelated branches to catch unwanted reshuffling.
+Dominant Constellation and Rings branches also keep their children on their
+parent's side of the hub instead of stretching connections across the canvas.
+
+Connection fix validation: booklet build, `npm run check`, `npm test` (858 Node
+passes, one opt-in skip, 211 Python passes and all six normalized-path checks),
+and `npm run audit` passed. The isolated collapsed-panel Command tour passed
+five checks with 14 captures across desktop/narrow, 2D/3D and light colors,
+with no renderer errors, network attempts or worker launches. Evidence stays
+under ignored `tools/logs/node-connections-*` paths. The Command tour bootstrap
+now reuses the shared process binding and installs its process guard once.
+
 Run `python tools/verify_command.py --appearance-matrix --output
 tools/logs/node-layout-verified-matrix` for all 50 style/layout/view combinations
 and 10 light-theme cases. Its real Electron checks include worker clearance,
@@ -538,3 +604,32 @@ full Node run on the concurrently edited tree passed 805 tests, skipped one,
 and failed four backlog/execution/planning tests; those failures are separate
 from the passing Command renderer checks. Local reports remain under ignored
 `tools/logs/panel-*` paths.
+
+Full-suite validation in run_1789866914430_3 (2026-09-19): `npm test` passed
+end to end on one working tree — Node 859 tests / 858 pass / 0 fail / 1
+opt-in skip, Python discovery 211 contracts OK, normalized-path lock proof
+6/6 — and `npm run audit` reported zero findings. The fixture-paths contract
+(`tools/test_mefi_studio_fixture_paths.py`, 6 tests) passed standalone via
+`python -m unittest tools.test_mefi_studio_fixture_paths` and inside the real
+`-s tools -p "test_mefi_studio_*.py"` discovery alongside Node, confirming
+the generalized unique-fixture pin (per-suite per-run temp-dir blocks, no
+repo-tree or shared `tools/logs` fixture writes, unique discovery basenames).
+Complete output was redirected to temp files and grepped, per the guidance
+above; the log excerpts that named each layer are retained locally.
+
+Store-fork reconciliation in run_1789867185715_4 (2026-09-19): the fork
+decision is recorded in code (`main.cjs` `getEyes()`), in
+`scripts/eyes.mjs`'s stale-fork guard, and now in README ("Board integrity"
+and the offline-commands section): `data/*.json` is this repo app's
+authoritative board, the home `~/.local/share/mefi-studio/board.db` stays a
+dormant stale fork (38 tasks/151 drained ideas vs the live views), any stray
+board-store-enabled process degrades loudly to file mode, and enabling the
+store requires the explicit fresh-migration cutover (archive `board.db`, then
+`eyes.enableBoardStore(eyes.defaultBoardConfig(STUDIO_ROOT))`),
+`tests/board_store.test.mjs` "fresh migration: archive the stale fork"
+covers end-to-end. Evidence: `node --test tests/store_fork_sync.test.mjs
+tests/board_store.test.mjs` passed 15/15 (13 board-store including the
+fresh-migration cutover and guard, 2 store-fork sync including idempotence
+and the app's own admission-rule drain). The repo?dist sync pass
+(`scripts/reconcile-store-fork.mjs`, `--dry-run` to preview) remains the
+tool for the two deliberate JSON stores; it never touches `board.db`.

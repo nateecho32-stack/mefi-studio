@@ -185,13 +185,20 @@ a quieter blue rim. Their compact labels put status above the task title, so
 the useful name has more room. Checkpoint notes use small outlined marks with
 larger click targets. Constellation groups related work around a centered hub,
 and collapsed panel headers retain clear space above the graph.
-The overview starts still: task and session anchors stay fixed as work
-updates, while active agents can travel between them. **Space** toggles rotation;
+The overview starts still: task and session anchors stay fixed during status
+updates, while active agents can travel between them. When a task changes its
+parent, its branch automatically moves with it, including expanded plan members.
+Agents connect to their current host as they work or return to the Assistant.
+Large Constellation and Rings branches keep their children beside their session
+instead of wrapping them around the opposite side of the tree.
+**Space** toggles rotation;
 **F** refits the tree. These managed positions last for the current view session;
 a reload starts a fresh layout, and resizing can adjust its spacing.
 
-Click the **Live work** heading to collapse or expand the panel. After 30 seconds
-without input in Command, **idle Zen** fades the panels and gently orbits the tree.
+Click the **Live work** heading to collapse or expand the panel. **Zen mode** in
+Command's **Ambience** menu is off by default and remembers your choice across
+restarts. Turn it on to fade the panels and gently orbit the tree after 30 seconds
+without input in Command.
 Move the mouse, scroll, touch, or press a key to bring the controls back. Open menus,
 text entry and dragging keep Zen from interrupting an interaction. Reduced motion
 keeps the quiet view still; this does not enable Zen audio or microphone capture.
@@ -241,9 +248,16 @@ or **Rose** to recolor Studio and the node tree. **Custom palette** saves your
 own accent, background, panel and text colors through color pickers or hex
 inputs. Derived text colors keep controls and graph labels readable against
 their own surfaces. The tree's music toggle follows local tracks directly.
-Desktop or microphone audio is optional and starts only after an explicit control
-gesture. Bass, mids, treble and beat envelopes affect the scene without speeding
-up its orbit or moving labels; reduced-motion preferences remain respected.
+**Audio link** in Music & themes connects sound to the live node tree. **Auto**
+follows a loaded local track; **Local player**, **Desktop audio / Spotify**, and
+**Microphone** let you choose a specific source. Desktop stays selected even
+when local tracks are queued. Capture starts only after an explicit control
+gesture; changing to Spotify or removing a track asks you to reconnect when
+desktop capture is needed. The connection status shows paused tracks and errors.
+Use **Response** to adjust the strength from 25% to 200%, independently of volume.
+Bass lights the hubs, mids and treble bring out different nodes, and existing
+connections brighten with the music. These effects fade with silence and pause
+without moving labels or changing work status. Reduced motion keeps them still.
 
 Project state stays under the application's ignored `data/projects/` folders;
 the original project's existing files stay in place. Source and portable builds
@@ -626,7 +640,18 @@ protects individual files and concurrent jobs in the host, but is not one
 atomic transaction spanning all three files or independent processes.
 An optional SQLite board store and its transaction tests exist in
 `scripts/eyes.mjs`; it is not enabled by `getEyes()` in the live project host.
-Studio does not migrate the existing board just by opening a project.
+Studio does not migrate the existing board just by opening a project. The
+**JSON views are this repo app's authoritative board** (the recorded store-fork
+decision in `main.cjs`): the home `~/.local/share/mefi-studio/board.db` is a
+known stale fork (38 tasks/151 already-drained ideas versus the views' live
+43/22), so a **stale-fork guard** in `scripts/eyes.mjs` degrades any
+board-store-enabled process that meets view rows the database has never seen
+loudly back to plain-file mode instead of exporting the stale database over
+fresher views. Turning the store on is therefore always an explicit fresh
+migration: archive the stale `board.db`, then call
+`eyes.enableBoardStore(eyes.defaultBoardConfig(STUDIO_ROOT))` — the guard then
+imports the current views wholesale, the cutover
+`tests/board_store.test.mjs` covers end-to-end.
 Nothing holds a mutable store across an AI call
 any more: the idea scan collects additions first and applies them as a
 validated delta against the latest store afterwards, so a slow model can no
@@ -656,7 +681,13 @@ title keys are one shared identity (`compactKey` / `planThemeKey` /
 compactor, housekeeping and the executor's live guards. The behavioral
 invariants live in `tests/board.test.mjs` (`npm test`), and
 `node scripts/reconcile-board.mjs` runs the same rules offline over the data
-files to repair a backlog left inconsistent by an older build.
+files to repair a backlog left inconsistent by an older build. The repo board
+and the packaged app's own board (`dist/Mefi Studio AI+/resources/app/data`)
+are two deliberate stores, never merged away;
+`node scripts/reconcile-store-fork.mjs` (`--dry-run` to preview) syncs the
+missing slice between them through the app's own helpers — idea identity,
+admission rule and drained task rows copied additively, existing rows and the
+home `board.db` fork untouched.
 
 **The Policy Lab.** Beside the execution loop sits an experiment loop that
 learns from measured history instead of adding more tasks. It is
@@ -1012,3 +1043,21 @@ node --test tests/
 
 `npm test` runs both, and `npm run reconcile-board` (`--dry-run` to preview)
 applies the same compaction rules offline to repair the live data files.
+After a heavy promotion pass the repo board and the packaged app's board can
+fork again; `node scripts/reconcile-store-fork.mjs` (`--dry-run` to preview)
+is idempotent and race-safe on re-run.
+
+After a CSS refactor or a `renderer/styles.css` merge collision, prove the
+result instead of eyeballing diffs with the cascade gate:
+
+```powershell
+npm run check:css
+```
+
+With no arguments it compares `HEAD:renderer/styles.css` against the working
+copy and exits non-zero unless every cascade-winning declaration (per
+selector-context, property and importance) survives unchanged.
+`npm run check:css -- pre-merge.css post-merge.css` compares any two files —
+snapshot the pre-merge copy, resolve the collision, then run this to confirm
+the merge is winner-for-winner equivalent (see TESTRUNS.md, "Verifying a
+session edit-collision handoff").

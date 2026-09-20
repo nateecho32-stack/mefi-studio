@@ -4,8 +4,10 @@ The suite audits a live tree that parallel Studio agent runs edit
 concurrently, so a check that reads repo state can observe a transient
 mid-edit state: it fails once, then passes on immediate re-run (the
 one-shot "203 tests, failures=1" flake). Tests guard such live-state
-checks with the retry helper in ``test_mefi_studio_auditor.py``; this
-module records the evidence, so the next occurrence names itself and
+checks with the shared ``retry_transient`` helper (see
+``test_mefi_studio_auditor.py``, ``test_mefi_studio_catalog.py`` and
+``test_mefi_studio_updater.py``); this module records the evidence, so
+the next occurrence names itself and
 pins its fixture instead of vanishing into a green re-run.
 
 Captures are appended to ``data/python-flake-capture.jsonl`` — local
