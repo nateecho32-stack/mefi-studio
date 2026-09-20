@@ -111,6 +111,17 @@ app.whenReady().then(async () => {
     }
     throw new Error(`Timed out: ${label}`);
   };
+  // A starved compositor can reject a single frame grab with UnknownVizError
+  // while the page itself stays healthy; poll for a frame instead of failing.
+  const capturePage = async () => {
+    const deadline = Date.now() + 30000;
+    for (;;) {
+      try { return await contents.capturePage(); } catch (error) {
+        if (!/UnknownVizError/i.test(String(error?.message ?? error)) || Date.now() > deadline) throw error;
+        await sleep(120);
+      }
+    }
+  };
   const downloadCapture = async () => {
     const download = new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error("Profiler JSON download timed out")), 5000);
@@ -170,7 +181,7 @@ app.whenReady().then(async () => {
     assert.ok(exported.host.samples.every((row) => row.processes.every((process) => !Object.hasOwn(process, "pid"))), "process identifiers do not leave the host profiler");
     report.payloadExcluded = true;
     report.exportedCapture = true;
-    fs.writeFileSync(path.join(root, "profiler-host.png"), (await contents.capturePage()).toPNG());
+    fs.writeFileSync(path.join(root, "profiler-host.png"), (await capturePage()).toPNG());
     assert.deepEqual(report.errors, []);
     assert.deepEqual(report.networkAttempts, []);
     assert.deepEqual(report.processAttempts, []);
@@ -224,7 +235,7 @@ app.whenReady().then(async () => {
     return {width:canvas.width,height:canvas.height,colored};
   `);
   assert.ok(chart.width > 0 && chart.height > 0 && chart.colored > 40, "the frame chart paints real canvas pixels");
-  fs.writeFileSync(path.join(root, "profiler-wide.png"), (await contents.capturePage()).toPNG());
+  fs.writeFileSync(path.join(root, "profiler-wide.png"), (await capturePage()).toPNG());
   window.setContentSize(600, 840);
   await sleep(350);
   report.narrowLayout = await run(`
@@ -239,7 +250,7 @@ app.whenReady().then(async () => {
   for (const button of report.narrowLayout.controls) {
     assert.ok(button.width > 0 && button.left >= 0 && button.right <= 600, `${button.id} remains reachable in the narrow layout`);
   }
-  fs.writeFileSync(path.join(root, "profiler-narrow.png"), (await contents.capturePage()).toPNG());
+  fs.writeFileSync(path.join(root, "profiler-narrow.png"), (await capturePage()).toPNG());
   await run("document.getElementById('profiler-reset').click();");
   await until("window.MefiProfiler.snapshot().renderer.frameCount===0", "reset clears the stopped capture");
   const cleared = await run("return window.MefiProfiler.snapshot().renderer;");

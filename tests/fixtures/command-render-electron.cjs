@@ -128,6 +128,17 @@ app.whenReady().then(async () => {
   });
   contents.on("render-process-gone", (_event, detail) => finish(new Error(`Renderer exited: ${detail.reason}`)));
   const run = (code) => contents.executeJavaScript(`(async()=>{${code}})()`, true);
+  // A starved compositor can reject a single frame grab with UnknownVizError
+  // while the page itself stays healthy; poll for a frame instead of failing.
+  const capturePage = async () => {
+    const deadline = Date.now() + 30000;
+    for (;;) {
+      try { return await contents.capturePage(); } catch (error) {
+        if (!/UnknownVizError/i.test(String(error?.message ?? error)) || Date.now() > deadline) throw error;
+        await sleep(120);
+      }
+    }
+  };
   const until = async (expression, label) => {
     const deadline = Date.now() + 5000;
     while (Date.now() < deadline) {
@@ -202,7 +213,7 @@ app.whenReady().then(async () => {
     await sleep(260);
     const target = process.env.MEFI_GROUP_CAPTURE;
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.writeFileSync(target, (await contents.capturePage()).toPNG());
+    fs.writeFileSync(target, (await capturePage()).toPNG());
   }
   await run(`
     const groupCard=document.getElementById('idle-info');
@@ -297,7 +308,7 @@ app.whenReady().then(async () => {
   if (process.env.MEFI_FILED_CAPTURE && path.isAbsolute(process.env.MEFI_FILED_CAPTURE)) {
     await sleep(260);
     fs.mkdirSync(path.dirname(process.env.MEFI_FILED_CAPTURE), { recursive: true });
-    fs.writeFileSync(process.env.MEFI_FILED_CAPTURE, (await contents.capturePage()).toPNG());
+    fs.writeFileSync(process.env.MEFI_FILED_CAPTURE, (await capturePage()).toPNG());
   }
   await run("window.MefiIdle.select(null);");
   await setPanels(false, false, "task:command_render_task");
@@ -336,7 +347,7 @@ app.whenReady().then(async () => {
   assert.ok(zen.area.w > beforeZen.area.w + 300, "Zen returns both hidden side gutters to the graph");
   if (process.env.MEFI_COMMAND_CAPTURE && path.isAbsolute(process.env.MEFI_COMMAND_CAPTURE)) {
     fs.mkdirSync(path.dirname(process.env.MEFI_COMMAND_CAPTURE), { recursive: true });
-    fs.writeFileSync(process.env.MEFI_COMMAND_CAPTURE, (await contents.capturePage()).toPNG());
+    fs.writeFileSync(process.env.MEFI_COMMAND_CAPTURE, (await capturePage()).toPNG());
   }
   contents.sendInputEvent({ type: "mouseMove", x: Math.round(beforeZen.area.x + 20), y: Math.round(beforeZen.area.y + 20) });
   await until("!window.MefiIdle.ambientZenStatus().active && !document.getElementById('idle-hud').inert", "native mouse movement restores panels");
@@ -403,7 +414,7 @@ app.whenReady().then(async () => {
   `);
   if (process.env.MEFI_MOTION_CAPTURE && path.isAbsolute(process.env.MEFI_MOTION_CAPTURE)) {
     fs.mkdirSync(path.dirname(process.env.MEFI_MOTION_CAPTURE), { recursive: true });
-    fs.writeFileSync(process.env.MEFI_MOTION_CAPTURE, (await contents.capturePage()).toPNG());
+    fs.writeFileSync(process.env.MEFI_MOTION_CAPTURE, (await capturePage()).toPNG());
   }
   await run(`
     window.__motionRoster=window.__motionRoster.map(agent=>({...agent,status:'done'}));
@@ -531,19 +542,35 @@ app.whenReady().then(async () => {
         waves,paintedWavePoints,strokedWavePaths,waveNodes:waveNodes.map(node=>({id:node.id,x:node.x,y:node.y})),
         nodes:nodes.map(node=>({id:node.id,x:node.x,y:node.y,radius:node.radius,anchor:node.layoutAnchor,label:node.labelRect,audioResponse:node.audioResponse}))};
     };
-    window.__audioSection=async section=>{
+    window.__audioSection=async (section,span=2.25)=>{
       window.__fixtureAudio.currentTime=section*sectionSeconds+0.01;
       await window.__fixtureAudio.play();
-      const deadline=performance.now()+950,peaks={energy:0,kick:0,snare:0,hat:0,bassline:0,bass:0,mid:0,treble:0};
+      const peaks={energy:0,kick:0,snare:0,hat:0,bassline:0,bass:0,mid:0,treble:0};
       let frames=0;
-      while(performance.now()<deadline){
-        await new Promise(resolve=>requestAnimationFrame(resolve));
-        const audio=window.MefiIdle.audioStatus();
+      // Sample by audio time across many drum cycles instead of a single
+      // wall-clock frame: the analyser only reflects the most recent audio
+      // block, so under full-suite load dropped rAF frames can step over a
+      // transient entirely. Every voice repeats every 0.32s, so spanning
+      // several cycles gives the peak-hold envelope repeated chances.
+      const sample=()=>{
+        if(window.__fixtureAudio.paused)return;
+        const t=window.__fixtureAudio.currentTime%sectionSeconds;
         // Allow the old section's release to finish before comparing voices.
-        if(performance.now()<deadline-550)continue;
+        if(t<0.35)return;
+        const audio=window.MefiIdle.audioStatus();
         for(const key of Object.keys(peaks))peaks[key]=Math.max(peaks[key],audio[key]??audio.bands[key]??0);
         frames++;
-      }
+      };
+      // Timers keep sampling when compositor stalls drop rAF frames, and the
+      // race bounds each wait so a frozen renderer still reaches the deadline.
+      const wall=performance.now()+5000,timer=setInterval(sample,25);
+      try{
+        while(performance.now()<wall){
+          await Promise.race([new Promise(resolve=>requestAnimationFrame(resolve)),new Promise(resolve=>setTimeout(resolve,400))]);
+          sample();
+          if(window.__fixtureAudio.currentTime%sectionSeconds>=span)break;
+        }
+      }finally{clearInterval(timer);}
       return {peaks,frames,snapshot:await window.__audioNodeSample()};
     };
   `);
@@ -561,7 +588,7 @@ app.whenReady().then(async () => {
   const captureAudio = async (name) => {
     if (!process.env[name] || !path.isAbsolute(process.env[name])) return;
     fs.mkdirSync(path.dirname(process.env[name]), { recursive: true });
-    fs.writeFileSync(process.env[name], (await contents.capturePage()).toPNG());
+    fs.writeFileSync(process.env[name], (await capturePage()).toPNG());
   };
   await captureAudio("MEFI_AUDIO_QUIET_CAPTURE");
   const loud = await run("return window.__audioSection(1);");
@@ -570,7 +597,7 @@ app.whenReady().then(async () => {
     "automatic level adaptation preserves meaningful response across an 80 dB input range");
   if (process.env.MEFI_AUDIO_CAPTURE && path.isAbsolute(process.env.MEFI_AUDIO_CAPTURE)) {
     fs.mkdirSync(path.dirname(process.env.MEFI_AUDIO_CAPTURE), { recursive: true });
-    fs.writeFileSync(process.env.MEFI_AUDIO_CAPTURE, (await contents.capturePage()).toPNG());
+    fs.writeFileSync(process.env.MEFI_AUDIO_CAPTURE, (await capturePage()).toPNG());
   }
   await sleep(150);
   const audioNextWave = await run("return window.__audioNodeSample();");
@@ -653,7 +680,7 @@ app.whenReady().then(async () => {
       captureCalls:window.__audioCaptureCalls.slice()
       };
     };
-    await window.__audioSection(1);
+    await window.__audioSection(1,0.95);
   `);
   await settledFrame();
   const audioControls = { initial: await run("return window.__audioControlSample();") };
@@ -862,7 +889,7 @@ app.whenReady().then(async () => {
     report.newWork[`${label}Off`] = await toggleState();
     if (process.env.MEFI_NEW_WORK_CAPTURE_DIR && path.isAbsolute(process.env.MEFI_NEW_WORK_CAPTURE_DIR)) {
       fs.mkdirSync(process.env.MEFI_NEW_WORK_CAPTURE_DIR, { recursive: true });
-      fs.writeFileSync(path.join(process.env.MEFI_NEW_WORK_CAPTURE_DIR, `new-work-${label}.png`), (await contents.capturePage()).toPNG());
+      fs.writeFileSync(path.join(process.env.MEFI_NEW_WORK_CAPTURE_DIR, `new-work-${label}.png`), (await capturePage()).toPNG());
     }
   }
   report.newWork.actions = await run("return window.commandFixture.assistantActions();");
@@ -889,7 +916,7 @@ app.whenReady().then(async () => {
   const shot = async (name) => {
     if (!process.env.MEFI_DONE_CAPTURE_DIR || !path.isAbsolute(process.env.MEFI_DONE_CAPTURE_DIR)) return;
     fs.mkdirSync(process.env.MEFI_DONE_CAPTURE_DIR, { recursive: true });
-    fs.writeFileSync(path.join(process.env.MEFI_DONE_CAPTURE_DIR, `${name}.png`), (await contents.capturePage()).toPNG());
+    fs.writeFileSync(path.join(process.env.MEFI_DONE_CAPTURE_DIR, `${name}.png`), (await capturePage()).toPNG());
   };
   await run("document.getElementById('cmd-done-toggle').click();");
   await until("document.getElementById('cmd-done').classList.contains('done-collapsed') && getComputedStyle(document.getElementById('cmd-done-list')).display==='none'", "the done log collapses to its head");

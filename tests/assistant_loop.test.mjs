@@ -164,7 +164,7 @@ test("chat starts independent facts together and preserves facts when one source
 function tickHost() {
   const key = deferred();
   const queued = [];
-  let reads = 0, supervised = 0;
+  let reads = 0, supervised = 0, probes = 0;
   const state = { status: "running", tickCount: 2, ai: {}, prefs: {}, organization: {}, problems: [] };
   const env = host(`let assistantTickInFlight = null, assistantTickDemand = null;\n${section('async function assistantTick(reason = "timer")', "async function startAssistant()")}`, {
     assistantState: state,
@@ -178,12 +178,13 @@ function tickHost() {
     assistantSuperviseJobs() { supervised += 1; },
     assistantLog() {}, saveAssistant: async () => {},
     assistantLoop: false, window: null, autopilot: { execute: true, jobs: [] },
+    scheduleAssistantAiProbe() { probes += 1; },
   });
-  return { env, key, queued, state, reads: () => reads, supervised: () => supervised };
+  return { env, key, queued, state, reads: () => reads, supervised: () => supervised, probes: () => probes };
 }
 
 test("overlapping ticks share one cadence pass and release the lock on completion", async () => {
-  const { env, key, queued, reads, state } = tickHost();
+  const { env, key, queued, reads, state, probes } = tickHost();
   const first = env.assistantTick();
   const second = env.assistantTick();
   await flush();
@@ -191,6 +192,7 @@ test("overlapping ticks share one cadence pass and release the lock on completio
   key.resolve(false);
   const [a, b] = await Promise.all([first, second]);
   assert.equal(a, b);
+  assert.equal(probes(), 1, "each tick pass re-arms the offline probe exactly once");
   assert.deepEqual(queued, ["watcher"]);
   assert.equal(state.tickCount, 3);
   await env.assistantTick();

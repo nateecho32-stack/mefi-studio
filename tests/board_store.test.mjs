@@ -322,7 +322,7 @@ test("two processes race for one open task: exactly one claim wins", async () =>
   const outcomes = await Promise.all(
     Array.from({ length: 5 }, () =>
       new Promise((resolve, reject) => {
-        const child = spawn(process.execPath, [workerPath, board.dir, path.join(board.dir, "board", "board.db"), "contested"], {
+        const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", workerPath, board.dir, path.join(board.dir, "board", "board.db"), "contested"], {
           stdio: ["ignore", "pipe", "pipe"],
           windowsHide: true,
         });
@@ -348,7 +348,7 @@ test("two processes race for one open task: exactly one claim wins", async () =>
 function executorSlot(dir, dbPath) {
   const workerPath = fileURLToPath(new URL("./fixtures/executor_slot.mjs", import.meta.url));
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [workerPath, dir, dbPath], {
+    const child = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", workerPath, dir, dbPath], {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });

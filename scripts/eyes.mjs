@@ -124,6 +124,21 @@ export function listSessions({ dbPath = DEFAULT_DB, limit = 40 } = {}) {
        from session order by time_updated desc limit ?`
     )
     .all(limit);
+  // Whether a session ended on purpose: its final part is a step-finish with
+  // reason "stop". A silent tail, a mid-turn "tool-calls" finish or an abort
+  // means the run left work hanging. Reviewers must never read a finished
+  // session as stalled just because it kept no todo list.
+  const finished = new Set();
+  const lastPart = db.prepare(
+    `select json_extract(data,'$.type') type, json_extract(data,'$.reason') reason
+     from part where session_id = ? order by time_created desc, id desc limit 1`
+  );
+  for (const row of rows) {
+    try {
+      const last = lastPart.get(row.id);
+      if (last?.type === "step-finish" && last.reason === "stop") finished.add(row.id);
+    } catch {}
+  }
   return rows.map((row) => ({
     id: row.id,
     parentId: row.parent_id,
@@ -132,6 +147,7 @@ export function listSessions({ dbPath = DEFAULT_DB, limit = 40 } = {}) {
     model: parseModel(row.model),
     directory: row.directory,
     cost: row.cost,
+    finished: finished.has(row.id),
     tokens: {
       input: row.tokens_input,
       output: row.tokens_output,
@@ -1228,6 +1244,7 @@ export function assistantFacts({ dbPath = DEFAULT_DB, sessionLimit = 10, changeL
       model: session.model?.id ?? "?",
       updatedMinutesAgo: Math.round((now - session.timeUpdated) / 60000),
       cost: Number(session.cost ?? 0).toFixed(3),
+      finished: session.finished === true,
       todos: todos
         .filter((todo) => todo.sessionId === session.id)
         .slice(0, todoLimitPerSession)

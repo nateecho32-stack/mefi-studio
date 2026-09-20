@@ -515,11 +515,11 @@
     els.nodeLayouts.setAttribute("aria-describedby", layoutHint.id);
     const effectsHeading = element("h4", "music-node-label", "Effects", nodeSection); effectsHeading.id = "music-effects-label";
     const effects = element("div", "music-effects", null, nodeSection); effects.setAttribute("role", "group"); effects.setAttribute("aria-labelledby", effectsHeading.id);
-    for (const [key, id, title, hint] of [
-      ["orbitTrails", "music-orbit-trails", "Blue orbit trails", "Circle queued and running work."],
-      ["extraGlow", "music-extra-glow", "Extra glow", "Brighter halos and luminous cores."],
+    for (const [key, id, effectClass, title, hint] of [
+      ["orbitTrails", "music-orbit-trails", "music-effect-orbitTrails", "Blue orbit trails", "Circle queued and running work."],
+      ["extraGlow", "music-extra-glow", "music-effect-extraGlow", "Extra glow", "Brighter halos and luminous cores."],
     ]) {
-      const row = element("label", `music-effect music-effect-${key}`, null, effects);
+      const row = element("label", `music-effect ${effectClass}`, null, effects);
       const sample = element("span", "music-effect-sample", null, row); sample.setAttribute("aria-hidden", "true");
       const copy = element("span", "music-effect-copy", null, row);
       element("strong", null, title, copy);

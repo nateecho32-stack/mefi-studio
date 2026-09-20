@@ -88,7 +88,18 @@ app.whenReady().then(async () => {
   contents.on("render-process-gone", (_event, detail) => finish(new Error(`Renderer exited: ${detail.reason}`)));
   const run = (code) => contents.executeJavaScript(`(async()=>{${code}})()`, true);
   const until = async (expression, label) => { const deadline = Date.now() + 6500; while (Date.now() < deadline) { assert.deepEqual(report.errors, [], JSON.stringify(report.errors)); if (await run(`return Boolean(${expression});`)) return; await sleep(35); } throw new Error(`Timed out: ${label}`); };
-  const capture = async (name) => { await sleep(160); fs.writeFileSync(path.join(root, name), (await contents.capturePage()).toPNG()); };
+  // A starved compositor can reject a single frame grab with UnknownVizError
+  // while the page itself stays healthy; poll for a frame instead of failing.
+  const capturePage = async () => {
+    const deadline = Date.now() + 30000;
+    for (;;) {
+      try { return await contents.capturePage(); } catch (error) {
+        if (!/UnknownVizError/i.test(String(error?.message ?? error)) || Date.now() > deadline) throw error;
+        await sleep(120);
+      }
+    }
+  };
+  const capture = async (name) => { await sleep(160); fs.writeFileSync(path.join(root, name), (await capturePage()).toPNG()); };
   const inspectDelegation = async (size) => {
     await run("const search=document.getElementById('task-search');search.value='';search.dispatchEvent(new Event('input',{bubbles:true}));await window.MefiTasks.open({taskId:'shared-task'});");
     await until("document.querySelector('[data-task-panel=delegation]')?.textContent.includes('1/2 confirmed')", `${size} delegated task details`);

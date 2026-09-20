@@ -388,6 +388,23 @@ def _fixture_db(path):
             "ses_f",
             now - 14 * 60_000,
         ),
+        # Turn-end markers: ses_a's final step finished with reason "stop" (a
+        # normal completion — finished even with a pending todo), ses_b's last
+        # step ended mid-turn on "tool-calls" (not finished). These are not
+        # tool parts, so the change/activity/collision math above never sees
+        # them; only the finished flag reads them.
+        (
+            "part_finish_a",
+            json.dumps({"type": "step-finish", "reason": "stop", "snapshot": "abc", "tokens": {"total": 25139}}),
+            "ses_a",
+            now - 500,
+        ),
+        (
+            "part_finish_b",
+            json.dumps({"type": "step-finish", "reason": "tool-calls", "snapshot": "abc"}),
+            "ses_b",
+            now - 400,
+        ),
     ]
     for part_id, data, session_id, time_created in parts:
         db.execute(
@@ -501,6 +518,18 @@ class MefiStudioEyesTests(unittest.TestCase):
         self.assertIn("overlapRangeOf", self.eyes, "request inputs validate the overlap window before citing it")
         self.assertIn("first > last", self.eyes, "an inverted window is a handoff, never a shared clash")
         self.assertIn("typeof overlap !== \"object\"", self.eyes, "a corrupt range normalizes to null instead of reaching a prompt")
+
+    def test_review_facts_carry_the_finished_signal(self):
+        # A session that finished normally (final step-finish reason "stop")
+        # but kept no todo list was flagged "Idle session lacks recorded work
+        # … stalled or unscoped" — completed work read as a stall and re-filed
+        # as a fix. The store now reports a finished session, the facts carry
+        # the flag, and the review prompt may not alert finished sessions.
+        self.assertIn('reason === "stop"', self.eyes, "only a normal step-finish ends a session")
+        self.assertIn("finished: finished.has(row.id)", self.eyes, "listSessions carries the finished flag")
+        self.assertIn("finished: session.finished === true", self.eyes, "assistantFacts carries the finished flag")
+        self.assertIn("never alert it as idle, stalled, or unscoped", self.main, "the review prompt protects finished sessions")
+        self.assertIn("Only sessions whose facts show open todos and no finished marker can be stale", self.main, "stale claims still need open todos")
 
     def test_main_registers_the_eyes_surface(self):
         for channel in (
@@ -805,6 +834,11 @@ console.log(JSON.stringify({
             payload = json.loads(result.stdout)
         self.assertEqual(["ses_a", "ses_b"], [s["id"] for s in payload["sessions"]])
         self.assertEqual("max", payload["sessions"][0]["model"]["variant"])
+        finished = {s["id"]: s["finished"] for s in payload["sessions"]}
+        self.assertTrue(finished["ses_a"], "a final step-finish with reason 'stop' marks the session finished")
+        self.assertFalse(finished["ses_b"], "a mid-turn 'tool-calls' tail never counts as finished")
+        facts_finished = {s["id"]: s["finished"] for s in payload["facts"]["sessions"]}
+        self.assertEqual({"ses_a": True, "ses_b": False}, facts_finished, "assistantFacts carries the finished signal to the A-Eyes review")
         self.assertEqual(2, len(payload["todos"]))
         changes = {change["tool"]: change for change in payload["changes"]}
         self.assertIn("edit", changes)

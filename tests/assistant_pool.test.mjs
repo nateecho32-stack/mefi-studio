@@ -395,7 +395,7 @@ function resumableHost(saved = null, { paused = false } = {}) {
     assistantAiUsable: () => false,
     assistantWorkLabel: (work) => work.text,
     assistantInFlight: (id) => [...h.pool.queue, ...h.pool.running.values()].some((entry) => entry.key === id || entry.work?.id === id),
-    assistantLoop: true, assistantTimer: null, applyKeepAwake() {},
+    assistantLoop: true, assistantTimer: null, applyKeepAwake() {}, clearAssistantAiProbe() {},
     saveAssistantSync() { snapshot = structuredClone(h.env.assistantState); },
   });
   vm.runInContext([

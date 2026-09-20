@@ -161,6 +161,81 @@ test("failed or skipped checks cannot become completion evidence under another f
   assert.equal(assistant.verifyCompletion({ verdictOk: true, resultNote: { parts: { tests: "npm test passed", audit: "failed" } } }).state, "unverified", "all reported check fields are considered");
 });
 
+test("an overseer verification run's results are the completed task's observed checks", async () => {
+  const { env, board } = verificationHost({ tasks: [{
+    id: "overseen", title: "Overseen work", status: "awaiting_verification",
+    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "overseen-session" },
+    verificationRun: { key: "verification:overseen:run_1", state: "passed", at: NOW - 100, results: [{ command: "npm run check", exitCode: 0, tail: "ok" }] },
+  }] });
+  await env.autopilotHousekeeping();
+  const task = board().tasks[0];
+  assert.equal(task.status, "done");
+  assert.equal(task.verification.state, "verified");
+  assert.deepEqual(task.verification.checks, { total: 1, passed: 1, failed: 0, pending: 0 });
+});
+
+test("the overseer's fresh run result supersedes the worker's stale failing run of the same command", async () => {
+  const { env, board } = verificationHost({ tasks: [{
+    id: "rerun", title: "Fresh overseer run", status: "awaiting_verification",
+    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "rerun-session" },
+    verificationRun: { key: "verification:rerun:run_1", state: "passed", at: NOW - 100, results: [{ command: "npm test", exitCode: 0, tail: "ok" }] },
+  }] });
+  Object.assign(env, { getEyes: async () => ({
+    listChanges: () => [{ file: "fixture.js", status: "completed" }],
+    listSessionChecks: () => ({ available: true, checks: [{ command: "npm test", startedAt: 5, status: "completed", exitCode: 1, passed: false }] }),
+  }) });
+  await env.autopilotHousekeeping();
+  const task = board().tasks[0];
+  assert.equal(task.status, "done", "the overseer's later row wins the latest-wins dedupe over the worker's stale failure");
+  assert.deepEqual(task.verification.checks, { total: 1, passed: 1, failed: 0, pending: 0 });
+});
+
+test("a done card whose overseer run later failed reopens on the failing evidence", async () => {
+  const { env, board, notes } = verificationHost({ tasks: [{
+    id: "raced", title: "Settled before its run finished", status: "done", doneAt: NOW - 500,
+    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "raced-session" },
+    verificationRun: { key: "verification:raced:run_1", state: "failed", at: NOW - 100, results: [{ command: "npm run check", timedOut: true, tail: "killed after budget" }] },
+  }] });
+  await env.autopilotHousekeeping();
+  const task = board().tasks[0];
+  assert.equal(task.status, "open");
+  assert.equal(task.doneAt, undefined);
+  assert.equal(task.verifyAttempts, 1);
+  assert.equal(task.verification.state, "unverified");
+  assert.equal(task.verification.checks, undefined, "the stale failing run is not recorded as completion evidence");
+  assert.equal(task.verification.changedFiles, null);
+  assert.equal(task.nextRunAt, NOW + 60000);
+  assert.match(notes.join("\n"), /reopened "Settled before its run finished" — recorded checks failed/);
+});
+
+test("a queued verification run is not yet evidence", async () => {
+  const { env, board } = verificationHost({ tasks: [{
+    id: "queued", title: "Run still draining", status: "awaiting_verification",
+    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "queued-session" },
+    verificationRun: { key: "verification:queued:run_1", state: "queued", at: NOW - 100 },
+  }], changes: [] });
+  await env.autopilotHousekeeping();
+  const task = board().tasks[0];
+  assert.equal(task.status, "open", "no attributable edits and no finished run — the done claim is retried, not accepted");
+  assert.equal(task.verification.state, "unverified");
+  assert.match(task.verification.reason, /no attributable edits and no named checks/);
+  assert.equal(task.verifyAttempts, 1);
+});
+
+test("a verified request's durable completion record carries the overseer run's checks", async () => {
+  const { env, board } = verificationHost({ requests: [{
+    title: "Overseen request", at: 5, status: "verifying",
+    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "request-session", runId: "run_9" },
+    verificationRun: { key: "verification:run_9:attempt", state: "passed", at: NOW - 100, results: [{ command: "npm run check", exitCode: 0, tail: "ok" }] },
+  }] });
+  await env.autopilotHousekeeping();
+  assert.equal(board().requests.length, 0, "the evidenced inbox row is released");
+  const completed = board().tasks.find((task) => task.completedFrom === "request");
+  assert.equal(completed?.status, "done");
+  assert.equal(completed.verification.evidenceKind, "runner-observed-checks");
+  assert.deepEqual(completed.verification.checks, { passed: 1, failed: 0, pending: 0 });
+});
+
 test("live worker status excludes finished entries and never exposes an invalid progress fraction", () => {
   const stopping = { since: 1000, reason: "time budget", error: "access denied", retryAt: 16000 };
   const env = vm.createContext({

@@ -39,7 +39,7 @@ function workOnHost(options = {}) {
 function addControls(h) {
   Object.assign(h.env, {
     assistantTimer: null, assistantLoop: false, overseerManualUntil: 0,
-    applyKeepAwake() {}, assistantPump() {}, assistantClearQueue() {},
+    applyKeepAwake() {}, assistantPump() {}, assistantClearQueue() {}, clearAssistantAiProbe() {},
     logError: (text) => h.logs.push(text),
   });
   vm.runInContext([

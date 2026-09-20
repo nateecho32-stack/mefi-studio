@@ -89,6 +89,17 @@ app.whenReady().then(async () => {
     });
     contents.on("render-process-gone", (_event, detail) => finish(new Error(`Renderer exited: ${detail.reason}`)));
     const run = (code) => contents.executeJavaScript(`(async()=>{${code}})()`, true);
+    // A starved compositor can reject a single frame grab with UnknownVizError
+    // while the page itself stays healthy; poll for a frame instead of failing.
+    const capturePage = async () => {
+      const deadline = Date.now() + 30000;
+      for (;;) {
+        try { return await contents.capturePage(); } catch (error) {
+          if (!/UnknownVizError/i.test(String(error?.message ?? error)) || Date.now() > deadline) throw error;
+          await sleep(120);
+        }
+      }
+    };
     await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
     await run(`window.MefiNav.go('command');await window.MefiIdle.ready();window.MefiIdle.setView(${JSON.stringify(view)});window.MefiIdle.setOrbit('auto');window.MefiIdle.setMusicReactive(false);window.MefiProfiler.close();`);
     await sleep(config.warmupMs);
@@ -108,7 +119,7 @@ app.whenReady().then(async () => {
       // Let the compositor publish the stopped HUD before saving visual evidence.
       // The numeric capture is already frozen, so this cannot affect its timings.
       await run("await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));");
-      fs.writeFileSync(path.join(root, `${name}.png`), (await contents.capturePage()).toPNG());
+      fs.writeFileSync(path.join(root, `${name}.png`), (await capturePage()).toPNG());
     }
     window.destroy();
   }

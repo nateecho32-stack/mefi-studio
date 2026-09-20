@@ -11,6 +11,7 @@ import { EventEmitter } from "node:events";
 import * as eyes from "../scripts/eyes.mjs";
 import * as assistant from "../scripts/assistant.mjs";
 import backlog from "../scripts/backlog.cjs";
+import agentModes from "../scripts/agent-modes.cjs";
 import taskHandoffs from "../scripts/task-handoffs.cjs";
 import executorResume from "../scripts/executor-resume.cjs";
 import { createRequire } from "node:module";
@@ -132,15 +133,20 @@ test("an explicit executor pause clears an expired infrastructure timer and cann
 });
 
 function finishHost({ kind = "task", owner = "run_100_1", missing = false, failWrites = 0, commitBeforeError = false, duplicate = false } = {}) {
-  const ref = { id: "task", title: "Fixture work", prompt: "Full fixture obligation", at: 5, status: kind === "task" ? "active" : "running", runId: owner, runFailures: 4, verifyAttempts: 2 };
+  // Task rows key verification by id; request rows must look like the real
+  // store's direct requests — no id, so agentModes.requestKey digests
+  // at/prompt identity instead of taking the id shortcut.
+  const ref = { ...(kind === "task" ? { id: "task" } : {}), title: "Fixture work", prompt: "Full fixture obligation", at: 5, status: kind === "task" ? "active" : "running", runId: owner, runFailures: 4, verifyAttempts: 2 };
   let board = { tasks: kind === "task" && !missing ? [structuredClone(ref)] : [], requests: kind === "request" && !missing ? [structuredClone(ref)] : [] };
   if (duplicate) board.requests.push({ ...ref, runId: undefined, status: undefined });
   const entry = { id: "run_100_1", taskId: kind === "task" ? "task" : null, title: ref.title, startedAt: 1, finished: false, spoke: true, sawDone: false, outputTail: ["new failure context"], handoffs: [{ title: "Follow up", prompt: "More work" }], resultNote: { raw: "done: changed; remaining: a follow-up", parts: { done: "changed", remaining: "a follow-up" } } };
   const autopilot = { execute: true, jobs: [entry], parallel: 1, consecutiveFailures: 0, infraFailures: 0 };
   const effects = [], timers = [], logs = [], records = [], roles = [];
+  const verificationJobs = [];
   let mutations = 0;
   const env = vm.createContext({
     Date, console, entry, autopilot, executorResume, job: { kind, title: ref.title, prompt: ref.prompt, source: "chat", ref: structuredClone(ref) }, assistantModule: assistant, taskHandoffs, queueExecutorCheckpoint() {},
+    agentModes, verificationJobs, runVerificationJobs: async () => effects.push("verify"),
     eyes: { findRunSession: () => ({ id: "own-session" }), readJson: async (key) => key === "history" ? [] : {}, writeJson: async (key, value) => records.push([key, structuredClone(value)]) },
     releaseFiles: () => effects.push("release"), discardEntry: () => { autopilot.jobs = autopilot.jobs.filter((item) => item !== entry); effects.push("release"); },
     executorLog: async () => effects.push("exit-fact"), policyRecord: () => effects.push("policy-fact"), workTitleKey: (text) => String(text),
@@ -171,7 +177,7 @@ function finishHost({ kind = "task", owner = "run_100_1", missing = false, failW
   vm.runInContext(section("function attributeRunSession(", "function watchRunSession(") +
     `function fixtureFinish() {\n${section("  let timeout = null;", "  entry.reap = finish;")}\nreturn finish; }` +
     section("let executorFillInFlight = null;", "// Work the assistant does on its own plumbing"), env);
-  return { env, entry, autopilot, finish: env.fixtureFinish(), effects, timers, logs, records, roles, board: () => board, mutations: () => mutations };
+  return { env, entry, autopilot, finish: env.fixtureFinish(), effects, timers, logs, records, roles, verificationJobs, board: () => board, mutations: () => mutations };
 }
 
 test("worker completion marks cleanup and failure-review role calls as automatic after Pause", async () => {
@@ -212,6 +218,12 @@ test("owned request success keeps unclaimed obligations and records only a pendi
   assert.equal(host.board().requests[0].status, "verifying");
   assert.deepEqual(Array.from(host.board().requests[0].remaining ?? []), ["Follow up"], "request handoffs remain obligations until verified");
   assert.equal(host.board().requests[1].status, undefined);
+  // A done report schedules the overseer's verification, keyed by request
+  // identity: exactly one queued job, stamped on the owner's row only.
+  assert.equal(host.verificationJobs.length, 1, "the done report queues exactly one verification job");
+  assert.equal(host.verificationJobs[0].taskId, agentModes.requestKey(host.board().requests[0]), "the job is keyed by request identity");
+  assert.equal(host.board().requests[0].verificationRun?.state, "queued", "the owner's row records the pending verification");
+  assert.equal(host.board().requests[1].verificationRun, undefined, "an unclaimed duplicate never gets a verification verdict");
   assert.equal(host.entry.sessionId, "own-session", "fast workers are attributed before the first poll");
   assert.ok(host.effects.includes("history:review"));
   assert.ok(!host.effects.includes("history:done"));
@@ -219,6 +231,7 @@ test("owned request success keeps unclaimed obligations and records only a pendi
   assert.match(checkpoints["own-session"][0].note, /awaiting verification/);
   await host.finish(0);
   assert.equal(host.effects.filter((effect) => effect === "handoff").length, 1);
+  assert.equal(host.verificationJobs.length, 1, "a re-settled stale attempt queues no second job");
 });
 
 test("failed attempts retain their latest evidence and stop at the existing fifth-failure budget", async () => {
@@ -278,8 +291,23 @@ test("a failed outcome write holds its slot and retries storage without rerunnin
   assert.equal(host.board().tasks[0].status, "awaiting_verification");
   assert.equal(host.entry.settlementPending, undefined);
   assert.equal(host.autopilot.jobs.length, 0);
+  assert.equal(host.verificationJobs.length, 1, "the retried settlement queues exactly one verification job (the queue survives a rolled-back write, and the duplicate report on retry queues nothing; the queued run still proves the attempt)");
+  assert.equal(host.board().tasks[0].verificationRun?.state, "queued", "the retried settlement recovers the verificationRun stamp the rolled-back write lost");
+  assert.equal(host.board().tasks[0].verificationRun?.key, assistant.verificationJobKey("task", host.entry.id), "the recovered stamp matches the queued job's key, so the runner can stamp results back");
   assert.equal(host.effects.filter((effect) => effect === "handoff").length, 1);
   assert.equal(host.effects.filter((effect) => effect === "exit-fact").length, 1);
+});
+
+test("a rolled-back request write recovers the row's verification stamp on retry", async () => {
+  const host = finishHost({ kind: "request", failWrites: 1 });
+  await host.finish(0);
+  assert.equal(host.board().requests[0].verificationRun, undefined, "the failed write left no stamp behind");
+  assert.equal(host.verificationJobs.length, 1, "the queue push survived the rolled-back write");
+  await host.timers.shift().fn();
+  assert.equal(host.board().requests[0].status, "verifying");
+  assert.equal(host.verificationJobs.length, 1, "the retried report queues nothing new");
+  assert.equal(host.board().requests[0].verificationRun?.state, "queued", "the retried settlement recovers the stamp via the queued job");
+  assert.equal(host.board().requests[0].verificationRun?.key, assistant.verificationJobKey(agentModes.requestKey(host.board().requests[0]), host.entry.id), "the recovered stamp is keyed by request identity");
 });
 
 test("retrying a partially committed failure does not spend a second retry or duplicate outcome effects", async () => {
