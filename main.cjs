@@ -584,6 +584,304 @@ async function announceRestart() {
   send("update:event", updateEvent({ phase: "restarted", kind: last.kind ?? "restart", files: last.files ?? [], auto: settings.update?.auto !== false, at: last.at }));
 }
 
+// ---- GitHub releases: read the published builds every 20 minutes ----------
+// The live updater above tracks this checkout; this watcher tracks the
+// repository's published builds. It asks GitHub for the newest release on a
+// slow cadence, compares the tag with this app's version, and — only when the
+// user presses the button — downloads the release zip, verifies its SHA-256
+// when the release names one, stages the portable payload, and hands the
+// install folder to a PowerShell helper. The helper waits for this process to
+// exit, copies the staged folder over the install folder (never
+// resources/app/data), and relaunches the app with --released <version>.
+const RELEASE_REPO = process.env.MEFI_STUDIO_UPDATE_REPO || null;
+
+let releaseState = {
+  state: "idle",
+  latest: null,
+  progress: null,
+  error: null,
+  needsToken: false,
+  checkedAt: null,
+  nextCheckAt: null,
+  repo: null,
+  installed: null,
+  staged: null,
+  at: Date.now(),
+};
+let releaseCheckInFlight = null;
+let releaseWatch = null;
+let ghTokenCache;
+
+function releaseStatus() {
+  return {
+    ...releaseState,
+    current: app.getVersion(),
+    repo: releaseState.repo ?? RELEASE_REPO ?? "nateecho32-stack/mefi-studio",
+    supported: app.isPackaged && process.platform === "win32",
+  };
+}
+
+// Only content changes reach the renderer: the timestamp fields move on every
+// poll, so they cannot drive the event. That keeps the toast on a real
+// discovery instead of re-announcing the same release every 20 minutes.
+function releaseSignature(status) {
+  return JSON.stringify([
+    status.state,
+    status.latest?.version ?? null,
+    status.progress?.percent ?? null,
+    status.error ?? null,
+    Boolean(status.needsToken),
+    status.installed?.version ?? null,
+  ]);
+}
+
+function publishRelease(patch = {}, { force = false } = {}) {
+  const before = releaseSignature(releaseState);
+  releaseState = { ...releaseState, ...patch, at: Date.now() };
+  if (force || releaseSignature(releaseState) !== before) send("release:event", releaseStatus());
+  return releaseStatus();
+}
+
+// A private repository needs credentials. Order: a token the user saved in
+// Studio (DPAPI-encrypted like the other keys), the usual environment
+// variables, then the GitHub CLI's own login — cached for this boot.
+async function resolveGithubToken(settings) {
+  const stored = decryptKey(settings, "githubTokenEncrypted");
+  if (stored) return stored;
+  for (const name of ["MEFI_STUDIO_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"]) {
+    if (process.env[name]) return process.env[name];
+  }
+  if (ghTokenCache !== undefined) return ghTokenCache;
+  ghTokenCache = await new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    let child;
+    try {
+      child = spawn("gh", ["auth", "token"], { windowsHide: true, env: { ...process.env, ELECTRON_RUN_AS_NODE: "" } });
+    } catch {
+      finish(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      try {
+        child.kill();
+      } catch {}
+      finish(null);
+    }, 4000);
+    let output = "";
+    child.stdout?.on("data", (chunk) => (output += chunk));
+    child.on("error", () => finish(null));
+    child.on("close", (code) => finish(code === 0 && output.trim() ? output.trim() : null));
+  });
+  return ghTokenCache;
+}
+
+async function checkRelease() {
+  if (releaseCheckInFlight) return releaseCheckInFlight;
+  if (["downloading", "applying"].includes(releaseState.state)) return releaseStatus();
+  releaseCheckInFlight = (async () => {
+    // A re-check while an update is already known runs silently: flipping to
+    // "checking" would hide the button for a moment every 20 minutes.
+    if (!releaseState.latest || ["idle", "error", "installed"].includes(releaseState.state)) {
+      publishRelease({ state: "checking", error: null, progress: null });
+    }
+    const module = await getReleaseUpdater();
+    const settings = await readSettings();
+    const token = await resolveGithubToken(settings);
+    const repo = RELEASE_REPO || module.DEFAULT_REPO;
+    const result = await module.checkForRelease({
+      repo,
+      currentVersion: app.getVersion(),
+      token,
+      platform: process.platform,
+      arch: process.arch,
+      timeoutMs: 15000,
+    });
+    const nextCheckAt = Date.now() + (Number(module.CHECK_INTERVAL_MS) || 20 * 60 * 1000);
+    if (!result.ok) {
+      // An empty releases page is a normal state, not a failure: this build is
+      // the newest one that exists yet.
+      const unpublished = /no published release found/i.test(result.error ?? "");
+      publishRelease({
+        state: unpublished ? "none" : "error",
+        error: unpublished ? null : result.error,
+        needsToken: unpublished ? false : Boolean(result.needsToken),
+        checkedAt: result.checkedAt,
+        nextCheckAt,
+        repo,
+        latest: null,
+      });
+      logLine(unpublished ? "[release] no published release yet" : `[release] check failed: ${result.error}`);
+    } else {
+      publishRelease({ state: result.update ? "available" : "current", latest: result.latest, error: null, needsToken: false, checkedAt: result.checkedAt, nextCheckAt, repo });
+      logLine(result.update ? `[release] v${result.update.version} available (running ${result.current})` : `[release] up to date (${result.current})`);
+    }
+    return releaseStatus();
+  })()
+    .catch((error) => {
+      publishRelease({ state: "error", error: String(error?.message ?? error).slice(0, 300), nextCheckAt: Date.now() + 20 * 60 * 1000 });
+      return releaseStatus();
+    })
+    .finally(() => {
+      releaseCheckInFlight = null;
+    });
+  return releaseCheckInFlight;
+}
+
+async function getReleaseUpdater() {
+  return loadModule("scripts/release-updater.mjs");
+}
+
+function startReleaseWatch() {
+  if (releaseWatch || SMOKE || CAPTURE || CLI_MODE) return { ok: true, running: Boolean(releaseWatch) };
+  getReleaseUpdater()
+    .then((module) => {
+      const interval = Math.max(60000, Number(module.CHECK_INTERVAL_MS) || 20 * 60 * 1000);
+      const first = setTimeout(() => checkRelease().catch(() => {}), 5000);
+      first.unref?.();
+      const timer = setInterval(() => checkRelease().catch(() => {}), interval);
+      timer.unref?.();
+      releaseWatch = { first, timer };
+      logLine(`[release] checking GitHub every ${Math.round(interval / 60000)} min`);
+    })
+    .catch((error) => logLine(`[release] watcher failed to start: ${error?.message ?? error}`));
+  return { ok: true, running: true };
+}
+
+function stopReleaseWatch() {
+  if (releaseWatch) {
+    clearTimeout(releaseWatch.first);
+    clearInterval(releaseWatch.timer);
+  }
+  releaseWatch = null;
+  return { ok: true, running: false };
+}
+
+// Downloads, verifies and stages the newest release. Leaves the state at
+// "downloading" with the bytes on disk; applyReleaseUpdate decides the next
+// phase, so a second click cannot start a second download.
+async function downloadReleaseBuild() {
+  const latest = releaseState.latest;
+  if (!latest?.asset) throw new Error("no release is available to download");
+  const module = await getReleaseUpdater();
+  const version = latest.version;
+  const root = path.join(app.getPath("temp"), "mefi-studio-update", `v${version}`);
+  await rm(root, { recursive: true, force: true });
+  await mkdir(root, { recursive: true });
+  publishRelease({ state: "downloading", progress: { received: 0, total: latest.asset.size ?? 0, percent: 0 }, error: null });
+  const settings = await readSettings();
+  const token = await resolveGithubToken(settings);
+  const downloaded = await module.downloadAsset({
+    asset: latest.asset,
+    directory: root,
+    token,
+    timeoutMs: 30 * 60 * 1000,
+    onProgress: ({ received, total }) =>
+      publishRelease({ progress: { received, total, percent: total ? Math.min(100, Math.floor((received / total) * 100)) : null } }),
+  });
+  let expected = typeof latest.asset.digest === "string" && latest.asset.digest.startsWith("sha256:")
+    ? latest.asset.digest.slice(7).toLowerCase()
+    : null;
+  if (!expected && latest.checksum) {
+    try {
+      expected = await module.fetchChecksum({ asset: latest.checksum, token });
+    } catch {}
+  }
+  if (expected && expected !== downloaded.sha256.toLowerCase()) {
+    await rm(root, { recursive: true, force: true });
+    throw new Error("the downloaded build failed its SHA-256 check");
+  }
+  logLine(`[release] downloaded v${version} (${Math.round(downloaded.bytes / (1024 * 1024))} MB${expected ? ", verified" : ", no checksum published"})`);
+  const installRoot = path.dirname(process.execPath);
+  const prepared = await module.stageUpdate({ zipPath: downloaded.path, stagingDir: path.join(root, "staging"), installRoot });
+  const scriptPath = path.join(root, "apply-update.ps1");
+  const logPath = path.join(root, "apply-update.log");
+  await module.writeApplyScript(scriptPath, {
+    sourceRoot: prepared.sourceRoot,
+    installRoot,
+    exePath: prepared.exePath,
+    pid: process.pid,
+    version,
+    cleanupRoot: root,
+    logPath,
+  });
+  publishRelease({ progress: null, latest: { ...latest, sha256: downloaded.sha256, verified: Boolean(expected) } });
+  return { version, scriptPath, installRoot, exePath: prepared.exePath, verified: Boolean(expected) };
+}
+
+async function applyReleaseUpdate() {
+  if (SMOKE || CAPTURE || CLI_MODE) return { ok: false, error: "release updates are unavailable in this mode" };
+  if (!app.isPackaged || process.platform !== "win32") {
+    return { ok: false, error: "Release updates install into the portable Windows build. In development the live updater applies source changes.", status: releaseStatus() };
+  }
+  if (releaseState.state === "applying") return { ok: false, error: "the update is already applying", status: releaseStatus() };
+  if (activeChild && activeChild.exitCode === null) return { ok: false, error: "Love2D is running — close it and try again", status: releaseStatus() };
+  const running = autopilot.jobs.filter((job) => !job.finished || job.settlementPending);
+  if (running.length) return { ok: false, error: `${running.length} build job(s) still running — try again when they finish`, status: releaseStatus() };
+  if (!releaseState.latest) return { ok: false, error: "no release is available to install", status: releaseStatus() };
+  try {
+    let prepared = releaseState.staged;
+    if (!prepared || prepared.version !== releaseState.latest.version) {
+      prepared = await downloadReleaseBuild();
+      publishRelease({ staged: prepared });
+    }
+    publishRelease({ state: "applying", error: null });
+    const settings = await readSettings();
+    settings.release = { ...(settings.release ?? {}), lastApply: { from: app.getVersion(), to: prepared.version, at: Date.now() } };
+    // The relaunched window comes back where this one was.
+    if (window && !window.isDestroyed()) settings.window = { bounds: window.getBounds(), maximized: window.isMaximized() };
+    await writeSettings(settings);
+    await saveResume();
+    try {
+      window?.webContents.session.flushStorageData();
+    } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    stopReleaseWatch();
+    stopUpdateWatch();
+    stopEyesWatch();
+    stopMachineWatch();
+    stopAssistant();
+    const helper = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", prepared.scriptPath], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    helper.unref();
+    logLine(`[release] applying v${prepared.version}; helper pid ${helper.pid}`);
+    app.releaseSingleInstanceLock();
+    app.exit(0);
+    return { ok: true, applying: true, version: prepared.version, status: releaseStatus() };
+  } catch (error) {
+    const message = String(error?.message ?? error).slice(0, 400);
+    publishRelease({ state: "error", error: message, progress: null, staged: null });
+    logLine(`[release] apply failed: ${message}`);
+    return { ok: false, error: message, status: releaseStatus() };
+  }
+}
+
+// A boot that carries --released says which build the helper just installed.
+async function announceRelease() {
+  const index = process.argv.indexOf("--released");
+  if (index < 0) return;
+  const settings = await readSettings();
+  const last = settings.release?.lastApply;
+  const version = String(process.argv[index + 1] ?? "").replace(/^v/i, "") || last?.to || null;
+  if (!version) return;
+  publishRelease({
+    state: "installed",
+    installed: { version, from: last?.from ?? null, at: last?.at ?? Date.now() },
+    latest: null,
+    error: null,
+    progress: null,
+  }, { force: true });
+  logLine(`[release] updated ${last?.from ?? "?"} -> ${version}`);
+}
+
 async function queueRequests(additions, { automaticGrowth = false } = {}) {
   if (!additions?.length) return 0;
   // Through the board gateway: the dedupe reads the inbox INSIDE the lock, so
@@ -8754,7 +9052,10 @@ function registerIpc() {
     return { ok: true, stopped: true };
   });
 
-  const keyFieldFor = (which) => (which === "zai" ? "zaiApiKeyEncrypted" : which === "gateway" ? "gatewayApiKeyEncrypted" : "apiKeyEncrypted");
+  const keyFieldFor = (which) =>
+    which === "github"
+      ? "githubTokenEncrypted"
+      : which === "zai" ? "zaiApiKeyEncrypted" : which === "gateway" ? "gatewayApiKeyEncrypted" : "apiKeyEncrypted";
 
   ipcMain.handle("settings:get-key", async (_event, which = "opencode") => {
     const settings = await readSettings();
@@ -9235,6 +9536,14 @@ function registerIpc() {
     }
     return { ok: result.ok !== false, ...result, status: updater.status() };
   });
+
+  // ---- GitHub release updates ---------------------------------------------
+  ipcMain.handle("release:status", () => ({ ok: true, status: releaseStatus() }));
+  ipcMain.handle("release:check", async () => {
+    await checkRelease();
+    return { ok: true, status: releaseStatus() };
+  });
+  ipcMain.handle("release:apply", async () => applyReleaseUpdate());
 }
 
 // Bounds a restart saved, when they still land on a display that exists.
@@ -9655,7 +9964,9 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => bootAutopilot(), 8000);
   // Both are fire-and-forget: a failure is logged, never an unhandled rejection.
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => startUpdateWatch().catch((error) => logLine(`[update] watch failed: ${error?.message ?? error}`)), 3500);
+  if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => startReleaseWatch(), 6000);
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRestart().catch(() => {}));
+  if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRelease().catch(() => {}));
   // The assistant service runs on its own clock, renderer or not; the smoke
   // exercises its keyless path, the capture tour never needs it.
   if (!CAPTURE && !CLI_MODE) setTimeout(() => startAssistant().catch((error) => logLine(`[assistant] start failed: ${error?.message ?? error}`)), 1500);
@@ -9712,6 +10023,7 @@ app.on("window-all-closed", () => {
   // Background mode with a tray keeps the assistant alive without a window.
   if (tray && assistantState?.prefs?.background && !app.isQuitting) return;
   stopUpdateWatch();
+  stopReleaseWatch();
   stopEyesWatch();
   stopMachineWatch();
   if (process.platform !== "darwin") app.quit();

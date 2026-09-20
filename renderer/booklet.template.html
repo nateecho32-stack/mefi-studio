@@ -388,11 +388,21 @@
         </div>
         <div class="update-block" data-update-block>
           <h3 class="mt">App updates</h3>
-          <p class="muted">In development, Studio watches its source files and applies local changes. Reloads wait for active builders and result saves. This control does not download releases from GitHub.</p>
+          <p class="muted">In development, Studio watches its source files and applies local changes. Reloads wait for active builders and result saves.</p>
           <div class="row tight update-row">
             <label class="switch" title="Apply updates on their own: in place at once, or after a pause when the page must reload (renderer, preload) or the app must restart (main.cjs)"><input type="checkbox" id="update-auto" checked><span class="track"></span><span>Apply updates automatically</span></label>
             <button id="update-apply" class="ghost" disabled>Apply update</button>
             <span class="eyes-status" id="update-status" role="status">not watching</span>
+          </div>
+          <p class="muted">Published builds are checked on GitHub every 20 minutes. The portable app can download and install one from here; in development the checker reports only.</p>
+          <div class="row tight update-row" data-release-row>
+            <button id="release-check" class="ghost" title="Ask GitHub for the newest published build now">Check GitHub</button>
+            <button id="release-apply" class="ghost" hidden disabled>Update</button>
+            <span class="eyes-status" id="release-status" role="status">release: not checked</span>
+          </div>
+          <div class="row tight update-row" id="release-token-row" hidden>
+            <input type="password" id="release-token" placeholder="GitHub token (read-only, for a private repo)" autocomplete="off" aria-label="GitHub update token">
+            <button id="release-token-save" class="ghost mini">Save token</button>
           </div>
         </div>
         </details>

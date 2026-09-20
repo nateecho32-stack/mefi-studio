@@ -68,13 +68,17 @@ app.whenReady().then(async () => {
     eyesCollisions: { ok: true, collisions: [], presence: [] },
     backlogStatus: { ok: true, counts: { ready: 1, running: 0, verifying: 0, blocked: 0 }, next: [] },
     speedMeasurements: { ok: true, measurements: {} },
+    assistantDoneLog: { ok: true, entries: [
+      { at: now - 60000, kind: "build", title: "Verify real node painting", ok: true, taskId: "command_render_task", sessionId: null, seconds: 12, detail: "reported done in 12s" },
+      { at: now - 120000, kind: "pass", title: "repaired the catalog", ok: true, taskId: null, sessionId: null, seconds: 0, detail: "fix pass" },
+    ] },
     readCatalog: JSON.parse(fs.readFileSync(path.join(root, "data", "models.json"), "utf8")),
   };
   const preload = path.join(root, "read-only-preload.cjs");
   fs.writeFileSync(preload, `const {contextBridge}=require("electron");
     const responses=${JSON.stringify(responses)};
     const listeners={onAssistant:[],onAssistantStatus:[]};
-    const modePatches=[],assistantActions=[];
+    const modePatches=[],assistantActions=[],questionAnswers=[];
     contextBridge.exposeInMainWorld("mefiStudio",{
       ...Object.fromEntries(Object.keys(responses).map(key=>[key,async()=>{if(key==='eyesCollisions')await new Promise(resolve=>setTimeout(resolve,5000));return responses[key];}])),
       ...Object.fromEntries(Object.keys(listeners).map(key=>[key,callback=>{listeners[key].push(callback);return()=>{};}])),
@@ -94,13 +98,15 @@ app.whenReady().then(async () => {
         for(const callback of listeners.onAssistantStatus)callback(responses.assistantStatus.status);
         for(const callback of listeners.onAssistant)callback({state:responses.assistantState.state,event:{kind:'control'}});
         return {ok:true,state:responses.assistantState.state,autopilot:responses.assistantStatus.status};
-      }
+      },
+      assistantAnswer:async payload=>{questionAnswers.push(payload);return {ok:true,state:responses.assistantState.state};}
     });
     contextBridge.exposeInMainWorld("commandFixture",{
       publishAssistant:(state,event)=>{responses.assistantState={ok:true,state};for(const callback of listeners.onAssistant)callback({state,event});},
       publishStatus:status=>{responses.assistantStatus={ok:true,status};for(const callback of listeners.onAssistantStatus)callback(status);},
       modePatches:()=>modePatches,
       assistantActions:()=>assistantActions,
+      questionAnswers:()=>questionAnswers,
       assistantState:()=>responses.assistantState.state,
       status:()=>responses.assistantStatus.status
     });
@@ -827,6 +833,33 @@ app.whenReady().then(async () => {
   report.newWork.actions = await run("return window.commandFixture.assistantActions();");
   assert.deepEqual(report.newWork.actions, ["start-work", "pause", "start-work", "pause"]);
   assert.ok(report.newWork.saving.every(Boolean), "both New work switches show the pending save");
+  // The merged right rail: one view at a time across Work / Assistant / Done /
+  // Ask, the done log reads the durable ledger, and an Ask card answers through
+  // the host bridge instead of typing into the thread.
+  await run(`
+    window.commandFixture.publishAssistant({status:'running',messages:[],prefs:{},work:[],agents:[],questions:[
+      {id:'q_fixture',at:Date.now(),kind:'question',source:'build',title:'Retry the failed build?',detail:'The worker stopped early.',status:'open',options:[
+        {id:'retry',label:'Retry once more',recommended:true,action:{kind:'backlog',action:'retry',payload:{taskId:'command_render_task'}}},
+        {id:'hold',label:'Leave it for review',dismiss:true}
+      ]}
+    ]});
+  `);
+  await until("document.getElementById('cmd-rail-ask-badge') && !document.getElementById('cmd-rail-ask-badge').hidden", "Ask badge counts the open question");
+  await run("document.getElementById('cmd-rail-tab-done').click();");
+  await until("!document.getElementById('cmd-done').hidden && document.getElementById('idle-feed').hidden", "Done tab shows its view alone");
+  await until("document.querySelectorAll('#cmd-done-list .done-row').length>=2", "the done log renders durable records");
+  report.rail = { doneRows: await run("return document.querySelectorAll('#cmd-done-list .done-row').length;") };
+  await run("document.getElementById('cmd-rail-tab-ask').click();");
+  await until("!document.getElementById('cmd-asks').hidden && document.querySelector('#cmd-ask-list .ask-option[data-recommended=\"true\"]')!==null", "Ask tab renders the recommended option");
+  await run("document.querySelector('#cmd-ask-list .ask-option[data-recommended=\"true\"]').click();");
+  await until("window.commandFixture.questionAnswers().length===1", "the recommended option answers through the host");
+  report.rail.answers = await run("return window.commandFixture.questionAnswers();");
+  await run("document.getElementById('cmd-rail-tab-work').click();");
+  await until("!document.getElementById('idle-feed').hidden && document.getElementById('cmd-done').hidden && document.getElementById('cmd-asks').hidden", "Work tab returns the live-work view");
+  report.rail.active = await run("return document.querySelector('.rail-tab[aria-selected=\"true\"]')?.dataset.railView;");
+  assert.equal(report.rail.doneRows >= 2, true, "the done log lists the ledger records");
+  assert.equal(report.rail.active, "work");
+  assert.equal(report.rail.answers.length, 1);
   assert.deepEqual(report.errors, []);
   assert.deepEqual(report.networkAttempts, []);
   assert.deepEqual(report.processAttempts, []);

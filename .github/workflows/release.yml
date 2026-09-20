@@ -1,0 +1,50 @@
+# Publishes a portable Windows build to GitHub Releases when a version tag is
+# pushed. The app's release watcher reads releases/latest every 20 minutes and
+# offers the zip to installed portable copies, which verify the .sha256 asset
+# before swapping it in.
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# workflow_dispatch builds and publishes the version given as input.
+name: Publish portable release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to publish (vX.Y.Z)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install pinned dependencies
+        run: npm ci
+      - name: Full check gate
+        run: npm run check
+      - name: Behavioral and isolated desktop checks
+        run: npm test
+      - name: Resolve the version
+        id: version
+        shell: pwsh
+        run: |
+          $version = "${{ github.event_name == 'push' && github.ref_name || inputs.version }}"
+          if ($version -notmatch '^v') { $version = "v$version" }
+          "value=$version" >> $env:GITHUB_OUTPUT
+      - name: Build and publish the portable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/package-release.mjs --version "${{ steps.version.outputs.value }}" --publish

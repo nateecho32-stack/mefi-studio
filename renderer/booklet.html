@@ -3921,11 +3921,21 @@ body.music-preview-active #idle-hud { display: none !important; }
         </div>
         <div class="update-block" data-update-block>
           <h3 class="mt">App updates</h3>
-          <p class="muted">In development, Studio watches its source files and applies local changes. Reloads wait for active builders and result saves. This control does not download releases from GitHub.</p>
+          <p class="muted">In development, Studio watches its source files and applies local changes. Reloads wait for active builders and result saves.</p>
           <div class="row tight update-row">
             <label class="switch" title="Apply updates on their own: in place at once, or after a pause when the page must reload (renderer, preload) or the app must restart (main.cjs)"><input type="checkbox" id="update-auto" checked><span class="track"></span><span>Apply updates automatically</span></label>
             <button id="update-apply" class="ghost" disabled>Apply update</button>
             <span class="eyes-status" id="update-status" role="status">not watching</span>
+          </div>
+          <p class="muted">Published builds are checked on GitHub every 20 minutes. The portable app can download and install one from here; in development the checker reports only.</p>
+          <div class="row tight update-row" data-release-row>
+            <button id="release-check" class="ghost" title="Ask GitHub for the newest published build now">Check GitHub</button>
+            <button id="release-apply" class="ghost" hidden disabled>Update</button>
+            <span class="eyes-status" id="release-status" role="status">release: not checked</span>
+          </div>
+          <div class="row tight update-row" id="release-token-row" hidden>
+            <input type="password" id="release-token" placeholder="GitHub token (read-only, for a private repo)" autocomplete="off" aria-label="GitHub update token">
+            <button id="release-token-save" class="ghost mini">Save token</button>
           </div>
         </div>
         </details>
@@ -9802,16 +9812,45 @@ body.music-preview-active #idle-hud { display: none !important; }
     };
   }
 
-  function paintUpdate(status) {
-    const view = updateView(status);
+  let liveUpdateStatus = null;
+  let releaseUpdateState = null;
+
+  function paintPill() {
     const pill = document.querySelector("#update-pill");
-    if (pill) {
-      pill.hidden = view.hidden;
-      pill.dataset.state = view.state;
-      pill.title = view.title;
+    if (!pill) return;
+    const view = updateView(liveUpdateStatus);
+    const release = releaseUpdateState;
+    // The steady "watching" state never masks a published build; an actual
+    // pending/working/held live update still owns the pill.
+    const liveBusy = ["pending", "working", "held"].includes(view.state);
+    const releasePill = !liveBusy && release && ["available", "downloading", "applying"].includes(release.state);
+    if (releasePill) {
+      const version = release.latest?.version ? `v${release.latest.version}` : "a new build";
+      pill.hidden = false;
+      pill.dataset.release = "1";
+      pill.dataset.state = release.state === "available" ? "pending" : "working";
+      pill.title =
+        release.state === "available"
+          ? `New build on GitHub: ${version} · open Studio → App updates`
+          : release.state === "downloading"
+            ? `Downloading ${version}…`
+            : `Installing ${version} · the app restarts`;
       const label = pill.querySelector(".label");
-      if (label) label.textContent = view.label;
+      if (label) label.textContent = release.state === "available" ? `Update ${version}` : release.state === "downloading" ? "Downloading update" : "Installing update";
+      return;
     }
+    delete pill.dataset.release;
+    pill.hidden = view.hidden;
+    pill.dataset.state = view.state;
+    pill.title = view.title;
+    const label = pill.querySelector(".label");
+    if (label) label.textContent = view.label;
+  }
+
+  function paintUpdate(status) {
+    liveUpdateStatus = status;
+    const view = updateView(status);
+    paintPill();
     const auto = document.querySelector("#update-auto");
     if (auto) auto.checked = status?.auto !== false;
     const apply = document.querySelector("#update-apply");
@@ -9961,15 +10000,140 @@ body.music-preview-active #idle-hud { display: none !important; }
     auto?.addEventListener("change", () => setUpdateAuto(auto.checked));
     document.querySelector("#update-apply")?.addEventListener("click", () => applyUpdate());
     // The pill opens Studio; while an update waits for a pause, clicking it
-    // also applies now (the host skips its gate for a manual apply).
+    // also applies now (the host skips its gate for a manual apply). A release
+    // pill only navigates: installing a published build is the button's job.
     document.querySelector("#update-pill")?.addEventListener("click", () => {
-      const phase = document.querySelector("#update-pill")?.dataset.state;
-      if (phase === "pending") applyUpdate();
+      const pill = document.querySelector("#update-pill");
+      if (pill?.dataset.release === "1") return;
+      if (pill?.dataset.state === "pending") applyUpdate();
     });
     window.mefiStudio.onUpdateEvent?.(onUpdateEvent);
     window.mefiStudio
       .updateStatus()
       .then((result) => paintUpdate(result?.status))
+      .catch(() => {});
+  }
+
+  // ---- GitHub release updates ---------------------------------------------
+
+  function releaseView(status) {
+    const state = status?.state ?? "idle";
+    const version = status?.latest?.version ? `v${status.latest.version}` : "a new build";
+    if (state === "checking") return { line: "checking GitHub…", busy: true };
+    if (state === "available") return { line: `update available · ${version}`, button: `Update to ${version}` };
+    if (state === "downloading") {
+      const percent = status?.progress?.percent;
+      return { line: `downloading ${version}${Number.isFinite(percent) ? ` · ${percent}%` : ""}…`, button: "Downloading…", busy: true };
+    }
+    if (state === "applying") return { line: `installing ${version} · the app restarts`, button: "Installing…", busy: true };
+    if (state === "installed") return { line: `updated to v${status?.installed?.version ?? ""} · running this build`, installed: true };
+    if (state === "none") return { line: "no published release yet" };
+    if (state === "current") return { line: `up to date${status?.current ? ` · v${status.current}` : ""}` };
+    if (state === "error") return { line: `check failed · ${status?.error ?? "unknown"}`, bad: true, token: Boolean(status?.needsToken) };
+    return { line: "not checked" };
+  }
+
+  function paintRelease(status) {
+    if (status) releaseUpdateState = status;
+    const state = releaseUpdateState;
+    const view = releaseView(state);
+    const line = document.querySelector("#release-status");
+    if (line) {
+      line.textContent = `release · ${view.line}`;
+      line.classList.toggle("bad-text", Boolean(view.bad));
+    }
+    const apply = document.querySelector("#release-apply");
+    if (apply) {
+      apply.hidden = !["available", "downloading", "applying"].includes(state?.state);
+      apply.disabled = Boolean(view.busy);
+      if (view.button) apply.textContent = view.button;
+    }
+    const check = document.querySelector("#release-check");
+    if (check) check.disabled = Boolean(view.busy);
+    const tokenRow = document.querySelector("#release-token-row");
+    if (tokenRow) tokenRow.hidden = !view.token;
+    paintPill();
+  }
+
+  function releaseToast(payload) {
+    if (payload?.state === "available") {
+      window.MefiToast?.(`Update available · v${payload.latest?.version} · Studio → App updates`, "info");
+    } else if (payload?.state === "installed") {
+      window.MefiToast?.(`Updated to v${payload.installed?.version}`, "good");
+    } else if (payload?.state === "error" && payload?.error) {
+      window.MefiToast?.(`Release check failed · ${payload.error}`, "bad");
+    }
+  }
+
+  function onReleaseEvent(payload) {
+    paintRelease(payload);
+    releaseToast(payload);
+  }
+
+  async function checkReleaseNow() {
+    if (!window.mefiStudio?.releaseCheck) return;
+    try {
+      const result = await window.mefiStudio.releaseCheck();
+      paintRelease(result?.status);
+      if (result?.status?.state === "current") window.MefiToast?.("GitHub release check · up to date", "info");
+      else if (result?.status?.state === "none") window.MefiToast?.("GitHub release check · no published release yet", "info");
+    } catch (error) {
+      window.MefiToast?.(`Release check failed · ${String(error?.message ?? error)}`, "bad");
+    }
+  }
+
+  async function applyReleaseNow() {
+    if (!window.mefiStudio?.releaseApply) return;
+    const button = document.querySelector("#release-apply");
+    if (button) button.disabled = true;
+    try {
+      const result = await window.mefiStudio.releaseApply();
+      paintRelease(result?.status);
+      if (result?.ok === false) window.MefiToast?.(`Update failed · ${result.error}`, "bad");
+    } catch (error) {
+      window.MefiToast?.(`Update failed · ${String(error?.message ?? error)}`, "bad");
+      if (button) button.disabled = false;
+      window.mefiStudio
+        .releaseStatus?.()
+        .then((result) => paintRelease(result?.status))
+        .catch(() => {});
+    }
+  }
+
+  async function saveReleaseToken() {
+    const input = document.querySelector("#release-token");
+    const token = String(input?.value ?? "").trim();
+    if (!token) {
+      window.MefiToast?.("Paste a GitHub token first", "bad");
+      return;
+    }
+    try {
+      const result = await window.mefiStudio.setApiKey?.(token, "github");
+      if (result?.ok === false) {
+        window.MefiToast?.(`Token not saved · ${result.error}`, "bad");
+        return;
+      }
+      if (input) input.value = "";
+      window.MefiToast?.("GitHub token saved", "good");
+      await checkReleaseNow();
+    } catch (error) {
+      window.MefiToast?.(`Token not saved · ${String(error?.message ?? error)}`, "bad");
+    }
+  }
+
+  function initRelease() {
+    const row = document.querySelector("[data-release-row]");
+    if (!window.mefiStudio?.releaseStatus) {
+      if (row) row.hidden = true;
+      return;
+    }
+    document.querySelector("#release-check")?.addEventListener("click", () => checkReleaseNow());
+    document.querySelector("#release-apply")?.addEventListener("click", () => applyReleaseNow());
+    document.querySelector("#release-token-save")?.addEventListener("click", () => saveReleaseToken());
+    window.mefiStudio.onReleaseEvent?.(onReleaseEvent);
+    window.mefiStudio
+      .releaseStatus()
+      .then((result) => paintRelease(result?.status))
       .catch(() => {});
   }
 
@@ -10182,6 +10346,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       if (!document.hidden) refreshBadges();
     });
     initUpdates();
+    initRelease();
   }
 
   window.MefiNav = {
@@ -14598,7 +14763,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     el.chatLogToggle?.setAttribute("title", state.chatLogOpen ? "Collapse the chat log" : "Expand the chat log");
     if (el.chatLogToggle) el.chatLogToggle.textContent = state.chatLogOpen ? "–" : "+";
     el.hud?.classList.toggle("chat-log-open", state.chatLogOpen);
-    applyRailCollapsed();
+    if (typeof applyRailCollapsed === "function") applyRailCollapsed();
     state.graphAreaAt = 0;
     state.hudRectsAt = 0;
   }
@@ -15361,9 +15526,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     refreshAssistantCache();
     updateAssistantPill();
     paintChatLog();
-    renderRailBadges(payload?.state ?? null);
-    if (state.railTab === "ask") renderAsks(payload?.state ?? null);
-    if (state.railTab === "done" && Date.now() - (state.doneAt ?? 0) > 4000) void loadDoneLog();
+    if (typeof renderRailBadges === "function") renderRailBadges(payload?.state ?? null);
+    if (state.railTab === "ask" && typeof renderAsks === "function") renderAsks(payload?.state ?? null);
+    if (state.railTab === "done" && typeof loadDoneLog === "function" && Date.now() - (state.doneAt ?? 0) > 4000) void loadDoneLog();
     const kind = payload?.event?.kind ?? null;
     if (!kind) return;
     if (kind === "tick") {
@@ -17305,14 +17470,15 @@ body.music-preview-active #idle-hud { display: none !important; }
       if (chatting) renderChat();
     }
     // Selecting the assistant brings its thread forward; picking anything else
-    // leaves the rail where the owner put it.
+    // leaves the rail where the owner put it. (Guarded: the renderer test
+    // slices run single functions without the rail helpers.)
     const assistantPicked = state.selected?.kind === "assistant";
     if (assistantPicked !== state.lastAssistantSelected) {
       state.lastAssistantSelected = assistantPicked;
-      if (assistantPicked) setRailTab("assistant");
+      if (assistantPicked && typeof setRailTab === "function") setRailTab("assistant");
     }
-    renderRailBadges();
-    if (state.railTab === "ask") renderAsks();
+    if (typeof renderRailBadges === "function") renderRailBadges();
+    if (state.railTab === "ask" && typeof renderAsks === "function") renderAsks();
     paintChatLog();
   }
 
@@ -20176,7 +20342,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     el.feedToggle?.setAttribute("aria-expanded", String(!state.feedCollapsed));
     if (el.feedToggle) el.feedToggle.title = state.feedCollapsed ? "Expand live work" : "Collapse live work";
     if (save) writeStore("mefiStudio.cmdFeedCollapsed", state.feedCollapsed ? "1" : "0");
-    applyRailCollapsed();
+    if (typeof applyRailCollapsed === "function") applyRailCollapsed();
     state.graphAreaAt = 0;
     state.hudRectsAt = 0;
     if (state.selected?.kind === "assistant") { state.feedDirty = true; renderInfo(); renderFeed(); }

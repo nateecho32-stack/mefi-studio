@@ -200,6 +200,22 @@ are syntax-checked first, and a broken file or three restarts a minute **hold**
 the update instead of crashing. The `data/` directory is never written by the
 updater or packaging.
 
+### Release updates
+
+A packaged copy also reads the repository's latest GitHub release every 20
+minutes. When a newer build exists, the App updates block shows **Update to
+vX.Y.Z**: it downloads the release zip, verifies the published `.sha256` (or
+the API digest) when one exists, stages the portable folder, and a helper
+script waits for the app to exit, copies the payload into place — never
+`resources/app/data` — and relaunches. In development the checker only
+reports; the live update above applies source changes.
+
+Build and publish a release with `node scripts/package-release.mjs --version
+vX.Y.Z --publish`, or push a `v*` tag and let
+`.github/workflows/release.yml` run. A private repository needs a read-only
+token: save one in App updates, set `MEFI_STUDIO_GITHUB_TOKEN`, or let Studio
+reuse the GitHub CLI's `gh auth token`.
+
 ## Tests
 
 ```powershell

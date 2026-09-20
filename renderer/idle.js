@@ -1682,7 +1682,7 @@
     el.chatLogToggle?.setAttribute("title", state.chatLogOpen ? "Collapse the chat log" : "Expand the chat log");
     if (el.chatLogToggle) el.chatLogToggle.textContent = state.chatLogOpen ? "–" : "+";
     el.hud?.classList.toggle("chat-log-open", state.chatLogOpen);
-    applyRailCollapsed();
+    if (typeof applyRailCollapsed === "function") applyRailCollapsed();
     state.graphAreaAt = 0;
     state.hudRectsAt = 0;
   }
@@ -2445,9 +2445,9 @@
     refreshAssistantCache();
     updateAssistantPill();
     paintChatLog();
-    renderRailBadges(payload?.state ?? null);
-    if (state.railTab === "ask") renderAsks(payload?.state ?? null);
-    if (state.railTab === "done" && Date.now() - (state.doneAt ?? 0) > 4000) void loadDoneLog();
+    if (typeof renderRailBadges === "function") renderRailBadges(payload?.state ?? null);
+    if (state.railTab === "ask" && typeof renderAsks === "function") renderAsks(payload?.state ?? null);
+    if (state.railTab === "done" && typeof loadDoneLog === "function" && Date.now() - (state.doneAt ?? 0) > 4000) void loadDoneLog();
     const kind = payload?.event?.kind ?? null;
     if (!kind) return;
     if (kind === "tick") {
@@ -4389,14 +4389,15 @@
       if (chatting) renderChat();
     }
     // Selecting the assistant brings its thread forward; picking anything else
-    // leaves the rail where the owner put it.
+    // leaves the rail where the owner put it. (Guarded: the renderer test
+    // slices run single functions without the rail helpers.)
     const assistantPicked = state.selected?.kind === "assistant";
     if (assistantPicked !== state.lastAssistantSelected) {
       state.lastAssistantSelected = assistantPicked;
-      if (assistantPicked) setRailTab("assistant");
+      if (assistantPicked && typeof setRailTab === "function") setRailTab("assistant");
     }
-    renderRailBadges();
-    if (state.railTab === "ask") renderAsks();
+    if (typeof renderRailBadges === "function") renderRailBadges();
+    if (state.railTab === "ask" && typeof renderAsks === "function") renderAsks();
     paintChatLog();
   }
 
@@ -7260,7 +7261,7 @@
     el.feedToggle?.setAttribute("aria-expanded", String(!state.feedCollapsed));
     if (el.feedToggle) el.feedToggle.title = state.feedCollapsed ? "Expand live work" : "Collapse live work";
     if (save) writeStore("mefiStudio.cmdFeedCollapsed", state.feedCollapsed ? "1" : "0");
-    applyRailCollapsed();
+    if (typeof applyRailCollapsed === "function") applyRailCollapsed();
     state.graphAreaAt = 0;
     state.hudRectsAt = 0;
     if (state.selected?.kind === "assistant") { state.feedDirty = true; renderInfo(); renderFeed(); }

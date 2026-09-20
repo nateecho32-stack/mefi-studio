@@ -90,6 +90,9 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   updateStatus: () => ipcRenderer.invoke("update:status"),
   updateSet: (auto) => ipcRenderer.invoke("update:set", { auto }),
   updateApply: () => ipcRenderer.invoke("update:apply"),
+  releaseStatus: () => ipcRenderer.invoke("release:status"),
+  releaseCheck: () => ipcRenderer.invoke("release:check"),
+  releaseApply: () => ipcRenderer.invoke("release:apply"),
   machineStatus: (kill) => ipcRenderer.invoke("machine:status", { kill: Boolean(kill) }),
   machineWatch: (running) => ipcRenderer.invoke("machine:watch", { running }),
   machineSet: (prefs) => ipcRenderer.invoke("machine:set", prefs),
@@ -106,5 +109,6 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   onStudioLog: (callback) => ipcRenderer.on("studio:log", (_event, line) => callback(line)),
   onStudioExit: (callback) => ipcRenderer.on("studio:exit", (_event, info) => callback(info)),
   onUpdateEvent: (callback) => ipcRenderer.on("update:event", (_event, payload) => callback(payload)),
+  onReleaseEvent: (callback) => ipcRenderer.on("release:event", (_event, payload) => callback(payload)),
   onAssistant: (callback) => ipcRenderer.on("eyes:assistant", (_event, payload) => callback(payload)),
 });
