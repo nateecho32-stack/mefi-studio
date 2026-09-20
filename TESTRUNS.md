@@ -1,5 +1,15 @@
 # Test Runs
 
+Chat admission regressions in `tests/assistant_chat_admission.test.mjs` run the
+real responder and task admission against serialized memory stores. They cover
+concurrent repeated sends, equivalent wording, inbox and worker reuse, pending
+verification, resolved follow-ups, full briefs sharing a truncated title, and
+failed saves without helper dispatch. `tests/chat_work.test.mjs` checks matching
+boundaries for projects, grouped tasks, scope, negation, paths and closed work.
+`tests/assistant_question_routing.test.mjs` keeps questions and lookups out of
+execution while retaining explicit instructions and mixed question/work messages.
+These checks use no live stores, coding workers or paid provider calls.
+
 Worker-start feedback coverage in `tests/assistant_work_on.test.mjs` reproduces
 repeated **Work on it** clicks after a session request has been promoted and its
 inbox entry removed. It checks existing-worker reuse, preparation versus process
@@ -7,6 +17,10 @@ startup, one chat confirmation per spawn, verification, stale assignments and
 Pause while a builder is running. `tests/executor_resources.test.mjs` also checks
 connection failures, dispatch-error recovery and full manual limits. These use
 in-memory stores and fake child events without launching paid workers.
+Validated on 2026-09-19: `npm run check`, `npm test` (1,294 Node passes,
+one opt-in skip, 220 Python contracts and six normalized-path checks), and
+`npm run audit` passed. Complete logs remain in the local temporary directory
+as `mefi-spawn-fix-{check,test,audit}.log`.
 
 `tests/assistant_work_on.test.mjs` covers the actual **Work on it** host path:
 paused and disabled workers are reported explicitly, repeated clicks retain one
@@ -1059,3 +1073,17 @@ fresh-migration cutover and guard, 2 store-fork sync including idempotence
 and the app's own admission-rule drain). The repo?dist sync pass
 (`scripts/reconcile-store-fork.mjs`, `--dry-run` to preview) remains the
 tool for the two deliberate JSON stores; it never touches `board.db`.
+
+Dedupe-tracking verification for task `task_fc3979c3e56e4a49` (2026-09-19):
+the A-Eyes "untracked dedupe test files" warn was stale.
+`git ls-files tools/` lists both `tools/test_session_dedupe.py` (172-line
+session dedupe contract suite) and `tools/test_mefi_studio_session_dedupe.py`
+(15-line discovery shim re-exporting it), `git status --porcelain` shows both
+clean, and `git log --oneline -- <files>` lands both in commit 95319cf ("fixes",
+HEAD at check time), so session ses_f432d9671ffebdeUbT5do8du83's work is
+already preserved and no commit was needed. Content scan found only synthetic
+fixture IDs (`ses_a`, `ses_b`, ...), no real session IDs or secrets. Checks run:
+`git diff HEAD -- tools/test_session_dedupe.py
+tools/test_mefi_studio_session_dedupe.py` empty; `python
+tools/test_session_dedupe.py` 3/3 OK and `python
+tools/test_mefi_studio_session_dedupe.py` 3/3 OK (both spellings of the suite).

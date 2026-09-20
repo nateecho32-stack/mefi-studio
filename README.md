@@ -31,6 +31,13 @@ Pick a project, talk an idea through, or choose **Give a task** to create real
 work on its board. The companion moves between Listen, Make, and Review as
 actual work changes; its narration and activity drawer show what is happening.
 
+Assistant questions and lookups stay in the conversation. Before creating work
+from chat, Studio checks the full request against existing tasks, queued requests
+and current workers. Repeated requests with equivalent wording reuse that work,
+including tasks awaiting verification, and do not send the helpers out again.
+The reply names the existing work. Different requirements remain separate;
+similar display titles alone do not combine their full briefs.
+
 **Plan an idea** opens **Plans** for work whose route is still unclear. Give the
 plan a destination and an out-of-scope boundary, collect unknowns, and turn them
 into discussion, research, prototype, or prerequisite questions. Questions can

@@ -14,6 +14,7 @@ const backlog = require("./scripts/backlog.cjs");
 const boardGrowth = require("./scripts/board-growth.cjs");
 const boardGrouping = require("./scripts/board-grouping.cjs");
 const taskContext = require("./scripts/task-context.cjs");
+const chatWork = require("./scripts/chat-work.cjs");
 const taskHandoffs = require("./scripts/task-handoffs.cjs");
 const agentModes = require("./scripts/agent-modes.cjs");
 const taskDelegation = require("./scripts/task-delegation.cjs");
@@ -938,14 +939,14 @@ const ASSISTANT_OVERSEER_SYSTEM = [
 
 const ASSISTANT_CHAT_SYSTEM = [
   "You are the assistant in Mefi's Studio AI+: an always-on helper that watches several AI coding agents sharing one machine and one repo, tidies their work, and keeps the node tree organized.",
-  "You run a roster of agents — watcher, machine, auditor, keeper, briefer, improver, grower, ideas, reference — and every work instruction sends all of them out in parallel alongside the request it queues for the executor.",
+  "You run a roster of agents — watcher, machine, auditor, keeper, briefer, improver, grower, ideas, reference. New work can request those helpers; repeated work reuses the existing task without another helper dispatch. Questions stay in conversation.",
   "You receive JSON: message (the user's latest text — always present, even when short), did (what you just did), thread, then facts (live sessions with todos, file collisions, tasks, the request inbox, ideas, machine, audit, briefing, update, the executor and its in-flight jobs, log — the assistant's own recent activity — suggestions — ranked next-work picks — and memory, a pushed primer of typed cells: dec/obs/bel/rsk/ver).",
   "facts.memory is compiled against this message before you see it — do not search for it. If memory.dig is true, a remembered fact was superseded; address that row before acting.",
   "facts.log is the assistant's own activity tail (ticks omitted). Read it when asked about the log, what just happened, or what you have been doing; do not invent lines that are not there.",
   "facts.planning describes saved decision plans and their next open questions. These are separate from executable tasks: direct the user to Plans or Plan an idea to discuss questions, record decisions, review a specification, and explicitly create its tasks. Never claim a plan is running or has started builders just because it exists or is approved. A null planning section means unavailable, not no plans.",
   "Reply in plain text only: at most 120 words, no JSON, no markdown, no headings. Ground every statement in the facts; when the facts do not cover the question, say so. You may mention what you just did.",
   "The thread is yours: it, that, them, yes and the second one all refer back to what you just said — answer follow-ups directly instead of asking what was meant. Small talk earns a one-line human answer, not a status dump.",
-  "When did is not empty, lead with it and name the thing that started — 'starting work on <title>' for a queued request, the pass name for a run agent, the roster for a dispatch — never a state dump. When did is empty and the message is a question, answer the question only.",
+  "When did is not empty, lead with its actual outcome: distinguish newly queued work, already represented work, confirmed worker starts, and failures. Never claim a new task or helper run when did reports reuse, or claim that queueing confirms a worker started. When did is empty and the message is a question, answer the question only.",
   "A greeting or open-ended message earns one short status line and an offer of the top pick from facts.suggestions ('could work on <title>') — do not list the whole board. Questions about work end with the best matching suggestion when one exists.",
   "Never narrate your own plumbing — reply jobs, attempts, the pool, queued responders — the user sees sessions, tasks, the inbox and the executor, not the machinery.",
   "Never invent sessions, files, numbers or ids that are not in the facts.",
@@ -4251,6 +4252,7 @@ async function assistantRespond(user, entry = null) {
   // The node this exchange is about, hoisted so the folder write after the
   // reply survives any failure above it.
   let folderTarget = null;
+  let chatTaskCreated = false;
   const done = [];
   try {
     try {
@@ -4307,13 +4309,31 @@ async function assistantRespond(user, entry = null) {
           // A resolved follow-up ("yes", "work on it") carries the real title
           // the reply settled on; anything else is filed as the user wrote it.
           const wanted = local?.request && typeof local.request === "object" ? local.request : null;
-          const created = await assistantCreateTask({
+          const admission = await assistantCreateTask({
             title: String(wanted?.title || text).slice(0, 60),
             prompt: String(wanted?.prompt || text),
             source: "chat",
             focused,
             pin: Boolean(wanted?.pin),
+            conversation: wanted ? { resolvedTitle: wanted.resolvedTitle, existingTarget: wanted.existingTarget } : {},
           });
+          const created = admission.created;
+          chatTaskCreated = Boolean(created);
+          if (admission.existing) {
+            const { kind, item } = admission.existing;
+            const phase = kind === "worker" ? "already assigned to a worker"
+              : ["awaiting_verification", "verifying"].includes(item?.status) ? "awaiting verification"
+              : ["active", "running"].includes(item?.status) ? "already assigned"
+              : ["blocked", "failed"].includes(item?.status) ? "waiting for review"
+              : "already queued";
+            const note = kind === "ambiguous"
+              ? "Several existing tasks have that name. Select the intended task card and choose Work on it. No extra task was queued."
+              : `\"${String(item?.title || item?.ref?.title || text).slice(0, 90)}\" is ${phase}. No extra task was queued.`;
+            local = { ...local, text: note };
+            done.push(note);
+            if (kind === "task" && item?.id) folderTarget = { kind: "task", id: item.id };
+            continue;
+          }
           // A chat instruction should start now, not wait for the foreman's
           // own cadence. The assistant still decides whether it can.
           if (created) assistantAskForWork("chat instruction");
@@ -4331,7 +4351,7 @@ async function assistantRespond(user, entry = null) {
           const result = await assistantRunRole("compactor", 20000);
           done.push(result ? `compactor: ${assistantClip(result.text ?? "compacted", 100)}` : "compaction queued; it reports in the activity list");
         } else if (action === "agents") {
-          done.push(await assistantDispatchAgents(text));
+          if (!(local?.actions ?? []).includes("queue-request") || chatTaskCreated) done.push(await assistantDispatchAgents(text));
         } else if (action === "overseer") {
           const result = await assistantRunRole("overseer", 30000);
           done.push(result ? `overseer: ${assistantClip(result.text ?? "reviewed", 100)}` : "overseer review queued; it reports in the activity list");
@@ -4341,6 +4361,7 @@ async function assistantRespond(user, entry = null) {
           done.push(restarted.length ? `restarted ${restarted.length} job(s): ${restarted.slice(0, 4).join(", ")}` : "nothing interrupted to restart");
         }
       } catch (error) {
+        if (action === "queue-request") local = { ...local, text: "I kept your message in the conversation, but could not save the task." };
         logError(`${action} failed: ${error.message}`);
         done.push(`${action} failed: ${error.message}`);
       }
@@ -4399,7 +4420,8 @@ async function assistantRespond(user, entry = null) {
   }
   // The action confirmations ride along on every reply, AI or local: an AI
   // text that only summarizes the facts must not hide that work happened.
-  if (done.length) reply = `${reply} Done: ${done.join("; ")}.`;
+  const confirmations = done.filter((note) => !reply.includes(note));
+  if (confirmations.length) reply = `${reply} Done: ${confirmations.join("; ")}.`;
   const replyEntry = assistantAppendReply(reply, via, intent);
   // The exchange is saved on the node it was about: the folder is what the
   // next reply — and the next agent on this node — reads back.
@@ -5487,10 +5509,12 @@ async function promoteRequestsToTasks() {
 // live task with the same title already stands, so a retried send cannot
 // double the work. Titles match on the shared compact key, so "Fix the
 // auditor" and "fix the auditor." are the same ask; a card mid-verification
-// counts as live too. Written through the board gateway.
-async function assistantCreateTask({ title, prompt = "", source = "chat", focused = null, pin = false } = {}) {
+// counts as live too. Conversation admission additionally checks equivalent
+// full briefs, inbox entries and owned workers under the same board lock, and
+// returns { created, existing } so the reply can describe what actually happened.
+async function assistantCreateTask({ title, prompt = "", source = "chat", focused = null, pin = false, conversation = null } = {}) {
   const cleanTitle = String(title ?? "").trim().slice(0, 90);
-  if (!cleanTitle) return null;
+  if (!cleanTitle) return conversation ? { created: null, existing: null } : null;
   const key = workTitleKey(cleanTitle);
   const now = Date.now();
   const task = {
@@ -5521,19 +5545,28 @@ async function assistantCreateTask({ title, prompt = "", source = "chat", focuse
     task.prompt = `${task.prompt}\n\nThe user pointed the assistant at ${target.kind} "${focused.title ?? target.id}" (id: ${target.id}) while asking for this.`;
   }
   const created = await mutateBoard((board) => {
-    if (board.tasks.some((task) => task && task.status !== "done" && task.status !== "archived" && workTitleKey(task.title) === key)) return { created: null };
+    if (conversation) {
+      const existing = chatWork.findExistingChatWork({ ...board, jobs: autopilot.jobs }, { ...task, ...conversation });
+      if (existing) return { created: null, existing };
+    } else if (board.tasks.some((task) => task && task.status !== "done" && task.status !== "archived" && workTitleKey(task.title) === key)) return { created: null };
     board.tasks = [task, ...board.tasks];
     return { tasks: board.tasks, created: task };
   });
-  if (!created.created) return null;
+  if (!created.created) return conversation ? { created: null, existing: created.existing ?? null } : null;
   // Explicit work can enter straight through the task composer or chat,
   // bypassing the request inbox. Classify that admission once, without
   // delaying its task card or dispatch; request promotion has its own intake.
-  jevShadowIntake([{ ...created.created, kind: "task", at: created.created.createdAt }]);
-  await refreshAutopilotQueue();
-  if (target?.kind && target?.id) assistantNodeContext(target, "note", `queued "${cleanTitle}" on the task board`, "assistant");
-  assistantLog("control", `chat work on the board: "${cleanTitle}"${pin ? " (pinned next)" : ""}`);
-  return task;
+  try {
+    jevShadowIntake([{ ...created.created, kind: "task", at: created.created.createdAt }]);
+    await refreshAutopilotQueue();
+    if (target?.kind && target?.id) assistantNodeContext(target, "note", `queued "${cleanTitle}" on the task board`, "assistant");
+    assistantLog("control", `chat work on the board: "${cleanTitle}"${pin ? " (pinned next)" : ""}`);
+  } catch (error) {
+    // The durable write succeeded. A failed refresh must not tell the user to
+    // submit again or disguise the admission as an unsaved request.
+    logError(`task saved; follow-up refresh failed: ${error.message}`);
+  }
+  return conversation ? { created: task, existing: null } : task;
 }
 
 function executorProcessAlive(pid) {

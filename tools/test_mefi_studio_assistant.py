@@ -407,8 +407,9 @@ class MefiStudioAssistantTests(unittest.TestCase):
 
     def test_chat_requests_kick_the_executor_and_report_back(self):
         action = self.main.index('action === "queue-request"')
-        region = self.main[action : action + 1800]
+        region = self.main[action : self.main.index('} else if (action === "compact")', action)]
         self.assertIn('assistantAskForWork("chat instruction")', region, "a chat request starts work now, not on the next tick")
+        self.assertIn('if (created) assistantAskForWork', region, "reusing existing work does not dispatch it again")
         self.assertIn("assistantCreateTask", region, "chat work lands on the task board, not the inbox")
         finish = self.main.index("pushAutopilotHistory(\"paused\"")
         report = self.main[finish : finish + 1600]

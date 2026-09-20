@@ -4,6 +4,7 @@ import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import { baselineCompareWork } from "../scripts/policy.mjs";
 import boardGrowth from "../scripts/board-growth.cjs";
+import chatWork from "../scripts/chat-work.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 function section(start, end) {
@@ -18,7 +19,7 @@ function host({ requests = [], tasks = [] } = {}) {
   const accepted = [];
   let serial = 0;
   const context = vm.createContext({
-    boardGrowth,
+    boardGrowth, chatWork,
     Date, crypto: { randomBytes: () => ({ toString: () => String(++serial) }) },
     projects: { current: () => ({ id: "fixture" }), stamp: (row) => row }, projectRoot: () => "/fixture",
     workTitleKey: (value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim(),

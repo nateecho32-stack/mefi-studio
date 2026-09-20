@@ -3549,8 +3549,8 @@ export function tidy({ tasks, ideas, requests, checkpoints, nodeFolders = null, 
 }
 
 // Work verbs instruct the assistant to do something; query verbs ask it to
-// look something up. Both can open an instruction (the `imperative` check in
-// classifyIntent), but only a query verb may fall through to a query intent.
+// look something up. Looking something up never becomes a coding request
+// merely because none of the saved-state query rules knows its subject.
 const DO_VERBS = new Set([
   "add", "make", "build", "write", "create", "implement", "change", "update", "remove", "refactor",
   "rename", "move", "wire", "draw", "fix", "work", "do", "handle", "upgrade", "finish", "complete", "address", "tackle", "run",
@@ -3559,7 +3559,7 @@ const DO_VERBS = new Set([
   // back as a list, because none of these were imperatives.
   "start", "get", "go", "pick", "take", "improve", "ship", "clear", "close", "knock", "crank", "push", "attack", "sort",
 ]);
-const QUERY_VERBS = new Set(["check", "look", "investigate", "find", "show"]);
+const QUERY_VERBS = new Set(["check", "look", "investigate", "find", "show", "list", "read", "inspect", "explain", "describe", "tell", "compare"]);
 // Verbs that can only mean "write code". They short-circuit every rule below,
 // so "improve the tree view" is a build request and not an order to reorganise
 // the tree, and "build the ideas panel" does not read as an ideas question.
@@ -3568,6 +3568,9 @@ const IMPERATIVES = new Set([...DO_VERBS, ...QUERY_VERBS]);
 // Intents that only report state. A work verb in front of one ("work on the
 // agent task", "fix the ideas list") is an instruction, not a question.
 const QUERY_INTENTS = new Set(["status", "tasks", "ideas", "collisions", "machine", "agents", "log", "planning-status"]);
+const READ_ONLY_INTENTS = new Set([...QUERY_INTENTS, "builder", "suggest", "help"]);
+const CONTROL_VERBS = new Set(["clean", "cleanup", "tidy", "prune", "archive", "organize", "organise", "fold", "pause", "stop", "resume", "restart", "retry", "redo", "repair", "heal", "oversee", "compact", "dedupe", "drain", "purge", "trim"]);
+const POLITE_PREFIX = /^(?:(?:please|pls|hey|hi|ok|okay|can you|could you|would you|will you)\s+)+/;
 const INTENT_RULES = [
   // Match explicit requests to inspect saved plans, not a mention of "plan"
   // inside a build instruction. Whole-message matching also leaves mixed work
@@ -3621,6 +3624,44 @@ function normalizeText(text) {
     .trim();
 }
 
+function instructionText(text) {
+  return normalizeText(text).replace(POLITE_PREFIX, "");
+}
+
+// Only a standalone reference reuses the saved brief. Words after the quoted
+// title can add scope, so those stay on the ordinary full-instruction path.
+function namedWorkSubject(text) {
+  const match = String(text ?? "").trim().match(/^(?:(?:please|pls|hey|hi|ok|okay|can you|could you|would you|will you)[\s,]+)*work\s+on\s+(?:"([^"\n]+)"|'([^'\n]+)'|“([^”\n]+)”)(?:\s+please)?\s*[.!?]*$/i);
+  return match ? (match[1] || match[2] || match[3]).trim() : null;
+}
+
+function opensWorkInstruction(text) {
+  const words = instructionText(text).split(" ");
+  return words.length > 1 && DO_VERBS.has(words[0]) && !/^do (?:you|we|i|they)\b/.test(words.join(" "));
+}
+
+function queryRouting(text) {
+  const flat = instructionText(text);
+  const first = flat.split(" ")[0];
+  const question = /^(?:what|whats|when|where|why|how|which|who|whose|is|are|was|were|does|did|can|could|should|would|will)\b|^do (?:you|we|i|they)\b|^i (?:wonder|am wondering)\b/.test(flat);
+  const query = QUERY_VERBS.has(first) || question || (/\?\s*$/.test(String(text)) && !DO_VERBS.has(first) && !CONTROL_VERBS.has(first));
+  if (!query) return { queryOnly: false, hasWork: false };
+
+  // A separate instruction remains an instruction: "Why is this slow? Add a
+  // cache." A direct lookup can also introduce work: "show my plans and build
+  // the first one". Embedded how-to questions do not authorize their verbs.
+  const sentences = String(text).split(/[!?;\n]+|\.(?=\s|$)/).filter((part) => part.trim());
+  if (sentences.slice(1).some(opensWorkInstruction)) return { queryOnly: false, hasWork: true };
+  if (QUERY_VERBS.has(first)) {
+    const clauses = flat.split(/\b(?:and then|and|then)\b/);
+    for (let index = 1; index < clauses.length; index += 1) {
+      const before = clauses.slice(0, index).join(" ");
+      if (!/\b(?:how|why|whether|if|should|could|would|can)\b/.test(before) && opensWorkInstruction(clauses[index])) return { queryOnly: false, hasWork: true };
+    }
+  }
+  return { queryOnly: true, hasWork: false };
+}
+
 // Keyword routing, case- and punctuation-insensitive, whole words only. An
 // instruction that opens with an imperative verb becomes a request; "update"
 // leading a sentence is that verb, not a status question. A work verb in
@@ -3629,16 +3670,22 @@ function normalizeText(text) {
 export function classifyIntent(text) {
   const flat = normalizeText(text);
   if (!flat) return "chat";
-  const words = flat.replace(/^(?:(?:please|pls|hey|hi|ok|okay|can you|could you|would you|will you)\s+)+/, "").split(" ");
+  const words = instructionText(text).split(" ");
   const imperative = words.length > 1 && IMPERATIVES.has(words[0]);
+  const { queryOnly, hasWork } = queryRouting(text);
+  // A mixed lookup followed by a direct work instruction must not be swallowed
+  // by the first lookup's status keyword.
+  if (hasWork) return "request";
+  if (namedWorkSubject(text)) return "request";
   if (imperative && BUILD_VERBS.has(words[0])) return "request";
   const searchable = imperative && words[0] === "update" ? words.slice(1).join(" ") : flat;
   for (const [intent, pattern] of INTENT_RULES) {
     if (!pattern.test(searchable)) continue;
-    if (imperative && DO_VERBS.has(words[0]) && QUERY_INTENTS.has(intent)) return "request";
+    if (queryOnly && !READ_ONLY_INTENTS.has(intent)) continue;
+    if (!queryOnly && imperative && DO_VERBS.has(words[0]) && QUERY_INTENTS.has(intent)) return "request";
     return intent;
   }
-  return imperative ? "request" : "chat";
+  return imperative && !queryOnly ? "request" : "chat";
 }
 
 // The keyless answer: grounded in `facts` and `state` only, never invented.
@@ -3704,9 +3751,9 @@ function compactStatus({ sessions, collisions, tasks, ideas }) {
 // and the AI payload all read this same list.
 export function suggestWork({ sessions = null, tasks = null, ideas = null, requests = null, collisions = null, uncommitted = null, audit = null, now = Date.now(), limit = 5 } = {}) {
   const picks = [];
-  const push = (kind, title, reason, rank) => {
+  const push = (kind, title, reason, rank, target = null) => {
     const label = clip(title, 70);
-    if (label && !picks.some((pick) => pick.title === label)) picks.push({ kind, title: label, reason: clip(reason, 80), rank });
+    if (label && !picks.some((pick) => pick.title === label)) picks.push({ kind, title: label, reason: clip(reason, 80), rank, ...(target ? { target, fullTitle: str(title) } : {}) });
   };
   for (const entry of asArray(collisions).filter(isObject).slice(0, 2)) {
     const fileCount = collisionFiles(entry).length;
@@ -3741,7 +3788,7 @@ export function suggestWork({ sessions = null, tasks = null, ideas = null, reque
     .sort((a, b) => rankTask(b) - rankTask(a) || num(a.createdAt, num(a.updatedAt, 0)) - num(b.createdAt, num(b.updatedAt, 0)));
   for (const task of open.slice(0, 3)) {
     const rank = rankTask(task);
-    push("task", task.title, rank === 65 ? "you asked for this" : rank === 10 ? "assistant upkeep" : "open on the board", rank);
+    push("task", task.title, rank === 65 ? "you asked for this" : rank === 10 ? "assistant upkeep" : "open on the board", rank, str(task.id) ? { kind: "task", id: task.id } : null);
   }
   const unread = asArray(ideas).filter((idea) => isObject(idea) && !idea.read && (idea.status === "new" || idea.status == null));
   if (unread.length) push("idea", str(unread[0].title), `${plural(unread.length, "unread idea")} waiting`, 20);
@@ -3907,18 +3954,19 @@ function vagueSubject(flat) {
 // pick — never an invented title.
 function resolveSubject({ index = null, state, picks, focused, loose = false }) {
   const offers = pendingOffers(state);
+  const fromPick = (pick) => pick ? { title: pick.fullTitle || pick.title, via: "pick", ...(pick.target ? { existingTarget: pick.target } : {}) } : null;
   if (index !== null) {
-    const title = pickAt(offers, index) ?? pickAt(asArray(picks).map((pick) => pick.title), index);
-    return title ? { title, via: "offer" } : null;
+    const title = pickAt(offers, index);
+    return title ? { title, via: "offer" } : fromPick(pickAt(picks, index));
   }
   if (offers.length) return { title: offers[0], via: "offer" };
   if (loose) {
     const quoted = lastQuoted(state);
     if (quoted.length) return { title: quoted[0], via: "quote" };
   }
-  if (focused) return { title: str(focused.label) || focused.id, via: "focus" };
+  if (focused) return { title: str(focused.label) || focused.id, via: "focus", ...(focused.kind === "task" ? { existingTarget: { kind: "task", id: focused.id } } : {}) };
   const top = asArray(picks)[0];
-  return top ? { title: top.title, via: "pick" } : null;
+  return fromPick(top);
 }
 
 const describeSubject = (flat) => {
@@ -4339,7 +4387,9 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
       const flat = normalizeText(text);
       const vague = vagueSubject(flat);
       const tail = tailAfter(flat, true);
-      const resolved = vague.vague && tail !== "" ? resolveSubject({ index: vague.index, state: current, picks: suggestWork({ ...source, now }), focused, loose: true }) : null;
+      const namedTitle = namedWorkSubject(text);
+      const resolved = namedTitle ? { title: namedTitle, via: "named" }
+        : vague.vague && tail !== "" ? resolveSubject({ index: vague.index, state: current, picks: suggestWork({ ...source, now }), focused, loose: true }) : null;
       if (vague.vague && tail !== "" && !resolved) {
         lines.push("Work on what, exactly? Nothing was offered, nothing is focused and the board has no clear pick — name it and I queue it.");
         break;
@@ -4357,8 +4407,8 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
       }
       actions.push("queue-request", "agents");
       if (resolved) {
-        request = { title: clip(resolved.title, 60), prompt: `Work on "${resolved.title}". Queued from the assistant chat — the user said "${clip(text, 140)}".` };
-        const where = { offer: "the pick on the table", quote: "what we were just talking about", focus: "the node you pointed at", pick: "the top pick" }[resolved.via] ?? "the pick";
+        request = { title: clip(resolved.title, 60), resolvedTitle: resolved.title, ...(resolved.existingTarget ? { existingTarget: resolved.existingTarget } : {}), prompt: `Work on "${resolved.title}". Queued from the assistant chat — the user said "${clip(text, 140)}".` };
+        const where = { offer: "the pick on the table", quote: "what we were just talking about", focus: "the node you pointed at", pick: "the top pick", named: "the work you named" }[resolved.via] ?? "the pick";
         lines.push(`On it — "${clip(resolved.title, 60)}" is ${where}, on the task board as the next piece of work and the roster goes out with it.`);
         lines.push(aiNote(current).trim());
       } else {
@@ -4377,7 +4427,7 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
       // A cleaning ask rides the same intent and ends in a compactor pass —
       // duplicates collapse, board-absorbed asks fold away, the foreman gets
       // the next pick.
-      const cleans = /\b(clean|cleanup|clear|tidy|dedupe|drain|fix|manage|sort|shrink|trim|prune)\b/.test(normalizeText(text));
+      const cleans = !queryRouting(text).queryOnly && /\b(clean|cleanup|clear|tidy|dedupe|drain|fix|manage|sort|shrink|trim|prune)\b/.test(normalizeText(text));
       if (!executor) {
         lines.push("Could not read the Auto Builder state.");
         break;
@@ -4436,7 +4486,7 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
           const title = pickAt(offers, index);
           if (title) {
             actions.push("queue-request", "agents");
-            request = { title: clip(title, 60), prompt: `Work on "${title}". Queued from the assistant chat — the user confirmed with "${clip(text, 140)}".` };
+            request = { title: clip(title, 60), resolvedTitle: title, prompt: `Work on "${title}". Queued from the assistant chat — the user confirmed with "${clip(text, 140)}".` };
             lines.push(`On it — "${clip(title, 60)}" is on the task board as the next piece of work and the roster is out with it.`);
             lines.push(aiNote(current).trim());
           } else {
