@@ -353,6 +353,7 @@ async function rendererValue(script, fallback = null, timeoutMs = 1500) {
 
 // Measure visible UI responsiveness, including waiting to reach its event loop
 // and paint frames. Background frame throttling must never hold coding work.
+measureWorkerLag.probes = 0; // identity for each physical probe, so the lag gate counts a sample once
 async function measureWorkerLag({ force = false } = {}) {
   const view = window;
   const visible = () => view && view === window && !view.isDestroyed() && !view.webContents.isDestroyed?.() && !view.isMinimized() && view.isVisible();
@@ -360,7 +361,7 @@ async function measureWorkerLag({ force = false } = {}) {
   const cached = measureWorkerLag.cache;
   if (!force && cached?.view === view && Date.now() >= cached.at && Date.now() - cached.at < 750) return cached.lagMs;
   if (measureWorkerLag.inFlight?.view === view) return measureWorkerLag.inFlight.promise;
-  const pending = { view, promise: null };
+  const pending = { view, promise: null, probeId: ++measureWorkerLag.probes };
   pending.promise = (async () => {
     const startedAt = Date.now();
     let answered = null;
@@ -371,7 +372,7 @@ async function measureWorkerLag({ force = false } = {}) {
     // Two ordinary frames plus IPC get a 50ms allowance. Time beyond that is
     // actual delay, so high CPU with a responsive view can still admit workers.
     const lagMs = answered === true ? Math.max(0, Date.now() - startedAt - 50) : 1000;
-    measureWorkerLag.cache = { view, at: Date.now(), lagMs };
+    measureWorkerLag.cache = { view, at: Date.now(), lagMs, probe: pending.probeId };
     return lagMs;
   })().finally(() => { if (measureWorkerLag.inFlight === pending) measureWorkerLag.inFlight = null; });
   measureWorkerLag.inFlight = pending;
@@ -385,6 +386,13 @@ async function measureWorkerLag({ force = false } = {}) {
 // sample. The sampler's latched hold stays in charge of host lag, single
 // critical spikes and recovery hysteresis; this gate is a second,
 // cache-independent factor, recreated when assistant.mjs is hot-swapped.
+// The gate counts each physical probe exactly once (the probe id rides the
+// sampler cache): the 750 ms cache and in-flight joins replay one measurement
+// to several admission reads, and counting a replay manufactured "two samples
+// in a row" from a single spike — the self-blocking start hold. While a hold
+// is live every read forces a fresh probe, so the hold rests on current
+// evidence and lifts on the first responsive reading instead of coasting on
+// cached lag.
 let machineLagGate = null;
 function resetMachineLagGate() { machineLagGate = null; }
 
@@ -7290,7 +7298,10 @@ async function spawnNextJob() {
     try {
       machine = await getMachine();
       assistant = await getAssistant();
-      const lagMs = await measureWorkerLag({ force });
+      // A live lag hold must re-sample before blocking another start: forcing
+      // the probe keeps the hold on current evidence and lets the first
+      // responsive reading lift it, even while the cache still holds lag.
+      const lagMs = await measureWorkerLag({ force: force || machineLagGate?.lastVerdict?.hold === true });
       capacity = await machine.workerCapacity({ running, force, lagMs });
       // The gate threshold mirrors the sampler's lagBusyMs: the same busy bar,
       // counted over the foreman's own samples instead of the sampler's cache.
@@ -7301,7 +7312,13 @@ async function spawnNextJob() {
         throw new Error("missing export getAssistant().createMachineLagGate");
       }
       machineLagGate ??= assistant.createMachineLagGate({ threshold: 100 });
-      const lagGate = machineLagGate(lagMs);
+      // One probe, one count: cached replays and shared in-flight probes carry
+      // the same probe id, so they reuse the recorded verdict rather than
+      // advancing the consecutive-sample streak a second time.
+      const probe = measureWorkerLag.cache?.probe ?? null;
+      const lagGate = probe !== null && machineLagGate.countedProbe === probe && machineLagGate.lastVerdict
+        ? machineLagGate.lastVerdict
+        : (machineLagGate.countedProbe = probe, machineLagGate.lastVerdict = machineLagGate(lagMs));
       capacity = { ...capacity, lagGate };
       if (lagGate.hold) {
         capacity = { ...capacity, canStart: false, reason: `Renderer responsiveness is high two samples in a row (${Math.round(lagMs)} ms); waiting for a responsive reading.` };
