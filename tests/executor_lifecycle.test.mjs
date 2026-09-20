@@ -403,6 +403,62 @@ test("a pending restart prevents predispatch work before routes, claims or child
   assert.equal(host.askedPaths.length, 0);
 });
 
+test("a failed capacity read parks on resources and stops swallowing the error", async () => {
+  for (const {
+    label,
+    breakIt,
+    // Recovery hands the host a healthy dependency again; the assistant cases
+    // all heal by restoring the real module.
+    restore = (host) => { host.env.getAssistant = async () => assistant; },
+    expected = "missing export getAssistant\\(\\)\\.createMachineLagGate",
+  } of [
+    { label: "a missing assistant module", breakIt: (host) => { host.env.getAssistant = async () => undefined; } },
+    { label: "an assistant module without the gate export", breakIt: (host) => { host.env.getAssistant = async () => ({ ...assistant, createMachineLagGate: undefined }); } },
+    {
+      label: "a machine module without the capacity export",
+      breakIt: (host) => { host.env.getMachine = async () => ({ workerCapacity: undefined, leaseStatus: async () => ({ exclusive: false }) }); },
+      restore: (host) => { host.env.getMachine = async () => ({ workerCapacity: async () => ({ canStart: true }), leaseStatus: async () => ({ exclusive: false }) }); },
+      expected: "missing export getMachine\\(\\)\\.workerCapacity",
+    },
+  ]) {
+    const host = dispatchHost();
+    const logs = [];
+    const capacityFaults = () => logs.filter((line) => line.includes("capacity read failed")).length;
+    host.env.logLine = (line) => logs.push(line);
+    breakIt(host);
+    assert.equal(await host.env.spawnNextJob(), "resources", `${label}: the failed read must stay fail-closed`);
+    assert.equal(host.autopilot.capacity.canStart, false, `${label}: the verdict must stay canStart:false`);
+    assert.equal(host.autopilot.capacity.reason, "machine measurements unavailable; retrying");
+    assert.equal(capacityFaults(), 1, `${label}: the swallowed error must surface exactly once`);
+    assert.match(logs[0], new RegExp(expected));
+    await host.env.spawnNextJob();
+    assert.equal(capacityFaults(), 1, `${label}: retries must not spam the log while the export is missing`);
+    restore(host);
+    host.autopilot.jobs = [];
+    assert.equal(await host.env.spawnNextJob(), "spawned", `${label}: a healthy read must clear the latch`);
+    assert.equal(capacityFaults(), 1);
+    host.autopilot.jobs = [];
+    host.env.machineLagGate = null;
+    Object.assign(host.board.tasks[0], { status: "open", runId: undefined });
+    breakIt(host);
+    assert.equal(await host.env.spawnNextJob(), "resources");
+    assert.equal(capacityFaults(), 2, `${label}: a regression returning after recovery must be logged again`);
+  }
+});
+
+test("a capability that exists but throws is logged every time, not latched", async () => {
+  const host = dispatchHost();
+  const logs = [];
+  host.env.logLine = (line) => logs.push(line);
+  host.env.measureWorkerLag = async () => { throw new Error("sampler wedged"); };
+  await host.env.spawnNextJob();
+  await host.env.spawnNextJob();
+  assert.equal(logs.length, 2, "transient failures must stay visible on every read");
+  assert.match(logs[0], /transient error/);
+  assert.match(logs[0], /sampler wedged/);
+  assert.equal(host.autopilot.capacity.canStart, false);
+});
+
 test("editing an open task during dispatch forces a fresh selection and file claim", async () => {
   const host = dispatchHost({ editBeforeClaim: { title: "Changed work", files: ["src/b.js"] } });
   assert.equal(await host.env.spawnNextJob(), "lost", "the old file reservation cannot authorize a new scope");

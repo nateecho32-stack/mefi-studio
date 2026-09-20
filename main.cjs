@@ -7285,20 +7285,39 @@ async function spawnNextJob() {
   // from launching a new process. The tentative claim is not a worker yet.
   const readCapacity = async (running, force = false) => {
     let capacity;
+    let machine = null;
+    let assistant = null;
     try {
-      const machine = await getMachine();
-      const assistant = await getAssistant();
+      machine = await getMachine();
+      assistant = await getAssistant();
       const lagMs = await measureWorkerLag({ force });
       capacity = await machine.workerCapacity({ running, force, lagMs });
       // The gate threshold mirrors the sampler's lagBusyMs: the same busy bar,
       // counted over the foreman's own samples instead of the sampler's cache.
+      if (typeof assistant?.createMachineLagGate !== "function") {
+        // A cached gate would mask the missing export forever (??= never
+        // re-reads), so drop the stale closure and fail this read loudly.
+        machineLagGate = null;
+        throw new Error("missing export getAssistant().createMachineLagGate");
+      }
       machineLagGate ??= assistant.createMachineLagGate({ threshold: 100 });
       const lagGate = machineLagGate(lagMs);
       capacity = { ...capacity, lagGate };
       if (lagGate.hold) {
         capacity = { ...capacity, canStart: false, reason: `Renderer responsiveness is high two samples in a row (${Math.round(lagMs)} ms); waiting for a responsive reading.` };
       }
-    } catch {
+      autopilot.capacityFaultLogged = false;
+    } catch (error) {
+      // Stay fail-closed ("resources"), but stop swallowing silently: a missing
+      // export hid behind this catch for a full session. A missing dependency
+      // is a code regression — log it once until a healthy read clears the
+      // latch; a capability that exists but threw is transient — log each time.
+      const missing = !machine?.workerCapacity ? "getMachine().workerCapacity"
+        : !assistant?.createMachineLagGate ? "getAssistant().createMachineLagGate" : null;
+      if (missing === null || !autopilot.capacityFaultLogged) {
+        logLine(`[autopilot] capacity read failed (${missing === null ? "transient error" : `missing export ${missing}`}): ${error?.stack || error}`);
+        autopilot.capacityFaultLogged = true;
+      }
       capacity = { canStart: false, reason: "machine measurements unavailable; retrying", resources: null };
     }
     if (autopilot.resourceBackoffUntil > Date.now()) {
@@ -7445,6 +7464,8 @@ async function spawnNextJob() {
       }
     } catch {}
     // A sibling job that already claimed the file always skips this pick.
+    // A finished-but-uncommitted session's edits hold the pick for
+    // verification too — re-dispatching would duplicate uncommitted work.
     // Live editors skip too, except pins, chat asks, and collision jobs
     // (shouldHoldWork) so the pool is never parked on someone else's buffer.
     const skip =
@@ -7452,7 +7473,12 @@ async function spawnNextJob() {
       (assistantModule?.shouldHoldWork ? assistantModule.shouldHoldWork(decision, next) : decision?.action === "defer");
     if (skip) {
       if (!deferred) {
-        const why = decision.reason === "claimed" ? "file claimed" : "live editor";
+        const heldFiles = (Array.isArray(decision?.held) ? decision.held : []).map((file) => String(file).split(/[\\/]/).pop());
+        const why = decision.reason === "claimed"
+          ? "file claimed"
+          : decision.reason === "finished-uncommitted"
+            ? `held for verification: finished session ${(decision.owners ?? []).join(", ") || "unknown"} left uncommitted edits on ${heldFiles.slice(0, 2).join(", ")}`
+            : "live editor";
         logLine(`[autopilot] skip "${String(next.title).slice(0, 80)}": ${why}`);
       }
       deferred += 1;
@@ -7460,6 +7486,12 @@ async function spawnNextJob() {
     }
     job = next;
     claim = decision;
+    // A fix retry passing its own failed attempt's finished-uncommitted hold
+    // is logged, so a bounded retry chain never hides as ordinary dispatches.
+    if (claim?.fixRetry) {
+      const retryFiles = (Array.isArray(claim.fixRetry.files) ? claim.fixRetry.files : []).map((file) => String(file).split(/[\\/]/).pop());
+      logLine(`[autopilot] fix retry "${String(next.title).slice(0, 80)}": verification could not confirm its own attempt, so the pick runs against session ${(claim.fixRetry.owners ?? []).join(", ") || "unknown"}'s uncommitted edits (${retryFiles.slice(0, 2).join(", ")}) instead of waiting for a commit`);
+    }
     selectedRank = rank;
     break;
   }
