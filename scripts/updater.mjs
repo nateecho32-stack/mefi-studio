@@ -246,6 +246,39 @@ export async function validate(root, relPaths, { execPath = process.execPath, ti
   return { ok: errors.length === 0, errors, checked };
 }
 
+// A restart loads main.cjs and its CommonJS helpers from disk, so every local
+// require in the tree must resolve before the payload is synced: an editor
+// that writes main.cjs and its new helper in two steps would otherwise sync
+// the requiring file alone and relaunch straight into "Cannot find module".
+const LOCAL_REQUIRE = /require\(\s*["'](\.[^"']+)["']\s*\)/g;
+
+export async function missingRequires(root, relPaths) {
+  const missing = [];
+  for (const rel of [...new Set((relPaths ?? []).map(normalizeRel))].sort()) {
+    if (!rel.endsWith(".cjs") || classifyPath(rel) === "ignore") continue;
+    let text = "";
+    try {
+      text = await readFile(path.join(root, rel), "utf8");
+    } catch {
+      continue;
+    }
+    for (const match of text.matchAll(LOCAL_REQUIRE)) {
+      const base = normalizeRel(path.posix.join(path.posix.dirname(rel), match[1]));
+      let found = false;
+      for (const candidate of [base, `${base}.cjs`, `${base}.js`, `${base}.json`, `${base}/index.cjs`, `${base}/index.js`]) {
+        try {
+          if ((await stat(path.join(root, candidate))).isFile()) {
+            found = true;
+            break;
+          }
+        } catch {}
+      }
+      if (!found) missing.push({ file: rel, target: base });
+    }
+  }
+  return missing;
+}
+
 export async function syncPayload({ sourceRoot, appRoot, relPaths }) {
   const result = { copied: [], deleted: [], skipped: [], failed: [] };
   const from = path.resolve(sourceRoot);
@@ -482,6 +515,17 @@ export function createUpdater({
         emit("held", { reason: "syntax error", error: `${first.file}: ${first.message}` });
         outcome = { ok: false, applied: false, phase: "held", kind, files, reason: state.reason, error: state.error, errors: verdict.errors };
         return outcome;
+      }
+      // A restart must come up on a complete module graph: hold while any
+      // local require is still waiting for its file (checked over the whole
+      // source tree, so a deleted helper also holds its unchanged caller).
+      if (restarting) {
+        const incomplete = await missingRequires(sourceRoot, Object.keys(next));
+        if (incomplete.length) {
+          emit("held", { reason: "incomplete source files", error: `Waiting for ${incomplete[0].target}` });
+          outcome = { ok: false, applied: false, phase: "held", kind, files, reason: state.reason, error: state.error };
+          return outcome;
+        }
       }
       // Checked before building/syncing: a held update must never leave the
       // packaged payload ahead of the process that is still running.

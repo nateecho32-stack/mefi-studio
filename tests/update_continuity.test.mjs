@@ -82,6 +82,57 @@ test("hot styling preserves base, music/theme, planning and profiler stylesheets
   assert.ok(applied.includes(".music-sheet"), "an incomplete read cannot strip the current styles");
 });
 
+async function restartFixture(t) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "mefi-update-requires-"));
+  const sourceRoot = path.join(root, "source"), appRoot = path.join(root, "app");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const base of [sourceRoot, appRoot]) {
+    await mkdir(path.join(base, "scripts"), { recursive: true });
+    await writeFile(path.join(base, "package.json"), JSON.stringify({ name: "fixture", main: "main.cjs" }));
+    await writeFile(path.join(base, "main.cjs"), "const app = 1;");
+  }
+  const restarts = [], events = [];
+  const updater = createUpdater({ sourceRoot, appRoot, watch: false, pollMs: 3600000, debounceMs: 3600000,
+    build: async () => {},
+    actions: { restart: async (files) => restarts.push(files) },
+    onEvent: (event) => events.push(event) });
+  t.after(() => updater.stop());
+  await updater.start();
+  return { sourceRoot, appRoot, restarts, events, updater };
+}
+
+test("a restart holds until a helper written after its requiring file exists", async (t) => {
+  const fixture = await restartFixture(t);
+  const { sourceRoot, appRoot, updater, restarts } = fixture;
+  await writeFile(path.join(sourceRoot, "main.cjs"), 'const helper = require("./scripts/late-helper.cjs");\nconsole.log(helper);');
+  const held = await updater.applyNow();
+  assert.equal(held.phase, "held");
+  assert.equal(held.reason, "incomplete source files");
+  assert.equal(held.error, "Waiting for scripts/late-helper.cjs");
+  assert.equal(restarts.length, 0, "the payload must not relaunch without the module its main.cjs requires");
+  assert.equal(await readFile(path.join(appRoot, "main.cjs"), "utf8"), "const app = 1;");
+  await writeFile(path.join(sourceRoot, "scripts", "late-helper.cjs"), "module.exports = 42;");
+  const applied = await updater.applyNow();
+  assert.equal(applied.applied, true);
+  assert.equal(restarts.length, 1);
+  assert.equal(await readFile(path.join(appRoot, "scripts", "late-helper.cjs"), "utf8"), "module.exports = 42;");
+  assert.match(await readFile(path.join(appRoot, "main.cjs"), "utf8"), /late-helper/);
+});
+
+test("deleting a helper holds the restart even when its requiring file did not change", async (t) => {
+  const fixture = await restartFixture(t);
+  const { sourceRoot, appRoot, updater, restarts } = fixture;
+  for (const base of [sourceRoot, appRoot]) await writeFile(path.join(base, "scripts", "helper.cjs"), "module.exports = 7;");
+  await writeFile(path.join(sourceRoot, "main.cjs"), 'const helper = require("./scripts/helper.cjs");\nconsole.log(helper);');
+  await writeFile(path.join(appRoot, "main.cjs"), 'const helper = require("./scripts/helper.cjs");\nconsole.log(helper);');
+  await rm(path.join(sourceRoot, "scripts", "helper.cjs"));
+  const held = await updater.applyNow();
+  assert.equal(held.phase, "held");
+  assert.equal(held.error, "Waiting for scripts/helper.cjs");
+  assert.equal(restarts.length, 0);
+  assert.equal(await readFile(path.join(appRoot, "scripts", "helper.cjs"), "utf8"), "module.exports = 7;");
+});
+
 function restartHost() {
   let exits = 0, asks = 0, assistantStops = 0;
   let settings = { ui: { autopilot: { enabled: false, execute: false, parallel: 3 } } };
