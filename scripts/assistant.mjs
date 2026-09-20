@@ -1801,6 +1801,11 @@ export function shouldHoldWork(collab, work = {}) {
   if (!isObject(collab) || collab.action !== "defer") return false;
   // A sibling executor job already claimed the file — even a pin waits.
   if (str(collab.reason) === "claimed") return true;
+  // A finished session's uncommitted edits hold every re-dispatch for
+  // verification — the work is on disk but unproven, and a fresh worker
+  // would duplicate it (the orbitTrails duplicate the expand-title guard
+  // does not cover). Only the assigned collision-resolution job still runs.
+  if (str(collab.reason) === "finished-uncommitted") return str(work.source) !== "collision";
   if (str(work.source) === "collision") return false;
   if (work.pin === true || work.ref?.pin === true) return false;
   if (str(work.source) === "chat") return false;
@@ -1987,6 +1992,70 @@ export function releaseWrite(files, owner = null) {
   return dropped;
 }
 
+// Finished-but-uncommitted file claims: a session that finished its final
+// turn normally still owns the files it edited while they are dirty vs HEAD —
+// the work is real but unproven until it is committed and verified. A task
+// whose file scope overlaps those edits is held for verification instead of
+// re-dispatched, because a fresh worker would duplicate or clobber work that
+// only exists uncommitted (the orbitTrails duplicate whose titles differ, so
+// the expand-title guard never saw it). The hold releases by itself: the
+// claim is derived from live facts, so committing the work (or the store
+// dropping the session) removes the dirty row and the next dispatch pass
+// lets the task through. No lease file is ever written. The one exception is
+// isOwnFixRetryClaim(): a task re-dispatched by its own unverified verdict may
+// run against its own failed attempt's edits, because commit-first cannot
+// release a buffer nobody will commit.
+export function finishedClaims({ work = null, sessions = [], uncommitted = [] } = {}) {
+  const named = workFiles(isObject(work) ? work : {});
+  if (!named.length) return [];
+  const finishedIds = new Set(
+    asArray(sessions)
+      .filter((row) => isObject(row) && row.finished === true)
+      .map((row) => str(row?.id ?? row?.sessionId))
+      .filter(Boolean)
+  );
+  if (!finishedIds.size) return [];
+  const claims = [];
+  const seen = new Set();
+  for (const row of asArray(uncommitted).filter(isObject)) {
+    const holders = asArray(row?.sessions).map(str).filter((id) => finishedIds.has(id));
+    if (!holders.length) continue;
+    const files = collisionFiles(row).filter((file) => named.some((item) => sameFile(file, item)));
+    for (const file of files) {
+      const key = writeClaimKey(file);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      claims.push({ file, sessions: holders });
+    }
+  }
+  return claims;
+}
+
+// The one commit-first exception, and the policy behind it. Commit-first stays
+// the release rule: a finished session's uncommitted edits hold re-dispatches
+// until the work is committed and verified. But a verification that could not
+// confirm the attempt reopens the task for a fix run (verifyCompletion returns
+// state "unverified" and the verifier schedules a retry) — and the failed
+// attempt's own session still owns its dirty edits, so the plain hold would
+// defer the task's own repair forever: nothing will commit a failed buffer,
+// and the retry budget the verifier just granted would be dead code. The
+// bypass is evidence-keyed, not title-keyed: it fires only when the hold's
+// owning sessions are exactly the task's own failed attempt session, and only
+// while the verdict is still retryable ("unverified"). A parked task (state
+// "failed", no nextRunAt) is never re-dispatched, so the existing verify
+// budget caps the loop, and any foreign session's edits still hold — the
+// cross-task duplicate protection the hold exists for is untouched.
+export function isOwnFixRetryClaim(work, sessions = []) {
+  const task = isObject(work?.ref) ? work.ref : null;
+  if (!task) return false;
+  if (str(task?.verification?.state) !== "unverified") return false;
+  if ((Number(task?.verifyAttempts) || 0) <= 0) return false;
+  const attemptSession = str(task?.lastAttempt?.sessionId);
+  if (!attemptSession) return false;
+  const holders = uniqueStrings(asArray(sessions).map(str).filter(Boolean));
+  return holders.length > 0 && holders.every((id) => id === attemptSession);
+}
+
 // Spawn-loop file claim: the same live-editor check as collaborate(), plus
 // in-memory claims from sibling executor jobs and the write-lock registry. A
 // hit is `defer` so the dispatcher skips this pick and tries the next — it
@@ -2011,6 +2080,40 @@ export function claimWork({ work = null, collisions = [], presence = [], session
       files: named,
       held: blockers,
       advice: `Another in-flight job already claimed ${labels.join(", ")}${extra} — wait for that claim to drop instead of editing the same file.`,
+    };
+  }
+  const finishedHeld = finishedClaims({ work, sessions, uncommitted });
+  if (finishedHeld.length) {
+    // The task's own failed-verification retry runs; everyone else waits.
+    const hardHeld = finishedHeld.filter((claim) => !isOwnFixRetryClaim(work, claim.sessions));
+    if (!hardHeld.length) {
+      return {
+        ...collab,
+        reason: collab.action,
+        files: named,
+        held: [],
+        fixRetry: {
+          owners: uniqueStrings(finishedHeld.flatMap((claim) => claim.sessions)).slice(0, 2),
+          files: finishedHeld.map((claim) => claim.file),
+        },
+      };
+    }
+    const labels = hardHeld.slice(0, 3).map((claim) => basename(claim.file) || claim.file);
+    const extra = hardHeld.length > 3 ? ` +${hardHeld.length - 3} more` : "";
+    const titleOf = (id) => {
+      const row = asArray(sessions).find((item) => isObject(item) && str(item?.id ?? item?.sessionId) === id);
+      return str(row?.title ?? "");
+    };
+    const owners = uniqueStrings(hardHeld.flatMap((claim) => claim.sessions)).slice(0, 2);
+    const who = owners.map((id) => (titleOf(id) ? `"${titleOf(id)}" (${id})` : id)).join(", ");
+    return {
+      ...collab,
+      action: "defer",
+      reason: "finished-uncommitted",
+      files: named,
+      held: hardHeld.map((claim) => claim.file),
+      owners,
+      advice: `Finished session${owners.length === 1 ? "" : "s"} ${who} already edited ${labels.join(", ")}${extra} but the edits are still uncommitted — the task is held for verification instead of re-dispatched; it releases once that work is committed or the session is cleared.`,
     };
   }
   return { ...collab, reason: collab.action, files: named, held: [] };
