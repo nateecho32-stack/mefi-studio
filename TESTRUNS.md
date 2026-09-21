@@ -1,5 +1,34 @@
 # Test Runs
 
+Launch screen and agent hold (2026-09-21). An interactive launch opens on a
+project chooser inside the boot gate (`renderer/startup.js`, boot.js phase
+`choose`) before any readiness step reads the workspace, and the assistant
+service, executor fill, proactive pass and foreman ask all wait on
+`autopilot.held` until the user presses **Open and start agents**, the
+workspace's **Start agents**, the tray entry, **Resume** or **Work through
+backlog** (`releaseStartupHold`; IPC `startup:state`, `startup:choose`,
+`startup:begin`, which bypass the project-scope wrapper like `projects:*`).
+Smoke, capture and CLI launches keep their automatic start; a renderer reload
+never shows the screen twice; a saved pause still asks for Resume. Validated:
+`npm run check` (84 targets, every selector used); the 244 Python contracts
+(one pins the literal `window.MefiWorkspace?.ready?.({ retry })` in
+booklet.js, kept); `tests/startup_screen.test.mjs` (7),
+`tests/startup_hold.test.mjs` (5) and two new `renderer_startup` cases;
+the renderer batch (renderer_startup, startup_screen, startup_hold,
+catalog_renderer, workspace_ui, boot_poll_visibility, booklet_build,
+explorer_ui, command_new_work, assistant_pool) at 119/119. The host batch
+(assistant_loop, assistant_work_on, backlog_engine, build_approval,
+executor_lifecycle, board_growth, projects, executor_resume,
+executor_delegation) reads 91 pass / 79 fail: the same Work-on, cluster and
+swarm set plus `logLine is not defined` in `readCapacity` that fails without
+this change (the uncommitted lag-gate work); no failure references the hold
+code. An offscreen Electron run of the real main process (fresh profile, two
+seeded projects, network blocked, machine watch off) confirmed the screen
+appears with every readiness step pending, nothing starts across the 1.5 s
+service and 8 s executor timers, choosing the second project opens it, Start
+agents releases the hold and starts the service, and a reload skips the
+screen. The packaged copy was refreshed with `npm run package`.
+
 The eyes worker (`scripts/eyes-worker.mjs`, `scripts/eyes-client.cjs`,
 `scripts/path-scope.cjs`) moves every OpenCode-store read and the synchronous
 `git status` off the Electron main process; `tests/eyes_worker.test.mjs`
@@ -457,6 +486,63 @@ tests/foreman_lag_gate.test.mjs tests/assistant_lag_gate.test.mjs` 46/46,
 live occlusion probe's visible phase (frames answer, lag < 100 ms under the new
 classification) passed before its documented capability-gated skip on this
 RDP desktop (occlusion tracker never engages).
+
+Validated on 2026-09-21 (run_1789980594010_11, silent-probe starvation fix):
+live evidence of an overnight alert ("1000 ms lag … waiting for 2 responsive
+readings", canStart false, CPU idle, 585-730 MB free) showed the unattended
+session-frozen renderer answered neither aliveness channel, so every probe
+re-read the 1000 ms sentinel, latched the ≥300 ms critical hold and recovery
+could never complete — the queue starved while the host idled. The probe now
+stamps `silent` on its cache when neither channel answers (return value and
+pinned sentinel semantics unchanged), and the foreman feeds the sampler and
+lag gate `null` for such readings — the hidden-window precedent: silence is
+absence of evidence, so gating falls to the healthy host and the latched hold
+clears on two host-responsive samples; any answering channel restores full
+renderer gating. `node --test tests/worker_responsiveness.test.mjs
+tests/foreman_lag_gate.test.mjs tests/machine_capacity.test.mjs` 41/41,
+`tests/assistant_lag_gate.test.mjs tests/executor_lifecycle.test.mjs
+tests/executor_resources.test.mjs tests/executor_parallel.test.mjs` 63/63,
+`npm run check` clean.
+
+Validated on 2026-09-21 (run_1789987234414_3, memory-hold facts integration):
+adopted the uncommitted memory-admission work from the worldgen memory-overrun
+triage session and closed its remaining integration gap. The sampler's
+structured hold classification (holdKind memory/memory-severe/lag/unknown,
+memoryShortfall tier, memoryWarning, requiredMemoryMB) existed so consumers
+never parse reason text, but buildFacts still stripped it — A-Eyes saw only
+numbers plus lagPressure, so a memory hold was indistinguishable from a lag
+hold in facts and replies. buildFacts now carries the four fields and
+executorLine names the memory-shaped remedy ("finishing or compacting
+existing work frees memory and resumes new starts") for memory holds while
+older snapshots without holdKind keep the generic recovery sentence.
+`node --test tests/machine_capacity.test.mjs tests/foreman_lag_gate.test.mjs
+tests/worker_responsiveness.test.mjs tests/assistant_readiness_reply.test.mjs`
+55/55, `python -m unittest tools.test_mefi_studio_assistant` 66/66 OK,
+`python -m unittest tools.test_mefi_studio_machine` 6/6 OK, `npm run check`
+clean.
+
+Validated on 2026-09-21 (run_1789990618971_12, memory-warn-override closure):
+the "205 MB available vs 300 MB severe floor; capacity.canStart=false even
+with override" alert is the severe tier behaving as designed — 205 MB sits
+under memorySevereFloorMB (300), which the override must never lift, so the
+admission work itself needs no code change. Adopted the triage session's
+uncommitted work wholesale (two-tier sampler admission, the settings/env
+override helper, both admission call sites, the renderer Machine-panel
+toggle, booklet rebuild, facts/reply integration) without clobbering it and
+closed the remaining gap: the Machine-panel contract now pins the override
+round trip end to end (toggle element in the template, machineSet persistence
+plus load-time restore in explorer.js, the machineMemoryWarnOverride helper
+with its settings and MEFI_STUDIO_MEMORY_WARN_OVERRIDE=1 paths, and both
+workerCapacity call sites) via new
+`test_memory_warn_override_round_trip`. `node --test tests/machine_capacity.test.mjs
+tests/foreman_lag_gate.test.mjs tests/worker_responsiveness.test.mjs
+tests/assistant_readiness_reply.test.mjs tests/booklet_build.test.mjs
+tests/explorer_ui.test.mjs` 61/61, `python -m unittest
+tools.test_mefi_studio_machine` 7/7 OK, `python -m unittest
+tools.test_mefi_studio_assistant` 66/66 OK, `npm run build-booklet` rebuilt
+(renderer/booklet.html carries the toggle), `npm run check` clean. The hold
+clears when host free memory recovers above 300 MB; the worldgen overrun
+itself lives in the external game repository.
 
 Validated on 2026-09-21 (run_1789973269892_2, occluded-phase re-pin under the
 framesMs classification): `MEFI_OCCLUSION_PROXY=visibility node --test
@@ -1047,7 +1133,7 @@ September reliability and Model Lab suites (included in `npm test`):
 | `tests/ideas_intake.test.mjs` | Scans without AI review preserve unread candidates; batching advances only past complete reviewed rows, including equal timestamps and more than 40 candidates; failed or oversized reviews retain the cursor. |
 | `tests/command_render.test.mjs` | Isolated Electron loads current renderer sources, checks real painted node pixels and frame progression, then exits and reopens the tree. Renderer errors fail the test; no live stores, network or workers. |
 | `tests/update_continuity.test.mjs` | Combined base/music hot styles, CommonJS restart classification, missing build inputs retaining the complete payload until recovery, builder/result drainage without forced restart and bounded dead-renderer probes. |
-| `tests/renderer_recovery.test.mjs` | Crash/load recovery, retry caps, quitting/disposal, content-free diagnostics and a real isolated Electron renderer crash/reload fixture. The live Studio window is never deliberately crashed. |
+| `tests/renderer_recovery.test.mjs` | Crash/load recovery, retry caps, quitting/disposal, skip records naming why a scheduled reload never ran, content-free diagnostics and a real isolated Electron renderer crash/reload fixture. The live Studio window is never deliberately crashed. |
 | `tests/model_performance.test.mjs` | Serialized atomic records, separate human/model ratings, unknown cost/usage, task/effort breakdowns, retention with lifetime totals and bounded supported-effort selection. No paid requests. |
 | `tests/model_observation.test.mjs` | Real host transport observations using stub responses: measured usage/errors, actual reported model, requested versus confirmed effort and no prompts/keys in the ledger. |
 | `tests/context_manager.test.mjs` | Bounded task-context previews, grouped requirements, missing/cyclic prerequisite descriptions, source priority, explicit truncation and preservation of saved originals. |
@@ -1414,3 +1500,42 @@ the parallel full run with the windowed-sampling fixture in place, and
 `tests/expand_finished_guard.test.mjs` (the other prior flake) passed too -
 no reconciliation regression and no flake recurrence observed. Full log kept
 locally as `%TEMP%\opencode\fulltest_run6.log`.
+
+Usage tracker rebuild (2026-09-21, session "Usage tracker menu model
+providers"): the tracker now merges two ledgers - the Studio model ledger and
+every assistant turn OpenCode's own store holds for the project, read on the
+eyes worker by the new `usageLedger` store read - and reads each connected
+provider's own account through `usage:accounts` (OpenCode Go windows, z.ai
+plan quota, OpenRouter key usage, Vercel AI Gateway balance; Zen, TypeSafe,
+custom endpoints, local servers and the CLIs are listed as having no account
+API). The Claude, Grok and Antigravity assistant routes now run in their JSON
+output modes so their token counts reach the ledger, and every charged Jev
+call joins the ledger under its route's provider. Gates on this tree while two
+other sessions were mid-edit (startup screen; executor/machine admission):
+`npm run check` exit 0 (84 targets, 167 unique specs, CSS merge skipped with
+no merge in progress, every selector used); `npm run audit` exit 0, zero
+findings; Python contracts 244 run, 1 failure in `tools/test_mefi_studio_idle.py`
+(the `MefiWorkspace.ready` hook in booklet.js, a file this change never
+touched, under the startup session's work); normalized-path lock all checks
+passed. Node stage, parallel group only (the two serialized Electron fixtures
+were not run): 1,594 tests - 1,433 pass, 157 fail, 1 skip. Of the failures, 8
+belonged to this change: `tests/jev_runtime.test.mjs` runs the Jev slice of
+main.cjs in a vm that had no `recordModelCall`; the fixture now supplies it
+and asserts the ledger record (provider from the route, tokens as reported,
+cost unknown). 4 in `tests/jev_model_routing_host.test.mjs` expect `spawned`
+and get `resources` (executor admission; that fixture stubs `chargeJevCall`
+itself). The remaining ~145 sit in executor_delegation/modes/resources/
+resume/end_to_end, assistant_work_on, build_approval, startup_screen/hold,
+backlog_engine, planning_execution and assistant_pool with `autopilot is not
+defined`, `logLine is not defined`, host-boundary and "machine measurements
+unavailable" errors from the concurrent executor/startup work; none references
+tracker code. Re-run of every file this change touches (jev_runtime, jev,
+usage_tracker, usage_tracker_host, usage_tracker_ui, usage_ledger_store,
+eyes_worker, projects, model_observation): 113 tests, 112 pass, 1 skip (the
+opt-in live gateway test), 0 fail. Measured on the live 26k-row message table:
+`usageLedger` cold scan 4.5 s once per worker lifetime, warm 82 ms, the
+15k-row game-project aggregate 81 ms on main per refresh. Both surfaces were
+checked in the browser fallback on port 4173 with a stubbed bridge (six
+account cards, provider/day/model tables, the compact rail lines). `npm run
+package` was deliberately not run: the tree carries other sessions'
+unfinished work. Node log kept locally as `%TEMP%\mefi-usage-tracker-nodestage.log`.

@@ -4120,7 +4120,15 @@ function executorLine(executor, readiness = null) {
     if (holds.length) lines.push(`Other saved work: ${holds.join("; ")}.`);
   } else if (num(source.queued, 0)) lines.push(`${plural(num(source.queued), "work item")} queued; detailed readiness is unavailable.`);
   if (readiness?.paused || source.enabled === false) lines.push(`New workers are paused${running.length ? "; current workers can finish" : ""}.`);
-  else if (machineManaged && source.capacity?.canStart === false) lines.push(`Dispatch waiting: ${clip(str(source.capacity.reason) || "waiting for machine capacity", 140)}. New starts resume automatically when machine capacity recovers.`);
+  else if (machineManaged && source.capacity?.canStart === false) {
+    // The structured hold class decides the remedy the reply names: a memory
+    // hold clears by finishing or compacting existing work (freeing RAM), not
+    // by waiting for responsiveness to recover. No holdKind (older snapshots)
+    // keeps the generic recovery sentence.
+    const holdKind = str(source.capacity.resources?.holdKind);
+    const memoryHold = holdKind === "memory" || holdKind === "memory-severe";
+    lines.push(`Dispatch waiting: ${clip(str(source.capacity.reason) || "waiting for machine capacity", 140)}. ${memoryHold ? "Finishing or compacting existing work frees memory and resumes new starts." : "New starts resume automatically when machine capacity recovers."}`);
+  }
   else if (str(readiness?.waiting || source.waiting)) lines.push(`Dispatch waiting: ${clip(str(readiness?.waiting || source.waiting), 140)}.`);
   else if (!running.length && num(counts?.ready, num(source.queued, 0)) > 0) lines.push("Ready work is waiting for the dispatcher; a worker start has not been confirmed.");
   return lines.join(" ");
@@ -5071,9 +5079,18 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
             canStart: executor.capacity.canStart === true,
             reason: clip(str(executor.capacity.reason), 180) || null,
             resources: isObject(executor.capacity.resources) ? { ...Object.fromEntries(
-              ["cpuPercent", "availableMemoryMB", "totalMemoryMB", "lagMs", "hostLagMs", "rendererLagMs"].map((key) => [key,
+              ["cpuPercent", "availableMemoryMB", "totalMemoryMB", "requiredMemoryMB", "lagMs", "hostLagMs", "rendererLagMs"].map((key) => [key,
                 typeof executor.capacity.resources[key] === "number" && Number.isFinite(executor.capacity.resources[key]) ? executor.capacity.resources[key] : null]),
-            ), lagPressure: typeof executor.capacity.resources.lagPressure === "boolean" ? executor.capacity.resources.lagPressure : null } : null,
+            ), lagPressure: typeof executor.capacity.resources.lagPressure === "boolean" ? executor.capacity.resources.lagPressure : null,
+              // The sampler's structured hold classification rides the facts so
+              // a reply can tell a memory gate from a responsiveness gate
+              // without parsing the reason text: "memory" is a small
+              // required-vs-available shortfall, "memory-severe" the gap under
+              // the severe floor, "lag" the latched hold, "unknown" missing
+              // readings, null a clear (or overridden) admission.
+              holdKind: str(executor.capacity.resources.holdKind) || null,
+              memoryShortfall: str(executor.capacity.resources.memoryShortfall) || null,
+              memoryWarning: clip(str(executor.capacity.resources.memoryWarning), 180) || null } : null,
           } : null,
           lastAsk: str(executor.lastAsk) || null,
           running: asArray(executor.running)

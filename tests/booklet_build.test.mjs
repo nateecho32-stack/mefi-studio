@@ -39,6 +39,7 @@ const INLINE_SCRIPTS = [
   "palette.js",
   "eyes.js",
   "boot.js",
+  "startup.js",
   "workspace.js",
   "planning.js",
   "music.js",

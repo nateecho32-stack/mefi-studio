@@ -83,6 +83,17 @@ test("a script that never completed keeps the 1000ms sentinel as genuine lag evi
   assert.equal(await second, 1000, "a non-numeric worker reading cannot be trusted as an alibi");
 });
 
+test("a silent probe stamps the cache so the foreman can gate on the host alone", async () => {
+  const h = probeHost(), pending = h.measure();
+  h.advance(1000); h.calls[0].resolve(null);
+  assert.equal(await pending, 1000);
+  assert.equal(h.env.measureWorkerLag.cache.silent, true, "silence is absence of evidence, not a 1000ms machine reading");
+  const answered = h.measure({ force: true });
+  h.advance(30); h.calls[1].resolve({ frames: true, framesMs: 30 });
+  assert.equal(await answered, 0);
+  assert.equal(h.env.measureWorkerLag.cache.silent, false, "any answering channel clears the silent stamp");
+});
+
 test("an occluded-but-live renderer never reports the 1000ms sentinel as lag", async () => {
   const h = probeHost(), pending = h.measure();
   assert.match(h.calls[0].script, /new Worker/);

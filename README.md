@@ -28,6 +28,11 @@ its result. Each lesson can **Walk me…** through the matching menu with a smal
 coach that highlights the control, ticks stops off as you go and remembers your
 place. [GETTING_STARTED.md](GETTING_STARTED.md) covers the same path in writing.
 
+Every launch starts on a project chooser: pick the folder to open, then
+**Open studio** (the agents stay off until you press **Start agents** in the
+workspace or the tray) or **Open and start agents**. Nothing runs before you
+choose.
+
 ## Quick start
 
 ### Run from source
@@ -154,12 +159,21 @@ project's ignored local `planning.json`.
   reported usage and USD cost, with human and model ratings kept separate;
   opening it never runs paid measurements. **Context** previews the current
   task brief within a chosen token budget and reports what was shortened.
-- **Usage tracker** sums recorded calls per day, provider and model, and reads
-  OpenCode Go's own 5-hour, weekly and monthly account windows with the saved
-  key. The live account reading and the local estimate stay clearly separate;
-  a compact version sits at the bottom of the Command rail, and the full view
+- **Usage tracker** sums two ledgers per day, provider and model: the calls
+  Studio made itself (assistant HTTP and CLI routes, Jev, speed probes) and
+  every coding-session turn OpenCode's own store recorded for the project
+  (the builders' runs on Go, Zen, OpenRouter or the z.ai plan), read on the
+  eyes worker. Each connected provider gets its own account reading over its
+  saved key — OpenCode Go's 5-hour/weekly/monthly windows, z.ai's plan quota,
+  OpenRouter's key usage and limit, the Vercel AI Gateway balance — and a
+  provider with no account API (Zen, TypeSafe, the Grok/Claude/Antigravity
+  CLIs, a local server) says so plainly. The CLI routes run in their JSON
+  output mode so their token counts reach the ledger. Live readings and the
+  local estimate stay clearly separate; a plan or subscription reports no
+  per-call cost, so those calls are shown as unpriced rather than free. A
+  compact version sits at the bottom of the Command rail, and the full view
   is the Model Lab **Tracker** tab. Opening it and every five minutes while it
-  is visible is the only time the account is asked; no prompts are sent.
+  is visible is the only time the accounts are asked; no prompts are sent.
 - **AI routing** picks who pays — Auto walks an ordered provider list you edit
   in Settings (the first usable provider answers, and the opt-in fallback
   walks down the list), plus z.ai only, OpenCode Go only, the Grok, Claude

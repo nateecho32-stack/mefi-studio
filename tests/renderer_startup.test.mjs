@@ -24,9 +24,9 @@ function bootEnvironment({ bridge = {}, reducedMotion = false, domLoading = fals
     contains(node) { return this === node || this.children.some((child) => child.contains(node)); }
     focus() { document.activeElement = this; }
   }
-  const elements = Object.fromEntries(["layer", "title", "detail", "progress", "count", "steps", "actions", "retry", "continue"].map((name) => ["boot-" + name, new Element("boot-" + name)]));
+  const elements = Object.fromEntries(["layer", "title", "detail", "progress", "progress-heading", "count", "steps", "actions", "retry", "continue", "choose"].map((name) => ["boot-" + name, new Element("boot-" + name)]));
   const layer = elements["boot-layer"];
-  layer.append(elements["boot-retry"]); layer.append(elements["boot-continue"]);
+  layer.append(elements["boot-retry"]); layer.append(elements["boot-continue"]); layer.append(elements["boot-choose"]);
   const main = new Element("main"), alreadyInert = new Element("existing-inert");
   alreadyInert.inert = true;
   Object.assign(document, {
@@ -110,6 +110,49 @@ test("startup prepares independent steps together and progress only follows real
   assert.equal(env.layer.hidden, true);
   assert.equal(env.document.documentElement.attributes.has("data-starting"), false);
   assert.equal(env.windowListeners.size, 0);
+});
+
+test("a launch choice runs first with the gate locked and no readiness step reads before it is made", async () => {
+  const choice = deferred(), loads = [];
+  const env = bootEnvironment({ reducedMotion: true });
+  let handoff = null;
+  const ready = env.boot.run(
+    [{ id: "workspace", label: "Your projects and work", load: () => { loads.push("workspace"); return true; } }],
+    (complete, chosen) => { handoff = { complete, chosen }; },
+    { choose: () => choice.promise },
+  );
+  await env.advance(300);
+  assert.equal(env.boot.state().phase, "choose");
+  assert.deepEqual(loads, [], "the project must be chosen before the workspace is read");
+  assert.equal(env.elements["boot-choose"].hidden, false);
+  assert.equal(env.elements["boot-progress"].hidden, true);
+  assert.equal(env.elements["boot-steps"].hidden, true);
+  assert.equal(env.elements["boot-title"].textContent, "Choose a project");
+  assert.equal(env.main.inert, true, "the studio stays locked behind the choice");
+  const escape = env.key("Escape", env.elements["boot-choose"]);
+  assert.equal(escape.prevented, true, "Escape cannot skip the choice");
+  choice.resolve({ projectId: "p1", startAgents: true, changed: false });
+  await env.advance(300);
+  assert.deepEqual(loads, ["workspace"]);
+  assert.equal(env.elements["boot-choose"].hidden, true);
+  assert.equal(env.elements["boot-progress"].hidden, false);
+  assert.equal(await ready, true);
+  assert.deepEqual(handoff, { complete: true, chosen: { projectId: "p1", startAgents: true, changed: false } }, "the handoff carries the choice");
+  assert.equal(env.main.inert, false);
+});
+
+test("a gate without a launch choice and a failing choice both proceed straight to readiness", async () => {
+  const plain = bootEnvironment({ reducedMotion: true });
+  let opened = 0;
+  const ready = plain.boot.run([{ id: "view", label: "View", load: () => true }], (complete, chosen) => { opened += 1; assert.equal(chosen, null); });
+  await plain.advance(300);
+  assert.equal(await ready, true); assert.equal(opened, 1);
+  const failing = bootEnvironment({ reducedMotion: true });
+  const loads = [];
+  const result = failing.boot.run([{ id: "view", label: "View", load: () => { loads.push("view"); return true; } }], () => {}, { choose: async () => { throw new Error("no host"); } });
+  await failing.advance(300);
+  assert.deepEqual(loads, ["view"], "a broken choice never strands the launch");
+  assert.equal(await result, true);
 });
 
 test("Escape, Enter, pointer clicks and shortcuts cannot bypass pending preloads", async () => {

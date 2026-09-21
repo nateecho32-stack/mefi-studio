@@ -2128,6 +2128,21 @@ html:not([data-starting]) #boot-layer { display: none; }
 .boot-step[data-state="error"]::before { border-color: var(--bad); background: var(--bad); }
 .boot-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 24px; }
 .boot-actions button { max-width: 100%; height: auto; min-height: 36px; white-space: normal; }
+/* The launch choice: project rows and the two ways to open the studio. */
+.boot-choose { margin-top: 18px; text-align: left; }
+.boot-projects { display: grid; gap: 6px; max-height: 264px; overflow-y: auto; padding: 2px; }
+.boot-projects-empty { margin: 2px 0 4px; font: 12px/1.65 var(--font-ui); color: var(--muted); }
+.boot-project { display: flex; width: 100%; height: auto; min-height: 0; align-items: center; gap: 11px; padding: 9px 11px; border: 1px solid var(--hairline); border-radius: 11px; background: transparent; color: var(--ivory); text-align: left; white-space: normal; }
+.boot-project:hover { background: rgba(201, 168, 106, 0.08); }
+.boot-project.selected { border-color: var(--gold); background: rgba(201, 168, 106, 0.13); box-shadow: inset 0 0 0 1px rgba(201, 168, 106, 0.28); }
+.boot-project-icon { flex: 0 0 28px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: rgba(201, 168, 106, 0.14); color: var(--gold-bright); font: 600 14px/1 var(--font-display); }
+.boot-project-text { display: grid; min-width: 0; gap: 2px; }
+.boot-project-name { font: 500 13px/1.3 var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.boot-project-path { font: 11px/1.4 var(--font-mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.boot-add { width: 100%; margin-top: 8px; }
+.boot-choose-note { min-height: 18px; margin: 14px 0 0; font: 12px/1.6 var(--font-ui); color: var(--muted); text-align: center; overflow-wrap: anywhere; }
+.boot-choose-note.error { color: var(--bad); }
+.boot-choose .boot-actions { margin-top: 12px; }
 @keyframes boot-spin { to { transform: rotate(360deg); } }
 body.no-motion #boot-layer, body.no-motion #boot-progress::-webkit-progress-value { transition: none; }
 body.no-motion .boot-spinner { animation: none; }
@@ -2973,6 +2988,23 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 .walkthrough-setup-item.done { color: var(--ivory); border-color: var(--hairline-strong); background: color-mix(in srgb, var(--gold) 10%, transparent); }
 .walkthrough-setup-item[aria-current="step"] { color: var(--gold-bright); border-color: var(--gold-bright); }
 .walkthrough-step.done { color: var(--gold-bright); }
+.walkthrough-panel { margin: 0 0 18px; padding: 14px 16px; border: 1px solid var(--hairline); border-radius: 12px; background: color-mix(in srgb, var(--panel) 92%, transparent); }
+.walkthrough-panel-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.walkthrough-panel-option { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
+.walkthrough-panel .muted { margin: 10px 0 0; font-size: 12px; line-height: 1.6; }
+.walkthrough-panel .muted.error { color: var(--danger, #e07a6a); }
+.walkthrough-facts, .walkthrough-notes { margin: 10px 0 0; padding-left: 18px; font-size: 12px; line-height: 1.6; }
+.walkthrough-facts { color: var(--ivory); }
+.walkthrough-notes { color: var(--muted); }
+.walkthrough-bar { position: relative; height: 5px; margin: 7px 0 0; border-radius: 999px; background: color-mix(in srgb, var(--hairline-strong) 60%, transparent); overflow: hidden; }
+.walkthrough-bar span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--gold-bright); transition: width .35s ease; }
+.walkthrough-bar.mini { height: 3px; margin-top: 9px; }
+.walkthrough-activity { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-size: 11px; color: var(--muted); }
+.walkthrough-activity-track { position: relative; flex: 1; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--hairline-strong) 60%, transparent); overflow: hidden; }
+.walkthrough-activity-track span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--gold); transition: width .3s ease; }
+.walkthrough-activity.busy .walkthrough-activity-track span { width: 40%; animation: walkthrough-slide 1.4s ease-in-out infinite; }
+.walkthrough-assist-list li[aria-current="step"] { color: var(--gold-bright); }
+@keyframes walkthrough-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
 .walkthrough-coach { position: fixed; right: 18px; bottom: 18px; z-index: var(--z-pop); display: flex; flex-direction: column; gap: 7px; width: min(340px, calc(100vw - 36px)); padding: 15px 16px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 92%, var(--gold) 8%); box-shadow: var(--shadow-3), var(--inset-hi); }
 .walkthrough-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .walkthrough-coach-tools { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -3262,6 +3294,15 @@ body.command-active .walkthrough-coach { right: 392px; }
 .tracker-footnote { margin: 0; font-size: 11px; line-height: 1.7; }
 .tracker-live-card > strong { color: var(--ivory); }
 .tracker-live-card > small { line-height: 1.6; }
+/* one card per connected provider: as many columns as fit, never a squeezed fourth */
+.tracker-accounts { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.tracker-account > strong { font-size: 19px; }
+.tracker-account-windows { grid-template-columns: 1fr; gap: 6px; }
+.tracker-account-windows .tracker-window { grid-template-columns: 96px 1fr auto; }
+.tracker-account-windows .tracker-window-value { font-size: 12px; }
+.tracker-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.tracker-chip { display: inline-block; padding: 1px 7px; border: 1px solid var(--hairline); border-radius: 999px; font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tracker-cell > strong { color: var(--ivory); font-weight: 600; }
 @media (max-width: 680px) { .tracker-windows { grid-template-columns: 1fr; } }
 
 /* the Command rail's bottom-right footer: pinned under the tab panels */
@@ -3280,6 +3321,7 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .cmd-usage .tracker-bar { height: 5px; border-radius: 3px; }
 #idle-hud .cmd-usage .tracker-line { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 #idle-hud .cmd-usage .tracker-line-warn { color: var(--warn); }
+#idle-hud .cmd-usage .tracker-line-account { color: var(--ivory); }
 
 /* Integrated music room. Shared theme tokens also colour Command and boards. */
 :root[data-studio-theme] .primary { background: linear-gradient(180deg, var(--gold-bright), var(--gold)); }
@@ -3666,9 +3708,18 @@ body.music-preview-active #idle-hud { display: none !important; }
     <p class="eyebrow">Mefi's Studio AI+</p>
     <h1 id="boot-title" class="boot-title">Opening your studio</h1>
     <p id="boot-detail" class="boot-detail" role="status" aria-live="polite" aria-atomic="true">Preparing your workspace before you begin.</p>
-    <div class="boot-progress-heading"><span>Getting ready</span><span id="boot-count" class="boot-count">0%</span></div>
+    <div id="boot-progress-heading" class="boot-progress-heading"><span>Getting ready</span><span id="boot-count" class="boot-count">0%</span></div>
     <progress id="boot-progress" max="100" value="0" aria-label="Startup progress"></progress>
     <ol id="boot-steps" class="boot-steps" aria-label="Startup checks"><li class="boot-step" data-state="loading">Preparing startup</li></ol>
+    <div id="boot-choose" class="boot-choose" hidden>
+      <div id="boot-projects" class="boot-projects" role="radiogroup" aria-label="Choose a project"></div>
+      <button id="boot-add-project" class="ghost boot-add" type="button">Open another folder…</button>
+      <p id="boot-choose-note" class="boot-choose-note" role="status" aria-live="polite">Agents stay off until you start them.</p>
+      <div class="boot-actions">
+        <button id="boot-open" class="primary" type="button">Open studio</button>
+        <button id="boot-open-start" class="ghost" type="button">Open and start agents</button>
+      </div>
+    </div>
     <div id="boot-actions" class="boot-actions" hidden>
       <button id="boot-retry" class="primary" type="button">Try again</button>
       <button id="boot-continue" class="ghost" type="button">Open with available data</button>
@@ -3737,7 +3788,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   <div class="ws-main">
     <div class="ws-topbar"><div class="ws-project-heading"><span class="ws-kicker">WORKSPACE /</span><strong id="workspace-project-name">Opening your project…</strong></div><div class="ws-top-actions"><button id="workspace-reveal" class="ghost mini" title="Show the project folder">Open folder ↗</button><button id="workspace-remove-project" class="ghost mini" title="Remove this folder from Studio's project list. Files and local work stay on disk.">Remove project</button><button class="ghost mini" data-nav="palette" aria-label="Find a tool or command">Search <kbd>Ctrl K</kbd></button></div></div>
     <div class="ws-heading"><div><p class="ws-kicker" id="workspace-greeting">YOUR SPACE TO CREATE</p><h1>What are we making?</h1><p id="workspace-project-path" class="ws-project-path"></p></div><span id="workspace-connection" class="ws-connection">Connecting…</span></div>
-    <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">A little guidance for your first project.</strong><p>Choose a project, connect your tools, create work and follow it through review.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start walkthrough</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk with me</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays in the sidebar">Not now</button></div></section>
+    <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">A little guidance for your first project.</strong><p>Scan this computer, choose a project, let an explorer map it, connect your tools, create work and follow it through review.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div><div class="walkthrough-bar mini" id="walkthrough-invite-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-invite-bar-fill"></span></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start walkthrough</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk with me</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays in the sidebar">Not now</button></div></section>
     <div class="ws-columns">
       <section class="ws-conversation" aria-label="Conversation with your companion">
         <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div><button id="workspace-stop-all" class="ghost mini" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button><button id="workspace-restart" class="ghost mini" title="Stop every agent, save progress, and restart Studio.">Restart</button><button id="workspace-pause" class="ghost mini" title="Pause new work. Running jobs finish normally.">Pause</button></div>
@@ -3846,7 +3897,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       </section>
       <section id="model-lab-usage" role="tabpanel" aria-labelledby="model-lab-tab-usage" hidden><h3>Recorded usage</h3><p id="model-lab-usage-coverage" class="muted">Missing provider usage stays unknown. These totals cover calls recorded by Studio; they are not an account balance.</p><p id="model-lab-usage-range" class="lab-status"></p><div id="model-lab-usage-totals" class="lab-usage-grid"></div><div id="model-lab-usage-list" class="lab-table-wrap"></div></section>
       <section id="model-lab-tracker" role="tabpanel" aria-labelledby="model-lab-tab-tracker" hidden>
-        <div class="lab-toolbar"><div><h3>Usage tracker</h3><p class="muted">Recorded local usage and the OpenCode Go account windows, shown separately. The account read uses the saved key and sends no prompts.</p></div><button id="model-lab-tracker-refresh" class="ghost" type="button">Refresh usage</button></div>
+        <div class="lab-toolbar"><div><h3>Usage tracker</h3><p class="muted">Recorded usage from both ledgers (the calls Studio made and the coding sessions OpenCode ran for this project) beside every connected provider's own account reading, shown separately. Account reads use the saved keys and send no prompts.</p></div><button id="model-lab-tracker-refresh" class="ghost" type="button">Refresh usage</button></div>
         <p id="model-lab-tracker-status" class="lab-status" role="status" aria-live="polite"></p>
         <div id="model-lab-tracker-body" class="lab-tracker"></div>
       </section>
@@ -4332,7 +4383,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     <ul id="cmd-ask-list" class="ask-list" aria-label="Questions and suggestions"></ul>
   </section>
     </div>
-  <section id="cmd-usage" class="cmd-usage" aria-label="Usage and OpenCode Go credits">
+  <section id="cmd-usage" class="cmd-usage" aria-label="Usage across connected providers">
     <header class="cmd-usage-head">
       <h2 class="cmd-usage-title">
         <button id="cmd-usage-toggle" class="feed-toggle" type="button" aria-expanded="true" aria-controls="cmd-usage-body" title="Collapse usage">
@@ -4340,7 +4391,7 @@ body.music-preview-active #idle-hud { display: none !important; }
           <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg>
         </button>
       </h2>
-      <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and the OpenCode Go windows">Refresh</button>
+      <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and every connected account">Refresh</button>
       <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Model Lab">Open</button>
     </header>
     <div id="cmd-usage-body" class="cmd-usage-body"></div>
@@ -4651,6 +4702,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         <h3 class="mt">Machine <span class="badge" id="machine-badge">idle</span></h3>
         <p class="eyes-status" id="machine-lines">scanning…</p>
         <label class="switch" title="Kill strays, hangs and over-age test runs automatically"><input type="checkbox" id="machine-auto" checked><span class="track"></span><span>Auto-kill</span></label>
+        <label class="switch" title="Demote a small memory shortfall to a warning instead of a hold (severe shortfalls still hold)"><input type="checkbox" id="machine-memory-override"><span class="track"></span><span>Memory warn override</span></label>
         <ul id="machine-list" class="pin-list"></ul>
         <ul id="machine-events" class="pin-list"></ul>
         <h3 class="mt">Request inbox</h3>
@@ -4665,7 +4717,7 @@ body.music-preview-active #idle-hud { display: none !important; }
 </div>
 <div class="overlay" id="walkthrough-overlay" hidden>
   <section class="sheet walkthrough-sheet" id="walkthrough-sheet" role="dialog" aria-modal="true" aria-labelledby="walkthrough-title" aria-describedby="walkthrough-copy" tabindex="-1">
-    <header class="sheet-head plain"><div class="sheet-title"><span class="eyebrow">START HERE</span><p id="walkthrough-progress" role="status">Step 1 of 5</p></div><button class="ghost mini" type="button" data-nav-close="onboarding">Save & close <kbd>Esc</kbd></button></header>
+    <header class="sheet-head plain"><div class="sheet-title"><span class="eyebrow">START HERE</span><p id="walkthrough-progress" role="status">Step 1 of 7</p><div class="walkthrough-bar" id="walkthrough-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-bar-fill"></span></div></div><button class="ghost mini" type="button" data-nav-close="onboarding">Save & close <kbd>Esc</kbd></button></header>
     <nav class="walkthrough-steps" id="walkthrough-steps" aria-label="Walkthrough steps"></nav>
     <div class="walkthrough-content"><h2 id="walkthrough-title" tabindex="-1"></h2><p id="walkthrough-copy"></p><ul id="walkthrough-points"></ul>
       <div id="walkthrough-build-mode" class="build-mode-control">
@@ -4673,6 +4725,24 @@ body.music-preview-active #idle-hud { display: none !important; }
         <strong id="walkthrough-build-mode-label">Loading preference…</strong>
         <p id="walkthrough-build-mode-note">Choose how work starts. You can change this above Your work at any time.</p>
         <p id="walkthrough-build-mode-feedback" role="status"></p>
+      </div>
+      <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>
+      <div id="walkthrough-scan" class="walkthrough-panel" hidden>
+        <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-scan-run" type="button">Run the first scan</button><button class="ghost" id="walkthrough-scan-apply" type="button" hidden>Use this setup</button><label class="walkthrough-panel-option" for="walkthrough-scan-allow-free"><input type="checkbox" id="walkthrough-scan-allow-free" checked><span>Allow free models (their free tier may use prompts to improve the model)</span></label></div>
+        <p id="walkthrough-scan-status" class="muted" role="status">Not run yet. The scan asks OpenCode what it has: its version, linked provider names, models and agents. It sends no prompt and saves nothing until you choose Use this setup.</p>
+        <ul id="walkthrough-scan-facts" class="walkthrough-facts"></ul>
+        <ul id="walkthrough-scan-notes" class="walkthrough-notes"></ul>
+      </div>
+      <div id="walkthrough-map" class="walkthrough-panel" hidden>
+        <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-map-run" type="button">Map this project</button><button class="ghost" id="walkthrough-map-cancel" type="button" hidden>Cancel</button></div>
+        <p id="walkthrough-map-status" class="muted" role="status">Not mapped yet. A read-only explorer reads the selected folder, writes its map as a todo list you can watch in the tree, and saves its suggested first tasks as ideas. Nothing is built.</p>
+        <ul id="walkthrough-map-steps" class="walkthrough-notes"></ul>
+        <ul id="walkthrough-map-facts" class="walkthrough-facts"></ul>
+      </div>
+      <div id="walkthrough-assist" class="walkthrough-panel" hidden>
+        <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-assist-run" type="button">Ask my assistant what to do next</button><button class="ghost" id="walkthrough-assist-task" type="button" hidden>Put the suggested task in the task box</button></div>
+        <p id="walkthrough-assist-status" class="muted" role="status">After the scan, the AI you linked plans the rest of this setup from what it found.</p>
+        <ul id="walkthrough-assist-list" class="walkthrough-facts walkthrough-assist-list"></ul>
       </div>
       <div class="walkthrough-destinations"><button class="primary" id="walkthrough-action" type="button"></button><button class="ghost" id="walkthrough-secondary" type="button" hidden></button></div><p id="walkthrough-note" class="muted"></p></div>
     <footer class="walkthrough-footer"><span>Your place is saved on this device.</span><div><button class="ghost" id="walkthrough-back" type="button">Back</button><button class="primary" id="walkthrough-next" type="button">Next step</button></div></footer>
@@ -11378,13 +11448,15 @@ body.music-preview-active #idle-hud { display: none !important; }
   window.MefiModelLab = { open, refresh, show, previewContext };
 })();
 
-// Usage tracker: recorded local totals and OpenCode Go account windows, kept
-// visibly separate. Local numbers come from the model ledger; the account read
-// uses the saved key through the host and never touches prompts or results.
+// Usage tracker: recorded totals from both ledgers (the calls Studio made and
+// the coding-session turns OpenCode's store holds) beside every connected
+// provider's own account reading, kept visibly separate. Account reads use
+// the saved keys through the host and never touch prompts or results.
 (function () {
   "use strict";
   const REFRESH_MS = 5 * 60 * 1000;
   const STALE_MS = 5000;
+  const WINDOW_LABELS = [["rolling", "5-hour window", "5h"], ["weekly", "Weekly window", "Wk"], ["monthly", "Monthly window", "Mo"]];
   const state = { initialized: false, collapsed: false, read: 0, at: 0, report: null, pending: null };
   const $ = (id) => document.getElementById(id);
   const api = () => window.mefiStudio;
@@ -11393,6 +11465,8 @@ body.music-preview-active #idle-hud { display: none !important; }
   const number = (value, digits = 0) => finite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: digits }) : "Unknown";
   const money = (value, digits = 2) => finite(value) ? `$${value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: value > 0 && value < 0.01 ? 4 : digits })}` : "Unknown";
   const percent = (value) => finite(value) ? `${number(value, 1)}%` : "Unknown";
+  const compact = (value) => !finite(value) ? "?" : value >= 1e6 ? `${(value / 1e6).toLocaleString(undefined, { maximumFractionDigits: 1 })}M` : value >= 1e4 ? `${Math.round(value / 1e3)}k` : number(value);
+  const calls = (value) => `${number(value)} ${value === 1 ? "call" : "calls"}`;
   const when = (value) => {
     if (value == null || value === "") return "unavailable";
     const date = new Date(value);
@@ -11435,10 +11509,18 @@ body.music-preview-active #idle-hud { display: none !important; }
     node.append(head, body);
     return node;
   }
-  function modelName(provider, model) {
-    const cell = element("div", "lab-model-name");
-    cell.append(element("strong", "", model || "Unknown model"), element("span", "muted", provider || "Unknown provider"));
+  function twoLine(main, detail) {
+    const cell = element("div", "lab-model-name tracker-cell");
+    cell.append(element("strong", "", main), element("span", "muted", detail));
     return cell;
+  }
+  function modelName(label, model) {
+    return twoLine(model || "Unknown model", label || "Unknown provider");
+  }
+  function chips(entries) {
+    const wrap = element("div", "tracker-chips");
+    for (const text of entries) wrap.append(element("span", "tracker-chip", text));
+    return wrap;
   }
   function section(title, note, content) {
     const node = element("section", "tracker-section");
@@ -11453,8 +11535,9 @@ body.music-preview-active #idle-hud { display: none !important; }
   function localCost(record) {
     return record && record.knownRecords > 0 ? money(record.spentUsd) : "Unknown";
   }
+  const origins = (record) => `Studio ${number(record?.origins?.studio)} · coding ${number(record?.origins?.["opencode-cli"])}`;
 
-  function windowBar(label, record) {
+  function windowBar(label, record, { resets = false } = {}) {
     const wrap = element("div", "tracker-window");
     wrap.append(element("span", "tracker-window-label", label));
     const bar = element("span", "tracker-bar");
@@ -11466,109 +11549,215 @@ body.music-preview-active #idle-hud { display: none !important; }
     bar.append(fill);
     wrap.append(bar);
     wrap.append(element("b", "tracker-window-value", record && finite(record.percent) ? percent(record.percent) : "—"));
+    if (resets && record?.resetsAt) wrap.title = `Resets ${when(record.resetsAt)}`;
     return wrap;
   }
 
-  function liveSection(credits) {
-    const target = element("div", "lab-usage-grid");
-    for (const [key, label] of [["rolling", "5-hour window"], ["weekly", "Weekly window"], ["monthly", "Monthly window"]]) {
-      const record = credits?.ok ? credits.usage?.[key] : null;
-      const card = element("div", "lab-usage-card tracker-live-card");
-      card.append(element("span", "", `OpenCode Go · ${label}`));
-      card.append(element("strong", "", record ? percent(record.percent) : "Unavailable"));
-      const detail = record
-        ? `${record.status === "rate-limited" ? "Limit reached · " : ""}${record.resetsAt ? `Resets ${when(record.resetsAt)}` : "Reset time unavailable"}`
-        : credits?.error || "No account reading yet.";
-      card.append(element("small", "muted", detail));
-      target.append(card);
+  // ---- connected accounts ------------------------------------------------
+  // One entry per provider the host found connected (a saved key or an
+  // installed CLI). The OpenCode Go windows also arrive on the older
+  // opencodeCredits bridge, which stands in when the accounts read is absent.
+  function accountsOf(report) {
+    const list = rows(report.accounts?.accounts);
+    if (list.some((account) => account.provider === "opencode-go") || !report.credits) return list;
+    const credits = report.credits;
+    return [{ provider: "opencode-go", label: "OpenCode Go", kind: "plan", read: "windows", connected: true, ok: credits.ok === true, fetchedAt: credits.fetchedAt ?? null, usage: credits.usage, error: credits.error, code: credits.code }, ...list];
+  }
+  function providerToday(local, provider) {
+    const row = rows(local?.providers).find((entry) => entry.provider === provider);
+    if (!row) return null;
+    const today = row.today ?? { calls: 0, usage: {} };
+    return `Recorded today · ${calls(today.calls)} · ${compact(today.usage?.totalTokens?.known)} tokens · ${costText(today.usage?.costUsd)}`;
+  }
+  function accountCard(account, local) {
+    const card = element("div", "lab-usage-card tracker-live-card tracker-account");
+    card.append(element("span", "", `${account.label}${account.read === "none" ? "" : " · live"}`));
+    if (account.read === "none") {
+      card.append(element("strong", "", "No account API"));
+      card.append(element("small", "muted", account.note || "This provider offers no account reading."));
+    } else if (!account.ok) {
+      card.append(element("strong", "", "Unavailable"));
+      card.append(element("small", "muted", account.error || "No account reading yet."));
+    } else if (account.read === "windows") {
+      const usage = account.usage ?? {};
+      card.append(element("strong", "", `${percent(usage.rolling?.percent)} of the 5-hour window`));
+      const bars = element("div", "tracker-windows tracker-account-windows");
+      for (const [key, label] of WINDOW_LABELS) bars.append(windowBar(label, usage[key], { resets: true }));
+      card.append(bars);
+      const limited = WINDOW_LABELS.filter(([key]) => usage[key]?.status === "rate-limited").map(([, label]) => label);
+      card.append(element("small", "muted", `${limited.length ? `Limit reached: ${limited.join(", ")} · ` : ""}${usage.rolling?.resetsAt ? `5-hour window resets ${when(usage.rolling.resetsAt)}` : "Reset time unavailable"}`));
+    } else if (account.read === "quota") {
+      const quota = account.quota ?? {};
+      card.append(element("strong", "", quota.rolling ? `${percent(quota.rolling.percent)} of the 5-hour window` : quota.weekly ? `${percent(quota.weekly.percent)} of the week` : "Quota read"));
+      const bars = element("div", "tracker-windows tracker-account-windows");
+      if (quota.rolling) bars.append(windowBar("5-hour window", quota.rolling, { resets: true }));
+      if (quota.weekly) bars.append(windowBar("Weekly window", quota.weekly, { resets: true }));
+      if (quota.tools) bars.append(windowBar("Tool quota", quota.tools));
+      card.append(bars);
+      card.append(element("small", "muted", `${quota.level ? `${quota.level} plan · ` : ""}${quota.rolling?.resetsAt ? `5-hour window resets ${when(quota.rolling.resetsAt)}` : "Plan quota, not a bill"}`));
+    } else if (account.read === "key") {
+      const key = account.key ?? {};
+      card.append(element("strong", "", `${money(key.usage)} spent`));
+      const detail = [];
+      if (account.credits) detail.push(`${money(account.credits.remaining)} of ${money(account.credits.totalCredits)} credits left`);
+      if (finite(key.limit)) detail.push(`${money(key.limitRemaining)} left of the ${money(key.limit)} key limit${key.limitReset ? ` (${key.limitReset})` : ""}`);
+      detail.push(`today ${money(key.usageDaily)} · week ${money(key.usageWeekly)} · month ${money(key.usageMonthly)}`);
+      if (key.isFreeTier) detail.push("free tier");
+      if (finite(key.percent)) card.append(windowBar("Key limit", key));
+      card.append(element("small", "muted", detail.join(" · ")));
+    } else if (account.read === "credits") {
+      const credits = account.credits ?? {};
+      card.append(element("strong", "", `${money(credits.balance)} left`));
+      card.append(element("small", "muted", finite(credits.totalUsed) ? `${money(credits.totalUsed)} used to date` : "Balance read from the gateway"));
+    } else {
+      card.append(element("strong", "", "Read"));
     }
-    return target;
+    const today = providerToday(local, account.provider);
+    if (today) card.append(element("small", "muted", today));
+    return card;
+  }
+  function accountsSection(report) {
+    const local = report.local?.ok === false ? null : report.local;
+    const accounts = accountsOf(report);
+    if (!accounts.length) {
+      return emptyBox("No connected providers", report.accounts?.ok === false ? report.accounts.error || "The account readings could not be made." : "Save a provider key or install a coding CLI in Settings; each connected provider appears here with its own account reading.");
+    }
+    const grid = element("div", "lab-usage-grid tracker-accounts");
+    for (const account of accounts) grid.append(accountCard(account, local));
+    return grid;
   }
 
   function localSection(credits) {
-    const note = "Counts only calls Studio recorded for this project, with the costs the provider reported. Calls without reported cost stay unknown, so this estimate can only be lower than the account's real usage.";
+    const note = "Counts the OpenCode Go calls in both ledgers (the assistant's Go route and every coding turn OpenCode ran on Go) with the costs the provider reported. Calls without reported cost stay unknown, so this estimate can only be lower than the account's real usage.";
     const stack = element("div", "tracker-stack");
     const windows = element("div", "tracker-windows");
-    for (const [key, label] of [["rolling", "5h"], ["weekly", "Week"], ["monthly", "Month"]]) windows.append(windowBar(label, credits?.[key]));
+    for (const [key, , short] of WINDOW_LABELS) windows.append(windowBar(short, credits?.[key]));
     stack.append(windows);
     const detail = element("div", "tracker-detail");
-    for (const [key, label] of [["rolling", "5h"], ["weekly", "Week"], ["monthly", "Month"]]) {
+    for (const [key, , short] of WINDOW_LABELS) {
       const record = credits?.[key];
       if (!record) continue;
-      detail.append(element("p", "muted", `${label}: ${localCost(record)} of ${money(record.limitUsd, 2)} · ${number(record.calls)} calls · ${number(record.unknownRecords)} without reported cost`));
+      detail.append(element("p", "muted", `${short === "Wk" ? "Week" : short === "Mo" ? "Month" : short}: ${localCost(record)} of ${money(record.limitUsd, 2)} · ${number(record.calls)} calls · ${number(record.unknownRecords)} without reported cost`));
     }
     stack.append(detail);
     return section("Recorded OpenCode Go spend (local estimate)", note, stack);
   }
 
-  function renderSummary(local) {
+  function renderSummary(local, report) {
     const grid = element("div", "lab-usage-grid");
+    const connected = accountsOf(report).length;
     const stats = [
-      ["Calls recorded", number(local.totals.calls)],
-      ["Calls today", number(local.today.calls)],
-      ["Recorded cost", costText(local.totals.usage.costUsd)],
-      ["Lifetime calls", number(local.lifetime?.calls)],
+      ["Calls recorded", number(local.totals.calls), origins(local.totals)],
+      ["Calls today", number(local.today.calls), `${compact(local.today.usage?.totalTokens?.known)} tokens · ${costText(local.today.usage?.costUsd)}`],
+      ["Recorded cost", costText(local.totals.usage.costUsd), `${number(local.totals.usage.costUsd?.unknownRecords)} calls without a reported cost`],
+      ["Providers", number(rows(local.providers).length), `${number(connected)} connected · lifetime ${number(local.lifetime?.calls)} Studio calls`],
     ];
-    for (const [label, value] of stats) { const card = element("div", "lab-usage-card"); card.append(element("span", "", label), element("strong", "", value)); grid.append(card); }
+    for (const [label, value, detail] of stats) {
+      const card = element("div", "lab-usage-card");
+      card.append(element("span", "", label), element("strong", "", value), element("small", "muted", detail));
+      grid.append(card);
+    }
     return grid;
   }
+  function providersTable(local) {
+    if (!rows(local.providers).length) return emptyBox("No providers observed", "Provider totals appear after the first recorded call or coding turn.");
+    return table(["Provider", "Calls", "Errors", "Input tokens", "Output tokens", "Cache read", "Reported cost", "Unpriced calls"], local.providers, (row) => [
+      twoLine(row.label || row.provider, `${row.kind || "unknown"}${row.providerIds?.length ? ` · ids ${row.providerIds.join(", ")}` : ""}`),
+      twoLine(number(row.calls), origins(row)),
+      number(row.errors), number(row.usage.inputTokens.known), number(row.usage.outputTokens.known), number(row.usage.cacheReadTokens?.known),
+      costText(row.usage.costUsd), number(row.usage.costUsd.unknownRecords),
+    ]);
+  }
   function daysTable(local) {
-    if (!rows(local.days).length) return emptyBox("No recorded calls yet", "Days appear here as Studio records measured calls. Unknown values stay unknown.");
-    return table(["Day", "Calls", "Errors", "Input tokens", "Output tokens", "Recorded cost"], local.days, (day) => [
-      day.day, number(day.calls), number(day.errors), number(day.usage.inputTokens.known), number(day.usage.outputTokens.known), costText(day.usage.costUsd),
+    if (!rows(local.days).length) return emptyBox("No recorded calls yet", "Days appear here as Studio records calls and OpenCode records coding turns. Unknown values stay unknown.");
+    return table(["Day", "Calls", "Errors", "Input tokens", "Output tokens", "Reported cost", "Providers"], local.days, (day) => [
+      day.day, twoLine(number(day.calls), origins(day)), number(day.errors), number(day.usage.inputTokens.known), number(day.usage.outputTokens.known), costText(day.usage.costUsd),
+      chips(rows(day.providers).map((row) => `${row.label || row.provider} · ${number(row.calls)}${row.usage?.costUsd?.knownRecords ? ` · ${money(row.usage.costUsd.known)}` : ""}`)),
     ]);
   }
   function modelsTable(local) {
     if (!rows(local.models).length) return emptyBox("No models observed", "Provider and model totals appear after the first recorded call.");
-    return table(["Model", "Calls", "Errors", "Total tokens", "Recorded cost", "Without cost"], local.models, (model) => [
-      modelName(model.provider, model.model), number(model.calls), number(model.errors), number(model.usage.totalTokens.known), costText(model.usage.costUsd), number(model.usage.costUsd.unknownRecords),
+    return table(["Model", "Calls", "Errors", "Total tokens", "Reported cost", "Unpriced calls"], local.models, (model) => [
+      modelName(model.label || model.provider, model.model), number(model.calls), number(model.errors), number(model.usage.totalTokens.known), costText(model.usage.costUsd), number(model.usage.costUsd.unknownRecords),
     ]);
+  }
+  function storeLine(local) {
+    const store = local.store;
+    if (!store) return "";
+    if (store.ok === false) return ` Coding sessions: ${store.error || "the OpenCode store could not be read."}`;
+    return ` Coding sessions: ${number(store.rows)} turns read from the OpenCode store${store.since ? ` since ${when(store.since)}` : ""}.`;
   }
 
   function renderFull(target, report) {
     const local = report.local ?? {};
     if (local.ok === false) { empty(target, "Usage could not be read", local.error || "The local ledger could not be read."); return; }
     target.replaceChildren();
-    target.append(renderSummary(local));
-    target.append(section("OpenCode Go account (live)", "Read from opencode.ai with the saved key. This is the provider's own window; it is not the local estimate.", liveSection(report.credits)));
+    target.append(renderSummary(local, report));
+    target.append(section("Connected accounts (live)", "Each provider's own reading over its saved key, or a plain statement when it offers none. These are the providers' numbers, not the local estimate.", accountsSection(report)));
     target.append(localSection(local.credits));
+    target.append(section("By provider", "Both ledgers: the calls Studio made and the coding turns OpenCode ran for this project. A plan or subscription reports no per-call cost, so its calls are unpriced rather than free.", providersTable(local)));
     target.append(section("Recorded usage by day", "Days use this machine's calendar. Cost is shown only when the provider reported it.", daysTable(local)));
-    target.append(section("By provider and model", "Sums from the local ledger for the active project.", modelsTable(local)));
-    const retired = local.retention?.dropped ? ` ${number(local.retention.dropped)} older details retired; lifetime totals retained.` : "";
-    target.append(element("p", "muted tracker-footnote", `${local.coverage || "Only calls recorded by Studio are included."}${retired}`));
+    target.append(section("By model", "Sums across both ledgers for the active project.", modelsTable(local)));
+    const retired = local.retention?.dropped ? ` ${number(local.retention.dropped)} older Studio details retired; lifetime totals retained.` : "";
+    target.append(element("p", "muted tracker-footnote", `${local.coverage || "Only recorded calls are included."}${storeLine(local)}${retired}`));
+  }
+
+  function accountLine(account, local) {
+    const row = rows(local?.providers).find((entry) => entry.provider === account.provider);
+    const today = row ? `today ${calls(row.today?.calls)} · ${compact(row.today?.usage?.totalTokens?.known)} tokens` : "no calls today";
+    if (account.read !== "none" && !account.ok) return element("p", "tracker-line tracker-line-warn", `${account.label} · ${account.error || "account read unavailable"}`);
+    if (account.read === "quota") {
+      const quota = account.quota ?? {};
+      return element("p", "tracker-line tracker-line-account", `${account.label} · 5h ${quota.rolling ? percent(quota.rolling.percent) : "—"} · wk ${quota.weekly ? percent(quota.weekly.percent) : "—"} · ${today}`);
+    }
+    if (account.read === "key") {
+      const key = account.key ?? {};
+      const left = account.credits ? `${money(account.credits.remaining)} left` : finite(key.limit) ? `${money(key.limitRemaining)} left of ${money(key.limit)}` : "no key limit";
+      return element("p", "tracker-line tracker-line-account", `${account.label} · ${money(key.usage)} spent · ${left}`);
+    }
+    if (account.read === "credits") return element("p", "tracker-line tracker-line-account", `${account.label} · ${money(account.credits?.balance)} left · ${money(account.credits?.totalUsed)} used`);
+    return element("p", "tracker-line tracker-line-account", `${account.label} · ${today}${row?.today?.usage?.costUsd?.knownRecords ? ` · ${money(row.today.usage.costUsd.known)}` : ""}`);
   }
 
   function renderCompact(target, report) {
     target.replaceChildren();
     const credits = report.credits ?? {};
     const local = report.local?.ok === false ? null : report.local;
+    const accounts = accountsOf(report);
+    const go = accounts.find((account) => account.provider === "opencode-go");
+    const goUsage = go?.ok ? go.usage : credits.ok ? credits.usage : null;
     const windows = element("div", "tracker-windows");
-    for (const [key, label] of [["rolling", "5h"], ["weekly", "Wk"], ["monthly", "Mo"]]) windows.append(windowBar(label, credits.ok ? credits.usage?.[key] : null));
+    for (const [key, , short] of WINDOW_LABELS) windows.append(windowBar(short, goUsage?.[key] ?? null));
     target.append(windows);
-    if (!credits.ok) target.append(element("p", "tracker-line tracker-line-warn", credits.error || "Live account usage is unavailable."));
+    if (!goUsage) target.append(element("p", "tracker-line tracker-line-warn", go?.error || credits.error || "Live account usage is unavailable."));
+    for (const account of accounts) if (account.provider !== "opencode-go") target.append(accountLine(account, local));
+    if (report.accounts?.ok === false && !accounts.length) target.append(element("p", "tracker-line tracker-line-warn", report.accounts.error || "Account readings are unavailable."));
     if (report.local?.ok === false) target.append(element("p", "tracker-line tracker-line-warn", report.local.error || "Local usage could not be read."));
     if (local) {
       const today = local.today.usage;
-      target.append(element("p", "tracker-line", `Recorded today · ${number(local.today.calls)} calls · ${number(today.totalTokens.known)} tokens · ${costText(today.costUsd)}`));
+      target.append(element("p", "tracker-line", `Recorded today · ${calls(local.today.calls)} · ${number(today.totalTokens.known)} tokens · ${costText(today.costUsd)}`));
       const estimate = local.credits;
       if (estimate) {
         target.append(element("p", "tracker-line", `Local estimate · 5h ${localCost(estimate.rolling)}/${money(estimate.rolling.limitUsd, 0)} · wk ${localCost(estimate.weekly)}/${money(estimate.weekly.limitUsd, 0)} · mo ${localCost(estimate.monthly)}/${money(estimate.monthly.limitUsd, 0)}`));
       }
+      if (local.store?.ok === false) target.append(element("p", "tracker-line tracker-line-warn", "Coding sessions unavailable: the OpenCode store could not be read."));
     }
   }
 
   function statusOf(report) {
     if (!report) return "Waiting for a reading…";
-    const stamp = report.credits?.fetchedAt ?? report.at;
-    return `Updated ${clock(stamp)}${report.credits?.ok === false ? " · live account read unavailable" : ""}`;
+    const stamp = report.accounts?.at ?? report.credits?.fetchedAt ?? report.at;
+    const failed = accountsOf(report).filter((account) => account.read !== "none" && !account.ok).length;
+    const note = report.credits?.ok === false ? " · live account read unavailable" : failed ? ` · ${failed} account read${failed === 1 ? "" : "s"} unavailable` : "";
+    return `Updated ${clock(stamp)}${note}`;
   }
   function render() {
     const report = state.report;
     if (!report) return;
     const full = $("model-lab-tracker-body");
     if (full) renderFull(full, report);
-    const compact = $("cmd-usage-body");
-    if (compact) renderCompact(compact, report);
+    const compactBody = $("cmd-usage-body");
+    if (compactBody) renderCompact(compactBody, report);
     const fullStatus = $("model-lab-tracker-status");
     if (fullStatus) fullStatus.textContent = statusOf(report);
     const compactState = $("cmd-usage-state");
@@ -11589,13 +11778,19 @@ body.music-preview-active #idle-hud { display: none !important; }
     state.pending = (async () => {
       const bridge = api();
       if (!bridge?.usageTracker) throw new Error("Usage tracking is available in the Studio desktop app.");
-      const [local, credits] = await Promise.all([
+      const [local, credits, accounts] = await Promise.all([
         bridge.usageTracker(),
         bridge.opencodeCredits ? bridge.opencodeCredits() : Promise.resolve({ ok: false, error: "Live account usage is unavailable in this build." }),
+        bridge.usageAccounts ? bridge.usageAccounts().catch((error) => ({ ok: false, error: error?.message || "Account readings are unavailable.", accounts: [] })) : Promise.resolve({ ok: false, error: "Account readings are unavailable in this build.", accounts: [] }),
       ]);
       if (token !== state.read) return state.report;
       state.at = Date.now();
-      state.report = { local: local ?? { ok: false, error: "No usage report." }, credits: credits ?? { ok: false, error: "No account reading." }, at: state.at };
+      state.report = {
+        local: local ?? { ok: false, error: "No usage report." },
+        credits: credits ?? { ok: false, error: "No account reading." },
+        accounts: accounts ?? { ok: false, error: "No account readings.", accounts: [] },
+        at: state.at,
+      };
       render();
       return state.report;
     })().catch((error) => {
@@ -22336,6 +22531,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       });
       window.mefiStudio?.machineSet?.({}).then((result) => {
         if (result?.ok && els.machineAuto) els.machineAuto.checked = result.machine.autoKill !== false;
+        if (result?.ok && els.machineMemoryOverride) els.machineMemoryOverride.checked = result.machine.memoryWarnOverride === true;
       });
     } catch (error) {
       // Never leave the pending "Loading sessions…" note stuck: render the
@@ -23472,6 +23668,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       machineBadge: "machine-badge",
       machineLines: "machine-lines",
       machineAuto: "machine-auto",
+      machineMemoryOverride: "machine-memory-override",
       machineList: "machine-list",
       machineEvents: "machine-events",
       openButton: "tree-explore",
@@ -23533,6 +23730,10 @@ body.music-preview-active #idle-hud { display: none !important; }
     els.machineAuto?.addEventListener("change", async () => {
       const result = await window.mefiStudio?.machineSet?.({ autoKill: els.machineAuto.checked });
       status(`resource manager auto-kill ${result?.machine?.autoKill ? "on" : "off"}`);
+    });
+    els.machineMemoryOverride?.addEventListener("change", async () => {
+      const result = await window.mefiStudio?.machineSet?.({ memoryWarnOverride: els.machineMemoryOverride.checked === true });
+      status(`memory warn override ${result?.machine?.memoryWarnOverride === true ? "on" : "off"}`);
     });
     window.mefiStudio?.onMachineStatus?.((status) => renderMachine(status));
     // A quiet backstop poll: the push subscriptions above carry live updates,
@@ -27449,7 +27650,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   const STEP_SLOW_MS = 15000;
   const STEP_DEAD_MS = 60000;
   const FADE_MS = 180;
-  const boot = { active: false, phase: "idle", epoch: 0, steps: [], promise: Promise.resolve(true), resolve: null, onReady: null };
+  const boot = { active: false, phase: "idle", epoch: 0, steps: [], promise: Promise.resolve(true), resolve: null, onReady: null, choose: null, choice: null };
   const el = {};
   const locked = new Map();
   let startedAt = 0;
@@ -27472,11 +27673,17 @@ body.music-preview-active #idle-hud { display: none !important; }
     }
     const failed = boot.steps.filter((step) => step.status === "error");
     const loading = boot.steps.find((step) => step.status === "loading" || step.status === "pending");
-    if (el.title) el.title.textContent = boot.phase === "error" ? "A little more setup is needed" : boot.phase === "ready" ? "Your studio is ready" : "Opening your studio";
-    if (el.detail) el.detail.textContent = boot.phase === "error"
-      ? "Couldn't finish " + failed.map((step) => step.label.toLowerCase()).join(", ") + ". Retry, or open with what's available."
-      : boot.phase === "ready" ? "Everything is in place." : loading ? loading.label + "…" : "Preparing your workspace…";
+    const choosing = boot.phase === "choose";
+    if (el.title) el.title.textContent = choosing ? "Choose a project" : boot.phase === "error" ? "A little more setup is needed" : boot.phase === "ready" ? "Your studio is ready" : "Opening your studio";
+    if (el.detail) el.detail.textContent = choosing
+      ? "Pick the folder to open. Nothing runs until you say so."
+      : boot.phase === "error"
+        ? "Couldn't finish " + failed.map((step) => step.label.toLowerCase()).join(", ") + ". Retry, or open with what's available."
+        : boot.phase === "ready" ? "Everything is in place." : loading ? loading.label + "…" : "Preparing your workspace…";
     if (el.actions) el.actions.hidden = boot.phase !== "error";
+    // The launch choice stands in for the progress readout until it is made.
+    if (el.choose) el.choose.hidden = !choosing;
+    for (const node of [el["progress-heading"], el.progress, el.steps]) if (node) node.hidden = choosing;
     for (const step of boot.steps) if (step.row) {
       step.row.dataset.state = step.status;
       step.row.textContent = step.label + (step.status === "ready" ? " · Ready" : step.status === "error" ? " · Couldn't load" : "");
@@ -27491,13 +27698,19 @@ body.music-preview-active #idle-hud { display: none !important; }
     event.stopImmediatePropagation();
     if (event.key === "Tab") {
       event.preventDefault();
-      const buttons = boot.phase === "error" ? [el.retry, el.continue].filter(Boolean) : [];
+      const buttons = boot.phase === "error" ? [el.retry, el.continue].filter(Boolean) : boot.phase === "choose" ? chooserControls() : [];
       if (!buttons.length) el.layer?.focus({ preventScroll: true });
       else {
         const index = buttons.indexOf(document.activeElement);
         buttons[(index + (event.shiftKey ? buttons.length - 1 : 1)) % buttons.length].focus();
       }
     } else if (event.key === "Escape" || !el.layer?.contains(event.target)) event.preventDefault();
+  }
+
+  // Tab stays inside the launch choice: its project rows and buttons.
+  function chooserControls() {
+    const nodes = el.choose?.querySelectorAll?.("button:not([disabled]), input:not([disabled])") ?? [];
+    return Array.from(nodes).filter((node) => !node.hidden && !node.closest?.("[hidden]"));
   }
 
   function blockOutside(event) {
@@ -27532,7 +27745,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (el.layer) { el.layer.hidden = true; el.layer.classList.remove("done"); }
     document.documentElement?.removeAttribute("data-starting");
     boot.phase = complete ? "complete" : "partial";
-    try { boot.onReady?.(complete); } catch (error) { console.error("Startup handoff failed", error); }
+    try { boot.onReady?.(complete, boot.choice); } catch (error) { console.error("Startup handoff failed", error); }
     boot.resolve?.(complete);
     boot.resolve = null;
   }
@@ -27582,11 +27795,29 @@ body.music-preview-active #idle-hud { display: none !important; }
     fadeTimer = setTimeout(() => { if (isCurrent()) release(true); }, reducedMotion() ? 0 : FADE_MS);
   }
 
-  function run(steps, onReady) {
+  // The launch choice runs first, with the gate locked, before any readiness
+  // step reads the workspace: the project it names is what the steps load.
+  async function begin() {
+    if (boot.choose) {
+      const epoch = boot.epoch;
+      const isCurrent = () => boot.active && boot.epoch === epoch;
+      boot.phase = "choose";
+      paint();
+      try { boot.choice = await boot.choose({ isCurrent }); }
+      catch (error) { boot.choice = null; console.warn("Startup choice failed", error); }
+      boot.choose = null; // Retry reloads data; it never asks again.
+      if (!isCurrent()) return;
+    }
+    void attempt();
+  }
+
+  function run(steps, onReady, options = {}) {
     if (boot.active) return boot.promise;
-    for (const name of ["layer", "title", "detail", "progress", "count", "steps", "actions", "retry", "continue"]) el[name] = document.getElementById("boot-" + name);
+    for (const name of ["layer", "title", "detail", "progress", "progress-heading", "count", "steps", "actions", "retry", "continue", "choose"]) el[name] = document.getElementById("boot-" + name);
     boot.steps = steps.map((step) => ({ ...step, status: "pending", row: null }));
     boot.onReady = onReady;
+    boot.choose = typeof options?.choose === "function" ? options.choose : null;
+    boot.choice = null;
     boot.active = true;
     boot.phase = "loading";
     startedAt = performance.now();
@@ -27603,7 +27834,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     lock();
     paint();
     // Start after DOM initialization, so readiness hooks refer to wired views.
-    const start = () => { if (boot.active) void attempt(); };
+    const start = () => { if (boot.active) void begin(); };
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
     else start();
     return boot.promise;
@@ -27659,6 +27890,125 @@ body.music-preview-active #idle-hud { display: none !important; }
   });
 
   window.MefiBoot = { run, ready: () => boot.promise, state, read, isActive: () => boot.active, pollStart, pollStop, pollActive: (key) => Boolean(polls.get(key)?.timer) };
+})();
+
+// The launch screen inside the startup gate: which project to open, and
+// whether the agents may start. It runs before any readiness step reads the
+// workspace, so the steps load the project the user named. Choosing only
+// selects the project on the host; the agents stay held (autopilot.held in
+// main.cjs) until "Open and start agents" here, or the workspace's Start
+// agents control, releases them. Diagnostic launches, a renderer reload after
+// the choice, and any bridge without the startup contract skip the screen.
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById("boot-" + id);
+  const api = () => window.mefiStudio;
+  const available = () => Boolean(api()?.startupState && api()?.startupChoose && api()?.startupBegin);
+  const state = { projects: [], selectedId: null, busy: false };
+
+  function node(tag, className, textContent) {
+    const element = document.createElement(tag);
+    if (className) element.className = className;
+    if (textContent !== undefined) element.textContent = textContent;
+    return element;
+  }
+  function note(text, error = false) {
+    const target = $("choose-note");
+    if (!target) return;
+    target.textContent = text || (state.selectedId ? "Agents stay off until you start them." : "You can add a folder later from the sidebar.");
+    target.classList.toggle("error", Boolean(error));
+  }
+  // The host's answer names the selection: a folder it just opened, a folder
+  // it just added, the current pick if it still exists, else the active one.
+  function adopt(result) {
+    if (Array.isArray(result?.projects)) state.projects = result.projects;
+    const known = (id) => state.projects.some((project) => project.id === id);
+    const preferred = [result?.selectedId, result?.addedId, state.selectedId, result?.activeId, state.projects[0]?.id].find((id) => typeof id === "string" && known(id));
+    state.selectedId = preferred ?? null;
+  }
+  function render() {
+    const list = $("projects");
+    if (!list) return;
+    list.replaceChildren();
+    if (!state.projects.length) list.append(node("p", "boot-projects-empty", "No project is open yet. Open a folder and Studio will start there, or continue without one."));
+    for (const project of state.projects) {
+      const selected = project.id === state.selectedId;
+      const row = node("button", selected ? "boot-project selected" : "boot-project");
+      row.type = "button";
+      row.setAttribute("role", "radio");
+      row.setAttribute("aria-checked", String(selected));
+      row.dataset.projectId = project.id;
+      row.title = project.path || "";
+      const text = node("span", "boot-project-text");
+      text.append(node("span", "boot-project-name", project.name || project.path || "Project"), node("span", "boot-project-path", project.path || ""));
+      row.append(node("span", "boot-project-icon", String(project.name || "P").slice(0, 1).toUpperCase()), text);
+      row.addEventListener("click", () => { if (state.busy) return; state.selectedId = project.id; render(); note(""); });
+      list.append(row);
+    }
+    if ($("open")) $("open").textContent = state.selectedId ? "Open studio" : "Continue without a project";
+    if ($("open-start")) $("open-start").hidden = !state.selectedId;
+  }
+  function setBusy(busy, label) {
+    state.busy = busy;
+    for (const id of ["open", "open-start", "add-project"]) if ($(id)) $(id).disabled = busy;
+    for (const row of $("projects")?.querySelectorAll?.("button") ?? []) row.disabled = busy;
+    if ($("open") && label) $("open").textContent = label;
+  }
+  function focusSelected() {
+    const row = $("projects")?.querySelector?.('[aria-checked="true"]');
+    (row || $("open"))?.focus?.({ preventScroll: true });
+  }
+
+  // Resolves with the choice once the host has the project open, or with null
+  // when the screen does not apply (the gate then proceeds as before).
+  async function choose({ isCurrent = () => true } = {}) {
+    if (!available() || !$("choose")) return null;
+    let info = null;
+    try { info = await api().startupState(); } catch (error) { console.warn("Startup state unavailable", error); return null; }
+    if (!isCurrent() || !info?.ok || info.interactive === false || info.chosen === true) return null;
+    adopt({ projects: info.projects, activeId: info.activeId });
+    render();
+    note("");
+    return new Promise((resolve) => {
+      const finish = async (startAgents) => {
+        if (state.busy || !isCurrent()) return;
+        setBusy(true, state.selectedId ? "Opening…" : "Continuing…");
+        note("");
+        try {
+          const result = await api().startupChoose(state.selectedId);
+          if (!isCurrent()) return;
+          if (result?.ok === false) { note(result.error || "The project could not be opened.", true); return; }
+          adopt(result);
+          const changed = (result?.activeId ?? null) !== (info.activeId ?? null);
+          resolve({ projectId: result?.activeId ?? state.selectedId ?? null, startAgents, changed });
+        } catch (error) { note(error?.message || "The project could not be opened.", true); }
+        finally { if (isCurrent()) { setBusy(false); render(); } }
+      };
+      $("open").onclick = () => finish(false);
+      $("open-start").onclick = () => finish(true);
+      if ($("add-project")) $("add-project").onclick = async () => {
+        if (state.busy || !api()?.projectsAdd) return;
+        setBusy(true);
+        try {
+          const result = await api().projectsAdd();
+          if (!isCurrent()) return;
+          if (result?.ok === false) note(result.error || "That folder could not be opened.", true);
+          else if (!result?.canceled) { adopt(result); note(""); }
+        } catch (error) { note(error?.message || "That folder could not be opened.", true); }
+        finally { if (isCurrent()) { setBusy(false); render(); focusSelected(); } }
+      };
+      focusSelected();
+    });
+  }
+
+  // "Open and start agents": called once the studio is up, never before.
+  async function begin() {
+    if (!api()?.startupBegin) return { ok: false, error: "Desktop app only." };
+    try { return await api().startupBegin(); }
+    catch (error) { console.warn("Starting the agents failed", error); return { ok: false, error: error?.message || "Starting the agents failed." }; }
+  }
+
+  window.MefiStartup = { choose, begin, available, state: () => ({ projects: state.projects.map((project) => project.id), selectedId: state.selectedId, busy: state.busy }) };
 })();
 
 // The working home: project context, a conversation, and durable work results.
@@ -27968,8 +28318,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     const paused = backlog?.paused || state.assistant.status === "paused";
     const draining = Boolean(backlog?.draining && !paused);
     $("run-backlog").textContent = state.busyAction === "run" ? "Preparing the backlog…" : state.busyAction === "pause" ? "Pausing…" : draining ? "Pause backlog" : "Work through backlog ↗";
-    $("backlog-title").textContent = state.backlogUnavailable ? "Backlog status unavailable" : paused ? "Ready when you are" : draining ? "One step closer" : "A little progress, every pass";
-    $("backlog-summary").textContent = state.backlogUnavailable ? "Couldn't refresh the queue. Use Retry loading below the conversation." : backlog?.summary || (backlog ? paused ? "New work is paused. Running jobs finish normally." : "Work through existing tasks and ideas in small batches." : api()?.backlogStatus ? "Checking your project's backlog…" : "Open the updated desktop app to manage the backlog.");
+    const held = state.status.held === true; // launch hold: nothing moves until Start agents
+    $("backlog-title").textContent = state.backlogUnavailable ? "Backlog status unavailable" : paused || held ? "Ready when you are" : draining ? "One step closer" : "A little progress, every pass";
+    $("backlog-summary").textContent = state.backlogUnavailable ? "Couldn't refresh the queue. Use Retry loading below the conversation." : held ? "Agents are waiting for you. Press Start agents above to let this queue move." : backlog?.summary || (backlog ? paused ? "New work is paused. Running jobs finish normally." : "Work through existing tasks and ideas in small batches." : api()?.backlogStatus ? "Checking your project's backlog…" : "Open the updated desktop app to manage the backlog.");
     $("backlog-metrics").replaceChildren();
     for (const [key, label] of [["ready", "ready"], ["running", "working"], ["approval", "to approve"], ["waiting", "waiting"], ["blocked", "need attention"]]) {
       if (["waiting", "approval"].includes(key) && !counts[key]) continue;
@@ -28111,20 +28462,22 @@ body.music-preview-active #idle-hud { display: none !important; }
   function renderCompanion() {
     const assistant = state.assistant;
     const paused = assistant.status === "paused" || assistant.prefs?.paused;
+    const held = state.status.held === true; // launch hold: agents wait for Start agents
     const workersOff = state.status.execute === false;
     const running = state.status.running || [];
     const working = running.length > 0;
     const reviewing = state.tasks.some((task) => taskView(task).filter === "review");
     const nickname = companion();
-    $("companion-name").textContent = paused ? `${nickname} is taking a breath` : working ? `${nickname} is making progress` : `${nickname} is here`;
+    $("companion-name").textContent = held && !working ? `${nickname} is waiting for you` : paused ? `${nickname} is taking a breath` : working ? `${nickname} is making progress` : `${nickname} is here`;
     const action = assistant.action;
     const waiting = state.backlog?.waiting || state.status.waiting;
     const narration = working ? `Working on ${running[0].title || "your task"}${running.length > 1 ? ` · ${running.length} jobs running` : ""}.` : paused ? "New work is paused. Any running jobs will finish normally." : state.pending ? "I'm listening. Your message is on its way." : waiting ? (typeof waiting === "string" ? waiting : waiting.text || waiting.reason || "Work is queued and waiting for an available worker.") : state.backlog?.draining && state.backlog?.next?.length ? `Next I'll pick up ${state.backlog.next[0].title}.` : reviewing ? "There's work that needs a closer look. Open Review to see results and blockers." : action?.text && !["idle", "listening"].includes(action.text) ? action.text : "Tell me what you have in mind. We can take it one step at a time.";
-    $("narration").textContent = !working && !paused && workersOff ? "Coding workers are off. Your tasks are saved; use Work through backlog when you're ready to start them." : narration;
+    $("narration").textContent = held && !working ? "Agents are waiting for you. Press Start agents when you're ready; your tasks and ideas are saved." : !working && !paused && workersOff ? "Coding workers are off. Your tasks are saved; use Work through backlog when you're ready to start them." : narration;
     $("companion-track").dataset.station = working ? "make" : reviewing ? "review" : "listen";
     $("companion-track").classList.toggle("busy", working || state.pending);
-    $("pause").textContent = paused ? "Resume" : "Pause";
-    $("connection").textContent = !api() ? "Browser preview" : paused ? "New work paused" : workersOff ? "Coding workers off" : assistant.ai?.keyPresent === false ? "Connect an AI in Settings" : working ? "Working with you" : "Ready when you are";
+    $("pause").textContent = held ? "Start agents" : paused ? "Resume" : "Pause";
+    $("pause").title = held ? "Start the assistant and the coding workers. Nothing has run since Studio opened." : "Pause new work. Running jobs finish normally.";
+    $("connection").textContent = !api() ? "Browser preview" : held ? "Agents waiting for you" : paused ? "New work paused" : workersOff ? "Coding workers off" : assistant.ai?.keyPresent === false ? "Connect an AI in Settings" : working ? "Working with you" : "Ready when you are";
     $("connection").classList.toggle("working", working);
     const logs = (assistant.log || []).filter((entry) => entry.kind !== "tick").slice(-8).reverse();
     const signature = JSON.stringify(logs);
@@ -28339,7 +28692,18 @@ body.music-preview-active #idle-hud { display: none !important; }
     $("restart")?.addEventListener("click", () => void restartStudio());
     $("pause").addEventListener("click", async () => {
       $("pause").disabled = true;
-      try { const paused = state.assistant.status === "paused" || state.assistant.prefs?.paused; const result = guard(await api().assistantControl(paused ? "resume" : "pause")); state.assistant = result.state; renderCompanion(); scheduleBacklogRead(); feedback(paused ? "New work can start again." : "New work paused. Running jobs finish normally."); }
+      try {
+        if (state.status.held === true) {
+          // The launch screen left the agents off; this is the user's Start.
+          const result = guard(await api().assistantControl("start"));
+          if (result.state) state.assistant = result.state;
+          state.status = { ...state.status, ...(result.autopilot || {}), held: false };
+          renderCompanion(); renderBacklog(); scheduleBacklogRead();
+          feedback(result.running ? "Agents started. New work can begin." : "Agents are on. The assistant was paused last time; press Resume to let new work start.");
+          return;
+        }
+        const paused = state.assistant.status === "paused" || state.assistant.prefs?.paused; const result = guard(await api().assistantControl(paused ? "resume" : "pause")); state.assistant = result.state; renderCompanion(); scheduleBacklogRead(); feedback(paused ? "New work can start again." : "New work paused. Running jobs finish normally.");
+      }
       catch (error) { feedback(error.message, true); } finally { controls(); }
     });
     for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "aurora"]]) {
@@ -29587,28 +29951,57 @@ body.music-preview-active #idle-hud { display: none !important; }
 })();
 
 // A local, resumable guide. Reading a lesson never changes a project or runs work.
-// "Walk with me" keeps a small coach in the corner while it navigates the real
-// menus with the user, highlights the exact control and ticks each stop off.
+// The first stop links an AI (the scan) and, from then on, that AI helps with
+// the rest of the setup: after "Use this setup and continue" the guide maps
+// the selected folder, asks the linked model to plan the remaining stops, and
+// shows the plan beside each one, with a progress bar for the setup and an
+// activity bar for anything that takes time. Only the scan, map and assistant
+// buttons (and the chain they start) reach the host; the scan saves nothing
+// until "Use this setup", the map saves ideas, never tasks, and the assistant
+// only writes advice. "Walk with me" keeps a small coach in the corner while
+// it navigates the real menus with the user and ticks each stop off.
 (function () {
   "use strict";
-  const KEY = "mefiStudio.walkthrough.v1";
-  const VERSION = 1;
+  const KEY = "mefiStudio.walkthrough.v2";
+  const LEGACY_KEY = "mefiStudio.walkthrough.v1";
+  const VERSION = 2;
   const MODES = ["idle", "sheet", "coach"];
+  const SCAN = 0, WORKSPACE = 1, MAP = 2, CONNECT = 3, CREATE = 4, MONITOR = 5, REVIEW = 6;
+  const BUILD_MODE_STEPS = [WORKSPACE, CREATE];
+  // v1 lesson index → v2 lesson index (the scan and the map are new stops).
+  const LEGACY_STEPS = [WORKSPACE, CONNECT, CREATE, MONITOR, REVIEW];
+  const SCAN_STEPS = ["locate", "version", "auth", "models", "verbose", "agents"];
+  const SCAN_STEP_LABELS = { locate: "finding OpenCode", version: "reading its version", auth: "linked providers", models: "models", verbose: "free models", agents: "agents" };
+  const ADVICE_STOPS = [["workspace", WORKSPACE], ["map", MAP], ["connections", CONNECT], ["create", CREATE], ["monitor", MONITOR], ["review", REVIEW]];
   const $ = (id) => document.getElementById(`walkthrough-${id}`);
   const lessons = [
+    {
+      title: "Link an AI and scan this computer", short: "Scan", glyph: "g-ambience", panel: "scan",
+      copy: "Before anything is read or built, find out what this computer already has: the OpenCode command line, the providers linked in it, the free models it can reach, and the keys saved in Studio. The AI chosen here helps with the rest of this setup.",
+      points: ["The scan asks OpenCode for its version, its linked provider names, its model list and its agents. It never opens the credential store, never sends a prompt and never changes OpenCode's own configuration.", "Free models cost nothing and are used first for exploring; paid plans you have linked are kept for building. Free-tier models may use prompts to improve the model, so keep confidential work on a paid model.", "Nothing is saved until you choose Use this setup and continue. From there the guide maps your selected folder and asks the linked AI to plan the remaining stops. You can run the scan again from Settings & connections after linking a provider."],
+      action: null, note: "Run the first scan reads OpenCode's own answers. Use this setup and continue saves the choices shown (no key), maps the selected folder, and asks the linked AI what to do next.",
+      done: "Setup saved",
+    },
     {
       title: "Welcome to Mefi's Studio", short: "Your workspace", glyph: "g-explorer",
       copy: "Turn an idea into a checked result: talk it through, create a task or plan, follow the work, then review what changed. This guide shows you where to do each step, and can walk the menus with you.",
       points: ["Start with Projects in the sidebar. Use + to add an existing folder, then select it. Check the project name above the conversation before adding work.", "Choose how builds start below. Auto build is on by default. Turn it off for Verify first: inspect each task, then approve the ones you want built.", "Each project keeps its own tasks, plans, conversation and results. Your project files stay in their folder; Studio keeps its history separately."],
       action: "Walk me to my projects", route: "project",
       station: "I opened the project menu with you and highlighted +. Add an existing folder, then select it. I tick this off the moment you are in a project.",
-      note: "This opens the workspace and the project menu with you. It does not change your selected project.",
+      note: "This opens the workspace and the project menu with you. It does not change your selected project. With a setup saved, selecting a folder here starts its map.",
       target: "#workspace-add-project", menu: true, waitFor: "mefi:project-changed", done: "Project selected",
     },
     {
+      title: "Map the folder", short: "First map", glyph: "g-explorer", panel: "map",
+      copy: "Let a read-only explorer lay out the node tree for the selected folder: what the project is, where its parts live, how it is checked, and what small work could start first.",
+      points: ["The explorer runs OpenCode's built-in plan agent on the model the scan chose (a free one when available). It reads and searches; it cannot edit files or run commands.", "As it works it writes its map as a todo list, which appears as nodes under its session in the tree. Its suggested first tasks are saved as ideas in Your work — nothing is admitted or built.", "Free models answer one request at a time and can take a few minutes on a large folder. Cancel at any point; a cancelled map saves nothing."],
+      action: null, note: "Map this project starts one explorer session in the selected folder. Ideas can be promoted to tasks later, one by one.",
+      waitFor: "mefi:first-map", done: "Folder mapped",
+    },
+    {
       title: "Connect the assistant and coding workers", short: "Connections", glyph: "g-ambience",
-      copy: "The assistant helps you think and organize. Coding workers carry out tasks in your project. Their provider settings are separate.",
-      points: ["In Settings & connections, save the key for the assistant provider you want, choose Grok, Claude Code or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Choose the coding worker provider and ensure its CLI is installed and signed in. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; it advises on related work and does not replace your coding provider."],
+      copy: "The assistant helps you think and organize. Coding workers carry out tasks in your project. Their provider settings are separate, and the scan's choices are shown at the top of Settings.",
+      points: ["In Settings & connections, save the key for the assistant provider you want, choose Grok, Claude Code or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Coding workers run through OpenCode by default: on your linked plan, or on the free model the scan found. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; without it the assistant's own model, or a free model, stands in for the small routing decisions."],
       action: "Walk me to connections", route: "studio",
       station: "We are in Settings & connections together, at the assistant group. Save the key you want, then scroll to the coding worker group and confirm its CLI is signed in. Nothing is sent until you choose to test it.",
       note: "Connection tests and AI requests may use your provider allowance when you explicitly run them.",
@@ -29616,7 +30009,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     },
     {
       title: "Give a clear task, or explore a plan", short: "Create", glyph: "g-tasks",
-      copy: "Use Give a task when the outcome is clear. Use Plan an idea when you need to settle questions before anything is built.",
+      copy: "Use Give a task when the outcome is clear. Use Plan an idea when you need to settle questions before anything is built. The map's ideas, and the assistant's suggested first task, are good places to start.",
       points: ["Talk together is for questions and discussion. Give a task saves work in the selected project; Use a task outline helps you describe the result and checks.", "Start small: for example, ‘Add a Create note button to the empty notes list; check that it opens a new note.’ Say what should stay unchanged, too.", "Plan an idea collects questions and decisions. Review and approve the specification, then explicitly create its tasks.", "With Verify first, View task lets you inspect the brief and Approve build, or leave it waiting. New work also follows your Pause and worker settings."],
       action: "Walk me to the task box", route: "task", secondary: "Explore a plan", secondaryRoute: "plans",
       station: "This is the task box for the selected project. Describe the result and how you will check it, or open Use a task outline for a guided shape. I do not send anything from here.",
@@ -29626,7 +30019,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     {
       title: "Follow the queue and current work", short: "Monitor", glyph: "g-command",
       copy: "Your work is the everyday queue. Command's node tree shows live workers, their current step and what is waiting to run.",
-      points: ["Your work separates the queue, saved ideas, Review and Done. Open any task for its brief, prerequisites, history and result.", "In Node tree, Live work shows running workers and their reported steps. Click Ready, Waiting or Needs attention to see the matching tasks and their reasons.", "Work through backlog starts existing work and admits saved ideas gradually. Pause stops new scheduling while current workers finish; let them finish before switching projects.", "A prerequisite must finish before dependent work starts. Read connection, retry and file-conflict messages before adding more work."],
+      points: ["Your work separates the queue, saved ideas, Review and Done. Open any task for its brief, prerequisites, history and result.", "In Node tree, Live work shows running workers and their reported steps. Click Ready, Waiting or Needs attention to see the matching tasks and their reasons.", "Work through backlog starts existing work and admits saved ideas gradually. Pause stops new scheduling while current workers finish; let them finish before switching projects.", "Free workers run one at a time and take longer than a paid model. A prerequisite must finish before dependent work starts. Read connection, retry and file-conflict messages before adding more work."],
       action: "Walk me to Live work", route: "command", secondary: "Open task board", secondaryRoute: "tasks",
       station: "We are in Command. Live work on the right follows running workers and their reported steps; the node tree behind it follows your selection. Open a reason like Ready, Waiting or Needs attention to see the matching tasks.",
       note: "Follow in Command tracks active work. You can pan or select a task to take control of the view.",
@@ -29643,23 +30036,51 @@ body.music-preview-active #idle-hud { display: none !important; }
     },
   ];
   const blankDone = () => lessons.map(() => false);
+  const clampStep = (value) => Number.isInteger(value) ? Math.max(0, Math.min(lessons.length - 1, value)) : 0;
+  function normalize(value) {
+    return {
+      version: VERSION,
+      step: clampStep(value?.step),
+      status: ["new", "reading", "dismissed", "complete"].includes(value?.status) ? value.status : "new",
+      mode: MODES.includes(value?.mode) ? value.mode : "idle",
+      done: blankDone().map((_, index) => Boolean(value?.done?.[index])),
+    };
+  }
+  // A v1 guide keeps its ticks under the new numbering. A finished or dismissed
+  // v1 guide comes back as an invitation (never as an automatic reopen) so the
+  // new stops are offered once.
+  function migrate(legacy) {
+    const done = blankDone();
+    (Array.isArray(legacy?.done) ? legacy.done : []).forEach((value, index) => { if (value && LEGACY_STEPS[index] !== undefined) done[LEGACY_STEPS[index]] = true; });
+    const status = ["complete", "dismissed"].includes(legacy?.status) ? "reading" : legacy?.status;
+    const step = ["complete", "dismissed"].includes(legacy?.status) ? SCAN : LEGACY_STEPS[Number.isInteger(legacy?.step) ? legacy.step : 0] ?? SCAN;
+    return normalize({ step, status, mode: "idle", done });
+  }
   function read() {
     try {
       const value = JSON.parse(localStorage.getItem(KEY));
-      if (value?.version === VERSION) return {
-        version: VERSION,
-        step: Number.isInteger(value.step) ? Math.max(0, Math.min(lessons.length - 1, value.step)) : 0,
-        status: ["new", "reading", "dismissed", "complete"].includes(value.status) ? value.status : "new",
-        mode: MODES.includes(value.mode) ? value.mode : "idle",
-        done: blankDone().map((_, index) => Boolean(value.done?.[index])),
-      };
+      if (value?.version === VERSION) return normalize(value);
     } catch {}
-    return { version: VERSION, step: 0, status: "new", mode: "idle", done: blankDone() };
+    try {
+      const legacy = JSON.parse(localStorage.getItem(LEGACY_KEY));
+      if (legacy?.version === 1) return migrate(legacy);
+    } catch {}
+    return normalize(null);
   }
   let state = read();
   let initialized = false;
   let claimed = false;
   let highlighted = null;
+  let scanResult = null;
+  let scanBusy = false;
+  let scanSynced = false;
+  let scanStarted = false;
+  let mapResult = null;
+  let mapBusy = false;
+  let mapStartedAt = 0;
+  const mapSteps = [];
+  let assistResult = null;
+  let assistBusy = false;
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
   function node(tag, className, text) {
     const element = document.createElement(tag);
@@ -29671,6 +30092,16 @@ body.music-preview-active #idle-hud { display: none !important; }
     try { if (typeof requestAnimationFrame === "function") { requestAnimationFrame(fn); return; } } catch {}
     try { setTimeout(fn, 0); } catch { fn(); }
   }
+  // The only doors to the host. A missing bridge (browser preview, capture,
+  // an older desktop build) leaves the panels explaining themselves instead of
+  // throwing; reading and navigating never reach these.
+  function hostApi(name) {
+    try {
+      const api = window.mefiStudio;
+      const fn = api?.[name];
+      return typeof fn === "function" ? (...args) => fn.apply(api, args) : null;
+    } catch { return null; }
+  }
   // The workspace header carries the truth about a selected project. Reading it
   // keeps the guide away from every project-writing host API.
   function projectReady() {
@@ -29680,9 +30111,33 @@ body.music-preview-active #idle-hud { display: none !important; }
   }
   function isDone(index) {
     if (state.done[index]) return true;
-    return index === 0 && projectReady();
+    return index === WORKSPACE && projectReady();
   }
   const doneCount = () => lessons.filter((_, index) => isDone(index)).length;
+  const setupSaved = () => state.done[SCAN] || Boolean(scanResult?.ok && scanResult.applied);
+  // ---- progress -----------------------------------------------------------------------
+  function fill(element, fraction) {
+    if (!element) return;
+    const style = element.style || (element.style = {});
+    style.width = `${Math.round(Math.max(0, Math.min(1, fraction)) * 100)}%`;
+  }
+  function renderBars() {
+    const done = doneCount();
+    for (const [bar, fillId] of [["bar", "bar-fill"], ["invite-bar", "invite-bar-fill"]]) {
+      $(bar)?.setAttribute?.("aria-valuenow", String(done));
+      $(bar)?.setAttribute?.("aria-valuemax", String(lessons.length));
+      fill($(fillId), done / lessons.length);
+    }
+  }
+  function setActivity(active, { label = "", fraction = null } = {}) {
+    const box = $("activity");
+    if (!box) return;
+    box.hidden = !active;
+    fill($("activity-fill"), !active ? 0 : fraction == null ? 0.4 : fraction);
+    try { box.classList?.[active && fraction == null ? "add" : "remove"]?.("busy"); } catch {}
+    if ($("activity-label")) $("activity-label").textContent = label;
+  }
+  const clock = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;
   function renderInvitation() {
     const card = $("invitation");
     if (!card) return;
@@ -29699,6 +30154,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       if (index === state.step && state.status !== "complete") item.setAttribute("aria-current", "step");
       return item;
     }));
+    renderBars();
   }
   function render() {
     const lesson = lessons[state.step];
@@ -29706,10 +30162,11 @@ body.music-preview-active #idle-hud { display: none !important; }
     $("title").textContent = lesson.title;
     $("copy").textContent = lesson.copy;
     $("points").replaceChildren(...lesson.points.map((text) => node("li", "", text)));
-    if ($("build-mode")) $("build-mode").hidden = ![0, 2].includes(state.step);
+    if ($("build-mode")) $("build-mode").hidden = !BUILD_MODE_STEPS.includes(state.step);
     renderBuildMode();
     $("note").textContent = lesson.note;
-    $("action").textContent = lesson.action;
+    $("action").hidden = !lesson.action;
+    $("action").textContent = lesson.action || "";
     $("secondary").hidden = !lesson.secondary;
     $("secondary").textContent = lesson.secondary || "";
     $("back").disabled = state.step === 0;
@@ -29722,6 +30179,10 @@ body.music-preview-active #idle-hud { display: none !important; }
       return button;
     });
     $("steps").replaceChildren(...steps);
+    if (!scanBusy && !mapBusy && !assistBusy) setActivity(false);
+    renderScan();
+    renderMap();
+    renderAssist();
     renderInvitation();
   }
   function renderBuildMode() {
@@ -29734,6 +30195,220 @@ body.music-preview-active #idle-hud { display: none !important; }
       ? "Unapproved work waits in Review. Open a task to review its scope and approve its build. This choice is saved for all projects."
       : "Queued work can start automatically. Turn off to choose which tasks get built. You can change this above Your work at any time.";
   }
+  // ---- the scan stop ----------------------------------------------------------------
+  function setPanelStatus(id, text, error = false) {
+    const target = $(id);
+    if (!target) return;
+    target.textContent = text;
+    try { target.classList?.[error ? "add" : "remove"]?.("error"); } catch {}
+  }
+  const allowFree = () => $("scan-allow-free")?.checked !== false;
+  function scanFacts(plan) {
+    if (!plan) return [];
+    const facts = [];
+    const cli = plan.opencode || {};
+    facts.push(cli.installed ? `OpenCode ${cli.version || "(version unknown)"} found${cli.path ? ` at ${cli.path}` : ""}${cli.supported === false ? " — older than the supported 1.x line" : ""}.` : "OpenCode is not installed on this computer.");
+    const linked = plan.providers?.linked || [];
+    facts.push(linked.length ? `Linked in OpenCode: ${linked.join(", ")}.` : "No provider is linked in OpenCode yet.");
+    const free = plan.providers?.free || {};
+    const best = Array.isArray(free.models) ? free.models.find((model) => model.usable) : null;
+    facts.push(free.count ? `${free.count} free model${free.count === 1 ? "" : "s"} available${best ? `, newest ${best.name || best.id}` : ""}.` : "No free model is available right now.");
+    facts.push(`Explorer: ${plan.explorer?.model || "OpenCode's default model"} — ${plan.explorer?.reason || ""}`.trim());
+    facts.push(`Builder: ${plan.builder?.model || "OpenCode's default model"} — ${plan.builder?.reason || ""}`.trim());
+    facts.push(`Judge: ${plan.judge?.kind || "fixed"} — ${plan.judge?.reason || ""}`.trim());
+    return facts;
+  }
+  function scanNotes(plan) {
+    if (!plan) return [];
+    return [
+      ...(plan.warnings || []).map((text) => `Warning: ${text}`),
+      ...(plan.nextSteps || []).map((text) => `Next: ${text}`),
+      ...(plan.disclosures || []).map((text) => `Note: ${text}`),
+    ];
+  }
+  function renderScan() {
+    const panel = $("scan");
+    if (!panel) return;
+    panel.hidden = state.step !== SCAN;
+    if ($("scan-run")) $("scan-run").disabled = scanBusy;
+    if ($("scan-apply")) { $("scan-apply").hidden = !(scanResult?.ok && scanResult.plan); $("scan-apply").disabled = scanBusy; }
+    const plan = scanResult?.ok ? scanResult.plan : null;
+    $("scan-facts")?.replaceChildren(...scanFacts(plan).map((text) => node("li", "", text)));
+    $("scan-notes")?.replaceChildren(...scanNotes(plan).map((text) => node("li", "", text)));
+    if (!panel.hidden && !scanSynced) syncScanStatus();
+  }
+  // A setup saved in an earlier session (or from Settings) counts; the guide
+  // reads the host's record instead of trusting this device's storage.
+  function syncScanStatus() {
+    const fn = hostApi("firstRunStatus");
+    scanSynced = true;
+    if (!fn) return;
+    Promise.resolve().then(() => fn()).then((status) => {
+      if (!status?.firstRun) return;
+      if (!state.done[SCAN]) { state.done[SCAN] = true; save(); }
+      if (!scanResult) setPanelStatus("scan-status", `Setup saved${status.firstRun.appliedAt ? ` on ${new Date(status.firstRun.appliedAt).toLocaleDateString()}` : ""}: explorer ${status.firstRun.explorer?.model || "OpenCode default"}, builder ${status.firstRun.builder?.model || "OpenCode default"}, judge ${status.firstRun.judge?.kind || "fixed"}. Run the scan again after linking a provider.`);
+      render();
+    }).catch(() => {});
+  }
+  function scanProgress(step) {
+    const index = SCAN_STEPS.indexOf(step?.id);
+    const at = index >= 0 ? index + 1 : 0;
+    setActivity(true, { label: `Scanning · ${SCAN_STEP_LABELS[step?.id] || step?.id || "…"} (${at} of ${SCAN_STEPS.length})`, fraction: at / SCAN_STEPS.length });
+  }
+  async function runScan({ automatic = false } = {}) {
+    const fn = hostApi("firstScan");
+    if (!fn) { if (!automatic) setPanelStatus("scan-status", "The first scan runs in the desktop app. In this preview nothing is read.", true); return; }
+    if (scanBusy) return;
+    scanBusy = true; scanStarted = true; scanResult = null; renderScan();
+    setActivity(true, { label: "Scanning · asking OpenCode what it has (about ten seconds)", fraction: 0 });
+    setPanelStatus("scan-status", "Scanning… asking OpenCode for its version, linked providers, models and agents.");
+    try {
+      const result = await fn({ prefs: { allowFreeTraining: allowFree() } });
+      scanResult = result;
+      if (!result?.ok) setPanelStatus("scan-status", result?.error || "The scan did not finish.", true);
+      else setPanelStatus("scan-status", result.plan?.ok ? "Scan complete. Review the facts below, then choose Use this setup and continue: it saves these choices (no key), maps your selected folder and asks the linked AI what to do next." : "Scan complete, but OpenCode is not usable yet. Follow the next steps below, then scan again.", !result.plan?.ok);
+    } catch (error) {
+      setPanelStatus("scan-status", error?.message || "The scan failed.", true);
+    } finally {
+      scanBusy = false; setActivity(false); renderScan();
+    }
+  }
+  async function applyScan() {
+    const fn = hostApi("firstScanApply");
+    if (!fn || !scanResult?.ok) { setPanelStatus("scan-status", "Run the scan first.", true); return; }
+    scanBusy = true; renderScan();
+    try {
+      const result = await fn({ prefs: { allowFreeTraining: allowFree() } });
+      if (!result?.ok) { setPanelStatus("scan-status", result?.error || "The setup could not be saved.", true); return; }
+      state.done[SCAN] = true; save();
+      scanResult = { ...scanResult, applied: true };
+      setPanelStatus("scan-status", `Setup saved. ${result.summary || ""} ${(result.notes || []).join(" ")}`.trim());
+      // The linked AI takes it from here: map the selected folder now, or wait
+      // at the workspace stop for a folder and map it as soon as one is chosen.
+      if (projectReady()) { move(MAP); void runMap({ automatic: true }); }
+      else move(WORKSPACE);
+    } catch (error) {
+      setPanelStatus("scan-status", error?.message || "The setup could not be saved.", true);
+    } finally {
+      scanBusy = false; render();
+    }
+  }
+  // ---- the map stop -----------------------------------------------------------------
+  function renderMap() {
+    const panel = $("map");
+    if (!panel) return;
+    panel.hidden = state.step !== MAP;
+    if ($("map-run")) $("map-run").disabled = mapBusy;
+    if ($("map-cancel")) $("map-cancel").hidden = !mapBusy;
+    $("map-steps")?.replaceChildren(...mapSteps.slice(-12).map((text) => node("li", "", text)));
+    const facts = [];
+    if (mapResult?.ok) {
+      facts.push(mapResult.summary || "Map saved.");
+      if (mapResult.ideas) facts.push(`${mapResult.ideas.added} new idea${mapResult.ideas.added === 1 ? "" : "s"} saved to Your work${mapResult.ideas.updated ? `, ${mapResult.ideas.updated} updated` : ""}.`);
+      if (mapResult.map?.summary) facts.push(mapResult.map.summary);
+      for (const area of (mapResult.map?.areas || []).slice(0, 6)) facts.push(`${area.name}${area.path ? ` (${area.path})` : ""}: ${area.what || ""}`.trim());
+    }
+    $("map-facts")?.replaceChildren(...facts.map((text) => node("li", "", text)));
+  }
+  function mapAdvice(result) {
+    const reason = result?.reason;
+    if (reason === "free-tier-refused") return `${result.error} Choose a paid model in Settings, then map again.`;
+    if (reason === "no-scan" || reason === "no-explorer" || reason === "no-opencode") return `${result.error} Go back to the Scan stop.`;
+    if (reason === "timeout") return `${result.error}`;
+    if (reason === "unparsable") return `${result.error} Map again; a second pass usually answers in the requested shape.`;
+    if (reason === "busy") return result.error;
+    return result?.error || "The map did not finish.";
+  }
+  async function runMap({ automatic = false } = {}) {
+    if (!projectReady()) { setPanelStatus("map-status", "Select a project first (the Your workspace stop), then map it.", true); return; }
+    const fn = hostApi("firstMap");
+    if (!fn) { if (!automatic) setPanelStatus("map-status", "The first map runs in the desktop app. In this preview nothing is read.", true); return; }
+    if (mapBusy) return;
+    mapBusy = true; mapResult = null; mapSteps.length = 0; mapStartedAt = Date.now(); renderMap();
+    setActivity(true, { label: automatic ? "Mapping the folder you selected · the explorer is reading it" : "Mapping · the explorer is reading the folder" });
+    setPanelStatus("map-status", `${automatic ? "The linked AI is mapping the folder you selected. " : ""}The explorer is reading the folder; its todo list appears in the tree as it goes.`);
+    try {
+      const result = await fn({});
+      mapResult = result;
+      if (result?.ok) {
+        state.done[MAP] = true; save();
+        setPanelStatus("map-status", `Folder mapped: ${result.summary || "map saved"}. Open Your work to review the ideas, or continue to Connections.`);
+        try { if (typeof CustomEvent === "function") window.dispatchEvent(new CustomEvent("mefi:first-map", { detail: result })); } catch {}
+      } else setPanelStatus("map-status", mapAdvice(result), true);
+    } catch (error) {
+      mapResult = { ok: false, error: error?.message || "The map failed." };
+      setPanelStatus("map-status", mapResult.error, true);
+    } finally {
+      mapBusy = false; setActivity(false); render();
+    }
+    if (mapResult?.ok) void runAssist({ automatic: true });
+  }
+  function cancelMap() {
+    const fn = hostApi("firstMapCancel");
+    if (!fn || !mapBusy) return;
+    setPanelStatus("map-status", "Cancelling the explorer…");
+    Promise.resolve().then(() => fn()).catch(() => {});
+  }
+  function hostProgress(data) {
+    if (!data) return;
+    if (data.kind === "scan") { if (scanBusy) scanProgress(data.step); return; }
+    if (data.kind !== "map") return;
+    if (data.step && mapSteps[mapSteps.length - 1] !== data.step) mapSteps.push(data.step);
+    if (mapSteps.length > 40) mapSteps.splice(0, mapSteps.length - 40);
+    if (mapBusy) setActivity(true, { label: `Mapping · ${data.step || "reading the folder"}${data.tools ? ` · ${data.tools} read${data.tools === 1 ? "" : "s"}` : ""} · ${clock(Number(data.elapsedMs) || Date.now() - mapStartedAt)}` });
+    if (state.step === MAP) renderMap();
+  }
+  // ---- the assistant --------------------------------------------------------------------
+  function adviceLines() {
+    const stops = assistResult?.advice?.stops || {};
+    return ADVICE_STOPS.filter(([id]) => stops[id]).map(([id, index]) => ({ id, index, label: lessons[index].short, text: stops[id] }));
+  }
+  function renderAssist() {
+    const panel = $("assist");
+    if (!panel) return;
+    panel.hidden = state.step === SCAN || !setupSaved();
+    if ($("assist-run")) { $("assist-run").disabled = assistBusy; $("assist-run").textContent = assistResult ? "Ask again" : "Ask my assistant what to do next"; }
+    if ($("assist-task")) $("assist-task").hidden = !assistResult?.advice?.firstTask;
+    $("assist-list")?.replaceChildren(...adviceLines().map((line) => {
+      const item = node("li", "", `${line.label}: ${line.text}`);
+      if (line.index === state.step) item.setAttribute("aria-current", "step");
+      return item;
+    }));
+  }
+  function assistSource(result) {
+    if (result?.via === "assistant") return `your assistant${result.model ? ` (${result.model})` : ""}`;
+    if (result?.via === "opencode-free") return result.model || "the free explorer";
+    return "the built-in guide";
+  }
+  async function runAssist({ automatic = false } = {}) {
+    const fn = hostApi("firstAssist");
+    if (!fn) { if (!automatic) setPanelStatus("assist-status", "The setup assistant runs in the desktop app.", true); return; }
+    if (assistBusy) return;
+    assistBusy = true; renderAssist();
+    setActivity(true, { label: "Asking the linked AI to plan the rest of the setup" });
+    setPanelStatus("assist-status", "Asking the linked AI what to do next…");
+    try {
+      const result = await fn({ progress: { done: state.done.slice(), step: state.step } });
+      assistResult = result;
+      if (!result?.ok) setPanelStatus("assist-status", result?.error || "The assistant did not answer.", true);
+      else setPanelStatus("assist-status", `${result.advice?.summary || "Here is the plan for the remaining stops."} (From ${assistSource(result)}.)${result.warnings?.length ? ` ${result.warnings.join(" ")}` : ""}`);
+    } catch (error) {
+      assistResult = null;
+      setPanelStatus("assist-status", error?.message || "The assistant did not answer.", true);
+    } finally {
+      assistBusy = false; setActivity(false); render();
+    }
+  }
+  // Places the suggested brief in the task box and takes the user there. It
+  // never submits: sending stays a deliberate click in the workspace.
+  function placeSuggestedTask() {
+    const task = assistResult?.advice?.firstTask;
+    if (!task) return;
+    const input = document.getElementById("workspace-input");
+    if (input) { input.value = `${task.title}\n\n${task.brief || ""}`.trim(); }
+    visit("task");
+  }
+  // ---- coach --------------------------------------------------------------------------
   function renderCoach() {
     if (!$("coach")) return;
     const lesson = lessons[state.step];
@@ -29776,7 +30451,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     window.MefiNav?.release?.("onboarding");
   }
   function move(index) {
-    state = { ...state, step: Math.max(0, Math.min(lessons.length - 1, index)), status: "reading" };
+    state = { ...state, step: clampStep(index), status: "reading" };
     save(); render(); $("title").focus();
   }
   function open() {
@@ -29839,10 +30514,18 @@ body.music-preview-active #idle-hud { display: none !important; }
       } else document.getElementById("workspace-add-project")?.focus();
     } else window.MefiNav?.go?.(route);
   }
+  // A stop with a panel has no menu to walk to: the coach hands it back to the
+  // sheet at that stop, where its button lives.
   function coach(index, options = {}) {
     init();
+    const step = clampStep(index);
+    if (lessons[step].panel) {
+      state = { ...state, step, status: "reading" };
+      open();
+      return;
+    }
     if (!$("coach") || !$("overlay")) return;
-    state = { ...state, step: Math.max(0, Math.min(lessons.length - 1, index)), status: "reading", mode: "coach" };
+    state = { ...state, step, status: "reading", mode: "coach" };
     save();
     $("overlay").hidden = true;
     releaseLayer();
@@ -29855,12 +30538,20 @@ body.music-preview-active #idle-hud { display: none !important; }
     coach(state.step + 1);
   }
   function projectChanged(event) {
-    if (!event?.detail?.projectId || isDone(0)) return;
-    state.done[0] = true;
-    save();
-    if (state.mode === "coach") renderCoach();
-    if (state.mode === "sheet" && $("overlay") && !$("overlay").hidden) render();
-    renderInvitation();
+    if (!event?.detail?.projectId) return;
+    if (!state.done[WORKSPACE]) {
+      state.done[WORKSPACE] = true;
+      save();
+      if (state.mode === "coach") renderCoach();
+      if (state.mode === "sheet" && $("overlay") && !$("overlay").hidden) render();
+      renderInvitation();
+    }
+    // The guide was waiting at the workspace stop with a setup saved: the
+    // linked AI maps the folder as soon as one is selected.
+    if (state.mode === "sheet" && state.step === WORKSPACE && setupSaved() && !state.done[MAP] && $("overlay") && !$("overlay").hidden && projectReady()) {
+      move(MAP);
+      void runMap({ automatic: true });
+    }
   }
   function init() {
     if (initialized || !$("overlay")) return;
@@ -29890,12 +30581,19 @@ body.music-preview-active #idle-hud { display: none !important; }
     $("coach-guide")?.addEventListener("click", () => open());
     $("coach-end")?.addEventListener("click", () => close());
     $("invite-walk")?.addEventListener("click", () => coach(state.status === "new" ? 0 : state.step));
+    $("scan-run")?.addEventListener("click", () => { void runScan(); });
+    $("scan-apply")?.addEventListener("click", () => { void applyScan(); });
+    $("map-run")?.addEventListener("click", () => { void runMap(); });
+    $("map-cancel")?.addEventListener("click", () => cancelMap());
+    $("assist-run")?.addEventListener("click", () => { void runAssist(); });
+    $("assist-task")?.addEventListener("click", () => placeSuggestedTask());
+    try { hostApi("onFirstMapProgress")?.(hostProgress); } catch {}
     $("back").addEventListener("click", () => move(state.step - 1));
     $("next").addEventListener("click", () => {
       if (state.step < lessons.length - 1) return move(state.step + 1);
       state.status = "complete"; save(); close();
     });
-    $("action").addEventListener("click", () => coach(state.step));
+    $("action").addEventListener("click", () => { if (lessons[state.step].action) coach(state.step); });
     $("secondary").addEventListener("click", () => visit(lessons[state.step].secondaryRoute));
     $("dismiss").addEventListener("click", () => {
       state.status = "dismissed"; save();
@@ -29920,9 +30618,12 @@ body.music-preview-active #idle-hud { display: none !important; }
     // Capture/smoke callers can initialize the controls without consuming it.
     if (!automatic || state.status !== "new" || !$("overlay")) return false;
     open();
+    // The first launch starts linking an AI by itself: the scan is read-only,
+    // shows its progress, and still saves nothing until "Use this setup".
+    if (!scanStarted && hostApi("firstScan")) void runScan({ automatic: true });
     return true;
   }
-  window.MefiOnboarding = { init, startup, open, close, coach };
+  window.MefiOnboarding = { init, startup, open, close, coach, lessons: () => lessons.map((lesson) => ({ title: lesson.title, short: lesson.short, panel: lesson.panel || null })) };
 })();
 
 // Mefi's Studio AI+ — booklet renderer, filters, refresh-on-open, studio launcher UI.
@@ -30905,22 +31606,31 @@ body.music-preview-active #idle-hud { display: none !important; }
       viewPrepared = true;
       return true;
     };
+    // The launch screen (renderer/startup.js) runs first, under the gate. A
+    // project chosen there is not the one the module-load reads used, so the
+    // workspace and tree steps then reload instead of joining those reads.
+    let launch = null;
+    const choose = window.MefiStartup?.choose ? async (context) => { launch = await window.MefiStartup.choose(context); return launch; } : null;
+    const relaunch = () => Boolean(launch?.changed);
     window.MefiBoot.run([
-      { id: "workspace", label: "Your projects and work", load: ({ retry }) => window.MefiWorkspace?.ready?.({ retry }) },
+      { id: "workspace", label: "Your projects and work", load: (context) => { const retry = context.retry || relaunch(); return window.MefiWorkspace?.ready?.({ retry }); } },
       { id: "catalog", label: "Model catalog", load: paintCatalog },
       { id: "tree", label: "Session tree", load: async ({ retry }) => {
-        await (retry ? window.MefiTree?.reload?.() : window.MefiTree?.ready?.());
+        await (retry || relaunch() ? window.MefiTree?.reload?.() : window.MefiTree?.ready?.());
         return window.MefiTree?.status?.() !== "unavailable";
       } },
       { id: "view", label: "Saved view and preferences", load: prepareView },
       { id: "fonts", label: "Fonts and interface", load: () => document.fonts?.ready },
-    ], () => {
+    ], (complete, choice) => {
       if (!viewPrepared && !restored?.restored && home) window.MefiWorkspace?.enter?.();
       if (restored?.restored) restored.finish?.();
       else if (window.MefiWorkspace?.isActive?.()) document.getElementById("workspace-layer")?.focus({ preventScroll: true });
       else document.getElementById("search")?.focus({ preventScroll: true });
       window.MefiOnboarding?.startup?.({ automatic: true });
-    });
+      // "Open and start agents": the studio is up, so the agents may start now.
+      // Every other choice leaves them held for the workspace's Start agents.
+      if ((choice ?? launch)?.startAgents) void window.MefiStartup?.begin?.();
+    }, choose ? { choose } : {});
   }
 })();
 </script>

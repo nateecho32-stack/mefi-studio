@@ -14,6 +14,17 @@ coach away, and the setup trail under the workspace invitation shows what is
 done. Reading the guide never creates or starts work, so nothing runs until you
 do it yourself.
 
+## Every launch: choose the project, then start the agents
+
+Studio opens on a launch screen before it reads anything. Pick the project to
+open (the one you last had open is preselected) or **Open another folder…**,
+then choose **Open studio** or **Open and start agents**. With **Open studio**
+the assistant and the coding workers stay off: the companion bar reads *Agents
+are waiting for you*, and its **Start agents** button (also in the tray menu)
+releases them whenever you are ready. Nothing is built, briefed or spent
+before that. A pause you saved earlier still stands and asks for **Resume** as
+before, and a renderer reload never shows the screen twice in one launch.
+
 ## New machine checklist
 
 A newly installed Studio opens with no project at all: nothing is read or built

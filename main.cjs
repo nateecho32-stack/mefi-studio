@@ -26,7 +26,9 @@ const { createMusicRecommender } = require("./scripts/music-recommendations.cjs"
 const { attachRendererRecovery } = require("./scripts/renderer-recovery.cjs");
 const { createEyesClient, wrapEyes } = require("./scripts/eyes-client.cjs");
 const { createModelPerformanceStore } = require("./scripts/model-performance.cjs");
-const { limitsFromPlan, aggregateUsage, opencodeWindows, parseOpencodeUsage, describeOpencodeStatus } = require("./scripts/usage-tracker.cjs");
+const { limitsFromPlan, aggregateUsage, mergeLedgers, opencodeWindows, parseOpencodeUsage, describeOpencodeStatus, describeAccountStatus,
+  parseOpenrouterKey, parseOpenrouterCredits, parseGatewayCredits, parseZaiQuota, providerInfo,
+  parseClaudeCliResult, parseGrokCliResult, parseAntigravityCliResult } = require("./scripts/usage-tracker.cjs");
 const { createPerformanceProfiler } = require("./scripts/performance-profiler.cjs");
 const { buildContext } = require("./scripts/context-manager.cjs");
 const electron = require("electron");
@@ -89,7 +91,7 @@ let projectAgentJobs = 0;
 const originalIpcHandle = ipcMain.handle.bind(ipcMain);
 
 function handleProjectIpc(channel, handler) {
-  if (channel.startsWith("projects:") || channel.startsWith("performance:")) return originalIpcHandle(channel, handler);
+  if (channel.startsWith("projects:") || channel.startsWith("performance:") || channel.startsWith("startup:")) return originalIpcHandle(channel, handler);
   originalIpcHandle(channel, (_event, ...args) => {
     if (projectSwitching) return { ok: false, error: "Switching projects. Try again in a moment." };
     const project = projects.active();
@@ -226,6 +228,15 @@ async function getAssistant() {
 const MACHINE_STATUS_PATH = path.join(STUDIO_ROOT, "data", "machine-status.json");
 const RESOURCE_LOG_PATH = path.join(STUDIO_ROOT, "data", "resource-manager.json");
 const MACHINE_DEFAULTS = { autoKill: true, idleSeconds: 240, maxAgeMinutes: 20, maxMemMB: 1500 };
+
+// Explicit memory-shortfall override: settings.machine.memoryWarnOverride
+// (saved via machine:set) or the MEFI_STUDIO_MEMORY_WARN_OVERRIDE=1 env var
+// demotes a small memory shortfall to a distinct warning instead of a hold.
+// It never lifts machine.mjs's severe floor or an unknown-memory hold.
+function machineMemoryWarnOverride(settings = null) {
+  if (settings?.machine?.memoryWarnOverride === true) return true;
+  return process.env.MEFI_STUDIO_MEMORY_WARN_OVERRIDE === "1";
+}
 let machineTimer = null;
 let machinePreviousCpu = new Map();
 const machineEvents = [];
@@ -259,7 +270,16 @@ async function resourcePass({ kill = true, reason = "poll", withProcesses = true
   const limits = { ...MACHINE_DEFAULTS, ...(settings.machine ?? {}) };
   const leases = await machine.leaseStatus({ repoRoot: projectRoot() });
   const lagMs = await measureWorkerLag();
-  let capacity = await machine.workerCapacity({ running: autopilot.jobs.length, lagMs });
+  // A silent probe (no frames, no worker, no MessageChannel within the
+  // timeout) is an unmeasured renderer, not a busy machine — the same rule
+  // the foreman's readCapacity applies. Feeding the 1000ms sentinel from
+  // this poll latched the sampler's critical-spike hold and reset its
+  // recoverySamples on every pass, so the two-responsive-readings recovery
+  // could never finish while a session-frozen page answered nothing (the
+  // sustained "Machine lag holds capacity" hold). Silence gates on the host
+  // alone until the renderer answers through any channel again.
+  const samplerLagMs = measureWorkerLag.cache?.silent === true ? null : lagMs;
+  let capacity = await machine.workerCapacity({ running: autopilot.jobs.length, lagMs: samplerLagMs, memoryWarnOverride: machineMemoryWarnOverride(settings) });
   if (autopilot.resourceBackoffUntil > Date.now()) capacity = { ...capacity, canStart: false, reason: "worker startup stalled; allowing the machine to recover" };
   autopilot.capacity = capacity;
   const processes = withProcesses ? await machine.processSnapshot() : [];
@@ -409,6 +429,7 @@ async function measureWorkerLag({ force = false } = {}) {
   pending.promise = (async () => {
     const startedAt = Date.now();
     let answered = null;
+    let silent = false;
     try {
       answered = await rendererValue(`new Promise(resolve => {
         let done = false;
@@ -459,10 +480,18 @@ async function measureWorkerLag({ force = false } = {}) {
     } else {
       // The script itself never completed (blocked event loop), or neither
       // aliveness channel ever answered while frames never came: the sentinel
-      // stands as genuine unresponsiveness evidence.
+      // stands as genuine unresponsiveness evidence. The reading is also
+      // stamped silent — silence is the renderer refusing to report, not a
+      // measurement of the machine. A session-frozen page on an unattended
+      // desktop (locked console, inert occlusion tracker) answers nothing for
+      // hours while the host idles: reporting the sentinel as renderer lag
+      // latched a hold no later reading could lift and starved the queue. The
+      // foreman gates such a sample on the host alone, exactly like a hidden
+      // window, until the renderer answers through any channel again.
       lagMs = 1000;
+      silent = true;
     }
-    measureWorkerLag.cache = { view, at: Date.now(), lagMs, probe: pending.probeId };
+    measureWorkerLag.cache = { view, at: Date.now(), lagMs, probe: pending.probeId, silent };
     return lagMs;
   })().finally(() => { if (measureWorkerLag.inFlight === pending) measureWorkerLag.inFlight = null; });
   measureWorkerLag.inFlight = pending;
@@ -1079,7 +1108,10 @@ function flushJevCharges() {
   return jevChargeFlush;
 }
 
-async function chargeJevCall(result, purpose) {
+// The provider a Jev route bills, in the usage tracker's vocabulary.
+const JEV_ROUTE_PROVIDERS = { vercel: "gateway", typesafe: "typesafe", zen: "opencode-zen", openrouter: "openrouter" };
+
+async function chargeJevCall(result, purpose, route = null) {
   if (!result.usage?.modelCalls) return;
   jevPendingCharges.push({
     purpose,
@@ -1087,6 +1119,15 @@ async function chargeJevCall(result, purpose) {
     tokens: (result.usage?.promptTokens ?? 0) + (result.usage?.completionTokens ?? 0),
     note: `${result.ok ? "completed" : "failed"} · ${result.model ?? "Jev"}`,
   });
+  // The same call joins the model ledger, so the usage tracker counts Jev
+  // beside every other provider: tokens as the gateway reported them, cost
+  // unknown (no Jev route prices a call in its reply).
+  const prompt = result.usage?.promptTokens ?? null;
+  const completion = result.usage?.completionTokens ?? null;
+  const elapsedMs = Number.isFinite(result.elapsedMs) && result.elapsedMs >= 0 ? result.elapsedMs : null;
+  await recordModelCall({ id: crypto.randomUUID(), model: result.model ?? "jev", provider: JEV_ROUTE_PROVIDERS[route] ?? "jev", taskType: purpose, source: "request",
+    at: Date.now() - (elapsedMs ?? 0), elapsedMs, status: result.ok ? "ok" : "error", errorKind: result.ok ? null : "http",
+    tokenUsage: { inputTokens: prompt, outputTokens: completion, totalTokens: prompt !== null && completion !== null ? prompt + completion : null }, costUsd: null });
   // Retain a paid result when accounting fails. Future calls flush this debt
   // first, so retrying a ledger write never repeats a paid classification.
   await flushJevCharges().catch((error) => logLine(`[jev] accounting pending: ${error.message}`));
@@ -1101,14 +1142,23 @@ async function runJevIntake(additions) {
   ]);
   const route = client.resolveJevRoute(settings);
   const resolved = client.resolveApiKey({ settings, decrypt: decryptKey, route });
-  if (!resolved) return { ok: true, defer: true, reason: "no-key" };
-  try { await flushJevCharges(); }
-  catch { return { ok: true, defer: true, reason: "accounting-pending" }; }
+  // No Jev key: the stand-in judge chosen at first run (the assistant model,
+  // or a free OpenCode model through the CLI) answers the same questions and
+  // its proposals are recorded the same way. Its calls are not Jev calls, so
+  // the Jev ledger is left alone.
+  const standIn = !resolved && typeof standInJudge === "function" ? await standInJudge(settings, "intake") : null;
+  if (!resolved && !standIn) return { ok: true, defer: true, reason: "no-key" };
+  if (!standIn) {
+    try { await flushJevCharges(); }
+    catch { return { ok: true, defer: true, reason: "accounting-pending" }; }
+  }
   const [requests, tasks] = await Promise.all([eyes.readJson(REQUESTS_PATH, []), eyes.readJson(TASKS_PATH, [])]);
   const { comparisons, questions, state } = loop.planIntake(additions, { requests, tasks });
   if (!comparisons.length) return { ok: true, attempted: false, proposals: 0 };
-  const result = await client.classify({ questions, state, apiKey: resolved.key, config: client.gatewayConfig({ route }) });
-  await chargeJevCall(result, "jev-shadow-intake");
+  const result = standIn
+    ? await standIn.classify({ questions, state, config: { timeoutMs: standIn.timeoutMs } })
+    : await client.classify({ questions, state, apiKey: resolved.key, config: client.gatewayConfig({ route }) });
+  if (!standIn) await chargeJevCall(result, "jev-shadow-intake", route);
   if (!result.ok) {
     logLine(`[jev] classification unavailable: ${assistantClip(result.error, 160)}`);
     return { ok: false, attempted: Boolean(result.usage?.modelCalls), error: result.error };
@@ -1157,7 +1207,7 @@ function probeJev() {
       questions: [{ id: "connection", type: "choice", prompt: "Choose ready if the state says ready, otherwise unavailable.", options: ["ready", "unavailable"] }],
       state: "ready", apiKey: resolved.key, config: client.gatewayConfig({ route }),
     });
-    await chargeJevCall(result, "jev-connection-check");
+    await chargeJevCall(result, "jev-connection-check", route);
     if (!result.ok) return { ok: false, error: result.error };
     if (result.answers.connection.choice !== "ready") return { ok: false, error: "Jev answered, but the connection check returned an unexpected result." };
     return { ok: true, model: result.model, elapsedMs: result.elapsedMs };
@@ -1680,6 +1730,34 @@ function routingSettingsKey(settings) {
   ])).digest("hex");
 }
 
+// The stand-in judge saved by the first-run scan (settings.firstRun.judge):
+// the assistant's chat model answers Jev's constrained questions through the
+// chat adapter (scripts/choice-judge.mjs), or a free OpenCode model does
+// through `opencode run`. The free CLI judge takes 8–60 s per answer, so it
+// serves batch intake only; per-task routing keeps Jev's 4 s budget and
+// therefore accepts the assistant kind alone. Answers are revalidated by the
+// same code that checks Jev's, and none of this touches a Jev key.
+async function standInJudge(settings, purpose = "routing") {
+  const saved = settings?.firstRun?.judge ?? null;
+  if (!saved || !["assistant", "opencode-free"].includes(saved.kind)) return null;
+  if (saved.kind === "opencode-free" && purpose !== "intake") return null;
+  const judge = await loadModule("scripts/choice-judge.mjs");
+  const timeoutMs = purpose === "intake" ? 15000 : 4000;
+  if (saved.kind === "assistant") {
+    const transport = async ({ system, user }) => {
+      const call = await assistantFetch(system, user, 600, { role: "routine", taskType: "judge" });
+      return call?.ok ? { ok: true, text: call.text, model: call.model ?? null, usage: call.tokenUsage ?? null } : { ok: false, error: call?.error ?? "assistant unavailable" };
+    };
+    return { kind: "assistant", model: null, timeoutMs,
+      classify: (args) => judge.judgeClassify({ ...args, transport, config: { ...(args?.config ?? {}), timeoutMs: args?.config?.timeoutMs ?? timeoutMs } }) };
+  }
+  if (typeof saved.model !== "string" || !saved.model) return null;
+  const scanner = await loadModule("scripts/first-scan.mjs");
+  const transport = judge.opencodeRunTransport({ exec: scanner.spawnExec, model: saved.model, cwd: projects.open() ? projects.current().path : null, env: { ...process.env, ...executorOpencodeEnv() }, title: "Mefi judge" });
+  return { kind: "opencode-free", model: saved.model, timeoutMs: 90000,
+    classify: (args) => judge.judgeClassify({ ...args, transport, config: { ...(args?.config ?? {}), timeoutMs: 90000, model: saved.model } }) };
+}
+
 async function applyModelRouting(route, { role = "routine", taskType = role, task = "", worker = false } = {}) {
   if (!route.ok || !["zai", "opencode"].includes(route.provider)) return route;
   const projectId = projects.current().id;
@@ -1698,13 +1776,17 @@ async function applyModelRouting(route, { role = "routine", taskType = role, tas
     const [client, router] = await Promise.all([loadModule("scripts/decision-client.mjs"), loadModule("scripts/model-routing.mjs")]);
     const jevRoute = client.resolveJevRoute(settings);
     const credential = client.resolveApiKey({ settings, decrypt: decryptKey, route: jevRoute });
-    if (!credential) return finish("default", "Save a Jev key to enable task-aware selection.");
-    const config = client.gatewayConfig({ route: jevRoute });
+    // No Jev key: for worker (builder) routing the AI linked at first run can
+    // stand in. Per-message assistant routing keeps fixed defaults, so a chat
+    // never pays a second call just to pick its own model.
+    const standIn = !credential && worker ? await standInJudge(settings, "routing") : null;
+    if (!credential && !standIn) return finish("default", "Save a Jev key to enable task-aware selection.");
+    const config = standIn ? { model: standIn.model ?? "stand-in-judge", timeoutMs: standIn.timeoutMs } : client.gatewayConfig({ route: jevRoute });
     // Hash the credential to isolate environment-key changes without retaining
     // the key in a cache identity or sending it to another provider.
-    const scope = `${projectId}:${signature}:${crypto.createHash("sha256").update(credential.key).update(JSON.stringify(config)).digest("hex")}`;
-    if ((modelRoutingBackoff.get(scope) ?? 0) > Date.now()) return finish("default", "Jev is temporarily unavailable; using the usual model.");
-    await flushJevCharges();
+    const scope = `${projectId}:${signature}:${crypto.createHash("sha256").update(credential?.key ?? `stand-in:${standIn?.kind}`).update(JSON.stringify(config)).digest("hex")}`;
+    if ((modelRoutingBackoff.get(scope) ?? 0) > Date.now()) return finish("default", `${standIn ? "The stand-in judge" : "Jev"} is temporarily unavailable; using the usual model.`);
+    if (!standIn) await flushJevCharges();
     const [catalog, performance] = await Promise.all([
       readFile(path.join(STUDIO_ROOT, "data", "models.json"), "utf8").then(JSON.parse),
       modelPerformanceStore().snapshot(),
@@ -1718,8 +1800,9 @@ async function applyModelRouting(route, { role = "routine", taskType = role, tas
     if (!selected || selected.expiresAt <= Date.now()) {
       let pending = modelRoutingPending.get(key);
       if (!pending) {
-        pending = router.selectTaskModel({ candidates, taskType, role: routingRole, task, apiKey: credential.key, config,
-          onUsage: (_usage, result) => chargeJevCall(result, "jev-model-routing") });
+        pending = router.selectTaskModel({ candidates, taskType, role: routingRole, task, apiKey: credential?.key ?? "", config,
+          ...(standIn ? { classifyFn: standIn.classify, judge: { model: standIn.model } } : {}),
+          onUsage: standIn ? null : (_usage, result) => chargeJevCall(result, "jev-model-routing", jevRoute) });
         modelRoutingPending.set(key, pending);
         pending.finally(() => modelRoutingPending.delete(key)).catch(() => {});
       }
@@ -1736,8 +1819,8 @@ async function applyModelRouting(route, { role = "routine", taskType = role, tas
     if (!selected.ok || !candidates.some((candidate) => candidate.model === selected.model && candidate.provider === route.provider)) {
       return finish("default", "Jev could not select a compatible model; using the usual model.");
     }
-    logLine(`[routing] ${taskType}: ${route.provider}/${selected.model} selected by Jev`);
-    return finish("jev", "Jev compared task fit, quality evidence, speed and cost within this provider.", selected);
+    logLine(`[routing] ${taskType}: ${route.provider}/${selected.model} selected by ${standIn ? `the stand-in judge (${standIn.kind})` : "Jev"}`);
+    return finish(standIn ? "judge" : "jev", standIn ? "The assistant model stood in for Jev and compared task fit, quality evidence, speed and cost within this provider." : "Jev compared task fit, quality evidence, speed and cost within this provider.", selected);
   } catch {
     return finish("default", "Jev or model evidence is unavailable; using the usual model.");
   }
@@ -1803,6 +1886,138 @@ async function usageTrackerLimits() {
   }
 }
 
+// The tracker's second ledger: every assistant turn OpenCode's own store holds
+// for coding sessions under the active project (the builders' opencode runs on
+// Go, Zen, OpenRouter or the Studio-managed z.ai provider). The read runs on
+// the eyes worker and covers the month the account windows span; a store that
+// cannot be read leaves the Studio ledger standing and says so.
+const USAGE_LEDGER_DAYS = 35;
+async function codingSessionUsage(now) {
+  try {
+    const eyes = await getEyes();
+    if (typeof eyes.usageLedger !== "function") return { ok: false, rows: [], error: "The store reader has no usage ledger." };
+    const result = await eyes.usageLedger({ since: now - USAGE_LEDGER_DAYS * 86400000, now });
+    return { ok: true, rows: Array.isArray(result?.rows) ? result.rows : [], scanned: result?.scanned ?? 0, since: result?.since ?? null, warm: result?.warm === true };
+  } catch (error) {
+    return { ok: false, rows: [], error: `Coding sessions could not be read: ${String(error?.message ?? error).slice(0, 160)}` };
+  }
+}
+
+// ---- every connected account ------------------------------------------------
+// One reading per provider the owner connected, each over its own saved key
+// and each cached like the OpenCode read (a minute for success, thirty seconds
+// for failure) so the Model Lab tab and the Command panel never double-poll.
+// No reading ever borrows a number from another, and none sends a prompt.
+const ACCOUNT_READ_TIMEOUT_MS = 15000;
+const OPENROUTER_KEY_URL = "https://openrouter.ai/api/v1/key";
+const OPENROUTER_CREDITS_URL = "https://openrouter.ai/api/v1/credits";
+const GATEWAY_CREDITS_URL = "https://ai-gateway.vercel.sh/v1/credits";
+const ZAI_QUOTA_URL = "https://api.z.ai/api/monitor/usage/quota/limit";
+const accountReadCache = new Map();
+const redactSecret = (value, secret) => (secret ? String(value ?? "").split(String(secret)).join("[redacted]") : String(value ?? ""));
+
+async function cachedAccountRead(key, read, { maxAgeMs = 60000 } = {}) {
+  const entry = accountReadCache.get(key) ?? { result: null, inFlight: null };
+  accountReadCache.set(key, entry);
+  const age = entry.result ? Date.now() - entry.result.at : Infinity;
+  if (entry.result && age < (entry.result.ok ? maxAgeMs : 30000)) return entry.result;
+  if (entry.inFlight) return entry.inFlight;
+  entry.inFlight = (async () => {
+    let result;
+    try { result = await read(); }
+    catch (error) { result = { ok: false, code: "network", error: String(error?.message ?? error).slice(0, 160) }; }
+    entry.result = { at: Date.now(), ...result };
+    return entry.result;
+  })().finally(() => { entry.inFlight = null; });
+  return entry.inFlight;
+}
+
+async function accountGet(url, { apiKey, label, authorization = `Bearer ${apiKey}`, headers = {} }) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ACCOUNT_READ_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { authorization, accept: "application/json", "user-agent": "mefi-studio/0.1 (usage tracker)", ...headers },
+    });
+    if (!response.ok) {
+      const code = response.status === 401 ? "auth" : response.status === 403 ? "forbidden" : "http";
+      return { ok: false, code, status: response.status, error: describeAccountStatus(label, response.status, await response.text().catch(() => ""), apiKey) };
+    }
+    return { ok: true, payload: await response.json() };
+  } catch (error) {
+    const message = controller.signal.aborted ? `The ${label} usage read timed out.` : `${label} usage could not be read: ${redactSecret(error?.message ?? error, apiKey).slice(0, 160)}`;
+    return { ok: false, code: "network", error: message };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readOpenrouterAccount(apiKey) {
+  const key = await accountGet(OPENROUTER_KEY_URL, { apiKey, label: "OpenRouter" });
+  if (!key.ok) return key;
+  let parsed;
+  try { parsed = parseOpenrouterKey(key.payload); }
+  catch (error) { return { ok: false, code: "shape", error: error.message }; }
+  // The balance needs a management key; an ordinary key is refused (403) and
+  // the reading then stands on the key's own usage alone.
+  const credits = await accountGet(OPENROUTER_CREDITS_URL, { apiKey, label: "OpenRouter" });
+  let balance = null;
+  if (credits.ok) { try { balance = parseOpenrouterCredits(credits.payload); } catch {} }
+  return { ok: true, key: parsed, credits: balance };
+}
+async function readGatewayAccount(apiKey) {
+  const result = await accountGet(GATEWAY_CREDITS_URL, { apiKey, label: "Vercel AI Gateway" });
+  if (!result.ok) return result;
+  try { return { ok: true, credits: parseGatewayCredits(result.payload) }; }
+  catch (error) { return { ok: false, code: "shape", error: error.message }; }
+}
+// z.ai's quota endpoint is the one its own usage plugin calls (the raw key in
+// the authorization header, no bearer prefix), not a documented API; a changed
+// reply is reported as unreadable, never guessed at.
+async function readZaiAccount(apiKey) {
+  const result = await accountGet(ZAI_QUOTA_URL, { apiKey, label: "z.ai", authorization: apiKey, headers: { "accept-language": "en-US,en" } });
+  if (!result.ok) return result;
+  try { return { ok: true, quota: parseZaiQuota(result.payload) }; }
+  catch (error) { return { ok: false, code: "shape", error: error.message }; }
+}
+
+async function usageAccounts() {
+  const settings = await readSettings();
+  const keyOf = (field) => decryptKey(settings, field);
+  const accounts = [];
+  const add = (provider, entry) => accounts.push({ provider, ...providerInfo(provider), connected: true, ...entry });
+  const live = async (provider, read, promise, shape) => {
+    const result = await promise;
+    add(provider, result.ok
+      ? { read, ok: true, fetchedAt: result.at, ...shape(result) }
+      : { read, ok: false, fetchedAt: result.at ?? null, error: result.error, code: result.code ?? "http" });
+  };
+  const none = (provider, note) => add(provider, { read: "none", ok: true, fetchedAt: null, note });
+  const reads = [];
+  const goKey = keyOf("apiKeyEncrypted");
+  if (goKey) reads.push(live("opencode-go", "windows", fetchOpencodeUsage({ maxAgeMs: 60000 }), (result) => ({ usage: result.usage })));
+  const zaiKey = keyOf("zaiApiKeyEncrypted");
+  if (zaiKey) reads.push(live("zai", "quota", cachedAccountRead("zai", () => readZaiAccount(zaiKey)), (result) => ({ quota: result.quota })));
+  const openrouterKey = keyOf("openrouterApiKeyEncrypted");
+  if (openrouterKey) reads.push(live("openrouter", "key", cachedAccountRead("openrouter", () => readOpenrouterAccount(openrouterKey)), (result) => ({ key: result.key, credits: result.credits })));
+  const gatewayKey = keyOf("gatewayApiKeyEncrypted");
+  if (gatewayKey) reads.push(live("gateway", "credits", cachedAccountRead("gateway", () => readGatewayAccount(gatewayKey)), (result) => ({ credits: result.credits })));
+  await Promise.all(reads);
+  if (keyOf("zenApiKeyEncrypted")) none("opencode-zen", "OpenCode Zen has no balance or usage API; the balance lives in the OpenCode console. Recorded Zen turns are counted below.");
+  if (keyOf("jevApiKeyEncrypted")) none("typesafe", "TypeSafe publishes no usage API; Jev calls are counted from the local ledger.");
+  if (keyOf("customApiKeyEncrypted") && normalizeCompatEndpoint(settings.customEndpoint)) none("custom", "A custom endpoint has no account reading; its calls are counted from the local ledger.");
+  const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
+  const order = normalizeAutoProviders(settings.aiAutoProviders);
+  if (provider === "lmstudio" || order.includes("lmstudio") || settings.lmStudioEndpoint) none("lmstudio", "A local server has no account; its tokens are counted and nothing is billed.");
+  const [grok, claude, antigravity] = await Promise.all([grokCliAvailable(), claudeCliAvailable(), antigravityCliAvailable()]);
+  for (const [id, installed] of [["grok", grok], ["claude", claude], ["antigravity", antigravity]]) {
+    if (installed) none(id, `${AUTO_PROVIDER_NAMES[id]} bills its own login and has no account API; its replies report tokens, which are counted below.`);
+  }
+  const ordered = accounts.sort((a, b) => Number(b.read !== "none") - Number(a.read !== "none") || a.label.localeCompare(b.label));
+  return { ok: true, at: Date.now(), accounts: ordered };
+}
+
 async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = null, provider = "unknown", taskType = "routine", source = "request", escalationOf = null } = {}) {
   const startedAt = Date.now();
   const observationId = crypto.randomUUID();
@@ -1856,15 +2071,28 @@ async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = n
   }
 }
 
+// The CLI routes print one JSON object in their headless modes: the reply
+// text rides inside it beside the tokens the run consumed (and, for Grok, a
+// reported cost when xAI stamped one), which is how those routes reach the
+// usage tracker with real numbers. A CLI that printed plain text instead
+// still answers, with its usage unknown rather than guessed.
+function cliReply(name, parsed, text, { code, err, model }) {
+  const fallback = model || name;
+  if (parsed && !parsed.ok) return { ok: false, error: `${name} error: ${parsed.error || "unknown"}`, model: parsed.model || fallback, tokenUsage: parsed.tokenUsage ?? {}, costUsd: parsed.costUsd ?? null };
+  if (parsed && parsed.text.trim()) return { ok: true, text: parsed.text.trim(), model: parsed.model || fallback, tokenUsage: parsed.tokenUsage ?? {}, costUsd: parsed.costUsd ?? null, equivalentUsd: parsed.equivalentUsd ?? null };
+  if (!parsed && text.trim()) return { ok: true, text: text.trim(), model: fallback };
+  return { ok: false, error: `${name} empty reply (exit ${code ?? "?"})${err.trim() ? `: ${err.trim().slice(-160)}` : ""}` };
+}
+
 // The Grok CLI as an assistant route: one headless single-turn call, system +
 // payload in via --prompt-file (the text can carry quotes and JSON, which no
-// command line should have to quote), plain text out on stdout. Auth rides
-// the CLI's own login, so no key is stored or read.
+// command line should have to quote), one JSON object out on stdout. Auth
+// rides the CLI's own login, so no key is stored or read.
 async function grokCompletion(system, user, model, { timeoutMs = 180000 } = {}) {
   const tmp = path.join(app.getPath("temp"), `mefi-grok-${Date.now()}-${crypto.randomBytes(3).toString("hex")}.txt`);
   try {
     await writeFile(tmp, `${system}\n\n${user}`, "utf8");
-    const args = ["--prompt-file", tmp, "--output-format", "plain", "--permission-mode", "dontAsk"];
+    const args = ["--prompt-file", tmp, "--output-format", "json", "--permission-mode", "dontAsk"];
     if (model) args.push("-m", model);
     return await new Promise((resolve) => {
       const child = spawn("grok", args, { cwd: projectRoot(), windowsHide: true });
@@ -1884,8 +2112,7 @@ async function grokCompletion(system, user, model, { timeoutMs = 180000 } = {}) 
       });
       child.on("close", (code) => {
         clearTimeout(timer);
-        if (text.trim()) resolve({ ok: true, text: text.trim(), model: model || "grok" });
-        else resolve({ ok: false, error: `grok empty reply (exit ${code ?? "?"})${err.trim() ? `: ${err.trim().slice(-160)}` : ""}` });
+        resolve(cliReply("grok", parseGrokCliResult(text), text, { code, err, model }));
       });
     });
   } catch (error) {
@@ -1911,7 +2138,7 @@ function cliModelArg(value) {
 // run is. Auth is the CLI's own login, so no key is stored or read.
 async function claudeCompletion(system, user, model, { timeoutMs = 180000 } = {}) {
   const selected = cliModelArg(model);
-  const command = `claude -p --output-format text --tools= --permission-mode dontAsk --no-session-persistence${selected ? ` --model ${selected}` : ""}`;
+  const command = `claude -p --output-format json --tools= --permission-mode dontAsk --no-session-persistence${selected ? ` --model ${selected}` : ""}`;
   return await new Promise((resolve) => {
     const child = spawn("cmd.exe", ["/d", "/s", "/c", command], { cwd: projectRoot(), windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
     let text = "";
@@ -1930,8 +2157,7 @@ async function claudeCompletion(system, user, model, { timeoutMs = 180000 } = {}
     });
     child.on("close", (code) => {
       clearTimeout(timer);
-      if (text.trim()) resolve({ ok: true, text: text.trim(), model: model || "claude" });
-      else resolve({ ok: false, error: `claude empty reply (exit ${code ?? "?"})${err.trim() ? `: ${err.trim().slice(-160)}` : ""}` });
+      resolve(cliReply("claude", parseClaudeCliResult(text), text, { code, err, model }));
     });
     try {
       child.stdin?.write(`${system}\n\n${user}`);
@@ -1961,7 +2187,7 @@ async function antigravityCompletion(system, user, model, { timeoutMs = 180000 }
   const selected = agyModelArg(model);
   const args = [];
   if (selected) args.push("--model", selected);
-  args.push("--output-format", "text", "-p");
+  args.push("--output-format", "json", "-p");
   return await new Promise((resolve) => {
     const child = spawn("agy", args, { cwd: projectRoot(), windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
     let text = "";
@@ -1980,8 +2206,7 @@ async function antigravityCompletion(system, user, model, { timeoutMs = 180000 }
     });
     child.on("close", (code) => {
       clearTimeout(timer);
-      if (text.trim()) resolve({ ok: true, text: text.trim(), model: model || "antigravity" });
-      else resolve({ ok: false, error: `antigravity empty reply (exit ${code ?? "?"})${err.trim() ? `: ${err.trim().slice(-160)}` : ""}` });
+      resolve(cliReply("antigravity", parseAntigravityCliResult(text), text, { code, err, model }));
     });
     try {
       child.stdin?.write(`${system}\n\n${user}`);
@@ -2097,8 +2322,19 @@ async function executorRunEnv() {
   // The opencode half: the default runner, with the mefi-zai provider when a
   // z.ai key is saved. Computed once and reused as the CLI fallback route.
   const opencodeRoute = async () => {
+    // The builder model saved for OpenCode (Settings, or the first-run scan's
+    // free pick) rides `--model provider/model`; a free-tier id caps the pool
+    // at one worker. A value without a provider prefix is ignored with a log
+    // line rather than handed to a shell.
+    const savedBuilder = String(settings.executorModels?.opencode ?? "").trim();
+    const builderModel = /^[a-z0-9][a-z0-9._-]*\/[A-Za-z0-9~][A-Za-z0-9._:/~-]*$/.test(savedBuilder) ? savedBuilder : "";
+    if (savedBuilder && !builderModel) logLine(`[autopilot] builder model for opencode must be provider/model, ignoring "${savedBuilder.slice(0, 60)}"`);
+    const freeBuilder = Boolean(builderModel) && (/(^|[-_.])free$/i.test(builderModel) || (settings.firstRun?.builder?.free === true && settings.firstRun?.builder?.model === builderModel));
+    const openDefault = (note) => builderModel
+      ? { cli: "opencode", env: executorOpencodeEnv(), modelArgs: ` --model ${builderModel}`, model: builderModel, free: freeBuilder, parallelCap: freeBuilder ? 1 : null, via: `${builderModel}${freeBuilder ? " · free, one at a time" : ""}${note ? ` · ${note}` : ""}` }
+      : { cli: "opencode", env: executorOpencodeEnv(), modelArgs: "", via: note ? `opencode default · ${note}` : "opencode default" };
     const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
-    if (provider === "opencode") return { cli: "opencode", env: executorOpencodeEnv(), modelArgs: "", via: "opencode default" };
+    if (provider === "opencode") return openDefault();
     const zaiEnv = await zaiOpencodeEnv();
     const mefiZai = () => ({ cli: "opencode", env: executorOpencodeEnv(zaiEnv), modelProvider: "zai", model: ZAI_MODEL_ROUTINE, modelArgs: ` --model mefi-zai/${ZAI_MODEL_ROUTINE}`, via: `mefi-zai/${ZAI_MODEL_ROUTINE}` });
     // The default is glm-5.3-flash on the coding plan. Task-aware selection
@@ -2111,12 +2347,12 @@ async function executorRunEnv() {
     const openAt = order.indexOf("opencode");
     if (zaiAt >= 0 && (openAt < 0 || zaiAt < openAt)) {
       if (zaiEnv) return mefiZai();
-      if (openAt >= 0) return { cli: "opencode", env: executorOpencodeEnv(), modelArgs: "", via: "opencode default · z.ai key missing" };
+      if (openAt >= 0) return openDefault("z.ai key missing");
       return { error: "AI routing is z.ai-only but no z.ai key is saved" };
     }
     // OpenCode leads the order (or is the only keyed runner listed): builders
     // stay on OpenCode's own account.
-    return { cli: "opencode", env: executorOpencodeEnv(), modelArgs: "", via: "opencode default" };
+    return openDefault();
   };
   if (settings.executorCli === "grok") {
     const buildModel = executorModelOverride(settings, "grok");
@@ -2171,7 +2407,7 @@ async function assistantFetch(system, user, maxTokens = 6000, { role = "routine"
         : await antigravityCompletion(system, user, route.model);
     const observationId = crypto.randomUUID();
     await recordModelCall({ id: observationId, model: cli.model || route.model || `${route.provider}-default`, provider: route.provider, taskType, source: "request",
-      at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : "error", errorKind: cli.ok ? null : "cli", tokenUsage: {}, costUsd: null });
+      at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : "error", errorKind: cli.ok ? null : "cli", tokenUsage: cli.tokenUsage ?? {}, costUsd: cli.costUsd ?? null });
     cli.observationId = observationId;
     if (cli.ok) {
       if (assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = cli.model;
@@ -3940,6 +4176,7 @@ async function assistantThinkerJob(now, entry) {
 function assistantAskForWork(reason) {
   if (SMOKE || CAPTURE || CLI_MODE) return false;
   if (assistantState?.status === "paused") return false;
+  if (autopilot.held) return false; // launch hold: the foreman waits for the user's Start
   // The reason rides into the Auto Builder panel, so the card says why the
   // assistant reached for work rather than leaving the executor's state
   // unexplained.
@@ -5004,7 +5241,34 @@ async function assistantTick(reason = "timer") {
   return assistantTickInFlight;
 }
 
+// ---- launch hold ----------------------------------------------------------
+// An interactive launch does not start agents on its own. The renderer's
+// launch screen (renderer/startup.js) picks the project (startup:choose) and
+// either releases the agents at once ("Open and start agents") or leaves them
+// held until the workspace's Start agents control, the tray, or a Resume /
+// Work-through-backlog action releases them. Smoke, capture and CLI launches
+// never hold. The flag is `autopilot.held` so every dispatch funnel — the
+// service loop, the executor fill, the proactive pass, the foreman ask —
+// reads one value; nothing is persisted, so a saved pause stays the operator's.
+let startupChosen = false;
+async function releaseStartupHold() {
+  if (!autopilot.held) return { ok: true, released: false, running: assistantLoop && assistantState?.status === "running" };
+  autopilot.held = false;
+  logLine("[startup] agents released by the user");
+  const result = await startAssistant();
+  refreshTray();
+  emitAutopilot();
+  return { ok: true, released: true, running: result?.running === true };
+}
+
 async function startAssistant() {
+  // Held: load the state (the tray and the panels read it) but start nothing.
+  // The boot timer still fires; it simply finds nothing to start yet.
+  if (autopilot.held) {
+    await ensureAssistant();
+    applyTray();
+    return { ok: true, running: false, held: true };
+  }
   // The foreman can run on the first assistant tick. Load saved executor
   // preferences before that tick can turn a persisted pause into paid work.
   if (!SMOKE && !CAPTURE && !CLI_MODE) await bootAutopilot();
@@ -5059,6 +5323,9 @@ async function assistantPause() {
 }
 
 async function assistantResume() {
+  // Resuming while the launch hold is on means "start now": release the
+  // service first, then carry on as a normal resume.
+  if (typeof autopilot !== "undefined" && autopilot.held) await releaseStartupHold();
   assistantState.status = "running";
   applyKeepAwake();
   assistantLog("control", "assistant resumed");
@@ -5119,14 +5386,17 @@ function refreshTray() {
   if (!tray || !assistantState) return;
   try {
     const paused = assistantState.status === "paused";
+    const held = autopilot.held === true;
     const summary = assistantModule?.summarizeForTree?.(assistantState, Date.now());
-    tray.setToolTip(`Mefi's Studio AI+ · ${summary?.sublabel ?? (paused ? "assistant paused" : "assistant running")}`);
-    if (trayPaused === paused) return;
-    trayPaused = paused;
+    tray.setToolTip(`Mefi's Studio AI+ · ${held ? "agents waiting for you" : (summary?.sublabel ?? (paused ? "assistant paused" : "assistant running"))}`);
+    // The menu is rebuilt only when its one variable entry would change.
+    const menuState = `${held ? "held" : "released"}:${paused ? "paused" : "running"}`;
+    if (trayPaused === menuState) return;
+    trayPaused = menuState;
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: "Open Studio", click: showWindow },
-        { label: paused ? "Resume assistant" : "Pause assistant", click: () => (paused ? assistantResume() : assistantPause()).catch(() => {}) },
+        { label: held ? "Start agents" : paused ? "Resume assistant" : "Pause assistant", click: () => (held ? releaseStartupHold() : paused ? assistantResume() : assistantPause()).catch(() => {}) },
         { type: "separator" },
         {
           label: "Quit",
@@ -5685,6 +5955,12 @@ async function assistantControl(action) {
       assistantAskForWork("new work enabled");
       return { ok: true, state: assistantState, autopilot: autopilotStatus() };
     }
+    else if (action === "start") {
+      // The launch screen's "wait" choice ends here: the agents may start.
+      // A pause the operator saved still stands; the reply says so.
+      const started = await releaseStartupHold();
+      return { ok: true, state: assistantState, autopilot: autopilotStatus(), released: started.released === true, running: started.running === true };
+    }
     else if (action === "tick") await assistantTick("control");
     else if (action === "tidy") await assistantRunRole("keeper");
     else if (action === "fix") {
@@ -6058,6 +6334,7 @@ let proactiveTimer = null;
 const autopilot = {
   enabled: true, // evaluate on a timer (was "proactive")
   execute: false, // bootAutopilot loads the saved choice before any worker can run
+  held: false, // launch hold: an interactive start waits for the user before any agent or worker runs (releaseStartupHold)
   autoBuild: true, // verify-first holds each saved scope until explicitly approved
   minutes: 5,
   parallel: 2, // retained manual worker limit
@@ -6211,6 +6488,7 @@ function autopilotStatus() {
   return {
     enabled: autopilot.enabled,
     execute: autopilot.execute,
+    held: autopilot.held === true, // launch hold: agents wait for the user's Start
     autoBuild: autopilot.autoBuild,
     minutes: autopilot.minutes,
     parallel: autopilot.parallel,
@@ -7051,6 +7329,7 @@ let executorFillInFlight = null;
 async function executeNextRequest() {
   if (SMOKE || CAPTURE || CLI_MODE) return;
   if (assistantState?.status === "paused") return;
+  if (autopilot.held) return; // launch hold: no worker before the user's Start
   if (executorUpdateHold()) { setAutopilotWaiting(executorUpdateHold()); return; }
   if (autopilot.jobs.some((entry) => entry.settlementPending)) { setAutopilotWaiting("saving a finished worker result; retrying storage"); return; }
   if (executorFillInFlight) return executorFillInFlight;
@@ -7443,8 +7722,16 @@ async function spawnNextJob() {
       // A live lag hold must re-sample before blocking another start: forcing
       // the probe keeps the hold on current evidence and lets the first
       // responsive reading lift it, even while the cache still holds lag.
-      const lagMs = await measureWorkerLag({ force: force || machineLagGate?.lastVerdict?.hold === true });
-      capacity = await machine.workerCapacity({ running, force, lagMs });
+      let lagMs = await measureWorkerLag({ force: force || machineLagGate?.lastVerdict?.hold === true });
+      // A silent probe (no frames, no worker, no MessageChannel within the
+      // timeout) is an unmeasurable renderer, not a busy machine: session-
+      // frozen pages on unattended desktops answer nothing for hours while
+      // the host idles. Silence never counts as lag evidence — gate on the
+      // host alone, exactly like a hidden window, so the hold rests on
+      // readings that can actually recover instead of starving the queue.
+      if (measureWorkerLag.cache?.silent === true) lagMs = null;
+      const capacitySettings = await readSettings();
+      capacity = await machine.workerCapacity({ running, force, lagMs, memoryWarnOverride: machineMemoryWarnOverride(capacitySettings) });
       // The gate threshold mirrors the sampler's lagBusyMs: the same busy bar,
       // counted over the foreman's own samples instead of the sampler's cache.
       if (typeof assistant?.createMachineLagGate !== "function") {
@@ -7523,6 +7810,10 @@ async function spawnNextJob() {
     logLine(`[autopilot] executor route failed: ${reason}`);
     return "route";
   }
+  // A free-tier builder answers one request at a time (a second concurrent
+  // call queued for minutes in probes): with a free route, one worker is the
+  // whole pool whatever the manual or adaptive limit says.
+  if (runRoute.parallelCap && autopilot.jobs.length >= runRoute.parallelCap) return "empty";
   const eyes = await getEyes();
   // Warm the frozen baseline port (policy.mjs is the extracted home of the
   // ranking; the inline fallback keeps dispatch alive if this load fails).
@@ -9478,6 +9769,7 @@ let autopilotPassInFlight = null;
 async function autopilotPass() {
   if (projectSwitching) return { ok: true, skipped: "switching project" };
   if (assistantState?.status === "paused") return { ok: true, skipped: "paused" };
+  if (autopilot.held) return { ok: true, skipped: "held" };
   // Nothing is organised, grown or spent for the app's own seed store: a
   // folder must be open before the loop has a project to work on.
   if (!projects.open()) return { ok: true, skipped: "no project open" };
@@ -10460,6 +10752,21 @@ function registerIpc() {
     if (typeof payload === "string") return selectProject(payload);
     return selectProject(payload?.id, { saveProgress: payload?.saveProgress === true });
   });
+  // The launch screen (renderer/startup.js): which project to open, and
+  // whether the agents may start. `chosen` lets a renderer reload skip the
+  // screen; `held` is what the Start agents controls key on.
+  ipcMain.handle("startup:state", () => ({ ...projects.list(), interactive: !SMOKE && !CAPTURE && !CLI_MODE, chosen: startupChosen, held: autopilot.held === true, started: assistantLoop }));
+  ipcMain.handle("startup:choose", async (_event, payload) => {
+    const id = typeof payload?.id === "string" && payload.id ? payload.id : null;
+    let result = projects.list();
+    if (id && id !== projects.active().id) {
+      result = await selectProject(id);
+      if (result.ok === false) return result;
+    }
+    startupChosen = true;
+    return { ...result, ok: true, chosen: true };
+  });
+  ipcMain.handle("startup:begin", () => releaseStartupHold());
   ipcMain.handle("planning:list", (_event, payload) => planningRequest("list", payload));
   ipcMain.handle("planning:action", (_event, payload) => planningRequest("action", payload));
   ipcMain.handle("planning:assist", (_event, payload) => planningRequest("assist", payload));
@@ -10761,6 +11068,42 @@ function registerIpc() {
   // The planner decides, this handler applies only real changes, and the
   // response explains every choice. Saved keys and model overrides are never
   // touched.
+  // First run on OpenCode: the scan, its apply step and the first map ride
+  // scripts/first-run-service.mjs; main supplies only the host boundaries.
+  // The service instance is kept for the process lifetime because it owns the
+  // running map; a live update of its module takes effect on the next launch.
+  let firstRunService = null;
+  async function firstRun() {
+    if (firstRunService) return firstRunService;
+    const [service, scanner, mapper, judge, assistModule] = await Promise.all([
+      loadModule("scripts/first-run-service.mjs"), loadModule("scripts/first-scan.mjs"), loadModule("scripts/first-map.mjs"), loadModule("scripts/choice-judge.mjs"), loadModule("scripts/setup-assist.mjs"),
+    ]);
+    firstRunService = service.createFirstRunService({
+      scanner, mapper, judge, readSettings, writeSettings, decryptKey,
+      assistantRoute: async () => { try { return await resolveAiRoute("routine"); } catch (error) { return { ok: false, error: String(error?.message ?? error) }; } },
+      projects,
+      analyzeProject: async () => { const result = await runAnalyzer({ kind: "project" }); return result?.ok ? result.result : null; },
+      runEnv: () => executorOpencodeEnv(),
+      readIdeas: async () => (await getEyes()).readJson(IDEAS_PATH, []),
+      writeIdeas: (rows) => withBoardLock(async () => (await getEyes()).writeJson(IDEAS_PATH, rows)),
+      writeMapFile: async (name, value) => (await getEyes()).writeJson(path.join(STUDIO_ROOT, "data", name), value),
+      send,
+      progress: (payload) => send("setup:first-map-progress", payload),
+      log: logLine,
+      assistModule,
+      assistantChat: (system, user) => assistantFetch(system, user, 1200, { role: "routine", taskType: "setup-assist" }),
+      readMapFile: async (name) => (await getEyes()).readJson(path.join(STUDIO_ROOT, "data", name), null),
+      smoke: SMOKE || CAPTURE || CLI_MODE,
+    });
+    return firstRunService;
+  }
+  ipcMain.handle("setup:first-run-status", async () => (await firstRun()).status());
+  ipcMain.handle("setup:first-scan", async (_event, payload) => (await firstRun()).scan(payload ?? {}));
+  ipcMain.handle("setup:first-scan-apply", async (_event, payload) => (await firstRun()).apply(payload ?? {}));
+  ipcMain.handle("setup:first-map", async (_event, payload) => (await firstRun()).map(payload ?? {}));
+  ipcMain.handle("setup:first-map-cancel", async () => (await firstRun()).cancel());
+  ipcMain.handle("setup:first-assist", async (_event, payload) => (await firstRun()).assist(payload ?? {}));
+
   ipcMain.handle("settings:auto-setup", async () => {
     const settings = await readSettings();
     const keys = {
@@ -10823,16 +11166,19 @@ function registerIpc() {
 
   ipcMain.handle("usage:tracker", async () => {
     try {
-      const state = await modelPerformanceStore().read();
-      const limits = await usageTrackerLimits();
       const now = Date.now();
+      const [state, limits, store] = await Promise.all([modelPerformanceStore().read(), usageTrackerLimits(), codingSessionUsage(now)]);
+      const merged = mergeLedgers({ studio: state.observations, store: store.rows });
       return {
         ok: true,
-        ...aggregateUsage(state.observations, { now }),
+        ...aggregateUsage(merged, { now }),
         lifetime: state.lifetime,
         retention: state.retention,
-        credits: opencodeWindows(state.observations, { now, limits }),
-        coverage: "Totals cover the calls Studio recorded for this project (assistant HTTP/Grok routes and speed probes). Coding CLI sessions are not counted, and a local OpenCode Go estimate counts only costs the provider reported.",
+        credits: opencodeWindows(merged, { now, limits }),
+        store: { ok: store.ok, error: store.error ?? null, rows: store.rows.length, scanned: store.scanned ?? 0, since: store.since ?? null, warm: store.warm === true },
+        coverage: store.ok
+          ? "Totals cover the calls Studio made for this project (assistant HTTP and CLI routes, Jev, speed probes) plus every assistant turn OpenCode's own store holds for coding sessions under this project folder, with the cost each provider reported. A plan or subscription reports no per-call cost, so those calls stay unpriced rather than free."
+          : "Totals cover the calls Studio made for this project (assistant HTTP and CLI routes, Jev, speed probes). The OpenCode store could not be read this time, so coding sessions are missing from these numbers until it can.",
       };
     } catch (error) {
       return { ok: false, error: error.message };
@@ -10846,6 +11192,14 @@ function registerIpc() {
     return result.ok
       ? { ok: true, usage: result.usage, fetchedAt: result.at }
       : { ok: false, error: result.error, code: result.code };
+  });
+
+  // Every connected provider's own account reading, one entry per provider:
+  // a live window, quota or balance where the provider offers one over the
+  // saved key, and a plain statement where it does not. Keys never cross IPC.
+  ipcMain.handle("usage:accounts", async () => {
+    try { return await usageAccounts(); }
+    catch (error) { return { ok: false, error: error.message, accounts: [] }; }
   });
 
   ipcMain.handle("speed:measurements-read", async () => {
@@ -11757,6 +12111,10 @@ app.whenReady().then(() => {
     })();
     return;
   }
+  // An interactive launch waits for the user: the launch screen picks the
+  // project and releases the agents (startup:begin / Start agents). Smoke,
+  // capture and CLI launches keep their automatic start.
+  autopilot.held = !SMOKE && !CAPTURE && !CLI_MODE;
   createWindow();
   // Watchers start after the window is up so first paint is never delayed.
   setTimeout(() => startMachineWatch(), 2500);

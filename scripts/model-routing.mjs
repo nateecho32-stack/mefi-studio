@@ -94,7 +94,7 @@ function taskDescription(task) {
 }
 
 /** Return an allowed model or a closed failure; the host retains its default. */
-export async function selectTaskModel({ candidates, taskType, role, task, apiKey, config = null, classifyFn = classify, onUsage } = {}) {
+export async function selectTaskModel({ candidates, taskType, role, task, apiKey, config = null, classifyFn = classify, onUsage, judge = null } = {}) {
   const failure = (reason, detail = {}) => ({ ok: false, reason, ...detail });
   if (!Array.isArray(candidates) || !candidates.length) return failure("no-compatible-models");
   const options = candidates.slice(0, MAX_ROUTING_CANDIDATES);
@@ -102,9 +102,15 @@ export async function selectTaskModel({ candidates, taskType, role, task, apiKey
   if (providers.size !== 1 || !["zai", "opencode"].includes(options[0]?.provider) || options.some((candidate) => !/^candidate_[1-9][0-9]*$/.test(candidate?.id ?? "") || !MODEL_ID.test(candidate?.model ?? "")) || new Set(options.map((candidate) => candidate.id)).size !== options.length || new Set(options.map((candidate) => candidate.model)).size !== options.length) return failure("invalid-candidates");
   const success = (candidate, reason, details = {}) => ({ ok: true, model: candidate.model, provider: candidate.provider, reason, evidence: { measured: candidate.measured, catalog: candidate.catalog }, ...details });
   if (options.length === 1) return success(options[0], "only-compatible-model");
-  if (typeof apiKey !== "string" || !apiKey.trim()) return failure("jev-unconfigured");
+  // A stand-in judge (the assistant's chat model behind the same question
+  // contract, see choice-judge.mjs) needs neither a Jev key nor a Jev model.
+  // It is only ever an injected classifier, so the real client's key and
+  // model checks still guard the real wire.
+  const standIn = Boolean(judge && typeof judge === "object" && classifyFn !== classify);
+  if (!standIn && (typeof apiKey !== "string" || !apiKey.trim())) return failure("jev-unconfigured");
   const cfg = { ...gatewayConfig(), ...config };
-  if (!isJevModel(cfg.model)) return failure("jev-only");
+  if (standIn) cfg.model = clip(judge.model, 160) || "stand-in-judge";
+  else if (!isJevModel(cfg.model)) return failure("jev-only");
   cfg.timeoutMs = Math.max(1, Math.min(ROUTING_TIMEOUT_MS, number(cfg.timeoutMs) ?? ROUTING_TIMEOUT_MS));
   cfg.maxStateChars = Math.max(200, Math.min(60000, number(cfg.maxStateChars) ?? 8000));
   const state = { now: Date.now(), taskType: taskSlug(taskType), role: clip(role, 48) || "routine", untrustedTask: taskDescription(task), candidates: options };
@@ -143,5 +149,5 @@ export async function selectTaskModel({ candidates, taskType, role, task, apiKey
   const answer = result.answers?.model_route;
   const candidate = options.find((item) => item.id === answer?.choice);
   if (!candidate || Object.keys(result.answers).length !== 1 || Object.keys(answer).some((key) => key !== "choice")) return failure("invalid-jev-choice", details);
-  return success(candidate, "jev-selected", details);
+  return success(candidate, standIn ? "judge-selected" : "jev-selected", details);
 }

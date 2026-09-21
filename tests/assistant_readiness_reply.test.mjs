@@ -66,7 +66,7 @@ test("paused builders and running workers are reported together without claiming
 });
 
 test("builder facts and replies retain machine admission decisions without reporting manual slots", () => {
-  const resources = { cpuPercent: 94, availableMemoryMB: 1900, totalMemoryMB: 16384, lagMs: 175, hostLagMs: 125, rendererLagMs: 175, lagPressure: true };
+  const resources = { cpuPercent: 94, availableMemoryMB: 1900, totalMemoryMB: 16384, requiredMemoryMB: 440, lagMs: 175, hostLagMs: 125, rendererLagMs: 175, lagPressure: true, holdKind: "lag", memoryShortfall: null, memoryWarning: null };
   const facts = buildFacts({ executor: { enabled: true, parallel: 2, running: Array.from({ length: 5 }, (_, index) => ({ title: `Work ${index}` })), capacity: { canStart: false, reason: "Studio is responding slowly", resources } } });
   assert.equal(facts.executor.adaptiveParallel, true);
   assert.deepEqual(facts.executor.capacity, { canStart: false, reason: "Studio is responding slowly", resources });
@@ -76,11 +76,49 @@ test("builder facts and replies retain machine admission decisions without repor
   assert.match(reply.text, /Dispatch waiting: Studio is responding slowly/);
   assert.match(reply.text, /resume automatically when machine capacity recovers/);
   assert.doesNotMatch(reply.text, /worker slots/);
-  const recovered = buildFacts({ executor: { ...facts.executor, capacity: { canStart: true, reason: null, resources: { ...resources, lagMs: 10, hostLagMs: 10, rendererLagMs: null, lagPressure: false } } } });
+  const recovered = buildFacts({ executor: { ...facts.executor, capacity: { canStart: true, reason: null, resources: { ...resources, lagMs: 10, hostLagMs: 10, rendererLagMs: null, lagPressure: false, holdKind: null } } } });
   assert.equal(recovered.executor.capacity.resources.rendererLagMs, null, "a hidden renderer has no observed lag");
   assert.equal(recovered.executor.capacity.resources.lagPressure, false);
   assert.equal(recovered.executor.capacity.resources.cpuPercent, 94, "high CPU remains resource context after responsiveness recovers");
   assert.doesNotMatch(localReply({ text: "builder status", facts: recovered }).text, /Dispatch waiting|responding slowly/);
+});
+
+test("a memory hold rides the facts and the reply names finishing or compacting work as the remedy", () => {
+  // The dispatch alert this integrates: a small memory shortfall (345 MB free,
+  // 440 MB needed) holds starts; the structured class must survive into the
+  // facts so the remedy is memory-shaped, not "wait for responsiveness".
+  const facts = buildFacts({
+    executor: {
+      enabled: true, parallel: 2, adaptiveParallel: true, running: [{ title: "worldgen triage" }],
+      capacity: {
+        canStart: false,
+        reason: "Machine memory is low (345 MB available; 440 MB needed before another worker).",
+        resources: { cpuPercent: 8, availableMemoryMB: 345, totalMemoryMB: 16384, requiredMemoryMB: 440, lagMs: 12, hostLagMs: 12, rendererLagMs: null, lagPressure: false, holdKind: "memory", memoryShortfall: "small", memoryWarning: null },
+      },
+    },
+  });
+  assert.equal(facts.executor.capacity.resources.holdKind, "memory");
+  assert.equal(facts.executor.capacity.resources.memoryShortfall, "small");
+  assert.equal(facts.executor.capacity.resources.requiredMemoryMB, 440);
+  const reply = localReply({ text: "builder status", facts });
+  assert.match(reply.text, /Dispatch waiting: Machine memory is low \(345 MB available; 440 MB needed/);
+  assert.match(reply.text, /Finishing or compacting existing work frees memory and resumes new starts/);
+  assert.doesNotMatch(reply.text, /resume automatically when machine capacity recovers/);
+
+  // The severe tier keeps its distinct wording and never borrows the lag text.
+  const severe = buildFacts({
+    executor: { enabled: true, parallel: 2, running: [], capacity: { canStart: false, reason: "Machine memory is critically low (250 MB available; 300 MB severe floor) — refusing another worker even with the memory override.", resources: { availableMemoryMB: 250, requiredMemoryMB: 440, lagMs: 5, hostLagMs: 5, rendererLagMs: null, lagPressure: false, holdKind: "memory-severe", memoryShortfall: "severe", memoryWarning: null } } },
+  });
+  const severeReply = localReply({ text: "builder status", facts: severe });
+  assert.match(severeReply.text, /Finishing or compacting existing work frees memory and resumes new starts/);
+
+  // An overridden small shortfall admits work: the warning rides the facts
+  // while the hold is gone.
+  const overridden = buildFacts({
+    executor: { enabled: true, parallel: 2, running: [], capacity: { canStart: true, reason: null, resources: { availableMemoryMB: 345, requiredMemoryMB: 440, lagMs: 0, hostLagMs: 0, rendererLagMs: 0, lagPressure: false, holdKind: null, memoryShortfall: "small", memoryWarning: "Machine memory is low (345 MB available; 440 MB needed before another worker) — starting on the explicit memory override." } } },
+  });
+  assert.equal(overridden.executor.capacity.resources.memoryWarning, "Machine memory is low (345 MB available; 440 MB needed before another worker) — starting on the explicit memory override.");
+  assert.doesNotMatch(localReply({ text: "builder status", facts: overridden }).text, /Dispatch waiting/);
 });
 
 test("dispatch holds and unavailable readiness remain explicit", () => {

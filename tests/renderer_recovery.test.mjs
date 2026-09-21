@@ -140,6 +140,31 @@ test("Chromium's error-page load is not mistaken for successful recovery", async
   assert.equal(f.recovery.status().state, "healthy");
 });
 
+test("a scheduled reload that never fires leaves a skipped record naming the reason", async () => {
+  const quitting = fixture();
+  quitting.crash();
+  assert.ok(quitting.records.some((record) => record.event === "scheduled"));
+  quitting.quit();
+  await quitting.flush();
+  assert.equal(quitting.loads(), 0);
+  assert.equal(quitting.records.filter((record) => record.event === "skipped").length, 1, "one skip per scheduled reload");
+  const skipped = quitting.records.find((record) => record.event === "skipped");
+  assert.equal(skipped.skipReason, "quitting");
+  assert.equal(skipped.reason, "crashed", "the triggering failure stays linked to the skip");
+  assert.equal(skipped.manual, false);
+
+  const clean = fixture();
+  clean.crash();
+  clean.crash("clean-exit", 0);
+  assert.equal(clean.pending.size, 0, "a clean exit cancels the pending reload");
+  assert.equal(clean.records.find((record) => record.event === "skipped")?.skipReason, "clean-exit");
+
+  const closing = fixture();
+  closing.crash();
+  closing.close();
+  assert.equal(closing.records.find((record) => record.event === "skipped")?.skipReason, "disposed");
+});
+
 test("clean exit, application quit and window disposal never resurrect a renderer", async () => {
   const clean = fixture(); clean.crash("clean-exit", 0); await clean.flush();
   assert.equal(clean.loads(), 0);

@@ -28,7 +28,8 @@ const incoming = { title: "Fix scheduler startup delay", prompt: "Fix scheduler 
 const existing = { id: "existing", title: "Reduce scheduler startup delay", status: "open" };
 
 function host({ settings = { gatewayApiKeyEncrypted: "fixture-encrypted" }, requests = [incoming], tasks = [existing], fetchImpl = async () => reply({ rel_0: { type: "choice", choice: "same_obligation" } }) } = {}) {
-  const calls = [], charges = [], records = [], reads = [], enqueued = [], logs = [];
+  const calls = [], charges = [], records = [], reads = [], enqueued = [], logs = [], ledger = [];
+  let serial = 0;
   const client = {
     ...decisionClient,
     resolveApiKey: (options) => decisionClient.resolveApiKey({ ...options, env: {} }),
@@ -62,9 +63,12 @@ function host({ settings = { gatewayApiKeyEncrypted: "fixture-encrypted" }, requ
     logLine: (line) => logs.push(line),
     mutateBoard: () => assert.fail("Jev cannot change the board"),
     spawn: () => assert.fail("Jev cannot start a worker"),
+    // Every charged call also joins the model ledger the usage tracker reads.
+    crypto: { randomUUID: () => `jev-${++serial}` },
+    recordModelCall: async (observation) => { ledger.push(observation); },
   });
   vm.runInContext(section("// Jev classifies admitted observations", "const PINS_PATH"), context, { filename: "main.cjs:jev-runtime" });
-  return { context, calls, charges, records, reads, enqueued, logs, settings, client, experience };
+  return { context, calls, charges, records, reads, enqueued, logs, ledger, settings, client, experience };
 }
 
 test("request admission sends only accepted records to Jev and never awaits the classifier", async () => {
@@ -195,7 +199,7 @@ test("the saved route picks the endpoint and its own credential", async () => {
 });
 
 test("a failed evaluation is budget-charged from usage and never becomes a proposal", async () => {
-  const { context, calls, charges, records } = host({ fetchImpl: async () => reply({}, { inputTokens: 37, outputTokens: 4 }) });
+  const { context, calls, charges, records, ledger } = host({ fetchImpl: async () => reply({}, { inputTokens: 37, outputTokens: 4 }) });
   const result = await context.runJevIntake([incoming]);
   assert.equal(result.ok, false);
   assert.equal(result.attempted, true);
@@ -205,6 +209,13 @@ test("a failed evaluation is budget-charged from usage and never becomes a propo
   assert.equal(charges[0].modelCalls, 1);
   assert.equal(charges[0].tokens, 41);
   assert.match(charges[0].note, /failed/);
+  // The same call reaches the usage tracker's ledger under the route's provider, tokens as reported, cost unknown.
+  assert.equal(ledger.length, 1);
+  assert.equal(ledger[0].provider, "gateway");
+  assert.equal(ledger[0].status, "error");
+  assert.equal(ledger[0].taskType, "jev-shadow-intake");
+  assert.deepEqual({ ...ledger[0].tokenUsage }, { inputTokens: 37, outputTokens: 4, totalTokens: 41 });
+  assert.equal(ledger[0].costUsd, null);
   assert.equal(records.length, 0);
 });
 

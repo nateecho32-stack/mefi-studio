@@ -10,7 +10,7 @@
   const STEP_SLOW_MS = 15000;
   const STEP_DEAD_MS = 60000;
   const FADE_MS = 180;
-  const boot = { active: false, phase: "idle", epoch: 0, steps: [], promise: Promise.resolve(true), resolve: null, onReady: null };
+  const boot = { active: false, phase: "idle", epoch: 0, steps: [], promise: Promise.resolve(true), resolve: null, onReady: null, choose: null, choice: null };
   const el = {};
   const locked = new Map();
   let startedAt = 0;
@@ -33,11 +33,17 @@
     }
     const failed = boot.steps.filter((step) => step.status === "error");
     const loading = boot.steps.find((step) => step.status === "loading" || step.status === "pending");
-    if (el.title) el.title.textContent = boot.phase === "error" ? "A little more setup is needed" : boot.phase === "ready" ? "Your studio is ready" : "Opening your studio";
-    if (el.detail) el.detail.textContent = boot.phase === "error"
-      ? "Couldn't finish " + failed.map((step) => step.label.toLowerCase()).join(", ") + ". Retry, or open with what's available."
-      : boot.phase === "ready" ? "Everything is in place." : loading ? loading.label + "…" : "Preparing your workspace…";
+    const choosing = boot.phase === "choose";
+    if (el.title) el.title.textContent = choosing ? "Choose a project" : boot.phase === "error" ? "A little more setup is needed" : boot.phase === "ready" ? "Your studio is ready" : "Opening your studio";
+    if (el.detail) el.detail.textContent = choosing
+      ? "Pick the folder to open. Nothing runs until you say so."
+      : boot.phase === "error"
+        ? "Couldn't finish " + failed.map((step) => step.label.toLowerCase()).join(", ") + ". Retry, or open with what's available."
+        : boot.phase === "ready" ? "Everything is in place." : loading ? loading.label + "…" : "Preparing your workspace…";
     if (el.actions) el.actions.hidden = boot.phase !== "error";
+    // The launch choice stands in for the progress readout until it is made.
+    if (el.choose) el.choose.hidden = !choosing;
+    for (const node of [el["progress-heading"], el.progress, el.steps]) if (node) node.hidden = choosing;
     for (const step of boot.steps) if (step.row) {
       step.row.dataset.state = step.status;
       step.row.textContent = step.label + (step.status === "ready" ? " · Ready" : step.status === "error" ? " · Couldn't load" : "");
@@ -52,13 +58,19 @@
     event.stopImmediatePropagation();
     if (event.key === "Tab") {
       event.preventDefault();
-      const buttons = boot.phase === "error" ? [el.retry, el.continue].filter(Boolean) : [];
+      const buttons = boot.phase === "error" ? [el.retry, el.continue].filter(Boolean) : boot.phase === "choose" ? chooserControls() : [];
       if (!buttons.length) el.layer?.focus({ preventScroll: true });
       else {
         const index = buttons.indexOf(document.activeElement);
         buttons[(index + (event.shiftKey ? buttons.length - 1 : 1)) % buttons.length].focus();
       }
     } else if (event.key === "Escape" || !el.layer?.contains(event.target)) event.preventDefault();
+  }
+
+  // Tab stays inside the launch choice: its project rows and buttons.
+  function chooserControls() {
+    const nodes = el.choose?.querySelectorAll?.("button:not([disabled]), input:not([disabled])") ?? [];
+    return Array.from(nodes).filter((node) => !node.hidden && !node.closest?.("[hidden]"));
   }
 
   function blockOutside(event) {
@@ -93,7 +105,7 @@
     if (el.layer) { el.layer.hidden = true; el.layer.classList.remove("done"); }
     document.documentElement?.removeAttribute("data-starting");
     boot.phase = complete ? "complete" : "partial";
-    try { boot.onReady?.(complete); } catch (error) { console.error("Startup handoff failed", error); }
+    try { boot.onReady?.(complete, boot.choice); } catch (error) { console.error("Startup handoff failed", error); }
     boot.resolve?.(complete);
     boot.resolve = null;
   }
@@ -143,11 +155,29 @@
     fadeTimer = setTimeout(() => { if (isCurrent()) release(true); }, reducedMotion() ? 0 : FADE_MS);
   }
 
-  function run(steps, onReady) {
+  // The launch choice runs first, with the gate locked, before any readiness
+  // step reads the workspace: the project it names is what the steps load.
+  async function begin() {
+    if (boot.choose) {
+      const epoch = boot.epoch;
+      const isCurrent = () => boot.active && boot.epoch === epoch;
+      boot.phase = "choose";
+      paint();
+      try { boot.choice = await boot.choose({ isCurrent }); }
+      catch (error) { boot.choice = null; console.warn("Startup choice failed", error); }
+      boot.choose = null; // Retry reloads data; it never asks again.
+      if (!isCurrent()) return;
+    }
+    void attempt();
+  }
+
+  function run(steps, onReady, options = {}) {
     if (boot.active) return boot.promise;
-    for (const name of ["layer", "title", "detail", "progress", "count", "steps", "actions", "retry", "continue"]) el[name] = document.getElementById("boot-" + name);
+    for (const name of ["layer", "title", "detail", "progress", "progress-heading", "count", "steps", "actions", "retry", "continue", "choose"]) el[name] = document.getElementById("boot-" + name);
     boot.steps = steps.map((step) => ({ ...step, status: "pending", row: null }));
     boot.onReady = onReady;
+    boot.choose = typeof options?.choose === "function" ? options.choose : null;
+    boot.choice = null;
     boot.active = true;
     boot.phase = "loading";
     startedAt = performance.now();
@@ -164,7 +194,7 @@
     lock();
     paint();
     // Start after DOM initialization, so readiness hooks refer to wired views.
-    const start = () => { if (boot.active) void attempt(); };
+    const start = () => { if (boot.active) void begin(); };
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
     else start();
     return boot.promise;

@@ -115,6 +115,7 @@
       });
       window.mefiStudio?.machineSet?.({}).then((result) => {
         if (result?.ok && els.machineAuto) els.machineAuto.checked = result.machine.autoKill !== false;
+        if (result?.ok && els.machineMemoryOverride) els.machineMemoryOverride.checked = result.machine.memoryWarnOverride === true;
       });
     } catch (error) {
       // Never leave the pending "Loading sessions…" note stuck: render the
@@ -1251,6 +1252,7 @@
       machineBadge: "machine-badge",
       machineLines: "machine-lines",
       machineAuto: "machine-auto",
+      machineMemoryOverride: "machine-memory-override",
       machineList: "machine-list",
       machineEvents: "machine-events",
       openButton: "tree-explore",
@@ -1312,6 +1314,10 @@
     els.machineAuto?.addEventListener("change", async () => {
       const result = await window.mefiStudio?.machineSet?.({ autoKill: els.machineAuto.checked });
       status(`resource manager auto-kill ${result?.machine?.autoKill ? "on" : "off"}`);
+    });
+    els.machineMemoryOverride?.addEventListener("change", async () => {
+      const result = await window.mefiStudio?.machineSet?.({ memoryWarnOverride: els.machineMemoryOverride.checked === true });
+      status(`memory warn override ${result?.machine?.memoryWarnOverride === true ? "on" : "off"}`);
     });
     window.mefiStudio?.onMachineStatus?.((status) => renderMachine(status));
     // A quiet backstop poll: the push subscriptions above carry live updates,

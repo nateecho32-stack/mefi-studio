@@ -220,6 +220,13 @@ function createProjects({ defaultRoot, studioRoot, saved = {}, preferredRoot = n
           return (Array.isArray(rows) ? rows : []).filter((row) => ids.has(row.sessionId) && (!row.file || !path.isAbsolute(row.file) || inProject(row.file)));
         };
       }
+      // The usage ledger scopes by folder in the store itself; a reader that
+      // ignores `root` (a fixture) is still held to the project here.
+      if (eyes.usageLedger) scoped.usageLedger = async (options = {}) => {
+        const result = await eyes.usageLedger({ ...options, root: project.path });
+        const rows = (Array.isArray(result?.rows) ? result.rows : []).filter((row) => inProject(row?.directory));
+        return { ...(result && typeof result === "object" ? result : {}), ok: result?.ok !== false, rows };
+      };
       if (eyes.assistantFacts) scoped.assistantFacts = async (options = {}) => {
         const [sessions, changes, todos, ids] = await Promise.all([
           scoped.listSessions({ ...options, limit: options.sessionLimit || 10 }),

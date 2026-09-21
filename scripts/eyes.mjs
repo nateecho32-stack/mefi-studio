@@ -2159,6 +2159,118 @@ export function closeBoardStore() {
   }
 }
 
+// ---- usage ledger: every assistant turn OpenCode recorded -----------------
+// The usage tracker's second source. The message table holds one row per
+// assistant turn with the provider, model, tokens and the cost OpenCode
+// computed, so a coding session on Go, Zen, OpenRouter or the Studio-managed
+// z.ai provider is accounted per turn, per day and per provider; the session
+// table has only the per-session sum and no time per turn. A whole-table pass
+// (25k assistant rows measured) costs seconds, so rows are read from the
+// newest end by rowid and kept in a per-store cache: a later read pays for the
+// new tail plus a re-read of the last rows, because OpenCode writes a turn's
+// tokens and cost into the same row when the turn completes. The cache lives
+// on the eyes worker beside the reader; the main process only receives rows.
+const USAGE_PAGE = 4000;
+const USAGE_TAIL = 400;
+const USAGE_DAY_MS = 86400000;
+const USAGE_COLUMNS = `m.rowid rid, m.id, m.session_id, m.time_created, m.data, s.directory, s.agent
+     from message m left join session s on s.id = m.session_id`;
+const usageCaches = new Map();
+const finiteNumber = (value) => (typeof value === "number" && Number.isFinite(value) ? value : null);
+
+function usageRowOf(row) {
+  let data;
+  try { data = JSON.parse(row.data); } catch { return null; }
+  if (!data || typeof data !== "object" || data.role !== "assistant") return null;
+  const tokens = data.tokens && typeof data.tokens === "object" ? data.tokens : {};
+  const cache = tokens.cache && typeof tokens.cache === "object" ? tokens.cache : {};
+  return {
+    rowid: row.rid,
+    id: row.id,
+    sessionId: row.session_id,
+    directory: row.directory ?? (typeof data.path?.cwd === "string" ? data.path.cwd : null),
+    agent: typeof data.agent === "string" ? data.agent : (row.agent ?? null),
+    at: finiteNumber(data.time?.created) ?? row.time_created,
+    completedAt: finiteNumber(data.time?.completed),
+    provider: typeof data.providerID === "string" ? data.providerID : null,
+    model: typeof data.modelID === "string" ? data.modelID : null,
+    cost: finiteNumber(data.cost),
+    tokens: {
+      input: finiteNumber(tokens.input) ?? 0,
+      output: finiteNumber(tokens.output) ?? 0,
+      reasoning: finiteNumber(tokens.reasoning) ?? 0,
+      cacheRead: finiteNumber(cache.read) ?? 0,
+      cacheWrite: finiteNumber(cache.write) ?? 0,
+      total: finiteNumber(tokens.total),
+    },
+    finish: typeof data.finish === "string" ? data.finish : null,
+    error: typeof data.error?.name === "string" ? data.error.name : (data.error ? "error" : null),
+  };
+}
+
+export function usageLedger({ dbPath = DEFAULT_DB, root = null, since = null, now = Date.now(), limit = 60000 } = {}) {
+  if (!storePresent(dbPath)) return { ok: true, rows: [], scanned: 0, since: null, warm: false, total: 0 };
+  const db = openDb(dbPath);
+  const from = finiteNumber(since) ?? now - 35 * USAGE_DAY_MS;
+  const top = db.prepare("select max(rowid) top from message").get()?.top ?? 0;
+  const page = db.prepare(`select ${USAGE_COLUMNS} where m.rowid > ? and m.rowid <= ? order by m.rowid desc`);
+  let cache = usageCaches.get(dbPath);
+  if (!cache || cache.since > from) {
+    cache = { since: from, top: 0, rows: new Map() };
+    usageCaches.set(dbPath, cache);
+  }
+  const warm = cache.top > 0;
+  let scanned = 0;
+  const absorb = (rows) => {
+    let oldest = null;
+    for (const raw of rows) {
+      scanned += 1;
+      oldest = oldest === null ? raw.time_created : Math.min(oldest, raw.time_created);
+      const row = usageRowOf(raw);
+      if (!row) { cache.rows.delete(raw.id); continue; }
+      if (row.at < from) continue;
+      cache.rows.set(row.id, row);
+    }
+    return oldest;
+  };
+  if (!warm) {
+    // A cold cache: page down from the newest row until a page reaches back
+    // past the window (rows are appended in time order) or the table ends.
+    let upper = top;
+    while (upper > 0) {
+      const lower = Math.max(0, upper - USAGE_PAGE);
+      const oldest = absorb(page.all(lower, upper));
+      upper = lower;
+      if (oldest !== null && oldest < from) break;
+    }
+  } else {
+    // A warm cache: the new rows plus the recent tail, whose tokens and cost
+    // OpenCode fills in when a turn completes.
+    absorb(page.all(Math.max(0, Math.min(cache.top, top) - USAGE_TAIL), top));
+    // Turns still running when they left the tail are re-read by id.
+    const open = [...cache.rows.values()].filter((row) => row.completedAt === null && row.rowid <= top - USAGE_TAIL).slice(0, 200);
+    if (open.length) {
+      const byId = db.prepare(`select ${USAGE_COLUMNS} where m.id = ?`);
+      for (const row of open) {
+        const fresh = byId.get(row.id);
+        if (fresh) absorb([fresh]);
+        else cache.rows.delete(row.id);
+      }
+    }
+  }
+  cache.top = top;
+  cache.since = from;
+  for (const [id, row] of cache.rows) if (row.at < from) cache.rows.delete(id);
+  const rows = [];
+  for (const row of cache.rows.values()) {
+    if (root && !containsPath(root, row.directory)) continue;
+    const { rowid: _rowid, ...out } = row;
+    rows.push(out);
+  }
+  rows.sort((a, b) => a.at - b.at || (a.id < b.id ? -1 : 1));
+  return { ok: true, rows: rows.length > limit ? rows.slice(rows.length - limit) : rows, scanned, since: from, warm, total: cache.rows.size };
+}
+
 // Test/CLI hook: same contract for the read-only store openDb() caches —
 // close it so a temp fixture database is deletable; the next read reopens.
 export function closeReadDb() {

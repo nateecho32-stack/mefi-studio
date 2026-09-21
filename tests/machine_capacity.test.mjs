@@ -50,7 +50,8 @@ test("machine admits responsive workers without a fixed worker limit and reports
   assert.equal(first.resources.lagMs, 0);
   assert.equal(first.resources.running, 27);
   assert.equal(first.resources.totalMemoryMB, 16384);
-  assert.equal(first.resources.requiredMemoryMB, 512);
+  assert.equal(first.resources.requiredMemoryMB, 440);
+  assert.equal(first.resources.holdKind, null);
   machine.cpu(50); machine.advance(50);
   assert.equal((await machine.capacity({ running: 100 })).resources.cpuPercent, 50);
   assert.deepEqual(machine.reads(), { cpuReads: 4, waits: 2 });
@@ -66,7 +67,7 @@ test("1.9 GB available on a 16 GB machine permits the fourth, fifth and tenth wo
     assert.equal(capacity.resources.memoryPressure, false);
     assert.equal(capacity.resources.availableMemoryMB, 1903);
     assert.equal(capacity.resources.totalMemoryMB, 16384);
-    assert.equal(capacity.resources.requiredMemoryMB, 512);
+    assert.equal(capacity.resources.requiredMemoryMB, 440);
     machine.advance();
   }
 });
@@ -189,6 +190,8 @@ test("severe response lag immediately prevents another worker", async () => {
   assert.equal(result.canStart, false);
   assert.equal(result.resources.hostLagMs, 300);
   assert.equal(result.resources.lagMs, 300);
+  assert.equal(result.resources.holdKind, "lag");
+  assert.doesNotMatch(result.reason, /memory/i, "the lag hold must not borrow the memory gate's wording");
   assert.match(result.reason, /responsiveness.*300 ms lag/);
 });
 
@@ -234,21 +237,109 @@ test("concurrent lag checks share sampling and retain the strongest renderer obs
   assert.deepEqual(machine.reads(), { cpuReads: 2, waits: 1 });
 });
 
-test("memory admission holds below the 512 MB emergency floor and recovers at the floor", async () => {
+test("memory admission holds below the 440 MB emergency floor and recovers at the floor", async () => {
   const machine = fixture();
-  machine.free(511);
+  machine.free(439);
   const low = await machine.capacity();
   assert.equal(low.canStart, false);
   assert.equal(low.resources.memoryPressure, true);
-  assert.match(low.reason, /511 MB available; 512 MB needed/);
-  machine.free(512); machine.advance();
+  assert.equal(low.resources.holdKind, "memory");
+  assert.match(low.reason, /439 MB available; 440 MB needed/);
+  assert.doesNotMatch(low.reason, /responsiveness|lag/i, "the memory hold must not borrow the lag gate's wording");
+  machine.free(440); machine.advance();
   assert.equal((await machine.capacity()).canStart, true);
-  machine.free(511); machine.advance();
+  machine.free(439); machine.advance();
   assert.equal((await machine.capacity()).canStart, false);
-  machine.free(513); machine.advance();
+  machine.free(441); machine.advance();
   assert.equal((await machine.capacity()).canStart, true);
   machine.free(0); machine.advance();
   assert.equal((await machine.capacity()).resources.memoryPressure, true);
+});
+
+test("the tuned floor admits the observed 474-585 MB free range instead of nondeterministically blocking", async () => {
+  const machine = fixture();
+  for (const freeMB of [474, 512, 585]) {
+    machine.free(freeMB); machine.advance();
+    const observed = await machine.capacity();
+    assert.equal(observed.canStart, true, `${freeMB} MB free is inside the observed machine range and must admit work`);
+    assert.equal(observed.resources.holdKind, null);
+  }
+});
+
+test("a small memory shortfall holds by default and demotes to a distinct warning only under the explicit override", async () => {
+  const machine = fixture();
+  machine.free(400); // inside the warn band: at or above the 300 MB severe floor, under the 440 MB sum
+  const blocked = await machine.capacity({ force: true });
+  assert.equal(blocked.canStart, false, "default behavior must keep blocking small shortfalls");
+  assert.equal(blocked.resources.holdKind, "memory");
+  assert.equal(blocked.resources.memoryShortfall, "small");
+  assert.equal(blocked.resources.memoryWarning, null);
+  assert.doesNotMatch(blocked.reason, /override/, "the default hold must not mention the override");
+  machine.advance();
+  const warned = await machine.capacity({ force: true, memoryWarnOverride: true });
+  assert.equal(warned.canStart, true, "the override flag admits the small shortfall");
+  assert.equal(warned.reason, null);
+  assert.equal(warned.resources.holdKind, null, "an overridden shortfall is a warning, not a hold");
+  assert.equal(warned.resources.memoryShortfall, "small");
+  assert.match(warned.resources.memoryWarning, /400 MB available; 440 MB needed/);
+  assert.match(warned.resources.memoryWarning, /explicit memory override/, "the warning must be distinctly worded");
+  machine.advance();
+  const perCallOff = await machine.capacity({ force: true, memoryWarnOverride: false });
+  assert.equal(perCallOff.canStart, false, "an explicit per-call false beats the sampler default and blocks again");
+});
+
+test("the severe memory floor blocks even with the override flag and holds at both boundaries", async () => {
+  const machine = fixture();
+  machine.free(299);
+  const severe = await machine.capacity({ force: true, memoryWarnOverride: true });
+  assert.equal(severe.canStart, false, "below the severe floor the override must not admit work");
+  assert.equal(severe.resources.holdKind, "memory-severe");
+  assert.equal(severe.resources.memoryShortfall, "severe");
+  assert.equal(severe.resources.memoryWarning, null);
+  assert.match(severe.reason, /299 MB available/);
+  assert.match(severe.reason, /severe floor/, "the severe hold must be distinctly worded");
+  machine.free(300); machine.advance();
+  const atFloor = await machine.capacity({ force: true, memoryWarnOverride: true });
+  assert.equal(atFloor.canStart, true, "equal to the floor is the small band, so the override admits");
+  assert.equal(atFloor.resources.memoryShortfall, "small");
+  machine.free(439); machine.advance();
+  const justUnder = await machine.capacity({ force: true, memoryWarnOverride: true });
+  assert.equal(justUnder.canStart, true, "439 MB is the small band under the 440 MB sum");
+  assert.equal(justUnder.resources.memoryShortfall, "small");
+  machine.free(440); machine.advance();
+  const clear = await machine.capacity({ force: true, memoryWarnOverride: true });
+  assert.equal(clear.canStart, true);
+  assert.equal(clear.resources.memoryShortfall, null);
+  assert.equal(clear.resources.memoryWarning, null, "no warning may leak when admission is clear");
+});
+
+test("a sampler-level override flag admits small shortfalls without per-call arguments", async () => {
+  const machine = fixture({ memoryWarnOverride: true });
+  machine.free(350);
+  const admitted = await machine.capacity({ force: true });
+  assert.equal(admitted.canStart, true);
+  assert.equal(admitted.resources.memoryShortfall, "small");
+  assert.match(admitted.resources.memoryWarning, /350 MB available; 440 MB needed/);
+});
+
+test("unknown memory readings never take the override path", async () => {
+  const machine = fixture({ memoryWarnOverride: true });
+  machine.available(true, false);
+  const missing = await machine.capacity();
+  assert.equal(missing.canStart, false);
+  assert.equal(missing.resources.holdKind, "unknown");
+  assert.equal(missing.resources.memoryShortfall, null);
+  assert.equal(missing.resources.memoryWarning, null);
+  assert.match(missing.reason, /memory readings/);
+});
+
+test("summaries surface the overridden memory warning alongside healthy admission", async () => {
+  const machine = fixture({ memoryWarnOverride: true });
+  machine.free(400);
+  const capacity = await machine.capacity({ force: true });
+  const summary = describe({ capacity, leases: { busy: false }, processes: [] });
+  assert.match(summary, /400 MB available; 440 MB needed.*override/);
+  assert.doesNotMatch(summary, /Waiting for machine memory/);
 });
 
 test("missing memory holds admission, while unavailable CPU does not block responsive work", async () => {

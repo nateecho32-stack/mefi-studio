@@ -12,9 +12,18 @@
     <p class="eyebrow">Mefi's Studio AI+</p>
     <h1 id="boot-title" class="boot-title">Opening your studio</h1>
     <p id="boot-detail" class="boot-detail" role="status" aria-live="polite" aria-atomic="true">Preparing your workspace before you begin.</p>
-    <div class="boot-progress-heading"><span>Getting ready</span><span id="boot-count" class="boot-count">0%</span></div>
+    <div id="boot-progress-heading" class="boot-progress-heading"><span>Getting ready</span><span id="boot-count" class="boot-count">0%</span></div>
     <progress id="boot-progress" max="100" value="0" aria-label="Startup progress"></progress>
     <ol id="boot-steps" class="boot-steps" aria-label="Startup checks"><li class="boot-step" data-state="loading">Preparing startup</li></ol>
+    <div id="boot-choose" class="boot-choose" hidden>
+      <div id="boot-projects" class="boot-projects" role="radiogroup" aria-label="Choose a project"></div>
+      <button id="boot-add-project" class="ghost boot-add" type="button">Open another folder…</button>
+      <p id="boot-choose-note" class="boot-choose-note" role="status" aria-live="polite">Agents stay off until you start them.</p>
+      <div class="boot-actions">
+        <button id="boot-open" class="primary" type="button">Open studio</button>
+        <button id="boot-open-start" class="ghost" type="button">Open and start agents</button>
+      </div>
+    </div>
     <div id="boot-actions" class="boot-actions" hidden>
       <button id="boot-retry" class="primary" type="button">Try again</button>
       <button id="boot-continue" class="ghost" type="button">Open with available data</button>
@@ -83,7 +92,7 @@
   <div class="ws-main">
     <div class="ws-topbar"><div class="ws-project-heading"><span class="ws-kicker">WORKSPACE /</span><strong id="workspace-project-name">Opening your project…</strong></div><div class="ws-top-actions"><button id="workspace-reveal" class="ghost mini" title="Show the project folder">Open folder ↗</button><button id="workspace-remove-project" class="ghost mini" title="Remove this folder from Studio's project list. Files and local work stay on disk.">Remove project</button><button class="ghost mini" data-nav="palette" aria-label="Find a tool or command">Search <kbd>Ctrl K</kbd></button></div></div>
     <div class="ws-heading"><div><p class="ws-kicker" id="workspace-greeting">YOUR SPACE TO CREATE</p><h1>What are we making?</h1><p id="workspace-project-path" class="ws-project-path"></p></div><span id="workspace-connection" class="ws-connection">Connecting…</span></div>
-    <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">A little guidance for your first project.</strong><p>Choose a project, connect your tools, create work and follow it through review.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start walkthrough</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk with me</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays in the sidebar">Not now</button></div></section>
+    <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">A little guidance for your first project.</strong><p>Scan this computer, choose a project, let an explorer map it, connect your tools, create work and follow it through review.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div><div class="walkthrough-bar mini" id="walkthrough-invite-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-invite-bar-fill"></span></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start walkthrough</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk with me</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays in the sidebar">Not now</button></div></section>
     <div class="ws-columns">
       <section class="ws-conversation" aria-label="Conversation with your companion">
         <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div><button id="workspace-stop-all" class="ghost mini" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button><button id="workspace-restart" class="ghost mini" title="Stop every agent, save progress, and restart Studio.">Restart</button><button id="workspace-pause" class="ghost mini" title="Pause new work. Running jobs finish normally.">Pause</button></div>
@@ -192,7 +201,7 @@
       </section>
       <section id="model-lab-usage" role="tabpanel" aria-labelledby="model-lab-tab-usage" hidden><h3>Recorded usage</h3><p id="model-lab-usage-coverage" class="muted">Missing provider usage stays unknown. These totals cover calls recorded by Studio; they are not an account balance.</p><p id="model-lab-usage-range" class="lab-status"></p><div id="model-lab-usage-totals" class="lab-usage-grid"></div><div id="model-lab-usage-list" class="lab-table-wrap"></div></section>
       <section id="model-lab-tracker" role="tabpanel" aria-labelledby="model-lab-tab-tracker" hidden>
-        <div class="lab-toolbar"><div><h3>Usage tracker</h3><p class="muted">Recorded local usage and the OpenCode Go account windows, shown separately. The account read uses the saved key and sends no prompts.</p></div><button id="model-lab-tracker-refresh" class="ghost" type="button">Refresh usage</button></div>
+        <div class="lab-toolbar"><div><h3>Usage tracker</h3><p class="muted">Recorded usage from both ledgers (the calls Studio made and the coding sessions OpenCode ran for this project) beside every connected provider's own account reading, shown separately. Account reads use the saved keys and send no prompts.</p></div><button id="model-lab-tracker-refresh" class="ghost" type="button">Refresh usage</button></div>
         <p id="model-lab-tracker-status" class="lab-status" role="status" aria-live="polite"></p>
         <div id="model-lab-tracker-body" class="lab-tracker"></div>
       </section>
@@ -678,7 +687,7 @@
     <ul id="cmd-ask-list" class="ask-list" aria-label="Questions and suggestions"></ul>
   </section>
     </div>
-  <section id="cmd-usage" class="cmd-usage" aria-label="Usage and OpenCode Go credits">
+  <section id="cmd-usage" class="cmd-usage" aria-label="Usage across connected providers">
     <header class="cmd-usage-head">
       <h2 class="cmd-usage-title">
         <button id="cmd-usage-toggle" class="feed-toggle" type="button" aria-expanded="true" aria-controls="cmd-usage-body" title="Collapse usage">
@@ -686,7 +695,7 @@
           <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg>
         </button>
       </h2>
-      <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and the OpenCode Go windows">Refresh</button>
+      <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and every connected account">Refresh</button>
       <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Model Lab">Open</button>
     </header>
     <div id="cmd-usage-body" class="cmd-usage-body"></div>
@@ -997,6 +1006,7 @@
         <h3 class="mt">Machine <span class="badge" id="machine-badge">idle</span></h3>
         <p class="eyes-status" id="machine-lines">scanning…</p>
         <label class="switch" title="Kill strays, hangs and over-age test runs automatically"><input type="checkbox" id="machine-auto" checked><span class="track"></span><span>Auto-kill</span></label>
+        <label class="switch" title="Demote a small memory shortfall to a warning instead of a hold (severe shortfalls still hold)"><input type="checkbox" id="machine-memory-override"><span class="track"></span><span>Memory warn override</span></label>
         <ul id="machine-list" class="pin-list"></ul>
         <ul id="machine-events" class="pin-list"></ul>
         <h3 class="mt">Request inbox</h3>
@@ -1011,7 +1021,7 @@
 </div>
 <div class="overlay" id="walkthrough-overlay" hidden>
   <section class="sheet walkthrough-sheet" id="walkthrough-sheet" role="dialog" aria-modal="true" aria-labelledby="walkthrough-title" aria-describedby="walkthrough-copy" tabindex="-1">
-    <header class="sheet-head plain"><div class="sheet-title"><span class="eyebrow">START HERE</span><p id="walkthrough-progress" role="status">Step 1 of 5</p></div><button class="ghost mini" type="button" data-nav-close="onboarding">Save & close <kbd>Esc</kbd></button></header>
+    <header class="sheet-head plain"><div class="sheet-title"><span class="eyebrow">START HERE</span><p id="walkthrough-progress" role="status">Step 1 of 7</p><div class="walkthrough-bar" id="walkthrough-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-bar-fill"></span></div></div><button class="ghost mini" type="button" data-nav-close="onboarding">Save & close <kbd>Esc</kbd></button></header>
     <nav class="walkthrough-steps" id="walkthrough-steps" aria-label="Walkthrough steps"></nav>
     <div class="walkthrough-content"><h2 id="walkthrough-title" tabindex="-1"></h2><p id="walkthrough-copy"></p><ul id="walkthrough-points"></ul>
       <div id="walkthrough-build-mode" class="build-mode-control">
@@ -1019,6 +1029,24 @@
         <strong id="walkthrough-build-mode-label">Loading preference…</strong>
         <p id="walkthrough-build-mode-note">Choose how work starts. You can change this above Your work at any time.</p>
         <p id="walkthrough-build-mode-feedback" role="status"></p>
+      </div>
+      <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>
+      <div id="walkthrough-scan" class="walkthrough-panel" hidden>
+        <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-scan-run" type="button">Run the first scan</button><button class="ghost" id="walkthrough-scan-apply" type="button" hidden>Use this setup</button><label class="walkthrough-panel-option" for="walkthrough-scan-allow-free"><input type="checkbox" id="walkthrough-scan-allow-free" checked><span>Allow free models (their free tier may use prompts to improve the model)</span></label></div>
+        <p id="walkthrough-scan-status" class="muted" role="status">Not run yet. The scan asks OpenCode what it has: its version, linked provider names, models and agents. It sends no prompt and saves nothing until you choose Use this setup.</p>
+        <ul id="walkthrough-scan-facts" class="walkthrough-facts"></ul>
+        <ul id="walkthrough-scan-notes" class="walkthrough-notes"></ul>
+      </div>
+      <div id="walkthrough-map" class="walkthrough-panel" hidden>
+        <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-map-run" type="button">Map this project</button><button class="ghost" id="walkthrough-map-cancel" type="button" hidden>Cancel</button></div>
+        <p id="walkthrough-map-status" class="muted" role="status">Not mapped yet. A read-only explorer reads the selected folder, writes its map as a todo list you can watch in the tree, and saves its suggested first tasks as ideas. Nothing is built.</p>
+        <ul id="walkthrough-map-steps" class="walkthrough-notes"></ul>
+        <ul id="walkthrough-map-facts" class="walkthrough-facts"></ul>
+      </div>
+      <div id="walkthrough-assist" class="walkthrough-panel" hidden>
+        <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-assist-run" type="button">Ask my assistant what to do next</button><button class="ghost" id="walkthrough-assist-task" type="button" hidden>Put the suggested task in the task box</button></div>
+        <p id="walkthrough-assist-status" class="muted" role="status">After the scan, the AI you linked plans the rest of this setup from what it found.</p>
+        <ul id="walkthrough-assist-list" class="walkthrough-facts walkthrough-assist-list"></ul>
       </div>
       <div class="walkthrough-destinations"><button class="primary" id="walkthrough-action" type="button"></button><button class="ghost" id="walkthrough-secondary" type="button" hidden></button></div><p id="walkthrough-note" class="muted"></p></div>
     <footer class="walkthrough-footer"><span>Your place is saved on this device.</span><div><button class="ghost" id="walkthrough-back" type="button">Back</button><button class="primary" id="walkthrough-next" type="button">Next step</button></div></footer>

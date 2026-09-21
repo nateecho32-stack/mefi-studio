@@ -23,9 +23,17 @@ function attachRendererRecovery({
   let notified = false;
   let disposed = false;
   let navigationFailed = false;
+  let pendingManual = false;
 
+  function unavailableReason() {
+    if (disposed) return "disposed";
+    if (isQuitting()) return "quitting";
+    if (window.isDestroyed()) return "window-destroyed";
+    if (contents.isDestroyed()) return "webcontents-destroyed";
+    return null;
+  }
   function unavailable() {
-    return disposed || isQuitting() || window.isDestroyed() || contents.isDestroyed();
+    return unavailableReason() !== null;
   }
   function prune() {
     attempts = attempts.filter((at) => now() - at < interval);
@@ -33,9 +41,14 @@ function attachRendererRecovery({
   function record(event, fields = {}) {
     try { log({ component: "renderer-recovery", event, at: now(), ...fields }); } catch { /* logging cannot prevent recovery */ }
   }
-  function clearPending() {
-    if (timer !== null) cancel(timer);
+  function clearPending(reason = null) {
+    if (timer === null) return;
+    cancel(timer);
     timer = null;
+    // Every "scheduled" record must get a terminal follow-up: when a queued
+    // reload is cancelled before its timer fires, log why it never ran. The
+    // failure fields ride along so the skip stays linked to its trigger.
+    if (reason) record("skipped", { manual: pendingManual, skipReason: reason, ...failure });
   }
   function status() {
     prune();
@@ -58,9 +71,16 @@ function attachRendererRecovery({
     const wait = manual ? 0 : delay * (attempts.length + 1);
     record("scheduled", { manual, delayMs: wait, ...failure });
     // Defer until Electron has finished handling render-process-gone.
+    pendingManual = manual;
     timer = schedule(() => {
       timer = null;
-      if (unavailable()) return;
+      // The one-shot timer fires at most once per "scheduled" record, so an
+      // unavailable world logs exactly one skip and cannot spam the log.
+      const skipReason = unavailableReason();
+      if (skipReason) {
+        record("skipped", { manual, skipReason, ...failure });
+        return;
+      }
       if (!manual) attempts.push(now());
       phase = "recovering";
       navigationFailed = false;
@@ -97,7 +117,7 @@ function attachRendererRecovery({
     if (unavailable()) return;
     if (details.reason === "clean-exit") {
       generation += 1;
-      clearPending();
+      clearPending("clean-exit");
       phase = "healthy";
       return;
     }
@@ -126,7 +146,7 @@ function attachRendererRecovery({
     if (disposed) return;
     disposed = true;
     generation += 1;
-    clearPending();
+    clearPending("disposed");
     phase = "disposed";
     contents.removeListener("render-process-gone", onGone);
     contents.removeListener("did-fail-load", onFailedLoad);

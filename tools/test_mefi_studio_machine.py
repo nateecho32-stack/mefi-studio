@@ -27,6 +27,7 @@ class MefiStudioMachineTests(unittest.TestCase):
     def setUpClass(cls):
         cls.main = (STUDIO / "main.cjs").read_text(encoding="utf-8")
         cls.preload = (STUDIO / "preload.cjs").read_text(encoding="utf-8")
+        cls.explorer = (STUDIO / "renderer" / "explorer.js").read_text(encoding="utf-8")
         cls.template = (STUDIO / "renderer" / "booklet.template.html").read_text(encoding="utf-8")
         cls.gitignore = (STUDIO / ".gitignore").read_text(encoding="utf-8")
         cls.guide = (ROOT / "TESTRUNS.md").read_text(encoding="utf-8")
@@ -38,7 +39,7 @@ class MefiStudioMachineTests(unittest.TestCase):
         for name in ("machineStatus", "machineWatch", "machineSet", "machineKill", "onMachineStatus"):
             with self.subTest(name=name):
                 self.assertIn(name, self.preload)
-        for element_id in ("machine-badge", "machine-lines", "machine-auto", "machine-list", "machine-events"):
+        for element_id in ("machine-badge", "machine-lines", "machine-auto", "machine-memory-override", "machine-list", "machine-events"):
             with self.subTest(element_id=element_id):
                 self.assertIn(f'id="{element_id}"', self.template)
         self.assertIn("startMachineWatch", self.main)
@@ -46,6 +47,25 @@ class MefiStudioMachineTests(unittest.TestCase):
         for ignored in ("data/machine-status.json", "data/resource-manager.json"):
             with self.subTest(ignored=ignored):
                 self.assertIn(ignored, self.gitignore)
+
+    def test_memory_warn_override_round_trip(self):
+        # The Machine panel's memory warn override toggle must persist through
+        # machine:set and reach both admission reads (the resource pass and the
+        # foreman's readCapacity). The sampler keeps veto power: the override
+        # only demotes the small shortfall band, never the severe floor or an
+        # unknown-memory hold (pinned behaviorally by tests/machine_capacity.test.mjs).
+        self.assertIn("function machineMemoryWarnOverride(settings = null)", self.main)
+        self.assertIn('settings?.machine?.memoryWarnOverride === true', self.main)
+        self.assertIn('process.env.MEFI_STUDIO_MEMORY_WARN_OVERRIDE === "1"', self.main)
+        for call in (
+            "memoryWarnOverride: machineMemoryWarnOverride(settings) ",
+            "memoryWarnOverride: machineMemoryWarnOverride(capacitySettings) ",
+        ):
+            with self.subTest(call=call):
+                self.assertIn(call, self.main)
+        # The toggle writes the flag and restores its saved state on load.
+        self.assertIn('machineSet?.({ memoryWarnOverride: els.machineMemoryOverride.checked === true })', self.explorer)
+        self.assertIn("result.machine.memoryWarnOverride === true", self.explorer)
 
     def test_briefing_facts_carry_machine_state(self):
         self.assertIn("runningTests", self.main)

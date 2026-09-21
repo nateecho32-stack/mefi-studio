@@ -978,21 +978,30 @@
       viewPrepared = true;
       return true;
     };
+    // The launch screen (renderer/startup.js) runs first, under the gate. A
+    // project chosen there is not the one the module-load reads used, so the
+    // workspace and tree steps then reload instead of joining those reads.
+    let launch = null;
+    const choose = window.MefiStartup?.choose ? async (context) => { launch = await window.MefiStartup.choose(context); return launch; } : null;
+    const relaunch = () => Boolean(launch?.changed);
     window.MefiBoot.run([
-      { id: "workspace", label: "Your projects and work", load: ({ retry }) => window.MefiWorkspace?.ready?.({ retry }) },
+      { id: "workspace", label: "Your projects and work", load: (context) => { const retry = context.retry || relaunch(); return window.MefiWorkspace?.ready?.({ retry }); } },
       { id: "catalog", label: "Model catalog", load: paintCatalog },
       { id: "tree", label: "Session tree", load: async ({ retry }) => {
-        await (retry ? window.MefiTree?.reload?.() : window.MefiTree?.ready?.());
+        await (retry || relaunch() ? window.MefiTree?.reload?.() : window.MefiTree?.ready?.());
         return window.MefiTree?.status?.() !== "unavailable";
       } },
       { id: "view", label: "Saved view and preferences", load: prepareView },
       { id: "fonts", label: "Fonts and interface", load: () => document.fonts?.ready },
-    ], () => {
+    ], (complete, choice) => {
       if (!viewPrepared && !restored?.restored && home) window.MefiWorkspace?.enter?.();
       if (restored?.restored) restored.finish?.();
       else if (window.MefiWorkspace?.isActive?.()) document.getElementById("workspace-layer")?.focus({ preventScroll: true });
       else document.getElementById("search")?.focus({ preventScroll: true });
       window.MefiOnboarding?.startup?.({ automatic: true });
-    });
+      // "Open and start agents": the studio is up, so the agents may start now.
+      // Every other choice leaves them held for the workspace's Start agents.
+      if ((choice ?? launch)?.startAgents) void window.MefiStartup?.begin?.();
+    }, choose ? { choose } : {});
   }
 })();

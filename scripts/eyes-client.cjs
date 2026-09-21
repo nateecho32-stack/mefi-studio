@@ -46,6 +46,7 @@ const EYES_WORKER_METHODS = Object.freeze([
   "filePresence",
   "listChatTexts",
   "assistantFacts",
+  "usageLedger",
   "gitPorcelain",
   "closeReadDb",
 ]);

@@ -305,8 +305,9 @@
     const paused = backlog?.paused || state.assistant.status === "paused";
     const draining = Boolean(backlog?.draining && !paused);
     $("run-backlog").textContent = state.busyAction === "run" ? "Preparing the backlog…" : state.busyAction === "pause" ? "Pausing…" : draining ? "Pause backlog" : "Work through backlog ↗";
-    $("backlog-title").textContent = state.backlogUnavailable ? "Backlog status unavailable" : paused ? "Ready when you are" : draining ? "One step closer" : "A little progress, every pass";
-    $("backlog-summary").textContent = state.backlogUnavailable ? "Couldn't refresh the queue. Use Retry loading below the conversation." : backlog?.summary || (backlog ? paused ? "New work is paused. Running jobs finish normally." : "Work through existing tasks and ideas in small batches." : api()?.backlogStatus ? "Checking your project's backlog…" : "Open the updated desktop app to manage the backlog.");
+    const held = state.status.held === true; // launch hold: nothing moves until Start agents
+    $("backlog-title").textContent = state.backlogUnavailable ? "Backlog status unavailable" : paused || held ? "Ready when you are" : draining ? "One step closer" : "A little progress, every pass";
+    $("backlog-summary").textContent = state.backlogUnavailable ? "Couldn't refresh the queue. Use Retry loading below the conversation." : held ? "Agents are waiting for you. Press Start agents above to let this queue move." : backlog?.summary || (backlog ? paused ? "New work is paused. Running jobs finish normally." : "Work through existing tasks and ideas in small batches." : api()?.backlogStatus ? "Checking your project's backlog…" : "Open the updated desktop app to manage the backlog.");
     $("backlog-metrics").replaceChildren();
     for (const [key, label] of [["ready", "ready"], ["running", "working"], ["approval", "to approve"], ["waiting", "waiting"], ["blocked", "need attention"]]) {
       if (["waiting", "approval"].includes(key) && !counts[key]) continue;
@@ -448,20 +449,22 @@
   function renderCompanion() {
     const assistant = state.assistant;
     const paused = assistant.status === "paused" || assistant.prefs?.paused;
+    const held = state.status.held === true; // launch hold: agents wait for Start agents
     const workersOff = state.status.execute === false;
     const running = state.status.running || [];
     const working = running.length > 0;
     const reviewing = state.tasks.some((task) => taskView(task).filter === "review");
     const nickname = companion();
-    $("companion-name").textContent = paused ? `${nickname} is taking a breath` : working ? `${nickname} is making progress` : `${nickname} is here`;
+    $("companion-name").textContent = held && !working ? `${nickname} is waiting for you` : paused ? `${nickname} is taking a breath` : working ? `${nickname} is making progress` : `${nickname} is here`;
     const action = assistant.action;
     const waiting = state.backlog?.waiting || state.status.waiting;
     const narration = working ? `Working on ${running[0].title || "your task"}${running.length > 1 ? ` · ${running.length} jobs running` : ""}.` : paused ? "New work is paused. Any running jobs will finish normally." : state.pending ? "I'm listening. Your message is on its way." : waiting ? (typeof waiting === "string" ? waiting : waiting.text || waiting.reason || "Work is queued and waiting for an available worker.") : state.backlog?.draining && state.backlog?.next?.length ? `Next I'll pick up ${state.backlog.next[0].title}.` : reviewing ? "There's work that needs a closer look. Open Review to see results and blockers." : action?.text && !["idle", "listening"].includes(action.text) ? action.text : "Tell me what you have in mind. We can take it one step at a time.";
-    $("narration").textContent = !working && !paused && workersOff ? "Coding workers are off. Your tasks are saved; use Work through backlog when you're ready to start them." : narration;
+    $("narration").textContent = held && !working ? "Agents are waiting for you. Press Start agents when you're ready; your tasks and ideas are saved." : !working && !paused && workersOff ? "Coding workers are off. Your tasks are saved; use Work through backlog when you're ready to start them." : narration;
     $("companion-track").dataset.station = working ? "make" : reviewing ? "review" : "listen";
     $("companion-track").classList.toggle("busy", working || state.pending);
-    $("pause").textContent = paused ? "Resume" : "Pause";
-    $("connection").textContent = !api() ? "Browser preview" : paused ? "New work paused" : workersOff ? "Coding workers off" : assistant.ai?.keyPresent === false ? "Connect an AI in Settings" : working ? "Working with you" : "Ready when you are";
+    $("pause").textContent = held ? "Start agents" : paused ? "Resume" : "Pause";
+    $("pause").title = held ? "Start the assistant and the coding workers. Nothing has run since Studio opened." : "Pause new work. Running jobs finish normally.";
+    $("connection").textContent = !api() ? "Browser preview" : held ? "Agents waiting for you" : paused ? "New work paused" : workersOff ? "Coding workers off" : assistant.ai?.keyPresent === false ? "Connect an AI in Settings" : working ? "Working with you" : "Ready when you are";
     $("connection").classList.toggle("working", working);
     const logs = (assistant.log || []).filter((entry) => entry.kind !== "tick").slice(-8).reverse();
     const signature = JSON.stringify(logs);
@@ -676,7 +679,18 @@
     $("restart")?.addEventListener("click", () => void restartStudio());
     $("pause").addEventListener("click", async () => {
       $("pause").disabled = true;
-      try { const paused = state.assistant.status === "paused" || state.assistant.prefs?.paused; const result = guard(await api().assistantControl(paused ? "resume" : "pause")); state.assistant = result.state; renderCompanion(); scheduleBacklogRead(); feedback(paused ? "New work can start again." : "New work paused. Running jobs finish normally."); }
+      try {
+        if (state.status.held === true) {
+          // The launch screen left the agents off; this is the user's Start.
+          const result = guard(await api().assistantControl("start"));
+          if (result.state) state.assistant = result.state;
+          state.status = { ...state.status, ...(result.autopilot || {}), held: false };
+          renderCompanion(); renderBacklog(); scheduleBacklogRead();
+          feedback(result.running ? "Agents started. New work can begin." : "Agents are on. The assistant was paused last time; press Resume to let new work start.");
+          return;
+        }
+        const paused = state.assistant.status === "paused" || state.assistant.prefs?.paused; const result = guard(await api().assistantControl(paused ? "resume" : "pause")); state.assistant = result.state; renderCompanion(); scheduleBacklogRead(); feedback(paused ? "New work can start again." : "New work paused. Running jobs finish normally.");
+      }
       catch (error) { feedback(error.message, true); } finally { controls(); }
     });
     for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "aurora"]]) {

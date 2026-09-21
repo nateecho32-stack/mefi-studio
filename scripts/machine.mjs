@@ -27,8 +27,22 @@ export const WORKER_CAPACITY_DEFAULTS = Object.freeze({
   lagRecoveryMs: 40,
   pressureSamples: 2,
   recoverySamples: 2,
-  desktopReserveMemoryMB: 256,
-  workerMemoryMB: 256,
+  // Admission floor tuning: the host machine genuinely sits at 474–585 MB
+  // free, so the old 256+256=512 MB sum nondeterministically blocked starts
+  // whenever free memory dipped under it — a memory hold, not a lag hold.
+  // 200 MB keeps a desktop reserve for the Studio shell + OS, 240 MB covers
+  // one more LOVE worker, and the 440 MB total clears the observed 474 MB
+  // floor with margin. Current workers already appear in the measurement.
+  desktopReserveMemoryMB: 200,
+  workerMemoryMB: 240,
+  // Two-tier memory admission: a small shortfall (free memory below the
+  // desktopReserve+worker sum but at or above memorySevereFloorMB) still
+  // holds by default; the explicit memoryWarnOverride flag demotes exactly
+  // that band to a distinct warning and admits the start. The severe floor
+  // never yields — below 300 MB free another LOVE worker could push the host
+  // into thrashing, so the override must not bypass it.
+  memorySevereFloorMB: 300,
+  memoryWarnOverride: false,
 });
 
 // Admission reads are deliberately independent of the slow process/lease scan.
@@ -77,7 +91,7 @@ export function createWorkerCapacitySampler({
     }
   }
 
-  async function sample(now) {
+  async function sample(now, memoryWarnOverride = null) {
     const baseline = cpuTotals();
     const startedAt = clock();
     await wait(options.sampleMs);
@@ -116,35 +130,67 @@ export function createWorkerCapacitySampler({
     }
 
     const memoryPressure = memoryKnown && availableMemoryMB < requiredMemoryMB;
+    // Classify the shortfall tier before deciding the hold: "small" sits
+    // between the severe floor and the admission sum, "severe" is below the
+    // floor. The override (per call, else the sampler default) applies only
+    // to the small band; unknown readings never reach it.
+    const overrideRequested = typeof memoryWarnOverride === "boolean"
+      ? memoryWarnOverride
+      : options.memoryWarnOverride === true;
+    const memoryShortfall = !memoryPressure ? null
+      : availableMemoryMB < options.memorySevereFloorMB ? "severe" : "small";
+    const memoryOverridden = memoryShortfall === "small" && overrideRequested;
     let reason = null;
+    let memoryWarning = null;
     if (lagMs === null || !memoryKnown) {
       const missing = [lagMs === null ? "responsiveness" : null, !memoryKnown ? "memory" : null].filter(Boolean).join(" and ");
       reason = `Waiting for machine ${missing} readings before starting another worker.`;
-    } else if (memoryPressure) {
-      reason = `Machine memory is low (${Math.floor(availableMemoryMB)} MB available; ${requiredMemoryMB} MB needed before another worker).`;
-    } else if (lagPressure) {
-      // A latched hold clears after recoverySamples consecutive responsive
-      // readings. The latest reading may already be healthy (even 0 ms), so
-      // cite the pending readings — never the healthy sample — as the hold.
-      const progress = Math.min(recoverySamples, options.recoverySamples);
-      const lagNote = lagMs >= options.lagBusyMs ? ` after ${Math.round(lagMs)} ms lag` : "";
-      reason = `Waiting for machine responsiveness to recover (${progress} of ${options.recoverySamples} responsive readings needed${lagNote}).`;
+    } else if (memoryPressure && !memoryOverridden) {
+      reason = memoryShortfall === "severe"
+        ? `Machine memory is critically low (${Math.floor(availableMemoryMB)} MB available; ${options.memorySevereFloorMB} MB severe floor) — refusing another worker even with the memory override.`
+        : `Machine memory is low (${Math.floor(availableMemoryMB)} MB available; ${requiredMemoryMB} MB needed before another worker).`;
+    } else {
+      if (memoryOverridden) {
+        memoryWarning = `Machine memory is low (${Math.floor(availableMemoryMB)} MB available; ${requiredMemoryMB} MB needed before another worker) — starting on the explicit memory override.`;
+      }
+      if (lagPressure) {
+        // A latched hold clears after recoverySamples consecutive responsive
+        // readings. The latest reading may already be healthy (even 0 ms), so
+        // cite the pending readings — never the healthy sample — as the hold.
+        const progress = Math.min(recoverySamples, options.recoverySamples);
+        const lagNote = lagMs >= options.lagBusyMs ? ` after ${Math.round(lagMs)} ms lag` : "";
+        reason = `Waiting for machine responsiveness to recover (${progress} of ${options.recoverySamples} responsive readings needed${lagNote}).`;
+      }
     }
+    // Structured hold classification so consumers can tell a memory gate from
+    // a responsiveness gate without parsing reason text: "memory" is a small
+    // required-vs-available shortfall hold, "memory-severe" is the gap under
+    // the severe floor (never overrideable), "lag" is the latched
+    // responsiveness hold, "unknown" covers missing readings, and null means
+    // admission is clear (an overridden small shortfall reports its distinct
+    // warning in resources.memoryWarning instead of a hold).
+    const holdKind = (lagMs === null || !memoryKnown) ? "unknown"
+      : memoryPressure && !memoryOverridden ? (memoryShortfall === "severe" ? "memory-severe" : "memory")
+      : lagPressure ? "lag"
+      : null;
     return {
       canStart: reason === null,
       reason,
-      resources: { lagMs, hostLagMs, rendererLagMs, lagPressure, cpuPercent, availableMemoryMB, totalMemoryMB, requiredMemoryMB, sampledAt, memoryPressure },
+      resources: { lagMs, hostLagMs, rendererLagMs, lagPressure, cpuPercent, availableMemoryMB, totalMemoryMB, requiredMemoryMB, sampledAt, memoryPressure, memoryShortfall, memoryWarning, holdKind },
     };
   }
 
   // A final admission check after claiming work bypasses the settled cache;
   // concurrent checks still share one interval instead of measuring in a burst.
-  return async function workerCapacity({ running = 0, now = clock(), force = false, lagMs = null } = {}) {
+  // memoryWarnOverride (boolean, or null to defer to the sampler default)
+  // demotes a small memory shortfall to a warning; it never lifts the
+  // severe floor or an unknown-memory hold.
+  return async function workerCapacity({ running = 0, now = clock(), force = false, lagMs = null, memoryWarnOverride = null } = {}) {
     const rendererLagMs = Number.isFinite(lagMs) && lagMs >= 0 ? lagMs : null;
     if (force || !cached || rendererLagMs !== cached.resources.rendererLagMs || now < cached.resources.sampledAt || now - cached.resources.sampledAt >= options.cacheMs) {
       if (!inFlight) {
         pendingRendererLagMs = rendererLagMs;
-        inFlight = sample(now).then((result) => { cached = result; return result; }).finally(() => { inFlight = null; });
+        inFlight = sample(now, memoryWarnOverride).then((result) => { cached = result; return result; }).finally(() => { inFlight = null; });
       } else if (rendererLagMs !== null) {
         pendingRendererLagMs = Math.max(pendingRendererLagMs ?? 0, rendererLagMs);
       }
@@ -290,6 +336,7 @@ export function describe(status) {
     if (Number.isFinite(resources.availableMemoryMB)) usage.push(`${Math.floor(resources.availableMemoryMB)} MB RAM available`);
     if (usage.length) lines.push(usage.join(", "));
     if (!canStart && reason) lines.push(reason);
+    if (resources.memoryWarning) lines.push(resources.memoryWarning);
   }
   if (status.leases?.exclusive) lines.push(`EXCLUSIVE lease held by ${status.leases.holders[0]?.label || status.leases.holders[0]?.agent || "?"} — wait for it to finish`);
   else if (status.leases?.busy) lines.push(`${status.leases.holders.length} lease holder(s) at width ${status.leases.totalWidth}: ${status.leases.holders.map((holder) => holder.label || holder.agent).join(", ")}`);

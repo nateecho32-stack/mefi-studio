@@ -2121,6 +2121,21 @@ html:not([data-starting]) #boot-layer { display: none; }
 .boot-step[data-state="error"]::before { border-color: var(--bad); background: var(--bad); }
 .boot-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 24px; }
 .boot-actions button { max-width: 100%; height: auto; min-height: 36px; white-space: normal; }
+/* The launch choice: project rows and the two ways to open the studio. */
+.boot-choose { margin-top: 18px; text-align: left; }
+.boot-projects { display: grid; gap: 6px; max-height: 264px; overflow-y: auto; padding: 2px; }
+.boot-projects-empty { margin: 2px 0 4px; font: 12px/1.65 var(--font-ui); color: var(--muted); }
+.boot-project { display: flex; width: 100%; height: auto; min-height: 0; align-items: center; gap: 11px; padding: 9px 11px; border: 1px solid var(--hairline); border-radius: 11px; background: transparent; color: var(--ivory); text-align: left; white-space: normal; }
+.boot-project:hover { background: rgba(201, 168, 106, 0.08); }
+.boot-project.selected { border-color: var(--gold); background: rgba(201, 168, 106, 0.13); box-shadow: inset 0 0 0 1px rgba(201, 168, 106, 0.28); }
+.boot-project-icon { flex: 0 0 28px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: rgba(201, 168, 106, 0.14); color: var(--gold-bright); font: 600 14px/1 var(--font-display); }
+.boot-project-text { display: grid; min-width: 0; gap: 2px; }
+.boot-project-name { font: 500 13px/1.3 var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.boot-project-path { font: 11px/1.4 var(--font-mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.boot-add { width: 100%; margin-top: 8px; }
+.boot-choose-note { min-height: 18px; margin: 14px 0 0; font: 12px/1.6 var(--font-ui); color: var(--muted); text-align: center; overflow-wrap: anywhere; }
+.boot-choose-note.error { color: var(--bad); }
+.boot-choose .boot-actions { margin-top: 12px; }
 @keyframes boot-spin { to { transform: rotate(360deg); } }
 body.no-motion #boot-layer, body.no-motion #boot-progress::-webkit-progress-value { transition: none; }
 body.no-motion .boot-spinner { animation: none; }
@@ -2966,6 +2981,23 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 .walkthrough-setup-item.done { color: var(--ivory); border-color: var(--hairline-strong); background: color-mix(in srgb, var(--gold) 10%, transparent); }
 .walkthrough-setup-item[aria-current="step"] { color: var(--gold-bright); border-color: var(--gold-bright); }
 .walkthrough-step.done { color: var(--gold-bright); }
+.walkthrough-panel { margin: 0 0 18px; padding: 14px 16px; border: 1px solid var(--hairline); border-radius: 12px; background: color-mix(in srgb, var(--panel) 92%, transparent); }
+.walkthrough-panel-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.walkthrough-panel-option { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
+.walkthrough-panel .muted { margin: 10px 0 0; font-size: 12px; line-height: 1.6; }
+.walkthrough-panel .muted.error { color: var(--danger, #e07a6a); }
+.walkthrough-facts, .walkthrough-notes { margin: 10px 0 0; padding-left: 18px; font-size: 12px; line-height: 1.6; }
+.walkthrough-facts { color: var(--ivory); }
+.walkthrough-notes { color: var(--muted); }
+.walkthrough-bar { position: relative; height: 5px; margin: 7px 0 0; border-radius: 999px; background: color-mix(in srgb, var(--hairline-strong) 60%, transparent); overflow: hidden; }
+.walkthrough-bar span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--gold-bright); transition: width .35s ease; }
+.walkthrough-bar.mini { height: 3px; margin-top: 9px; }
+.walkthrough-activity { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; font-size: 11px; color: var(--muted); }
+.walkthrough-activity-track { position: relative; flex: 1; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--hairline-strong) 60%, transparent); overflow: hidden; }
+.walkthrough-activity-track span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--gold); transition: width .3s ease; }
+.walkthrough-activity.busy .walkthrough-activity-track span { width: 40%; animation: walkthrough-slide 1.4s ease-in-out infinite; }
+.walkthrough-assist-list li[aria-current="step"] { color: var(--gold-bright); }
+@keyframes walkthrough-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
 .walkthrough-coach { position: fixed; right: 18px; bottom: 18px; z-index: var(--z-pop); display: flex; flex-direction: column; gap: 7px; width: min(340px, calc(100vw - 36px)); padding: 15px 16px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 92%, var(--gold) 8%); box-shadow: var(--shadow-3), var(--inset-hi); }
 .walkthrough-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .walkthrough-coach-tools { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -3255,6 +3287,15 @@ body.command-active .walkthrough-coach { right: 392px; }
 .tracker-footnote { margin: 0; font-size: 11px; line-height: 1.7; }
 .tracker-live-card > strong { color: var(--ivory); }
 .tracker-live-card > small { line-height: 1.6; }
+/* one card per connected provider: as many columns as fit, never a squeezed fourth */
+.tracker-accounts { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.tracker-account > strong { font-size: 19px; }
+.tracker-account-windows { grid-template-columns: 1fr; gap: 6px; }
+.tracker-account-windows .tracker-window { grid-template-columns: 96px 1fr auto; }
+.tracker-account-windows .tracker-window-value { font-size: 12px; }
+.tracker-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.tracker-chip { display: inline-block; padding: 1px 7px; border: 1px solid var(--hairline); border-radius: 999px; font-size: 11px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tracker-cell > strong { color: var(--ivory); font-weight: 600; }
 @media (max-width: 680px) { .tracker-windows { grid-template-columns: 1fr; } }
 
 /* the Command rail's bottom-right footer: pinned under the tab panels */
@@ -3273,3 +3314,4 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .cmd-usage .tracker-bar { height: 5px; border-radius: 3px; }
 #idle-hud .cmd-usage .tracker-line { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 #idle-hud .cmd-usage .tracker-line-warn { color: var(--warn); }
+#idle-hud .cmd-usage .tracker-line-account { color: var(--ivory); }

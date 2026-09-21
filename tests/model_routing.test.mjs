@@ -94,6 +94,22 @@ test("missing credentials, unsupported providers and a non-Jev judge never call 
   assert.equal(calls, 0);
 });
 
+test("a stand-in judge needs no Jev key or Jev model but is still revalidated like Jev", async () => {
+  let request;
+  const result = await selectTaskModel({ candidates: candidates(), taskType: "coding", role: "worker", task: "Add a test", judge: { model: "deepseek-v4.1-flash" }, classifyFn: async (value) => { request = value; return answer("candidate_2", { model: "deepseek-v4.1-flash" }); } });
+  assert.equal(result.ok, true);
+  assert.equal(result.model, "model-b");
+  assert.equal(result.reason, "judge-selected");
+  assert.equal(result.judgeModel, "deepseek-v4.1-flash");
+  assert.equal(request.config.model, "deepseek-v4.1-flash");
+  assert.equal(request.config.timeoutMs, ROUTING_TIMEOUT_MS);
+  const invented = await selectTaskModel({ candidates: candidates(), judge: { model: "x" }, classifyFn: async () => answer("candidate_99") });
+  assert.equal(invented.ok, false);
+  assert.equal(invented.reason, "invalid-jev-choice");
+  // The judge option never unlocks the real client: without an injected classifier the key check stands.
+  assert.equal((await selectTaskModel({ candidates: candidates(), judge: { model: "x" } })).reason, "jev-unconfigured");
+});
+
 test("invalid choices, extra answers, prose and provider errors retain the host default", async () => {
   for (const reply of [answer("invented-model"), answer("model-a"), answer("candidate_99"), answer("candidate_1", { answers: { model_route: { choice: "candidate_1" }, secret: { choice: "candidate_2" } } }), answer("candidate_1", { answers: { model_route: { choice: "candidate_1", reason: "prose" } } }), answer("candidate_1", { ok: false, error: "fixture-key must not leak" }), { ok: true }, null]) {
     const result = await selectTaskModel({ candidates: candidates(), apiKey: "fixture-key", classifyFn: async () => reply });

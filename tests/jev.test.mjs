@@ -660,8 +660,9 @@ test("the shadow intake stays observation-only and charges the constrained clien
   assert.match(intake, /client\.classify\(\{ questions, state,/);
   assert.match(intake, /policyRecord\("jev-proposal"/);
   assert.doesNotMatch(intake, /mutateBoard|spawn\(/, "a classification proposal cannot modify or start work");
-  // every call is charged to the global improvement budget
-  assert.match(intake, /chargeJevCall\(result, "jev-shadow-intake"\)/);
+  // every call is charged to the global improvement budget, and the route it
+  // rode names the provider the usage tracker records it under
+  assert.match(intake, /chargeJevCall\(result, "jev-shadow-intake", route\)/);
 });
 
 // ---- live half: only with an exported key, skipped otherwise ------------------------
