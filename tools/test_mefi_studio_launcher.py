@@ -71,7 +71,6 @@ class MefiStudioLauncherTests(unittest.TestCase):
             "eyesBriefingRead",
             "eyesCollisions",
             "assistantRun",
-            "assistantProactive",
             "auditorRun",
             "checkpointAdd",
             "analyzerRun",

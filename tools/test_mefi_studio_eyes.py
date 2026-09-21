@@ -552,8 +552,6 @@ class MefiStudioEyesTests(unittest.TestCase):
     def test_main_registers_the_eyes_surface(self):
         for channel in (
             '"eyes:state"',
-            '"eyes:changes"',
-            '"eyes:todos"',
             '"eyes:log"',
             '"eyes:pins-read"',
             '"eyes:pins-write"',
@@ -592,7 +590,7 @@ class MefiStudioEyesTests(unittest.TestCase):
         self.assertIn("SCOPE_WALK_SKIP", self.reconcile, "the script's walk uses the same skip list as the app")
 
     def test_preload_exposes_the_eyes_bridge(self):
-        for name in ("eyesState", "eyesChanges", "eyesTodos", "eyesLog", "eyesPinsRead", "eyesPinsWrite", "eyesWatch", "onEyesActivity"):
+        for name in ("eyesState", "eyesLog", "eyesPinsRead", "eyesPinsWrite", "eyesWatch", "onEyesActivity"):
             with self.subTest(name=name):
                 self.assertIn(name, self.preload)
 

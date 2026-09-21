@@ -33,10 +33,10 @@ class MefiStudioMachineTests(unittest.TestCase):
         cls.guide = (ROOT / "TESTRUNS.md").read_text(encoding="utf-8")
 
     def test_ipc_preload_and_panel_wiring(self):
-        for channel in ('ipcMain.handle("machine:status"', 'ipcMain.handle("machine:watch"', 'ipcMain.handle("machine:set"', 'ipcMain.handle("machine:kill"'):
+        for channel in ('ipcMain.handle("machine:status"', 'ipcMain.handle("machine:set"', 'ipcMain.handle("machine:kill"'):
             with self.subTest(channel=channel):
                 self.assertIn(channel, self.main)
-        for name in ("machineStatus", "machineWatch", "machineSet", "machineKill", "onMachineStatus"):
+        for name in ("machineStatus", "machineSet", "machineKill", "onMachineStatus"):
             with self.subTest(name=name):
                 self.assertIn(name, self.preload)
         for element_id in ("machine-badge", "machine-lines", "machine-auto", "machine-memory-override", "machine-list", "machine-events"):

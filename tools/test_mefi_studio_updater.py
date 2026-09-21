@@ -240,7 +240,7 @@ console.log(JSON.stringify({ queued, exitsWhileQueued, reloads: calls.reload.map
         for name in ("task-groups.js", "nav.js", "sidebar.js", "styles.css", "model-lab.js", "idle.js", "booklet.js"):
             with self.subTest(name=name):
                 self.assertIn(f'readFile(path.join(RENDERER, "{name}")', self.build)
-        self.assertIn("[performanceCore, profiler, taskGroups, nav, sidebar, graph, modelLab, tracker, tree, idle,", self.build)
+        self.assertIn("[stageLabels, performanceCore, profiler, taskGroups, nav, sidebar, graph, modelLab, tracker, tree, idle,", self.build)
         self.assertNotIn('from "electron"', self.updater)
         self.assertNotIn('require("electron")', self.updater)
         check = self.package.get("scripts", {}).get("check", "")
@@ -760,8 +760,8 @@ console.log(JSON.stringify({
             with self.subTest(source="main.cjs", marker=marker):
                 self.assertIn(marker, self.main)
         for marker in (
-            "const POLL_INTERVAL_MS = 5000",
-            "const POLL_MAX_MS = 30000",
+            "const POLL_INTERVAL_MS = 15000",
+            "const POLL_MAX_MS = 60000",
             'if (document.visibilityState !== "visible")',
             "Math.min(pollDelay * 2, POLL_MAX_MS)",
         ):
@@ -777,7 +777,7 @@ console.log(JSON.stringify({
                 self.assertIsNotNone(export, "the MefiOverhead global assignment must exist")
                 self.assertIn("open", export.group(), "the MefiOverhead export must expose open")
                 self.assertIn("close", export.group(), "the MefiOverhead export must expose close")
-        for marker in ("const POLL_MAX_MS = 30000",):
+        for marker in ("const POLL_MAX_MS = 60000",):
             with self.subTest(source="built booklet", marker=marker):
                 self.assertIn(marker, booklet, "the shipped page carries the paused, backing-off poll")
 
