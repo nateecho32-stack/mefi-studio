@@ -1193,7 +1193,7 @@ const ASSISTANT_GROW_SYSTEM = [
   "You receive JSON facts about recent sessions plus an archive list of older session titles.",
   "Reply with STRICT minified JSON only, no markdown: {\"summary\":\"<=40 words\",\"alerts\":[],\"checkpoints\":[],\"expand\":[{\"title\":\"<=8 words\",\"prompt\":\"<=60 words\"}]}",
   "Return zero to three concrete, buildable follow-ups grounded in unfinished archive work. board.existingWork is already accepted work: do not re-propose it, even reworded. Prefer finishing those obligations; an empty expand list is correct. Never invent features or infer unfinished work solely from an old title.",
-  "Sessions and archive rows with finished:true ended normally — that work is done: never propose expand items for them, not even reworded. Only unfinished rows with real leftover obligations earn proposals.",
+  "Each recentTitles/archive session entry may carry a boolean `finished` flag sourced from the producer. finished:true means the session completed its final turn normally — that work is done: never propose expand items for it, not even reworded. Entries with finished:false (or no finished field) are the unfinished candidates: aim follow-ups only at their real leftover obligations; an empty expand list is correct when none remain.",
 ].join(" ");
 
 const ASSISTANT_IMPROVE_SYSTEM = [
@@ -1201,7 +1201,7 @@ const ASSISTANT_IMPROVE_SYSTEM = [
   "You receive the app file inventory (paths and line counts), package scripts, recent agent sessions, and file collisions.",
   'Reply with STRICT minified JSON only: {"summary":"<=40 words","alerts":[],"checkpoints":[],"expand":[{"title":"<=8 words","prompt":"<=60 words"}]}',
   "Return zero to three concrete improvements to THIS app, each naming exact files and an acceptance check. board.existingWork is already accepted work: do not re-propose it, even reworded. Prefer finishing existing obligations; an empty expand list is correct. Never propose speculative rewrites or new dependencies.",
-  "recentSessions rows with finished:true completed normally — done work: never propose expand items that treat them as unfinished.",
+  "Each recentSessions entry may carry a boolean `finished` flag sourced from the producer. finished:true means the session completed its final turn normally — done work: never propose expand items that treat it as unfinished, not even reworded. Entries with finished:false (or no finished field) are the unfinished candidates: that is where improvement suggestions come from — target their open todos and gaps.",
 ].join(" ");
 
 function startEyesWatch() {
@@ -8123,6 +8123,7 @@ async function spawnNextJob() {
                 task: { id: agentModes.requestKey(owned), title: owned.title, files: owned.files, file: owned.file, refs: owned.refs },
                 attemptKey: entry.id,
                 queue: verificationJobs,
+                baseCheck: baseCheckForProject(owned?.projectPath ?? null),
               });
               // Same partial-commit recovery as the task path: a deduped
               // retry still finds the attempt's queued job and stamps the row.
@@ -8232,6 +8233,7 @@ async function spawnNextJob() {
         if (entry.resultNote && typeof assistantModule?.scheduleVerificationOnDone === "function") {
           const planned = assistantModule.scheduleVerificationOnDone({
             resultNote: entry.resultNote, task: job.ref, attemptKey: entry.id, queue: verificationJobs,
+            baseCheck: baseCheckForProject(job.ref?.projectPath ?? null),
           });
           // Partial-commit recovery: the queue push survives a rolled-back
           // store write, so the retried settlement dedupes to null. Recover
@@ -8780,6 +8782,26 @@ const hasPackageJson = (dir) => Boolean(dir) && existsSync(path.join(dir, "packa
 // The overseer's verification queue: done reports enqueue one keyed job per
 // attempt (assistant.scheduleVerificationOnDone) and this runner drains it.
 const verificationJobs = [];
+// A project's base verification check. main.cjs only observes the project's
+// real shape on disk (package.json, a tracked test\run-check.ps1, the headless
+// LÖVE harness in test\runner plus an installed love.exe); the decision itself
+// is assistant.projectBaseCheck, the pure function the unit tests pin, so the
+// shipped choice and the tested choice cannot drift. A row with no recorded
+// project path is judged against projectRoot(), the same directory
+// runVerificationJob falls back to for its cwd, so shape and execution agree.
+function baseCheckForProject(projectPath) {
+  const root = String(projectPath || "").trim() || projectRoot();
+  const chooser = assistantModule?.projectBaseCheck;
+  if (typeof chooser !== "function") return null;
+  const shape = { hasPackageJson: false, hasRepoCheck: false, hasLoveHarness: false, repoCheckFile: "test\\run-check.ps1" };
+  try {
+    shape.hasPackageJson = existsSync(path.join(root, "package.json"));
+    shape.hasRepoCheck = existsSync(path.join(root, "test", "run-check.ps1"));
+    if (shape.hasRepoCheck) shape.repoCheckFile = path.join(root, "test", "run-check.ps1");
+    shape.hasLoveHarness = existsSync(path.join(root, "test", "runner", "main.lua")) && existsSync("C:\\Program Files\\LOVE\\love.exe");
+  } catch { }
+  return chooser(shape);
+}
 const VERIFICATION_COMMAND_BUDGET_MS = 15 * 60 * 1000;
 // `npm run check` is the long pole of every verification, so a strictly serial
 // drain stacked a burst of done reports into one long wait while each card
@@ -8811,14 +8833,18 @@ const runCheckCommand = (command, cwd) => new Promise((resolve) => {
 async function runVerificationJob(planned, fallbackJob) {
   if (!planned || !Array.isArray(planned.commands) || !planned.commands.length) return;
   // A task's project can be any folder — a game checkout, a notes tree — and
-  // most define no npm scripts, so `npm run check` there dies ENOENT before
-  // any real check executes. Keep a project root that has its own
-  // package.json; otherwise move the job to the Studio checkout, whose
+  // most define no npm scripts, so an `npm run check` there dies ENOENT before
+  // any real check executes; such a job moves to the Studio checkout, whose
   // package.json defines every command the overseer schedules (focused
   // node/python commands carry absolute paths, so the move is safe for them).
+  // Every other base check — the project's own run-check.ps1 wrapper, the
+  // headless LÖVE harness — is written relative to the project, so the
+  // project keeps the working directory no matter what it defines; relocating
+  // those used to fail the run 0xFFFD0000 (PowerShell cannot resolve the
+  // relative -File from the foreign cwd).
   const requested = planned.projectPath || (fallbackJob?.kind === "task" && fallbackJob.ref?.projectPath ? fallbackJob.ref.projectPath : projectRoot());
   let cwd = requested;
-  if (!hasPackageJson(cwd)) {
+  if (planned.commands.some((command) => /^\s*npm\b/.test(String(command))) && !hasPackageJson(cwd)) {
     cwd = hasPackageJson(SOURCE_ROOT) ? SOURCE_ROOT : STUDIO_ROOT;
     logLine(`[autopilot] verification run moved to the Studio checkout: "${requested}" has no package.json`);
   }
@@ -9507,7 +9533,7 @@ function waitForExecutorIdle(timeoutMs = 20000) {
 async function waitForProjectIdle(timeoutMs = 10000) {
   const startedAt = Date.now();
   for (;;) {
-    const busy = projectBusyReason();
+    const busy = projectBusyReason({ ownSwitch: true });
     if (!busy || Date.now() - startedAt >= timeoutMs) return busy;
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
@@ -10071,8 +10097,12 @@ async function gatherReferences({ text, useWeb = false, useTree = true, useIdeas
   }
 }
 
-function projectBusyReason() {
-  if (projectSwitching) return "A project switch is already in progress.";
+// `ownSwitch` is for the switch in progress asking whether the rest of the
+// gate has cleared: its own lock is not a reason to keep waiting. (Without it
+// every wait under the lock read "already in progress" until its timeout and
+// the save-and-switch path could never complete.)
+function projectBusyReason({ ownSwitch = false } = {}) {
+  if (projectSwitching && !ownSwitch) return "A project switch is already in progress.";
   if (autopilot.jobs.length) return `Finish or stop the ${autopilot.jobs.length} running build(s) before switching projects.`;
   if (projectOperations || projectAgentJobs || pool.running.size || pool.queue.length || assistantTickInFlight || assistantTickDemand || autopilotPassInFlight || executorFillInFlight) return "The assistant is finishing work in this project. Pause it, let the current work finish, then switch.";
   if (projectBoardWrites || assistantWriting || assistantLoading || machineReadInFlight) return "Saving this project's work. Try switching again in a moment.";
@@ -10138,17 +10168,52 @@ async function adoptProject(previous, next, { savedAgents = 0, selected = false 
   return { ...projects.list(), saved: savedAgents };
 }
 
+// Only a running build is work the operator must decide about; every other
+// gate holder (a cadence role in the pool, a panel read overlapping the click,
+// a save in flight) clears on its own once new work is barred.
+function projectBuildsBusy() {
+  if (projectSwitching) return "A project switch is already in progress.";
+  if (autopilot.jobs.length) return `Finish or stop the ${autopilot.jobs.length} running build(s) before switching projects.`;
+  return null;
+}
+
+// Drain the transient gate holders under the switch lock: the roster's queued
+// and running cadence roles are abandoned to their journals (the same exit
+// stopAllAgents takes), new IPC and pump passes are refused by the lock, and
+// the counters an in-flight tick, fill pass or save still hold run down within
+// a moment. Returns the reason the gate still reads busy, or null.
+async function drainProjectGate(timeoutMs = 4000) {
+  if (pool.queue.length || pool.running.size) {
+    if (typeof assistantClearQueue === "function") assistantClearQueue({ abandonRunning: true, text: "abandoned · switching projects" });
+  }
+  return waitForProjectIdle(timeoutMs);
+}
+
 async function selectProject(id, { saveProgress = false } = {}) {
   if (id === projects.active().id) return projects.list();
   // With no project open there is no one's work to strand: the switch is free
   // even while a placeholder cadence tick is in flight.
-  let busy = projects.open() ? projectBusyReason() : null;
+  let busy = projects.open() ? projectBuildsBusy() : null;
   let savedAgents = 0;
   if (busy && !saveProgress) return { ...projects.list(), ok: false, error: busy, busy: true };
   const next = projects.find(id);
   if (!next) return { ...projects.list(), ok: false, error: "Choose a project from your project list." };
   try { if (!statSync(next.path).isDirectory()) throw new Error(); }
   catch { return { ...projects.list(), ok: false, error: "That project folder is unavailable. Reconnect it before switching." }; }
+  if (!busy && projects.open() && projectBusyReason()) {
+    // Background work only: no build to save, so no question to ask. Raise
+    // the lock now so nothing new starts, drain what is in flight, and go.
+    // (This used to bounce the click straight back as "agents are still
+    // working", which made the picker look broken whenever a cadence role
+    // or a panel read happened to be in flight — most of the time.)
+    projectSwitching = true;
+    try { busy = await drainProjectGate(); }
+    catch (error) { busy = `Could not settle the project's work: ${String(error?.message ?? error)}`; }
+    if (busy && !saveProgress) {
+      projectSwitching = false;
+      return { ...projects.list(), ok: false, error: busy, busy: true };
+    }
+  }
   if (busy && saveProgress) {
     // Save progress on the way out: stop every running agent, keep each run's
     // checkpoint and each roster journal entry, wait for claims to clear, then
@@ -10157,9 +10222,11 @@ async function selectProject(id, { saveProgress = false } = {}) {
     // new work in the old project while this stop is still settling.
     projectSwitching = true;
     try {
-      const stopped = await stopAllAgents({ reason: "switching projects", pauseAssistant: false, pauseExecutor: false });
+      // The long executor wait is for builds being killed; with none the roster
+      // stop settles in a moment and a short gate poll is all that is left.
+      const stopped = await stopAllAgents({ reason: "switching projects", pauseAssistant: false, pauseExecutor: false, waitMs: autopilot.jobs.length ? 20000 : 4000 });
       savedAgents = Number(stopped?.stopped) || 0;
-      busy = await waitForProjectIdle();
+      busy = await waitForProjectIdle(autopilot.jobs.length ? 10000 : 4000);
     } catch (error) {
       busy = `Could not stop the agents: ${String(error?.message ?? error)}`;
     }

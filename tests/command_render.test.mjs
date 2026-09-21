@@ -32,7 +32,9 @@ const runFixture = async () => {
     let output = "";
     child.stdout.on("data", (chunk) => { output = (output + chunk).slice(-10000); });
     child.stderr.on("data", (chunk) => { output = (output + chunk).slice(-10000); });
-    const timer = setTimeout(() => child.kill(), 45000);
+    // The fixture's full pass takes ~45s under load; keep the kill bound well
+    // clear of a legitimate run (occlusion_probe uses the same 80s convention).
+    const timer = setTimeout(() => child.kill(), 80000);
     const code = await new Promise((resolve, reject) => { child.once("error", reject); child.once("close", resolve); }).finally(() => clearTimeout(timer));
     // Electron can exit before its error stream flushes. Read its synchronously
     // saved report before asserting the exit code or deleting the fixture.

@@ -179,7 +179,7 @@ test("real host refuses a project change during a live build and keeps its ident
     pool: { running: new Map(), queue: [] }, assistantTickInFlight: null, assistantTickDemand: null,
     autopilotPassInFlight: null, executorFillInFlight: null, assistantWriting: null, assistantLoading: null, machineReadInFlight: null,
   });
-  vm.runInContext(section("function taskView(", "async function setTaskDependencies(") + "\n" + section("function projectBusyReason()", "function createCatalogFileReader("), context);
+  vm.runInContext(section("function taskView(", "async function setTaskDependencies(") + "\n" + section("function projectBusyReason(", "function createCatalogFileReader("), context);
   const result = await context.selectProject(f.secondary.id);
   assert.equal(result.ok, false);
   assert.match(result.error, /running build/);
@@ -232,7 +232,7 @@ test("normal background mode switches between cadence ticks and reloads its own 
     getEyes: async () => f.projects.eyes(f.eyes), send: (name, data) => sends.push([name, data]),
     emitAutopilot() {}, assistantSchedule: () => scheduled.push(f.projects.current().id),
   });
-  vm.runInContext(section("function taskView(", "async function setTaskDependencies(") + "\n" + section("function projectBusyReason()", "function createCatalogFileReader("), context);
+  vm.runInContext(section("function taskView(", "async function setTaskDependencies(") + "\n" + section("function projectBusyReason(", "function createCatalogFileReader("), context);
   assert.equal(context.projectBusyReason(), null, "a pending cadence timer does not lock the project selector");
   const result = await context.selectProject(f.secondary.id);
   assert.equal(result.ok, true);
@@ -248,6 +248,68 @@ test("normal background mode switches between cadence ticks and reloads its own 
   const back = await context.selectProject(first.id);
   assert.equal(back.ok, true);
   assert.equal(context.assistantState.messages[0].text, "First project context");
+});
+
+// Cadence roles run every minute and panel reads overlap most clicks, so the
+// picker used to bounce nearly every switch back as "agents are still
+// working" and route it through the slow save-and-stop dialog. Roster work and
+// transient counters are drained under the lock instead; only a build asks.
+test("background roster work and an overlapping read drain instead of refusing the switch", async (t) => {
+  const f = await fixture(t);
+  const studio = f.projects.add(f.studio);
+  f.projects.select(studio.id);
+  const cleared = [];
+  const running = new Map([[1, { role: "foreman", work: null }]]);
+  const context = vm.createContext({
+    projects: f.projects, projectSwitching: false, autopilot: { jobs: [], execute: false },
+    projectOperations: 1, projectAgentJobs: 0, projectBoardWrites: 0,
+    pool: { running, queue: [{ role: "thinker" }] }, assistantTickInFlight: null, assistantTickDemand: null,
+    autopilotPassInFlight: null, executorFillInFlight: null, assistantWriting: null, assistantLoading: null, machineReadInFlight: null,
+    assistantState: { status: "running", messages: [] }, assistantTimer: null, assistantSaveTimer: null, assistantEmitTimer: null, assistantEmitPending: null,
+    assistantPending: null, assistantSavedAt: 1, assistantLoop: false, machineReadCache: null, eyesLastTs: 0, assistantCache: {},
+    TASKS_PATH: f.file, REQUESTS_PATH: path.join(f.studio, "data", "eyes-requests.json"), IDEAS_PATH: path.join(f.studio, "data", "eyes-feature-ideas.json"),
+    mkdir, statSync, path, setTimeout, clearTimeout, Date,
+    assistantClearQueue: (options) => { cleared.push(options); context.pool.queue = []; context.pool.running.clear(); },
+    assistantWrite: async () => {}, ensureAssistant: async () => { context.assistantState = { status: "running", messages: [] }; },
+    readSettings: async () => ({}), writeSettings: async () => {},
+    getEyes: async () => f.projects.eyes(f.eyes), send() {}, emitAutopilot() {}, assistantSchedule() {},
+  });
+  vm.runInContext(section("function taskView(", "async function setTaskDependencies(") + "\n" + section("async function waitForProjectIdle(", "let stopAllPromise") + "\n" + section("function projectBusyReason(", "function createCatalogFileReader("), context);
+  assert.match(context.projectBusyReason(), /finishing work/, "the gate itself still reads busy");
+  const startedAt = Date.now();
+  const switching = context.selectProject(f.secondary.id);
+  assert.equal(context.projectSwitching, true, "the lock is raised before the drain so nothing new starts");
+  // The overlapping panel read finishes a moment later, as it does in the app.
+  setTimeout(() => { context.projectOperations = 0; }, 300);
+  const result = await switching;
+  assert.equal(result.ok, true);
+  assert.equal(result.activeId, f.secondary.id);
+  assert.equal(cleared.length, 1, "the roster's queued and running roles were abandoned to their journals");
+  assert.equal(cleared[0].abandonRunning, true);
+  assert.ok(Date.now() - startedAt < 3000, "the switch settles as soon as the counter clears, not after a long wait");
+  assert.equal(context.projectSwitching, false);
+});
+
+test("a gate holder that never clears still refuses the switch after the drain window", async (t) => {
+  const f = await fixture(t);
+  const studio = f.projects.add(f.studio);
+  f.projects.select(studio.id);
+  const first = f.projects.active().id;
+  const context = vm.createContext({
+    projects: f.projects, projectSwitching: false, autopilot: { jobs: [] },
+    projectOperations: 0, projectAgentJobs: 1, projectBoardWrites: 0,
+    pool: { running: new Map(), queue: [] }, assistantTickInFlight: null, assistantTickDemand: null,
+    autopilotPassInFlight: null, executorFillInFlight: null, assistantWriting: null, assistantLoading: null, machineReadInFlight: null,
+    statSync, setTimeout, Date,
+  });
+  vm.runInContext(section("function taskView(", "async function setTaskDependencies(") + "\n" + section("async function waitForProjectIdle(", "let stopAllPromise") + "\n" + section("function projectBusyReason(", "function createCatalogFileReader("), context);
+  // Shorten the window for the test; the app waits four seconds.
+  const result = await context.selectProject(f.secondary.id);
+  assert.equal(result.ok, false);
+  assert.equal(result.busy, true);
+  assert.match(result.error, /finishing work/);
+  assert.equal(f.projects.active().id, first);
+  assert.equal(context.projectSwitching, false, "the lock is released on refusal");
 });
 
 test("a stalled assistant response body times out instead of retaining a project job indefinitely", async () => {

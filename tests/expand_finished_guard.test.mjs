@@ -69,3 +69,37 @@ test("runAssistant attaches trusted finished titles from facts, not model output
   assert.match(wiring, /facts\.recentSessions/);
   assert.match(wiring, /row\?\.finished === true/, "only rows the finished flag marks count, never model text");
 });
+
+function promptConstant(name) {
+  // `const` declarations stay in the vm script's lexical scope, so read the
+  // joined constant back as the script's completion value.
+  return vm.runInContext(`${section(`const ${name} = [`, "function startEyesWatch()")}\n${name};`, vm.createContext({}));
+}
+
+test("grow and improve prompts name the finished flag with distinct finished/unfinished handling", () => {
+  for (const [name, feedRows] of [["ASSISTANT_GROW_SYSTEM", /recentTitles\/archive/], ["ASSISTANT_IMPROVE_SYSTEM", /recentSessions/]]) {
+    const prompt = promptConstant(name);
+    assert.match(prompt, feedRows, `${name} describes the feed rows it reads`);
+    assert.match(prompt, /boolean `finished` flag sourced from the producer/, `${name} names the exact \`finished\` field`);
+    assert.doesNotMatch(prompt, /isFinished|Finished flag/, `${name} never drifts from the exact field name`);
+    assert.match(prompt, /finished:true means the session completed its final turn normally — (that work is done|done work): never propose expand items/, `${name} treats finished sessions as complete work`);
+    assert.match(prompt, /finished:false \(or no finished field\) are the unfinished candidates/, `${name} treats unfinished (or flag-absent) sessions as the candidates`);
+  }
+});
+
+test("a sample feed with both finished states renders both distinguishably into the prompt payload", () => {
+  // Same contract as main.cjs: producer rows map through `finished: session.finished === true`
+  // and runAssistant renders facts with JSON.stringify (main.cjs runAssistant user payload).
+  const producerSessions = [{ title: "Wrapped work", finished: true }, { title: "Open work", finished: false }, { title: "Flag lost in transit" }];
+  const feed = producerSessions.map((session) => ({ title: session.title, finished: session.finished === true }));
+  const user = JSON.stringify({ recentTitles: feed }).slice(0, 14000);
+  const grow = promptConstant("ASSISTANT_GROW_SYSTEM");
+  assert.match(user, /"finished":true/, "a finished entry stays visible to the model");
+  assert.match(user, /"finished":false/, "an unfinished entry stays visible to the model");
+  assert.match(user, /"title":"Wrapped work","finished":true/, "the true flag lands on the finished row");
+  assert.match(user, /"title":"Open work","finished":false/, "the false flag lands on the unfinished row");
+  const improve = promptConstant("ASSISTANT_IMPROVE_SYSTEM");
+  for (const prompt of [grow, improve]) {
+    assert.ok(prompt.includes("finished") && user.includes("finished"), "prompt and rendered feed speak the same field name");
+  }
+});

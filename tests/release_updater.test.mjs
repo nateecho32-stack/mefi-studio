@@ -131,6 +131,14 @@ test("the check reports newer, equal and older releases, and never throws", asyn
   const missing = await checkForRelease({ repo: "owner/repo", currentVersion: "0.1.0", fetchImpl: async () => jsonResponse(404, {}) });
   assert.equal(missing.ok, false);
   assert.equal(missing.needsToken, true, "a private repo's 404 tells the user a token is the way in");
+  const publicEmpty = await checkForRelease({
+    repo: "owner/repo",
+    currentVersion: "0.1.0",
+    fetchImpl: async (url) => (String(url).endsWith("/repos/owner/repo") ? jsonResponse(200, { private: false }) : jsonResponse(404, {})),
+  });
+  assert.equal(publicEmpty.ok, false);
+  assert.equal(publicEmpty.needsToken, false, "a visible repository with no release is not a token problem");
+  assert.match(publicEmpty.error, /no published release found/, "the app reads this as its 'none' state, not an error");
   const missingWithToken = await checkForRelease({ repo: "owner/repo", currentVersion: "0.1.0", token: "t", fetchImpl: async () => jsonResponse(404, {}) });
   assert.equal(missingWithToken.needsToken, false);
   const refused = await checkForRelease({ repo: "owner/repo", currentVersion: "0.1.0", fetchImpl: async () => jsonResponse(403, {}) });
