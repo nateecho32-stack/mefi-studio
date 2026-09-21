@@ -1584,3 +1584,41 @@ checked in the browser fallback on port 4173 with a stubbed bridge (six
 account cards, provider/day/model tables, the compact rail lines). `npm run
 package` was deliberately not run: the tree carries other sessions'
 unfinished work. Node log kept locally as `%TEMP%\mefi-usage-tracker-nodestage.log`.
+
+Merged main validation (2026-09-21, session "Node tree visuals and agent
+interactions"): the Command view visual layer (branch `command-visuals`,
+41def17) and the UX phase 0 pass (branch `ux-phase0`) were landed on main at
+the user's request on top of a snapshot of every session's uncommitted work:
+b1d4042 (snapshot), 3569cfc (merge command-visuals), f33525b + 3374bd2 (UX
+snapshot and merge), df56601 (Python contracts aligned with the UX pass:
+eyes:changes / eyes:todos / machine:watch / assistantProactive removed,
+overhead poll 15 s / 60 s, stage-labels first in the booklet inline list).
+Gates on the merged tree: `npm run check` exit 0 (88 targets, 171 unique
+specs, every selector used), `npm run audit` exit 0, Python contracts 244 run
+with 0 failures, `npm run package` refreshed `dist\Mefi Studio AI+\`. Node,
+full run (parallel group plus the serialized Electron fixtures): 1,633 tests -
+1,492 pass, 140 fail, 1 skip. 135 of the failures are the executor harness
+family (executor_delegation 40, executor_modes 21, executor_resources 18,
+executor_resume 16, executor_end_to_end 13, assistant_work_on 8,
+build_approval 7, executor_lifecycle 6, backlog_engine 2,
+executor_result_protocol 2, executor_parallel 1, planning_execution 1); they
+already failed at the pre-merge snapshot, checked by running
+`tests/assistant_work_on.test.mjs` in a throwaway worktree at b1d4042 (17
+tests, 9 pass, 8 fail, same reasons: the silent-probe lag gate's
+`readSettings()` / `machineMemoryWarnOverride()` are not in the harness
+fakes). The other five: `performance_render` (profiler JSON download timed
+out at 26 s under the full run) passes alone, 2/2; `task_overview_render`
+asserted the pre-UX stage vocabulary in
+`tests/fixtures/task-overview-render-electron.cjs` and now expects
+`Done · Verified` / `Verifying` from `renderer/stage-labels.js`, 1/1;
+`usage_tracker_host` pinned the exact `window.MefiUsageTracker` member list,
+which the tracker snapshot extended with `report`, and the regex now allows
+extra members, 14/14; the two `workspace_ui` failures are a merge choice, not
+drift: the merge kept main's launch-hold pause handler
+(`assistantControl("start" | "pause")`, `#connection` reading "New work
+paused") where the UX tests expect Pause to call `backlogControl({ action:
+"pause" })`, Resume to call `assistantControl("start-work")` and
+`#connection` to read `runState().label`. `renderer/workspace.js` was under
+live edit by the startup-hold session (its uncommitted move of the launch
+hold into `runState`) while this ran, so that reconciliation is left with it.
+Node log kept locally in the session scratchpad as `node-main.log`.

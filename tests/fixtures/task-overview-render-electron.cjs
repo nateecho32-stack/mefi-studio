@@ -106,8 +106,8 @@ app.whenReady().then(async () => {
     await run("document.querySelector('[data-task-panel=delegation]').scrollIntoView({block:'center',behavior:'instant'});");
     const detail = await run(`const panel=document.querySelector('[data-task-panel=delegation]');const bounds=panel.getBoundingClientRect();return {width:innerWidth,height:innerHeight,overflow:document.documentElement.scrollWidth>innerWidth+1,text:panel.textContent,bounds:{left:bounds.left,right:bounds.right,top:bounds.top,bottom:bounds.bottom},links:[...panel.querySelectorAll('[data-task-action=view-subtask]')].map(link=>{const rect=link.getBoundingClientRect();return {id:link.dataset.taskId,text:link.textContent,disabled:link.disabled,left:rect.left,right:rect.right,top:rect.top,bottom:rect.bottom};})};`);
     assert.match(detail.text, /Delegated subtasks · 1\/2 confirmed/);
-    assert.match(detail.text, /Implement the export formatConfirmed/);
-    assert.match(detail.text, /Verify the export controlsChecking completion/);
+    assert.match(detail.text, /Implement the export formatDone · Verified/);
+    assert.match(detail.text, /Verify the export controlsVerifying/);
     assert.match(detail.text, /parent resumes to combine and verify results/i);
     assert.equal(detail.links.length, 2);
     assert.ok(!detail.overflow && detail.bounds.left >= 0 && detail.bounds.right <= detail.width + 1 && detail.links.every((link) => !link.disabled && link.left >= 0 && link.right <= detail.width + 1 && link.top >= 0 && link.bottom <= detail.height), JSON.stringify(detail));

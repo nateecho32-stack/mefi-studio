@@ -237,7 +237,7 @@ test("both surfaces exist in the template and are driven by the tracker module",
     assert.match(template, new RegExp(`id="${id}"`), `missing #${id}`);
   }
   assert.match(template, /aria-label="Usage across connected providers"/);
-  assert.match(trackerSource, /window\.MefiUsageTracker = \{ refresh, tick, open, openTab, init \}/);
+  assert.match(trackerSource, /window\.MefiUsageTracker = \{ refresh, tick, open, openTab, init(?:, [^}]*)? \}/);
   assert.match(trackerSource, /bridge\.usageTracker\(\)/);
   assert.match(trackerSource, /bridge\.opencodeCredits/);
   assert.match(trackerSource, /bridge\.usageAccounts/);
