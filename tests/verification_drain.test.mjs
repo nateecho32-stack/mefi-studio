@@ -152,6 +152,20 @@ test("a project that defines its own npm scripts keeps its own root", async () =
   assert.equal(host.logs.some((line) => line.includes("has no package.json")), false, "no move was logged");
 });
 
+// The project's own wrapper check is a relative -File, so the project itself
+// must stay the cwd even where no package.json exists; moving the job to the
+// Studio checkout made PowerShell exit 0xFFFD0000 hunting for test\run-check.ps1.
+test("a project's own wrapper check keeps the project root even without package.json", async () => {
+  const host = drainHost({ tasks: [{ id: "t-love", title: "Game fix", verificationRun: { key: "k-love", state: "queued" } }] });
+  host.queue({ key: "k-love", taskId: "t-love", projectPath: "C:/game checkout", commands: ['powershell -NoProfile -ExecutionPolicy Bypass -File "test\\run-check.ps1"'] });
+  const drain = host.env.runVerificationJobs({});
+  host.spawns[0].close(0);
+  await drain;
+  assert.equal(host.spawns[0].cwd, "C:/game checkout", "the relative wrapper resolves against the project, so it stays the cwd");
+  assert.equal(host.logs.some((line) => line.includes("has no package.json")), false, "no move was logged");
+  assert.equal(host.board().tasks[0].verificationRun.state, "passed", "the check itself still settles the card");
+});
+
 test("a payload install with no npm checkout falls back to the app payload root", async () => {
   const host = drainHost();
   host.pkgRoots.delete("C:/fixture-studio");
