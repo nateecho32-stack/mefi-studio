@@ -1,5 +1,63 @@
 # Test Runs
 
+First-map plan verification, 7 ideas (2026-09-21, evening). Run
+run_1790027371112_14 for task_plan_mubs2uat_0 — read/verify checklist, no
+source changes: `npm run build-booklet` reproduced `renderer/booklet.html`
+byte-identical (39 models, hash f98dd2322a01; git shows no renderer diff).
+`npm run check:css` (default HEAD-vs-worktree mode) FAILS on this checkout
+with 7 winner mismatches that are all pure CRLF artifacts — `core.autocrlf`
+is true, the working copy is CRLF and the HEAD blob is LF; comparing both
+sides LF-normalized through `cascadeEquivalence` gives 0 problems across 6401
+winner keys, and the modes `npm run check` actually wires pass
+(`--merge` skip-clean, `--unused` ALL-SELECTORS-USED over 4 stylesheets).
+Gate itself is line-ending sensitive; follow-up filed. `npm run audit` clean
+(0 findings, 0 warnings). Focused suites green: foreman_lag_gate 8/8,
+verification_checks + verification_evidence 17/17, package_privacy 1/1
+(payload data/ = curated.json + models.json only; source settings/projects/
+cache never ship; live portable state preserved across rebuilds). Website
+previewed over HTTP per website/README.md (`python -m http.server`): index,
+wiki shell, pages.json, download and `wiki/pages/home.md` all 200, then the
+server was stopped. Docs surveyed: GETTING_STARTED (npm ci → build-booklet →
+npm start; clear ELECTRON_RUN_AS_NODE), AGENT_LOOP_VERIFICATION (verified
+2026-09-19; claimed checks need session-attributed recorded execution),
+FEATURE_AUDIT (partials: verification, collision sandboxing, photographer
+role, Steam release). Concurrent session's uncommitted TESTRUNS.md /
+run-node-tests.mjs / fixture edits left untouched.
+
+Silent-probe resourcePass resume verification (2026-09-21, evening). Resume of
+run_1790027270074_12 for task_9f795c0f862dd7ae: the interrupted session's two
+code todos had already landed — `b1d4042` scoped the resourcePass silence rule
+(main.cjs `samplerLagMs` gates the poll's lag on
+`measureWorkerLag.cache?.silent`, so a frozen renderer feeds the sampler null
+instead of the 1000ms sentinel) and `tests/foreman_lag_gate.test.mjs`'s
+resource-pass test pins it — so this run verified rather than re-edited:
+`node --test tests/foreman_lag_gate.test.mjs` 8/8 (including "the resource
+pass applies the same silence rule"), the lag-gate trio
+(`worker_responsiveness`, `machine_capacity`, `assistant_lag_gate`) 47/47,
+`python tools/test_mefi_studio_machine.py` 7/7, `npm run check` clean (90
+targets, 175 specs, CSS merge/unused, syntax), `npm run audit` clean (0
+findings). Full `npm test`: the parallel `node --test` stage 1682 tests, 1680
+pass, 0 fail; the serialized display stage had `eyes_toggle_electron` flake
+under suite load (one fetch while hidden) and pass 1/1 isolated, while
+`occlusion_probe` fails while the live Mefi Studio app holds the interactive
+desktop — the probe window is destroyed mid-occluded-phase ("Object has been
+destroyed" through `fixtures/occlusion-probe-electron.cjs` `run()`), which is
+not the fixture's capability-gated skip path and is unrelated to the
+resourcePass change (the fixture reads main.cjs only as text for the probe
+expression); it needs a re-run without the live app on the desktop.
+
+Mefi first map verification (2026-09-21, evening). Resume of run_1790021119814_13
+(progress 0 at interruption) for task_86a2670145d882c9; no source changes were
+needed — the prior session's first-map implementation is already committed and
+all of the map's first-task verification commands pass on a clean tree:
+`node --test tests/first_map.test.mjs` 6/6 and
+`node --test tests/first_run_service.test.mjs` 9/9; `npm run build-booklet`
+rebuilt `renderer/booklet.html` (39 models, hash f98dd2322a01) with zero git
+diff; `npm run check:targets` ok (90 targets, 90 through the syntax pass, full
+coverage); `npm run check:specs` ok (175 specs, unique basenames, no orphans);
+`npm run audit` ok (0 findings, 0 warnings); full `npm run check` ok including
+check-css merge/unused and check-syntax (90 files).
+
 Coding tiers, Codex CLI and the Command usage dropdown (2026-09-21 16:00). Settings
 › Coding workers gained a coding tier (`executorTier`: Auto / Free / Fast /
 Heavy) with per-CLI tier models (`executorTierModels`) resolved by
