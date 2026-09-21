@@ -30,6 +30,7 @@
     syncBlocked();
     if (blocked()) return false;
     cancelClose();
+    window.MefiNav?.paintCurrent?.();
     root.dataset.open = "true";
     panel.inert = false;
     panel.setAttribute("aria-hidden", "false");

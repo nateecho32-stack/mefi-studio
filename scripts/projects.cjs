@@ -140,15 +140,23 @@ function createProjects({ defaultRoot, studioRoot, saved = {}, preferredRoot = n
       const scoped = Object.create(null);
       Object.assign(scoped, eyes);
       const boardNames = new Set(["eyes-tasks.json", "eyes-requests.json", "eyes-feature-ideas.json"]);
+      // The three board views opt into the reader's row cache (readJson in
+      // scripts/eyes.mjs): while the file's bytes are unchanged a read hands
+      // back cloned row bodies with the saved history shared, instead of a
+      // fresh parse of megabytes of contextHistory behind every broadcast.
+      // A fixture reader without the option simply ignores the extra argument.
+      const boardOptions = { rowCache: true };
       scoped.readJson = async (file, fallback) => {
-        const rows = await eyes.readJson(dataPath(file, project), fallback);
-        return boardNames.has(path.basename(file)) && Array.isArray(rows) ? rows.map((row) => stamp(row, project)) : rows;
+        const board = boardNames.has(path.basename(file));
+        const rows = await eyes.readJson(dataPath(file, project), fallback, board ? boardOptions : undefined);
+        return board && Array.isArray(rows) ? rows.map((row) => stamp(row, project)) : rows;
       };
       scoped.writeJson = async (file, value) => {
         const target = dataPath(file, project);
         if (target !== file) await mkdir(path.dirname(target), { recursive: true });
-        const rows = boardNames.has(path.basename(file)) && Array.isArray(value) ? value.map((row) => stamp(row, project)) : value;
-        return eyes.writeJson(target, rows);
+        const board = boardNames.has(path.basename(file));
+        const rows = board && Array.isArray(value) ? value.map((row) => stamp(row, project)) : value;
+        return eyes.writeJson(target, rows, board ? boardOptions : undefined);
       };
       // The optional SQLite store is global. File storage remains the current
       // authority until SQLite gains an equivalent project partition.

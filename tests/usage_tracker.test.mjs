@@ -7,7 +7,7 @@ const {
   DEFAULT_LIMITS, limitsFromPlan, aggregateUsage, opencodeWindows, parseOpencodeUsage, describeOpencodeStatus,
   canonicalProvider, providerInfo, normalizeStoreUsage, mergeLedgers,
   parseOpenrouterKey, parseOpenrouterCredits, parseGatewayCredits, parseZaiQuota, describeAccountStatus,
-  parseCliJson, parseClaudeCliResult, parseGrokCliResult, parseAntigravityCliResult,
+  parseCliJson, parseClaudeCliResult, parseGrokCliResult, parseAntigravityCliResult, parseCodexCliResult,
 } = require("../scripts/usage-tracker.cjs");
 
 const localTime = (year, month, day, hour = 12, minute = 0) => new Date(year, month - 1, day, hour, minute).getTime();
@@ -321,4 +321,30 @@ test("CLI replies yield the text and the tokens, and never an invented cost", ()
   assert.deepEqual(parseCliJson("  \n{\"a\":1}\n"), { a: 1 }, "whitespace around the object is ignored");
   assert.deepEqual(parseCliJson("noise before\n{\"a\":1}"), { a: 1 });
   assert.equal(parseCliJson("[1,2]"), null, "an array is not a reply object");
+});
+
+test("the Codex CLI event stream yields the agent message and the turn's tokens, never a price", () => {
+  const stream = [
+    "Reading prompt from stdin...",
+    JSON.stringify({ type: "thread.started", thread_id: "t" }),
+    JSON.stringify({ type: "turn.started" }),
+    JSON.stringify({ type: "item.completed", item: { id: "i1", type: "command_execution", command: "ls" } }),
+    JSON.stringify({ type: "item.completed", item: { id: "i2", type: "agent_message", text: "the answer" } }),
+    JSON.stringify({ type: "turn.completed", usage: { input_tokens: 120, cached_input_tokens: 100, output_tokens: 30 } }),
+  ].join("\n");
+  const codex = parseCodexCliResult(stream);
+  assert.equal(codex.ok, true);
+  assert.equal(codex.text, "the answer");
+  assert.equal(codex.model, null, "the stream names no model");
+  assert.equal(codex.costUsd, null, "a login-billed run reports no price");
+  assert.deepEqual(codex.tokenUsage, { inputTokens: 120, outputTokens: 30, cacheReadTokens: 100, cacheWriteTokens: null, reasoningTokens: null, totalTokens: 150 }, "cached tokens sit inside input_tokens, so the total is input + output");
+  assert.equal(providerInfo("codex").label, "Codex CLI");
+  assert.equal(providerInfo("codex").kind, "subscription");
+  const failed = parseCodexCliResult(`${JSON.stringify({ type: "turn.started" })}\n${JSON.stringify({ type: "turn.failed", error: { message: "rate limited" } })}`);
+  assert.equal(failed.ok, false);
+  assert.equal(failed.error, "rate limited");
+  const silent = parseCodexCliResult(JSON.stringify({ type: "turn.completed", usage: { input_tokens: 5, output_tokens: 0 } }));
+  assert.equal(silent.ok, false, "a turn with no agent message is not a reply");
+  assert.equal(parseCodexCliResult("plain text reply"), null, "a text reply is not mistaken for the event stream");
+  assert.equal(parseCodexCliResult(""), null);
 });

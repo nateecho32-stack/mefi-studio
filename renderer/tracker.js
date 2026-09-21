@@ -27,6 +27,14 @@
     const date = new Date(value);
     return Number.isFinite(date.getTime()) ? date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "unknown time";
   };
+  // A reset moment for the compact panel: the time when it is within a day,
+  // the date otherwise.
+  const soon = (value) => {
+    if (value == null || value === "") return "";
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return "";
+    return Math.abs(date.getTime() - Date.now()) < 86400000 ? clock(date) : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  };
   const readStore = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
   const writeStore = (key, value) => { try { localStorage.setItem(key, value); } catch {} };
 
@@ -252,21 +260,48 @@
     target.append(element("p", "muted tracker-footnote", `${local.coverage || "Only recorded calls are included."}${storeLine(local)}${retired}`));
   }
 
-  function accountLine(account, local) {
-    const row = rows(local?.providers).find((entry) => entry.provider === account.provider);
-    const today = row ? `today ${calls(row.today?.calls)} · ${compact(row.today?.usage?.totalTokens?.known)} tokens` : "no calls today";
-    if (account.read !== "none" && !account.ok) return element("p", "tracker-line tracker-line-warn", `${account.label} · ${account.error || "account read unavailable"}`);
+  // ---- the compact Command panel ------------------------------------------
+  // The lead account is the first connected provider with a live window or
+  // quota reading (OpenCode Go's plan windows, z.ai's plan quota): it owns the
+  // bars and the collapsed header's summary. No live reading means no bars —
+  // an empty gauge for an account that was never connected says nothing.
+  function leadAccount(report) {
+    return accountsOf(report).find((account) => account.ok && (account.read === "windows" || account.read === "quota")) ?? null;
+  }
+  function leadWindows(account) {
+    if (!account) return [];
+    if (account.read === "windows") return WINDOW_LABELS.map(([key, , short]) => [short, account.usage?.[key] ?? null]);
+    const quota = account.quota ?? {};
+    return [["5h", quota.rolling ?? null], ["Wk", quota.weekly ?? null], quota.tools ? ["Tools", quota.tools] : null].filter(Boolean);
+  }
+  function row(label, value, tone = "") {
+    const item = element("li", "tracker-row");
+    if (tone) item.setAttribute("data-tone", tone);
+    item.append(element("span", "tracker-row-label", label), element("span", "tracker-row-value", value));
+    return item;
+  }
+  const hot = (...records) => records.some((record) => record && (record.status === "rate-limited" || (finite(record.percent) && record.percent >= 90)));
+  // One aligned row per connected provider that is not the lead: its own
+  // live reading where it offers one, its recorded calls today where not.
+  function accountRow(account, local) {
+    const recorded = rows(local?.providers).find((entry) => entry.provider === account.provider);
+    const today = recorded ? `today ${calls(recorded.today?.calls)} · ${compact(recorded.today?.usage?.totalTokens?.known)} tokens` : "no calls today";
+    if (account.read !== "none" && !account.ok) return [account.label, account.error || "account read unavailable", "warn"];
+    if (account.read === "windows") {
+      const usage = account.usage ?? {};
+      return [account.label, `5h ${usage.rolling ? percent(usage.rolling.percent) : "—"} · wk ${usage.weekly ? percent(usage.weekly.percent) : "—"}`, hot(usage.rolling, usage.weekly, usage.monthly) ? "warn" : ""];
+    }
     if (account.read === "quota") {
       const quota = account.quota ?? {};
-      return element("p", "tracker-line tracker-line-account", `${account.label} · 5h ${quota.rolling ? percent(quota.rolling.percent) : "—"} · wk ${quota.weekly ? percent(quota.weekly.percent) : "—"} · ${today}`);
+      return [account.label, `5h ${quota.rolling ? percent(quota.rolling.percent) : "—"} · wk ${quota.weekly ? percent(quota.weekly.percent) : "—"} · ${today}`, hot(quota.rolling, quota.weekly) ? "warn" : ""];
     }
     if (account.read === "key") {
       const key = account.key ?? {};
       const left = account.credits ? `${money(account.credits.remaining)} left` : finite(key.limit) ? `${money(key.limitRemaining)} left of ${money(key.limit)}` : "no key limit";
-      return element("p", "tracker-line tracker-line-account", `${account.label} · ${money(key.usage)} spent · ${left}`);
+      return [account.label, `${money(key.usage)} spent · ${left}`, hot(key) ? "warn" : ""];
     }
-    if (account.read === "credits") return element("p", "tracker-line tracker-line-account", `${account.label} · ${money(account.credits?.balance)} left · ${money(account.credits?.totalUsed)} used`);
-    return element("p", "tracker-line tracker-line-account", `${account.label} · ${today}${row?.today?.usage?.costUsd?.knownRecords ? ` · ${money(row.today.usage.costUsd.known)}` : ""}`);
+    if (account.read === "credits") return [account.label, `${money(account.credits?.balance)} left · ${money(account.credits?.totalUsed)} used`, ""];
+    return [account.label, `${today}${recorded?.today?.usage?.costUsd?.knownRecords ? ` · ${money(recorded.today.usage.costUsd.known)}` : ""}`, ""];
   }
 
   function renderCompact(target, report) {
@@ -274,32 +309,74 @@
     const credits = report.credits ?? {};
     const local = report.local?.ok === false ? null : report.local;
     const accounts = accountsOf(report);
-    const go = accounts.find((account) => account.provider === "opencode-go");
-    const goUsage = go?.ok ? go.usage : credits.ok ? credits.usage : null;
-    const windows = element("div", "tracker-windows");
-    for (const [key, , short] of WINDOW_LABELS) windows.append(windowBar(short, goUsage?.[key] ?? null));
-    target.append(windows);
-    if (!goUsage) target.append(element("p", "tracker-line tracker-line-warn", go?.error || credits.error || "Live account usage is unavailable."));
-    for (const account of accounts) if (account.provider !== "opencode-go") target.append(accountLine(account, local));
+    const lead = leadAccount(report);
+    if (lead) {
+      const box = element("div", "tracker-lead");
+      const name = element("div", "tracker-lead-name");
+      const kind = lead.read === "quota" ? `${lead.quota?.level ? `${lead.quota.level} plan` : "plan quota"}` : "plan windows";
+      name.append(element("span", "", lead.label), element("small", "", kind));
+      box.append(name);
+      const windows = element("div", "tracker-windows");
+      for (const [short, record] of leadWindows(lead)) windows.append(windowBar(short, record, { resets: true }));
+      box.append(windows);
+      const rolling = lead.read === "windows" ? lead.usage?.rolling : lead.quota?.rolling;
+      const limited = leadWindows(lead).filter(([, record]) => record?.status === "rate-limited").map(([short]) => short);
+      const reset = soon(rolling?.resetsAt);
+      if (limited.length || reset) box.append(element("p", limited.length ? "tracker-line tracker-line-warn" : "tracker-line", `${limited.length ? `Limit reached: ${limited.join(", ")}` : ""}${limited.length && reset ? " · " : ""}${reset ? `5h resets ${reset}` : ""}`));
+      target.append(box);
+    } else {
+      const failed = accounts.find((account) => account.read !== "none" && !account.ok && account.code !== "no-key");
+      target.append(element("p", "tracker-line tracker-line-warn", failed ? `${failed.label} · ${failed.error || "account read unavailable"}` : credits.ok === false && credits.error ? credits.error : "No live account reading yet · save a plan key in Settings."));
+    }
+    // The older credits bridge stands in for a Go account even when no Go
+    // key is saved; that placeholder is a hint for the Model Lab view, not a
+    // connected provider, so the compact panel leaves it out.
+    const placeholder = (account) => account.provider === "opencode-go" && !account.ok && account.code === "no-key";
+    const others = accounts.filter((account) => account !== lead && !placeholder(account));
+    if (others.length) {
+      target.append(element("p", "tracker-kicker", "Connected"));
+      const list = element("ul", "tracker-rows");
+      for (const account of others) list.append(row(...accountRow(account, local)));
+      target.append(list);
+    }
     if (report.accounts?.ok === false && !accounts.length) target.append(element("p", "tracker-line tracker-line-warn", report.accounts.error || "Account readings are unavailable."));
     if (report.local?.ok === false) target.append(element("p", "tracker-line tracker-line-warn", report.local.error || "Local usage could not be read."));
     if (local) {
+      target.append(element("p", "tracker-kicker", "Recorded"));
+      const list = element("ul", "tracker-rows");
       const today = local.today.usage;
-      target.append(element("p", "tracker-line", `Recorded today · ${calls(local.today.calls)} · ${number(today.totalTokens.known)} tokens · ${costText(today.costUsd)}`));
+      list.append(row("Recorded today", `${calls(local.today.calls)} · ${compact(today.totalTokens.known)} tokens · ${costText(today.costUsd)}`));
       const estimate = local.credits;
-      if (estimate) {
-        target.append(element("p", "tracker-line", `Local estimate · 5h ${localCost(estimate.rolling)}/${money(estimate.rolling.limitUsd, 0)} · wk ${localCost(estimate.weekly)}/${money(estimate.weekly.limitUsd, 0)} · mo ${localCost(estimate.monthly)}/${money(estimate.monthly.limitUsd, 0)}`));
-      }
+      if (estimate) list.append(row("Local estimate", `5h ${localCost(estimate.rolling)}/${money(estimate.rolling.limitUsd, 0)} · wk ${localCost(estimate.weekly)}/${money(estimate.weekly.limitUsd, 0)} · mo ${localCost(estimate.monthly)}/${money(estimate.monthly.limitUsd, 0)}`));
+      target.append(list);
       if (local.store?.ok === false) target.append(element("p", "tracker-line tracker-line-warn", "Coding sessions unavailable: the OpenCode store could not be read."));
     }
   }
 
+  // A missing OpenCode Go key is not a failed read once the accounts read is
+  // authoritative: the older credits bridge simply has nothing to say.
+  function readNote(report) {
+    const noKey = report.credits?.ok === false && report.credits?.code === "no-key" && report.accounts?.ok === true;
+    const failed = accountsOf(report).filter((account) => account.read !== "none" && !account.ok && !(noKey && account.provider === "opencode-go")).length;
+    return report.credits?.ok === false && !noKey ? " · live account read unavailable" : failed ? ` · ${failed} account read${failed === 1 ? "" : "s"} unavailable` : "";
+  }
   function statusOf(report) {
     if (!report) return "Waiting for a reading…";
     const stamp = report.accounts?.at ?? report.credits?.fetchedAt ?? report.at;
-    const failed = accountsOf(report).filter((account) => account.read !== "none" && !account.ok).length;
-    const note = report.credits?.ok === false ? " · live account read unavailable" : failed ? ` · ${failed} account read${failed === 1 ? "" : "s"} unavailable` : "";
-    return `Updated ${clock(stamp)}${note}`;
+    return `Updated ${clock(stamp)}${readNote(report)}`;
+  }
+  // The collapsed panel still says the one thing worth knowing: the lead
+  // account's windows, or today's recorded calls when nothing live is connected.
+  function compactStatus(report) {
+    if (!report) return "Waiting for a reading…";
+    const stamp = clock(report.accounts?.at ?? report.credits?.fetchedAt ?? report.at);
+    const lead = leadAccount(report);
+    if (lead) {
+      const windows = leadWindows(lead).slice(0, 2).map(([short, record]) => `${short.toLowerCase()} ${record && finite(record.percent) ? percent(record.percent) : "—"}`);
+      return `Updated ${stamp} · ${lead.label} ${windows.join(" · ")}${readNote(report)}`;
+    }
+    const local = report.local?.ok === false ? null : report.local;
+    return `Updated ${stamp}${local ? ` · today ${calls(local.today.calls)}` : ""}${readNote(report)}`;
   }
   function render() {
     const report = state.report;
@@ -313,7 +390,7 @@
     const fullStatus = $("model-lab-tracker-status");
     if (fullStatus) fullStatus.textContent = statusOf(report);
     const compactState = $("cmd-usage-state");
-    if (compactState) compactState.textContent = statusOf(report);
+    if (compactState) compactState.textContent = compactStatus(report);
   }
   function setStatus(text) {
     const fullStatus = $("model-lab-tracker-status");

@@ -664,6 +664,8 @@ table.detail td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* toolbar / chips */
 .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 6px 0 var(--s3); }
+.toolbar-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.toolbar-actions .glyph { color: var(--gold); }
 input[type="search"] { flex: 1; min-width: 220px; }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip {
@@ -1429,6 +1431,9 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .cmd-tools .icon { width: var(--ctl-h-hud); min-width: var(--ctl-h-hud); padding: 0; }
 .cmd-tools .glyph { color: var(--gold); }
 .cmd-tools [aria-pressed="true"] { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--gold-dim); }
+/* the quick agent-mode switch on the toolbar; the rail's Agents tab holds the full control */
+#idle-hud .cmd-agent-mode { display: flex; align-items: center; flex: none; gap: 6px; margin: 0 5px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+#idle-hud .cmd-agent-mode select { width: 94px; min-height: 34px; padding: 4px 8px; font-size: 12px; background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 6px; }
 .cmd-tools [aria-pressed="true"] .glyph { color: var(--gold-bright); }
 .tools-sep { width: 1px; height: 18px; background: var(--hairline); margin: 0 3px; flex: none; }
 #idle-labels .label { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); }
@@ -2099,6 +2104,8 @@ footer {
   body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: 64px; }
   .cmd-bottom { padding: 0 var(--s3); }
   .cmd-dock { max-width: calc(100vw - 24px); }     /* wraps to two rows; row-gap is already 4px */
+  .settings-layout { grid-template-columns: minmax(0, 1fr); }
+  .settings-nav { position: static; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 }
 
 @media (max-width: 719px) {
@@ -2276,10 +2283,6 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-home { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 13px; background: #2b3026; border: 1px solid #414735; color: #edece2; border-radius: 9px; font-size: 12px; }
 .ws-home .glyph { color: var(--ws-accent); }
 .ws-home kbd { margin-left: auto; }
-.workspace .ws-shortcut { margin-top: 7px; justify-content: flex-start; background: transparent; border-color: transparent; color: #cdd2c5; }
-.workspace .ws-shortcut:hover { border-color: var(--ws-accent); }
-.workspace .ws-node-tree { display: flex; margin-top: 7px; background: transparent; border-color: #343a30; color: #cdd2c5; }
-.workspace .ws-node-tree:hover { background: #252b21; border-color: var(--ws-accent); color: #edece2; }
 .ws-section-label { display: flex; align-items: center; justify-content: space-between; padding: 27px 9px 9px; color: #949a8d; font-size: 10px; letter-spacing: 1.6px; }
 .ws-section-label button { font-size: 22px; line-height: 1; min-height: 24px; border: none; }
 .ws-projects { display: grid; gap: 6px; }
@@ -2292,21 +2295,10 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-empty-project { display: grid; gap: 9px; padding: 10px 9px 4px; color: #7f8877; font-size: 11px; line-height: 1.7; }
 .ws-empty-project p { margin: 0; }
 .ws-empty-project button { width: 100%; }
-.ws-sidebar-note { color: #7f8877; font-size: 11px; line-height: 1.8; padding: 7px 9px; }
-.ws-sidebar-bottom { margin-top: auto; padding-top: 34px; }
-.ws-tools summary, .ws-personal summary { display: flex; align-items: center; gap: 9px; list-style: none; cursor: pointer; padding: 12px 9px; color: #c3cab8; font-size: 12px; }
-.ws-tools summary > span, .ws-personal summary > span { margin-left: auto; }
-.ws-tools summary::marker, .ws-personal summary::marker { content: ""; }
-.ws-tools[open] summary { color: var(--ws-accent); }
-#workspace-tool-links { display: grid; gap: 3px; padding: 4px 5px 10px; max-height: 280px; overflow: auto; }
-#workspace-tool-links button { display: flex; align-items: center; justify-content: space-between; border: 0; border-radius: 6px; font-size: 12px; text-align: left; padding: 8px 10px; }
-.workspace .ws-settings { display: flex; gap: 9px; align-items: center; width: 100%; padding: 10px 9px; font-size: 12px; border: 0; }
-.ws-personal { border-top: 1px solid #31362c; margin-top: 16px; }
-.ws-personal label { display: flex; flex-direction: column; gap: 4px; margin: 10px 8px; font-size: 11px; color: #adb4a4; }
-.ws-personal input, .ws-personal select { width: 100%; min-width: 0; font-size: 12px; background: #131710; border-color: #383f30; padding: 7px; }
-.ws-personal .ws-check { flex-direction: row; align-items: center; }
-.ws-personal .ws-check input { width: auto; }
-.ws-local-note { display: block; font-size: 9px; color: #7e8874; padding: 20px 8px 0; }
+.ws-sidebar-bottom { margin-top: auto; padding-top: 16px; }
+.ws-tools > summary, .ws-personal > summary { display: flex; align-items: center; gap: 9px; list-style: none; cursor: pointer; color: #c3cab8; font-size: 12px; }
+.ws-tools > summary::marker, .ws-personal > summary::marker, .ws-tools > summary::-webkit-details-marker, .ws-personal > summary::-webkit-details-marker { content: ""; display: none; }
+.ws-local-note { display: block; font-size: 9.5px; line-height: 1.7; color: #7e8874; padding: 12px 8px 0; }
 .ws-local-note i { display: inline-block; height: 5px; width: 5px; border-radius: 50%; background: #91a77d; margin-right: 4px; }
 .ws-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 0 38px; background: radial-gradient(ellipse at 65% 0, #24241b66, transparent 54%), #121313; }
 .ws-topbar { height: 73px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2a2c27; gap: 20px; }
@@ -2492,9 +2484,17 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-activity li { display: grid; gap: 4px; margin-bottom: 13px; font-size: 11px; color: #b2bfa1; line-height: 1.6; overflow-wrap: anywhere; }
 .ws-activity li time { font-size: 10px; color: #96a782; }
 .ws-jeV { font-size: 10px; color: #a6b392; padding: 9px 0 3px; }
+/* "More tools": one menu face everywhere it appears (tabs row, sheet headers, the
+   Command dock). The summary is a quiet capsule with a glyph and a chevron that
+   turns while open; the list is a glass card of grouped, glyph-led rows. */
 .studio-more { position: relative; }
-.studio-more > summary { cursor: pointer; font-size: 12px; color: var(--muted); padding: 9px 12px; border: 1px solid var(--hairline); border-radius: 8px; }
-.studio-more > .tools-cluster, .studio-more-links { position: absolute; z-index: 95; top: calc(100% + 6px); right: 0; display: grid; min-width: 190px; border: 1px solid #4a4737; padding: 8px; background: #171813; box-shadow: 0 12px 28px #0008; border-radius: 10px; }
+.studio-more > summary { display: inline-flex; align-items: center; gap: 7px; min-height: var(--ctl-h-hud); padding: 0 11px; cursor: pointer; list-style: none; font-size: var(--fs-sm); color: var(--muted); border: 1px solid var(--hairline); border-radius: var(--r-sm); background: transparent; transition: color var(--dur-1) var(--ease), background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease); }
+.studio-more > summary::marker, .studio-more > summary::-webkit-details-marker { display: none; content: ""; }
+.studio-more > summary > .glyph { color: var(--gold); }
+.studio-more > summary > .chev { color: var(--muted); transition: transform var(--dur-2) var(--ease); }
+.studio-more > summary:hover, .studio-more[open] > summary { color: var(--ivory); background: var(--tint-gold-2); border-color: var(--hairline-strong); }
+.studio-more[open] > summary > .chev { transform: rotate(180deg); }
+.studio-more > .tools-cluster, .studio-more-links { position: absolute; z-index: 95; top: calc(100% + 6px); right: 0; display: grid; min-width: 236px; padding: 8px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: var(--glass-hard); backdrop-filter: var(--blur); box-shadow: var(--shadow-2), var(--inset-hi); }
 .studio-more:not([open]) > .tools-cluster, .studio-more:not([open]) .studio-more-links { display: none; }
 .studio-more-links .dock-item, .studio-more .tool { justify-content: flex-start; width: 100%; }
 .sheet-links:has(.studio-more) { border: none; background: transparent; overflow: visible; padding: 0; }
@@ -2554,57 +2554,110 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 @media (max-width: 650px) { .workspace { grid-template-columns: 1fr; overflow-y: auto; }.ws-sidebar { padding: 14px; border-right: 0; overflow: visible; }.ws-brand { margin-bottom: 14px; }.ws-home,.ws-sidebar-note,.ws-local-note,.ws-section-label { display: none; }.ws-projects { display: flex; overflow-x: auto; }.ws-project { flex: 0 0 auto; width: auto; max-width: 200px; }.ws-sidebar-bottom { padding-top: 8px; display: flex; align-items: flex-start; gap: 10px; }.ws-tools,.ws-personal { flex: 1; position: relative; margin: 0; border: none; }.ws-personal[open] { min-width: 150px; }.workspace .ws-settings { width: auto; max-width: 110px; }.ws-main { overflow: visible; padding-inline: 18px; }.ws-topbar { height: 48px; }.ws-heading { padding-top: 23px; }.ws-heading h1 { font-size: 29px; }.ws-project-path { max-width: 65vw; }.ws-connection { display: none; }.ws-conversation { height: 580px; }.ws-companion-track { width: 96px; }.ws-track-dot.middle { left: 46px; }[data-station="make"] .ws-buddy { transform: translateX(26px); }[data-station="review"] .ws-buddy { transform: translateX(52px); }.ws-track-labels { padding: 0; font-size: 7px; }.ws-companion-bar { gap: 9px; }.ws-compose-bottom > span { max-width: 140px; }.ws-work { min-height: 350px; } }
 @media print { .workspace { display: none !important; } body.workspace-active > main,body.workspace-active > header { visibility: visible; } }
 
-/* One shared menu, revealed from the left edge on every Studio surface. */
+/* One shared menu, revealed from the left edge on every Studio surface: a grip on
+   the edge opens it on hover, click or focus; inside, four go-to rows, the project
+   list, a tools grid and a bottom row for Settings / Music / Start here. */
 #workspace-layer { grid-template-columns: minmax(0, 1fr); }
 #workspace-sidebar {
-  --sidebar-width: min(320px, calc(100vw - 44px));
+  --sidebar-width: min(312px, calc(100vw - 44px));
   position: fixed; inset: 0; z-index: 85; display: block; overflow: hidden;
   background: transparent; pointer-events: none;
 }
 #workspace-sidebar-panel {
   position: absolute; inset: 0 auto 0 0; width: var(--sidebar-width); height: 100%;
-  padding: 18px 22px 20px; border-left: 0; border-right: 1px solid var(--hairline-strong);
-  background: var(--panel-solid); color: var(--ivory); overflow-y: auto;
+  padding: 14px 16px 16px; border-left: 0; border-right: 1px solid var(--hairline-strong);
+  background: radial-gradient(120% 34% at 0 0, rgba(var(--ws-accent-rgb), 0.12), transparent 60%), var(--panel-solid);
+  color: var(--ivory); overflow-y: auto;
   overscroll-behavior: contain; scrollbar-gutter: stable; pointer-events: none;
   transform: translateX(-100%); visibility: hidden;
-  transition: transform 180ms var(--ease), visibility 180ms;
+  transition: transform 200ms var(--ease), visibility 200ms;
 }
 #workspace-sidebar[data-open="true"] #workspace-sidebar-panel {
   transform: translateX(0); visibility: visible; pointer-events: auto;
-  box-shadow: 18px 0 50px #0005;
+  box-shadow: 18px 0 50px #0006;
 }
+/* the grip: always faintly there, bright on hover, gone while the panel is out */
 #workspace-sidebar .sidebar-edge,
 #workspace-sidebar .sidebar-edge:is(:hover, :focus-visible, :active) {
-  position: absolute; inset: 0 auto 0 0; width: 6px; height: 100%; min-width: 0; min-height: 0;
-  display: block; padding: 0; margin: 0; border: 0; border-radius: 0;
+  position: absolute; inset: 0 auto 0 0; width: 14px; height: 100%; min-width: 0; min-height: 0;
+  display: grid; place-items: center; padding: 0; margin: 0; border: 0; border-radius: 0;
   background: transparent; box-shadow: none; outline: none;
-  transform: none; transition: none; cursor: default; pointer-events: auto;
+  transform: none; transition: none; cursor: pointer; pointer-events: auto;
 }
+#workspace-sidebar .sidebar-grip {
+  display: grid; gap: 3px; padding: 9px 4px; border-radius: 0 7px 7px 0;
+  background: rgba(var(--ws-accent-rgb), 0.1); border: 1px solid rgba(var(--ws-accent-rgb), 0.22); border-left: 0;
+  opacity: 0.6; transition: opacity var(--dur-2) var(--ease), background var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease);
+}
+#workspace-sidebar .sidebar-grip i { display: block; width: 3px; height: 3px; border-radius: 50%; background: var(--ws-accent); }
+#workspace-sidebar .sidebar-edge:is(:hover, :focus-visible) .sidebar-grip { opacity: 1; background: rgba(var(--ws-accent-rgb), 0.2); box-shadow: 0 0 14px rgba(var(--ws-accent-rgb), 0.3); }
+#workspace-sidebar .sidebar-edge:focus-visible .sidebar-grip { outline: 2px solid var(--ws-accent); outline-offset: 2px; }
 #workspace-sidebar[data-open="true"] .sidebar-edge { pointer-events: none; }
-#workspace-sidebar .sidebar-heading { display: flex; align-items: center; justify-content: space-between; margin: 0 0 16px 8px; color: var(--dim); font-size: 9px; letter-spacing: 1.8px; }
-#workspace-sidebar .sidebar-heading button { min-width: 32px; min-height: 32px; padding: 2px 8px; font-size: 22px; line-height: 1; color: var(--muted); }
-#workspace-sidebar .ws-brand { font-size: 19px; margin: 0 6px 30px; }
-#workspace-sidebar .ws-brand small { font-size: 8px; letter-spacing: 1.65px; }
-#workspace-sidebar .ws-home { display: flex; justify-content: flex-start; min-height: 48px; padding: 11px 14px; font-size: 13px; border-radius: 12px; flex-shrink: 0; }
-#workspace-sidebar .ws-section-label { display: flex; padding-top: 29px; }
-#workspace-sidebar .ws-projects { display: grid; flex-shrink: 0; overflow: visible; }
-#workspace-sidebar .ws-project { width: 100%; max-width: none; min-height: 49px; border-radius: 11px; flex-shrink: 0; }
-#workspace-sidebar .ws-sidebar-note { display: block; font-size: 12px; line-height: 1.9; padding: 9px 10px; }
-#workspace-sidebar .sidebar-feedback { margin: 0 9px; color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+#workspace-sidebar[data-open="true"] .sidebar-grip { opacity: 0; }
+/* head */
+#workspace-sidebar .sidebar-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 12px; }
+#workspace-sidebar .sidebar-heading button { min-width: 30px; min-height: 30px; padding: 0 6px; font-size: 20px; line-height: 1; color: var(--muted); border-color: transparent; }
+#workspace-sidebar .ws-brand { font-size: 15px; margin: 0; gap: 9px; }
+#workspace-sidebar .ws-brand-mark { font-size: 30px; width: 30px; letter-spacing: -4px; }
+#workspace-sidebar .ws-brand-mark span { font-size: 13px; margin-left: 4px; }
+#workspace-sidebar .ws-brand small { font-size: 7.5px; letter-spacing: 1.5px; margin-top: 4px; }
+/* go-to rows */
+#workspace-sidebar .ws-nav { display: grid; gap: 2px; }
+#workspace-sidebar .ws-home { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; min-height: 40px; margin: 0; padding: 8px 10px; font-size: 13px; border-radius: 10px; background: transparent; border: 1px solid transparent; color: #cdd2c5; flex-shrink: 0; }
+#workspace-sidebar .ws-home .glyph { color: var(--ws-accent); opacity: .85; }
+#workspace-sidebar .ws-home .label { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#workspace-sidebar .ws-home kbd { margin-left: 0; }
+#workspace-sidebar .ws-home:hover { background: rgba(var(--ws-accent-rgb), 0.08); border-color: rgba(var(--ws-accent-rgb), 0.22); color: var(--ivory); }
+#workspace-sidebar [data-nav][aria-current="page"] { background: rgba(var(--ws-accent-rgb), 0.14); border-color: rgba(var(--ws-accent-rgb), 0.35); color: var(--ivory); box-shadow: inset 3px 0 0 var(--ws-accent); }
+/* projects */
+#workspace-sidebar .ws-section-label { display: flex; align-items: center; justify-content: space-between; padding: 14px 8px 6px; color: var(--dim); font-size: 10px; letter-spacing: 1.6px; }
+#workspace-sidebar .ws-section-label button { font-size: 20px; min-height: 24px; min-width: 24px; padding: 0 4px; border: 1px solid transparent; border-radius: 7px; color: var(--ws-accent); }
+#workspace-sidebar .ws-section-label button:hover { background: rgba(var(--ws-accent-rgb), 0.12); border-color: rgba(var(--ws-accent-rgb), 0.3); }
+#workspace-sidebar .ws-projects { display: grid; gap: 4px; flex-shrink: 0; overflow: visible; }
+#workspace-sidebar .ws-project { width: 100%; max-width: none; min-height: 42px; padding: 8px 9px; border-radius: 10px; flex-shrink: 0; }
+#workspace-sidebar .sidebar-feedback { margin: 4px 9px 0; color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 #workspace-sidebar .sidebar-feedback:empty { display: none; }
 #workspace-sidebar .sidebar-feedback.error { color: var(--bad, #f1aa91); }
-#workspace-sidebar .ws-sidebar-bottom { display: block; padding-top: 24px; }
-#workspace-sidebar .ws-tools, #workspace-sidebar .ws-personal { flex: none; }
-#workspace-sidebar .ws-personal { border-top: 1px solid var(--hairline-strong); margin-top: 16px; }
-#workspace-sidebar .ws-settings { width: 100%; max-width: none; min-height: 42px; justify-content: flex-start; font-size: 13px; }
-#workspace-sidebar .ws-tools summary, #workspace-sidebar .ws-personal summary { font-size: 13px; }
-#workspace-sidebar .ws-local-note { display: block; padding-top: 20px; line-height: 1.8; }
+/* tools grid */
+#workspace-sidebar .ws-tools { flex: none; margin-top: 4px; }
+#workspace-sidebar .ws-tools > summary { gap: 8px; padding: 14px 8px 6px; color: var(--dim); font-size: 10px; letter-spacing: 1.6px; }
+#workspace-sidebar .ws-tools > summary > span { flex: 1; }
+#workspace-sidebar .ws-chev { width: 14px; height: 14px; color: var(--dim); transition: transform var(--dur-2) var(--ease); }
+#workspace-sidebar details[open] > summary .ws-chev { transform: rotate(180deg); }
+#workspace-sidebar .ws-tools[open] > summary { color: var(--muted); }
+#workspace-tool-links { display: grid; gap: 8px; padding: 0 0 4px; }
+#workspace-tool-links .nav-menu-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; border: 0; padding: 0; margin: 0; }
+#workspace-tool-links .nav-menu-heading { grid-column: 1 / -1; padding: 2px 8px 0; font-size: 9.5px; }
+#workspace-tool-links .nav-menu-group button { position: relative; display: flex; align-items: center; justify-content: flex-start; gap: 8px; min-height: 38px; padding: 6px 9px; font-size: 12px; text-align: left; border: 1px solid rgba(var(--ws-accent-rgb), 0.1); border-radius: 9px; background: rgba(var(--ws-accent-rgb), 0.04); color: #cdd2c5; }
+#workspace-tool-links .nav-menu-group button:hover { background: rgba(var(--ws-accent-rgb), 0.12); border-color: rgba(var(--ws-accent-rgb), 0.3); color: var(--ivory); transform: none; box-shadow: none; }
+#workspace-tool-links .nav-menu-group button .glyph { color: var(--ws-accent); }
+#workspace-tool-links .nav-menu-group button .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#workspace-tool-links .nav-menu-group .key { display: none; }
+#workspace-tool-links .nav-menu-group .count { position: absolute; top: -6px; right: -4px; box-shadow: 0 0 0 2px var(--panel-solid); }
+#workspace-tool-links .nav-menu-group .tone-dot { position: absolute; bottom: -2px; right: -2px; box-shadow: 0 0 0 2px var(--panel-solid); }
+/* bottom row */
+#workspace-sidebar .ws-sidebar-bottom { display: block; padding-top: 14px; }
+#workspace-sidebar .ws-quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+#workspace-sidebar .ws-settings { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; width: 100%; max-width: none; min-height: 54px; padding: 8px 4px; font-size: 11px; border: 1px solid rgba(var(--ws-accent-rgb), 0.12); border-radius: 10px; background: rgba(var(--ws-accent-rgb), 0.05); color: #cdd2c5; }
+#workspace-sidebar .ws-settings .glyph { width: 17px; height: 17px; color: var(--ws-accent); }
+#workspace-sidebar .ws-settings .label { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#workspace-sidebar .ws-settings:hover { background: rgba(var(--ws-accent-rgb), 0.14); border-color: rgba(var(--ws-accent-rgb), 0.32); color: var(--ivory); transform: none; box-shadow: none; }
+#workspace-sidebar .ws-personal { flex: none; margin-top: 10px; border-top: 1px solid rgba(var(--ws-accent-rgb), 0.14); }
+#workspace-sidebar .ws-personal > summary { padding: 11px 8px 8px; }
+#workspace-sidebar .ws-personal > summary > span { flex: 1; }
+#workspace-sidebar .ws-personal > summary > .glyph:first-child { color: var(--ws-accent); }
+#workspace-sidebar .ws-personal-fields { display: grid; padding-bottom: 6px; }
+#workspace-sidebar .ws-personal label { display: flex; flex-direction: column; gap: 4px; margin: 6px 8px; font-size: 11px; color: #adb4a4; }
+#workspace-sidebar .ws-personal input, #workspace-sidebar .ws-personal select { width: 100%; min-width: 0; min-height: 32px; font-size: 12px; padding: 6px 8px; border-radius: 8px; background: #131710; border-color: #383f30; }
+#workspace-sidebar .ws-personal .ws-check { flex-direction: row; align-items: center; gap: 8px; }
+#workspace-sidebar .ws-personal .ws-check input { width: auto; min-height: 0; }
 #workspace-sidebar[hidden], #workspace-sidebar .sidebar-edge[hidden] { display: none; }
 @media (max-height: 800px) {
   #workspace-sidebar-panel { padding-top: 10px; padding-bottom: 12px; }
   #workspace-sidebar .sidebar-heading { margin-bottom: 8px; }
-  #workspace-sidebar .ws-brand { margin-bottom: 20px; }
-  #workspace-sidebar .ws-sidebar-bottom { padding-top: 16px; }
+  #workspace-sidebar .ws-home { min-height: 36px; padding: 6px 10px; }
+  #workspace-sidebar .ws-section-label, #workspace-sidebar .ws-tools > summary { padding-top: 10px; }
+  #workspace-sidebar .ws-sidebar-bottom { padding-top: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
   #workspace-sidebar-panel { transition: none; }
@@ -2718,8 +2771,6 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #idle-hud .cmd-search input { width: 100%; min-width: 0; font-size: 13px; }
 #idle-hud .cmd-tools { grid-column: 2; grid-row: 1; justify-self: end; padding: 5px; gap: 2px; border-radius: 14px; border-color: var(--cmd-edge); background: var(--cmd-surface); box-shadow: var(--cmd-shadow); }
 #idle-hud .cmd-tools button { min-height: 34px; padding: 5px 9px; border-radius: 6px; }
-#idle-hud .cmd-agent-mode { display: flex; align-items: center; flex: none; gap: 6px; margin: 0 5px; font-size: 11px; color: var(--muted); white-space: nowrap; }
-#idle-hud .cmd-agent-mode select { width: 94px; min-height: 34px; padding: 4px 8px; font-size: 12px; background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 6px; }
 #idle-hud .cmd-tools .glyph, #idle-hud #idle-labels .label, #idle-hud #idle-view .label { color: inherit; }
 #idle-hud .cmd-tools .ghost:hover { background: var(--cmd-hover); border-color: transparent; }
 #idle-hud .cmd-tools [aria-pressed="true"], #idle-hud #idle-view[data-view="2d"] { color: var(--ivory); background: var(--tint-gold-2); border-color: transparent; box-shadow: inset 0 -2px var(--gold); }
@@ -2853,10 +2904,12 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .dock-item .count.bad { color: var(--bad); }
 #idle-hud .dock-item .tone-dot { position: static; transform: none; width: 5px; height: 5px; }
 #idle-hud .cmd-more-tools { position: relative; }
-#idle-hud .cmd-more-tools > summary { cursor: pointer; list-style: none; display: flex; align-items: center; }
-#idle-hud .cmd-more-tools > summary::after { content: '⌃'; font-size: 14px; margin-left: 6px; }
+#idle-hud .cmd-more-tools > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px; }
+#idle-hud .cmd-more-tools > summary::marker, #idle-hud .cmd-more-tools > summary::-webkit-details-marker { display: none; content: ""; }
+#idle-hud .cmd-more-tools > summary > .chev { color: var(--muted); transition: transform var(--dur-2) var(--ease); }
 #idle-hud .cmd-more-tools[open] > summary { color: var(--gold-bright); background: var(--tint-gold-3); }
-#idle-hud .cmd-more-links { position: absolute; bottom: calc(100% + 15px); right: 0; width: 310px; display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 12px; background: var(--cmd-surface); border: 1px solid var(--hairline-strong); border-radius: 10px; box-shadow: var(--shadow-2); }
+#idle-hud .cmd-more-tools[open] > summary > .chev { transform: rotate(180deg); }
+#idle-hud .cmd-more-links { position: absolute; bottom: calc(100% + 15px); right: 0; width: 290px; padding: 8px; background: var(--glass-hard); backdrop-filter: var(--blur); border: 1px solid var(--hairline-strong); border-radius: 12px; box-shadow: var(--shadow-2), var(--inset-hi); }
 #idle-hud .cmd-more-links .dock-item { justify-content: flex-start; }
 #idle-hud .cmd-more-links .key { display: inline; margin-left: auto; }
 #idle-hud .cmd-follow-status { position: absolute; top: var(--command-panel-top); left: calc(48px + var(--command-feed-width)); right: 348px; padding: 9px 13px; border: 1px solid var(--hairline); border-left: 2px solid var(--gold); border-radius: 7px; background: var(--cmd-surface); color: var(--gold-bright); font-size: 12px; line-height: 1.5; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3061,17 +3114,16 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 }
 
                                                     
-.nav-menu-group { display: grid; gap: 3px; min-width: 0; }
-.nav-menu-group + .nav-menu-group { border-top: 1px solid var(--hairline); padding-top: 8px; margin-top: 5px; }
-.nav-menu-heading { padding: 6px 9px 3px; color: var(--muted); font-size: 10px; letter-spacing: .07em; text-transform: uppercase; }
-#workspace-tool-links .nav-menu-group button { width: 100%; justify-content: flex-start; gap: 7px; }
-#workspace-tool-links .nav-menu-group .key { margin-left: auto; }
-.studio-more > .tools-cluster, .studio-more-links { min-width: 230px; max-height: min(65vh, 540px); overflow: auto; }
+.nav-menu-group { display: grid; gap: 2px; min-width: 0; }
+.nav-menu-group + .nav-menu-group { border-top: 1px solid var(--hairline); padding-top: 8px; margin-top: 6px; }
+.nav-menu-heading { padding: 4px 9px 3px; color: var(--dim); font: 650 10px/1.4 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; }
+.studio-more > .tools-cluster, .studio-more-links { max-height: min(65vh, 540px); overflow: auto; }
 .studio-more .tools-cluster .tool .label { display: inline; }
-.studio-more .tools-cluster .tool { gap: 8px; padding: 8px 10px; }
-.studio-more .tools-cluster .key { margin-left: auto; }
-#idle-hud .cmd-more-links { display: block; width: 280px; max-height: min(65vh, 540px); overflow: auto; }
-#idle-hud .cmd-more-links .dock-item { width: 100%; }
+.studio-more .tools-cluster .tool, .studio-more-links .dock-item { gap: 9px; min-height: 34px; padding: 6px 10px; border-radius: 8px; }
+.studio-more .tools-cluster .key, .studio-more-links .key { margin-left: auto; }
+.studio-more .tools-cluster .tool .count, .studio-more .tools-cluster .tool .tone-dot { position: static; margin-left: 4px; box-shadow: none; }
+#idle-hud .cmd-more-links { display: block; width: 290px; max-height: min(65vh, 540px); overflow: auto; }
+#idle-hud .cmd-more-links .dock-item { width: 100%; min-height: 34px; padding: 6px 10px; border-radius: 8px; }
 .walkthrough-invitation { flex: none; display: flex; align-items: center; gap: 20px; justify-content: space-between; margin: 0 0 16px; padding: 12px 15px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: color-mix(in srgb, var(--gold) 6%, var(--panel)); }
 .walkthrough-invitation strong { font-size: 13px; color: var(--ivory); }
 .walkthrough-invitation p { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
@@ -3137,33 +3189,68 @@ body.command-active .walkthrough-coach { right: 392px; }
   50% { outline-color: transparent; }
 }
 .help-start { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
-.settings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
-.settings-heading h2 { margin-bottom: 7px; }
+/* Settings & connections: one page of cards with a sticky section nav beside it */
+.settings-panel { padding: var(--s3) 0 var(--s6); }
+.settings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: var(--s4); }
+.settings-heading h2 { margin-bottom: 6px; }
+.settings-heading .eyebrow { margin-bottom: 4px; }
+.settings-heading > div > p { margin: 0; max-width: 72ch; }
 .settings-heading > button { flex-shrink: 0; }
-.settings-group { padding: 20px 0; border-top: 1px solid var(--hairline); }
-.settings-group h3 { margin: 0 0 8px; color: var(--ivory); }
+.settings-layout { display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: var(--s5); align-items: start; }
+.settings-nav { position: sticky; top: 68px; display: grid; gap: 2px; padding: 6px; border: 1px solid var(--hairline); border-radius: 12px; background: rgba(8, 8, 11, 0.35); }
+.settings-nav-item { display: flex; align-items: center; justify-content: flex-start; gap: 9px; min-height: 34px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font-size: var(--fs-sm); text-align: left; }
+.settings-nav-item .glyph { color: var(--gold); opacity: .8; }
+.settings-nav-item .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-nav-item:hover { color: var(--ivory); background: var(--tint-gold-2); border-color: var(--hairline); transform: none; box-shadow: none; }
+.settings-nav-item[aria-current="true"] { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--gold-dim); box-shadow: inset 3px 0 0 var(--gold-bright); }
+.settings-nav-item[hidden] { display: none; }
+.settings-sections { display: grid; gap: var(--s3); min-width: 0; }
+#studio-desktop { display: grid; gap: var(--s3); }
+#studio-desktop[hidden] { display: none; }
+.settings-card { padding: 18px 20px; border: 1px solid var(--hairline); border-radius: 14px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 40%), var(--glass); box-shadow: var(--inset-hi); scroll-margin-top: 76px; }
+.settings-card-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 8px; }
+.settings-card-head > div { flex: 1; min-width: 0; }
+.settings-card-head > div > p { margin: 0; }
+.settings-card-glyph { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--hairline-strong); background: radial-gradient(circle at 30% 25%, var(--tint-gold-3), transparent 60%), rgba(8, 8, 11, 0.5); color: var(--gold-bright); box-shadow: var(--inset-hi); }
+.settings-card-glyph .glyph { width: 17px; height: 17px; }
+.settings-group { padding: 0; border-top: 0; }
+.settings-group h3 { margin: 0 0 4px; color: var(--ivory); font-size: var(--fs-lg); }
 .settings-group > p { margin-top: 0; }
-.settings-group .row, .settings-optional .row { flex-wrap: wrap; margin-top: 12px; }
+.settings-group .row, .settings-optional .row { flex-wrap: wrap; margin-top: 10px; }
 .settings-group select { max-width: 100%; }
-.settings-group input[type="password"] { flex: 1 1 280px; min-width: 0; }
+.settings-group input[type="password"] { flex: 1 1 260px; min-width: 0; }
 .settings-group label { max-width: 100%; }
+.key-list { display: grid; gap: 6px; margin-top: 8px; }
+.key-row { margin: 0; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(8, 8, 11, 0.35); }
+.key-provider { flex: 0 0 96px; font: 600 var(--fs-sm)/1.3 var(--font-ui); color: var(--ivory); letter-spacing: .02em; }
+.key-row-custom input[type="text"] { flex: 1 1 240px; min-width: 0; }
+.key-status { flex: 1 0 100%; font-size: var(--fs-xs); }
 .auto-order { flex-direction: column; align-items: flex-start; gap: 8px; }
 .auto-order-list { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 0; padding: 0; }
 .auto-order-item { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
 .auto-order-index { color: var(--muted); font-size: 11px; min-width: 1.2em; text-align: right; }
 .auto-order-name { color: var(--ivory); font-size: 12.5px; flex: 1 1 auto; }
 .auto-order-add { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
-.settings-optional { border-top: 1px solid var(--hairline); padding: 14px 0; }
-.settings-optional > summary { color: var(--ivory); cursor: pointer; font-size: 13px; padding: 5px 0; }
+.settings-optional { padding: 14px 20px; border-top: 0; }
+.settings-optional > summary { display: flex; align-items: center; gap: 12px; padding: 0; color: var(--ivory); cursor: pointer; font-size: 13px; list-style: none; }
+.settings-optional > summary::marker, .settings-optional > summary::-webkit-details-marker { display: none; content: ""; }
+.settings-optional[open] > summary { padding-bottom: 12px; margin-bottom: 10px; border-bottom: 1px solid var(--hairline); }
+.settings-summary-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.settings-summary-text > b { font-size: var(--fs-base); color: var(--ivory); }
+.settings-summary-text > span { color: var(--muted); font-size: var(--fs-xs); }
+.settings-chev { color: var(--muted); transition: transform var(--dur-2) var(--ease); }
+.settings-optional[open] > summary .settings-chev { transform: rotate(180deg); }
 .settings-optional > p { font-size: 12px; line-height: 1.7; }
 .settings-optional > .log { margin-bottom: 0; }
-.settings-group.setup-card { border-top: 0; padding-top: 4px; }
+.settings-group.setup-card { border-top: 0; }
+.executor-tiers { font-size: 12px; line-height: 1.7; max-width: 760px; }
 .setup-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
 .setup-head > div { min-width: 0; }
 .setup-head > button { flex-shrink: 0; }
 .setup-state { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin: 14px 0 10px; }
 .setup-state-item { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 9px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
 .setup-state-label { color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+.setup-state-item > span:last-child { color: var(--ivory); font-size: 12.5px; line-height: 1.5; }
 .setup-state-item > span:last-child { color: var(--ivory); font-size: 12.5px; line-height: 1.5; }
 #auto-setup-status { font-size: 12px; line-height: 1.7; }
 .ws-compose-bottom { flex-wrap: wrap; }
@@ -3269,24 +3356,33 @@ body.command-active .walkthrough-coach { right: 392px; }
 /* the settings view: a settings list (label · control · hint) in two
    groups, Queue and Safety, with the long explanations folded underneath */
 #idle-hud .cmd-settings .settings-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; overscroll-behavior-y: contain; padding: 0 7px 4px 2px; }
+#idle-hud .agents-glance { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0 0 12px; }
+#idle-hud .agents-chip { display: grid; gap: 2px; min-width: 0; padding: 7px 9px; border: 1px solid var(--cmd-edge); border-radius: 9px; background: var(--cmd-raised); transition: border-color var(--dur-2) var(--ease), background var(--dur-2) var(--ease); }
+#idle-hud .agents-chip-k { font: 650 9px/1.3 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+#idle-hud .agents-chip b { font: 600 12px/1.3 var(--font-ui); color: var(--ivory); overflow-wrap: anywhere; }
+#idle-hud .agents-chip[data-tone="ok"] { border-color: var(--gold-dim); background: var(--tint-gold-2); }
+#idle-hud .agents-chip[data-tone="ok"] b { color: var(--gold-bright); }
+#idle-hud .agents-chip[data-tone="off"] b { color: var(--muted); }
 #idle-hud .rail-view-head .setting-state { flex: none; max-width: 58%; margin-left: auto; padding: 2px 8px; border: 1px solid var(--cmd-edge); border-radius: 999px; background: var(--cmd-raised); color: var(--muted); font-size: 10px; line-height: 1.4; letter-spacing: .01em; }
 #idle-hud .rail-view-head .setting-state:empty { display: none; }
 #idle-hud .rail-view-head .setting-state[data-on="true"] { color: var(--gold-bright); border-color: var(--gold-dim); background: var(--tint-gold-2); }
 #idle-hud .setting-group { padding: 2px 0 10px; }
 #idle-hud .setting-group + .setting-group { padding-top: 12px; border-top: 1px solid var(--hairline); }
-#idle-hud .setting-group-title { margin: 0 0 2px; font: 650 9.5px/1.4 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
-#idle-hud .setting-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 12px; row-gap: 4px; align-items: center; padding: 10px 0; border-top: 1px solid var(--hairline); }
+#idle-hud .setting-group-title { display: flex; align-items: center; gap: 6px; margin: 0 0 2px; font: 650 9.5px/1.4 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+#idle-hud .setting-group-title .glyph { width: 12px; height: 12px; color: var(--gold); opacity: .9; }
+#idle-hud .setting-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 4px; align-items: center; padding: 10px 0; border-top: 1px solid var(--hairline); }
+#idle-hud .setting-glyph { grid-column: 1; grid-row: 1; width: 14px; height: 14px; color: var(--gold); opacity: .85; }
 #idle-hud .setting-row[hidden] { display: none; }
 #idle-hud .setting-group-title + .setting-row { border-top: 0; }
-#idle-hud .setting-label { grid-column: 1; grid-row: 1; margin: 0; font: 500 12.5px/1.35 var(--font-ui); color: var(--ivory); cursor: pointer; }
+#idle-hud .setting-label { grid-column: 2; grid-row: 1; margin: 0; font: 500 12.5px/1.35 var(--font-ui); color: var(--ivory); cursor: pointer; }
 #idle-hud .setting-row:has(> select:disabled) .setting-label,
 #idle-hud .setting-row:has(input:disabled) .setting-label { color: var(--muted); cursor: default; }
 #idle-hud .setting-row > select,
-#idle-hud .setting-row > .switch { grid-column: 2; grid-row: 1; justify-self: end; }
+#idle-hud .setting-row > .switch { grid-column: 3; grid-row: 1; justify-self: end; }
 #idle-hud .setting-row > select { width: 150px; min-height: 30px; padding: 4px 9px; font-size: 11.5px; background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 6px; }
 #idle-hud .setting-switch { gap: 0; margin: 0; }
 #idle-hud .setting-switch input:focus-visible + .track { outline: 2px solid var(--gold-bright); outline-offset: 3px; }
-#idle-hud .setting-hint { grid-column: 1 / -1; grid-row: 2; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+#idle-hud .setting-hint { grid-column: 2 / -1; grid-row: 2; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
 #idle-hud .setting-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 6px 0 8px; }
 #idle-hud .setting-actions .feed-state { flex: 1; min-width: 0; text-align: right; }
 
@@ -3465,6 +3561,15 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .cmd-usage .tracker-window-label { font-size: 10px; }
 #idle-hud .cmd-usage .tracker-window-value { font-size: 10px; min-width: 0; }
 #idle-hud .cmd-usage .tracker-bar { height: 5px; border-radius: 3px; }
+#idle-hud .cmd-usage .tracker-lead { display: grid; gap: 5px; padding: 7px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
+#idle-hud .cmd-usage .tracker-lead-name { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; color: var(--ivory); font-size: 10.5px; }
+#idle-hud .cmd-usage .tracker-lead-name small { color: var(--muted); font-size: 9.5px; white-space: nowrap; }
+#idle-hud .cmd-usage .tracker-kicker { margin: 5px 0 0; color: var(--muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+#idle-hud .cmd-usage .tracker-rows { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+#idle-hud .cmd-usage .tracker-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-size: 10px; line-height: 1.45; }
+#idle-hud .cmd-usage .tracker-row-label { color: var(--ivory); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#idle-hud .cmd-usage .tracker-row-value { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+#idle-hud .cmd-usage .tracker-row[data-tone="warn"] .tracker-row-value { color: var(--warn); }
 #idle-hud .cmd-usage .tracker-line { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 #idle-hud .cmd-usage .tracker-line-warn { color: var(--warn); }
 #idle-hud .cmd-usage .tracker-line-account { color: var(--ivory); }
@@ -3907,27 +4012,37 @@ body.music-preview-active #idle-hud { display: none !important; }
   <symbol id="g-plane" viewBox="0 0 16 16"><path d="M8 2.6 13.8 6v4L8 13.4 2.2 10V6z"/><path d="M2.2 6 8 9.2 13.8 6M8 9.2v4.2"/></symbol>
   <symbol id="g-chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
   <symbol id="g-plans" viewBox="0 0 16 16"><path d="M4 2.5h5.5L12 5v8.5H4z"/><path d="M9.5 2.5V5H12M6 8h4M6 10.5h4"/></symbol>
+  <symbol id="g-more" viewBox="0 0 16 16"><circle cx="4.5" cy="4.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="11.5" cy="4.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="4.5" cy="11.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="11.5" cy="11.5" r="1.3" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="g-sliders" viewBox="0 0 16 16"><path d="M2.5 4.5h5.5M11 4.5h2.5M2.5 8h1.5M6.5 8h7M2.5 11.5h6.5M12 11.5h1.5"/><circle cx="9.3" cy="4.5" r="1.3"/><circle cx="5.2" cy="8" r="1.3"/><circle cx="10.3" cy="11.5" r="1.3"/></symbol>
+  <symbol id="g-agents" viewBox="0 0 16 16"><circle cx="8" cy="4" r="1.9"/><circle cx="3.8" cy="12" r="1.9"/><circle cx="12.2" cy="12" r="1.9"/><path d="M7.1 5.7 4.7 10.3M8.9 5.7l2.4 4.6M5.7 12h4.6"/></symbol>
+  <symbol id="g-key" viewBox="0 0 16 16"><circle cx="5.5" cy="8" r="3"/><path d="M8.5 8h5M11.5 8v2.5M13.5 8v1.5"/></symbol>
+  <symbol id="g-route" viewBox="0 0 16 16"><circle cx="4" cy="4" r="1.6"/><circle cx="4" cy="12" r="1.6"/><circle cx="12" cy="8" r="1.6"/><path d="M5.6 4c2.6 0 2.6 4 4.8 4M5.6 12c2.6 0 2.6-4 4.8-4"/></symbol>
+  <symbol id="g-wrench" viewBox="0 0 24 24"><path stroke-width="2.25" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+  <symbol id="g-plug" viewBox="0 0 16 16"><path d="M5 2.5v3.5M11 2.5v3.5"/><path d="M3.5 6h9v1.5a4.5 4.5 0 0 1-9 0z"/><path d="M8 12v2"/></symbol>
+  <symbol id="g-spark" viewBox="0 0 16 16"><path d="M8 2.5 9.4 6.6 13.5 8l-4.1 1.4L8 13.5 6.6 9.4 2.5 8l4.1-1.4z"/></symbol>
 </svg>
 <div id="workspace-sidebar" class="workspace studio-sidebar" data-open="false">
-  <button id="workspace-sidebar-toggle" class="sidebar-edge" type="button" aria-label="Open studio sidebar" aria-controls="workspace-sidebar-panel" aria-expanded="false"></button>
+  <button id="workspace-sidebar-toggle" class="sidebar-edge" type="button" aria-label="Open studio menu" aria-controls="workspace-sidebar-panel" aria-expanded="false" title="Studio menu: projects, tools and settings"><span class="sidebar-grip" aria-hidden="true"><i></i><i></i><i></i></span></button>
   <aside id="workspace-sidebar-panel" class="ws-sidebar" aria-label="Projects and tools" aria-hidden="true" inert>
-    <div class="sidebar-heading"><span>YOUR STUDIO</span><button id="workspace-sidebar-close" class="ghost mini" type="button" aria-label="Close studio sidebar" title="Close sidebar (Esc)">×</button></div>
-    <a class="ws-brand" href="#" data-nav="workspace"><span class="ws-brand-mark">m<span>+</span></span><span>Mefi's Studio<small>MAKE SOMETHING YOURS</small></span></a>
-    <button class="ws-home" data-nav="workspace"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg>Your workspace <kbd>H</kbd></button>
-    <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open Command view — the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg>Command view <kbd>D</kbd><span class="count warn" data-badge="questions" hidden></span></button>
-    <button class="ws-home ws-shortcut" data-nav="tasks" title="Open your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg>Task board <kbd>T</kbd></button>
-    <button class="ws-home ws-shortcut" data-nav="plans" title="Explore an idea and review its plan (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg>Plans <kbd>P</kbd></button>
+    <div class="sidebar-heading"><a class="ws-brand" href="#" data-nav="workspace"><span class="ws-brand-mark">m<span>+</span></span><span>Mefi's Studio<small>MAKE SOMETHING YOURS</small></span></a><button id="workspace-sidebar-close" class="ghost mini" type="button" aria-label="Close studio menu" title="Close menu (Esc)">×</button></div>
+    <nav class="ws-nav" aria-label="Go to">
+      <button class="ws-home" data-nav="workspace" title="Your workspace (H)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg><span class="label">Your workspace</span><kbd>H</kbd></button>
+      <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open Command view: the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span class="label">Command view</span><kbd>D</kbd><span class="count warn" data-badge="questions" hidden></span></button>
+      <button class="ws-home ws-shortcut" data-nav="tasks" title="Open your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span class="label">Task board</span><kbd>T</kbd><span class="count" data-badge="tasks" hidden></span></button>
+      <button class="ws-home ws-shortcut" data-nav="plans" title="Explore an idea and review its plan (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span class="label">Plans</span><kbd>P</kbd></button>
+    </nav>
     <div class="ws-section-label"><span>PROJECTS</span><button id="workspace-add-project" class="ghost mini" title="Add an existing project folder" aria-label="Add project">+</button></div>
     <div id="workspace-projects" class="ws-projects" aria-label="Choose a project"></div>
-    <p class="ws-sidebar-note">One space for each idea.<br>Its own work, its own conversation.</p>
     <p id="workspace-sidebar-feedback" class="sidebar-feedback" role="status" aria-live="polite"></p>
+    <details class="ws-tools" id="workspace-tools" open><summary><span>TOOLS</span><svg class="glyph ws-chev" aria-hidden="true"><use href="#g-chev"/></svg></summary><div id="workspace-tool-links"></div></details>
     <div class="ws-sidebar-bottom">
-      <details class="ws-tools" id="workspace-tools"><summary><svg class="glyph" aria-hidden="true"><use href="#g-overhead"/></svg>Studio tools<span>⌄</span></summary><div id="workspace-tool-links"></div></details>
-      <button class="ghost ws-settings" data-nav="studio"><svg class="glyph" aria-hidden="true"><use href="#g-ambience"/></svg>Settings & connections</button>
-      <button class="ghost ws-settings" data-nav="music"><svg class="glyph" aria-hidden="true"><use href="#g-music"/></svg>Music & themes</button>
-      <button class="ghost ws-settings" data-nav="onboarding"><svg class="glyph" aria-hidden="true"><use href="#g-help"/></svg>Start here</button>
-      <details class="ws-personal"><summary>Make yourself at home <span>✧</span></summary><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Studio theme<select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></details>
-      <span class="ws-local-note"><i></i> A little studio. A lot of possibility.</span>
+      <div class="ws-quick" role="group" aria-label="Studio">
+        <button class="ghost ws-settings" data-nav="studio" title="Settings & connections (4)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span class="label">Settings</span></button>
+        <button class="ghost ws-settings" data-nav="music" title="Music & themes (U)"><svg class="glyph" aria-hidden="true"><use href="#g-music"/></svg><span class="label">Music</span></button>
+        <button class="ghost ws-settings" data-nav="onboarding" title="Start here: the walkthrough"><svg class="glyph" aria-hidden="true"><use href="#g-help"/></svg><span class="label">Start here</span></button>
+      </div>
+      <details class="ws-personal"><summary><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Make yourself at home</span><svg class="glyph ws-chev" aria-hidden="true"><use href="#g-chev"/></svg></summary><div class="ws-personal-fields"><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Studio theme<select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></div></details>
+      <span class="ws-local-note"><i></i> Local-first. Your work stays on this machine.</span>
     </div>
   </aside>
 </div>
@@ -3991,17 +4106,14 @@ body.music-preview-active #idle-hud { display: none !important; }
     <div class="monogram" aria-hidden="true">M+</div>
     <div>
       <div class="eyebrow">Mefi's Studio AI+</div>
-      <h1>Studio tools</h1>
+      <h1>Studio</h1>
       <p class="sub" id="status">Loading catalog…</p>
     </div>
   </div>
   <div class="head-actions">
     <button id="update-pill" class="pill update-pill" data-nav="studio" data-state="watching" title="Live update: watching the source tree" hidden><i class="dot" aria-hidden="true"></i><span class="label">Live update</span></button>
     <label class="switch" title="Toggle animations"><input type="checkbox" id="motion-toggle" checked><span class="track"></span><span>Motion</span></label>
-    <button id="refresh-btn" class="ghost" title="Re-read data/models.json (R)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-refresh"/></svg><span class="label">Refresh</span><kbd class="key">R</kbd></button>
-    <button id="print-btn" class="ghost" title="Print / PDF"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-print"/></svg><span class="label">Print / PDF</span></button>
     <button id="help-btn" class="ghost icon" title="Shortcuts (?)" aria-label="Shortcuts"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg></button>
-    <a class="link" href="https://opencode.ai/go" target="_blank" rel="noreferrer">opencode.ai/go<svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-external"/></svg></a>
   </div>
 </header>
 <nav class="tabs" id="tabs" aria-label="Surfaces and tools">
@@ -4013,7 +4125,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   <button class="tab" data-tab="eyes" title="Activity & evidence · A-Eyes (3)"><span class="label">Activity & evidence</span><kbd class="key">3</kbd></button>
   <button class="tab" data-tab="studio" title="Settings & connections (4)"><span class="label">Settings</span><kbd class="key">4</kbd></button>
   <span class="spacer" aria-hidden="true"></span>
-  <details class="studio-more"><summary>More tools</summary><div id="nav-tools" class="tools-cluster" role="group" aria-label="Tools"></div></details>
+  <details class="studio-more"><summary><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-more"/></svg><span class="label">More tools</span><svg class="glyph chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><div id="nav-tools" class="tools-cluster" role="group" aria-label="Tools"></div></details>
 </nav>
 <div id="banner" class="banner" hidden></div>
 <main>
@@ -4030,6 +4142,10 @@ body.music-preview-active #idle-hud { display: none !important; }
         <option value="name">Name</option>
         <option value="pool">Monthly pool</option>
       </select></label>
+      <span class="toolbar-actions">
+        <button id="refresh-btn" class="ghost mini" title="Re-read data/models.json (R)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-refresh"/></svg><span class="label">Refresh</span><kbd class="key">R</kbd></button>
+        <button id="print-btn" class="ghost mini" title="Print / PDF"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-print"/></svg><span class="label">Print / PDF</span></button>
+      </span>
     </div>
     <div id="cards" class="cards"></div>
     <p id="count" class="muted"></p>
@@ -4172,16 +4288,29 @@ body.music-preview-active #idle-hud { display: none !important; }
     </div>
   </section>
   <section id="tab-studio" hidden>
-    <div class="panel">
-      <div class="settings-heading"><div><h2>Settings & connections</h2><p class="muted">Connect your assistant, choose your coding workers, and manage optional tools.</p></div><button class="ghost" data-nav="onboarding">Start here</button></div>
+    <div class="panel settings-panel">
+      <div class="settings-heading"><div><p class="eyebrow">Studio</p><h2>Settings & connections</h2><p class="muted">Connect your assistant, choose your coding workers, and manage optional tools. Keys are stored encrypted on this machine and never shown again.</p></div><button class="ghost" data-nav="onboarding"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg>Start here</button></div>
+      <div class="settings-layout">
+        <nav id="settings-nav" class="settings-nav" aria-label="Settings sections">
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-setup" aria-current="true"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span class="label">Auto setup</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-assistant" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-key"/></svg><span class="label">Assistant</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-routing" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-route"/></svg><span class="label">Model routing</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-workers" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-wrench"/></svg><span class="label">Coding workers</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-jev" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-target"/></svg><span class="label">Jev</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-updates" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-update"/></svg><span class="label">Updates & diagnostics</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-integrations" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plug"/></svg><span class="label">Integrations</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-log" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-legend"/></svg><span class="label">Log</span></button>
+        </nav>
+        <div id="settings-sections" class="settings-sections">
       <div id="studio-desktop">
-        <section class="settings-group setup-card" aria-labelledby="settings-setup-heading">
-        <div class="setup-head">
+        <section class="settings-group settings-card setup-card" id="settings-setup" aria-labelledby="settings-setup-heading">
+        <div class="setup-head settings-card-head">
+          <span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-spark"/></svg></span>
           <div>
             <h3 id="settings-setup-heading">Auto setup</h3>
             <p class="muted">One pass over what this machine already has: saved keys or a reachable local server choose the assistant route, installed CLIs choose the builders, and a saved Jev key turns on task-aware model selection. It sends no request, changes no key, and keeps every model override.</p>
           </div>
-          <button id="auto-setup">Run auto setup</button>
+          <button id="auto-setup" class="primary">Run auto setup</button>
         </div>
         <div class="setup-state">
           <div class="setup-state-item"><span class="setup-state-label">Assistant</span><span id="setup-assistant">checking…</span></div>
@@ -4190,29 +4319,29 @@ body.music-preview-active #idle-hud { display: none !important; }
         </div>
         <p class="muted" id="auto-setup-status" role="status">Not run yet. Auto setup applies only the changes that are needed and explains each one.</p>
         </section>
-        <section class="settings-group" aria-labelledby="settings-assistant-heading">
-        <h3 id="settings-assistant-heading">Assistant connection</h3>
-        <p class="muted">Save a key for the provider you use, then choose its routing below. Grok and Claude Code use their CLI's own login; LM Studio needs no key. Keys are stored encrypted and never shown again.</p>
-        <div class="row">
+        <section class="settings-group settings-card" id="settings-assistant" aria-labelledby="settings-assistant-heading">
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-key"/></svg></span><div><h3 id="settings-assistant-heading">Assistant connection</h3><p class="muted">Save a key for the provider you use, then choose its routing below. Grok, Claude Code, Codex and Antigravity use their CLI's own login; LM Studio needs no key.</p></div></div>
+        <div class="key-list">
+        <div class="row key-row"><span class="key-provider">z.ai</span>
           <input type="password" id="zai-key" placeholder="z.ai Coding Plan API key (stored encrypted)" autocomplete="off" aria-label="z.ai Coding Plan API key">
           <button id="save-zai-key">Save z.ai key</button>
-          <span class="muted" id="zai-key-status">checking…</span>
+          <span class="muted key-status" id="zai-key-status">checking…</span>
         </div>
-        <div class="row">
+        <div class="row key-row"><span class="key-provider">OpenCode Go</span>
           <input type="password" id="api-key" placeholder="OpenCode Go API key (stored encrypted)" autocomplete="off" aria-label="OpenCode Go API key">
           <button id="save-key">Save OpenCode key</button>
-          <span class="muted" id="key-status">checking…</span>
+          <span class="muted key-status" id="key-status">checking…</span>
         </div>
-        <div class="row">
-          <input type="text" id="custom-endpoint" placeholder="Custom endpoint — https://host/v1 (OpenAI-compatible)" spellcheck="false" autocomplete="off" aria-label="Custom provider endpoint" style="width: 24em">
+        <div class="row key-row key-row-custom"><span class="key-provider">Custom</span>
+          <input type="text" id="custom-endpoint" placeholder="Custom endpoint — https://host/v1 (OpenAI-compatible)" spellcheck="false" autocomplete="off" aria-label="Custom provider endpoint">
           <input type="password" id="custom-key" placeholder="Custom API key (stored encrypted)" autocomplete="off" aria-label="Custom provider API key">
           <button id="save-custom-key">Save custom key</button>
-          <span class="muted" id="custom-key-status">checking…</span>
+          <span class="muted key-status" id="custom-key-status">checking…</span>
+        </div>
         </div>
         </section>
-        <section class="settings-group" aria-labelledby="settings-routing-heading">
-        <h3 id="settings-routing-heading">Model routing</h3>
-        <p class="muted">Who pays for assistant calls, and how each task's model is chosen. Models are saved per provider, so switching routes cannot carry one provider's model into another; use whichever option you already have — a saved key, an installed CLI login, or a local server.</p>
+        <section class="settings-group settings-card" id="settings-routing" aria-labelledby="settings-routing-heading">
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-route"/></svg></span><div><h3 id="settings-routing-heading">Model routing</h3><p class="muted">Who pays for assistant calls, and how each task's model is chosen. Models are saved per provider, so switching routes cannot carry one provider's model into another; use whichever option you already have: a saved key, an installed CLI login, or a local server.</p></div></div>
         <div class="row">
           <label class="muted">AI routing
             <select id="ai-provider">
@@ -4221,6 +4350,7 @@ body.music-preview-active #idle-hud { display: none !important; }
               <option value="opencode">OpenCode Go only</option>
               <option value="grok">Grok CLI — the assistant answers through the grok CLI's own login</option>
               <option value="claude">Claude Code CLI — the assistant answers on your Claude Code subscription login</option>
+              <option value="codex">Codex CLI — the assistant answers through codex on your ChatGPT login</option>
               <option value="antigravity">Antigravity CLI — the assistant answers through agy on your Google account</option>
               <option value="lmstudio">LM Studio — a local server on this machine, no key</option>
               <option value="custom">Custom endpoint — your own OpenAI-compatible URL and key</option>
@@ -4257,27 +4387,36 @@ body.music-preview-active #idle-hud { display: none !important; }
           </label>
           <button class="ghost" id="ai-routing-refresh">Refresh selection</button>
         </div>
-        <p class="muted" id="ai-routing-help">Jev ranks available models within your chosen provider for each task using catalog quality and estimated prices, plus your project's measured timing, errors, ratings and reported costs. Missing evidence stays unknown. Selection uses a small billed gateway request. Save a Jev gateway key below to enable it; a timeout or unavailable Jev uses the usual default. Model overrides take priority. Grok, Claude Code and Antigravity use their saved model or CLI default; LM Studio and custom endpoints answer from the URL above (load one model or save a model override).</p>
+        <p class="muted" id="ai-routing-help">Jev ranks available models within your chosen provider for each task using catalog quality and estimated prices, plus your project's measured timing, errors, ratings and reported costs. Missing evidence stays unknown. Selection uses a small billed gateway request. Save a Jev gateway key below to enable it; a timeout or unavailable Jev uses the usual default. Model overrides take priority. Grok, Claude Code, Codex and Antigravity use their saved model or CLI default; LM Studio and custom endpoints answer from the URL above (load one model or save a model override).</p>
         <p class="muted" id="ai-routing-status" role="status">Checking model selection…</p>
         <p class="muted" id="ai-routing-decision" role="status">No selection recorded yet.</p>
         <p class="muted" id="ai-routing-evidence" hidden></p>
         </section>
-        <section class="settings-group" aria-labelledby="settings-workers-heading">
-        <h3 id="settings-workers-heading">Coding workers</h3>
-        <p class="muted">Workers carry out queued tasks in your selected project. Choose a provider whose CLI is installed and signed in. Jev model selection also applies to Studio's z.ai coding workers; other CLI accounts keep their usual model.</p>
+        <section class="settings-group settings-card" id="settings-workers" aria-labelledby="settings-workers-heading">
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-wrench"/></svg></span><div><h3 id="settings-workers-heading">Coding workers</h3><p class="muted">Workers carry out queued tasks in your selected project. Choose a provider whose CLI is installed and signed in, then a coding tier: <strong>Auto</strong> lets Studio pick per task (Jev or the stand-in judge within your provider, otherwise the CLI default), <strong>Free</strong> runs a free model one worker at a time, <strong>Fast</strong> runs the quick economical model, and <strong>Heavy</strong> runs the high-end one. Tier models are saved per CLI; a tier without a model of its own uses Studio's default for that CLI, or the CLI's own default — except Free, which never falls back to a billed model.</p></div></div>
         <div class="row">
           <label class="muted">Builders run on
             <select id="executor-cli">
               <option value="opencode">OpenCode run</option>
               <option value="grok">Grok CLI — grok builds every queued job on its own login</option>
               <option value="claude">Claude Code — claude builds every queued job on your subscription login</option>
+              <option value="codex">Codex — codex builds every queued job on your ChatGPT login</option>
               <option value="antigravity">Antigravity — agy builds every queued job on your Google account</option>
             </select>
           </label>
-          <label class="muted">Builder model <span class="muted" id="builder-scope-note">for this CLI</span>
-            <input type="text" id="executor-model" placeholder="CLI default" spellcheck="false" autocomplete="off" title="Model this builder CLI runs with (grok -m / claude --model / agy --model). Saved per builder; empty = CLI default." style="width: 15em">
+          <label class="muted">Coding tier
+            <select id="executor-tier" title="What each build may cost: Auto picks per task, Free runs free models one at a time, Fast runs the quick economical model, Heavy runs the high-end one">
+              <option value="auto">Auto — Studio picks per task</option>
+              <option value="free">Free — free models, one worker at a time</option>
+              <option value="fast">Fast — quick, economical models</option>
+              <option value="heavy">Heavy — high-end models for hard work</option>
+            </select>
+          </label>
+          <label class="muted"><span id="executor-model-label">Pinned model</span> <span class="muted" id="builder-scope-note">for this CLI</span>
+            <input type="text" id="executor-model" placeholder="CLI default" spellcheck="false" autocomplete="off" title="Model this builder runs with for the selected tier (grok -m / claude --model / codex -m / agy --model; OpenCode takes provider/model). Saved per builder and per tier; empty = the tier's default." style="width: 15em">
           </label>
         </div>
+        <p class="muted executor-tiers" id="executor-tier-status" role="status">Checking coding tiers…</p>
         <div class="row">
           <span class="muted">Coding CLIs</span>
           <button class="ghost" data-cli="opencode" title="Open the OpenCode TUI in the repo; carries the Studio mefi-zai provider (your z.ai plan) when a key is saved">OpenCode</button>
@@ -4289,12 +4428,12 @@ body.music-preview-active #idle-hud { display: none !important; }
           <span class="muted" id="cli-status">checking…</span>
         </div>
         </section>
-        <details class="settings-optional"><summary>Jev connection & optional task suggestions</summary>
+        <details class="settings-optional settings-card" id="settings-jev"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-target"/></svg></span><span class="settings-summary-text"><b>Jev connection</b><span>Task-aware model selection and optional task suggestions</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <p class="muted">Choose where Jev is routed: the Vercel AI Gateway, TypeSafe's Jev API directly, OpenCode Zen (including its free Jev tier), or OpenRouter. Each route keeps its own key, stored encrypted; switching never moves a key between routes. The key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
           <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: a hosted gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option><option value="zen">OpenCode Zen</option><option value="openrouter">OpenRouter</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled" checked><span class="track"></span><span>Intake classification</span></label></div>
           <p class="muted" id="jev-status" role="status">Checking Jev…</p>
         </details>
-        <details class="settings-optional"><summary>Diagnostics & app updates</summary>
+        <details class="settings-optional settings-card" id="settings-updates"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-update"/></svg></span><span class="settings-summary-text"><b>Updates & diagnostics</b><span>Live update, published builds and a speed probe</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
         <div class="row">
           <label class="muted">Speed probe <select id="speed-model"></select></label>
           <button id="speed-go">Measure tokens/s</button>
@@ -4321,8 +4460,10 @@ body.music-preview-active #idle-hud { display: none !important; }
         </div>
         </details>
       </div>
-      <details class="settings-optional"><summary>Optional · Ruins Runner & Love2D</summary><p class="muted">Requires a separate game project and its LÖVE runtime. This integration is optional for Studio.</p><div class="row studio-actions" id="studio-actions"><button data-action="launch">Launch Love2D studio</button><button data-action="smoke">Run smoke</button><button data-action="game">Launch Ruins Runner</button><button data-action="stop">Stop game</button></div><p class="muted" id="studio-hint"></p></details>
-      <details class="settings-optional"><summary>Connection & tool log</summary><pre class="log" id="studio-log" aria-label="Connection and tool log">No activity yet.</pre></details>
+      <details class="settings-optional settings-card" id="settings-integrations"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Integrations</b><span>Optional: Ruins Runner and Love2D</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Requires a separate game project and its LÖVE runtime. This integration is optional for Studio.</p><div class="row studio-actions" id="studio-actions"><button data-action="launch">Launch Love2D studio</button><button data-action="smoke">Run smoke</button><button data-action="game">Launch Ruins Runner</button><button data-action="stop">Stop game</button></div><p class="muted" id="studio-hint"></p></details>
+      <details class="settings-optional settings-card" id="settings-log"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-legend"/></svg></span><span class="settings-summary-text"><b>Connection & tool log</b><span>What Studio tried and what answered</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><pre class="log" id="studio-log" aria-label="Connection and tool log">No activity yet.</pre></details>
+        </div>
+      </div>
     </div>
   </section>
 </main>
@@ -4372,7 +4513,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       </div>
     </div>
     <div class="cmd-tools" role="toolbar" aria-label="Node tree controls">
-      <label class="cmd-agent-mode">Agents <select id="idle-feed-agent-mode" disabled aria-label="Agent coordination mode" aria-describedby="idle-feed-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select></label>
+      <label class="cmd-agent-mode" title="Quick switch: the same selector as the rail's Agents tab">Agents <select id="idle-feed-agent-mode" disabled aria-label="Agent coordination mode" aria-describedby="idle-feed-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select></label>
       <button id="idle-fit" class="ghost icon" title="Rearrange and fit the node tree (F)" aria-label="Fit and rearrange node tree"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-fit"/></svg></button>
       <button id="idle-orbit" class="ghost icon" aria-pressed="true" title="Orbit on · Space pauses" aria-label="Orbit"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg></button>
       <button id="idle-cam-orbit" class="ghost" data-cam="orbit" aria-pressed="true" title="Camera: orbit — keep the whole tree framed (C cycles orbit / follow / free)" aria-label="Camera: orbit"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-fit"/></svg><span class="label">Orbit</span></button>
@@ -4405,10 +4546,10 @@ body.music-preview-active #idle-hud { display: none !important; }
   </div>
   <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" aria-live="polite" hidden></aside>
   <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
-  <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, settings, assistant, done and questions">
+  <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, agents, assistant, done and questions">
     <header class="rail-tabs" role="tablist" aria-label="Panel views">
       <button id="cmd-rail-tab-work" class="rail-tab" role="tab" aria-selected="true" aria-controls="idle-feed" data-rail-view="work">Work<span id="cmd-rail-work-badge" class="count" hidden></span></button>
-      <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings">Work settings</button>
+      <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings">Agents</button>
       <button id="cmd-rail-tab-assistant" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-chat" tabindex="-1" data-rail-view="assistant">Assistant<span id="cmd-rail-assistant-badge" class="count" hidden></span></button>
       <button id="cmd-rail-tab-done" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-done" tabindex="-1" data-rail-view="done">Done</button>
       <button id="cmd-rail-tab-ask" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-asks" tabindex="-1" data-rail-view="ask">Ask<span id="cmd-rail-ask-badge" class="count warn" hidden></span></button>
@@ -4494,36 +4635,45 @@ body.music-preview-active #idle-hud { display: none !important; }
   </aside>
   <section id="cmd-settings" class="cmd-settings" role="tabpanel" aria-labelledby="cmd-rail-tab-settings" hidden>
     <div class="rail-view-head">
-      <h2 class="rail-view-title">Work settings</h2>
+      <h2 class="rail-view-title">Agents</h2>
       <span id="cmd-settings-state" class="feed-state setting-state" role="status" aria-live="polite"></span>
     </div>
-    <p class="rail-view-note">How the agent queue runs. Changes apply to every project and never interrupt work already in progress.</p>
+    <p class="rail-view-note">How your agents run the queue. Changes apply to every project and never interrupt work already in progress.</p>
     <div class="settings-scroll">
+      <div id="cmd-agents-glance" class="agents-glance" role="group" aria-label="Agents at a glance">
+        <span class="agents-chip" id="cmd-glance-autopilot" data-tone="idle"><span class="agents-chip-k">Autopilot</span><b>…</b></span>
+        <span class="agents-chip" id="cmd-glance-workers" data-tone="idle"><span class="agents-chip-k">Workers</span><b>…</b></span>
+        <span class="agents-chip" id="cmd-glance-mode" data-tone="idle"><span class="agents-chip-k">Mode</span><b>…</b></span>
+      </div>
       <div class="setting-group" role="group" aria-labelledby="cmd-settings-queue-title">
-        <h3 id="cmd-settings-queue-title" class="setting-group-title">Queue</h3>
+        <h3 id="cmd-settings-queue-title" class="setting-group-title"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-agents"/></svg>Queue</h3>
         <div class="setting-row">
+          <svg class="glyph setting-glyph" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg>
           <label class="setting-label" for="idle-autopilot">Autopilot</label>
           <label class="switch mini setting-switch" title="Turn the agent queue on or off"><input type="checkbox" id="idle-autopilot" role="switch" aria-describedby="idle-autopilot-help"><span class="track" aria-hidden="true"></span></label>
           <span id="idle-autopilot-help" class="setting-hint">Starts ready tasks and verifies what comes back. Off stops new starts; running jobs finish.</span>
         </div>
         <div class="setting-row">
+          <svg class="glyph setting-glyph" aria-hidden="true" focusable="false"><use href="#g-overhead"/></svg>
           <label class="setting-label" for="idle-feed-parallel">Parallel builds</label>
           <select id="idle-feed-parallel" aria-describedby="idle-feed-parallel-help"><option value="machine">Machine managed</option><option value="1">Manual: 1 worker</option><option value="2">Manual: 2 workers</option><option value="3">Manual: 3 workers</option></select>
           <span id="idle-feed-parallel-help" class="setting-hint">How many builds run at once. Machine managed backs off while the machine is busy.</span>
         </div>
         <div class="setting-row">
+          <svg class="glyph setting-glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg>
           <label class="setting-label" for="idle-feed-build-mode">Build mode</label>
           <select id="idle-feed-build-mode" aria-describedby="idle-feed-build-mode-help"><option value="auto">Auto build</option><option value="verify">Verify first</option></select>
           <span id="idle-feed-build-mode-help" class="setting-hint">Auto build starts eligible tasks itself. Verify first holds each new or changed brief for your approval.</span>
         </div>
         <div class="setting-row">
+          <svg class="glyph setting-glyph" aria-hidden="true" focusable="false"><use href="#g-agents"/></svg>
           <label class="setting-label" for="idle-settings-agent-mode">Agent mode</label>
           <select id="idle-settings-agent-mode" disabled aria-describedby="idle-feed-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select>
           <span id="idle-feed-agent-mode-note" class="setting-hint" role="status">Both modes collaborate and delegate subtasks. Swarm works across the queue; Cluster focuses on one shared task.</span>
         </div>
       </div>
       <div class="setting-group" role="group" aria-labelledby="cmd-settings-safety-title">
-        <h3 id="cmd-settings-safety-title" class="setting-group-title">Safety</h3>
+        <h3 id="cmd-settings-safety-title" class="setting-group-title"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-exit"/></svg>Safety</h3>
         <div class="setting-actions">
           <button id="idle-stop-all" class="ghost mini" type="button" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button>
           <button id="idle-restart" class="ghost mini" type="button" title="Stop every agent, save progress, and restart Studio.">Restart Studio</button>
@@ -4541,7 +4691,7 @@ body.music-preview-active #idle-hud { display: none !important; }
           <dt>Build mode</dt>
           <dd><b>Auto build</b> starts eligible tasks as soon as a worker is free. <b>Verify first</b> holds every new or changed brief for your approval, so you decide what gets built. Switching never interrupts a running job.</dd>
           <dt>Agent mode</dt>
-          <dd>How agents coordinate. <b>Swarm</b> works across all ready tasks and their subtasks; <b>Cluster</b> focuses every agent on one shared task until it is done. Both plan, delegate and review results; current work finishes when you switch. The same selector sits in the node tree toolbar under <b>Agents</b>.</dd>
+          <dd>How agents coordinate. <b>Swarm</b> works across all ready tasks and their subtasks; <b>Cluster</b> focuses every agent on one shared task until it is done. Both plan, delegate and review results; current work finishes when you switch. The same selector sits in the node tree toolbar under <b>Agents</b> for quick changes.</dd>
           <dt>New work</dt>
           <dd>The master switch for starting anything new — queued tasks, builds and work the assistant suggests — lives with the Assistant. Off pauses admission; running jobs, replies and your answers to questions still work.</dd>
         </dl>
@@ -4577,7 +4727,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         </button>
       </h2>
       <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and every connected account">Refresh</button>
-      <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Model Lab">Open</button>
+      <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Model Lab">Details</button>
     </header>
     <div id="cmd-usage-body" class="cmd-usage-body"></div>
   </section>
@@ -4958,7 +5108,7 @@ body.music-preview-active #idle-hud { display: none !important; }
 </div>
 <div id="toast-host" role="status" aria-live="polite"></div>
 <footer>
-  <span>Sources: opencode.ai/zen/go · models.dev · dev.opencode.ai/docs/go</span>
+  <span>Sources: <a class="link" href="https://opencode.ai/go" target="_blank" rel="noreferrer">opencode.ai/go<svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-external"/></svg></a> · models.dev · dev.opencode.ai/docs/go</span>
   <span id="footer-keys">D Command · 1–4 tabs · E T I O A tools · ⌃K jump · ? shortcuts</span>
   <span id="footer-meta"></span>
 </footer>
@@ -9867,6 +10017,22 @@ body.music-preview-active #idle-hud { display: none !important; }
     return button;
   }
 
+  // The "More tools" summary every menu shares: a glyph, the label and a chevron
+  // that the stylesheet turns while the menu is open.
+  function moreSummary(className) {
+    const summary = document.createElement("summary");
+    if (className) summary.className = className;
+    summary.append(glyphNode("g-more"));
+    const label = document.createElement("span");
+    label.className = "label";
+    label.textContent = "More tools";
+    summary.append(label);
+    const chevron = glyphNode("g-chev");
+    chevron.setAttribute("class", "glyph chev");
+    summary.append(chevron);
+    return summary;
+  }
+
   function separator(className) {
     const element = document.createElement("span");
     element.className = className;
@@ -9902,8 +10068,10 @@ body.music-preview-active #idle-hud { display: none !important; }
     const element = target ?? document.getElementById("workspace-tool-links");
     if (!element) return;
     element.textContent = "";
+    // Workspace, Command, Task board and Plans are pinned at the top of the
+    // sidebar and Settings / Music sit in its bottom row, so none repeat here.
     appendGrouped(element, list().filter((dest) =>
-      !["workspace", "command", "studio", "music"].includes(dest.id) &&
+      !["workspace", "command", "tasks", "plans", "studio", "music"].includes(dest.id) &&
       dest.kind !== "action" && dest.layer !== "transient"), "ghost");
     paintBadges(element);
   }
@@ -9918,9 +10086,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     const more = document.createElement("details");
     more.id = "cmd-more-tools";
     more.className = "cmd-more-tools";
-    const summary = document.createElement("summary");
-    summary.className = "dock-item";
-    summary.textContent = "More tools";
+    const summary = moreSummary("dock-item");
     const links = document.createElement("div");
     links.className = "cmd-more-links";
     appendGrouped(links, destinations.filter((item) => !item.commandPrimary), "dock-item");
@@ -9976,9 +10142,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       container.textContent = "";
       const menu = document.createElement("details");
       menu.className = "studio-more";
-      const summary = document.createElement("summary");
-      summary.textContent = "More tools";
-      menu.append(summary);
+      menu.append(moreSummary());
       const links = document.createElement("div");
       links.className = "studio-more-links";
       appendGrouped(links, list({ showIn: "tools" }).filter((dest) => dest.layer === "sheet" && dest.id !== self), "dock-item small");
@@ -10101,7 +10265,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   // ---- input -------------------------------------------------------------
 
   document.addEventListener("click", (event) => {
-    for (const menu of document.querySelectorAll(".studio-more[open], .cmd-more-tools[open], #workspace-tools[open]")) {
+    for (const menu of document.querySelectorAll(".studio-more[open], .cmd-more-tools[open]")) {
       if (!menu.contains(event.target)) menu.open = false;
     }
     const button = event.target?.closest?.("[data-nav], [data-nav-close]");
@@ -10121,7 +10285,8 @@ body.music-preview-active #idle-hud { display: none !important; }
       }
     }
     go(button.dataset.nav, params);
-    button.closest("details")?.removeAttribute("open");
+    const menu = button.closest("details");
+    if (menu && menu.id !== "workspace-tools") menu.removeAttribute("open");
   });
 
   function keyContext(dest, event) {
@@ -10160,7 +10325,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       window.MefiSidebar.close({ restoreFocus: true });
       return;
     }
-    const more = document.activeElement?.closest?.(".studio-more[open], .cmd-more-tools[open], #workspace-tools[open]") ?? document.getElementById("cmd-more-tools");
+    const more = document.activeElement?.closest?.(".studio-more[open], .cmd-more-tools[open]") ?? document.getElementById("cmd-more-tools");
     if (event.key === "Escape" && more?.open) {
       event.preventDefault();
       more.open = false;
@@ -10214,6 +10379,27 @@ body.music-preview-active #idle-hud { display: none !important; }
   }
 
   window.addEventListener("keydown", handleKey);
+
+  // ---- current destination -----------------------------------------------
+
+  // The surface the user is looking at: an open sheet, Command, the workspace
+  // or the active tab. The sidebar paints it as aria-current on its own entry.
+  function current() {
+    if (state.sheet) return state.sheet;
+    if (idleActive()) return "command";
+    if (window.MefiWorkspace?.isActive?.()) return "workspace";
+    return document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
+  }
+
+  function paintCurrent() {
+    const id = current();
+    for (const button of document.querySelectorAll?.("#workspace-sidebar-panel [data-nav]") ?? []) {
+      if (button.dataset.nav === id) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    }
+  }
+
+  window.addEventListener("mefi:nav", paintCurrent);
 
   // ---- live update -------------------------------------------------------
 
@@ -10841,6 +11027,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     renderTools();
     renderDock();
     renderSheetLinks();
+    paintCurrent();
     renderFooter();
     wireTabRail();
     paintBadges();
@@ -10902,6 +11089,8 @@ body.music-preview-active #idle-hud { display: none !important; }
     renderDock,
     renderTools,
     renderWorkspaceTools,
+    paintCurrent,
+    current,
     renderSheetLinks,
     renderHelp,
     renderFooter,
@@ -10953,6 +11142,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     syncBlocked();
     if (blocked()) return false;
     cancelClose();
+    window.MefiNav?.paintCurrent?.();
     root.dataset.open = "true";
     panel.inert = false;
     panel.setAttribute("aria-hidden", "false");
@@ -11730,6 +11920,14 @@ body.music-preview-active #idle-hud { display: none !important; }
     const date = new Date(value);
     return Number.isFinite(date.getTime()) ? date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }) : "unknown time";
   };
+  // A reset moment for the compact panel: the time when it is within a day,
+  // the date otherwise.
+  const soon = (value) => {
+    if (value == null || value === "") return "";
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return "";
+    return Math.abs(date.getTime() - Date.now()) < 86400000 ? clock(date) : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  };
   const readStore = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
   const writeStore = (key, value) => { try { localStorage.setItem(key, value); } catch {} };
 
@@ -11955,21 +12153,48 @@ body.music-preview-active #idle-hud { display: none !important; }
     target.append(element("p", "muted tracker-footnote", `${local.coverage || "Only recorded calls are included."}${storeLine(local)}${retired}`));
   }
 
-  function accountLine(account, local) {
-    const row = rows(local?.providers).find((entry) => entry.provider === account.provider);
-    const today = row ? `today ${calls(row.today?.calls)} · ${compact(row.today?.usage?.totalTokens?.known)} tokens` : "no calls today";
-    if (account.read !== "none" && !account.ok) return element("p", "tracker-line tracker-line-warn", `${account.label} · ${account.error || "account read unavailable"}`);
+  // ---- the compact Command panel ------------------------------------------
+  // The lead account is the first connected provider with a live window or
+  // quota reading (OpenCode Go's plan windows, z.ai's plan quota): it owns the
+  // bars and the collapsed header's summary. No live reading means no bars —
+  // an empty gauge for an account that was never connected says nothing.
+  function leadAccount(report) {
+    return accountsOf(report).find((account) => account.ok && (account.read === "windows" || account.read === "quota")) ?? null;
+  }
+  function leadWindows(account) {
+    if (!account) return [];
+    if (account.read === "windows") return WINDOW_LABELS.map(([key, , short]) => [short, account.usage?.[key] ?? null]);
+    const quota = account.quota ?? {};
+    return [["5h", quota.rolling ?? null], ["Wk", quota.weekly ?? null], quota.tools ? ["Tools", quota.tools] : null].filter(Boolean);
+  }
+  function row(label, value, tone = "") {
+    const item = element("li", "tracker-row");
+    if (tone) item.setAttribute("data-tone", tone);
+    item.append(element("span", "tracker-row-label", label), element("span", "tracker-row-value", value));
+    return item;
+  }
+  const hot = (...records) => records.some((record) => record && (record.status === "rate-limited" || (finite(record.percent) && record.percent >= 90)));
+  // One aligned row per connected provider that is not the lead: its own
+  // live reading where it offers one, its recorded calls today where not.
+  function accountRow(account, local) {
+    const recorded = rows(local?.providers).find((entry) => entry.provider === account.provider);
+    const today = recorded ? `today ${calls(recorded.today?.calls)} · ${compact(recorded.today?.usage?.totalTokens?.known)} tokens` : "no calls today";
+    if (account.read !== "none" && !account.ok) return [account.label, account.error || "account read unavailable", "warn"];
+    if (account.read === "windows") {
+      const usage = account.usage ?? {};
+      return [account.label, `5h ${usage.rolling ? percent(usage.rolling.percent) : "—"} · wk ${usage.weekly ? percent(usage.weekly.percent) : "—"}`, hot(usage.rolling, usage.weekly, usage.monthly) ? "warn" : ""];
+    }
     if (account.read === "quota") {
       const quota = account.quota ?? {};
-      return element("p", "tracker-line tracker-line-account", `${account.label} · 5h ${quota.rolling ? percent(quota.rolling.percent) : "—"} · wk ${quota.weekly ? percent(quota.weekly.percent) : "—"} · ${today}`);
+      return [account.label, `5h ${quota.rolling ? percent(quota.rolling.percent) : "—"} · wk ${quota.weekly ? percent(quota.weekly.percent) : "—"} · ${today}`, hot(quota.rolling, quota.weekly) ? "warn" : ""];
     }
     if (account.read === "key") {
       const key = account.key ?? {};
       const left = account.credits ? `${money(account.credits.remaining)} left` : finite(key.limit) ? `${money(key.limitRemaining)} left of ${money(key.limit)}` : "no key limit";
-      return element("p", "tracker-line tracker-line-account", `${account.label} · ${money(key.usage)} spent · ${left}`);
+      return [account.label, `${money(key.usage)} spent · ${left}`, hot(key) ? "warn" : ""];
     }
-    if (account.read === "credits") return element("p", "tracker-line tracker-line-account", `${account.label} · ${money(account.credits?.balance)} left · ${money(account.credits?.totalUsed)} used`);
-    return element("p", "tracker-line tracker-line-account", `${account.label} · ${today}${row?.today?.usage?.costUsd?.knownRecords ? ` · ${money(row.today.usage.costUsd.known)}` : ""}`);
+    if (account.read === "credits") return [account.label, `${money(account.credits?.balance)} left · ${money(account.credits?.totalUsed)} used`, ""];
+    return [account.label, `${today}${recorded?.today?.usage?.costUsd?.knownRecords ? ` · ${money(recorded.today.usage.costUsd.known)}` : ""}`, ""];
   }
 
   function renderCompact(target, report) {
@@ -11977,32 +12202,74 @@ body.music-preview-active #idle-hud { display: none !important; }
     const credits = report.credits ?? {};
     const local = report.local?.ok === false ? null : report.local;
     const accounts = accountsOf(report);
-    const go = accounts.find((account) => account.provider === "opencode-go");
-    const goUsage = go?.ok ? go.usage : credits.ok ? credits.usage : null;
-    const windows = element("div", "tracker-windows");
-    for (const [key, , short] of WINDOW_LABELS) windows.append(windowBar(short, goUsage?.[key] ?? null));
-    target.append(windows);
-    if (!goUsage) target.append(element("p", "tracker-line tracker-line-warn", go?.error || credits.error || "Live account usage is unavailable."));
-    for (const account of accounts) if (account.provider !== "opencode-go") target.append(accountLine(account, local));
+    const lead = leadAccount(report);
+    if (lead) {
+      const box = element("div", "tracker-lead");
+      const name = element("div", "tracker-lead-name");
+      const kind = lead.read === "quota" ? `${lead.quota?.level ? `${lead.quota.level} plan` : "plan quota"}` : "plan windows";
+      name.append(element("span", "", lead.label), element("small", "", kind));
+      box.append(name);
+      const windows = element("div", "tracker-windows");
+      for (const [short, record] of leadWindows(lead)) windows.append(windowBar(short, record, { resets: true }));
+      box.append(windows);
+      const rolling = lead.read === "windows" ? lead.usage?.rolling : lead.quota?.rolling;
+      const limited = leadWindows(lead).filter(([, record]) => record?.status === "rate-limited").map(([short]) => short);
+      const reset = soon(rolling?.resetsAt);
+      if (limited.length || reset) box.append(element("p", limited.length ? "tracker-line tracker-line-warn" : "tracker-line", `${limited.length ? `Limit reached: ${limited.join(", ")}` : ""}${limited.length && reset ? " · " : ""}${reset ? `5h resets ${reset}` : ""}`));
+      target.append(box);
+    } else {
+      const failed = accounts.find((account) => account.read !== "none" && !account.ok && account.code !== "no-key");
+      target.append(element("p", "tracker-line tracker-line-warn", failed ? `${failed.label} · ${failed.error || "account read unavailable"}` : credits.ok === false && credits.error ? credits.error : "No live account reading yet · save a plan key in Settings."));
+    }
+    // The older credits bridge stands in for a Go account even when no Go
+    // key is saved; that placeholder is a hint for the Model Lab view, not a
+    // connected provider, so the compact panel leaves it out.
+    const placeholder = (account) => account.provider === "opencode-go" && !account.ok && account.code === "no-key";
+    const others = accounts.filter((account) => account !== lead && !placeholder(account));
+    if (others.length) {
+      target.append(element("p", "tracker-kicker", "Connected"));
+      const list = element("ul", "tracker-rows");
+      for (const account of others) list.append(row(...accountRow(account, local)));
+      target.append(list);
+    }
     if (report.accounts?.ok === false && !accounts.length) target.append(element("p", "tracker-line tracker-line-warn", report.accounts.error || "Account readings are unavailable."));
     if (report.local?.ok === false) target.append(element("p", "tracker-line tracker-line-warn", report.local.error || "Local usage could not be read."));
     if (local) {
+      target.append(element("p", "tracker-kicker", "Recorded"));
+      const list = element("ul", "tracker-rows");
       const today = local.today.usage;
-      target.append(element("p", "tracker-line", `Recorded today · ${calls(local.today.calls)} · ${number(today.totalTokens.known)} tokens · ${costText(today.costUsd)}`));
+      list.append(row("Recorded today", `${calls(local.today.calls)} · ${compact(today.totalTokens.known)} tokens · ${costText(today.costUsd)}`));
       const estimate = local.credits;
-      if (estimate) {
-        target.append(element("p", "tracker-line", `Local estimate · 5h ${localCost(estimate.rolling)}/${money(estimate.rolling.limitUsd, 0)} · wk ${localCost(estimate.weekly)}/${money(estimate.weekly.limitUsd, 0)} · mo ${localCost(estimate.monthly)}/${money(estimate.monthly.limitUsd, 0)}`));
-      }
+      if (estimate) list.append(row("Local estimate", `5h ${localCost(estimate.rolling)}/${money(estimate.rolling.limitUsd, 0)} · wk ${localCost(estimate.weekly)}/${money(estimate.weekly.limitUsd, 0)} · mo ${localCost(estimate.monthly)}/${money(estimate.monthly.limitUsd, 0)}`));
+      target.append(list);
       if (local.store?.ok === false) target.append(element("p", "tracker-line tracker-line-warn", "Coding sessions unavailable: the OpenCode store could not be read."));
     }
   }
 
+  // A missing OpenCode Go key is not a failed read once the accounts read is
+  // authoritative: the older credits bridge simply has nothing to say.
+  function readNote(report) {
+    const noKey = report.credits?.ok === false && report.credits?.code === "no-key" && report.accounts?.ok === true;
+    const failed = accountsOf(report).filter((account) => account.read !== "none" && !account.ok && !(noKey && account.provider === "opencode-go")).length;
+    return report.credits?.ok === false && !noKey ? " · live account read unavailable" : failed ? ` · ${failed} account read${failed === 1 ? "" : "s"} unavailable` : "";
+  }
   function statusOf(report) {
     if (!report) return "Waiting for a reading…";
     const stamp = report.accounts?.at ?? report.credits?.fetchedAt ?? report.at;
-    const failed = accountsOf(report).filter((account) => account.read !== "none" && !account.ok).length;
-    const note = report.credits?.ok === false ? " · live account read unavailable" : failed ? ` · ${failed} account read${failed === 1 ? "" : "s"} unavailable` : "";
-    return `Updated ${clock(stamp)}${note}`;
+    return `Updated ${clock(stamp)}${readNote(report)}`;
+  }
+  // The collapsed panel still says the one thing worth knowing: the lead
+  // account's windows, or today's recorded calls when nothing live is connected.
+  function compactStatus(report) {
+    if (!report) return "Waiting for a reading…";
+    const stamp = clock(report.accounts?.at ?? report.credits?.fetchedAt ?? report.at);
+    const lead = leadAccount(report);
+    if (lead) {
+      const windows = leadWindows(lead).slice(0, 2).map(([short, record]) => `${short.toLowerCase()} ${record && finite(record.percent) ? percent(record.percent) : "—"}`);
+      return `Updated ${stamp} · ${lead.label} ${windows.join(" · ")}${readNote(report)}`;
+    }
+    const local = report.local?.ok === false ? null : report.local;
+    return `Updated ${stamp}${local ? ` · today ${calls(local.today.calls)}` : ""}${readNote(report)}`;
   }
   function render() {
     const report = state.report;
@@ -12016,7 +12283,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     const fullStatus = $("model-lab-tracker-status");
     if (fullStatus) fullStatus.textContent = statusOf(report);
     const compactState = $("cmd-usage-state");
-    if (compactState) compactState.textContent = statusOf(report);
+    if (compactState) compactState.textContent = compactStatus(report);
   }
   function setStatus(text) {
     const fullStatus = $("model-lab-tracker-status");
@@ -19113,7 +19380,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   function renderAgentModeControl() {
     const assistant = state.assistant;
     const known = ["swarm", "cluster"].includes(assistant?.mode);
-    // The tree toolbar and the Work settings view show the same selector.
+    // The tree toolbar (quick switch) and the rail's Agents view show the same selector.
     for (const control of [el.feedAgentMode, el.settingsAgentMode].filter(Boolean)) {
       control.disabled = Boolean(state.agentModeSaving) || !known || !window.mefiStudio?.assistantAutopilot;
       if (!state.agentModeSaving) control.value = assistant?.mode === "cluster" ? "cluster" : "swarm";
@@ -19125,6 +19392,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       : assistant.clusterFocus?.title ? `Cluster · agents focus on: ${assistant.clusterFocus.title}`
       : autopilotJobs(assistant).length ? "Cluster · current workers finish before agents focus on one task."
       : "Cluster · the Assistant and builders share one task, delegate independent subtasks, then combine the results.";
+    renderAgentsGlance();
   }
 
   // Settings live in their own rail view. The same renderers also run on every
@@ -19145,6 +19413,32 @@ body.music-preview-active #idle-hud { display: none !important; }
         : state.assistant.enabled ? "Autopilot on" : "Autopilot off";
       el.settingsState.dataset.on = String(Boolean(window.mefiStudio && state.assistant?.enabled));
     }
+    renderAgentsGlance();
+  }
+
+  // The three chips above the Agents controls: the queue switch, how many builds
+  // are running under which cap, and the coordination mode. Painted from the same
+  // assistant state the controls read, so the two can never disagree.
+  function renderAgentsGlance() {
+    const chip = (element, text, tone) => {
+      if (!element) return;
+      const value = element.querySelector("b");
+      if (value) value.textContent = text;
+      element.dataset.tone = tone;
+    };
+    if (!el.glanceAutopilot && !el.glanceWorkers && !el.glanceMode) return;
+    if (!window.mefiStudio) {
+      for (const element of [el.glanceAutopilot, el.glanceWorkers, el.glanceMode]) chip(element, "Desktop only", "idle");
+      return;
+    }
+    const assistant = state.assistant;
+    const on = Boolean(assistant?.enabled);
+    chip(el.glanceAutopilot, !assistant ? "…" : on ? "On" : "Off", !assistant ? "idle" : on ? "ok" : "off");
+    const running = assistant ? autopilotJobs(assistant).length : 0;
+    const cap = el.feedParallel?.value === "machine" ? "auto cap" : Number(el.feedParallel?.value) > 0 ? `cap ${el.feedParallel.value}` : "";
+    chip(el.glanceWorkers, `${running} running${cap ? ` · ${cap}` : ""}`, running ? "ok" : "idle");
+    const mode = assistant?.mode === "cluster" ? "Cluster" : assistant?.mode === "swarm" ? "Swarm" : "…";
+    chip(el.glanceMode, mode, mode === "…" ? "idle" : "ok");
   }
 
   async function changeAgentMode(mode) {
@@ -23682,6 +23976,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     el.railAskBadge = document.getElementById("cmd-rail-ask-badge");
     el.settings = document.getElementById("cmd-settings");
     el.settingsState = document.getElementById("cmd-settings-state");
+    el.glanceAutopilot = document.getElementById("cmd-glance-autopilot");
+    el.glanceWorkers = document.getElementById("cmd-glance-workers");
+    el.glanceMode = document.getElementById("cmd-glance-mode");
     el.done = document.getElementById("cmd-done");
     el.doneList = document.getElementById("cmd-done-list");
     el.doneState = document.getElementById("cmd-done-state");
@@ -30551,13 +30848,18 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (!$("dash-usage")) return;
     const report = state.usage;
     if (!report) { $("dash-usage").dataset.tone = "idle"; $("dash-usage-value").textContent = api() ? "No reading yet" : "Desktop app only"; $("dash-usage-note").textContent = ""; return; }
-    const credits = report.credits?.ok ? report.credits.usage : null;
+    // The lead account is the first connected provider with a live window or
+    // quota reading (the same choice the Command usage panel makes); the older
+    // OpenCode Go read stands in when the accounts read is absent.
+    const accounts = Array.isArray(report.accounts?.accounts) ? report.accounts.accounts : [];
+    const lead = accounts.find((account) => account?.ok && (account.read === "windows" || account.read === "quota")) ?? null;
+    const credits = lead ? (lead.read === "windows" ? lead.usage : lead.quota) : report.credits?.ok ? report.credits.usage : null;
     const today = report.local?.ok === false ? null : report.local?.today;
     const percent = (window) => (window && Number.isFinite(window.percent) ? `${Math.round(window.percent)}%` : null);
     const rolling = percent(credits?.rolling), weekly = percent(credits?.weekly);
     if (rolling || weekly) {
       $("dash-usage-value").textContent = `5h ${rolling ?? "—"} · week ${weekly ?? "—"}`;
-      $("dash-usage").dataset.tone = (credits?.rolling?.percent >= 90 || credits?.weekly?.percent >= 90) ? "warn" : "ok";
+      $("dash-usage").dataset.tone = (credits?.rolling?.percent >= 90 || credits?.weekly?.percent >= 90 || credits?.rolling?.status === "rate-limited") ? "warn" : "ok";
     } else if (today) {
       $("dash-usage-value").textContent = `${today.calls ?? 0} calls today`;
       $("dash-usage").dataset.tone = "ok";
@@ -30566,7 +30868,8 @@ body.music-preview-active #idle-hud { display: none !important; }
       $("dash-usage").dataset.tone = "idle";
     }
     const cost = Number(today?.usage?.costUsd);
-    $("dash-usage-note").textContent = today ? `Today · ${today.calls ?? 0} calls${Number.isFinite(cost) ? ` · $${cost.toFixed(2)}` : ""}` : report.credits?.error || "";
+    const who = lead ? `${lead.label} · ` : "";
+    $("dash-usage-note").textContent = today ? `${who}Today · ${today.calls ?? 0} calls${Number.isFinite(cost) ? ` · $${cost.toFixed(2)}` : ""}` : lead ? who.slice(0, -3) : report.credits?.error || "";
   }
   function renderJev(value) {
     const status = value?.status || value;
@@ -32123,9 +32426,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     {
       title: "Connect the assistant and coding workers", short: "Connections", glyph: "g-ambience",
       copy: "The assistant helps you think and organize. Coding workers carry out tasks in your project. Their provider settings are separate, and the scan's choices are shown at the top of Settings.",
-      points: ["In Settings & connections, save the key for the assistant provider you want, choose Grok, Claude Code or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Coding workers run through OpenCode by default: on your linked plan, or on the free model the scan found. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; without it the assistant's own model, or a free model, stands in for the small routing decisions."],
+      points: ["In Settings & connections, save the key for the assistant provider you want, choose Grok, Claude Code, Codex or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Coding workers run through OpenCode by default: on your linked plan, or on the free model the scan found. The coding tier decides what each build may cost — Free, Fast or Heavy — while Auto lets Studio pick per task. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; without it the assistant's own model, or a free model, stands in for the small routing decisions."],
       action: "Walk me to connections", route: "studio",
-      station: "We are in Settings & connections together, at the assistant group. Save the key you want, then scroll to the coding worker group and confirm its CLI is signed in. Nothing is sent until you choose to test it.",
+      station: "We are in Settings & connections together, at the assistant group. Save the key you want, then scroll to the coding worker group, confirm its CLI is signed in and pick a coding tier. Nothing is sent until you choose to test it.",
       note: "Connection tests and AI requests may use your provider allowance when you explicitly run them.",
       target: "#settings-assistant-heading", done: "Connections checked",
     },
@@ -33087,8 +33390,51 @@ body.music-preview-active #idle-hud { display: none !important; }
       requestAnimationFrame(() => state.graph.redraw());
     }
     if (name === "eyes") window.MefiEyes?.init();
-    if (name === "studio") initStudio();
+    if (name === "studio") {
+      initStudio();
+      syncSettingsNav();
+    }
     writeStore("mefiStudio.tab", name);
+  }
+
+  // ---- settings section nav ----
+  // The Settings tab is one page of cards; the sticky nav beside it jumps to a
+  // card, opens it when it is folded, and follows the scroll position. Cards
+  // hidden with their #studio-desktop wrapper (browser build) drop out of the nav.
+  function settingsSections() {
+    return Array.from(document.querySelectorAll("#settings-nav [data-settings-jump]")).map((button) => ({ button, section: document.getElementById(button.dataset.settingsJump) }));
+  }
+
+  function syncSettingsNav(currentId) {
+    const items = settingsSections();
+    if (!items.length) return;
+    let current = currentId ?? items.find(({ button }) => button.getAttribute("aria-current") === "true")?.button.dataset.settingsJump ?? null;
+    for (const { button, section } of items) {
+      const unavailable = !section || Boolean(section.closest("#studio-desktop[hidden]"));
+      button.hidden = unavailable;
+      if (unavailable && current === button.dataset.settingsJump) current = null;
+    }
+    if (!current) current = items.find(({ button }) => !button.hidden)?.button.dataset.settingsJump ?? null;
+    for (const { button } of items) button.setAttribute("aria-current", String(button.dataset.settingsJump === current));
+  }
+
+  function wireSettingsNav() {
+    const nav = document.getElementById("settings-nav");
+    if (!nav) return;
+    nav.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-settings-jump]");
+      const section = button ? document.getElementById(button.dataset.settingsJump) : null;
+      if (!section) return;
+      if (section.tagName === "DETAILS") section.open = true;
+      section.scrollIntoView({ behavior: document.body.classList.contains("no-motion") ? "auto" : "smooth", block: "start" });
+      syncSettingsNav(button.dataset.settingsJump);
+    });
+    if (typeof IntersectionObserver !== "function") return;
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      if (visible[0]) syncSettingsNav(visible[0].target.id);
+    }, { rootMargin: "-15% 0px -65% 0px" });
+    for (const { section } of settingsSections()) if (section) observer.observe(section);
   }
 
   // ---- studio ----
@@ -33136,8 +33482,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     const setupAssistant = document.getElementById("setup-assistant");
     const setupSelection = document.getElementById("setup-selection");
     const setupBuilders = document.getElementById("setup-builders");
-    const providerNames = { auto: "Auto (your order)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
-    const singleModelProviders = new Set(["grok", "claude", "antigravity", "lmstudio", "custom"]);
+    const providerNames = { auto: "Auto (your order)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
+    const builderNames = { opencode: "OpenCode", grok: "Grok", claude: "Claude Code", codex: "Codex", antigravity: "Antigravity" };
+    const singleModelProviders = new Set(["grok", "claude", "codex", "antigravity", "lmstudio", "custom"]);
     function cliInstalled(id) {
       return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === id && cli.installed);
     }
@@ -33166,7 +33513,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         const provider = providerNames[routing.provider] ? routing.provider : "auto";
         const order = autoOrderOf(routing);
         const autoFirst = order.find((id) => autoProviderUsable(id));
-        const detail = provider === "grok" || provider === "claude" || provider === "antigravity" ? "CLI login"
+        const detail = provider === "grok" || provider === "claude" || provider === "codex" || provider === "antigravity" ? "CLI login"
           : provider === "lmstudio" ? "no key needed"
           : provider === "custom" ? (routing.hasCustom ? "key saved" : "no key saved")
           : provider === "auto" ? (autoFirst ? `will use ${providerNames[autoFirst]}` : "no usable provider in this order yet")
@@ -33180,9 +33527,9 @@ body.music-preview-active #idle-hud { display: none !important; }
       if (setup.cliError) setupBuilders.textContent = "CLI status unavailable";
       else if (!setup.clis) setupBuilders.textContent = "checking…";
       else {
-        const builderIds = ["opencode", "grok", "claude", "antigravity"];
+        const builderIds = ["opencode", "grok", "claude", "codex", "antigravity"];
         const installed = setup.clis.filter((cli) => cli.installed && builderIds.includes(cli.id));
-        setupBuilders.textContent = installed.length ? `${installed.map((cli) => cli.name).join(", ")} installed` : "No builder CLI detected — install OpenCode, Grok, Claude Code or Antigravity";
+        setupBuilders.textContent = installed.length ? `${installed.map((cli) => cli.name).join(", ")} installed` : "No builder CLI detected — install OpenCode, Grok, Claude Code, Codex or Antigravity";
       }
       const readiness = document.getElementById("provider-readiness");
       const selected = routing && providerNames[routing.provider] ? routing.provider : null;
@@ -33318,7 +33665,49 @@ body.music-preview-active #idle-hud { display: none !important; }
     const modelHeavy = document.getElementById("ai-model-heavy");
     const executorCli = document.getElementById("executor-cli");
     const executorModel = document.getElementById("executor-model");
+    const executorTier = document.getElementById("executor-tier");
+    const executorModelLabel = document.getElementById("executor-model-label");
+    const executorTierStatus = document.getElementById("executor-tier-status");
     const lmStudioEndpoint = document.getElementById("lmstudio-endpoint");
+    // Coding tiers. One text field serves the active tier: Auto shows the
+    // pinned per-CLI override, a tier shows that tier's own saved model, and
+    // the placeholder is the model that would actually run when the field is
+    // empty — the host resolves it, so what reads here is what the next run does.
+    const tierNames = { auto: "Auto", free: "Free", fast: "Fast", heavy: "Heavy" };
+    const tierSources = { saved: "saved", "first-scan": "from the first scan", zai: "on your z.ai plan", alias: "Claude Code alias", "cli-default": "CLI default", none: "no free model saved" };
+    const tierEntry = (routing, cli, tier) => routing?.executorTierDefaults?.[cli]?.[tier] ?? { model: "", source: tier === "free" ? "none" : "cli-default" };
+    function syncExecutorModel(routing) {
+      const cli = executorCli.value || "opencode";
+      const tier = tierNames[executorTier.value] ? executorTier.value : "auto";
+      if (tier === "auto") {
+        executorModelLabel.textContent = "Pinned model";
+        executorModel.value = routing?.executorModel ?? "";
+        executorModel.placeholder = "CLI default";
+        return;
+      }
+      const entry = tierEntry(routing, cli, tier);
+      executorModelLabel.textContent = `${tierNames[tier]} model`;
+      executorModel.value = routing?.executorTierModels?.[cli]?.[tier] ?? "";
+      executorModel.placeholder = entry.model && entry.source !== "saved" ? `${entry.model} · ${tierSources[entry.source] ?? entry.source}` : tier === "free" ? "no free model saved" : "CLI default";
+    }
+    function renderExecutorTiers(routing) {
+      const cli = executorCli.value || "opencode";
+      const tier = tierNames[executorTier.value] ? executorTier.value : "auto";
+      const cliName = builderNames[cli] ?? cli;
+      if (!routing?.executorTierDefaults) { executorTierStatus.textContent = "Coding tiers need the desktop app."; return; }
+      const describe = (name) => {
+        const entry = tierEntry(routing, cli, name);
+        if (!entry.model) return `${tierNames[name]} → ${name === "free" ? "no free model saved" : "CLI default"}`;
+        return `${tierNames[name]} → ${entry.model}${entry.source === "saved" ? "" : ` (${tierSources[entry.source] ?? entry.source})`}`;
+      };
+      const active = tierEntry(routing, cli, tier);
+      const lead = tier === "auto"
+        ? `Auto: ${cli === "opencode" ? "Jev or the stand-in judge picks per task within your provider; a pinned model wins" : `${cliName} runs the pinned model or its CLI default`}.`
+        : tier === "free" && !active.model
+          ? `Free tier: no free model is saved for ${cliName}, so builds wait until one is${cli === "opencode" ? " (run the first scan, or save a free provider/model id)" : ""}.`
+          : `${tierNames[tier]} tier: ${cliName} runs ${active.model || "its CLI default"}${tier === "free" ? ", one worker at a time" : ""}.`;
+      executorTierStatus.textContent = `${lead} ${["free", "fast", "heavy"].map(describe).join(" · ")}.`;
+    }
     const customEndpoint = document.getElementById("custom-endpoint");
     function evidenceText(evidence, taskType) {
       const workerNote = taskType === "coding" ? " Available measurements describe Studio HTTP requests; CLI worker timing and billing are not measured." : "";
@@ -33368,12 +33757,14 @@ body.music-preview-active #idle-hud { display: none !important; }
           modelRoutine.value = scoped?.routine ?? (fallbackAllowed ? routing.models?.routine ?? "" : "");
           modelHeavy.value = scoped?.heavy ?? (fallbackAllowed ? routing.models?.heavy ?? "" : "");
           executorCli.value = routing.executorCli ?? "opencode";
-          executorModel.value = routing.executorModel ?? "";
+          executorTier.value = tierNames[routing.executorTier] ? routing.executorTier : "auto";
+          syncExecutorModel(routing);
           lmStudioEndpoint.value = routing.lmStudioEndpoint ?? "";
           customEndpoint.value = routing.customEndpoint ?? "";
         }
+        renderExecutorTiers(routing);
         const selection = routing.modelSelection ?? "jev";
-        const cliProvider = routing.provider === "grok" ? "Grok CLI" : routing.provider === "claude" ? "Claude Code CLI" : routing.provider === "antigravity" ? "Antigravity CLI" : null;
+        const cliProvider = routing.provider === "grok" ? "Grok CLI" : routing.provider === "claude" ? "Claude Code CLI" : routing.provider === "codex" ? "Codex CLI" : routing.provider === "antigravity" ? "Antigravity CLI" : null;
         routingStatus.textContent = selection === "fixed"
           ? "Fixed defaults enabled. Explicit model overrides take priority."
           : cliProvider
@@ -33408,7 +33799,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     // Auto order editor: the host stores the same ordered array. The editor
     // only reorders, adds and removes, then saves the whole list; every save
     // re-reads routing so the controls stay authoritative.
-    const autoProviderIds = ["zai", "opencode", "grok", "claude", "antigravity", "lmstudio", "custom"];
+    const autoProviderIds = ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
     let autoOrder = ["zai", "opencode"];
     function renderAutoOrder() {
       autoOrderList.replaceChildren(...autoOrder.map((id, index) => {
@@ -33468,7 +33859,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       if (!autoProviderIds.includes(id) || autoOrder.includes(id)) return;
       return saveAutoOrder([...autoOrder, id], `${providerNames[id] ?? id} added to the auto order`);
     });
-    const routingControls = [providerSelect, modelSelection, fallbackToggle, autoOrderAdd, autoOrderAddButton, modelRoutine, modelHeavy, executorCli, executorModel, lmStudioEndpoint, customEndpoint];
+    const routingControls = [providerSelect, modelSelection, fallbackToggle, autoOrderAdd, autoOrderAddButton, modelRoutine, modelHeavy, executorCli, executorTier, executorModel, lmStudioEndpoint, customEndpoint];
     for (const control of routingControls) control.disabled = true;
     loadAiRouting({ syncControls: true }).finally(() => {
       for (const control of routingControls) control.disabled = false;
@@ -33508,10 +33899,19 @@ body.music-preview-active #idle-hud { display: none !important; }
         }
       });
     }
-    // Builder models are saved per CLI too, so switching builders cannot leave
-    // one CLI's model id on another CLI's command line.
+    // Builder models are saved per CLI (and per tier) too, so switching
+    // builders or tiers cannot leave one CLI's model id on another CLI's
+    // command line. Every save re-reads routing, so the field and the tier
+    // line always show the host's answer.
     executorCli.addEventListener("change", () => saveRouting({ executorCli: executorCli.value }, `builders run on ${executorCli.value}`, { syncControls: true }));
-    executorModel.addEventListener("change", () => saveRouting({ executorModels: { [executorCli.value]: executorModel.value } }, `builder model for ${executorCli.value} ${executorModel.value.trim() ? `"${executorModel.value.trim()}"` : "reset to CLI default"}`));
+    executorTier.addEventListener("change", () => saveRouting({ executorTier: executorTier.value }, `coding tier: ${executorTier.value}`, { syncControls: true }));
+    executorModel.addEventListener("change", () => {
+      const cli = executorCli.value;
+      const tier = tierNames[executorTier.value] ? executorTier.value : "auto";
+      const value = executorModel.value;
+      if (tier === "auto") return saveRouting({ executorModels: { [cli]: value } }, `builder model for ${cli} ${value.trim() ? `"${value.trim()}"` : "reset to CLI default"}`);
+      return saveRouting({ executorTierModels: { [cli]: { [tier]: value } } }, `${tier} tier model for ${cli} ${value.trim() ? `"${value.trim()}"` : "reset to its default"}`, { syncControls: true });
+    });
     executorModel.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -33563,8 +33963,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     }
 
     // Coding CLIs: launch the owner's installed tools in their own terminal.
-    // Codex and Claude Code use their own accounts; OpenCode carries the
-    // Studio-managed mefi-zai provider when a z.ai key is saved.
+    // Grok, Codex, Claude Code and Antigravity use their own accounts;
+    // OpenCode carries the Studio-managed mefi-zai provider when a z.ai key
+    // is saved.
     const cliStatus = document.getElementById("cli-status");
     async function refreshCliStatus() {
       try {
@@ -33650,6 +34051,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (window.MefiNav) window.MefiNav.go(tab.dataset.tab, {}, { source: "tabs" });
     else showTab(tab.dataset.tab);
   });
+  wireSettingsNav();
   document.getElementById("refresh-btn").addEventListener("click", () => refresh("manual"));
   document.getElementById("print-btn").addEventListener("click", () => window.print());
   const motionToggle = document.getElementById("motion-toggle");

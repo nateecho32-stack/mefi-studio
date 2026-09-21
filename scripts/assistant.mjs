@@ -562,12 +562,20 @@ export function organize({ sessions = [], todos = [], now = Date.now(), policy =
   const foldedSet = new Set(folded);
   let hiddenTodos = 0;
   for (const [sessionId, list] of bySession) if (foldedSet.has(sessionId)) hiddenTodos += list.length;
-  // Work accounting: one active session can carry one in-progress todo. Todo
-  // rows beyond that are overflow — the watcher reports them as requeued
-  // (back to pending) instead of in flight, so the intel it hands the
-  // digest can never claim more work than there are active slots.
-  const inProgressRows = asArray(todos).filter((todo) => isObject(todo) && todo.status === "in_progress");
-  const inProgress = Math.min(inProgressRows.length, active.length);
+  // Work accounting: one active session can carry one in-progress todo — and
+  // only a row on an active session counts as in flight. A stale or folded
+  // session's in-progress row is rot waiting for its rescue, not work in
+  // flight, so the watcher reports it as requeued (back to pending): the intel
+  // it hands the digest can never claim work no active slot is carrying.
+  const activeSet = new Set(active);
+  let inProgressRows = 0;
+  let inProgress = 0;
+  for (const [sessionId, list] of bySession) {
+    const rows = list.filter((todo) => todo.status === "in_progress").length;
+    if (!rows) continue;
+    inProgressRows += rows;
+    if (activeSet.has(sessionId)) inProgress += 1; // one in-flight todo per active session
+  }
   return {
     updatedAt: now,
     policy: rules,
@@ -576,7 +584,7 @@ export function organize({ sessions = [], todos = [], now = Date.now(), policy =
     stale,
     folded,
     inProgress,
-    requeuedTodos: Math.max(0, inProgressRows.length - inProgress),
+    requeuedTodos: Math.max(0, inProgressRows - inProgress),
     // Outside counts on purpose: it moves every tick, and sameOrganization
     // must not redraw the tree each time it does. The overseer digest reads it.
     staleQuietMin: staleQuietMs ? Math.round(staleQuietMs / MINUTE) : 0,

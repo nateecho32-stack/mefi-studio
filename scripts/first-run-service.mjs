@@ -84,9 +84,9 @@ export function createFirstRunService(deps = {}) {
 
   // Writes the owner's choice: the first-run record, OpenCode as the builder
   // CLI when it is the only usable one, the free builder model when chosen
-  // (consumed by the free builder route once it is wired), and Jev selection
-  // when a Jev key exists. Keys and model overrides for other providers are
-  // never touched.
+  // (the Free coding tier runs it; Auto keeps it as OpenCode's pinned model
+  // when the z.ai plan is not in use), and Jev selection when a Jev key
+  // exists. Keys and model overrides for other providers are never touched.
   async function apply({ prefs = {} } = {}) {
     if (!lastScan) return { ok: false, error: "Run the first scan before using its setup." };
     const settings = await readSettings();
@@ -129,7 +129,7 @@ export function createFirstRunService(deps = {}) {
     }
     await writeSettings(next);
     const notes = [];
-    if (firstRun.builder.model) notes.push("The free builder model is saved; builders use it once the free builder route is wired (until then they keep OpenCode's default).");
+    if (firstRun.builder.model) notes.push("The free builder model is saved: choose the Free coding tier in Settings to run it one worker at a time (Auto keeps it as OpenCode's pinned model when the z.ai plan is not in use).");
     if (plan.judge.kind === "assistant" || plan.judge.kind === "opencode-free") notes.push("The stand-in judge is saved; routing and intake use it once the judge route is wired (until then fixed defaults apply).");
     log(`[first-run] applied: ${applied.join(", ")}`);
     return { ok: true, firstRun, plan, applied, notes, summary: `Explorer ${firstRun.explorer.model ?? "OpenCode default"}, builder ${firstRun.builder.model ?? "OpenCode default"}, judge ${firstRun.judge.kind}.` };

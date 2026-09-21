@@ -4876,7 +4876,7 @@
   function renderAgentModeControl() {
     const assistant = state.assistant;
     const known = ["swarm", "cluster"].includes(assistant?.mode);
-    // The tree toolbar and the Work settings view show the same selector.
+    // The tree toolbar (quick switch) and the rail's Agents view show the same selector.
     for (const control of [el.feedAgentMode, el.settingsAgentMode].filter(Boolean)) {
       control.disabled = Boolean(state.agentModeSaving) || !known || !window.mefiStudio?.assistantAutopilot;
       if (!state.agentModeSaving) control.value = assistant?.mode === "cluster" ? "cluster" : "swarm";
@@ -4888,6 +4888,7 @@
       : assistant.clusterFocus?.title ? `Cluster · agents focus on: ${assistant.clusterFocus.title}`
       : autopilotJobs(assistant).length ? "Cluster · current workers finish before agents focus on one task."
       : "Cluster · the Assistant and builders share one task, delegate independent subtasks, then combine the results.";
+    renderAgentsGlance();
   }
 
   // Settings live in their own rail view. The same renderers also run on every
@@ -4908,6 +4909,32 @@
         : state.assistant.enabled ? "Autopilot on" : "Autopilot off";
       el.settingsState.dataset.on = String(Boolean(window.mefiStudio && state.assistant?.enabled));
     }
+    renderAgentsGlance();
+  }
+
+  // The three chips above the Agents controls: the queue switch, how many builds
+  // are running under which cap, and the coordination mode. Painted from the same
+  // assistant state the controls read, so the two can never disagree.
+  function renderAgentsGlance() {
+    const chip = (element, text, tone) => {
+      if (!element) return;
+      const value = element.querySelector("b");
+      if (value) value.textContent = text;
+      element.dataset.tone = tone;
+    };
+    if (!el.glanceAutopilot && !el.glanceWorkers && !el.glanceMode) return;
+    if (!window.mefiStudio) {
+      for (const element of [el.glanceAutopilot, el.glanceWorkers, el.glanceMode]) chip(element, "Desktop only", "idle");
+      return;
+    }
+    const assistant = state.assistant;
+    const on = Boolean(assistant?.enabled);
+    chip(el.glanceAutopilot, !assistant ? "…" : on ? "On" : "Off", !assistant ? "idle" : on ? "ok" : "off");
+    const running = assistant ? autopilotJobs(assistant).length : 0;
+    const cap = el.feedParallel?.value === "machine" ? "auto cap" : Number(el.feedParallel?.value) > 0 ? `cap ${el.feedParallel.value}` : "";
+    chip(el.glanceWorkers, `${running} running${cap ? ` · ${cap}` : ""}`, running ? "ok" : "idle");
+    const mode = assistant?.mode === "cluster" ? "Cluster" : assistant?.mode === "swarm" ? "Swarm" : "…";
+    chip(el.glanceMode, mode, mode === "…" ? "idle" : "ok");
   }
 
   async function changeAgentMode(mode) {
@@ -9445,6 +9472,9 @@
     el.railAskBadge = document.getElementById("cmd-rail-ask-badge");
     el.settings = document.getElementById("cmd-settings");
     el.settingsState = document.getElementById("cmd-settings-state");
+    el.glanceAutopilot = document.getElementById("cmd-glance-autopilot");
+    el.glanceWorkers = document.getElementById("cmd-glance-workers");
+    el.glanceMode = document.getElementById("cmd-glance-mode");
     el.done = document.getElementById("cmd-done");
     el.doneList = document.getElementById("cmd-done-list");
     el.doneState = document.getElementById("cmd-done-state");

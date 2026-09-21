@@ -7,7 +7,9 @@ Pins the three accounting rules on one tick of the assistant pipeline:
    "Pause polling on visibility hidden" pair becomes one session.
 2. Work accounting caps in-progress todos at one per active session and
    requeues the overflow (organization.inProgress / requeuedTodos), so the
-   watcher intel can never show more in-flight todos than active sessions.
+   watcher intel can never show more in-flight todos than active sessions;
+   an in-progress row on a stale or folded session is rot waiting for its
+   rescue, never work in flight.
 3. The overseer digest derives work.inFlight from the freshest watcher
    report's in-progress todo count, so the digest and the watcher never
    disagree (watcher said 10 while the journal said 0); a stale report or no
@@ -71,6 +73,8 @@ class SessionDedupeTest(unittest.TestCase):
                 "distinct": _session("ses_b", 4, "Draw the tide pool fish"),
                 "cappedSessions": [_session("ses_c", 1, "Wire the crafting bench"), _session("ses_d", 2, "Draw the tide pool fish")],
                 "manyTodos": _todos(["ses_c", "ses_d"] * 5),
+                "staleSession": _session("ses_stale", 30 * 60, "Rename the swamp biome"),
+                "staleTodos": [{"sessionId": "ses_stale", "content": "Rename the swamp biome", "status": "in_progress", "position": 0}],
                 "workJournal": [{"id": "job_1", "kind": "audit", "role": "auditor", "text": "audit ran", "startedAt": NOW - 2 * 60 * MINUTE, "attempts": 1, "status": "running"}],
             }
         )
@@ -95,14 +99,25 @@ console.log(JSON.stringify({
   order: deduped.order,
 }));
 
-// --- member 2: one active session per in-progress todo, overflow requeued --
-const capped = organize({ sessions: fixture.cappedSessions, todos: fixture.manyTodos, now: NOW });
-console.log(JSON.stringify({
-  active: capped.counts.active,
-  inProgress: capped.inProgress,
-  requeuedTodos: capped.requeuedTodos,
-  invariant: capped.inProgress <= capped.counts.active,
-}));
+        // --- member 2: one active session per in-progress todo, overflow requeued --
+        const capped = organize({ sessions: fixture.cappedSessions, todos: fixture.manyTodos, now: NOW });
+        console.log(JSON.stringify({
+          active: capped.counts.active,
+          inProgress: capped.inProgress,
+          requeuedTodos: capped.requeuedTodos,
+          invariant: capped.inProgress <= capped.counts.active,
+        }));
+        // a stale session's in-progress row rides with the active sessions but
+        // never counts as in flight, and alone it is pure requeue
+        const withRot = organize({ sessions: [...fixture.cappedSessions, fixture.staleSession], todos: [...fixture.manyTodos, ...fixture.staleTodos], now: NOW });
+        const rotOnly = organize({ sessions: [...fixture.cappedSessions, fixture.staleSession], todos: fixture.staleTodos, now: NOW });
+        console.log(JSON.stringify({
+          inProgress: withRot.inProgress,
+          requeuedTodos: withRot.requeuedTodos,
+          rotStale: withRot.stale.includes("ses_stale"),
+          rotOnlyInFlight: rotOnly.inProgress,
+          rotOnlyRequeued: rotOnly.requeuedTodos,
+        }));
 
 // --- member 1: the digest reads the watcher's count, not its journal -------
 const base = normalizeState({ work: fixture.workJournal }, NOW);
@@ -124,7 +139,7 @@ console.log(JSON.stringify({ agree: overseerDigest(fresh, NOW).work.inFlight ===
 """.replace("PROJECT", STUDIO.as_posix())
         result = subprocess.run([NODE, "--input-type=module", "-", fixture], input=script, capture_output=True, text=True, encoding="utf-8", timeout=60)
         self.assertEqual(0, result.returncode, result.stderr)
-        pair, deduped, capped, digest, agree = (json.loads(line) for line in result.stdout.splitlines())
+        pair, deduped, capped, rot, digest, agree = (json.loads(line) for line in result.stdout.splitlines())
         self.assertEqual(1, pair["sessions"], "the duplicated 'Pause polling on visibility hidden' pair is one session")
         self.assertEqual(1, pair["active"], "one active slot for one title")
         self.assertEqual(["ses_a"], pair["activeIds"], "the newest session of a duplicated title wins")
@@ -135,6 +150,11 @@ console.log(JSON.stringify({ agree: overseerDigest(fresh, NOW).work.inFlight ===
         self.assertEqual(2, capped["inProgress"], "one in-progress todo per active session")
         self.assertEqual(8, capped["requeuedTodos"], "the overflow is requeued, not counted in flight")
         self.assertTrue(capped["invariant"], "watcher intel shows in-progress todos no greater than active sessions")
+        self.assertEqual(2, rot["inProgress"], "the stale session's row does not add in-flight work")
+        self.assertEqual(9, rot["requeuedTodos"], "the stale session's row rides as requeued overflow")
+        self.assertTrue(rot["rotStale"], "the quiet in-progress session is classified stale")
+        self.assertEqual(0, rot["rotOnlyInFlight"], "rot alone is never work in flight")
+        self.assertEqual(1, rot["rotOnlyRequeued"], "rot alone is pure requeue")
         self.assertEqual(1, digest["journalOnly"], "without a watcher report the work journal stands in")
         self.assertEqual(10, digest["watcherWins"], "the watcher said 10; the digest must not say 0")
         self.assertEqual(1, digest["staleFallsBack"], "a stale watcher report does not own the digest")

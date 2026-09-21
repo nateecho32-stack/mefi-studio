@@ -1,5 +1,59 @@
 # Agent loop and startup measurements
 
+## Board mutations stop re-serializing the whole board, September 21, 2026
+
+The live project's board (`data/projects/<id>/eyes-tasks.json`) is 7.9 MB for
+84 tasks, and 91% of it is `contextHistory`: 1,150 saved revisions. In file
+mode (the SQLite store stays off; see `getEyes` in main.cjs) every gateway
+mutation re-parsed the three board files, stringified the whole task board
+twice to detect a change, hashed every task's snapshot, and pretty-printed
+the whole board again to write it. Every read behind the broadcast (the task
+list, the backlog summary, the queue-depth refresh) parsed it once more. All
+of that ran on the Electron main thread, up to once a second per running job
+through the executor checkpoint. Measured on the development Windows machine,
+Node 24.15.0, on a copy of that live board:
+
+| Cost inside one mutation | Before | After |
+|---|---:|---:|
+| Parse of the task board per read | 22 ms parse + 8 ms UTF-8 decode | 3 ms byte compare + 3.5 ms row clone while the file is unchanged |
+| Change detection | 72 ms (whole board stringified twice) | 7–14 ms (row bodies; a shared history object compares by reference) |
+| `recordTaskRevision` over 84 untouched rows | 19 ms | none (the hash is memoized on the shared history object) |
+| Serializing the board for a write | 45 ms stringify + 5 ms encode | one changed row re-printed; unchanged rows copied as byte spans |
+
+Through the gateway (`mutateBoard`, file path) with the real reader and
+project facade, median of nine runs; wall time / process CPU / worst
+event-loop gap under a 1 ms ticker:
+
+| Gateway operation | Before | After |
+|---|---:|---:|
+| No-op mutation | 154 / 142 / 4 ms | 24 / 16 / 2 ms |
+| Executor checkpoint (`runProgress` on one row) | 256 / 235 / 172 ms | 61 / 47 / 21 ms |
+| One-row edit (title) | 195 / 172 / 149 ms | 203 / 46 / 20 ms |
+| Scoped `readJson` of the tasks board | 44 / 32 / 3 ms | 16 / 0 / 3 ms |
+
+Wall time includes the atomic write's disk I/O on the OneDrive-pinned tree,
+which varies run to run and which the main thread does not wait on (the two
+write rows above wrote the same file); the CPU and event-loop-gap columns
+are the responsiveness cost. The on-disk format is unchanged,
+`JSON.stringify(rows, null, 2)` byte for byte (tests/eyes_row_cache.test.mjs
+pins it against a mix of moved, edited, null and history-swapped rows). A
+rewrite by another process is always seen, because the reader's cache is
+validated against the file's bytes rather than a timestamp, and rows handed
+to callers are fresh copies with only the append-only `contextHistory`
+shared. Rows that reach the gateway from a fresh parse are hashed as before,
+so drift written outside the gateway is still recorded
+(tests/board_gateway.test.mjs). The A/B harness stayed out of the tree; none
+of these numbers are pass/fail thresholds.
+
+`npm run check` no longer spawns one Node process per source: the in-process
+pass scripts/check-syntax.mjs compiles all 90 files the way Node would load
+them (CommonJS through the module wrapper, `.mjs` and renderer `.js` as
+module source under the package's `"type": "module"`), and the check-targets
+audit treats the pass as covering everything it discovers, preload.cjs
+included. On this machine the `node --check` chain took 15.0 s; the pass
+takes 0.6 s including its relaunch under `--experimental-vm-modules`, and the
+five chain steps together about 2.3 s.
+
 ## Store reads leave the main process, September 21, 2026
 
 Every OpenCode-store read (`node:sqlite` is synchronous) and the synchronous

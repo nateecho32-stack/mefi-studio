@@ -1,5 +1,74 @@
 # Test Runs
 
+Coding tiers, Codex CLI and the Command usage dropdown (2026-09-21 16:00). Settings
+› Coding workers gained a coding tier (`executorTier`: Auto / Free / Fast /
+Heavy) with per-CLI tier models (`executorTierModels`) resolved by
+`executorTierDefaults` in main.cjs (z.ai GLM pair on the plan, the first scan's
+free pick, Claude Code's `sonnet`/`opus` aliases, otherwise the CLI default;
+Free never falls back to a billed model and runs one worker at a time). Codex
+is a fifth builder seat (`codex exec` on stdin, sandbox bypassed like the other
+CLIs) and an assistant route (`codex exec --json -s read-only`, parsed by
+`parseCodexCliResult`). The Command usage panel leads with the first live plan
+account (Go windows or z.ai quota), then aligned rows, with an informative
+collapsed header; the workspace usage tile follows the same lead. Validated on
+a tree shared live with the menu-cleanup session (coordinated by message, no
+overlapping regions): `npm run check` clean; `tests/executor_tiers.test.mjs`
+(new, 8), model_auto_setup, executor_parallel, planning_routing,
+jev_routing_ui, usage_tracker, usage_tracker_host, usage_tracker_ui,
+first_run_service and the host batch (assistant_work_on, build_approval,
+executor_delegation, executor_lifecycle, executor_modes) all green; the full
+Node suite 1676/1682 under machine load, with each miss (eyes_worker timeout
+case, performance_render, renderer_recovery, task_overview_render) passing
+alone; Python contracts 246 OK. Browser check with a fake bridge on the built
+booklet: Codex in both selects, tier switching updates the model field,
+placeholder and status line, the usage dropdown renders lead + rows and the
+collapsed header reads `Updated … · z.ai GLM 5h 40.5% · wk 12%`. Not run: a
+real `codex exec` build (no paid run started).
+
+Menu cleanup pass (2026-09-21, afternoon). The studio sidebar is one menu with
+a visible grip on the left edge (`.sidebar-grip` inside the unchanged
+`#workspace-sidebar-toggle`), four go-to rows with keycaps and badges, the
+project list, an inline two-column tools grid (`#workspace-tools` is open by
+default and exempt from nav.js's outside-click / Escape / activation folding;
+`renderWorkspaceTools` now also drops `tasks` and `plans`, which the rows above
+pin), a Settings / Music / Start here row and the "Make yourself at home"
+drawer; the entry that owns the visible surface carries `aria-current="page"`
+(`MefiNav.paintCurrent`, repainted on every `mefi:nav` and on menu open). Every
+"More tools" menu (tabs row, sheet headers, the dock) shares `moreSummary()`:
+glyph, label, turning chevron and one grouped glass card. Refresh and
+Print / PDF moved from the header into the catalog toolbar; the opencode.ai
+link moved to the footer. The Settings tab is one page of cards with a sticky
+`#settings-nav` (booklet.js `wireSettingsNav` / `syncSettingsNav`; entries
+whose card sits under a hidden `#studio-desktop` drop out, folded cards open on
+jump). The Command rail's "Work settings" tab is "Agents" with an at-a-glance
+strip (`renderAgentsGlance` in idle.js: Autopilot / Workers / Mode chips) and
+glyph-led rows; every id the harnesses read is unchanged. The toolbar's quick
+agent-mode select was removed and then restored: the Electron render fixture
+asserts it stays in `.cmd-tools` with Live work collapsed. Validated:
+`npm run check` (88 targets, every selector used), `npm run audit` (0
+findings), `tools.test_mefi_studio_idle` + `tools.test_mefi_studio_booklet`
+(27 OK), the renderer batch (sidebar, onboarding, nav_startup,
+palette_keyboard, workspace_ui, auditor_dom, booklet_build, catalog_renderer,
+jev_routing_ui, model_auto_setup, command_new_work: 119/119) and
+`command_render` + `command_visuals` + `agent_modes` (pass after the restore);
+`tests/onboarding.test.mjs` and `tools/verify_workspace.py` updated for the
+pinned-rows exclusion (`[data-nav=explorer]` in the harness). The booklet was
+rebuilt and walked in the browser build at 1440x900: sidebar, Settings,
+Command rail Agents tab, dock and sheet-header menus, catalog toolbar.
+
+Host-batch lag-gate re-run (2026-09-21). The 79 host-batch failures in the
+launch-screen entry below were tied to the then-uncommitted silent-probe lag
+gate; that work has since landed in `b1d4042` (machine memory-warn override
+and the silent-probe rule in the foreman's lag gate) with test alignment in
+`83a3ee5` (readSettings/machineMemoryWarnOverride). Re-run on the merged tree:
+the lag-gate trio (`foreman_lag_gate`, `machine_capacity`,
+`worker_responsiveness`) at 48/48 and the nine-file host batch
+(assistant_loop, assistant_work_on, backlog_engine, build_approval,
+executor_lifecycle, board_growth, projects, executor_resume,
+executor_delegation) at 170/170, 0 fail; `npm run check` clean (88 targets).
+The explorer state poll from the same snapshot is in place
+(`renderer/explorer.js` `EXPLORER_POLL_MS` 5000 via `MefiBoot.pollStart`).
+
 Launch screen and agent hold (2026-09-21). An interactive launch opens on a
 project chooser inside the boot gate (`renderer/startup.js`, boot.js phase
 `choose`) before any readiness step reads the workspace, and the assistant

@@ -333,8 +333,51 @@
       requestAnimationFrame(() => state.graph.redraw());
     }
     if (name === "eyes") window.MefiEyes?.init();
-    if (name === "studio") initStudio();
+    if (name === "studio") {
+      initStudio();
+      syncSettingsNav();
+    }
     writeStore("mefiStudio.tab", name);
+  }
+
+  // ---- settings section nav ----
+  // The Settings tab is one page of cards; the sticky nav beside it jumps to a
+  // card, opens it when it is folded, and follows the scroll position. Cards
+  // hidden with their #studio-desktop wrapper (browser build) drop out of the nav.
+  function settingsSections() {
+    return Array.from(document.querySelectorAll("#settings-nav [data-settings-jump]")).map((button) => ({ button, section: document.getElementById(button.dataset.settingsJump) }));
+  }
+
+  function syncSettingsNav(currentId) {
+    const items = settingsSections();
+    if (!items.length) return;
+    let current = currentId ?? items.find(({ button }) => button.getAttribute("aria-current") === "true")?.button.dataset.settingsJump ?? null;
+    for (const { button, section } of items) {
+      const unavailable = !section || Boolean(section.closest("#studio-desktop[hidden]"));
+      button.hidden = unavailable;
+      if (unavailable && current === button.dataset.settingsJump) current = null;
+    }
+    if (!current) current = items.find(({ button }) => !button.hidden)?.button.dataset.settingsJump ?? null;
+    for (const { button } of items) button.setAttribute("aria-current", String(button.dataset.settingsJump === current));
+  }
+
+  function wireSettingsNav() {
+    const nav = document.getElementById("settings-nav");
+    if (!nav) return;
+    nav.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-settings-jump]");
+      const section = button ? document.getElementById(button.dataset.settingsJump) : null;
+      if (!section) return;
+      if (section.tagName === "DETAILS") section.open = true;
+      section.scrollIntoView({ behavior: document.body.classList.contains("no-motion") ? "auto" : "smooth", block: "start" });
+      syncSettingsNav(button.dataset.settingsJump);
+    });
+    if (typeof IntersectionObserver !== "function") return;
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      if (visible[0]) syncSettingsNav(visible[0].target.id);
+    }, { rootMargin: "-15% 0px -65% 0px" });
+    for (const { section } of settingsSections()) if (section) observer.observe(section);
   }
 
   // ---- studio ----
@@ -382,8 +425,9 @@
     const setupAssistant = document.getElementById("setup-assistant");
     const setupSelection = document.getElementById("setup-selection");
     const setupBuilders = document.getElementById("setup-builders");
-    const providerNames = { auto: "Auto (your order)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
-    const singleModelProviders = new Set(["grok", "claude", "antigravity", "lmstudio", "custom"]);
+    const providerNames = { auto: "Auto (your order)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
+    const builderNames = { opencode: "OpenCode", grok: "Grok", claude: "Claude Code", codex: "Codex", antigravity: "Antigravity" };
+    const singleModelProviders = new Set(["grok", "claude", "codex", "antigravity", "lmstudio", "custom"]);
     function cliInstalled(id) {
       return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === id && cli.installed);
     }
@@ -412,7 +456,7 @@
         const provider = providerNames[routing.provider] ? routing.provider : "auto";
         const order = autoOrderOf(routing);
         const autoFirst = order.find((id) => autoProviderUsable(id));
-        const detail = provider === "grok" || provider === "claude" || provider === "antigravity" ? "CLI login"
+        const detail = provider === "grok" || provider === "claude" || provider === "codex" || provider === "antigravity" ? "CLI login"
           : provider === "lmstudio" ? "no key needed"
           : provider === "custom" ? (routing.hasCustom ? "key saved" : "no key saved")
           : provider === "auto" ? (autoFirst ? `will use ${providerNames[autoFirst]}` : "no usable provider in this order yet")
@@ -426,9 +470,9 @@
       if (setup.cliError) setupBuilders.textContent = "CLI status unavailable";
       else if (!setup.clis) setupBuilders.textContent = "checking…";
       else {
-        const builderIds = ["opencode", "grok", "claude", "antigravity"];
+        const builderIds = ["opencode", "grok", "claude", "codex", "antigravity"];
         const installed = setup.clis.filter((cli) => cli.installed && builderIds.includes(cli.id));
-        setupBuilders.textContent = installed.length ? `${installed.map((cli) => cli.name).join(", ")} installed` : "No builder CLI detected — install OpenCode, Grok, Claude Code or Antigravity";
+        setupBuilders.textContent = installed.length ? `${installed.map((cli) => cli.name).join(", ")} installed` : "No builder CLI detected — install OpenCode, Grok, Claude Code, Codex or Antigravity";
       }
       const readiness = document.getElementById("provider-readiness");
       const selected = routing && providerNames[routing.provider] ? routing.provider : null;
@@ -564,7 +608,49 @@
     const modelHeavy = document.getElementById("ai-model-heavy");
     const executorCli = document.getElementById("executor-cli");
     const executorModel = document.getElementById("executor-model");
+    const executorTier = document.getElementById("executor-tier");
+    const executorModelLabel = document.getElementById("executor-model-label");
+    const executorTierStatus = document.getElementById("executor-tier-status");
     const lmStudioEndpoint = document.getElementById("lmstudio-endpoint");
+    // Coding tiers. One text field serves the active tier: Auto shows the
+    // pinned per-CLI override, a tier shows that tier's own saved model, and
+    // the placeholder is the model that would actually run when the field is
+    // empty — the host resolves it, so what reads here is what the next run does.
+    const tierNames = { auto: "Auto", free: "Free", fast: "Fast", heavy: "Heavy" };
+    const tierSources = { saved: "saved", "first-scan": "from the first scan", zai: "on your z.ai plan", alias: "Claude Code alias", "cli-default": "CLI default", none: "no free model saved" };
+    const tierEntry = (routing, cli, tier) => routing?.executorTierDefaults?.[cli]?.[tier] ?? { model: "", source: tier === "free" ? "none" : "cli-default" };
+    function syncExecutorModel(routing) {
+      const cli = executorCli.value || "opencode";
+      const tier = tierNames[executorTier.value] ? executorTier.value : "auto";
+      if (tier === "auto") {
+        executorModelLabel.textContent = "Pinned model";
+        executorModel.value = routing?.executorModel ?? "";
+        executorModel.placeholder = "CLI default";
+        return;
+      }
+      const entry = tierEntry(routing, cli, tier);
+      executorModelLabel.textContent = `${tierNames[tier]} model`;
+      executorModel.value = routing?.executorTierModels?.[cli]?.[tier] ?? "";
+      executorModel.placeholder = entry.model && entry.source !== "saved" ? `${entry.model} · ${tierSources[entry.source] ?? entry.source}` : tier === "free" ? "no free model saved" : "CLI default";
+    }
+    function renderExecutorTiers(routing) {
+      const cli = executorCli.value || "opencode";
+      const tier = tierNames[executorTier.value] ? executorTier.value : "auto";
+      const cliName = builderNames[cli] ?? cli;
+      if (!routing?.executorTierDefaults) { executorTierStatus.textContent = "Coding tiers need the desktop app."; return; }
+      const describe = (name) => {
+        const entry = tierEntry(routing, cli, name);
+        if (!entry.model) return `${tierNames[name]} → ${name === "free" ? "no free model saved" : "CLI default"}`;
+        return `${tierNames[name]} → ${entry.model}${entry.source === "saved" ? "" : ` (${tierSources[entry.source] ?? entry.source})`}`;
+      };
+      const active = tierEntry(routing, cli, tier);
+      const lead = tier === "auto"
+        ? `Auto: ${cli === "opencode" ? "Jev or the stand-in judge picks per task within your provider; a pinned model wins" : `${cliName} runs the pinned model or its CLI default`}.`
+        : tier === "free" && !active.model
+          ? `Free tier: no free model is saved for ${cliName}, so builds wait until one is${cli === "opencode" ? " (run the first scan, or save a free provider/model id)" : ""}.`
+          : `${tierNames[tier]} tier: ${cliName} runs ${active.model || "its CLI default"}${tier === "free" ? ", one worker at a time" : ""}.`;
+      executorTierStatus.textContent = `${lead} ${["free", "fast", "heavy"].map(describe).join(" · ")}.`;
+    }
     const customEndpoint = document.getElementById("custom-endpoint");
     function evidenceText(evidence, taskType) {
       const workerNote = taskType === "coding" ? " Available measurements describe Studio HTTP requests; CLI worker timing and billing are not measured." : "";
@@ -614,12 +700,14 @@
           modelRoutine.value = scoped?.routine ?? (fallbackAllowed ? routing.models?.routine ?? "" : "");
           modelHeavy.value = scoped?.heavy ?? (fallbackAllowed ? routing.models?.heavy ?? "" : "");
           executorCli.value = routing.executorCli ?? "opencode";
-          executorModel.value = routing.executorModel ?? "";
+          executorTier.value = tierNames[routing.executorTier] ? routing.executorTier : "auto";
+          syncExecutorModel(routing);
           lmStudioEndpoint.value = routing.lmStudioEndpoint ?? "";
           customEndpoint.value = routing.customEndpoint ?? "";
         }
+        renderExecutorTiers(routing);
         const selection = routing.modelSelection ?? "jev";
-        const cliProvider = routing.provider === "grok" ? "Grok CLI" : routing.provider === "claude" ? "Claude Code CLI" : routing.provider === "antigravity" ? "Antigravity CLI" : null;
+        const cliProvider = routing.provider === "grok" ? "Grok CLI" : routing.provider === "claude" ? "Claude Code CLI" : routing.provider === "codex" ? "Codex CLI" : routing.provider === "antigravity" ? "Antigravity CLI" : null;
         routingStatus.textContent = selection === "fixed"
           ? "Fixed defaults enabled. Explicit model overrides take priority."
           : cliProvider
@@ -654,7 +742,7 @@
     // Auto order editor: the host stores the same ordered array. The editor
     // only reorders, adds and removes, then saves the whole list; every save
     // re-reads routing so the controls stay authoritative.
-    const autoProviderIds = ["zai", "opencode", "grok", "claude", "antigravity", "lmstudio", "custom"];
+    const autoProviderIds = ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
     let autoOrder = ["zai", "opencode"];
     function renderAutoOrder() {
       autoOrderList.replaceChildren(...autoOrder.map((id, index) => {
@@ -714,7 +802,7 @@
       if (!autoProviderIds.includes(id) || autoOrder.includes(id)) return;
       return saveAutoOrder([...autoOrder, id], `${providerNames[id] ?? id} added to the auto order`);
     });
-    const routingControls = [providerSelect, modelSelection, fallbackToggle, autoOrderAdd, autoOrderAddButton, modelRoutine, modelHeavy, executorCli, executorModel, lmStudioEndpoint, customEndpoint];
+    const routingControls = [providerSelect, modelSelection, fallbackToggle, autoOrderAdd, autoOrderAddButton, modelRoutine, modelHeavy, executorCli, executorTier, executorModel, lmStudioEndpoint, customEndpoint];
     for (const control of routingControls) control.disabled = true;
     loadAiRouting({ syncControls: true }).finally(() => {
       for (const control of routingControls) control.disabled = false;
@@ -754,10 +842,19 @@
         }
       });
     }
-    // Builder models are saved per CLI too, so switching builders cannot leave
-    // one CLI's model id on another CLI's command line.
+    // Builder models are saved per CLI (and per tier) too, so switching
+    // builders or tiers cannot leave one CLI's model id on another CLI's
+    // command line. Every save re-reads routing, so the field and the tier
+    // line always show the host's answer.
     executorCli.addEventListener("change", () => saveRouting({ executorCli: executorCli.value }, `builders run on ${executorCli.value}`, { syncControls: true }));
-    executorModel.addEventListener("change", () => saveRouting({ executorModels: { [executorCli.value]: executorModel.value } }, `builder model for ${executorCli.value} ${executorModel.value.trim() ? `"${executorModel.value.trim()}"` : "reset to CLI default"}`));
+    executorTier.addEventListener("change", () => saveRouting({ executorTier: executorTier.value }, `coding tier: ${executorTier.value}`, { syncControls: true }));
+    executorModel.addEventListener("change", () => {
+      const cli = executorCli.value;
+      const tier = tierNames[executorTier.value] ? executorTier.value : "auto";
+      const value = executorModel.value;
+      if (tier === "auto") return saveRouting({ executorModels: { [cli]: value } }, `builder model for ${cli} ${value.trim() ? `"${value.trim()}"` : "reset to CLI default"}`);
+      return saveRouting({ executorTierModels: { [cli]: { [tier]: value } } }, `${tier} tier model for ${cli} ${value.trim() ? `"${value.trim()}"` : "reset to its default"}`, { syncControls: true });
+    });
     executorModel.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -809,8 +906,9 @@
     }
 
     // Coding CLIs: launch the owner's installed tools in their own terminal.
-    // Codex and Claude Code use their own accounts; OpenCode carries the
-    // Studio-managed mefi-zai provider when a z.ai key is saved.
+    // Grok, Codex, Claude Code and Antigravity use their own accounts;
+    // OpenCode carries the Studio-managed mefi-zai provider when a z.ai key
+    // is saved.
     const cliStatus = document.getElementById("cli-status");
     async function refreshCliStatus() {
       try {
@@ -896,6 +994,7 @@
     if (window.MefiNav) window.MefiNav.go(tab.dataset.tab, {}, { source: "tabs" });
     else showTab(tab.dataset.tab);
   });
+  wireSettingsNav();
   document.getElementById("refresh-btn").addEventListener("click", () => refresh("manual"));
   document.getElementById("print-btn").addEventListener("click", () => window.print());
   const motionToggle = document.getElementById("motion-toggle");

@@ -103,7 +103,7 @@ test("apply needs a scan, writes the first-run record and only the routing field
   // No Jev key and no assistant route: the free model judges batch work.
   assert.equal(state.settings.firstRun.judge.kind, "opencode-free");
   assert.equal(state.settings.firstRun.judge.model, "opencode/nemotron-3.5-lightning-free");
-  assert.ok(result.notes.some((note) => /free builder route is wired/.test(note)));
+  assert.ok(result.notes.some((note) => /choose the Free coding tier/.test(note)));
   assert.ok(result.notes.some((note) => /stand-in judge is saved/.test(note)));
   // Declining free-tier data removes the free builder again and clears the saved model.
   const declined = await service.apply({ prefs: { allowFreeTraining: false } });

@@ -220,6 +220,8 @@ test("every route that can report usage does: CLI JSON replies and Jev charges r
   assert.match(mainSource, /resolve\(cliReply\("claude", parseClaudeCliResult\(text\), text/);
   assert.match(mainSource, /resolve\(cliReply\("grok", parseGrokCliResult\(text\), text/);
   assert.match(mainSource, /resolve\(cliReply\("antigravity", parseAntigravityCliResult\(text\), text/);
+  assert.match(mainSource, /codex exec --json --ephemeral --skip-git-repo-check --color never -s read-only/, "the Codex assistant route prints its usage as JSONL, read-only");
+  assert.match(mainSource, /resolve\(cliReply\("codex", parseCodexCliResult\(text\), text/);
   assert.match(mainSource, /tokenUsage: cli\.tokenUsage \?\? \{\}, costUsd: cli\.costUsd \?\? null/, "the CLI observation records what the reply reported");
   assert.match(mainSource, /async function chargeJevCall\(result, purpose, route = null\)/);
   const charge = mainSource.slice(mainSource.indexOf("async function chargeJevCall"), mainSource.indexOf("async function runJevIntake"));
@@ -230,6 +232,7 @@ test("every route that can report usage does: CLI JSON replies and Jev charges r
   assert.match(mainSource, /chargeJevCall\(result, "jev-model-routing", jevRoute\)/);
   // The builders keep their text protocol: their sentinel parsing reads plain stdout.
   assert.match(mainSource, /claude -p --output-format text --dangerously-skip-permissions/);
+  assert.match(mainSource, /codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never/);
 });
 
 test("both surfaces exist in the template and are driven by the tracker module", () => {

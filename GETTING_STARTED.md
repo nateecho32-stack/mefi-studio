@@ -198,7 +198,8 @@ workers, what needs you, what is next, the machine and today's usage; its
 **Your work** gives you All, Queue, Ideas, Review and Done views. **Command
 view** in the sidebar opens
 Command, where **Live work** shows running workers, reported steps and queue
-readiness. Open a task to inspect its brief, dependencies, attempts and evidence.
+readiness, and the **Agents** tab holds Autopilot, Parallel builds, Build mode
+and Agent mode with an at-a-glance strip above them. Open a task to inspect its brief, dependencies, attempts and evidence.
 
 | What you see | What it means | Next step |
 | --- | --- | --- |

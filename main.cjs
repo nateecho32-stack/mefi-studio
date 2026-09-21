@@ -28,7 +28,7 @@ const { createEyesClient, wrapEyes } = require("./scripts/eyes-client.cjs");
 const { createModelPerformanceStore } = require("./scripts/model-performance.cjs");
 const { limitsFromPlan, aggregateUsage, mergeLedgers, opencodeWindows, parseOpencodeUsage, describeOpencodeStatus, describeAccountStatus,
   parseOpenrouterKey, parseOpenrouterCredits, parseGatewayCredits, parseZaiQuota, providerInfo,
-  parseClaudeCliResult, parseGrokCliResult, parseAntigravityCliResult } = require("./scripts/usage-tracker.cjs");
+  parseClaudeCliResult, parseGrokCliResult, parseAntigravityCliResult, parseCodexCliResult } = require("./scripts/usage-tracker.cjs");
 const { createPerformanceProfiler } = require("./scripts/performance-profiler.cjs");
 const { buildContext } = require("./scripts/context-manager.cjs");
 const electron = require("electron");
@@ -1257,12 +1257,12 @@ const LMSTUDIO_ENDPOINT = "http://127.0.0.1:1234/v1/chat/completions";
 // Any other OpenAI-compatible endpoint (OpenRouter, Together, vLLM, a proxy,
 // a hosted gateway): its URL is a plain preference, its key lives in its own
 // encrypted field, and only a saved key makes the route usable.
-const AI_PROVIDERS = ["auto", "zai", "opencode", "grok", "claude", "antigravity", "lmstudio", "custom"];
+const AI_PROVIDERS = ["auto", "zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
 // Auto mode's provider pool. The owner saves an ordered subset in
 // aiAutoProviders; the first usable entry answers. "auto" itself is never a
 // candidate.
-const AI_AUTO_PROVIDERS = ["zai", "opencode", "grok", "claude", "antigravity", "lmstudio", "custom"];
-const AUTO_PROVIDER_NAMES = { zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" };
+const AI_AUTO_PROVIDERS = ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
+const AUTO_PROVIDER_NAMES = { zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" };
 
 const ASSISTANT_SYSTEM = [
   "You are A-Eyes, the coordination assistant for several AI coding agents sharing one machine and one repo.",
@@ -1466,7 +1466,7 @@ function decryptKey(settings, field) {
 // their routine choice serves the heavy passes too. Their saved models also
 // never fall back to the role-wide overrides — a GLM id saved for z.ai must
 // not leak into a CLI or local server that never had it.
-const SINGLE_MODEL_PROVIDERS = new Set(["grok", "claude", "antigravity", "lmstudio", "custom"]);
+const SINGLE_MODEL_PROVIDERS = new Set(["grok", "claude", "codex", "antigravity", "lmstudio", "custom"]);
 
 // The assistant's model is the owner's choice, not a constant. Models are
 // saved per provider, so switching routes cannot carry a model id into a
@@ -1498,6 +1498,75 @@ function executorModelOverride(settings, cli = "") {
   if (scoped) return scoped;
   return String(settings.executorModel ?? "").trim().slice(0, 120);
 }
+
+// Coding tiers are the owner's answer to "how much should a build cost":
+// Free rides a free model one worker at a time, Fast the quick economical
+// model, Heavy the high-end one, and Auto keeps per-task selection (Jev, the
+// stand-in judge, or the CLI default) exactly as before. Tier models are
+// saved per builder CLI and per tier, so switching builders never carries one
+// CLI's id onto another's command line. A tier with no saved model resolves
+// to a built-in default only where Studio owns the knowledge (the z.ai GLM
+// pair on the coding plan, the first scan's free pick, Claude Code's own
+// aliases) and otherwise to the CLI default - except Free, which never falls
+// back to a billed default: no free model means no run, said plainly.
+const EXECUTOR_TIERS = ["auto", "free", "fast", "heavy"];
+const EXECUTOR_CLIS = ["opencode", "grok", "claude", "codex", "antigravity"];
+// `opencode run --model` takes provider/model; anything else is refused
+// before it can reach a shell.
+const OPENCODE_MODEL_ID = /^[a-z0-9][a-z0-9._-]*\/[A-Za-z0-9~][A-Za-z0-9._:/~-]*$/;
+function normalizeExecutorTier(value) {
+  return EXECUTOR_TIERS.includes(value) ? value : "auto";
+}
+function executorTierModels(settings, cli = "") {
+  const saved = settings.executorTierModels && typeof settings.executorTierModels === "object" ? settings.executorTierModels : {};
+  const scoped = saved[String(cli ?? "")] && typeof saved[String(cli ?? "")] === "object" ? saved[String(cli ?? "")] : {};
+  const pick = (value) => String(value ?? "").trim().slice(0, 120);
+  return { free: pick(scoped.free), fast: pick(scoped.fast), heavy: pick(scoped.heavy) };
+}
+// The saved tier models a route may actually use: an OpenCode id that is not
+// provider/model (only a hand-edited settings file can hold one) counts as
+// unsaved, so the built-in default runs rather than a silent switch to the
+// CLI default on another account.
+function executorTierModelsUsable(settings, cli = "") {
+  const saved = executorTierModels(settings, cli);
+  if (cli !== "opencode") return saved;
+  return Object.fromEntries(Object.entries(saved).map(([tier, value]) => [tier, OPENCODE_MODEL_ID.test(value) ? value : ""]));
+}
+// The effective model per tier for one builder, with where it came from. The
+// Settings placeholders and the executor route share this one answer, so what
+// the owner reads is what the next run does. `zai` says whether the z.ai
+// coding plan is usable for OpenCode runs (a saved key, routing not pinned
+// to OpenCode's own account).
+function executorTierDefaults(settings, cli = "", { zai = false } = {}) {
+  const saved = executorTierModelsUsable(settings, cli);
+  const entry = (tier, fallback, source) => {
+    if (saved[tier]) return { model: saved[tier], source: "saved" };
+    if (fallback) return { model: fallback, source };
+    return { model: "", source: tier === "free" ? "none" : "cli-default" };
+  };
+  if (cli === "opencode") {
+    const scan = settings.firstRun?.builder;
+    const scanFree = scan?.free === true && typeof scan.model === "string" && OPENCODE_MODEL_ID.test(scan.model) ? scan.model : "";
+    const legacy = String(settings.executorModels?.opencode ?? "").trim();
+    const legacyFree = !scanFree && /(^|[-_.])free$/i.test(legacy) && OPENCODE_MODEL_ID.test(legacy) ? legacy : "";
+    return {
+      free: entry("free", scanFree || legacyFree, scanFree ? "first-scan" : "saved"),
+      fast: entry("fast", zai ? `mefi-zai/${ZAI_MODEL_ROUTINE}` : "", "zai"),
+      heavy: entry("heavy", zai ? `mefi-zai/${ZAI_MODEL_HEAVY}` : "", "zai"),
+    };
+  }
+  if (cli === "claude") {
+    // Claude Code resolves its own aliases to the current generation on the
+    // owner's subscription, so no dated id is pinned here.
+    return { free: entry("free", "", "none"), fast: entry("fast", "sonnet", "alias"), heavy: entry("heavy", "opus", "alias") };
+  }
+  return { free: entry("free", "", "none"), fast: entry("fast", "", "cli-default"), heavy: entry("heavy", "", "cli-default") };
+}
+function executorTierZai(settings) {
+  const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
+  return Boolean(settings.zaiApiKeyEncrypted) && provider !== "opencode";
+}
+const TIER_LABELS = { auto: "Auto", free: "Free", fast: "Fast", heavy: "Heavy" };
 
 // Auto mode is an ordered list of providers, not a fixed pair: the first
 // usable entry answers, and - only when the owner opted in - a failed HTTP
@@ -1533,19 +1602,20 @@ function planAutoSetup({ settings = {}, keys = {}, clis = [], local = {} } = {})
     : keys.opencode ? "opencode"
       : installed("grok") ? "grok"
         : installed("claude") ? "claude"
-          : installed("antigravity") ? "antigravity"
-            : local.lmstudio ? "lmstudio"
-              : local.custom ? "custom"
-                : null;
+          : installed("codex") ? "codex"
+            : installed("antigravity") ? "antigravity"
+              : local.lmstudio ? "lmstudio"
+                : local.custom ? "custom"
+                  : null;
   if (!provider) {
     return { ok: false, error: "Nothing to set up yet - save a z.ai, OpenCode Go or custom key, install a coding CLI, or start LM Studio, then run auto setup again." };
   }
   const currentProvider = typeof settings.aiProvider === "string" ? settings.aiProvider : "auto";
   const currentSelection = settings.modelSelection === "fixed" ? "fixed" : "jev";
-  const currentBuilder = ["grok", "claude", "antigravity"].includes(settings.executorCli) ? settings.executorCli : "opencode";
+  const currentBuilder = ["grok", "claude", "codex", "antigravity"].includes(settings.executorCli) ? settings.executorCli : "opencode";
   const jevReady = Boolean(keys.gateway || keys.jev || keys.zen || keys.openrouter);
   const modelSelection = jevReady ? "jev" : "fixed";
-  const builder = installed("opencode") ? "opencode" : installed("grok") ? "grok" : installed("claude") ? "claude" : installed("antigravity") ? "antigravity" : null;
+  const builder = installed("opencode") ? "opencode" : installed("grok") ? "grok" : installed("claude") ? "claude" : installed("codex") ? "codex" : installed("antigravity") ? "antigravity" : null;
   const changes = {};
   if (currentProvider !== provider) changes.provider = provider;
   if (currentSelection !== modelSelection) changes.modelSelection = modelSelection;
@@ -1557,6 +1627,7 @@ function planAutoSetup({ settings = {}, keys = {}, clis = [], local = {} } = {})
     keys.opencode ? "opencode" : null,
     installed("grok") ? "grok" : null,
     installed("claude") ? "claude" : null,
+    installed("codex") ? "codex" : null,
     installed("antigravity") ? "antigravity" : null,
     local.lmstudio ? "lmstudio" : null,
     local.custom ? "custom" : null,
@@ -1567,6 +1638,7 @@ function planAutoSetup({ settings = {}, keys = {}, clis = [], local = {} } = {})
   else if (provider === "opencode") notes.push("OpenCode Go key found: the assistant bills OpenCode Go.");
   else if (provider === "grok") notes.push("No assistant key saved: the assistant answers through the Grok CLI's own login.");
   else if (provider === "claude") notes.push("No assistant key saved: the assistant answers through the Claude Code CLI's own subscription login.");
+  else if (provider === "codex") notes.push("No assistant key saved: the assistant answers through the Codex CLI's own ChatGPT login.");
   else if (provider === "antigravity") notes.push("No assistant key saved: the assistant answers through the Antigravity CLI's own Google account login.");
   else if (provider === "lmstudio") notes.push("No key saved: LM Studio is reachable on this machine, so the assistant answers from the local server.");
   else notes.push("No key saved: the saved custom endpoint answers for the assistant.");
@@ -1575,8 +1647,9 @@ function planAutoSetup({ settings = {}, keys = {}, clis = [], local = {} } = {})
   if (builder === "opencode") notes.push("OpenCode CLI found: builders run through it.");
   else if (builder === "grok") notes.push("OpenCode CLI not found; Grok CLI found: builders run through Grok.");
   else if (builder === "claude") notes.push("OpenCode CLI not found; Claude Code CLI found: builders run through Claude Code.");
+  else if (builder === "codex") notes.push("OpenCode CLI not found; Codex CLI found: builders run through Codex.");
   else if (builder === "antigravity") notes.push("OpenCode CLI not found; Antigravity CLI found: builders run through Antigravity.");
-  else notes.push("No builder CLI detected: install OpenCode, Grok, Claude Code or Antigravity before queuing build work.");
+  else notes.push("No builder CLI detected: install OpenCode, Grok, Claude Code, Codex or Antigravity before queuing build work.");
   if (changes.autoFallback === false) notes.push("Provider fallback turned off: the auto order has no second usable provider.");
   return { ok: true, changes, active: { provider, modelSelection, executorCli: builder ?? currentBuilder }, notes };
 }
@@ -1620,9 +1693,10 @@ async function compatEndpointModel(endpoint) {
 // takes the first usable route; a failed HTTP route retries down the remaining
 // HTTP entries solely when aiAutoFallback (formerly aiFallbackOpenCode) was
 // turned on - never by default, so there are no surprise charges. "grok",
-// "claude" and "antigravity" ride their CLI instead of an HTTP endpoint: the
-// CLI carries its own auth (Grok's login, Claude Code's subscription,
-// Antigravity's Google account), so no key is needed, and the model saved for
+// "claude", "codex" and "antigravity" ride their CLI instead of an HTTP
+// endpoint: the CLI carries its own auth (Grok's login, Claude Code's
+// subscription, Codex's ChatGPT login, Antigravity's Google account), so no
+// key is needed, and the model saved for
 // that provider (if any) is passed on the CLI. "lmstudio" talks to the local
 // server, also keyless. `allowCli: false` resolves the same preference order
 // with every CLI route excluded - the fallback pass a failed CLI call lands on.
@@ -1634,9 +1708,9 @@ async function resolveAiCandidate(provider, role, settings, { allowCli, zaiKey, 
       ? { provider, endpoint: ZAI_ENDPOINT, model: assistantModelOverride(settings, role, "zai") || (role === "heavy" ? ZAI_MODEL_HEAVY : ZAI_MODEL_ROUTINE), apiKey }
       : { provider, endpoint: ASSISTANT_ENDPOINT, model: assistantModelOverride(settings, role, "opencode") || ASSISTANT_MODEL, apiKey };
   }
-  if (provider === "grok" || provider === "claude" || provider === "antigravity") {
+  if (provider === "grok" || provider === "claude" || provider === "codex" || provider === "antigravity") {
     if (!allowCli) return null;
-    const available = provider === "grok" ? await grokCliAvailable() : provider === "claude" ? await claudeCliAvailable() : await antigravityCliAvailable();
+    const available = provider === "grok" ? await grokCliAvailable() : provider === "claude" ? await claudeCliAvailable() : provider === "codex" ? await codexCliAvailable() : await antigravityCliAvailable();
     return available ? { provider, endpoint: null, model: assistantModelOverride(settings, role, provider), apiKey: null, cli: true } : null;
   }
   if (provider === "lmstudio") {
@@ -1677,7 +1751,7 @@ async function resolveAiRoute(role = "routine", { allowCli = true } = {}) {
   const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
   const zaiKey = decryptKey(settings, "zaiApiKeyEncrypted");
   const goKey = decryptKey(settings, "apiKeyEncrypted");
-  if (provider === "grok" || provider === "claude" || provider === "antigravity") {
+  if (provider === "grok" || provider === "claude" || provider === "codex" || provider === "antigravity") {
     if (allowCli) return { ok: true, provider, model: assistantModelOverride(settings, role, provider), endpoint: null, apiKey: null, cli: true, fallback: null };
     return resolveAutoRoute(role, settings, { allowCli: false, zaiKey, goKey });
   }
@@ -1727,6 +1801,7 @@ function routingSettingsKey(settings) {
     settings.zenApiKeyEncrypted, settings.openrouterApiKeyEncrypted,
     settings.zaiApiKeyEncrypted, settings.apiKeyEncrypted,
     settings.executorCli, settings.executorModel, settings.executorModels,
+    settings.executorTier, settings.executorTierModels,
   ])).digest("hex");
 }
 
@@ -2010,8 +2085,8 @@ async function usageAccounts() {
   const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
   const order = normalizeAutoProviders(settings.aiAutoProviders);
   if (provider === "lmstudio" || order.includes("lmstudio") || settings.lmStudioEndpoint) none("lmstudio", "A local server has no account; its tokens are counted and nothing is billed.");
-  const [grok, claude, antigravity] = await Promise.all([grokCliAvailable(), claudeCliAvailable(), antigravityCliAvailable()]);
-  for (const [id, installed] of [["grok", grok], ["claude", claude], ["antigravity", antigravity]]) {
+  const [grok, claude, codex, antigravity] = await Promise.all([grokCliAvailable(), claudeCliAvailable(), codexCliAvailable(), antigravityCliAvailable()]);
+  for (const [id, installed] of [["grok", grok], ["claude", claude], ["codex", codex], ["antigravity", antigravity]]) {
     if (installed) none(id, `${AUTO_PROVIDER_NAMES[id]} bills its own login and has no account API; its replies report tokens, which are counted below.`);
   }
   const ordered = accounts.sort((a, b) => Number(b.read !== "none") - Number(a.read !== "none") || a.label.localeCompare(b.label));
@@ -2166,6 +2241,44 @@ async function claudeCompletion(system, user, model, { timeoutMs = 180000 } = {}
   });
 }
 
+// The Codex CLI as an assistant route: one headless `codex exec` turn on the
+// owner's ChatGPT (or API-key) login. The prompt rides stdin ("-" tells the
+// CLI to read its instructions there), the sandbox is read-only so a reply
+// request cannot touch the repo, --ephemeral keeps the turn out of the CLI's
+// session store, and --json prints the JSONL event stream the usage tracker
+// reads: the agent message plus the turn's token usage. The npm install is a
+// .cmd shim, so the CLI is reached through cmd.exe like claude is. Auth is
+// the CLI's own login, so no key is stored or read.
+async function codexCompletion(system, user, model, { timeoutMs = 180000 } = {}) {
+  const selected = cliModelArg(model);
+  const command = `codex exec --json --ephemeral --skip-git-repo-check --color never -s read-only${selected ? ` -m ${selected}` : ""} -`;
+  return await new Promise((resolve) => {
+    const child = spawn("cmd.exe", ["/d", "/s", "/c", command], { cwd: projectRoot(), windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+    let text = "";
+    let err = "";
+    const timer = setTimeout(() => {
+      try {
+        child.kill();
+      } catch {}
+      resolve({ ok: false, error: "codex cli timed out" });
+    }, timeoutMs);
+    child.stdout?.on("data", (chunk) => (text += chunk));
+    child.stderr?.on("data", (chunk) => (err += chunk));
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      resolve({ ok: false, error: `codex spawn failed: ${error.message}` });
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve(cliReply("codex", parseCodexCliResult(text), text, { code, err, model }));
+    });
+    try {
+      child.stdin?.write(`${system}\n\n${user}`);
+      child.stdin?.end();
+    } catch {}
+  });
+}
+
 // Antigravity CLI (`agy`) model names are display strings with spaces and
 // parentheses ("Gemini 3.1 Pro (High)"), unlike the slug ids the other CLIs
 // take. They travel as one argv entry through a direct spawn, never through a
@@ -2269,9 +2382,11 @@ function executorOpencodeEnv(extra = {}) {
 // OpenCode's own account; "zai" with no key fails loudly instead of billing
 // OpenCode by surprise. executorCli moves the whole run to another coding CLI
 // — "grok" hands the job to the Grok CLI (its own login, sentinel protocol
-// unchanged) and "claude" to Claude Code's headless mode (its own subscription
-// login, same protocol), so the builders' seats are a Studio choice, not a
-// constant. Neither CLI is a single point of failure: a missing binary
+// unchanged), "claude" to Claude Code's headless mode (its own subscription
+// login, same protocol) and "codex" to `codex exec` (its own ChatGPT login),
+// so the builders' seats are a Studio choice, not a constant. The coding
+// tier (Auto / Free / Fast / Heavy) then names the model each seat runs;
+// see executorTierDefaults. No CLI is a single point of failure: a missing binary
 // resolves straight to the opencode route, and a CLI route carries the
 // opencode route with it so a run that dies can fall back per job (see
 // spawnNextJob).
@@ -2303,6 +2418,20 @@ function claudeCliAvailable() {
   });
 }
 
+let codexCliProbe = { checkedAt: 0, ok: false };
+function codexCliAvailable() {
+  if (Date.now() - codexCliProbe.checkedAt < 5 * 60000) return Promise.resolve(codexCliProbe.ok);
+  return new Promise((resolve) => {
+    const child = spawn("where.exe", ["codex"], { windowsHide: true });
+    const done = (ok) => {
+      codexCliProbe = { checkedAt: Date.now(), ok };
+      resolve(ok);
+    };
+    child.on("error", () => done(false));
+    child.on("close", (code) => done(code === 0));
+  });
+}
+
 let antigravityCliProbe = { checkedAt: 0, ok: false };
 function antigravityCliAvailable() {
   if (Date.now() - antigravityCliProbe.checkedAt < 5 * 60000) return Promise.resolve(antigravityCliProbe.ok);
@@ -2319,21 +2448,53 @@ function antigravityCliAvailable() {
 
 async function executorRunEnv() {
   const settings = await readSettings();
+  const tier = normalizeExecutorTier(settings.executorTier);
+  // A CLI builder's model: the tier's model when a tier is chosen (Free with
+  // no free model is refused rather than billed), otherwise the pinned
+  // per-CLI override as before.
+  const cliBuildModel = (cli) => {
+    if (tier === "auto") return { model: executorModelOverride(settings, cli) };
+    const pick = executorTierDefaults(settings, cli)[tier];
+    if (tier === "free" && !pick.model) return { error: `Coding tier is Free but no free model is saved for ${cli} - choose Fast or Heavy, or save a free model id in Settings` };
+    return { model: pick.model, note: `${tier} tier${pick.model ? ` (${pick.model})` : " (CLI default)"}` };
+  };
   // The opencode half: the default runner, with the mefi-zai provider when a
   // z.ai key is saved. Computed once and reused as the CLI fallback route.
   const opencodeRoute = async () => {
+    const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
+    // A coding tier other than Auto pins the model for every OpenCode run:
+    // Free rides the free model one worker at a time and never a billed
+    // default; Fast and Heavy ride the saved tier model, or the z.ai GLM pair
+    // on the coding plan when a z.ai key is saved and routing is not pinned
+    // to OpenCode's own account. A z.ai-only pick with no key still fails
+    // loudly instead of quietly spending OpenCode credit.
+    if (tier !== "auto") {
+      const zaiEnv = provider === "opencode" ? null : await zaiOpencodeEnv();
+      if (provider === "zai" && !zaiEnv) return { error: "AI routing is z.ai-only but no z.ai key is saved" };
+      const raw = executorTierModels(settings, "opencode")[tier];
+      if (raw && !OPENCODE_MODEL_ID.test(raw)) logLine(`[autopilot] ${tier} tier model for opencode must be provider/model, ignoring "${raw.slice(0, 60)}"`);
+      const pick = executorTierDefaults(settings, "opencode", { zai: Boolean(zaiEnv) })[tier];
+      const model = OPENCODE_MODEL_ID.test(pick.model) ? pick.model : "";
+      if (tier === "free") {
+        if (!model) return { error: "Coding tier is Free but no free model is saved for OpenCode - run the first scan or save one in Settings" };
+        return { cli: "opencode", env: executorOpencodeEnv(), modelArgs: ` --model ${model}`, model, free: true, parallelCap: 1, tier, via: `${model} · free tier, one at a time` };
+      }
+      if (!model) return { cli: "opencode", env: executorOpencodeEnv(), modelArgs: "", tier, via: `opencode default · ${tier} tier (no model saved)` };
+      const managed = model.startsWith("mefi-zai/");
+      if (managed && !zaiEnv) return { error: `Coding tier is ${TIER_LABELS[tier]} on the z.ai plan but no z.ai key is saved` };
+      return { cli: "opencode", env: executorOpencodeEnv(managed ? zaiEnv : undefined), modelArgs: ` --model ${model}`, model, tier, via: `${model} · ${tier} tier` };
+    }
     // The builder model saved for OpenCode (Settings, or the first-run scan's
     // free pick) rides `--model provider/model`; a free-tier id caps the pool
     // at one worker. A value without a provider prefix is ignored with a log
     // line rather than handed to a shell.
     const savedBuilder = String(settings.executorModels?.opencode ?? "").trim();
-    const builderModel = /^[a-z0-9][a-z0-9._-]*\/[A-Za-z0-9~][A-Za-z0-9._:/~-]*$/.test(savedBuilder) ? savedBuilder : "";
+    const builderModel = OPENCODE_MODEL_ID.test(savedBuilder) ? savedBuilder : "";
     if (savedBuilder && !builderModel) logLine(`[autopilot] builder model for opencode must be provider/model, ignoring "${savedBuilder.slice(0, 60)}"`);
     const freeBuilder = Boolean(builderModel) && (/(^|[-_.])free$/i.test(builderModel) || (settings.firstRun?.builder?.free === true && settings.firstRun?.builder?.model === builderModel));
     const openDefault = (note) => builderModel
       ? { cli: "opencode", env: executorOpencodeEnv(), modelArgs: ` --model ${builderModel}`, model: builderModel, free: freeBuilder, parallelCap: freeBuilder ? 1 : null, via: `${builderModel}${freeBuilder ? " · free, one at a time" : ""}${note ? ` · ${note}` : ""}` }
       : { cli: "opencode", env: executorOpencodeEnv(), modelArgs: "", via: note ? `opencode default · ${note}` : "opencode default" };
-    const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
     if (provider === "opencode") return openDefault();
     const zaiEnv = await zaiOpencodeEnv();
     const mefiZai = () => ({ cli: "opencode", env: executorOpencodeEnv(zaiEnv), modelProvider: "zai", model: ZAI_MODEL_ROUTINE, modelArgs: ` --model mefi-zai/${ZAI_MODEL_ROUTINE}`, via: `mefi-zai/${ZAI_MODEL_ROUTINE}` });
@@ -2355,7 +2516,8 @@ async function executorRunEnv() {
     return openDefault();
   };
   if (settings.executorCli === "grok") {
-    const buildModel = executorModelOverride(settings, "grok");
+    const buildModel = cliBuildModel("grok");
+    if (buildModel.error) return { error: buildModel.error };
     const opencode = await opencodeRoute();
     if (!(await grokCliAvailable())) {
       // The chosen runner is not on the machine: do not park the builders —
@@ -2365,10 +2527,11 @@ async function executorRunEnv() {
       if (!opencode.error) opencode.via += " · grok missing";
       return opencode;
     }
-    return { cli: "grok", env: {}, modelArgs: "", via: "grok cli", grok: true, model: buildModel, opencode };
+    return { cli: "grok", env: {}, modelArgs: "", via: `grok cli${buildModel.note ? ` · ${buildModel.note}` : ""}`, grok: true, model: buildModel.model, tier, opencode };
   }
   if (settings.executorCli === "claude") {
-    const buildModel = executorModelOverride(settings, "claude");
+    const buildModel = cliBuildModel("claude");
+    if (buildModel.error) return { error: buildModel.error };
     const opencode = await opencodeRoute();
     if (!(await claudeCliAvailable())) {
       logLine("[autopilot] claude CLI not found — builders fall back to opencode run");
@@ -2376,10 +2539,23 @@ async function executorRunEnv() {
       if (!opencode.error) opencode.via += " · claude missing";
       return opencode;
     }
-    return { cli: "claude", env: {}, modelArgs: "", via: "claude cli", claude: true, model: buildModel, opencode };
+    return { cli: "claude", env: {}, modelArgs: "", via: `claude cli${buildModel.note ? ` · ${buildModel.note}` : ""}`, claude: true, model: buildModel.model, tier, opencode };
+  }
+  if (settings.executorCli === "codex") {
+    const buildModel = cliBuildModel("codex");
+    if (buildModel.error) return { error: buildModel.error };
+    const opencode = await opencodeRoute();
+    if (!(await codexCliAvailable())) {
+      logLine("[autopilot] codex CLI not found — builders fall back to opencode run");
+      pushAutopilotHistory("fallback", "codex CLI not found — builders on opencode");
+      if (!opencode.error) opencode.via += " · codex missing";
+      return opencode;
+    }
+    return { cli: "codex", env: {}, modelArgs: "", via: `codex cli${buildModel.note ? ` · ${buildModel.note}` : ""}`, codex: true, model: buildModel.model, tier, opencode };
   }
   if (settings.executorCli === "antigravity") {
-    const buildModel = executorModelOverride(settings, "antigravity");
+    const buildModel = cliBuildModel("antigravity");
+    if (buildModel.error) return { error: buildModel.error };
     const opencode = await opencodeRoute();
     if (!(await antigravityCliAvailable())) {
       logLine("[autopilot] antigravity CLI not found — builders fall back to opencode run");
@@ -2387,7 +2563,7 @@ async function executorRunEnv() {
       if (!opencode.error) opencode.via += " · antigravity missing";
       return opencode;
     }
-    return { cli: "antigravity", env: {}, modelArgs: "", via: "antigravity cli", antigravity: true, model: buildModel, opencode };
+    return { cli: "antigravity", env: {}, modelArgs: "", via: `antigravity cli${buildModel.note ? ` · ${buildModel.note}` : ""}`, antigravity: true, model: buildModel.model, tier, opencode };
   }
   return opencodeRoute();
 }
@@ -2395,16 +2571,17 @@ async function executorRunEnv() {
 async function assistantFetch(system, user, maxTokens = 6000, { role = "routine", taskType = role } = {}) {
   const route = await resolveAiRoute(role);
   if (!route.ok) return route;
-  // Grok, Claude Code and Antigravity ride their CLI, not an HTTP endpoint —
-  // maxTokens has no knob there, and the model saved for that provider rides
-  // the CLI itself. The CLI is the route, not the whole story: a missing
-  // binary, a timeout or an empty reply falls back once to the keyed HTTP
-  // routes — the rest of the auto order, never back to a CLI.
-  if (route.cli === true || route.provider === "grok" || route.provider === "claude" || route.provider === "antigravity") {
+  // Grok, Claude Code, Codex and Antigravity ride their CLI, not an HTTP
+  // endpoint — maxTokens has no knob there, and the model saved for that
+  // provider rides the CLI itself. The CLI is the route, not the whole story:
+  // a missing binary, a timeout or an empty reply falls back once to the
+  // keyed HTTP routes — the rest of the auto order, never back to a CLI.
+  if (route.cli === true || route.provider === "grok" || route.provider === "claude" || route.provider === "codex" || route.provider === "antigravity") {
     const startedAt = Date.now();
     const cli = route.provider === "grok" ? await grokCompletion(system, user, route.model)
       : route.provider === "claude" ? await claudeCompletion(system, user, route.model)
-        : await antigravityCompletion(system, user, route.model);
+        : route.provider === "codex" ? await codexCompletion(system, user, route.model)
+          : await antigravityCompletion(system, user, route.model);
     const observationId = crypto.randomUUID();
     await recordModelCall({ id: observationId, model: cli.model || route.model || `${route.provider}-default`, provider: route.provider, taskType, source: "request",
       at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : "error", errorKind: cli.ok ? null : "cli", tokenUsage: cli.tokenUsage ?? {}, costUsd: cli.costUsd ?? null });
@@ -2500,8 +2677,8 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
   // route still requires an encrypted key and a working OS keystore. Auto
   // clears the gate when its order lists a keyless provider.
   const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
-  const keyless = provider === "grok" || provider === "claude" || provider === "antigravity" || provider === "lmstudio"
-    || (provider === "auto" && normalizeAutoProviders(settings.aiAutoProviders).some((id) => ["grok", "claude", "antigravity", "lmstudio"].includes(id)));
+  const keyless = provider === "grok" || provider === "claude" || provider === "codex" || provider === "antigravity" || provider === "lmstudio"
+    || (provider === "auto" && normalizeAutoProviders(settings.aiAutoProviders).some((id) => ["grok", "claude", "codex", "antigravity", "lmstudio"].includes(id)));
   const anyKey = Boolean(settings.apiKeyEncrypted || settings.zaiApiKeyEncrypted || settings.customApiKeyEncrypted);
   if (!keyless && (!anyKey || !safeStorage.isEncryptionAvailable())) {
     return { ok: false, error: "no API key saved - add a z.ai or OpenCode Go key in the Studio tab" };
@@ -7484,6 +7661,54 @@ function withBoardLock(fn) {
 // partial application — and a rejected async mutator is not the rollback the
 // caller meant. Gather awaited inputs before the gateway.
 const isThenable = (value) => Boolean(value) && typeof value.then === "function";
+// Per-row JSON identity for the gateway's change detection. A task's
+// contextHistory is the bulk of the board (91% of the 7.9 MB live file) and
+// an append-only value: cloneTask keeps the read snapshot's history object on
+// the working copy, and recordTaskRevision hands back the previous history
+// when a row's snapshot is unchanged. Two rows holding the same history
+// object therefore differ only if their bodies do, and the bodies of the
+// 84-task live board are half a megabyte. Comparing rows this way replaced a
+// double whole-board stringify that cost 72 ms of every mutation's measured
+// 243 ms main-thread stall.
+const rowBodies = new WeakMap();
+function rowBody(row) {
+  if (!row || typeof row !== "object") {
+    const text = JSON.stringify(row);
+    return text === undefined ? "null" : text; // an array slot serializes undefined as null
+  }
+  let body = rowBodies.get(row);
+  if (body === undefined) {
+    const { contextHistory: _history, ...rest } = row;
+    body = JSON.stringify(rest);
+    rowBodies.set(row, body);
+  }
+  return body;
+}
+// The answer JSON.stringify equality gave, without serializing shared
+// history: a history object is compared by reference first and by text only
+// when the references differ.
+function sameRows(next, prev) {
+  if (next === prev) return true;
+  if (!Array.isArray(next) || !Array.isArray(prev)) return JSON.stringify(next) === JSON.stringify(prev);
+  if (next.length !== prev.length) return false;
+  for (let index = 0; index < next.length; index += 1) {
+    const a = next[index];
+    const b = prev[index];
+    if (a === b) continue;
+    if (a && b && typeof a === "object" && typeof b === "object" && a.contextHistory !== b.contextHistory && JSON.stringify(a.contextHistory) !== JSON.stringify(b.contextHistory)) return false;
+    if (rowBody(a) !== rowBody(b)) return false;
+  }
+  return true;
+}
+// Rows whose snapshot recordTaskRevision already hashed: the saved history
+// object (immutable, and shared across reads by the row cache in
+// scripts/eyes.mjs) maps to the body text that matched its latest entry. An
+// untouched row on the next pass costs one small stringify instead of a
+// snapshot copy, canonical sort and sha256 per task, which was 19 ms per
+// mutation across the live board. A row whose history object is new to this
+// process (a fresh parse after the file changed underneath) is hashed as
+// before, so drift written by another process is still recorded.
+const revisionBodies = new WeakMap();
 async function mutateBoard(mutator) {
   const eyes = await getEyes();
   return withBoardLock(async () => {
@@ -7498,11 +7723,21 @@ async function mutateBoard(mutator) {
       if (isThenable(returned)) throw new TypeError("mutateBoard: mutator must be synchronous — await inputs before the gateway, not inside it");
       const patch = returned ?? {};
       if (patch.ok === false) return patch;
+      const kind = patch.revisionKind ?? "updated";
+      const note = patch.revisionNote ?? "";
+      const now = Date.now();
       const tasks = (patch.tasks ?? board.tasks).map((task) => {
         if (task?.buildApproval && !backlog.hasBuildApproval(task)) delete task.buildApproval;
-        return taskContext.recordTaskRevision(task, {
-        previous: previous.get(task?.id), kind: patch.revisionKind ?? "updated", note: patch.revisionNote ?? "", now: Date.now(),
-        });
+        const prior = previous.get(task?.id);
+        const history = task?.contextHistory;
+        // Untouched: the read snapshot's history object with the body that
+        // last matched its latest hash. recordTaskRevision would recompute
+        // that hash and return the row as it is.
+        if (kind !== "restored" && prior && history && history === prior.contextHistory && revisionBodies.get(history) === rowBody(task)) return task;
+        const next = taskContext.recordTaskRevision(task, { previous: prior, kind, note, now });
+        const saved = next?.contextHistory;
+        if (saved && saved.version === 1 && Array.isArray(saved.entries) && typeof saved.entries[saved.entries.length - 1]?.hash === "string") revisionBodies.set(saved, rowBody(next));
+        return next;
       });
       return { ...patch, tasks };
     };
@@ -7548,7 +7783,7 @@ async function mutateBoard(mutator) {
     ]) {
       // Identical content (a mutator that changed nothing) is not a change:
       // skip the write and broadcast.
-      if (JSON.stringify(result[key]) === JSON.stringify(original[key])) continue;
+      if (sameRows(result[key], original[key])) continue;
       await eyes.writeJson(file, result[key]);
       send(event, key === "tasks" ? result[key].map(taskView) : result[key]);
       written.push(key);
@@ -8224,7 +8459,8 @@ async function spawnNextJob() {
     },
     depth: entry.depth,
     claim: { runId: entry.id, leaseAt: startedAt },
-    route: { via: String(runRoute.via ?? "").slice(0, 80), cli: ["grok", "claude", "antigravity"].includes(runRoute.cli) ? runRoute.cli : "opencode" },
+    // Inline on purpose: spawnNextJob is sliced into test hosts without the tier helpers.
+    route: { via: String(runRoute.via ?? "").slice(0, 80), cli: ["grok", "claude", "codex", "antigravity"].includes(runRoute.cli) ? runRoute.cli : "opencode", tier: ["free", "fast", "heavy"].includes(runRoute.tier) ? runRoute.tier : "auto" },
   });
   // `opencode run` exits 1 even on a clean run, so the exit code cannot be the
   // success signal (every job looked failed: tasks never closed, the breaker
@@ -8796,11 +9032,11 @@ async function spawnNextJob() {
   // mefi-zai provider (GLM 5.3 Flash on the owner's coding plan, billed to
   // z.ai — never the OpenCode balance) unless routing was pinned to
   // "opencode". "zai"-only routing with no key fails the job loudly rather
-  // than quietly spending OpenCode credit. executorCli "grok", "claude" or
-  // "antigravity" hands the run to that CLI instead — same prompt, same
-  // sentinel protocol, the CLI's own login, tools auto-approved because
+  // than quietly spending OpenCode credit. executorCli "grok", "claude",
+  // "codex" or "antigravity" hands the run to that CLI instead — same prompt,
+  // same sentinel protocol, the CLI's own login, tools auto-approved because
   // nobody is at the keyboard.
-  const isCliRun = runRoute.cli === "grok" || runRoute.cli === "claude" || runRoute.cli === "antigravity";
+  const isCliRun = runRoute.cli === "grok" || runRoute.cli === "claude" || runRoute.cli === "codex" || runRoute.cli === "antigravity";
   let runLabel = isCliRun ? runRoute.cli : "opencode";
   const cliRoute = isCliRun ? runRoute.cli : null;
   // Same line-buffering as streamChild, but the autopilot children are tracked
@@ -8848,7 +9084,7 @@ async function spawnNextJob() {
   // — spawn failure, wedged start, silent exit — retries the same job, on the
   // same claim, through opencode once. A CLI run that TALKED and then exited
   // nonzero is the job's own failure and counts as one.
-  const fallbackRoute = (runRoute.grok || runRoute.claude || runRoute.antigravity) && runRoute.opencode && !runRoute.opencode.error ? runRoute.opencode : null;
+  const fallbackRoute = (runRoute.grok || runRoute.claude || runRoute.codex || runRoute.antigravity) && runRoute.opencode && !runRoute.opencode.error ? runRoute.opencode : null;
   const spawnAttempt = (route, cli) => {
     if (cli === "grok") {
       // Build jobs need a headless agentic session: positional prompt, tools
@@ -8872,6 +9108,24 @@ async function spawnNextJob() {
       // characters before it enters the command string.
       const selected = cliModelArg(route.model);
       const child = spawn("cmd.exe", ["/d", "/s", "/c", `claude -p --output-format text --dangerously-skip-permissions${selected ? ` --model ${selected}` : ""}`], {
+        cwd: runRoot,
+        env: { ...process.env, ...route.env },
+        windowsHide: true,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      child.stdin.write(prompt);
+      child.stdin.end();
+      return child;
+    }
+    if (cli === "codex") {
+      // The same agentic contract through `codex exec`: approvals and the
+      // sandbox are bypassed because nobody is at the keyboard (the run root
+      // is the whole workspace), the prompt rides stdin ("-" reads it there,
+      // never cmd's command line), --color never keeps the sentinel protocol
+      // readable on plain stdout, and the model id is held to real-id
+      // characters before it enters the command string.
+      const selected = cliModelArg(route.model);
+      const child = spawn("cmd.exe", ["/d", "/s", "/c", `codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never${selected ? ` -m ${selected}` : ""} -`], {
         cwd: runRoot,
         env: { ...process.env, ...route.env },
         windowsHide: true,
@@ -10795,8 +11049,9 @@ function registerIpc() {
   ipcMain.handle("studio:smoke", () => runGameScript("smoke", "Run Dev Tool (LOVE2D).cmd", "--smoke"));
 
   // ---- Coding CLIs ---------------------------------------------------------
-  // OpenCode, Codex and Claude Code are the owner's installed tools; Codex and
-  // Claude launch on their own existing accounts. OpenCode additionally gets a
+  // OpenCode, Grok, Codex, Claude Code and Antigravity are the owner's
+  // installed tools; every CLI but OpenCode launches on its own existing
+  // account. Each is also a builder seat (executorRunEnv). OpenCode additionally gets a
   // Studio-managed "mefi-zai" provider (config injected per process via env,
   // key never written to disk) so GLM work bills the z.ai plan, not OpenCode.
   const CODING_CLIS = [
@@ -10946,7 +11201,8 @@ function registerIpc() {
           heavy: String(roles?.heavy ?? "").slice(0, 120),
         }])
     );
-    const executorCli = ["grok", "claude", "antigravity"].includes(settings.executorCli) ? settings.executorCli : "opencode";
+    const executorCli = ["grok", "claude", "codex", "antigravity"].includes(settings.executorCli) ? settings.executorCli : "opencode";
+    const tierZai = executorTierZai(settings);
     return {
       modelSelection: settings.modelSelection === "fixed" ? "fixed" : "jev",
       jevConfigured: Boolean(client.resolveApiKey({ settings, decrypt: decryptKey, route: jevRoute })),
@@ -10976,6 +11232,12 @@ function registerIpc() {
       executorCli,
       executorModel: executorModelOverride(settings, executorCli),
       executorModels: settings.executorModels && typeof settings.executorModels === "object" ? settings.executorModels : {},
+      // The coding tier and its per-CLI models, plus what each tier resolves
+      // to right now so Settings can show the answer instead of a guess.
+      executorTier: normalizeExecutorTier(settings.executorTier),
+      executorTierModels: Object.fromEntries(EXECUTOR_CLIS.map((cli) => [cli, executorTierModels(settings, cli)])),
+      executorTierDefaults: Object.fromEntries(EXECUTOR_CLIS.map((cli) => [cli, executorTierDefaults(settings, cli, { zai: tierZai })])),
+      executorTierZai: tierZai,
     };
   });
 
@@ -11031,8 +11293,32 @@ function registerIpc() {
       settings.aiModelsByProvider = saved;
     }
     if (patch.executorCli !== undefined) {
-      if (!["opencode", "grok", "claude", "antigravity"].includes(patch.executorCli)) return { ok: false, error: `unknown executor cli: ${patch.executorCli}` };
+      if (!EXECUTOR_CLIS.includes(patch.executorCli)) return { ok: false, error: `unknown executor cli: ${patch.executorCli}` };
       settings.executorCli = patch.executorCli;
+    }
+    if (patch.executorTier !== undefined) {
+      if (!EXECUTOR_TIERS.includes(patch.executorTier)) return { ok: false, error: `unknown coding tier: ${patch.executorTier}` };
+      settings.executorTier = patch.executorTier;
+    }
+    // Tier models: `executorTierModels: { claude: { heavy: "opus" } }`. Empty
+    // clears that tier so its built-in default (or the CLI default) applies
+    // again; an OpenCode id must be provider/model before it is kept.
+    if (patch.executorTierModels !== undefined && typeof patch.executorTierModels === "object") {
+      const saved = settings.executorTierModels && typeof settings.executorTierModels === "object" ? settings.executorTierModels : {};
+      for (const [cli, tiers] of Object.entries(patch.executorTierModels)) {
+        if (!EXECUTOR_CLIS.includes(cli) || !tiers || typeof tiers !== "object") continue;
+        const entry = saved[cli] && typeof saved[cli] === "object" ? saved[cli] : {};
+        for (const tier of ["free", "fast", "heavy"]) {
+          if (tiers[tier] === undefined) continue;
+          const value = String(tiers[tier] ?? "").trim().slice(0, 120);
+          if (value && cli === "opencode" && !OPENCODE_MODEL_ID.test(value)) return { ok: false, error: `OpenCode tier models are provider/model ids (for example mefi-zai/${ZAI_MODEL_ROUTINE}), not "${value.slice(0, 40)}"` };
+          if (value) entry[tier] = value;
+          else delete entry[tier];
+        }
+        if (Object.keys(entry).length) saved[cli] = entry;
+        else delete saved[cli];
+      }
+      settings.executorTierModels = saved;
     }
     if (patch.executorModel !== undefined) settings.executorModel = String(patch.executorModel ?? "").trim().slice(0, 120);
     // Per-builder models: `executorModels: { grok: "grok-4" }`. Empty clears
@@ -11040,7 +11326,7 @@ function registerIpc() {
     if (patch.executorModels !== undefined && typeof patch.executorModels === "object") {
       const saved = settings.executorModels && typeof settings.executorModels === "object" ? settings.executorModels : {};
       for (const [cli, value] of Object.entries(patch.executorModels)) {
-        if (!["opencode", "grok", "claude", "antigravity"].includes(cli)) continue;
+        if (!EXECUTOR_CLIS.includes(cli)) continue;
         const model = String(value ?? "").trim().slice(0, 120);
         if (model) saved[cli] = model;
         else delete saved[cli];
@@ -11116,14 +11402,14 @@ function registerIpc() {
     };
     const clis = await codingCliStatus();
     const local = { custom: Boolean(keys.custom && normalizeCompatEndpoint(settings.customEndpoint)), lmstudio: false };
-    if (!keys.zai && !keys.opencode && !local.custom && !clis.some((cli) => cli.installed && ["grok", "claude", "antigravity"].includes(cli.id))) {
+    if (!keys.zai && !keys.opencode && !local.custom && !clis.some((cli) => cli.installed && ["grok", "claude", "codex", "antigravity"].includes(cli.id))) {
       local.lmstudio = Boolean(await compatEndpointModel(normalizeLmStudioEndpoint(settings.lmStudioEndpoint)));
     }
     const plan = planAutoSetup({ settings, keys, clis, local });
     if (!plan.ok) return plan;
-    const providerNames = { zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "the custom endpoint" };
+    const providerNames = { zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "the custom endpoint" };
     const selectionNames = { jev: "Jev model selection", fixed: "fixed model defaults" };
-    const builderNames = { opencode: "OpenCode", grok: "Grok", claude: "Claude Code", antigravity: "Antigravity" };
+    const builderNames = { opencode: "OpenCode", grok: "Grok", claude: "Claude Code", codex: "Codex", antigravity: "Antigravity" };
     const summary = `Assistant on ${providerNames[plan.active.provider]}, ${selectionNames[plan.active.modelSelection]}, builders on ${builderNames[plan.active.executorCli] ?? plan.active.executorCli}.`;
     if (Object.keys(plan.changes).length === 0) {
       return { ...plan, applied: false, summary: `Already set up - ${summary.charAt(0).toLowerCase()}${summary.slice(1)}` };

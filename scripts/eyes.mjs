@@ -481,7 +481,82 @@ export async function writePins(pinsPath, pins) {
   return writeJson(pinsPath, pins);
 }
 
-export async function readJson(pathname, fallback) {
+// Parsed-row cache for the board views (eyes-tasks.json and its siblings).
+// The task board is dominated by contextHistory: 7.9 MB of the live file,
+// 1,150 saved revisions, and the app parsed it on the main thread five or
+// more times per mutation cycle (the gateway read, the renderer's task-list
+// and backlog reads behind the broadcast, the queue-depth refresh) at 22 ms
+// a parse plus 8 ms of UTF-8 decode. A caller that opts in (the project
+// facade does, for the three board files) gets the cached parse back while
+// the file's bytes are the ones this process last read or wrote: a memcmp
+// of the file (3 ms), never a timestamp heuristic, so a rewrite by another
+// process is always seen. Rows handed out are fresh copies of each row's
+// body; only `contextHistory` is shared by reference, because it is
+// append-only and never edited in place (the board gateway already shares
+// it between its read snapshot and working copy for the same reason). The
+// cache keeps a private copy of the rows, so a caller editing a row it was
+// given cannot poison a later read.
+const cachedRows = new Map();
+const rowCacheKey = (pathname) => path.resolve(String(pathname));
+function cloneRow(row) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return structuredClone(row);
+  const { contextHistory, ...body } = row;
+  return contextHistory === undefined ? structuredClone(body) : { ...structuredClone(body), contextHistory };
+}
+function rememberRows(pathname, bytes, rows, layout = null) {
+  const key = rowCacheKey(pathname);
+  if (!Array.isArray(rows)) {
+    cachedRows.delete(key);
+    return;
+  }
+  try {
+    cachedRows.set(key, { bytes, rows: rows.map(cloneRow), marks: layout?.marks ?? null, spans: layout?.spans ?? null });
+  } catch {
+    cachedRows.delete(key); // a row the structured clone refuses is simply not cached
+  }
+}
+
+// Serializing the board for a write is JSON.stringify(rows, null, 2), whose
+// text is one indented row after another. A row whose compact JSON matches a
+// cached row's (with the history slot marked, so its position counts) and
+// whose history is the same object serializes to the same text, so its bytes
+// are reused from the last written buffer instead of being pretty-printed
+// again: a checkpoint write re-prints one row, not 7.9 MB. The result is
+// byte-identical to the plain stringify; tests pin that.
+const ROW_INDENT = "  ";
+const rowMark = (row) => (!row || typeof row !== "object" || Array.isArray(row) || row.contextHistory === undefined ? JSON.stringify(row) ?? "null" : JSON.stringify({ ...row, contextHistory: 0 }));
+const prettyRow = (row) => `${ROW_INDENT}${(JSON.stringify(row, null, 2) ?? "null").split("\n").join(`\n${ROW_INDENT}`)}`;
+function serializeRows(rows, known) {
+  if (!rows.length) return { bytes: Buffer.from("[]", "utf8"), marks: [], spans: [] };
+  const reusable = new Map();
+  if (known?.marks && known.spans) for (let index = 0; index < known.marks.length; index += 1) reusable.set(known.marks[index], index);
+  const parts = [Buffer.from("[\n", "utf8")];
+  const separator = Buffer.from(",\n", "utf8");
+  const marks = new Array(rows.length);
+  const spans = new Array(rows.length);
+  let offset = 2;
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    const mark = rowMark(row);
+    marks[index] = mark;
+    const at = reusable.get(mark);
+    const cached = at === undefined ? undefined : known.rows[at];
+    const part = at !== undefined && (row === null ? cached === null : row?.contextHistory === cached?.contextHistory)
+      ? known.bytes.subarray(known.spans[at][0], known.spans[at][1])
+      : Buffer.from(prettyRow(row), "utf8");
+    if (index) {
+      parts.push(separator);
+      offset += 2;
+    }
+    parts.push(part);
+    spans[index] = [offset, offset + part.length];
+    offset += part.length;
+  }
+  parts.push(Buffer.from("\n]", "utf8"));
+  return { bytes: Buffer.concat(parts), marks, spans };
+}
+
+export async function readJson(pathname, fallback, { rowCache: shareRows = false } = {}) {
   // Board stores route through the SQLite authority while it is enabled AND
   // healthy (enableBoardStore). A store that degraded — open failure, or the
   // stale-fork guard below — hands the read back to the JSON view: in file
@@ -492,11 +567,30 @@ export async function readJson(pathname, fallback) {
     if (Array.isArray(stored)) return stored;
     // the store failed or degraded mid-read — fall through to the view file
   }
+  if (!shareRows) {
+    try {
+      return JSON.parse(await readFile(pathname, "utf8"));
+    } catch {
+      return fallback;
+    }
+  }
+  let bytes;
   try {
-    return JSON.parse(await readFile(pathname, "utf8"));
+    bytes = await readFile(pathname);
   } catch {
     return fallback;
   }
+  const known = cachedRows.get(rowCacheKey(pathname));
+  if (known && known.bytes.equals(bytes)) return known.rows.map(cloneRow);
+  let value;
+  try {
+    value = JSON.parse(bytes.toString("utf8"));
+  } catch {
+    cachedRows.delete(rowCacheKey(pathname));
+    return fallback;
+  }
+  rememberRows(pathname, bytes, value);
+  return value;
 }
 
 // Quarantine cleanup: the fix pass sets a store that no longer parses aside
@@ -547,10 +641,11 @@ async function sweepBrokenSiblings(pathname) {
   );
 }
 
-export async function writeJson(pathname, value) {
+export async function writeJson(pathname, value, { rowCache: shareRows = false } = {}) {
   const boardKind = boardKindFor(pathname);
   if (boardKind) return boardWrite(boardKind, value);
-  const payload = JSON.stringify(value, null, 2);
+  const layout = shareRows && Array.isArray(value) ? serializeRows(value, cachedRows.get(rowCacheKey(pathname))) : null;
+  const payload = layout ? layout.bytes : Buffer.from(JSON.stringify(value, null, 2), "utf8");
   // Write to a sibling temp file and rename over the target: a reader that
   // loaded the file mid-write (or a crash mid-write) used to see a torn JSON
   // document and silently reset the whole store to its fallback. The rename
@@ -565,6 +660,11 @@ export async function writeJson(pathname, value) {
     } catch {
       await writeFile(pathname, payload);
     }
+    // The bytes on disk are known exactly here. A board writer keeps the rows
+    // it wrote for the reads that follow; any other write drops the entry so
+    // the next read of that path parses fresh.
+    if (shareRows) rememberRows(pathname, payload, value, layout);
+    else cachedRows.delete(rowCacheKey(pathname));
     await sweepBrokenSiblings(pathname);
     return { ok: true };
   } finally {

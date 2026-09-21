@@ -795,6 +795,22 @@
     return button;
   }
 
+  // The "More tools" summary every menu shares: a glyph, the label and a chevron
+  // that the stylesheet turns while the menu is open.
+  function moreSummary(className) {
+    const summary = document.createElement("summary");
+    if (className) summary.className = className;
+    summary.append(glyphNode("g-more"));
+    const label = document.createElement("span");
+    label.className = "label";
+    label.textContent = "More tools";
+    summary.append(label);
+    const chevron = glyphNode("g-chev");
+    chevron.setAttribute("class", "glyph chev");
+    summary.append(chevron);
+    return summary;
+  }
+
   function separator(className) {
     const element = document.createElement("span");
     element.className = className;
@@ -830,8 +846,10 @@
     const element = target ?? document.getElementById("workspace-tool-links");
     if (!element) return;
     element.textContent = "";
+    // Workspace, Command, Task board and Plans are pinned at the top of the
+    // sidebar and Settings / Music sit in its bottom row, so none repeat here.
     appendGrouped(element, list().filter((dest) =>
-      !["workspace", "command", "studio", "music"].includes(dest.id) &&
+      !["workspace", "command", "tasks", "plans", "studio", "music"].includes(dest.id) &&
       dest.kind !== "action" && dest.layer !== "transient"), "ghost");
     paintBadges(element);
   }
@@ -846,9 +864,7 @@
     const more = document.createElement("details");
     more.id = "cmd-more-tools";
     more.className = "cmd-more-tools";
-    const summary = document.createElement("summary");
-    summary.className = "dock-item";
-    summary.textContent = "More tools";
+    const summary = moreSummary("dock-item");
     const links = document.createElement("div");
     links.className = "cmd-more-links";
     appendGrouped(links, destinations.filter((item) => !item.commandPrimary), "dock-item");
@@ -904,9 +920,7 @@
       container.textContent = "";
       const menu = document.createElement("details");
       menu.className = "studio-more";
-      const summary = document.createElement("summary");
-      summary.textContent = "More tools";
-      menu.append(summary);
+      menu.append(moreSummary());
       const links = document.createElement("div");
       links.className = "studio-more-links";
       appendGrouped(links, list({ showIn: "tools" }).filter((dest) => dest.layer === "sheet" && dest.id !== self), "dock-item small");
@@ -1029,7 +1043,7 @@
   // ---- input -------------------------------------------------------------
 
   document.addEventListener("click", (event) => {
-    for (const menu of document.querySelectorAll(".studio-more[open], .cmd-more-tools[open], #workspace-tools[open]")) {
+    for (const menu of document.querySelectorAll(".studio-more[open], .cmd-more-tools[open]")) {
       if (!menu.contains(event.target)) menu.open = false;
     }
     const button = event.target?.closest?.("[data-nav], [data-nav-close]");
@@ -1049,7 +1063,8 @@
       }
     }
     go(button.dataset.nav, params);
-    button.closest("details")?.removeAttribute("open");
+    const menu = button.closest("details");
+    if (menu && menu.id !== "workspace-tools") menu.removeAttribute("open");
   });
 
   function keyContext(dest, event) {
@@ -1088,7 +1103,7 @@
       window.MefiSidebar.close({ restoreFocus: true });
       return;
     }
-    const more = document.activeElement?.closest?.(".studio-more[open], .cmd-more-tools[open], #workspace-tools[open]") ?? document.getElementById("cmd-more-tools");
+    const more = document.activeElement?.closest?.(".studio-more[open], .cmd-more-tools[open]") ?? document.getElementById("cmd-more-tools");
     if (event.key === "Escape" && more?.open) {
       event.preventDefault();
       more.open = false;
@@ -1142,6 +1157,27 @@
   }
 
   window.addEventListener("keydown", handleKey);
+
+  // ---- current destination -----------------------------------------------
+
+  // The surface the user is looking at: an open sheet, Command, the workspace
+  // or the active tab. The sidebar paints it as aria-current on its own entry.
+  function current() {
+    if (state.sheet) return state.sheet;
+    if (idleActive()) return "command";
+    if (window.MefiWorkspace?.isActive?.()) return "workspace";
+    return document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
+  }
+
+  function paintCurrent() {
+    const id = current();
+    for (const button of document.querySelectorAll?.("#workspace-sidebar-panel [data-nav]") ?? []) {
+      if (button.dataset.nav === id) button.setAttribute("aria-current", "page");
+      else button.removeAttribute("aria-current");
+    }
+  }
+
+  window.addEventListener("mefi:nav", paintCurrent);
 
   // ---- live update -------------------------------------------------------
 
@@ -1769,6 +1805,7 @@
     renderTools();
     renderDock();
     renderSheetLinks();
+    paintCurrent();
     renderFooter();
     wireTabRail();
     paintBadges();
@@ -1830,6 +1867,8 @@
     renderDock,
     renderTools,
     renderWorkspaceTools,
+    paintCurrent,
+    current,
     renderSheetLinks,
     renderHelp,
     renderFooter,

@@ -65,27 +65,37 @@
   <symbol id="g-plane" viewBox="0 0 16 16"><path d="M8 2.6 13.8 6v4L8 13.4 2.2 10V6z"/><path d="M2.2 6 8 9.2 13.8 6M8 9.2v4.2"/></symbol>
   <symbol id="g-chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
   <symbol id="g-plans" viewBox="0 0 16 16"><path d="M4 2.5h5.5L12 5v8.5H4z"/><path d="M9.5 2.5V5H12M6 8h4M6 10.5h4"/></symbol>
+  <symbol id="g-more" viewBox="0 0 16 16"><circle cx="4.5" cy="4.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="11.5" cy="4.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="4.5" cy="11.5" r="1.3" fill="currentColor" stroke="none"/><circle cx="11.5" cy="11.5" r="1.3" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="g-sliders" viewBox="0 0 16 16"><path d="M2.5 4.5h5.5M11 4.5h2.5M2.5 8h1.5M6.5 8h7M2.5 11.5h6.5M12 11.5h1.5"/><circle cx="9.3" cy="4.5" r="1.3"/><circle cx="5.2" cy="8" r="1.3"/><circle cx="10.3" cy="11.5" r="1.3"/></symbol>
+  <symbol id="g-agents" viewBox="0 0 16 16"><circle cx="8" cy="4" r="1.9"/><circle cx="3.8" cy="12" r="1.9"/><circle cx="12.2" cy="12" r="1.9"/><path d="M7.1 5.7 4.7 10.3M8.9 5.7l2.4 4.6M5.7 12h4.6"/></symbol>
+  <symbol id="g-key" viewBox="0 0 16 16"><circle cx="5.5" cy="8" r="3"/><path d="M8.5 8h5M11.5 8v2.5M13.5 8v1.5"/></symbol>
+  <symbol id="g-route" viewBox="0 0 16 16"><circle cx="4" cy="4" r="1.6"/><circle cx="4" cy="12" r="1.6"/><circle cx="12" cy="8" r="1.6"/><path d="M5.6 4c2.6 0 2.6 4 4.8 4M5.6 12c2.6 0 2.6-4 4.8-4"/></symbol>
+  <symbol id="g-wrench" viewBox="0 0 24 24"><path stroke-width="2.25" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+  <symbol id="g-plug" viewBox="0 0 16 16"><path d="M5 2.5v3.5M11 2.5v3.5"/><path d="M3.5 6h9v1.5a4.5 4.5 0 0 1-9 0z"/><path d="M8 12v2"/></symbol>
+  <symbol id="g-spark" viewBox="0 0 16 16"><path d="M8 2.5 9.4 6.6 13.5 8l-4.1 1.4L8 13.5 6.6 9.4 2.5 8l4.1-1.4z"/></symbol>
 </svg>
 <div id="workspace-sidebar" class="workspace studio-sidebar" data-open="false">
-  <button id="workspace-sidebar-toggle" class="sidebar-edge" type="button" aria-label="Open studio sidebar" aria-controls="workspace-sidebar-panel" aria-expanded="false"></button>
+  <button id="workspace-sidebar-toggle" class="sidebar-edge" type="button" aria-label="Open studio menu" aria-controls="workspace-sidebar-panel" aria-expanded="false" title="Studio menu: projects, tools and settings"><span class="sidebar-grip" aria-hidden="true"><i></i><i></i><i></i></span></button>
   <aside id="workspace-sidebar-panel" class="ws-sidebar" aria-label="Projects and tools" aria-hidden="true" inert>
-    <div class="sidebar-heading"><span>YOUR STUDIO</span><button id="workspace-sidebar-close" class="ghost mini" type="button" aria-label="Close studio sidebar" title="Close sidebar (Esc)">×</button></div>
-    <a class="ws-brand" href="#" data-nav="workspace"><span class="ws-brand-mark">m<span>+</span></span><span>Mefi's Studio<small>MAKE SOMETHING YOURS</small></span></a>
-    <button class="ws-home" data-nav="workspace"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg>Your workspace <kbd>H</kbd></button>
-    <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open Command view — the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg>Command view <kbd>D</kbd><span class="count warn" data-badge="questions" hidden></span></button>
-    <button class="ws-home ws-shortcut" data-nav="tasks" title="Open your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg>Task board <kbd>T</kbd></button>
-    <button class="ws-home ws-shortcut" data-nav="plans" title="Explore an idea and review its plan (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg>Plans <kbd>P</kbd></button>
+    <div class="sidebar-heading"><a class="ws-brand" href="#" data-nav="workspace"><span class="ws-brand-mark">m<span>+</span></span><span>Mefi's Studio<small>MAKE SOMETHING YOURS</small></span></a><button id="workspace-sidebar-close" class="ghost mini" type="button" aria-label="Close studio menu" title="Close menu (Esc)">×</button></div>
+    <nav class="ws-nav" aria-label="Go to">
+      <button class="ws-home" data-nav="workspace" title="Your workspace (H)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg><span class="label">Your workspace</span><kbd>H</kbd></button>
+      <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open Command view: the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span class="label">Command view</span><kbd>D</kbd><span class="count warn" data-badge="questions" hidden></span></button>
+      <button class="ws-home ws-shortcut" data-nav="tasks" title="Open your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span class="label">Task board</span><kbd>T</kbd><span class="count" data-badge="tasks" hidden></span></button>
+      <button class="ws-home ws-shortcut" data-nav="plans" title="Explore an idea and review its plan (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span class="label">Plans</span><kbd>P</kbd></button>
+    </nav>
     <div class="ws-section-label"><span>PROJECTS</span><button id="workspace-add-project" class="ghost mini" title="Add an existing project folder" aria-label="Add project">+</button></div>
     <div id="workspace-projects" class="ws-projects" aria-label="Choose a project"></div>
-    <p class="ws-sidebar-note">One space for each idea.<br>Its own work, its own conversation.</p>
     <p id="workspace-sidebar-feedback" class="sidebar-feedback" role="status" aria-live="polite"></p>
+    <details class="ws-tools" id="workspace-tools" open><summary><span>TOOLS</span><svg class="glyph ws-chev" aria-hidden="true"><use href="#g-chev"/></svg></summary><div id="workspace-tool-links"></div></details>
     <div class="ws-sidebar-bottom">
-      <details class="ws-tools" id="workspace-tools"><summary><svg class="glyph" aria-hidden="true"><use href="#g-overhead"/></svg>Studio tools<span>⌄</span></summary><div id="workspace-tool-links"></div></details>
-      <button class="ghost ws-settings" data-nav="studio"><svg class="glyph" aria-hidden="true"><use href="#g-ambience"/></svg>Settings & connections</button>
-      <button class="ghost ws-settings" data-nav="music"><svg class="glyph" aria-hidden="true"><use href="#g-music"/></svg>Music & themes</button>
-      <button class="ghost ws-settings" data-nav="onboarding"><svg class="glyph" aria-hidden="true"><use href="#g-help"/></svg>Start here</button>
-      <details class="ws-personal"><summary>Make yourself at home <span>✧</span></summary><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Studio theme<select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></details>
-      <span class="ws-local-note"><i></i> A little studio. A lot of possibility.</span>
+      <div class="ws-quick" role="group" aria-label="Studio">
+        <button class="ghost ws-settings" data-nav="studio" title="Settings & connections (4)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span class="label">Settings</span></button>
+        <button class="ghost ws-settings" data-nav="music" title="Music & themes (U)"><svg class="glyph" aria-hidden="true"><use href="#g-music"/></svg><span class="label">Music</span></button>
+        <button class="ghost ws-settings" data-nav="onboarding" title="Start here: the walkthrough"><svg class="glyph" aria-hidden="true"><use href="#g-help"/></svg><span class="label">Start here</span></button>
+      </div>
+      <details class="ws-personal"><summary><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Make yourself at home</span><svg class="glyph ws-chev" aria-hidden="true"><use href="#g-chev"/></svg></summary><div class="ws-personal-fields"><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Studio theme<select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></div></details>
+      <span class="ws-local-note"><i></i> Local-first. Your work stays on this machine.</span>
     </div>
   </aside>
 </div>
@@ -149,17 +159,14 @@
     <div class="monogram" aria-hidden="true">M+</div>
     <div>
       <div class="eyebrow">Mefi's Studio AI+</div>
-      <h1>Studio tools</h1>
+      <h1>Studio</h1>
       <p class="sub" id="status">Loading catalog…</p>
     </div>
   </div>
   <div class="head-actions">
     <button id="update-pill" class="pill update-pill" data-nav="studio" data-state="watching" title="Live update: watching the source tree" hidden><i class="dot" aria-hidden="true"></i><span class="label">Live update</span></button>
     <label class="switch" title="Toggle animations"><input type="checkbox" id="motion-toggle" checked><span class="track"></span><span>Motion</span></label>
-    <button id="refresh-btn" class="ghost" title="Re-read data/models.json (R)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-refresh"/></svg><span class="label">Refresh</span><kbd class="key">R</kbd></button>
-    <button id="print-btn" class="ghost" title="Print / PDF"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-print"/></svg><span class="label">Print / PDF</span></button>
     <button id="help-btn" class="ghost icon" title="Shortcuts (?)" aria-label="Shortcuts"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg></button>
-    <a class="link" href="https://opencode.ai/go" target="_blank" rel="noreferrer">opencode.ai/go<svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-external"/></svg></a>
   </div>
 </header>
 <nav class="tabs" id="tabs" aria-label="Surfaces and tools">
@@ -171,7 +178,7 @@
   <button class="tab" data-tab="eyes" title="Activity & evidence · A-Eyes (3)"><span class="label">Activity & evidence</span><kbd class="key">3</kbd></button>
   <button class="tab" data-tab="studio" title="Settings & connections (4)"><span class="label">Settings</span><kbd class="key">4</kbd></button>
   <span class="spacer" aria-hidden="true"></span>
-  <details class="studio-more"><summary>More tools</summary><div id="nav-tools" class="tools-cluster" role="group" aria-label="Tools"></div></details>
+  <details class="studio-more"><summary><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-more"/></svg><span class="label">More tools</span><svg class="glyph chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><div id="nav-tools" class="tools-cluster" role="group" aria-label="Tools"></div></details>
 </nav>
 <div id="banner" class="banner" hidden></div>
 <main>
@@ -188,6 +195,10 @@
         <option value="name">Name</option>
         <option value="pool">Monthly pool</option>
       </select></label>
+      <span class="toolbar-actions">
+        <button id="refresh-btn" class="ghost mini" title="Re-read data/models.json (R)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-refresh"/></svg><span class="label">Refresh</span><kbd class="key">R</kbd></button>
+        <button id="print-btn" class="ghost mini" title="Print / PDF"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-print"/></svg><span class="label">Print / PDF</span></button>
+      </span>
     </div>
     <div id="cards" class="cards"></div>
     <p id="count" class="muted"></p>
@@ -330,16 +341,29 @@
     </div>
   </section>
   <section id="tab-studio" hidden>
-    <div class="panel">
-      <div class="settings-heading"><div><h2>Settings & connections</h2><p class="muted">Connect your assistant, choose your coding workers, and manage optional tools.</p></div><button class="ghost" data-nav="onboarding">Start here</button></div>
+    <div class="panel settings-panel">
+      <div class="settings-heading"><div><p class="eyebrow">Studio</p><h2>Settings & connections</h2><p class="muted">Connect your assistant, choose your coding workers, and manage optional tools. Keys are stored encrypted on this machine and never shown again.</p></div><button class="ghost" data-nav="onboarding"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg>Start here</button></div>
+      <div class="settings-layout">
+        <nav id="settings-nav" class="settings-nav" aria-label="Settings sections">
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-setup" aria-current="true"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span class="label">Auto setup</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-assistant" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-key"/></svg><span class="label">Assistant</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-routing" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-route"/></svg><span class="label">Model routing</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-workers" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-wrench"/></svg><span class="label">Coding workers</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-jev" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-target"/></svg><span class="label">Jev</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-updates" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-update"/></svg><span class="label">Updates & diagnostics</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-integrations" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plug"/></svg><span class="label">Integrations</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-log" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-legend"/></svg><span class="label">Log</span></button>
+        </nav>
+        <div id="settings-sections" class="settings-sections">
       <div id="studio-desktop">
-        <section class="settings-group setup-card" aria-labelledby="settings-setup-heading">
-        <div class="setup-head">
+        <section class="settings-group settings-card setup-card" id="settings-setup" aria-labelledby="settings-setup-heading">
+        <div class="setup-head settings-card-head">
+          <span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-spark"/></svg></span>
           <div>
             <h3 id="settings-setup-heading">Auto setup</h3>
             <p class="muted">One pass over what this machine already has: saved keys or a reachable local server choose the assistant route, installed CLIs choose the builders, and a saved Jev key turns on task-aware model selection. It sends no request, changes no key, and keeps every model override.</p>
           </div>
-          <button id="auto-setup">Run auto setup</button>
+          <button id="auto-setup" class="primary">Run auto setup</button>
         </div>
         <div class="setup-state">
           <div class="setup-state-item"><span class="setup-state-label">Assistant</span><span id="setup-assistant">checking…</span></div>
@@ -348,29 +372,29 @@
         </div>
         <p class="muted" id="auto-setup-status" role="status">Not run yet. Auto setup applies only the changes that are needed and explains each one.</p>
         </section>
-        <section class="settings-group" aria-labelledby="settings-assistant-heading">
-        <h3 id="settings-assistant-heading">Assistant connection</h3>
-        <p class="muted">Save a key for the provider you use, then choose its routing below. Grok and Claude Code use their CLI's own login; LM Studio needs no key. Keys are stored encrypted and never shown again.</p>
-        <div class="row">
+        <section class="settings-group settings-card" id="settings-assistant" aria-labelledby="settings-assistant-heading">
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-key"/></svg></span><div><h3 id="settings-assistant-heading">Assistant connection</h3><p class="muted">Save a key for the provider you use, then choose its routing below. Grok, Claude Code, Codex and Antigravity use their CLI's own login; LM Studio needs no key.</p></div></div>
+        <div class="key-list">
+        <div class="row key-row"><span class="key-provider">z.ai</span>
           <input type="password" id="zai-key" placeholder="z.ai Coding Plan API key (stored encrypted)" autocomplete="off" aria-label="z.ai Coding Plan API key">
           <button id="save-zai-key">Save z.ai key</button>
-          <span class="muted" id="zai-key-status">checking…</span>
+          <span class="muted key-status" id="zai-key-status">checking…</span>
         </div>
-        <div class="row">
+        <div class="row key-row"><span class="key-provider">OpenCode Go</span>
           <input type="password" id="api-key" placeholder="OpenCode Go API key (stored encrypted)" autocomplete="off" aria-label="OpenCode Go API key">
           <button id="save-key">Save OpenCode key</button>
-          <span class="muted" id="key-status">checking…</span>
+          <span class="muted key-status" id="key-status">checking…</span>
         </div>
-        <div class="row">
-          <input type="text" id="custom-endpoint" placeholder="Custom endpoint — https://host/v1 (OpenAI-compatible)" spellcheck="false" autocomplete="off" aria-label="Custom provider endpoint" style="width: 24em">
+        <div class="row key-row key-row-custom"><span class="key-provider">Custom</span>
+          <input type="text" id="custom-endpoint" placeholder="Custom endpoint — https://host/v1 (OpenAI-compatible)" spellcheck="false" autocomplete="off" aria-label="Custom provider endpoint">
           <input type="password" id="custom-key" placeholder="Custom API key (stored encrypted)" autocomplete="off" aria-label="Custom provider API key">
           <button id="save-custom-key">Save custom key</button>
-          <span class="muted" id="custom-key-status">checking…</span>
+          <span class="muted key-status" id="custom-key-status">checking…</span>
+        </div>
         </div>
         </section>
-        <section class="settings-group" aria-labelledby="settings-routing-heading">
-        <h3 id="settings-routing-heading">Model routing</h3>
-        <p class="muted">Who pays for assistant calls, and how each task's model is chosen. Models are saved per provider, so switching routes cannot carry one provider's model into another; use whichever option you already have — a saved key, an installed CLI login, or a local server.</p>
+        <section class="settings-group settings-card" id="settings-routing" aria-labelledby="settings-routing-heading">
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-route"/></svg></span><div><h3 id="settings-routing-heading">Model routing</h3><p class="muted">Who pays for assistant calls, and how each task's model is chosen. Models are saved per provider, so switching routes cannot carry one provider's model into another; use whichever option you already have: a saved key, an installed CLI login, or a local server.</p></div></div>
         <div class="row">
           <label class="muted">AI routing
             <select id="ai-provider">
@@ -379,6 +403,7 @@
               <option value="opencode">OpenCode Go only</option>
               <option value="grok">Grok CLI — the assistant answers through the grok CLI's own login</option>
               <option value="claude">Claude Code CLI — the assistant answers on your Claude Code subscription login</option>
+              <option value="codex">Codex CLI — the assistant answers through codex on your ChatGPT login</option>
               <option value="antigravity">Antigravity CLI — the assistant answers through agy on your Google account</option>
               <option value="lmstudio">LM Studio — a local server on this machine, no key</option>
               <option value="custom">Custom endpoint — your own OpenAI-compatible URL and key</option>
@@ -415,27 +440,36 @@
           </label>
           <button class="ghost" id="ai-routing-refresh">Refresh selection</button>
         </div>
-        <p class="muted" id="ai-routing-help">Jev ranks available models within your chosen provider for each task using catalog quality and estimated prices, plus your project's measured timing, errors, ratings and reported costs. Missing evidence stays unknown. Selection uses a small billed gateway request. Save a Jev gateway key below to enable it; a timeout or unavailable Jev uses the usual default. Model overrides take priority. Grok, Claude Code and Antigravity use their saved model or CLI default; LM Studio and custom endpoints answer from the URL above (load one model or save a model override).</p>
+        <p class="muted" id="ai-routing-help">Jev ranks available models within your chosen provider for each task using catalog quality and estimated prices, plus your project's measured timing, errors, ratings and reported costs. Missing evidence stays unknown. Selection uses a small billed gateway request. Save a Jev gateway key below to enable it; a timeout or unavailable Jev uses the usual default. Model overrides take priority. Grok, Claude Code, Codex and Antigravity use their saved model or CLI default; LM Studio and custom endpoints answer from the URL above (load one model or save a model override).</p>
         <p class="muted" id="ai-routing-status" role="status">Checking model selection…</p>
         <p class="muted" id="ai-routing-decision" role="status">No selection recorded yet.</p>
         <p class="muted" id="ai-routing-evidence" hidden></p>
         </section>
-        <section class="settings-group" aria-labelledby="settings-workers-heading">
-        <h3 id="settings-workers-heading">Coding workers</h3>
-        <p class="muted">Workers carry out queued tasks in your selected project. Choose a provider whose CLI is installed and signed in. Jev model selection also applies to Studio's z.ai coding workers; other CLI accounts keep their usual model.</p>
+        <section class="settings-group settings-card" id="settings-workers" aria-labelledby="settings-workers-heading">
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-wrench"/></svg></span><div><h3 id="settings-workers-heading">Coding workers</h3><p class="muted">Workers carry out queued tasks in your selected project. Choose a provider whose CLI is installed and signed in, then a coding tier: <strong>Auto</strong> lets Studio pick per task (Jev or the stand-in judge within your provider, otherwise the CLI default), <strong>Free</strong> runs a free model one worker at a time, <strong>Fast</strong> runs the quick economical model, and <strong>Heavy</strong> runs the high-end one. Tier models are saved per CLI; a tier without a model of its own uses Studio's default for that CLI, or the CLI's own default — except Free, which never falls back to a billed model.</p></div></div>
         <div class="row">
           <label class="muted">Builders run on
             <select id="executor-cli">
               <option value="opencode">OpenCode run</option>
               <option value="grok">Grok CLI — grok builds every queued job on its own login</option>
               <option value="claude">Claude Code — claude builds every queued job on your subscription login</option>
+              <option value="codex">Codex — codex builds every queued job on your ChatGPT login</option>
               <option value="antigravity">Antigravity — agy builds every queued job on your Google account</option>
             </select>
           </label>
-          <label class="muted">Builder model <span class="muted" id="builder-scope-note">for this CLI</span>
-            <input type="text" id="executor-model" placeholder="CLI default" spellcheck="false" autocomplete="off" title="Model this builder CLI runs with (grok -m / claude --model / agy --model). Saved per builder; empty = CLI default." style="width: 15em">
+          <label class="muted">Coding tier
+            <select id="executor-tier" title="What each build may cost: Auto picks per task, Free runs free models one at a time, Fast runs the quick economical model, Heavy runs the high-end one">
+              <option value="auto">Auto — Studio picks per task</option>
+              <option value="free">Free — free models, one worker at a time</option>
+              <option value="fast">Fast — quick, economical models</option>
+              <option value="heavy">Heavy — high-end models for hard work</option>
+            </select>
+          </label>
+          <label class="muted"><span id="executor-model-label">Pinned model</span> <span class="muted" id="builder-scope-note">for this CLI</span>
+            <input type="text" id="executor-model" placeholder="CLI default" spellcheck="false" autocomplete="off" title="Model this builder runs with for the selected tier (grok -m / claude --model / codex -m / agy --model; OpenCode takes provider/model). Saved per builder and per tier; empty = the tier's default." style="width: 15em">
           </label>
         </div>
+        <p class="muted executor-tiers" id="executor-tier-status" role="status">Checking coding tiers…</p>
         <div class="row">
           <span class="muted">Coding CLIs</span>
           <button class="ghost" data-cli="opencode" title="Open the OpenCode TUI in the repo; carries the Studio mefi-zai provider (your z.ai plan) when a key is saved">OpenCode</button>
@@ -447,12 +481,12 @@
           <span class="muted" id="cli-status">checking…</span>
         </div>
         </section>
-        <details class="settings-optional"><summary>Jev connection & optional task suggestions</summary>
+        <details class="settings-optional settings-card" id="settings-jev"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-target"/></svg></span><span class="settings-summary-text"><b>Jev connection</b><span>Task-aware model selection and optional task suggestions</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <p class="muted">Choose where Jev is routed: the Vercel AI Gateway, TypeSafe's Jev API directly, OpenCode Zen (including its free Jev tier), or OpenRouter. Each route keeps its own key, stored encrypted; switching never moves a key between routes. The key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
           <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: a hosted gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option><option value="zen">OpenCode Zen</option><option value="openrouter">OpenRouter</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled" checked><span class="track"></span><span>Intake classification</span></label></div>
           <p class="muted" id="jev-status" role="status">Checking Jev…</p>
         </details>
-        <details class="settings-optional"><summary>Diagnostics & app updates</summary>
+        <details class="settings-optional settings-card" id="settings-updates"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-update"/></svg></span><span class="settings-summary-text"><b>Updates & diagnostics</b><span>Live update, published builds and a speed probe</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
         <div class="row">
           <label class="muted">Speed probe <select id="speed-model"></select></label>
           <button id="speed-go">Measure tokens/s</button>
@@ -479,8 +513,10 @@
         </div>
         </details>
       </div>
-      <details class="settings-optional"><summary>Optional · Ruins Runner & Love2D</summary><p class="muted">Requires a separate game project and its LÖVE runtime. This integration is optional for Studio.</p><div class="row studio-actions" id="studio-actions"><button data-action="launch">Launch Love2D studio</button><button data-action="smoke">Run smoke</button><button data-action="game">Launch Ruins Runner</button><button data-action="stop">Stop game</button></div><p class="muted" id="studio-hint"></p></details>
-      <details class="settings-optional"><summary>Connection & tool log</summary><pre class="log" id="studio-log" aria-label="Connection and tool log">No activity yet.</pre></details>
+      <details class="settings-optional settings-card" id="settings-integrations"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Integrations</b><span>Optional: Ruins Runner and Love2D</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Requires a separate game project and its LÖVE runtime. This integration is optional for Studio.</p><div class="row studio-actions" id="studio-actions"><button data-action="launch">Launch Love2D studio</button><button data-action="smoke">Run smoke</button><button data-action="game">Launch Ruins Runner</button><button data-action="stop">Stop game</button></div><p class="muted" id="studio-hint"></p></details>
+      <details class="settings-optional settings-card" id="settings-log"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-legend"/></svg></span><span class="settings-summary-text"><b>Connection & tool log</b><span>What Studio tried and what answered</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><pre class="log" id="studio-log" aria-label="Connection and tool log">No activity yet.</pre></details>
+        </div>
+      </div>
     </div>
   </section>
 </main>
@@ -530,7 +566,7 @@
       </div>
     </div>
     <div class="cmd-tools" role="toolbar" aria-label="Node tree controls">
-      <label class="cmd-agent-mode">Agents <select id="idle-feed-agent-mode" disabled aria-label="Agent coordination mode" aria-describedby="idle-feed-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select></label>
+      <label class="cmd-agent-mode" title="Quick switch: the same selector as the rail's Agents tab">Agents <select id="idle-feed-agent-mode" disabled aria-label="Agent coordination mode" aria-describedby="idle-feed-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select></label>
       <button id="idle-fit" class="ghost icon" title="Rearrange and fit the node tree (F)" aria-label="Fit and rearrange node tree"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-fit"/></svg></button>
       <button id="idle-orbit" class="ghost icon" aria-pressed="true" title="Orbit on · Space pauses" aria-label="Orbit"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg></button>
       <button id="idle-cam-orbit" class="ghost" data-cam="orbit" aria-pressed="true" title="Camera: orbit — keep the whole tree framed (C cycles orbit / follow / free)" aria-label="Camera: orbit"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-fit"/></svg><span class="label">Orbit</span></button>
@@ -563,10 +599,10 @@
   </div>
   <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" aria-live="polite" hidden></aside>
   <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
-  <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, settings, assistant, done and questions">
+  <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, agents, assistant, done and questions">
     <header class="rail-tabs" role="tablist" aria-label="Panel views">
       <button id="cmd-rail-tab-work" class="rail-tab" role="tab" aria-selected="true" aria-controls="idle-feed" data-rail-view="work">Work<span id="cmd-rail-work-badge" class="count" hidden></span></button>
-      <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings">Work settings</button>
+      <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings">Agents</button>
       <button id="cmd-rail-tab-assistant" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-chat" tabindex="-1" data-rail-view="assistant">Assistant<span id="cmd-rail-assistant-badge" class="count" hidden></span></button>
       <button id="cmd-rail-tab-done" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-done" tabindex="-1" data-rail-view="done">Done</button>
       <button id="cmd-rail-tab-ask" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-asks" tabindex="-1" data-rail-view="ask">Ask<span id="cmd-rail-ask-badge" class="count warn" hidden></span></button>
@@ -652,36 +688,45 @@
   </aside>
   <section id="cmd-settings" class="cmd-settings" role="tabpanel" aria-labelledby="cmd-rail-tab-settings" hidden>
     <div class="rail-view-head">
-      <h2 class="rail-view-title">Work settings</h2>
+      <h2 class="rail-view-title">Agents</h2>
       <span id="cmd-settings-state" class="feed-state setting-state" role="status" aria-live="polite"></span>
     </div>
-    <p class="rail-view-note">How the agent queue runs. Changes apply to every project and never interrupt work already in progress.</p>
+    <p class="rail-view-note">How your agents run the queue. Changes apply to every project and never interrupt work already in progress.</p>
     <div class="settings-scroll">
+      <div id="cmd-agents-glance" class="agents-glance" role="group" aria-label="Agents at a glance">
+        <span class="agents-chip" id="cmd-glance-autopilot" data-tone="idle"><span class="agents-chip-k">Autopilot</span><b>…</b></span>
+        <span class="agents-chip" id="cmd-glance-workers" data-tone="idle"><span class="agents-chip-k">Workers</span><b>…</b></span>
+        <span class="agents-chip" id="cmd-glance-mode" data-tone="idle"><span class="agents-chip-k">Mode</span><b>…</b></span>
+      </div>
       <div class="setting-group" role="group" aria-labelledby="cmd-settings-queue-title">
-        <h3 id="cmd-settings-queue-title" class="setting-group-title">Queue</h3>
+        <h3 id="cmd-settings-queue-title" class="setting-group-title"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-agents"/></svg>Queue</h3>
         <div class="setting-row">
+          <svg class="glyph setting-glyph" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg>
           <label class="setting-label" for="idle-autopilot">Autopilot</label>
           <label class="switch mini setting-switch" title="Turn the agent queue on or off"><input type="checkbox" id="idle-autopilot" role="switch" aria-describedby="idle-autopilot-help"><span class="track" aria-hidden="true"></span></label>
           <span id="idle-autopilot-help" class="setting-hint">Starts ready tasks and verifies what comes back. Off stops new starts; running jobs finish.</span>
         </div>
         <div class="setting-row">
+          <svg class="glyph setting-glyph" aria-hidden="true" focusable="false"><use href="#g-overhead"/></svg>
           <label class="setting-label" for="idle-feed-parallel">Parallel builds</label>
           <select id="idle-feed-parallel" aria-describedby="idle-feed-parallel-help"><option value="machine">Machine managed</option><option value="1">Manual: 1 worker</option><option value="2">Manual: 2 workers</option><option value="3">Manual: 3 workers</option></select>
           <span id="idle-feed-parallel-help" class="setting-hint">How many builds run at once. Machine managed backs off while the machine is busy.</span>
         </div>
         <div class="setting-row">
+          <svg class="glyph setting-glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg>
           <label class="setting-label" for="idle-feed-build-mode">Build mode</label>
           <select id="idle-feed-build-mode" aria-describedby="idle-feed-build-mode-help"><option value="auto">Auto build</option><option value="verify">Verify first</option></select>
           <span id="idle-feed-build-mode-help" class="setting-hint">Auto build starts eligible tasks itself. Verify first holds each new or changed brief for your approval.</span>
         </div>
         <div class="setting-row">
+          <svg class="glyph setting-glyph" aria-hidden="true" focusable="false"><use href="#g-agents"/></svg>
           <label class="setting-label" for="idle-settings-agent-mode">Agent mode</label>
           <select id="idle-settings-agent-mode" disabled aria-describedby="idle-feed-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select>
           <span id="idle-feed-agent-mode-note" class="setting-hint" role="status">Both modes collaborate and delegate subtasks. Swarm works across the queue; Cluster focuses on one shared task.</span>
         </div>
       </div>
       <div class="setting-group" role="group" aria-labelledby="cmd-settings-safety-title">
-        <h3 id="cmd-settings-safety-title" class="setting-group-title">Safety</h3>
+        <h3 id="cmd-settings-safety-title" class="setting-group-title"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-exit"/></svg>Safety</h3>
         <div class="setting-actions">
           <button id="idle-stop-all" class="ghost mini" type="button" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button>
           <button id="idle-restart" class="ghost mini" type="button" title="Stop every agent, save progress, and restart Studio.">Restart Studio</button>
@@ -699,7 +744,7 @@
           <dt>Build mode</dt>
           <dd><b>Auto build</b> starts eligible tasks as soon as a worker is free. <b>Verify first</b> holds every new or changed brief for your approval, so you decide what gets built. Switching never interrupts a running job.</dd>
           <dt>Agent mode</dt>
-          <dd>How agents coordinate. <b>Swarm</b> works across all ready tasks and their subtasks; <b>Cluster</b> focuses every agent on one shared task until it is done. Both plan, delegate and review results; current work finishes when you switch. The same selector sits in the node tree toolbar under <b>Agents</b>.</dd>
+          <dd>How agents coordinate. <b>Swarm</b> works across all ready tasks and their subtasks; <b>Cluster</b> focuses every agent on one shared task until it is done. Both plan, delegate and review results; current work finishes when you switch. The same selector sits in the node tree toolbar under <b>Agents</b> for quick changes.</dd>
           <dt>New work</dt>
           <dd>The master switch for starting anything new — queued tasks, builds and work the assistant suggests — lives with the Assistant. Off pauses admission; running jobs, replies and your answers to questions still work.</dd>
         </dl>
@@ -735,7 +780,7 @@
         </button>
       </h2>
       <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and every connected account">Refresh</button>
-      <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Model Lab">Open</button>
+      <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Model Lab">Details</button>
     </header>
     <div id="cmd-usage-body" class="cmd-usage-body"></div>
   </section>
@@ -1116,7 +1161,7 @@
 </div>
 <div id="toast-host" role="status" aria-live="polite"></div>
 <footer>
-  <span>Sources: opencode.ai/zen/go · models.dev · dev.opencode.ai/docs/go</span>
+  <span>Sources: <a class="link" href="https://opencode.ai/go" target="_blank" rel="noreferrer">opencode.ai/go<svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-external"/></svg></a> · models.dev · dev.opencode.ai/docs/go</span>
   <span id="footer-keys">D Command · 1–4 tabs · E T I O A tools · ⌃K jump · ? shortcuts</span>
   <span id="footer-meta"></span>
 </footer>

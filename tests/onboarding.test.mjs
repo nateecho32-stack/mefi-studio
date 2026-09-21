@@ -617,7 +617,8 @@ test("workspace tool menu groups destinations and excludes duplicated sidebar li
   assert.deepEqual(target.children.map((group) => group.attrs["aria-label"]), ["Work", "Monitor & inspect", "Models"]);
   const buttons = target.querySelectorAll("button");
   const destinations = buttons.map((button) => button.dataset.nav);
-  for (const id of ["tasks", "plans", "ideas", "explorer", "eyes", "booklet", "graph"]) assert.ok(destinations.includes(id));
-  for (const id of ["workspace", "command", "studio", "music", "onboarding"]) assert.ok(!destinations.includes(id));
+  for (const id of ["ideas", "explorer", "eyes", "overhead", "analyzer", "booklet", "graph"]) assert.ok(destinations.includes(id));
+  // pinned at the top of the sidebar or in its bottom row, so never repeated in the grid
+  for (const id of ["workspace", "command", "tasks", "plans", "studio", "music", "onboarding"]) assert.ok(!destinations.includes(id));
   assert.equal(new Set(destinations).size, destinations.length);
 });

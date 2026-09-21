@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { discoverTargets } from "./check-syntax.mjs";
 
 export function extractCheckTargets(checkScript) {
   const targets = [];
@@ -56,6 +57,10 @@ function readPackageJson(packageRoot) {
   return JSON.parse(text);
 }
 
+// The in-process syntax pass (scripts/check-syntax.mjs) covers every source
+// it discovers, so a chain that runs it needs no per-file `node --check`.
+const SYNTAX_PASS = /(?:^|&&|\|\||;)\s*node\s+(?:-\S+\s+)*scripts\/check-syntax\.mjs(?=\s|$)/;
+
 export function audit(packageRoot, checkScript) {
   const targets = extractCheckTargets(checkScript);
   const referenced = new Set(targets.map((t) => t.split("\\").join("/")));
@@ -64,6 +69,10 @@ export function audit(packageRoot, checkScript) {
     const abs = resolve(packageRoot, rel);
     if (!existsSync(abs) || !statSync(abs).isFile()) missing.push(rel);
   }
+  const syntaxPass = SYNTAX_PASS.test(checkScript);
+  const discovered = syntaxPass ? discoverTargets(packageRoot) : [];
+  if (syntaxPass && !existsSync(join(packageRoot, "scripts", "check-syntax.mjs"))) missing.push("scripts/check-syntax.mjs");
+  for (const rel of discovered) referenced.add(rel);
 
   const pkg = readPackageJson(packageRoot);
   const scriptMissing = [];
@@ -94,7 +103,7 @@ export function audit(packageRoot, checkScript) {
     unreferenced.push(mainEntry);
   }
 
-  return { targets, missing, scriptMissing, unreferenced, bommed: findBommedJson(packageRoot) };
+  return { targets, discovered, missing, scriptMissing, unreferenced, bommed: findBommedJson(packageRoot) };
 }
 
 export function main(argv = process.argv.slice(2)) {
@@ -107,7 +116,7 @@ export function main(argv = process.argv.slice(2)) {
     console.error("check-targets: no scripts.check in package.json");
     return 1;
   }
-  const { missing, scriptMissing, unreferenced, bommed } = audit(packageRoot, checkScript);
+  const { targets, discovered, missing, scriptMissing, unreferenced, bommed } = audit(packageRoot, checkScript);
   for (const rel of bommed) {
     console.error(`check-targets: UTF-8 BOM in ${rel} (rewrite the file as UTF-8 without BOM)`);
   }
@@ -124,7 +133,8 @@ export function main(argv = process.argv.slice(2)) {
     console.error(`check-targets: ${bommed.length} bommed, ${missing.length + scriptMissing.length} missing, ${unreferenced.length} uncovered`);
     return 1;
   }
-  console.log(`check-targets: ok (${extractCheckTargets(checkScript).length} targets, full coverage)`);
+  const covered = new Set([...targets, ...discovered]).size;
+  console.log(`check-targets: ok (${covered} targets${discovered.length ? `, ${discovered.length} through the syntax pass` : ""}, full coverage)`);
   return 0;
 }
 

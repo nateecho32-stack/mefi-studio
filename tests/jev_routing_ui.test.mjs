@@ -314,6 +314,48 @@ test("builder models are saved per CLI", async () => {
   assert.deepEqual(env.writes[1], { executorCli: "antigravity" });
 });
 
+test("the coding tier saves on its own and the model field follows the tier and the builder", async () => {
+  const executorTierDefaults = {
+    opencode: { free: { model: "opencode/nemotron-3.5-lightning-free", source: "first-scan" }, fast: { model: "mefi-zai/glm-5.3-flash", source: "zai" }, heavy: { model: "mefi-zai/glm-5.3", source: "zai" } },
+    claude: { free: { model: "", source: "none" }, fast: { model: "sonnet", source: "alias" }, heavy: { model: "opus", source: "alias" } },
+    codex: { free: { model: "", source: "none" }, fast: { model: "", source: "cli-default" }, heavy: { model: "", source: "cli-default" } },
+  };
+  const env = environment({ executorCli: "opencode", executorModel: "", executorTier: "fast", executorTierModels: { opencode: {} }, executorTierDefaults }); await flush();
+  assert.equal(env.get("executor-tier").value, "fast");
+  assert.equal(env.get("executor-model-label").textContent, "Fast model");
+  assert.equal(env.get("executor-model").value, "", "no saved fast model: the field is empty and the placeholder says what runs");
+  assert.match(env.get("executor-model").placeholder, /mefi-zai\/glm-5\.3-flash · on your z\.ai plan/);
+  const status = () => env.get("executor-tier-status").textContent;
+  assert.match(status(), /Fast tier: OpenCode runs mefi-zai\/glm-5\.3-flash/);
+  assert.match(status(), /Free → opencode\/nemotron-3\.5-lightning-free \(from the first scan\)/);
+  assert.match(status(), /Heavy → mefi-zai\/glm-5\.3 \(on your z\.ai plan\)/);
+  env.get("executor-model").value = "mefi-zai/glm-5.3";
+  await env.get("executor-model").trigger("change");
+  assert.deepEqual(env.writes[0], { executorTierModels: { opencode: { fast: "mefi-zai/glm-5.3" } } }, "a tier model saves under its CLI and tier");
+  env.get("executor-tier").value = "heavy";
+  await env.get("executor-tier").trigger("change");
+  assert.deepEqual(env.writes[1], { executorTier: "heavy" });
+  assert.equal(env.get("executor-model-label").textContent, "Heavy model");
+  assert.match(env.get("executor-model").placeholder, /mefi-zai\/glm-5\.3 · on your z\.ai plan/);
+  env.get("executor-cli").value = "claude";
+  await env.get("executor-cli").trigger("change");
+  assert.deepEqual(env.writes[2], { executorCli: "claude" });
+  assert.match(env.get("executor-model").placeholder, /opus · Claude Code alias/, "switching builders shows that CLI's own tier default");
+  assert.match(status(), /Heavy tier: Claude Code runs opus/);
+  env.get("executor-tier").value = "free";
+  await env.get("executor-tier").trigger("change");
+  assert.match(status(), /Free tier: no free model is saved for Claude Code, so builds wait/);
+  env.get("executor-cli").value = "codex";
+  await env.get("executor-cli").trigger("change");
+  env.get("executor-tier").value = "auto";
+  await env.get("executor-tier").trigger("change");
+  assert.equal(env.get("executor-model-label").textContent, "Pinned model");
+  assert.match(status(), /Auto: Codex runs the pinned model or its CLI default/);
+  env.get("executor-model").value = "gpt-5.5-codex";
+  await env.get("executor-model").trigger("change");
+  assert.deepEqual(env.writes.at(-1), { executorModels: { codex: "gpt-5.5-codex" } }, "Auto keeps the pinned per-CLI override");
+});
+
 test("the auto order renders as a numbered preference list and saves whole-list edits", async () => {
   const env = environment({ provider: "auto", autoProviders: ["zai", "grok", "opencode"] }); await flush();
   const list = env.get("auto-order-list");
@@ -330,7 +372,7 @@ test("the auto order renders as a numbered preference list and saves whole-list 
 test("the auto order adds and removes providers and never leaves it empty", async () => {
   const env = environment({ provider: "auto", autoProviders: ["zai"] }); await flush();
   const add = env.get("auto-order-add");
-  assert.deepEqual(add.children.map((option) => option.value), ["opencode", "grok", "claude", "antigravity", "lmstudio", "custom"], "the picker lists exactly the missing providers");
+  assert.deepEqual(add.children.map((option) => option.value), ["opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"], "the picker lists exactly the missing providers");
   add.value = "opencode";
   await env.get("auto-order-add-button").trigger("click");
   assert.deepEqual(env.writes, [{ autoProviders: ["zai", "opencode"] }]);

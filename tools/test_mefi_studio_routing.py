@@ -189,7 +189,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn("AI_AUTO_PROVIDERS.includes(id)", normalize)
         self.assertIn("!order.includes(id)", normalize)
         self.assertIn('["zai", "opencode"]', normalize)
-        self.assertIn('AI_AUTO_PROVIDERS = ["zai", "opencode", "grok", "claude", "antigravity", "lmstudio", "custom"]', self.main)
+        self.assertIn('AI_AUTO_PROVIDERS = ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"]', self.main)
         # The opt-in fallback switch generalized: aiAutoFallback first, the
         # older aiFallbackOpenCode field honored for settings already written.
         fallback = _function_body(self.main, "autoFallbackEnabled")
@@ -271,7 +271,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn("child.stdin?.write", complete, "the prompt rides stdin, never the command line")
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "claude"', body, "the router returns the CLI route without a key")
-        self.assertRegex(self.main, r'AI_PROVIDERS = \["auto", "zai", "opencode", "grok", "claude", "antigravity",.*"lmstudio", "custom"\]')
+        self.assertRegex(self.main, r'AI_PROVIDERS = \["auto", "zai", "opencode", "grok", "claude", "codex", "antigravity",.*"lmstudio", "custom"\]')
         fetch = _function_body(self.main, "assistantFetch")
         self.assertIn('route.provider === "grok" || route.provider === "claude"', fetch)
         self.assertIn("claudeCompletion(system, user, route.model)", fetch)
@@ -284,6 +284,64 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn("claude: true", _function_body(self.main, "executorRunEnv"))
         self.assertIn('<option value="claude">', self.template)
         self.assertIn('<option value="claude">Claude Code — claude builds', self.template)
+
+    def test_codex_route_rides_the_chatgpt_login(self):
+        # Codex CLI as a keyless route: `codex exec` through the npm .cmd shim
+        # (like claude), the prompt on stdin ("-"), a read-only sandbox for
+        # replies, and JSONL events so the usage tracker records the tokens.
+        complete = _function_body(self.main, "codexCompletion")
+        self.assertTrue(complete, "codexCompletion must exist")
+        self.assertIn("codex exec --json --ephemeral --skip-git-repo-check --color never -s read-only", complete)
+        self.assertIn('spawn("cmd.exe"', complete, "the npm install is a .cmd shim")
+        self.assertIn("child.stdin?.write", complete, "the prompt rides stdin, never the command line")
+        self.assertIn('cliReply("codex", parseCodexCliResult(text), text', complete)
+        body = _function_body(self.main, "resolveAiRoute")
+        self.assertIn('provider === "codex"', body)
+        fetch = _function_body(self.main, "assistantFetch")
+        self.assertIn("codexCompletion(system, user, route.model)", fetch)
+        # Builders: approvals and the sandbox bypassed because nobody is at the
+        # keyboard, plain stdout so the sentinel protocol stays readable.
+        spawn = _function_body(self.main, "spawnNextJob")
+        self.assertIn('cli === "codex"', spawn)
+        self.assertIn("codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never", spawn)
+        route = _function_body(self.main, "executorRunEnv")
+        self.assertIn('settings.executorCli === "codex"', route)
+        self.assertIn("codexCliAvailable", route)
+        self.assertIn("codex: true", route)
+        self.assertIn('{ id: "codex", name: "Codex", cmd: "codex" }', self.main)
+        self.assertIn('<option value="codex">', self.template)
+        self.assertIn('<option value="codex">Codex — codex builds', self.template)
+        self.assertIn('codex: "Codex CLI"', self.booklet_js)
+
+    def test_coding_tiers_pin_the_builder_model_per_cli(self):
+        # Auto keeps per-task selection; Free / Fast / Heavy pin the tier model
+        # saved per CLI, with Studio's own defaults only where it owns the
+        # knowledge, and Free never falls back to a billed default.
+        self.assertIn('const EXECUTOR_TIERS = ["auto", "free", "fast", "heavy"]', self.main)
+        defaults = _function_body(self.main, "executorTierDefaults")
+        self.assertTrue(defaults, "executorTierDefaults must exist")
+        self.assertIn("ZAI_MODEL_ROUTINE", defaults)
+        self.assertIn("ZAI_MODEL_HEAVY", defaults, "the heavy tier is where the heavy GLM belongs")
+        self.assertIn('"sonnet"', defaults)
+        self.assertIn('"opus"', defaults)
+        self.assertIn('tier === "free" ? "none" : "cli-default"', defaults, "a free tier without a model says so instead of guessing")
+        route = _function_body(self.main, "executorRunEnv")
+        self.assertIn("normalizeExecutorTier(settings.executorTier)", route)
+        self.assertIn("Coding tier is Free but no free model is saved", route)
+        self.assertIn("parallelCap: 1, tier", route, "free runs stay serialized")
+        self.assertIn('"AI routing is z.ai-only but no z.ai key is saved"', route)
+        setter = self.main[self.main.index('ipcMain.handle("settings:set-ai-routing"'):]
+        self.assertIn("patch.executorTier !== undefined", setter)
+        self.assertIn("patch.executorTierModels !== undefined", setter)
+        self.assertIn("OPENCODE_MODEL_ID.test(value)", setter, "an OpenCode tier model must be provider/model before it is kept")
+        for element_id in ("executor-tier", "executor-model-label", "executor-tier-status"):
+            with self.subTest(element_id=element_id):
+                self.assertIn(f'id="{element_id}"', self.template)
+        for value in ("auto", "free", "fast", "heavy"):
+            with self.subTest(tier=value):
+                self.assertIn(f'<option value="{value}">', self.template)
+        self.assertIn("executorTierModels", self.booklet_js)
+        self.assertIn("executorTierDefaults", self.booklet_js, "the renderer shows what each tier resolves to, never a guess")
 
     def test_antigravity_route_rides_the_agy_login(self):
         # Antigravity CLI (`agy`) as a keyless route: a direct spawn (a Go
@@ -317,7 +375,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertTrue(override, "assistantModelOverride must exist")
         self.assertIn("settings.aiModelsByProvider", override)
         self.assertIn("SINGLE_MODEL_PROVIDERS.has(providerKey)", override)
-        self.assertIn('const SINGLE_MODEL_PROVIDERS = new Set(["grok", "claude", "antigravity", "lmstudio", "custom"])', self.main)
+        self.assertIn('const SINGLE_MODEL_PROVIDERS = new Set(["grok", "claude", "codex", "antigravity", "lmstudio", "custom"])', self.main)
         builder = _function_body(self.main, "executorModelOverride")
         self.assertTrue(builder, "executorModelOverride must exist")
         self.assertIn("settings.executorModels", builder)

@@ -244,9 +244,24 @@ console.log(JSON.stringify({ queued, exitsWhileQueued, reloads: calls.reload.map
         self.assertNotIn('from "electron"', self.updater)
         self.assertNotIn('require("electron")', self.updater)
         check = self.package.get("scripts", {}).get("check", "")
-        self.assertIn("node --check scripts/updater.mjs", check)
-        self.assertIn("node --check renderer/nav.js", check)
-        self.assertEqual(1, check.count("renderer/palette.js"))
+        # The chain's syntax pass (scripts/check-syntax.mjs) discovers every
+        # scripts/*.mjs and renderer/*.js on disk instead of naming each file.
+        self.assertIn("node scripts/check-syntax.mjs", check)
+        if NODE is None:
+            self.skipTest("Node unavailable; static contracts still ran")
+        listing = subprocess.run(
+            [NODE, "-e", "import(require('node:url').pathToFileURL(require('node:path').resolve('scripts/check-syntax.mjs')).href).then((m) => console.log(JSON.stringify(m.discoverTargets(process.cwd()))))"],
+            cwd=STUDIO,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=60,
+        )
+        self.assertEqual(0, listing.returncode, listing.stdout + listing.stderr)
+        discovered = json.loads(listing.stdout.strip().splitlines()[-1])
+        self.assertIn("scripts/updater.mjs", discovered)
+        self.assertIn("renderer/nav.js", discovered)
+        self.assertEqual(1, discovered.count("renderer/palette.js"))
 
     def test_renderer_wiring_and_resume_contract(self):
         for marker in ("mefiStudio.resume", "onUpdateEvent", "updateStatus", "updateApply", "updateSet", "Toggle automatic updates", "Apply update now", "#update-pill"):

@@ -83,22 +83,49 @@ function environment({ tracker = async () => localReport(), credits = async () =
   return { get: (id) => ids.get(id), window, emit: (name) => listeners.get(name)?.({}) };
 }
 
-test("the compact Command panel shows the Go windows, one line per connected provider and the local line", async () => {
+test("the compact Command panel leads with the live plan account, then one aligned row per provider and the recorded lines", async () => {
   const env = environment();
   await env.window.MefiUsageTracker.refresh({ force: true });
   await flush();
-  const compact = env.get("cmd-usage-body").textContent;
-  assert.match(compact, /42%/);
-  assert.match(compact, /100%/);
-  assert.match(compact, /z\.ai GLM · 5h 40\.5% · wk 12% · today 1 call · 200 tokens/);
-  assert.match(compact, /OpenRouter · \$25\.50 spent · \$74\.50 left of \$100\.00/);
-  assert.match(compact, /Vercel AI Gateway · \$95\.50 left · \$4\.50 used/);
-  assert.match(compact, /Claude Code CLI · today 1 call · 4,500 tokens/);
-  assert.match(compact, /TypeSafe Jev API · no calls today/);
-  assert.match(compact, /Recorded today · 2 calls/);
-  assert.match(compact, /Local estimate · 5h \$3\.00\/\$12/);
-  assert.doesNotMatch(compact, /OpenCode Go ·/, "the Go account is the bars, not a second line");
-  assert.match(env.get("cmd-usage-state").textContent, /Updated/);
+  const body = env.get("cmd-usage-body");
+  const compact = body.textContent;
+  const lead = body.children[0];
+  assert.equal(lead.className, "tracker-lead", "the first connected live account owns the bars");
+  assert.match(lead.textContent, /OpenCode Go plan windows/);
+  assert.match(lead.textContent, /42%/);
+  assert.match(lead.textContent, /100%/);
+  assert.match(lead.textContent, /Limit reached: Mo/);
+  assert.match(compact, /z\.ai GLM\s+5h 40\.5% · wk 12% · today 1 call · 200 tokens/);
+  assert.match(compact, /OpenRouter\s+\$25\.50 spent · \$74\.50 left of \$100\.00/);
+  assert.match(compact, /Vercel AI Gateway\s+\$95\.50 left · \$4\.50 used/);
+  assert.match(compact, /Claude Code CLI\s+today 1 call · 4,500 tokens/);
+  assert.match(compact, /TypeSafe Jev API\s+no calls today/);
+  assert.match(compact, /Recorded today\s+2 calls · 300 tokens/);
+  assert.match(compact, /Local estimate\s+5h \$3\.00\/\$12/);
+  assert.doesNotMatch(compact, /OpenCode Go ·/, "the Go account is the lead box, not a second row");
+  const rows = body.children.filter((child) => child.className === "tracker-rows");
+  assert.equal(rows.length, 2, "connected providers and recorded totals are two aligned lists");
+  assert.equal(rows[0].children.length, 5, "every provider but the lead gets one row");
+  assert.equal(rows[0].children[0].className, "tracker-row");
+  assert.match(env.get("cmd-usage-state").textContent, /Updated .* · OpenCode Go 5h 42% · wk 34%/, "the collapsed header still says the one thing worth knowing");
+});
+
+test("with no Go key the z.ai quota leads the compact panel instead of empty Go bars", async () => {
+  const env = environment({
+    credits: async () => ({ ok: false, code: "no-key", error: "No OpenCode Go key is saved. Add one in Settings to read account usage." }),
+    accounts: async () => ({ ok: true, at: 1, accounts: accountsReport().accounts.filter((account) => account.provider !== "opencode-go") }),
+  });
+  await env.window.MefiUsageTracker.refresh({ force: true });
+  await flush();
+  const body = env.get("cmd-usage-body");
+  const lead = body.children[0];
+  assert.equal(lead.className, "tracker-lead");
+  assert.match(lead.textContent, /z\.ai GLM pro plan/);
+  assert.match(lead.textContent, /40\.5%/);
+  assert.match(lead.textContent, /12%/);
+  assert.doesNotMatch(body.textContent, /No OpenCode Go key is saved/, "an account that was never connected is not a warning");
+  assert.doesNotMatch(body.textContent, /z\.ai GLM\s+5h/, "the lead account is not repeated as a row");
+  assert.match(env.get("cmd-usage-state").textContent, /z\.ai GLM 5h 40\.5% · wk 12%$/, "and no unavailable note for a key that was never saved");
 });
 
 test("the Model Lab tracker tab lists every connected account beside both ledgers", async () => {
@@ -143,11 +170,12 @@ test("a failed account read is stated plainly and never invented from local spen
   });
   await env.window.MefiUsageTracker.refresh({ force: true });
   await flush();
-  const compact = env.get("cmd-usage-body").textContent;
-  assert.match(compact, /No OpenCode Go key is saved/);
-  assert.match(compact, /—/);
-  assert.match(compact, /OpenRouter · OpenRouter rejected the saved key/);
-  assert.match(env.get("cmd-usage-state").textContent, /live account read unavailable/);
+  const body = env.get("cmd-usage-body");
+  const compact = body.textContent;
+  assert.notEqual(body.children[0].className, "tracker-lead", "no live reading means no bars");
+  assert.match(compact, /OpenRouter · OpenRouter rejected the saved key/, "the failed read leads, stated plainly");
+  assert.match(compact, /OpenRouter\s+OpenRouter rejected the saved key \(401\)/);
+  assert.match(env.get("cmd-usage-state").textContent, /1 account read unavailable/, "the missing Go key is not a failed read; the rejected OpenRouter key is");
   const full = env.get("model-lab-tracker-body").textContent;
   assert.match(full, /Unavailable/);
   assert.match(full, /No OpenCode Go key is saved/);
@@ -161,8 +189,8 @@ test("a failed local read leaves the account readings standing", async () => {
   assert.match(env.get("model-lab-tracker-body").textContent, /Usage could not be read/);
   const compact = env.get("cmd-usage-body").textContent;
   assert.match(compact, /42%/);
-  assert.match(compact, /Vercel AI Gateway · \$95\.50 left/);
-  assert.match(compact, /Claude Code CLI · no calls today/);
+  assert.match(compact, /Vercel AI Gateway\s+\$95\.50 left/);
+  assert.match(compact, /Claude Code CLI\s+no calls today/);
   assert.doesNotMatch(compact, /Recorded today/);
 });
 

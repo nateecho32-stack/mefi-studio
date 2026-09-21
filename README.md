@@ -86,8 +86,11 @@ Ruins Runner integration uses `MEFI_STUDIO_GAME_ROOT`, or a sibling
 ### Workspace and work
 
 - **Projects** keeps each folder's tasks, conversations, drafts, references and
-  work logs together; the left-edge sidebar switches projects, and running work
-  must finish before a project change.
+  work logs together. The studio menu opens from the grip on the left edge
+  (hover, click or Tab to it): Your workspace, Command view, Task board and
+  Plans at the top, the project list, a tools grid, and Settings, Music and
+  Start here in its bottom row. Running work must finish before a project
+  change.
 - **Your work** separates open work, attempts needing **Review**, and verified
   or manually confirmed **Done** tasks; archived completions stay visible.
 - **Auto build** stays on by default. Turn it off for **Verify first** so each
@@ -147,6 +150,9 @@ project's ignored local `planning.json`.
   task) and a ranked queue; **Settings** holds the queue controls, while
   **Agents** in the toolbar chooses how the roster shares work between
   **Swarm** (across the queue) and **Cluster** (one goal at a time).
+- The rail's **Agents** tab gathers the queue controls (Autopilot, Parallel
+  builds, Build mode, Agent mode) under an at-a-glance strip that shows the
+  switch, the running builds and their cap, and the coordination mode.
 - **Parallel builds** defaults to **Machine managed**: admission follows
   measured app responsiveness, with optional manual limits of one to three
   workers. High CPU alone never limits builds.
@@ -233,9 +239,17 @@ project's ignored local `planning.json`.
   request, changes no key, keeps model overrides, reports every choice, and
   leaves the same controls editable afterward.
 - Builders run through `opencode run` (with a Studio-managed z.ai provider),
-  the Grok CLI, Claude Code (`claude -p` on your subscription login), or
-  Antigravity (`agy` on your Google account), with automatic one-time fallback
-  decided by the failure kind.
+  the Grok CLI, Claude Code (`claude -p` on your subscription login), Codex
+  (`codex exec` on your ChatGPT login), or Antigravity (`agy` on your Google
+  account), with automatic one-time fallback decided by the failure kind.
+- A **coding tier** in Settings › Coding workers decides what each build may
+  cost. **Auto** keeps per-task selection (Jev or the stand-in judge within
+  your provider, otherwise the CLI default); **Free** runs a free model one
+  worker at a time and never falls back to a billed default; **Fast** runs the
+  quick economical model (GLM 5.3 Flash on the z.ai plan, `sonnet` on Claude
+  Code); **Heavy** runs the high-end one (GLM 5.3, `opus`). Tier models are
+  saved per builder CLI, and the Settings line shows what each tier resolves
+  to before anything runs.
 - Keys live in the OS keystore (`safeStorage`; DPAPI on Windows). Headless
   setup: `MEFI_STUDIO_KEY=... electron . --set-key`,
   `MEFI_STUDIO_ZAI_KEY=... electron . --set-zai-key`, and

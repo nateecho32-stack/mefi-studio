@@ -550,13 +550,18 @@
     if (!$("dash-usage")) return;
     const report = state.usage;
     if (!report) { $("dash-usage").dataset.tone = "idle"; $("dash-usage-value").textContent = api() ? "No reading yet" : "Desktop app only"; $("dash-usage-note").textContent = ""; return; }
-    const credits = report.credits?.ok ? report.credits.usage : null;
+    // The lead account is the first connected provider with a live window or
+    // quota reading (the same choice the Command usage panel makes); the older
+    // OpenCode Go read stands in when the accounts read is absent.
+    const accounts = Array.isArray(report.accounts?.accounts) ? report.accounts.accounts : [];
+    const lead = accounts.find((account) => account?.ok && (account.read === "windows" || account.read === "quota")) ?? null;
+    const credits = lead ? (lead.read === "windows" ? lead.usage : lead.quota) : report.credits?.ok ? report.credits.usage : null;
     const today = report.local?.ok === false ? null : report.local?.today;
     const percent = (window) => (window && Number.isFinite(window.percent) ? `${Math.round(window.percent)}%` : null);
     const rolling = percent(credits?.rolling), weekly = percent(credits?.weekly);
     if (rolling || weekly) {
       $("dash-usage-value").textContent = `5h ${rolling ?? "—"} · week ${weekly ?? "—"}`;
-      $("dash-usage").dataset.tone = (credits?.rolling?.percent >= 90 || credits?.weekly?.percent >= 90) ? "warn" : "ok";
+      $("dash-usage").dataset.tone = (credits?.rolling?.percent >= 90 || credits?.weekly?.percent >= 90 || credits?.rolling?.status === "rate-limited") ? "warn" : "ok";
     } else if (today) {
       $("dash-usage-value").textContent = `${today.calls ?? 0} calls today`;
       $("dash-usage").dataset.tone = "ok";
@@ -565,7 +570,8 @@
       $("dash-usage").dataset.tone = "idle";
     }
     const cost = Number(today?.usage?.costUsd);
-    $("dash-usage-note").textContent = today ? `Today · ${today.calls ?? 0} calls${Number.isFinite(cost) ? ` · $${cost.toFixed(2)}` : ""}` : report.credits?.error || "";
+    const who = lead ? `${lead.label} · ` : "";
+    $("dash-usage-note").textContent = today ? `${who}Today · ${today.calls ?? 0} calls${Number.isFinite(cost) ? ` · $${cost.toFixed(2)}` : ""}` : lead ? who.slice(0, -3) : report.credits?.error || "";
   }
   function renderJev(value) {
     const status = value?.status || value;

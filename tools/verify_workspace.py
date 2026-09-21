@@ -542,8 +542,8 @@ class VerifiedWindow extends NativeWindow {
     assert.equal((await this.run("return await window.mefiStudio.backlogStatus();")).counts.running, 0, "isolated smoke must not launch paid workers");
     this.check("Work through backlog and Pause update the real scheduling state without paid workers");
 
-    await this.click("#workspace-tools > summary");
-    await this.until("document.querySelector('#workspace-tool-links [data-nav=tasks]') && document.querySelector('#workspace-tool-links [role=group]')", "advanced tools are discoverable in groups");
+    await this.run("document.getElementById('workspace-tools').open = true;");
+    await this.until("document.querySelector('#workspace-tool-links [data-nav=explorer]') && document.querySelector('#workspace-tool-links [role=group]')", "advanced tools are discoverable in groups");
     await this.capture("06-tools-menu");
     await this.click('#workspace-node-tree');
     await this.until("window.MefiIdle?.isActive?.() && !window.MefiWorkspace.isActive()", "constellation opens from its primary sidebar control");

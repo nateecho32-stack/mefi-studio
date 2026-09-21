@@ -10,7 +10,7 @@ const main = (await readFile(new URL("../main.cjs", import.meta.url), "utf8")).r
 const from = main.indexOf("function normalizeAutoProviders(");
 const to = main.indexOf("// Pick who pays", from);
 assert.ok(from >= 0 && to > from, "planAutoSetup must exist in main.cjs");
-const context = vm.createContext({ AI_AUTO_PROVIDERS: ["zai", "opencode", "grok", "claude", "antigravity", "lmstudio", "custom"] });
+const context = vm.createContext({ AI_AUTO_PROVIDERS: ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"] });
 vm.runInContext(main.slice(from, to), context);
 const planAutoSetup = context.planAutoSetup;
 const plain = (value) => JSON.parse(JSON.stringify(value));
@@ -84,6 +84,23 @@ test("an Antigravity-only machine configures the agy login route and Antigravity
   assert.match(notes, /Antigravity CLI's own Google account login/);
   assert.match(notes, /builders run through Antigravity/);
   assert.doesNotMatch(notes, /key found/);
+});
+
+test("a Codex-only machine configures the ChatGPT login route and Codex builders", () => {
+  const plan = planAutoSetup({ settings: {}, keys: {}, clis: [cli("codex", true)] });
+  assert.equal(plan.ok, true);
+  assert.deepEqual(plain(plan.changes), { provider: "codex", modelSelection: "fixed", executorCli: "codex" });
+  const notes = plan.notes.join(" ");
+  assert.match(notes, /Codex CLI's own ChatGPT login/);
+  assert.match(notes, /builders run through Codex/);
+  assert.doesNotMatch(notes, /key found/);
+});
+
+test("Claude Code outranks Codex as the fallback builder when both are installed and OpenCode is not", () => {
+  const plan = planAutoSetup({ settings: {}, keys: { zai: true }, clis: [cli("codex", true), cli("claude", true)] });
+  assert.equal(plan.active.provider, "zai", "a saved key still leads the assistant route");
+  assert.equal(plan.active.executorCli, "claude");
+  assert.match(plan.notes.join(" "), /Claude Code CLI found: builders run through Claude Code/);
 });
 
 test("a machine with no keys or CLIs is still set up from a local server or custom endpoint", () => {
