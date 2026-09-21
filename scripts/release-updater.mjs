@@ -157,12 +157,17 @@ export async function checkForRelease({
       signal: timeoutSignal(timeoutMs),
     });
     if (response.status === 404) {
+      // GitHub answers 404 both for a private repository seen without a token
+      // and for a public repository that simply has no release yet. Only the
+      // second is the normal "nothing published" state, so a tokenless 404
+      // asks whether the repository itself is visible before blaming a token.
+      const visible = token ? true : await repoVisible({ repo, fetchImpl, apiBase, timeoutMs });
       return {
         ok: false,
-        error: token
+        error: visible
           ? "no published release found for this repository"
           : "no release found — a private repository needs a GitHub token",
-        needsToken: !token,
+        needsToken: !visible,
         checkedAt,
       };
     }
@@ -178,6 +183,22 @@ export async function checkForRelease({
   } catch (error) {
     const aborted = error?.name === "AbortError" || error?.name === "TimeoutError";
     return { ok: false, error: aborted ? "the release check timed out" : String(error?.message ?? error).slice(0, 300), checkedAt };
+  }
+}
+
+// True when the repository page itself answers 200 without credentials, so a
+// missing release is a missing release and not a hidden repository. Any
+// failure counts as "not visible": the token hint then stays as the safe fallback.
+async function repoVisible({ repo, fetchImpl, apiBase, timeoutMs }) {
+  try {
+    const response = await fetchImpl(`${apiBase}/repos/${repo}`, {
+      headers: githubHeaders(null),
+      redirect: "follow",
+      signal: timeoutSignal(timeoutMs),
+    });
+    return response.status === 200;
+  } catch {
+    return false;
   }
 }
 
