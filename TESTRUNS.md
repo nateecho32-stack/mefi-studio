@@ -470,6 +470,19 @@ was blocked, so the tracker never engaged; the records carry the new
 timeline, and no occluded record was claimed. The strict native pass above
 remains the pinned evidence for this thread.
 
+Re-run on 2026-09-21 (run_1789974561450_6, owner-gated commit of the
+occlusion-probe thread): the thread's scoped work is committed as a9464fd
+(framesMs lag classification in `main.cjs`, strict native occluded record,
+fixture/worker-test hardening, and the TESTRUNS rows above); one more fresh
+`node --test tests/occlusion_probe.test.mjs` skipped at the documented
+capability gate with the desktop locked (Windows Default Lock Screen
+foreground, LockApp pid 17300, console session 1 "Active", input idle ~15
+min, cover shown focused, 8 focus reassertions, rAF loud at ~60 fps behind
+the cover) — the same inert-unattended-tracker state recorded above, where
+the benign-input route is unavailable at the lock screen. No occluded record
+was claimed and the visibility proxy stayed off; the strict native pass from
+run_1789973551180_3 remains the pinned evidence for this thread.
+
 Validated on 2026-09-20: `npm run check`, `npm test` (1,490 parallel Node
 tests with 1,489 passing and one opt-in skip, the serialized occlusion probe
 passing at ~0 ms lag, 243 Python contracts and the normalized-path checks)
