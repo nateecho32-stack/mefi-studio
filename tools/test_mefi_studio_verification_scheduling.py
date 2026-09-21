@@ -147,8 +147,9 @@ class VerificationSchedulingTests(unittest.TestCase):
         self.assertIn('asArray(queue).some((job) => isObject(job) && job.key === key)', module)
         # Only a done claim queues; the result field is read start-anchored.
         self.assertIn("VERIFICATION_RESULT_RE", module)
-        # The queued run is npm run check plus the task's focused tests.
-        self.assertIn('commands: ["npm run check", ...tests]', module)
+        # The queued run is the project's base check (npm run check by
+        # default) plus the task's focused tests.
+        self.assertIn('commands: [str(baseCheck).trim() || "npm run check", ...tests]', module)
         # Spaced Windows paths survive the shell:true runner: every path
         # segment is double-quoted ("Coding projects" was once split by
         # cmd.exe and recorded as "Coding, projects").

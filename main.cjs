@@ -8123,7 +8123,10 @@ async function spawnNextJob() {
                 task: { id: agentModes.requestKey(owned), title: owned.title, files: owned.files, file: owned.file, refs: owned.refs },
                 attemptKey: entry.id,
                 queue: verificationJobs,
-                baseCheck: baseCheckForProject(owned?.projectPath ?? null),
+                // The base-check probe is a module-level helper a sliced
+                // settle context may not carry; without it the job still
+                // queues on the default check instead of dying mid-settle.
+                baseCheck: typeof baseCheckForProject === "function" ? baseCheckForProject(owned?.projectPath ?? null) : null,
               });
               // Same partial-commit recovery as the task path: a deduped
               // retry still finds the attempt's queued job and stamps the row.
@@ -8233,7 +8236,8 @@ async function spawnNextJob() {
         if (entry.resultNote && typeof assistantModule?.scheduleVerificationOnDone === "function") {
           const planned = assistantModule.scheduleVerificationOnDone({
             resultNote: entry.resultNote, task: job.ref, attemptKey: entry.id, queue: verificationJobs,
-            baseCheck: baseCheckForProject(job.ref?.projectPath ?? null),
+            // Same sliced-context guard as the request path above.
+            baseCheck: typeof baseCheckForProject === "function" ? baseCheckForProject(job.ref?.projectPath ?? null) : null,
           });
           // Partial-commit recovery: the queue push survives a rolled-back
           // store write, so the retried settlement dedupes to null. Recover
