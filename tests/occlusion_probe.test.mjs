@@ -10,7 +10,11 @@
 // after the visible-phase CSP/worker/probe assertions still ran — occlusion
 // is an environment capability, so its absence here is information, not a
 // regression. Any environment that does produce occlusion keeps every strict
-// assertion. Opt-in only (MEFI_OCCLUSION_PROXY=visibility, default off): the
+// assertion. External destruction of the probe window mid-phase is handled
+// the same way: the fixture reports `windowLost` (phase, trigger, window and
+// cover state, foreground identity) and this test skips with that reason —
+// a window killed by the environment says nothing about the contract.
+// Opt-in only (MEFI_OCCLUSION_PROXY=visibility, default off): the
 // fixture may additionally drive the occluded-phase branch with hide()/show()
 // — a "not rendered" proxy, never coverage ("hide is not coverage"; owner
 // sign-off on that contract change is still pending) — and those results are
@@ -51,6 +55,21 @@ test("an occluded booklet window's worker/MessageChannel channel answers while r
     try { report = JSON.parse(await readFile(path.join(fixture, "report.json"), "utf8")); } catch {}
     assert.equal(code, 0, `${output}\n${report?.failure || "No occlusion fixture report"}`);
     assert.ok(report && !report.failure, report?.failure || "No occlusion fixture report");
+
+    // Environment interference, the windowLost twin of occlusionUnsupported:
+    // something outside the fixture destroyed the probe window mid-phase
+    // (user close, shell, cleanup tooling). The fixture recognized the death
+    // — "closed" event, the destroyed-access error at its shared exit, or
+    // its assertProbeAlive guard — recorded diagnostics, and exited cleanly.
+    // A destroyed window says nothing about the occlusion contract, so the
+    // test skips with the explicit reason; this runs before any per-phase
+    // assertion because phase data before the death may be partial.
+    if (report.windowLost) {
+      const lost = report.windowLost;
+      t.diagnostic(`probe window destroyed externally during ${lost.phase}: trigger=${lost.trigger}; windowDestroyed=${lost.windowDestroyed}, handle=${lost.windowHandle}, coverDestroyed=${lost.coverDestroyed}, coverVisible=${lost.coverVisible}, cover=${lost.coverHandle}, win32 foreground=${JSON.stringify(lost.foreground)}, timeline tail=${JSON.stringify(lost.timelineTail)}`);
+      t.skip(`probe window was destroyed externally during the ${lost.phase} phase (${lost.trigger})`);
+      return;
+    }
 
     assert.match(report.csp, /worker-src[^;]*blob:/, "booklet.html CSP must allow blob workers");
     assert.deepEqual(report.cspViolations, [], `CSP violations in the live page: ${JSON.stringify(report.cspViolations)}`);

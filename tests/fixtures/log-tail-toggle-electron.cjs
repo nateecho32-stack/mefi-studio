@@ -12,7 +12,10 @@
 // the production default, so the page behaves exactly like the running app:
 // the hidden pause is corroborated both by the fetch counts and by the guard
 // itself reporting the poll timer torn down while hidden and live again after
-// show — timer throttling cannot fake that teardown.
+// show — timer throttling cannot fake that teardown. Timing assertions are
+// load-tolerant: lower-bound fetch counts are awaited with deadlines, the
+// hidden phase is judged by hidden-stamped fetches, and doubling is read from
+// fetch timestamps, so timer drift under load cannot fail the acceptance.
 // Run: node --test tests/eyes_toggle_electron.test.mjs
 
 const { app, BrowserWindow } = require("electron");
@@ -70,6 +73,12 @@ app.whenReady().then(async () => {
     width: 640,
     height: 480,
     show: false,
+    // Desktop z-order under CalculateNativeWinOcclusion can flap a plain
+    // window's visibility (shown → covered → raised) and dispatch several
+    // real visibilitychange events the shipped code must answer; pinning the
+    // window above the clutter keeps the fixture's single hide/show toggle
+    // the only visibility transition, so the snap count stays deterministic.
+    alwaysOnTop: true,
     backgroundColor: "#101014",
     webPreferences: {
       contextIsolation: true,
@@ -104,6 +113,20 @@ app.whenReady().then(async () => {
       await pause(100);
     }
     throw new Error(`${what}: condition never held within ${deadline}ms (last=${JSON.stringify(state)})`);
+  };
+  // Fetch-count lower bounds are awaited, never assumed from a wall-clock
+  // window: a busy machine stretches timer delivery, and slowness is not a
+  // cadence failure — a dead timer is, and the deadline tells those apart.
+  const fetchLogNow = () => run("return window.__fetches;");
+  const waitForFetches = async (target, deadline, what) => {
+    const limit = Date.now() + deadline;
+    let log = [];
+    while (Date.now() < limit) {
+      log = await fetchLogNow();
+      if (log.length >= target) return log;
+      await pause(100);
+    }
+    throw new Error(`${what}: only ${log.length}/${target} fetches landed within ${deadline}ms`);
   };
 
   await window.loadURL("data:text/html,<title>log-tail-toggle</title><body></body>");
@@ -145,17 +168,21 @@ app.whenReady().then(async () => {
   `);
   assert.ok(await run("return window.MefiBoot.pollActive('eyes.log')"), "the log tail poll must be live after registration");
 
-  // Phase 1 — visible baseline: the cadence fetches once per interval.
+  // Phase 1 — visible baseline: the cadence fetches once per interval. Two
+  // fetches are awaited with a generous deadline rather than counted inside a
+  // fixed ~1.1s window, so timer drift under load cannot fail the phase; only
+  // a poll that stops fetching altogether can. The span is read from the
+  // fetch timestamps themselves.
   const baselineStart = await pageState("baseline-start");
-  await pause(1100);
+  const baselineLog = await waitForFetches(baselineStart.fetches + 2, 15000, "baseline cadence");
   const baselineEnd = await pageState("baseline-end");
   report.baseline = {
     start: baselineStart.fetches,
     end: baselineEnd.fetches,
-    fetches: baselineEnd.fetches - baselineStart.fetches,
-    spanMs: baselineEnd.at - baselineStart.at,
+    fetches: baselineLog.length - baselineStart.fetches,
+    spanMs: baselineLog[baselineLog.length - 1].at - baselineLog[baselineStart.fetches].at,
   };
-  assert.ok(report.baseline.fetches >= 2, `visible cadence must fetch at least twice over ~1.1s at ${PROBE_MS}ms (got ${report.baseline.fetches})`);
+  assert.ok(report.baseline.fetches >= 2, `visible cadence must fetch at least twice at ${PROBE_MS}ms (got ${report.baseline.fetches} over ${report.baseline.spanMs}ms)`);
 
   // Phase 2 — the single visibility toggle: hide the window, the canonical
   // user-visible-to-invisible transition that flips document.hidden.
@@ -173,8 +200,14 @@ app.whenReady().then(async () => {
   const hiddenStill = await pageState("hidden-still");
   assert.equal(hiddenStill.pollLive, false, "the poll must stay torn down for the whole hidden stretch");
   const afterHide = hiddenStill.fetches;
-  report.hidden = { before: beforeHide, after: afterHide, fetches: afterHide - beforeHide, spanMs: 1200 };
-  assert.equal(report.hidden.fetches, 0, `a hidden window must fetch nothing across ${report.hidden.spanMs}ms (got ${report.hidden.fetches})`);
+  // The hidden phase is judged by the fetch stamps, not by a delta between
+  // sampled counters: a visible tick that lands between the pre-hide sample
+  // and the hide transition is legitimately visible (every fetch stamps
+  // document.hidden at call time), and under load that straddle window grows.
+  // The shipped guarantee under test is exactly "no fetch stamped hidden".
+  const hiddenStamped = (await fetchLogNow()).filter((fetch) => fetch.hidden);
+  report.hidden = { before: beforeHide, after: afterHide, fetches: hiddenStamped.length, spanMs: 1200 };
+  assert.equal(report.hidden.fetches, 0, `a hidden window must fetch nothing across ${report.hidden.spanMs}ms (got ${report.hidden.fetches} fetches stamped hidden: ${JSON.stringify(hiddenStamped)})`);
 
   // Phase 3 — show: the shipped listener snaps exactly one immediate fetch.
   // The snap is measured from the fetch log's timestamps, not a wall-clock
@@ -195,18 +228,24 @@ app.whenReady().then(async () => {
   report.resume = { before: afterHide, after: afterResume, immediateFetches: 1 + bunched.length, snapGapMs: bunched.length ? Math.min(...bunched.map((fetch) => fetch.at - snap.at)) : null };
   assert.equal(report.resume.immediateFetches, 1, `show must snap exactly one immediate refresh (got ${report.resume.immediateFetches})`);
 
-  // Phase 4 — resumed cadence: baseline rate, never doubled. A leaked second
-  // interval or a double-registered listener would roughly double this count.
-  await pause(1200);
+  // Phase 4 — resumed cadence: baseline rate, never doubled. Three fetches
+  // are awaited with a generous deadline instead of counted inside a fixed
+  // 1.2s window (load stretches delivery downward only), and the doubling
+  // check reads the timestamps: a leaked second interval or a
+  // double-registered listener halves the time three fetches need, which no
+  // count-based window under load can distinguish from drift.
+  const resumedLog = await waitForFetches(afterResume + 3, 15000, "resumed cadence");
+  const resumedSlice = resumedLog.slice(afterResume);
+  const resumedSpanMs = resumedSlice[resumedSlice.length - 1].at - resumedSlice[0].at;
   const finalState = await pageState("resumed-cadence");
   report.resumedCadence = {
     start: afterResume,
     end: finalState.fetches,
     fetches: finalState.fetches - afterResume,
-    spanMs: 1200,
+    spanMs: resumedSpanMs,
   };
   assert.ok(report.resumedCadence.fetches >= 3, `the resumed cadence must tick ~once per ${PROBE_MS}ms (got ${report.resumedCadence.fetches} over ${report.resumedCadence.spanMs}ms)`);
-  assert.ok(report.resumedCadence.fetches <= 6, `the resumed cadence must not be doubled by a leaked interval or listener (got ${report.resumedCadence.fetches}, baseline rate would be ~4)`);
+  assert.ok(resumedSpanMs >= PROBE_MS * 1.5, `the resumed cadence must not be doubled by a leaked interval or listener (three fetches within ${resumedSpanMs}ms at ${PROBE_MS}ms cadence; the baseline rate needs about twice that)`);
   assert.ok(await run("return window.MefiBoot.pollActive('eyes.log');"), "exactly one live poll remains registered after the toggle");
 
   // Every recorded fetch happened while visible — none slipped through hidden.

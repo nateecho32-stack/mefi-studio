@@ -1,5 +1,42 @@
 # Test Runs
 
+TESTRUNS flake triage: eyes_toggle_electron + occlusion_probe (2026-09-21,
+evening, run_1790028053881_29). Adopted and completed the uncommitted fixture
+work already in the tree rather than rewriting it. Root cause reproduced, not
+guessed: recreating the old serialized stage (both display fixtures in one
+`node --test` invocation, the pre-fix `runGroup(exclusive)` shape) plus four
+CPU spinners fails eyes_toggle with "show must snap exactly one immediate
+refresh (got 2)" — the occlusion fixture's always-on-top cover reasserts
+`app.focus({ steal: true })` every 2s, flapping the eyes window's visibility
+so the shipped listener correctly snaps once per real visibilitychange. The
+landed fix is the combination already staged in the worktree:
+`scripts/run-node-tests.mjs` now gives each exclusive fixture its own
+invocation (`node --test a b` runs files concurrently); the log-tail fixture
+judges phases load-tolerantly (fetch counts awaited with deadlines, the
+hidden phase judged by fetches stamped `document.hidden` at call time,
+doubling read from fetch timestamps, the window pinned always-on-top), with
+the test wrapper's count-based `<= 6` doubling window replaced by the same
+span judgement and the stale "while minimized" message corrected; the
+occlusion fixture recognizes external window destruction (`windowLost`:
+phase, trigger, window/cover state, Win32 foreground identity, timeline
+tail) at its shared exit and the test skips with that reason — the live app
+holding the desktop destroying the probe window mid-occluded-phase is a
+diagnostic, not a contract failure. Verified: `node --test
+tests/eyes_toggle_electron.test.mjs` isolated 1/1; `node --test
+tests/occlusion_probe.test.mjs` isolated passes strictly natively
+(document.hidden detection, occluded rAF growth 0, worker-channel lag 0ms);
+eyes_toggle under four CPU spinners alone passes (load tolerance holds —
+the flake needs the window fight, which the runner separation removes); the
+new stage shape (one invocation per fixture, sequential) under the same load
+passes both; `node --check` on every changed file and `npm run check` (90
+targets, 176 specs, CSS merge/unused, syntax) are clean. The adjacent
+uncommitted performance_render kill-contract hardening (taskkill /T /F on
+the fixture's own tree) parses and its `spawn` import is intact; it belongs
+to the still-open residual performance_render task. Remaining: the full
+`npm test` combined gate was not rerun end-to-end here (serialized-stage
+evidence is the targeted equivalent), and the worktree changes are
+uncommitted.
+
 First-map plan verification, 7 ideas (2026-09-21, evening). Run
 run_1790027371112_14 for task_plan_mubs2uat_0 — read/verify checklist, no
 source changes: `npm run build-booklet` reproduced `renderer/booklet.html`

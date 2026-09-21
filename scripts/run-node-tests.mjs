@@ -23,8 +23,13 @@ all.sort();
 const parallel = all.filter((file) => !serialized.has(path.basename(file)));
 const exclusive = all.filter((file) => serialized.has(path.basename(file)));
 
-for (const group of [parallel, exclusive]) {
-  if (!group.length) continue;
-  const run = spawnSync(process.execPath, ["--test", ...group], { cwd: studio, stdio: "inherit" });
+const runGroup = (files) => {
+  const run = spawnSync(process.execPath, ["--test", ...files], { cwd: studio, stdio: "inherit" });
   if (run.status !== 0 || run.error) process.exit(run.status ?? 1);
-}
+};
+if (parallel.length) runGroup(parallel);
+// The exclusive fixtures each get their own invocation: a single
+// `node --test a b` call still runs the two files concurrently, and two
+// live windows fighting over occlusion and visibility is exactly what this
+// stage exists to prevent.
+for (const file of exclusive) runGroup([file]);

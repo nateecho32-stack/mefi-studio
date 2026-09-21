@@ -28,6 +28,17 @@
 // under `occlusionProxy` with the signal named, and `occluded` stays reserved
 // for real native occlusion; promoting the proxy to a sanctioned occlusion
 // signal is a contract change still awaiting owner sign-off.
+// External window destruction is handled the same way as an inert tracker:
+// something outside the fixture killing the probe window mid-phase (user,
+// shell, cleanup tooling) would otherwise surface as a bare "Object has been
+// destroyed" throw from whatever window/webContents access ran next — only
+// render-process-gone was handled. The fixture listens for the window's own
+// "closed" event as a proactive signal and recognizes the destroyed-access
+// error at the shared finish() exit (check-then-use guards are TOCTOU against
+// external destruction), records `windowLost` diagnostics — phase, trigger,
+// window/cover state, Win32 foreground identity, timeline tail — and exits
+// cleanly so the test can skip with an explicit reason, exactly like
+// `occlusionUnsupported`.
 
 const { app, BrowserWindow, screen } = require("electron");
 const assert = require("node:assert/strict");
@@ -59,16 +70,125 @@ app.on("window-all-closed", () => {});
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let finished = false;
+let probeWindow = null;
+let coverWindow = null;
+let currentPhase = "startup";
+let windowClosedSignal = null;
+
+// OS-level window identity for the diagnostic records: hwnd values for our
+// own windows plus who actually holds Win32 foreground at record time. This
+// separates "the cover held foreground and the tracker simply never engaged"
+// from "the focus steal never landed" — and, for windowLost, who held the
+// desktop when the window died. GetForegroundWindow legitimately returns
+// NULL on some desktops (observed live on this one), and that observation is
+// itself the diagnosis, so the NULL case is reported, not treated as an
+// error. Every snapshot — NULL foreground included — also carries a
+// `session` block so the record is self-describing about the desktop it was
+// taken on: the active console session id, the session's WTSConnectState,
+// whether the input desktop is openable (locked/secure desktop) plus its
+// name, and GetLastInputInfo-based idle time (a headless/unattended desktop
+// reads a huge idleMs, which explains a NULL foreground at a glance).
+function nativeWindowHandle(browserWindow) {
+  try {
+    const buffer = browserWindow.getNativeWindowHandle();
+    const value = buffer.byteLength >= 8 ? buffer.readBigUInt64LE(0) : BigInt(buffer.readUInt32LE(0));
+    return `0x${value.toString(16)}`;
+  } catch {
+    return null;
+  }
+}
+function snapshotForeground() {
+  if (process.platform !== "win32") return Promise.resolve(null);
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    "Add-Type -TypeDefinition 'using System; using System.Text; using System.Runtime.InteropServices; public static class FgProbe { [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId); [DllImport(\"user32.dll\", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount); [DllImport(\"kernel32.dll\")] public static extern uint WTSGetActiveConsoleSessionId(); [DllImport(\"kernel32.dll\")] public static extern uint GetTickCount(); [StructLayout(LayoutKind.Sequential)] public struct LASTINPUTINFO { public uint cbSize; public uint dwTime; } [DllImport(\"user32.dll\")] public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii); [DllImport(\"wtsapi32.dll\", SetLastError=true)] public static extern bool WTSQuerySessionInformation(IntPtr hServer, int sessionId, int infoClass, out IntPtr ppBuffer, out int pBytesReturned); [DllImport(\"wtsapi32.dll\")] public static extern void WTSFreeMemory(IntPtr pMemory); [DllImport(\"user32.dll\", SetLastError=true)] public static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint access); [DllImport(\"user32.dll\", CharSet=CharSet.Unicode)] public static extern bool GetUserObjectInformation(IntPtr hObj, int nIndex, StringBuilder lpInfo, int nLength, out int lpnLengthNeeded); [DllImport(\"user32.dll\", SetLastError=true)] public static extern bool CloseDesktop(IntPtr hDesktop); }'",
+    "$session = [ordered]@{ consoleSessionId = [FgProbe]::WTSGetActiveConsoleSessionId() }",
+    "$session.connectState = $null; $session.connectStateError = $null",
+    "$wtsBuf = [IntPtr]::Zero; $wtsLen = 0",
+    "if ([FgProbe]::WTSQuerySessionInformation([IntPtr]::Zero, -1, 8, [ref]$wtsBuf, [ref]$wtsLen)) { $session.connectState = [Runtime.InteropServices.Marshal]::ReadByte($wtsBuf); [void][FgProbe]::WTSFreeMemory($wtsBuf) } else { $session.connectStateError = [Runtime.InteropServices.Marshal]::GetLastWin32Error() }",
+    "$connectStateNames = @{0 = 'Active'; 1 = 'Connected'; 2 = 'ConnectQuery'; 3 = 'Shadow'; 4 = 'Disconnected'; 5 = 'Idle'; 6 = 'Listen'; 7 = 'Reset'; 8 = 'Down'}",
+    "$session.connectStateName = $null; if ($null -ne $session.connectState) { $session.connectStateName = $connectStateNames[[int]$session.connectState] }",
+    "$session.inputDesktop = $null; $session.inputDesktopLocked = $null; $session.inputDesktopError = $null",
+    "$inputDesktop = [FgProbe]::OpenInputDesktop(0, $false, 1)",
+    "$session.inputDesktopLocked = ($inputDesktop -eq [IntPtr]::Zero)",
+    "if ($inputDesktop -eq [IntPtr]::Zero) { $session.inputDesktopError = [Runtime.InteropServices.Marshal]::GetLastWin32Error() } else { $nameSb = New-Object System.Text.StringBuilder 256; $nameLen = 0; if ([FgProbe]::GetUserObjectInformation($inputDesktop, 2, $nameSb, 256, [ref]$nameLen)) { $session.inputDesktop = $nameSb.ToString() } else { $session.inputDesktopError = [Runtime.InteropServices.Marshal]::GetLastWin32Error() }; [void][FgProbe]::CloseDesktop($inputDesktop) }",
+    "$lii = New-Object \"FgProbe+LASTINPUTINFO\"",
+    "$lii.cbSize = [Runtime.InteropServices.Marshal]::SizeOf([type][FgProbe+LASTINPUTINFO])",
+    "$session.idleMs = $null",
+    "if ([FgProbe]::GetLastInputInfo([ref]$lii)) { $idle = [int64][FgProbe]::GetTickCount() - [int64]$lii.dwTime; if ($idle -lt 0) { $idle += 4294967296 }; $session.idleMs = $idle }",
+    "$h = [FgProbe]::GetForegroundWindow()",
+    "if ($h -eq [IntPtr]::Zero) { Write-Output ([ordered]@{ hwnd = '0x0'; title = $null; pid = $null; process = $null; session = $session } | ConvertTo-Json -Compress -Depth 4); exit 0 }",
+    "$owner = [uint32]0",
+    "[void][FgProbe]::GetWindowThreadProcessId($h, [ref]$owner)",
+    "$sb = New-Object System.Text.StringBuilder 512",
+    "[void][FgProbe]::GetWindowText($h, $sb, 512)",
+    "$name = ''",
+    "try { $name = (Get-Process -Id $owner -ErrorAction Stop).ProcessName } catch {}",
+    "$obj = [ordered]@{ hwnd = ('0x{0:x}' -f $h.ToInt64()); title = $sb.ToString(); pid = $owner; process = $name; session = $session }",
+    "Write-Output ($obj | ConvertTo-Json -Compress -Depth 4)",
+  ].join("; ");
+  return new Promise((resolve) => {
+    execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script], { windowsHide: true, timeout: 8000 }, (error, stdout) => {
+      if (error) return resolve({ error: String(error.message || error) });
+      try {
+        resolve(JSON.parse(String(stdout).trim()));
+      } catch (parseError) {
+        resolve({ error: `unparseable snapshot ${String(stdout).slice(0, 200)}: ${parseError}` });
+      }
+    });
+  });
+}
+
+// A probe window destroyed by something outside the fixture (user close,
+// shell, cleanup tooling) surfaces wherever the next window/webContents
+// access happens — executeJavaScript, isVisible, focus, any call site — as a
+// bare "Object has been destroyed" throw. Recognizing it at the shared
+// finish() exit covers every current and future call site and is TOCTOU-proof
+// where per-call isDestroyed() checks are not; the window's own "closed"
+// event is the proactive twin that fires before any access can throw.
+function destroyedWindowError(error) {
+  const message = String((error && error.message) || error || "");
+  // The third pattern matches assertProbeAlive's destroyed branch, which can
+  // beat both the native throw and the "closed" event to finish() by a tick.
+  return /object has been destroyed/i.test(message)
+    || /webcontents? .*(?:is|has been) destroyed/i.test(message)
+    || /probe window destroyed during/i.test(message);
+}
+async function windowLostRecord(trigger) {
+  const record = {
+    reason: `probe window destroyed externally during the ${currentPhase} phase`,
+    trigger: String(trigger),
+    phase: currentPhase,
+    windowDestroyed: probeWindow ? probeWindow.isDestroyed() : null,
+    windowHandle: probeWindow && !probeWindow.isDestroyed() ? nativeWindowHandle(probeWindow) : null,
+    coverDestroyed: coverWindow ? coverWindow.isDestroyed() : null,
+    coverVisible: coverWindow && !coverWindow.isDestroyed() ? coverWindow.isVisible() : null,
+    coverHandle: coverWindow && !coverWindow.isDestroyed() ? nativeWindowHandle(coverWindow) : null,
+    timelineTail: Array.isArray(report.occlusionTimeline) ? report.occlusionTimeline.slice(-8) : null,
+  };
+  record.foreground = await snapshotForeground();
+  return record;
+}
 async function finish(error) {
   if (finished) return;
   finished = true;
   let failure = error ? (error.stack || String(error)) : null;
+  // External destruction becomes a diagnostic record + clean exit for a
+  // skip, never a bare hard fail; a genuine non-destruction failure still
+  // fails, and the closed-signal path only applies when nothing else did.
+  if (failure && destroyedWindowError(error)) {
+    report.windowLost = await windowLostRecord((error && error.message) || error);
+    failure = null;
+  } else if (!failure && windowClosedSignal) {
+    report.windowLost = await windowLostRecord(windowClosedSignal);
+  }
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) window.destroy();
   }
   if (failure) report.failure = failure;
   fs.writeFileSync(path.join(root, "report.json"), JSON.stringify(report, null, 2));
   if (failure) console.error(failure);
+  else if (report.windowLost) console.log(`Probe window destroyed externally (test will skip): ${report.windowLost.reason} — trigger: ${report.windowLost.trigger}`);
   else if (report.occlusionUnsupported) console.log(`Occlusion capability absent on this desktop (test will skip): ${report.occlusionUnsupported.reason}`);
   else console.log("Occlusion probe fixture passed");
   process.exitCode = failure ? 1 : 0;
@@ -107,6 +227,7 @@ app.whenReady().then(async () => {
     },
   });
   const contents = window.webContents;
+  probeWindow = window;
   contents.setAudioMuted(true);
   contents.setWindowOpenHandler(() => ({ action: "deny" }));
   contents.on("console-message", (_event, detail, oldMessage) => {
@@ -115,7 +236,26 @@ app.whenReady().then(async () => {
     if (level === "error" || level === 3) report.consoleErrors.push(message);
     if (/Content Security Policy|worker-src|Refused to (?:create|load)/i.test(message)) report.cspViolations.push(message);
   });
-  contents.on("render-process-gone", (_event, detail) => finish(new Error(`Probe renderer exited: ${detail.reason}`)));
+  let rendererGone = null;
+  contents.on("render-process-gone", (_event, detail) => { rendererGone = detail?.reason ?? "unknown"; finish(new Error(`Probe renderer exited: ${detail.reason}`)); });
+  const assertProbeAlive = (phase) => {
+    if (window.isDestroyed() || contents.isDestroyed()) {
+      // The render-process-gone handler can lose the race to the next
+      // executeJavaScript call, which would only surface as an opaque
+      // "Object has been destroyed"; name the real cause instead.
+      throw new Error(rendererGone ? `Probe renderer exited during ${phase}: ${rendererGone}` : `Probe window destroyed during ${phase}`);
+    }
+  };
+  // Proactive half of the external-destruction guard: when something outside
+  // the fixture closes the probe window mid-phase, record it and exit
+  // cleanly before whatever window/webContents access runs next can throw a
+  // bare "Object has been destroyed". finish()'s own destroy loop sets
+  // `finished` first, so self-inflicted closes never take this path.
+  window.on("closed", () => {
+    if (finished) return;
+    windowClosedSignal = `probe window "closed" event during the ${currentPhase} phase (not requested by the fixture)`;
+    finish();
+  });
   const run = (source) => contents.executeJavaScript(`(async()=>{${source}})()`, true);
 
   // Same classification as main.cjs around the awaited probe: the renderer's
@@ -155,69 +295,9 @@ app.whenReady().then(async () => {
   }
   const bestSample = (samples) => samples.reduce((best, sample) => (sample.lagMs < best.lagMs ? sample : best));
 
-  // OS-level window identity for the occlusionUnsupported record: hwnd values
-  // for our own windows plus who actually holds Win32 foreground at give-up
-  // time. This separates "the cover held foreground and the tracker simply
-  // never engaged" from "the focus steal never landed" — two failures with
-  // different fixes. GetForegroundWindow legitimately returns NULL on some
-  // desktops (observed live on this one), and that observation is itself the
-  // diagnosis, so the NULL case is reported, not treated as an error. Every
-  // snapshot — NULL foreground included — also carries a `session` block so
-  // the record is self-describing about the desktop it was taken on: the
-  // active console session id, the session's WTSConnectState, whether the
-  // input desktop is openable (locked/secure desktop) plus its name, and
-  // GetLastInputInfo-based idle time (a headless/unattended desktop reads a
-  // huge idleMs, which explains a NULL foreground at a glance).
-  function nativeWindowHandle(browserWindow) {
-    try {
-      const buffer = browserWindow.getNativeWindowHandle();
-      const value = buffer.byteLength >= 8 ? buffer.readBigUInt64LE(0) : BigInt(buffer.readUInt32LE(0));
-      return `0x${value.toString(16)}`;
-    } catch {
-      return null;
-    }
-  }
-  function snapshotForeground() {
-    if (process.platform !== "win32") return Promise.resolve(null);
-    const script = [
-      "$ErrorActionPreference = 'Stop'",
-      "Add-Type -TypeDefinition 'using System; using System.Text; using System.Runtime.InteropServices; public static class FgProbe { [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId); [DllImport(\"user32.dll\", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount); [DllImport(\"kernel32.dll\")] public static extern uint WTSGetActiveConsoleSessionId(); [DllImport(\"kernel32.dll\")] public static extern uint GetTickCount(); [StructLayout(LayoutKind.Sequential)] public struct LASTINPUTINFO { public uint cbSize; public uint dwTime; } [DllImport(\"user32.dll\")] public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii); [DllImport(\"wtsapi32.dll\", SetLastError=true)] public static extern bool WTSQuerySessionInformation(IntPtr hServer, int sessionId, int infoClass, out IntPtr ppBuffer, out int pBytesReturned); [DllImport(\"wtsapi32.dll\")] public static extern void WTSFreeMemory(IntPtr pMemory); [DllImport(\"user32.dll\", SetLastError=true)] public static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint access); [DllImport(\"user32.dll\", CharSet=CharSet.Unicode)] public static extern bool GetUserObjectInformation(IntPtr hObj, int nIndex, StringBuilder lpInfo, int nLength, out int lpnLengthNeeded); [DllImport(\"user32.dll\")] public static extern bool CloseDesktop(IntPtr hDesktop); }'",
-      "$session = [ordered]@{ consoleSessionId = [FgProbe]::WTSGetActiveConsoleSessionId() }",
-      "$session.connectState = $null; $session.connectStateError = $null",
-      "$wtsBuf = [IntPtr]::Zero; $wtsLen = 0",
-      "if ([FgProbe]::WTSQuerySessionInformation([IntPtr]::Zero, -1, 8, [ref]$wtsBuf, [ref]$wtsLen)) { $session.connectState = [Runtime.InteropServices.Marshal]::ReadByte($wtsBuf); [void][FgProbe]::WTSFreeMemory($wtsBuf) } else { $session.connectStateError = [Runtime.InteropServices.Marshal]::GetLastWin32Error() }",
-      "$connectStateNames = @{0 = 'Active'; 1 = 'Connected'; 2 = 'ConnectQuery'; 3 = 'Shadow'; 4 = 'Disconnected'; 5 = 'Idle'; 6 = 'Listen'; 7 = 'Reset'; 8 = 'Down'}",
-      "$session.connectStateName = $null; if ($null -ne $session.connectState) { $session.connectStateName = $connectStateNames[[int]$session.connectState] }",
-      "$session.inputDesktop = $null; $session.inputDesktopLocked = $null; $session.inputDesktopError = $null",
-      "$inputDesktop = [FgProbe]::OpenInputDesktop(0, $false, 1)",
-      "$session.inputDesktopLocked = ($inputDesktop -eq [IntPtr]::Zero)",
-      "if ($inputDesktop -eq [IntPtr]::Zero) { $session.inputDesktopError = [Runtime.InteropServices.Marshal]::GetLastWin32Error() } else { $nameSb = New-Object System.Text.StringBuilder 256; $nameLen = 0; if ([FgProbe]::GetUserObjectInformation($inputDesktop, 2, $nameSb, 256, [ref]$nameLen)) { $session.inputDesktop = $nameSb.ToString() } else { $session.inputDesktopError = [Runtime.InteropServices.Marshal]::GetLastWin32Error() }; [void][FgProbe]::CloseDesktop($inputDesktop) }",
-      "$lii = New-Object \"FgProbe+LASTINPUTINFO\"",
-      "$lii.cbSize = [Runtime.InteropServices.Marshal]::SizeOf([type][FgProbe+LASTINPUTINFO])",
-      "$session.idleMs = $null",
-      "if ([FgProbe]::GetLastInputInfo([ref]$lii)) { $idle = [int64][FgProbe]::GetTickCount() - [int64]$lii.dwTime; if ($idle -lt 0) { $idle += 4294967296 }; $session.idleMs = $idle }",
-      "$h = [FgProbe]::GetForegroundWindow()",
-      "if ($h -eq [IntPtr]::Zero) { Write-Output ([ordered]@{ hwnd = '0x0'; title = $null; pid = $null; process = $null; session = $session } | ConvertTo-Json -Compress -Depth 4); exit 0 }",
-      "$owner = [uint32]0",
-      "[void][FgProbe]::GetWindowThreadProcessId($h, [ref]$owner)",
-      "$sb = New-Object System.Text.StringBuilder 512",
-      "[void][FgProbe]::GetWindowText($h, $sb, 512)",
-      "$name = ''",
-      "try { $name = (Get-Process -Id $owner -ErrorAction Stop).ProcessName } catch {}",
-      "$obj = [ordered]@{ hwnd = ('0x{0:x}' -f $h.ToInt64()); title = $sb.ToString(); pid = $owner; process = $name; session = $session }",
-      "Write-Output ($obj | ConvertTo-Json -Compress -Depth 4)",
-    ].join("; ");
-    return new Promise((resolve) => {
-      execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script], { windowsHide: true, timeout: 8000 }, (error, stdout) => {
-        if (error) return resolve({ error: String(error.message || error) });
-        try {
-          resolve(JSON.parse(String(stdout).trim()));
-        } catch (parseError) {
-          resolve({ error: `unparseable snapshot ${String(stdout).slice(0, 200)}: ${parseError}` });
-        }
-      });
-    });
-  }
+  // OS-level identity helpers live at module scope (shared by the
+  // occlusionUnsupported and windowLost records); see nativeWindowHandle
+  // and snapshotForeground above.
 
   await window.loadFile(path.join(studio, "renderer", "booklet.html"));
 
@@ -257,6 +337,7 @@ app.whenReady().then(async () => {
   // Phase 1 — visible: rAF advances, frames answer, worker constructs. Wait
   // for the compositor to actually start producing frames (software rendering
   // a 30k-line page can take a moment) instead of a fixed settle.
+  currentPhase = "visible";
   const visibleDeadline = Date.now() + 10000;
   let visibleState = null;
   let raised = 0;
@@ -301,6 +382,7 @@ app.whenReady().then(async () => {
   // window is exempt from occlusion throttling and pixel-exact bounds can
   // leave an uncovered seam, so a cover that never takes focus never engages
   // the tracker and the probe would keep painting behind it.
+  currentPhase = "cover-wait";
   const cover = new BrowserWindow({
     x: bounds.x - 40,
     y: bounds.y - 40,
@@ -312,6 +394,7 @@ app.whenReady().then(async () => {
     skipTaskbar: true,
     backgroundColor: "#12233a",
   });
+  coverWindow = cover;
   await cover.loadURL("data:text/html,<title>occluder</title><body style=\"background:#12233a\"></body>");
   cover.show();
   cover.moveTop();
@@ -344,6 +427,7 @@ app.whenReady().then(async () => {
       reassertions += 1;
       if (!cover.isDestroyed()) { cover.moveTop(); app.focus({ steal: true }); cover.focus(); }
     }
+    assertProbeAlive("the occlusion wait");
     const state = await run("return { hidden: document.hidden, visibility: document.visibilityState, ticks: window.__rafTicks|0, focused: document.hasFocus() };");
     report.occlusionTimeline.push({ at: Date.now(), ...state });
     if ((state.hidden && trustHidden) || (state.ticks === lastTicks && Date.now() - lastChange >= 1500)) {
@@ -358,6 +442,7 @@ app.whenReady().then(async () => {
   // result is namespaced under `occlusionProxy` — the phase is "not rendered",
   // not occlusion — and the report never fills `occluded` from it.
   async function runVisibilityProxy() {
+    currentPhase = "visibility-proxy";
     const proxy = {
       signal: "visibility",
       contract: "hide()/show() prove not-rendered, not covered; this record never claims occlusion",
@@ -433,6 +518,7 @@ app.whenReady().then(async () => {
     }
     return finish();
   }
+  currentPhase = "occluded-measure";
   report.occluded = {
     detection: occluded,
     windowState: { visible: window.isVisible(), minimized: window.isMinimized() },
@@ -464,6 +550,7 @@ app.whenReady().then(async () => {
   // was real occlusion and not a wedged page. A stray topmost desktop window
   // can keep the region covered after the cover dies, so nudge the probe
   // window above everything if frames stay silent.
+  currentPhase = "recovery";
   cover.destroy();
   const recoverDeadline = Date.now() + 10000;
   const baseline = report.occluded.rafAfter;
@@ -471,6 +558,7 @@ app.whenReady().then(async () => {
   let nudged = false;
   let nudgeAt = 0;
   while (Date.now() < recoverDeadline) {
+    assertProbeAlive("the recovery wait");
     const state = await run("return { hidden: document.hidden, visibility: document.visibilityState, ticks: window.__rafTicks|0 };");
     // Frames resuming is the recovery proof; the visibility flag itself can
     // lag the native tracker, so it is recorded, not required.
