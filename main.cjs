@@ -62,6 +62,10 @@ if (!SMOKE && !CAPTURE && !CLI_MODE) {
     app.quit();
     return;
   }
+  // Registered at the top level, not inside whenReady: a second launch that
+  // races the first instance's startup still reaches showWindow() instead of
+  // being dropped before the ready handler ever ran.
+  app.on("second-instance", () => showWindow());
 }
 const LOVE_DIR = GAME_ROOT && path.join(GAME_ROOT, "build", "cache", "love-11.5-win64");
 const LOVE_EXE = LOVE_DIR && path.join(LOVE_DIR, "love.exe");
@@ -11680,7 +11684,6 @@ app.whenReady().then(() => {
   // The assistant service runs on its own clock, renderer or not; the smoke
   // exercises its keyless path, the capture tour never needs it.
   if (!CAPTURE && !CLI_MODE) setTimeout(() => startAssistant().catch((error) => logLine(`[assistant] start failed: ${error?.message ?? error}`)), 1500);
-  app.on("second-instance", () => showWindow());
   if (CAPTURE) {
     window.webContents.once("did-finish-load", () => captureTabs());
     setTimeout(() => {

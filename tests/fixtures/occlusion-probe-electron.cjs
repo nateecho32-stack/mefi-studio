@@ -232,6 +232,12 @@ app.whenReady().then(async () => {
   await cover.loadURL("data:text/html,<title>occluder</title><body style=\"background:#12233a\"></body>");
   cover.show();
   cover.moveTop();
+  // Windows' foreground lock denies SetForegroundWindow to a background
+  // process, so a plain cover.focus() can be a no-op; the tracker exempts the
+  // foreground window and the probe would then keep painting behind the cover
+  // forever (seen live: 60fps rAF under a fully covering always-on-top window).
+  // app.focus({ steal: true }) is the sanctioned foreground grab.
+  app.focus({ steal: true });
   cover.focus();
 
   // Occlusion can arrive as document.hidden (native occlusion tracking) and
@@ -243,8 +249,16 @@ app.whenReady().then(async () => {
   const deadline = Date.now() + 15000;
   let lastTicks = -1;
   let lastChange = Date.now();
+  let reasserted = 0;
   let occluded = null;
   while (Date.now() < deadline) {
+    // A stray click can hand foreground (and the tracker's exemption) to the
+    // probe window mid-wait; keep re-raising the cover like the visible phase
+    // re-raises the probe.
+    if (Date.now() - reasserted > 2000) {
+      reasserted = Date.now();
+      if (!cover.isDestroyed()) { cover.moveTop(); app.focus({ steal: true }); cover.focus(); }
+    }
     const state = await run("return { hidden: document.hidden, visibility: document.visibilityState, ticks: window.__rafTicks|0 };");
     report.occlusionTimeline.push({ at: Date.now(), ...state });
     if ((state.hidden && trustHidden) || (state.ticks === lastTicks && Date.now() - lastChange >= 1500)) {
