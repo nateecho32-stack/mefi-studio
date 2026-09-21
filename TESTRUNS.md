@@ -656,6 +656,21 @@ claimed and the visibility proxy stayed off; no further code changes were
 pending — a9464fd remains the scoped code commit and the strict native pass
 from run_1789973551180_3 remains the pinned evidence for this thread.
 
+Re-run on 2026-09-21 (run_1790017587654_66, owner-gated commit of the
+occlusion-probe thread): one more fresh
+`node --test tests/occlusion_probe.test.mjs` on the committed tree passed
+strictly in ~8.9 s — the console desktop was attended again, so the native
+tracker engaged (detection signal `document.hidden`; not the proxy, not the
+capability-gated skip), with occluded rAF growth 0, the probe answering every
+sample over the unthrottled worker channel (workerDriftMs 165 → lag 0 ms of
+1 sample), blob worker still constructed, MessageChannel 0 ms, rAF resumed
+after the cover was removed, 0 console errors, and `MEFI_OCCLUSION_PROXY`
+unset throughout — the proxy stayed off and no occluded record was claimed
+from it. The strict native pass is reconfirmed on today's tree, re-pinning
+run_1789973551180_3's record; a9464fd remains the scoped code commit
+(`main.cjs` framesMs classification and the hardened fixture, already in
+history), so the thread's only pending change was this row, committed scoped.
+
 Validated on 2026-09-20: `npm run check`, `npm test` (1,490 parallel Node
 tests with 1,489 passing and one opt-in skip, the serialized occlusion probe
 passing at ~0 ms lag, 243 Python contracts and the normalized-path checks)
