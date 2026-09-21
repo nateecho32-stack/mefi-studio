@@ -493,6 +493,32 @@ test("eyes.js log tail: without the guard the fallback interval holds the same s
 // pins hold each tick's own hidden bail ahead of its fetch, and each show
 // listener snapping the view back, so a future edit cannot silently move the
 // fetch ahead of the bail.
+test("profiler.js live capture: hiding tears down the sampling timers, recording-show restores them", async () => {
+  const source = await readFile(path.join(STUDIO, "renderer", "profiler.js"), "utf8");
+  // The profiler polls the host snapshot on its own 500ms interval while a
+  // capture is live; instead of the shared guard it owns a stricter gate —
+  // the whole sampling session (interval, rAF loop, observer) stops on hide
+  // and restarts only if a capture is still recording.
+  assert.equal(
+    (source.match(/document\.addEventListener\("visibilitychange"/g) || []).length,
+    1,
+    "the profiler registers exactly one visibilitychange listener, so no toggle can double its restarts"
+  );
+  assert.match(
+    source,
+    /document\.addEventListener\("visibilitychange", \(\) => \{\s*if \(document\.hidden\) stopSampling\(\); else if \(core\.isRecording\(\)\) startSampling\(\); paint\(\);/,
+    "hide must tear the sampling timers down and a visible recording must restore them"
+  );
+  const start = source.match(/function startSampling\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(start, "startSampling must exist");
+  assert.match(start[0], /if \(!core\.isRecording\(\) \|\| document\.hidden\) return;/, "a hidden window must never start sampling");
+  const stop = source.match(/function stopSampling\(\) \{[\s\S]*?\n  \}/);
+  assert.ok(stop, "stopSampling must exist");
+  assert.match(stop[0], /if \(raf\) cancelAnimationFrame\(raf\);/, "hiding must cancel the frame loop");
+  assert.match(stop[0], /if \(timer\) clearInterval\(timer\);/, "hiding must clear the host-poll interval, so a hidden capture issues no IPC reads");
+});
+
+
 test("tasks.js board poll: the tick's hidden bail precedes load, and show reloads the board", async () => {
   const source = await readFile(path.join(STUDIO, "renderer", "tasks.js"), "utf8");
   assert.match(source, /pollStart\("tasks\.board", tasksTick, TASKS_POLL_MS\)/, "the board poll must register under the shared guard");

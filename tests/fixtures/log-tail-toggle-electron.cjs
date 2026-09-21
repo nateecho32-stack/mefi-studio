@@ -177,15 +177,22 @@ app.whenReady().then(async () => {
   assert.equal(report.hidden.fetches, 0, `a hidden window must fetch nothing across ${report.hidden.spanMs}ms (got ${report.hidden.fetches})`);
 
   // Phase 3 — show: the shipped listener snaps exactly one immediate fetch.
-  // Sample inside the first probe interval so only the event-driven snap-back
-  // lands in this window; the guard's restarted interval ticks after PROBE_MS.
+  // The snap is measured from the fetch log's timestamps, not a wall-clock
+  // window: the guard restarts its interval inside the same visibilitychange
+  // dispatch, so its first tick lands PROBE_MS after show — under a busy
+  // machine a count sampled after that tick would mistake it for a second
+  // snap. A genuine duplicate (a double-registered listener) stamps a second
+  // fetch within milliseconds of the snap and still fails here.
   window.show();
   await waitFor((state) => state.hidden === false, 5000, "visible-after-show");
-  await pause(100); // the visibilitychange snap-back is synchronous on the event
+  await waitFor((state) => (state.fetches ?? 0) > afterHide, 5000, "resume-snap-landed");
   const shownState = await pageState("resume-snap");
   assert.equal(shownState.pollLive, true, "the guard must hold exactly one live interval again after show");
-  const afterResume = shownState.fetches;
-  report.resume = { before: afterHide, after: afterResume, immediateFetches: afterResume - afterHide };
+  const fetchLog = await run("return window.__fetches;");
+  const snap = fetchLog[afterHide]; // the first post-show fetch is the event-driven snap
+  const bunched = fetchLog.filter((fetch, index) => index > afterHide && fetch.at - snap.at < PROBE_MS / 2);
+  const afterResume = fetchLog.length;
+  report.resume = { before: afterHide, after: afterResume, immediateFetches: 1 + bunched.length, snapGapMs: bunched.length ? Math.min(...bunched.map((fetch) => fetch.at - snap.at)) : null };
   assert.equal(report.resume.immediateFetches, 1, `show must snap exactly one immediate refresh (got ${report.resume.immediateFetches})`);
 
   // Phase 4 — resumed cadence: baseline rate, never doubled. A leaked second
