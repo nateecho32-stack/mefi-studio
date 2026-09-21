@@ -119,6 +119,113 @@
     for (const char of String(role ?? "")) hash = (hash * 31 + char.charCodeAt(0)) | 0;
     return hslHex(hash, 0.5, 0.72);
   }
+  // One small vector glyph per role, drawn inside the satellite so a crew of
+  // ten reads as ten jobs rather than ten dots. Every path is built in a unit
+  // box (-1..1) and scaled to the orb, so the rail and the Command view share
+  // exactly one drawing. A role this build does not know gets a plain spark.
+  const AGENT_GLYPHS = {
+    watcher: "eye", machine: "chip", auditor: "clipboard", keeper: "broom", compactor: "compress", foreman: "flag",
+    thinker: "spark", builder: "hammer", briefer: "lines", overseer: "crown", responder: "bubble", improver: "arrow-up",
+    grower: "leaf", ideas: "bulb", reference: "book", "cluster-planner": "pin", "cluster-reviewer": "lens",
+  };
+  function agentGlyphKind(role) {
+    return AGENT_GLYPHS[role] ?? "spark";
+  }
+  function agentGlyph(ctx, role, x, y, size, ink = "#0b1016") {
+    const kind = agentGlyphKind(role);
+    const s = Math.max(2, size);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.lineWidth = 0.22;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = ink;
+    ctx.fillStyle = ink;
+    ctx.beginPath();
+    switch (kind) {
+      case "eye":
+        ctx.moveTo(-0.85, 0); ctx.quadraticCurveTo(0, -0.85, 0.85, 0); ctx.quadraticCurveTo(0, 0.85, -0.85, 0); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, 0.3, 0, Math.PI * 2); ctx.fill();
+        break;
+      case "chip":
+        ctx.rect(-0.55, -0.55, 1.1, 1.1); ctx.stroke();
+        ctx.beginPath(); ctx.rect(-0.22, -0.22, 0.44, 0.44); ctx.fill();
+        ctx.beginPath();
+        for (const t of [-0.3, 0.3]) { ctx.moveTo(t, -0.55); ctx.lineTo(t, -0.9); ctx.moveTo(t, 0.55); ctx.lineTo(t, 0.9); ctx.moveTo(-0.55, t); ctx.lineTo(-0.9, t); ctx.moveTo(0.55, t); ctx.lineTo(0.9, t); }
+        ctx.stroke();
+        break;
+      case "clipboard":
+        ctx.rect(-0.6, -0.7, 1.2, 1.5); ctx.stroke();
+        ctx.beginPath(); ctx.rect(-0.25, -0.9, 0.5, 0.35); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-0.3, 0.05); ctx.lineTo(-0.08, 0.3); ctx.lineTo(0.35, -0.2); ctx.stroke();
+        break;
+      case "broom":
+        ctx.moveTo(0.75, -0.8); ctx.lineTo(-0.05, 0.05); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-0.05, 0.05); ctx.lineTo(-0.75, 0.35); ctx.lineTo(-0.35, 0.85); ctx.lineTo(0.3, 0.4); ctx.closePath(); ctx.fill();
+        break;
+      case "compress":
+        ctx.moveTo(0, -0.9); ctx.lineTo(0, -0.2); ctx.moveTo(-0.35, -0.5); ctx.lineTo(0, -0.15); ctx.lineTo(0.35, -0.5);
+        ctx.moveTo(0, 0.9); ctx.lineTo(0, 0.2); ctx.moveTo(-0.35, 0.5); ctx.lineTo(0, 0.15); ctx.lineTo(0.35, 0.5);
+        ctx.moveTo(-0.7, 0); ctx.lineTo(0.7, 0); ctx.stroke();
+        break;
+      case "flag":
+        ctx.moveTo(-0.55, 0.9); ctx.lineTo(-0.55, -0.9); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-0.55, -0.85); ctx.lineTo(0.7, -0.5); ctx.lineTo(-0.55, -0.1); ctx.closePath(); ctx.fill();
+        break;
+      case "hammer":
+        ctx.moveTo(-0.7, 0.75); ctx.lineTo(0.15, -0.1); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-0.1, -0.35); ctx.lineTo(0.35, -0.8); ctx.lineTo(0.85, -0.3); ctx.lineTo(0.4, 0.15); ctx.closePath(); ctx.fill();
+        break;
+      case "lines":
+        for (const y of [-0.55, -0.1, 0.35]) { ctx.moveTo(-0.7, y); ctx.lineTo(y === 0.35 ? 0.15 : 0.7, y); }
+        ctx.stroke();
+        break;
+      case "crown":
+        ctx.moveTo(-0.8, 0.6); ctx.lineTo(-0.8, -0.4); ctx.lineTo(-0.3, 0.05); ctx.lineTo(0, -0.7); ctx.lineTo(0.3, 0.05); ctx.lineTo(0.8, -0.4); ctx.lineTo(0.8, 0.6); ctx.closePath(); ctx.fill();
+        break;
+      case "bubble":
+        ctx.moveTo(-0.6, -0.65); ctx.lineTo(0.7, -0.65); ctx.lineTo(0.7, 0.25); ctx.lineTo(0, 0.25); ctx.lineTo(-0.4, 0.7); ctx.lineTo(-0.35, 0.25); ctx.lineTo(-0.6, 0.25); ctx.closePath(); ctx.stroke();
+        break;
+      case "arrow-up":
+        ctx.moveTo(0, 0.85); ctx.lineTo(0, -0.7); ctx.moveTo(-0.55, -0.15); ctx.lineTo(0, -0.75); ctx.lineTo(0.55, -0.15); ctx.stroke();
+        break;
+      case "leaf":
+        ctx.moveTo(-0.7, 0.75); ctx.quadraticCurveTo(-0.7, -0.6, 0.75, -0.75); ctx.quadraticCurveTo(0.7, 0.6, -0.7, 0.75); ctx.fill();
+        ctx.beginPath(); ctx.strokeStyle = "rgba(255,255,255,0.45)"; ctx.moveTo(-0.6, 0.65); ctx.lineTo(0.5, -0.5); ctx.stroke();
+        break;
+      case "bulb":
+        ctx.arc(0, -0.2, 0.55, Math.PI * 0.8, Math.PI * 2.2); ctx.lineTo(0.25, 0.55); ctx.lineTo(-0.25, 0.55); ctx.closePath(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-0.25, 0.8); ctx.lineTo(0.25, 0.8); ctx.stroke();
+        break;
+      case "book":
+        ctx.moveTo(0, -0.6); ctx.quadraticCurveTo(-0.45, -0.85, -0.85, -0.6); ctx.lineTo(-0.85, 0.7); ctx.quadraticCurveTo(-0.45, 0.45, 0, 0.7);
+        ctx.quadraticCurveTo(0.45, 0.45, 0.85, 0.7); ctx.lineTo(0.85, -0.6); ctx.quadraticCurveTo(0.45, -0.85, 0, -0.6); ctx.lineTo(0, 0.7); ctx.stroke();
+        break;
+      case "pin":
+        ctx.arc(0, -0.3, 0.5, Math.PI * 0.85, Math.PI * 2.15); ctx.lineTo(0, 0.85); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.fillStyle = "rgba(255,255,255,0.55)"; ctx.arc(0, -0.3, 0.18, 0, Math.PI * 2); ctx.fill();
+        break;
+      case "lens":
+        ctx.arc(-0.15, -0.15, 0.55, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.lineWidth = 0.3; ctx.moveTo(0.28, 0.28); ctx.lineTo(0.85, 0.85); ctx.stroke();
+        break;
+      case "spark":
+      default:
+        for (let index = 0; index < 4; index += 1) { const a = index * Math.PI / 2; ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 0.9, Math.sin(a) * 0.9); }
+        for (let index = 0; index < 4; index += 1) { const a = index * Math.PI / 2 + Math.PI / 4; ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * 0.45, Math.sin(a) * 0.45); }
+        ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // The ink a glyph is drawn in: dark on a bright body, ivory on a dim one.
+  function glyphInk(hex) {
+    const value = String(hex ?? "").replace("#", "");
+    if (!/^[\da-f]{6}$/i.test(value)) return "#0b1016";
+    const int = parseInt(value, 16);
+    const luminance = ((int >> 16) & 255) * 0.2126 + ((int >> 8) & 255) * 0.7152 + (int & 255) * 0.0722;
+    return luminance > 140 ? "#0b1016" : "#f3f6fa";
+  }
   const AGENT_RING = 34;
   // The last store answer, so a roster change can rebuild without a re-read.
   const cache = { sessions: [], todos: [], fallback: null };
@@ -167,6 +274,11 @@
   const RUN_ORBIT_R = 4;
   const PULSE_EVERY_MS = 350;
   const SPARK_MS = 450;
+  // A flying agent leaves a short wake in its own colour: the last few
+  // painted positions, dropped once they are older than TRAIL_MS.
+  const TRAIL_MS = 520;
+  const TRAIL_MAX = 14;
+  const trails = new Map();
   const motions = new Map();
   let external = [];
   let sparks = [];
@@ -1107,6 +1219,23 @@
     ctx.quadraticCurveTo(cx, cy, b.x, b.y);
     ctx.stroke();
     ctx.restore();
+    // a packet carries cargo: a small diamond rides the head, so a finding
+    // coming home reads as a delivery rather than a bare signal
+    if (pulse.packet) {
+      const along = Math.min(1, Math.max(0, t));
+      const inv = 1 - along;
+      const px = inv * inv * a.x + 2 * inv * along * cx + along * along * b.x;
+      const py = inv * inv * a.y + 2 * inv * along * cy + along * along * b.y;
+      const size = 3.5 * env + 1.5;
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillStyle = `rgba(${tint},${0.9 * env})`;
+      ctx.shadowColor = pulse.glow ?? "#e6c98d";
+      ctx.shadowBlur = 10;
+      ctx.fillRect(-size / 2, -size / 2, size, size);
+      ctx.restore();
+    }
     // the signal lands: a quick bloom on the receiving node
     const land = Math.max(0, (t - 0.8) / 0.2);
     if (land > 0) {
@@ -1121,11 +1250,23 @@
   }
 
   function drawStars() {
+    // The rail's sky follows the colour theme: a faint accent wash rises from
+    // the foot of the strip and the stars take the theme's text tone.
+    const palette = window.MefiMusic?.themePalette?.()?.canvas;
+    if (palette?.accent) {
+      const accent = hexRgb(palette.accent);
+      const wash = ctx.createRadialGradient(width * 0.5, height * 1.05, 0, width * 0.5, height * 1.05, height * 0.8);
+      wash.addColorStop(0, `rgba(${accent}, 0.10)`);
+      wash.addColorStop(1, `rgba(${accent}, 0)`);
+      ctx.fillStyle = wash;
+      ctx.fillRect(0, 0, width, height);
+    }
+    const tint = hexRgb(palette?.text ?? "#ece5d8");
     for (const star of stars) {
       const p = project(star);
       if (p.depth < 80) continue;
       const alpha = Math.max(0.05, Math.min(0.5, 1 - p.depth / 900));
-      ctx.fillStyle = `rgba(236, 229, 216, ${alpha * 0.5})`;
+      ctx.fillStyle = `rgba(${tint}, ${alpha * 0.5})`;
       ctx.fillRect(p.x, p.y, star.size, star.size);
     }
   }
@@ -1200,6 +1341,23 @@
       ctx.stroke();
       ctx.restore();
 
+    }
+
+    // wakes: the trail a flying agent leaves behind it, fading as it goes
+    for (const [role, trail] of trails) {
+      if (!trail.length || time - trail[trail.length - 1].at > TRAIL_MS) { trails.delete(role); continue; }
+      if (trail.length < 2) continue;
+      const tint = hexRgb(agentColor(role));
+      for (let index = 1; index < trail.length; index += 1) {
+        const life = 1 - (time - trail[index].at) / TRAIL_MS;
+        if (life <= 0) continue;
+        ctx.strokeStyle = `rgba(${tint}, ${0.55 * life})`;
+        ctx.lineWidth = 0.6 + 2.2 * (index / trail.length);
+        ctx.beginPath();
+        ctx.moveTo(trail[index - 1].x, trail[index - 1].y);
+        ctx.lineTo(trail[index].x, trail[index].y);
+        ctx.stroke();
+      }
     }
 
     // nodes, far to near
@@ -1283,6 +1441,30 @@
         ctx.globalAlpha = Math.max(0.5, fresh) * visibility; ctx.fillStyle = body; ctx.fill(); ctx.globalAlpha = visibility;
         ctx.strokeStyle = color; ctx.globalAlpha = (selected ? 0.95 : working ? 0.8 : 0.35) * visibility;
         ctx.lineWidth = selected ? 1.6 : 1; ctx.stroke(); ctx.globalAlpha = visibility;
+      }
+      if (isAgent && nodeStyle !== "minimal" && radius >= 4.5) {
+        // The role glyph and the status ring: what this satellite is, and
+        // whether it is working (a spinning arc), waiting its turn (dashed)
+        // or stuck (amber). The Command view draws the same through MefiTree.
+        agentGlyph(ctx, node.role, p.x, p.y, radius * 0.7, glyphInk(color));
+        if (node.status === "running") {
+          const phase = noMotion() ? 0 : time / 380;
+          ctx.beginPath(); ctx.arc(p.x, p.y, radius + 3.5, phase, phase + Math.PI * 1.3);
+          ctx.strokeStyle = color; ctx.lineWidth = 1.3; ctx.globalAlpha = 0.9 * visibility; ctx.stroke(); ctx.globalAlpha = visibility;
+        } else if (node.status === "queued") {
+          ctx.save(); ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.arc(p.x, p.y, radius + 3.5, 0, Math.PI * 2);
+          ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.globalAlpha = 0.5 * visibility; ctx.stroke(); ctx.restore();
+        } else if (node.status === "error") {
+          ctx.beginPath(); ctx.arc(p.x, p.y, radius + 3.5, 0, Math.PI * 2);
+          ctx.strokeStyle = COLORS.amber; ctx.lineWidth = 1.4; ctx.globalAlpha = 0.85 * visibility; ctx.stroke(); ctx.globalAlpha = visibility;
+        }
+        const motion = motions.get(node.role);
+        if (motion && (motion.phase === "flying" || motion.phase === "returning") && !noMotion()) {
+          const trail = trails.get(node.role) ?? [];
+          trail.push({ x: p.x, y: p.y, at: time });
+          while (trail.length > TRAIL_MAX || (trail.length && time - trail[0].at > TRAIL_MS)) trail.shift();
+          trails.set(node.role, trail);
+        } else trails.delete(node.role);
       }
       if (appearance.orbitTrails === true && !isAgent && working) {
         const phase = noMotion() ? Math.PI / 3 : time / 1100 * Math.PI * 2;
@@ -1685,6 +1867,12 @@
         requestReturn(role, status === "done");
       }
     }
+    if (target && event.kind === "intel") {
+      // A scout reported home: the finding rides a packet satellite → assistant,
+      // the same delivery the Command view draws.
+      const satellite = agentNodeOf(String(event.role ?? ""));
+      if (satellite) queuePulse({ from: satellite, to: target, start: performance.now(), duration: 1000, color: "#ffe9a8", glow: "#e6c98d", wave: true, packet: true });
+    }
     if (event.kind === "organize") {
       // Fold and stale changes must show the moment the tick made them.
       assistant.pending = load()
@@ -1886,6 +2074,9 @@
             a: indexes.get(edge.a),
             b: indexes.get(edge.b),
             sessionId: edge.sessionId ?? null,
+            // what the line means, so the Command view can style it
+            assistant: edge.assistant === true,
+            agent: edge.agent === true,
           }))
           .filter((edge) => edge.a >= 0 && edge.b >= 0),
         assistant: (() => {
@@ -1913,6 +2104,11 @@
     // The per-role satellite colour (hex), shared so the Command view, the
     // rosters and the rail can never disagree on which agent is which.
     agentColor,
+    // The per-role glyph painter and its ink rule, shared for the same reason:
+    // one drawing of "what this satellite is" on every surface.
+    agentGlyph,
+    agentGlyphKind,
+    glyphInk,
     // Agent travel: live positions in tree space (the Command view overrides
     // its agent nodes from these every frame), and the Command-only task nodes
     // a reference agent may fly to.

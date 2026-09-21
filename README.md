@@ -149,6 +149,32 @@ project's ignored local `planning.json`.
   (**Classic orbs**, **Soft glass**, **Minimal**, **Halo**, **Crystal**) and
   arrangement (**Constellation**, **Branches**, **Rings**, **Helix**,
   **Terraces**) per project, in 2D or real 3D.
+- The sky follows the colour theme — Aurora ribbons, Deep space, Nebula,
+  Rising embers, Fireflies, Soft bokeh, Warm dust — or pick a **Backdrop**
+  (plus Quiet grid and Minimal) in the Ambience pop. **Speech bubbles** beside
+  the agents say what each one is doing: a **→** bubble is a finding going
+  home, a **←** one is it landing, and a diamond packet rides the line between
+  the two agents.
+- Every agent wears its role glyph (an eye for the watcher, a hammer for a
+  builder, a crown for the overseer…), spins a ring while it works, dashes one
+  while it waits its turn, and leaves a coloured wake when it flies to a node.
+- Sessions, tasks, the assistant and working agents carry a **callout**: a
+  leader rising from the orb into a horizontal top bar, the title above it
+  with its number (S1, T4…), a check or status mark and the done/left counts,
+  and below it a bubble with what the agents think or do there. Cards keep
+  their spot while the tree turns and step aside to a compact label rather
+  than overlap; hovering one lifts it and softens everything else; clicking
+  it (or its orb) **focuses** the node: the camera closes in, less on a
+  parent so its children stay in frame, and the rest of the tree keeps
+  turning slowly behind a blur until Esc or an empty click. **Card style**
+  in the Ambience pop picks outlined, filled, or auto (filled when hovered,
+  selected or running).
+- Lines say what they mean: the hub link is doubled, a task's anchor is
+  dotted and marches while its worker runs, an agent's tether is dashed, a
+  finished cluster is stippled, and a done todo's link fades green.
+- **Absorb** on the Done tab flies the finished records into the assistant
+  orb: the log clears and the assistant's card keeps the last twenty under
+  **Absorbed work**, per project, across restarts.
 - **Music & themes** plays your local files or Spotify links and recolours
   Studio; **Audio link** wires bass, mids and treble to the live tree
   (including desktop audio and microphone sources) only when you enable it.

@@ -29,6 +29,51 @@ service and 8 s executor timers, choosing the second project opens it, Start
 agents releases the hold and starts the service, and a reload skips the
 screen. The packaged copy was refreshed with `npm run package`.
 
+Command view visual layer (2026-09-21, branch `command-visuals` in the
+`mefi-studio-wt-command-visuals` worktree): backdrop scenes keyed to the colour
+theme with an Ambience override (`renderer/idle.js` drawBackdrop), speech
+bubbles beside the agents for hops, findings (→ leaving, ← landing), thoughts
+and replies, the foreman's hand-out packet, per-role glyphs, status rings and
+flight wakes shared with the rail through `MefiTree.agentGlyph`, and the
+Done-tab Absorb that flies its records into the assistant orb and keeps the
+last twenty on the assistant's card (`mefiStudio.cmdAbsorbed.<project>`).
+`tests/command_visuals.test.mjs` (10 tests) covers scene selection and the
+override, bubble lifetime, cap, expiry and hover hold, the remark prefix strip,
+the two-line wrap, the hand-out, the per-project ledger cap and reload, every
+role's glyph, every scene painting in motion and still, and the HUD, CSS and
+API wiring. Validated the same day: `npm run check` clean (81 targets, every
+selector used), `npm run audit` zero findings, the 20 vm-based renderer suites
+at 266 pass / 0 fail, the 6 Electron render suites (command_render,
+startup_render, node_paint_cache, tree3d_performance, performance_render,
+task_overview_render) at 16 pass / 0 fail, and the idle, assistant, booklet,
+tree_keyboard, palette and launcher Python contracts at 119 OK. A scratch
+offscreen capture harness (an isolated booklet build against an in-memory
+bridge: no store, no main process) produced the look-gate PNGs for every theme
+scene, the three overrides, agents at work with bubbles and packets, the
+absorb flight and both absorbed ledgers, with zero renderer errors.
+
+Second pass the same day, same branch — callouts and focus: every session,
+task, the hub and each agent working somewhere without a card gets a callout
+(a leader at seventy degrees into a horizontal top bar, the numbered title
+with a status mark and done/left counts above it, agent thoughts below it),
+placed among fixed side × up/down × length candidates that avoid other
+cards, the HUD and orbs, kept between frames, held briefly when blocked and
+stepped aside to a compact label rather than overlapped (running work and
+the card the user is on may take a crowded spot). Hover lifts a card and
+softens the rest; a click focuses the node (camera by kind, a slow orbit
+borrowed and returned on Esc) with everything outside the branch painted on
+a second, CSS-blurred canvas (`#idle-layer-far`). Edges got per-relationship
+styles (hub double, task dotted and marching, agent dashed, folded stippled,
+done todo green) and a Card style control joined the Ambience pop.
+`tests/command_visuals.test.mjs` grew to 18 tests (leader geometry, placement
+routing/hold/step-aside, card content, edge styles, focus sets and the
+borrowed orbit, drift, drawCallouts separation and hit-testing, wiring).
+Validated: `npm run check` clean, `npm run audit` zero findings, the 17
+vm-based renderer suites at 251 pass / 0 fail, the 6 Electron render suites
+at 16 pass / 0 fail, the 119 Python contracts OK; the capture harness added
+hover, task-focus, session-focus and Escape steps and reported the sharp
+sets, the borrowed orbit and zero renderer errors.
+
 The eyes worker (`scripts/eyes-worker.mjs`, `scripts/eyes-client.cjs`,
 `scripts/path-scope.cjs`) moves every OpenCode-store read and the synchronous
 `git status` off the Electron main process; `tests/eyes_worker.test.mjs`

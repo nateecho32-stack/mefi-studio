@@ -70,8 +70,12 @@
     {
       key: "agent",
       sw: agentSwatch(),
-      label: "active assistant agent — orb in its role colour; finished and waiting agents stay in the activity history",
+      label: "active assistant agent — orb in its role colour with its role glyph; a spinning ring means it is working",
     },
+    { key: "speech", sw: rgba(NODE_RGB.session, 0.85), label: "speech bubble — what an agent is doing right now; → a report going out, ← one landing" },
+    { key: "packet", sw: "#ffe9a8", label: "packet — a finding or a hand-out travelling between agents" },
+    { key: "trail", sw: agentSwatch(), label: "trail — an agent in flight to the node it works on" },
+    { key: "callout", sw: rgba(NODE_RGB.session, 0.8), label: "callout — leader, top bar with number and done/left, thoughts below; hover lifts it, click focuses" },
   ];
   const AGENT_STATES = new Set(["running", "queued", "error", "done"]);
 
@@ -97,6 +101,9 @@
   const NODE_ABSORB_MS = 800;
   const NODE_ABSORB_TTL = 6000;
   const ABSORBED_MAX = 8; // briefs a host keeps readable on its card
+  const ABSORBED_HUB_MAX = 20; // Done-tab records the assistant keeps on its card after an absorb
+  const ABSORB_FLIGHT_MS = 900; // one record's flight from the Done tab into the assistant orb
+  const ABSORB_STAGGER_MS = 45; // the rows leave one after another, not as one clump
   // A task that finishes while the view watches holds the board before it
   // sinks: it pulses green and wears a wiggling "!" you can click to read the
   // work first. Anything already finished before the view saw it — archived
@@ -117,6 +124,56 @@
     { count: 52, seed: 11.3, spin: 0.012, tempo: 3400, size: 0.7, alpha: 0.22 },
     { count: 18, seed: 47.7, spin: 0.03, tempo: 2500, size: 1, alpha: 0.28 },
   ];
+  // Backdrop scenes: the sky behind the constellation. "follow" picks the scene
+  // that belongs to the active colour theme (Music & themes); any other key is
+  // an explicit override, remembered per machine. Every scene is tinted from
+  // the live palette, so a custom theme still gets its own sky.
+  const BACKDROPS = {
+    follow: "Follow theme",
+    aurora: "Aurora ribbons",
+    deepspace: "Deep space",
+    nebula: "Nebula",
+    embers: "Rising embers",
+    fireflies: "Fireflies",
+    bokeh: "Soft bokeh",
+    dust: "Warm dust",
+    grid: "Quiet grid",
+    minimal: "Minimal",
+  };
+  const BACKDROP_ORDER = ["follow", "aurora", "deepspace", "nebula", "embers", "fireflies", "bokeh", "dust", "grid", "minimal"];
+  const THEME_BACKDROP = { gold: "dust", midnight: "deepspace", forest: "fireflies", violet: "nebula", ember: "embers", aurora: "aurora", rose: "bokeh", custom: "dust" };
+  // Speech bubbles: what an agent says while it works, drawn beside its orb.
+  const SPEECH_TTL = 4200; // a plain remark
+  const SPEECH_TTL_LONG = 6500; // a reply or a finding worth reading
+  const SPEECH_MAX = 8; // bubbles on screen at once; the oldest yields
+  const SPEECH_FADE_IN = 160;
+  const SPEECH_FADE_OUT = 420;
+  const SPEECH_FONT = '500 11px system-ui, "Segoe UI", sans-serif';
+  const TRAIL_MS = 520; // how long a flying agent's wake lingers
+  const TRAIL_MAX = 14;
+  // Callouts: the leader leaves the orb at this angle, runs one of these
+  // lengths, then turns into the horizontal top bar. A card keeps its place
+  // for CALLOUT_HOLD_MS after something blocks it before it moves, so an
+  // orbiting tree does not make the cards hop.
+  const CALLOUT_ANGLE = (70 * Math.PI) / 180;
+  const CALLOUT_COS = Math.cos(CALLOUT_ANGLE);
+  const CALLOUT_SIN = Math.sin(CALLOUT_ANGLE);
+  const CALLOUT_LENGTHS = [46, 74, 106, 140];
+  const CALLOUT_MIN_W = 116;
+  const CALLOUT_MAX_W = 224;
+  const CALLOUT_TITLE_H = 17;
+  const CALLOUT_LINE_H = 14;
+  const CALLOUT_BUDGET = 6; // full cards at rest; the rest fall back to compact labels, cards on hover / selection / focus
+  const CALLOUT_HOLD_MS = 260;
+  const CALLOUT_TITLE_FONT = '600 12.5px system-ui, "Segoe UI", sans-serif';
+  const CALLOUT_NUMBER_FONT = '700 9.5px system-ui, "Segoe UI", sans-serif';
+  const CALLOUT_COUNTS_FONT = '10.5px system-ui, "Segoe UI", sans-serif';
+  const CALLOUT_LINE_FONT = SPEECH_FONT;
+  const CARD_STYLES = ["auto", "outline", "filled"];
+  // Focus: how close a click brings the camera, by what was clicked — less
+  // on a parent so its children stay in frame — and the slow turn behind it.
+  const FOCUS_ZOOM = { task: 2.4, todo: 2.4, agent: 2.2, session: 1.7, "task-group": 1.6, assistant: 1.45, root: 1.35, folded: 1.5 };
+  const FOCUS_DRIFT = 0.55; // of ORBIT_BASE
   const ROTATE_SPEED = 0.005; // right-drag: radians per pixel
   const PITCH_MAX = 0.55; // right-drag vertical tilt clamp
   const CAMERA_EASE = 0.045;
@@ -284,6 +341,24 @@
     readyPromise: null,
     workOnBusy: false,
     newWorkBusy: false,
+    // Backdrop scene and speech bubbles (Ambience pop), remembered per machine.
+    backdrop: BACKDROP_ORDER.includes(readStore("mefiStudio.cmdBackdrop")) ? readStore("mefiStudio.cmdBackdrop") : "follow",
+    themeKey: null, // the Music & themes key the canvas last synced to
+    bubbles: readStore("mefiStudio.cmdBubbles") !== "0",
+    speech: new Map(), // node id → the bubble it is showing
+    speechRects: [], // bubble surfaces drawn this frame; labels step around them
+    hoverSpeech: null, // node id whose bubble is under the pointer (it stays up)
+    deferred: [], // { at, run }: frame-stepped timers for staggered effects
+    agentTrails: new Map(), // node id → recent screen points of a flying agent
+    agentPhases: {}, // role → the motion phase last seen, for arrival remarks
+    hubSwellAt: 0, // the assistant orb swells for a beat when work lands in it
+    callouts: new Map(), // node id → the placement its callout keeps between frames
+    calloutRects: [], // card surfaces drawn this frame; labels and bubbles step around them
+    hoverCallout: null, // node id whose callout is under the pointer (it lifts)
+    focus: null, // { id, kind, since }: the node a click zoomed onto; the rest blurs behind it
+    focusRestore: null, // what focus changed (the orbit setting), put back on exit
+    focusIds: null, // this frame's sharp set, read by the label and bubble painters
+    cardStyle: CARD_STYLES.includes(readStore("mefiStudio.cmdCardStyle")) ? readStore("mefiStudio.cmdCardStyle") : "auto",
   };
 
   const el = {};
@@ -781,6 +856,12 @@
     appendDoneHoldNodes();
     appendBuilderNodes();
     sweepFx();
+    // Callout numbers: sessions in the order the tree shows them, tasks in
+    // board order — stable while the board holds, never derived from a slot.
+    let sessionOrdinal = 0;
+    for (const node of state.nodes) if (node.kind === "session") node.ordinal = `S${++sessionOrdinal}`;
+    const boardIndex = new Map((state.allTasks?.length ? state.allTasks : state.tasks ?? []).map((task, index) => [String(task.id), index + 1]));
+    for (const node of state.nodes) if ((node.kind === "task" || node.kind === "task-group") && node.task) node.ordinal = `T${boardIndex.get(String(node.task.id)) ?? "?"}`;
     const firstGraph = !state.graphSeeded;
     state.graphSeeded = true;
     // The hub wears the whole board on its own meter: how much of the
@@ -1150,6 +1231,12 @@
         z: fx.lastZ ?? anchor.z + Math.sin(ring) * radius,
       };
       state.nodes.push(node);
+      // A builder that just appeared is the foreman handing work out: say so
+      // once, on the tree, the moment it pops.
+      if (state.active && state.graphSeeded && Number.isFinite(fx.bornAt) && !fx.announced && Date.now() - fx.bornAt < 1500 && typeof announceHandout === "function") {
+        fx.announced = true;
+        announceHandout(node);
+      }
       // Same life-cycle as a task: the builder pops out of its host when the
       // job starts and flies home into it when the run ends.
       // A brief gap in the job list can reverse an exit. Reuse the same
@@ -1525,8 +1612,21 @@
     state.screenLayout = null;
     state.agentLayout.clear();
     state.agentSeq = {};
+    state.agentPhases = {};
     state.taskLayout = new Map();
     state.graphSeeded = false;
+    // Remarks, wakes and pending effects belong to the old project's tree;
+    // the absorbed ledger is per project and reloads for the new one.
+    state.speech?.clear?.();
+    state.speechRects = [];
+    state.deferred = [];
+    state.agentTrails?.clear?.();
+    state.absorbed?.delete?.("__assistant__");
+    if (typeof loadAbsorbedLedger === "function") loadAbsorbedLedger();
+    state.callouts?.clear?.();
+    state.calloutRects = [];
+    state.hoverCallout = null;
+    if (typeof exitFocus === "function") exitFocus();
     state.backlogRevision += 1;
     state.backlogReadAt = 0;
     state.backlog = null;
@@ -1906,9 +2006,61 @@
     if (save) writeStore("mefiStudio.cmdDoneCollapsed", state.doneCollapsed ? "1" : "0");
   }
 
-  // Absorb: every record spirals into the Absorb button, then the host wipes
-  // them from the done log for good. The flight is skipped when motion is off —
-  // the wipe still lands, it just lands at once.
+  // ---------- the absorbed ledger: what the assistant keeps after an absorb ----------
+  // Records absorbed from the Done tab live on the assistant's card (the last
+  // ABSORBED_HUB_MAX), per project, remembered on this machine so a restart
+  // does not lose what was just filed into it.
+  function absorbedStorageKey() {
+    return `mefiStudio.cmdAbsorbed.${String(state.projectId ?? "default").replace(/[^\w.-]+/g, "_").slice(0, 80)}`;
+  }
+
+  function loadAbsorbedLedger() {
+    const hubId = "__assistant__";
+    let stored = [];
+    try { stored = JSON.parse(readStore(absorbedStorageKey()) ?? "[]"); } catch { stored = []; }
+    const rows = (Array.isArray(stored) ? stored : []).filter((entry) => entry && typeof entry.title === "string").slice(0, ABSORBED_HUB_MAX);
+    const live = (state.absorbed.get(hubId) ?? []).filter((entry) => entry.kind !== "record");
+    state.absorbed.set(hubId, [...rows, ...live].slice(0, ABSORBED_HUB_MAX));
+    return rows;
+  }
+
+  function recordAbsorbed(entries) {
+    const hubId = "__assistant__";
+    const at = Date.now();
+    const fresh = (Array.isArray(entries) ? entries : []).map((entry) => ({
+      kind: "record",
+      title: String(entry.title ?? "Untitled").slice(0, 200),
+      source: entry.kind === "build" ? "build" : entry.kind === "pass" ? "pass" : "run",
+      ok: entry.ok !== false,
+      at: Number(entry.at) || at,
+      absorbedAt: at,
+      taskId: typeof entry.taskId === "string" ? entry.taskId : null,
+      sessionId: typeof entry.sessionId === "string" ? entry.sessionId : null,
+      detail: entry.detail ? String(entry.detail).slice(0, 200) : "",
+    }));
+    const kept = [...fresh, ...(state.absorbed.get(hubId) ?? [])].slice(0, ABSORBED_HUB_MAX);
+    state.absorbed.set(hubId, kept);
+    writeStore(absorbedStorageKey(), JSON.stringify(kept.filter((entry) => entry.kind === "record")));
+    return kept;
+  }
+
+  // Where the Done tab's rows fly to: the assistant orb when it is on screen,
+  // else the Absorb button, so the gesture never aims at nothing.
+  function absorbTarget() {
+    const hub = assistantNode();
+    if (state.active && hub && hub._px != null && hub._py != null && !hub._absorbed) {
+      const area = usableArea();
+      if (hub._px >= area.x && hub._px <= area.x + area.w && hub._py >= area.y && hub._py <= area.y + area.h) return { x: hub._px, y: hub._py, hub };
+    }
+    const button = el.doneAbsorb?.getBoundingClientRect?.();
+    return button ? { x: button.left + button.width / 2, y: button.top + button.height / 2, hub: null } : null;
+  }
+
+  // Absorb: every record flies out of the Done tab into the assistant orb —
+  // the rows shrink toward it while a packet per row crosses the canvas and
+  // the hub swells as they land — then the host clears the log and the hub's
+  // card keeps the records. Motion off skips the flight; the wipe and the
+  // ledger still land, at once.
   async function absorbDoneLog() {
     if (state.doneAbsorbing || !el.doneList || !window.mefiStudio?.assistantAbsorbDoneLog) return;
     const entries = state.doneEntries ?? [];
@@ -1917,19 +2069,36 @@
     if (el.doneAbsorb) el.doneAbsorb.disabled = true;
     const rows = [...el.doneList.querySelectorAll(".done-row")];
     const button = el.doneAbsorb;
-    const target = button?.getBoundingClientRect();
+    const target = absorbTarget();
+    const shown = Math.min(rows.length, 12);
     if (!noMotion() && target && rows.length) {
-      const cx = target.left + target.width / 2;
-      const cy = target.top + target.height / 2;
       rows.forEach((row, index) => {
         const rect = row.getBoundingClientRect();
-        row.style.setProperty("--absorb-dx", `${Math.round(cx - (rect.left + rect.width / 2))}px`);
-        row.style.setProperty("--absorb-dy", `${Math.round(cy - (rect.top + rect.height / 2))}px`);
+        const sx = rect.left + rect.width / 2, sy = rect.top + rect.height / 2;
+        row.style.setProperty("--absorb-dx", `${Math.round(target.x - sx)}px`);
+        row.style.setProperty("--absorb-dy", `${Math.round(target.y - sy)}px`);
         row.style.setProperty("--absorb-i", String(Math.min(index, 12)));
+        if (target.hub && index < 12) {
+          // The canvas half of the same flight: a packet from where the row
+          // sat to the hub, one after another, each landing with a bloom.
+          const ghost = { id: `absorb:${index}`, x: 0, y: 0, z: 0 };
+          later(index * ABSORB_STAGGER_MS, () => {
+            state.pulses.push({ from: ghost, to: target.hub, start: Date.now(), duration: ABSORB_FLIGHT_MS, color: entries[index]?.ok === false ? "#ffb3b3" : "#ffe9a8", glow: "#e6c98d", wave: true, packet: true, screen: { x: sx, y: sy } });
+            if (state.pulses.length > 24) state.pulses.shift();
+          });
+        }
       });
       el.done?.classList.add("absorbing");
-      button.classList.add("pulling");
-      await new Promise((resolve) => setTimeout(resolve, 640 + Math.min(rows.length, 12) * 45));
+      button?.classList.add("pulling");
+      if (target.hub) {
+        later(ABSORB_FLIGHT_MS + shown * ABSORB_STAGGER_MS, () => {
+          state.hubSwellAt = Date.now();
+          spawnParticles(target.hub, Math.min(24, 8 + entries.length * 2), { gold: true });
+          say(target.hub, `absorbed ${entries.length} record${entries.length === 1 ? "" : "s"}`, { kind: "receive", ttl: SPEECH_TTL_LONG });
+          bell({ long: true, level: 0.8 });
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, ABSORB_FLIGHT_MS + shown * ABSORB_STAGGER_MS));
     }
     try {
       const result = await window.mefiStudio.assistantAbsorbDoneLog();
@@ -1937,9 +2106,12 @@
         window.MefiToast?.(`absorb failed · ${result?.error ?? "unknown error"}`, "bad");
         return;
       }
+      recordAbsorbed(entries);
       state.doneEntries = [];
       state.doneAt = Date.now();
-      window.MefiToast?.(`absorbed ${entries.length} record${entries.length === 1 ? "" : "s"}`, "good");
+      if (state.selected?.kind === "assistant") renderInfo();
+      if (chatMode()) renderChat();
+      window.MefiToast?.(`absorbed ${entries.length} record${entries.length === 1 ? "" : "s"} into the assistant`, "good");
     } catch (error) {
       window.MefiToast?.(`absorb failed · ${String(error?.message ?? error)}`, "bad");
     } finally {
@@ -2723,6 +2895,16 @@
         state.pulses.push({ from, to, start: Date.now(), duration: 900, color: failed ? "#ffd479" : agentHex(role), glow: failed ? "#ffd479" : agentHex(role), wave: true });
         if (state.pulses.length > 24) state.pulses.shift();
       }
+      if (state.active && satellite) {
+        // The satellite says what it is doing: the hop label for a running
+        // agent, the outcome for a finished or failed one, "queued" while it
+        // waits. The role prefix goes — the orb is already the role.
+        const remark = agentRemark(payload?.event?.text, role);
+        if (status === "error") say(satellite, remark || "failed", { kind: "error", ttl: SPEECH_TTL_LONG });
+        else if (status === "done") say(satellite, remark || "done", { kind: "done" });
+        else if (status === "queued") say(satellite, "queued · waiting for a slot", { ttl: 2600 });
+        else if (remark) say(satellite, remark);
+      }
       if (state.selected?.kind === "assistant" || state.selected?.kind === "agent") renderInfo();
       return;
     }
@@ -2744,6 +2926,14 @@
       if (state.active && hub && satellite) {
         state.pulses.push({ from: satellite, to: hub, start: Date.now(), duration: 1100, color: "#ffe9a8", glow: "#e6c98d", wave: true, packet: true });
         if (state.pulses.length > 24) state.pulses.shift();
+        // Sending and receiving, said out loud: the scout's bubble shows the
+        // finding leaving (→), the hub's shows it landing (←) once the packet
+        // arrives, so a hand-over reads as one exchange.
+        const finding = agentRemark(payload?.event?.text, role);
+        if (finding) {
+          say(satellite, finding, { kind: "send", ttl: SPEECH_TTL_LONG });
+          say(hub, `${role}: ${finding}`, { kind: "receive", ttl: SPEECH_TTL_LONG, delay: 1000 });
+        }
       }
       if (state.selected?.kind === "assistant" || state.selected?.kind === "agent") renderInfo();
       return;
@@ -2767,6 +2957,11 @@
           packet: fromOverseer,
         });
         if (state.pulses.length > 24) state.pulses.shift();
+        // The thought itself, in a dotted bubble: the overseer's lands on the
+        // hub as well, since that is who it is talking to.
+        const thought = String(payload.event.text).slice(0, 160);
+        say(satellite, thought, { kind: "think", ttl: SPEECH_TTL_LONG });
+        if (fromOverseer) say(hub, `overseer: ${thought}`, { kind: "receive", ttl: SPEECH_TTL_LONG, delay: 900 });
       }
       if (state.selected?.kind === "assistant" || state.selected?.kind === "agent") renderInfo();
       return;
@@ -2787,6 +2982,7 @@
       if (state.active && hub && node) {
         state.pulses.push({ from: hub, to: node, start: Date.now(), duration: 900, color: "#f1dcae", glow: "#e6c98d" });
         if (state.pulses.length > 24) state.pulses.shift();
+        say(hub, `looking at "${String(focus.label ?? node.label ?? focus.id).slice(0, 44)}"`, { ttl: 3200 });
       }
       if (state.selected) renderInfo();
       return;
@@ -2800,6 +2996,15 @@
         const inbound = kind === "message" || kind === "reply";
         state.pulses.push({ from: inbound ? node : root, to: inbound ? root : node, start: Date.now(), duration: 1400, color: "#f1dcae", glow: "#e6c98d" });
         if (state.pulses.length > 24) state.pulses.shift();
+        // The conversation on the tree: your message lands on the hub, the
+        // reply is said from it; tidy and fix passes get a plain remark.
+        const line = String(payload?.event?.text ?? "").trim();
+        if (kind === "reply") {
+          const messages = assistantFull()?.messages ?? [];
+          const last = messages[messages.length - 1];
+          say(node, last?.role === "assistant" && last.text ? last.text : line || "replied", { ttl: SPEECH_TTL_LONG });
+        } else if (kind === "message") say(node, line ? `you: ${line}` : "reading your message", { kind: "receive" });
+        else say(node, line || (kind === "tidy" ? "tidied up" : "fixed things"), { kind: "done" });
       }
     }
     if (selectedAssistant) renderInfo();
@@ -3247,6 +3452,97 @@
     if (node.kind === "assistant" || node.kind === "music") {
       ctx.font = '600 10px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillStyle = "#edf0f5"; ctx.fillText(node.kind === "music" ? "♪" : "M", p.x, p.y + 0.5);
+    }
+    ctx.restore();
+  }
+
+  // ---------- agent dress: glyph, status ring, wake; the hub's breathing ----------
+  // The role glyph inside the orb and a ring that says what the agent is up
+  // to: a spinning arc while it works, a dashed ring while it waits its turn,
+  // amber when it failed, a green tick for a beat when it just finished.
+  function drawAgentDress(ctx, node, p, radius, tint, time, still) {
+    if (node.kind !== "agent" || node._absorbed || radius < 4.5 || state.nodeStyle === "minimal") return;
+    ctx.save();
+    ctx.globalAlpha = (node._fade ?? 1) * Math.max(0.35, emphasis(node));
+    const hex = agentHex(node.role);
+    window.MefiTree?.agentGlyph?.(ctx, node.role, p.x, p.y, radius * 0.7, window.MefiTree?.glyphInk?.(hex) ?? "#0b1016");
+    const ring = radius + 3.5;
+    if (node.status === "running" || node.builder) {
+      const phase = still ? 0 : time / 380;
+      ctx.beginPath(); ctx.arc(p.x, p.y, ring, phase, phase + Math.PI * 1.3);
+      ctx.strokeStyle = rgba(tint, 0.9); ctx.lineWidth = 1.3; ctx.stroke();
+      if (!still) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, ring, phase + Math.PI * 1.5, phase + Math.PI * 1.7);
+        ctx.strokeStyle = rgba(tint, 0.35); ctx.lineWidth = 1; ctx.stroke();
+      }
+    } else if (node.status === "queued") {
+      ctx.setLineDash([2, 3]);
+      ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI * 2);
+      ctx.strokeStyle = rgba(tint, 0.5); ctx.lineWidth = 1; ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (node.status === "error") {
+      ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI * 2);
+      ctx.strokeStyle = rgba(NODE_RGB.amber, 0.85); ctx.lineWidth = 1.4; ctx.stroke();
+      const bx = p.x + radius + 3, by = p.y - radius - 3;
+      ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI * 2); ctx.fillStyle = "#3a2a12"; ctx.fill();
+      ctx.strokeStyle = rgba(NODE_RGB.amber, 0.9); ctx.lineWidth = 1; ctx.stroke();
+      ctx.fillStyle = rgb(NODE_RGB.amber); ctx.font = '700 8px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("!", bx, by + 0.5);
+    } else if (node.status === "done") {
+      const bx = p.x + radius + 3, by = p.y - radius - 3;
+      ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI * 2); ctx.fillStyle = "#173025"; ctx.fill();
+      ctx.strokeStyle = rgba(NODE_RGB.done, 0.85); ctx.lineWidth = 1; ctx.stroke();
+      ctx.strokeStyle = rgb(NODE_RGB.done); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(bx - 2.6, by); ctx.lineTo(bx - 0.8, by + 1.9); ctx.lineTo(bx + 2.6, by - 2); ctx.stroke();
+    }
+    ctx.restore();
+    // The wake: only while the satellite actually travels, sampled from the
+    // painted position so it follows whatever the layout decided, camera
+    // moves included. Builders circle in place and leave none.
+    const travelling = !node.builder && (node.phase === "flying" || node.phase === "returning");
+    if (travelling && !still) {
+      const trail = state.agentTrails.get(node.id) ?? [];
+      trail.push({ x: p.x, y: p.y, at: time });
+      while (trail.length > TRAIL_MAX || (trail.length && time - trail[0].at > TRAIL_MS)) trail.shift();
+      state.agentTrails.set(node.id, trail);
+    } else state.agentTrails.delete(node.id);
+  }
+
+  // Wakes are painted under the orbs, from the positions of the frames before.
+  function drawAgentTrails(ctx, time) {
+    if (!state.agentTrails.size) return;
+    for (const [id, trail] of state.agentTrails) {
+      if (!trail.length || time - trail[trail.length - 1].at > TRAIL_MS) { state.agentTrails.delete(id); continue; }
+      const node = state.nodes.find((entry) => entry.id === id);
+      if (!node || trail.length < 2) continue;
+      const tint = agentRgb(node.role);
+      ctx.save();
+      ctx.lineCap = "round";
+      for (let index = 1; index < trail.length; index += 1) {
+        const life = 1 - (time - trail[index].at) / TRAIL_MS;
+        if (life <= 0) continue;
+        ctx.strokeStyle = rgba(tint, 0.6 * life);
+        ctx.lineWidth = 0.8 + 2.6 * (index / trail.length);
+        ctx.beginPath(); ctx.moveTo(trail[index - 1].x, trail[index - 1].y); ctx.lineTo(trail[index].x, trail[index].y); ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  // The hub's own dress: a slow breathing halo, the faint ring the crew rests
+  // on, and a swell for a beat when absorbed work lands in it.
+  function drawHubDress(ctx, node, p, radius, tint, time, still) {
+    if (node.kind !== "assistant" || node._absorbed) return;
+    const swell = state.hubSwellAt ? Math.max(0, 1 - (Date.now() - state.hubSwellAt) / 700) : 0;
+    const breathe = still ? 0.5 : (Math.sin(time / 1900) + 1) / 2;
+    ctx.save();
+    ctx.globalAlpha = (node._fade ?? 1) * emphasis(node);
+    const ring = radius + 5 + breathe * 2.5 + swell * 10;
+    ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI * 2);
+    ctx.strokeStyle = rgba(tint, 0.18 + breathe * 0.14 + swell * 0.5); ctx.lineWidth = 1 + swell * 2; ctx.stroke();
+    if (state.nodes.some((entry) => entry.kind === "agent" && !entry.builder && !entry.dying)) {
+      ctx.setLineDash([2, 5]);
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius * 3.1, 0, Math.PI * 2);
+      ctx.strokeStyle = rgba(tint, 0.1); ctx.lineWidth = 0.8; ctx.stroke();
+      ctx.setLineDash([]);
     }
     ctx.restore();
   }
@@ -3878,8 +4174,10 @@
       const value = style.getPropertyValue(name).trim();
       return /^#[\da-f]{3}(?:[\da-f]{3})?$/i.test(value) ? hexToRgb(value) : fallback;
     };
-    const palette = window.MefiMusic?.themePalette?.()?.canvas;
+    const theme = window.MefiMusic?.themePalette?.() ?? null;
+    const palette = theme?.canvas;
     state.canvasPalette = palette ?? null;
+    state.themeKey = theme?.theme ?? document.documentElement?.dataset?.studioTheme ?? null;
     NODE_RGB.warm = palette?.bright ? hexToRgb(palette.bright) : color("--gold-bright", NODE_RGB.warm);
     NODE_RGB.task = [...NODE_RGB.warm];
     NODE_RGB.assistant = [...NODE_RGB.warm];
@@ -4006,6 +4304,258 @@
     ctx.fillRect(x + 3 * scale, y + 3 * scale, 5 * scale, scale);
     ctx.fillRect(x + 3 * scale, y + 6 * scale, 3.5 * scale, scale);
     ctx.restore();
+  }
+
+  // ---------- speech bubbles, deferred effects ----------
+  // A frame-stepped timer: staggered effects (a row of records flying home,
+  // a reply landing after its packet) wait on the animation loop instead of
+  // setTimeout, so a hidden or paused view never fires them into the void.
+  function later(delay, run) {
+    state.deferred.push({ at: Date.now() + Math.max(0, delay), run });
+  }
+
+  function stepDeferred(now) {
+    if (!state.deferred.length) return;
+    const due = state.deferred.filter((entry) => entry.at <= now);
+    if (!due.length) return;
+    state.deferred = state.deferred.filter((entry) => entry.at > now);
+    for (const entry of due) {
+      try { entry.run(); } catch (error) { console.error("[idle] deferred effect failed", error); }
+    }
+  }
+
+  // "watcher · scanned "Swamp biome"" → "scanned "Swamp biome"": the role is
+  // already the orb; the bubble carries only what it is doing.
+  function agentRemark(text, role) {
+    let remark = String(text ?? "").trim();
+    if (role) remark = remark.replace(new RegExp(`^${String(role).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(?:done|running|queued|error|idle)?\\s*[·:]?\\s*`, "i"), "");
+    return remark.replace(/\s+/g, " ").slice(0, 160);
+  }
+
+  // One bubble per node. A repeat of the same remark only refreshes the
+  // clock; a new remark replaces the old bubble and restarts its fade.
+  // `kind` shapes the marker: say · send (→) · receive (←) · think · done · error.
+  function say(node, text, { kind = "say", ttl = SPEECH_TTL, tint = null, delay = 0 } = {}) {
+    if (!state.bubbles || !node || !text) return null;
+    const id = typeof node === "string" ? node : node.id;
+    if (!id) return null;
+    if (delay > 0) {
+      later(delay, () => say(id, text, { kind, ttl, tint }));
+      return null;
+    }
+    const remark = String(text).replace(/\s+/g, " ").trim().slice(0, 160);
+    if (!remark) return null;
+    const now = Date.now();
+    const existing = state.speech.get(id);
+    if (existing && existing.text === remark && existing.kind === kind) {
+      existing.at = now;
+      existing.ttl = Math.max(existing.ttl, ttl);
+      return existing;
+    }
+    const bubble = { id, text: remark, kind, at: now, ttl, tint, lines: null };
+    state.speech.set(id, bubble);
+    if (state.speech.size > SPEECH_MAX) {
+      const oldest = [...state.speech.values()].sort((a, b) => a.at - b.at)[0];
+      if (oldest && oldest.id !== id) state.speech.delete(oldest.id);
+    }
+    return bubble;
+  }
+
+  function clearSpeech(id = null) {
+    if (id == null) state.speech.clear();
+    else state.speech.delete(id);
+  }
+
+  // Expiry runs on the frame clock, so a bubble under the pointer stays up
+  // and a view that was hidden does not lose everything said while away.
+  function stepSpeech(now) {
+    for (const [id, bubble] of state.speech) {
+      if (state.hoverSpeech === id) { bubble.at = Math.max(bubble.at, now - bubble.ttl + SPEECH_FADE_OUT + 200); continue; }
+      if (now - bubble.at > bubble.ttl) state.speech.delete(id);
+    }
+  }
+
+  // Bubble alpha over its life: a short fade in, a hold, a longer fade out.
+  // Reduced motion shows and hides without the ramps.
+  function speechAlpha(bubble, now, still) {
+    const age = now - bubble.at;
+    if (still) return age <= bubble.ttl ? 1 : 0;
+    const tail = bubble.ttl - age;
+    return Math.max(0, Math.min(1, age / SPEECH_FADE_IN, tail / SPEECH_FADE_OUT));
+  }
+
+  // Word-wrap a remark to at most two lines of `maxWidth`, ellipsis on the last.
+  function speechLines(ctx, text, maxWidth) {
+    ctx.font = SPEECH_FONT;
+    const words = String(text).split(" ");
+    const lines = [];
+    let line = "";
+    let index = 0;
+    for (; index < words.length; index += 1) {
+      const word = words[index];
+      const candidate = line ? `${line} ${word}` : word;
+      if (ctx.measureText(candidate).width <= maxWidth || !line) line = candidate;
+      else {
+        lines.push(line);
+        line = word;
+        if (lines.length === 2) break;
+      }
+    }
+    if (lines.length < 2 && line) lines.push(line);
+    const clipped = lines.length === 2 && (index < words.length || ctx.measureText(lines[1]).width > maxWidth);
+    let last = lines[lines.length - 1] ?? "";
+    if (clipped || ctx.measureText(last).width > maxWidth) {
+      while (last.length > 1 && ctx.measureText(`${last}…`).width > maxWidth) last = last.slice(0, -1);
+      lines[lines.length - 1] = `${last}…`;
+    }
+    return lines;
+  }
+
+  const SPEECH_MARKS = {
+    send: (ctx, x, y, tint) => { ctx.strokeStyle = tint; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x - 4, y); ctx.lineTo(x + 4, y); ctx.moveTo(x + 1, y - 3); ctx.lineTo(x + 4, y); ctx.lineTo(x + 1, y + 3); ctx.stroke(); },
+    receive: (ctx, x, y, tint) => { ctx.strokeStyle = tint; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x + 4, y); ctx.lineTo(x - 4, y); ctx.moveTo(x - 1, y - 3); ctx.lineTo(x - 4, y); ctx.lineTo(x - 1, y + 3); ctx.stroke(); },
+    think: (ctx, x, y, tint) => { ctx.fillStyle = tint; for (const dx of [-4, 0, 4]) { ctx.beginPath(); ctx.arc(x + dx, y, 1.2, 0, Math.PI * 2); ctx.fill(); } },
+    done: (ctx, x, y, tint) => { ctx.strokeStyle = tint; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x - 4, y); ctx.lineTo(x - 1, y + 3); ctx.lineTo(x + 4, y - 3); ctx.stroke(); },
+    error: (ctx, x, y, tint) => { ctx.strokeStyle = tint; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x, y - 4); ctx.lineTo(x, y + 1); ctx.moveTo(x, y + 3.2); ctx.lineTo(x, y + 3.5); ctx.stroke(); },
+  };
+
+  // The bubbles: placed beside their node, clear of the HUD, of each other and
+  // of other orbs; labels are placed afterwards and step around them.
+  function drawSpeech(projected) {
+    state.speechRects = [];
+    for (const { node } of projected) node._speech = null;
+    if (!state.speech.size) return;
+    const ctx = el.ctx;
+    if (!ctx) return;
+    const now = Date.now();
+    const still = noMotion();
+    const excluded = [...hudRects()];
+    const hitsNode = nodeLabelBlocker(projected);
+    const byId = new Map(projected.map((entry) => [entry.node.id, entry]));
+    const area = usableArea();
+    const maxWidth = Math.min(210, Math.max(120, area.w * 0.28));
+    const bubbles = [...state.speech.values()].sort((a, b) => b.at - a.at);
+    for (const bubble of bubbles) {
+      const node = byId.get(bubble.id)?.node;
+      // a node with a callout says it inside the card instead, and an agent on
+      // a card-bearing node speaks through that card
+      if (!node || node._absorbed || node.dying || node._callout || node._px == null || (node._fade ?? 1) <= 0.02) continue;
+      if (typeof hostedOnCard === "function" && hostedOnCard(node)) continue;
+      const alpha = speechAlpha(bubble, now, still) * Math.max(0.35, node._fade ?? 1);
+      if (alpha <= 0.01) continue;
+      const lines = bubble.lines ?? speechLines(ctx, bubble.text, maxWidth - 22);
+      bubble.lines = lines;
+      ctx.font = SPEECH_FONT;
+      const textWidth = Math.max(...lines.map((line) => ctx.measureText(line).width));
+      const marked = Boolean(SPEECH_MARKS[bubble.kind]);
+      const w = Math.ceil(textWidth + 18 + (marked ? 13 : 0));
+      const h = 12 + lines.length * 14;
+      const reach = (node._pr ?? 6) + 9;
+      const px = node._px, py = node._py;
+      // Four corners at the orb's rim, then the same corners a step further
+      // out, then straight above and below: a crowded hub still finds air for
+      // its bubbles. A bubble with nowhere to go waits for the next frame
+      // rather than sitting on top of another one.
+      const slots = [];
+      for (const distance of [0, 18, 36]) {
+        const r = reach + distance;
+        slots.push(
+          { x: px + r, y: py - r - h + 6, tail: "bl" },
+          { x: px - r - w, y: py - r - h + 6, tail: "br" },
+          { x: px + r, y: py + r - 6, tail: "tl" },
+          { x: px - r - w, y: py + r - 6, tail: "tr" },
+          { x: px - w / 2, y: py - r - h - 2, tail: "bl" },
+          { x: px - w / 2, y: py + r + 2, tail: "tl" },
+        );
+      }
+      let rect = null;
+      for (const slot of slots) {
+        const candidate = { x: slot.x, y: slot.y, w, h, tail: slot.tail };
+        if (candidate.x < area.x + 4 || candidate.y < area.y + 4 || candidate.x + w > area.x + area.w - 4 || candidate.y + h > area.y + area.h - 4) continue;
+        if (blocked(candidate, excluded) || blocked(candidate, state.speechRects) || hitsNode(candidate, node)) continue;
+        rect = candidate;
+        break;
+      }
+      if (!rect) continue;
+      const triple = bubble.tint ? hexToRgb(bubble.tint) : node.kind === "agent" ? agentRgb(node.role) : node.kind === "assistant" ? NODE_RGB.assistant : NODE_RGB.session;
+      const mark = bubble.kind === "error" ? rgb(NODE_RGB.amber) : bubble.kind === "done" ? rgb(NODE_RGB.done) : rgb(triple);
+      const paper = state.canvasPalette?.background ?? "#101620";
+      // a bubble outside the focused branch paints on the far (blurred) layer
+      const pen = state.focusIds && el.farCtx && !state.focusIds.has(node.id) ? el.farCtx : ctx;
+      pen.save();
+      pen.globalAlpha = alpha;
+      // tail: a short wedge from the bubble's near corner toward the orb
+      const tailX = rect.tail.endsWith("l") ? rect.x + 10 : rect.x + rect.w - 10;
+      const tailY = rect.tail.startsWith("b") ? rect.y + rect.h : rect.y;
+      const towardX = tailX + (px - tailX) * 0.35, towardY = tailY + (py - tailY) * 0.45;
+      pen.beginPath();
+      pen.moveTo(tailX - 4, tailY); pen.lineTo(tailX + 4, tailY); pen.lineTo(towardX, towardY); pen.closePath();
+      pen.fillStyle = paper; pen.fill();
+      pen.strokeStyle = rgba(triple, 0.55); pen.lineWidth = 1; pen.stroke();
+      // body
+      pen.beginPath(); pen.roundRect(rect.x, rect.y, rect.w, rect.h, 8);
+      pen.fillStyle = paper; pen.fill();
+      pen.fillStyle = rgba(triple, 0.1); pen.fill();
+      if (bubble.kind === "think") pen.setLineDash([3, 3]);
+      pen.strokeStyle = bubble.kind === "error" ? rgba(NODE_RGB.amber, 0.8) : rgba(triple, 0.6); pen.lineWidth = 1; pen.stroke();
+      pen.setLineDash([]);
+      // the seam where the tail meets the body
+      pen.fillStyle = paper;
+      pen.fillRect(tailX - 3.5, rect.tail.startsWith("b") ? tailY - 1.5 : tailY - 0.5, 7, 2);
+      let textX = rect.x + 9;
+      if (marked) { SPEECH_MARKS[bubble.kind](pen, rect.x + 11, rect.y + 12, mark); textX += 13; }
+      pen.font = SPEECH_FONT; pen.textAlign = "left"; pen.textBaseline = "alphabetic";
+      pen.fillStyle = rgba(NODE_RGB.session, 0.95);
+      lines.forEach((line, index) => pen.fillText(line, textX, rect.y + 16 + index * 14));
+      pen.restore();
+      node._speech = { ...rect, id: bubble.id };
+      state.speechRects.push({ x: rect.x - 4, y: rect.y - 4, w: rect.w + 8, h: rect.h + 8 });
+    }
+  }
+
+  // A builder starting is the foreman handing work out: a packet leaves the
+  // foreman (the hub, when no foreman sits on the ring) for the new builder,
+  // the foreman says what it handed out and the builder answers it is on it.
+  function announceHandout(builder) {
+    const hub = assistantNode();
+    const foreman = state.nodes.find((entry) => entry.kind === "agent" && entry.role === "foreman" && !entry.dying && !entry.builder) ?? hub;
+    if (!foreman || foreman === builder) return;
+    const title = String(builder.job?.title ?? builder.label ?? "work").replace(/^Work on\s+/i, "").replace(/^["']|["']$/g, "").slice(0, 48);
+    state.pulses.push({ from: foreman, to: builder, start: Date.now(), duration: 900, color: agentHex("foreman"), glow: agentHex("foreman"), wave: true, packet: true });
+    if (state.pulses.length > 24) state.pulses.shift();
+    say(foreman, `handed out "${title}"`, { kind: "send" });
+    say(builder, `on it: "${title}"`, { kind: "receive", delay: 900 });
+  }
+
+  function speechAt(x, y) {
+    for (const node of state.nodes) {
+      const rect = node._speech;
+      if (!rect) continue;
+      if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) return node;
+    }
+    return null;
+  }
+
+  // Backdrop: "follow" resolves to the scene the colour theme owns.
+  function activeBackdrop() {
+    if (state.backdrop !== "follow" && BACKDROPS[state.backdrop]) return state.backdrop;
+    return THEME_BACKDROP[state.themeKey] ?? "dust";
+  }
+
+  function setBackdrop(key) {
+    const next = BACKDROP_ORDER.includes(key) ? key : "follow";
+    state.backdrop = next;
+    writeStore("mefiStudio.cmdBackdrop", next);
+    if (el.backdrop && el.backdrop.value !== next) el.backdrop.value = next;
+    return activeBackdrop();
+  }
+
+  function setBubbles(enabled) {
+    state.bubbles = Boolean(enabled);
+    writeStore("mefiStudio.cmdBubbles", state.bubbles ? "1" : "0");
+    if (!state.bubbles) clearSpeech();
+    if (el.bubbles) el.bubbles.checked = state.bubbles;
+    return state.bubbles;
   }
 
   // ---------- graph helpers ----------
@@ -4814,6 +5364,17 @@
       }
     }
 
+    // What the assistant has absorbed from the Done tab, in the rail console
+    // too — the floating card is hidden while the rail shows the assistant.
+    if (el.chatAbsorbed && el.chatAbsorbedList) {
+      const ledger = state.absorbed.get("__assistant__") ?? [];
+      el.chatAbsorbed.hidden = !ledger.length;
+      const summary = el.chatAbsorbed.querySelector("summary");
+      if (summary) summary.textContent = `Absorbed work (${ledger.length})`;
+      el.chatAbsorbedList.textContent = "";
+      for (const entry of ledger.slice(0, ABSORBED_HUB_MAX)) el.chatAbsorbedList.append(absorbedRow(entry));
+    }
+
     // Replies read here count as seen, the same as the Explorer thread: main
     // zeroes unread and pushes the state back.
     const unread = Number(full?.unread) || 0;
@@ -4969,6 +5530,15 @@
       const target = travelling && motion.targetId ? state.nodes.find((entry) => entry.id === motion.targetId) ?? null : null;
       node.targetNode = target;
       node.label = travelling ? `${node.role} · ${target?.label ?? motion.targetLabel ?? "…"}` : node.role;
+      // Arrivals and departures, said out loud: the flight ending on a node
+      // is "at …", the turn for home is "heading home".
+      const phases = state.agentPhases ??= {};
+      const previousPhase = phases[node.role];
+      phases[node.role] = motion.phase;
+      if (state.active && previousPhase && previousPhase !== motion.phase && typeof say === "function") {
+        if (previousPhase === "flying" && motion.phase === "hovering" && target) say(node, `at "${String(target.label ?? motion.targetLabel ?? "").slice(0, 40)}"`, { ttl: 2600 });
+        else if (motion.phase === "returning" && previousPhase !== "home") say(node, "heading home", { ttl: 1800 });
+      }
       const seen = state.agentSeq[node.role] ?? { pulse: motion.pulseSeq, spark: motion.sparkSeq, done: motion.doneSeq };
       if (motion.pulseSeq > seen.pulse && target) {
         const tint = agentHex(node.role);
@@ -5023,6 +5593,8 @@
     // Only a real gesture holds the orbit: a drag in progress, a selection or
     // a search. The pointer resting on the canvas is not one.
     if (state.panning || state.rotating) return 0;
+    // A focused node keeps the rest of the tree turning slowly behind it.
+    if (state.focus && state.view !== "2d" && !noMotion()) return ORBIT_BASE * FOCUS_DRIFT;
     if (state.selected || state.query) return 0;
     if (Date.now() < state.settleUntil) return 0;
     return ORBIT_BASE + (state.reactive ? 0 : energy) * ORBIT_ENERGY;
@@ -5263,16 +5835,35 @@
     state.audioWaves.push({ from: a.node.id, to: b.node.id, sourceLink, band, ...wave });
   }
 
-  function drawGraphConnections(ctx, projected, runningIds, audioLinked = false, time = 0) {
+  function drawGraphConnections(ctx, projected, runningIds, audioLinked = false, time = 0, layers = null) {
     const profiler = globalThis.window?.MefiProfiler;
     const span = profiler?.begin("command.connections");
-    try { return drawGraphConnectionsImpl(ctx, projected, runningIds, audioLinked, time); }
+    try { return drawGraphConnectionsImpl(ctx, projected, runningIds, audioLinked, time, layers); }
     finally { profiler?.end(span); }
   }
 
-  function drawGraphConnectionsImpl(ctx, projected, runningIds, audioLinked, time) {
+  // One look per relationship, so the eye can tell what a line means before
+  // reading either end: root→session plain, session→todo faint and tinted by
+  // the todo's state, a task's anchor dotted, the hub link doubled, the
+  // finished cluster stippled. The active path (a running worker's node) is
+  // the bright one and its dots march while the work runs.
+  function edgeStyleFor(edge, a, b, { active = false, inspected = false, primary = false } = {}) {
+    const hub = Boolean(edge.assistant) || (a.node.kind === "root" && b.node.kind === "assistant") || (a.node.kind === "assistant" && b.node.kind === "root");
+    if (hub) return { kind: "hub", dash: [], width: 1, alpha: 0.34, double: true };
+    if (edge.task || b.node.kind === "task" || b.node.kind === "task-group") return { kind: "task", dash: [2, 4], width: active || inspected ? 1.4 : 1, alpha: inspected ? 0.7 : active ? 0.55 : primary ? 0.32 : 0.12, march: active };
+    if (b.node.kind === "todo") return { kind: "todo", dash: [], width: active ? 1.2 : 0.8, alpha: b.node.state === "done" ? 0.3 : inspected ? 0.6 : active ? 0.5 : 0.14 };
+    if (b.node.kind === "folded") return { kind: "folded", dash: [1, 5], width: 0.9, alpha: 0.22 };
+    return { kind: "session", dash: [], width: inspected ? 1.3 : 0.9, alpha: inspected ? 0.65 : active ? 0.5 : primary ? 0.3 : 0.16 };
+  }
+
+  function drawGraphConnectionsImpl(ctx, projected, runningIds, audioLinked, time, layers = null) {
     state.audioWaves = [];
     audioLinked = audioLinked && state.audioEffects?.waves !== false && state.audioResponse !== 0;
+    // A line with an end outside the focused branch paints on the far layer.
+    const far = layers?.far ?? ctx;
+    const focusIds = layers?.focusIds ?? null;
+    const penFor = (a, b) => (focusIds && far !== ctx && !(focusIds.has(a.node.id) && focusIds.has(b.node.id)) ? far : ctx);
+    const marching = typeof noMotion === "function" ? !noMotion() : false;
     // Keep the work tether underneath each waveform so its endpoints and
     // assignment remain readable as the sound bends the connection.
     for (const edge of state.edges) {
@@ -5285,18 +5876,33 @@
       const active = b.node._workLabel !== "Verifying" && isBusyNode(b.node, runningIds);
       const branches = state.nodeLayout === "tree" || state.nodeLayout === "layers";
       const primary = state.branchParents?.get(b.node.id) === a.node.id;
-      const tint = active || inspected ? colorOf(b.node) : NODE_RGB.task;
+      const tint = active || inspected ? colorOf(b.node) : b.node.kind === "todo" && b.node.state === "done" ? NODE_RGB.done ?? NODE_RGB.task : NODE_RGB.task;
+      const style = edgeStyleFor(edge, a, b, { active, inspected, primary });
       const response = audioLinked && state.audioEffects?.splitBands === false ? b.node._audioResponse : null;
       const light = response ? response.level * 0.24 + response.beat * 0.12 : 0;
-      ctx.strokeStyle = rgba(tint, lifetime * Math.min(0.95, (!primary && !inspected ? 0.075 : inspected ? 0.65 : active ? 0.5 : 0.32) + light));
-      ctx.lineWidth = (!primary && !inspected ? 0.65 : active || inspected ? 1.3 : 0.9) + light * 1.8;
-      ctx.beginPath(); ctx.moveTo(a.p.x, a.p.y);
-      if (primary && branches) {
-        const middle = (a.p.y + b.p.y) / 2;
-        ctx.bezierCurveTo(a.p.x, middle, b.p.x, middle, b.p.x, b.p.y);
-      } else ctx.lineTo(b.p.x, b.p.y);
-      ctx.stroke();
-      if (audioLinked) drawAudioConnection(ctx, a, b, tint, lifetime, time, Boolean(primary && branches));
+      const pen = penFor(a, b);
+      pen.strokeStyle = rgba(tint, lifetime * Math.min(0.95, style.alpha + light));
+      pen.lineWidth = style.width + light * 1.8;
+      pen.setLineDash?.(style.dash);
+      pen.lineDashOffset = style.march && marching ? -((time / 60) % 6) : 0;
+      if (style.double) {
+        const dx = b.p.x - a.p.x, dy = b.p.y - a.p.y, len = Math.hypot(dx, dy) || 1;
+        const nx = (-dy / len) * 1.6, ny = (dx / len) * 1.6;
+        pen.beginPath();
+        pen.moveTo(a.p.x + nx, a.p.y + ny); pen.lineTo(b.p.x + nx, b.p.y + ny);
+        pen.moveTo(a.p.x - nx, a.p.y - ny); pen.lineTo(b.p.x - nx, b.p.y - ny);
+        pen.stroke();
+      } else {
+        pen.beginPath(); pen.moveTo(a.p.x, a.p.y);
+        if (primary && branches) {
+          const middle = (a.p.y + b.p.y) / 2;
+          pen.bezierCurveTo(a.p.x, middle, b.p.x, middle, b.p.x, b.p.y);
+        } else pen.lineTo(b.p.x, b.p.y);
+        pen.stroke();
+      }
+      pen.setLineDash?.([]);
+      pen.lineDashOffset = 0;
+      if (audioLinked) drawAudioConnection(pen, a, b, tint, lifetime, time, Boolean(primary && branches));
     }
 
     // The managed host follows assignments and return flights. Draw one link
@@ -5312,10 +5918,16 @@
       if (lifetime <= 0.02) continue;
       const response = audioLinked && state.audioEffects?.splitBands === false ? node._audioResponse : null;
       const light = response ? response.level * 0.24 + response.beat * 0.12 : 0;
-      ctx.strokeStyle = rgba(agentRgb(node.role), lifetime * ((state.nodeLayout === "tree" ? 0.18 : 0.38) + light));
-      ctx.lineWidth = 1 + light * 1.8;
-      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(target.p.x, target.p.y); ctx.stroke();
-      if (audioLinked) drawAudioConnection(ctx, { node, p }, target, agentRgb(node.role), lifetime, time);
+      // an agent's tether: dashed, and marching toward the work while it runs
+      const pen = penFor({ node, p }, target);
+      pen.strokeStyle = rgba(agentRgb(node.role), lifetime * ((state.nodeLayout === "tree" ? 0.18 : 0.38) + light));
+      pen.lineWidth = 1 + light * 1.8;
+      pen.setLineDash?.([6, 4]);
+      pen.lineDashOffset = marching && (node.status === "running" || node.builder) ? -((time / 40) % 10) : 0;
+      pen.beginPath(); pen.moveTo(p.x, p.y); pen.lineTo(target.p.x, target.p.y); pen.stroke();
+      pen.setLineDash?.([]);
+      pen.lineDashOffset = 0;
+      if (audioLinked) drawAudioConnection(pen, { node, p }, target, agentRgb(node.role), lifetime, time);
     }
     // This is the audio source's visual cable, kept outside the task graph so
     // playing music cannot create a prerequisite or rearrange the layout.
@@ -5324,6 +5936,738 @@
     if (music && hub && !music.node._absorbed && !hub.node._absorbed) {
       drawAudioConnection(ctx, music, hub, NODE_RGB.warm, Math.min(music.node._fade ?? 1, hub.node._fade ?? 1), time, false, true);
     }
+  }
+
+  // ---------- backdrop scenes ----------
+  // Deterministic pseudo-random per (seed, index): stable across frames and
+  // resizes, so nothing is stored and a still frame is exactly repeatable.
+  const hash01 = (seed, index, salt = 0) => {
+    const value = Math.sin(seed * 12.9898 + index * 78.233 + salt * 37.719) * 43758.5453;
+    return value - Math.floor(value);
+  };
+
+  // The sky behind the constellation: the theme background, the scene the
+  // theme (or the override) asked for, then the core glow and the vignette
+  // every scene shares. Motion off freezes every scene at its resting pose.
+  function drawBackdrop(ctx, time, still, energy, musicBands, musicBeat) {
+    const width = el.width, height = el.height;
+    ctx.clearRect(0, 0, width, height);
+    const scene = activeBackdrop();
+    const backdrop = hexToRgb(state.canvasPalette?.background ?? "#050507");
+    const accent = state.canvasPalette?.accent ? hexToRgb(state.canvasPalette.accent) : NODE_RGB.warm;
+    const bright = NODE_RGB.warm;
+    const ink = NODE_RGB.session;
+    const diagonal = Math.hypot(width, height);
+    const clock = still ? 0 : time;
+    const breathe = still ? 0.5 : (Math.sin(time / 14000) + 1) / 2;
+    const skyTint = backdrop.map((channel, index) => Math.round(channel * 0.95 + accent[index] * 0.05));
+    const sky = ctx.createLinearGradient(0, 0, 0, height);
+    sky.addColorStop(0, rgb(skyTint));
+    sky.addColorStop(0.55, rgb(backdrop));
+    sky.addColorStop(1, rgb(backdrop.map((channel) => Math.round(channel * 0.97))));
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, width, height);
+    const nebula = (x, y, r, triple, alpha) => {
+      if (alpha <= 0.002) return;
+      const wash = ctx.createRadialGradient(x, y, 0, x, y, r);
+      wash.addColorStop(0, rgba(triple, alpha));
+      wash.addColorStop(1, rgba(triple, 0));
+      ctx.fillStyle = wash;
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    };
+    // starfield: depth bands wheeling at a fraction of the orbit rate, so the
+    // sky drifts against the constellation; sizes and tones vary, and a
+    // flared band carries a small cross
+    const stars = (layers) => {
+      const cx = width / 2, cy = height / 2;
+      for (const layer of layers) {
+        const turn = state.angle * layer.spin;
+        const cos = Math.cos(turn), sin = Math.sin(turn);
+        for (let index = 0; index < layer.count; index += 1) {
+          const seed = layer.seed + index * 127.1;
+          const sx = (Math.sin(seed) * 0.5 + 0.5) * (width + 200) - 100;
+          const sy = (Math.cos(seed * 1.7) * 0.5 + 0.5) * (height + 200) - 100;
+          const x = cx + (sx - cx) * cos - (sy - cy) * sin;
+          const y = cy + (sx - cx) * sin + (sy - cy) * cos;
+          const twinkle = still ? layer.alpha * (0.35 + 0.5 * Math.abs(Math.sin(index * 1.31))) : layer.alpha * (0.3 + 0.7 * Math.abs(Math.sin(time / layer.tempo + index * 1.31)));
+          ctx.globalAlpha = Math.min(1, twinkle * (0.5 + energy * 0.15 + musicBands.treble * 0.7));
+          const tone = Math.sin(seed * 3.3);
+          ctx.fillStyle = tone > 0.55 ? rgb(NODE_RGB.dust) : tone < -0.82 ? rgb(bright) : rgb(ink);
+          const size = layer.size * (0.8 + 0.4 * Math.abs(Math.sin(seed * 5.1)));
+          ctx.fillRect(x, y, size, size);
+          if (layer.flare) {
+            ctx.globalAlpha *= 0.4;
+            ctx.fillRect(x - size * 2, y - 0.5, size * 4, 1);
+            ctx.fillRect(x - 0.5, y - size * 2, 1, size * 4);
+          }
+        }
+      }
+      ctx.globalAlpha = 1;
+    };
+    if (scene === "dust") {
+      // the classic sky: two breathing nebulae, the stars, warm motes adrift
+      nebula(width * 0.2, height * 0.14, diagonal * 0.4, NODE_RGB.pending, 0.03 + breathe * 0.012);
+      nebula(width * 0.86, height * 0.84, diagonal * 0.34, bright, 0.03 + (1 - breathe) * 0.012);
+      stars(STAR_LAYERS);
+      for (let index = 0; index < 46; index += 1) {
+        const span = width + 40, drop = height + 40;
+        const drift = hash01(3.1, index) * span + (clock / (9000 + hash01(3.2, index) * 9000)) * 60 * (hash01(3.3, index) - 0.5);
+        const rise = hash01(3.4, index) * drop - (clock / 16000) * drop * (0.15 + hash01(3.5, index) * 0.2);
+        const x = ((drift % span) + span) % span - 20;
+        const y = ((rise % drop) + drop) % drop - 20;
+        ctx.globalAlpha = 0.08 + hash01(3.7, index) * 0.16 + energy * 0.1;
+        ctx.fillStyle = rgb(bright);
+        ctx.beginPath(); ctx.arc(x, y, 0.8 + hash01(3.6, index) * 1.8, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    } else if (scene === "deepspace") {
+      // a faint milky band across the sky, three depths of stars, the odd meteor
+      ctx.save();
+      ctx.translate(width / 2, height / 2);
+      ctx.rotate(-0.42);
+      const band = ctx.createLinearGradient(0, -diagonal * 0.12, 0, diagonal * 0.12);
+      band.addColorStop(0, rgba(ink, 0));
+      band.addColorStop(0.5, rgba(ink, 0.06 + energy * 0.02));
+      band.addColorStop(1, rgba(ink, 0));
+      ctx.fillStyle = band;
+      ctx.fillRect(-diagonal, -diagonal * 0.12, diagonal * 2, diagonal * 0.24);
+      ctx.restore();
+      nebula(width * 0.75, height * 0.2, diagonal * 0.3, accent, 0.045 + breathe * 0.015);
+      stars([
+        { count: 130, seed: 11.3, spin: 0.012, tempo: 3400, size: 0.8, alpha: 0.4 },
+        { count: 50, seed: 47.7, spin: 0.03, tempo: 2500, size: 1.1, alpha: 0.52 },
+        { count: 14, seed: 91.2, spin: 0.05, tempo: 1900, size: 1.6, alpha: 0.62, flare: true },
+      ]);
+      if (!still) {
+        const bucket = Math.floor(time / 6500);
+        const phase = (time % 6500) / 6500;
+        if (hash01(7.7, bucket) > 0.55 && phase < 0.22) {
+          const t = phase / 0.22;
+          const x = hash01(7.8, bucket) * width + t * 260, y = hash01(7.9, bucket) * height * 0.5 + t * 110;
+          const streak = ctx.createLinearGradient(x - 70, y - 30, x, y);
+          streak.addColorStop(0, rgba(ink, 0));
+          streak.addColorStop(1, rgba(ink, 0.75 * Math.sin(Math.PI * t)));
+          ctx.strokeStyle = streak; ctx.lineWidth = 1.2;
+          ctx.beginPath(); ctx.moveTo(x - 70, y - 30); ctx.lineTo(x, y); ctx.stroke();
+        }
+      }
+    } else if (scene === "nebula") {
+      // billowing clouds in the theme's own hues, drifting on a long cycle
+      for (let index = 0; index < 7; index += 1) {
+        const x = (0.12 + hash01(5.1, index) * 0.76) * width + Math.sin(clock / (23000 + index * 3100) + index) * 40;
+        const y = (0.1 + hash01(5.2, index) * 0.8) * height + Math.cos(clock / (27000 + index * 2300) + index * 2) * 30;
+        const r = diagonal * (0.16 + hash01(5.3, index) * 0.18);
+        const mix = hash01(5.4, index);
+        nebula(x, y, r, mix < 0.4 ? accent : mix < 0.7 ? bright : NODE_RGB.dust, 0.045 + hash01(5.5, index) * 0.035 + energy * 0.02 + (index === 0 ? musicBands.bass * 0.03 : 0));
+      }
+      stars([{ count: 60, seed: 11.3, spin: 0.012, tempo: 3400, size: 0.7, alpha: 0.2 }, { count: 20, seed: 47.7, spin: 0.03, tempo: 2500, size: 1, alpha: 0.28 }]);
+    } else if (scene === "aurora") {
+      // curtains across the upper sky: each ribbon is three stacked bands, the
+      // tallest the faintest, so the light gathers along its upper edge
+      stars([{ count: 60, seed: 11.3, spin: 0.012, tempo: 3400, size: 0.7, alpha: 0.2 }]);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      const ribbons = [
+        { base: 0.16, amp: 26, speed: 9000, k: 0.006, triple: accent, alpha: 0.05 },
+        { base: 0.24, amp: 34, speed: 12500, k: 0.0045, triple: NODE_RGB.done, alpha: 0.035 },
+        { base: 0.11, amp: 20, speed: 7200, k: 0.008, triple: NODE_RGB.dust, alpha: 0.03 },
+      ];
+      const step = 28;
+      for (const [rIndex, ribbon] of ribbons.entries()) {
+        const tops = [];
+        for (let x = -step; x <= width + step; x += step) {
+          const wave = Math.sin(x * ribbon.k + clock / ribbon.speed + rIndex * 1.7) * ribbon.amp + Math.sin(x * ribbon.k * 2.3 - clock / (ribbon.speed * 0.7)) * ribbon.amp * 0.35;
+          const tall = 70 + Math.sin(x * ribbon.k * 1.6 + clock / (ribbon.speed * 1.3)) * 28 + energy * 40 + musicBands.mid * 30;
+          tops.push({ x, top: height * ribbon.base + wave, tall });
+        }
+        for (const depth of [1, 0.6, 0.3]) {
+          ctx.beginPath();
+          tops.forEach((point, index) => index ? ctx.lineTo(point.x, point.top) : ctx.moveTo(point.x, point.top));
+          for (let index = tops.length - 1; index >= 0; index -= 1) ctx.lineTo(tops[index].x, tops[index].top + tops[index].tall * depth);
+          ctx.closePath();
+          ctx.fillStyle = rgba(ribbon.triple, ribbon.alpha * (0.7 + 0.3 * breathe));
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    } else if (scene === "embers") {
+      // heat below, embers rising through it and cooling as they climb
+      const heat = ctx.createLinearGradient(0, height * 0.55, 0, height);
+      heat.addColorStop(0, rgba(accent, 0));
+      heat.addColorStop(1, rgba(accent, 0.16 + energy * 0.08 + musicBands.bass * 0.08));
+      ctx.fillStyle = heat;
+      ctx.fillRect(0, height * 0.55, width, height * 0.45);
+      nebula(width * 0.5, height * 1.05, diagonal * 0.4, bright, 0.06 + breathe * 0.02);
+      for (let index = 0; index < 64; index += 1) {
+        const speed = 14000 + hash01(6.1, index) * 16000;
+        const life = ((clock / speed + hash01(6.2, index)) % 1 + 1) % 1;
+        const x = hash01(6.3, index) * width + Math.sin(clock / 2600 + index) * 14 * life;
+        const y = height + 10 - life * (height + 20);
+        const glow = (1 - life * 0.7) * (0.6 + 0.4 * Math.abs(Math.sin(clock / 300 + index)));
+        ctx.globalAlpha = Math.max(0, Math.min(1, glow));
+        ctx.fillStyle = life < 0.5 ? rgb(bright) : rgb(accent);
+        ctx.beginPath(); ctx.arc(x, y, 1.1 + hash01(6.4, index) * 1.9, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      stars([{ count: 26, seed: 11.3, spin: 0.012, tempo: 3400, size: 0.7, alpha: 0.14 }]);
+    } else if (scene === "fireflies") {
+      // mist in two slow bands, fireflies blinking in and out above it
+      for (const [index, band] of [{ y: 0.62, h: 0.22, alpha: 0.05 }, { y: 0.8, h: 0.26, alpha: 0.07 }].entries()) {
+        const drift = Math.sin(clock / (19000 + index * 5000)) * 30;
+        const mist = ctx.createLinearGradient(0, height * band.y + drift, 0, height * (band.y + band.h) + drift);
+        mist.addColorStop(0, rgba(NODE_RGB.done, 0));
+        mist.addColorStop(0.5, rgba(NODE_RGB.done, band.alpha));
+        mist.addColorStop(1, rgba(NODE_RGB.done, 0));
+        ctx.fillStyle = mist;
+        ctx.fillRect(0, height * band.y + drift - 10, width, height * band.h + 20);
+      }
+      nebula(width * 0.3, height * 0.1, diagonal * 0.3, accent, 0.03);
+      stars([{ count: 30, seed: 11.3, spin: 0.012, tempo: 3400, size: 0.7, alpha: 0.16 }]);
+      for (let index = 0; index < 34; index += 1) {
+        const blink = still ? 0.6 : Math.max(0, Math.sin(clock / (1300 + hash01(4.1, index) * 1800) + hash01(4.2, index) * 6.28));
+        if (blink < 0.15) continue;
+        const x = hash01(4.3, index) * width + Math.sin(clock / (5000 + hash01(4.4, index) * 4000) + index) * 24;
+        const y = height * (0.3 + hash01(4.5, index) * 0.65) + Math.cos(clock / (6000 + hash01(4.6, index) * 5000) + index * 1.3) * 18;
+        const size = 1.4 + blink * 1.6;
+        const glow = ctx.createRadialGradient(x, y, 0, x, y, size * 4);
+        glow.addColorStop(0, rgba(NODE_RGB.live, blink * 0.55));
+        glow.addColorStop(1, rgba(NODE_RGB.live, 0));
+        ctx.fillStyle = glow;
+        ctx.fillRect(x - size * 4, y - size * 4, size * 8, size * 8);
+        ctx.globalAlpha = Math.pow(blink, 1.5);
+        ctx.fillStyle = "#e8ffd0";
+        ctx.beginPath(); ctx.arc(x, y, size * 0.6, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    } else if (scene === "bokeh") {
+      // soft discs of light drifting slowly, the bigger ones further out of focus
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      for (let index = 0; index < 22; index += 1) {
+        const r = 18 + hash01(8.1, index) * 70;
+        const x = hash01(8.2, index) * width + Math.sin(clock / (17000 + hash01(8.3, index) * 12000) + index) * 36;
+        const y = hash01(8.4, index) * height + Math.cos(clock / (21000 + hash01(8.5, index) * 9000) + index * 0.7) * 28;
+        const mix = hash01(8.6, index);
+        const triple = mix < 0.5 ? accent : mix < 0.8 ? bright : ink;
+        const alpha = (0.035 + hash01(8.7, index) * 0.05) * (0.8 + 0.2 * breathe) + energy * 0.02;
+        const disc = ctx.createRadialGradient(x, y, r * 0.55, x, y, r);
+        disc.addColorStop(0, rgba(triple, alpha));
+        disc.addColorStop(0.85, rgba(triple, alpha * 0.8));
+        disc.addColorStop(1, rgba(triple, 0));
+        ctx.fillStyle = disc;
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+      ctx.restore();
+      stars([{ count: 24, seed: 11.3, spin: 0.012, tempo: 3400, size: 0.7, alpha: 0.12 }]);
+    } else if (scene === "grid") {
+      // a quiet drafting grid that drifts with the orbit, brighter in the middle
+      const step = 48;
+      const shift = ((state.angle * 140) % step + step) % step;
+      ctx.save();
+      const fade = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, diagonal * 0.55);
+      fade.addColorStop(0, rgba(accent, 0.09 + energy * 0.04));
+      fade.addColorStop(1, rgba(accent, 0.015));
+      ctx.strokeStyle = fade; ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = -step + shift; x <= width + step; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, height); }
+      for (let y = -step + shift * 0.6; y <= height + step; y += step) { ctx.moveTo(0, y); ctx.lineTo(width, y); }
+      ctx.stroke();
+      ctx.restore();
+      nebula(width / 2, height / 2, diagonal * 0.3, accent, 0.03 + breathe * 0.01);
+    } else {
+      // minimal: the sky, one soft wash, the vignette
+      nebula(width * 0.5, height * 0.5, diagonal * 0.35, accent, 0.02);
+    }
+    // a soft ember where the constellation's mass sits — the world origin is
+    // projected so the glow pans and zooms with the graph, not the window
+    const core = project({ x: 0, y: -10, z: 0 });
+    const coreR = diagonal * 0.42;
+    const coreGlow = ctx.createRadialGradient(core.x, core.y, 0, core.x, core.y, coreR);
+    coreGlow.addColorStop(0, rgba(bright, (scene === "minimal" ? 0.015 : 0.025) + energy * 0.015 + musicBands.bass * 0.03 + musicBeat * 0.02));
+    coreGlow.addColorStop(0.45, rgba(bright, 0.015));
+    coreGlow.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = coreGlow;
+    ctx.fillRect(core.x - coreR, core.y - coreR, coreR * 2, coreR * 2);
+    // vignette: the constellation sits in the middle of the frame, the edges fall away
+    const outer = diagonal / 2;
+    const vignette = ctx.createRadialGradient(width / 2, height / 2, outer * 0.45, width / 2, height / 2, outer);
+    vignette.addColorStop(0, rgba(backdrop, 0));
+    vignette.addColorStop(1, rgba(backdrop, 0.55));
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, width, height);
+  }
+
+  // ---------- callouts: leader, top bar, title row, thought bubble ----------
+  // Every session, task, the hub and each working agent carries a callout: a
+  // leader leaving the orb at CALLOUT_ANGLE, a horizontal top bar, the short
+  // title with its number and done/left counts above the bar, and below it a
+  // bubble with what the agents think or do there. Placement is chosen among
+  // a few fixed candidates (side × up/down × length) that keep the leader and
+  // the card clear of other orbs, cards and the HUD, and the choice is kept
+  // from frame to frame so the tree can orbit without the cards wandering.
+  const CALLOUT_KINDS = new Set(["session", "task", "task-group", "assistant", "agent", "root", "folded"]);
+
+  function calloutCandidates(previous) {
+    const list = [];
+    if (previous) list.push({ side: previous.side, vert: previous.vert, length: previous.length });
+    for (const length of CALLOUT_LENGTHS) {
+      for (const [side, vert] of [[1, -1], [-1, -1], [1, 1], [-1, 1]]) {
+        if (previous && previous.side === side && previous.vert === vert && previous.length === length) continue;
+        list.push({ side, vert, length });
+      }
+    }
+    return list;
+  }
+
+  // The card's words: number, title, mark, counts and up to two bubble lines.
+  function calloutContent(node, { rich = false } = {}) {
+    const speech = state.speech?.get(node.id) ?? null;
+    const lines = [];
+    let mark = "dot";
+    let counts = null;
+    let title = String(node.label ?? node.kind ?? "").trim();
+    let number = node.ordinal ?? null;
+    const workers = state.nodes.filter((entry) => entry.kind === "agent" && !entry.dying && !entry._absorbed && entry !== node && (entry.targetNode?.id === node.id || entry.hostId === node.id || entry.targetId === node.id));
+    if (node.kind === "session") {
+      const todos = todosOf(node.id);
+      const done = todos.filter((todo) => todo.state === "done").length;
+      counts = todos.length ? `${done} done · ${todos.length - done} left` : node.stale ? "stale" : null;
+      mark = todos.length && done === todos.length ? "check" : node.state === "active" ? "live" : "dot";
+    } else if (node.kind === "task" || node.kind === "task-group") {
+      const task = node.task ?? {};
+      const members = node.taskGroup?.members ?? null;
+      if (members?.length) {
+        const done = members.filter((member) => ["done", "archived", "absorbed"].includes(member.status)).length;
+        counts = `${done} done · ${members.length - done} left`;
+      } else if (typeof node.progress === "number" && Number.isFinite(node.progress)) counts = `${Math.round(node.progress * 100)}%`;
+      else counts = node._workLabel === "Verifying" ? "verifying" : node._workLabel === "Next" ? "up next" : node._workLabel === "Running" ? "running" : task.status === "done" ? "done" : null;
+      mark = task.status === "done" ? "check" : task.status === "awaiting_verification" || node._workLabel === "Verifying" ? "verify" : node._workLabel === "Running" || node.state === "active" ? "live" : "dot";
+    } else if (node.kind === "assistant") {
+      title = "Assistant";
+      number = null;
+      const running = Number(state.assistant?.rosterRunning) || 0;
+      const queued = Number(state.assistant?.rosterQueued) || 0;
+      counts = running || queued ? `${running} working · ${queued} queued` : null;
+      mark = "hub";
+    } else if (node.kind === "agent") {
+      title = node.builder ? "Builder" : String(node.role ?? "agent");
+      number = null;
+      if (node.builder && node.startedAt) {
+        const seconds = Math.max(0, Math.round((Date.now() - node.startedAt) / 1000));
+        counts = seconds < 90 ? `${seconds}s` : `${Math.round(seconds / 60)}m`;
+      } else if (typeof node.progress === "number" && Number.isFinite(node.progress)) counts = `${Math.round(node.progress * 100)}%`;
+      mark = node.status === "error" ? "error" : node.status === "done" ? "check" : node.status === "running" || node.builder ? "live" : "dot";
+    } else if (node.kind === "root") {
+      title = "Sessions";
+      number = null;
+      counts = `${state.nodes.filter((entry) => entry.kind === "session").length} sessions`;
+    } else if (node.kind === "folded") {
+      number = null;
+      counts = `${node.count ?? 0} finished`;
+      mark = "check";
+    }
+    if (speech) lines.push({ text: speech.text, kind: speech.kind });
+    else if (workers.length) {
+      // The agents here speak through this card: the freshest remark wins.
+      const spoken = workers.map((worker) => ({ worker, bubble: state.speech?.get(worker.id) ?? null })).sort((a, b) => (b.bubble?.at ?? 0) - (a.bubble?.at ?? 0))[0];
+      const { worker, bubble } = spoken;
+      const name = worker.builder ? "builder" : worker.role;
+      if (bubble) lines.push({ text: `${name} · ${bubble.text}`, kind: bubble.kind });
+      else lines.push({ text: `${name} · ${agentRemark(worker.text, worker.role) || "working here"}`, kind: "say" });
+    }
+    else if (node.kind === "agent") {
+      const remark = agentRemark(node.status === "error" && node.error ? node.error : node.text, node.role);
+      if (remark) lines.push({ text: remark, kind: node.status === "error" ? "error" : "say" });
+      const target = node.targetNode?.label ?? node.targetLabel;
+      if (target && (node.status === "running" || node.builder)) lines.push({ text: `at "${String(target).slice(0, 40)}"`, kind: "muted" });
+    } else if (rich && node.kind === "assistant") {
+      // Quiet detail (the hub's summary, a task's prompt, a session's model
+      // and age) only on the card you hover, select or focus: at rest a
+      // card without live thoughts is just its title bar.
+      const sub = window.MefiTree?.assistantSummary?.()?.sublabel;
+      if (sub) lines.push({ text: String(sub), kind: "muted" });
+    } else if (rich && node.kind === "task" && node.task?.prompt) lines.push({ text: String(node.task.prompt).replace(/\s+/g, " ").slice(0, 90), kind: "muted" });
+    else if (rich && node.kind === "session") {
+      const meta = [node.agent, node.model].filter(Boolean).join(" ");
+      const when = node.updated ? agoLabel(node.updated) : null;
+      const text = [meta, when].filter(Boolean).join(" · ");
+      if (text) lines.push({ text, kind: "muted" });
+    }
+    return { number, title, mark, counts, lines: lines.slice(0, 2) };
+  }
+
+  function clipLine(ctx, font, text, maxWidth) {
+    let value = String(text ?? "").replace(/\s+/g, " ").trim();
+    if (measure(ctx, font, value) <= maxWidth) return value;
+    while (value.length > 1 && measure(ctx, font, `${value}…`) > maxWidth) value = value.slice(0, -1);
+    return `${value.trimEnd()}…`;
+  }
+
+  // The card's measurements: its width from the title row, the title clipped
+  // to what is left beside the number and the counts, the bubble lines
+  // wrapped (one remark may take two lines; two remarks take one each).
+  function calloutSize(ctx, content) {
+    const numberW = content.number ? measure(ctx, CALLOUT_NUMBER_FONT, content.number) + 13 : 0;
+    const countsW = content.counts ? measure(ctx, CALLOUT_COUNTS_FONT, content.counts) + 10 : 0;
+    const fullTitle = measure(ctx, CALLOUT_TITLE_FONT, content.title);
+    const w = Math.max(CALLOUT_MIN_W, Math.min(CALLOUT_MAX_W, 22 + numberW + fullTitle + countsW + 8));
+    const title = clipLine(ctx, CALLOUT_TITLE_FONT, content.title, Math.max(30, w - 22 - numberW - countsW - 8));
+    let lines = [];
+    if (content.lines.length === 1) lines = speechLines(ctx, content.lines[0].text, w - 22 - (SPEECH_MARKS[content.lines[0].kind] ? 13 : 0)).map((text, index) => ({ text, kind: index === 0 ? content.lines[0].kind : "cont" }));
+    else lines = content.lines.map((line) => ({ text: clipLine(ctx, CALLOUT_LINE_FONT, line.text, w - 22 - (SPEECH_MARKS[line.kind] ? 13 : 0)), kind: line.kind }));
+    const bubbleH = lines.length ? 9 + lines.length * CALLOUT_LINE_H : 0;
+    return { w, title, lines, bubbleH };
+  }
+
+  // Distance from a point to a segment, for routing leaders around orbs.
+  function segmentDistance(px, py, ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+    return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
+  }
+
+  function segmentHitsRect(ax, ay, bx, by, rect) {
+    for (let step = 0; step <= 8; step += 1) {
+      const t = step / 8, x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+      if (x >= rect.x && x <= rect.x + rect.w && y >= rect.y && y <= rect.y + rect.h) return true;
+    }
+    return false;
+  }
+
+  // Where one candidate puts the leader, the bar and the card, in screen space.
+  function calloutLayout(node, p, candidate, size) {
+    const r = (node._pr ?? 6) + 3;
+    const sx = p.x + candidate.side * CALLOUT_COS * r;
+    const sy = p.y + candidate.vert * CALLOUT_SIN * r;
+    const ex = p.x + candidate.side * CALLOUT_COS * (r + candidate.length);
+    const ey = p.y + candidate.vert * CALLOUT_SIN * (r + candidate.length);
+    const x = candidate.side > 0 ? ex : ex - size.w;
+    const top = ey - CALLOUT_TITLE_H - 3;
+    const h = CALLOUT_TITLE_H + 3 + (size.bubbleH ? size.bubbleH + 4 : 2);
+    return {
+      side: candidate.side, vert: candidate.vert, length: candidate.length,
+      sx, sy, ex, ey, w: size.w,
+      rect: { x, y: top, w: size.w, h },
+      bubble: size.bubbleH ? { x, y: ey + 4, w: size.w, h: size.bubbleH } : null,
+    };
+  }
+
+  // How much a candidate collides: 0 is clean. Hard faults (off the viewport,
+  // under the HUD, on another card, over an orb) score CALLOUT_HARD or more;
+  // a leader crossing an orb or another card is a soft fault a card may live
+  // with when nothing cleaner exists.
+  const CALLOUT_HARD = 5;
+  function calloutPenalty(node, layout, projected, placedRects, hud, hitsNode, area) {
+    const { rect } = layout;
+    let score = 0;
+    if (rect.x < area.x + 6 || rect.y < area.y + 6 || rect.x + rect.w > area.x + area.w - 6 || rect.y + rect.h > area.y + area.h - 6) score += 10;
+    if (blocked(rect, hud)) score += 8;
+    for (const other of placedRects) if (overlaps(rect, other)) score += 6;
+    if (hitsNode(rect, node)) score += CALLOUT_HARD;
+    for (const other of projected) {
+      if (other.node === node || other.node._absorbed || other.node.dying || other.p?.x == null) continue;
+      if (segmentDistance(other.p.x, other.p.y, layout.sx, layout.sy, layout.ex, layout.ey) < (other.node._pr ?? 4) + 5) { score += 2; break; }
+    }
+    for (const other of placedRects) if (segmentHitsRect(layout.sx, layout.sy, layout.ex, layout.ey, other)) { score += 2; break; }
+    return score;
+  }
+
+  // Pick this node's placement: the previous one while it is still clean,
+  // else the first clean candidate, else the least soft-faulted one, else
+  // hold the previous spot for a beat (a turning tree usually clears it
+  // again), else — only for the card the user is on — the least-bad spot.
+  function placeCallout(node, p, size, projected, placedRects, hud, hitsNode, area, now, allowDirty = false) {
+    const previous = state.callouts.get(node.id) ?? null;
+    let chosen = null, soft = null, softScore = Infinity, fallback = null, fallbackScore = Infinity;
+    for (const candidate of calloutCandidates(previous)) {
+      const layout = calloutLayout(node, p, candidate, size);
+      const score = calloutPenalty(node, layout, projected, placedRects, hud, hitsNode, area);
+      if (score === 0) { chosen = layout; break; }
+      if (score < CALLOUT_HARD && score < softScore) { softScore = score; soft = layout; }
+      if (score < fallbackScore) { fallbackScore = score; fallback = layout; }
+    }
+    if (!chosen && soft) chosen = soft;
+    if (chosen) {
+      state.callouts.set(node.id, { side: chosen.side, vert: chosen.vert, length: chosen.length, blockedSince: null, at: now });
+      return chosen;
+    }
+    // Nothing clean. Hold the previous spot for a beat; after that the card
+    // steps aside (its node keeps a compact label) unless it is the one the
+    // user is on, which may take the least-bad spot rather than vanish.
+    const blockedSince = previous?.blockedSince ?? now;
+    const held = previous && now - blockedSince < CALLOUT_HOLD_MS;
+    const layout = held ? calloutLayout(node, p, previous, size) : allowDirty ? fallback : null;
+    if (previous) previous.blockedSince = blockedSince;
+    if (!layout) return null;
+    state.callouts.set(node.id, { side: layout.side, vert: layout.vert, length: layout.length, blockedSince, at: now });
+    return layout;
+  }
+
+  // An agent on a node that carries its own card speaks through that card;
+  // it gets neither a card nor a floating bubble of its own.
+  function hostedOnCard(node) {
+    if (node.kind !== "agent") return false;
+    const at = node.targetNode ?? (node.hostId ? state.nodes.find((entry) => entry.id === node.hostId) : null);
+    return Boolean(at && CALLOUT_KINDS.has(at.kind) && at.kind !== "agent");
+  }
+
+  // Is an agent on this node right now (flying to it, hovering it, building it)?
+  function agentOn(node) {
+    return state.nodes.some((entry) => entry.kind === "agent" && !entry.dying && !entry._absorbed && entry !== node && (entry.targetNode?.id === node.id || entry.hostId === node.id));
+  }
+
+  // Placement order: the card the user is on, the focused branch, the hub,
+  // then whatever has work on it (a running task, a node an agent is at) —
+  // they pick their spots first, so a crowd costs the quiet cards, not them.
+  function calloutPriority(node, focusIds) {
+    if (state.hoverCallout === node.id || state.hoverNode === node || state.selected?.id === node.id) return 0;
+    if (focusIds?.has(node.id)) return 1;
+    if (node.kind === "assistant") return 2;
+    if ((node.kind === "task" || node.kind === "task-group") && node._workLabel === "Running") return 2.2;
+    if (node.kind !== "agent" && agentOn(node)) return 2.3;
+    if (node.kind === "agent" && (node.status === "running" || node.builder)) return 2.5;
+    if ((node.kind === "task" || node.kind === "task-group") && (node._workLabel || node.state === "active")) return 2.6;
+    if (node.kind === "session") return node.stale ? 5 : 3;
+    if (node.kind === "task" || node.kind === "task-group") return 4;
+    if (node.kind === "root" || node.kind === "folded") return 6;
+    return 7;
+  }
+
+  function drawCallouts(projected, { near, far = near, focusIds = null } = {}) {
+    state.calloutRects = [];
+    for (const { node } of projected) { node._callout = null; node._cardRect = null; }
+    if (state.labels === "none" || !near) return;
+    const still = noMotion();
+    const now = Date.now();
+    const area = usableArea();
+    const hud = hudRects();
+    const hitsNode = nodeLabelBlocker(projected);
+    // Only an agent working somewhere without a card (a todo, the open ring)
+    // gets a card of its own; the rest speak through their host's card.
+    const wanted = projected
+      .filter(({ node, p }) => CALLOUT_KINDS.has(node.kind) && !node.dying && !node._absorbed && node._px != null && (node._fade ?? 1) > 0.02 && (node.kind !== "agent" || ((node.status === "running" || node.builder) && !hostedOnCard(node))))
+      .filter(({ node, p }) => p.k >= 0.55 || state.hoverCallout === node.id || state.selected?.id === node.id)
+      .sort((a, b) => calloutPriority(a.node, focusIds) - calloutPriority(b.node, focusIds) || String(a.node.id).localeCompare(String(b.node.id)));
+    const placedRects = [];
+    let drawn = 0;
+    for (const { node, p } of wanted) {
+      if (drawn >= CALLOUT_BUDGET && state.hoverCallout !== node.id && state.selected?.id !== node.id) break;
+      // The card the user is on (hover, selection, focus) gets the detail
+      // lines and may take a crowded spot; every other card stays clean or
+      // steps aside to a compact label (work in progress was placed first,
+      // so it is the quiet cards that step aside).
+      const important = state.hoverCallout === node.id || state.selected?.id === node.id || Boolean(focusIds?.has(node.id));
+      const content = calloutContent(node, { rich: important });
+      const size = calloutSize(near, content);
+      const layout = placeCallout(node, p, size, projected, placedRects, hud, hitsNode, area, now, important);
+      if (!layout) continue;
+      const dimmed = focusIds ? !focusIds.has(node.id) : false;
+      const lifted = state.hoverCallout === node.id;
+      drawCallout(dimmed && far !== near ? far : near, node, layout, content, size, { lifted, dimmed, still });
+      const hit = { x: Math.min(layout.rect.x, layout.sx) - 8, y: Math.min(layout.rect.y, layout.sy) - 8 };
+      hit.w = Math.max(layout.rect.x + layout.rect.w, layout.sx) + 8 - hit.x;
+      hit.h = Math.max(layout.rect.y + layout.rect.h, layout.sy) + 8 - hit.y;
+      node._callout = { ...layout, hit, content };
+      node._cardRect = { ...layout.rect };
+      placedRects.push({ x: layout.rect.x - 4, y: layout.rect.y - 4, w: layout.rect.w + 8, h: layout.rect.h + 8 });
+      drawn += 1;
+    }
+    state.calloutRects = placedRects;
+    if (state.callouts.size > 80) for (const id of [...state.callouts.keys()]) if (!state.nodes.some((entry) => entry.id === id)) state.callouts.delete(id);
+  }
+
+  function drawCalloutMark(ctx, mark, x, y, tint) {
+    ctx.save();
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    if (mark === "check") { ctx.strokeStyle = rgb(NODE_RGB.done); ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(x - 4, y); ctx.lineTo(x - 1, y + 3); ctx.lineTo(x + 4, y - 3); ctx.stroke(); }
+    else if (mark === "verify") { ctx.strokeStyle = rgb(NODE_RGB.verify); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x - 2.5, y); ctx.lineTo(x - 0.5, y + 2); ctx.lineTo(x + 2.8, y - 2); ctx.stroke(); }
+    else if (mark === "error") { ctx.strokeStyle = rgb(NODE_RGB.amber); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = rgb(NODE_RGB.amber); ctx.fillRect(x - 0.7, y - 2.5, 1.4, 3); ctx.fillRect(x - 0.7, y + 1.3, 1.4, 1.4); }
+    else if (mark === "live") { ctx.fillStyle = rgba(tint, 0.95); ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = rgba(tint, 0.45); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, 5.2, 0, Math.PI * 2); ctx.stroke(); }
+    else if (mark === "hub") { ctx.strokeStyle = rgba(tint, 0.95); ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.stroke(); ctx.fillStyle = rgba(tint, 0.95); ctx.beginPath(); ctx.arc(x, y, 1.6, 0, Math.PI * 2); ctx.fill(); }
+    else { ctx.fillStyle = rgba(tint, 0.75); ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+  }
+
+  // One card: leader and rim dot, the top bar in the node's own style (double
+  // for the hub, dashed for an agent, a square cap for a task), the title row
+  // above it, the bubble below. Hover lifts the card a touch and glows it;
+  // outside a focused branch it paints dimmer (and on the blurred layer).
+  function drawCallout(ctx, node, layout, content, size, { lifted = false, dimmed = false, still = true } = {}) {
+    const tint = node.kind === "agent" ? agentRgb(node.role) : colorOf(node);
+    const styleChoice = state.cardStyle === "auto" ? (lifted || state.selected?.id === node.id || content.mark === "live" ? "filled" : "outline") : state.cardStyle;
+    // At rest a card sits back a little; the one the user is on comes forward.
+    const forward = lifted || state.selected?.id === node.id;
+    const alpha = (node._fade ?? 1) * (dimmed ? 0.5 : forward ? 1 : 0.86) * Math.max(0.4, emphasis(node));
+    const paper = state.canvasPalette?.background ?? "#101620";
+    const { sx, sy, ex, ey, side, rect, bubble, w } = layout;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    if (lifted && !still) {
+      ctx.translate(ex, ey); ctx.scale(1.06, 1.06); ctx.translate(-ex, -ey);
+      ctx.shadowColor = rgba(tint, 0.35); ctx.shadowBlur = 14;
+    }
+    ctx.strokeStyle = rgba(tint, forward ? 0.75 : 0.5); ctx.lineWidth = 1; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.fillStyle = rgba(tint, 0.85); ctx.beginPath(); ctx.arc(sx, sy, 1.6, 0, Math.PI * 2); ctx.fill();
+    const barEnd = ex + side * w;
+    ctx.lineWidth = forward ? 1.5 : 1.2;
+    ctx.strokeStyle = rgba(tint, forward ? 0.8 : 0.6);
+    if (node.kind === "assistant") {
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(ex, ey - 1.5); ctx.lineTo(barEnd, ey - 1.5); ctx.moveTo(ex, ey + 1.5); ctx.lineTo(barEnd, ey + 1.5); ctx.stroke();
+    } else {
+      if (node.kind === "agent") ctx.setLineDash([5, 3]);
+      ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(barEnd, ey); ctx.stroke();
+      ctx.setLineDash([]);
+      if (node.kind === "task" || node.kind === "task-group") { ctx.fillStyle = rgba(tint, 0.9); ctx.fillRect(barEnd - (side > 0 ? 3 : 0), ey - 1.5, 3, 3); }
+    }
+    ctx.shadowBlur = 0;
+    let x = rect.x + 4;
+    const baseline = ey - 5;
+    drawCalloutMark(ctx, content.mark, x + 5, baseline - 4, tint);
+    x += 14;
+    if (content.number) {
+      ctx.font = CALLOUT_NUMBER_FONT;
+      const nw = ctx.measureText(content.number).width + 8;
+      ctx.beginPath(); ctx.roundRect(x, baseline - 11, nw, 13, 3); ctx.fillStyle = rgba(tint, 0.2); ctx.fill();
+      ctx.fillStyle = rgba(tint, 1); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(content.number, x + 4, baseline - 1);
+      x += nw + 5;
+    }
+    ctx.font = CALLOUT_TITLE_FONT; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = rgba(NODE_RGB.session, 0.95);
+    ctx.fillText(size.title, x, baseline);
+    if (content.counts) {
+      ctx.font = CALLOUT_COUNTS_FONT; ctx.textAlign = "right";
+      ctx.fillStyle = content.mark === "error" ? rgba(NODE_RGB.amber, 0.95) : rgba(NODE_RGB.pending, 0.95);
+      ctx.fillText(content.counts, rect.x + rect.w - 4, baseline);
+      ctx.textAlign = "left";
+    }
+    if (bubble && size.lines.length) {
+      ctx.beginPath(); ctx.roundRect(bubble.x, bubble.y, bubble.w, bubble.h, 7);
+      if (styleChoice === "filled") {
+        ctx.fillStyle = paper; ctx.globalAlpha = alpha * 0.92; ctx.fill(); ctx.globalAlpha = alpha;
+        ctx.fillStyle = rgba(tint, 0.12); ctx.fill();
+        ctx.strokeStyle = rgba(tint, 0.8);
+      } else {
+        ctx.fillStyle = paper; ctx.globalAlpha = alpha * 0.45; ctx.fill(); ctx.globalAlpha = alpha;
+        ctx.strokeStyle = rgba(tint, 0.55);
+      }
+      ctx.lineWidth = 1;
+      if (size.lines.some((line) => line.kind === "think")) ctx.setLineDash([3, 3]);
+      ctx.stroke(); ctx.setLineDash([]);
+      let ly = bubble.y + 14;
+      for (const line of size.lines) {
+        let tx = bubble.x + 9;
+        const marker = SPEECH_MARKS[line.kind];
+        if (marker) { marker(ctx, tx + 4, ly - 4, line.kind === "error" ? rgb(NODE_RGB.amber) : line.kind === "done" ? rgb(NODE_RGB.done) : rgb(tint)); tx += 13; }
+        ctx.font = CALLOUT_LINE_FONT; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+        ctx.fillStyle = line.kind === "muted" ? rgba(NODE_RGB.pending, 0.95) : line.kind === "error" ? rgba(NODE_RGB.amber, 0.95) : rgba(NODE_RGB.session, 0.92);
+        ctx.fillText(line.text, tx, ly);
+        ly += CALLOUT_LINE_H;
+      }
+    }
+    ctx.restore();
+  }
+
+  // The card itself (a little padded) or a point within a few pixels of its
+  // leader; when cards sit close together the smaller card under the
+  // pointer wins, and a card beats a leader.
+  function calloutAt(x, y) {
+    let best = null, bestArea = Infinity;
+    for (const node of state.nodes) {
+      const layout = node._callout;
+      if (!layout) continue;
+      const { rect } = layout;
+      const inside = x >= rect.x - 4 && x <= rect.x + rect.w + 4 && y >= rect.y - 4 && y <= rect.y + rect.h + 4;
+      const onLeader = !inside && segmentDistance(x, y, layout.sx, layout.sy, layout.ex, layout.ey) <= 6;
+      if (!inside && !onLeader) continue;
+      const area = inside ? rect.w * rect.h : 1e12;
+      if (area < bestArea) { best = node; bestArea = area; }
+    }
+    return best;
+  }
+
+  // ---------- focus: click to close in, the rest turns softly behind ----------
+  // The branch that stays sharp around a node: a session with its todos, its
+  // anchored tasks and the agents on them; a task with its anchor; the hub
+  // with its crew; an agent with the hub and the node it works on.
+  function focusSetFor(node) {
+    const ids = new Set([node.id]);
+    const agentsOn = (targets) => {
+      for (const entry of state.nodes) {
+        if (entry.kind !== "agent" || entry.dying) continue;
+        const at = entry.targetNode?.id ?? entry.targetId ?? entry.hostId ?? null;
+        if (at && targets.has(at)) ids.add(entry.id);
+      }
+    };
+    if (node.kind === "session") {
+      for (const child of childrenOf(node.id)) ids.add(child.id);
+      agentsOn(new Set(ids));
+    } else if (node.kind === "todo") {
+      if (node.sessionId) ids.add(node.sessionId);
+      agentsOn(new Set(ids));
+    } else if (node.kind === "task" || node.kind === "task-group") {
+      if (node.anchorSessionId) ids.add(node.anchorSessionId);
+      for (const member of node.taskGroup?.members ?? []) ids.add(`task:${member.id}`);
+      agentsOn(new Set([node.id]));
+    } else if (node.kind === "assistant") {
+      for (const entry of state.nodes) if ((entry.kind === "agent" && !entry.builder && !entry.dying) || entry.kind === "root") ids.add(entry.id);
+    } else if (node.kind === "root") {
+      for (const entry of state.nodes) if (["session", "assistant", "folded"].includes(entry.kind)) ids.add(entry.id);
+    } else if (node.kind === "agent") {
+      const hub = assistantNode();
+      if (hub) ids.add(hub.id);
+      const at = node.targetNode ?? (node.hostId ? state.nodes.find((entry) => entry.id === node.hostId) : null);
+      if (at) ids.add(at.id);
+    }
+    return ids;
+  }
+
+  // The ids that paint sharp this frame — null when nothing is focused or
+  // hovered, so the far layer only carries the sky.
+  function splitIds() {
+    const ids = new Set();
+    const focused = state.focus ? state.nodes.find((entry) => entry.id === state.focus.id) : null;
+    if (focused) for (const id of focusSetFor(focused)) ids.add(id);
+    const hovered = state.hoverCallout ? state.nodes.find((entry) => entry.id === state.hoverCallout) : null;
+    if (hovered) for (const id of focusSetFor(hovered)) ids.add(id);
+    return focused || hovered ? ids : null;
+  }
+
+  function syncFarLayer(focusIds) {
+    if (!el.far?.classList) return;
+    el.far.classList.toggle("focused", Boolean(state.focus));
+    el.far.classList.toggle("soft", !state.focus && Boolean(focusIds));
+  }
+
+  function enterFocus(node) {
+    if (!node || node.kind === "music") return false;
+    if (!state.focus) state.focusRestore = { orbit: state.orbit };
+    state.focus = { id: node.id, kind: node.kind, since: Date.now() };
+    selectNode(node);
+    setCamMode("free", { quiet: true });
+    focusOn(node);
+    setZoom(FOCUS_ZOOM[node.kind] ?? 1.9);
+    if (state.orbit === "paused" && state.view !== "2d" && !noMotion()) setOrbit("auto", { quiet: true });
+    state.settleUntil = 0;
+    return true;
+  }
+
+  function exitFocus() {
+    if (!state.focus) return false;
+    state.focus = null;
+    const restore = state.focusRestore;
+    state.focusRestore = null;
+    if (restore && restore.orbit !== state.orbit) setOrbit(restore.orbit, { quiet: true });
+    return true;
+  }
+
+  function setCardStyle(style) {
+    state.cardStyle = CARD_STYLES.includes(style) ? style : "auto";
+    writeStore("mefiStudio.cmdCardStyle", state.cardStyle);
+    if (el.cardStyle && el.cardStyle.value !== state.cardStyle) el.cardStyle.value = state.cardStyle;
+    return state.cardStyle;
   }
 
   function drawFrame(time) {
@@ -5363,87 +6707,18 @@
     if (state.camMode === "follow" && state.followZoomTarget != null && !still) state.zoom += (state.followZoomTarget - state.zoom) * 0.065;
 
     const { ctx } = el;
+    // Two layers: the sky, and while a node is focused or a card hovered
+    // everything outside that branch, paint on the far canvas (which the CSS
+    // blurs); the rest paints here, sharp. With no far canvas it all lands here.
+    const far = el.farCtx ?? ctx;
     const profiler = globalThis.window?.MefiProfiler;
     const backdropSpan = profiler?.begin("command.backdrop");
     try {
-    ctx.clearRect(0, 0, el.width, el.height);
-
-    // The canvas paints its own backdrop, so CSS alone cannot apply a theme.
-    // Keep the wash close to the selected background in light and dark palettes.
-    const backdrop = hexToRgb(state.canvasPalette?.background ?? "#050507");
-    const skyTint = backdrop.map((channel, index) => Math.round(channel * 0.96 + NODE_RGB.warm[index] * 0.04));
-    const sky = ctx.createLinearGradient(0, 0, 0, el.height);
-    sky.addColorStop(0, rgb(skyTint));
-    sky.addColorStop(0.55, rgb(backdrop));
-    sky.addColorStop(1, rgb(backdrop.map((channel) => Math.round(channel * 0.98))));
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, el.width, el.height);
-
-    // nebulae: a cool wash up in a corner and a warm one low right, breathing
-    // on a slow cycle and pinned to the sky rather than the camera
-    const breathe = still ? 0.5 : (Math.sin(time / 14000) + 1) / 2;
-    const nebula = (x, y, r, color, alpha) => {
-      const wash = ctx.createRadialGradient(x, y, 0, x, y, r);
-      wash.addColorStop(0, `rgba(${color},${alpha})`);
-      wash.addColorStop(1, `rgba(${color},0)`);
-      ctx.fillStyle = wash;
-      ctx.fillRect(x - r, y - r, r * 2, r * 2);
-    };
-    const diagonal = Math.hypot(el.width, el.height);
-    nebula(el.width * 0.2, el.height * 0.14, diagonal * 0.4, NODE_RGB.pending.join(","), 0.03 + breathe * 0.012);
-    nebula(el.width * 0.86, el.height * 0.84, diagonal * 0.34, NODE_RGB.warm.join(","), 0.03 + (still ? 0 : (1 - breathe) * 0.012));
-
-    // starfield: three depth bands wheeling at a fraction of the orbit rate,
-    // so the sky drifts against the constellation; sizes and tones vary, and
-    // the brightest band carries a small cross flare
-    for (const layer of STAR_LAYERS) {
-      const turn = state.angle * layer.spin;
-      const cos = Math.cos(turn);
-      const sin = Math.sin(turn);
-      const cx = el.width / 2;
-      const cy = el.height / 2;
-      for (let index = 0; index < layer.count; index += 1) {
-        const seed = layer.seed + index * 127.1;
-        const sx = (Math.sin(seed) * 0.5 + 0.5) * (el.width + 200) - 100;
-        const sy = (Math.cos(seed * 1.7) * 0.5 + 0.5) * (el.height + 200) - 100;
-        const x = cx + (sx - cx) * cos - (sy - cy) * sin;
-        const y = cy + (sx - cx) * sin + (sy - cy) * cos;
-        const twinkle = still
-          ? layer.alpha * (0.35 + 0.5 * Math.abs(Math.sin(index * 1.31)))
-          : layer.alpha * (0.3 + 0.7 * Math.abs(Math.sin(time / layer.tempo + index * 1.31)));
-        ctx.globalAlpha = Math.min(1, twinkle * (0.5 + energy * 0.15 + musicBands.treble * 0.7));
-        const tone = Math.sin(seed * 3.3);
-          ctx.fillStyle = tone > 0.55 ? rgb(NODE_RGB.dust) : tone < -0.82 ? rgb(NODE_RGB.warm) : rgb(NODE_RGB.session);
-        const size = layer.size * (0.8 + 0.4 * Math.abs(Math.sin(seed * 5.1)));
-        ctx.fillRect(x, y, size, size);
-        if (layer.flare) {
-          ctx.globalAlpha *= 0.4;
-          ctx.fillRect(x - size * 2, y - 0.5, size * 4, 1);
-          ctx.fillRect(x - 0.5, y - size * 2, 1, size * 4);
-        }
-      }
-    }
-    ctx.globalAlpha = 1;
-
-    // a soft ember where the constellation's mass sits — the world origin is
-    // projected so the glow pans and zooms with the graph, not the window
-    const core = project({ x: 0, y: -10, z: 0 });
-    const coreR = diagonal * 0.42;
-    const coreGlow = ctx.createRadialGradient(core.x, core.y, 0, core.x, core.y, coreR);
-    coreGlow.addColorStop(0, rgba(NODE_RGB.warm, 0.025 + energy * 0.015 + musicBands.bass * 0.03 + musicBeat * 0.02));
-    coreGlow.addColorStop(0.45, rgba(NODE_RGB.warm, 0.015));
-    coreGlow.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = coreGlow;
-    ctx.fillRect(core.x - coreR, core.y - coreR, coreR * 2, coreR * 2);
-
-    // vignette: the constellation sits in the middle of the frame, the edges fall away
-    const outer = diagonal / 2;
-    const vignette = ctx.createRadialGradient(el.width / 2, el.height / 2, outer * 0.45, el.width / 2, el.height / 2, outer);
-    vignette.addColorStop(0, rgba(backdrop, 0));
-    vignette.addColorStop(1, rgba(backdrop, 0.55));
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, el.width, el.height);
-
+      // The canvas paints its own sky, so CSS alone cannot apply a theme: the
+      // scene follows the colour theme (or the Ambience override) and is
+      // tinted from the live palette in light and dark palettes alike.
+      drawBackdrop(far, time, still, energy, musicBands, musicBeat);
+      if (far !== ctx) ctx.clearRect(0, 0, el.width, el.height);
     } finally { profiler?.end(backdropSpan); }
 
     // A followed branch can be zoomed past the rest of the constellation.
@@ -5452,6 +6727,7 @@
     ctx.beginPath();
     ctx.rect(graphArea.x, graphArea.y, graphArea.w, graphArea.h);
     ctx.clip();
+    if (far !== ctx) { far.save(); far.beginPath(); far.rect(graphArea.x, graphArea.y, graphArea.w, graphArea.h); far.clip(); }
 
     syncAgentMotion(Date.now(), time);
     stepFx(Date.now());
@@ -5474,15 +6750,23 @@
     layoutProjectedGraph(projected, graphArea, state.camMode, time, still);
     const screenPoints = new Map(projected.map(({ node, p }) => [node.id, p]));
     computeBranch();
+    // A focused node that left the graph releases the focus; otherwise the
+    // sharp set decides which layer each element paints on this frame.
+    if (state.focus && !state.nodes.some((entry) => entry.id === state.focus.id)) exitFocus();
+    const focusIds = splitIds();
+    state.focusIds = focusIds;
+    const layerFor = (node) => (focusIds && far !== ctx && !focusIds.has(node.id) ? far : ctx);
 
-    drawGraphConnections(ctx, projected, runningIds, audioLinked, time);
+    drawGraphConnections(ctx, projected, runningIds, audioLinked, time, { far, focusIds });
 
     // pulses: bright travelling dots on the working path — a line that ends
     // at an agent carries the signal itself instead (wave, see surgeLine)
     const now = Date.now();
     state.pulses = state.pulses.filter((pulse) => now - pulse.start < pulse.duration);
     for (const pulse of state.pulses) {
-      const from = screenPoints.get(pulse.from.id) ?? project(pulse.from);
+      // A pulse launched from a HUD row (an absorbed record) starts at that
+      // screen point rather than at a node.
+      const from = pulse.screen ?? screenPoints.get(pulse.from.id) ?? project(pulse.from);
       const to = screenPoints.get(pulse.to.id) ?? project(pulse.to);
       const t = still ? 1 : Math.min(1, (now - pulse.start) / pulse.duration);
       if (pulse.wave) {
@@ -5542,6 +6826,9 @@
     }
     if (still) state.particles = [];
 
+    // wakes: what a flying agent leaves behind, under the orbs
+    drawAgentTrails(ctx, time);
+
     // Familiar luminous orbs: one restrained halo and one status rim.
     // Managed anchors stay fixed while work and compact labels update.
     const ordered = [...projected].sort((a, b) => b.p.depth - a.p.depth);
@@ -5549,6 +6836,8 @@
     try {
     for (const { node, p } of ordered) {
       if (node._absorbed) continue;
+      // outside the focused branch an orb paints on the far (blurred) layer
+      const ctx = layerFor(node);
       const nodeScale = node._scale ?? 1;
       if (nodeScale <= 0.02) continue;
       const visual = nodeVisualProfile(node);
@@ -5566,6 +6855,8 @@
       drawNodeSurface(ctx, node, p, radius, tint, { selected: Boolean(selected), active, alpha: Math.max(0.35, visual.alpha * factor) });
       drawWorkOrbit(ctx, node, p, radius, time, still);
       drawFiledWork(ctx, node, p, radius, runningIds, time, still);
+      drawAgentDress(ctx, node, p, radius, tint, time, still);
+      drawHubDress(ctx, node, p, radius, tint, time, still);
       // Work-left meter: only a known worker fraction, never inferred activity.
       if ((active || selected) && typeof node.progress === "number" && Number.isFinite(node.progress)) {
         const fraction = Math.max(0, Math.min(1, node.progress));
@@ -5604,13 +6895,21 @@
       const hit = { x: bx - 5, y: by - 5, w: paint.w + 10, h: paint.h + 10, node };
       if (hit.x < graphArea.x || hit.y < graphArea.y || hit.x + hit.w > graphArea.x + graphArea.w || hit.y + hit.h > graphArea.y + graphArea.h || badgeExclusions.some((zone) => overlaps(hit, zone))) continue;
       if (projected.some((other) => other.node !== node && !other.node._absorbed && overlaps(hit, { x: other.p.x - (other.node._pr ?? 4), y: other.p.y - (other.node._pr ?? 4), w: (other.node._pr ?? 4) * 2, h: (other.node._pr ?? 4) * 2 }))) continue;
-      drawBubble(ctx, bx, by, scale, state.hoverNode === node || state.hoverBubble === node ? 1 : 0.65);
+      drawBubble(layerFor(node), bx, by, scale, state.hoverNode === node || state.hoverBubble === node ? 1 : 0.65);
       node._bubble = hit; node._bubblePaint = paint;
       badgeExclusions.push(hit);
     }
 
+    // callouts first (leader, bar, title row, thoughts), then the remaining
+    // bubbles and the compact labels stepping around them
+    stepDeferred(Date.now());
+    stepSpeech(Date.now());
+    drawCallouts(projected, { near: ctx, far, focusIds });
+    drawSpeech(projected);
     drawLabels(projected);
     ctx.restore();
+    if (far !== ctx) far.restore();
+    syncFarLayer(focusIds);
   }
 
   // ---------- labels ----------
@@ -5721,7 +7020,7 @@
     const list = [];
     for (const item of projected) {
       const node = item.node;
-      if (node.dying || node._absorbed || (node._fade ?? 1) <= 0.02) continue; // ghosts do not get a name
+      if (node.dying || node._absorbed || node._callout || (node._fade ?? 1) <= 0.02) continue; // ghosts do not get a name; a callout already carries it
       let priority = -1;
       if (node.id === selectedId) priority = 0;
       else if (state.hoverNode === node) priority = 1;
@@ -5740,7 +7039,14 @@
         else if (node.kind === "root") priority = 5;
         else if (node.kind === "todo" && node.status === "in_progress") priority = 3.2;
         else if (node.kind === "todo" && state.branch && node.sessionId === state.branch) priority = 7;
-        else if (node.kind === "agent") priority = node.status === "running" ? 2.8 : node.targetNode ? 4.5 : mode === "all" ? 9 : -1;
+        // An agent's glyph already says which role it is: a name only while it
+        // is away at work (a builder, or a running agent whose target is not
+        // the hub it rests at), or when every label is on.
+        else if (node.kind === "agent") {
+          const target = node.targetNode ?? node.targetId ?? null;
+          const away = node.builder || (target && (node.targetNode?.kind ?? null) !== "assistant" && node.targetId !== "__assistant__");
+          priority = (node.status === "running" || node.builder) && away ? 2.8 : mode === "all" ? 9 : -1;
+        }
         else if (mode === "all") priority = 8;
       }
       if (priority < 0) continue;
@@ -5885,7 +7191,7 @@
     const ctx = el.ctx;
     if (!ctx) return;
     state.labelRects.length = 0;
-    const excluded = [...hudRects(), ...projected.flatMap(({ node }) => node._bubble ? [node._bubble] : [])];
+    const excluded = [...hudRects(), ...(state.calloutRects ?? []), ...(state.speechRects ?? []), ...projected.flatMap(({ node }) => node._bubble ? [node._bubble] : [])];
     const candidates = labelCandidates(projected);
     const budget = labelBudget();
     const hitsNode = nodeLabelBlocker(projected);
@@ -5987,27 +7293,29 @@
       const alpha = priority <= 2 ? 1 : Math.max(0.6, Math.min(1, emphasis(node)));
       const endX = Math.max(paint.x, Math.min(p.x, paint.x + paint.w));
       const endY = Math.max(paint.y, Math.min(p.y, paint.y + paint.h));
-      const previousAlpha = ctx.globalAlpha;
-      ctx.globalAlpha = node._fade ?? 1;
+      // a label outside the focused branch paints on the far (blurred) layer
+      const pen = state.focusIds && el.farCtx && !state.focusIds.has(node.id) ? el.farCtx : ctx;
+      const previousAlpha = pen.globalAlpha;
+      pen.globalAlpha = node._fade ?? 1;
       const gap = Math.hypot(endX - p.x, endY - p.y);
       if (gap > radius + 14) {
-        ctx.strokeStyle = "rgba(172,185,202,0.32)"; ctx.lineWidth = 0.8;
-        ctx.beginPath(); ctx.moveTo(p.x + (endX - p.x) * (radius + 2) / gap, p.y + (endY - p.y) * (radius + 2) / gap);
-        ctx.lineTo(endX, endY); ctx.stroke();
+        pen.strokeStyle = "rgba(172,185,202,0.32)"; pen.lineWidth = 0.8;
+        pen.beginPath(); pen.moveTo(p.x + (endX - p.x) * (radius + 2) / gap, p.y + (endY - p.y) * (radius + 2) / gap);
+        pen.lineTo(endX, endY); pen.stroke();
       }
-      ctx.beginPath(); ctx.roundRect(paint.x, paint.y, paint.w, paint.h, 7);
-      ctx.fillStyle = state.canvasPalette?.background ?? "#101620"; ctx.fill();
-      ctx.fillStyle = rgba(NODE_RGB.session, 0.045); ctx.fill();
-      ctx.strokeStyle = rgba(workStatus ? colorOf(node) : NODE_RGB.pending, priority <= 2 ? 0.75 : workStatus === "Running" ? 0.45 : 0.25); ctx.lineWidth = 1; ctx.stroke();
+      pen.beginPath(); pen.roundRect(paint.x, paint.y, paint.w, paint.h, 7);
+      pen.fillStyle = state.canvasPalette?.background ?? "#101620"; pen.fill();
+      pen.fillStyle = rgba(NODE_RGB.session, 0.045); pen.fill();
+      pen.strokeStyle = rgba(workStatus ? colorOf(node) : NODE_RGB.pending, priority <= 2 ? 0.75 : workStatus === "Running" ? 0.45 : 0.25); pen.lineWidth = 1; pen.stroke();
       if (workStatus) {
-        ctx.font = '600 9px system-ui, "Segoe UI", sans-serif'; ctx.textBaseline = "alphabetic"; ctx.textAlign = "left";
-        ctx.fillStyle = rgba(colorOf(node), alpha);
-        ctx.fillText(workStatus === "Verifying" ? "VERIFYING" : workStatus === "Next" ? "UP NEXT" : "RUNNING", paint.x + 8, paint.y + 13);
+        pen.font = '600 9px system-ui, "Segoe UI", sans-serif'; pen.textBaseline = "alphabetic"; pen.textAlign = "left";
+        pen.fillStyle = rgba(colorOf(node), alpha);
+        pen.fillText(workStatus === "Verifying" ? "VERIFYING" : workStatus === "Next" ? "UP NEXT" : "RUNNING", paint.x + 8, paint.y + 13);
       }
-      ctx.font = font; ctx.textBaseline = "alphabetic"; ctx.textAlign = workStatus ? "left" : rect.align;
-      ctx.fillStyle = state.canvasPalette ? rgba(NODE_RGB.session, alpha) : node.kind === "agent" ? labelColour(node, alpha) : `rgba(222,229,239,${alpha})`;
-      lines.forEach((text, index) => ctx.fillText(text, workStatus ? paint.x + 8 : rect.tx, workStatus ? paint.y + 30 + index * 16 : rect.ty));
-      ctx.globalAlpha = previousAlpha ?? 1;
+      pen.font = font; pen.textBaseline = "alphabetic"; pen.textAlign = workStatus ? "left" : rect.align;
+      pen.fillStyle = state.canvasPalette ? rgba(NODE_RGB.session, alpha) : node.kind === "agent" ? labelColour(node, alpha) : `rgba(222,229,239,${alpha})`;
+      lines.forEach((text, index) => pen.fillText(text, workStatus ? paint.x + 8 : rect.tx, workStatus ? paint.y + 30 + index * 16 : rect.ty));
+      pen.globalAlpha = previousAlpha ?? 1;
       state.labelRects.push(paint); node._label = { ...paint }; node._labelLines = lines; drawn += 1;
     }
     ctx.lineWidth = 1; ctx.textAlign = "left";
@@ -6017,6 +7325,7 @@
   function tipKey() {
     if (state.hoverBubble) return `bubble:${state.hoverBubble.id}`;
     if (state.hoverNode) return `node:${state.hoverNode.id}`;
+    if (state.hoverSpeech) return `speech:${state.hoverSpeech}`;
     return null;
   }
 
@@ -6070,7 +7379,9 @@
   function refreshTip(px, py) {
     if (!el.tip) return;
     const key = tipKey();
-    if (!key || state.panning) {
+    // An orb with a callout already says what the tooltip would; keep the
+    // tip for bubbles, checkpoint notes and orbs without a card.
+    if (!key || state.panning || (state.hoverNode?._callout && !state.hoverBubble && !state.hoverSpeech)) {
       hideTip();
       return;
     }
@@ -6078,7 +7389,13 @@
       state.tipNode = key;
       const title = el.tip.querySelector(".tip-title");
       const meta = el.tip.querySelector(".tip-meta");
-      if (state.hoverBubble) {
+      if (state.hoverSpeech && !state.hoverBubble && !state.hoverNode) {
+        // The full remark, for a bubble that had to clip itself.
+        const bubble = state.speech.get(state.hoverSpeech);
+        const speaker = state.nodes.find((entry) => entry.id === state.hoverSpeech);
+        if (title) title.textContent = speaker ? (speaker.kind === "agent" ? speaker.role : speaker.label ?? speaker.kind) : "";
+        if (meta) meta.textContent = bubble?.text ?? "";
+      } else if (state.hoverBubble) {
         const notes = state.checkpoints?.[state.hoverBubble.id] ?? [];
         if (title) title.textContent = `${notes.length} checkpoint${notes.length === 1 ? "" : "s"}`;
         if (meta) meta.textContent = notes.length ? String(notes[0].note ?? "").slice(0, 60) : "";
@@ -6177,6 +7494,7 @@
     // Done, or a card whose node just left the graph) would fall to <body>.
     const focusInCard = !node && Boolean(el.info?.contains(document.activeElement));
     state.selected = node ? { id: node.id, kind: node.kind, node, via: options.via ?? "pointer" } : null;
+    if (!node) exitFocus(); // letting go of the selection lets go of the focus too
     if (node?.doneHold) ackDoneHold(node.id); // the click is the read
     if (node && !node.readOnly && (node.kind === "session" || node.kind === "todo" || node.kind === "task")) focusAssistant(node);
     if (node) dropPopups();
@@ -6407,23 +7725,34 @@
     const list = state.absorbed.get(node.id) ?? [];
     if (!list.length) return;
     const details = document.createElement("details");
-    details.className = "card-cps";
+    details.className = "card-cps absorbed-ledger";
     details.open = list.length <= 2;
     const summary = document.createElement("summary");
     summary.textContent = `Absorbed work (${list.length})`;
     details.append(summary);
-    for (const entry of list.slice(0, 6)) {
-      const item = document.createElement("div");
-      item.className = "cp-note checkpoint-note";
-      item.textContent = `${entry.kind === "job" ? `job · ${entry.title}` : entry.title} · ${agoLabel(entry.at) ?? ""}`;
-      item.title = entry.prompt ?? entry.title;
-      if (entry.taskId) {
-        item.style.cursor = "pointer";
-        item.addEventListener("click", () => nav("tasks", { taskId: entry.taskId }));
-      }
-      details.append(item);
-    }
+    for (const entry of list.slice(0, node.kind === "assistant" ? ABSORBED_HUB_MAX : 6)) details.append(absorbedRow(entry));
     info.append(details);
+  }
+
+  // One absorbed record: its verdict, what it was and when it was absorbed —
+  // a click opens the task or the session it came from.
+  function absorbedRow(entry) {
+    const item = document.createElement("div");
+    item.className = "cp-note checkpoint-note absorbed-row";
+    item.dataset.ok = String(entry.ok !== false);
+    const verdict = entry.kind === "record"
+      ? (entry.source === "pass" ? "pass" : entry.ok === false ? "failed" : "done")
+      : entry.kind === "job" ? "job" : entry.kind === "session" ? "session" : "done";
+    item.textContent = `${verdict} · ${entry.title} · ${agoLabel(entry.absorbedAt ?? entry.at) ?? ""}`;
+    item.title = entry.detail || entry.prompt || entry.title;
+    if (entry.taskId) {
+      item.style.cursor = "pointer";
+      item.addEventListener("click", () => nav("tasks", { taskId: entry.taskId, filter: "all" }));
+    } else if (entry.sessionId) {
+      item.style.cursor = "pointer";
+      item.addEventListener("click", () => nav("explorer", { sessionId: entry.sessionId }));
+    }
+    return item;
   }
 
   // A node's context folder: what agents did here, what the chat settled, what
@@ -7535,6 +8864,11 @@
       clearSearch();
       return true;
     }
+    if (state.focus) {
+      exitFocus();
+      selectNode(null);
+      return true;
+    }
     if (state.selected) {
       selectNode(null);
       return true;
@@ -7689,11 +9023,13 @@
     if (el.searchCount) el.searchCount.textContent = "";
     closeAmbience();
     el.canvas.hidden = false;
+    if (el.far) el.far.hidden = false;
     el.hud.hidden = false;
     el.hud.classList.toggle("forced", !state.ambient);
     document.body.classList.add("command-active");
     resize();
     renderLegend();
+    loadAbsorbedLedger();
     syncViewControls();
     setCamMode(state.camMode, { quiet: true }); // a saved follow/orbit mode resumes where it left off
     // The first build as a promise: the boot sequence holds its fade until
@@ -7784,6 +9120,13 @@
     hideTip();
     clearSearch();
     el.canvas.hidden = true;
+    if (el.far) { el.far.hidden = true; el.far.classList?.remove("focused", "soft"); }
+    state.focus = null;
+    state.focusRestore = null;
+    state.focusIds = null;
+    state.hoverCallout = null;
+    state.callouts.clear();
+    state.calloutRects = [];
     el.hud.hidden = true;
     el.hud.classList.remove("dim");
     el.hud.classList.remove("forced");
@@ -7808,6 +9151,11 @@
     state.popups = [];
     state.particles = [];
     state.pulses = [];
+    state.speech.clear();
+    state.speechRects = [];
+    state.hoverSpeech = null;
+    state.deferred = [];
+    state.agentTrails.clear();
     const playerAudio = window.MefiMusic?.getAudioElement?.();
     if (state.audio?.state === "running" && !(playerAudio && state.mediaElements.has(playerAudio))) state.audio.suspend().catch(() => {});
     // Leaving Command hands the capture back: suspending the context alone
@@ -7869,6 +9217,13 @@
     el.canvas.style.width = width + "px";
     el.canvas.style.height = height + "px";
     el.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (el.far && el.farCtx) {
+      el.far.width = width * dpr;
+      el.far.height = height * dpr;
+      el.far.style.width = width + "px";
+      el.far.style.height = height + "px";
+      el.farCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
     el.width = width;
     el.height = height;
     state.labelWidths.clear();
@@ -7946,6 +9301,9 @@
   function init() {
     if (!el.canvas) {
       el.canvas = document.getElementById("idle-layer");
+    // The far layer: the sky, and whatever a focused branch pushes behind it.
+    el.far = document.getElementById("idle-layer-far");
+    el.farCtx = el.far?.getContext?.("2d") ?? null;
       el.hud = document.getElementById("idle-hud");
       if (!el.canvas) return;
       el.ctx = el.canvas.getContext("2d");
@@ -7994,6 +9352,11 @@
     el.musicLevel = document.getElementById("idle-music-level");
     el.source = document.getElementById("idle-source");
     el.profile = document.getElementById("idle-profile");
+    el.backdrop = document.getElementById("idle-backdrop");
+    el.bubbles = document.getElementById("idle-bubbles");
+    el.cardStyle = document.getElementById("idle-card-style");
+    el.chatAbsorbed = document.getElementById("idle-chat-absorbed");
+    el.chatAbsorbedList = document.getElementById("idle-chat-absorbed-list");
     el.exitBtn = document.getElementById("idle-exit");
     el.search = document.getElementById("idle-search");
     el.searchCount = document.getElementById("idle-search-count");
@@ -8091,6 +9454,18 @@
       el.source.value = state.audioSource;
       el.source.disabled = false;
       el.source.addEventListener("change", () => setAudioSource(el.source.value));
+    }
+    if (el.backdrop) {
+      el.backdrop.innerHTML = BACKDROP_ORDER.map((key) => `<option value="${key}" ${key === state.backdrop ? "selected" : ""}>${BACKDROPS[key]}</option>`).join("");
+      el.backdrop.addEventListener("change", () => setBackdrop(el.backdrop.value));
+    }
+    if (el.bubbles) {
+      el.bubbles.checked = state.bubbles;
+      el.bubbles.addEventListener("change", () => setBubbles(el.bubbles.checked));
+    }
+    if (el.cardStyle) {
+      el.cardStyle.value = state.cardStyle;
+      el.cardStyle.addEventListener("change", () => setCardStyle(el.cardStyle.value));
     }
     el.exitBtn?.addEventListener("click", exit);
     el.home?.addEventListener("change", () => {
@@ -8277,14 +9652,23 @@
         selectNode(bubbleNode, { via: "bubble" });
         return;
       }
+      // A speech bubble belongs to its speaker: clicking it opens the card
+      // (an agent's lands on the hub, like clicking the agent itself).
+      const speaker = speechAt(x, y);
+      if (speaker) {
+        selectNode(speaker.kind === "agent" ? assistantNode() ?? speaker : speaker, { via: "speech" });
+        return;
+      }
       // The finished "!" reads its task: select it, the ack follows.
       const exclNode = exclAt(x, y);
       if (exclNode) {
         selectNode(exclNode, { via: "excl" });
         return;
       }
-      // An agent is part of the assistant: its click lands on the hub.
-      const hit = nodeAt(x, y);
+      // An orb (or its label) wins over a card behind it; a callout belongs to
+      // its node, so pressing the card is pressing the orb. An agent is part
+      // of the assistant: its click lands on the hub.
+      const hit = nodeAt(x, y) ?? calloutAt(x, y);
       const node = hit && hit.kind === "agent" ? assistantNode() ?? hit : hit;
       state.panning = { x: event.clientX, y: event.clientY, cam: { ...state.camera, tx: state.camera.x, ty: state.camera.y, tz: state.camera.z }, moved: false, node };
     });
@@ -8361,21 +9745,29 @@
       if (event.target !== el.canvas) return;
       state.hoverNode = nodeAt(x, y) ?? exclAt(x, y);
       state.hoverBubble = bubbleAt(x, y);
-      el.canvas.style.cursor = state.hoverNode || state.hoverBubble ? "pointer" : "default";
-      refreshTip(x, y);
+      state.hoverSpeech = state.hoverNode || state.hoverBubble ? null : speechAt(x, y)?.id ?? null;
+      // A hovered callout lifts and sharpens while the rest softens; the card
+      // is its own explanation, so no tooltip rides along.
+      state.hoverCallout = state.hoverNode || state.hoverBubble || state.hoverSpeech ? null : calloutAt(x, y)?.id ?? null;
+      el.canvas.style.cursor = state.hoverNode || state.hoverBubble || state.hoverSpeech || state.hoverCallout ? "pointer" : "default";
+      if (state.hoverCallout) hideTip();
+      else refreshTip(x, y);
     });
     el.canvas.addEventListener("mouseleave", () => {
       state.hoverNode = null;
       state.hoverBubble = null;
+      state.hoverSpeech = null;
+      state.hoverCallout = null;
       hideTip();
     });
     window.addEventListener("mouseup", () => {
       if (state.panning && !state.panning.moved) {
         const node = state.panning.node;
-        if (node) {
-          selectNode(node);
-          focusNode(node, { zoom: node.kind === "session" || node.kind === "root" ? 1.6 : 1.9 });
-        } else selectNode(null);
+        // A click on a node or its callout focuses it: the camera closes in
+        // (less on a parent, so its children stay in frame) and the rest of
+        // the tree keeps turning, softly blurred, behind it. Empty canvas lets go.
+        if (node) enterFocus(node);
+        else selectNode(null);
       }
       state.panning = null;
       state.rotating = null;
@@ -8600,6 +9992,21 @@
     setMusicReactive,
     setAudioResponse,
     setAudioEffects,
+    setBackdrop,
+    setBubbles,
+    // What the sky is showing and what the agents are saying — for the
+    // capture tour, the tests and the dev tools.
+    backdropStatus: () => ({ choice: state.backdrop, scene: activeBackdrop(), theme: state.themeKey, options: [...BACKDROP_ORDER] }),
+    speechStatus: () => [...state.speech.values()].map((bubble) => ({ id: bubble.id, text: bubble.text, kind: bubble.kind, age: Date.now() - bubble.at, ttl: bubble.ttl })),
+    say: (id, text, options) => Boolean(say(id, text, options)),
+    absorbedStatus: () => (state.absorbed.get("__assistant__") ?? []).map((entry) => ({ ...entry })),
+    // Callouts and focus — the placements the cards hold, and what a click
+    // brought the camera onto.
+    enterFocus: (id) => enterFocus(typeof id === "string" ? state.nodes.find((node) => node.id === id) ?? null : id),
+    exitFocus,
+    setCardStyle,
+    focusStatus: () => ({ id: state.focus?.id ?? null, kind: state.focus?.kind ?? null, since: state.focus?.since ?? null, restore: state.focusRestore ? { ...state.focusRestore } : null, sharp: state.focusIds ? [...state.focusIds] : null, farLayer: Boolean(el.farCtx), hover: state.hoverCallout, zoom: state.zoom, orbit: state.orbit }),
+    calloutStatus: () => state.nodes.filter((node) => node._callout).map((node) => ({ id: node.id, kind: node.kind, side: node._callout.side, vert: node._callout.vert, length: node._callout.length, rect: { ...node._callout.rect }, hit: { ...node._callout.hit }, leader: { x1: node._callout.sx, y1: node._callout.sy, x2: node._callout.ex, y2: node._callout.ey }, title: node._callout.content.title, number: node._callout.content.number, counts: node._callout.content.counts, mark: node._callout.content.mark, lines: node._callout.content.lines.map((line) => line.text) })),
     search,
     selectAssistant,
     saveState,
@@ -8623,6 +10030,10 @@
       tree: state.treeStatus,
       audioSource: state.audioSource,
       listening: Boolean(state.inputStream),
+      backdrop: activeBackdrop(),
+      bubbles: state.bubbles,
+      cardStyle: state.cardStyle,
+      focus: state.focus?.id ?? null,
     }),
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

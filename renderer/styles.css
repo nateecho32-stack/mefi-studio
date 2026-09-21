@@ -1285,11 +1285,24 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 /* ============================================================
    12. Command view
    ============================================================ */
-#idle-layer {
+/* two canvases: the far one carries the sky and, while a node is focused or a
+   card hovered, everything outside that branch — the CSS blurs it; the near
+   one stays sharp on top (it is transparent, so the far one shows through) */
+#idle-layer-far {
   position: fixed; inset: 0;
   z-index: var(--z-command);
   display: block;
   background: var(--cmd-bg);
+  pointer-events: none;
+  transition: filter 260ms var(--ease);
+}
+#idle-layer-far.soft { filter: blur(1.6px); }
+#idle-layer-far.focused { filter: blur(3px); }
+#idle-layer {
+  position: fixed; inset: 0;
+  z-index: var(--z-command);
+  display: block;
+  background: transparent;
   outline: none;
 }
 #idle-hud { position: fixed; inset: 0; z-index: var(--z-hud); pointer-events: none; }
@@ -1635,6 +1648,10 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .sw[data-sw="meter"] { width: 14px; height: 4px; border-radius: 2px; }
 .sw[data-sw="pulse"], .sw[data-sw="dust"] { width: 6px; height: 6px; }
 .sw[data-sw="pulse"] { box-shadow: 0 0 8px var(--sw, var(--live)); }
+.sw[data-sw="speech"] { width: 14px; height: 10px; border-radius: 6px 6px 6px 1px; background: transparent; border: 1.5px solid var(--sw, var(--ivory)); }
+.sw[data-sw="packet"] { width: 8px; height: 8px; border-radius: 1px; transform: rotate(45deg); box-shadow: 0 0 8px var(--sw, var(--gold-bright)); }
+.sw[data-sw="trail"] { width: 16px; height: 4px; border-radius: 2px; }
+.sw[data-sw="callout"] { width: 16px; height: 9px; border-radius: 0 0 4px 4px; background: transparent; border: 1.5px solid var(--sw, var(--ivory)); border-top-width: 2px; }
 
 /* --- empty state --- */
 .cmd-empty {
@@ -3186,21 +3203,30 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .done-detail { color: var(--muted); font-size: 11px; line-height: 1.45; }
 #idle-hud .done-empty, #idle-hud .ask-empty { margin: 0; padding: 8px 2px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 
+/* the absorbed ledger: what the assistant keeps after a Done-tab absorb, on
+   its card and in the rail console while the assistant is selected */
+#idle-hud .feed-absorbed { flex: none; margin: 8px 0 0; }
+#idle-hud .feed-absorbed > summary { color: var(--gold); font-size: 11px; cursor: pointer; }
+.absorbed-ledger { max-height: 220px; overflow-y: auto; }
+.absorbed-row[data-ok="false"] { color: var(--bad); }
+
 /* collapse: the head keeps the count and the Absorb button, the list tucks away */
 #idle-hud .cmd-done.done-collapsed .rail-view-note,
 #idle-hud .cmd-done.done-collapsed .done-list { display: none; }
 
-/* absorb: every record spirals into the Absorb button, then the log is gone */
+/* absorb: every record flies into the assistant orb on the canvas (idle.js aims
+   --absorb-dx/dy at the hub and launches a packet per row), shrinking to a spark
+   on the way; the host then clears the log and the hub card keeps the records */
 #idle-hud .cmd-done.absorbing .done-row {
   pointer-events: none;
-  animation: done-absorb 620ms cubic-bezier(.55, -.2, .75, .5) forwards;
+  animation: done-absorb 900ms cubic-bezier(.5, -.15, .6, .55) forwards;
   animation-delay: calc(var(--absorb-i, 0) * 45ms);
 }
 #idle-hud .cmd-done.absorbing .done-empty { opacity: 0; }
 @keyframes done-absorb {
-  0% { opacity: 1; transform: translate(0, 0) scale(1) rotate(0deg); }
-  30% { opacity: 1; transform: translate(calc(var(--absorb-dx, 0px) * .14), calc(var(--absorb-dy, 0px) * .14)) scale(1.02) rotate(-.5deg); }
-  100% { opacity: 0; transform: translate(var(--absorb-dx, 0px), var(--absorb-dy, 0px)) scale(.05) rotate(6deg); }
+  0% { opacity: 1; transform: translate(0, 0) scale(1); filter: brightness(1); }
+  25% { opacity: 1; transform: translate(calc(var(--absorb-dx, 0px) * .1), calc(var(--absorb-dy, 0px) * .12)) scale(1.03); filter: brightness(1.25); }
+  100% { opacity: 0; transform: translate(var(--absorb-dx, 0px), var(--absorb-dy, 0px)) scale(.04); filter: brightness(2); }
 }
 #idle-hud #cmd-done-absorb.pulling { animation: absorb-pull 780ms ease-out; }
 @keyframes absorb-pull {
