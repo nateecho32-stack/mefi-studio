@@ -395,7 +395,7 @@
     });
     el.view?.addEventListener("click", () => {
       state.view = state.view === "graph" ? "list" : "graph";
-      el.view.textContent = state.view === "graph" ? "Graph view" : "List view";
+      el.view.textContent = state.view === "graph" ? "Feature graph" : "List view";
       // `hidden`, not display: it is what drawGraph()'s early return reads.
       el.canvas.hidden = state.view !== "graph";
       drawGraph();

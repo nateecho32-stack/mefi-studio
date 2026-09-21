@@ -4,7 +4,7 @@
   "use strict";
   const $ = (id) => document.getElementById(`workspace-${id}`);
   const api = () => window.mefiStudio;
-  const state = { projects: [], activeId: null, tasks: [], ideas: [], backlog: null, assistant: {}, status: {}, filter: "open", query: "", limit: 20, mode: "chat", pending: false, busyAction: null, switching: false, epoch: 0 };
+  const state = { projects: [], activeId: null, tasks: [], ideas: [], backlog: null, assistant: {}, status: {}, machine: null, usage: null, filter: "open", query: "", limit: 20, mode: "chat", pending: false, busyAction: null, switching: false, epoch: 0 };
   let initialized = false;
   let refreshFlight = null;
   let startupPromise = null;
@@ -208,8 +208,7 @@
     const scheduled = state.backlog?.taskStates?.find((item) => item.id === task.id);
     const stage = done(task) ? "done" : task.status === "active" ? "running" : scheduled?.stage || (description.stage === "review" ? "review" : "ready");
     const filter = stage === "done" ? "done" : ["review", "blocked", "approval"].includes(stage) ? "review" : "open";
-    const labels = { ready: "Ready", running: "Working", approval: "Awaiting build approval", review: "Awaiting verification", blocked: "Needs attention", cooling: "Retry scheduled", waiting: "Waiting on prerequisites", grouped: "Included in a plan", done: "Done" };
-    return { stage, filter, label: labels[stage] || description.label, summary: stage === "ready" ? task.prompt || description.summary || scheduled?.reason : scheduled?.reason || description.summary, retryAt: scheduled?.retryAt, groupId: scheduled?.groupId, dependencies: scheduled?.dependencies, canRetry: scheduled?.canRetry };
+    return { stage, filter, label: window.MefiStage?.label?.(stage, task) || description.label, summary: stage === "ready" ? task.prompt || description.summary || scheduled?.reason : scheduled?.reason || description.summary, retryAt: scheduled?.retryAt, groupId: scheduled?.groupId, dependencies: scheduled?.dependencies, canRetry: scheduled?.canRetry };
   }
   function cardAction(label, action, payload) {
     const button = text("button", "ghost mini", label);
@@ -299,6 +298,7 @@
     controls();
   }
   function renderBacklog() {
+    renderDashboard();
     renderBuildMode();
     const backlog = state.backlog;
     const counts = backlog?.counts || {};
@@ -460,8 +460,8 @@
     $("narration").textContent = !working && !paused && workersOff ? "Coding workers are off. Your tasks are saved; use Work through backlog when you're ready to start them." : narration;
     $("companion-track").dataset.station = working ? "make" : reviewing ? "review" : "listen";
     $("companion-track").classList.toggle("busy", working || state.pending);
-    $("pause").textContent = paused ? "Resume" : "Pause";
-    $("connection").textContent = !api() ? "Browser preview" : paused ? "New work paused" : workersOff ? "Coding workers off" : assistant.ai?.keyPresent === false ? "Connect an AI in Settings" : working ? "Working with you" : "Ready when you are";
+    renderDashboard();
+    $("connection").textContent = runState().label;
     $("connection").classList.toggle("working", working);
     const logs = (assistant.log || []).filter((entry) => entry.kind !== "tick").slice(-8).reverse();
     const signature = JSON.stringify(logs);
@@ -471,6 +471,89 @@
       if (!logs.length) $("activity-list").append(text("li", "", "Real activity will appear here as the assistant works."));
       $("activity-count").textContent = logs.length || "";
     }
+  }
+  // The real run state, read from the two switches the backend actually has:
+  // the assistant service (paused / running) and work admission (execute).
+  // Every surface that says "paused" now says it from here.
+  function runState() {
+    const assistant = state.assistant;
+    const assistantPaused = assistant.status === "paused" || assistant.prefs?.paused === true;
+    const admissionOff = state.status.execute === false;
+    const running = state.status.running || [];
+    const held = assistantPaused || admissionOff;
+    const keyMissing = assistant.ai?.keyPresent === false;
+    const label = !api() ? "Browser preview" : assistantPaused && admissionOff ? "Paused" : assistantPaused ? "Assistant paused" : admissionOff ? "New work held" : keyMissing ? "No AI connected" : running.length ? "Working" : "Ready";
+    const note = !api() ? "Live status needs the desktop app." : assistantPaused && admissionOff ? "All new work is held. Running jobs finish normally." : assistantPaused ? "The assistant is paused; queued tasks still start when a worker is free." : admissionOff ? "Queued tasks wait; the assistant still replies and takes answers." : keyMissing ? "Connect an AI in Settings to start." : state.status.waiting ? String(state.status.waiting) : running.length ? `${running.length} job${running.length === 1 ? "" : "s"} running` : "Waiting for work.";
+    return { held, label, note, running, tone: !api() ? "idle" : held ? "held" : keyMissing ? "warn" : running.length ? "busy" : "ok" };
+  }
+  const showFilter = (filter) => { state.filter = filter; state.limit = 20; $("work-list").scrollTop = 0; renderWork(); };
+  // Studio at a glance: the landing strip answers "is anything waiting on me,
+  // is anything running, is the machine holding work" before the conversation.
+  // Service, workers, attention and next come from state this module already
+  // holds; the machine and usage tiles are painted by their own feeds.
+  function renderDashboard() {
+    if (!$("dash-service")) return;
+    const run = runState();
+    $("dash-service").dataset.tone = run.tone;
+    $("dash-service-value").textContent = run.label;
+    $("dash-service-note").textContent = run.note;
+    $("pause").textContent = run.held ? "Resume" : "Pause";
+    $("pause").title = run.held ? "Let new work start again." : "Hold all new work: queued tasks, builds and the assistant's own suggestions. Running jobs finish normally.";
+    const running = run.running;
+    const limit = state.status.adaptiveParallel ? null : Number(state.status.parallel) || null;
+    $("dash-workers").dataset.tone = running.length ? "busy" : "idle";
+    $("dash-workers-value").textContent = running.length ? `${running.length} building` : "0 running";
+    $("dash-workers-note").textContent = running.length ? running.map((job) => job.title || "task").slice(0, 2).join(" · ") : limit ? `Up to ${limit} at once` : state.status.adaptiveParallel ? "Machine managed" : "";
+    const questions = (Array.isArray(state.assistant.questions) ? state.assistant.questions : []).filter((question) => question?.status === "open");
+    const review = scoped(state.tasks).filter((task) => taskView(task).filter === "review");
+    const waiting = questions.length + review.length;
+    $("dash-attention").dataset.tone = questions.length ? "warn" : review.length ? "busy" : "idle";
+    $("dash-attention").dataset.target = questions.length ? "ask" : "review";
+    $("dash-attention-value").textContent = waiting ? `${waiting} waiting` : "Nothing waiting";
+    $("dash-attention-note").textContent = [questions.length ? `${questions.length} question${questions.length === 1 ? "" : "s"} to answer` : "", review.length ? `${review.length} to review` : ""].filter(Boolean).join(" · ");
+    const next = (state.backlog?.next || [])[0];
+    const nextTask = next ? scoped(state.tasks).find((task) => task.id === next.id) : null;
+    const ready = state.backlog?.counts?.ready || 0;
+    $("dash-next").dataset.tone = next ? "ok" : "idle";
+    $("dash-next-value").textContent = nextTask?.title || next?.title || (ready ? `${ready} ready` : "Queue is empty");
+    $("dash-next-note").textContent = next ? `${ready} ready${state.backlog?.summary ? ` · ${state.backlog.summary}` : ""}` : state.backlog?.summary || "";
+  }
+  function renderMachineTile() {
+    if (!$("dash-machine")) return;
+    const status = state.machine;
+    if (!status) { $("dash-machine").dataset.tone = "idle"; $("dash-machine-value").textContent = api() ? "Checking…" : "Desktop app only"; $("dash-machine-note").textContent = ""; return; }
+    const resources = status.capacity?.resources || {};
+    const exclusive = status.leases?.exclusive === true;
+    const held = status.wait === true;
+    const busy = status.leases?.busy === true;
+    $("dash-machine").dataset.tone = exclusive ? "warn" : held ? "held" : busy ? "busy" : "ok";
+    $("dash-machine-value").textContent = exclusive ? "Reserved by a test" : held ? "Holding new workers" : busy ? "Busy" : "Free";
+    const parts = [];
+    if (Number.isFinite(resources.availableMemoryMB)) parts.push(`${(resources.availableMemoryMB / 1024).toFixed(1)} GB free`);
+    if (Number.isFinite(resources.lagMs)) parts.push(`${Math.round(resources.lagMs)} ms lag`);
+    if (held && status.capacity?.reason) parts.push(String(status.capacity.reason));
+    $("dash-machine-note").textContent = parts.join(" · ");
+  }
+  function renderUsageTile() {
+    if (!$("dash-usage")) return;
+    const report = state.usage;
+    if (!report) { $("dash-usage").dataset.tone = "idle"; $("dash-usage-value").textContent = api() ? "No reading yet" : "Desktop app only"; $("dash-usage-note").textContent = ""; return; }
+    const credits = report.credits?.ok ? report.credits.usage : null;
+    const today = report.local?.ok === false ? null : report.local?.today;
+    const percent = (window) => (window && Number.isFinite(window.percent) ? `${Math.round(window.percent)}%` : null);
+    const rolling = percent(credits?.rolling), weekly = percent(credits?.weekly);
+    if (rolling || weekly) {
+      $("dash-usage-value").textContent = `5h ${rolling ?? "—"} · week ${weekly ?? "—"}`;
+      $("dash-usage").dataset.tone = (credits?.rolling?.percent >= 90 || credits?.weekly?.percent >= 90) ? "warn" : "ok";
+    } else if (today) {
+      $("dash-usage-value").textContent = `${today.calls ?? 0} calls today`;
+      $("dash-usage").dataset.tone = "ok";
+    } else {
+      $("dash-usage-value").textContent = "Usage unavailable";
+      $("dash-usage").dataset.tone = "idle";
+    }
+    const cost = Number(today?.usage?.costUsd);
+    $("dash-usage-note").textContent = today ? `Today · ${today.calls ?? 0} calls${Number.isFinite(cost) ? ` · $${cost.toFixed(2)}` : ""}` : report.credits?.error || "";
   }
   function renderJev(value) {
     const status = value?.status || value;
@@ -607,6 +690,9 @@
   function enter() {
     init(); window.MefiIdle?.exit?.(); $("layer").hidden = false;
     document.body.classList.add("workspace-active");
+    renderMachineTile(); renderUsageTile();
+    // Usage has no push; one read on entry (cached 5 min by the tracker).
+    if (api()) window.MefiUsageTracker?.refresh?.()?.catch?.(() => {});
     $("layer").focus({ preventScroll: true });
     // Startup already reads and paints the workspace. Opening it underneath
     // the loading layer joins that work instead of issuing a second batch.
@@ -674,9 +760,26 @@
     $("reveal").addEventListener("click", () => api()?.shellReveal(project()?.path));
     $("stop-all")?.addEventListener("click", () => void stopAllAgents());
     $("restart")?.addEventListener("click", () => void restartStudio());
+    // The one pause control. Pause holds every kind of new work (queued tasks,
+    // builds, the assistant's own suggestions) exactly as Command's New work
+    // switch does; Resume reopens admission and wakes the assistant. Running
+    // jobs are never interrupted by either.
     $("pause").addEventListener("click", async () => {
       $("pause").disabled = true;
-      try { const paused = state.assistant.status === "paused" || state.assistant.prefs?.paused; const result = guard(await api().assistantControl(paused ? "resume" : "pause")); state.assistant = result.state; renderCompanion(); scheduleBacklogRead(); feedback(paused ? "New work can start again." : "New work paused. Running jobs finish normally."); }
+      try {
+        if (runState().held) {
+          const result = guard(await api().assistantControl("start-work"));
+          if (result.state) state.assistant = result.state;
+          if (result.autopilot) state.status = { ...state.status, ...result.autopilot };
+          feedback("New work can start again.");
+        } else {
+          const result = guard(await api().backlogControl({ action: "pause", projectId: state.activeId }));
+          if (result.backlog) state.backlog = result.backlog;
+          state.status = { ...state.status, execute: false };
+          feedback("New work paused. Running jobs finish normally.");
+        }
+        renderCompanion(); scheduleBacklogRead();
+      }
       catch (error) { feedback(error.message, true); } finally { controls(); }
     });
     for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "aurora"]]) {
@@ -689,7 +792,14 @@
     }
     const syncThemeChoice = () => {
       const theme = window.MefiMusic?.status?.().theme;
-      if (theme) $("accent").value = theme === "forest" ? "sage" : theme;
+      if (!theme) return;
+      const choice = theme === "forest" ? "sage" : theme;
+      // The select must carry the option or it goes blank, and the saved accent
+      // follows the real theme so data-accent never drifts from it.
+      const options = $("accent").options ? [...$("accent").options] : null;
+      if (options && !options.some((option) => option.value === choice)) return;
+      $("accent").value = choice;
+      if (storage.get("accent", "aurora") !== choice) { storage.set("accent", choice); personalize(); }
     };
     window.addEventListener("mefi-theme-change", syncThemeChoice);
     syncThemeChoice();
@@ -701,6 +811,11 @@
     api()?.onIdeas?.((ideas) => { if (ideas?.some((idea) => idea.projectId && idea.projectId !== state.activeId)) return; revisions.ideas += 1; state.ideas = ideas || []; if (active()) renderWork(); scheduleBacklogRead(); });
     api()?.onAssistant?.((payload) => { if (payload?.state?.projectId && payload.state.projectId !== state.activeId) return; revisions.assistant += 1; if (payload?.state) state.assistant = payload.state; if (active()) { renderThread(); renderCompanion(); } });
     api()?.onAssistantStatus?.((status) => { if (status?.projectId && status.projectId !== state.activeId) return; revisions.status += 1; state.status = status || {}; renderBuildMode(); controls(); if (active()) { renderCompanion(); renderWork(); } scheduleBacklogRead(); });
+    api()?.onMachineStatus?.((status) => { state.machine = status || null; if (active()) renderMachineTile(); });
+    window.addEventListener("mefi:usage-report", (event) => { state.usage = event.detail || null; if (active()) renderUsageTile(); });
+    $("dash-attention")?.addEventListener("click", () => { if ($("dash-attention").dataset.target === "ask") window.MefiNav?.go?.("command", { rail: "ask" }); else showFilter("review"); });
+    $("dash-next")?.addEventListener("click", () => showFilter("open"));
+    $("dash-usage")?.addEventListener("click", () => window.MefiUsageTracker?.openTab?.());
     personalize(); renderProjects(); renderWork(); renderBacklog();
     loadInitialWorkspace();
     if (!api()) $("jev").textContent = "Desktop app connects your tools";

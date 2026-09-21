@@ -9794,7 +9794,6 @@ function streamChild(child, label) {
   if (child.stderr) wire(child.stderr);
   child.on("close", (code) => {
     logLine(`[${label}] exited with code ${code}`);
-    send("studio:exit", { code });
     if (activeChild === child) activeChild = null;
   });
   child.on("error", (error) => logLine(`[${label}] failed: ${error.message}`));
@@ -10892,24 +10891,6 @@ function registerIpc() {
     }
   });
 
-  ipcMain.handle("eyes:changes", async (_event, { sessionId = null } = {}) => {
-    try {
-      const eyes = await getEyes();
-      return { ok: true, changes: await eyes.listChanges({ sessionId, limit: 300 }) };
-    } catch (error) {
-      return { ok: false, error: String(error.message ?? error) };
-    }
-  });
-
-  ipcMain.handle("eyes:todos", async () => {
-    try {
-      const eyes = await getEyes();
-      return { ok: true, todos: await eyes.listTodos() };
-    } catch (error) {
-      return { ok: false, error: String(error.message ?? error) };
-    }
-  });
-
   ipcMain.handle("eyes:log", async (_event, { lines = 220 } = {}) => {
     try {
       const eyes = await getEyes();
@@ -10989,11 +10970,6 @@ function registerIpc() {
   );
   // The explorer's legacy switch: it sets the service pref and steers the
   // A-Eyes autopilot timer with it, so one toggle moves both halves.
-  ipcMain.handle("assistant:proactive", async (_event, { enabled, minutes } = {}) => {
-    const result = await assistantSetPrefs({ proactive: enabled !== false });
-    const status = await setProactive(enabled !== false, minutes ?? autopilot.minutes);
-    return { ok: true, enabled: result.state.prefs.proactive, minutes: status.minutes, state: result.state, status };
-  });
   // A-Eyes autopilot: main's timer/executor switch. It moves prefs.proactive
   // too, so the assistant card and the autopilot panel never disagree.
   ipcMain.handle("assistant:autopilot", async (_event, prefs) => {
@@ -11048,14 +11024,6 @@ function registerIpc() {
     return result;
   });
   // Agent questions: the Ask cards, the answer path, and the durable done log.
-  ipcMain.handle("assistant:questions", () => assistantQuestions());
-  ipcMain.handle("assistant:ask", async (_event, payload) => {
-    await ensureAssistant();
-    const question = assistantQuestion(payload ?? {});
-    if (!question) return { ok: false, error: "A question needs a title and at least one labelled option.", state: assistantState };
-    await saveAssistant({ force: true });
-    return { ok: true, question, state: assistantState };
-  });
   ipcMain.handle("assistant:answer", (_event, payload) => assistantAnswer(payload ?? {}));
   ipcMain.handle("assistant:done-log", (_event, payload) => assistantDoneLog(payload ?? {}));
   ipcMain.handle("assistant:absorb-done", () => assistantAbsorbDoneLog());
@@ -11195,7 +11163,6 @@ function registerIpc() {
       return { ok: false, error: String(error?.message ?? error) };
     }
   });
-  ipcMain.handle("machine:watch", async (_event, { running } = {}) => (running === false ? stopMachineWatch() : startMachineWatch()));
   ipcMain.handle("machine:set", async (_event, prefs) => {
     const settings = await readSettings();
     settings.machine = { ...MACHINE_DEFAULTS, ...(settings.machine ?? {}), ...(prefs ?? {}) };

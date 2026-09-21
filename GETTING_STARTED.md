@@ -128,7 +128,8 @@ Later folders are added to the sidebar — select one to switch. Tasks,
 conversations, plans and references belong to that project. For your first run,
 use a small project whose changes you can easily inspect.
 
-Choose **Auto build** in the guide or above **Your work**. It is on by default.
+Choose **Auto build** in the guide or in the backlog panel under **Your work**.
+It is on by default.
 Turn it off for **Verify first** if you want to choose what gets built. This
 preference is saved for all projects and can be changed at any time.
 
@@ -179,7 +180,12 @@ review the specification, approve it, then explicitly create its tasks.
 
 ## 4. Follow the work
 
-**Your work** gives you Open, Review, Done and Ideas views. **Node tree** opens
+The strip at the top of the workspace shows the service state, running
+workers, what needs you, what is next, the machine and today's usage; its
+**Pause** button holds all new work until you press **Resume**.
+
+**Your work** gives you All, Queue, Ideas, Review and Done views. **Command
+view** in the sidebar opens
 Command, where **Live work** shows running workers, reported steps and queue
 readiness. Open a task to inspect its brief, dependencies, attempts and evidence.
 

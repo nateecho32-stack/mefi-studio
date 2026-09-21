@@ -4,7 +4,7 @@
   const { fmt, privacyLabel } = window.MefiGraph;
 
   // Global toasts: quiet confirmations that do not need a panel status line.
-  window.MefiToast = (message, kind = "info") => {
+  window.MefiToast = (message, kind = "info", options = {}) => {
     let host = document.getElementById("toast-host");
     if (!host) {
       host = document.createElement("div");
@@ -14,12 +14,24 @@
     const toast = document.createElement("div");
     toast.className = `toast ${kind}`;
     toast.textContent = message;
-    host.append(toast);
-    requestAnimationFrame(() => toast.classList.add("show"));
-    setTimeout(() => {
+    const dismiss = () => {
       toast.classList.remove("show");
       setTimeout(() => toast.remove(), 300);
-    }, 2600);
+    };
+    // An action keeps the toast clickable and on screen long enough to use it.
+    const action = options?.action;
+    if (action && typeof action.run === "function") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "toast-action";
+      button.textContent = action.label || "Open";
+      button.addEventListener("click", () => { dismiss(); action.run(); });
+      toast.classList.add("has-action");
+      toast.append(button);
+    }
+    host.append(toast);
+    requestAnimationFrame(() => toast.classList.add("show"));
+    setTimeout(dismiss, action ? 9000 : 2600);
   };
 
   // Every store access is guarded, exactly as nav.js and idle.js guard theirs: a

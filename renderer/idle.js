@@ -6343,7 +6343,7 @@
     }
     const status = node.task?.status ?? "open";
     const className = status === "active" ? "badge premium" : status === "done" ? "badge free" : "badge";
-    return { text: status === "awaiting_verification" ? "Verifying" : status, className };
+    return { text: window.MefiStage?.label?.(status, node.task) ?? status, className };
   }
 
   function appendTaskGroupInfo(info, node) {
@@ -6665,7 +6665,7 @@
         for (const task of filed.slice(0, 8)) {
           const item = document.createElement("div");
           item.className = "cp-note checkpoint-note";
-          const status = busy.has(task.id) ? "running" : String(task.status ?? "open").replace("_", " ");
+          const status = busy.has(task.id) ? (window.MefiStage?.label?.("running") ?? "running") : (window.MefiStage?.label?.(task.status, task, { short: true }) ?? String(task.status ?? "open").replace("_", " "));
           item.textContent = `${task.title ?? "task"} · ${status}`;
           item.title = task.prompt ?? task.title ?? "";
           item.style.cursor = "pointer";
@@ -7644,8 +7644,10 @@
 
   function applyEnterParams(params) {
     // A live-update reload hands back what saveState() captured: the selected
-    // node by id (any kind) and the zoom, restored in that order.
+    // node by id (any kind) and the zoom, restored in that order. A rail tab
+    // ("ask" for waiting decisions) can be named by any caller.
     let applied = false;
+    if (typeof params?.rail === "string" && typeof setRailTab === "function") { setRailTab(params.rail, { focus: true }); applied = true; }
     const selectedId = typeof params?.selected === "string" ? params.selected : "";
     if (selectedId && select(selectedId)) applied = true;
     if (typeof params?.zoom === "number" && Number.isFinite(params.zoom)) {

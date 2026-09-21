@@ -23,6 +23,7 @@ const RENDERER = path.join(STUDIO, "renderer");
 const INLINE_SCRIPTS = [
   "performance-core.js",
   "profiler.js",
+  "stage-labels.js",
   "task-groups.js",
   "nav.js",
   "sidebar.js",

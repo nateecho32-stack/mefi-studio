@@ -5,6 +5,7 @@ import vm from "node:vm";
 import planning from "../scripts/planning.cjs";
 
 const source = await readFile(new URL("../renderer/planning.js", import.meta.url), "utf8");
+const stageSource = await readFile(new URL("../renderer/stage-labels.js", import.meta.url), "utf8");
 const flush = async () => { for (let i = 0; i < 50; i += 1) await Promise.resolve(); };
 const deferred = () => { let resolve; const promise = new Promise((yes) => { resolve = yes; }); return { promise, resolve }; };
 
@@ -42,6 +43,7 @@ async function environment(item = savedPlan(), storage = new Map()) {
   const tasks = { "project-a": [], "project-b": [] };
   const bridge = {
     projectsList: async () => structuredClone(projects),
+    onTasks: (fn) => { events.tasks = fn; },
     planningList: async ({ projectId }) => ({ ok: true, projectId, plans: structuredClone(data[projectId]) }),
     planningAction: async (payload) => { calls.push(structuredClone(payload)); const result = planning.applyPlanningAction(data[payload.projectId], payload, { project: { id: payload.projectId } }); return { ...result, projectId: payload.projectId }; },
     planningAssist: async (payload) => { calls.push(structuredClone(payload)); return { ok: false, error: "Connection unavailable" }; },
@@ -49,6 +51,7 @@ async function environment(item = savedPlan(), storage = new Map()) {
   };
   const document = { readyState: "complete", hidden: false, activeElement: null, createElement: (tag) => new Element(tag), getElementById: find, addEventListener: (name, callback) => { documentEvents[name] = callback; } };
   const context = vm.createContext({ window: { mefiStudio: bridge, addEventListener: (name, callback) => { events[name] = callback; }, MefiNav: { claim() {}, release() {}, go: (...args) => navigation.push(args) }, MefiBoot: { pollStart: (key, fn) => polls.set(key, fn), pollStop: (key) => polls.delete(key) } }, document, localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) }, console });
+  vm.runInContext(stageSource, context);
   vm.runInContext(source, context);
   await context.window.MefiPlanning.open({ planId: item.id }); await flush();
   const input = async (id, value) => { const target = el(id); assert.ok(target, `Missing input ${id}`); target.value = value; await target.trigger("input"); };
@@ -233,4 +236,16 @@ test("external question changes refresh untouched fields while keeping actual ed
   assert.equal(env.el(`edit-question-${id}-text`).value, "My considered revision?");
   assert.equal(env.el(`save-question-${id}`).disabled, false, "a retained edit can still be saved after the question was externally resolved");
   assert.equal(env.el("suggest-questions").disabled, true);
+});
+
+test("a pushed board change repaints a converted plan without a task read", async () => {
+  const item = savedPlan(); item.status = "converted"; item.taskIds = ["first"];
+  const env = await environment(item);
+  let reads = 0; const original = env.bridge.tasksList;
+  env.bridge.tasksList = async (...args) => { reads += 1; return original(...args); };
+  env.events.tasks([{ id: "first", title: "Build it", projectId: "project-a", planningId: item.id, status: "active" }, { id: "foreign", title: "Elsewhere", projectId: "project-b", status: "active" }]);
+  assert.equal(env.el("work-first").dataset.taskStage, "running");
+  assert.equal(env.el("work-foreign"), undefined);
+  assert.equal(reads, 0, "the push carries the board; no read is issued");
+  assert.equal(env.calls.length, 0);
 });
