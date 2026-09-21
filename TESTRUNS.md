@@ -1,5 +1,29 @@
 # Test Runs
 
+Occlusion-probe cover guard landed, in-flight tree remainder closed
+out (2026-09-21, night, run_1790031887248_14 for
+task_65726c87fbcd7cf9, commit owner for the in-flight tree). The
+dirty-tree remainder after 3a6ef13 was the coverLost half of the
+parent hardening task ("Harden occlusion-probe fixture against
+external window destruction"): tests/fixtures/occlusion-probe-
+electron.cjs learns the mirror-image guard (cover "closed" listener
+with a coverTeardownStarted flag so fixture-requested destroys never
+fire, coverLostRecord carrying phase/trigger/occlusion detection/rAF
+growth/foreground/timeline tail plus any suppressed failure verbatim,
+finish() routing it to a clean exit) and tests/occlusion_probe.test.mjs
+skips with that reason before any per-phase assert, exactly like
+windowLost. Reviewed the full diff hunk by hunk, then serialized
+`node --test tests/occlusion_probe.test.mjs` passed strict native
+occlusion (document.hidden signal, occluded rAF growth 0, lag 0 ms,
+worker drift 161 ms, 1 pass / 0 fail, no skip — the interrupted
+run_1790030986320_1 ERR_ASSERTION exit-1 tail was that same probe
+under interference) and `npm run check` clean (90 targets, 177 specs,
+css, syntax). Not run here: the full npm test gate — 3a6ef13's gate
+was green on this tree's siblings and the changed files are exactly
+the serialized probe above. The one-line package-lock.json
+"license": "MIT" sync (package.json already declared it at HEAD;
+stale lock from a later npm install) committed separately.
+
 Full npm test gate green, verification-settlement work landed
 (2026-09-21, late evening, run_1790031327079_1 for
 task_073a02b3a82eec7d, resuming the interrupted

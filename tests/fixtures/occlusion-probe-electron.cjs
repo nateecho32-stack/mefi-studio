@@ -28,6 +28,16 @@
 // under `occlusionProxy` with the signal named, and `occluded` stays reserved
 // for real native occlusion; promoting the proxy to a sanctioned occlusion
 // signal is a contract change still awaiting owner sign-off.
+// The cover window gets the mirror-image guard: an externally closed cover
+// mid-measure un-occludes the probe, rAF legitimately resumes, and the strict
+// occluded-phase asserts would hard-fail on exactly the recovery behavior the
+// fixture itself proves — interference, not regression. The fixture listens
+// for the cover's own "closed" event (self-requested destroys are flagged so
+// they never trigger), records `coverLost` diagnostics — phase, trigger,
+// cover/probe state, how occlusion was detected, measured rAF growth, Win32
+// foreground identity, timeline tail, and the suppressed failure verbatim —
+// and exits cleanly so the test skips with an explicit reason, exactly like
+// `windowLost` and `occlusionUnsupported`.
 // External window destruction is handled the same way as an inert tracker:
 // something outside the fixture killing the probe window mid-phase (user,
 // shell, cleanup tooling) would otherwise surface as a bare "Object has been
@@ -74,6 +84,9 @@ let probeWindow = null;
 let coverWindow = null;
 let currentPhase = "startup";
 let windowClosedSignal = null;
+let coverClosedSignal = null;
+let coverClosedPhase = null;
+let coverTeardownStarted = false;
 
 // OS-level window identity for the diagnostic records: hwnd values for our
 // own windows plus who actually holds Win32 foreground at record time. This
@@ -169,6 +182,29 @@ async function windowLostRecord(trigger) {
   record.foreground = await snapshotForeground();
   return record;
 }
+// The cover-window twin of windowLostRecord: who held the desktop when the
+// cover died, how occlusion had been detected, what rAF growth was measured
+// (or that the measure never ran), and — when a strict assert had already
+// fired because the dying cover un-occluded the probe — the suppressed
+// failure verbatim so nothing is silently discarded.
+async function coverLostRecord(trigger, suppressedFailure) {
+  const record = {
+    reason: `cover window destroyed externally during the ${currentPhase} phase`,
+    trigger: String(trigger),
+    closedDuringPhase: coverClosedPhase,
+    phase: currentPhase,
+    coverDestroyed: coverWindow ? coverWindow.isDestroyed() : null,
+    windowDestroyed: probeWindow ? probeWindow.isDestroyed() : null,
+    windowVisible: probeWindow && !probeWindow.isDestroyed() ? probeWindow.isVisible() : null,
+    windowHandle: probeWindow && !probeWindow.isDestroyed() ? nativeWindowHandle(probeWindow) : null,
+    occlusionDetection: report.occluded?.detection ?? null,
+    measuredRafGrowth: report.occluded?.rafGrowth ?? null,
+    timelineTail: Array.isArray(report.occlusionTimeline) ? report.occlusionTimeline.slice(-8) : null,
+  };
+  if (suppressedFailure) record.suppressedFailure = String(suppressedFailure);
+  record.foreground = await snapshotForeground();
+  return record;
+}
 async function finish(error) {
   if (finished) return;
   finished = true;
@@ -179,8 +215,19 @@ async function finish(error) {
   if (failure && destroyedWindowError(error)) {
     report.windowLost = await windowLostRecord((error && error.message) || error);
     failure = null;
+  } else if (failure && coverClosedSignal) {
+    // The cover died externally mid-measure, so the probe resumed painting
+    // and a strict occluded-phase assert fired on the recovery behavior the
+    // fixture itself proves. Record the interference (with the suppressed
+    // failure preserved verbatim) and skip; only the cover's own teardown
+    // sets coverTeardownStarted, so a fixture-requested destroy never lands
+    // here.
+    report.coverLost = await coverLostRecord(coverClosedSignal, failure);
+    failure = null;
   } else if (!failure && windowClosedSignal) {
     report.windowLost = await windowLostRecord(windowClosedSignal);
+  } else if (!failure && coverClosedSignal) {
+    report.coverLost = await coverLostRecord(coverClosedSignal, null);
   }
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) window.destroy();
@@ -189,6 +236,7 @@ async function finish(error) {
   fs.writeFileSync(path.join(root, "report.json"), JSON.stringify(report, null, 2));
   if (failure) console.error(failure);
   else if (report.windowLost) console.log(`Probe window destroyed externally (test will skip): ${report.windowLost.reason} — trigger: ${report.windowLost.trigger}`);
+  else if (report.coverLost) console.log(`Cover window destroyed externally (test will skip): ${report.coverLost.reason} — trigger: ${report.coverLost.trigger}`);
   else if (report.occlusionUnsupported) console.log(`Occlusion capability absent on this desktop (test will skip): ${report.occlusionUnsupported.reason}`);
   else console.log("Occlusion probe fixture passed");
   process.exitCode = failure ? 1 : 0;
@@ -395,6 +443,19 @@ app.whenReady().then(async () => {
     backgroundColor: "#12233a",
   });
   coverWindow = cover;
+  // Proactive half of the cover interference guard, mirroring the probe
+  // window's "closed" handler: when something outside the fixture closes the
+  // cover mid-phase, record it and exit cleanly before the strict
+  // occluded-phase asserts can fail on the resumed rAF. Only the fixture's
+  // own teardown sets coverTeardownStarted, so self-inflicted destroys
+  // (visibility proxy, recovery) never take this path; finish()'s destroy
+  // loop sets `finished` first, covering end-of-run closes the same way.
+  cover.on("closed", () => {
+    if (finished || coverTeardownStarted) return;
+    coverClosedSignal = `cover window "closed" event during the ${currentPhase} phase (not requested by the fixture)`;
+    coverClosedPhase = currentPhase;
+    finish();
+  });
   await cover.loadURL("data:text/html,<title>occluder</title><body style=\"background:#12233a\"></body>");
   cover.show();
   cover.moveTop();
@@ -447,7 +508,7 @@ app.whenReady().then(async () => {
       signal: "visibility",
       contract: "hide()/show() prove not-rendered, not covered; this record never claims occlusion",
     };
-    if (!cover.isDestroyed()) cover.destroy();
+    if (!cover.isDestroyed()) { coverTeardownStarted = true; cover.destroy(); }
     await pause(300);
     window.hide();
     const flipDeadline = Date.now() + 10000;
@@ -551,6 +612,7 @@ app.whenReady().then(async () => {
   // can keep the region covered after the cover dies, so nudge the probe
   // window above everything if frames stay silent.
   currentPhase = "recovery";
+  coverTeardownStarted = true;
   cover.destroy();
   const recoverDeadline = Date.now() + 10000;
   const baseline = report.occluded.rafAfter;

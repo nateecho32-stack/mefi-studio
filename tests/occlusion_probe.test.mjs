@@ -13,7 +13,12 @@
 // assertion. External destruction of the probe window mid-phase is handled
 // the same way: the fixture reports `windowLost` (phase, trigger, window and
 // cover state, foreground identity) and this test skips with that reason —
-// a window killed by the environment says nothing about the contract.
+// a window killed by the environment says nothing about the contract. The
+// cover window has the mirror-image guard: an externally closed cover
+// mid-measure un-occludes the probe (rAF legitimately resumes), so the
+// fixture reports `coverLost` and this test skips the same way — the
+// environment removing the cover is interference, not an occlusion
+// regression.
 // Opt-in only (MEFI_OCCLUSION_PROXY=visibility, default off): the
 // fixture may additionally drive the occluded-phase branch with hide()/show()
 // — a "not rendered" proxy, never coverage ("hide is not coverage"; owner
@@ -68,6 +73,20 @@ test("an occluded booklet window's worker/MessageChannel channel answers while r
       const lost = report.windowLost;
       t.diagnostic(`probe window destroyed externally during ${lost.phase}: trigger=${lost.trigger}; windowDestroyed=${lost.windowDestroyed}, handle=${lost.windowHandle}, coverDestroyed=${lost.coverDestroyed}, coverVisible=${lost.coverVisible}, cover=${lost.coverHandle}, win32 foreground=${JSON.stringify(lost.foreground)}, timeline tail=${JSON.stringify(lost.timelineTail)}`);
       t.skip(`probe window was destroyed externally during the ${lost.phase} phase (${lost.trigger})`);
+      return;
+    }
+
+    // The cover twin of windowLost: something outside the fixture closed the
+    // cover mid-measure, un-occluding the probe — rAF legitimately resumed
+    // and the strict occluded-phase assertions were invalidated (had they
+    // already fired, the fixture suppressed them into coverLost.suppressedFailure).
+    // A cover killed by the environment says nothing about the occlusion
+    // contract, so the test skips with the explicit reason, before any
+    // per-phase assertion for the same partial-data reason as windowLost.
+    if (report.coverLost) {
+      const lost = report.coverLost;
+      t.diagnostic(`cover window destroyed externally during ${lost.phase}: trigger=${lost.trigger}; closedDuringPhase=${lost.closedDuringPhase}, coverDestroyed=${lost.coverDestroyed}, probe=${lost.windowHandle}, occlusion detected via=${lost.occlusionDetection ? JSON.stringify(lost.occlusionDetection) : "none"}, measured rAF growth=${lost.measuredRafGrowth}, suppressedFailure=${lost.suppressedFailure ? JSON.stringify(String(lost.suppressedFailure).slice(0, 400)) : "none"}, win32 foreground=${JSON.stringify(lost.foreground)}, timeline tail=${JSON.stringify(lost.timelineTail)}`);
+      t.skip(`cover window was destroyed externally during the ${lost.phase} phase (${lost.trigger})`);
       return;
     }
 
