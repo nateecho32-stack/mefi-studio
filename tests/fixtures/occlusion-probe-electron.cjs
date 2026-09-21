@@ -12,11 +12,26 @@
 // shown focused yet rAF stays loud behind it, or the mirror case where
 // document.hidden reads true while frames keep flowing — the fixture reports
 // `occlusionUnsupported` and exits cleanly so the test can skip with an
-// explicit reason; the strict occlusion assertions only run when real
+// explicit reason; the record carries foreground-window identity (Win32
+// GetForegroundWindow plus both windows' hwnds and the page's per-sample
+// hasFocus stamps) so a dead tracker is distinguishable from a failed focus
+// steal, and every foreground snapshot embeds a self-describing `session`
+// block (WTSGetActiveConsoleSessionId, WTSConnectState, input-desktop
+// openability/lock state, GetLastInputInfo idle ms) so even a NULL-foreground
+// record says what kind of desktop it was taken on; the strict occlusion
+// assertions only run when real
 // occlusion was actually observed (or rAF provably went silent under cover).
+// Opt-in alternate strict-phase signal (MEFI_OCCLUSION_PROXY=visibility,
+// default off): on occlusion-unsupported desktops hide()/show() may exercise
+// the downstream occluded-phase branch, but they prove "not rendered", never
+// "covered" — hide is not coverage. Proxy results are therefore reported
+// under `occlusionProxy` with the signal named, and `occluded` stays reserved
+// for real native occlusion; promoting the proxy to a sanctioned occlusion
+// signal is a contract change still awaiting owner sign-off.
 
 const { app, BrowserWindow, screen } = require("electron");
 const assert = require("node:assert/strict");
+const { execFile } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -54,6 +69,7 @@ async function finish(error) {
   if (failure) report.failure = failure;
   fs.writeFileSync(path.join(root, "report.json"), JSON.stringify(report, null, 2));
   if (failure) console.error(failure);
+  else if (report.occlusionUnsupported) console.log(`Occlusion capability absent on this desktop (test will skip): ${report.occlusionUnsupported.reason}`);
   else console.log("Occlusion probe fixture passed");
   process.exitCode = failure ? 1 : 0;
   app.quit();
@@ -135,6 +151,68 @@ app.whenReady().then(async () => {
     return samples;
   }
   const bestSample = (samples) => samples.reduce((best, sample) => (sample.lagMs < best.lagMs ? sample : best));
+
+  // OS-level window identity for the occlusionUnsupported record: hwnd values
+  // for our own windows plus who actually holds Win32 foreground at give-up
+  // time. This separates "the cover held foreground and the tracker simply
+  // never engaged" from "the focus steal never landed" — two failures with
+  // different fixes. GetForegroundWindow legitimately returns NULL on some
+  // desktops (observed live on this one), and that observation is itself the
+  // diagnosis, so the NULL case is reported, not treated as an error. Every
+  // snapshot — NULL foreground included — also carries a `session` block so
+  // the record is self-describing about the desktop it was taken on: the
+  // active console session id, the session's WTSConnectState, whether the
+  // input desktop is openable (locked/secure desktop) plus its name, and
+  // GetLastInputInfo-based idle time (a headless/unattended desktop reads a
+  // huge idleMs, which explains a NULL foreground at a glance).
+  function nativeWindowHandle(browserWindow) {
+    try {
+      const buffer = browserWindow.getNativeWindowHandle();
+      const value = buffer.byteLength >= 8 ? buffer.readBigUInt64LE(0) : BigInt(buffer.readUInt32LE(0));
+      return `0x${value.toString(16)}`;
+    } catch {
+      return null;
+    }
+  }
+  function snapshotForeground() {
+    if (process.platform !== "win32") return Promise.resolve(null);
+    const script = [
+      "$ErrorActionPreference = 'Stop'",
+      "Add-Type -TypeDefinition 'using System; using System.Text; using System.Runtime.InteropServices; public static class FgProbe { [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow(); [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId); [DllImport(\"user32.dll\", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount); [DllImport(\"kernel32.dll\")] public static extern uint WTSGetActiveConsoleSessionId(); [DllImport(\"kernel32.dll\")] public static extern uint GetTickCount(); [StructLayout(LayoutKind.Sequential)] public struct LASTINPUTINFO { public uint cbSize; public uint dwTime; } [DllImport(\"user32.dll\")] public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii); [DllImport(\"wtsapi32.dll\", SetLastError=true)] public static extern bool WTSQuerySessionInformation(IntPtr hServer, int sessionId, int infoClass, out IntPtr ppBuffer, out int pBytesReturned); [DllImport(\"wtsapi32.dll\")] public static extern void WTSFreeMemory(IntPtr pMemory); [DllImport(\"user32.dll\", SetLastError=true)] public static extern IntPtr OpenInputDesktop(uint flags, bool inherit, uint access); [DllImport(\"user32.dll\", CharSet=CharSet.Unicode)] public static extern bool GetUserObjectInformation(IntPtr hObj, int nIndex, StringBuilder lpInfo, int nLength, out int lpnLengthNeeded); [DllImport(\"user32.dll\")] public static extern bool CloseDesktop(IntPtr hDesktop); }'",
+      "$session = [ordered]@{ consoleSessionId = [FgProbe]::WTSGetActiveConsoleSessionId() }",
+      "$session.connectState = $null; $session.connectStateError = $null",
+      "$wtsBuf = [IntPtr]::Zero; $wtsLen = 0",
+      "if ([FgProbe]::WTSQuerySessionInformation([IntPtr]::Zero, -1, 8, [ref]$wtsBuf, [ref]$wtsLen)) { $session.connectState = [Runtime.InteropServices.Marshal]::ReadByte($wtsBuf); [void][FgProbe]::WTSFreeMemory($wtsBuf) } else { $session.connectStateError = [Runtime.InteropServices.Marshal]::GetLastWin32Error() }",
+      "$session.inputDesktop = $null; $session.inputDesktopLocked = $null; $session.inputDesktopError = $null",
+      "$inputDesktop = [FgProbe]::OpenInputDesktop(0, $false, 1)",
+      "$session.inputDesktopLocked = ($inputDesktop -eq [IntPtr]::Zero)",
+      "if ($inputDesktop -eq [IntPtr]::Zero) { $session.inputDesktopError = [Runtime.InteropServices.Marshal]::GetLastWin32Error() } else { $nameSb = New-Object System.Text.StringBuilder 256; $nameLen = 0; if ([FgProbe]::GetUserObjectInformation($inputDesktop, 2, $nameSb, 256, [ref]$nameLen)) { $session.inputDesktop = $nameSb.ToString() } else { $session.inputDesktopError = [Runtime.InteropServices.Marshal]::GetLastWin32Error() }; [void][FgProbe]::CloseDesktop($inputDesktop) }",
+      "$lii = New-Object \"FgProbe+LASTINPUTINFO\"",
+      "$lii.cbSize = [Runtime.InteropServices.Marshal]::SizeOf([type][FgProbe+LASTINPUTINFO])",
+      "$session.idleMs = $null",
+      "if ([FgProbe]::GetLastInputInfo([ref]$lii)) { $idle = [int64][FgProbe]::GetTickCount() - [int64]$lii.dwTime; if ($idle -lt 0) { $idle += 4294967296 }; $session.idleMs = $idle }",
+      "$h = [FgProbe]::GetForegroundWindow()",
+      "if ($h -eq [IntPtr]::Zero) { Write-Output ([ordered]@{ hwnd = '0x0'; title = $null; pid = $null; process = $null; session = $session } | ConvertTo-Json -Compress -Depth 4); exit 0 }",
+      "$owner = [uint32]0",
+      "[void][FgProbe]::GetWindowThreadProcessId($h, [ref]$owner)",
+      "$sb = New-Object System.Text.StringBuilder 512",
+      "[void][FgProbe]::GetWindowText($h, $sb, 512)",
+      "$name = ''",
+      "try { $name = (Get-Process -Id $owner -ErrorAction Stop).ProcessName } catch {}",
+      "$obj = [ordered]@{ hwnd = ('0x{0:x}' -f $h.ToInt64()); title = $sb.ToString(); pid = $owner; process = $name; session = $session }",
+      "Write-Output ($obj | ConvertTo-Json -Compress -Depth 4)",
+    ].join("; ");
+    return new Promise((resolve) => {
+      execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script], { windowsHide: true, timeout: 8000 }, (error, stdout) => {
+        if (error) return resolve({ error: String(error.message || error) });
+        try {
+          resolve(JSON.parse(String(stdout).trim()));
+        } catch (parseError) {
+          resolve({ error: `unparseable snapshot ${String(stdout).slice(0, 200)}: ${parseError}` });
+        }
+      });
+    });
+  }
 
   await window.loadFile(path.join(studio, "renderer", "booklet.html"));
 
@@ -250,6 +328,7 @@ app.whenReady().then(async () => {
   let lastTicks = -1;
   let lastChange = Date.now();
   let reasserted = 0;
+  let reassertions = 0;
   let occluded = null;
   while (Date.now() < deadline) {
     // A stray click can hand foreground (and the tracker's exemption) to the
@@ -257,9 +336,10 @@ app.whenReady().then(async () => {
     // re-raises the probe.
     if (Date.now() - reasserted > 2000) {
       reasserted = Date.now();
+      reassertions += 1;
       if (!cover.isDestroyed()) { cover.moveTop(); app.focus({ steal: true }); cover.focus(); }
     }
-    const state = await run("return { hidden: document.hidden, visibility: document.visibilityState, ticks: window.__rafTicks|0 };");
+    const state = await run("return { hidden: document.hidden, visibility: document.visibilityState, ticks: window.__rafTicks|0, focused: document.hasFocus() };");
     report.occlusionTimeline.push({ at: Date.now(), ...state });
     if ((state.hidden && trustHidden) || (state.ticks === lastTicks && Date.now() - lastChange >= 1500)) {
       occluded = { ...state, signal: state.hidden && trustHidden ? "document.hidden" : "raf-silence" };
@@ -267,6 +347,52 @@ app.whenReady().then(async () => {
     }
     if (state.ticks !== lastTicks) { lastTicks = state.ticks; lastChange = Date.now(); }
     await pause(200);
+  }
+  // Opt-in visibility proxy for the strict phase (default off): mirrors the
+  // occluded-phase measurements using hide()/show() instead of a cover. Every
+  // result is namespaced under `occlusionProxy` — the phase is "not rendered",
+  // not occlusion — and the report never fills `occluded` from it.
+  async function runVisibilityProxy() {
+    const proxy = {
+      signal: "visibility",
+      contract: "hide()/show() prove not-rendered, not covered; this record never claims occlusion",
+    };
+    if (!cover.isDestroyed()) cover.destroy();
+    await pause(300);
+    window.hide();
+    const flipDeadline = Date.now() + 10000;
+    let state = null;
+    while (Date.now() < flipDeadline) {
+      state = await run("return { hidden: document.hidden, visibility: document.visibilityState, ticks: window.__rafTicks|0, focused: document.hasFocus() };");
+      if (state.hidden) break;
+      await pause(200);
+    }
+    proxy.windowState = { visible: window.isVisible(), minimized: window.isMinimized() };
+    proxy.hidden = state?.hidden === true;
+    if (!proxy.hidden) {
+      proxy.failed = `document.hidden never flipped within 10s after hide() (state=${JSON.stringify(state)})`;
+      return proxy;
+    }
+    await pause(700);
+    proxy.rafBefore = await run("return window.__rafTicks|0;");
+    await pause(3000);
+    proxy.rafAfter = await run("return window.__rafTicks|0;");
+    proxy.rafGrowth = proxy.rafAfter - proxy.rafBefore;
+    proxy.state = await run("return { hidden: document.hidden, visibility: document.visibilityState, focused: document.hasFocus() };");
+    proxy.probeSamples = await sampleProbe();
+    proxy.probe = bestSample(proxy.probeSamples);
+    proxy.worker = await run("return window.__workerProbe();");
+    proxy.messageChannelMs = await run("return window.__messageChannelProbe();");
+    window.show();
+    window.focus();
+    const recoverDeadline = Date.now() + 10000;
+    const baseline = proxy.rafAfter;
+    while (Date.now() < recoverDeadline) {
+      const after = await run("return { hidden: document.hidden, ticks: window.__rafTicks|0 };");
+      if (after.ticks > baseline + 5) { proxy.recovered = after; break; }
+      await pause(200);
+    }
+    return proxy;
   }
   if (!occluded) {
     // Some desktops never engage Chromium's native occlusion tracker at all:
@@ -276,7 +402,12 @@ app.whenReady().then(async () => {
     // an environment capability, not an app regression — report it so the
     // test can skip with an explicit reason instead of failing every run,
     // and leave enough diagnostics to tell "tracker never engaged" from
-    // "the cover never covered".
+    // "the cover never covered": hwnd identity for both windows, who held
+    // Win32 foreground at give-up time (NULL is a real observation here, not
+    // an error), and whether the page itself saw focus across the wait (the
+    // timeline's focused stamps) — cover-foreground + page-focus=false means
+    // the tracker was simply inert; page-focus=true throughout means the
+    // focus steal never landed.
     report.occlusionUnsupported = {
       reason: trustHidden
         ? "cover shown focused but visibility never flipped and rAF never went silent within 15s"
@@ -284,8 +415,17 @@ app.whenReady().then(async () => {
       coverVisible: !cover.isDestroyed() && cover.isVisible(),
       windowState: { visible: window.isVisible(), minimized: window.isMinimized() },
       visibilitySignalReliable: trustHidden,
+      coverHandle: nativeWindowHandle(cover),
+      probeHandle: nativeWindowHandle(window),
+      foreground: await snapshotForeground(),
+      reassertions,
       timelineTail: report.occlusionTimeline.slice(-8),
     };
+    if (process.env.MEFI_OCCLUSION_PROXY === "visibility") {
+      report.occlusionProxy = await runVisibilityProxy();
+    } else {
+      report.occlusionProxyDeclined = "MEFI_OCCLUSION_PROXY not set to \"visibility\"; the occluded phase is untested on this desktop (hide()/show() never satisfy the coverage contract without owner sign-off)";
+    }
     return finish();
   }
   report.occluded = {

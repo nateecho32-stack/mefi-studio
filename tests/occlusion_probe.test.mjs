@@ -10,7 +10,12 @@
 // after the visible-phase CSP/worker/probe assertions still ran — occlusion
 // is an environment capability, so its absence here is information, not a
 // regression. Any environment that does produce occlusion keeps every strict
-// assertion.
+// assertion. Opt-in only (MEFI_OCCLUSION_PROXY=visibility, default off): the
+// fixture may additionally drive the occluded-phase branch with hide()/show()
+// — a "not rendered" proxy, never coverage ("hide is not coverage"; owner
+// sign-off on that contract change is still pending) — and those results are
+// asserted as proxy results while the test pins that `occluded` was never
+// claimed from them.
 //
 // Run: node --test tests/occlusion_probe.test.mjs
 
@@ -62,7 +67,30 @@ test("an occluded booklet window's worker/MessageChannel channel answers while r
     // observation is logged as information, not failure.
     if (report.occlusionUnsupported) {
       const unsupported = report.occlusionUnsupported;
-      t.diagnostic(`occlusion capability absent on this desktop: ${unsupported.reason}; cover visible=${unsupported.coverVisible}, window=${JSON.stringify(unsupported.windowState)}, rAF stayed loud (timeline tail=${JSON.stringify(unsupported.timelineTail)})`);
+      if (report.occlusionProxy) {
+        // Opt-in visibility proxy ran: assert the downstream occluded-phase
+        // branch on its own record, and pin that the proxy never masqueraded
+        // as occlusion — hide() is "not rendered", not covered.
+        const proxy = report.occlusionProxy;
+        assert.equal(proxy.signal, "visibility", "the proxy record must name its signal");
+        assert.equal(report.occluded, undefined, "the visibility proxy must never claim native occlusion");
+        if (proxy.failed) assert.fail(`visibility proxy could not flip document.hidden: ${proxy.failed}`);
+        assert.equal(proxy.hidden, true, "hide() must flip document.hidden before the proxy phase measures anything");
+        assert.equal(proxy.windowState.minimized, false, "the proxy must use hide, not minimize");
+        assert.equal(proxy.rafGrowth, 0, `rAF must stay silent while hidden (growth=${proxy.rafGrowth})`);
+        assert.ok(Array.isArray(proxy.probeSamples) && proxy.probeSamples.length >= 1, "fixture must report every proxy probe sample");
+        for (const [index, sample] of proxy.probeSamples.entries()) {
+          assert.notEqual(sample.answered?.frames, true, `proxy probe sample ${index + 1}/${proxy.probeSamples.length} must not answer via frames: ${JSON.stringify(sample)}`);
+          assert.ok(Number.isFinite(sample.answered?.workerDriftMs), `proxy probe sample ${index + 1} must answer via the unthrottled channel: ${JSON.stringify(sample)}`);
+        }
+        assert.ok(proxy.probe.lagMs < 100, `proxy lag must be ~0 on the cleanest of ${proxy.probeSamples.length} samples, got ${proxy.probe.lagMs}ms (sentinel is 1000, samples=${JSON.stringify(proxy.probeSamples.map((sample) => sample.lagMs))})`);
+        assert.equal(proxy.worker.constructed, true, "blob worker must still construct and answer while hidden");
+        assert.ok(Number.isFinite(proxy.messageChannelMs) && proxy.messageChannelMs < 200, `proxy MessageChannel round trip too slow: ${proxy.messageChannelMs}ms`);
+        assert.ok(proxy.recovered, "rAF must resume after show()");
+        t.diagnostic(`occlusion capability absent; strict phase exercised via the visibility proxy (not occlusion): rAF growth ${proxy.rafGrowth}; probe ${JSON.stringify(proxy.probe.answered)}; lag ${proxy.probe.lagMs}ms of ${proxy.probeSamples.length} samples (${proxy.probeSamples.map((sample) => sample.lagMs).join(", ")}); worker drift ${proxy.worker.driftMs}ms; MessageChannel ${proxy.messageChannelMs}ms; recovered=${Boolean(proxy.recovered)}`);
+        return;
+      }
+      t.diagnostic(`occlusion capability absent on this desktop: ${unsupported.reason}; cover visible=${unsupported.coverVisible}, window=${JSON.stringify(unsupported.windowState)}, cover=${unsupported.coverHandle}, probe=${unsupported.probeHandle}, win32 foreground=${JSON.stringify(unsupported.foreground)}, focus reassertions=${unsupported.reassertions}, rAF stayed loud (timeline tail=${JSON.stringify(unsupported.timelineTail)})`);
       t.skip("this desktop never emits Electron occlusion events (visibility never flipped, rAF stayed loud under a focused cover)");
       return;
     }
