@@ -192,7 +192,8 @@
       row.append(head, text("div", "ws-message-body", message.text));
       list.append(row);
     }
-    list.scrollTop = pinned ? list.scrollHeight : oldTop;
+    // The welcome reads top-down; only a real conversation pins to its newest line.
+    list.scrollTop = !messages.length ? 0 : pinned ? list.scrollHeight : oldTop;
   }
   const scoped = (rows) => rows.filter((row) => !row.projectId || row.projectId === state.activeId);
   const workLabels = { all: "All work", open: "Queue", ideas: "Ideas", review: "Review", done: "Done" };
@@ -462,10 +463,9 @@
     $("narration").textContent = held && !working ? "Agents are waiting for you. Press Start agents when you're ready; your tasks and ideas are saved." : !working && !paused && workersOff ? "Coding workers are off. Your tasks are saved; use Work through backlog when you're ready to start them." : narration;
     $("companion-track").dataset.station = working ? "make" : reviewing ? "review" : "listen";
     $("companion-track").classList.toggle("busy", working || state.pending);
-    $("pause").textContent = held ? "Start agents" : paused ? "Resume" : "Pause";
-    $("pause").title = held ? "Start the assistant and the coding workers. Nothing has run since Studio opened." : "Pause new work. Running jobs finish normally.";
-    $("connection").textContent = !api() ? "Browser preview" : held ? "Agents waiting for you" : paused ? "New work paused" : workersOff ? "Coding workers off" : assistant.ai?.keyPresent === false ? "Connect an AI in Settings" : working ? "Working with you" : "Ready when you are";
     renderDashboard();
+    // The pill reads the same run state as the Service tile and its button.
+    $("connection").textContent = runState().label;
     $("connection").classList.toggle("working", working);
     const logs = (assistant.log || []).filter((entry) => entry.kind !== "tick").slice(-8).reverse();
     const signature = JSON.stringify(logs);
@@ -484,11 +484,14 @@
     const assistantPaused = assistant.status === "paused" || assistant.prefs?.paused === true;
     const admissionOff = state.status.execute === false;
     const running = state.status.running || [];
+    // The launch hold is not a pause: nothing has run since Studio opened, and
+    // only the operator's Start agents lets anything begin.
+    const launchHold = state.status.held === true && !running.length;
     const held = assistantPaused || admissionOff;
     const keyMissing = assistant.ai?.keyPresent === false;
-    const label = !api() ? "Browser preview" : assistantPaused && admissionOff ? "Paused" : assistantPaused ? "Assistant paused" : admissionOff ? "New work held" : keyMissing ? "No AI connected" : running.length ? "Working" : "Ready";
-    const note = !api() ? "Live status needs the desktop app." : assistantPaused && admissionOff ? "All new work is held. Running jobs finish normally." : assistantPaused ? "The assistant is paused; queued tasks still start when a worker is free." : admissionOff ? "Queued tasks wait; the assistant still replies and takes answers." : keyMissing ? "Connect an AI in Settings to start." : state.status.waiting ? String(state.status.waiting) : running.length ? `${running.length} job${running.length === 1 ? "" : "s"} running` : "Waiting for work.";
-    return { held, label, note, running, tone: !api() ? "idle" : held ? "held" : keyMissing ? "warn" : running.length ? "busy" : "ok" };
+    const label = !api() ? "Browser preview" : launchHold ? "Waiting for you" : assistantPaused && admissionOff ? "Paused" : assistantPaused ? "Assistant paused" : admissionOff ? "New work held" : keyMissing ? "No AI connected" : running.length ? "Working" : "Ready";
+    const note = !api() ? "Live status needs the desktop app." : launchHold ? "Nothing has run since launch." : assistantPaused && admissionOff ? "All new work is held. Running jobs finish normally." : assistantPaused ? "The assistant is paused; queued tasks still start when a worker is free." : admissionOff ? "Queued tasks wait; the assistant still replies and takes answers." : keyMissing ? "Connect an AI in Settings to start." : state.status.waiting ? String(state.status.waiting) : running.length ? `${running.length} job${running.length === 1 ? "" : "s"} running` : "Waiting for work.";
+    return { held, launchHold, label, note, running, tone: !api() ? "idle" : launchHold ? "warn" : held ? "held" : keyMissing ? "warn" : running.length ? "busy" : "ok" };
   }
   const showFilter = (filter) => { state.filter = filter; state.limit = 20; $("work-list").scrollTop = 0; renderWork(); };
   // Studio at a glance: the landing strip answers "is anything waiting on me,
@@ -501,8 +504,11 @@
     $("dash-service").dataset.tone = run.tone;
     $("dash-service-value").textContent = run.label;
     $("dash-service-note").textContent = run.note;
-    $("pause").textContent = run.held ? "Resume" : "Pause";
-    $("pause").title = run.held ? "Let new work start again." : "Hold all new work: queued tasks, builds and the assistant's own suggestions. Running jobs finish normally.";
+    $("pause").textContent = run.launchHold ? "Start agents" : run.held ? "Resume" : "Pause";
+    $("pause").title = run.launchHold ? "Start the assistant and the coding workers. Nothing has run since Studio opened." : run.held ? "Let new work start again." : "Hold all new work: queued tasks, builds and the assistant's own suggestions. Running jobs finish normally.";
+    // The one control the launch hold needs reads as the primary action.
+    $("pause").classList.toggle("primary", run.launchHold);
+    $("pause").classList.toggle("ghost", !run.launchHold);
     const running = run.running;
     const limit = state.status.adaptiveParallel ? null : Number(state.status.parallel) || null;
     $("dash-workers").dataset.tone = running.length ? "busy" : "idle";
@@ -520,7 +526,9 @@
     const ready = state.backlog?.counts?.ready || 0;
     $("dash-next").dataset.tone = next ? "ok" : "idle";
     $("dash-next-value").textContent = nextTask?.title || next?.title || (ready ? `${ready} ready` : "Queue is empty");
-    $("dash-next-note").textContent = next ? `${ready} ready${state.backlog?.summary ? ` · ${state.backlog.summary}` : ""}` : state.backlog?.summary || "";
+    const summary = state.backlog?.summary || "";
+    // The backlog summary usually already reads "N ready to work on".
+    $("dash-next-note").textContent = next ? (/\bready\b/i.test(summary) ? summary : [`${ready} ready`, summary].filter(Boolean).join(" · ")) : summary;
   }
   function renderMachineTile() {
     if (!$("dash-machine")) return;
@@ -780,7 +788,21 @@
           feedback(result.running ? "Agents started. New work can begin." : "Agents are on. The assistant was paused last time; press Resume to let new work start.");
           return;
         }
-        const paused = state.assistant.status === "paused" || state.assistant.prefs?.paused; const result = guard(await api().assistantControl(paused ? "resume" : "pause")); state.assistant = result.state; renderCompanion(); scheduleBacklogRead(); feedback(paused ? "New work can start again." : "New work paused. Running jobs finish normally.");
+        if (runState().held) {
+          // Resume reopens admission and wakes the assistant in one step, so a
+          // hold left by Stop all or a tripped breaker clears with the pause.
+          const result = guard(await api().assistantControl("start-work"));
+          if (result.state) state.assistant = result.state;
+          if (result.autopilot) state.status = { ...state.status, ...result.autopilot };
+          feedback("New work can start again.");
+        } else {
+          if (!api()?.backlogControl) throw new Error("Open the updated desktop app to pause new work.");
+          const result = guard(await api().backlogControl({ action: "pause", projectId: state.activeId }));
+          if (result.backlog) state.backlog = result.backlog;
+          state.status = { ...state.status, execute: false };
+          feedback("New work paused. Running jobs finish normally.");
+        }
+        renderCompanion(); renderBacklog(); scheduleBacklogRead();
       }
       catch (error) { feedback(error.message, true); } finally { controls(); }
     });

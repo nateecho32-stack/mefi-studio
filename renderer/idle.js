@@ -334,6 +334,10 @@
     follow: null,
     followReadAt: 0,
     followZoomTarget: null,
+    zoomTarget: null, // a zoom the camera glides to (a click, a search hit); null once settled
+    cameraMoving: false, // set per frame while the camera or its zoom is still in flight
+    center: null, // the eased projection centre (stepCenter); null snaps it on the next frame
+    graphFrame: null, // the rectangle between the fixed rails, before floating panels carve it (usableArea)
     followStatusKey: "",
     completedTaskIds: new Set(),
     // Resolves when an enter()'s first tasks+graph build has settled; the
@@ -3096,12 +3100,36 @@
     return state.active && !state.feedCollapsed && !!el.feed && !el.feed.hidden && el.feed.offsetWidth > 0;
   }
 
+  // The projection centre is the middle of the clear rectangle. When a
+  // floating panel moves it — the selection card opening on a click, the
+  // Follow banner — the centre glides there at the camera's rate, so the
+  // tree slides instead of jumping. It snaps when the frame itself changes
+  // (the window, the rails, a feed toggle: the layout re-seeds against it
+  // anyway), in the overview camera, whose back-off is instant, and under
+  // reduced motion. Returns how far it still has to go, in pixels.
+  function stepCenter(area, still) {
+    const frame = state.graphFrame ?? area;
+    const frameKey = `${frame.x},${frame.y},${frame.w},${frame.h}`;
+    const tx = area.x + area.w / 2, ty = area.y + area.h / 2;
+    const center = state.center;
+    const left = center ? Math.hypot(tx - center.x, ty - center.y) : 0;
+    if (!center || still || state.camMode === "orbit" || center.frameKey !== frameKey || left < 0.25) {
+      state.center = { x: tx, y: ty, frameKey };
+      return 0;
+    }
+    center.x += (tx - center.x) * CAMERA_EASE;
+    center.y += (ty - center.y) * CAMERA_EASE;
+    return left * (1 - CAMERA_EASE);
+  }
+
   function centerX() {
+    if (state.center) return state.center.x;
     const area = usableArea();
     return area.x + area.w / 2;
   }
 
   function centerY() {
+    if (state.center) return state.center.y;
     const area = usableArea();
     return area.y + area.h / 2;
   }
@@ -3153,9 +3181,13 @@
   function usableArea() {
     if (state.settingsPreview) {
       const area = state.settingsPreview;
+      state.graphFrame = { x: area.x, y: area.y, w: area.w, h: area.h };
       return { x: area.x, y: area.y, w: area.w, h: area.h };
     }
-    if (state.ambientZen) return { x: 28, y: 28, w: Math.max(1, el.width - 56), h: Math.max(1, el.height - 56) };
+    if (state.ambientZen) {
+      state.graphFrame = { x: 28, y: 28, w: Math.max(1, el.width - 56), h: Math.max(1, el.height - 56) };
+      return { ...state.graphFrame };
+    }
     const now = Date.now();
     if (state.graphArea && now - state.graphAreaAt < 250) return state.graphArea;
     const visibleBox = (node) => {
@@ -3195,10 +3227,17 @@
       if (feed && feed.height < el.height * 0.48) top = Math.max(top, feed.bottom + 20);
     }
     if (bottom - top < 160) top = Math.max(20, bottom - 160);
-    let spaces = [{ x: left, y: top, w: Math.max(160, right - left), h: Math.max(160, bottom - top) }];
+    // The frame: what is left between the fixed rails before floating panels
+    // carve it. The persisted node layout is keyed on it (layoutProjectedGraphImpl).
+    state.graphFrame = { x: left, y: top, w: Math.max(160, right - left), h: Math.max(160, bottom - top) };
+    let spaces = [{ ...state.graphFrame }];
     // Details, menus and the Follow banner can extend into the space between
     // the main rails. Fit the graph into the largest remaining clear rectangle
-    // instead of merely hiding its labels behind those panels.
+    // instead of merely hiding its labels behind those panels. (The persisted
+    // node layout is keyed on the frame above, not on this rectangle, so the
+    // selection card opening on a click carves the rectangle without
+    // re-seeding the tree, and the projection centre glides after it —
+    // stepCenter — instead of jumping.)
     for (const panel of [feed, chat, visibleBox(el.info), visibleBox(el.followStatus), visibleBox(el.legend), visibleBox(el.pop)]) {
       if (!panel) continue;
       const x = panel.left - 20, y = panel.top - 20, rightEdge = panel.right + 20, bottomEdge = panel.bottom + 20;
@@ -3246,6 +3285,19 @@
 
   function setZoom(value) {
     state.zoom = Math.min(2.6, Math.max(0.45, value));
+    state.zoomTarget = null; // an instant zoom (wheel, fit, restore) ends any glide
+  }
+
+  // A zoom the camera glides to instead of snapping: the frame loop eases
+  // state.zoom toward it at the camera's own rate, so a click closes in on a
+  // node with the scale and the pan arriving together. Snapping the scale
+  // first threw the clicked node outward from the centre (off-screen for an
+  // edge node) before the pan brought it back — the jump a click used to
+  // make. Reduced motion lands at once, like the camera does.
+  function glideZoom(value) {
+    const target = Math.min(2.6, Math.max(0.45, value));
+    if (noMotion()) { setZoom(target); return; }
+    state.zoomTarget = target;
   }
 
   function fitAll() {
@@ -3270,6 +3322,7 @@
   function refitLayout() {
     state.screenLayout = null;
     state.overviewScale = 1;
+    state.center = null; // the centre snaps to the refit frame
     state.camera.tx = 0;
     state.camera.ty = 0;
     state.camera.tz = 0;
@@ -3998,7 +4051,13 @@
 
   function layoutProjectedGraphImpl(projected, area, mode, animationTime, still) {
     const layoutName = state.nodeLayout ?? "constellation";
-    const key = `${layoutName}|${state.view}|${area.x},${area.y},${area.w},${area.h}`;
+    // Keyed on the frame between the rails, not on the clear rectangle: a
+    // floating panel (the selection card on a click) shrinks the rectangle
+    // without changing where the anchors belong, and re-seeding every anchor
+    // for it made the tree jump under the click. Orbit's overview back-off
+    // below still keeps the anchors inside the clear rectangle.
+    const frame = state.graphFrame ?? area;
+    const key = `${layoutName}|${state.view}|${frame.x},${frame.y},${frame.w},${frame.h}`;
     if (state.screenLayout?.key !== key) {
       state.screenLayout = { key, nodes: new Map(), slots: new Map() };
       state.overviewScale = 1;
@@ -4817,13 +4876,14 @@
   function renderAgentModeControl() {
     const assistant = state.assistant;
     const known = ["swarm", "cluster"].includes(assistant?.mode);
-    if (el.feedAgentMode) {
-      el.feedAgentMode.disabled = Boolean(state.agentModeSaving) || !known || !window.mefiStudio?.assistantAutopilot;
-      if (!state.agentModeSaving) el.feedAgentMode.value = assistant?.mode === "cluster" ? "cluster" : "swarm";
-      el.feedAgentMode.setAttribute("aria-busy", String(Boolean(state.agentModeSaving)));
-      el.feedAgentMode.title = "Both modes use the Assistant to plan, delegate subtasks and review results. Swarm also works across ready tasks; Cluster keeps agents on one shared task. Applies to all projects; current work finishes when switching.";
+    // The tree toolbar and the Work settings view show the same selector.
+    for (const control of [el.feedAgentMode, el.settingsAgentMode].filter(Boolean)) {
+      control.disabled = Boolean(state.agentModeSaving) || !known || !window.mefiStudio?.assistantAutopilot;
+      if (!state.agentModeSaving) control.value = assistant?.mode === "cluster" ? "cluster" : "swarm";
+      control.setAttribute("aria-busy", String(Boolean(state.agentModeSaving)));
+      control.title = "Both modes use the Assistant to plan, delegate subtasks and review results. Swarm also works across ready tasks; Cluster keeps agents on one shared task. Applies to all projects; current work finishes when switching.";
     }
-    if (el.feedAgentModeNote) el.feedAgentModeNote.textContent = state.agentModeSaving ? "Saving agent mode…" : !known ? "Loading agent mode…" : assistant.mode === "swarm"
+    if (el.feedAgentModeNote) el.feedAgentModeNote.textContent = state.agentModeSaving ? "Saving agent mode…" : !window.mefiStudio ? "Available in the desktop app." : !known ? "Loading agent mode…" : assistant.mode === "swarm"
       ? "Swarm · agents collaborate on tasks and their subtasks across the queue. Pause, approvals and capacity still apply."
       : assistant.clusterFocus?.title ? `Cluster · agents focus on: ${assistant.clusterFocus.title}`
       : autopilotJobs(assistant).length ? "Cluster · current workers finish before agents focus on one task."
@@ -4839,13 +4899,14 @@
     if (el.autopilotToggle) {
       el.autopilotToggle.checked = Boolean(state.assistant?.enabled);
       el.autopilotToggle.disabled = state.treeStatus !== "ok";
-      const wrap = el.autopilotToggle.closest(".switch");
+      const wrap = el.autopilotToggle.closest(".setting-row") ?? el.autopilotToggle.closest(".switch");
       if (wrap) wrap.hidden = !window.mefiStudio;
     }
     if (el.settingsState) {
-      el.settingsState.textContent = !window.mefiStudio ? "desktop only"
+      el.settingsState.textContent = !window.mefiStudio ? "Desktop only"
         : !state.assistant ? "…"
-        : state.assistant.enabled ? "autopilot on" : "autopilot off";
+        : state.assistant.enabled ? "Autopilot on" : "Autopilot off";
+      el.settingsState.dataset.on = String(Boolean(window.mefiStudio && state.assistant?.enabled));
     }
   }
 
@@ -5272,7 +5333,9 @@
   function growArea(area) {
     if (!area) return;
     area.style.height = "auto";
-    area.style.height = `${Math.min(120, Math.max(38, area.scrollHeight))}px`;
+    const height = Math.min(120, Math.max(38, area.scrollHeight));
+    area.style.height = `${height}px`;
+    area.style.overflowY = area.scrollHeight > height + 1 ? "auto" : "hidden";
   }
 
   // The reply-is-coming bubble: a responder job in the work journal means a
@@ -5335,8 +5398,9 @@
       el.chatInput.placeholder = !bridge
         ? "desktop app only"
         : focused
-          ? `Work on "${String(focused.label || focused.id).slice(0, 40)}"… (Enter)`
-          : "Message the assistant… (Enter)";
+          ? `Work on "${String(focused.label || focused.id).slice(0, 22).trimEnd()}${String(focused.label || focused.id).length > 22 ? "…" : ""}"`
+          : "Message the assistant…";
+      if (bridge) el.chatInput.title = "Enter sends · Shift+Enter for a new line";
       growArea(el.chatInput);
     }
     if (el.chatSend) {
@@ -5424,7 +5488,7 @@
     // navigation, a card link) — the camera belongs to them from here on.
     setCamMode("free", { quiet: true });
     focusOn(node);
-    if (zoom) setZoom(Math.max(state.zoom, zoom));
+    if (zoom) glideZoom(Math.max(state.zoomTarget ?? state.zoom, zoom));
   }
 
   function onActivity(data) {
@@ -5644,7 +5708,11 @@
       frameRequest = requestAnimationFrame(frame);
       return;
     }
-    if (!document.hidden && time - lastFrameAt >= 33) {
+    // ~30 fps. The gate sits a little under the two-tick spacing (33.3 ms at
+    // 60 Hz): vsync timestamps jitter by a millisecond or two, and a 32.9 ms
+    // tick that missed a 33 ms gate cost a whole extra tick — a 50 ms hitch
+    // that read as judder in every camera glide.
+    if (!document.hidden && time - lastFrameAt >= 30) {
       lastFrameAt = time;
       const profiler = globalThis.window?.MefiProfiler;
       const span = profiler?.begin("command.frame");
@@ -6379,6 +6447,14 @@
   // again), else — only for the card the user is on — the least-bad spot.
   function placeCallout(node, p, size, projected, placedRects, hud, hitsNode, area, now, allowDirty = false) {
     const previous = state.callouts.get(node.id) ?? null;
+    // While the camera is in flight (a click closing in, a search hit) a card
+    // keeps the spot it had: re-deciding every frame against neighbours that
+    // are still moving made the cards hop. Placement resumes once the camera
+    // settles, with a fresh hold for whatever ended up blocked.
+    if (previous && state.cameraMoving) {
+      state.callouts.set(node.id, { ...previous, blockedSince: null, at: now });
+      return calloutLayout(node, p, previous, size);
+    }
     let chosen = null, soft = null, softScore = Infinity, fallback = null, fallbackScore = Infinity;
     for (const candidate of calloutCandidates(previous)) {
       const layout = calloutLayout(node, p, candidate, size);
@@ -6648,7 +6724,7 @@
     selectNode(node);
     setCamMode("free", { quiet: true });
     focusOn(node);
-    setZoom(FOCUS_ZOOM[node.kind] ?? 1.9);
+    glideZoom(FOCUS_ZOOM[node.kind] ?? 1.9);
     if (state.orbit === "paused" && state.view !== "2d" && !noMotion()) setOrbit("auto", { quiet: true });
     state.settleUntil = 0;
     return true;
@@ -6690,6 +6766,7 @@
       state.graphFrameKey = graphFrameKey;
       if (state.camMode === "orbit" || state.camMode === "follow") autoFit();
     }
+    const centerFlight = stepCenter(graphArea, still);
     updateFollowCamera(Date.now());
     const target = orbitTarget(energy);
     state.orbitVel += (target - state.orbitVel) * ORBIT_EASE;
@@ -6705,6 +6782,16 @@
       state.camera.z += (state.camera.tz - state.camera.z) * CAMERA_EASE;
     }
     if (state.camMode === "follow" && state.followZoomTarget != null && !still) state.zoom += (state.followZoomTarget - state.zoom) * 0.065;
+    if (state.zoomTarget != null) {
+      // The glide a click (or a search hit) asked for: the same ease as the
+      // camera, so scale and pan settle together; snap and stop once there.
+      if (still || Math.abs(state.zoomTarget - state.zoom) < 0.003) setZoom(state.zoomTarget);
+      else state.zoom += (state.zoomTarget - state.zoom) * CAMERA_EASE;
+    }
+    // Callouts keep their spots while the camera is in flight (placeCallout):
+    // "in flight" is a pan still worth more than a few pixels, or a zoom glide.
+    const flightPx = Math.hypot(state.camera.tx - state.camera.x, state.camera.ty - state.camera.y, state.camera.tz - state.camera.z) * state.fit * state.zoom * (state.overviewScale ?? 1);
+    state.cameraMoving = !still && (flightPx > 8 || centerFlight > 8 || (state.zoomTarget != null && Math.abs(state.zoomTarget - state.zoom) > 0.03));
 
     const { ctx } = el;
     // Two layers: the sky, and while a node is focused or a card hovered
@@ -7907,7 +7994,9 @@
     title.className = "card-title clamp-3";
     title.textContent = node.label ?? node.kind;
     title.title = node.label ?? node.kind;
-    info.append(kicker, title);
+    // The assistant card's eyebrow already reads "Assistant": no second line.
+    info.append(kicker);
+    if (node.kind !== "assistant" || String(node.label ?? "").trim().toLowerCase() !== "assistant") info.append(title);
 
     const kv = document.createElement("div");
     kv.className = "kv";
@@ -7995,7 +8084,15 @@
           const item = document.createElement("div");
           item.className = "cp-note checkpoint-note";
           const status = busy.has(task.id) ? (window.MefiStage?.label?.("running") ?? "running") : (window.MefiStage?.label?.(task.status, task, { short: true }) ?? String(task.status ?? "open").replace("_", " "));
-          item.textContent = `${task.title ?? "task"} · ${status}`;
+          item.classList.add("filed-row");
+          if (busy.has(task.id)) item.classList.add("is-running");
+          const name = document.createElement("span");
+          name.className = "text";
+          name.textContent = task.title ?? "task";
+          const when = document.createElement("span");
+          when.className = "when";
+          when.textContent = status;
+          item.append(name, when);
           item.title = task.prompt ?? task.title ?? "";
           item.style.cursor = "pointer";
           item.addEventListener("click", () => nav("tasks", { taskId: task.id, filter: "all" }));
@@ -8004,9 +8101,12 @@
         info.append(details);
       }
 
+      const threadHead = document.createElement("div");
+      threadHead.className = "card-sub";
+      threadHead.textContent = "Thread";
       const thread = document.createElement("div");
       thread.className = "assistant-thread";
-      info.append(thread);
+      info.append(threadHead, thread);
       fillThread(thread, full);
       thread.scrollTop = threadPinned ? thread.scrollHeight : threadTop;
 
@@ -8039,8 +8139,9 @@
       input.placeholder = !bridge
         ? "desktop app only"
         : focused
-          ? `Work on "${String(focused.label || focused.id).slice(0, 40)}"… (Enter)`
-          : "Message the assistant… (Enter)";
+          ? `Work on "${String(focused.label || focused.id).slice(0, 22).trimEnd()}${String(focused.label || focused.id).length > 22 ? "…" : ""}"`
+          : "Message the assistant…";
+      if (bridge) input.title = "Enter sends · Shift+Enter for a new line";
       input.disabled = !bridge || state.assistantSending;
       const send = document.createElement("button");
       send.className = "primary mini";
@@ -8191,7 +8292,14 @@
         steppers.append(createBuildParallelControl());
         info.append(steppers);
       }
-      if (!roster.length) info.append(createBuildParallelControl());
+      if (!roster.length) {
+        const head = document.createElement("div");
+        head.className = "card-sub";
+        head.textContent = "Capacity";
+        const control = createBuildParallelControl();
+        control.classList.add("stepper-row");
+        info.append(head, control);
+      }
 
       // The R&D layer's last word: health, score, and how much the playbook holds.
       const overseer = full?.overseer;
@@ -8204,6 +8312,10 @@
 
       const log = (full?.log ?? []).slice(-6).reverse();
       if (log.length) {
+        const head = document.createElement("div");
+        head.className = "card-sub";
+        head.textContent = "Recent";
+        info.append(head);
         const activity = document.createElement("ul");
         activity.className = "assistant-activity pin-list";
         for (const entry of log) {
@@ -8224,14 +8336,13 @@
         info.append(activity);
       }
 
-      action("Send", () => primaryAction(node), { primary: true, title: "Send the message (Enter)" });
-      action("Oversee", () => assistantControl("overseer", "overseer"), { title: "Run the overseer — it reviews the assistant's own work, tunes prefs and files upgrades" });
-      action("Tidy now", () => assistantControl("tidy", "tidy"), { title: "Archive done tasks, prune ideas, clear resolved requests" });
-      action("Fix now", () => assistantControl("fix", "fix"), { title: "Repair the catalog and data files, check the updater" });
+      action("Open Explorer", () => nav("explorer", { assistant: true }), { primary: true, title: "The full thread in the Session explorer (E)" });
       action(full?.status === "paused" ? "Resume" : "Pause", () => assistantControl(full?.status === "paused" ? "resume" : "pause", "control"), {
         title: "Pause or resume the assistant service",
       });
-      action("Open Explorer", () => nav("explorer", { assistant: true }), { title: "The full thread in the Session explorer (E)" });
+      action("Tidy", () => assistantControl("tidy", "tidy"), { title: "Archive done tasks, prune ideas, clear resolved requests" });
+      action("Fix", () => assistantControl("fix", "fix"), { title: "Repair the catalog and data files, check the updater" });
+      action("Oversee", () => assistantControl("overseer", "overseer"), { title: "Run the overseer — it reviews the assistant's own work, tunes prefs and files upgrades" });
     } else if (node.kind === "folded") {
       row("sessions", node.count ?? 0);
       row("why", "finished and untouched for a while");
@@ -9231,6 +9342,7 @@
     state.labelWidths.clear();
     state.hudRectsAt = 0;
     state.graphAreaAt = 0;
+    state.center = null;
     if (state.camMode === "orbit") autoFit(); // a new window still shows every node
   }
 
@@ -9379,6 +9491,7 @@
     el.feedParallel = document.getElementById("idle-feed-parallel");
     el.feedBuildMode = document.getElementById("idle-feed-build-mode");
     el.feedAgentMode = document.getElementById("idle-feed-agent-mode");
+    el.settingsAgentMode = document.getElementById("idle-settings-agent-mode");
     el.feedAgentModeNote = document.getElementById("idle-feed-agent-mode-note");
     el.stopAll = document.getElementById("idle-stop-all");
     el.restart = document.getElementById("idle-restart");
@@ -9605,6 +9718,7 @@
     el.feedParallel?.addEventListener("change", () => void changeBuildParallel(el.feedParallel.value));
     el.feedBuildMode?.addEventListener("change", () => void changeBuildMode(el.feedBuildMode.value));
     el.feedAgentMode?.addEventListener("change", () => void changeAgentMode(el.feedAgentMode.value));
+    el.settingsAgentMode?.addEventListener("change", () => void changeAgentMode(el.settingsAgentMode.value));
     el.stopAll?.addEventListener("click", () => void stopAllAgents());
     el.restart?.addEventListener("click", () => void restartStudio());
     setFeedMenu(state.feedMenuOpen);

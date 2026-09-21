@@ -1622,3 +1622,42 @@ paused") where the UX tests expect Pause to call `backlogControl({ action:
 live edit by the startup-hold session (its uncommitted move of the launch
 hold into `runState`) while this ran, so that reconciliation is left with it.
 Node log kept locally in the session scratchpad as `node-main.log`.
+
+Workspace harness re-alignment (2026-09-21, session "Fix verify_workspace
+walkthrough assertions"): `python tools/verify_workspace.py --output
+tools/logs/workspace-ui` had stopped on its first guide assertion ("Step 1 of
+5") since `renderer/onboarding.js` grew to seven lessons (Scan, Your workspace,
+First map, Connections, Create, Monitor, Review). The bootstrap's verify() now
+follows that order: the guide opens on the scan stop reading "Step 1 of 7"; the
+automatic first scan is refused by the `--smoke` launch ("unavailable in smoke,
+capture and CLI launches") before OpenCode is asked anything and offers nothing
+to save; the build preference is hidden there and appears on the workspace stop
+(step 2); the map stop (3) shows its panel; Escape leaves the guide at
+Connections (4) and the reminder reopens it there; Create (5) follows; and the
+narrow-window finish walks Create, Monitor, Review, "Finish guide". Two other
+assumptions had gone stale behind that first failure. A keyless reply that
+offers next work now becomes an open "Pick the next piece of work" decision
+whose "Decision needed" toast holds the bottom-left corner for nine seconds and
+covered the sidebar's "Make yourself at home" control, so the tour answers the
+toast: its Answer control opens Command on the Ask rail showing the waiting
+decision, the toast leaves, and the rail returns to Work. The single pause
+control reads Resume while worker admission is held, resumes through
+`assistantControl("start-work")` and pauses through
+`backlogControl({ action: "pause" })`, matching `tests/workspace_ui.test.mjs`
+(30 of 30 pass on this tree, including the two pause cases recorded as failing
+above). The harness's obscured-control error now names the element that was
+hit. Its safety boundaries are unchanged: both runs recorded no network
+attempts, no worker attempts and no renderer errors, and reopening admission
+dispatched nothing (the smoke guard returns from the autopilot pass). Two
+identical runs reached 26 checks and 27 screenshots (about 25 s each) and stop
+on the last gate, "short desktop leaves usable scrolling room for backlog
+cards": at 1280x720 `#workspace-work-list` sits at its 90 px CSS minimum with
+its bottom at 739 px, below the 721 px viewport, where the 2026-09-19 pass
+measured 142 px with the list ending at 591 px. The "Studio at a glance" strip
+and the taller "Your work" settings panel from the UX pass consume that room,
+and `.ws-work` now scrolls as a whole, so the list nests a second scroller at
+short heights. That gate was left as written for the UX session rather than
+lowered or restyled here; the report and screenshots stay under ignored
+`tools/logs/workspace-ui/`, where `failure.png` shows the 720 px state. Free
+memory on this machine was about 200 MB during the runs, which the Machine
+tile reported as a low-memory hold; it changed no result.

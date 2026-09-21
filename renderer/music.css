@@ -4,11 +4,11 @@
 :root[data-studio-theme] .workspace { --ws-accent: var(--gold-bright); --ws-accent-rgb: var(--studio-accent-rgb); background: var(--bg); }
 :root[data-studio-theme] .ws-main { background: radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), var(--bg); }
 :root[data-studio-theme] .ws-sidebar { background: var(--panel-solid); border-color: var(--hairline); }
-:root[data-studio-theme] :is(.ws-home, .ws-project.selected, .ws-backlog, .ws-composer, .ws-message.user, .ws-work-card) { background: color-mix(in srgb, var(--gold) 8%, var(--panel-solid)); }
-:root[data-studio-theme] :is(.ws-home, .ws-project.selected, .ws-backlog, .ws-composer, .ws-message.user, .ws-work-search, .ws-personal, .ws-topbar, .ws-companion-bar, .ws-work, .ws-work-tabs) { border-color: var(--hairline-strong); }
+:root[data-studio-theme] :is(.ws-home, .ws-project.selected, .ws-backlog, .ws-composer, .ws-message.user, .ws-work-card, .ws-dash-tile) { background: color-mix(in srgb, var(--gold) 8%, var(--panel-solid)); }
+:root[data-studio-theme] :is(.ws-home, .ws-project.selected, .ws-backlog, .ws-composer, .ws-message.user, .ws-work-search, .ws-personal, .ws-topbar, .ws-companion-bar, .ws-work, .ws-work-tabs, .ws-dash-tile) { border-color: var(--hairline-strong); }
 :root[data-studio-theme] :is(.ws-project-icon, .ws-modes, .ws-work-search, .ws-personal input, .ws-personal select) { background: var(--bg-deep); }
-:root[data-studio-theme] :is(.ws-modes button[aria-pressed="true"], .ws-work-tabs button[aria-pressed="true"], .ws-project:hover) { background: var(--tint-gold-3); border-color: var(--hairline-strong); }
-:root[data-studio-theme] :is(.ws-companion-copy p, .ws-welcome p, .ws-project-path, .ws-sidebar-note, .ws-work-summary) { color: var(--muted); }
+:root[data-studio-theme] :is(.ws-modes button[aria-pressed="true"], .ws-work-tabs button[aria-pressed="true"], .ws-project:hover, .ws-dash-tile:hover, .ws-dash-tile:focus-visible) { background: var(--tint-gold-3); border-color: var(--hairline-strong); }
+:root[data-studio-theme] :is(.ws-companion-copy p, .ws-welcome p, .ws-project-path, .ws-sidebar-note, .ws-work-summary, .ws-dash-note) { color: var(--muted); }
 :root[data-studio-theme] .ws-work-search input::placeholder { color: var(--muted); }
 :root[data-studio-theme] .ws-buddy-face { background: radial-gradient(circle at 35% 20%, var(--tint-gold-3), var(--panel-solid) 75%); }
 .music-overlay { position: fixed; inset: 0; z-index: var(--z-sheet); padding: 16px; display: grid; grid-template-columns: clamp(300px, 38vw, 480px) minmax(0, 1fr); gap: 24px; background: transparent; pointer-events: none; }

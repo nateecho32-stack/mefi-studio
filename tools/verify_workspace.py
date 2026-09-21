@@ -129,7 +129,7 @@ class VerifiedWindow extends NativeWindow {
       await this.click("#workspace-sidebar-close");
       await sleep(220);
     }
-    return this.run(`const selector = ${JSON.stringify(selector)}; const el = document.querySelector(selector); if (!el) throw new Error('Missing control: ' + selector); if (el.disabled) throw new Error('Disabled control: ' + selector); el.scrollIntoView({block:'nearest'}); const rect = el.getBoundingClientRect(); if (!rect.width || !rect.height || getComputedStyle(el).visibility === 'hidden') throw new Error('Hidden control: ' + selector); const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2); if (!hit || !el.contains(hit)) throw new Error('Obscured control: ' + selector); el.click();`);
+    return this.run(`const selector = ${JSON.stringify(selector)}; const el = document.querySelector(selector); if (!el) throw new Error('Missing control: ' + selector); if (el.disabled) throw new Error('Disabled control: ' + selector); el.scrollIntoView({block:'nearest'}); const rect = el.getBoundingClientRect(); if (!rect.width || !rect.height || getComputedStyle(el).visibility === 'hidden') throw new Error('Hidden control: ' + selector); const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2); if (!hit || !el.contains(hit)) throw new Error('Obscured control: ' + selector + ' (hit: ' + (hit ? hit.tagName.toLowerCase() + (hit.id ? '#' + hit.id : '') + (typeof hit.className === 'string' && hit.className.trim() ? '.' + hit.className.trim().split(' ').filter(Boolean).join('.') : '') : 'nothing') + ')'); el.click();`);
   }
   async capture(name) {
     // Hidden offscreen windows can retain the constellation's last canvas
@@ -150,7 +150,14 @@ class VerifiedWindow extends NativeWindow {
     assert.equal(await this.run("return (await window.mefiStudio.projectsList()).activeId;"), config.alpha.id);
     assert.equal((await this.run("return (await window.mefiStudio.tasksList()).tasks;")).length, 30, "all thirty fixture tasks survive loading");
     await this.until("window.MefiOnboarding && !document.getElementById('walkthrough-overlay').hidden", "walkthrough opens automatically on first launch");
-    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent;"), "Step 1 of 5", "new users start at the first lesson without clicking an invitation");
+    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent;"), "Step 1 of 7", "new users start at the first lesson without clicking an invitation");
+    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /scan this computer/i, "the guide opens on the scan stop");
+    // The scan stop starts its read-only scan by itself. This launch runs with
+    // --smoke, so the host refuses it before OpenCode is asked anything; the
+    // stop must say so and offer nothing to save.
+    await this.until("document.getElementById('walkthrough-scan-status').classList.contains('error') && document.getElementById('walkthrough-scan-status').textContent.includes('unavailable in smoke')", "the automatic first scan is refused by the isolated launch");
+    assert.equal(await this.run("return document.getElementById('walkthrough-scan-apply').hidden;"), true, "a refused scan offers nothing to save");
+    assert.equal(await this.run("return document.getElementById('walkthrough-build-mode').hidden;"), true, "the build preference is not offered on the scan stop");
     this.setContentSize(1280, 720);
     await sleep(250);
     const firstUseLayout = await this.run("const sheet=document.getElementById('walkthrough-sheet');const next=document.getElementById('walkthrough-next').getBoundingClientRect();return {width:innerWidth,height:innerHeight,scroll:document.documentElement.scrollWidth,sheet:sheet.getBoundingClientRect().toJSON(),sheetWidth:sheet.clientWidth,sheetScroll:sheet.scrollWidth,next:next.toJSON()};");
@@ -161,7 +168,10 @@ class VerifiedWindow extends NativeWindow {
     this.setContentSize(1460, 940);
     await sleep(250);
     await this.capture("00-first-project-guide");
-    await this.until("!document.getElementById('walkthrough-auto-build').disabled", "first-use build preference loads");
+    await this.click("#walkthrough-next");
+    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent;"), "Step 2 of 7");
+    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Welcome to Mefi/, "the workspace stop follows the scan");
+    await this.until("!document.getElementById('walkthrough-build-mode').hidden && !document.getElementById('walkthrough-auto-build').disabled", "first-use build preference loads on the workspace stop");
     assert.equal(await this.run("return document.getElementById('walkthrough-auto-build').checked;"), true, "auto build remains enabled by default for existing preferences");
     await this.click('label[for="walkthrough-auto-build"]');
     await this.until("(async () => (await window.mefiStudio.assistantStatus()).status.autoBuild === false)()", "first-use toggle saves verify-first through real IPC");
@@ -169,6 +179,11 @@ class VerifiedWindow extends NativeWindow {
     assert.equal(JSON.parse(fs.readFileSync(path.join(config.profile, "settings.json"), "utf8")).ui.autopilot.autoBuild, false, "verify-first is stored in the isolated Electron profile");
     await this.capture("00c-first-use-verify-first");
     await this.click("#walkthrough-next");
+    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Map the folder/, "the map stop follows the workspace stop");
+    assert.equal(await this.run("return document.getElementById('walkthrough-map').hidden;"), false, "the map stop shows its panel");
+    assert.equal(await this.run("return document.getElementById('walkthrough-build-mode').hidden;"), true, "the build preference is not offered on the map stop");
+    await this.click("#walkthrough-next");
+    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent;"), "Step 4 of 7");
     assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Connect/);
     this.webContents.sendInputEvent({type:"keyDown",keyCode:"Escape"});
     this.webContents.sendInputEvent({type:"keyUp",keyCode:"Escape"});
@@ -183,8 +198,10 @@ class VerifiedWindow extends NativeWindow {
     assert.equal((await this.run("return (await window.mefiStudio.assistantStatus()).status;")).execute, false, "changing build preference leaves the existing worker pause in place");
     this.check("First-use and workspace toggles persist Auto build or Verify first without changing the worker pause");
     await this.click("#walkthrough-invite-open");
+    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent;"), "Step 4 of 7", "the reminder reopens the guide at the saved connections stop");
     assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Connect/);
     await this.click("#walkthrough-next");
+    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Give a clear task/, "the create stop follows connections");
     await this.click("#walkthrough-action");
     assert.equal(await this.run("return document.getElementById('workspace-mode-work').getAttribute('aria-pressed');"), "true");
     assert.equal((await this.run("return (await window.mefiStudio.tasksList()).tasks;")).length, 30, "guide action prepares but never submits work");
@@ -404,6 +421,24 @@ class VerifiedWindow extends NativeWindow {
     assert(conversation.some(message => message.role === "assistant" && message.text), "keyless chat still replies");
     this.check("Conversation sends a real keyless message and displays the reply");
 
+    // The local reply put next work on the table, which the host turns into an
+    // open decision. The renderer announces a new decision once, with a toast
+    // that stays clickable in the bottom-left corner for nine seconds, so it is
+    // answered here instead of being left over the sidebar's lower controls.
+    await this.until("(async () => (await window.mefiStudio.assistantState()).state.questions.some(question => question.status === 'open' && question.title === 'Pick the next piece of work'))()", "an offered next step becomes an open decision");
+    await this.until("document.querySelector('#toast-host .toast.has-action.show')?.textContent?.includes('Decision needed: Pick the next piece of work')", "a new decision is announced with an actionable toast");
+    assert.equal(await this.run("return document.querySelectorAll('#toast-host .toast.show').length;"), 1, "one decision raises one toast");
+    await this.click("#toast-host .toast.has-action .toast-action");
+    await this.until("window.MefiIdle?.isActive?.() && !window.MefiWorkspace.isActive() && !document.getElementById('cmd-asks').hidden", "the toast's Answer control opens Command on the Ask rail");
+    await this.until("document.querySelector('#cmd-ask-list .ask-card[data-status=open] .ask-title')?.textContent === 'Pick the next piece of work'", "the Ask rail shows the waiting decision");
+    assert.equal(await this.run("return document.querySelector('#cmd-rail .rail-tab[data-rail-view=ask]').getAttribute('aria-selected');"), "true");
+    await this.until("!document.querySelector('#toast-host .toast.show')", "the answered toast leaves the screen");
+    await this.click('#cmd-rail .rail-tab[data-rail-view="work"]');
+    assert.equal(await this.run("return document.getElementById('cmd-asks').hidden;"), true, "the rail returns to live work for the rest of the tour");
+    await this.run("window.MefiNav.go('workspace');");
+    await this.until("window.MefiWorkspace.isActive() && !window.MefiIdle.isActive()", "workspace returns from the Ask rail");
+    this.check("A reply that offers next work raises one decision toast whose Answer control opens the Ask rail in Command");
+
     await this.click("#workspace-done");
     await this.until("document.getElementById('workspace-work-list').textContent.includes('Finish the garden planner')", "Done shows completed task");
     assert(!(await this.run("return document.getElementById('workspace-work-list').textContent.includes('Review the seed importer');")), "awaiting review must not masquerade as done");
@@ -481,11 +516,20 @@ class VerifiedWindow extends NativeWindow {
     assert.equal(await this.run("return document.getElementById('workspace-input').value;"), "A draft just for Garden Notes", "first project's draft survives switching");
     this.check("Project switching keeps tasks and conversation isolated and durable");
 
+    // Worker admission has been held since the seeded settings, so the one
+    // pause control reads Resume: it reopens admission and wakes the assistant
+    // through start-work. Pause then holds new work and the assistant through
+    // the backlog service. The smoke launch dispatches no worker in between.
+    await this.until("document.getElementById('workspace-pause').textContent === 'Resume'", "held admission offers Resume");
     await this.click("#workspace-pause");
-    await this.until("(async () => (await window.mefiStudio.assistantState()).state.status === 'paused')()", "pause control updates service");
+    await this.until("(async () => (await window.mefiStudio.assistantStatus()).status.execute === true && (await window.mefiStudio.assistantState()).state.status === 'running')()", "Resume reopens admission and keeps the assistant running through the real service");
+    await this.until("document.getElementById('workspace-pause').textContent === 'Pause'", "open admission offers Pause");
     await this.click("#workspace-pause");
-    await this.until("(async () => (await window.mefiStudio.assistantState()).state.status === 'running')()", "resume control updates service");
-    this.check("Pause and resume use the real assistant service");
+    await this.until("(async () => (await window.mefiStudio.assistantStatus()).status.execute === false && (await window.mefiStudio.assistantState()).state.status === 'paused')()", "Pause holds new work and the assistant through the real backlog service");
+    await this.until("document.getElementById('workspace-pause').textContent === 'Resume'", "held work offers Resume again");
+    assert.equal((await this.run("return await window.mefiStudio.backlogStatus();")).counts.running, 0, "neither control starts a worker in the isolated launch");
+    assert.equal(report.workerAttempts.length, 0, "reopening admission never reaches a coding worker");
+    this.check("One pause control resumes through start-work and holds new work through the real backlog service");
 
     await this.until("!document.getElementById('workspace-run-backlog').disabled", "backlog controls are ready");
     await this.click("#workspace-run-backlog");
@@ -562,8 +606,12 @@ class VerifiedWindow extends NativeWindow {
     const guideLayout = await this.run("const sheet=document.getElementById('walkthrough-sheet');return {width:sheet.clientWidth,scroll:sheet.scrollWidth,screen:innerWidth,right:sheet.getBoundingClientRect().right};");
     assert(guideLayout.scroll <= guideLayout.width + 2 && guideLayout.right <= guideLayout.screen + 2, "guide fits narrow windows");
     await this.capture("13-narrow-walkthrough");
+    assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent;"), "Step 5 of 7", "the guide reopens at the saved create stop");
     await this.click("#walkthrough-next");
+    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Follow the queue/, "the monitor stop follows create");
     await this.click("#walkthrough-next");
+    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Review results/, "the review stop is last");
+    assert.equal(await this.run("return document.getElementById('walkthrough-next').textContent;"), "Finish guide", "the last stop offers to finish");
     await this.click("#walkthrough-next");
     assert.equal(await this.run("return document.getElementById('walkthrough-overlay').hidden;"), true, "guide finishes from saved create lesson");
     assert.equal(await this.run("return document.getElementById('walkthrough-invitation').hidden;"), true, "completed invitation stays out of the way");

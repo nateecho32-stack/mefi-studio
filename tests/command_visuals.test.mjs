@@ -310,7 +310,8 @@ function calloutFixture({ nodes = [], area = { x: 0, y: 0, w: 1200, h: 800 } } =
     selectNode: (node) => { state.selected = node ? { id: node.id, kind: node.kind, node } : null; calls.push(["select", node?.id ?? null]); },
     setCamMode: (mode) => { state.camMode = mode; },
     focusOn: (node) => { state.camera.tx = -node.x; state.camera.ty = -node.y; state.camera.tz = -node.z; },
-    setZoom: (value) => { state.zoom = value; },
+    setZoom: (value) => { state.zoom = value; state.zoomTarget = null; },
+    glideZoom: (value) => { state.zoomTarget = value; },
     setOrbit: (mode) => { state.orbit = mode === "auto" || mode === true ? "auto" : "paused"; calls.push(["orbit", state.orbit]); },
     writeStore: (key, value) => stores.set(key, value), readStore: (key) => stores.get(key) ?? null,
   });
@@ -430,14 +431,15 @@ test("focus closes in by kind, turns the tree slowly, and lets go of the orbit i
   const { env, state, calls } = calloutFixture({ nodes: [session, todo, task, hub, root, watcher, builder, idleAgent] });
   assert.equal(env.enterFocus(task), true);
   assert.equal(state.focus.id, "task:t");
-  assert.equal(state.zoom, 2.4, "a task is framed close");
+  assert.equal(state.zoomTarget, 2.4, "a task is framed close, as a glide the frame loop eases toward rather than a snap");
+  assert.equal(state.zoom, 1, "the scale itself does not move on the click");
   assert.equal(state.orbit, "auto", "focus turns the tree even though Orbit was paused");
   assert.deepEqual(plain(state.focusRestore), { orbit: "paused" });
   assert.equal(state.selected.id, "task:t");
   assert.deepEqual(plain(state.camera).tx, -200, "the camera centres the node");
   assert.deepEqual([...env.focusSetFor(task)].sort(), ["builder:t", "s1", "task:t"], "a task keeps its anchor and its builder sharp");
   env.enterFocus(session);
-  assert.equal(state.zoom, 1.7, "a parent is framed wider so its children stay in view");
+  assert.equal(state.zoomTarget, 1.7, "a parent is framed wider so its children stay in view");
   assert.deepEqual([...env.focusSetFor(session)].sort(), ["__agent__:watcher", "builder:t", "s1", "s1:0", "task:t"], "a session keeps its todos, its anchored tasks and every agent on any of them");
   assert.deepEqual([...env.focusSetFor(hub)].sort(), ["__agent__:keeper", "__agent__:watcher", "__assistant__", "__root__"], "the hub keeps its crew and the root");
   assert.deepEqual([...env.focusSetFor(watcher)].sort(), ["__agent__:watcher", "__assistant__", "s1"], "an agent keeps the hub and the node it works on");
@@ -513,4 +515,111 @@ test("the far layer, the card style control and the focus API are wired", () => 
   assert.match(styles, /#idle-layer \{[^}]*background: transparent/, "the near canvas is transparent so the far one shows through");
   for (const marker of ["enterFocus:", "exitFocus,", "setCardStyle,", "focusStatus:", "calloutStatus:", "drawCallouts(projected, { near: ctx, far, focusIds })", "drawBackdrop(far, time, still, energy, musicBands, musicBeat)", "const hit = nodeAt(x, y) ?? calloutAt(x, y);", "if (node) enterFocus(node);"]) assert.ok(idle.includes(marker), `idle.js carries ${marker}`);
   assert.ok(tree.includes("assistant: edge.assistant === true"), "the rail's snapshot says which edge is the hub link");
+});
+
+test("a click glides the zoom with the camera instead of snapping it", () => {
+  // Snapping the scale first threw the clicked node outward from the centre
+  // (off-screen for an edge node) before the pan brought it back. The focus
+  // zoom is now a target the frame loop eases toward at the camera's rate.
+  const state = { zoom: 1, zoomTarget: null };
+  let reduced = false;
+  const env = vm.createContext({ state, Math, noMotion: () => reduced });
+  vm.runInContext(section(idle, "  function setZoom(", "  function fitAll()"), env);
+  env.glideZoom(2.4);
+  assert.equal(state.zoom, 1, "the scale does not move on the click itself");
+  assert.equal(state.zoomTarget, 2.4, "the frame loop is handed the target");
+  env.glideZoom(9);
+  assert.equal(state.zoomTarget, 2.6, "clamped like any zoom");
+  env.setZoom(1.2);
+  assert.equal(state.zoomTarget, null, "a wheel tick, a fit or a restore ends the glide");
+  reduced = true;
+  env.glideZoom(1.7);
+  assert.deepEqual([state.zoom, state.zoomTarget], [1.7, null], "reduced motion lands at once, like the camera");
+  for (const marker of [
+    "glideZoom(FOCUS_ZOOM[node.kind] ?? 1.9)",
+    "if (zoom) glideZoom(Math.max(state.zoomTarget ?? state.zoom, zoom))",
+    "else state.zoom += (state.zoomTarget - state.zoom) * CAMERA_EASE;",
+    "state.cameraMoving = !still && (flightPx > 8 || centerFlight > 8 || (state.zoomTarget != null",
+    "const frame = state.graphFrame ?? area;",
+    "const centerFlight = stepCenter(graphArea, still);",
+  ]) assert.ok(idle.includes(marker), "idle.js carries " + marker);
+});
+
+test("cards hold their spots while the camera is in flight, then settle with the usual hold", () => {
+  const { env, state, tick, now } = calloutFixture();
+  const node = { id: "task:a", kind: "task", _pr: 8 };
+  const projected = [{ node, p: { x: 300, y: 400, k: 1 } }];
+  const size = { w: 150, title: "t", lines: [], bubbleH: 0 };
+  const hits = env.nodeLabelBlocker(projected);
+  const area = env.usableArea();
+  const first = env.placeCallout(node, projected[0].p, size, projected, [], [], hits, area, now());
+  const chosen = { side: first.side, vert: first.vert, length: first.length };
+  const everything = [{ x: -5000, y: -5000, w: 10000, h: 10000 }];
+  state.cameraMoving = true;
+  for (let frame = 0; frame < 40; frame += 1) {
+    const held = env.placeCallout(node, projected[0].p, size, projected, everything, [], hits, area, tick(33));
+    assert.deepEqual({ side: held.side, vert: held.vert, length: held.length }, chosen, "in flight the card keeps its spot however long the glide takes");
+  }
+  assert.equal(state.callouts.get("task:a").blockedSince, null, "the flight does not run down the hold");
+  const stranger = { id: "task:b", kind: "task", _pr: 8 };
+  assert.ok(env.placeCallout(stranger, { x: 600, y: 300 }, size, projected, [], [], hits, area, now()), "a card without a spot yet is still placed mid-flight");
+  state.cameraMoving = false;
+  const settled = env.placeCallout(node, projected[0].p, size, projected, everything, [], hits, area, tick(16));
+  assert.deepEqual({ side: settled.side, vert: settled.vert, length: settled.length }, chosen, "landed: a fresh hold starts");
+  assert.equal(env.placeCallout(node, projected[0].p, size, projected, everything, [], hits, area, tick(400)), null, "past it the card steps aside as before");
+});
+
+test("the frame gate tolerates vsync jitter so a two-tick frame is never skipped", () => {
+  const drawn = [];
+  const env = vm.createContext({ state: { active: true }, document: { hidden: false, body: { dataset: {} } }, drawFrame: (time) => drawn.push(time), requestAnimationFrame: () => 1, console });
+  vm.runInContext(section(idle, "  // Animation state belongs", "  function drawFrame("), env);
+  env.frame(100); env.frame(116.7); env.frame(132.9); env.frame(149.6); env.frame(166.3);
+  assert.deepEqual(drawn, [100, 132.9, 166.3], "a 32.9 ms tick (33.3 with jitter) draws instead of costing a 50 ms hitch");
+});
+
+test("a floating panel carves the clear rectangle without re-seeding the tree, and the projection centre glides after it", () => {
+  // The selection card opens on every click. Before, its rectangle keyed the
+  // persisted layout and set the projection centre, so a click re-seeded
+  // every anchor and shifted the whole scene at once.
+  const frame = { x: 300, y: 150, w: 800, h: 600 };
+  const state = { tasks: [], view: "2d", graphFrame: { ...frame } };
+  const project = (world) => ({ x: 700 + world.x, y: 450 + world.y, depth: 800, k: 1 });
+  const env = vm.createContext({ state, project, unprojectForLayout: (p, world) => ({ x: p.x - 700, y: p.y - 450, z: world.z }), Map, Set, Number, Math, String });
+  vm.runInContext(section(idle, "  function graphLayoutSeeds(", "  function hexToRgb("), env);
+  const nodes = [{ id: "task:a", kind: "task", x: 0, y: 0, z: 1 }, { id: "task:b", kind: "task", x: 2, y: 4, z: 2 }, { id: "session", kind: "session", x: -40, y: -40, z: 0 }];
+  const run = (area) => {
+    const projected = nodes.map((node) => ({ node, p: project(node) }));
+    env.layoutProjectedGraph(projected, area, "free");
+    return new Map(projected.map(({ node, p }) => [node.id, [p.x, p.y]]));
+  };
+  const before = run(frame);
+  const layout = state.screenLayout;
+  const carved = run({ x: 300, y: 150, w: 480, h: 600 }); // a 300px card on the right, with its margins
+  assert.equal(state.screenLayout, layout, "the same frame keeps the same persisted layout");
+  for (const [id, point] of before) assert.deepEqual(carved.get(id), point, id + " keeps its anchor when the card opens");
+  state.graphFrame = { x: 300, y: 150, w: 700, h: 600 };
+  run(state.graphFrame);
+  assert.notEqual(state.screenLayout, layout, "a change of frame (window, rails, feeds) still re-seeds");
+
+  // The centre: eased in the user's camera, snapped for the overview, a new
+  // frame, or reduced motion.
+  const cam = { camMode: "free", graphFrame: { ...frame }, center: null };
+  const centre = vm.createContext({ state: cam, Math, CAMERA_EASE: 0.045, usableArea: () => frame });
+  vm.runInContext(section(idle, "  function stepCenter(", "  function project("), centre);
+  assert.equal(centre.stepCenter(frame, false), 0);
+  assert.deepEqual([centre.centerX(), centre.centerY()], [700, 450]);
+  const smaller = { x: 300, y: 150, w: 480, h: 600 };
+  const left = centre.stepCenter(smaller, false);
+  assert.ok(left > 100 && centre.centerX() > 540 && centre.centerX() < 700, "the centre starts gliding toward the carved rectangle: " + centre.centerX());
+  for (let frameCount = 0; frameCount < 400; frameCount += 1) centre.stepCenter(smaller, false);
+  assert.equal(centre.centerX(), 540, "and lands on it");
+  cam.camMode = "orbit";
+  assert.equal(centre.stepCenter(frame, false), 0);
+  assert.equal(centre.centerX(), 700, "the overview camera snaps");
+  cam.camMode = "free";
+  assert.equal(centre.stepCenter(smaller, true), 0);
+  assert.equal(centre.centerX(), 540, "reduced motion snaps");
+  cam.graphFrame = { x: 0, y: 0, w: 1400, h: 900 };
+  centre.stepCenter({ x: 0, y: 0, w: 1400, h: 900 }, false);
+  assert.equal(centre.centerX(), 700, "a new frame snaps");
 });

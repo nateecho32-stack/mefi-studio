@@ -986,11 +986,53 @@ table#table tr:hover td { background: rgba(201, 168, 106, 0.04); }
 .stepper .k { margin-right: 2px; }
 .stepper .num { min-width: 16px; text-align: center; color: var(--gold-bright); font-weight: 600; font-variant-numeric: tabular-nums; }
 .stepper button.icon.mini { width: var(--ctl-h-xs); min-width: var(--ctl-h-xs); min-height: var(--ctl-h-xs); padding: 0; }
-.cmd-card .card-sub { margin: var(--s2) 0 2px; font: 600 var(--fs-2xs)/1.4 var(--font-ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); }
-.cmd-card .assistant-thread { max-height: 190px; margin-top: var(--s2); }
-.cmd-card .assistant-composer input, .cmd-card .assistant-composer textarea { min-height: var(--ctl-h-sm); padding: 4px 9px; font-size: var(--fs-sm); }
+.cmd-card .card-sub { margin: var(--s3) 0 var(--s1); font: 600 var(--fs-2xs)/1.4 var(--font-ui); text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); }
+/* the assistant card: the thread is a framed well with a thin scrollbar, the
+   composer sits directly under it, and the chips read as a quiet row */
+.cmd-card .assistant-thread {
+  max-height: 200px; margin: 0;
+  padding: var(--s2);
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  scrollbar-width: thin; scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+.cmd-card .assistant-thread::-webkit-scrollbar { width: 6px; }
+.cmd-card .assistant-thread::-webkit-scrollbar-track { background: transparent; }
+.cmd-card .assistant-thread::-webkit-scrollbar-thumb { border: 0; background: #2a261d; }
+.cmd-card .assistant-thread::-webkit-scrollbar-button { display: none; height: 0; }
+.cmd-card .assistant-msg { max-width: 100%; font-size: var(--fs-sm); line-height: 1.5; }
+.cmd-card .assistant-msg.assistant { border: 0; border-left: 2px solid var(--hairline-strong); border-radius: 0; background: transparent; padding: 2px 0 2px var(--s2); }
+.cmd-card .assistant-msg.user { max-width: 92%; }
+.cmd-card .assistant-composer { margin: var(--s2) 0 var(--s1); }
+.cmd-card .assistant-composer input, .cmd-card .assistant-composer textarea { min-height: var(--ctl-h-sm); padding: 6px 9px; font-size: var(--fs-sm); line-height: 1.45; }
+.cmd-card .assistant-composer textarea { overflow-y: hidden; scrollbar-width: thin; }
+.cmd-card .assistant-composer textarea::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cmd-card .assistant-composer .primary.mini { min-height: var(--ctl-h-sm); }
-.cmd-card .assistant-activity { margin: var(--s2) 0 0; }
+.cmd-card .chat-chips { gap: 5px; margin: 0; }
+.cmd-card .chat-chips button { min-height: 25px; padding: 3px 8px; font-size: var(--fs-2xs); color: var(--muted); background: transparent; border-color: var(--hairline); border-radius: 5px; }
+.cmd-card .chat-chips button:hover:not(:disabled) { color: var(--ivory); background: var(--cmd-raised); }
+.cmd-card .assistant-activity { margin: 0; }
+.cmd-card .assistant-activity li { padding-top: 1px; padding-bottom: 1px; }
+.cmd-card .assistant-intel b { font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; }
+.cmd-card .kv + .card-cps { margin-top: var(--s2); }
+.cmd-card .card-cps > summary { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; cursor: pointer; user-select: none; }
+.cmd-card .card-cps > summary::marker, .cmd-card .card-cps > summary::-webkit-details-marker { display: none; content: ""; }
+.cmd-card .card-cps > summary::before { content: ""; width: 0; height: 0; border: 4px solid transparent; border-left: 5px solid currentColor; margin-left: 2px; transition: transform var(--dur-1) var(--ease); }
+.cmd-card .card-cps[open] > summary::before { transform: rotate(90deg) translateX(1px); }
+.cmd-card .filed-row { display: flex; align-items: baseline; gap: 6px; margin: 2px 0; padding-left: var(--s2); border-left: 2px solid var(--gold-dim); border-radius: 0; }
+.cmd-card .filed-row .text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmd-card .filed-row .when { flex: none; color: var(--dim); font-size: var(--fs-2xs); white-space: nowrap; }
+.cmd-card .filed-row.is-running { border-left-color: var(--gold-bright); }
+.cmd-card .filed-row.is-running .when { color: var(--gold-bright); }
+.cmd-card .filed-row:hover .text { color: var(--gold-bright); }
+.cmd-card .stepper-row { display: flex; align-items: center; gap: var(--s2); width: 100%; margin: 0; }
+.cmd-card .stepper-row .k { flex: none; white-space: nowrap; margin: 0; font-size: var(--fs-sm); color: var(--muted); }
+.cmd-card .stepper-row select { flex: 1; min-width: 0; min-height: var(--ctl-h-sm); font-size: var(--fs-sm); }
+.cmd-card .assistant-steppers { margin: var(--s2) 0 0; }
+.cmd-card .assistant-steppers .stepper .k { white-space: nowrap; }
+.cmd-card .card-actions { margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--hairline); }
 .cmd-card .card-list li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* --- assistant chat log #cmd-chat: right rail, the thread always on screen ---
@@ -1424,10 +1466,15 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   width: 340px;
   max-height: calc(100vh - 200px);
   overflow: auto;
+  scrollbar-width: thin; scrollbar-gutter: stable;
   padding: var(--s4);
   border-radius: var(--r-lg);
   animation: card-in var(--dur-3) var(--ease);
 }
+.cmd-card::-webkit-scrollbar { width: 6px; }
+.cmd-card::-webkit-scrollbar-track { background: transparent; }
+.cmd-card::-webkit-scrollbar-thumb { border: 0; background: #2a261d; }
+.cmd-card::-webkit-scrollbar-button { display: none; height: 0; }
 @keyframes card-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
 
 .card-kicker { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s2); }
@@ -1440,12 +1487,14 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   overflow-wrap: anywhere;
 }
 .cmd-card .kv {
-  display: grid; grid-template-columns: 92px minmax(0, 1fr);
-  gap: var(--s1) var(--s2);
+  display: grid; grid-template-columns: 84px minmax(0, 1fr);
+  gap: 5px var(--s2);
   font-size: var(--fs-sm);
   margin: var(--s2) 0;
+  align-items: baseline;
 }
-.cmd-card .kv .k { color: var(--dim); }
+.cmd-card .kv .k { color: var(--dim); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; }
+.cmd-card .kv > span:not(.k) { color: var(--ivory); font-variant-numeric: tabular-nums; }
 .cmd-card .kv > span { overflow-wrap: anywhere; }
 /* a <button> inside the kv grid that must read as text; all:unset drops the ring, so restore it */
 .link-value {
@@ -2267,8 +2316,8 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-project-heading strong { font-weight: 450; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 .ws-top-actions { display: flex; gap: 9px; flex-shrink: 0; }
 .ws-top-actions button { font-size: 11px; }
-.ws-heading { display: flex; justify-content: space-between; align-items: center; gap: 15px; padding: 30px 0 24px; flex-shrink: 0; }
-.ws-heading h1 { color: #ece8da; font: 400 clamp(30px, 3vw, 43px)/1.15 Georgia, serif; letter-spacing: -.9px; margin: 0 0 10px; }
+.ws-heading { display: flex; justify-content: space-between; align-items: center; gap: 15px; padding: 22px 0 18px; flex-shrink: 0; }
+.ws-heading h1 { color: #ece8da; font: 400 clamp(28px, 2.6vw, 38px)/1.15 Georgia, serif; letter-spacing: -.9px; margin: 0 0 8px; }
 .ws-project-path { margin: 0; color: #99a08f; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 48vw; }
 .ws-connection { font-size: 11px; color: #c2d1b3; white-space: nowrap; border: 1px solid #414b38; background: #20281c; border-radius: 20px; padding: 7px 11px; }
 .ws-connection::before { content: ""; display: inline-block; width: 5px; height: 5px; background: #aabd97; border-radius: 50%; margin: 0 6px 1px 0; }
@@ -2276,13 +2325,13 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 /* Studio at a glance: the landing strip that answers "is anything waiting on
    me, is anything running, is the machine holding work" before the
    conversation. Every tile deep-links to the view that owns its signal. */
-.ws-dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 10px; margin: 0 0 18px; }
-.ws-dash-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 86px; padding: 11px 13px; text-align: left; background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px; color: inherit; font: inherit; cursor: pointer; transition: border-color var(--dur-2) var(--ease), background var(--dur-2) var(--ease); }
-.ws-dash-tile:hover, .ws-dash-tile:focus-visible { border-color: var(--hairline-strong); background: var(--panel-solid); }
+.ws-dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 10px; margin: 0 0 16px; }
+.ws-dash-tile { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px; min-height: 80px; padding: 10px 12px; text-align: left; white-space: normal; background: #1b2018; border: 1px solid #333a2c; border-radius: 12px; color: inherit; font: inherit; line-height: 1.3; cursor: pointer; box-shadow: none; transition: border-color var(--dur-2) var(--ease), background var(--dur-2) var(--ease); }
+.ws-dash-tile:hover, .ws-dash-tile:focus-visible { border-color: #576149; background: #21261d; transform: none; box-shadow: none; }
 .ws-dash-service { cursor: default; }
 .ws-dash-kicker { color: #919886; font: 9px/1.4 var(--font-ui); letter-spacing: 1.6px; }
-.ws-dash-value { font: 500 15px/1.3 var(--font-ui); color: #e3dfd0; }
-.ws-dash-note { font-size: 11px; line-height: 1.4; color: var(--muted); }
+.ws-dash-value { font: 500 15px/1.3 var(--font-ui); color: #e3dfd0; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.ws-dash-note { font-size: 11px; line-height: 1.4; color: #aab3a0; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .ws-dash-actions { margin-top: auto; padding-top: 6px; }
 .ws-dash-tile[data-tone="ok"] .ws-dash-value { color: #cfe9d8; }
 .ws-dash-tile[data-tone="busy"] .ws-dash-value { color: var(--gold-bright); }
@@ -2295,7 +2344,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .toast-action { flex-shrink: 0; padding: 4px 9px; font-size: var(--fs-sm); border-radius: var(--r-sm); border: 1px solid var(--hairline-strong); background: transparent; color: var(--gold-bright); cursor: pointer; }
 .ws-columns { display: grid; grid-template-columns: minmax(0,1fr) minmax(310px,34%); gap: 27px; flex: 1; min-height: 0; padding-bottom: 18px; }
 .ws-conversation { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.ws-companion-bar { display: flex; align-items: center; gap: 17px; padding: 8px 0 16px; flex-shrink: 0; border-bottom: 1px solid #30332a; min-height: 99px; }
+.ws-companion-bar { display: flex; align-items: center; gap: 17px; padding: 6px 0 12px; flex-shrink: 0; border-bottom: 1px solid #30332a; min-height: 90px; }
 .ws-companion-track { width: 150px; height: 74px; flex-shrink: 0; position: relative; }
 .ws-track-line { position: absolute; top: 32px; left: 15px; right: 15px; height: 1px; background: linear-gradient(90deg,#7c7d55,#3b4034); }
 .ws-track-dot { position: absolute; top: 30px; width: 5px; height: 5px; border-radius: 50%; background: #5e684d; }
@@ -2315,11 +2364,11 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-companion-copy p { color: #b0b7a5; font-size: 12px; line-height: 1.65; margin: 5px 0 0; max-height: 60px; overflow-y: auto; overflow-wrap: anywhere; }
 .ws-companion-bar button { font-size: 11px; }
 .ws-thread { flex: 1; min-height: 100px; overflow-y: auto; padding: 20px 8px 20px 0; overscroll-behavior: contain; }
-.ws-welcome { max-width: 490px; margin: auto; padding: clamp(24px,5vh,70px) 12px 32px; }
-.ws-welcome-star { display: block; font: 48px Georgia,serif; color: var(--ws-accent); margin-bottom: 16px; }
-.ws-welcome h2 { font: 400 clamp(23px,2.3vw,31px)/1.3 Georgia,serif; color: #e4e0d2; margin: 0 0 12px; letter-spacing: -.5px; }
-.ws-welcome p { font-size: 13px; color: #a1a795; line-height: 1.85; margin: 0; max-width: 430px; }
-.ws-suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 23px; }
+.ws-welcome { max-width: 490px; margin: auto; padding: clamp(14px,3vh,40px) 12px 24px; }
+.ws-welcome-star { display: block; font: 40px Georgia,serif; color: var(--ws-accent); margin-bottom: 10px; }
+.ws-welcome h2 { font: 400 clamp(21px,2vw,27px)/1.3 Georgia,serif; color: #e4e0d2; margin: 0 0 8px; letter-spacing: -.5px; }
+.ws-welcome p { font-size: 13px; color: #a1a795; line-height: 1.7; margin: 0; max-width: 430px; }
+.ws-suggestions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .ws-suggestions button { font-size: 11px; padding: 8px 12px; border-radius: 7px; }
 .ws-message { margin: 0 0 20px; padding: 0 11px; }
 .ws-message.user { padding: 13px 16px; background: #22271f; border-radius: 10px; border: 1px solid #343c2d; margin-left: 34px; }
@@ -2333,7 +2382,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-modes button { font-size: 11px; border: 0; color: #b0b9a3; background: transparent; padding: 7px 9px; border-radius: 5px; min-height: 0; }
 .ws-modes button[aria-pressed="true"] { background: #3b4330; color: #e6e5d5; }
 #workspace-composer-context { color: #8d997e; font-size: 9px; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.workspace textarea { border: 0; border-radius: 0; resize: vertical; background: transparent; min-height: 89px; max-height: 24vh; color: #e7e9dd; font-size: 13px; width: 100%; padding: 15px 16px 8px; box-shadow: none; outline: none; line-height: 1.65; }
+.workspace textarea { border: 0; border-radius: 0; resize: vertical; background: transparent; min-height: 66px; max-height: 24vh; color: #e7e9dd; font-size: 13px; width: 100%; padding: 15px 16px 8px; box-shadow: none; outline: none; line-height: 1.65; }
 .workspace textarea::placeholder { color: #a0ab93; }
 .ws-composer:focus-within { border-color: var(--ws-accent); }
 .ws-compose-bottom { padding: 3px 12px 12px 16px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -2344,12 +2393,12 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-feedback.error { color: #efb5a0; }
 .ws-feedback-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
 .ws-feedback-row button { font-size: 10px; margin-top: 6px; }
-.ws-work { min-width: 0; min-height: 0; border-left: 1px solid #2b3027; padding-left: 26px; display: flex; flex-direction: column; container-type: inline-size; }
-.ws-work-heading { display: flex; justify-content: space-between; align-items: center; padding: 13px 0 16px; gap: 7px; }
+.ws-work { min-width: 0; min-height: 0; border-left: 1px solid #2b3027; padding-left: 26px; display: flex; flex-direction: column; container-type: inline-size; overflow: hidden auto; }
+.ws-work-heading { display: flex; justify-content: space-between; align-items: center; padding: 10px 0 12px; gap: 7px; }
 .ws-work-heading h2 { font: 400 24px Georgia,serif; margin: 0; color: #e3dfd0; }
 .ws-work-heading .ws-kicker { font-size: 8px; margin-bottom: 6px; }
 .ws-work-heading button { font-size: 11px; padding-inline: 8px; }
-.ws-backlog { flex-shrink: 0; border: 1px solid #424b35; border-radius: 10px; padding: 13px; margin-bottom: 15px; background: radial-gradient(ellipse at 100% 0,rgba(var(--ws-accent-rgb),.07),transparent 70%),#1d2219; }
+.ws-backlog { flex-shrink: 0; border: 1px solid #424b35; border-radius: 10px; padding: 12px; margin-bottom: 12px; background: radial-gradient(ellipse at 100% 0,rgba(var(--ws-accent-rgb),.07),transparent 70%),#1d2219; }
 .ws-backlog-heading { display: flex; align-items: center; gap: 7px; }
 .build-mode-control { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; border-bottom: 1px solid var(--hairline); padding-bottom: 12px; margin-bottom: 12px; }
 .build-mode-control > strong { margin-left: auto; color: var(--ivory); font-size: 11px; }
@@ -2359,11 +2408,19 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .agent-mode-control > label { color: var(--ivory); font-size: 11px; }
 .agent-mode-control > select { width: auto; min-width: 100px; min-height: 30px; margin-left: auto; padding: 4px 8px; font-size: 11px; border-radius: 6px; }
 .agent-mode-control > p { overflow-wrap: anywhere; }
+/* Both build settings share one row inside the backlog panel; the panel must
+   leave room for the list below it, so the notes stay to two short lines. */
+.ws-backlog-settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; border-bottom: 1px solid var(--hairline); padding-bottom: 10px; margin-bottom: 10px; }
+.ws-backlog-settings .build-mode-control { align-content: start; gap: 5px 8px; border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
+.ws-backlog-settings .build-mode-control > p { font-size: 10px; line-height: 1.5; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.ws-backlog-settings .build-mode-control > p:empty { display: none; }
+.ws-backlog-settings .agent-mode-control > select { min-width: 88px; }
+@container (max-width: 340px) { .ws-backlog-settings { grid-template-columns: minmax(0, 1fr); gap: 8px; } }
 .ws-backlog-light { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: #9baa81; }
 .ws-backlog[data-state="running"] .ws-backlog-light { background: var(--ws-accent); box-shadow: 0 0 8px rgba(var(--ws-accent-rgb),.4); }
 .ws-backlog h3, #workspace-backlog-title { color: #e4e7d9; font: 550 13px/1.5 var(--font-ui); margin: 0 0 5px; }
 #workspace-backlog-summary { color: #b6c0a6; font-size: 11px; line-height: 1.65; margin: 0; overflow-wrap: anywhere; }
-#workspace-backlog-metrics { display: flex; gap: 7px 14px; align-items: center; flex-wrap: wrap; margin: 11px 0; color: #aab69a; font-size: 10px; line-height: 1.6; }
+#workspace-backlog-metrics { display: flex; gap: 7px 14px; align-items: center; flex-wrap: wrap; margin: 9px 0; color: #aab69a; font-size: 10px; line-height: 1.6; }
 #workspace-backlog-metrics > * { white-space: nowrap; }
 #workspace-backlog-metrics strong { color: #e3e7d6; font-size: 15px; font-weight: 550; margin-right: 3px; font-variant-numeric: tabular-nums; }
 #workspace-run-backlog { width: 100%; min-height: 34px; border-radius: 6px; padding: 7px 10px; font-size: 12px; }
@@ -2446,6 +2503,32 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 @keyframes ws-spark { 50% { opacity: .3; transform: rotate(60deg); } }
 .ws-still * { animation: none !important; transition: none !important; }
 @media (prefers-reduced-motion: reduce) { .workspace * { animation: none !important; transition: none !important; } }
+/* Mid-height desktops (a 1440x900 window): trim the chrome above the columns
+   so the conversation and the work list keep their room; the 800px tier
+   below goes further and wins where the two overlap. */
+@media (max-height: 1000px) and (min-width: 961px) {
+  .ws-heading { padding: 14px 0 12px; }
+  .ws-heading h1 { font-size: 30px; margin-bottom: 4px; }
+  .walkthrough-invitation { margin-bottom: 12px; }
+  .walkthrough-invitation > div > p { display: none; }
+  .ws-dashboard { margin-bottom: 12px; }
+  .ws-dash-tile { min-height: 72px; }
+  .ws-companion-bar { min-height: 80px; padding-bottom: 8px; }
+  .ws-welcome { padding-top: 12px; }
+  .ws-welcome-star { display: none; }
+  .workspace textarea { min-height: 54px; }
+  .ws-work-heading { padding: 6px 0 8px; }
+  .ws-backlog-heading { display: none; }
+  .ws-backlog-settings .build-mode-control > p { -webkit-line-clamp: 1; }
+  #workspace-backlog-next { margin-top: 6px; -webkit-line-clamp: 1; }
+  .ws-activity summary { padding: 6px 0; }
+  .ws-backlog { padding: 10px 12px; margin-bottom: 10px; }
+  #workspace-backlog-metrics { margin: 7px 0; }
+  .ws-work-tabs { padding-bottom: 6px; margin-bottom: 7px; }
+  .ws-work-search { min-height: 32px; }
+  .ws-work-summary-line { margin-bottom: 6px; }
+  .ws-jeV { display: none; }
+}
 @media (max-height: 800px) and (min-width: 961px) {
   .ws-topbar { height: 48px; }
   .ws-heading { padding: 13px 0 12px; }
@@ -2465,7 +2548,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
   .ws-welcome { padding: 20px 12px; }
   .ws-work-summary { -webkit-line-clamp: 1; }
 }
-@media (min-width: 1750px) { .ws-main { padding: 0 max(45px,calc((100vw - 1580px)/2)); }.ws-columns { gap: 40px; }.ws-work { padding-left: 35px; }.ws-heading { padding: 40px 0 30px; } }
+@media (min-width: 1750px) { .ws-main { padding: 0 max(45px,calc((100vw - 1580px)/2)); }.ws-columns { gap: 40px; }.ws-work { padding-left: 35px; }.ws-heading { padding: 28px 0 20px; } }
 @media (max-width: 1150px) { .workspace { grid-template-columns: 200px minmax(0,1fr); }.ws-sidebar { padding-inline: 12px; }.ws-main { padding-inline: 23px; }.ws-columns { gap: 18px; grid-template-columns: minmax(0,1fr) 265px; }.ws-work { padding-left: 18px; }.ws-companion-track { width: 96px; }.ws-track-dot.middle { left: 46px; }[data-station="make"] .ws-buddy { transform: translateX(26px); }[data-station="review"] .ws-buddy { transform: translateX(52px); }.ws-track-labels { padding: 0; font-size: 7px; }.ws-companion-bar { gap: 8px; }.ws-connection { font-size: 9px; }.ws-heading h1 { font-size: 32px; }.ws-compose-bottom > span { max-width: 140px; } }
 @media (max-width: 960px) { .workspace { grid-template-columns: 176px minmax(0,1fr); }.ws-brand { font-size: 14px; gap: 7px; margin-inline: 0; }.ws-brand small { font-size: 6px; letter-spacing: 1px; }.ws-main { overflow-y: auto; }.ws-columns { display: flex; flex-direction: column; flex: none; }.ws-conversation { min-height: 550px; height: calc(100vh - 220px); }.ws-work { padding: 18px 0 8px; border-left: 0; border-top: 1px solid #343b2c; min-height: 300px; flex-shrink: 0; }.ws-work-list { max-height: 400px; }.ws-top-actions button:first-child { display: none; }.ws-topbar .ws-kicker { display: none; }.ws-heading { align-items: flex-start; }.ws-connection { max-width: 132px; white-space: normal; text-align: center; }.ws-companion-track { width: 150px; }.ws-track-dot.middle { left: 73px; }[data-station="make"] .ws-buddy { transform: translateX(53px); }[data-station="review"] .ws-buddy { transform: translateX(106px); }.ws-track-labels { padding: 0 10px; font-size: 8px; }.ws-companion-bar { gap: 15px; }.ws-local-note { line-height: 1.8; } }
 @media (max-width: 650px) { .workspace { grid-template-columns: 1fr; overflow-y: auto; }.ws-sidebar { padding: 14px; border-right: 0; overflow: visible; }.ws-brand { margin-bottom: 14px; }.ws-home,.ws-sidebar-note,.ws-local-note,.ws-section-label { display: none; }.ws-projects { display: flex; overflow-x: auto; }.ws-project { flex: 0 0 auto; width: auto; max-width: 200px; }.ws-sidebar-bottom { padding-top: 8px; display: flex; align-items: flex-start; gap: 10px; }.ws-tools,.ws-personal { flex: 1; position: relative; margin: 0; border: none; }.ws-personal[open] { min-width: 150px; }.workspace .ws-settings { width: auto; max-width: 110px; }.ws-main { overflow: visible; padding-inline: 18px; }.ws-topbar { height: 48px; }.ws-heading { padding-top: 23px; }.ws-heading h1 { font-size: 29px; }.ws-project-path { max-width: 65vw; }.ws-connection { display: none; }.ws-conversation { height: 580px; }.ws-companion-track { width: 96px; }.ws-track-dot.middle { left: 46px; }[data-station="make"] .ws-buddy { transform: translateX(26px); }[data-station="review"] .ws-buddy { transform: translateX(52px); }.ws-track-labels { padding: 0; font-size: 7px; }.ws-companion-bar { gap: 9px; }.ws-compose-bottom > span { max-width: 140px; }.ws-work { min-height: 350px; } }
@@ -2679,15 +2762,6 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .feed-metric[data-empty="true"] strong { color: var(--muted); }
 #idle-hud .feed-metric[data-state="blocked"][data-empty="false"] { border-color: color-mix(in srgb, var(--warn) 48%, var(--cmd-edge)); background: color-mix(in srgb, var(--warn) 7%, var(--cmd-surface)); }
 #idle-hud .feed-metric[data-state="blocked"][data-empty="false"] strong { color: var(--warn); }
-#idle-hud .feed-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; flex: none; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--hairline); }
-#idle-hud .feed-controls.feed-stop-row { justify-content: flex-start; gap: 8px; margin-top: -6px; border-bottom: none; padding-bottom: 0; }
-#idle-hud .feed-stop-row .feed-state { margin-left: auto; }
-#idle-hud .feed-autopilot { font-size: 11px; gap: 7px; }
-#idle-hud .feed-autopilot:has(input:focus-visible) { outline: 2px solid var(--gold-bright); outline-offset: 4px; border-radius: 3px; }
-#idle-hud .feed-capacity { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; flex: none; font-size: 10px; color: var(--muted); margin: 0; }
-#idle-hud .feed-capacity select { min-height: 30px; padding: 4px 8px; width: 108px; font-size: 11px; background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 6px; }
-#idle-hud #idle-feed-parallel { width: 148px; }
-#idle-hud .feed-mode-note { margin: 0 0 12px; color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
 #idle-hud .feed-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; overscroll-behavior-y: contain; padding: 2px 7px 4px 2px; scroll-padding-block: 4px; }
 #idle-hud .feed-scroll:has(> .feed-activity[hidden]) { flex: 0 1 auto; max-height: 40%; margin-bottom: 12px; }
 #idle-hud .feed-scroll:has(> .feed-activity[hidden]) .feed-current { margin-bottom: 0; }
@@ -2998,7 +3072,7 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 .studio-more .tools-cluster .key { margin-left: auto; }
 #idle-hud .cmd-more-links { display: block; width: 280px; max-height: min(65vh, 540px); overflow: auto; }
 #idle-hud .cmd-more-links .dock-item { width: 100%; }
-.walkthrough-invitation { flex: none; display: flex; align-items: center; gap: 20px; justify-content: space-between; margin: 0 0 18px; padding: 13px 16px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: color-mix(in srgb, var(--gold) 6%, var(--panel)); }
+.walkthrough-invitation { flex: none; display: flex; align-items: center; gap: 20px; justify-content: space-between; margin: 0 0 16px; padding: 12px 15px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: color-mix(in srgb, var(--gold) 6%, var(--panel)); }
 .walkthrough-invitation strong { font-size: 13px; color: var(--ivory); }
 .walkthrough-invitation p { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .walkthrough-invite-actions { display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -3008,7 +3082,9 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 .walkthrough-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 6px; }
 .walkthrough-sheet .sheet-head { align-items: flex-start; gap: 12px; }
 #walkthrough-progress { color: var(--muted); margin: 5px 0 0; font-size: 12px; }
-.walkthrough-steps { display: flex; flex-wrap: wrap; gap: 5px; padding: 14px 0 22px; }
+.walkthrough-steps { display: flex; flex-wrap: wrap; gap: 5px; padding: 14px 0 20px; }
+.walkthrough-steps .walkthrough-step { padding: 5px 10px; font-size: 12px; border-radius: 8px; white-space: nowrap; }
+.walkthrough-steps .walkthrough-step[aria-current="step"] { color: var(--gold-bright); border-color: var(--gold-bright); background: color-mix(in srgb, var(--gold) 12%, transparent); }
 
 
 .walkthrough-content h2 { font-size: clamp(21px, 3vw, 28px); margin: 0 0 14px; line-height: 1.25; }
@@ -3030,6 +3106,8 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 .walkthrough-panel-option { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
 .walkthrough-panel .muted { margin: 10px 0 0; font-size: 12px; line-height: 1.6; }
 .walkthrough-panel .muted.error { color: var(--danger, #e07a6a); }
+.walkthrough-notes:empty, .walkthrough-facts:empty { display: none; }
+.walkthrough-textTail { margin: 8px 0 0; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 8px; color: var(--muted); font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow: auto; }
 .walkthrough-facts, .walkthrough-notes { margin: 10px 0 0; padding-left: 18px; font-size: 12px; line-height: 1.6; }
 .walkthrough-facts { color: var(--ivory); }
 .walkthrough-notes { color: var(--muted); }
@@ -3188,16 +3266,35 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .rail-view-head button { flex: none; min-height: 26px; padding: 3px 8px; font-size: 11px; }
 #idle-hud .rail-view-note { flex: none; margin: 0 0 10px; color: var(--muted); font-size: 11px; line-height: 1.55; }
 
-/* the settings view: queue controls and safety stops, on their own tab */
-#idle-hud .cmd-settings .settings-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; overscroll-behavior-y: contain; padding: 2px 7px 4px 2px; }
-#idle-hud .cmd-settings .feed-controls { justify-content: flex-start; }
-#idle-hud .cmd-settings .feed-stop-row { margin-top: 0; padding-top: 12px; border-top: 1px solid var(--hairline); }
+/* the settings view: a settings list (label · control · hint) in two
+   groups, Queue and Safety, with the long explanations folded underneath */
+#idle-hud .cmd-settings .settings-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; overscroll-behavior-y: contain; padding: 0 7px 4px 2px; }
+#idle-hud .rail-view-head .setting-state { flex: none; max-width: 58%; margin-left: auto; padding: 2px 8px; border: 1px solid var(--cmd-edge); border-radius: 999px; background: var(--cmd-raised); color: var(--muted); font-size: 10px; line-height: 1.4; letter-spacing: .01em; }
+#idle-hud .rail-view-head .setting-state:empty { display: none; }
+#idle-hud .rail-view-head .setting-state[data-on="true"] { color: var(--gold-bright); border-color: var(--gold-dim); background: var(--tint-gold-2); }
+#idle-hud .setting-group { padding: 2px 0 10px; }
+#idle-hud .setting-group + .setting-group { padding-top: 12px; border-top: 1px solid var(--hairline); }
+#idle-hud .setting-group-title { margin: 0 0 2px; font: 650 9.5px/1.4 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
+#idle-hud .setting-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 12px; row-gap: 4px; align-items: center; padding: 10px 0; border-top: 1px solid var(--hairline); }
+#idle-hud .setting-row[hidden] { display: none; }
+#idle-hud .setting-group-title + .setting-row { border-top: 0; }
+#idle-hud .setting-label { grid-column: 1; grid-row: 1; margin: 0; font: 500 12.5px/1.35 var(--font-ui); color: var(--ivory); cursor: pointer; }
+#idle-hud .setting-row:has(> select:disabled) .setting-label,
+#idle-hud .setting-row:has(input:disabled) .setting-label { color: var(--muted); cursor: default; }
+#idle-hud .setting-row > select,
+#idle-hud .setting-row > .switch { grid-column: 2; grid-row: 1; justify-self: end; }
+#idle-hud .setting-row > select { width: 150px; min-height: 30px; padding: 4px 9px; font-size: 11.5px; background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 6px; }
+#idle-hud .setting-switch { gap: 0; margin: 0; }
+#idle-hud .setting-switch input:focus-visible + .track { outline: 2px solid var(--gold-bright); outline-offset: 3px; }
+#idle-hud .setting-hint { grid-column: 1 / -1; grid-row: 2; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+#idle-hud .setting-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 6px 0 8px; }
+#idle-hud .setting-actions .feed-state { flex: 1; min-width: 0; text-align: right; }
 
 /* visible explanations for the queue controls */
 #idle-hud .control-help { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
-#idle-hud .feed-help { flex: none; margin: 0 0 12px; padding: 0 10px; border: 1px solid var(--cmd-edge); border-radius: 8px; background: var(--cmd-raised); }
-#idle-hud .feed-help > summary { cursor: pointer; color: var(--muted); font-size: 11px; padding: 7px 0; }
-#idle-hud .feed-help[open] > summary { color: var(--ivory); }
+#idle-hud .feed-help { flex: none; margin: 2px 0 12px; padding: 0 10px; border: 1px solid var(--cmd-edge); border-radius: 8px; background: var(--cmd-raised); }
+#idle-hud .feed-help > summary { cursor: pointer; color: var(--muted); font-size: 11px; padding: 8px 0; }
+#idle-hud .feed-help > summary:hover, #idle-hud .feed-help[open] > summary { color: var(--ivory); }
 #idle-hud .feed-help-list { margin: 0; padding: 0 0 8px; font-size: 11px; line-height: 1.55; }
 #idle-hud .feed-help-list dt { color: var(--gold); font-weight: 600; margin-top: 8px; }
 #idle-hud .feed-help-list dt:first-child { margin-top: 0; }
@@ -3353,9 +3450,12 @@ body.command-active .walkthrough-coach { right: 392px; }
 
 /* the Command rail's bottom-right footer: pinned under the tab panels */
 #idle-hud .cmd-usage { flex: none; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); pointer-events: auto; }
-#idle-hud .cmd-usage-head { display: flex; align-items: center; gap: 5px; }
+#idle-hud .cmd-usage-head { display: flex; align-items: flex-start; gap: 5px; }
 #idle-hud .cmd-usage-title { flex: 1; min-width: 0; margin: 0; font: 600 12px/1.3 var(--font-ui); }
-#idle-hud .cmd-usage-title .feed-toggle { min-height: 24px; font-size: 11px; }
+#idle-hud .cmd-usage-title .feed-toggle { flex-wrap: wrap; row-gap: 2px; min-height: 24px; font-size: 11px; }
+#idle-hud .cmd-usage-title .feed-toggle > span:first-child { order: 0; }
+#idle-hud .cmd-usage-title .feed-toggle .glyph { order: 1; }
+#idle-hud .cmd-usage-title .feed-toggle .feed-state { order: 2; flex: 1 0 100%; margin-left: 0; text-align: left; white-space: normal; overflow: visible; text-overflow: clip; font-size: 10px; line-height: 1.45; }
 #idle-hud .cmd-usage-head button { flex: none; }
 #idle-hud .cmd-usage-head .ghost.mini { min-height: 24px; padding: 2px 8px; font-size: 10px; }
 #idle-hud .cmd-usage-body { display: flex; flex-direction: column; gap: 6px; }
@@ -3375,11 +3475,11 @@ body.command-active .walkthrough-coach { right: 392px; }
 :root[data-studio-theme] .workspace { --ws-accent: var(--gold-bright); --ws-accent-rgb: var(--studio-accent-rgb); background: var(--bg); }
 :root[data-studio-theme] .ws-main { background: radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), var(--bg); }
 :root[data-studio-theme] .ws-sidebar { background: var(--panel-solid); border-color: var(--hairline); }
-:root[data-studio-theme] :is(.ws-home, .ws-project.selected, .ws-backlog, .ws-composer, .ws-message.user, .ws-work-card) { background: color-mix(in srgb, var(--gold) 8%, var(--panel-solid)); }
-:root[data-studio-theme] :is(.ws-home, .ws-project.selected, .ws-backlog, .ws-composer, .ws-message.user, .ws-work-search, .ws-personal, .ws-topbar, .ws-companion-bar, .ws-work, .ws-work-tabs) { border-color: var(--hairline-strong); }
+:root[data-studio-theme] :is(.ws-home, .ws-project.selected, .ws-backlog, .ws-composer, .ws-message.user, .ws-work-card, .ws-dash-tile) { background: color-mix(in srgb, var(--gold) 8%, var(--panel-solid)); }
+:root[data-studio-theme] :is(.ws-home, .ws-project.selected, .ws-backlog, .ws-composer, .ws-message.user, .ws-work-search, .ws-personal, .ws-topbar, .ws-companion-bar, .ws-work, .ws-work-tabs, .ws-dash-tile) { border-color: var(--hairline-strong); }
 :root[data-studio-theme] :is(.ws-project-icon, .ws-modes, .ws-work-search, .ws-personal input, .ws-personal select) { background: var(--bg-deep); }
-:root[data-studio-theme] :is(.ws-modes button[aria-pressed="true"], .ws-work-tabs button[aria-pressed="true"], .ws-project:hover) { background: var(--tint-gold-3); border-color: var(--hairline-strong); }
-:root[data-studio-theme] :is(.ws-companion-copy p, .ws-welcome p, .ws-project-path, .ws-sidebar-note, .ws-work-summary) { color: var(--muted); }
+:root[data-studio-theme] :is(.ws-modes button[aria-pressed="true"], .ws-work-tabs button[aria-pressed="true"], .ws-project:hover, .ws-dash-tile:hover, .ws-dash-tile:focus-visible) { background: var(--tint-gold-3); border-color: var(--hairline-strong); }
+:root[data-studio-theme] :is(.ws-companion-copy p, .ws-welcome p, .ws-project-path, .ws-sidebar-note, .ws-work-summary, .ws-dash-note) { color: var(--muted); }
 :root[data-studio-theme] .ws-work-search input::placeholder { color: var(--muted); }
 :root[data-studio-theme] .ws-buddy-face { background: radial-gradient(circle at 35% 20%, var(--tint-gold-3), var(--panel-solid) 75%); }
 .music-overlay { position: fixed; inset: 0; z-index: var(--z-sheet); padding: 16px; display: grid; grid-template-columns: clamp(300px, 38vw, 480px) minmax(0, 1fr); gap: 24px; background: transparent; pointer-events: none; }
@@ -3850,7 +3950,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         <div id="workspace-thread" class="ws-thread" role="log" aria-label="Project conversation" aria-live="polite" aria-relevant="additions"></div>
         <form id="workspace-form" class="ws-composer">
           <div class="ws-compose-top"><div class="ws-modes" role="group" aria-label="Message purpose"><button type="button" id="workspace-mode-chat" aria-pressed="true">Talk together</button><button type="button" id="workspace-mode-work" aria-pressed="false">Give a task</button></div><span id="workspace-composer-context"></span></div>
-          <label class="sr-only" for="workspace-input">Message or task for this project</label><textarea id="workspace-input" rows="3" placeholder="Ask a question, think through an idea, or tell me where you're stuck…"></textarea>
+          <label class="sr-only" for="workspace-input">Message or task for this project</label><textarea id="workspace-input" rows="2" placeholder="Ask a question, think through an idea, or tell me where you're stuck…"></textarea>
           <div class="ws-compose-bottom"><span id="workspace-compose-hint">Enter to send · Shift + Enter for a new line</span><button id="workspace-task-outline" class="ghost mini" type="button" hidden>Use a task outline</button><button id="workspace-plan-idea" class="ghost" type="button">Plan an idea</button><button id="workspace-send" class="primary" type="submit">Send message <span aria-hidden="true">↗</span></button></div>
         </form>
         <div class="ws-feedback-row"><p id="workspace-feedback" class="ws-feedback" role="status"></p><button id="workspace-created-task" class="ghost mini" type="button" hidden>View task</button><button id="workspace-retry" class="ghost mini" type="button" hidden>Retry loading</button></div>
@@ -3858,6 +3958,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       <aside class="ws-work" aria-label="Project work and results">
         <div class="ws-work-heading"><div><p class="ws-kicker">FROM IDEA TO DONE</p><h2>Your work</h2></div><button class="ghost mini" data-nav="tasks" title="Open full task board">View board ↗</button></div>
         <section class="ws-backlog" aria-label="Backlog controls">
+          <div class="ws-backlog-settings">
           <div class="build-mode-control">
             <label class="switch" for="workspace-auto-build"><input type="checkbox" id="workspace-auto-build" checked disabled aria-describedby="workspace-build-mode-note"><span class="track"></span><span>Auto build</span></label>
             <strong id="workspace-build-mode-label">Loading preference…</strong>
@@ -3867,6 +3968,7 @@ body.music-preview-active #idle-hud { display: none !important; }
             <label for="workspace-agent-mode">Agent mode</label>
             <select id="workspace-agent-mode" disabled aria-describedby="workspace-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select>
             <p id="workspace-agent-mode-note" role="status">Both modes collaborate and delegate subtasks. Swarm works across the queue; Cluster focuses on one shared task.</p>
+          </div>
           </div>
           <div class="ws-backlog-heading"><span class="ws-backlog-light" aria-hidden="true"></span><strong id="workspace-backlog-title">A little progress, every pass</strong></div>
           <p id="workspace-backlog-summary">Checking your project's backlog…</p>
@@ -4393,32 +4495,53 @@ body.music-preview-active #idle-hud { display: none !important; }
   <section id="cmd-settings" class="cmd-settings" role="tabpanel" aria-labelledby="cmd-rail-tab-settings" hidden>
     <div class="rail-view-head">
       <h2 class="rail-view-title">Work settings</h2>
-      <span id="cmd-settings-state" class="feed-state" role="status" aria-live="polite"></span>
+      <span id="cmd-settings-state" class="feed-state setting-state" role="status" aria-live="polite"></span>
     </div>
     <p class="rail-view-note">How the agent queue runs. Changes apply to every project and never interrupt work already in progress.</p>
     <div class="settings-scroll">
-      <div class="feed-controls">
-        <label class="switch mini feed-autopilot" title="Autopilot: queue and run Auto Builder requests"><input type="checkbox" id="idle-autopilot" aria-describedby="idle-autopilot-help"><span class="track"></span><span>Autopilot</span></label>
-        <label class="feed-capacity">Parallel builds <select id="idle-feed-parallel" aria-label="Build scheduling capacity" aria-describedby="idle-feed-parallel-help"><option value="machine">Machine managed</option><option value="1">Manual: 1 worker</option><option value="2">Manual: 2 workers</option><option value="3">Manual: 3 workers</option></select></label>
-        <label class="feed-capacity">Build mode <select id="idle-feed-build-mode" aria-label="Build approval mode" aria-describedby="idle-feed-build-mode-help"><option value="auto">Auto build</option><option value="verify">Verify first</option></select></label>
+      <div class="setting-group" role="group" aria-labelledby="cmd-settings-queue-title">
+        <h3 id="cmd-settings-queue-title" class="setting-group-title">Queue</h3>
+        <div class="setting-row">
+          <label class="setting-label" for="idle-autopilot">Autopilot</label>
+          <label class="switch mini setting-switch" title="Turn the agent queue on or off"><input type="checkbox" id="idle-autopilot" role="switch" aria-describedby="idle-autopilot-help"><span class="track" aria-hidden="true"></span></label>
+          <span id="idle-autopilot-help" class="setting-hint">Starts ready tasks and verifies what comes back. Off stops new starts; running jobs finish.</span>
+        </div>
+        <div class="setting-row">
+          <label class="setting-label" for="idle-feed-parallel">Parallel builds</label>
+          <select id="idle-feed-parallel" aria-describedby="idle-feed-parallel-help"><option value="machine">Machine managed</option><option value="1">Manual: 1 worker</option><option value="2">Manual: 2 workers</option><option value="3">Manual: 3 workers</option></select>
+          <span id="idle-feed-parallel-help" class="setting-hint">How many builds run at once. Machine managed backs off while the machine is busy.</span>
+        </div>
+        <div class="setting-row">
+          <label class="setting-label" for="idle-feed-build-mode">Build mode</label>
+          <select id="idle-feed-build-mode" aria-describedby="idle-feed-build-mode-help"><option value="auto">Auto build</option><option value="verify">Verify first</option></select>
+          <span id="idle-feed-build-mode-help" class="setting-hint">Auto build starts eligible tasks itself. Verify first holds each new or changed brief for your approval.</span>
+        </div>
+        <div class="setting-row">
+          <label class="setting-label" for="idle-settings-agent-mode">Agent mode</label>
+          <select id="idle-settings-agent-mode" disabled aria-describedby="idle-feed-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select>
+          <span id="idle-feed-agent-mode-note" class="setting-hint" role="status">Both modes collaborate and delegate subtasks. Swarm works across the queue; Cluster focuses on one shared task.</span>
+        </div>
       </div>
-      <p id="idle-feed-agent-mode-note" class="feed-mode-note" role="status">Both modes collaborate and delegate subtasks. Swarm works across the queue; Cluster focuses on one shared task.</p>
-      <div class="feed-controls feed-stop-row">
-        <button id="idle-stop-all" class="ghost mini" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button>
-        <button id="idle-restart" class="ghost mini" title="Stop every agent, save progress, and restart Studio.">Restart Studio</button>
-        <span id="idle-stop-state" class="feed-state" role="status" aria-live="polite"></span>
+      <div class="setting-group" role="group" aria-labelledby="cmd-settings-safety-title">
+        <h3 id="cmd-settings-safety-title" class="setting-group-title">Safety</h3>
+        <div class="setting-actions">
+          <button id="idle-stop-all" class="ghost mini" type="button" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button>
+          <button id="idle-restart" class="ghost mini" type="button" title="Stop every agent, save progress, and restart Studio.">Restart Studio</button>
+          <span id="idle-stop-state" class="feed-state" role="status" aria-live="polite"></span>
+        </div>
+        <p class="setting-hint">Stop all halts every agent now; progress is saved and the work stays queued. Restart stops the agents first, then relaunches Studio paused.</p>
       </div>
       <details id="idle-controls-help" class="feed-help">
-        <summary>How these controls work</summary>
+        <summary>About these controls</summary>
         <dl class="feed-help-list">
-          <dt id="idle-autopilot-help">Autopilot</dt>
-          <dd>Autopilot is the master switch for the assistant's queue. On each pass the assistant looks for ready tasks, starts them while a worker slot is free, and verifies what came back. Turning it off stops new work from starting; jobs already running finish normally.</dd>
-          <dt id="idle-feed-parallel-help">Parallel builds</dt>
+          <dt>Autopilot</dt>
+          <dd>The master switch for the assistant's queue. On each pass the assistant looks for ready tasks, starts them while a worker slot is free, and verifies what came back. Turning it off stops new work from starting; jobs already running finish normally.</dd>
+          <dt>Parallel builds</dt>
           <dd>How many builds may run at the same time. <b>Machine managed</b> starts work while the app stays responsive and backs off when the machine is busy. A manual limit (1–3) caps concurrent builds but never starts or pauses anything by itself.</dd>
-          <dt id="idle-feed-build-mode-help">Build mode</dt>
+          <dt>Build mode</dt>
           <dd><b>Auto build</b> starts eligible tasks as soon as a worker is free. <b>Verify first</b> holds every new or changed brief for your approval, so you decide what gets built. Switching never interrupts a running job.</dd>
-          <dt id="idle-feed-agent-mode-help">Agent mode</dt>
-          <dd>How agents coordinate. <b>Swarm</b> works across all ready tasks and their subtasks; <b>Cluster</b> focuses every agent on one shared task until it is done. Both plan, delegate and review results; current work finishes when you switch. The selector sits in the node tree toolbar under <b>Agents</b>.</dd>
+          <dt>Agent mode</dt>
+          <dd>How agents coordinate. <b>Swarm</b> works across all ready tasks and their subtasks; <b>Cluster</b> focuses every agent on one shared task until it is done. Both plan, delegate and review results; current work finishes when you switch. The same selector sits in the node tree toolbar under <b>Agents</b>.</dd>
           <dt>New work</dt>
           <dd>The master switch for starting anything new — queued tasks, builds and work the assistant suggests — lives with the Assistant. Off pauses admission; running jobs, replies and your answers to questions still work.</dd>
         </dl>
@@ -4799,6 +4922,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-map-run" type="button">Map this project</button><button class="ghost" id="walkthrough-map-cancel" type="button" hidden>Cancel</button></div>
         <p id="walkthrough-map-status" class="muted" role="status">Not mapped yet. A read-only explorer reads the selected folder, writes its map as a todo list you can watch in the tree, and saves its suggested first tasks as ideas. Nothing is built.</p>
         <ul id="walkthrough-map-steps" class="walkthrough-notes"></ul>
+        <pre id="walkthrough-map-tail" class="walkthrough-textTail" hidden></pre>
         <ul id="walkthrough-map-facts" class="walkthrough-facts"></ul>
       </div>
       <div id="walkthrough-assist" class="walkthrough-panel" hidden>
@@ -14447,6 +14571,10 @@ body.music-preview-active #idle-hud { display: none !important; }
     follow: null,
     followReadAt: 0,
     followZoomTarget: null,
+    zoomTarget: null, // a zoom the camera glides to (a click, a search hit); null once settled
+    cameraMoving: false, // set per frame while the camera or its zoom is still in flight
+    center: null, // the eased projection centre (stepCenter); null snaps it on the next frame
+    graphFrame: null, // the rectangle between the fixed rails, before floating panels carve it (usableArea)
     followStatusKey: "",
     completedTaskIds: new Set(),
     // Resolves when an enter()'s first tasks+graph build has settled; the
@@ -17209,12 +17337,36 @@ body.music-preview-active #idle-hud { display: none !important; }
     return state.active && !state.feedCollapsed && !!el.feed && !el.feed.hidden && el.feed.offsetWidth > 0;
   }
 
+  // The projection centre is the middle of the clear rectangle. When a
+  // floating panel moves it — the selection card opening on a click, the
+  // Follow banner — the centre glides there at the camera's rate, so the
+  // tree slides instead of jumping. It snaps when the frame itself changes
+  // (the window, the rails, a feed toggle: the layout re-seeds against it
+  // anyway), in the overview camera, whose back-off is instant, and under
+  // reduced motion. Returns how far it still has to go, in pixels.
+  function stepCenter(area, still) {
+    const frame = state.graphFrame ?? area;
+    const frameKey = `${frame.x},${frame.y},${frame.w},${frame.h}`;
+    const tx = area.x + area.w / 2, ty = area.y + area.h / 2;
+    const center = state.center;
+    const left = center ? Math.hypot(tx - center.x, ty - center.y) : 0;
+    if (!center || still || state.camMode === "orbit" || center.frameKey !== frameKey || left < 0.25) {
+      state.center = { x: tx, y: ty, frameKey };
+      return 0;
+    }
+    center.x += (tx - center.x) * CAMERA_EASE;
+    center.y += (ty - center.y) * CAMERA_EASE;
+    return left * (1 - CAMERA_EASE);
+  }
+
   function centerX() {
+    if (state.center) return state.center.x;
     const area = usableArea();
     return area.x + area.w / 2;
   }
 
   function centerY() {
+    if (state.center) return state.center.y;
     const area = usableArea();
     return area.y + area.h / 2;
   }
@@ -17266,9 +17418,13 @@ body.music-preview-active #idle-hud { display: none !important; }
   function usableArea() {
     if (state.settingsPreview) {
       const area = state.settingsPreview;
+      state.graphFrame = { x: area.x, y: area.y, w: area.w, h: area.h };
       return { x: area.x, y: area.y, w: area.w, h: area.h };
     }
-    if (state.ambientZen) return { x: 28, y: 28, w: Math.max(1, el.width - 56), h: Math.max(1, el.height - 56) };
+    if (state.ambientZen) {
+      state.graphFrame = { x: 28, y: 28, w: Math.max(1, el.width - 56), h: Math.max(1, el.height - 56) };
+      return { ...state.graphFrame };
+    }
     const now = Date.now();
     if (state.graphArea && now - state.graphAreaAt < 250) return state.graphArea;
     const visibleBox = (node) => {
@@ -17308,10 +17464,17 @@ body.music-preview-active #idle-hud { display: none !important; }
       if (feed && feed.height < el.height * 0.48) top = Math.max(top, feed.bottom + 20);
     }
     if (bottom - top < 160) top = Math.max(20, bottom - 160);
-    let spaces = [{ x: left, y: top, w: Math.max(160, right - left), h: Math.max(160, bottom - top) }];
+    // The frame: what is left between the fixed rails before floating panels
+    // carve it. The persisted node layout is keyed on it (layoutProjectedGraphImpl).
+    state.graphFrame = { x: left, y: top, w: Math.max(160, right - left), h: Math.max(160, bottom - top) };
+    let spaces = [{ ...state.graphFrame }];
     // Details, menus and the Follow banner can extend into the space between
     // the main rails. Fit the graph into the largest remaining clear rectangle
-    // instead of merely hiding its labels behind those panels.
+    // instead of merely hiding its labels behind those panels. (The persisted
+    // node layout is keyed on the frame above, not on this rectangle, so the
+    // selection card opening on a click carves the rectangle without
+    // re-seeding the tree, and the projection centre glides after it —
+    // stepCenter — instead of jumping.)
     for (const panel of [feed, chat, visibleBox(el.info), visibleBox(el.followStatus), visibleBox(el.legend), visibleBox(el.pop)]) {
       if (!panel) continue;
       const x = panel.left - 20, y = panel.top - 20, rightEdge = panel.right + 20, bottomEdge = panel.bottom + 20;
@@ -17359,6 +17522,19 @@ body.music-preview-active #idle-hud { display: none !important; }
 
   function setZoom(value) {
     state.zoom = Math.min(2.6, Math.max(0.45, value));
+    state.zoomTarget = null; // an instant zoom (wheel, fit, restore) ends any glide
+  }
+
+  // A zoom the camera glides to instead of snapping: the frame loop eases
+  // state.zoom toward it at the camera's own rate, so a click closes in on a
+  // node with the scale and the pan arriving together. Snapping the scale
+  // first threw the clicked node outward from the centre (off-screen for an
+  // edge node) before the pan brought it back — the jump a click used to
+  // make. Reduced motion lands at once, like the camera does.
+  function glideZoom(value) {
+    const target = Math.min(2.6, Math.max(0.45, value));
+    if (noMotion()) { setZoom(target); return; }
+    state.zoomTarget = target;
   }
 
   function fitAll() {
@@ -17383,6 +17559,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   function refitLayout() {
     state.screenLayout = null;
     state.overviewScale = 1;
+    state.center = null; // the centre snaps to the refit frame
     state.camera.tx = 0;
     state.camera.ty = 0;
     state.camera.tz = 0;
@@ -18111,7 +18288,13 @@ body.music-preview-active #idle-hud { display: none !important; }
 
   function layoutProjectedGraphImpl(projected, area, mode, animationTime, still) {
     const layoutName = state.nodeLayout ?? "constellation";
-    const key = `${layoutName}|${state.view}|${area.x},${area.y},${area.w},${area.h}`;
+    // Keyed on the frame between the rails, not on the clear rectangle: a
+    // floating panel (the selection card on a click) shrinks the rectangle
+    // without changing where the anchors belong, and re-seeding every anchor
+    // for it made the tree jump under the click. Orbit's overview back-off
+    // below still keeps the anchors inside the clear rectangle.
+    const frame = state.graphFrame ?? area;
+    const key = `${layoutName}|${state.view}|${frame.x},${frame.y},${frame.w},${frame.h}`;
     if (state.screenLayout?.key !== key) {
       state.screenLayout = { key, nodes: new Map(), slots: new Map() };
       state.overviewScale = 1;
@@ -18930,13 +19113,14 @@ body.music-preview-active #idle-hud { display: none !important; }
   function renderAgentModeControl() {
     const assistant = state.assistant;
     const known = ["swarm", "cluster"].includes(assistant?.mode);
-    if (el.feedAgentMode) {
-      el.feedAgentMode.disabled = Boolean(state.agentModeSaving) || !known || !window.mefiStudio?.assistantAutopilot;
-      if (!state.agentModeSaving) el.feedAgentMode.value = assistant?.mode === "cluster" ? "cluster" : "swarm";
-      el.feedAgentMode.setAttribute("aria-busy", String(Boolean(state.agentModeSaving)));
-      el.feedAgentMode.title = "Both modes use the Assistant to plan, delegate subtasks and review results. Swarm also works across ready tasks; Cluster keeps agents on one shared task. Applies to all projects; current work finishes when switching.";
+    // The tree toolbar and the Work settings view show the same selector.
+    for (const control of [el.feedAgentMode, el.settingsAgentMode].filter(Boolean)) {
+      control.disabled = Boolean(state.agentModeSaving) || !known || !window.mefiStudio?.assistantAutopilot;
+      if (!state.agentModeSaving) control.value = assistant?.mode === "cluster" ? "cluster" : "swarm";
+      control.setAttribute("aria-busy", String(Boolean(state.agentModeSaving)));
+      control.title = "Both modes use the Assistant to plan, delegate subtasks and review results. Swarm also works across ready tasks; Cluster keeps agents on one shared task. Applies to all projects; current work finishes when switching.";
     }
-    if (el.feedAgentModeNote) el.feedAgentModeNote.textContent = state.agentModeSaving ? "Saving agent mode…" : !known ? "Loading agent mode…" : assistant.mode === "swarm"
+    if (el.feedAgentModeNote) el.feedAgentModeNote.textContent = state.agentModeSaving ? "Saving agent mode…" : !window.mefiStudio ? "Available in the desktop app." : !known ? "Loading agent mode…" : assistant.mode === "swarm"
       ? "Swarm · agents collaborate on tasks and their subtasks across the queue. Pause, approvals and capacity still apply."
       : assistant.clusterFocus?.title ? `Cluster · agents focus on: ${assistant.clusterFocus.title}`
       : autopilotJobs(assistant).length ? "Cluster · current workers finish before agents focus on one task."
@@ -18952,13 +19136,14 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (el.autopilotToggle) {
       el.autopilotToggle.checked = Boolean(state.assistant?.enabled);
       el.autopilotToggle.disabled = state.treeStatus !== "ok";
-      const wrap = el.autopilotToggle.closest(".switch");
+      const wrap = el.autopilotToggle.closest(".setting-row") ?? el.autopilotToggle.closest(".switch");
       if (wrap) wrap.hidden = !window.mefiStudio;
     }
     if (el.settingsState) {
-      el.settingsState.textContent = !window.mefiStudio ? "desktop only"
+      el.settingsState.textContent = !window.mefiStudio ? "Desktop only"
         : !state.assistant ? "…"
-        : state.assistant.enabled ? "autopilot on" : "autopilot off";
+        : state.assistant.enabled ? "Autopilot on" : "Autopilot off";
+      el.settingsState.dataset.on = String(Boolean(window.mefiStudio && state.assistant?.enabled));
     }
   }
 
@@ -19385,7 +19570,9 @@ body.music-preview-active #idle-hud { display: none !important; }
   function growArea(area) {
     if (!area) return;
     area.style.height = "auto";
-    area.style.height = `${Math.min(120, Math.max(38, area.scrollHeight))}px`;
+    const height = Math.min(120, Math.max(38, area.scrollHeight));
+    area.style.height = `${height}px`;
+    area.style.overflowY = area.scrollHeight > height + 1 ? "auto" : "hidden";
   }
 
   // The reply-is-coming bubble: a responder job in the work journal means a
@@ -19448,8 +19635,9 @@ body.music-preview-active #idle-hud { display: none !important; }
       el.chatInput.placeholder = !bridge
         ? "desktop app only"
         : focused
-          ? `Work on "${String(focused.label || focused.id).slice(0, 40)}"… (Enter)`
-          : "Message the assistant… (Enter)";
+          ? `Work on "${String(focused.label || focused.id).slice(0, 22).trimEnd()}${String(focused.label || focused.id).length > 22 ? "…" : ""}"`
+          : "Message the assistant…";
+      if (bridge) el.chatInput.title = "Enter sends · Shift+Enter for a new line";
       growArea(el.chatInput);
     }
     if (el.chatSend) {
@@ -19537,7 +19725,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     // navigation, a card link) — the camera belongs to them from here on.
     setCamMode("free", { quiet: true });
     focusOn(node);
-    if (zoom) setZoom(Math.max(state.zoom, zoom));
+    if (zoom) glideZoom(Math.max(state.zoomTarget ?? state.zoom, zoom));
   }
 
   function onActivity(data) {
@@ -19757,7 +19945,11 @@ body.music-preview-active #idle-hud { display: none !important; }
       frameRequest = requestAnimationFrame(frame);
       return;
     }
-    if (!document.hidden && time - lastFrameAt >= 33) {
+    // ~30 fps. The gate sits a little under the two-tick spacing (33.3 ms at
+    // 60 Hz): vsync timestamps jitter by a millisecond or two, and a 32.9 ms
+    // tick that missed a 33 ms gate cost a whole extra tick — a 50 ms hitch
+    // that read as judder in every camera glide.
+    if (!document.hidden && time - lastFrameAt >= 30) {
       lastFrameAt = time;
       const profiler = globalThis.window?.MefiProfiler;
       const span = profiler?.begin("command.frame");
@@ -20492,6 +20684,14 @@ body.music-preview-active #idle-hud { display: none !important; }
   // again), else — only for the card the user is on — the least-bad spot.
   function placeCallout(node, p, size, projected, placedRects, hud, hitsNode, area, now, allowDirty = false) {
     const previous = state.callouts.get(node.id) ?? null;
+    // While the camera is in flight (a click closing in, a search hit) a card
+    // keeps the spot it had: re-deciding every frame against neighbours that
+    // are still moving made the cards hop. Placement resumes once the camera
+    // settles, with a fresh hold for whatever ended up blocked.
+    if (previous && state.cameraMoving) {
+      state.callouts.set(node.id, { ...previous, blockedSince: null, at: now });
+      return calloutLayout(node, p, previous, size);
+    }
     let chosen = null, soft = null, softScore = Infinity, fallback = null, fallbackScore = Infinity;
     for (const candidate of calloutCandidates(previous)) {
       const layout = calloutLayout(node, p, candidate, size);
@@ -20761,7 +20961,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     selectNode(node);
     setCamMode("free", { quiet: true });
     focusOn(node);
-    setZoom(FOCUS_ZOOM[node.kind] ?? 1.9);
+    glideZoom(FOCUS_ZOOM[node.kind] ?? 1.9);
     if (state.orbit === "paused" && state.view !== "2d" && !noMotion()) setOrbit("auto", { quiet: true });
     state.settleUntil = 0;
     return true;
@@ -20803,6 +21003,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       state.graphFrameKey = graphFrameKey;
       if (state.camMode === "orbit" || state.camMode === "follow") autoFit();
     }
+    const centerFlight = stepCenter(graphArea, still);
     updateFollowCamera(Date.now());
     const target = orbitTarget(energy);
     state.orbitVel += (target - state.orbitVel) * ORBIT_EASE;
@@ -20818,6 +21019,16 @@ body.music-preview-active #idle-hud { display: none !important; }
       state.camera.z += (state.camera.tz - state.camera.z) * CAMERA_EASE;
     }
     if (state.camMode === "follow" && state.followZoomTarget != null && !still) state.zoom += (state.followZoomTarget - state.zoom) * 0.065;
+    if (state.zoomTarget != null) {
+      // The glide a click (or a search hit) asked for: the same ease as the
+      // camera, so scale and pan settle together; snap and stop once there.
+      if (still || Math.abs(state.zoomTarget - state.zoom) < 0.003) setZoom(state.zoomTarget);
+      else state.zoom += (state.zoomTarget - state.zoom) * CAMERA_EASE;
+    }
+    // Callouts keep their spots while the camera is in flight (placeCallout):
+    // "in flight" is a pan still worth more than a few pixels, or a zoom glide.
+    const flightPx = Math.hypot(state.camera.tx - state.camera.x, state.camera.ty - state.camera.y, state.camera.tz - state.camera.z) * state.fit * state.zoom * (state.overviewScale ?? 1);
+    state.cameraMoving = !still && (flightPx > 8 || centerFlight > 8 || (state.zoomTarget != null && Math.abs(state.zoomTarget - state.zoom) > 0.03));
 
     const { ctx } = el;
     // Two layers: the sky, and while a node is focused or a card hovered
@@ -22020,7 +22231,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     title.className = "card-title clamp-3";
     title.textContent = node.label ?? node.kind;
     title.title = node.label ?? node.kind;
-    info.append(kicker, title);
+    // The assistant card's eyebrow already reads "Assistant": no second line.
+    info.append(kicker);
+    if (node.kind !== "assistant" || String(node.label ?? "").trim().toLowerCase() !== "assistant") info.append(title);
 
     const kv = document.createElement("div");
     kv.className = "kv";
@@ -22108,7 +22321,15 @@ body.music-preview-active #idle-hud { display: none !important; }
           const item = document.createElement("div");
           item.className = "cp-note checkpoint-note";
           const status = busy.has(task.id) ? (window.MefiStage?.label?.("running") ?? "running") : (window.MefiStage?.label?.(task.status, task, { short: true }) ?? String(task.status ?? "open").replace("_", " "));
-          item.textContent = `${task.title ?? "task"} · ${status}`;
+          item.classList.add("filed-row");
+          if (busy.has(task.id)) item.classList.add("is-running");
+          const name = document.createElement("span");
+          name.className = "text";
+          name.textContent = task.title ?? "task";
+          const when = document.createElement("span");
+          when.className = "when";
+          when.textContent = status;
+          item.append(name, when);
           item.title = task.prompt ?? task.title ?? "";
           item.style.cursor = "pointer";
           item.addEventListener("click", () => nav("tasks", { taskId: task.id, filter: "all" }));
@@ -22117,9 +22338,12 @@ body.music-preview-active #idle-hud { display: none !important; }
         info.append(details);
       }
 
+      const threadHead = document.createElement("div");
+      threadHead.className = "card-sub";
+      threadHead.textContent = "Thread";
       const thread = document.createElement("div");
       thread.className = "assistant-thread";
-      info.append(thread);
+      info.append(threadHead, thread);
       fillThread(thread, full);
       thread.scrollTop = threadPinned ? thread.scrollHeight : threadTop;
 
@@ -22152,8 +22376,9 @@ body.music-preview-active #idle-hud { display: none !important; }
       input.placeholder = !bridge
         ? "desktop app only"
         : focused
-          ? `Work on "${String(focused.label || focused.id).slice(0, 40)}"… (Enter)`
-          : "Message the assistant… (Enter)";
+          ? `Work on "${String(focused.label || focused.id).slice(0, 22).trimEnd()}${String(focused.label || focused.id).length > 22 ? "…" : ""}"`
+          : "Message the assistant…";
+      if (bridge) input.title = "Enter sends · Shift+Enter for a new line";
       input.disabled = !bridge || state.assistantSending;
       const send = document.createElement("button");
       send.className = "primary mini";
@@ -22304,7 +22529,14 @@ body.music-preview-active #idle-hud { display: none !important; }
         steppers.append(createBuildParallelControl());
         info.append(steppers);
       }
-      if (!roster.length) info.append(createBuildParallelControl());
+      if (!roster.length) {
+        const head = document.createElement("div");
+        head.className = "card-sub";
+        head.textContent = "Capacity";
+        const control = createBuildParallelControl();
+        control.classList.add("stepper-row");
+        info.append(head, control);
+      }
 
       // The R&D layer's last word: health, score, and how much the playbook holds.
       const overseer = full?.overseer;
@@ -22317,6 +22549,10 @@ body.music-preview-active #idle-hud { display: none !important; }
 
       const log = (full?.log ?? []).slice(-6).reverse();
       if (log.length) {
+        const head = document.createElement("div");
+        head.className = "card-sub";
+        head.textContent = "Recent";
+        info.append(head);
         const activity = document.createElement("ul");
         activity.className = "assistant-activity pin-list";
         for (const entry of log) {
@@ -22337,14 +22573,13 @@ body.music-preview-active #idle-hud { display: none !important; }
         info.append(activity);
       }
 
-      action("Send", () => primaryAction(node), { primary: true, title: "Send the message (Enter)" });
-      action("Oversee", () => assistantControl("overseer", "overseer"), { title: "Run the overseer — it reviews the assistant's own work, tunes prefs and files upgrades" });
-      action("Tidy now", () => assistantControl("tidy", "tidy"), { title: "Archive done tasks, prune ideas, clear resolved requests" });
-      action("Fix now", () => assistantControl("fix", "fix"), { title: "Repair the catalog and data files, check the updater" });
+      action("Open Explorer", () => nav("explorer", { assistant: true }), { primary: true, title: "The full thread in the Session explorer (E)" });
       action(full?.status === "paused" ? "Resume" : "Pause", () => assistantControl(full?.status === "paused" ? "resume" : "pause", "control"), {
         title: "Pause or resume the assistant service",
       });
-      action("Open Explorer", () => nav("explorer", { assistant: true }), { title: "The full thread in the Session explorer (E)" });
+      action("Tidy", () => assistantControl("tidy", "tidy"), { title: "Archive done tasks, prune ideas, clear resolved requests" });
+      action("Fix", () => assistantControl("fix", "fix"), { title: "Repair the catalog and data files, check the updater" });
+      action("Oversee", () => assistantControl("overseer", "overseer"), { title: "Run the overseer — it reviews the assistant's own work, tunes prefs and files upgrades" });
     } else if (node.kind === "folded") {
       row("sessions", node.count ?? 0);
       row("why", "finished and untouched for a while");
@@ -23344,6 +23579,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     state.labelWidths.clear();
     state.hudRectsAt = 0;
     state.graphAreaAt = 0;
+    state.center = null;
     if (state.camMode === "orbit") autoFit(); // a new window still shows every node
   }
 
@@ -23492,6 +23728,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     el.feedParallel = document.getElementById("idle-feed-parallel");
     el.feedBuildMode = document.getElementById("idle-feed-build-mode");
     el.feedAgentMode = document.getElementById("idle-feed-agent-mode");
+    el.settingsAgentMode = document.getElementById("idle-settings-agent-mode");
     el.feedAgentModeNote = document.getElementById("idle-feed-agent-mode-note");
     el.stopAll = document.getElementById("idle-stop-all");
     el.restart = document.getElementById("idle-restart");
@@ -23718,6 +23955,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     el.feedParallel?.addEventListener("change", () => void changeBuildParallel(el.feedParallel.value));
     el.feedBuildMode?.addEventListener("change", () => void changeBuildMode(el.feedBuildMode.value));
     el.feedAgentMode?.addEventListener("change", () => void changeAgentMode(el.feedAgentMode.value));
+    el.settingsAgentMode?.addEventListener("change", () => void changeAgentMode(el.settingsAgentMode.value));
     el.stopAll?.addEventListener("click", () => void stopAllAgents());
     el.restart?.addEventListener("click", () => void restartStudio());
     setFeedMenu(state.feedMenuOpen);
@@ -29955,7 +30193,8 @@ body.music-preview-active #idle-hud { display: none !important; }
       row.append(head, text("div", "ws-message-body", message.text));
       list.append(row);
     }
-    list.scrollTop = pinned ? list.scrollHeight : oldTop;
+    // The welcome reads top-down; only a real conversation pins to its newest line.
+    list.scrollTop = !messages.length ? 0 : pinned ? list.scrollHeight : oldTop;
   }
   const scoped = (rows) => rows.filter((row) => !row.projectId || row.projectId === state.activeId);
   const workLabels = { all: "All work", open: "Queue", ideas: "Ideas", review: "Review", done: "Done" };
@@ -30225,10 +30464,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     $("narration").textContent = held && !working ? "Agents are waiting for you. Press Start agents when you're ready; your tasks and ideas are saved." : !working && !paused && workersOff ? "Coding workers are off. Your tasks are saved; use Work through backlog when you're ready to start them." : narration;
     $("companion-track").dataset.station = working ? "make" : reviewing ? "review" : "listen";
     $("companion-track").classList.toggle("busy", working || state.pending);
-    $("pause").textContent = held ? "Start agents" : paused ? "Resume" : "Pause";
-    $("pause").title = held ? "Start the assistant and the coding workers. Nothing has run since Studio opened." : "Pause new work. Running jobs finish normally.";
-    $("connection").textContent = !api() ? "Browser preview" : held ? "Agents waiting for you" : paused ? "New work paused" : workersOff ? "Coding workers off" : assistant.ai?.keyPresent === false ? "Connect an AI in Settings" : working ? "Working with you" : "Ready when you are";
     renderDashboard();
+    // The pill reads the same run state as the Service tile and its button.
+    $("connection").textContent = runState().label;
     $("connection").classList.toggle("working", working);
     const logs = (assistant.log || []).filter((entry) => entry.kind !== "tick").slice(-8).reverse();
     const signature = JSON.stringify(logs);
@@ -30247,11 +30485,14 @@ body.music-preview-active #idle-hud { display: none !important; }
     const assistantPaused = assistant.status === "paused" || assistant.prefs?.paused === true;
     const admissionOff = state.status.execute === false;
     const running = state.status.running || [];
+    // The launch hold is not a pause: nothing has run since Studio opened, and
+    // only the operator's Start agents lets anything begin.
+    const launchHold = state.status.held === true && !running.length;
     const held = assistantPaused || admissionOff;
     const keyMissing = assistant.ai?.keyPresent === false;
-    const label = !api() ? "Browser preview" : assistantPaused && admissionOff ? "Paused" : assistantPaused ? "Assistant paused" : admissionOff ? "New work held" : keyMissing ? "No AI connected" : running.length ? "Working" : "Ready";
-    const note = !api() ? "Live status needs the desktop app." : assistantPaused && admissionOff ? "All new work is held. Running jobs finish normally." : assistantPaused ? "The assistant is paused; queued tasks still start when a worker is free." : admissionOff ? "Queued tasks wait; the assistant still replies and takes answers." : keyMissing ? "Connect an AI in Settings to start." : state.status.waiting ? String(state.status.waiting) : running.length ? `${running.length} job${running.length === 1 ? "" : "s"} running` : "Waiting for work.";
-    return { held, label, note, running, tone: !api() ? "idle" : held ? "held" : keyMissing ? "warn" : running.length ? "busy" : "ok" };
+    const label = !api() ? "Browser preview" : launchHold ? "Waiting for you" : assistantPaused && admissionOff ? "Paused" : assistantPaused ? "Assistant paused" : admissionOff ? "New work held" : keyMissing ? "No AI connected" : running.length ? "Working" : "Ready";
+    const note = !api() ? "Live status needs the desktop app." : launchHold ? "Nothing has run since launch." : assistantPaused && admissionOff ? "All new work is held. Running jobs finish normally." : assistantPaused ? "The assistant is paused; queued tasks still start when a worker is free." : admissionOff ? "Queued tasks wait; the assistant still replies and takes answers." : keyMissing ? "Connect an AI in Settings to start." : state.status.waiting ? String(state.status.waiting) : running.length ? `${running.length} job${running.length === 1 ? "" : "s"} running` : "Waiting for work.";
+    return { held, launchHold, label, note, running, tone: !api() ? "idle" : launchHold ? "warn" : held ? "held" : keyMissing ? "warn" : running.length ? "busy" : "ok" };
   }
   const showFilter = (filter) => { state.filter = filter; state.limit = 20; $("work-list").scrollTop = 0; renderWork(); };
   // Studio at a glance: the landing strip answers "is anything waiting on me,
@@ -30264,8 +30505,11 @@ body.music-preview-active #idle-hud { display: none !important; }
     $("dash-service").dataset.tone = run.tone;
     $("dash-service-value").textContent = run.label;
     $("dash-service-note").textContent = run.note;
-    $("pause").textContent = run.held ? "Resume" : "Pause";
-    $("pause").title = run.held ? "Let new work start again." : "Hold all new work: queued tasks, builds and the assistant's own suggestions. Running jobs finish normally.";
+    $("pause").textContent = run.launchHold ? "Start agents" : run.held ? "Resume" : "Pause";
+    $("pause").title = run.launchHold ? "Start the assistant and the coding workers. Nothing has run since Studio opened." : run.held ? "Let new work start again." : "Hold all new work: queued tasks, builds and the assistant's own suggestions. Running jobs finish normally.";
+    // The one control the launch hold needs reads as the primary action.
+    $("pause").classList.toggle("primary", run.launchHold);
+    $("pause").classList.toggle("ghost", !run.launchHold);
     const running = run.running;
     const limit = state.status.adaptiveParallel ? null : Number(state.status.parallel) || null;
     $("dash-workers").dataset.tone = running.length ? "busy" : "idle";
@@ -30283,7 +30527,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     const ready = state.backlog?.counts?.ready || 0;
     $("dash-next").dataset.tone = next ? "ok" : "idle";
     $("dash-next-value").textContent = nextTask?.title || next?.title || (ready ? `${ready} ready` : "Queue is empty");
-    $("dash-next-note").textContent = next ? `${ready} ready${state.backlog?.summary ? ` · ${state.backlog.summary}` : ""}` : state.backlog?.summary || "";
+    const summary = state.backlog?.summary || "";
+    // The backlog summary usually already reads "N ready to work on".
+    $("dash-next-note").textContent = next ? (/\bready\b/i.test(summary) ? summary : [`${ready} ready`, summary].filter(Boolean).join(" · ")) : summary;
   }
   function renderMachineTile() {
     if (!$("dash-machine")) return;
@@ -30543,7 +30789,21 @@ body.music-preview-active #idle-hud { display: none !important; }
           feedback(result.running ? "Agents started. New work can begin." : "Agents are on. The assistant was paused last time; press Resume to let new work start.");
           return;
         }
-        const paused = state.assistant.status === "paused" || state.assistant.prefs?.paused; const result = guard(await api().assistantControl(paused ? "resume" : "pause")); state.assistant = result.state; renderCompanion(); scheduleBacklogRead(); feedback(paused ? "New work can start again." : "New work paused. Running jobs finish normally.");
+        if (runState().held) {
+          // Resume reopens admission and wakes the assistant in one step, so a
+          // hold left by Stop all or a tripped breaker clears with the pause.
+          const result = guard(await api().assistantControl("start-work"));
+          if (result.state) state.assistant = result.state;
+          if (result.autopilot) state.status = { ...state.status, ...result.autopilot };
+          feedback("New work can start again.");
+        } else {
+          if (!api()?.backlogControl) throw new Error("Open the updated desktop app to pause new work.");
+          const result = guard(await api().backlogControl({ action: "pause", projectId: state.activeId }));
+          if (result.backlog) state.backlog = result.backlog;
+          state.status = { ...state.status, execute: false };
+          feedback("New work paused. Running jobs finish normally.");
+        }
+        renderCompanion(); renderBacklog(); scheduleBacklogRead();
       }
       catch (error) { feedback(error.message, true); } finally { controls(); }
     });
@@ -32162,7 +32422,11 @@ body.music-preview-active #idle-hud { display: none !important; }
     panel.hidden = state.step !== MAP;
     if ($("map-run")) $("map-run").disabled = mapBusy;
     if ($("map-cancel")) $("map-cancel").hidden = !mapBusy;
-    $("map-steps")?.replaceChildren(...mapSteps.slice(-12).map((text) => node("li", "", text)));
+    // Progress lines matter while the explorer runs and when it fails (they show how far it got); a finished map replaces them with facts.
+    const showSteps = mapBusy || (mapResult && !mapResult.ok);
+    $("map-steps")?.replaceChildren(...(showSteps ? mapSteps.slice(-12).map((text) => node("li", "", text)) : []));
+    const tail = $("map-tail");
+    if (tail) { const text = !mapBusy && mapResult && !mapResult.ok && mapResult.textTail ? String(mapResult.textTail).trim() : ""; tail.hidden = !text; tail.textContent = text ? `What the explorer wrote instead: ${text}` : ""; }
     const facts = [];
     if (mapResult?.ok) {
       facts.push(mapResult.summary || "Map saved.");

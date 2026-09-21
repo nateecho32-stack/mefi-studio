@@ -169,8 +169,9 @@ project's ignored local `planning.json`.
   and below it a bubble with what the agents think or do there. Cards keep
   their spot while the tree turns and step aside to a compact label rather
   than overlap; hovering one lifts it and softens everything else; clicking
-  it (or its orb) **focuses** the node: the camera closes in, less on a
-  parent so its children stay in frame, and the rest of the tree keeps
+  it (or its orb) **focuses** the node: the camera glides in (scale and pan
+  together, less on a parent so its children stay in frame), the tree slides
+  over for the card instead of jumping, and the rest of the tree keeps
   turning slowly behind a blur until Esc or an empty click. **Card style**
   in the Ambience pop picks outlined, filled, or auto (filled when hovered,
   selected or running).

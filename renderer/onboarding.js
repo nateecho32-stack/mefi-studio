@@ -348,7 +348,11 @@
     panel.hidden = state.step !== MAP;
     if ($("map-run")) $("map-run").disabled = mapBusy;
     if ($("map-cancel")) $("map-cancel").hidden = !mapBusy;
-    $("map-steps")?.replaceChildren(...mapSteps.slice(-12).map((text) => node("li", "", text)));
+    // Progress lines matter while the explorer runs and when it fails (they show how far it got); a finished map replaces them with facts.
+    const showSteps = mapBusy || (mapResult && !mapResult.ok);
+    $("map-steps")?.replaceChildren(...(showSteps ? mapSteps.slice(-12).map((text) => node("li", "", text)) : []));
+    const tail = $("map-tail");
+    if (tail) { const text = !mapBusy && mapResult && !mapResult.ok && mapResult.textTail ? String(mapResult.textTail).trim() : ""; tail.hidden = !text; tail.textContent = text ? `What the explorer wrote instead: ${text}` : ""; }
     const facts = [];
     if (mapResult?.ok) {
       facts.push(mapResult.summary || "Map saved.");

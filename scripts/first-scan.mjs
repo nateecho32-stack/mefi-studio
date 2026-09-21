@@ -416,7 +416,10 @@ export function spawnExec(command, args = [], { timeoutMs = DEFAULT_STEP_TIMEOUT
     let child;
     try {
       child = platform === "win32"
-        ? spawn("cmd.exe", ["/d", "/s", "/c", commandLine(command, args)], { env, cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] })
+        // `/s` strips the first and last quote of the line after `/c`; the line
+        // is wrapped in its own pair so quoted arguments (a title with spaces,
+        // a project path) survive. Verbatim arguments stop Node re-quoting it.
+        ? spawn("cmd.exe", ["/d", "/s", "/c", `"${commandLine(command, args)}"`], { env, cwd, windowsHide: true, windowsVerbatimArguments: true, stdio: ["pipe", "pipe", "pipe"] })
         : spawn(command, args, { env, cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
     } catch (error) {
       finish({ code: null, stdout, stderr, timedOut, error: String(error?.message ?? error) });

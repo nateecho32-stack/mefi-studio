@@ -300,6 +300,13 @@ test("commandLine quotes paths for cmd.exe and refuses anything cmd.exe could re
   assert.throws(() => commandLine("opencode", ["--title", "line\nbreak"]), /unsafe argument/);
 });
 
+test("spawnExec on Windows keeps two quoted arguments intact (cmd /s strips the outer pair only)", { skip: process.platform !== "win32" }, async () => {
+  // Regression: the first map passes a spaced title and a spaced project path; cmd's /s once ate the title's opening quote and the path's closing quote.
+  const result = await spawnExec(process.execPath, ["-p", "process.argv.slice(1).join('|')", "Mefi first map", "C:\Coding Projects\Mefi's Studio AI+"], { timeoutMs: 30000 });
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stdout.trim(), "Mefi first map|C:\Coding Projects\Mefi's Studio AI+");
+});
+
 test("spawnExec resolves with a result for a missing command instead of throwing", async () => {
   const result = await spawnExec("mefi-first-scan-no-such-command-xyz", ["--version"], { timeoutMs: 15000 });
   assert.equal(result.timedOut, false);
