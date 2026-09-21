@@ -477,6 +477,7 @@
   <canvas id="tree-canvas" tabindex="0" role="tree" aria-label="Session tree"></canvas>
   <div class="rail-stats" id="tree-stats">no session yet</div>
 </aside>
+<canvas id="idle-layer-far" aria-hidden="true" hidden></canvas>
 <canvas id="idle-layer" tabindex="0" role="application" aria-label="Command constellation" hidden></canvas>
 <div id="idle-hud" hidden>
   <div class="cmd-top">
@@ -531,6 +532,11 @@
     <label class="pop-row" title="Audio profile"><span class="grow">Profile</span><select id="idle-profile"></select></label>
     <label class="switch pop-row" title="Let the nodes and connections respond to audio"><span class="grow">Audio link</span><input type="checkbox" id="idle-reactive"><span class="track"></span></label>
     <label class="pop-row" title="What the nodes listen to"><span class="grow">Listen to</span><select id="idle-source"><option value="auto">Auto · local or desktop</option><option value="local">Local player</option><option value="desktop">Desktop audio / Spotify</option><option value="mic">Microphone</option></select></label>
+    <hr class="pop-sep">
+    <div class="eyebrow">Look</div>
+    <label class="pop-row" title="The sky behind the node tree. Follow theme picks the scene that belongs to your colour theme in Music &amp; themes."><span class="grow">Backdrop</span><select id="idle-backdrop"></select></label>
+    <label class="switch pop-row" title="Agents say what they are doing beside their orb: hops, findings going home, replies and thoughts."><span class="grow">Speech bubbles</span><input type="checkbox" id="idle-bubbles"><span class="track"></span></label>
+    <label class="pop-row" title="How the thought bubble under a card is drawn. Auto keeps them outlined and fills the one you hover, select or that has a worker running."><span class="grow">Card style</span><select id="idle-card-style"><option value="auto">Auto</option><option value="outline">Outline</option><option value="filled">Filled</option></select></label>
     <hr class="pop-sep">
     <div class="eyebrow">Startup</div>
     <label class="switch pop-row" title="Open your project workspace on launch"><span class="grow">Open Workspace on launch</span><input type="checkbox" id="idle-home"><span class="track"></span></label>
@@ -603,6 +609,7 @@
       <p id="idle-chat-status" class="eyes-status assistant-service" role="status">assistant</p>
       <div id="idle-chat-thread" class="assistant-thread feed-chat-thread" aria-live="polite" aria-label="Assistant thread"></div>
       <ul id="idle-chat-work" class="pin-list assistant-activity feed-chat-work"></ul>
+      <details id="idle-chat-absorbed" class="card-cps feed-absorbed" hidden><summary>Absorbed work</summary><div id="idle-chat-absorbed-list"></div></details>
       <div id="idle-chat-chips" class="chat-chips" aria-label="Quick asks">
         <button class="ghost mini" data-msg="status">Status</button>
         <button class="ghost mini" data-msg="what should I work on">What next?</button>
@@ -664,9 +671,9 @@
       <span id="cmd-done-state" class="feed-state" role="status" aria-live="polite">Loading…</span>
       <button id="cmd-done-toggle" class="ghost mini" type="button" aria-expanded="true" aria-controls="cmd-done-list" title="Collapse the done log">&ndash;</button>
       <button id="cmd-done-refresh" class="ghost mini" type="button" title="Re-read the executor ledger">Refresh</button>
-      <button id="cmd-done-absorb" class="primary mini" type="button" title="Absorb every record — the done log clears for good" disabled>Absorb</button>
+      <button id="cmd-done-absorb" class="primary mini" type="button" title="Absorb every record into the assistant — they fly into its orb, stay readable on its card, and the done log clears" disabled>Absorb</button>
     </div>
-    <p class="rail-view-note">Finished builds from the durable executor ledger, plus the assistant's own completed passes. <b>Done</b> means the worker reported success; <b>Failed</b> means it stopped early. These records survive restarts until you absorb them.</p>
+    <p class="rail-view-note">Finished builds from the durable executor ledger, plus the assistant's own completed passes. <b>Done</b> means the worker reported success; <b>Failed</b> means it stopped early. <b>Absorb</b> sends them into the assistant orb on the tree: the log clears and the assistant's card keeps the last twenty.</p>
     <ul id="cmd-done-list" class="done-list" aria-label="Completed work"></ul>
   </section>
   <section id="cmd-asks" class="cmd-asks" role="tabpanel" aria-labelledby="cmd-rail-tab-ask" hidden>
