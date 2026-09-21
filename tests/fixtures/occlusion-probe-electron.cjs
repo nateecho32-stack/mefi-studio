@@ -118,15 +118,18 @@ app.whenReady().then(async () => {
   contents.on("render-process-gone", (_event, detail) => finish(new Error(`Probe renderer exited: ${detail.reason}`)));
   const run = (source) => contents.executeJavaScript(`(async()=>{${source}})()`, true);
 
-  // Same classification as main.cjs around the awaited probe: frames get a
-  // 50ms allowance, the unthrottled channel gets 200ms, and the sentinel
-  // stands only when neither aliveness channel ever answered.
+  // Same classification as main.cjs around the awaited probe: the renderer's
+  // own frame chain gets a 50ms allowance, the unthrottled channel gets 200ms,
+  // and the sentinel stands only when neither aliveness channel ever answered.
   async function runProbe() {
     const startedAt = Date.now();
     const answered = await contents.executeJavaScript(`(${probeExpression})`, true);
     const wallMs = Date.now() - startedAt;
     let lagMs;
-    if (answered?.frames === true) lagMs = Math.max(0, wallMs - 50);
+    if (answered?.frames === true) {
+      const framesMs = Number(answered.framesMs);
+      lagMs = Number.isFinite(framesMs) ? Math.max(0, framesMs - 50) : Math.max(0, wallMs - 50);
+    }
     else if (Number.isFinite(answered?.workerDriftMs)) lagMs = Math.max(0, answered.workerDriftMs - 200, wallMs - 200);
     else lagMs = 1000;
     return { answered, wallMs, lagMs };
@@ -183,6 +186,8 @@ app.whenReady().then(async () => {
       "$session.connectState = $null; $session.connectStateError = $null",
       "$wtsBuf = [IntPtr]::Zero; $wtsLen = 0",
       "if ([FgProbe]::WTSQuerySessionInformation([IntPtr]::Zero, -1, 8, [ref]$wtsBuf, [ref]$wtsLen)) { $session.connectState = [Runtime.InteropServices.Marshal]::ReadByte($wtsBuf); [void][FgProbe]::WTSFreeMemory($wtsBuf) } else { $session.connectStateError = [Runtime.InteropServices.Marshal]::GetLastWin32Error() }",
+      "$connectStateNames = @{0 = 'Active'; 1 = 'Connected'; 2 = 'ConnectQuery'; 3 = 'Shadow'; 4 = 'Disconnected'; 5 = 'Idle'; 6 = 'Listen'; 7 = 'Reset'; 8 = 'Down'}",
+      "$session.connectStateName = $null; if ($null -ne $session.connectState) { $session.connectStateName = $connectStateNames[[int]$session.connectState] }",
       "$session.inputDesktop = $null; $session.inputDesktopLocked = $null; $session.inputDesktopError = $null",
       "$inputDesktop = [FgProbe]::OpenInputDesktop(0, $false, 1)",
       "$session.inputDesktopLocked = ($inputDesktop -eq [IntPtr]::Zero)",

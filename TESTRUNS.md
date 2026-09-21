@@ -369,9 +369,14 @@ is throttled) beside a dedicated Web Worker timer that posts its own drift past
 a 150 ms schedule (worker timers are not frame-throttled); when worker
 construction is refused or errors, an unthrottled `MessageChannel` round-trip
 takes over. The script runs through `rendererValue` with a `null` fallback and a
-1000 ms timeout. Scoring: frames answered reads
-`max(0, elapsed − 50)` (two frames plus IPC allowance), so high CPU with a live
-view still admits workers; only the worker answered means frames were merely
+1000 ms timeout. Scoring: frames answered reads the renderer's own in-page frame
+chain, `max(0, framesMs − 50)` from `performance.now()` inside the probe (a
+50 ms allowance covers a normal frame period), so high CPU with a live view
+still admits workers — host dispatch/reply wall time is not renderer lag, and
+counting it (the old `elapsed − 50` rule) manufactured renderer-lag holds that
+blocked new starts on a healthy machine (a healthy window read 452 ms mid-suite);
+a page that does not report `framesMs` keeps the wall-clock reading; only the
+worker answered means frames were merely
 throttled and the reading is `max(0, workerDriftMs − 200, elapsed − 200)` — an
 occluded-but-live window reads ~0 while a main thread wedged after script eval
 keeps growing; neither channel answered, or a non-numeric worker reading, keeps
@@ -387,9 +392,13 @@ gate (documented with `tools/test_mefi_studio_machine.py` above) counts a
 sample exactly once.
 `tests/worker_responsiveness.test.mjs` runs the real sampler source in a VM
 with controlled clocks and view doubles to pin the script shape (exactly two
-`requestAnimationFrame` calls, `new Worker` with `postMessage(Date.now() - t0)`,
+`requestAnimationFrame` calls timed by in-page `performance.now()` into
+`framesMs`, `new Worker` with `postMessage(Date.now() - t0)`,
 the MessageChannel fallback on refusal or worker error), all three scoring
-branches, sentinel recovery, visibility invalidation, cache/in-flight sharing
+branches (frames judge only the renderer's own frame chain — host wall time
+around the probe is not renderer lag when frames answer, and a page without
+`framesMs` keeps the wall-clock reading), sentinel recovery, visibility
+invalidation, cache/in-flight sharing
 and probe identity; `tests/foreman_lag_gate.test.mjs` pins the foreman's
 consumption of these samples. `tests/occlusion_probe.test.mjs` is the
 live-Chromium proof of the same contract: a real Electron fixture loads the
@@ -406,6 +415,60 @@ Under the full suite `scripts/run-node-tests.mjs` holds this fixture out of
 the parallel stage and runs it serialized afterward, because mid-suite CPU
 contention inflated even the cleanest of three samples to 452 ms on a healthy
 window while the isolated fixture reads ~0.
+
+Validated on 2026-09-21 (run_1789972006803_41, frames-path lag fix): the
+renderer probe now scores the frames branch by its own in-page frame chain
+(`framesMs` from `performance.now()` inside the probe) instead of host wall
+time, so a busy main process during a spawn burst no longer reads as renderer
+lag and cannot latch renderer-responsiveness holds on a healthy machine.
+`node --test tests/worker_responsiveness.test.mjs tests/machine_capacity.test.mjs
+tests/foreman_lag_gate.test.mjs tests/assistant_lag_gate.test.mjs` 46/46,
+`python tools/test_mefi_studio_machine.py` 6/6 OK, `npm run check` clean; the
+live occlusion probe's visible phase (frames answer, lag < 100 ms under the new
+classification) passed before its documented capability-gated skip on this
+RDP desktop (occlusion tracker never engages).
+
+Validated on 2026-09-21 (run_1789973269892_2, occluded-phase re-pin under the
+framesMs classification): `MEFI_OCCLUSION_PROXY=visibility node --test
+tests/occlusion_probe.test.mjs` passed, exercising the downstream occluded-phase
+branch via the sanctioned hide()/show() proxy (not occlusion): rAF growth 0
+while hidden, probe answered via the unthrottled worker channel
+(workerDriftMs 164 → lag 0 ms of 1 sample under
+`max(0, workerDriftMs − 200, wallMs − 200)`), MessageChannel 0 ms, rAF resumed
+after show(). The plain `node --test tests/occlusion_probe.test.mjs` still
+skips at the capability gate (cover shown focused, 8 focus reassertions, rAF
+loud, NULL Win32 foreground, console session 1, ~3.3 h input idle), and
+`tests/worker_responsiveness.test.mjs` passed 16/16. A strict native-occlusion
+~0 ms reading still requires a desktop whose tracker engages; the proxy record
+remains "not rendered", not covered, pending owner sign-off.
+
+Validated on 2026-09-21 (run_1789973551180_3, strict native occlusion pinned,
+proxy off): on the console desktop (session 1, WTSConnectState Active — not
+RDP, input desktop Default, not locked) the plain
+`node --test tests/occlusion_probe.test.mjs` first still skipped at the
+capability gate with a self-describing record: cover shown focused, 8 focus
+reassertions, rAF loud at ~60 fps behind the cover, NULL Win32 foreground,
+page `hasFocus()` false throughout, ~3.4 h input idle — the tracker is inert
+on an unattended desktop, which is the real mechanism behind this machine's
+"occlusion never engages", not a hard capability gap. One benign input nudge
+(SendInput mouse move, no click or keys) reset the idle clock and the rerun
+passed strictly in ~6.3 s: detection signal `document.hidden` (native tracker
+engaged), probe window visible and never minimized, occluded rAF growth 0,
+every probe sample answered via the unthrottled worker channel
+(workerDriftMs 157 → lag 0 ms of 1 sample), blob worker still constructed,
+MessageChannel 0 ms, rAF resumed after the cover was removed, 0 console
+errors, `MEFI_OCCLUSION_PROXY` unset throughout — the visibility proxy stayed
+off and no `occluded` record was ever claimed from it. The occluded ~0 ms
+reading is now pinned natively under the framesMs classification.
+
+Re-run on 2026-09-21 (run_1789974040791_4, owner-gated commit check): two
+fresh `node --test tests/occlusion_probe.test.mjs` runs both skipped at the
+documented capability gate because the desktop was unattended with the lock
+screen foreground (LockApp, input idle 4.8-6 min) and a benign SendInput nudge
+was blocked, so the tracker never engaged; the records carry the new
+`connectStateName` field ("Active", console session 1) and the loud-rAF
+timeline, and no occluded record was claimed. The strict native pass above
+remains the pinned evidence for this thread.
 
 Validated on 2026-09-20: `npm run check`, `npm test` (1,490 parallel Node
 tests with 1,489 passing and one opt-in skip, the serialized occlusion probe

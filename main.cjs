@@ -389,7 +389,8 @@ async function measureWorkerLag({ force = false } = {}) {
       answered = await rendererValue(`new Promise(resolve => {
         let done = false;
         const finish = (answer) => { if (!done) { done = true; resolve(answer); } };
-        requestAnimationFrame(() => requestAnimationFrame(() => finish({ frames: true })));
+        const framesT0 = performance.now();
+        requestAnimationFrame(() => requestAnimationFrame(() => finish({ frames: true, framesMs: performance.now() - framesT0 })));
         // Frame throttling cannot stall these channels: dedicated worker timers
         // are unthrottled, and if a worker is refused (a strict CSP, for
         // example) a MessageChannel round-trip is an ordinary task Chromium
@@ -414,9 +415,15 @@ async function measureWorkerLag({ force = false } = {}) {
     if (!visible()) return null;
     let lagMs;
     if (answered?.frames === true) {
-      // Two ordinary frames plus IPC get a 50ms allowance. Time beyond that is
-      // actual delay, so high CPU with a responsive view can still admit workers.
-      lagMs = Math.max(0, Date.now() - startedAt - 50);
+      // Two ordinary frames prove the renderer alive, so only its own frame
+      // chain is lag evidence: a 50ms allowance covers a normal frame period
+      // and time beyond that is in-page delay. Dispatch and reply wall time
+      // belongs to a busy main process — exactly when the foreman spawns
+      // workers — and counting it manufactured renderer-lag holds (a healthy
+      // window read 452ms mid-suite) that blocked starts on a fine machine.
+      // A page that does not report framesMs keeps the wall-clock reading.
+      const framesMs = Number(answered.framesMs);
+      lagMs = Number.isFinite(framesMs) ? Math.max(0, framesMs - 50) : Math.max(0, Date.now() - startedAt - 50);
     } else if (Number.isFinite(answered?.workerDriftMs)) {
       // Frames were throttled but the event loop answered through the
       // unthrottled channel (a worker timer, or the MessageChannel round-trip
