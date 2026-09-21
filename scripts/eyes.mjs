@@ -39,6 +39,34 @@ function storePresent(dbPath) {
   return existsSync(dbPath);
 }
 
+// The part table has no index on time_created and its type lives inside the
+// JSON data blob, so every "newest rows of type X" query is a full table
+// scan that json_extracts each row. A long-lived OpenCode store is dominated
+// by tool output: 17 GB across 115k rows was measured, and one such scan
+// read gigabytes and blocked the main process for 10 s or more, which is what
+// gated startup on "Your projects and work · Couldn't load". Parts are
+// appended in creation order, so a scan bounded by rowid from the newest end
+// reads only the recent tail; the window widens until the caller has enough
+// rows (count) or the window reaches back past its time bound (covers).
+const PART_WINDOW = 2000;
+function scanRecentParts(db, query, enough) {
+  const top = db.prepare("select max(rowid) top from part").get()?.top ?? 0;
+  let size = PART_WINDOW;
+  for (;;) {
+    const lower = Math.max(0, top - size);
+    const rows = query(lower);
+    if (lower === 0 || enough(rows, lower)) return rows;
+    size *= 4;
+  }
+}
+// True once every row created after `since` lies inside the window (rowid >
+// lower). Reads only row headers: time_created sits before the data blob.
+function windowCovers(db, lower, since) {
+  if (lower === 0) return true;
+  const oldest = db.prepare("select min(time_created) t from part where rowid > ?").get(lower)?.t;
+  return oldest !== null && oldest !== undefined && oldest <= since;
+}
+
 function parseModel(raw) {
   try {
     const parsed = JSON.parse(raw);
@@ -129,9 +157,12 @@ export function listSessions({ dbPath = DEFAULT_DB, limit = 40 } = {}) {
   // means the run left work hanging. Reviewers must never read a finished
   // session as stalled just because it kept no todo list.
   const finished = new Set();
+  // Locate the final part by its cheap columns first; parsing data for every
+  // part of a long session would read all of its tool output.
   const lastPart = db.prepare(
     `select json_extract(data,'$.type') type, json_extract(data,'$.reason') reason
-     from part where session_id = ? order by time_created desc, id desc limit 1`
+     from part where rowid = (
+       select rowid from part where session_id = ? order by time_created desc, id desc limit 1)`
   );
   for (const row of rows) {
     try {
@@ -212,12 +243,12 @@ export function listChanges({ dbPath = DEFAULT_DB, sessionId = null, limit = 300
            where ${where} and session_id = ? order by time_created desc limit ?`
         )
         .all(sessionId, limit)
-    : db
+    : scanRecentParts(db, (lower) => db
         .prepare(
           `select id, session_id, time_created, data from part
-           where ${where} order by time_created desc limit ?`
+           where rowid > ? and ${where} order by time_created desc limit ?`
         )
-        .all(limit);
+        .all(lower, limit), (found) => found.length >= limit);
   return rows.map(toChange).filter(Boolean);
 }
 
@@ -319,16 +350,16 @@ export function listTodos({ dbPath = DEFAULT_DB, sessionId = null } = {}) {
 export function activitySince({ dbPath = DEFAULT_DB, since = 0, limit = 60 } = {}) {
   if (!storePresent(dbPath)) return [];
   const db = openDb(dbPath);
-  const rows = db
+  const rows = scanRecentParts(db, (lower) => db
     .prepare(
       `select id, session_id, time_created, json_extract(data,'$.tool') tool,
               json_extract(data,'$.state.input.filePath') file,
               substr(data, 1, 200) head
        from part
-       where time_created > ? and json_extract(data,'$.type') = 'tool'
+       where rowid > ? and time_created > ? and json_extract(data,'$.type') = 'tool'
        order by time_created asc limit ?`
     )
-    .all(since, limit);
+    .all(lower, since, limit), (_found, lower) => windowCovers(db, lower, since));
   return rows.map((row) => ({
     id: row.id,
     sessionId: row.session_id,
@@ -623,16 +654,16 @@ export function ownerIsInactive(collision) {
 function editWindowsByFile({ dbPath = DEFAULT_DB, since, root = null } = {}) {
   if (!storePresent(dbPath)) return new Map();
   const db = openDb(dbPath);
-  const rows = db
+  const rows = scanRecentParts(db, (lower) => db
     .prepare(
       `select session_id, json_extract(data,'$.state.input.filePath') file, time_created
        from part
-       where time_created > ?
+       where rowid > ? and time_created > ?
          and json_extract(data,'$.type') = 'tool'
          and json_extract(data,'$.tool') in ('edit','write')
        order by time_created desc`
     )
-    .all(since);
+    .all(lower, since), (_found, lower) => windowCovers(db, lower, since));
   const byFile = new Map();
   for (const row of rows) {
     if (!row.file || !withinRoot(row.file, root)) continue;
@@ -1206,17 +1237,20 @@ export function listChatTexts({ dbPath = DEFAULT_DB, after = { at: 0, id: "" }, 
   const afterAt = Number.isFinite(Number(since ?? seed.at)) ? Number(since ?? seed.at) : 0;
   const afterId = String(seed.id ?? "");
   const direction = order === "asc" ? "asc" : "desc";
-  const rows = db
+  // Newest-first reads stop once the page is full; a cursor walk (asc) must
+  // reach back to the cursor so no older row can precede its page.
+  const rows = scanRecentParts(db, (lower) => db
     .prepare(
       `select id, session_id, time_created, json_extract(data,'$.text') text
        from part
-       where json_extract(data,'$.type') = 'text'
+       where rowid > ? and json_extract(data,'$.type') = 'text'
          and (time_created > ? or (time_created = ? and (? = '' or id > ?)))
          and length(json_extract(data,'$.text')) between ? and ?
        order by time_created ${direction}, id ${direction}
        limit ?`
     )
-    .all(afterAt, afterAt, afterId, afterId, minLength, maxLength, limit);
+    .all(lower, afterAt, afterAt, afterId, afterId, minLength, maxLength, limit),
+  (found, lower) => (direction === "desc" && found.length >= limit) || windowCovers(db, lower, afterAt));
   return rows.map((row) => ({ id: row.id, sessionId: row.session_id, at: row.time_created, text: row.text }));
 }
 

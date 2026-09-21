@@ -565,7 +565,10 @@
       if (api().ideasList && (results[4].status === "rejected" || !results[4].value?.ok)) failures.push("ideas");
       if (state.backlogUnavailable) failures.push("backlog");
       $("retry").hidden = !failures.length;
-      if (failures.length) feedback(`Couldn't refresh ${failures.join(" and ")}. Your last loaded information is still here.`, true, "read");
+      if (failures.length) {
+        console.warn("Workspace refresh failed", failures, results.map((result) => result.status === "rejected" ? String(result.reason?.message || result.reason) : result.value?.ok === false ? result.value?.error ?? "ok:false" : result.value ? "ok" : "empty"));
+        feedback(`Couldn't refresh ${failures.join(" and ")}. Your last loaded information is still here.`, true, "read");
+      }
       else if (readFailure) feedback("");
       return failures.length === 0;
     });

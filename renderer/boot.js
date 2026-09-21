@@ -118,8 +118,9 @@
         const result = await Promise.race([Promise.resolve().then(() => step.load({ retry, isCurrent })), dead]);
         if (result === false || result?.ok === false) throw new Error("Startup step unavailable");
         if (isCurrent()) step.status = "ready";
-      } catch {
+      } catch (error) {
         if (isCurrent()) step.status = "error";
+        console.warn(`Startup step "${step.id}" failed`, error);
       } finally {
         clearTimeout(slowTimer);
         clearTimeout(deadTimer);
