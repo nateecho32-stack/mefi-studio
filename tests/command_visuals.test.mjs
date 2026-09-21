@@ -598,3 +598,16 @@ test("a floating panel carves the clear rectangle without re-seeding the tree, a
   centre.stepCenter({ x: 0, y: 0, w: 1400, h: 900 }, false);
   assert.equal(centre.centerX(), 700, "a new frame snaps");
 });
+
+test("verifying cards rank behind live sessions for the card budget; running work stays ahead", () => {
+  const { env } = calloutFixture();
+  const verifying = { id: "task:v", kind: "task", _workLabel: "Verifying", task: { status: "awaiting_verification" } };
+  const running = { id: "task:r", kind: "task", _workLabel: "Running", task: { status: "active" } };
+  const next = { id: "task:n", kind: "task", _workLabel: "Next", task: { status: "open" } };
+  const session = { id: "s1", kind: "session", state: "active" };
+  const plain = { id: "task:p", kind: "task", task: { status: "open" } };
+  const rank = (node) => env.calloutPriority(node, null, new Set());
+  assert.ok(rank(running) < rank(session) && rank(next) < rank(session), "live and up-next work outranks sessions");
+  assert.ok(rank(verifying) > rank(session), "a verifying card yields to the sessions being read");
+  assert.ok(rank(verifying) < rank(plain), "but still ranks ahead of an idle task");
+});

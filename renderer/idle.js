@@ -6561,6 +6561,10 @@
     if ((node.kind === "task" || node.kind === "task-group") && node._workLabel === "Running") return 2.2;
     if (node.kind !== "agent" && (hosted ? hosted.has(node.id) : agentOn(node))) return 2.3;
     if (node.kind === "agent" && (node.status === "running" || node.builder)) return 2.5;
+    // Verifying is waiting, not work: a burst of finished runs used to fill
+    // the card budget with "verifying" cards ahead of the sessions being
+    // read. They rank behind live sessions now and stay one hover away.
+    if ((node.kind === "task" || node.kind === "task-group") && node._workLabel === "Verifying") return 3.4;
     if ((node.kind === "task" || node.kind === "task-group") && (node._workLabel || node.state === "active")) return 2.6;
     if (node.kind === "session") return node.stale ? 5 : 3;
     if (node.kind === "task" || node.kind === "task-group") return 4;
@@ -7123,6 +7127,26 @@
     return clipped ? `${text}…` : text;
   }
 
+  // The verifying cards that still earn a name at rest: the newest
+  // VERIFYING_NAMED by attempt time (ordinal, then id, as the tie-break so the
+  // set is stable between frames). Everything else verifying is an orb.
+  const VERIFYING_NAMED = 2;
+  // One numeric-aware collator for the tie-break: localeCompare builds one
+  // per call, and this sort runs every frame over every verifying card.
+  const verifyingCollator = typeof Intl !== "undefined" && Intl.Collator ? new Intl.Collator(undefined, { numeric: true }) : { compare: (a, b) => a.localeCompare(b, undefined, { numeric: true }) };
+  function recentVerifyingIds(projected) {
+    const rows = [];
+    for (const { node } of projected) {
+      if (node.kind !== "task" || node._workLabel !== "Verifying" || node.dying || node._absorbed) continue;
+      const task = node.task ?? node.workTask ?? {};
+      const at = Number(task.lastAttempt?.at) || Number(task.updatedAt) || 0;
+      rows.push({ id: node.id, at, ordinal: String(node.ordinal ?? "") });
+    }
+    if (rows.length <= VERIFYING_NAMED) return new Set(rows.map((row) => row.id));
+    rows.sort((a, b) => b.at - a.at || verifyingCollator.compare(b.ordinal, a.ordinal) || verifyingCollator.compare(String(a.id), String(b.id)));
+    return new Set(rows.slice(0, VERIFYING_NAMED).map((row) => row.id));
+  }
+
   function workLabelLines(ctx, node, font, workStatus, maxWidth = 200) {
     if (!workStatus || usableArea().w < 480) return [labelText(ctx, node, font, { separateStatus: Boolean(workStatus) })];
     // Working names need enough context to distinguish simultaneous jobs.
@@ -7165,6 +7189,11 @@
     const selectedId = state.selected?.id ?? null;
     const focus = state.camMode === "follow" ? state.follow : null;
     const hasWorkerTask = projected.some(({ node }) => node.kind === "task" && !node.dying && !node._absorbed && node._workLabel !== "Verifying" && (node.state === "active" || node._workLabel === "Running"));
+    // Verifying cards are all waiting on the same overseer pass, so naming
+    // every one of them says nothing a HUD count does not. Only the newest
+    // few keep a name at rest; the rest are tinted orbs, named on hover,
+    // selection, search or All.
+    const recentVerifying = recentVerifyingIds(projected);
     const list = [];
     for (const item of projected) {
       const node = item.node;
@@ -7177,7 +7206,7 @@
       else if (mode !== "none") {
         if (node.kind === "task" && node._workLabel !== "Verifying" && (node._workLabel === "Running" || node.state === "active")) priority = 2.15;
         else if (node.kind === "assistant") priority = 2.22;
-        else if (node._workLabel === "Verifying") priority = 2.45;
+        else if (node._workLabel === "Verifying") priority = recentVerifying.has(node.id) ? 2.45 : 4;
         else if (node._workLabel === "Next") priority = 2.55;
         else if (node.kind !== "todo" && node._workLabel === "Running" || node.builder && node.status === "running") priority = 2.6;
         else if (node.kind === "music") priority = 2.7;
@@ -7202,7 +7231,7 @@
         // The saved tree stays intact. Quiet names become available on hover,
         // selection, search, or All; they do not compete with current work.
         const landmark = node.kind === "assistant" || node.kind === "music" || Boolean(node.taskGroup);
-        const activeTask = node.kind === "task" && (node.state === "active" || ["Running", "Verifying", "Next"].includes(node._workLabel));
+        const activeTask = node.kind === "task" && (node._workLabel === "Verifying" ? recentVerifying.has(node.id) : node.state === "active" || ["Running", "Next"].includes(node._workLabel));
         const activeAgent = node.kind === "agent" && node.status === "running";
         const related = focus ? followsNode(node, focus) : Boolean(state.branch && node.sessionId === state.branch || selectedId && node.sessionId === selectedId);
         const step = node.kind === "todo" && node.status === "in_progress" && related;
@@ -7362,7 +7391,12 @@
     let drawn = 0;
     for (const { node, p, priority } of candidates) {
       if (drawn >= budget) break;
-      const workStatus = node.kind === "task" && ["Running", "Verifying", "Next"].includes(node._workLabel) ? node._workLabel : null;
+      // Running and up-next work get the two-line plate with a header; a
+      // verifying card is only waiting, so it keeps the compact one-line
+      // chip ("Verifying · title") in the verify tint — a burst of finished
+      // runs no longer stacks tall VERIFYING plates across the graph.
+      const workStatus = node.kind === "task" && ["Running", "Next"].includes(node._workLabel) ? node._workLabel : null;
+      const verifying = node.kind === "task" && node._workLabel === "Verifying";
       const font = fontFor(node);
       let lines = workLabelLines(ctx, node, font, workStatus);
       if (!lines[0]) continue;
@@ -7470,7 +7504,7 @@
       pen.beginPath(); pen.roundRect(paint.x, paint.y, paint.w, paint.h, 7);
       pen.fillStyle = state.canvasPalette?.background ?? "#101620"; pen.fill();
       pen.fillStyle = rgba(NODE_RGB.session, 0.045); pen.fill();
-      pen.strokeStyle = rgba(workStatus ? colorOf(node) : NODE_RGB.pending, priority <= 2 ? 0.75 : workStatus === "Running" ? 0.45 : 0.25); pen.lineWidth = 1; pen.stroke();
+      pen.strokeStyle = rgba(workStatus || verifying ? colorOf(node) : NODE_RGB.pending, priority <= 2 ? 0.75 : workStatus === "Running" ? 0.45 : verifying ? 0.35 : 0.25); pen.lineWidth = 1; pen.stroke();
       if (workStatus) {
         pen.font = '600 9px system-ui, "Segoe UI", sans-serif'; pen.textBaseline = "alphabetic"; pen.textAlign = "left";
         pen.fillStyle = rgba(colorOf(node), alpha);

@@ -127,7 +127,32 @@ plus the overseer run's command results (main.cjs:9895-9913), and calls
 
 Edits without an attributable session, or zero changed files with no executed
 named checks, are exactly the "no attributable edits and no named checks"
-reopen this task experienced on its first attempt. Housekeeping also refreshes
+reopen this task experienced on its first attempt.
+
+The pass no longer waits for the next tick to look again (2026-09-21):
+
+- `finish()` aims one coalesced settle at the moment the attempt's 30 s
+  evidence dwell expires (`kickVerificationSettlement`, which always keeps the
+  earliest requested moment), so a card is judged ~31 s after its run ends
+  instead of up to `autopilot.minutes` later.
+- Housekeeping re-arms itself for what it had to skip: a card still inside
+  its dwell (`followUp.dwellMs`), or a card whose evidence store did not
+  answer (`VERIFY_EVIDENCE_RETRY_MS`, bounded by `VERIFY_EVIDENCE_RETRY_MAX`
+  per streak, then the tick owns it).
+- A card whose overseer check is queued or in flight in THIS process
+  (`verificationJobs` / `verificationInFlight`) waits for that result instead
+  of settling ahead of it and being reopened by the failing run minutes
+  later; a stale "queued" stamp from an earlier app session never blocks.
+- Identical base checks across a burst of done reports share one execution
+  (`runSharedCheck`): a check that started at or after a job was created
+  covers that job's edits, in flight or landed within 3 minutes. Focused
+  tests still run per job, sequentially, after the shared check.
+
+The Command graph treats verifying as waiting, not work: only the two newest
+verifying cards keep a name at rest (`recentVerifyingIds`), the label is the
+compact one-line chip rather than the two-line RUNNING-style plate, and
+verifying callouts rank behind live sessions for the card budget. The HUD's
+"Verifying N" count carries the total. Housekeeping also refreshes
 live leases (main.cjs:9834-9837) and re-queues claims whose run died with the
 app (`executorResume.recover`, main.cjs:9826-9830).
 

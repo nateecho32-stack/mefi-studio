@@ -9478,6 +9478,10 @@ const hasPackageJson = (dir) => Boolean(dir) && existsSync(path.join(dir, "packa
 // The overseer's verification queue: done reports enqueue one keyed job per
 // attempt (assistant.scheduleVerificationOnDone) and this runner drains it.
 const verificationJobs = [];
+// Keys of jobs a drain worker has taken off the queue and not yet stamped:
+// housekeeping treats such a card's "queued" overseer run as live and waits
+// for its result instead of settling ahead of it.
+const verificationInFlight = new Set();
 // A project's base verification check. main.cjs only observes the project's
 // real shape on disk (package.json, a tracked test\run-check.ps1, the headless
 // LÖVE harness in test\runner plus an installed love.exe); the decision itself
@@ -9648,10 +9652,13 @@ async function runVerificationJobs(job) {
         while (verificationJobs.length) {
           const planned = verificationJobs.shift();
           if (!planned) break;
+          if (planned.key) verificationInFlight.add(planned.key);
           try {
             await runVerificationJob(planned, job);
           } catch (error) {
             logLine(`[autopilot] verification run failed: ${error.message}`);
+          } finally {
+            if (planned.key) verificationInFlight.delete(planned.key);
           }
         }
       });
@@ -9835,7 +9842,7 @@ async function autopilotHousekeeping() {
     const budget = (typeof VERIFICATION_COMMAND_BUDGET_MS === "number" ? VERIFICATION_COMMAND_BUDGET_MS : 15 * 60 * 1000) * 2;
     if (!(Number(run.at) > 0) || now - Number(run.at) >= budget) return false;
     const queued = typeof verificationJobs !== "undefined" && Array.isArray(verificationJobs) && verificationJobs.some((job) => job?.key === run.key);
-    const running = typeof verificationInFlight !== "undefined" && verificationInFlight instanceof Set && verificationInFlight.has(run.key);
+    const running = typeof verificationInFlight !== "undefined" && typeof verificationInFlight?.has === "function" && verificationInFlight.has(run.key);
     return queued || running;
   };
   if (typeof verify === "function") {
@@ -10185,6 +10192,14 @@ async function autopilotHousekeeping() {
     logLine(`[autopilot] housekeeping: ${[`${sweep.tasksReopened ?? 0} reopened`, `${sweep.tasksArchived ?? 0} aged out`, `${sweep.backlogCapped ?? 0} capped`, `${sweep.duplicateTasks ?? 0} duplicate title(s)`, `${sweep.requestsPruned ?? 0} stale request(s)`].join(", ")}`);
   }
   await refreshAutopilotQueue(eyes);
+  // Re-arm for what this pass had to skip, so a card never waits for the
+  // next autopilot tick when its evidence is a few seconds away. Evidence
+  // waits are bounded per streak; the counter resets once nothing waits.
+  if (followUp.evidenceWaiting) verificationEvidenceRetries += 1;
+  else verificationEvidenceRetries = 0;
+  let again = Number.isFinite(followUp.dwellMs) ? followUp.dwellMs : Infinity;
+  if (followUp.evidenceWaiting && verificationEvidenceRetries <= VERIFY_EVIDENCE_RETRY_MAX) again = Math.min(again, VERIFY_EVIDENCE_RETRY_MS);
+  if (Number.isFinite(again) && typeof kickVerificationSettlement === "function") kickVerificationSettlement(again);
 }
 
 // One autopilot tick: proactive pass (brief + audit + collision/fix

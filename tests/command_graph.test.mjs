@@ -1812,3 +1812,17 @@ test("work titles rewrap into a nearby opening before using distant whitespace",
   assert.ok(node._label.w < 190, "the chip uses the narrow opening");
   assert.ok(node._labelLines.every((line) => el.ctx.measureText(line).width <= node._label.w - 14));
 });
+
+test("only the newest verifying cards keep a name at rest; the rest are tinted orbs until hovered, selected or All", () => {
+  const labels = labelContext();
+  const verifying = (id, at) => ({ id, kind: "task", label: id, state: "active", _workLabel: "Verifying", task: { status: "awaiting_verification", lastAttempt: { at } }, _pr: 5 });
+  const nodes = [verifying("t-old", 1), verifying("t-mid", 2), verifying("t-new", 3), verifying("t-newest", 4)];
+  const projected = nodes.map((node, index) => ({ node, p: { x: 200 + index * 150, y: 300, k: 1, depth: 800 } }));
+  assert.deepEqual([...labels.env.recentVerifyingIds(projected)].sort(), ["t-new", "t-newest"]);
+  assert.deepEqual(Array.from(labels.env.labelCandidates(projected), ({ node }) => node.id).sort(), ["t-new", "t-newest"], "Auto names the two newest verifying cards only");
+  labels.state.hoverNode = nodes[0];
+  assert.ok(labels.env.labelCandidates(projected).some(({ node }) => node.id === "t-old"), "a hovered verifying orb gets its name back");
+  labels.state.hoverNode = null;
+  labels.state.labels = "all";
+  assert.equal(labels.env.labelCandidates(projected).length, 4, "All shows every name");
+});

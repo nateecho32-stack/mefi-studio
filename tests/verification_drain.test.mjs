@@ -175,3 +175,66 @@ test("a payload install with no npm checkout falls back to the app payload root"
   await drain;
   assert.equal(host.spawns[0].cwd, "C:/fixture-payload");
 });
+
+// A burst of done reports schedules the same base check once per card. One
+// execution that started at or after a job was created covers that job's
+// edits, so it is shared; a job created after the check started is not.
+test("identical base checks across a burst of done reports share one execution, focused tests stay per job", async () => {
+  const host = drainHost({ tasks: [
+    { id: "t-a", title: "A", verificationRun: { key: "k-a", state: "queued" } },
+    { id: "t-b", title: "B", verificationRun: { key: "k-b", state: "queued" } },
+  ] });
+  const created = Date.now() - 1000;
+  host.queue({ key: "k-a", taskId: "t-a", projectPath: "C:/fixture-root", commands: ["npm run check"], createdAt: created });
+  host.queue({ key: "k-b", taskId: "t-b", projectPath: "C:/fixture-root", commands: ["npm run check", "node --test tests/b.test.mjs"], createdAt: created });
+  const drain = host.env.runVerificationJobs({});
+  assert.deepEqual(host.spawns.map((child) => child.command), ["npm run check"], "the second job joins the base check already running for the first");
+  host.spawns[0].close(0);
+  await host.flush();
+  assert.deepEqual(host.spawns.map((child) => child.command), ["npm run check", "node --test tests/b.test.mjs"], "the focused test still runs for its own job after the shared check");
+  host.spawns[1].close(0);
+  await drain;
+  const [a, b] = host.board().tasks;
+  assert.equal(a.verificationRun.state, "passed");
+  assert.equal(b.verificationRun.state, "passed");
+  assert.equal(b.verificationRun.results[0].shared, true, "the joined result is marked as shared");
+  assert.equal(a.verificationRun.results[0].shared, undefined);
+  assert.equal(host.logs.filter((line) => line.includes("verification run passed")).length, 2, "every card still gets its own settled run");
+  assert.ok(host.logs.some((line) => line.includes("shared with a sibling run")));
+  // A job created after that check started cannot borrow it: its edits are newer.
+  host.queue({ key: "k-c", taskId: "t-c", projectPath: "C:/fixture-root", commands: ["npm run check"], createdAt: Date.now() + 5000 });
+  const again = host.env.runVerificationJobs({});
+  assert.equal(host.spawns.length, 3, "a later attempt gets a fresh check");
+  host.spawns[2].close(0);
+  await again;
+});
+
+test("a base check that failed is shared as a failure, never re-run per card", async () => {
+  const host = drainHost({ tasks: [
+    { id: "t-a", title: "A", verificationRun: { key: "k-a", state: "queued" } },
+    { id: "t-b", title: "B", verificationRun: { key: "k-b", state: "queued" } },
+  ] });
+  const created = Date.now() - 1000;
+  host.queue({ key: "k-a", taskId: "t-a", projectPath: "C:/fixture-root", commands: ["npm run check"], createdAt: created });
+  host.queue({ key: "k-b", taskId: "t-b", projectPath: "C:/fixture-root", commands: ["npm run check"], createdAt: created });
+  const drain = host.env.runVerificationJobs({});
+  host.spawns[0].stderr.emit("data", "css merge failed\n");
+  host.spawns[0].close(1);
+  await drain;
+  assert.equal(host.spawns.length, 1);
+  for (const task of host.board().tasks) {
+    assert.equal(task.verificationRun.state, "failed");
+    assert.match(task.verificationRun.results[0].tail, /css merge failed/);
+  }
+});
+
+test("the settle kick keeps the earliest requested moment and never arms a second timer", () => {
+  const host = drainHost();
+  host.env.kickVerificationSettlement(31000);
+  host.env.kickVerificationSettlement(1000);
+  host.env.kickVerificationSettlement(5000);
+  const live = host.timers.filter((timer) => !timer.cancelled);
+  assert.equal(live.length, 1, "one timer stays armed");
+  assert.ok(live[0].delay <= 1000 && live[0].delay >= 900, `the earlier request wins (${live[0].delay}ms)`);
+  assert.equal(host.timers.length, 2, "the later request was replaced, the still-later one folded in");
+});

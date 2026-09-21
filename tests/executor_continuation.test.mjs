@@ -256,3 +256,62 @@ test("live worker status excludes finished entries and never exposes an invalid 
   assert.equal(status.running[1].progress, undefined);
   assert.equal(status.running[2].progress, 1);
 });
+
+// Verification used to wait for the next autopilot tick (minutes) whenever a
+// pass could not settle a card yet. The pass now re-arms one coalesced settle
+// for the moment it can: the dwell's expiry, or a short bounded evidence retry.
+test("a card inside its evidence dwell re-arms one settle pass for the moment the dwell expires", async () => {
+  const { env, board } = verificationHost({ tasks: [{
+    id: "fresh", title: "Just finished", status: "awaiting_verification",
+    lastAttempt: { startedAt: NOW - 20000, at: NOW - 10000, code: 0, sessionId: "fresh-session" },
+  }] });
+  const kicks = [];
+  Object.assign(env, { kickVerificationSettlement: (ms) => kicks.push(ms) });
+  await env.autopilotHousekeeping();
+  assert.equal(board().tasks[0].status, "awaiting_verification", "the dwell is respected");
+  assert.deepEqual(kicks, [20250], "the pass is re-armed for the dwell's expiry, not the next tick");
+});
+
+test("a card whose overseer check is live in this process waits for that result instead of racing it", async () => {
+  const { env, board } = verificationHost({ tasks: [{
+    id: "live", title: "Check still running", status: "awaiting_verification",
+    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "live-session" },
+    verificationRun: { key: "verification:live:run_1", state: "queued", at: NOW - 100 },
+  }] });
+  const kicks = [];
+  Object.assign(env, { kickVerificationSettlement: (ms) => kicks.push(ms), verificationJobs: [{ key: "verification:live:run_1" }], verificationInFlight: new Set() });
+  await env.autopilotHousekeeping();
+  assert.equal(board().tasks[0].status, "awaiting_verification", "queued in this process: the run's own result kicks the settle");
+  env.verificationJobs = [];
+  env.verificationInFlight = new Set(["verification:live:run_1"]);
+  await env.autopilotHousekeeping();
+  assert.equal(board().tasks[0].status, "awaiting_verification", "in flight: still waited for");
+  assert.deepEqual(kicks, [], "no timer is armed for a run that kicks on its own");
+  env.verificationInFlight = new Set();
+  await env.autopilotHousekeeping();
+  assert.equal(board().tasks[0].status, "done", "once the run is no longer live the card settles on its evidence");
+});
+
+test("a stale queued stamp with no live job never blocks settlement", async () => {
+  const { env, board } = verificationHost({ tasks: [{
+    id: "stale", title: "Queued by an earlier app session", status: "awaiting_verification",
+    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "stale-session" },
+    verificationRun: { key: "verification:stale:run_1", state: "queued", at: NOW - 100 },
+  }] });
+  Object.assign(env, { verificationJobs: [], verificationInFlight: new Set() });
+  await env.autopilotHousekeeping();
+  assert.equal(board().tasks[0].status, "done");
+});
+
+test("evidence waits re-arm on the short cadence, bounded per streak", async () => {
+  const { env, board } = verificationHost({
+    tasks: [{ id: "waiting", title: "Store not answering", status: "awaiting_verification", lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "gone" } }],
+    unavailable: ["gone"],
+  });
+  const kicks = [];
+  Object.assign(env, { kickVerificationSettlement: (ms) => kicks.push(ms) });
+  for (let pass = 0; pass < 10; pass += 1) await env.autopilotHousekeeping();
+  assert.equal(board().tasks[0].status, "awaiting_verification");
+  assert.equal(board().tasks[0].verification.state, "pending");
+  assert.deepEqual(kicks, Array(8).fill(15000), "eight short retries, then the autopilot tick owns it");
+});

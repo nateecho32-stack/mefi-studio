@@ -1,5 +1,25 @@
 # Test Runs
 
+Full npm test gate green, verification-settlement work landed
+(2026-09-21, late evening, run_1790031327079_1 for
+task_073a02b3a82eec7d, resuming the interrupted
+run_1790031092452_3). The uncommitted tree (kickVerificationSettlement
+dwell/retry re-arm and shared base checks in main.cjs, verifying-orb
+label ranking in renderer/idle.js, the four new fixtures in
+tests/command_graph / command_visuals / executor_continuation /
+verification_drain, AGENT_LOOP.md notes, booklet rebuilt to the same
+hash f98dd2322a01) was verified end to end: the first full `npm test`
+hit the known eyes_worker "read past the timeout" load flake in the
+parallel stage (1 fail of 1716; passes 8/0 alone, same signature as
+the 2026-09-21 entries above); the rerun was fully green in one
+invocation - parallel stage 1716 tests / 1714 pass / 0 fail / 2 skip,
+serialized eyes_toggle_electron 1/0 (fetch gaps 292-1300 ms, 6
+fetches), serialized occlusion_probe 1/0 (lag 0 ms, worker drift
+163 ms), python contracts 246 OK, normalized-path lock checks ok,
+exit 0. `npm run check` clean (90 targets, 177 specs, css, syntax)
+and `npm run audit` ok (0 findings) on the same tree. Not run: a
+live app session watching a card settle through the new kick.
+
 performance_render isolated re-run, timeout confirmed environmental
 (2026-09-21, evening, run_1790030471057_2 for task_9892bbd6444a088e,
 resuming the interrupted run_1790030285727_13). With zero electron
