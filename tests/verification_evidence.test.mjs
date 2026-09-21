@@ -101,19 +101,19 @@ test("scan truncation, output truncation, empty windows, and unavailable stores 
   assert.equal(eyes.listSessionChecks({ dbPath: file, sessionId: "ours" }).available, false);
 }));
 
-test("project facade reads only an exact session owned by this project", async () => fixture(({ file, folder, add }) => {
+test("project facade reads only an exact session owned by this project", async () => fixture(async ({ file, folder, add }) => {
   add(part());add(part({ id: "foreign", session: "foreign" }));
   const projects = createProjects({ defaultRoot: folder, studioRoot: folder, isDirectory: () => true });
   const project = projects.add(folder);
   projects.select(project.id);
   const scoped = projects.eyes(eyes);
-  assert.equal(scoped.listSessionChecks({ dbPath: file, ...scope }).checks.length, 1);
-  const other = scoped.listSessionChecks({ dbPath: file, ...scope, sessionId: "foreign" });
+  assert.equal((await scoped.listSessionChecks({ dbPath: file, ...scope })).checks.length, 1);
+  const other = await scoped.listSessionChecks({ dbPath: file, ...scope, sessionId: "foreign" });
   assert.equal(other.available, false);assert.deepEqual(other.checks, []);
-  assert.equal(scoped.listSessionChecks({ dbPath: file, ...scope, sessionId: "missing" }).available, false);
+  assert.equal((await scoped.listSessionChecks({ dbPath: file, ...scope, sessionId: "missing" })).available, false);
 }));
 
-test("attempt-scoped edits cannot borrow earlier or later writes in a resumed session", async () => fixture(({ file, folder, add }) => {
+test("attempt-scoped edits cannot borrow earlier or later writes in a resumed session", async () => fixture(async ({ file, folder, add }) => {
   const write = (id, at, start, end) => ({ id, session_id: "ours", time_created: at, data: JSON.stringify({ type: "tool", tool: "write", state: { status: "completed", input: { filePath: "inside.js", content: "x" }, time: { start, end } } }) });
   add(write("earlier", 90, 90, 110));add(write("current", 120, 120, 140));
   add(write("previous-start", 130, 90, 140));add(write("later-finish", 140, 140, 510));
@@ -128,6 +128,6 @@ test("attempt-scoped edits cannot borrow earlier or later writes in a resumed se
   // Existing listChanges project filtering uses listSessions. Supply a local
   // fixture implementation so its full historical schema is unnecessary.
   const scoped = projects.eyes({ ...eyes, listSessions: () => [{ id: "ours", directory: folder }] });
-  assert.deepEqual(scoped.listChanges(options).map((row) => row.id), ["patch", "current"], "the project facade forwards the attempt window");
+  assert.deepEqual((await scoped.listChanges(options)).map((row) => row.id), ["patch", "current"], "the project facade forwards the attempt window");
   assert.deepEqual(eyes.listChanges({ ...options, until: 90 }), []);
 }));

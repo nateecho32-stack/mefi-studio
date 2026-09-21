@@ -61,9 +61,10 @@ test("the real stream and progress watcher save context which a new host continu
   first.wake(); await first.pump();
   const entry = first.autopilot.jobs[0];
   first.session(entry.id, "saved-session", [{ content: "Implement serializer", status: "completed" }, { content: "Verify empty input", status: "in_progress" }]);
-  assert.equal(first.env.attributeRunSession(await first.env.getEyes(), entry), true);
+  assert.equal(await first.env.attributeRunSession(await first.env.getEyes(), entry), true);
   entry.child.stdout.emit("data", "Serializer is implemented; empty input coverage remains.\n");
-  first.timers.find((timer) => timer.delay === first.env.EXECUTOR_PROGRESS_POLL_MS).fn();
+  // The progress poll reads the store asynchronously (the eyes worker); await the read it schedules.
+  await first.timers.find((timer) => timer.delay === first.env.EXECUTOR_PROGRESS_POLL_MS).fn();
   const save = first.timers.find((timer) => timer.delay === 1000 && !timer.cancelled);
   assert.ok(save, "stream/session/todo changes schedule a durable checkpoint");
   await save.fn();
@@ -109,7 +110,7 @@ test("Cluster recovers a direct request without copying it into a task and advan
   const original = first.autopilot.jobs[0];
   assert.equal(original.kind, "request");
   first.session(original.id, "direct-request-session");
-  assert.equal(first.env.attributeRunSession(await first.env.getEyes(), original), true);
+  assert.equal(await first.env.attributeRunSession(await first.env.getEyes(), original), true);
   original.child.stdout.emit("data", "Serializer implemented; empty input verification remains.\n");
   await first.env.queueExecutorCheckpoint(original, { force: true });
 
@@ -144,12 +145,12 @@ test("todo wording updates are saved even when the percentage stays the same", a
   h.wake(); await h.pump();
   const entry = h.autopilot.jobs[0];
   h.session(entry.id, "todo-session", [{ content: "Implementation", status: "completed" }, { content: "Initial verification plan", status: "in_progress" }]);
-  h.env.attributeRunSession(await h.env.getEyes(), entry);
-  h.timers.find((timer) => timer.delay === h.env.EXECUTOR_PROGRESS_POLL_MS).fn();
+  await h.env.attributeRunSession(await h.env.getEyes(), entry);
+  await h.timers.find((timer) => timer.delay === h.env.EXECUTOR_PROGRESS_POLL_MS).fn();
   await h.env.queueExecutorCheckpoint(entry, { force: true });
   assert.equal(h.board().tasks[0].runProgress.progress, 0.5);
   h.session(entry.id, "todo-session", [{ content: "Implementation", status: "completed" }, { content: "Verify the newly found empty-input case", status: "in_progress" }]);
-  h.timers.findLast((timer) => timer.delay === h.env.EXECUTOR_PROGRESS_POLL_MS).fn();
+  await h.timers.findLast((timer) => timer.delay === h.env.EXECUTOR_PROGRESS_POLL_MS).fn();
   const save = h.timers.findLast((timer) => timer.delay === 1000 && !timer.cancelled);
   assert.ok(save); await save.fn();
   assert.equal(h.board().tasks[0].runProgress.progress, 0.5);
@@ -266,7 +267,7 @@ for (const duringQuit of [false, true]) test(`${duringQuit ? "quit's final" : "a
   assert.equal(await h.env.spawnNextJob(), "spawned");
   const entry = h.autopilot.jobs[0];
   h.session(entry.id, "immediate-session");
-  assert.equal(h.env.attributeRunSession(await h.env.getEyes(), entry), true);
+  assert.equal(await h.env.attributeRunSession(await h.env.getEyes(), entry), true);
   entry.child.stdout.emit("data", "Progress emitted immediately after spawn\n");
   if (duringQuit) {
     let beforeQuit, resolveQuit, prevented = false;

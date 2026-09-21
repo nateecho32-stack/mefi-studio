@@ -15,6 +15,7 @@ import { open, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/pr
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
+import { containsPath } from "./path-scope.cjs";
 
 export const OPENCODE_DIR = path.join(os.homedir(), ".local", "share", "opencode");
 export const DEFAULT_DB = path.join(OPENCODE_DIR, "opencode.db");
@@ -140,18 +141,26 @@ function toChange(part) {
   };
 }
 
-export function listSessions({ dbPath = DEFAULT_DB, limit = 40 } = {}) {
-  if (!storePresent(dbPath)) return [];
-  const db = openDb(dbPath);
-  const rows = db
-    .prepare(
-      `select id, parent_id, title, agent, model, directory, cost,
+const SESSION_COLUMNS = `id, parent_id, title, agent, model, directory, cost,
               tokens_input, tokens_output, tokens_cache_read,
               summary_files, summary_additions, summary_deletions,
-              time_created, time_updated
-       from session order by time_updated desc limit ?`
-    )
-    .all(limit);
+              time_created, time_updated`;
+
+// `root` scopes the listing to sessions whose directory lies inside that
+// folder (scripts/path-scope.cjs semantics), applied before the per-session
+// final-part lookup below. The project facade used to list the 400 newest
+// sessions of every project and filter afterwards, which paid that lookup
+// 400 times per read; scoping here pays it `limit` times.
+export function listSessions({ dbPath = DEFAULT_DB, limit = 40, root = null } = {}) {
+  if (!storePresent(dbPath)) return [];
+  const db = openDb(dbPath);
+  const rows = root
+    ? db
+        .prepare(`select ${SESSION_COLUMNS} from session order by time_updated desc`)
+        .all()
+        .filter((row) => containsPath(root, row.directory))
+        .slice(0, limit)
+    : db.prepare(`select ${SESSION_COLUMNS} from session order by time_updated desc limit ?`).all(limit);
   // Whether a session ended on purpose: its final part is a step-finish with
   // reason "stop". A silent tail, a mid-turn "tool-calls" finish or an abort
   // means the run left work hanging. Reviewers must never read a finished
@@ -192,6 +201,26 @@ export function listSessions({ dbPath = DEFAULT_DB, limit = 40 } = {}) {
     timeCreated: row.time_created,
     timeUpdated: row.time_updated,
   }));
+}
+
+// Every session id under a folder, without the per-session
+// final-part lookup listSessions pays: the project facade scopes todo, change
+// and chat reads by this set. Reads only the session table (846 rows measured
+// against the 121k-row part table).
+export function listSessionIds({ dbPath = DEFAULT_DB, root = null } = {}) {
+  if (!storePresent(dbPath)) return [];
+  const db = openDb(dbPath);
+  const rows = db.prepare("select id, directory from session").all();
+  return rows.filter((row) => !root || containsPath(root, row.directory)).map((row) => row.id);
+}
+
+// The folder one session ran in, or null when the store or the session is
+// missing. The facade's project check for verification evidence reads this
+// instead of opening the store on the calling thread.
+export function sessionDirectory({ dbPath = DEFAULT_DB, sessionId } = {}) {
+  if (typeof sessionId !== "string" || !sessionId || !storePresent(dbPath)) return null;
+  const row = openDb(dbPath).prepare("select directory from session where id = ?").get(sessionId);
+  return typeof row?.directory === "string" ? row.directory : null;
 }
 
 // A dispatch identifies itself in its initial user prompt. Creation time is

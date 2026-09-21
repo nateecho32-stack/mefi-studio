@@ -149,9 +149,10 @@ test("OpenCode sessions, chat, todos and changes stay inside the selected folder
   const changes = [...activity, { sessionId: "mine", file: path.join(f.other, "private.js") }];
   let factsInput;
   const facade = f.projects.eyes({ ...f.eyes, listSessions: () => rows, listTodos: () => activity, listChanges: () => changes, listChatTexts: () => activity, activitySince: () => activity, assistantFacts: (input) => { factsInput = input; return { sessions: input.sessions, collisions: [] }; } });
-  assert.deepEqual(facade.listSessions().map((row) => row.id), ["mine", "nested"]);
-  for (const method of ["listTodos", "listChanges", "listChatTexts", "activitySince"]) assert.deepEqual(facade[method]().map((row) => row.sessionId), ["mine", "nested"]);
-  assert.deepEqual(facade.assistantFacts().sessions.map((row) => row.id), ["mine", "nested"]);
+  // Store reads are asynchronous (they run on the eyes worker); a synchronous fixture is awaited the same way.
+  assert.deepEqual((await facade.listSessions()).map((row) => row.id), ["mine", "nested"]);
+  for (const method of ["listTodos", "listChanges", "listChatTexts", "activitySince"]) assert.deepEqual((await facade[method]()).map((row) => row.sessionId), ["mine", "nested"]);
+  assert.deepEqual((await facade.assistantFacts()).sessions.map((row) => row.id), ["mine", "nested"]);
   for (const key of ["changes", "todos"]) assert.deepEqual(factsInput[key].map((row) => row.sessionId), ["mine", "nested"], `${key} injected into fact assembly are project-scoped before any counts or summaries are calculated`);
   assert.equal(factsInput.root, f.studio);
 });

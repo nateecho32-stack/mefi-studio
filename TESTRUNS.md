@@ -1,5 +1,35 @@
 # Test Runs
 
+The eyes worker (`scripts/eyes-worker.mjs`, `scripts/eyes-client.cjs`,
+`scripts/path-scope.cjs`) moves every OpenCode-store read and the synchronous
+`git status` off the Electron main process; `tests/eyes_worker.test.mjs`
+covers it with a fixture module (busy read, hang, crash, uncloneable result,
+allowlist, module version restart, closed client) and the real reader against
+a temporary store (folder scoping through `listSessions({ root })`,
+`listSessionIds`, `sessionDirectory` and the async project facade, plus the
+facade's shared scope read). Facade reads are asynchronous now, so
+`tests/projects.test.mjs`, `tests/verification_evidence.test.mjs`,
+`tests/executor_lifecycle.test.mjs`, `tests/executor_resume.test.mjs` and
+`tests/fixtures/host_executor.mjs` await them and slice
+`async function attributeRunSession(`. Housekeeping reads verification
+evidence before its synchronous board mutation through a read-only
+`mutateBoard` pass, so harness fakes without `readJson` still verify.
+Validated on 2026-09-21: `npm run check` (81 targets, full coverage),
+`npm run audit` (zero findings), the 244 Python contracts (the
+`eyes:collisions` pin keeps its literal `presence:` key) and the normalized
+path lock pass. The 30 Node files that slice the converted host sections
+(331 tests) were run before and after the change against the same working
+tree: the 127 failures left are the same set that fails without the change
+(the uncommitted lag-gate work calls `readSettings()` and
+`machineMemoryWarnOverride()` inside `spawnNextJob`, which the executor
+harnesses do not define, so their dispatches read "resources"); no new
+failure remains. The full `node scripts/run-node-tests.mjs` run reached 744
+passes with that same failure set and then sat on
+`tests/jev_model_routing_host.test.mjs`, which never returned on this machine
+in either run (the baseline stalled at the same file), so it printed no
+summary. Measurements are in PERFORMANCE.md ("Store reads leave the main
+process"); the packaged copy needs `npm run package` to pick the change up.
+
 Chat admission regressions in `tests/assistant_chat_admission.test.mjs` run the
 real responder and task admission against serialized memory stores. They cover
 concurrent repeated sends, equivalent wording, inbox and worker reuse, pending

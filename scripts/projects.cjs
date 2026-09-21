@@ -9,17 +9,15 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { AsyncLocalStorage } = require("node:async_hooks");
 const { mkdir } = require("node:fs/promises");
+// Folder containment lives in scripts/path-scope.cjs so the store reader
+// (scripts/eyes.mjs) scopes sessions by the same rule this facade applies.
+const { pathKey, containsPath } = require("./path-scope.cjs");
 
-function pathKey(value) {
-  const resolved = path.resolve(String(value));
-  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
-}
-
-function containsPath(root, value) {
-  if (!value) return false;
-  const relative = path.relative(pathKey(root), pathKey(value));
-  return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
-}
+// How long one facade trusts its list of the project's session ids. Store
+// reads are asynchronous and cost a worker round trip each, so the scope set
+// is shared across the reads of one operation (watcher pass, chat reply)
+// instead of being rebuilt per call.
+const SESSION_SCOPE_MS = 2000;
 
 function projectFromPath(value, { name, legacy = false, explicit = false } = {}) {
   if (typeof value !== "string" || !path.isAbsolute(value)) throw new TypeError("Choose an absolute project folder.");
@@ -155,52 +153,81 @@ function createProjects({ defaultRoot, studioRoot, saved = {}, preferredRoot = n
       // The optional SQLite store is global. File storage remains the current
       // authority until SQLite gains an equivalent project partition.
       scoped.boardEnabled = () => false;
-      let knownSessions = null;
-      let sessionsAt = 0;
-      const sessions = (options = {}) => {
-        if (!knownSessions || Date.now() - sessionsAt > 250) {
-          knownSessions = eyes.listSessions({ ...options, limit: Math.max(400, options.limit || 40) }).filter((session) => containsPath(project.path, session.directory));
-          sessionsAt = Date.now();
-        }
-        return knownSessions;
+      // Store reads are asynchronous: the real module answers from the eyes
+      // worker (scripts/eyes-client.cjs), so every scoped read returns a
+      // promise, and a synchronous fixture module is simply awaited. The
+      // project scope asks the store for the sessions under this folder
+      // (listSessions root, listSessionIds) instead of listing the 400 newest
+      // sessions of every project and filtering here: that floor cost 138 ms
+      // warm and up to 2.6 s cold per read on a 17 GB store, and the A-Eyes
+      // watch paid it every 2 s on the main thread.
+      const inProject = (directory) => containsPath(project.path, directory);
+      // One scope per store path (a fixture may name its own database); the
+      // live app only ever reads the default store.
+      const scopes = new Map();
+      const sessionIds = (options = {}) => {
+        const key = typeof options.dbPath === "string" ? options.dbPath : "";
+        const store = options.dbPath ? { dbPath: options.dbPath } : {};
+        const scope = scopes.get(key) ?? { ids: null, at: 0, pending: null };
+        scopes.set(key, scope);
+        if (scope.ids && Date.now() - scope.at < SESSION_SCOPE_MS) return Promise.resolve(scope.ids);
+        if (scope.pending) return scope.pending;
+        scope.pending = (async () => {
+          const ids = typeof eyes.listSessionIds === "function"
+            ? await eyes.listSessionIds({ ...store, root: project.path })
+            : (await eyes.listSessions({ ...store, root: project.path, limit: 400 }) ?? []).filter((session) => inProject(session.directory)).map((session) => session.id);
+          scope.ids = new Set(Array.isArray(ids) ? ids : []);
+          scope.at = Date.now();
+          return scope.ids;
+        })().finally(() => { scope.pending = null; });
+        return scope.pending;
       };
+      const unavailableChecks = () => ({ available: false, checks: [], truncated: false, error: "Session check evidence is unavailable for this project" });
       if (eyes.readPins) scoped.readPins = (file) => eyes.readPins(dataPath(file, project));
       if (eyes.writePins) scoped.writePins = async (file, value) => {
         const target = dataPath(file, project);
         await mkdir(path.dirname(target), { recursive: true });
         return eyes.writePins(target, value);
       };
-      if (eyes.listSessions) scoped.listSessions = (options = {}) => sessions(options).slice(0, options.limit || 40);
-      if (eyes.findRunSession) scoped.findRunSession = (options = {}) => {
-        const session = eyes.findRunSession(options);
-        return session && containsPath(project.path, session.directory) ? session : null;
+      if (eyes.listSessions) scoped.listSessions = async (options = {}) => {
+        const limit = options.limit || 40;
+        const rows = await eyes.listSessions({ ...options, root: project.path, limit });
+        // A reader that ignores `root` (a fixture) still ends up scoped.
+        return (Array.isArray(rows) ? rows : []).filter((session) => inProject(session.directory)).slice(0, limit);
       };
-      if (eyes.listSessionChecks) scoped.listSessionChecks = (options = {}) => {
+      if (eyes.findRunSession) scoped.findRunSession = async (options = {}) => {
+        const session = await eyes.findRunSession(options);
+        return session && inProject(session.directory) ? session : null;
+      };
+      if (eyes.listSessionChecks) scoped.listSessionChecks = async (options = {}) => {
         // Check one exact session directly rather than relying on the recent
-        // 400-session UI cache: verification may resume after a long outage.
+        // session scope: verification may resume after a long outage.
         try {
-          const row = eyes.openDb(options.dbPath).prepare("select directory from session where id = ?").get(options.sessionId ?? "");
-          if (!row || !containsPath(project.path, row.directory)) return { available: false, checks: [], truncated: false, error: "Session check evidence is unavailable for this project" };
-          return eyes.listSessionChecks(options);
+          const sessionId = options.sessionId ?? "";
+          const directory = typeof eyes.sessionDirectory === "function"
+            ? await eyes.sessionDirectory({ dbPath: options.dbPath, sessionId })
+            : eyes.openDb(options.dbPath).prepare("select directory from session where id = ?").get(sessionId)?.directory ?? null;
+          if (!directory || !inProject(directory)) return unavailableChecks();
+          return await eyes.listSessionChecks(options);
         } catch {
-          return { available: false, checks: [], truncated: false, error: "Session check evidence is unavailable for this project" };
+          return unavailableChecks();
         }
       };
       for (const method of ["listTodos", "listChanges", "listChatTexts", "activitySince"]) {
         if (typeof eyes[method] !== "function") continue;
-        scoped[method] = (options = {}) => {
-          const ids = new Set(sessions(options).map((session) => session.id));
-          return eyes[method](options).filter((row) => ids.has(row.sessionId) && (!row.file || !path.isAbsolute(row.file) || containsPath(project.path, row.file)));
+        scoped[method] = async (options = {}) => {
+          const [rows, ids] = await Promise.all([eyes[method](options), sessionIds(options)]);
+          return (Array.isArray(rows) ? rows : []).filter((row) => ids.has(row.sessionId) && (!row.file || !path.isAbsolute(row.file) || inProject(row.file)));
         };
       }
-      if (eyes.assistantFacts) scoped.assistantFacts = (options = {}) => {
-        const ids = new Set(sessions(options).map((session) => session.id));
-        const facts = eyes.assistantFacts({
-          ...options, root: project.path,
-          sessions: scoped.listSessions({ ...options, limit: options.sessionLimit || 10 }),
-          changes: scoped.listChanges({ ...options, limit: options.changeLimit || 60 }),
-          todos: scoped.listTodos(options),
-        });
+      if (eyes.assistantFacts) scoped.assistantFacts = async (options = {}) => {
+        const [sessions, changes, todos, ids] = await Promise.all([
+          scoped.listSessions({ ...options, limit: options.sessionLimit || 10 }),
+          scoped.listChanges({ ...options, limit: options.changeLimit || 60 }),
+          scoped.listTodos(options),
+          sessionIds(options),
+        ]);
+        const facts = await eyes.assistantFacts({ ...options, root: project.path, sessions, changes, todos });
         return { ...facts, project, sessions: (facts.sessions || []).filter((session) => ids.has(session.id)) };
       };
       return scoped;
@@ -208,4 +235,4 @@ function createProjects({ defaultRoot, studioRoot, saved = {}, preferredRoot = n
   };
 }
 
-module.exports = { createProjects, projectFromPath, containsPath };
+module.exports = { createProjects, projectFromPath, containsPath, pathKey };

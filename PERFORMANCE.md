@@ -1,5 +1,53 @@
 # Agent loop and startup measurements
 
+## Store reads leave the main process, September 21, 2026
+
+Every OpenCode-store read (`node:sqlite` is synchronous) and the synchronous
+`git status` behind `assistantFacts` used to run on the Electron main
+process. Measured on the development Windows machine against the live store
+(17.7 GB, 846 sessions, 121k parts) from a scratch harness, Node 24.15.0:
+
+| Main-process read, before this change | Warm | Cold |
+|---|---:|---:|
+| The project facade's 400-session floor (`listSessions({ limit: 400 })`), paid by every scoped read including the 2 s A-Eyes watch | 106–140 ms | 0.8–3.2 s |
+| `assistantFacts` (chat reply, briefing, overseer) | 140–160 ms | 280 ms |
+| `listChatTexts` (once a minute) | 105 ms | — |
+| `gitPorcelain` (`spawnSync`, 8 s timeout; every 30 s) | 100–185 ms | — |
+| `activitySince({ since: 0 })` (a full part-table scan; the cursor starts at `Date.now()`, so only a bug reaches it) | 10.7–14.7 s | — |
+
+Past a few seconds of that, Windows titles the window "Not Responding".
+
+Now `scripts/eyes.mjs` is hosted on a worker thread by
+`scripts/eyes-worker.mjs`; `scripts/eyes-client.cjs` turns each store read
+into one message and a promise, restarts the worker on a crash, a timeout
+(90 s) or a live-updated module, and `getEyes()` hands out the wrapped
+module. The facade in `scripts/projects.cjs` no longer lists 400 sessions
+to scope a read: `listSessions` takes a `root` and `listSessionIds`
+returns the folder's ids without the per-session final-part lookup.
+
+| One watcher pass (six store reads) plus one watch read, three passes back to back | Wall per pass | Worst gap on the calling thread (10 ms timer) |
+|---|---:|---:|
+| Inline on the calling thread (before) | 149 ms | 464 ms |
+| Through the eyes worker (after) | 143 ms | 20 ms |
+
+| Scoped session reads | Before | After |
+|---|---:|---:|
+| Session list behind one scoped read | 106–140 ms warm, 3.2 s cold (400 sessions) | 26–39 ms (`listSessions({ root, limit: 40 })`) |
+| The folder's session-id set | (same 400-session list) | 8–11 ms (`listSessionIds({ root })`) |
+
+A worker round trip costs 1.8–2 ms on top of the query; the first read after
+launch pays a 130–220 ms spawn and module import. The same 14 s full scan
+that blocked the main thread ran on the worker with the main event loop's
+worst delay at 23 ms. Verification evidence for housekeeping is read before
+the board mutation (which must stay synchronous) through the board gateway,
+one extra read-only pass per housekeeping run.
+
+Not measured here: the whole-app effect. The host machine sits at a few
+hundred MB free, and the board itself (5.1 MB of JSON rewritten per executor
+checkpoint) is unchanged; those are the next passes. `tests/eyes_worker.test.mjs`
+covers the client contract and the folder scoping with a fixture module and a
+temporary store; the wall-clock numbers above are not pass/fail thresholds.
+
 ## Model management and catalog work, September 19, 2026
 
 Model Lab validates the ledger's file identity, size and change timestamps on

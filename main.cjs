@@ -24,6 +24,7 @@ const { createPlanningService } = require("./scripts/planning-service.cjs");
 const { applyIdeaAction } = require("./scripts/idea-actions.cjs");
 const { createMusicRecommender } = require("./scripts/music-recommendations.cjs");
 const { attachRendererRecovery } = require("./scripts/renderer-recovery.cjs");
+const { createEyesClient, wrapEyes } = require("./scripts/eyes-client.cjs");
 const { createModelPerformanceStore } = require("./scripts/model-performance.cjs");
 const { limitsFromPlan, aggregateUsage, opencodeWindows, parseOpencodeUsage, describeOpencodeStatus } = require("./scripts/usage-tracker.cjs");
 const { createPerformanceProfiler } = require("./scripts/performance-profiler.cjs");
@@ -153,7 +154,30 @@ async function getEyes() {
   // — the guard then imports the current views into the fresh database, the
   // recovery path tests/board_store.test.mjs covers end-to-end ("fresh
   // migration: archive the stale fork").
-  return projects.eyes(await loadModule("scripts/eyes.mjs"), project);
+  return projects.eyes(await loadEyes(), project);
+}
+
+// The store reader runs on the eyes worker (scripts/eyes-client.cjs): every
+// node:sqlite read the assistant makes, and the synchronous git status, leave
+// the main thread, so a slow store no longer freezes the window. The module
+// itself still loads here for its pure helpers, versioned like every other
+// script so a live update swaps both copies together.
+let eyesClient = null;
+let eyesWrapped = null;
+async function loadEyes() {
+  const module = await loadModule("scripts/eyes.mjs");
+  const version = moduleVersions.get("scripts/eyes.mjs") ?? 0;
+  if (eyesWrapped && eyesWrapped.module === module && eyesWrapped.version === version) return eyesWrapped.eyes;
+  eyesClient ??= createEyesClient({ studioRoot: STUDIO_ROOT, log: (line) => logLine(line) });
+  eyesClient.setVersion(version);
+  eyesWrapped = { module, version, eyes: wrapEyes(module, eyesClient) };
+  return eyesWrapped.eyes;
+}
+// A live update that swapped scripts/eyes.mjs or the worker entry restarts
+// the worker: the next read imports the new file.
+function resetEyes(reason) {
+  eyesWrapped = null;
+  eyesClient?.restart(reason);
 }
 
 async function getAuditor() {
@@ -510,6 +534,7 @@ async function applyStyle(files) {
 // updater restarts the watcher from the new file once this pass is over.
 async function applyModules(rels) {
   const swapped = invalidateModules(rels);
+  if (swapped.includes("scripts/eyes.mjs") || swapped.includes("scripts/eyes-worker.mjs")) resetEyes("live update");
   if (swapped.includes("scripts/assistant.mjs")) {
     resetMachineLagGate();
     try {
@@ -1238,11 +1263,15 @@ function startEyesWatch() {
       // An obsolete read must neither advance the new cursor nor revive a poll.
       if (generation !== eyesWatchGeneration || projectId !== projects.active().id) return;
       if (window && (window.isMinimized() || !window.isVisible())) return;
-      const activity = eyes.activitySince({ since: eyesLastTs });
+      const activity = await eyes.activitySince({ since: eyesLastTs });
+      // The read ran on the eyes worker; a stop or a project switch may have
+      // landed meanwhile, and stale rows must not move the cursor.
+      if (generation !== eyesWatchGeneration || projectId !== projects.active().id) return;
       if (activity.length) {
         eyesLastTs = activity[activity.length - 1].time;
         idleTicks = 0;
-        const todos = eyes.listTodos();
+        const todos = await eyes.listTodos();
+        if (generation !== eyesWatchGeneration || projectId !== projects.active().id) return;
         send("eyes:activity", { activity, todos });
       } else {
         idleTicks += 1;
@@ -1290,7 +1319,7 @@ async function improveFacts(eyes) {
     }
   }
   await walk(projectRoot(), 0);
-  const facts = eyes.assistantFacts({ sessionLimit: 6, changeLimit: 30, root: projectRoot() });
+  const facts = await eyes.assistantFacts({ sessionLimit: 6, changeLimit: 30, root: projectRoot() });
   let packageScripts = {};
   try {
     packageScripts = JSON.parse(await readFile(path.join(projectRoot(), "package.json"), "utf8")).scripts ?? {};
@@ -2255,29 +2284,27 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
       inventory: inventory.slice(0, 90),
     };
   } else if (mode === "explore" || mode === "expand") {
-    const base = eyes.assistantFacts({ root: projectRoot() });
+    const base = await eyes.assistantFacts({ root: projectRoot() });
     const session = base.sessions.find((item) => item.id === sessionId) ?? null;
     facts = {
       generatedAt: base.generatedAt,
       checkpoint: payload?.note ? { note: payload.note, at: payload.at, files: payload.files ?? [] } : null,
       session,
-      recentChanges: eyes
-        .listChanges({ sessionId, limit: 14 })
+      recentChanges: (await eyes.listChanges({ sessionId, limit: 14 }))
         .map((change) => ({ tool: change.tool, file: change.file, additions: change.additions, deletions: change.deletions })),
     };
   } else if (mode === "grow") {
-    const base = eyes.assistantFacts({ root: projectRoot() });
+    const base = await eyes.assistantFacts({ root: projectRoot() });
     facts = {
       generatedAt: base.generatedAt,
       recentTitles: base.sessions.slice(0, 6).map((session) => ({ title: session.title, finished: session.finished === true })),
-      archive: eyes
-        .listSessions({ limit: 40 })
+      archive: (await eyes.listSessions({ limit: 40 }))
         .filter((session) => Date.now() - session.timeUpdated > 30 * 60 * 1000)
         .slice(0, 24)
         .map((session) => ({ id: session.id, title: session.title, agent: session.agent, finished: session.finished === true })),
     };
   } else {
-    facts = eyes.assistantFacts({ sessionLimit: 8, changeLimit: 40, todoLimitPerSession: 8, root: projectRoot() });
+    facts = await eyes.assistantFacts({ sessionLimit: 8, changeLimit: 40, todoLimitPerSession: 8, root: projectRoot() });
     if (mode === "checkpoint" && sessionId) {
       facts = { ...facts, sessions: facts.sessions.filter((session) => session.id === sessionId) };
     }
@@ -3432,12 +3459,14 @@ function assistantClearQueue({ abandonRunning = false, text = "dropped" } = {}) 
 
 // ---- role jobs: each returns { ok, text } for the roster ------------------
 // Live facts from the OpenCode store; throws when the store is unavailable.
-function readPorcelain(eyes) {
+async function readPorcelain(eyes) {
   const now = Date.now();
   if (assistantCache.porcelainAt && now - assistantCache.porcelainAt < 30_000 && typeof assistantCache.porcelain === "string") {
     return assistantCache.porcelain;
   }
-  const text = typeof eyes.gitPorcelain === "function" ? eyes.gitPorcelain({ root: projectRoot() }) : "";
+  // git status runs on the eyes worker: its wait (up to an 8 s timeout)
+  // used to block the main thread here every 30 s.
+  const text = typeof eyes.gitPorcelain === "function" ? await eyes.gitPorcelain({ root: projectRoot() }) : "";
   assistantCache.porcelain = text;
   assistantCache.porcelainAt = now;
   return text;
@@ -3449,19 +3478,21 @@ async function assistantReadStore() {
   if (assistantStoreReadInFlight) return assistantStoreReadInFlight;
   assistantStoreReadInFlight = (async () => {
     const eyes = await getEyes();
-    const sessions = eyes.listSessions({ limit: 40 });
-    const porcelain = readPorcelain(eyes);
+    // Every read below is an eyes-worker round trip; issue them together.
+    const [sessions, porcelain, todos, collisions, presence, changes] = await Promise.all([
+      eyes.listSessions({ limit: 40 }),
+      readPorcelain(eyes),
+      eyes.listTodos(),
+      eyes.collisions({ root: projectRoot() }),
+      eyes.filePresence({ root: projectRoot() }),
+      eyes.listChanges({ limit: 80 }),
+    ]);
     const store = {
       sessions,
-      todos: eyes.listTodos(),
-      collisions: eyes.collisions({ root: projectRoot() }),
-      presence: eyes.filePresence({ root: projectRoot() }),
-      uncommitted: eyes.uncommittedOnly({
-        porcelain,
-        sessions,
-        changes: eyes.listChanges({ limit: 80 }),
-        root: projectRoot(),
-      }),
+      todos,
+      collisions,
+      presence,
+      uncommitted: eyes.uncommittedOnly({ porcelain, sessions, changes, root: projectRoot() }),
       at: Date.now(),
     };
     assistantCache.store = store;
@@ -3471,8 +3502,7 @@ async function assistantReadStore() {
     // cost more than the freshness is worth.
     if (Date.now() - assistantCache.chatsAt > MINUTE_MS) {
       try {
-        assistantCache.chats = eyes
-          .listChatTexts({ since: Date.now() - OVERSEER_CHAT_WINDOW_MS, limit: 400 })
+        assistantCache.chats = (await eyes.listChatTexts({ since: Date.now() - OVERSEER_CHAT_WINDOW_MS, limit: 400 }))
           .slice(0, OVERSEER_CHAT_LIMIT)
           .map((row) => ({ sessionId: row.sessionId, at: row.at, text: String(row.text).slice(0, 200) }));
         assistantCache.chatsAt = Date.now();
@@ -6656,10 +6686,8 @@ async function autopilotProactivePass({ useAi = true } = {}) {
     logLine(`[auditor] failed: ${error.message}`);
   }
   const known = await requestBaseline(eyes);
-  const store = {
-    collisions: eyes.collisions({ root: projectRoot() }),
-    presence: eyes.filePresence({ root: projectRoot() }),
-  };
+  const [collisions, presence] = await Promise.all([eyes.collisions({ root: projectRoot() }), eyes.filePresence({ root: projectRoot() })]);
+  const store = { collisions, presence };
   const additions = [
     ...eyes.requestsFromCollisions(store.collisions, known),
     ...(await duplicateDeclarationRequests(eyes, store, known)),
@@ -6951,10 +6979,13 @@ function queueExecutorCheckpoint(entry, { force = false } = {}) {
 // after spawn. Poll for it (3s x 20) so finish() can file a checkpoint against
 // the real session id instead of only the assistant history — and so the
 // wedged-start watchdog can tell a slow store from a stuck run.
-function attributeRunSession(eyes, entry) {
+async function attributeRunSession(eyes, entry) {
   if (entry.sessionId || entry.finished || !autopilot.jobs.includes(entry)) return Boolean(entry.sessionId);
   try {
-    const session = eyes.findRunSession?.({ runId: entry.id, since: entry.startedAt - 10000 });
+    const session = await eyes.findRunSession?.({ runId: entry.id, since: entry.startedAt - 10000 });
+    // The read ran on the eyes worker; a concurrent poll may have bound the
+    // identity meanwhile, and the same answer must not be bound twice.
+    if (entry.sessionId) return true;
     if (!session || autopilot.jobs.some((other) => other !== entry && other.sessionId === session.id)) return false;
     entry.sessionId = session.id;
     queueExecutorCheckpoint(entry);
@@ -6964,17 +6995,17 @@ function attributeRunSession(eyes, entry) {
 
 function watchRunSession(eyes, startedAt, entry) {
   let tries = 0;
-  const poll = () => {
+  const poll = async () => {
     tries += 1;
     // A job that left the in-flight list already closed.
     if (!autopilot.jobs.includes(entry) || entry.finished) return;
-    if (attributeRunSession(eyes, entry)) {
+    if (await attributeRunSession(eyes, entry)) {
       emitAutopilot();
       return;
     }
-    if (tries < 20 && autopilot.jobs.includes(entry)) setTimeout(poll, 3000).unref?.();
+    if (tries < 20 && autopilot.jobs.includes(entry)) setTimeout(() => poll().catch(() => {}), 3000).unref?.();
   };
-  setTimeout(poll, 3000).unref?.();
+  setTimeout(() => poll().catch(() => {}), 3000).unref?.();
 }
 
 // A run's own todo list is the honest fraction done — the same done/total the
@@ -6983,11 +7014,13 @@ function watchRunSession(eyes, startedAt, entry) {
 // push only goes out when the fraction moves, so the poll costs one cheap
 // read and stays quiet the rest of the time.
 function watchJobProgress(eyes, entry) {
-  const poll = () => {
+  const schedule = () => setTimeout(() => poll().catch(() => {}), EXECUTOR_PROGRESS_POLL_MS).unref?.();
+  const poll = async () => {
     if (!autopilot.jobs.includes(entry) || entry.finished) return;
     if (entry.sessionId) {
       try {
-        const todos = eyes.listTodos({ sessionId: entry.sessionId });
+        const todos = await eyes.listTodos({ sessionId: entry.sessionId });
+        if (!autopilot.jobs.includes(entry) || entry.finished) return;
         const done = todos.filter((todo) => todo && todo.status === "completed").length;
         const next = todos.length ? done / todos.length : null;
         if (JSON.stringify(entry.todos) !== JSON.stringify(todos)) {
@@ -7001,9 +7034,9 @@ function watchJobProgress(eyes, entry) {
         }
       } catch {}
     }
-    setTimeout(poll, EXECUTOR_PROGRESS_POLL_MS).unref?.();
+    schedule();
   };
-  setTimeout(poll, EXECUTOR_PROGRESS_POLL_MS).unref?.();
+  schedule();
 }
 
 // Starts eligible work while the Machine agent admits new workers (or until
@@ -7991,14 +8024,17 @@ async function spawnNextJob() {
   let timeout = null;
   let startWatchdog = null;
   const finish = async (code, errorMessage = null) => {
-    if (entry.finished) return;
+    if (entry.finished || entry.finishing) return;
+    // The identity read below is an eyes-worker round trip; a second close
+    // event (exit after a kill, the reaper) must not settle the run twice.
+    entry.finishing = true;
     // An operator stop (Stop all, project switch, restart) is an intentional
     // pause, not a failure: progress is checkpointed and the card returns to
     // the queue without spending an attempt.
     const userStop = entry.stopUser === true;
     // Fast workers may end before the first polling interval. Bind only the
     // exact dispatch identity before freezing the attempt's evidence.
-    attributeRunSession(eyes, entry);
+    await attributeRunSession(eyes, entry);
     entry.finished = true;
     if (entry.checkpointTimer) clearTimeout(entry.checkpointTimer);
     // Release the write-lock registry claims first so a waiting dispatch is
@@ -9076,6 +9112,56 @@ async function autopilotHousekeeping() {
       : null;
   } catch {}
   const policyReceipts = [];
+  // Verification evidence comes from the OpenCode store, and store reads are
+  // eyes-worker round trips, while the mutator below must stay synchronous.
+  // So the attempts this pass could settle are read up front, outside the
+  // lock, and the mutator looks their evidence up. A card whose attempt
+  // changed between this read and the mutation finds nothing and waits for
+  // the next pass, exactly as an unavailable store makes it wait.
+  const attemptEvidenceWindow = (attempt) => {
+    const since = Number(attempt.startedAt) || Number(/^run_(\d+)_/.exec(String(attempt.runId ?? ""))?.[1]);
+    const until = Number(attempt.at);
+    return Number.isFinite(since) && since > 0 && Number.isFinite(until) && until > 0 && until >= since ? { since, until } : null;
+  };
+  const evidenceKey = (attempt, window) => `${attempt.sessionId}|${window.since}|${window.until}`;
+  const evidence = { changes: new Map(), checks: new Map() };
+  if (typeof verify === "function") {
+    // The rows come from the board gateway itself (one read under the lock,
+    // an empty patch, so nothing is written or broadcast): the views on disk
+    // are exports of that read, not always its equal.
+    let candidates = [];
+    try {
+      await mutateBoard((board) => {
+        candidates = [...(Array.isArray(board.tasks) ? board.tasks : []), ...(Array.isArray(board.requests) ? board.requests : [])]
+          .filter((row) => row?.lastAttempt?.sessionId && (row.status === "awaiting_verification" || row.status === "verifying"))
+          .map((row) => ({ lastAttempt: { ...row.lastAttempt } }));
+        return {};
+      });
+    } catch {}
+    for (const row of candidates) {
+      const attempt = row.lastAttempt ?? {};
+      if (!attempt.sessionId) continue;
+      if (Number(attempt.at) > 0 && now - Number(attempt.at) < VERIFY_DWELL_MS) continue;
+      const window = attemptEvidenceWindow(attempt);
+      if (!window) continue;
+      const key = evidenceKey(attempt, window);
+      if (!evidence.changes.has(key)) {
+        try {
+          const files = await eyes.listChanges({ sessionId: attempt.sessionId, ...window, limit: 50 });
+          evidence.changes.set(key, Array.isArray(files) ? { files } : { error: "session changes are unavailable" });
+        } catch (error) {
+          evidence.changes.set(key, { error: String(error?.message ?? error) });
+        }
+      }
+      if (!evidence.checks.has(key) && typeof eyes.listSessionChecks === "function") {
+        try {
+          evidence.checks.set(key, { read: await eyes.listSessionChecks({ sessionId: attempt.sessionId, ...window, limit: 200 }) });
+        } catch (error) {
+          evidence.checks.set(key, { error: String(error?.message ?? error) });
+        }
+      }
+    }
+  }
   const result = await mutateBoard((board) => {
     // In file-store fallback, an interrupted inbox write may retain the
     // parent before its child array. Replay the captured admissions before
@@ -9116,11 +9202,6 @@ async function autopilotHousekeeping() {
       row.verification = { state: "pending", at: now, reason };
       changedByVerify = true;
     };
-    const attemptEvidenceWindow = (attempt) => {
-      const since = Number(attempt.startedAt) || Number(/^run_(\d+)_/.exec(String(attempt.runId ?? ""))?.[1]);
-      const until = Number(attempt.at);
-      return Number.isFinite(since) && since > 0 && Number.isFinite(until) && until > 0 && until >= since ? { since, until } : null;
-    };
     const attemptChanges = (attempt, title) => {
       if (!attempt.sessionId) return [];
       const window = attemptEvidenceWindow(attempt);
@@ -9128,29 +9209,28 @@ async function autopilotHousekeeping() {
       // the verifier no attributable evidence and use its bounded retry
       // path, without widening the read to unrelated session history.
       if (!window) return [];
-      try {
-        const files = eyes.listChanges({ sessionId: attempt.sessionId, ...window, limit: 50 });
-        if (!Array.isArray(files)) throw new Error("session changes are unavailable");
-        return files.filter((file) => file?.status === "completed" && (file.file || file.files?.length));
-      } catch (error) {
-        // An unavailable evidence reader is not a failed attempt. Leave this
-        // row in review without consuming its budget and settle other work.
-        verifyNotes.push(`verification waiting for "${assistantClip(title, 60)}" — ${String(error?.message ?? error).slice(0, 160)}`);
+      // Read before the lock (the evidence prefetch above). An unavailable
+      // evidence reader is not a failed attempt: leave this row in review
+      // without consuming its budget and settle other work.
+      const found = evidence.changes.get(evidenceKey(attempt, window));
+      if (!found || found.error) {
+        verifyNotes.push(`verification waiting for "${assistantClip(title, 60)}" — ${String(found?.error ?? "session changes were not read this pass").slice(0, 160)}`);
         return null;
       }
+      return found.files.filter((file) => file?.status === "completed" && (file.file || file.files?.length));
     };
     const attemptChecks = (attempt, title) => {
       if (!attempt.sessionId || typeof eyes.listSessionChecks !== "function") return [];
       const window = attemptEvidenceWindow(attempt);
       if (!window) return [];
-      try {
-        const read = eyes.listSessionChecks({ sessionId: attempt.sessionId, ...window, limit: 200 });
-        if (!read?.available || read.truncated) throw new Error(read?.truncated ? "session check history exceeds the verification window" : "session checks are unavailable");
-        return Array.isArray(read.checks) ? read.checks : [];
-      } catch (error) {
-        verifyNotes.push(`verification waiting for "${assistantClip(title, 60)}" — ${String(error?.message ?? error).slice(0, 160)}`);
+      const found = evidence.checks.get(evidenceKey(attempt, window));
+      const read = found?.read;
+      if (!found || found.error || !read?.available || read.truncated) {
+        const why = found?.error ?? (read?.truncated ? "session check history exceeds the verification window" : "session checks are unavailable");
+        verifyNotes.push(`verification waiting for "${assistantClip(title, 60)}" — ${String(why).slice(0, 160)}`);
         return null;
       }
+      return Array.isArray(read.checks) ? read.checks : [];
     };
     // The overseer's own verification run (row.verificationRun) is direct
     // evidence: map its per-command outcomes into the observedChecks shape
@@ -9830,7 +9910,7 @@ async function scanIdeasInternal(ai = false, entry = null) {
     // Keyset continuation, oldest-first: the cursor is the (timestamp, part
     // id) of the last consumed row, so a page never skips the rows below it
     // the way the old newest-first `> maxTimestamp` read did.
-    chats = eyes.listChatTexts({ after: { at: chatCursor > 0 ? chatCursor : Date.now() - 48 * 3600 * 1000, id: chatCursorId }, order: "asc" });
+    chats = await eyes.listChatTexts({ after: { at: chatCursor > 0 ? chatCursor : Date.now() - 48 * 3600 * 1000, id: chatCursorId }, order: "asc" });
   } catch (error) {
     // No OpenCode store: a plain scan has nothing to ingest, but an AI review
     // goes on to the board pass, which never needed the store.
@@ -9996,7 +10076,7 @@ async function scanIdeasInternal(ai = false, entry = null) {
   if (entry) {
     const scanned = [...new Set(found.map((idea) => idea.sessionId).filter(Boolean))];
     try {
-      if (!assistantCache.store) assistantCache.store = { sessions: eyes.listSessions({ limit: 40 }), todos: [], collisions: [], presence: [], uncommitted: [], at: Date.now() };
+      if (!assistantCache.store) assistantCache.store = { sessions: await eyes.listSessions({ limit: 40 }), todos: [], collisions: [], presence: [], uncommitted: [], at: Date.now() };
     } catch {}
     await assistantVisit(entry, scanned.map(sessionTarget), (target) => `scanned "${assistantSessionTitle(target.id)}"`);
   }
@@ -10100,8 +10180,8 @@ async function gatherReferences({ text, useWeb = false, useTree = true, useIdeas
     const analyzer = await getAnalyzer();
     const reference = await getReference();
     const analysis = await analyzer.verifyIdea(text, { root: projectRoot() });
-    const sessions = eyes.listSessions();
-    const chats = useTree ? eyes.listChatTexts({ limit: 200 }) : [];
+    const sessions = await eyes.listSessions();
+    const chats = useTree ? await eyes.listChatTexts({ limit: 200 }) : [];
     const pngs = await eyes.listPngs({ roots: [path.join(projectRoot(), "tools", "logs")], limit: 10 });
     const web = useWeb ? await reference.webSearch(text) : [];
     const ideas = useIdeas ? await eyes.readJson(IDEAS_PATH, []) : [];
@@ -10800,10 +10880,12 @@ function registerIpc() {
   ipcMain.handle("eyes:state", async (_event, { sessionId = null } = {}) => {
     try {
       const eyes = await getEyes();
-      const sessions = eyes.listSessions();
-      const changes = eyes.listChanges({ sessionId, limit: 300 });
-      const todos = eyes.listTodos();
-      const pngs = await eyes.listPngs({ roots: [path.join(projectRoot(), "tools", "logs")] });
+      const [sessions, changes, todos, pngs] = await Promise.all([
+        eyes.listSessions(),
+        eyes.listChanges({ sessionId, limit: 300 }),
+        eyes.listTodos(),
+        eyes.listPngs({ roots: [path.join(projectRoot(), "tools", "logs")] }),
+      ]);
       return { ok: true, sessions, changes, todos, pngs };
     } catch (error) {
       return { ok: false, error: String(error.message ?? error) };
@@ -10813,7 +10895,7 @@ function registerIpc() {
   ipcMain.handle("eyes:changes", async (_event, { sessionId = null } = {}) => {
     try {
       const eyes = await getEyes();
-      return { ok: true, changes: eyes.listChanges({ sessionId, limit: 300 }) };
+      return { ok: true, changes: await eyes.listChanges({ sessionId, limit: 300 }) };
     } catch (error) {
       return { ok: false, error: String(error.message ?? error) };
     }
@@ -10822,7 +10904,7 @@ function registerIpc() {
   ipcMain.handle("eyes:todos", async () => {
     try {
       const eyes = await getEyes();
-      return { ok: true, todos: eyes.listTodos() };
+      return { ok: true, todos: await eyes.listTodos() };
     } catch (error) {
       return { ok: false, error: String(error.message ?? error) };
     }
@@ -10888,13 +10970,10 @@ function registerIpc() {
   ipcMain.handle("eyes:collisions", async () => {
     try {
       const eyes = await getEyes();
-      return {
-        ok: true,
-        collisions: eyes.collisions({ root: projectRoot() }),
-        // Solo live editors sit beside collisions so the collateral watch can
-        // steer around a file before a second session turns it into a clash.
-        presence: eyes.filePresence({ root: projectRoot() }),
-      };
+      // Solo live editors sit beside collisions so the collateral watch can
+      // steer around a file before a second session turns it into a clash.
+      const [collisions, presence] = await Promise.all([eyes.collisions({ root: projectRoot() }), eyes.filePresence({ root: projectRoot() })]);
+      return { ok: true, collisions: collisions, presence: presence };
     } catch (error) {
       return { ok: false, error: String(error.message ?? error) };
     }
@@ -11013,8 +11092,7 @@ function registerIpc() {
     const store = await eyes.readJson(CHECKPOINTS_PATH, {});
     const list = store[sessionId] ?? [];
     const pngs = await eyes.listPngs({ roots: [path.join(projectRoot(), "tools", "logs")], limit: 1 });
-    const files = eyes
-      .listChanges({ sessionId, limit: 6 })
+    const files = (await eyes.listChanges({ sessionId, limit: 6 }))
       .map((change) => change.file)
       .filter(Boolean);
     list.unshift({
@@ -11773,4 +11851,12 @@ process.on("exit", () => {
     const pid = entry.pid ?? entry.child?.pid;
     if (pid) spawn("taskkill", ["/pid", String(pid), "/t", "/f"]);
   }
+});
+
+// The eyes worker holds a read-only handle on the OpenCode store; drop it
+// once the quit is final so the thread never outlives the windows. (Kept
+// after the exit hook: the quit-checkpoint contract test slices the section
+// above it and expects only the before-quit listener there.)
+app.on("will-quit", () => {
+  eyesClient?.close().catch(() => {});
 });

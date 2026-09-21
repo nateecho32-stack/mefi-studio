@@ -48,9 +48,9 @@ test("session evidence belongs to the exact user dispatch, never the nearest con
     const project = projects.add(folder);
     projects.select(project.id);
     const scoped = projects.eyes(eyes);
-    assert.equal(scoped.findRunSession({ dbPath: file, runId: "run_100_2" }).id, "ours");
+    assert.equal((await scoped.findRunSession({ dbPath: file, runId: "run_100_2" })).id, "ours");
     add("foreign-project", "This dispatch is run run_100_3.", { directory: path.join(os.tmpdir(), "another-project") });
-    assert.equal(scoped.findRunSession({ dbPath: file, runId: "run_100_3" }), null);
+    assert.equal(await scoped.findRunSession({ dbPath: file, runId: "run_100_3" }), null);
     add("copied-dispatch", "This dispatch is run run_100_2 for task ours.");
     assert.equal(eyes.findRunSession({ dbPath: file, runId: "run_100_2" }), null, "ambiguous copied identities cannot supply verification evidence");
   } finally {
@@ -61,22 +61,22 @@ test("session evidence belongs to the exact user dispatch, never the nearest con
   }
 });
 
-test("worker attribution waits for its identity and refuses sibling or finished jobs", () => {
+test("worker attribution waits for its identity and refuses sibling or finished jobs", async () => {
   const first = { id: "run_100_1", startedAt: 100, sessionId: null };
   const second = { id: "run_100_2", startedAt: 100, sessionId: "sibling" };
   const env = vm.createContext({ autopilot: { jobs: [first, second] }, queueExecutorCheckpoint() {} });
-  vm.runInContext(section("function attributeRunSession(", "function watchRunSession("), env);
+  vm.runInContext(section("async function attributeRunSession(", "function watchRunSession("), env);
   const reader = { listSessions: () => assert.fail("timestamp matching must not be used"), findRunSession: () => null };
-  assert.equal(env.attributeRunSession(reader, first), false);
+  assert.equal(await env.attributeRunSession(reader, first), false);
   assert.equal(first.sessionId, null);
   reader.findRunSession = () => ({ id: "sibling" });
-  assert.equal(env.attributeRunSession(reader, first), false);
+  assert.equal(await env.attributeRunSession(reader, first), false);
   reader.findRunSession = ({ runId }) => ({ id: `${runId}-session` });
-  assert.equal(env.attributeRunSession(reader, first), true);
+  assert.equal(await env.attributeRunSession(reader, first), true);
   assert.equal(first.sessionId, "run_100_1-session");
   first.sessionId = null;
   first.finished = true;
-  assert.equal(env.attributeRunSession(reader, first), false);
+  assert.equal(await env.attributeRunSession(reader, first), false);
 });
 
 function settingsHost() {
@@ -174,7 +174,7 @@ function finishHost({ kind = "task", owner = "run_100_1", missing = false, failW
     SMOKE: false, CAPTURE: false, CLI_MODE: false, assistantState: { status: "running" }, executorUpdateHold: () => null,
     spawnNextJob: async () => assert.fail("storage recovery must not launch another paid worker"),
   });
-  vm.runInContext(section("function attributeRunSession(", "function watchRunSession(") +
+  vm.runInContext(section("async function attributeRunSession(", "function watchRunSession(") +
     `function fixtureFinish() {\n${section("  let timeout = null;", "  entry.reap = finish;")}\nreturn finish; }` +
     section("let executorFillInFlight = null;", "// Work the assistant does on its own plumbing"), env);
   return { env, entry, autopilot, finish: env.fixtureFinish(), effects, timers, logs, records, roles, verificationJobs, board: () => board, mutations: () => mutations };
