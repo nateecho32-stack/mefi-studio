@@ -196,17 +196,19 @@ test("the done log merges executor finishes with assistant passes, newest first"
     JSON.stringify({ at: 300, event: "finish", kind: "task", title: "Broken build", ok: false, error: "exit 1" }),
   ].join("\n");
   const h = questionHost({ executorLog: lines });
+  // Assistant passes are not finished nodes: they stay in the activity log
+  // and never land in the done log.
   h.state.log = [{ at: 400, kind: "fix", text: "repaired the catalog" }, { at: 50, kind: "tick", text: "noise" }];
   const result = await h.env.assistantDoneLog({ limit: 10 });
   assert.equal(result.ok, true);
-  assert.deepEqual(Array.from(result.entries, (entry) => entry.title), ["repaired the catalog", "Broken build", "Build the rail"]);
-  assert.equal(result.entries[0].kind, "pass");
-  assert.equal(result.entries[1].ok, false);
-  assert.equal(result.entries[2].taskId, "task_1");
-  assert.match(result.entries[2].detail, /42s/);
+  assert.deepEqual(Array.from(result.entries, (entry) => entry.title), ["Broken build", "Build the rail"]);
+  assert.ok(result.entries.every((entry) => entry.kind !== "pass"), "no pass rows in the done log");
+  assert.equal(result.entries[0].ok, false);
+  assert.equal(result.entries[1].taskId, "task_1");
+  assert.match(result.entries[1].detail, /42s/);
 });
 
-test("absorbing the done log drops finish rows, keeps start rows and hides old passes", async () => {
+test("clearing the done log drops finish rows, keeps start rows and leaves passes alone", async () => {
   const lines = [
     JSON.stringify({ at: 100, event: "start", title: "Build the rail" }),
     JSON.stringify({ at: 200, event: "finish", kind: "task", task: "task_1", title: "Build the rail", ok: true }),
@@ -214,28 +216,25 @@ test("absorbing the done log drops finish rows, keeps start rows and hides old p
   ].join("\n");
   const h = questionHost({ executorLog: lines });
   h.state.log = [{ at: 400, kind: "fix", text: "repaired the catalog" }];
-  const result = await h.env.assistantAbsorbDoneLog();
+  const result = await h.env.assistantClearDoneLog();
   assert.equal(result.ok, true);
   assert.equal(result.records, 2);
-  assert.equal(result.passes, 1);
   assert.equal(h.writes.length, 1, "the ledger is rewritten once");
   assert.ok(!h.writes[0].text.includes('"finish"'), "finish rows are gone");
   assert.ok(h.writes[0].text.includes('"start"'), "start rows stay");
-  assert.equal(h.state.doneAbsorbedAt > 0, true);
   assert.equal(h.saves.length, 1);
+  assert.equal(h.state.log.some((row) => row.kind === "fix"), true, "the activity log keeps the pass");
   const after = await h.env.assistantDoneLog({ limit: 10 });
   assert.deepEqual(Array.from(after.entries, (entry) => entry.title), [], "the tab reads empty");
-  h.state.log.push({ at: h.state.doneAbsorbedAt + 1, kind: "tidy", text: "later tidy" });
-  const later = await h.env.assistantDoneLog({ limit: 10 });
-  assert.deepEqual(Array.from(later.entries, (entry) => entry.title), ["later tidy"], "passes after the absorb still land");
 });
 
-test("absorbing an empty ledger is a no-op that still clears old passes", async () => {
+test("clearing an empty ledger is a no-op", async () => {
   const h = questionHost();
   h.state.log = [{ at: 400, kind: "audit", text: "audited" }];
-  const result = await h.env.assistantAbsorbDoneLog();
+  const result = await h.env.assistantClearDoneLog();
   assert.equal(result.ok, true);
   assert.equal(result.records, 0);
   assert.equal(h.writes.length, 0, "a missing ledger is never written");
+  assert.equal(h.saves.length, 0, "nothing to record when nothing was cleared");
   assert.equal((await h.env.assistantDoneLog({ limit: 10 })).entries.length, 0);
 });

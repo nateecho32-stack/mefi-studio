@@ -1,5 +1,160 @@
 # Test Runs
 
+performance_render isolated re-run, timeout confirmed environmental
+(2026-09-21, evening, run_1790030471057_2 for task_9892bbd6444a088e,
+resuming the interrupted run_1790030285727_13). With zero electron
+processes on the desktop (the interrupted run's leftover electron.exe
+PIDs had already exited on their own; verified via tasklist + Win32_Process
+before and after) and no suite load, `node --test
+tests/performance_render.test.mjs` passed twice back-to-back: 2/0 then
+2/0, exit 0, wall clock 14.4 s and 12.0 s, fixtures 7.3/5.7 s and
+5.2/6.5 s - an order of magnitude under the 40 s kill contract and 50 s
+test timeouts. Environment pinned before/after: 16 logical cores, 0.57 GB
+free RAM, ~23% CPU load, HEAD ce3e6ec with the concurrent sessions'
+uncommitted work untouched (the in-flight 25-line kill-contract hardening
+in tests/performance_render.test.mjs is the only profiler-area delta; its
+taskkill /T /F path never fired and both runs left zero leftover electron
+processes; the only %TEMP%\mefi-performance-render-* dirs remaining are
+the pre-existing Sep 19 / Sep 21 17:03 stale ones). Conclusion: the 50 s
+timeout seen in run_1790028119882_30's full `npm test` reproduces only
+under shared load - it is environmental, not caused by the in-flight
+profiler change. Remaining: reproduce under the historical full-`npm test`
+contention condition to classify the exact signature (TESTRUNS residual
+note above), using the reusable flake-loop harness.
+
+Agent-to-agent mail channel (2026-09-21, evening, "Agent-to-agent
+communication" session; shared tree, uncommitted). Roster seats can now write
+each other notes: scripts/assistant.mjs gained a pure mail section beside the
+intel one (sendMail / inbox / readMail / rolesWithMail / mailLines, state.mail,
+MAIL_CAP 48 rows, MAIL_UNREAD_PER_ROLE 6, read notes age out after an hour,
+unread mail makes its recipient due in dueRoles, digest.chatter and
+facts.chatter carry the lines, the "agents" local reply adds "Said to each
+other"). main.cjs delivers it: assistantSendMail / assistantDeliverMail /
+assistantTakeMail next to assistantReportIntel, assistantStart hands a job its
+unread notes as entry.inbox, assistantSettle sends a result's messages[] (at
+most three), the watcher writes the keeper (stale sessions) and the auditor
+(collisions), the machine writes the foreman (canStart false / unhealthy), the
+auditor, compactor and keeper write the foreman/compactor, the foreman writes
+the thinker, the overseer sends its say to every role it wakes, a builder's
+MEFI_CALL writes the seat it calls, and the brief/grow/improve prompts share
+ASSISTANT_MAIL_RULE (facts.chatter, facts.inbox, optional messages[] reply key
+relayed by the briefer and build jobs). Renderer: a "mail" event case in
+idle.js draws a packet sender -> recipient with send/receive bubbles and the
+assistant card lists "Said to each other"; tree3d.js draws the same packet;
+styles.css adds .assistant-mail; booklet rebuilt (hash f98dd2322a01, shared
+with the performance session's booklet.js change). Tests: new
+tests/assistant_mail.test.mjs (12 tests: pure API, bounds, round trip, dueRoles
+pull, host helpers via vm, wiring assertions). The vm-host suites needed the
+new collaborators stubbed (assistantTakeMail / assistantDeliverMail /
+assistantSendMail) in tests/assistant_pool.test.mjs,
+tests/executor_handoffs.test.mjs, tests/assistant_coordination.test.mjs and
+tests/fixtures/host_executor.mjs, and tests/expand_finished_guard.test.mjs now
+slices the shared ASSISTANT_MAIL_RULE const with each prompt array - without
+those, ~30 unrelated tests fail with ReferenceError (the other session saw the
+same six in executor_modes/expand_finished_guard before the fix). Results:
+node scripts/run-node-tests.mjs first pass 1707 tests / 1697 pass / 7 fail
+(the six above plus eyes_worker "read past the timeout" and performance_render
+timing out at 50 s under the shared load); after the stubs, executor_modes +
+expand_finished_guard + eyes_worker 37/0, performance_render 2/0 alone,
+assistant_* + agent_modes + planning_assistant + executor_handoffs 161/0,
+node scripts/assistant.mjs --self-test 184 checks ok, npm run check clean,
+python -m unittest tools.test_mefi_studio_assistant tools.test_builder_intel
+tools.test_mefi_studio_builder_intel 72/0. Not verified: a live app run of the
+packet drawing (no preview launched); the performance_render 50 s timeout is
+the known load flake, not a regression.
+
+Command frame pass (2026-09-21, evening). Renderer-only change:
+renderer/idle.js (callout placement ranked once per pass with an agent-host
+set and one shared Intl.Collator, the label grid answering leader-vs-orb
+queries, rgb/rgba and speechLines memoized, drawNodeSurface painting halo
+and body under one transform block) and renderer/booklet.js (studioLog
+bounded to the newest 400 lines); renderer/booklet.html rebuilt (hash
+f98dd2322a01, which also carries the concurrent agent-mail session's
+edits). `npm run check` passed (90 targets, 177 specs, css clean, syntax
+ok). `node scripts/run-node-tests.mjs` on the shared tree: 1707 tests /
+1699 pass / 6 fail / 2 skipped in 53.5 s; the six failures are all in
+tests/executor_modes.test.mjs and tests/expand_finished_guard.test.mjs,
+which exercise main.cjs and scripts/assistant.mjs while the agent-mail
+session had both files mid-edit (neither test loads renderer code). Every
+Command and renderer suite passed (command_visuals, command_performance,
+command_render in real Chromium, node_paint_cache with a max pixel delta of
+1 at DPR 1, 1.5 and 2, catalog_renderer, jev_routing_ui,
+performance_render), and the two exclusive fixtures each passed in their
+own invocation afterwards (eyes_toggle 1/1, occlusion_probe 1/1). The
+before/after frame numbers are in PERFORMANCE.md (top section).
+
+performance_render residual-flake loaded loop, no repro (2026-09-21, evening,
+run_1790028475698_40 for task_3d33701ba75b4e48). Observation-only loop harness
+(`tools/logs/performance-render-flake-loop/run-flake-loop.ps1`, gitignored)
+ran `node --test tests/performance_render.test.mjs` 14 times with full
+per-iteration capture (verbatim stdout/stderr, exit code, duration, report.json
+plus profiler PNGs via MEFI_PERFORMANCE_CAPTURE_DIR, host CPU/free-RAM and
+electron/node process counts before/after): round 1 idle baseline + 7 runs
+under 4 CPU spinners (11-22s each), round 2 baseline + 5 runs under 12 of 16
+logical cores spun (fixture slowed to 38-53s - real pressure), all exit 0 with
+report.errors/networkAttempts/processAttempts empty. The hardened kill contract
+(uncommitted 40s `taskkill /T /F` hunk) never fired and left zero leftover
+electron processes; pre-existing stale `%TEMP%\mefi-performance-render-*` dirs
+(Sep 19, Sep 21 17:03, from earlier failed runs) and ~500-650MB free RAM confirm
+this host runs near overload. The same-day full `npm test` in run_1790028566027_42
+(1695 tests, exit 0) also saw no recurrence. Historical signatures stay
+unclassified: the pak-load failure and the fixture-internal `Profiler JSON
+download timed out` (`tests/fixtures/performance-render-electron.cjs:127`,
+5s will-download deadline - not covered by the kill contract, which only handles
+the 40s-hang case) did not recur under synthetic load. Remaining: reproduce under
+the historical condition - full `npm test` contention (parallel node stage plus
+serialized display fixtures, multiple concurrent Electron launches) plus OneDrive
+sync churn on node_modules - then classify via the same signature rules; the loop
+harness is reusable as-is.
+
+Full npm test after the severe-memory parallelism cap merge (2026-09-21,
+evening). Run run_1790028566027_42 for task_cf5dbf3b66810435 (parent
+task_1a265efeeb6cbdd3 "Persistent-memory guard"). Pre-run verification: the
+cap change is present in the working tree (uncommitted, adopted as-is) —
+`scripts/machine.mjs` latches `severeMemoryCap` on any under-floor sample
+(300 MB severe floor), releases only at floor + release margin, and reports
+holdKind "memory-cap" with runningCount in the reason while recovering;
+`tests/machine_capacity.test.mjs` covers the latch outliving the floor, the
+recovery band refusing re-admission on the memory override, and the distinct
+holdKind. Full `npm test` (unmodified tree, concurrent sessions' uncommitted
+work untouched) exited 0 through the whole `&&` chain: the main node stage
+1695 tests / 1693 pass / 0 fail / 2 skipped in 47.8 s — the two skips are the
+known environment-conditional ones ("live: the gateway resolves the pinned
+Jev model" without credentials, and the in-process vm-modules source check
+that needs --experimental-vm-modules); the two exclusive Electron fixtures
+each ran in their own invocation and passed: eyes_toggle 1/1 (3.6 s,
+load-tolerant span judgement) and occlusion_probe 1/1 strict native
+(6.3 s — occlusion via document.hidden, occluded rAF growth 0, worker-channel
+lag 0 ms); `python -m unittest discover -s tools` 246 OK in 43.7 s;
+`node tools/test_normalized_path_lock.mjs` 6/6 with "all checks passed". The
+previously documented performance_render Electron Profiler flake did not
+recur in this run. The memory-cap code and its tests remain uncommitted in
+the worktree alongside the other in-flight session work; committing them is
+the parent task's follow-up.
+
+check-css CRLF normalization (2026-09-21, evening). Build of
+run_1790028119882_30 for task_f2faf80852cb9049: made
+`scripts/check-css.mjs` line-ending agnostic — `cascadeWinners` now folds
+`\r\n`/`\r` to `\n` in memory (single funnel for the default HEAD-vs-worktree
+mode, the two-file form and every `--merge` side through `mergeResolution`;
+files are never rewritten). Reproduced the reported failure first
+(`node scripts/check-css.mjs` → `CASCADE-DIVERGED: 7 mismatch(es)`, all
+`\r\n`-vs-`\n` inside multi-line values), then exit 0
+`CASCADE-EQUIVALENT: winners identical for all 6401 ... keys` after the fix.
+Regression tests added: CRLF-candidate equivalence + real-change-still-diverges
+unit tests and a two-file CLI CRLF case in `tests/check_css.test.mjs`, and a
+CRLF-resolution-vs-LF-git-sides case (clean, plus reverted still flagged) in
+`tests/check_css_merge.test.mjs`. `node --test` on the three check-css suites
+37/37; `npm run check` clean (90 targets, 176 specs, css merge-skip/unused,
+syntax); `npm run audit` clean (0 findings); `node --test
+tests/auditor_dom.test.mjs` 4/4 (auditor imports findUnusedSelectors —
+behavior unchanged). Full `npm test`: `tests/performance_render.test.mjs`
+fails (Profiler JSON download timed out — Electron fixture under load, file
+modified by a concurrent session; same class as the documented
+eyes_toggle/occlusion Electron flakes) — not touched by this change, which is
+pure-Node CSS comparison. Concurrent session's uncommitted work left
+untouched.
+
 TESTRUNS flake triage: eyes_toggle_electron + occlusion_probe (2026-09-21,
 evening, run_1790028053881_29). Adopted and completed the uncommitted fixture
 work already in the tree rather than rewriting it. Root cause reproduced, not
@@ -909,7 +1064,7 @@ npm run check
 npm test
 ```
 
-`npm run check` verifies package-script targets and JavaScript syntax and runs the spec-collision audit (`npm run check:specs`, `scripts/spec-collisions.mjs`) that enforces the CONTRIBUTING.md test-file conventions. `npm run check:css` (`scripts/check-css.mjs`) is the standalone CSS-refactor safety gate: it computes the cascade-winning declaration for every (selector-context, property, importance) key in a stylesheet and proves a candidate (by default the working copy of `renderer/styles.css`) keeps exactly the same winners as the base ref (by default `HEAD`), reporting missing/changed/new winners and exiting non-zero on divergence. `tests/check_css.test.mjs` pins the winner extraction, cascade-equivalence comparison and the CLI exit codes (`node scripts/check-css.mjs base.css candidate.css` also works on bare files; `npm run check:css -- pre-merge.css post-merge.css` is the same two-file form used to prove a styles.css merge — see "Verifying a session edit-collision handoff" below). `npm run check:css:merge` (`scripts/check-css.mjs --merge`) is the collision-resolution form folded into the same convention: after a styles.css merge conflict it checks **both sides against the merge base** (ours `HEAD`, theirs `MERGE_HEAD`, base their `git merge-base`) and fails when the resolution drops a one-sided winner change, resurrects a one-sided deletion, or settles a both-sides change on neither side's value; it runs inside the `npm run check` chain and is a no-op (`MERGE-CSS-SKIP`, exit 0) when no merge is in progress, with `--theirs <ref>` auditing any branch pair. Guarded by `tests/check_css_merge.test.mjs`. `npm run check:css:unused` (`scripts/check-css.mjs --unused`) is the dead-selector half of the same audit: it scans every `renderer/*.css` (or explicit file arguments), extracts the class tokens of each winner-bearing selector (rules with no declarations carry no winners and are skipped; `@keyframes` internals are not candidates) and flags any selector whose class never appears in the surrounding renderer html/js/css usage, exiting 1 with `UNUSED-SELECTOR` lines; `--allow cls,...` keeps a documented dynamic class out of the report. It also runs inside the `npm run check` chain and stays clean on this tree (`ALL-SELECTORS-USED`). Guarded by `tests/check_css_unused.test.mjs`. `npm test` runs the Node behavioral suite in `tests/`, all Python contracts in `tools/`, and the normalized-path lock proof (`node tools/test_normalized_path_lock.mjs`, the A-Eyes overseer directive's named check) as its closing gate. To investigate one layer or one contract:
+`npm run check` verifies package-script targets and JavaScript syntax and runs the spec-collision audit (`npm run check:specs`, `scripts/spec-collisions.mjs`) that enforces the CONTRIBUTING.md test-file conventions. `npm run check:css` (`scripts/check-css.mjs`) is the standalone CSS-refactor safety gate: it computes the cascade-winning declaration for every (selector-context, property, importance) key in a stylesheet and proves a candidate (by default the working copy of `renderer/styles.css`) keeps exactly the same winners as the base ref (by default `HEAD`), reporting missing/changed/new winners and exiting non-zero on divergence; both sides are CRLF/LF-normalized in memory before comparison (`cascadeWinners` folds `\r\n`/`\r` to `\n`, files are never rewritten), so `core.autocrlf` checkouts with a CRLF worktree against LF blobs compare clean, and the same normalization carries through the `--merge` sides. `tests/check_css.test.mjs` pins the winner extraction, cascade-equivalence comparison and the CLI exit codes (`node scripts/check-css.mjs base.css candidate.css` also works on bare files; `npm run check:css -- pre-merge.css post-merge.css` is the same two-file form used to prove a styles.css merge — see "Verifying a session edit-collision handoff" below). `npm run check:css:merge` (`scripts/check-css.mjs --merge`) is the collision-resolution form folded into the same convention: after a styles.css merge conflict it checks **both sides against the merge base** (ours `HEAD`, theirs `MERGE_HEAD`, base their `git merge-base`) and fails when the resolution drops a one-sided winner change, resurrects a one-sided deletion, or settles a both-sides change on neither side's value; it runs inside the `npm run check` chain and is a no-op (`MERGE-CSS-SKIP`, exit 0) when no merge is in progress, with `--theirs <ref>` auditing any branch pair. Guarded by `tests/check_css_merge.test.mjs`. `npm run check:css:unused` (`scripts/check-css.mjs --unused`) is the dead-selector half of the same audit: it scans every `renderer/*.css` (or explicit file arguments), extracts the class tokens of each winner-bearing selector (rules with no declarations carry no winners and are skipped; `@keyframes` internals are not candidates) and flags any selector whose class never appears in the surrounding renderer html/js/css usage, exiting 1 with `UNUSED-SELECTOR` lines; `--allow cls,...` keeps a documented dynamic class out of the report. It also runs inside the `npm run check` chain and stays clean on this tree (`ALL-SELECTORS-USED`). Guarded by `tests/check_css_unused.test.mjs`. `npm test` runs the Node behavioral suite in `tests/`, all Python contracts in `tools/`, and the normalized-path lock proof (`node tools/test_normalized_path_lock.mjs`, the A-Eyes overseer directive's named check) as its closing gate. To investigate one layer or one contract:
 
 ```powershell
 node --test "tests/**/*.test.mjs"
@@ -1915,3 +2070,67 @@ the performance_render fixture still needs an owner-present, machine-idle
 rerun to separate the pak-load/timeout flake from a real regression, and the
 uncommitted env-drift fixture hunks plus this entry still need a commit
 owner.
+
+Occlusion-probe fixture hardened against external window destruction
+(2026-09-21 17:05-17:15, run_1790027684371_23 for the "Harden occlusion-probe
+fixture against external window destruction" task, task_e65d8260beb42082).
+tests/fixtures/occlusion-probe-electron.cjs handled only
+render-process-gone, so a probe window killed mid-phase by something outside
+the fixture surfaced as a bare "Object has been destroyed" hard fail. It now
+(a) listens for the window's own "closed" event as a proactive signal,
+(b) recognizes the destroyed-access error - including assertProbeAlive's
+"Probe window destroyed during ..." variant, which landed concurrently from
+another session - at the shared async finish() exit, covering every
+window/webContents call site without TOCTOU-prone per-call guards, and
+(c) writes a windowLost record (phase, trigger, window/cover state and
+hwnds, Win32 foreground identity with the self-describing session block,
+timeline tail) and exits cleanly; tests/occlusion_probe.test.mjs skips with
+that reason before any per-phase assertion, the windowLost twin of the
+occlusionUnsupported gate. Validation: with the live Studio app minimized
+off the desktop, `node --test tests/occlusion_probe.test.mjs` passed strict
+native occlusion (document.hidden signal; occluded rAF growth 0; probe lag
+0ms via workerDriftMs on 1 sample; worker and MessageChannel answering; 0
+fail) while another session's log-tail-toggle fixture was live. An external
+WM_CLOSE posted to the spawned fixture's probe window (EnumWindows by title,
+the occluder cover excluded) produced the windowLost record across attempts
+(phase visible and cover-wait) and the harness outcome tests 1 / pass 0 /
+fail 0 / skipped 1 with the windowLost reason and diagnostics - the
+clean-skip contract, not a bare failure. `npm run check` passed after the
+edits. Not done here: an external close of the cover window during
+occluded-measure still hard-fails the rAF-growth assert (observed once via a
+stray CloseMainWindow; arguably correct since the occlusion condition
+genuinely ended, but the owner may want it as an interference record too);
+these edits, like the rest of the in-flight tree, remain uncommitted.
+
+Full `node scripts/run-node-tests.mjs` attempts for the toggle card (2026-09-21
+17:35-17:41, run_1790029850877_1 for "Run full node test suite to close toggle
+card", task_c3fca713a5ff8b66). Preflight: the live Studio app - which hosts
+this very worker, so closing it was not an option - was minimized off the
+desktop per the occlusion-probe precedent above, and two sibling workers'
+full-suite chains (started 17:33:01 and 17:33:38, bash pipelines also running
+build-booklet/check) were awaited to quiescence before each launch. Run A
+(43 s, exit 1): the Node parallel stage printed "tests 1707, pass 1699,
+fail 6, skipped 2, duration 42.2 s" - executor_modes.test.mjs:212/234/249/270
+("the awaited host boundary must be reached") plus expand_finished_guard
+.test.mjs:79/90 (ReferenceError ASSISTANT_MAIL_RULE / assistantTakeMail in
+the vm section sandbox). Both files pass solo minutes later (node --test on
+the pair: 29/29, exit 0) and main.cjs / scripts/assistant.mjs had not
+changed since 17:30:17, so the failures were in-suite only, not a mid-edit
+artifact. Run B after a second quiescence wait (43 s, exit 1): identical
+totals 1707/1699/6/2 but a disjoint failure set - boot_poll_visibility
+.test.mjs:936/1024/1092, command_graph.test.mjs:17/99 and
+command_visuals.test.mjs:572, every one a "ReferenceError: pickerHeld is not
+defined"-class vm-section error. With the failure set rotating between runs
+while each named file passes solo, the parallel stage is flaking
+non-deterministically across the vm/section()-style tests (file reads or
+sandboxes under the 1707-test concurrent stage; consistent with the
+OneDrive-path read interference earlier entries flagged). Because
+scripts/run-node-tests.mjs chains its stages like &&, both runs
+short-circuited before the serialized occlusion_probe and eyes_toggle
+invocations, so this card's own fixtures were not exercised in-suite here;
+their solo evidence stands (eyes_toggle 1/1 pass at 17:28 in
+run_1790029681239_2; occlusion_probe strict pass with Studio minimized,
+17:05-17:15 entry above). No repo source was modified by this run beyond
+this entry. Handed on: root-cause the rotating in-suite ReferenceErrors and
+land one green exit-0 full-suite run; that green run - not this entry - is
+what should close task_11085243b2d2452f.

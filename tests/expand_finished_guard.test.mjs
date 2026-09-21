@@ -73,7 +73,8 @@ test("runAssistant attaches trusted finished titles from facts, not model output
 function promptConstant(name) {
   // `const` declarations stay in the vm script's lexical scope, so read the
   // joined constant back as the script's completion value.
-  return vm.runInContext(`${section(`const ${name} = [`, "function startEyesWatch()")}\n${name};`, vm.createContext({}));
+  // The prompts share the roster-mail rule, defined just above them.
+  return vm.runInContext(`${section("const ASSISTANT_MAIL_RULE =", "const ASSISTANT_SYSTEM = [")}\n${section(`const ${name} = [`, "function startEyesWatch()")}\n${name};`, vm.createContext({}));
 }
 
 test("grow and improve prompts name the finished flag with distinct finished/unfinished handling", () => {

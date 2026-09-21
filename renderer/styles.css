@@ -976,6 +976,8 @@ table#table tr:hover td { background: rgba(201, 168, 106, 0.04); }
 .assistant-roster li.agents-head { color: var(--ivory); border-left-color: var(--gold); }
 .assistant-intel b { font-weight: 500; flex: none; }
 .assistant-intel li { border-left-width: 2px; }
+.cmd-card .assistant-mail b { text-transform: none; letter-spacing: 0; }
+.assistant-mail li.unread .text { color: var(--gold-bright); }
 .assistant-steppers { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s3); margin: var(--s2) 0; font-size: var(--fs-sm); }
 .stepper { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
 .stepper .k { margin-right: 2px; }
@@ -3401,11 +3403,9 @@ body.command-active .walkthrough-coach { right: 392px; }
   border-radius: 8px; background: var(--cmd-raised); font-size: 12px;
 }
 #idle-hud .done-row[data-ok="false"] { border-left-color: var(--bad); }
-#idle-hud .done-row[data-kind="pass"] { border-left-color: var(--info); }
 #idle-hud .done-row-head { display: flex; align-items: center; gap: 6px; }
 #idle-hud .done-verdict { font: 600 10px/1.4 var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--live); }
 #idle-hud .done-row[data-ok="false"] .done-verdict { color: var(--bad); }
-#idle-hud .done-row[data-kind="pass"] .done-verdict { color: var(--info); }
 #idle-hud .done-when { margin-left: auto; color: var(--dim); font-size: 10px; font-variant-numeric: tabular-nums; }
 #idle-hud .done-title { color: var(--ivory); line-height: 1.45; overflow-wrap: anywhere; }
 #idle-hud button.done-title {
@@ -3416,36 +3416,16 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .done-detail { color: var(--muted); font-size: 11px; line-height: 1.45; }
 #idle-hud .done-empty, #idle-hud .ask-empty { margin: 0; padding: 8px 2px; color: var(--muted); font-size: 12px; line-height: 1.6; }
 
-/* the absorbed ledger: what the assistant keeps after a Done-tab absorb, on
+/* the absorbed ledger: the work that sank into a node on the tree, readable on
    its card and in the rail console while the assistant is selected */
 #idle-hud .feed-absorbed { flex: none; margin: 8px 0 0; }
 #idle-hud .feed-absorbed > summary { color: var(--gold); font-size: 11px; cursor: pointer; }
 .absorbed-ledger { max-height: 220px; overflow-y: auto; }
 .absorbed-row[data-ok="false"] { color: var(--bad); }
 
-/* collapse: the head keeps the count and the Absorb button, the list tucks away */
+/* collapse: the head keeps the count and the Clear button, the list tucks away */
 #idle-hud .cmd-done.done-collapsed .rail-view-note,
 #idle-hud .cmd-done.done-collapsed .done-list { display: none; }
-
-/* absorb: every record flies into the assistant orb on the canvas (idle.js aims
-   --absorb-dx/dy at the hub and launches a packet per row), shrinking to a spark
-   on the way; the host then clears the log and the hub card keeps the records */
-#idle-hud .cmd-done.absorbing .done-row {
-  pointer-events: none;
-  animation: done-absorb 900ms cubic-bezier(.5, -.15, .6, .55) forwards;
-  animation-delay: calc(var(--absorb-i, 0) * 45ms);
-}
-#idle-hud .cmd-done.absorbing .done-empty { opacity: 0; }
-@keyframes done-absorb {
-  0% { opacity: 1; transform: translate(0, 0) scale(1); filter: brightness(1); }
-  25% { opacity: 1; transform: translate(calc(var(--absorb-dx, 0px) * .1), calc(var(--absorb-dy, 0px) * .12)) scale(1.03); filter: brightness(1.25); }
-  100% { opacity: 0; transform: translate(var(--absorb-dx, 0px), var(--absorb-dy, 0px)) scale(.04); filter: brightness(2); }
-}
-#idle-hud #cmd-done-absorb.pulling { animation: absorb-pull 780ms ease-out; }
-@keyframes absorb-pull {
-  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 60%, transparent); }
-  100% { box-shadow: 0 0 0 16px color-mix(in srgb, var(--live) 0%, transparent); }
-}
 
 /* the ask cards */
 #idle-hud .ask-list {

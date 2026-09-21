@@ -1873,6 +1873,16 @@
       const satellite = agentNodeOf(String(event.role ?? ""));
       if (satellite) queuePulse({ from: satellite, to: target, start: performance.now(), duration: 1000, color: "#ffe9a8", glow: "#e6c98d", wave: true, packet: true });
     }
+    if (target && event.kind === "mail" && event.from) {
+      // One agent wrote to another: the note rides a packet between the two
+      // satellites in the sender's colour (the hub stands in for the
+      // assistant's own notes). A read carries no sender and draws nothing.
+      const seat = (role) => (role === "assistant" ? target : agentNodeOf(String(role ?? "")));
+      const sender = seat(event.from);
+      const recipient = seat(event.to);
+      const tint = agentColor(String(event.from));
+      if (sender && recipient && sender !== recipient) queuePulse({ from: sender, to: recipient, start: performance.now(), duration: 1000, color: tint, glow: tint, wave: true, packet: true });
+    }
     if (event.kind === "organize") {
       // Fold and stale changes must show the moment the tick made them.
       assistant.pending = load()

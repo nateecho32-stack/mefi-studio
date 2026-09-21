@@ -43,6 +43,18 @@ export const WORKER_CAPACITY_DEFAULTS = Object.freeze({
   // into thrashing, so the override must not bypass it.
   memorySevereFloorMB: 300,
   memoryWarnOverride: false,
+  // Severe-memory parallelism cap: an under-floor reading latches a cap that
+  // keeps admission closed until free memory recovers past the floor by this
+  // margin. 300 + 150 = 450 MB sits just above the 440 MB admission sum, so
+  // the cap lifts exactly when a start would clear normal admission anyway —
+  // a host idling near the floor with several workers no longer flaps a
+  // start in and out on every oscillation across 300 MB. Engaging the latch
+  // and releasing it each take severeCapSamples consecutive readings: the
+  // host was observed swinging 197 -> 526 -> 354 MB across both boundaries
+  // on solitary samples, and single-sample thresholds let that flicker
+  // toggle the cap per reading.
+  memorySevereReleaseMarginMB: 150,
+  severeCapSamples: 2,
 });
 
 // Admission reads are deliberately independent of the slow process/lease scan.
@@ -63,6 +75,9 @@ export function createWorkerCapacitySampler({
   let lagPressure = false;
   let highSamples = 0;
   let recoverySamples = 0;
+  let severeMemoryCap = false;
+  let severeCapLowSamples = 0;
+  let severeCapHighSamples = 0;
 
   function cpuTotals() {
     try {
@@ -110,6 +125,27 @@ export function createWorkerCapacitySampler({
     const availableMemoryMB = memoryMB(freemem);
     const totalMemoryMB = memoryMB(totalmem);
     const memoryKnown = totalMemoryMB > 0 && availableMemoryMB !== null && availableMemoryMB <= totalMemoryMB;
+    // Latch the severe-memory parallelism cap with boundary hysteresis:
+    // severeCapSamples consecutive under-floor readings engage it, the same
+    // number of consecutive readings past the floor plus release margin
+    // release it, and recovery-band readings hold the latch while resetting
+    // both streaks — so solitary dips or blips cannot toggle it. The hold
+    // that consumes the latch lives in the wrapper, where each caller's
+    // live worker count is known.
+    if (memoryKnown) {
+      if (availableMemoryMB < options.memorySevereFloorMB) {
+        severeCapHighSamples = 0;
+        severeCapLowSamples += 1;
+        if (severeCapLowSamples >= options.severeCapSamples) severeMemoryCap = true;
+      } else if (availableMemoryMB >= options.memorySevereFloorMB + options.memorySevereReleaseMarginMB) {
+        severeCapLowSamples = 0;
+        severeCapHighSamples += 1;
+        if (severeCapHighSamples >= options.severeCapSamples) severeMemoryCap = false;
+      } else {
+        severeCapLowSamples = 0;
+        severeCapHighSamples = 0;
+      }
+    }
     // Keep a modest emergency reserve and room for one more worker. A share
     // of total RAM unnecessarily blocks healthy machines with several GB free;
     // current workers already appear in the available-memory measurement.
@@ -168,7 +204,9 @@ export function createWorkerCapacitySampler({
     // the severe floor (never overrideable), "lag" is the latched
     // responsiveness hold, "unknown" covers missing readings, and null means
     // admission is clear (an overridden small shortfall reports its distinct
-    // warning in resources.memoryWarning instead of a hold).
+    // warning in resources.memoryWarning instead of a hold). The wrapper adds
+    // "memory-cap" — the latched severe-memory parallelism cap — on top of a
+    // clear or overridden verdict while the recovery band holds.
     const holdKind = (lagMs === null || !memoryKnown) ? "unknown"
       : memoryPressure && !memoryOverridden ? (memoryShortfall === "severe" ? "memory-severe" : "memory")
       : lagPressure ? "lag"
@@ -176,7 +214,7 @@ export function createWorkerCapacitySampler({
     return {
       canStart: reason === null,
       reason,
-      resources: { lagMs, hostLagMs, rendererLagMs, lagPressure, cpuPercent, availableMemoryMB, totalMemoryMB, requiredMemoryMB, sampledAt, memoryPressure, memoryShortfall, memoryWarning, holdKind },
+      resources: { lagMs, hostLagMs, rendererLagMs, lagPressure, cpuPercent, availableMemoryMB, totalMemoryMB, requiredMemoryMB, sampledAt, memoryPressure, memoryShortfall, memoryWarning, holdKind, memorySevereCapped: severeMemoryCap },
     };
   }
 
@@ -196,7 +234,23 @@ export function createWorkerCapacitySampler({
       }
       await inFlight;
     }
-    return { ...cached, resources: { ...cached.resources, running: Math.max(0, Number(running) || 0) } };
+    // The severe-memory parallelism cap applies per call: a cached sample
+    // serves callers with different live worker counts, and the cap pins
+    // admission only while at least one worker already runs — a cap that
+    // starved the pool below one would deadlock the queue. Like the floor it
+    // protects, the cap is never overrideable; it exists to stop the
+    // admit/release oscillation right above the severe floor.
+    const runningCount = Math.max(0, Number(running) || 0);
+    const verdict = { ...cached, resources: { ...cached.resources, running: runningCount } };
+    if (verdict.canStart === true && verdict.resources.memorySevereCapped === true && runningCount >= 1) {
+      const releaseMB = Math.floor(options.memorySevereFloorMB + options.memorySevereReleaseMarginMB);
+      return {
+        canStart: false,
+        reason: `Machine memory is recovering from the severe floor (${Math.floor(verdict.resources.availableMemoryMB)} MB available; ${releaseMB} MB needed) — worker parallelism stays capped at ${runningCount} until free memory recovers.`,
+        resources: { ...verdict.resources, holdKind: "memory-cap", memoryWarning: null },
+      };
+    }
+    return verdict;
   };
 }
 

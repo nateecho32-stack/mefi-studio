@@ -4,6 +4,11 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+// Line-ending divergence is never a cascade change: autocrlf checkouts keep a
+// CRLF working copy against LF git blobs, so fold CR variants to LF before any
+// winner comparison (in-memory only — files are never rewritten).
+const normalizeEol = (cssText) => cssText.replace(/\r\n?/g, "\n");
+
 function blankComments(css) {
   return css.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
 }
@@ -77,7 +82,7 @@ function parseDecls(body) {
 }
 
 export function cascadeWinners(cssText) {
-  const css = blankComments(cssText);
+  const css = blankComments(normalizeEol(cssText));
   const winners = new Map();
   let seq = 0;
   (function walk(from, to, ctx) {
@@ -123,7 +128,7 @@ export function findUnusedSelectors(cssText, usageText, { allow = [] } = {}) {
   const css = blankComments(cssText);
   const usage = new Set(usageText.match(/[\w-]+/g) ?? []);
   const dynamicPrefixes = new Set();
-  for (const match of usageText.matchAll(/([\w-]+)[ \t]*\$\{/g)) dynamicPrefixes.add(match[1]);
+  for (const match of usageText.matchAll(/([\w-]+)[ \t]*\$\{/g)) dynamicPrefixes.add(match[1].replace(/-+$/, ""));
   const composed = (name) => [...dynamicPrefixes].some((prefix) => name === prefix || name.startsWith(`${prefix}-`));
   const allowed = new Set(allow);
   const unused = [];

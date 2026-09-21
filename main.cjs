@@ -1264,6 +1264,11 @@ const AI_PROVIDERS = ["auto", "zai", "opencode", "grok", "claude", "codex", "ant
 const AI_AUTO_PROVIDERS = ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
 const AUTO_PROVIDER_NAMES = { zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" };
 
+// The roster talks to itself: every AI pass sees the exchange and may answer
+// it. The rule is shared so the three build prompts describe one protocol.
+const ASSISTANT_MAIL_RULE =
+  'facts.chatter is what the agents on the roster said to each other lately and facts.inbox the notes addressed to you. You may add an optional "messages":[{"to":"watcher|machine|auditor|keeper|compactor|foreman|thinker|overseer|improver|grower|ideas","text":"<=30 words"}] key — at most two, only when another agent should act on what you found; never repeat a note already in facts.chatter.';
+
 const ASSISTANT_SYSTEM = [
   "You are A-Eyes, the coordination assistant for several AI coding agents sharing one machine and one repo.",
   "You receive authoritative JSON facts about live sessions: titles, agents, todos with status, recently changed files, file collisions (same file edited by multiple sessions, each with an owner whose work the others should adopt), and presence (who is editing each file right now).",
@@ -1272,6 +1277,7 @@ const ASSISTANT_SYSTEM = [
   "Alerts must cover: file collisions, two sessions overlapping on the same subsystem, stale in-progress work, and unusually large deletions. Checkpoints are short progress notes for active sessions (one per session, the most useful observation).",
   "A session with finished:true completed its final turn normally — it is done work: never alert it as idle, stalled, or unscoped, and its missing todos mean no list was kept, not lost work. Only sessions whose facts show open todos and no finished marker can be stale.",
   "Never invent sessions, files, ids, or numbers that are not in the facts.",
+  ASSISTANT_MAIL_RULE,
 ].join(" ");
 
 const ASSISTANT_GROW_SYSTEM = [
@@ -1280,6 +1286,7 @@ const ASSISTANT_GROW_SYSTEM = [
   "Reply with STRICT minified JSON only, no markdown: {\"summary\":\"<=40 words\",\"alerts\":[],\"checkpoints\":[],\"expand\":[{\"title\":\"<=8 words\",\"prompt\":\"<=60 words\"}]}",
   "Return zero to three concrete, buildable follow-ups grounded in unfinished archive work. board.existingWork is already accepted work: do not re-propose it, even reworded. Prefer finishing those obligations; an empty expand list is correct. Never invent features or infer unfinished work solely from an old title.",
   "Each recentTitles/archive session entry may carry a boolean `finished` flag sourced from the producer. finished:true means the session completed its final turn normally — that work is done: never propose expand items for it, not even reworded. Entries with finished:false (or no finished field) are the unfinished candidates: aim follow-ups only at their real leftover obligations; an empty expand list is correct when none remain.",
+  ASSISTANT_MAIL_RULE,
 ].join(" ");
 
 const ASSISTANT_IMPROVE_SYSTEM = [
@@ -1288,6 +1295,7 @@ const ASSISTANT_IMPROVE_SYSTEM = [
   'Reply with STRICT minified JSON only: {"summary":"<=40 words","alerts":[],"checkpoints":[],"expand":[{"title":"<=8 words","prompt":"<=60 words"}]}',
   "Return zero to three concrete improvements to THIS app, each naming exact files and an acceptance check. board.existingWork is already accepted work: do not re-propose it, even reworded. Prefer finishing existing obligations; an empty expand list is correct. Never propose speculative rewrites or new dependencies.",
   "Each recentSessions entry may carry a boolean `finished` flag sourced from the producer. finished:true means the session completed its final turn normally — done work: never propose expand items that treat it as unfinished, not even reworded. Entries with finished:false (or no finished field) are the unfinished candidates: that is where improvement suggestions come from — target their open todos and gaps.",
+  ASSISTANT_MAIL_RULE,
 ].join(" ");
 
 function startEyesWatch() {
@@ -1418,6 +1426,7 @@ const ASSISTANT_OVERSEER_SYSTEM = [
   "You never do the assistant's jobs; you study its digest and your own playbook, then improve how the assistant works: its cadences, prefs, prompts and tooling.",
   'Reply with STRICT minified JSON only: {"summary":"<=40 words","health":"good|fair|poor","score":0-100,"findings":[{"severity":"info|warn|critical","title":"<=8 words","detail":"<=30 words"}],"lessons":["<=18 words"],"upgrades":[{"title":"<=8 words","prompt":"<=60 words"}],"prefs":{"foldAfterMinutes":0,"staleAfterHours":0,"tidyDoneAfterHours":0,"parallel":0,"aiParallel":0}}',
   "facts.intel is what working agents last reported home — a failed builder is work to unstick, not a footnote. Respond to those reports: retry, narrow, or hand the next piece on.",
+  "digest.chatter is what the agents said to each other (unread counts notes nobody has taken yet — a growing pile is a seat that is not keeping up); facts.chatter lists the lines.",
   "digest.builders counts executor outcomes in the last half hour: reports = runs that finished, fails = runs that failed. Each came with a structured event (job id, role, exit code); failures stay counted whichever run reported last.",
   "upgrades are concrete changes to the assistant itself — each names the file to touch (main.cjs, scripts/assistant.mjs, renderer/*.js, tools/*) and the check that proves it. Never repeat an open directive; playbook.directives lists what is already out.",
   "board is the durable task backlog. Review and help finish its existingWork; never re-propose their obligations under new wording. When board.growthHeld is true return upgrades:[] and report findings about the existing work instead. An empty upgrades list is correct.",
@@ -2751,6 +2760,12 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
   // The brief knows what the assistant has in flight and what it restarted.
   if (mode === "brief" && assistantState) facts = { ...facts, work: assistantState.work ?? [], resumed: assistantState.resumed ?? null };
   if (["grow", "improve", "expand"].includes(mode)) facts = { board: await growthBoardFacts(eyes), ...facts };
+  // What the agents have been saying to each other, and the notes addressed
+  // to this pass's seat: a brief can answer a scout instead of rediscovering it.
+  if (assistantState && assistantModule?.mailLines) {
+    const seat = ASSISTANT_RUN_ROLES[mode] ?? (mode === "brief" ? "briefer" : null);
+    facts = { ...facts, chatter: assistantModule.mailLines(assistantState, Date.now(), { limit: 8 }), ...(seat ? { inbox: assistantModule.mailLines(assistantState, Date.now(), { limit: 6, role: seat }) } : {}) };
+  }
   const user = JSON.stringify(facts).slice(0, 14000);
   // The improver rewrites the assistant's own playbook — the one pass that
   // earns the always-reasoning glm-5.3 route; everything else rides flash.
@@ -2836,7 +2851,7 @@ const ASSISTANT_DATA_EVENTS = {
   "eyes-briefing.json": "eyes:briefing",
 };
 // When pushes coalesce, the most telling event of the window wins.
-const ASSISTANT_EVENT_RANK = { question: 6, organize: 6, reply: 5, message: 4, focus: 4, think: 4, intel: 3, fix: 3, tidy: 3, context: 3, error: 2, agent: 2 };
+const ASSISTANT_EVENT_RANK = { question: 6, organize: 6, reply: 5, message: 4, focus: 4, think: 4, intel: 3, mail: 3, fix: 3, tidy: 3, context: 3, error: 2, agent: 2 };
 // The pool: responder > on-demand > cadence; a job gets 150 s.
 const ASSISTANT_PRIORITY = { responder: 3, demand: 2, cadence: 1 };
 const ASSISTANT_JOB_TIMEOUT_MS = 150000;
@@ -3041,7 +3056,6 @@ function assistantEmptyState(now) {
     nodeFolders: {},
     closedAt: 0,
     resumed: null,
-    doneAbsorbedAt: 0,
   };
 }
 
@@ -3564,6 +3578,57 @@ function assistantReportIntel(role, text, facts = null) {
   assistantEmit({ at: Date.now(), kind: "intel", role, text: finding.slice(0, 200), facts: safeFacts });
 }
 
+// One agent writes to another. The note lands in the module's mail (the
+// recipient takes it when its job starts, and unread mail pulls it due on the
+// next tick), the activity log keeps the line, and the push draws it: a packet
+// from the sender's satellite to the recipient's. `from` may be a roster
+// role, a builder or the assistant itself; `to` must be a roster seat. False
+// when nothing was sent (unknown seat, empty text, a role writing to itself).
+function assistantSendMail(from, to, text, facts = null) {
+  const note = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!note || !assistantModule?.sendMail || !assistantState) return false;
+  const before = assistantState;
+  try {
+    assistantState = assistantModule.sendMail(assistantState, { from, to, text: note, facts: facts && typeof facts === "object" ? facts : {} }, Date.now());
+  } catch (error) {
+    logLine(`[assistant] mail update failed: ${error.message}`);
+    return false;
+  }
+  if (assistantState === before) return false;
+  if (SMOKE) console.log(`[assistant] mail: ${from} → ${to}: ${note}`);
+  assistantLog("mail", `${from} → ${to}: ${note.slice(0, 200)}`, { from, to, note: note.slice(0, 200) }, from);
+  return true;
+}
+
+// A finished job's `messages` ([{ to, text, facts? }], at most three) go out
+// under its own role once it has settled, so a note never outruns the finding
+// it rides with. Returns how many were delivered.
+function assistantDeliverMail(from, messages) {
+  let sent = 0;
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (sent >= 3) break;
+    if (!message || typeof message !== "object") continue;
+    if (assistantSendMail(from, String(message.to ?? ""), message.text, message.facts ?? null)) sent += 1;
+  }
+  return sent;
+}
+
+// A job takes its mail as it starts: the unread notes for its role, oldest
+// first, stamped read so the same note never drives two runs. They ride the
+// entry (`entry.inbox`) for the job to act on, and the log says what was read.
+function assistantTakeMail(role) {
+  if (!assistantModule?.readMail || !assistantState) return [];
+  try {
+    const { state, mail } = assistantModule.readMail(assistantState, role, Date.now());
+    assistantState = state;
+    if (mail.length) assistantLog("mail", `${role} read ${mail.length} note(s): ${mail.map((row) => `${row.from}: ${row.text}`).join(" · ").slice(0, 300)}`, { to: role, read: mail.length }, role);
+    return mail;
+  } catch (error) {
+    logLine(`[assistant] mail read failed: ${error.message}`);
+    return [];
+  }
+}
+
 // An executor run reports home while it is still on the board, so the
 // Command view can pulse builder → assistant. The overseer thinks the
 // finding through (a thought bubble, not unread) and wakes on failures.
@@ -3743,6 +3808,7 @@ function assistantPump() {
 function assistantStart(entry) {
   entry.startedAt = Date.now();
   pool.running.set(entry.id, entry);
+  entry.inbox = assistantTakeMail(entry.role);
   const label = entry.work ? assistantJobLabel(entry.role, entry.work) : `${entry.role} started`;
   entry.text = label;
   if (entry.work) assistantJournal(Object.assign(entry.work, { status: "running", startedAt: entry.startedAt }));
@@ -3806,6 +3872,8 @@ function assistantSettle(entry, { result, error }) {
     // A role that found something says so on the assistant's intel board: the
     // finding line when it wrote one, its summary otherwise.
     assistantReportIntel(entry.role, typeof result?.finding === "string" && result.finding.trim() ? result.finding : summary, result?.intel);
+    // What it has to say to the other seats goes out under its own name.
+    assistantDeliverMail(entry.role, result?.messages);
   }
   entry.resolve(error !== undefined ? { ok: false, error: failure } : result);
   if (entry.work) assistantJournal({ id: entry.work.id, done: true });
@@ -4040,10 +4108,22 @@ async function assistantWatcherJob(now, entry) {
     const targets = [...order, ...((counts.folded ?? 0) > 0 ? [FOLDED_NODE] : [])];
     await assistantVisit(entry, targets, (target) => (target.kind === "folded" ? `visiting ${counts.folded} finished sessions` : `visiting "${assistantSessionTitle(target.id)}"`));
   }
+  // What other seats own in this read: stale sessions are the keeper's to
+  // tidy, colliding files are the auditor's to check. Said to them directly.
+  const messages = [];
+  if (store && (counts.stale ?? 0) > 0) {
+    const staleTitles = (assistantState.organization?.stale ?? []).slice(0, 2).map((sessionId) => assistantSessionTitle(sessionId)).filter(Boolean);
+    messages.push({ to: "keeper", text: `${counts.stale} stale session(s)${staleTitles.length ? `: ${staleTitles.map((title) => `"${assistantClip(title, 30)}"`).join(", ")}` : ""} — tidy their folders when you pass`, facts: { stale: counts.stale } });
+  }
+  if (store?.collisions.length) {
+    const files = store.collisions.slice(0, 3).map((collision) => path.basename(String(collision.file)));
+    messages.push({ to: "auditor", text: `${store.collisions.length} file(s) edited by several sessions: ${files.join(", ")} — check them on your next pass`, facts: { collisions: store.collisions.length } });
+  }
   return {
     ok: true,
     text: store ? `${counts.sessions ?? 0} sessions · ${counts.folded ?? 0} folded${organized ? " · reorganized" : ""}` : "store unavailable",
     finding,
+    messages,
     intel: {
       sessions: counts.sessions ?? 0,
       active: counts.active ?? 0,
@@ -4073,7 +4153,13 @@ async function assistantMachineJob() {
       : []
   );
   const running = (status.running ?? []).length;
-  return { ok: true, text: `${status.capacity?.reason || "capacity available"} · ${running} test run(s)${killed.size ? ` · ${killed.size} killed` : ""}`, intel: { running, killed: killed.size, unhealthy: unhealthy.length, capacity: status.capacity } };
+  // The foreman hands work out against this capacity: a hold or a sick
+  // process is told to it directly, not left for the assistant to relay.
+  const held = Boolean(status.capacity && status.capacity.canStart === false);
+  const messages = held || unhealthy.length
+    ? [{ to: "foreman", text: `${held ? `machine holding new starts: ${assistantClip(status.capacity?.reason || "capacity", 120)}` : "capacity available"}${unhealthy.length ? ` · ${unhealthy.length} unhealthy process(es)` : ""}${killed.size ? ` · ${killed.size} killed` : ""}`, facts: { held, unhealthy: unhealthy.length, killed: killed.size } }]
+    : [];
+  return { ok: true, text: `${status.capacity?.reason || "capacity available"} · ${running} test run(s)${killed.size ? ` · ${killed.size} killed` : ""}`, intel: { running, killed: killed.size, unhealthy: unhealthy.length, capacity: status.capacity }, messages };
 }
 
 // A torn store (crash or concurrent write mid-save) truncates the tail, not
@@ -4214,6 +4300,8 @@ async function assistantAuditorJob() {
     ok: true,
     text: `${result.errors} error(s) · ${result.warnings} warning(s)${fixes.count ? ` · ${fixes.count} fix(es)` : ""}`,
     intel: { errors: result.errors, warnings: result.warnings, fixes: fixes.count, queued: queued ?? 0 },
+    // Fix requests it filed are the foreman's to hand out; say so.
+    messages: queued ? [{ to: "foreman", text: `${queued} fix request(s) queued from the audit (${result.errors} error(s)) — hand them out`, facts: { queued, errors: result.errors } }] : [],
   };
 }
 
@@ -4295,7 +4383,13 @@ async function assistantForemanJob(now, entry) {
         : autopilot.waiting
           ? `held · ${autopilot.waiting}`
           : autopilot.adaptiveParallel === true ? "nothing ready to hand out · machine managed" : `nothing to hand out · ${free} slot(s) free`;
-  return { ok: true, text, intel: { handedOut: started.length, building: autopilot.jobs.length, slotsFree: free } };
+  // The notes it took as it started (the machine's hold, the compactor's
+  // ready count) are part of the story it tells; the thinker hears what went out.
+  const heard = (entry?.inbox ?? []).map((row) => `${row.from}: ${assistantClip(row.text, 60)}`);
+  const messages = started.length
+    ? [{ to: "thinker", text: `handed out ${started.length}: ${started.map((job) => assistantClip(job.title, 40)).join(", ")}`, facts: { handedOut: started.length, building: autopilot.jobs.length } }]
+    : [];
+  return { ok: true, text: heard.length && !started.length ? `${text} · heard ${heard.join(" · ")}`.slice(0, 200) : text, intel: { handedOut: started.length, building: autopilot.jobs.length, slotsFree: free }, messages };
 }
 
 // The thinker: the assistant itself. It reshapes the node tree, reads the
@@ -4460,7 +4554,9 @@ async function assistantCompactorJob(now, entry) {
   const requested = Boolean(report.runnable && autopilot.execute && assistantAskForWork("compacted"));
   await assistantHop(entry, ROOT_NODE, { progress: 1, label: report.runnable ? `${report.runnable} ready` : "no eligible work" });
   const held = assistantState?.status === "paused" || !autopilot.execute ? " · new workers paused" : requested ? " · dispatch requested; worker start is not yet confirmed" : "";
-  return { ok: true, text: `${report.text}${held}${next}`, intel: { queued: report.reviewed?.queued ?? 0, runnable: report.runnable ?? 0, plans: (report.plans ?? []).length } };
+  return { ok: true, text: `${report.text}${held}${next}`, intel: { queued: report.reviewed?.queued ?? 0, runnable: report.runnable ?? 0, plans: (report.plans ?? []).length },
+    // The shaped queue, said to the one seat that starts it.
+    messages: report.runnable ? [{ to: "foreman", text: `${report.runnable} work item(s) ready${next} — yours to hand out`, facts: { runnable: report.runnable } }] : [] };
 }
 
 async function assistantKeeperJob(now, entry) {
@@ -4530,6 +4626,10 @@ async function assistantKeeperJob(now, entry) {
     ok: true,
     text: assistantState.housekeeping.lastText,
     intel: { archived: report.tasksArchived ?? 0, pruned: report.ideasPruned ?? 0, cleared: report.requestsCleared ?? 0, dropped: report.checkpointsDropped ?? 0, folders: report.foldersCleaned ?? 0 },
+    // A pruned board changes the queue's shape: the compactor hears it first.
+    messages: (report.tasksArchived || report.requestsCleared || report.ideasPruned)
+      ? [{ to: "compactor", text: `tidied: ${report.tasksArchived ?? 0} task(s) archived, ${report.requestsCleared ?? 0} request(s) cleared, ${report.ideasPruned ?? 0} idea(s) pruned — reshape the queue`, facts: { archived: report.tasksArchived ?? 0, cleared: report.requestsCleared ?? 0 } }]
+      : [],
   };
 }
 
@@ -4556,7 +4656,7 @@ async function assistantBrieferJob(now, entry) {
   const eyes = await getEyes();
   const queued = await queueRequests(eyes.requestsFromBriefing(briefing, await requestBaseline(eyes)));
   if (queued) assistantLog("brief", `${queued} fix request(s) queued from the briefing`);
-  return { ok: true, text: String(briefing.summary ?? "briefed").slice(0, 80) };
+  return { ok: true, text: String(briefing.summary ?? "briefed").slice(0, 80), messages: Array.isArray(briefing.messages) ? briefing.messages : [] };
 }
 
 // The build half of the roster. `improve` reads the app's own inventory and
@@ -4585,7 +4685,7 @@ async function assistantBuildJob(role, mode, entry) {
   assistantLog("brief", `${mode}: ${summary}${queued ? ` · ${queued} request(s) queued` : " · nothing new to queue"}`);
   // A queued request should start now, not wait for the foreman's own cadence.
   if (queued) assistantAskForWork("a build pass queued work");
-  return { ok: true, text: `${queued ? `queued ${queued}` : "nothing new"} · ${summary.slice(0, 60)}` };
+  return { ok: true, text: `${queued ? `queued ${queued}` : "nothing new"} · ${summary.slice(0, 60)}`, messages: Array.isArray(briefing.messages) ? briefing.messages : [] };
 }
 
 const assistantImproverJob = (now, entry) => assistantBuildJob("improver", "improve", entry);
@@ -4621,6 +4721,7 @@ function overseerFacts(now, board = null) {
     // work that slipped rather than count it.
     staleSessions: (assistantState.organization?.stale ?? []).slice(0, 4).map((id) => ({ id, title: assistantSessionTitle(id) })),
     intel: assistantModule?.intelLines?.(assistantState, now, { limit: 8 }) ?? [],
+    chatter: assistantModule?.mailLines?.(assistantState, now, { limit: 8 }) ?? [],
   };
 }
 
@@ -4912,7 +5013,11 @@ async function assistantOverseerJob(now, entry) {
     if (serious) assistantAppendReply(`Overseer: ${talk.say} ${talk.reply}`.trim(), "local", "overseer");
     assistantLog("overseer", `told the assistant: ${assistantClip(talk.say, 140)}`);
   }
-  for (const role of talk.roles ?? []) assistantEnqueueRole(role, ASSISTANT_PRIORITY.demand);
+  for (const role of talk.roles ?? []) {
+    // The summons carries its reason: the woken seat reads why it was called.
+    assistantSendMail("overseer", role, talk.say, { findings: (review.findings ?? []).length });
+    assistantEnqueueRole(role, ASSISTANT_PRIORITY.demand);
+  }
   if (talk.organize) assistantEnqueueRole("watcher", ASSISTANT_PRIORITY.demand);
   if (talk.resumeUnanswered) {
     try {
@@ -5591,7 +5696,7 @@ function refreshTray() {
 // Facts for a reply: every source guarded, null when it is not available,
 // shaped by the module's own builder.
 async function assistantMessageFacts(now, query = "") {
-  const raw = { sessions: null, todos: null, collisions: null, presence: null, uncommitted: null, tasks: null, ideas: null, planning: null, machine: null, audit: null, briefing: null, update: null, now };
+  const raw = { sessions: null, todos: null, collisions: null, presence: null, uncommitted: null, tasks: null, ideas: null, planning: null, machine: null, audit: null, briefing: null, update: null, mail: assistantState?.mail ?? null, now };
   // The folder the user opened is a fact in its own right: its identity and
   // the Analyzer's local scan of it, so a reply about "this project" or about
   // the plans in it answers for the folder the thread actually belongs to.
@@ -6350,12 +6455,11 @@ function assistantBuildFailureQuestion(job, failures) {
 }
 
 // ---- the done log -----------------------------------------------------------
-// What finished, from two durable sources: the executor's JSONL ledger (one
-// finish row per build, with the verdict) and the assistant's own completed
-// passes (fix, tidy, audit, overseer, brief, organize, ideas). Read on demand
-// so a reload always shows the file, not a cache.
+// What finished: the executor's JSONL ledger, one finish row per build with
+// the verdict. The assistant's own passes (fix, tidy, audit, …) are not
+// finished nodes — they stay in the activity log and never land here. Read
+// on demand so a reload always shows the file, not a cache.
 const DONE_LOG_LIMIT = 80;
-const DONE_LOG_PASS_KINDS = new Set(["fix", "tidy", "audit", "overseer", "brief", "organize", "ideas"]);
 
 async function assistantDoneLog({ limit = DONE_LOG_LIMIT } = {}) {
   const cap = Math.max(1, Math.min(200, Math.floor(Number(limit) || DONE_LOG_LIMIT)));
@@ -6380,27 +6484,18 @@ async function assistantDoneLog({ limit = DONE_LOG_LIMIT } = {}) {
       });
     }
   } catch {}
-  // Pass rows the user absorbed stay in the activity log but out of the done
-  // log: the watermark is the absorb's stamp, so anything newer still lands.
-  const absorbedAt = Math.max(0, Math.floor(Number(assistantState?.doneAbsorbedAt) || 0));
-  for (const row of assistantState?.log ?? []) {
-    if (!DONE_LOG_PASS_KINDS.has(row.kind)) continue;
-    if (Math.floor(Number(row.at) || 0) <= absorbedAt) continue;
-    entries.push({ at: Number(row.at) || 0, kind: "pass", title: String(row.text ?? "").slice(0, 200), ok: true, taskId: null, sessionId: null, seconds: 0, detail: `${row.kind} pass` });
-  }
   entries.sort((a, b) => b.at - a.at);
   return { ok: true, entries: entries.slice(0, cap) };
 }
 
-// Absorbing the done log: the records the tab showed are wiped for good. The
+// Clearing the done log: the records the tab showed are wiped for good. The
 // executor ledger keeps its start/fallback rows — they are the run history,
-// not the done list — while the assistant's pass rows stay in the activity
-// log, hidden from the done log by the watermark. Rewritten through a temp
-// file so a reader never sees a torn ledger.
-let doneAbsorbing = false;
-async function assistantAbsorbDoneLog() {
-  if (doneAbsorbing) return { ok: false, error: "an absorb is already running" };
-  doneAbsorbing = true;
+// not the done list. Rewritten through a temp file so a reader never sees a
+// torn ledger.
+let doneClearing = false;
+async function assistantClearDoneLog() {
+  if (doneClearing) return { ok: false, error: "a clear is already running" };
+  doneClearing = true;
   try {
     let records = 0;
     const target = projectDataPath(EXECUTOR_LOG_PATH);
@@ -6428,7 +6523,7 @@ async function assistantAbsorbDoneLog() {
         kept.push(line);
       }
       if (records) {
-        const temp = `${target}.absorb`;
+        const temp = `${target}.clear`;
         try {
           await writeFile(temp, kept.length ? `${kept.join("\n")}\n` : "", "utf8");
           await rename(temp, target);
@@ -6438,19 +6533,16 @@ async function assistantAbsorbDoneLog() {
         }
       }
     }
-    const absorbedAt = Date.now();
-    const passes = (assistantState?.log ?? []).filter((row) => DONE_LOG_PASS_KINDS.has(row.kind) && Math.floor(Number(row.at) || 0) <= absorbedAt).length;
-    if (assistantState) {
-      if (passes) assistantState.doneAbsorbedAt = absorbedAt;
-      assistantLog("absorb", `absorbed the done log · ${records} run record${records === 1 ? "" : "s"} · ${passes} pass${passes === 1 ? "" : "es"} cleared`);
+    if (assistantState && records) {
+      assistantLog("clear", `cleared the done log · ${records} run record${records === 1 ? "" : "s"}`);
       await saveAssistant({ force: true });
     }
-    return { ok: true, records, passes, entries: [] };
+    return { ok: true, records, entries: [] };
   } catch (error) {
-    logError(`absorb failed: ${error.message}`);
+    logError(`clear failed: ${error.message}`);
     return { ok: false, error: String(error.message ?? error) };
   } finally {
-    doneAbsorbing = false;
+    doneClearing = false;
   }
 }
 
@@ -9024,6 +9116,14 @@ async function spawnNextJob() {
     assistantAskForWork("a slot came free");
     if (heard?.wakeOverseer) assistantEnqueueRole("overseer", ASSISTANT_PRIORITY.demand, { automatic: true });
     refreshAutopilotQueue(eyes).catch(() => {});
+    // A reported success is verified by housekeeping, and a card used to sit
+    // "verifying" until the next autopilot tick (minutes) even when its
+    // evidence was ready after the dwell. Aim one settle pass at the moment
+    // the dwell expires; the coalescing kick folds it into any pass already
+    // due sooner.
+    if (ok && typeof kickVerificationSettlement === "function") {
+      kickVerificationSettlement((typeof VERIFY_DWELL_MS === "number" ? VERIFY_DWELL_MS : 30 * 1000) + 1000);
+    }
     };
     await settle();
   };
@@ -9423,6 +9523,28 @@ const runCheckCommand = (command, cwd) => new Promise((resolve) => {
     resolve({ command: String(command), ok: exitCode === 0, timedOut, exitCode, tail: timedOut ? `timed out after ${Math.round(VERIFICATION_COMMAND_BUDGET_MS / 60000)}m` : last.slice(-200) });
   });
 });
+// A burst of done reports schedules the same base check (`npm run check` in
+// the same checkout) once per card, and every copy proves the same tree. One
+// execution serves every job it covers: a check that STARTED at or after a
+// job was created ran against that attempt's edits, so its result is that
+// job's evidence too — in flight (the waiting job joins the running command)
+// or already landed (within a short window). A check that started earlier
+// cannot vouch for later edits and is never reused; a job carrying focused
+// tests still runs those itself, sequentially, after the shared base check.
+const SHARED_CHECK_WINDOW_MS = 3 * 60 * 1000;
+const sharedChecks = new Map(); // `${cwd}\n${command}` → { startedAt, promise }
+function runSharedCheck(command, cwd, notBefore = 0) {
+  const key = `${String(cwd)}\n${String(command).trim()}`;
+  const now = Date.now();
+  const hit = sharedChecks.get(key);
+  if (hit && hit.startedAt >= Number(notBefore) && now - hit.startedAt < SHARED_CHECK_WINDOW_MS) {
+    return hit.promise.then((result) => ({ ...result, shared: true }));
+  }
+  const promise = runCheckCommand(command, cwd);
+  sharedChecks.set(key, { startedAt: now, promise });
+  if (sharedChecks.size > 24) for (const [k, v] of sharedChecks) if (now - v.startedAt >= SHARED_CHECK_WINDOW_MS) sharedChecks.delete(k);
+  return promise;
+}
 // One queued job's commands, run for real, then the observed state stamped
 // back onto its card. Commands stay sequential inside a job (a failed check
 // ends the run; the tail says why) — jobs are what run side by side.
@@ -9446,16 +9568,18 @@ async function runVerificationJob(planned, fallbackJob) {
   }
   logLine(`[autopilot] verification run started: ${planned.commands.join(" && ")}`);
   const results = [];
+  const notBefore = Number(planned.createdAt) || 0;
   for (const command of planned.commands) {
-    const result = await runCheckCommand(command, cwd);
+    const result = await runSharedCheck(command, cwd, notBefore);
     results.push(result);
     if (!result.ok) break; // a failed check ends the run; the tail says why
   }
   const failed = results.filter((row) => !row.ok);
+  const shared = results.filter((row) => row.shared).length;
   const state = failed.length ? "failed" : "passed";
   const summary = failed.length
     ? `${failed[0].command} failed${failed[0].timedOut ? " (timed out)" : ""}${failed[0].tail ? ` — ${failed[0].tail}` : ""}`
-    : `${results.length} check(s) passed`;
+    : `${results.length} check(s) passed${shared ? ` (${shared} shared with a sibling run)` : ""}`;
   logLine(`[autopilot] verification run ${state}: ${summary}`);
   try {
     await mutateBoard((board) => {
@@ -9492,13 +9616,23 @@ async function runVerificationJob(planned, fallbackJob) {
 
 // Coalesced post-verification settle: several results can land together and
 // one housekeeping pass settles them all. Unref'd so it never holds the app.
+// The kick takes a delay so callers can aim at a known moment — a landed
+// result settles a second later; a finished run asks for the moment its
+// evidence dwell expires; housekeeping re-arms itself for the cards it had
+// to skip — and the one timer always keeps the EARLIEST requested moment,
+// so a burst of kicks still costs one pass.
 let verificationSettleTimer = null;
-function kickVerificationSettlement() {
-  if (verificationSettleTimer) return;
+let verificationSettleDue = 0;
+function kickVerificationSettlement(delayMs = 1000) {
+  const due = Date.now() + Math.max(0, Number(delayMs) || 0);
+  if (verificationSettleTimer && verificationSettleDue <= due) return;
+  if (verificationSettleTimer) clearTimeout(verificationSettleTimer);
+  verificationSettleDue = due;
   verificationSettleTimer = setTimeout(() => {
     verificationSettleTimer = null;
+    verificationSettleDue = 0;
     autopilotHousekeeping().catch((error) => logLine(`[autopilot] post-verification housekeeping failed: ${error.message}`));
-  }, 1000);
+  }, Math.max(0, due - Date.now()));
   verificationSettleTimer.unref?.();
 }
 
@@ -9549,6 +9683,8 @@ async function runExecutorHandoffs(entry, job) {
     if (queued) handed.push(`${queued} follow-up request(s)`);
   }
   for (const role of entry.calls) {
+    // The woken seat hears which run called it and for what.
+    assistantSendMail("builder", role, `finished "${assistantClip(job.title, 60)}" and asked you to follow it up`, { job: String(entry.id ?? "").slice(0, 60) });
     // The worker chooses a role only. Reference gathering needs context, so
     // use the already admitted brief, never a payload from the output marker.
     if (role === "reference") {
@@ -9588,6 +9724,12 @@ async function runExecutorHandoffs(entry, job) {
 // completion evidence checked. Each store is written (and broadcast) only when
 // it changed.
 const VERIFY_DWELL_MS = 30 * 1000; // allow the finished session's evidence to flush before checking it
+// A card whose evidence store did not answer this pass is re-checked on a
+// short cadence a bounded number of times, then left to the autopilot tick;
+// without this, "waiting for evidence" meant one full tick per attempt.
+const VERIFY_EVIDENCE_RETRY_MS = 15 * 1000;
+const VERIFY_EVIDENCE_RETRY_MAX = 8;
+let verificationEvidenceRetries = 0;
 const LEASE_REFRESH_MS = 10 * 60 * 1000; // how often a live owner re-stamps its claims
 // Board-wide stale-scope heal. The settlement heal only touches the card a run
 // just finished — every other saved scope keeps pointing at a ghost path
@@ -9670,6 +9812,32 @@ async function autopilotHousekeeping() {
   };
   const evidenceKey = (attempt, window) => `${attempt.sessionId}|${window.since}|${window.until}`;
   const evidence = { changes: new Map(), checks: new Map() };
+  // What this pass could not settle yet, and when to look again: a card
+  // inside its evidence dwell is due when the dwell expires; a card whose
+  // overseer check is still running is settled by that result's own kick;
+  // a card whose evidence store did not answer is retried on the short
+  // bounded cadence. The soonest of these re-arms one coalesced pass.
+  const followUp = { dwellMs: Infinity, evidenceWaiting: false };
+  const dwelling = (attempt) => {
+    const at = Number(attempt?.at);
+    if (!(at > 0) || now - at >= VERIFY_DWELL_MS) return false;
+    followUp.dwellMs = Math.min(followUp.dwellMs, VERIFY_DWELL_MS - (now - at) + 250);
+    return true;
+  };
+  // The overseer's own check for this attempt is queued or running in THIS
+  // process: its result lands within the command budget and kicks a settle,
+  // so settling now would only race it (a done card reopened minutes later
+  // by the failing run). A stale "queued" stamp with no live job — an
+  // attempt settled by an earlier app session — never blocks.
+  const overseerRunPending = (row) => {
+    const run = row?.verificationRun;
+    if (!run || run.state !== "queued" || !run.key) return false;
+    const budget = (typeof VERIFICATION_COMMAND_BUDGET_MS === "number" ? VERIFICATION_COMMAND_BUDGET_MS : 15 * 60 * 1000) * 2;
+    if (!(Number(run.at) > 0) || now - Number(run.at) >= budget) return false;
+    const queued = typeof verificationJobs !== "undefined" && Array.isArray(verificationJobs) && verificationJobs.some((job) => job?.key === run.key);
+    const running = typeof verificationInFlight !== "undefined" && verificationInFlight instanceof Set && verificationInFlight.has(run.key);
+    return queued || running;
+  };
   if (typeof verify === "function") {
     // The rows come from the board gateway itself (one read under the lock,
     // an empty patch, so nothing is written or broadcast): the views on disk
@@ -9686,7 +9854,7 @@ async function autopilotHousekeeping() {
     for (const row of candidates) {
       const attempt = row.lastAttempt ?? {};
       if (!attempt.sessionId) continue;
-      if (Number(attempt.at) > 0 && now - Number(attempt.at) < VERIFY_DWELL_MS) continue;
+      if (dwelling(attempt)) continue;
       const window = attemptEvidenceWindow(attempt);
       if (!window) continue;
       const key = evidenceKey(attempt, window);
@@ -9743,6 +9911,7 @@ async function autopilotHousekeeping() {
     const verifyNotes = [];
     const waitForEvidence = (row) => {
       const reason = "Waiting for the attempt's recorded execution evidence";
+      followUp.evidenceWaiting = true;
       if (row.verification?.state === "pending" && row.verification.reason === reason) return;
       row.verification = { state: "pending", at: now, reason };
       changedByVerify = true;
@@ -9840,7 +10009,8 @@ async function autopilotHousekeeping() {
         if (handoffs.waitingTaskIds.has(task.id)) continue;
         if (task.delegation && backlog.dependencyState(task, board.tasks).stage) continue;
         const attempt = task.lastAttempt ?? {};
-        if (Number(attempt.at) > 0 && now - Number(attempt.at) < VERIFY_DWELL_MS) continue;
+        if (dwelling(attempt)) continue;
+        if (overseerRunPending(task)) continue;
         const files = attemptChanges(attempt, task.title);
         if (files === null) { waitForEvidence(task); continue; }
         const observedChecks = attemptChecks(attempt, task.title);
@@ -9923,7 +10093,8 @@ async function autopilotHousekeeping() {
         if (handoffs.waitingRequestRuns.has(request.lastAttempt?.runId)) continue;
         if (request.delegation && backlog.dependencyState(request, board.tasks).stage) continue;
         const attempt = request.lastAttempt ?? {};
-        if (Number(attempt.at) > 0 && now - Number(attempt.at) < VERIFY_DWELL_MS) continue;
+        if (dwelling(attempt)) continue;
+        if (overseerRunPending(request)) continue;
         const files = attemptChanges(attempt, request.title);
         if (files === null) { waitForEvidence(request); continue; }
         const observedChecks = attemptChecks(attempt, request.title);
@@ -11666,7 +11837,7 @@ function registerIpc() {
   // Agent questions: the Ask cards, the answer path, and the durable done log.
   ipcMain.handle("assistant:answer", (_event, payload) => assistantAnswer(payload ?? {}));
   ipcMain.handle("assistant:done-log", (_event, payload) => assistantDoneLog(payload ?? {}));
-  ipcMain.handle("assistant:absorb-done", () => assistantAbsorbDoneLog());
+  ipcMain.handle("assistant:clear-done", () => assistantClearDoneLog());
 
   ipcMain.handle("auditor:run", async () => {
     const settings = await readSettings();

@@ -139,6 +139,17 @@ project's ignored local `planning.json`.
 - The **overseer** reviews how the assistant works, keeps a playbook and lesson
   counts, files bounded upgrade requests, and repairs the loop (resume stale
   sessions, re-arm interrupted work) every fifteen minutes.
+- The agents **talk to each other**: a scout that sees something another role
+  owns writes it a note — the watcher tells the keeper about stale sessions and
+  the auditor about colliding files, the machine tells the foreman when it is
+  holding new starts, the auditor and the compactor tell the foreman what is
+  ready to hand out, the keeper tells the compactor what it pruned, a finished
+  builder tells the agent it called what for, and the overseer says why it woke
+  a role. Unread mail pulls its reader onto the next tick, and the reader takes
+  its notes as it starts. On the tree a note rides a packet between the two
+  agents' orbs; the assistant card lists the exchange under **Said to each
+  other**, the AI passes see it as `chatter` and may answer with notes of their
+  own, and asking about **agents** in chat reads the latest lines.
 - Closing the window hides Studio to a tray icon and the loop keeps running;
   builders journal their progress and checkpoint before quit, and interrupted
   work resumes on the next start instead of being duplicated.
@@ -184,9 +195,10 @@ project's ignored local `planning.json`.
 - Lines say what they mean: the hub link is doubled, a task's anchor is
   dotted and marches while its worker runs, an agent's tether is dashed, a
   finished cluster is stippled, and a done todo's link fades green.
-- **Absorb** on the Done tab flies the finished records into the assistant
-  orb: the log clears and the assistant's card keeps the last twenty under
-  **Absorbed work**, per project, across restarts.
+- The Done tab lists the builds that finished off, from the executor ledger;
+  **Clear** wipes it. The absorb is the tree's: a finished node collapses
+  into its host and its brief stays readable on that card under
+  **Absorbed work**.
 - **Music & themes** plays your local files or Spotify links and recolours
   Studio; **Audio link** wires bass, mids and treble to the live tree
   (including desktop audio and microphone sources) only when you enable it.

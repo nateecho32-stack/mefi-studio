@@ -34,7 +34,19 @@ async function runFixture(t, desktopHost = false) {
     let output = "";
     child.stdout.on("data", (chunk) => { output = (output + chunk).slice(-14000); });
     child.stderr.on("data", (chunk) => { output = (output + chunk).slice(-14000); });
-    const timer = setTimeout(() => child.kill(), 40000);
+    const timer = setTimeout(() => {
+      output += `\nPerformance fixture timed out: PID ${child.pid}, root ${fixture}\n`;
+      if (child.exitCode !== null) {
+        // A helper retaining inherited pipes after its parent exits cannot
+        // keep the test's exit event pending indefinitely.
+        child.stdout.destroy(); child.stderr.destroy();
+      } else if (process.platform === "win32" && child.pid) {
+        // Kill only this fixture's process tree; Chromium helpers otherwise
+        // survive electron.exe, retain the pipes and hold the fixture folder.
+        const killer = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+        killer.once("error", () => child.kill());
+      } else child.kill();
+    }, 40000);
     const code = await new Promise((resolve, reject) => { child.once("error", reject); child.once("exit", resolve); }).finally(() => clearTimeout(timer));
     let report;
     try { report = JSON.parse(await readFile(path.join(fixture, "report.json"), "utf8")); } catch {}

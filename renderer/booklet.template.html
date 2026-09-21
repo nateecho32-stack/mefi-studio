@@ -757,9 +757,9 @@
       <span id="cmd-done-state" class="feed-state" role="status" aria-live="polite">Loading…</span>
       <button id="cmd-done-toggle" class="ghost mini" type="button" aria-expanded="true" aria-controls="cmd-done-list" title="Collapse the done log">&ndash;</button>
       <button id="cmd-done-refresh" class="ghost mini" type="button" title="Re-read the executor ledger">Refresh</button>
-      <button id="cmd-done-absorb" class="primary mini" type="button" title="Absorb every record into the assistant — they fly into its orb, stay readable on its card, and the done log clears" disabled>Absorb</button>
+      <button id="cmd-done-clear" class="ghost mini" type="button" title="Clear every record — the done log clears for good" disabled>Clear</button>
     </div>
-    <p class="rail-view-note">Finished builds from the durable executor ledger, plus the assistant's own completed passes. <b>Done</b> means the worker reported success; <b>Failed</b> means it stopped early. <b>Absorb</b> sends them into the assistant orb on the tree: the log clears and the assistant's card keeps the last twenty.</p>
+    <p class="rail-view-note">Builds that finished off, from the durable executor ledger. <b>Done</b> means the worker reported success; <b>Failed</b> means it stopped early. On the tree the finished node collapses into its host and is absorbed; its brief stays readable on that card. <b>Clear</b> wipes this log.</p>
     <ul id="cmd-done-list" class="done-list" aria-label="Completed work"></ul>
   </section>
   <section id="cmd-asks" class="cmd-asks" role="tabpanel" aria-labelledby="cmd-rail-tab-ask" hidden>

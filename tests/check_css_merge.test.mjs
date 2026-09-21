@@ -82,6 +82,16 @@ test("mergeResolution: keys untouched by both sides are out of scope", () => {
   assert.deepEqual(diverged, { ours: 1, theirs: 1 });
 });
 
+test("mergeResolution: a CRLF working-copy resolution against LF git sides stays clean (autocrlf)", () => {
+  const bothCrlf = ".card { color: navy; padding: 8px; }\r\n.title { font-weight: bold; }\r\n";
+  const clean = mergeResolution(BASE, oursChange, theirsChange, bothCrlf);
+  assert.equal(clean.problems.length, 0);
+  const revertedCrlf = bothCrlf.replace("color: navy;", "color: black;").replace("padding: 8px;", "padding: 4px;");
+  const reverted = mergeResolution(BASE, oursChange, theirsChange, revertedCrlf);
+  assert.equal(reverted.problems.length, 2);
+  assert.ok(reverted.problems.every((p) => p.kind === "dropped"));
+});
+
 test("CLI --merge: honors a real conflicted-merge resolution, then flags a reverted one", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "check-css-merge-"));
   const sheet = path.join(dir, "styles.css");

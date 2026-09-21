@@ -96,7 +96,9 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     EXECUTOR_PARALLEL_MAX: 12, EXECUTOR_PARALLEL_CAP: 3, AUTOPILOT_PARK_MS: 600000, MINUTE_MS: 60000,
     ASSISTANT_PRIORITY: { cadence: 1, demand: 2, responder: 3 }, ASSISTANT_NODE: { id: "assistant", kind: "assistant" }, ASSISTANT_JOB_WEDGED_MS: 1500000,
     AI_PARALLEL_MAX: 6, ASSISTANT_JOB_TIMEOUT_MS: 150000,
-    assistantRoleTargets: () => [], assistantAgentEvent() {}, assistantReportIntel() {}, assistantThink() {}, assistantThinkClear() {}, assistantWrite: async () => {}, assistantPoolCounts() {},
+    assistantRoleTargets: () => [], assistantAgentEvent() {}, assistantReportIntel() {},
+    // The mail channel has its own suite (assistant_mail.test.mjs); this host neither takes nor sends notes.
+    assistantTakeMail: () => [], assistantDeliverMail: () => 0, assistantSendMail: () => true, assistantThink() {}, assistantThinkClear() {}, assistantWrite: async () => {}, assistantPoolCounts() {},
     SMOKE: false, CAPTURE: false, CLI_MODE: false, proactiveTimer: null,
     compareWork: (a, b) => Number(Boolean(b.pin)) - Number(Boolean(a.pin)) || (a.createdAt ?? a.at ?? 0) - (b.createdAt ?? b.at ?? 0),
     mutateBoard: async (mutator) => {

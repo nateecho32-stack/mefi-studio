@@ -71,7 +71,7 @@ app.whenReady().then(async () => {
     speedMeasurements: { ok: true, measurements: {} },
     assistantDoneLog: { ok: true, entries: [
       { at: now - 60000, kind: "build", title: "Verify real node painting", ok: true, taskId: "command_render_task", sessionId: null, seconds: 12, detail: "reported done in 12s" },
-      { at: now - 120000, kind: "pass", title: "repaired the catalog", ok: true, taskId: null, sessionId: null, seconds: 0, detail: "fix pass" },
+      { at: now - 120000, kind: "run", title: "Swamp biome rename", ok: false, taskId: null, sessionId: "command_render_session", seconds: 40, detail: "stopped without reporting done" },
     ] },
     readCatalog: JSON.parse(fs.readFileSync(path.join(root, "data", "models.json"), "utf8")),
   };
@@ -79,7 +79,7 @@ app.whenReady().then(async () => {
   fs.writeFileSync(preload, `const {contextBridge}=require("electron");
     const responses=${JSON.stringify(responses)};
     const listeners={onAssistant:[],onAssistantStatus:[]};
-    const modePatches=[],assistantActions=[],questionAnswers=[],doneAbsorbs=[];
+    const modePatches=[],assistantActions=[],questionAnswers=[],doneClears=[];
     contextBridge.exposeInMainWorld("mefiStudio",{
       ...Object.fromEntries(Object.keys(responses).map(key=>[key,async()=>{if(key==='eyesCollisions')await new Promise(resolve=>setTimeout(resolve,5000));return responses[key];}])),
       ...Object.fromEntries(Object.keys(listeners).map(key=>[key,callback=>{listeners[key].push(callback);return()=>{};}])),
@@ -101,7 +101,7 @@ app.whenReady().then(async () => {
         return {ok:true,state:responses.assistantState.state,autopilot:responses.assistantStatus.status};
       },
       assistantAnswer:async payload=>{questionAnswers.push(payload);return {ok:true,state:responses.assistantState.state};},
-      assistantAbsorbDoneLog:async()=>{doneAbsorbs.push(true);responses.assistantDoneLog={ok:true,entries:[]};return {ok:true,records:2,passes:1,entries:[]};}
+      assistantClearDoneLog:async()=>{doneClears.push(true);responses.assistantDoneLog={ok:true,entries:[]};return {ok:true,records:2,entries:[]};}
     });
     contextBridge.exposeInMainWorld("commandFixture",{
       publishAssistant:(state,event)=>{responses.assistantState={ok:true,state};for(const callback of listeners.onAssistant)callback({state,event});},
@@ -109,7 +109,7 @@ app.whenReady().then(async () => {
       modePatches:()=>modePatches,
       assistantActions:()=>assistantActions,
       questionAnswers:()=>questionAnswers,
-      doneAbsorbs:()=>doneAbsorbs.length,
+      doneClears:()=>doneClears.length,
       assistantState:()=>responses.assistantState.state,
       status:()=>responses.assistantStatus.status
     });
@@ -914,8 +914,8 @@ app.whenReady().then(async () => {
   await until("!document.getElementById('cmd-done').hidden && document.getElementById('idle-feed').hidden", "Done tab shows its view alone");
   await until("document.querySelectorAll('#cmd-done-list .done-row').length>=2", "the done log renders durable records");
   report.rail = { doneRows: await run("return document.querySelectorAll('#cmd-done-list .done-row').length;") };
-  // Collapse tucks the list away while the head keeps the count and Absorb;
-  // Absorb then flies the records into the button and clears them on the host.
+  // Collapse tucks the list away while the head keeps the count and Clear;
+  // Clear then wipes the records on the host with no flight of its own.
   const shot = async (name) => {
     if (!process.env.MEFI_DONE_CAPTURE_DIR || !path.isAbsolute(process.env.MEFI_DONE_CAPTURE_DIR)) return;
     fs.mkdirSync(process.env.MEFI_DONE_CAPTURE_DIR, { recursive: true });
@@ -926,12 +926,11 @@ app.whenReady().then(async () => {
   await shot("done-collapsed");
   await run("document.getElementById('cmd-done-toggle').click();");
   await until("!document.getElementById('cmd-done').classList.contains('done-collapsed') && getComputedStyle(document.getElementById('cmd-done-list')).display!=='none'", "the done log expands again");
-  await run("document.getElementById('cmd-done-absorb').click();");
-  await sleep(340);
-  await shot("absorb-mid");
-  await until("window.commandFixture.doneAbsorbs()===1 && document.querySelector('#cmd-done-list .done-empty')!==null", "Absorb clears the done log through the host");
-  await shot("absorb-done");
-  report.rail.absorbed = await run("return window.commandFixture.doneAbsorbs();");
+  await run("document.getElementById('cmd-done-clear').click();");
+  await until("window.commandFixture.doneClears()===1 && document.querySelector('#cmd-done-list .done-empty')!==null", "Clear empties the done log through the host");
+  await until("!document.getElementById('cmd-done').classList.contains('absorbing')", "the Done tab never takes the absorb class");
+  await shot("done-cleared");
+  report.rail.cleared = await run("return window.commandFixture.doneClears();");
   await run("document.getElementById('cmd-rail-tab-ask').click();");
   await until("!document.getElementById('cmd-asks').hidden && document.querySelector('#cmd-ask-list .ask-option[data-recommended=\"true\"]')!==null", "Ask tab renders the recommended option");
   await run("document.querySelector('#cmd-ask-list .ask-option[data-recommended=\"true\"]').click();");
@@ -941,7 +940,7 @@ app.whenReady().then(async () => {
   await until("!document.getElementById('idle-feed').hidden && document.getElementById('cmd-done').hidden && document.getElementById('cmd-asks').hidden", "Work tab returns the live-work view");
   report.rail.active = await run("return document.querySelector('.rail-tab[aria-selected=\"true\"]')?.dataset.railView;");
   assert.equal(report.rail.doneRows >= 2, true, "the done log lists the ledger records");
-  assert.equal(report.rail.absorbed, 1, "Absorb reaches the host and empties the list");
+  assert.equal(report.rail.cleared, 1, "Clear reaches the host and empties the list");
   assert.equal(report.rail.active, "work");
   assert.equal(report.rail.answers.length, 1);
   assert.deepEqual(report.errors, []);

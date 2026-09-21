@@ -1,5 +1,83 @@
 # Agent loop and startup measurements
 
+## Command frames stop paying for every node twice, September 21, 2026
+
+Why the app felt choppy: with Command as the home view and six builder
+workers live, the renderer process's UI thread had averaged 40% of a core
+since launch (596 s over 1478 s), the GPU process 19% and the main process
+8% (per-thread CPU sampled from the live packaged app, pids 33780 / 16708 /
+31196). The agents themselves already run as separate `opencode` processes;
+the executor's bookkeeping on the main thread was not the cost. The board
+checkpoints measured earlier in this file were also not it: the active board
+(1 MB) was rewritten about once every two seconds, not once a second per job.
+
+The frame was. In the isolated Command workload (tools/profile_studio.mjs,
+Electron offscreen, software rendering, 1280x900, 154 painted nodes: 8
+sessions, 128 todos, 12 tasks, 3 agents) one frame's JavaScript took 16.9 ms
+on average and 29 ms at p95, against a 33 ms budget at Command's 30 Hz, and
+the profile split it as: 6.9 ms placing the callout cards, 3.7 ms drawing the
+orbs, 2.7 ms of per-frame bookkeeping, 1.1 ms labels. Inside the callouts,
+the placement sort called `calloutPriority` for both sides of every
+comparison, and each call scanned every node for an agent standing on it
+(`agentOn`), so the sort was quadratic in the constellation and re-ran every
+frame; each candidate spot for a card then measured its leader against every
+orb on the board (17 candidates x 154 orbs), and every tie broke through
+`String#localeCompare`, which builds a collator per call.
+
+What changed (renderer/idle.js, visuals unchanged):
+
+- `drawCallouts` builds the set of agent-hosted nodes once per pass and
+  ranks each card once, then sorts on the numbers with one `Intl.Collator`.
+- The label blocker's 64 px grid now also answers "does this leader cross an
+  orb": `nodeLabelBlocker` records each orb's centre and reach, and
+  `calloutPenalty` queries the segment's bounds instead of every node. Faded
+  orbs still block a leader exactly as the linear scan did (a `ghosts` list),
+  and a test-supplied blocker without the method falls back to the old loop.
+- `rgb`/`rgba` memoize their strings per palette triple (a WeakMap keyed on
+  the array, at most 64 alphas each), and `speechLines` keeps the last 300
+  wraps keyed on text and width; both caches are dropped with the label
+  widths on resize.
+- `drawNodeSurface` paints the halo and body under one transform block and
+  traces the circles in that unit space, so the three save/restore pairs per
+  orb become one; the rim still strokes in screen space.
+  tests/node_paint_cache.test.mjs reads a max pixel delta of 1 at DPR 1, 1.5
+  and 2 (it was 4 at DPR 1.5 before).
+
+Same workload, same machine, median-free single captures of 6 s after a 2 s
+warm-up (frame statistics are the fixture's software compositor, not a
+frame-rate claim; the per-frame JavaScript columns are the result):
+
+| command-150-3d, per frame | Before | After |
+|---|---:|---:|
+| `command.frame` inclusive mean / p95 / max | 16.9 / 29.4 / 39.3 ms | 8.3 / 15.1 / 24.9 ms |
+| `command.frame` self (bookkeeping, callouts, speech, bubbles) | 9.75 ms | 2.76 ms |
+| `command.nodes` self | 4.32 ms | 2.81 ms |
+| `command.labels` self | 1.11 ms | 0.89 ms |
+| Long tasks (>= 50 ms) in the capture | 72 | 28 |
+
+| command-30-3d, per frame | Before | After |
+|---|---:|---:|
+| `command.frame` inclusive mean / p95 | 5.5 / 9.8 ms | 4.9 / 9.1 ms |
+| Long tasks in the capture | 13 | 4 |
+
+With the same instrumentation left in a scratch copy, the callout pass went
+from 6.87 ms to 1.12 ms per frame and the orb painter from 2.0 ms to about
+1.5 ms; the remaining frame is spread over the orbs (14 us each), labels,
+layout and the backdrop. Canvas operations per frame (664 fills, 501 arcs,
+313 strokes, 474 saves before) fall by the save/restore pairs only; the
+raster work the GPU process does per frame is otherwise unchanged and is the
+next lever, along with the two full-window canvases Command composites.
+
+Also in this pass: renderer/booklet.js's connection log kept every worker
+stdout line forever (`textContent +=` on an unbounded string per line); it
+now keeps the newest 400 lines and rewrites the block from that buffer.
+
+The host itself matters here: at the time of the measurement the machine sat
+at 76% CPU with six `opencode` workers, several Claude sessions and 600 MB of
+RAM free (880 MB in Memory Compression), so any frame that misses its budget
+is also competing for a core. None of the numbers above are pass/fail
+thresholds.
+
 ## Board mutations stop re-serializing the whole board, September 21, 2026
 
 The live project's board (`data/projects/<id>/eyes-tasks.json`) is 7.9 MB for

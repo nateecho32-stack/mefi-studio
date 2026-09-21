@@ -322,6 +322,113 @@ test("a sampler-level override flag admits small shortfalls without per-call arg
   assert.match(admitted.resources.memoryWarning, /350 MB available; 440 MB needed/);
 });
 
+test("an under-floor dip latches a parallelism cap that outlives the floor and ignores the override", async () => {
+  const machine = fixture();
+  machine.free(299);
+  const severe = await machine.capacity({ force: true, running: 4, memoryWarnOverride: true });
+  assert.equal(severe.canStart, false);
+  assert.equal(severe.resources.holdKind, "memory-severe");
+  // One under-floor sample must not latch the cap by itself: a solitary dip
+  // that recovers straight into the small band stays a plain overrideable
+  // shortfall, exactly like any other flicker-above-the-floor reading.
+  machine.free(350); machine.advance();
+  const single = await machine.capacity({ force: true, running: 4, memoryWarnOverride: true });
+  assert.equal(single.canStart, true, "a single under-floor sample never latches the cap");
+  assert.equal(single.resources.memorySevereCapped, false);
+  assert.equal(single.resources.memoryShortfall, "small");
+  // Two consecutive under-floor readings engage the latch. Recovering just
+  // past the floor must not re-admit: the latched cap holds the recovery
+  // band, so a host with 4 workers stops flapping on every oscillation
+  // across 300 MB.
+  machine.free(299); machine.advance();
+  assert.equal((await machine.capacity({ force: true, running: 4, memoryWarnOverride: true })).canStart, false);
+  machine.free(299); machine.advance();
+  const latched = await machine.capacity({ force: true, running: 4, memoryWarnOverride: true });
+  assert.equal(latched.resources.memorySevereCapped, true, "two consecutive under-floor samples latch the cap");
+  machine.free(350); machine.advance();
+  const capped = await machine.capacity({ force: true, running: 4, memoryWarnOverride: true });
+  assert.equal(capped.canStart, false, "the recovery band must not admit on the override");
+  assert.equal(capped.resources.holdKind, "memory-cap");
+  assert.equal(capped.resources.memorySevereCapped, true);
+  assert.match(capped.reason, /recovering from the severe floor/);
+  assert.match(capped.reason, /parallelism stays capped at 4/);
+  assert.match(capped.reason, /450 MB needed/);
+  assert.equal(capped.resources.memoryWarning, null, "the cap must not leak the override warning while holding");
+  machine.free(449); machine.advance();
+  assert.equal((await machine.capacity({ force: true, running: 4 })).canStart, false, "one MB short of the release threshold the cap holds");
+  // Release needs consecutive readings too: the host was observed flickering
+  // 197 -> 526 -> 354 MB across the boundaries on solitary samples, so one
+  // 451 MB blip between band readings must not lift the cap.
+  machine.free(451); machine.advance();
+  assert.equal((await machine.capacity({ force: true, running: 4 })).canStart, false, "a single release-side reading keeps the cap");
+  machine.free(449); machine.advance();
+  assert.equal((await machine.capacity({ force: true, running: 4 })).canStart, false, "a band reading after a release blip restarts the streak");
+  machine.free(450); machine.advance();
+  assert.equal((await machine.capacity({ force: true, running: 4 })).canStart, false, "the first of two consecutive release readings keeps the cap");
+  machine.free(450); machine.advance();
+  const released = await machine.capacity({ force: true, running: 4 });
+  assert.equal(released.canStart, true, "two consecutive readings past floor plus margin release the cap");
+  assert.equal(released.resources.holdKind, null);
+  assert.equal(released.resources.memorySevereCapped, false);
+});
+
+test("oscillating readings across both boundaries stay held until consecutive readings clear the recovery band", async () => {
+  const machine = fixture();
+  machine.free(299);
+  await machine.capacity({ force: true, running: 4, memoryWarnOverride: true });
+  machine.free(299); machine.advance();
+  await machine.capacity({ force: true, running: 4, memoryWarnOverride: true });
+  for (const freeMB of [360, 299, 380, 310, 440]) {
+    machine.free(freeMB); machine.advance();
+    const held = await machine.capacity({ force: true, running: 4, memoryWarnOverride: true });
+    assert.equal(held.canStart, false, `${freeMB} MB after an under-floor dip must stay held`);
+  }
+  // Solitary 451 MB blips between band readings reproduce the observed host
+  // flicker (197 -> 526 -> 354 MB): without consecutive-sample release the
+  // cap toggled per reading and re-admitted workers into the band.
+  for (const freeMB of [451, 340, 451, 360]) {
+    machine.free(freeMB); machine.advance();
+    assert.equal((await machine.capacity({ force: true, running: 4, memoryWarnOverride: true })).canStart, false, `a solitary ${freeMB} MB reading must not release the cap`);
+  }
+  machine.free(450); machine.advance();
+  assert.equal((await machine.capacity({ force: true, running: 4, memoryWarnOverride: true })).canStart, false, "the first clear reading alone keeps the cap");
+  machine.free(450); machine.advance();
+  assert.equal((await machine.capacity({ force: true, running: 4, memoryWarnOverride: true })).canStart, true, "two consecutive clear readings release the cap");
+});
+
+test("the severe-memory cap starves nobody: a drained pool may still start its first worker", async () => {
+  const machine = fixture();
+  machine.free(299);
+  await machine.capacity({ force: true, running: 4 });
+  machine.free(299); machine.advance();
+  await machine.capacity({ force: true, running: 4 });
+  machine.free(350); machine.advance();
+  const solo = await machine.capacity({ force: true, running: 0, memoryWarnOverride: true });
+  assert.equal(solo.canStart, true, "with no workers running the cap defers to the normal small-band rules");
+  assert.equal(solo.resources.memorySevereCapped, true, "the latch itself stays visible in the resources");
+  assert.equal(solo.resources.memoryShortfall, "small");
+  assert.match(solo.resources.memoryWarning, /explicit memory override/);
+});
+
+test("the cap reads each caller's live worker count from one cached sample", async () => {
+  const machine = fixture();
+  machine.free(299);
+  await machine.capacity({ force: true, running: 2 });
+  machine.free(299); machine.advance();
+  await machine.capacity({ force: true, running: 2 });
+  machine.free(350); machine.advance();
+  await machine.capacity({ force: true, running: 0, memoryWarnOverride: true });
+  const [pooled, drained] = await Promise.all([
+    machine.capacity({ running: 4, memoryWarnOverride: true }),
+    machine.capacity({ running: 0, memoryWarnOverride: true }),
+  ]);
+  assert.equal(pooled.resources.sampledAt, drained.resources.sampledAt, "both verdicts share the cached sample");
+  assert.equal(pooled.canStart, false);
+  assert.equal(pooled.resources.holdKind, "memory-cap");
+  assert.equal(drained.canStart, true, "the same cached reading admits the first worker of a drained pool");
+  assert.equal(drained.resources.holdKind, null);
+});
+
 test("unknown memory readings never take the override path", async () => {
   const machine = fixture({ memoryWarnOverride: true });
   machine.available(true, false);

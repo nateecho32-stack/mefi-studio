@@ -26,6 +26,8 @@ test("overseer reads live runs inside the board transaction before recovering or
   const board = { tasks: [{ id: "new-task", status: "open" }, { id: "orphan", status: "active", runId: "old-run" }], requests: [] };
   const autopilot = { jobs: [], execute: true, enabled: true };
   const env = vm.createContext({
+    // The mail channel has its own suite (assistant_mail.test.mjs); this host neither takes nor sends notes.
+    assistantTakeMail: () => [], assistantDeliverMail: () => 0, assistantSendMail: () => true,
     process, executorResume, executorProcessAlive: () => false,
     assistantState: { status: "running", prefs: {} }, autopilot,
     getEyes: async () => ({}),
@@ -69,6 +71,8 @@ test("overseer recovery preserves live owner or worker processes and restores de
       requests: specs.map((row) => ({ title: row.id, status: "running", runId: row.id, lease: row.lease, runProgress: { runId: row.id, workerPid: row.workerPid, outputTail: ["saved changes"] } })),
     };
     const env = vm.createContext({
+    // The mail channel has its own suite (assistant_mail.test.mjs); this host neither takes nor sends notes.
+    assistantTakeMail: () => [], assistantDeliverMail: () => 0, assistantSendMail: () => true,
       process, executorResume, executorProcessAlive: (pid) => [process.pid + 1, process.pid + 4].includes(pid),
       assistantState: { status: "running", prefs: {} }, autopilot: { jobs: [{ id: "live-local" }], execute: true, enabled: true },
       getEyes: async () => ({}),
@@ -107,6 +111,8 @@ for (const pause of [false, true]) test(`overseer findings ${pause ? "wait after
   state.status = "running";
   state.ai.keyPresent = true;
   const env = vm.createContext({
+    // The mail channel has its own suite (assistant_mail.test.mjs); this host neither takes nor sends notes.
+    assistantTakeMail: () => [], assistantDeliverMail: () => 0, assistantSendMail: () => true,
     assistantState: state, getAssistant: async () => assistant, overseerManualUntil: 0,
     assistantOverseerRepair: async () => ({ fixed: [], directives: [], rescued: 0, staleCount: 0 }),
     growthBoardFacts: async () => ({ outstanding: 0, growthHeld: false, existingWork: [] }),
@@ -137,6 +143,8 @@ for (const pause of [false, true]) test(`overseer findings ${pause ? "wait after
 test("reference handoffs retain distinct instructions while coalescing an identical in-flight request", async () => {
   const calls = new Map(), gathered = [];
   const env = vm.createContext({
+    // The mail channel has its own suite (assistant_mail.test.mjs); this host neither takes nor sends notes.
+    assistantTakeMail: () => [], assistantDeliverMail: () => 0, assistantSendMail: () => true,
     assistantState: { prefs: { proactive: false }, agents: [] }, assistantAiUsable: () => false,
     assistantBrieferAllowed: () => false, assistantEnqueueRole() {}, ASSISTANT_PRIORITY: { demand: 2 },
     assistantClip: clip, gatherReferences: async ({ text }) => { gathered.push(text); return { ok: true }; },
@@ -152,6 +160,8 @@ test("reference handoffs retain distinct instructions while coalescing an identi
 
 test("builder failure reports use the reporting run's error and wake recovery through shared intel", () => {
   const env = vm.createContext({
+    // The mail channel has its own suite (assistant_mail.test.mjs); this host neither takes nor sends notes.
+    assistantTakeMail: () => [], assistantDeliverMail: () => 0, assistantSendMail: () => true,
     assistantState: assistant.emptyState(1000), assistantModule: assistant,
     autopilot: { lastError: "unrelated parallel job error" }, EXECUTOR_DONE_MARK: "DONE",
     assistantClip: clip, logLine() {}, logError() {}, assistantEmit() {}, assistantLog() {}, assistantAppendReply() {},

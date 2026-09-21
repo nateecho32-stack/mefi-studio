@@ -37,8 +37,34 @@
     assistant: [230, 201, 141], // champagne gold: the assistant service's own node
     amber: [255, 212, 121], // its ring when something needs attention
   };
-  const rgb = (triple) => `rgb(${triple.join(",")})`;
-  const rgba = (triple, alpha) => `rgba(${triple.join(",")},${alpha})`;
+  // Colour strings are built by the thousand per frame (an orb's halo, body
+  // and rim, every edge and label). Memoize them per palette triple so a hot
+  // frame reuses one string instead of joining and formatting it each time:
+  // a WeakMap keyed on the triple array frees entries with the palette, and
+  // the per-triple map stays small because alphas are a handful of literals
+  // (a continuous alpha evicts the map past 64 entries).
+  const colourCache = new WeakMap();
+  const colourMap = (triple) => {
+    let map = colourCache.get(triple);
+    if (!map) { map = new Map(); colourCache.set(triple, map); }
+    return map;
+  };
+  const rgb = (triple) => {
+    const map = colourMap(triple);
+    let value = map.get(-1);
+    if (value === undefined) { value = `rgb(${triple.join(",")})`; map.set(-1, value); }
+    return value;
+  };
+  const rgba = (triple, alpha) => {
+    const map = colourMap(triple);
+    let value = map.get(alpha);
+    if (value === undefined) {
+      if (map.size >= 64) map.clear();
+      value = `rgba(${triple.join(",")},${alpha})`;
+      map.set(alpha, value);
+    }
+    return value;
+  };
 
   // A striped swatch standing in for "every agent role its own colour" — the
   // stops come from the tree's palette, so the legend tracks the satellites.
@@ -101,9 +127,6 @@
   const NODE_ABSORB_MS = 800;
   const NODE_ABSORB_TTL = 6000;
   const ABSORBED_MAX = 8; // briefs a host keeps readable on its card
-  const ABSORBED_HUB_MAX = 20; // Done-tab records the assistant keeps on its card after an absorb
-  const ABSORB_FLIGHT_MS = 900; // one record's flight from the Done tab into the assistant orb
-  const ABSORB_STAGGER_MS = 45; // the rows leave one after another, not as one clump
   // A task that finishes while the view watches holds the board before it
   // sinks: it pulses green and wears a wiggling "!" you can click to read the
   // work first. Anything already finished before the view saw it — archived
@@ -258,6 +281,7 @@
     ideasAt: 0,
     ideasUnread: 0,
     frameError: false,
+    pickerHoldUntil: 0,
     // Command-hub state
     ambient: true,
     orbit: "paused",
@@ -277,7 +301,7 @@
     doneAt: 0,
     doneLoading: false,
     doneCollapsed: readStore("mefiStudio.cmdDoneCollapsed") === "1",
-    doneAbsorbing: false,
+    doneClearing: false,
     askSending: false,
     lastAssistantSelected: false,
     query: "",
@@ -355,7 +379,6 @@
     deferred: [], // { at, run }: frame-stepped timers for staggered effects
     agentTrails: new Map(), // node id → recent screen points of a flying agent
     agentPhases: {}, // role → the motion phase last seen, for arrival remarks
-    hubSwellAt: 0, // the assistant orb swells for a beat when work lands in it
     callouts: new Map(), // node id → the placement its callout keeps between frames
     calloutRects: [], // card surfaces drawn this frame; labels and bubbles step around them
     hoverCallout: null, // node id whose callout is under the pointer (it lifts)
@@ -1619,14 +1642,13 @@
     state.agentPhases = {};
     state.taskLayout = new Map();
     state.graphSeeded = false;
-    // Remarks, wakes and pending effects belong to the old project's tree;
-    // the absorbed ledger is per project and reloads for the new one.
+    // Remarks, wakes and pending effects belong to the old project's tree,
+    // and so does what sank into the assistant orb.
     state.speech?.clear?.();
     state.speechRects = [];
     state.deferred = [];
     state.agentTrails?.clear?.();
     state.absorbed?.delete?.("__assistant__");
-    if (typeof loadAbsorbedLedger === "function") loadAbsorbedLedger();
     state.callouts?.clear?.();
     state.calloutRects = [];
     state.hoverCallout = null;
@@ -1972,10 +1994,10 @@
     }
   }
 
-  // The done log: the durable executor ledger plus the assistant's completed
-  // passes, read from the host on demand so a reload shows the file, not a cache.
+  // The done log: the durable executor ledger — the builds that finished off —
+  // read from the host on demand so a reload shows the file, not a cache.
   async function loadDoneLog() {
-    if (!el.doneList || state.doneAbsorbing) return;
+    if (!el.doneList || state.doneClearing) return;
     if (!window.mefiStudio?.assistantDoneLog) {
       if (el.doneState) el.doneState.textContent = "desktop app only";
       renderDone();
@@ -1996,7 +2018,7 @@
     }
   }
 
-  // The done log collapses to its head: the count and the Absorb button stay
+  // The done log collapses to its head: the count and the Clear button stay
   // reachable while the list tucks away, and the choice is remembered.
   function setDoneCollapsed(collapsed, { save = true } = {}) {
     state.doneCollapsed = Boolean(collapsed);
@@ -2010,118 +2032,28 @@
     if (save) writeStore("mefiStudio.cmdDoneCollapsed", state.doneCollapsed ? "1" : "0");
   }
 
-  // ---------- the absorbed ledger: what the assistant keeps after an absorb ----------
-  // Records absorbed from the Done tab live on the assistant's card (the last
-  // ABSORBED_HUB_MAX), per project, remembered on this machine so a restart
-  // does not lose what was just filed into it.
-  function absorbedStorageKey() {
-    return `mefiStudio.cmdAbsorbed.${String(state.projectId ?? "default").replace(/[^\w.-]+/g, "_").slice(0, 80)}`;
-  }
-
-  function loadAbsorbedLedger() {
-    const hubId = "__assistant__";
-    let stored = [];
-    try { stored = JSON.parse(readStore(absorbedStorageKey()) ?? "[]"); } catch { stored = []; }
-    const rows = (Array.isArray(stored) ? stored : []).filter((entry) => entry && typeof entry.title === "string").slice(0, ABSORBED_HUB_MAX);
-    const live = (state.absorbed.get(hubId) ?? []).filter((entry) => entry.kind !== "record");
-    state.absorbed.set(hubId, [...rows, ...live].slice(0, ABSORBED_HUB_MAX));
-    return rows;
-  }
-
-  function recordAbsorbed(entries) {
-    const hubId = "__assistant__";
-    const at = Date.now();
-    const fresh = (Array.isArray(entries) ? entries : []).map((entry) => ({
-      kind: "record",
-      title: String(entry.title ?? "Untitled").slice(0, 200),
-      source: entry.kind === "build" ? "build" : entry.kind === "pass" ? "pass" : "run",
-      ok: entry.ok !== false,
-      at: Number(entry.at) || at,
-      absorbedAt: at,
-      taskId: typeof entry.taskId === "string" ? entry.taskId : null,
-      sessionId: typeof entry.sessionId === "string" ? entry.sessionId : null,
-      detail: entry.detail ? String(entry.detail).slice(0, 200) : "",
-    }));
-    const kept = [...fresh, ...(state.absorbed.get(hubId) ?? [])].slice(0, ABSORBED_HUB_MAX);
-    state.absorbed.set(hubId, kept);
-    writeStore(absorbedStorageKey(), JSON.stringify(kept.filter((entry) => entry.kind === "record")));
-    return kept;
-  }
-
-  // Where the Done tab's rows fly to: the assistant orb when it is on screen,
-  // else the Absorb button, so the gesture never aims at nothing.
-  function absorbTarget() {
-    const hub = assistantNode();
-    if (state.active && hub && hub._px != null && hub._py != null && !hub._absorbed) {
-      const area = usableArea();
-      if (hub._px >= area.x && hub._px <= area.x + area.w && hub._py >= area.y && hub._py <= area.y + area.h) return { x: hub._px, y: hub._py, hub };
-    }
-    const button = el.doneAbsorb?.getBoundingClientRect?.();
-    return button ? { x: button.left + button.width / 2, y: button.top + button.height / 2, hub: null } : null;
-  }
-
-  // Absorb: every record flies out of the Done tab into the assistant orb —
-  // the rows shrink toward it while a packet per row crosses the canvas and
-  // the hub swells as they land — then the host clears the log and the hub's
-  // card keeps the records. Motion off skips the flight; the wipe and the
-  // ledger still land, at once.
-  async function absorbDoneLog() {
-    if (state.doneAbsorbing || !el.doneList || !window.mefiStudio?.assistantAbsorbDoneLog) return;
+  // Clear: the host wipes the finish rows from the executor ledger and the tab
+  // reads empty. No ceremony here — the absorb flight belongs to the nodes on
+  // the tree, which collapse into their host when their work finishes off.
+  async function clearDoneLog() {
+    if (state.doneClearing || !el.doneList || !window.mefiStudio?.assistantClearDoneLog) return;
     const entries = state.doneEntries ?? [];
     if (!entries.length) return;
-    state.doneAbsorbing = true;
-    if (el.doneAbsorb) el.doneAbsorb.disabled = true;
-    const rows = [...el.doneList.querySelectorAll(".done-row")];
-    const button = el.doneAbsorb;
-    const target = absorbTarget();
-    const shown = Math.min(rows.length, 12);
-    if (!noMotion() && target && rows.length) {
-      rows.forEach((row, index) => {
-        const rect = row.getBoundingClientRect();
-        const sx = rect.left + rect.width / 2, sy = rect.top + rect.height / 2;
-        row.style.setProperty("--absorb-dx", `${Math.round(target.x - sx)}px`);
-        row.style.setProperty("--absorb-dy", `${Math.round(target.y - sy)}px`);
-        row.style.setProperty("--absorb-i", String(Math.min(index, 12)));
-        if (target.hub && index < 12) {
-          // The canvas half of the same flight: a packet from where the row
-          // sat to the hub, one after another, each landing with a bloom.
-          const ghost = { id: `absorb:${index}`, x: 0, y: 0, z: 0 };
-          later(index * ABSORB_STAGGER_MS, () => {
-            state.pulses.push({ from: ghost, to: target.hub, start: Date.now(), duration: ABSORB_FLIGHT_MS, color: entries[index]?.ok === false ? "#ffb3b3" : "#ffe9a8", glow: "#e6c98d", wave: true, packet: true, screen: { x: sx, y: sy } });
-            if (state.pulses.length > 24) state.pulses.shift();
-          });
-        }
-      });
-      el.done?.classList.add("absorbing");
-      button?.classList.add("pulling");
-      if (target.hub) {
-        later(ABSORB_FLIGHT_MS + shown * ABSORB_STAGGER_MS, () => {
-          state.hubSwellAt = Date.now();
-          spawnParticles(target.hub, Math.min(24, 8 + entries.length * 2), { gold: true });
-          say(target.hub, `absorbed ${entries.length} record${entries.length === 1 ? "" : "s"}`, { kind: "receive", ttl: SPEECH_TTL_LONG });
-          bell({ long: true, level: 0.8 });
-        });
-      }
-      await new Promise((resolve) => setTimeout(resolve, ABSORB_FLIGHT_MS + shown * ABSORB_STAGGER_MS));
-    }
+    state.doneClearing = true;
+    if (el.doneClear) el.doneClear.disabled = true;
     try {
-      const result = await window.mefiStudio.assistantAbsorbDoneLog();
+      const result = await window.mefiStudio.assistantClearDoneLog();
       if (!result?.ok) {
-        window.MefiToast?.(`absorb failed · ${result?.error ?? "unknown error"}`, "bad");
+        window.MefiToast?.(`clear failed · ${result?.error ?? "unknown error"}`, "bad");
         return;
       }
-      recordAbsorbed(entries);
       state.doneEntries = [];
       state.doneAt = Date.now();
-      if (state.selected?.kind === "assistant") renderInfo();
-      if (chatMode()) renderChat();
-      window.MefiToast?.(`absorbed ${entries.length} record${entries.length === 1 ? "" : "s"} into the assistant`, "good");
+      window.MefiToast?.(`cleared ${entries.length} record${entries.length === 1 ? "" : "s"} from the done log`, "good");
     } catch (error) {
-      window.MefiToast?.(`absorb failed · ${String(error?.message ?? error)}`, "bad");
+      window.MefiToast?.(`clear failed · ${String(error?.message ?? error)}`, "bad");
     } finally {
-      state.doneAbsorbing = false;
-      el.done?.classList.remove("absorbing");
-      button?.classList.remove("pulling");
+      state.doneClearing = false;
       renderDone();
     }
   }
@@ -2129,18 +2061,18 @@
   function renderDone() {
     if (!el.doneList) return;
     const entries = state.doneEntries ?? [];
-    if (el.doneAbsorb) {
-      el.doneAbsorb.disabled = state.doneAbsorbing || !entries.length;
-      el.doneAbsorb.title = entries.length
-        ? `Absorb ${entries.length} record${entries.length === 1 ? "" : "s"} — the done log clears for good`
-        : "Nothing to absorb yet";
+    if (el.doneClear) {
+      el.doneClear.disabled = state.doneClearing || !entries.length;
+      el.doneClear.title = entries.length
+        ? `Clear ${entries.length} record${entries.length === 1 ? "" : "s"} — the done log clears for good`
+        : "Nothing to clear yet";
     }
     el.doneList.textContent = "";
     if (!entries.length) {
       const empty = document.createElement("li");
       empty.className = "done-empty";
       empty.textContent = window.mefiStudio
-        ? "Nothing has finished yet. Completed builds and assistant passes land here."
+        ? "Nothing has finished yet. Builds that finish off land here."
         : "The done log is available in the desktop app.";
       el.doneList.append(empty);
     }
@@ -2148,12 +2080,12 @@
       const row = document.createElement("li");
       row.className = "done-row";
       row.dataset.ok = String(entry.ok !== false);
-      row.dataset.kind = entry.kind === "build" ? "build" : entry.kind === "pass" ? "pass" : "run";
+      row.dataset.kind = entry.kind === "build" ? "build" : "run";
       const head = document.createElement("div");
       head.className = "done-row-head";
       const verdict = document.createElement("span");
       verdict.className = "done-verdict";
-      verdict.textContent = entry.kind === "pass" ? "Pass" : entry.ok ? "Done" : "Failed";
+      verdict.textContent = entry.ok ? "Done" : "Failed";
       const when = document.createElement("span");
       when.className = "done-when";
       when.textContent = agoLabel(entry.at) ?? "";
@@ -2942,6 +2874,30 @@
       if (state.selected?.kind === "assistant" || state.selected?.kind === "agent") renderInfo();
       return;
     }
+    if (kind === "mail") {
+      // One agent wrote to another: a packet rides sender → recipient in the
+      // sender's colour, the sender's bubble shows the note leaving (→) and
+      // the recipient's shows it landing (←) once the packet arrives. A read
+      // (no sender on the event) is the recipient taking its notes: its own
+      // bubble alone, so a pile being worked through never redraws the delivery.
+      const from = payload?.event?.from ?? null;
+      const to = payload?.event?.to ?? null;
+      const note = String(payload?.event?.note ?? "").trim();
+      const hub = assistantNode();
+      const seat = (role) => (role === "assistant" ? hub : role ? state.nodes.find((node) => node.kind === "agent" && node.role === role) ?? null : null);
+      const sender = seat(from);
+      const recipient = seat(to);
+      if (state.active && from && note && sender && recipient && sender !== recipient) {
+        state.pulses.push({ from: sender, to: recipient, start: Date.now(), duration: 1100, color: agentHex(from), glow: agentHex(from), wave: true, packet: true });
+        if (state.pulses.length > 24) state.pulses.shift();
+        say(sender, `${to}: ${note}`, { kind: "send", ttl: SPEECH_TTL_LONG });
+        say(recipient, `${from}: ${note}`, { kind: "receive", ttl: SPEECH_TTL_LONG, delay: 1000 });
+      } else if (state.active && !from && recipient) {
+        say(recipient, agentRemark(payload?.event?.text, to) || "reading notes", { ttl: SPEECH_TTL_LONG });
+      }
+      if (state.selected?.kind === "assistant" || state.selected?.kind === "agent") renderInfo();
+      return;
+    }
     if (kind === "think") {
       // Overseer and thinker talking in the box: pulse between the satellite
       // and the hub so the conversation is visible on the tree.
@@ -3490,13 +3446,19 @@
     }
     const glowRadius = radius * (active || selected ? 1.9 : 1.45);
     const { halo, body } = orbPaints(ctx, tint, active, selected);
-    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(p.x, p.y, glowRadius, 0, Math.PI * 2);
-    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius); ctx.fill(); ctx.restore();
+    // One transform block for both unit-space paints: the halo disc at its
+    // glow radius, then the opaque core and the body over it. The circles are
+    // traced in that same unit space (the transform maps them onto the exact
+    // screen circles), so the three save/restore pairs the screen-space
+    // version needed become one per orb; the rim strokes in screen space.
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(0, 0, glowRadius / radius, 0, Math.PI * 2); ctx.fill();
     // A luminous orb with an opaque centre: restrained halo, one clear rim.
-    traceNodeSurface(ctx, "circle", p.x, p.y, radius);
+    ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2);
     ctx.fillStyle = "#151a22"; ctx.fill();
-    ctx.fillStyle = body;
-    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius); ctx.fill(); ctx.restore();
+    ctx.fillStyle = body; ctx.fill();
+    ctx.restore();
+    traceNodeSurface(ctx, "circle", p.x, p.y, radius);
     ctx.strokeStyle = rgba(tint, selected ? 1 : active ? 0.85 : 0.55);
     ctx.lineWidth = selected ? 1.8 : active ? 1.3 : 0.8; ctx.stroke();
     if (!["assistant", "music"].includes(node.kind)) {
@@ -3580,17 +3542,16 @@
     }
   }
 
-  // The hub's own dress: a slow breathing halo, the faint ring the crew rests
-  // on, and a swell for a beat when absorbed work lands in it.
+  // The hub's own dress: a slow breathing halo and the faint ring the crew
+  // rests on.
   function drawHubDress(ctx, node, p, radius, tint, time, still) {
     if (node.kind !== "assistant" || node._absorbed) return;
-    const swell = state.hubSwellAt ? Math.max(0, 1 - (Date.now() - state.hubSwellAt) / 700) : 0;
     const breathe = still ? 0.5 : (Math.sin(time / 1900) + 1) / 2;
     ctx.save();
     ctx.globalAlpha = (node._fade ?? 1) * emphasis(node);
-    const ring = radius + 5 + breathe * 2.5 + swell * 10;
+    const ring = radius + 5 + breathe * 2.5;
     ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI * 2);
-    ctx.strokeStyle = rgba(tint, 0.18 + breathe * 0.14 + swell * 0.5); ctx.lineWidth = 1 + swell * 2; ctx.stroke();
+    ctx.strokeStyle = rgba(tint, 0.18 + breathe * 0.14); ctx.lineWidth = 1; ctx.stroke();
     if (state.nodes.some((entry) => entry.kind === "agent" && !entry.builder && !entry.dying)) {
       ctx.setLineDash([2, 5]);
       ctx.beginPath(); ctx.arc(p.x, p.y, radius * 3.1, 0, Math.PI * 2);
@@ -4444,7 +4405,21 @@
   }
 
   // Word-wrap a remark to at most two lines of `maxWidth`, ellipsis on the last.
+  // A card re-wraps its remark on every frame it is drawn, and the wrap
+  // depends only on the text and the width, so the last few hundred are kept.
+  const SPEECH_LINE_CACHE_MAX = 300;
   function speechLines(ctx, text, maxWidth) {
+    const cache = state.speechLineCache ??= new Map();
+    const key = `${Math.round(maxWidth)}|${text}`;
+    const cached = cache.get(key);
+    if (cached) return cached;
+    const lines = speechLinesImpl(ctx, text, maxWidth);
+    if (cache.size >= SPEECH_LINE_CACHE_MAX) cache.clear();
+    cache.set(key, lines);
+    return lines;
+  }
+
+  function speechLinesImpl(ctx, text, maxWidth) {
     ctx.font = SPEECH_FONT;
     const words = String(text).split(" ");
     const lines = [];
@@ -5455,15 +5430,15 @@
       }
     }
 
-    // What the assistant has absorbed from the Done tab, in the rail console
-    // too — the floating card is hidden while the rail shows the assistant.
+    // The work that sank into the assistant orb, in the rail console too —
+    // the floating card is hidden while the rail shows the assistant.
     if (el.chatAbsorbed && el.chatAbsorbedList) {
       const ledger = state.absorbed.get("__assistant__") ?? [];
       el.chatAbsorbed.hidden = !ledger.length;
       const summary = el.chatAbsorbed.querySelector("summary");
       if (summary) summary.textContent = `Absorbed work (${ledger.length})`;
       el.chatAbsorbedList.textContent = "";
-      for (const entry of ledger.slice(0, ABSORBED_HUB_MAX)) el.chatAbsorbedList.append(absorbedRow(entry));
+      for (const entry of ledger.slice(0, ABSORBED_MAX)) el.chatAbsorbedList.append(absorbedRow(entry));
     }
 
     // Replies read here count as seen, the same as the Explorer thread: main
@@ -5726,12 +5701,48 @@
     return 0.55;
   }
 
+  // A native <select> picker paints on this same main thread: Chromium shows
+  // the popup widget first and fills it from a script that queues behind
+  // whatever the page is doing. With the constellation drawing at 30 fps that
+  // script can wait long enough that the picker sits open as a blank grey box
+  // ("the dropdown shows no menu"), so the frame loop and the refresh tick
+  // yield from the moment a select is engaged (mousedown, focus or a keyboard
+  // open) until it changes, blurs or the page is clicked elsewhere. The hold
+  // is bounded: a select left focused never freezes the view for good.
+  const PICKER_HOLD_MS = 6000;
+  function pickerHeld(now = performance.now()) {
+    return state.pickerHoldUntil > now;
+  }
+  function holdForPicker(target) {
+    if (!(target instanceof HTMLSelectElement)) return;
+    state.pickerHoldUntil = performance.now() + PICKER_HOLD_MS;
+  }
+  function releasePicker() {
+    state.pickerHoldUntil = 0;
+  }
+  function watchPickers() {
+    document.addEventListener("mousedown", (event) => {
+      if (event.target instanceof HTMLSelectElement) holdForPicker(event.target);
+      else releasePicker();
+    }, true);
+    document.addEventListener("focusin", (event) => holdForPicker(event.target), true);
+    document.addEventListener("keydown", (event) => {
+      if (!(event.target instanceof HTMLSelectElement)) return;
+      if (event.altKey || ["ArrowDown", "ArrowUp", " ", "Enter", "F4"].includes(event.key)) holdForPicker(event.target);
+    }, true);
+    for (const type of ["change", "focusout"]) {
+      document.addEventListener(type, (event) => {
+        if (event.target instanceof HTMLSelectElement) releasePicker();
+      }, true);
+    }
+  }
+
   // Animation state belongs to the scheduler, independent of graph styling.
   let lastFrameAt = 0;
   let frameRequest = 0;
   function frame(time) {
     if (!state.active) return;
-    if (document.body.dataset.sheet && !(state.settingsPreview && document.body.dataset.sheet === "music")) {
+    if (document.body.dataset.sheet && !(state.settingsPreview && document.body.dataset.sheet === "music") || pickerHeld(time)) {
       frameRequest = requestAnimationFrame(frame);
       return;
     }
@@ -6301,6 +6312,9 @@
   // the card clear of other orbs, cards and the HUD, and the choice is kept
   // from frame to frame so the tree can orbit without the cards wandering.
   const CALLOUT_KINDS = new Set(["session", "task", "task-group", "assistant", "agent", "root", "folded"]);
+  // Equal-priority cards keep their locale order; one collator is far cheaper
+  // than String#localeCompare, which builds one per call.
+  const idCollator = typeof Intl !== "undefined" && Intl.Collator ? new Intl.Collator() : { compare: (a, b) => a.localeCompare(b) };
 
   function calloutCandidates(previous) {
     const list = [];
@@ -6460,9 +6474,13 @@
     if (blocked(rect, hud)) score += 8;
     for (const other of placedRects) if (overlaps(rect, other)) score += 6;
     if (hitsNode(rect, node)) score += CALLOUT_HARD;
-    for (const other of projected) {
-      if (other.node === node || other.node._absorbed || other.node.dying || other.p?.x == null) continue;
-      if (segmentDistance(other.p.x, other.p.y, layout.sx, layout.sy, layout.ex, layout.ey) < (other.node._pr ?? 4) + 5) { score += 2; break; }
+    if (typeof hitsNode.leaderHitsNode === "function") {
+      if (hitsNode.leaderHitsNode(layout.sx, layout.sy, layout.ex, layout.ey, node)) score += 2;
+    } else {
+      for (const other of projected) {
+        if (other.node === node || other.node._absorbed || other.node.dying || other.p?.x == null) continue;
+        if (segmentDistance(other.p.x, other.p.y, layout.sx, layout.sy, layout.ex, layout.ey) < (other.node._pr ?? 4) + 5) { score += 2; break; }
+      }
     }
     for (const other of placedRects) if (segmentHitsRect(layout.sx, layout.sy, layout.ex, layout.ey, other)) { score += 2; break; }
     return score;
@@ -6523,12 +6541,25 @@
   // Placement order: the card the user is on, the focused branch, the hub,
   // then whatever has work on it (a running task, a node an agent is at) —
   // they pick their spots first, so a crowd costs the quiet cards, not them.
-  function calloutPriority(node, focusIds) {
+  // The nodes an agent is on right now, as one set per pass: the placement
+  // sort asks this for every card it compares, and a scan of every node per
+  // comparison made the sort quadratic in the size of the constellation.
+  function agentHostIds(nodes) {
+    const ids = new Set();
+    for (const entry of nodes) {
+      if (entry.kind !== "agent" || entry.dying || entry._absorbed) continue;
+      if (entry.targetNode?.id != null) ids.add(entry.targetNode.id);
+      if (entry.hostId != null) ids.add(entry.hostId);
+    }
+    return ids;
+  }
+
+  function calloutPriority(node, focusIds, hosted = null) {
     if (state.hoverCallout === node.id || state.hoverNode === node || state.selected?.id === node.id) return 0;
     if (focusIds?.has(node.id)) return 1;
     if (node.kind === "assistant") return 2;
     if ((node.kind === "task" || node.kind === "task-group") && node._workLabel === "Running") return 2.2;
-    if (node.kind !== "agent" && agentOn(node)) return 2.3;
+    if (node.kind !== "agent" && (hosted ? hosted.has(node.id) : agentOn(node))) return 2.3;
     if (node.kind === "agent" && (node.status === "running" || node.builder)) return 2.5;
     if ((node.kind === "task" || node.kind === "task-group") && (node._workLabel || node.state === "active")) return 2.6;
     if (node.kind === "session") return node.stale ? 5 : 3;
@@ -6546,12 +6577,15 @@
     const area = usableArea();
     const hud = hudRects();
     const hitsNode = nodeLabelBlocker(projected);
+    const hosted = agentHostIds(state.nodes);
     // Only an agent working somewhere without a card (a todo, the open ring)
     // gets a card of its own; the rest speak through their host's card.
     const wanted = projected
       .filter(({ node, p }) => CALLOUT_KINDS.has(node.kind) && !node.dying && !node._absorbed && node._px != null && (node._fade ?? 1) > 0.02 && (node.kind !== "agent" || ((node.status === "running" || node.builder) && !hostedOnCard(node))))
       .filter(({ node, p }) => p.k >= 0.55 || state.hoverCallout === node.id || state.selected?.id === node.id)
-      .sort((a, b) => calloutPriority(a.node, focusIds) - calloutPriority(b.node, focusIds) || String(a.node.id).localeCompare(String(b.node.id)));
+      .map((entry) => ({ entry, priority: calloutPriority(entry.node, focusIds, hosted), id: String(entry.node.id) }))
+      .sort((a, b) => a.priority - b.priority || idCollator.compare(a.id, b.id))
+      .map(({ entry }) => entry);
     const placedRects = [];
     let drawn = 0;
     for (const { node, p } of wanted) {
@@ -6880,7 +6914,7 @@
     for (const pulse of state.pulses) {
       // A pulse launched from a HUD row (an absorbed record) starts at that
       // screen point rather than at a node.
-      const from = pulse.screen ?? screenPoints.get(pulse.from.id) ?? project(pulse.from);
+      const from = screenPoints.get(pulse.from.id) ?? project(pulse.from);
       const to = screenPoints.get(pulse.to.id) ?? project(pulse.to);
       const t = still ? 1 : Math.min(1, (now - pulse.start) / pulse.duration);
       if (pulse.wave) {
@@ -7231,12 +7265,13 @@
   // Important labels can search hundreds of free slots. Only nearby nodes
   // can obstruct one; keep the exact padded overlap test inside those cells.
   function nodeLabelBlocker(projected) {
-    const cells = new Map(), broad = [], rects = [];
+    const cells = new Map(), broad = [], rects = [], ghosts = [];
     const cellSize = 64;
     for (const { node, p } of projected) {
-      if (node.dying || node._absorbed || (node._fade ?? 1) <= 0.02) continue;
+      if (node.dying || node._absorbed) continue;
+      if ((node._fade ?? 1) <= 0.02) { ghosts.push({ node, cx: p.x, cy: p.y, reach: (node._pr ?? 4) + 5 }); continue; }
       const radius = Math.max(5, node._orbitTrail?.radius ?? node._pr ?? 4) + 3;
-      const rect = { node, x: p.x - radius, y: p.y - radius, w: radius * 2, h: radius * 2 };
+      const rect = { node, x: p.x - radius, y: p.y - radius, w: radius * 2, h: radius * 2, cx: p.x, cy: p.y, reach: (node._pr ?? 4) + 5 };
       rects.push(rect);
       const left = Math.floor(rect.x / cellSize), right = Math.floor((rect.x + rect.w) / cellSize);
       const top = Math.floor(rect.y / cellSize), bottom = Math.floor((rect.y + rect.h) / cellSize);
@@ -7251,10 +7286,7 @@
         }
       }
     }
-    return (surface, node) => {
-      const left = Math.floor((surface.x - LABEL_PAD) / cellSize), right = Math.floor((surface.x + surface.w + LABEL_PAD) / cellSize);
-      const top = Math.floor((surface.y - LABEL_PAD) / cellSize), bottom = Math.floor((surface.y + surface.h + LABEL_PAD) / cellSize);
-      const hits = (rect) => rect.node !== node && overlaps(surface, rect);
+    const search = (left, right, top, bottom, hits) => {
       if (!Number.isFinite(left + right + top + bottom) || (right - left + 1) * (bottom - top + 1) > 256) return rects.some(hits);
       if (broad.some(hits)) return true;
       for (let x = left; x <= right; x += 1) {
@@ -7264,6 +7296,24 @@
       }
       return false;
     };
+    const blocker = (surface, node) => {
+      const left = Math.floor((surface.x - LABEL_PAD) / cellSize), right = Math.floor((surface.x + surface.w + LABEL_PAD) / cellSize);
+      const top = Math.floor((surface.y - LABEL_PAD) / cellSize), bottom = Math.floor((surface.y + surface.h + LABEL_PAD) / cellSize);
+      return search(left, right, top, bottom, (rect) => rect.node !== node && overlaps(surface, rect));
+    };
+    // A callout leader crossing an orb: the same grid, queried along the
+    // segment's bounds grown by the widest reach any orb tests against, so a
+    // card's candidates check the few orbs nearby instead of every node.
+    let maxReach = 0;
+    for (const rect of rects) if (rect.reach > maxReach) maxReach = rect.reach;
+    blocker.leaderHitsNode = (sx, sy, ex, ey, node) => {
+      const hits = (rect) => rect.node !== node && segmentDistance(rect.cx, rect.cy, sx, sy, ex, ey) < rect.reach;
+      if (ghosts.some(hits)) return true;
+      const left = Math.floor((Math.min(sx, ex) - maxReach) / cellSize), right = Math.floor((Math.max(sx, ex) + maxReach) / cellSize);
+      const top = Math.floor((Math.min(sy, ey) - maxReach) / cellSize), bottom = Math.floor((Math.max(sy, ey) + maxReach) / cellSize);
+      return search(left, right, top, bottom, hits);
+    };
+    return blocker;
   }
 
   // Panels are opaque; labels step around them instead of the constellation
@@ -7844,19 +7894,17 @@
     const summary = document.createElement("summary");
     summary.textContent = `Absorbed work (${list.length})`;
     details.append(summary);
-    for (const entry of list.slice(0, node.kind === "assistant" ? ABSORBED_HUB_MAX : 6)) details.append(absorbedRow(entry));
+    for (const entry of list.slice(0, node.kind === "assistant" ? ABSORBED_MAX : 6)) details.append(absorbedRow(entry));
     info.append(details);
   }
 
-  // One absorbed record: its verdict, what it was and when it was absorbed —
-  // a click opens the task or the session it came from.
+  // One absorbed brief: its verdict, what it was and when it sank in — a
+  // click opens the task or the session it came from.
   function absorbedRow(entry) {
     const item = document.createElement("div");
     item.className = "cp-note checkpoint-note absorbed-row";
     item.dataset.ok = String(entry.ok !== false);
-    const verdict = entry.kind === "record"
-      ? (entry.source === "pass" ? "pass" : entry.ok === false ? "failed" : "done")
-      : entry.kind === "job" ? "job" : entry.kind === "session" ? "session" : "done";
+    const verdict = entry.kind === "job" ? "job" : entry.kind === "session" ? "session" : "done";
     item.textContent = `${verdict} · ${entry.title} · ${agoLabel(entry.absorbedAt ?? entry.at) ?? ""}`;
     item.title = entry.detail || entry.prompt || entry.title;
     if (entry.taskId) {
@@ -8251,6 +8299,35 @@
           text.className = "text";
           text.textContent = String(row.text ?? "");
           text.title = text.textContent;
+          const when = document.createElement("span");
+          when.className = "when";
+          when.textContent = row.at ? agoShort(row.at) : "";
+          li.append(name, text, when);
+          list.append(li);
+        }
+        info.append(head, list);
+      }
+
+      // What the agents said to each other: the notes between seats, newest
+      // first, unread ones lit — the loop's side conversations on record.
+      const mailRows = Array.isArray(full?.mail) ? [...full.mail].filter((row) => row && row.from && row.to).sort((a, b) => (b.at ?? 0) - (a.at ?? 0)).slice(0, 6) : [];
+      if (mailRows.length) {
+        const head = document.createElement("div");
+        head.className = "card-sub";
+        head.textContent = "Said to each other";
+        const list = document.createElement("ul");
+        list.className = "assistant-intel assistant-mail assistant-activity pin-list";
+        for (const row of mailRows) {
+          const li = document.createElement("li");
+          li.style.borderLeftColor = agentHex(row.from);
+          if (!row.readAt) li.classList.add("unread");
+          const name = document.createElement("b");
+          name.textContent = `${row.from} → ${row.to}`;
+          name.style.color = agentHex(row.from);
+          const text = document.createElement("span");
+          text.className = "text";
+          text.textContent = String(row.text ?? "");
+          text.title = `${text.textContent}${row.readAt ? "" : " · unread"}`;
           const when = document.createElement("span");
           when.className = "when";
           when.textContent = row.at ? agoShort(row.at) : "";
@@ -9169,7 +9246,6 @@
     document.body.classList.add("command-active");
     resize();
     renderLegend();
-    loadAbsorbedLedger();
     syncViewControls();
     setCamMode(state.camMode, { quiet: true }); // a saved follow/orbit mode resumes where it left off
     // The first build as a promise: the boot sequence holds its fade until
@@ -9312,6 +9388,7 @@
   function tick() {
     if (!state.active) return;
     if (document.body.dataset.sheet && !(state.settingsPreview && document.body.dataset.sheet === "music")) return;
+    if (pickerHeld()) return; // an opening picker gets the main thread; the next tick catches up
     if (document.hidden) return; // hidden app: make no fetch; the visibilitychange listener snaps the view back on show
     refreshCommandBacklog();
     refreshGraph();
@@ -9367,6 +9444,7 @@
     el.width = width;
     el.height = height;
     state.labelWidths.clear();
+    state.speechLineCache?.clear();
     state.hudRectsAt = 0;
     state.graphAreaAt = 0;
     state.center = null;
@@ -9480,7 +9558,7 @@
     el.doneState = document.getElementById("cmd-done-state");
     el.doneRefresh = document.getElementById("cmd-done-refresh");
     el.doneToggle = document.getElementById("cmd-done-toggle");
-    el.doneAbsorb = document.getElementById("cmd-done-absorb");
+    el.doneClear = document.getElementById("cmd-done-clear");
     el.asks = document.getElementById("cmd-asks");
     el.askList = document.getElementById("cmd-ask-list");
     el.askState = document.getElementById("cmd-ask-state");
@@ -9613,6 +9691,7 @@
       el.cardStyle.addEventListener("change", () => setCardStyle(el.cardStyle.value));
     }
     el.exitBtn?.addEventListener("click", exit);
+    watchPickers();
     el.home?.addEventListener("change", () => {
       window.mefiStudio?.prefsSet?.({ commandHome: el.home.checked });
       writeStore("mefiStudio.commandHome", el.home.checked ? "1" : "0");
@@ -9736,7 +9815,7 @@
     });
     el.doneRefresh?.addEventListener("click", () => void loadDoneLog());
     el.doneToggle?.addEventListener("click", () => setDoneCollapsed(!state.doneCollapsed));
-    el.doneAbsorb?.addEventListener("click", () => void absorbDoneLog());
+    el.doneClear?.addEventListener("click", () => void clearDoneLog());
     setDoneCollapsed(state.doneCollapsed, { save: false });
     setRailTab(state.railTab, { save: false });
     document.getElementById("idle-chat-explorer")?.addEventListener("click", () => nav("explorer", { assistant: true }));

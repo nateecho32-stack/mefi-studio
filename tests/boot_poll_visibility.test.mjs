@@ -949,6 +949,7 @@ test("idle.js through the real tick and auto-enter timer: hidden silence under r
     },
     Date: { now: () => clock.now },
     POPUP_MS: 30000,
+    pickerHeld: () => false,
     refreshCommandBacklog: () => {
       calls.backlog += 1;
     },
@@ -1039,6 +1040,7 @@ test("idle.js Command refresh rides its shipped interval: a hidden stretch makes
     },
     Date: { now: () => clock.now },
     POPUP_MS: 30000,
+    pickerHeld: () => false,
     refreshCommandBacklog: () => {
       refreshes += 1;
     },
@@ -1139,6 +1141,7 @@ test("idle.js Command refresh: an in-flight backlog read completing while hidden
     },
     Date: { now: () => clock.now },
     POPUP_MS: 30000,
+    pickerHeld: () => false,
     refreshCommandBacklog,
     refreshGraph: () => {},
     checkCollisions: () => {},

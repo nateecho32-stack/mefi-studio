@@ -38,6 +38,9 @@ function poolHost({ parallel = 2, aiParallel = 2, switching = false } = {}) {
     assistantJobLabel: (role, work) => `${role} · ${work.text}`,
     assistantJournal(entry) { env.assistantState = assistant.applyWork(env.assistantState, entry, now); },
     assistantWrite: async () => {}, assistantLog() {}, logError(text, role) { env.assistantLog("error", text, null, role); }, logLine() {}, assistantReportIntel(...args) { intel.push(args); },
+    // The mail channel is its own suite (assistant_mail.test.mjs): here a
+    // starting job takes nothing and a settling one sends nothing.
+    assistantTakeMail: () => [], assistantDeliverMail: () => 0,
     assistantAgentEvent(...args) { events.push(args); },
     assistantThink(text, role) { env.assistantState.thinking = { text, role }; },
     assistantThinkClear(role) { if (env.assistantState.thinking?.role === role) env.assistantState.thinking = null; },

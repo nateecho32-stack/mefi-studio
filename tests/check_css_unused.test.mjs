@@ -88,6 +88,20 @@ test("findUnusedSelectors: interpolation prefixes do not revive classes outside 
   assert.deepEqual(hits.map((hit) => hit.missing), [["totally-dead"]]);
 });
 
+test("findUnusedSelectors: a literal ending in a hyphen before the interpolation still forms its family", () => {
+  const css = ".music-preview-orbs i { background: gold; }";
+  const usage = 'const preview = element("span", `music-node-preview music-preview-${key}`, null, choice);';
+  const hits = findUnusedSelectors(css, usage);
+  assert.deepEqual(hits, [], `hyphen-ended interpolation must not flag live classes: ${JSON.stringify(hits)}`);
+});
+
+test("findUnusedSelectors: a hyphen-ended interpolation does not revive neighbouring families", () => {
+  const css = ".music-previewz-dead { color: red; }";
+  const usage = 'const preview = element("span", `music-node-preview music-preview-${key}`, null, choice);';
+  const hits = findUnusedSelectors(css, usage);
+  assert.deepEqual(hits.map((hit) => hit.missing), [["music-previewz-dead"]]);
+});
+
 test("findUnusedSelectors: a prefix only counts when it touches an interpolation", () => {
   const css = ".music-effect-orbitTrails { color: red; }";
   const usage = 'element("label", "music-effect", null, effects);';

@@ -18,7 +18,7 @@ test("the graph frame scheduler draws and reschedules without undeclared runtime
   const drawn = [], scheduled = [], errors = [];
   const state = { active: true };
   const document = { hidden: false, body: { dataset: {} } };
-  const env = vm.createContext({ state, document, drawFrame: (time) => drawn.push(time), requestAnimationFrame: (callback) => { scheduled.push(callback); return scheduled.length; }, console: { error: (...args) => errors.push(args) } });
+  const env = vm.createContext({ state, document, pickerHeld: () => false, drawFrame: (time) => drawn.push(time), requestAnimationFrame: (callback) => { scheduled.push(callback); return scheduled.length; }, console: { error: (...args) => errors.push(args) } });
   vm.runInContext(section("// Animation state belongs", "function drawFrame("), env);
   env.frame(100); env.frame(110); env.frame(150);
   assert.deepEqual(drawn, [100, 150]);
@@ -100,7 +100,7 @@ test("Music preview refreshes real graph snapshots while other sheets remain idl
   let reads = 0, popups = 0;
   const state = { active: true, settingsPreview: { x: 600, y: 0, w: 600, h: 800 }, assistant: {}, ambient: true, popupAt: 0 };
   const document = { hidden: false, body: { dataset: { sheet: "tasks" } } };
-  const env = vm.createContext({ state, document, Date, POPUP_MS: 1000, refreshCommandBacklog: () => { reads += 1; }, refreshGraph: () => { reads += 1; }, checkCollisions() {}, updateTelemetry() {}, autopilotJobs: () => [], chatMode: () => false, renderFeed() {}, popup: () => { popups += 1; } });
+  const env = vm.createContext({ state, document, Date, POPUP_MS: 1000, pickerHeld: () => false, refreshCommandBacklog: () => { reads += 1; }, refreshGraph: () => { reads += 1; }, checkCollisions() {}, updateTelemetry() {}, autopilotJobs: () => [], chatMode: () => false, renderFeed() {}, popup: () => { popups += 1; } });
   vm.runInContext(section("function tick()", "async function checkCollisions("), env);
   env.tick(); assert.equal(reads, 0);
   document.body.dataset.sheet = "music";

@@ -79,6 +79,19 @@ test("comments and whitespace do not affect equivalence", () => {
   assert.equal(problems.length, 0);
 });
 
+test("CRLF candidate is equivalent to its LF base (autocrlf checkouts)", () => {
+  const { problems, totalBase, totalHead } = cascadeEquivalence(BASE, BASE.replace(/\n/g, "\r\n"));
+  assert.equal(problems.length, 0);
+  assert.equal(totalBase, totalHead);
+});
+
+test("a real winner change still diverges through CRLF line endings", () => {
+  const { problems } = cascadeEquivalence(BASE, BASE.replace("color: blue;", "color: purple;").replace(/\n/g, "\r\n"));
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].kind, "changed");
+  assert.equal(problems[0].head, "purple");
+});
+
 test("CLI: equivalent pair exits 0, divergent pair exits 1, bad input exits 2", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "check-css-"));
   try {
@@ -101,6 +114,20 @@ test("CLI: equivalent pair exits 0, divergent pair exits 1, bad input exits 2", 
       execFileP(process.execPath, [CLI, base, path.join(dir, "nope.css")]),
       (err) => err.code === 2
     );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("CLI: CRLF candidate file against an LF base file exits 0", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "check-css-crlf-"));
+  try {
+    const base = path.join(dir, "base.css");
+    const crlf = path.join(dir, "crlf.css");
+    await writeFile(base, BASE);
+    await writeFile(crlf, BASE.replace(/\n/g, "\r\n"));
+    const ok = await execFileP(process.execPath, [CLI, base, crlf]);
+    assert.match(ok.stdout, /CASCADE-EQUIVALENT/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

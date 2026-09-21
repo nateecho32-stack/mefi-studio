@@ -112,6 +112,16 @@ test("a memory hold rides the facts and the reply names finishing or compacting 
   const severeReply = localReply({ text: "builder status", facts: severe });
   assert.match(severeReply.text, /Finishing or compacting existing work frees memory and resumes new starts/);
 
+  // The latched severe-memory parallelism cap keeps the memory-shaped remedy
+  // too: releasing workers frees memory, it is not a responsiveness wait.
+  const capped = buildFacts({
+    executor: { enabled: true, parallel: 2, adaptiveParallel: true, running: [{ title: "worldgen triage" }], capacity: { canStart: false, reason: "Machine memory is recovering from the severe floor (350 MB available; 450 MB needed) — worker parallelism stays capped at 4 until free memory recovers.", resources: { availableMemoryMB: 350, requiredMemoryMB: 440, lagMs: 5, hostLagMs: 5, rendererLagMs: null, lagPressure: false, holdKind: "memory-cap", memoryShortfall: "small", memoryWarning: null } } },
+  });
+  const cappedReply = localReply({ text: "builder status", facts: capped });
+  assert.match(cappedReply.text, /Dispatch waiting: Machine memory is recovering from the severe floor/);
+  assert.match(cappedReply.text, /Finishing or compacting existing work frees memory and resumes new starts/);
+  assert.doesNotMatch(cappedReply.text, /resume automatically when machine capacity recovers/);
+
   // An overridden small shortfall admits work: the warning rides the facts
   // while the hold is gone.
   const overridden = buildFacts({

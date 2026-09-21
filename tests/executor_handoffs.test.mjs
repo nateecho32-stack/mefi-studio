@@ -16,6 +16,8 @@ function section(start, end) {
 function host() {
   const queued = [], requests = [], gathered = [], attached = [], history = [];
   const env = vm.createContext({
+    // The mail channel has its own suite (assistant_mail.test.mjs); this host neither takes nor sends notes.
+    assistantTakeMail: () => [], assistantDeliverMail: () => 0, assistantSendMail: () => true,
     Date, Set, EXECUTOR_MAX_DEPTH: 3, EXECUTOR_MAX_HANDOFFS: 3,
     EXECUTOR_NEXT_MARK: "MEFI_NEXT:", EXECUTOR_CALL_MARK: "MEFI_CALL:",
     EXECUTOR_CALLABLE: new Set(["auditor", "reference"]),

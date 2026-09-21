@@ -14,6 +14,16 @@ npm test          # node --test tests/**/*.test.mjs  +  python unittest discover
 npm run audit     # scripts/auditor.mjs (renderer/template contracts)
 ```
 
+Two named sub-gates run inside `npm run check` and work standalone:
+
+- `npm run check:targets` (`scripts/check-targets.mjs`) — catches stale
+  checks: every node target referenced by a npm script must exist on disk,
+  and every `scripts/*.mjs` + `renderer/*.js` source (plus the `main`
+  entry) must be covered by the check chain. Guarded by
+  `tests/check_targets.test.mjs`.
+- `npm run check:specs` (`scripts/spec-collisions.mjs`) — duplicate spec
+  names and unshimmed contracts; see "Test file conventions" below.
+
 Rebuild the model booklet after editing renderer sources
 (`npm run build-booklet`; the generated `renderer/booklet.html` is committed).
 

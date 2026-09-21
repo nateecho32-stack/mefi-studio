@@ -381,9 +381,18 @@
   }
 
   // ---- studio ----
+  // Every builder worker's stdout streams here a line at a time. Appending
+  // each one to the element's text rebuilt an ever-growing string (and, with
+  // the log open, re-laid-out the whole block per line); keep the newest
+  // STUDIO_LOG_LINES and rewrite the block from that bounded buffer.
+  const STUDIO_LOG_LINES = 400;
+  const studioLogLines = [];
   function studioLog(line) {
+    studioLogLines.push(String(line));
+    if (studioLogLines.length > STUDIO_LOG_LINES) studioLogLines.splice(0, studioLogLines.length - STUDIO_LOG_LINES);
     const log = document.getElementById("studio-log");
-    log.textContent += `\n${line}`;
+    if (!log) return;
+    log.textContent = studioLogLines.join("\n");
     log.scrollTop = log.scrollHeight;
   }
 

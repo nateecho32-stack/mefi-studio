@@ -76,7 +76,7 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   assistantPrefs: (patch) => ipcRenderer.invoke("assistant:prefs", patch),
   assistantAnswer: (payload) => ipcRenderer.invoke("assistant:answer", payload ?? {}),
   assistantDoneLog: (payload) => ipcRenderer.invoke("assistant:done-log", payload ?? {}),
-  assistantAbsorbDoneLog: () => ipcRenderer.invoke("assistant:absorb-done"),
+  assistantClearDoneLog: () => ipcRenderer.invoke("assistant:clear-done"),
   auditorRun: () => ipcRenderer.invoke("auditor:run"),
   checkpointAdd: (sessionId, note) => ipcRenderer.invoke("checkpoint:add", { sessionId, note }),
   analyzerRun: (kind, payload) => ipcRenderer.invoke("analyzer:run", { kind, ...payload }),

@@ -1,9 +1,10 @@
 // The Command view's visual layer: backdrop scenes that follow the colour
 // theme (or an explicit override), the speech bubbles agents wear while they
 // work, the foreman's hand-out packet, the per-role glyph painter the rail and
-// the Command view share, and the absorbed ledger the assistant keeps after a
-// Done-tab absorb. Sections of idle.js and tree3d.js are evaluated in a vm
-// with a recording canvas, so no Electron or real DOM is needed.
+// the Command view share, and the Done tab's plain Clear (the absorb flight
+// belongs to the nodes, not the tab). Sections of idle.js and tree3d.js are
+// evaluated in a vm with a recording canvas, so no Electron or real DOM is
+// needed.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -180,43 +181,17 @@ test("a builder starting is the foreman handing work out, said on both ends", ()
   assert.equal(state.pulses[0].from, hub, "with no foreman on the ring the hub hands out");
 });
 
-test("the absorbed ledger is per project, capped at twenty and survives a reload", () => {
-  const stores = new Map();
-  const context = (projectId) => {
-    const state = { projectId, active: true, absorbed: new Map(), nodes: [] };
-    const env = vm.createContext({
-      state, Math, String, Array, JSON, Number, Boolean, Date,
-      ABSORBED_HUB_MAX: 20,
-      writeStore: (key, value) => stores.set(key, value),
-      readStore: (key) => stores.get(key) ?? null,
-      assistantNode: () => state.nodes.find((node) => node.kind === "assistant") ?? null,
-      usableArea: () => ({ x: 0, y: 0, w: 1200, h: 800 }),
-      el: { doneAbsorb: { getBoundingClientRect: () => ({ left: 1000, top: 100, width: 60, height: 20 }) } },
-    });
-    vm.runInContext(section(idle, "  // ---------- the absorbed ledger", "  // Absorb: every record flies out"), env);
-    return { env, state };
-  };
-  const first = context("C:/work/proj a");
-  const entries = Array.from({ length: 25 }, (_, index) => ({ at: 1000 + index, kind: index % 3 === 0 ? "pass" : "build", title: `record ${index}`, ok: index % 5 !== 0, taskId: index % 2 ? `task-${index}` : null, sessionId: null, detail: "reported done" }));
-  const kept = first.env.recordAbsorbed(entries);
-  assert.equal(kept.length, 20);
-  assert.equal(kept[0].title, "record 0");
-  assert.equal(kept[0].kind, "record");
-  assert.equal(kept[0].source, "pass");
-  assert.equal(kept[0].ok, false);
-  assert.equal(JSON.parse(stores.get(first.env.absorbedStorageKey())).length, 20);
-  const again = context("C:/work/proj a");
-  assert.equal(again.env.loadAbsorbedLedger().length, 20, "the same project reads its ledger back");
-  assert.equal(again.state.absorbed.get("__assistant__").length, 20);
-  const other = context("C:/work/other");
-  assert.equal(other.env.loadAbsorbedLedger().length, 0, "another project starts clean");
-  // The flight aims at the hub while it is on screen, else at the button.
-  first.state.nodes = [{ id: "__assistant__", kind: "assistant", _px: 400, _py: 300 }];
-  const onScreen = first.env.absorbTarget();
-  assert.equal(onScreen.x, 400); assert.equal(onScreen.y, 300); assert.equal(onScreen.hub, first.state.nodes[0]);
-  first.state.nodes[0]._px = -50;
-  const offScreen = first.env.absorbTarget();
-  assert.equal(offScreen.x, 1030); assert.equal(offScreen.y, 110); assert.equal(offScreen.hub, null);
+test("the Done tab has no absorb of its own: Clear is a plain host call and the rows never fly", () => {
+  const doneTab = section(idle, "  // Clear: the host wipes the finish rows", "  // The Ask cards:");
+  for (const gone of ["absorbing", "--absorb-dx", "hubSwellAt", "assistantAbsorbDoneLog", "recordAbsorbed", "absorbTarget"]) {
+    assert.ok(!idle.includes(gone), `idle.js no longer carries ${gone}`);
+  }
+  assert.ok(doneTab.includes("assistantClearDoneLog"), "Clear reaches the host");
+  assert.ok(!doneTab.includes("state.pulses.push"), "no packets leave the Done tab");
+  assert.ok(!styles.includes("done-absorb") && !styles.includes("absorb-pull"), "the Done-tab flight styles are gone");
+  assert.ok(template.includes('id="cmd-done-clear"') && !template.includes("cmd-done-absorb"), "the template offers Clear, not Absorb");
+  // The node absorb is untouched: finished work still collapses into its host.
+  for (const kept of ["function markAbsorb(id)", "function finalizeAbsorb(id, fx)", "NODE_ABSORB_MS"]) assert.ok(idle.includes(kept), `idle.js keeps ${kept}`);
 });
 
 test("every agent role has its own glyph and the painter draws it", () => {
@@ -571,7 +546,7 @@ test("cards hold their spots while the camera is in flight, then settle with the
 
 test("the frame gate tolerates vsync jitter so a two-tick frame is never skipped", () => {
   const drawn = [];
-  const env = vm.createContext({ state: { active: true }, document: { hidden: false, body: { dataset: {} } }, drawFrame: (time) => drawn.push(time), requestAnimationFrame: () => 1, console });
+  const env = vm.createContext({ state: { active: true }, document: { hidden: false, body: { dataset: {} } }, pickerHeld: () => false, drawFrame: (time) => drawn.push(time), requestAnimationFrame: () => 1, console });
   vm.runInContext(section(idle, "  // Animation state belongs", "  function drawFrame("), env);
   env.frame(100); env.frame(116.7); env.frame(132.9); env.frame(149.6); env.frame(166.3);
   assert.deepEqual(drawn, [100, 132.9, 166.3], "a 32.9 ms tick (33.3 with jitter) draws instead of costing a 50 ms hitch");

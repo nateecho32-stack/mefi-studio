@@ -39,7 +39,7 @@ export function createMachineLagGate({ threshold = 100, requiredSamples = 2 } = 
 const PREF_RANGES = { parallel: [1, PARALLEL_MAX], aiParallel: [1, AI_PARALLEL_MAX] }; // integer prefs clamped into a range
 export const INTENTS = ["status", "tasks", "ideas", "collisions", "machine", "agents", "suggest", "tidy", "fix", "organize", "pause", "resume", "resume-work", "help", "request", "chat", "overseer", "compact", "builder", "log", "planning-status"];
 export const ACTION_KINDS = ["idle", "tick", "audit", "brief", "fix", "tidy", "organize", "message", "overseer"];
-export const LOG_KINDS = ["tick", "message", "reply", "fix", "tidy", "organize", "audit", "brief", "collision", "machine", "error", "control", "overseer", "think", "question"];
+export const LOG_KINDS = ["tick", "message", "reply", "fix", "tidy", "organize", "audit", "brief", "collision", "machine", "error", "control", "overseer", "think", "question", "mail"];
 export const THINKING_KEEP = 8; // committed inner-monologue bubbles kept in the thread
 export const FIX_KINDS = ["data", "catalog", "requests", "process", "build", "overseer"];
 export const PROBLEM_KINDS = ["update-held", "store-unavailable", "ai-offline", "audit", "collision", "machine", "work-stale", "overseer", "executor"];
@@ -279,6 +279,7 @@ export function emptyState(now = Date.now()) {
     pool: emptyPool(),
     agents: AGENT_ROLES.map(({ role }) => emptyAgent(role)),
     intel: [],
+    mail: [],
     builderEvents: [],
     work: [],
     overseer: emptyOverseer(),
@@ -286,9 +287,6 @@ export function emptyState(now = Date.now()) {
     nodeFolders: {},
     closedAt: 0,
     resumed: null,
-    // The done log's absorb watermark: pass rows at or before this stamp stay
-    // out of the Done tab while the activity log keeps them.
-    doneAbsorbedAt: 0,
   };
 }
 
@@ -494,6 +492,7 @@ export function normalizeState(raw, now = Date.now()) {
     state.prefs = normalizePrefs(raw.prefs);
     state.agents = normalizeAgents(raw.agents);
     state.intel = asArray(raw.intel).map(normalizeIntelRow).filter(Boolean).slice(0, INTEL_CAP);
+    state.mail = normalizeMail(raw.mail);
     state.builderEvents = clampTail(asArray(raw.builderEvents).map(normalizeBuilderEvent).filter(Boolean), BUILDER_EVENTS_CAP);
     state.pool = emptyPool(state.prefs); // nothing runs or waits in a freshly loaded state
     state.work = clampTail(asArray(raw.work).map((entry) => normalizeWorkEntry(entry, 0)).filter(Boolean), CAPS.work);
@@ -502,7 +501,6 @@ export function normalizeState(raw, now = Date.now()) {
     state.nodeFolders = normalizeNodeFolders(raw.nodeFolders);
     state.closedAt = num(raw.closedAt, 0);
     state.resumed = normalizeResumed(raw.resumed);
-    state.doneAbsorbedAt = num(raw.doneAbsorbedAt, 0);
     return state;
   } catch {
     return emptyState(now);
@@ -743,6 +741,9 @@ export function overseerDigest(state, now = Date.now()) {
     ai: { keyPresent: bool(ai.keyPresent, false), online: bool(ai.online, false), failures: Math.floor(num(ai.failures, 0)), backoffMin: Math.max(0, Math.round((num(ai.backoffUntil, 0) - now) / MINUTE)) },
     prefs: normalizePrefs(current.prefs),
     intel: intelLines(current, now, { limit: 6, maxAgeMs: 30 * MINUTE }),
+    // What the agents told each other, and how much of it is still waiting
+    // to be read: an unread pile is a recipient that is not keeping up.
+    chatter: { unread: normalizeMail(current.mail).filter((row) => !row.readAt).length, lines: mailLines(current, now, { limit: 6 }) },
     // Builder outcomes are counted per event: reports = runs that finished,
     // fails = runs that failed, both inside the half-hour window, so the
     // numbers match what the builders actually reported home. States saved
@@ -978,6 +979,9 @@ export function dueRoles(state, now = Date.now(), prefs = null) {
   const rows = new Map(asArray(current.agents).filter((row) => isObject(row) && typeof row.role === "string").map((row) => [row.role, row]));
   const ai = isObject(current.ai) ? current.ai : {};
   const problemDue = new Set(rolesForProblems(current, now));
+  // Unread mail pulls its recipient due the same way: another agent asked
+  // for it, so it runs on this tick rather than when its cadence next elapses.
+  const mailDue = new Set(rolesWithMail(current));
   const due = [];
   for (const { role, cadenceMs, ai: needsAi } of AGENT_ROLES) {
     if (!cadenceMs) continue;
@@ -985,7 +989,7 @@ export function dueRoles(state, now = Date.now(), prefs = null) {
     if (row && (row.status === "queued" || row.status === "running")) continue;
     const lastRunAt = num(row?.lastRunAt, 0);
     const cadenceElapsed = !lastRunAt || now - lastRunAt >= cadenceMs * CADENCE_TOLERANCE;
-    if (!cadenceElapsed && !problemDue.has(role)) continue;
+    if (!cadenceElapsed && !problemDue.has(role) && !mailDue.has(role)) continue;
     if (needsAi && (!rules.proactive || !ai.keyPresent || now < num(ai.backoffUntil, 0))) continue;
     // The thinker is the proactive inner monologue: off the switch, it
     // stays quiet. No key required — it reads the log locally.
@@ -1195,6 +1199,104 @@ export function hearReport(state, report, now = Date.now()) {
     : `Builder reported: failed "${title || "the job"}". ${clip(str(source.error) || "no done line", 80)} Looking at it.`;
   next = applyThought(next, { text: reply, role: "overseer", at: now }, now);
   return { state: next, finding, reply: clip(reply, REPLY_MAX_CHARS), wakeOverseer: !ok, wakeForeman: !ok || handed > 0 };
+}
+
+// ---- agent mail: what the agents say to each other ------------------------
+// Intel is a report home to the assistant; mail is a note from one agent to
+// another. A scout that sees something another role owns (the watcher sees
+// stale sessions the keeper tidies, the machine sees capacity the foreman
+// hands work out against) writes it here instead of hoping the assistant
+// relays it. Unread mail pulls its recipient due on the next tick; the host
+// hands the inbox to the job when it starts, and the job reads it however it
+// likes. Bounded: MAIL_CAP rows overall, MAIL_UNREAD_PER_ROLE unread per
+// recipient — a chatty sender cannot flood a slow reader.
+export const MAIL_CAP = 48;
+export const MAIL_UNREAD_PER_ROLE = 6;
+const MAIL_TEXT_MAX = 200;
+const MAIL_WINDOW_MS = 60 * MINUTE;
+// Senders: every roster seat, the builders and the assistant hub itself.
+// Recipients: roster seats only — mail is addressed to something that runs.
+export const MAIL_SENDERS = [...INTEL_ROLES, "assistant"];
+const MAIL_SENDER_SET = new Set(MAIL_SENDERS);
+const MAIL_RECIPIENT_SET = new Set(AGENT_ROLES.map((entry) => entry.role));
+// Two notes in the same millisecond between the same seats differ by text.
+const mailHash = (text) => { let h = 5381; for (let i = 0; i < text.length; i += 1) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0; return h.toString(36); };
+const mailId = (row) => `mail_${row.at}_${row.from}_${row.to}_${mailHash(row.text)}`;
+
+const normalizeMailRow = (row) => {
+  if (!isObject(row) || !MAIL_SENDER_SET.has(row.from) || !MAIL_RECIPIENT_SET.has(row.to) || row.from === row.to) return null;
+  const text = str(row.text).replace(/\s+/g, " ").trim().slice(0, MAIL_TEXT_MAX);
+  if (!text) return null;
+  const at = num(row.at, 0);
+  const base = { at, from: row.from, to: row.to, text, facts: normalizeIntelFacts(row.facts), readAt: num(row.readAt, 0) };
+  return { id: str(row.id) || mailId(base), ...base };
+};
+
+function normalizeMail(raw) {
+  // A stable sort by clock: notes sent in the same millisecond keep the
+  // order they were sent in.
+  const rows = asArray(raw).map(normalizeMailRow).filter(Boolean).sort((a, b) => a.at - b.at);
+  return clampTail(rows, MAIL_CAP);
+}
+
+// One note from one agent to another. Returns the new state, or the same
+// state when the note is not deliverable (unknown sender or recipient, an
+// empty text, an agent writing to itself). The same unread note twice only
+// refreshes its clock; a recipient already holding MAIL_UNREAD_PER_ROLE unread
+// notes drops its oldest one, so an inbox never grows past what one job can
+// read. Read mail ages out of the box after MAIL_WINDOW_MS.
+export function sendMail(state, note, now = Date.now()) {
+  const current = isObject(state) ? state : emptyState(now);
+  const source = isObject(note) ? note : {};
+  const row = normalizeMailRow({ ...source, at: num(source.at, 0) || now, readAt: 0, id: "" });
+  if (!row) return current;
+  const rows = normalizeMail(current.mail).filter((entry) => entry.readAt === 0 || now - entry.readAt <= MAIL_WINDOW_MS);
+  const duplicate = rows.find((entry) => !entry.readAt && entry.from === row.from && entry.to === row.to && entry.text === row.text);
+  if (duplicate) {
+    return { ...current, mail: normalizeMail(rows.map((entry) => (entry === duplicate ? { ...entry, at: row.at, facts: row.facts } : entry))) };
+  }
+  const unread = rows.filter((entry) => entry.to === row.to && !entry.readAt);
+  const drop = unread.length >= MAIL_UNREAD_PER_ROLE ? new Set(unread.slice(0, unread.length - MAIL_UNREAD_PER_ROLE + 1).map((entry) => entry.id)) : null;
+  return { ...current, mail: normalizeMail([...(drop ? rows.filter((entry) => !drop.has(entry.id)) : rows), row]) };
+}
+
+// What a role has been sent, oldest first: its unread notes by default, or
+// everything still on the board for it.
+export function inbox(state, role, { unreadOnly = true } = {}) {
+  return normalizeMail(isObject(state) ? state.mail : null).filter((row) => row.to === role && (!unreadOnly || !row.readAt));
+}
+
+// A job starting takes its mail: every unread note for the role is stamped
+// read and handed back, so the same note never drives two runs.
+export function readMail(state, role, now = Date.now()) {
+  const current = isObject(state) ? state : emptyState(now);
+  const mail = inbox(current, role);
+  if (!mail.length) return { state: current, mail };
+  const ids = new Set(mail.map((row) => row.id));
+  return { state: { ...current, mail: normalizeMail(current.mail).map((row) => (ids.has(row.id) ? { ...row, readAt: now } : row)) }, mail };
+}
+
+// Roster roles holding unread mail that are free to run. Order is roster
+// order, like dueRoles; queued/running rows read their mail when they start.
+export function rolesWithMail(state) {
+  const current = isObject(state) ? state : {};
+  const rows = new Map(asArray(current.agents).filter((row) => isObject(row) && typeof row.role === "string").map((row) => [row.role, row]));
+  const waiting = new Set(normalizeMail(current.mail).filter((row) => !row.readAt).map((row) => row.to));
+  return AGENT_ROLES.map((entry) => entry.role).filter((role) => {
+    if (!waiting.has(role)) return false;
+    const row = rows.get(role);
+    return !(row && (row.status === "queued" || row.status === "running"));
+  });
+}
+
+// The conversation, newest first, one line each: "watcher → keeper: …". The
+// chat, the cards and the AI facts all read the same lines.
+export function mailLines(state, now = Date.now(), { limit = 6, maxAgeMs = MAIL_WINDOW_MS, role = null } = {}) {
+  return normalizeMail(isObject(state) ? state.mail : null)
+    .filter((row) => (!maxAgeMs || now - row.at <= maxAgeMs) && (!role || row.to === role || row.from === role))
+    .sort((a, b) => b.at - a.at)
+    .slice(0, Math.max(1, limit))
+    .map((row) => `${row.from} → ${row.to}: ${row.text}${row.readAt ? "" : " (unread)"} (${ago(Math.max(0, (now - row.at) / MINUTE))})`);
 }
 
 // The folder the way the chat and the cards read it: newest first, one line
@@ -4134,7 +4236,7 @@ function executorLine(executor, readiness = null) {
     // by waiting for responsiveness to recover. No holdKind (older snapshots)
     // keeps the generic recovery sentence.
     const holdKind = str(source.capacity.resources?.holdKind);
-    const memoryHold = holdKind === "memory" || holdKind === "memory-severe";
+    const memoryHold = holdKind === "memory" || holdKind === "memory-severe" || holdKind === "memory-cap";
     lines.push(`Dispatch waiting: ${clip(str(source.capacity.reason) || "waiting for machine capacity", 140)}. ${memoryHold ? "Finishing or compacting existing work frees memory and resumes new starts." : "New starts resume automatically when machine capacity recovers."}`);
   }
   else if (str(readiness?.waiting || source.waiting)) lines.push(`Dispatch waiting: ${clip(str(readiness?.waiting || source.waiting), 140)}.`);
@@ -4579,6 +4681,8 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
       if (fresh.length) lines.push(`Never run: ${fresh.join(", ")}.`);
       const intel = intelLines(current, now, { limit: 3 });
       if (intel.length) lines.push(`Reported home: ${intel.join("; ")}.`);
+      const chatter = mailLines(current, now, { limit: 3 });
+      if (chatter.length) lines.push(`Said to each other: ${chatter.join("; ")}.`);
       const executing = executorLine(executor, source.backlog);
       if (executing) lines.push(executing);
       lines.push("A work instruction queues it and sends the roster out with it.");
@@ -4707,7 +4811,7 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
       lines.push('Ask "what should I work on" and I pick from the board, the request inbox and quiet sessions.');
       lines.push("I can tidy, fix, organize, pause, resume, and resume the work — and clear the queue when the backlog needs collapsing.");
       lines.push("The overseer sits above me — ask it to review the workflow and it scores my work, tunes prefs and files upgrades.");
-      lines.push("My agents: overseer, watcher, machine, auditor, keeper, thinker, briefer, improver, grower, ideas, reference — an instruction queues it to the request inbox and sends the whole roster out.");
+      lines.push("My agents: overseer, watcher, machine, auditor, keeper, thinker, briefer, improver, grower, ideas, reference — an instruction queues it to the request inbox and sends the whole roster out. They talk to each other too — ask about agents to read what they said.");
       break;
     }
     case "log": {
@@ -4965,7 +5069,7 @@ function normalizeProjectScan(projectScan) {
 
 // The facts shape localReply reads, from the raw store rows. main.cjs builds
 // the same shape (each source guarded, null when unreadable); the CLI uses it.
-export function buildFacts({ sessions = null, todos = null, collisions = null, presence = null, uncommitted = null, tasks = null, ideas = null, requests = null, executor = null, backlog = null, planning = null, project = null, projectScan = null, machine = null, audit = null, briefing = null, update = null, work = null, resumed = null, focus = null, nodeFolders = null, lessons = null, log = null, query = "", now = Date.now() } = {}) {
+export function buildFacts({ sessions = null, todos = null, collisions = null, presence = null, uncommitted = null, tasks = null, ideas = null, requests = null, executor = null, backlog = null, planning = null, project = null, projectScan = null, machine = null, audit = null, briefing = null, update = null, work = null, resumed = null, focus = null, nodeFolders = null, lessons = null, log = null, mail = null, query = "", now = Date.now() } = {}) {
   const todoRows = asArray(todos).filter((todo) => isObject(todo) && typeof todo.sessionId === "string");
   const focusRow = normalizeFocus(focus);
   const folderKey = focusRow ? nodeKeyOf(focusRow) : null;
@@ -4980,6 +5084,9 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
   });
   return {
     focus: focusRow,
+    // What the agents said to each other lately, newest first — a reply about
+    // the roster can quote the exchange instead of guessing at it.
+    chatter: Array.isArray(mail) ? mailLines({ mail }, now, { limit: 8 }) : null,
     focusFolder: folder
       ? { key: folderKey, count: asArray(folder.entries).filter(isObject).length, lines: nodeFolderLines(nodeFolders, folderKey, { limit: 4, now }) }
       : null,
@@ -5094,8 +5201,10 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
               // a reply can tell a memory gate from a responsiveness gate
               // without parsing the reason text: "memory" is a small
               // required-vs-available shortfall, "memory-severe" the gap under
-              // the severe floor, "lag" the latched hold, "unknown" missing
-              // readings, null a clear (or overridden) admission.
+              // the severe floor, "memory-cap" the latched severe-memory
+              // parallelism cap in its recovery band, "lag" the latched hold,
+              // "unknown" missing readings, null a clear (or overridden)
+              // admission.
               holdKind: str(executor.capacity.resources.holdKind) || null,
               memoryShortfall: str(executor.capacity.resources.memoryShortfall) || null,
               memoryWarning: clip(str(executor.capacity.resources.memoryWarning), 180) || null } : null,
