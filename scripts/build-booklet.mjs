@@ -46,15 +46,16 @@ export async function build({ root = ROOT } = {}) {
     readFile(path.join(RENDERER, "booklet.js"), "utf8"),
   ]);
 
-  const [profilerStyles, performanceCore, profiler] = await Promise.all([
+  const [profilerStyles, performanceCore, profiler, stageLabels] = await Promise.all([
     readFile(path.join(RENDERER, "profiler.css"), "utf8"),
     readFile(path.join(RENDERER, "performance-core.js"), "utf8"),
     readFile(path.join(RENDERER, "profiler.js"), "utf8"),
+    readFile(path.join(RENDERER, "stage-labels.js"), "utf8"),
   ]);
   const html = template
     .replace("__BOOKLET_DATA__", () => catalog.trim())
     .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${profilerStyles}`)
-    .replace("__BOOKLET_CODE__", () => [performanceCore, profiler, taskGroups, nav, sidebar, graph, modelLab, tracker, tree, idle, explorer, analyzer, tasks, ideas, overhead, palette, eyes, boot, startup, workspace, music, planning, onboarding, booklet].join("\n"));
+    .replace("__BOOKLET_CODE__", () => [stageLabels, performanceCore, profiler, taskGroups, nav, sidebar, graph, modelLab, tracker, tree, idle, explorer, analyzer, tasks, ideas, overhead, palette, eyes, boot, startup, workspace, music, planning, onboarding, booklet].join("\n"));
 
   const out = path.join(RENDERER, "booklet.html");
   let previous = null;

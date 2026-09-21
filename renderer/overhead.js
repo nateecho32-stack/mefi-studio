@@ -11,8 +11,9 @@
   // Task/snapshot refresh cadence while the sheet is open. Polls pause while
   // document.hidden and back off while a poll reads the same data, so an idle
   // app makes far fewer IPC round trips; fresh data snaps back to the base.
-  const POLL_INTERVAL_MS = 5000;
-  const POLL_MAX_MS = 30000;
+  // Pushed board changes refresh the sheet at once (init); these only backstop.
+  const POLL_INTERVAL_MS = 15000;
+  const POLL_MAX_MS = 60000;
   let pollTimer = null;
   let pollDelay = POLL_INTERVAL_MS;
 
@@ -275,6 +276,12 @@
     }
     el.ctx = el.canvas.getContext("2d");
     el.openButton?.addEventListener("click", open);
+    window.mefiStudio?.onTasks?.(() => {
+      if (!initialized || el.overlay?.hidden || document.visibilityState !== "visible") return;
+      clearTimeout(pollTimer);
+      pollDelay = POLL_INTERVAL_MS;
+      pollTimer = setTimeout(poll, 250);
+    });
     el.close?.addEventListener("click", close);
     el.overlay?.addEventListener("click", (event) => {
       if (event.target === el.overlay) close();

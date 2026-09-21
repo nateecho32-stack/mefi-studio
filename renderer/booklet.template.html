@@ -64,6 +64,7 @@
   <symbol id="g-update" viewBox="0 0 16 16"><path d="M8 2.5v7M5 6.5l3 3 3-3"/><path d="M3 11.5v1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1"/></symbol>
   <symbol id="g-plane" viewBox="0 0 16 16"><path d="M8 2.6 13.8 6v4L8 13.4 2.2 10V6z"/><path d="M2.2 6 8 9.2 13.8 6M8 9.2v4.2"/></symbol>
   <symbol id="g-chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
+  <symbol id="g-plans" viewBox="0 0 16 16"><path d="M4 2.5h5.5L12 5v8.5H4z"/><path d="M9.5 2.5V5H12M6 8h4M6 10.5h4"/></symbol>
 </svg>
 <div id="workspace-sidebar" class="workspace studio-sidebar" data-open="false">
   <button id="workspace-sidebar-toggle" class="sidebar-edge" type="button" aria-label="Open studio sidebar" aria-controls="workspace-sidebar-panel" aria-expanded="false"></button>
@@ -71,9 +72,9 @@
     <div class="sidebar-heading"><span>YOUR STUDIO</span><button id="workspace-sidebar-close" class="ghost mini" type="button" aria-label="Close studio sidebar" title="Close sidebar (Esc)">×</button></div>
     <a class="ws-brand" href="#" data-nav="workspace"><span class="ws-brand-mark">m<span>+</span></span><span>Mefi's Studio<small>MAKE SOMETHING YOURS</small></span></a>
     <button class="ws-home" data-nav="workspace"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg>Your workspace <kbd>H</kbd></button>
-    <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open the node tree / Command view (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg>Node tree <kbd>D</kbd></button>
+    <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open Command view — the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg>Command view <kbd>D</kbd><span class="count warn" data-badge="questions" hidden></span></button>
     <button class="ws-home ws-shortcut" data-nav="tasks" title="Open your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg>Task board <kbd>T</kbd></button>
-    <button class="ws-home ws-shortcut" data-nav="plans" title="Explore an idea and review its plan"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg>Plans</button>
+    <button class="ws-home ws-shortcut" data-nav="plans" title="Explore an idea and review its plan (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg>Plans <kbd>P</kbd></button>
     <div class="ws-section-label"><span>PROJECTS</span><button id="workspace-add-project" class="ghost mini" title="Add an existing project folder" aria-label="Add project">+</button></div>
     <div id="workspace-projects" class="ws-projects" aria-label="Choose a project"></div>
     <p class="ws-sidebar-note">One space for each idea.<br>Its own work, its own conversation.</p>
@@ -83,7 +84,7 @@
       <button class="ghost ws-settings" data-nav="studio"><svg class="glyph" aria-hidden="true"><use href="#g-ambience"/></svg>Settings & connections</button>
       <button class="ghost ws-settings" data-nav="music"><svg class="glyph" aria-hidden="true"><use href="#g-music"/></svg>Music & themes</button>
       <button class="ghost ws-settings" data-nav="onboarding"><svg class="glyph" aria-hidden="true"><use href="#g-help"/></svg>Start here</button>
-      <details class="ws-personal"><summary>Make yourself at home <span>✧</span></summary><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Studio theme<select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></details>
+      <details class="ws-personal"><summary>Make yourself at home <span>✧</span></summary><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Studio theme<select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></details>
       <span class="ws-local-note"><i></i> A little studio. A lot of possibility.</span>
     </div>
   </aside>
@@ -93,9 +94,17 @@
     <div class="ws-topbar"><div class="ws-project-heading"><span class="ws-kicker">WORKSPACE /</span><strong id="workspace-project-name">Opening your project…</strong></div><div class="ws-top-actions"><button id="workspace-reveal" class="ghost mini" title="Show the project folder">Open folder ↗</button><button id="workspace-remove-project" class="ghost mini" title="Remove this folder from Studio's project list. Files and local work stay on disk.">Remove project</button><button class="ghost mini" data-nav="palette" aria-label="Find a tool or command">Search <kbd>Ctrl K</kbd></button></div></div>
     <div class="ws-heading"><div><p class="ws-kicker" id="workspace-greeting">YOUR SPACE TO CREATE</p><h1>What are we making?</h1><p id="workspace-project-path" class="ws-project-path"></p></div><span id="workspace-connection" class="ws-connection">Connecting…</span></div>
     <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">A little guidance for your first project.</strong><p>Scan this computer, choose a project, let an explorer map it, connect your tools, create work and follow it through review.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div><div class="walkthrough-bar mini" id="walkthrough-invite-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-invite-bar-fill"></span></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start walkthrough</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk with me</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays in the sidebar">Not now</button></div></section>
+    <section id="workspace-dashboard" class="ws-dashboard" aria-label="Studio at a glance">
+      <div class="ws-dash-tile ws-dash-service" id="workspace-dash-service" data-tone="idle"><span class="ws-dash-kicker">SERVICE</span><strong class="ws-dash-value" id="workspace-dash-service-value">Connecting…</strong><span class="ws-dash-note" id="workspace-dash-service-note"></span><div class="ws-dash-actions"><button id="workspace-pause" class="ghost mini" title="Hold all new work: queued tasks, builds and the assistant's own suggestions. Running jobs finish normally.">Pause</button></div></div>
+      <button class="ws-dash-tile" id="workspace-dash-workers" data-nav="command" data-tone="idle" type="button" title="Open Command view · live work (D)"><span class="ws-dash-kicker">WORKERS</span><strong class="ws-dash-value" id="workspace-dash-workers-value">0 running</strong><span class="ws-dash-note" id="workspace-dash-workers-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-attention" data-tone="idle" data-target="review" type="button" title="Questions waiting for you and work to review"><span class="ws-dash-kicker">NEEDS YOU</span><strong class="ws-dash-value" id="workspace-dash-attention-value">Nothing waiting</strong><span class="ws-dash-note" id="workspace-dash-attention-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-next" data-tone="idle" type="button" title="Show the queue"><span class="ws-dash-kicker">UP NEXT</span><strong class="ws-dash-value" id="workspace-dash-next-value">Queue is empty</strong><span class="ws-dash-note" id="workspace-dash-next-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-machine" data-nav="explorer" data-tone="idle" type="button" title="Machine status (opens the Explorer)"><span class="ws-dash-kicker">MACHINE</span><strong class="ws-dash-value" id="workspace-dash-machine-value">Checking…</strong><span class="ws-dash-note" id="workspace-dash-machine-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-usage" data-tone="idle" type="button" title="Open the usage tracker in Model Lab"><span class="ws-dash-kicker">USAGE</span><strong class="ws-dash-value" id="workspace-dash-usage-value">No reading yet</strong><span class="ws-dash-note" id="workspace-dash-usage-note"></span></button>
+    </section>
     <div class="ws-columns">
       <section class="ws-conversation" aria-label="Conversation with your companion">
-        <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div><button id="workspace-stop-all" class="ghost mini" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button><button id="workspace-restart" class="ghost mini" title="Stop every agent, save progress, and restart Studio.">Restart</button><button id="workspace-pause" class="ghost mini" title="Pause new work. Running jobs finish normally.">Pause</button></div>
+        <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div><button id="workspace-stop-all" class="ghost mini" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button><button id="workspace-restart" class="ghost mini" title="Stop every agent, save progress, and restart Studio.">Restart</button></div>
         <div id="workspace-thread" class="ws-thread" role="log" aria-label="Project conversation" aria-live="polite" aria-relevant="additions"></div>
         <form id="workspace-form" class="ws-composer">
           <div class="ws-compose-top"><div class="ws-modes" role="group" aria-label="Message purpose"><button type="button" id="workspace-mode-chat" aria-pressed="true">Talk together</button><button type="button" id="workspace-mode-work" aria-pressed="false">Give a task</button></div><span id="workspace-composer-context"></span></div>
@@ -153,7 +162,7 @@
 </header>
 <nav class="tabs" id="tabs" aria-label="Surfaces and tools">
   <button class="home-tab" data-nav="workspace" title="Your workspace (H)">← Workspace</button>
-  <button id="nav-command" class="home-tab" data-nav="command" data-return-label="Back to Command" title="Command view (D)"><svg class="glyph glyph-home" aria-hidden="true" focusable="false"><use href="#g-command"/></svg><svg class="glyph glyph-back" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span><kbd class="key">D</kbd><span class="dot live" data-badge="progress" data-badge-mode="dot" hidden></span></button>
+  <button id="nav-command" class="home-tab" data-nav="command" data-return-label="Back to Command" title="Command view (D)"><svg class="glyph glyph-home" aria-hidden="true" focusable="false"><use href="#g-command"/></svg><svg class="glyph glyph-back" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span><kbd class="key">D</kbd><span class="dot live" data-badge="progress" data-badge-mode="dot" hidden></span><span class="count warn" data-badge="questions" hidden></span></button>
   <span class="tabs-sep" aria-hidden="true"></span>
   <button class="tab active" data-tab="booklet" title="Model catalog (1)"><span class="label">Model catalog</span><kbd class="key">1</kbd></button>
   <button class="tab" data-tab="graph" title="Model Lab (2)"><span class="label">Model Lab</span><kbd class="key">2</kbd></button>
@@ -190,7 +199,7 @@
         <button id="model-lab-tab-usage" role="tab" aria-selected="false" aria-controls="model-lab-usage" tabindex="-1" data-lab-view="usage">Usage</button>
         <button id="model-lab-tab-tracker" role="tab" aria-selected="false" aria-controls="model-lab-tracker" tabindex="-1" data-lab-view="tracker">Tracker</button>
         <button id="model-lab-tab-context" role="tab" aria-selected="false" aria-controls="model-lab-context" tabindex="-1" data-lab-view="context">Context</button>
-        <button id="model-lab-tab-compare" role="tab" aria-selected="false" aria-controls="model-lab-compare" tabindex="-1" data-lab-view="compare">Compare <span class="lab-soon">Planned</span></button>
+        <button id="model-lab-tab-compare" role="tab" aria-selected="false" aria-controls="model-lab-compare" tabindex="-1" data-lab-view="compare" hidden>Compare <span class="lab-soon">Planned</span></button>
       </div>
       <p id="model-lab-status" class="lab-status" role="status" aria-live="polite"></p>
       <section id="model-lab-rankings" role="tabpanel" aria-labelledby="model-lab-tab-rankings">
@@ -438,7 +447,7 @@
         </section>
         <details class="settings-optional"><summary>Jev connection & optional task suggestions</summary>
           <p class="muted">Choose where Jev is routed: the Vercel AI Gateway, TypeSafe's Jev API directly, OpenCode Zen (including its free Jev tier), or OpenRouter. Each route keeps its own key, stored encrypted; switching never moves a key between routes. The key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
-          <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: a hosted gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option><option value="zen">OpenCode Zen</option><option value="openrouter">OpenRouter</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled"><span class="track"></span><span>Intake classification</span></label></div>
+          <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: a hosted gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option><option value="zen">OpenCode Zen</option><option value="openrouter">OpenRouter</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled" checked><span class="track"></span><span>Intake classification</span></label></div>
           <p class="muted" id="jev-status" role="status">Checking Jev…</p>
         </details>
         <details class="settings-optional"><summary>Diagnostics & app updates</summary>
@@ -487,18 +496,18 @@
   <div class="rail-stats" id="tree-stats">no session yet</div>
 </aside>
 <canvas id="idle-layer-far" aria-hidden="true" hidden></canvas>
-<canvas id="idle-layer" tabindex="0" role="application" aria-label="Command constellation" hidden></canvas>
+<canvas id="idle-layer" tabindex="0" role="application" aria-label="Command view" hidden></canvas>
 <div id="idle-hud" hidden>
   <div class="cmd-top">
     <div class="cmd-brand">
       <div class="monogram small" aria-hidden="true">M+</div>
       <div class="cmd-brand-text">
         <span class="eyebrow">Mefi's Studio</span>
-        <h1 class="cmd-heading">Command center</h1>
+        <h1 class="cmd-heading">Command view</h1>
         <div id="idle-telemetry" class="cmd-tele" role="group" aria-label="Live status">
           <button class="pill" data-tele="sessions" title="Fit the whole constellation"><b class="num">0</b><span class="unit">sessions</span></button>
           <button class="pill" data-tele="progress" title="Jump to the next in-progress todo" hidden><i class="dot live" aria-hidden="true"></i><b class="num">0</b><span class="unit">in progress</span></button>
-          <button class="pill" data-tele="tasks" data-nav="tasks" title="Open Tasks (T)" hidden><b class="num">0</b><span class="unit">open tasks</span></button>
+          <button class="pill" data-tele="tasks" data-nav="tasks" title="Open the Task board (T)" hidden><b class="num">0</b><span class="unit">open tasks</span></button>
           <button class="pill" data-tele="ideas" data-nav="ideas" title="Open Feature ideas (I)" hidden><b class="num">0</b><span class="unit">unread ideas</span></button>
           <button class="pill" data-tele="machine" data-nav="machine" title="Machine status (opens the Explorer)" hidden><i class="dot" aria-hidden="true"></i><span class="unit">machine · busy</span></button>
           <button class="pill" id="idle-pill-assistant" data-tele="assistant" data-tone="ok" title="Select the assistant (M)" hidden><i class="dot" aria-hidden="true"></i><span class="unit">assistant</span></button>
@@ -555,7 +564,7 @@
   <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, settings, assistant, done and questions">
     <header class="rail-tabs" role="tablist" aria-label="Panel views">
       <button id="cmd-rail-tab-work" class="rail-tab" role="tab" aria-selected="true" aria-controls="idle-feed" data-rail-view="work">Work<span id="cmd-rail-work-badge" class="count" hidden></span></button>
-      <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings">Settings</button>
+      <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings">Work settings</button>
       <button id="cmd-rail-tab-assistant" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-chat" tabindex="-1" data-rail-view="assistant">Assistant<span id="cmd-rail-assistant-badge" class="count" hidden></span></button>
       <button id="cmd-rail-tab-done" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-done" tabindex="-1" data-rail-view="done">Done</button>
       <button id="cmd-rail-tab-ask" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-asks" tabindex="-1" data-rail-view="ask">Ask<span id="cmd-rail-ask-badge" class="count warn" hidden></span></button>
@@ -720,7 +729,7 @@
       <button class="primary" data-nav="booklet" data-variant="desktop-only">Open the Booklet</button>
       <button class="ghost" data-nav="help" data-variant="desktop-only">Shortcuts</button>
       <button id="cmd-empty-retry" class="primary" data-variant="store">Retry</button>
-      <button class="ghost" data-nav="tasks" data-variant="store">Open Tasks</button>
+      <button class="ghost" data-nav="tasks" data-variant="store">Open the Task board</button>
       <button id="cmd-empty-assistant" class="ghost" title="Select the assistant node and focus its composer (M)" hidden>Message the assistant</button>
     </div>
   </div>
@@ -756,7 +765,7 @@
     <header class="explorer-head sheet-head">
       <button class="sheet-back ghost mini" data-nav-close="tasks" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
       <div class="sheet-title">
-        <div class="eyebrow">A-Eyes</div>
+        <div class="eyebrow">Work</div>
         <h2 id="tasks-heading">Task board</h2>
       </div>
       <div class="sheet-links" data-sheet-links="tasks" role="group" aria-label="Other tools"></div>
@@ -810,12 +819,12 @@
     <header class="explorer-head sheet-head">
       <button class="sheet-back ghost mini" data-nav-close="ideas" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
       <div class="sheet-title">
-        <div class="eyebrow">A-Eyes</div>
+        <div class="eyebrow">Work</div>
         <h2 id="ideas-heading">Feature ideas</h2>
       </div>
       <div class="sheet-links" data-sheet-links="ideas" role="group" aria-label="Other tools"></div>
       <div class="sheet-actions">
-        <button id="ideas-view" class="ghost" title="Toggle list / feature graph">Graph view</button>
+        <button id="ideas-view" class="ghost" title="Toggle list / feature graph">Feature graph</button>
         <button id="ideas-scan" class="ghost" title="Scan recent chats for ideas">Scan chats</button>
         <button id="ideas-ai" class="ghost" title="AI review of scanned ideas (needs a key)">AI review</button>
         <button id="ideas-clean" class="ghost" title="Remove done/accepted ideas from the list">Clean done</button>
@@ -844,7 +853,7 @@
     <header class="explorer-head sheet-head">
       <button class="sheet-back ghost mini" data-nav-close="overhead" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
       <div class="sheet-title">
-        <div class="eyebrow">A-Eyes</div>
+        <div class="eyebrow">Monitor</div>
         <h2 id="overhead-heading">Overhead</h2>
       </div>
       <div class="sheet-links" data-sheet-links="overhead" role="group" aria-label="Other tools"></div>
@@ -899,7 +908,7 @@
     <header class="explorer-head sheet-head">
       <button class="sheet-back ghost mini" data-nav-close="analyzer" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
       <div class="sheet-title">
-        <div class="eyebrow">A-Eyes</div>
+        <div class="eyebrow">Monitor</div>
         <h2 id="analyzer-heading">Analyzer</h2>
       </div>
       <div class="sheet-links" data-sheet-links="analyzer" role="group" aria-label="Other tools"></div>
@@ -943,11 +952,11 @@
     <header class="explorer-head sheet-head">
       <button class="sheet-back ghost mini" data-nav-close="explorer" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
       <div class="sheet-title">
-        <div class="eyebrow">A-Eyes</div>
+        <div class="eyebrow">Monitor</div>
         <h2 id="explorer-heading">Session explorer</h2>
       </div>
       <div class="sheet-links" role="group" aria-label="Other tools">
-        <button id="tasks-open" class="dock-item small" title="Tasks (T)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg><span class="label">Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
+        <button id="tasks-open" class="dock-item small" title="Task board (T)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg><span class="label">Task board</span><span class="count" data-badge="tasks" hidden></span></button>
         <button id="ideas-open" class="dock-item small" title="Feature ideas (I)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-ideas"/></svg><span class="label">Ideas</span><span class="count" id="ideas-badge" data-badge="ideas" hidden>0</span></button>
         <button id="overhead-open" class="dock-item small" title="Overhead (O)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-overhead"/></svg><span class="label">Overhead</span></button>
         <button class="dock-item small" data-nav="analyzer" title="Analyzer (A)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-analyzer"/></svg><span class="label">Analyzer</span></button>
@@ -970,7 +979,7 @@
         <div id="explorer-detail" class="explorer-detail"><p class="muted">Pick a session on the left, or a node in the rail behind this sheet.</p></div>
       </section>
       <aside class="explorer-col">
-        <h3>Assistant <span class="badge premium" id="assistant-model">deepseek-v4.1-flash</span></h3>
+        <h3>Assistant <span class="badge premium" id="assistant-model">not connected</span></h3>
         <p class="eyes-status" id="assistant-status">idle</p>
         <p class="eyes-status assistant-service" id="assistant-service" role="status">service starting…</p>
         <div id="assistant-thread" class="assistant-thread" aria-live="polite" aria-label="Assistant thread"></div>

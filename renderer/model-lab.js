@@ -216,8 +216,12 @@
       const button = $(`tab-${name}`);
       button.addEventListener("click", () => show(name));
       button.addEventListener("keydown", (event) => {
-        const target = event.key === "ArrowRight" ? (index + 1) % views.length : event.key === "ArrowLeft" ? (index + views.length - 1) % views.length : event.key === "Home" ? 0 : event.key === "End" ? views.length - 1 : -1;
-        if (target < 0) return; event.preventDefault(); show(views[target]); $(`tab-${views[target]}`).focus();
+        // Arrow keys cycle only the tabs that are shown; a hidden tab (Compare
+        // until it runs) is skipped instead of being reachable by keyboard.
+        const order = views.filter((view) => !$(`tab-${view}`)?.hidden);
+        const at = order.indexOf(name);
+        const target = at < 0 ? -1 : event.key === "ArrowRight" ? (at + 1) % order.length : event.key === "ArrowLeft" ? (at + order.length - 1) % order.length : event.key === "Home" ? 0 : event.key === "End" ? order.length - 1 : -1;
+        if (target < 0) return; event.preventDefault(); show(order[target]); $(`tab-${order[target]}`).focus();
       });
     }
     $("refresh").addEventListener("click", refresh);

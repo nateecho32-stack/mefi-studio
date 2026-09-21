@@ -304,6 +304,8 @@
   function render() {
     const report = state.report;
     if (!report) return;
+    // The workspace's usage tile listens; it never reads on its own.
+    if (typeof CustomEvent === "function") window.dispatchEvent?.(new CustomEvent("mefi:usage-report", { detail: report }));
     const full = $("model-lab-tracker-body");
     if (full) renderFull(full, report);
     const compactBody = $("cmd-usage-body");
@@ -366,8 +368,9 @@
     if (save) writeStore("mefiStudio.cmdUsageCollapsed", state.collapsed ? "1" : "0");
   }
   function openTab() {
-    window.MefiIdle?.exit?.();
-    window.MefiBooklet?.showTab?.("graph");
+    // Through the registry so the "Back to Command" return state is recorded.
+    if (window.MefiNav?.go) window.MefiNav.go("graph");
+    else { window.MefiIdle?.exit?.(); window.MefiBooklet?.showTab?.("graph"); }
     window.MefiModelLab?.show?.("tracker");
   }
   function open() {
@@ -390,6 +393,6 @@
     });
   }
 
-  window.MefiUsageTracker = { refresh, tick, open, openTab, init };
+  window.MefiUsageTracker = { refresh, tick, open, openTab, init, report: () => state.report };
   init();
 })();

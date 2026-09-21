@@ -5,6 +5,7 @@ import vm from "node:vm";
 
 const source = await readFile(new URL("../renderer/tasks.js", import.meta.url), "utf8");
 const groupsSource = await readFile(new URL("../renderer/task-groups.js", import.meta.url), "utf8");
+const stageSource = await readFile(new URL("../renderer/stage-labels.js", import.meta.url), "utf8");
 
 class Element {
   constructor(tag = "div") {
@@ -57,6 +58,7 @@ function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = nu
     document: { readyState: "loading", getElementById: get, createElement: (tag) => new Element(tag), querySelectorAll: () => [], addEventListener() {} },
     setTimeout() {}, setInterval() {}, console,
   });
+  vm.runInContext(stageSource, context);
   if (overview) vm.runInContext(groupsSource, context);
   vm.runInContext(source, context);
   const api = context.window.MefiTasks; api.init();
@@ -162,8 +164,8 @@ test("shared-task details link delegated builders and count only confirmed subta
   const panel = descendants(env.get("task-detail")).find((element) => element.dataset.taskPanel === "delegation");
   assert.match(panel.textContent, /Delegated subtasks · 1\/5 confirmed/);
   assert.match(panel.textContent, /Build format and UI independently/);
-  assert.match(panel.textContent, /Write UI.*Checking completion/);
-  assert.match(panel.textContent, /Write checks.*Needs build approval/);
+  assert.match(panel.textContent, /Write UI.*Verifying/);
+  assert.match(panel.textContent, /Write checks.*Awaiting approval/);
   assert.match(panel.textContent, /Unavailable subtask · missing.*Board status unavailable/);
   assert.doesNotMatch(panel.textContent, /Unrelated private work/);
   assert.equal(descendants(panel).filter((element) => element.dataset.taskAction === "view-subtask" && element.disabled).length, 2);

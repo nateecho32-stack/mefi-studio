@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
 const source = await readFile(new URL("../renderer/workspace.js", import.meta.url), "utf8");
+const stageSource = await readFile(new URL("../renderer/stage-labels.js", import.meta.url), "utf8");
 const flush = async () => { for (let i = 0; i < 30; i += 1) await Promise.resolve(); };
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 
@@ -74,6 +75,7 @@ async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter 
     setTimeout: timerQueue ? (fn, delay) => { const timer = { fn, delay }; timerQueue.push(timer); return timer; } : setTimeout,
     clearTimeout: timerQueue ? (timer) => { if (timer) timer.cancelled = true; } : clearTimeout, console,
   });
+  vm.runInContext(stageSource, context);
   vm.runInContext(source, context);
   await flush();
   if (autoEnter) context.window.MefiWorkspace.enter();
@@ -246,7 +248,7 @@ test("unapproved builds appear in Review and open scope details without approvin
   env.bridge.backlogStatus = async () => ({ ok: true, counts: { approval: 1, ready: 0 }, taskStates: [{ id: "original", stage: "approval", reason: "Review the scope before building" }], next: [] });
   await env.workspace.refresh(true);
   await env.el("review").trigger("click");
-  assert.match(env.el("work-list").textContent, /Awaiting build approval/);
+  assert.match(env.el("work-list").textContent, /Awaiting approval/);
   const review = env.el("work-list").querySelectorAll("button").find((button) => button.textContent === "Review build ↗");
   assert.ok(review); await review.trigger("click");
   assert.equal(routes[0][0], "tasks"); assert.equal(routes[0][1].taskId, "original");
@@ -571,11 +573,48 @@ test("dependency waits and grouped work remain visible without offering an unsaf
     { id: "plan", stage: "ready" },
   ], next: [{ title: "Gallery plan" }], paused: true, summary: "Paused. Current workers can finish; new work will wait.", waiting: "Paused. Current workers can finish; new work will wait." });
   await env.workspace.refresh(true);
-  assert.match(env.el("work-list").textContent, /Waiting on prerequisites/);
+  assert.match(env.el("work-list").textContent, /Waiting/);
   assert.match(env.el("work-list").textContent, /Waiting for Gallery plan/);
-  assert.match(env.el("work-list").textContent, /Included in a plan/);
+  assert.match(env.el("work-list").textContent, /In a plan/);
   assert.match(env.el("work-list").textContent, /View plan/);
   assert.doesNotMatch(env.el("work-list").textContent, /Try again/);
   assert.match(env.el("backlog-metrics").textContent, /1waiting/);
   assert.equal(env.el("backlog-next").textContent, "Up next: Gallery plan");
+});
+
+test("the dashboard reads the real run state, workers and waiting decisions from pushes", async () => {
+  const env = await environment();
+  assert.equal(env.el("dash-service-value").textContent, "Ready");
+  assert.equal(env.el("pause").textContent, "Pause");
+  env.events.status({ projectId: "project-a", running: [{ title: "Write tests" }], execute: true, parallel: 2 });
+  assert.equal(env.el("dash-service-value").textContent, "Working");
+  assert.equal(env.el("dash-workers-value").textContent, "1 building");
+  assert.match(env.el("dash-workers-note").textContent, /Write tests/);
+  env.events.assistant({ state: { projectId: "project-a", messages: [], ai: { keyPresent: true }, questions: [{ id: "q1", title: "Ship it?", status: "open" }, { id: "q2", title: "Old", status: "answered" }] } });
+  assert.equal(env.el("dash-attention-value").textContent, "1 waiting");
+  assert.match(env.el("dash-attention-note").textContent, /1 question to answer/);
+  assert.equal(env.el("dash-attention").dataset.target, "ask");
+  env.events.status({ projectId: "project-a", running: [], execute: false });
+  assert.equal(env.el("dash-service-value").textContent, "New work held");
+  env.events.assistant({ state: { projectId: "project-a", messages: [], ai: { keyPresent: true }, status: "paused", questions: [] } });
+  assert.equal(env.el("dash-service-value").textContent, "Paused");
+  assert.equal(env.el("pause").textContent, "Resume");
+  assert.equal(env.el("connection").textContent, "Paused");
+});
+
+test("one pause control holds all new work and resumes through start-work", async () => {
+  const calls = [];
+  const env = await environment({ bridgeOverrides: {
+    backlogControl: async (payload) => { calls.push(["backlog", payload]); return { ok: true, backlog: { paused: true, counts: { ready: 1 }, next: [], taskStates: [] } }; },
+    assistantControl: async (action) => { calls.push(["control", action]); return { ok: true, state: { projectId: "project-a", messages: [], ai: { keyPresent: true } }, autopilot: { execute: true, running: [] } }; },
+  } });
+  await env.el("pause").trigger("click"); await flush();
+  assert.equal(calls.at(-1)[0], "backlog");
+  assert.equal(calls.at(-1)[1].action, "pause");
+  assert.equal(env.el("pause").textContent, "Resume");
+  assert.equal(env.el("dash-service-value").textContent, "New work held");
+  await env.el("pause").trigger("click"); await flush();
+  assert.deepEqual(calls.at(-1), ["control", "start-work"]);
+  assert.equal(env.el("pause").textContent, "Pause");
+  assert.equal(env.el("dash-service-value").textContent, "Ready");
 });

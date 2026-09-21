@@ -4,6 +4,7 @@
 
   const COLORS = ["#e6c98d", "#9db7ff", "#57ff9a", "#f2a2e8", "#ffb38a", "#86d1d6", "#c9a8ff", "#ffd479"];
   const FILTERS = ["all", "open", "review", "done"];
+  const stageLabel = (stage, task, options) => window.MefiStage?.label?.(stage, task, options) ?? String(stage ?? task?.status ?? "open");
   const READINESS_FILTERS = { all: "All scheduling states", ready: "Ready", running: "Working", review: "Verifying", waiting: "Waiting or retrying", blocked: "Needs attention" };
   // A row that just finished pulses green for a few seconds — the board's
   // echo of the constellation's done pulse — before it settles under the mark.
@@ -144,12 +145,12 @@
 
   function describe(task) {
     const stage = taskStage(task);
-    if (stage === "done") return { stage, label: task.status === "archived" ? "Archived" : "Done", summary: doneSummary(task) };
+    if (stage === "done") return { stage, label: stageLabel("done", task), summary: doneSummary(task) };
     if (task?.status === "awaiting_verification" || task?.status === "verifying") {
-      return { stage, label: "Checking completion", summary: "The worker finished. Completion checks are pending; this work is not marked done yet." };
+      return { stage, label: stageLabel("review"), summary: "The worker finished. Completion checks are pending; this work is not marked done yet." };
     }
-    if (stage === "review") return { stage, label: "Needs review", summary: task?.verification?.reason || task?.lastRunError || "The last attempt could not be confirmed. Review its result before retrying or marking it done." };
-    return { stage, label: task?.status === "active" ? "Working" : "Open", summary: task?.lastRunError || task?.prompt || "Ready for the assistant." };
+    if (stage === "review") return { stage, label: stageLabel("blocked"), summary: task?.verification?.reason || task?.lastRunError || "The last attempt could not be confirmed. Review its result before retrying or marking it done." };
+    return { stage, label: stageLabel(task?.status === "active" ? "running" : "open"), summary: task?.lastRunError || task?.prompt || "Ready for the assistant." };
   }
 
   function retryDescription(at) {
@@ -222,8 +223,7 @@
     };
     dot.className = `src-tag ${STATUS_TAG[task.status] ?? "collision"}`;
     const scheduled = scheduledTask(task);
-    const readinessLabels = { ready: "READY", approval: "AWAITING APPROVAL", waiting: "WAITING", running: "RUNNING", review: "VERIFYING", blocked: "BLOCKED", grouped: "IN PLAN", cooling: "RETRY LATER", done: task.status === "archived" ? "ARCHIVED" : "DONE" };
-    dot.textContent = readinessLabels[scheduled?.stage] || (needsReview(task) ? "REVIEW" : String(task.status ?? "open").toUpperCase());
+    dot.textContent = (scheduled?.stage ? stageLabel(scheduled.stage, task, { short: true }) : needsReview(task) ? stageLabel("blocked") : stageLabel(task.status, task, { short: true })).toUpperCase();
     if (scheduled) { dot.dataset.readiness = scheduled.stage; dot.title = scheduled.reason || ""; li.dataset.readiness = scheduled.stage; }
     const text = document.createElement("span");
     text.className = "task-name";
@@ -403,7 +403,7 @@
     const head = node("div", "task-overview-card-head");
     const kind = planning ? "PLAN & DISCUSSION" : group.kind === "approved-plan" ? "APPROVED PLAN" : group.kind === "task" ? "TASK" : group.kind === "task-delegation" ? "SHARED TASK & SUBTASKS" : "PLAN & FOLLOW-UPS";
     head.append(node("span", "eyebrow", kind));
-    const badge = node("span", "task-overview-status", ({ planning: "Planning", running: "Working", review: "Checking completion", blocked: "Needs attention", done: "Confirmed", waiting: "Waiting" })[stage]);
+    const badge = node("span", "task-overview-status", stageLabel(stage));
     badge.dataset.stage = stage;
     head.append(badge);
     card.append(head, node("h3", "task-overview-title", group.title || group.task?.title || "Untitled plan"));
@@ -890,7 +890,7 @@
       link.type = "button"; link.dataset.taskAction = "view-subtask"; link.dataset.taskId = child.id; link.disabled = !child.task;
       link.addEventListener("click", () => window.MefiTasks.selectTask(child.id));
       const stage = overviewProgress(child.task), scheduled = child.task && scheduledTask(child.task);
-      const label = !child.task ? "Board status unavailable" : scheduled?.stage === "approval" ? "Needs build approval" : ({ done: "Confirmed", running: "Working", review: "Checking completion", blocked: "Needs attention", waiting: "Waiting" })[stage];
+      const label = !child.task ? "Board status unavailable" : scheduled?.stage === "approval" ? stageLabel("approval") : stageLabel(stage, child.task);
       row.append(link, node("span", "task-context-hint", label));
       if (scheduled?.reason) row.append(node("p", "task-context-hint", scheduled.reason));
       list.append(row);

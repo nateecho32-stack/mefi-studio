@@ -8,7 +8,8 @@
   const SVG_NS = "http://www.w3.org/2000/svg";
   const ESC_HELP = "Close the top-most layer: palette → help → sheet → Command (clear selection, then leave)";
   const BADGE_THROTTLE_MS = 2000;
-  const BADGE_POLL_MS = 20000;
+  // Pushes keep the counts live; this backstop only catches a missed push.
+  const BADGE_POLL_MS = 120000;
   const RESUME_KEY = "mefiStudio.resume";
   // Fields a live-update reload carries across: text-like inputs and textareas
   // that have an id. Checkboxes and selects are settings and persist elsewhere.
@@ -19,7 +20,7 @@
   const state = { sheet: null, transient: null, returnTo: null, focusReturn: { sheet: null, transient: null } };
   // assistant holds the service tone (ok | busy | warn | offline | paused), painted
   // as a dot on the Explorer's dock item and tool button.
-  const badges = { sessions: 0, progress: 0, tasks: 0, ideas: 0, machine: null, assistant: null };
+  const badges = { sessions: 0, progress: 0, tasks: 0, ideas: 0, machine: null, assistant: null, questions: 0 };
   let lastBadgeRefresh = 0;
 
   // A record with no key, or a multi-character display key such as "Ctrl K",
@@ -49,6 +50,22 @@
   const openTasks = (tasks) => (Array.isArray(tasks) ? tasks : []).filter((task) => task.status === "open" || task.status === "active").length;
   const unreadIdeas = (ideas) => (Array.isArray(ideas) ? ideas : []).filter((idea) => !idea.read).length;
   const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+  const openQuestions = (state) => (Array.isArray(state?.questions) ? state.questions : []).filter((question) => question && question.status === "open");
+  // Decisions the agents are waiting on: a count on every Command entry point
+  // and one toast per new question, whichever view is up. The first payload
+  // seeds what is already known so a restart never re-announces old asks.
+  let knownQuestions = null;
+  function noticeQuestions(state) {
+    if (!state || !Array.isArray(state.questions)) return;
+    const open = openQuestions(state);
+    setBadge("questions", open.length);
+    if (knownQuestions === null) { knownQuestions = new Set(state.questions.map((question) => question.id)); return; }
+    for (const question of open) {
+      if (knownQuestions.has(question.id)) continue;
+      knownQuestions.add(question.id);
+      window.MefiToast?.(`Decision needed: ${question.title}`, "warn", { action: { label: "Answer", run: () => go("command", { rail: "ask" }) } });
+    }
+  }
 
   // ---- registry ----------------------------------------------------------
 
@@ -73,6 +90,7 @@
       key: "D",
       glyph: "g-command",
       badge: "progress",
+      alert: "questions",
       desc: "The node tree / constellation — sessions, agents, todos and tasks",
       searchTerms: "node tree live work monitor progress workers",
       showIn: showIn({ palette: true, help: true, footer: true }),
@@ -188,8 +206,8 @@
       kind: "overlay",
       layer: "sheet",
       group: "tools",
-      key: null,
-      glyph: "g-ideas",
+      key: "P",
+      glyph: "g-plans",
       badge: null,
       desc: "Explore an idea, settle decisions, and create reviewed tasks",
       searchTerms: "plan an idea planning questions specification approval",
@@ -287,7 +305,7 @@
     },
     {
       id: "music", label: "Music & themes", short: "Music", kind: "overlay", layer: "sheet",
-      group: "tools", glyph: "g-music", badge: null, commandPrimary: true,
+      group: "tools", key: "U", glyph: "g-music", badge: null, commandPrimary: true,
       desc: "Local music, Spotify links, AI suggestions, and Studio themes",
       searchTerms: "color colour appearance accent theme sound audio background",
       showIn: showIn({ dock: true, palette: true, help: true }),
@@ -402,7 +420,7 @@
     },
     {
       id: "machine",
-      label: "Machine status",
+      label: "Machine status (in the Explorer)",
       short: "Machine",
       kind: "action",
       layer: null,
@@ -729,6 +747,14 @@
       } else {
         element.className = "count";
       }
+      element.hidden = true;
+      list.push(element);
+    }
+    if (dest.alert) {
+      // A warning count: decisions the agents are waiting on.
+      const element = document.createElement("span");
+      element.className = "count warn";
+      element.dataset.badge = dest.alert;
       element.hidden = true;
       list.push(element);
     }
@@ -1753,6 +1779,7 @@
     window.mefiStudio?.onAssistant?.((payload) => {
       window.MefiTree?.applyAssistant?.(payload);
       setBadge("assistant", window.MefiTree?.assistantSummary?.()?.tone ?? null);
+      noticeQuestions(payload?.state);
     });
     window.addEventListener("mefi:eyes-activity", (event) => {
       if (!event.detail?.todos) return;

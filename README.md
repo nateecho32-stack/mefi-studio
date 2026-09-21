@@ -93,9 +93,14 @@ Ruins Runner integration uses `MEFI_STUDIO_GAME_ROOT`, or a sibling
 - **Auto build** stays on by default. Turn it off for **Verify first** so each
   task waits in Review until you choose **Approve build**. Approval covers the
   saved task scope and is saved across restarts for all projects.
+- **Studio at a glance** sits above the conversation: the service state with
+  the single **Pause / Resume** control, running workers, what needs you (open
+  questions and work to review), what is up next, the machine gauge and
+  today's usage. Each tile opens the view that owns it, and a new agent
+  question raises a toast with an **Answer** button from any view.
 - **Work through backlog** works the project's existing tasks and ideas first,
-  keeping a small runnable buffer; **Pause** stops new scheduling while current
-  workers finish.
+  keeping a small runnable buffer; **Pause** holds every kind of new work (the
+  same hold as Command's **New work** switch) while current workers finish.
 - The **task board** opens as plan cards with progress and a current step, and
   holds prerequisites, handoff context and task history. Missing prerequisites
   and dependency cycles are surfaced for correction.
@@ -310,10 +315,12 @@ cascade with `npm run check:css` instead of eyeballing diffs.
 
 ## Keys
 
-`D` Command view · `1` Booklet · `2` Graph · `3` A-Eyes · `4` Studio · `E`
-explorer · `T` tasks · `I` ideas · `O` overhead · `A` analyzer · `Ctrl K`
-palette · `R` refresh catalog · `G` pin the node tree · `M` message the
-assistant · `?` shortcut sheet · `Esc` closes the top-most layer.
+`H` workspace · `D` Command view · `1` Model catalog · `2` Model Lab · `3`
+Activity & evidence · `4` Settings · `E` explorer · `T` task board · `P`
+plans · `I` ideas · `O` overhead · `A` analyzer · `U` music & themes ·
+`Ctrl K` palette · `R` refresh catalog · `G` pin the node tree · `M` message
+the assistant (inside Command) · `?` shortcut sheet · `Esc` closes the
+top-most layer.
 
 ## Privacy and security
 
@@ -328,7 +335,8 @@ assistant · `?` shortcut sheet · `Esc` closes the top-most layer.
 
 ## Love2D studio
 
-The Studio tab launches the external Ruins Runner checkout's dev tool exactly
+The Settings tab's "Optional · Ruins Runner & Love2D" group launches the
+external Ruins Runner checkout's dev tool exactly
 like `Run Dev Tool (LOVE2D).cmd` (windowed LÖVE 11.5 with
 `dev/dev_tool_love_project`). If the runtime is missing, run
 `tools/build-windows.ps1` from the game root.

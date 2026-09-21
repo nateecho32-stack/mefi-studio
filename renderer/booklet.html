@@ -2273,6 +2273,26 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-connection { font-size: 11px; color: #c2d1b3; white-space: nowrap; border: 1px solid #414b38; background: #20281c; border-radius: 20px; padding: 7px 11px; }
 .ws-connection::before { content: ""; display: inline-block; width: 5px; height: 5px; background: #aabd97; border-radius: 50%; margin: 0 6px 1px 0; }
 .ws-connection.working::before { box-shadow: 0 0 8px #aabd97; }
+/* Studio at a glance: the landing strip that answers "is anything waiting on
+   me, is anything running, is the machine holding work" before the
+   conversation. Every tile deep-links to the view that owns its signal. */
+.ws-dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 10px; margin: 0 0 18px; }
+.ws-dash-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 86px; padding: 11px 13px; text-align: left; background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px; color: inherit; font: inherit; cursor: pointer; transition: border-color var(--dur-2) var(--ease), background var(--dur-2) var(--ease); }
+.ws-dash-tile:hover, .ws-dash-tile:focus-visible { border-color: var(--hairline-strong); background: var(--panel-solid); }
+.ws-dash-service { cursor: default; }
+.ws-dash-kicker { color: #919886; font: 9px/1.4 var(--font-ui); letter-spacing: 1.6px; }
+.ws-dash-value { font: 500 15px/1.3 var(--font-ui); color: #e3dfd0; }
+.ws-dash-note { font-size: 11px; line-height: 1.4; color: var(--muted); }
+.ws-dash-actions { margin-top: auto; padding-top: 6px; }
+.ws-dash-tile[data-tone="ok"] .ws-dash-value { color: #cfe9d8; }
+.ws-dash-tile[data-tone="busy"] .ws-dash-value { color: var(--gold-bright); }
+.ws-dash-tile[data-tone="warn"] { border-color: rgba(230, 168, 90, 0.55); }
+.ws-dash-tile[data-tone="warn"] .ws-dash-value { color: #f0c27b; }
+.ws-dash-tile[data-tone="held"] { border-color: rgba(200, 120, 120, 0.5); }
+.ws-dash-tile[data-tone="held"] .ws-dash-value { color: #e9a3a3; }
+#workspace-sidebar .ws-home .count { margin-left: auto; }
+.toast.has-action { pointer-events: auto; display: flex; align-items: center; gap: 10px; }
+.toast-action { flex-shrink: 0; padding: 4px 9px; font-size: var(--fs-sm); border-radius: var(--r-sm); border: 1px solid var(--hairline-strong); background: transparent; color: var(--gold-bright); cursor: pointer; }
 .ws-columns { display: grid; grid-template-columns: minmax(0,1fr) minmax(310px,34%); gap: 27px; flex: 1; min-height: 0; padding-bottom: 18px; }
 .ws-conversation { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .ws-companion-bar { display: flex; align-items: center; gap: 17px; padding: 8px 0 16px; flex-shrink: 0; border-bottom: 1px solid #30332a; min-height: 99px; }
@@ -3786,6 +3806,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   <symbol id="g-update" viewBox="0 0 16 16"><path d="M8 2.5v7M5 6.5l3 3 3-3"/><path d="M3 11.5v1a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1"/></symbol>
   <symbol id="g-plane" viewBox="0 0 16 16"><path d="M8 2.6 13.8 6v4L8 13.4 2.2 10V6z"/><path d="M2.2 6 8 9.2 13.8 6M8 9.2v4.2"/></symbol>
   <symbol id="g-chev" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></symbol>
+  <symbol id="g-plans" viewBox="0 0 16 16"><path d="M4 2.5h5.5L12 5v8.5H4z"/><path d="M9.5 2.5V5H12M6 8h4M6 10.5h4"/></symbol>
 </svg>
 <div id="workspace-sidebar" class="workspace studio-sidebar" data-open="false">
   <button id="workspace-sidebar-toggle" class="sidebar-edge" type="button" aria-label="Open studio sidebar" aria-controls="workspace-sidebar-panel" aria-expanded="false"></button>
@@ -3793,9 +3814,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     <div class="sidebar-heading"><span>YOUR STUDIO</span><button id="workspace-sidebar-close" class="ghost mini" type="button" aria-label="Close studio sidebar" title="Close sidebar (Esc)">×</button></div>
     <a class="ws-brand" href="#" data-nav="workspace"><span class="ws-brand-mark">m<span>+</span></span><span>Mefi's Studio<small>MAKE SOMETHING YOURS</small></span></a>
     <button class="ws-home" data-nav="workspace"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg>Your workspace <kbd>H</kbd></button>
-    <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open the node tree / Command view (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg>Node tree <kbd>D</kbd></button>
+    <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open Command view — the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg>Command view <kbd>D</kbd><span class="count warn" data-badge="questions" hidden></span></button>
     <button class="ws-home ws-shortcut" data-nav="tasks" title="Open your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg>Task board <kbd>T</kbd></button>
-    <button class="ws-home ws-shortcut" data-nav="plans" title="Explore an idea and review its plan"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg>Plans</button>
+    <button class="ws-home ws-shortcut" data-nav="plans" title="Explore an idea and review its plan (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg>Plans <kbd>P</kbd></button>
     <div class="ws-section-label"><span>PROJECTS</span><button id="workspace-add-project" class="ghost mini" title="Add an existing project folder" aria-label="Add project">+</button></div>
     <div id="workspace-projects" class="ws-projects" aria-label="Choose a project"></div>
     <p class="ws-sidebar-note">One space for each idea.<br>Its own work, its own conversation.</p>
@@ -3805,7 +3826,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       <button class="ghost ws-settings" data-nav="studio"><svg class="glyph" aria-hidden="true"><use href="#g-ambience"/></svg>Settings & connections</button>
       <button class="ghost ws-settings" data-nav="music"><svg class="glyph" aria-hidden="true"><use href="#g-music"/></svg>Music & themes</button>
       <button class="ghost ws-settings" data-nav="onboarding"><svg class="glyph" aria-hidden="true"><use href="#g-help"/></svg>Start here</button>
-      <details class="ws-personal"><summary>Make yourself at home <span>✧</span></summary><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Studio theme<select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></details>
+      <details class="ws-personal"><summary>Make yourself at home <span>✧</span></summary><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Studio theme<select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></details>
       <span class="ws-local-note"><i></i> A little studio. A lot of possibility.</span>
     </div>
   </aside>
@@ -3815,9 +3836,17 @@ body.music-preview-active #idle-hud { display: none !important; }
     <div class="ws-topbar"><div class="ws-project-heading"><span class="ws-kicker">WORKSPACE /</span><strong id="workspace-project-name">Opening your project…</strong></div><div class="ws-top-actions"><button id="workspace-reveal" class="ghost mini" title="Show the project folder">Open folder ↗</button><button id="workspace-remove-project" class="ghost mini" title="Remove this folder from Studio's project list. Files and local work stay on disk.">Remove project</button><button class="ghost mini" data-nav="palette" aria-label="Find a tool or command">Search <kbd>Ctrl K</kbd></button></div></div>
     <div class="ws-heading"><div><p class="ws-kicker" id="workspace-greeting">YOUR SPACE TO CREATE</p><h1>What are we making?</h1><p id="workspace-project-path" class="ws-project-path"></p></div><span id="workspace-connection" class="ws-connection">Connecting…</span></div>
     <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">A little guidance for your first project.</strong><p>Scan this computer, choose a project, let an explorer map it, connect your tools, create work and follow it through review.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div><div class="walkthrough-bar mini" id="walkthrough-invite-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-invite-bar-fill"></span></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start walkthrough</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk with me</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays in the sidebar">Not now</button></div></section>
+    <section id="workspace-dashboard" class="ws-dashboard" aria-label="Studio at a glance">
+      <div class="ws-dash-tile ws-dash-service" id="workspace-dash-service" data-tone="idle"><span class="ws-dash-kicker">SERVICE</span><strong class="ws-dash-value" id="workspace-dash-service-value">Connecting…</strong><span class="ws-dash-note" id="workspace-dash-service-note"></span><div class="ws-dash-actions"><button id="workspace-pause" class="ghost mini" title="Hold all new work: queued tasks, builds and the assistant's own suggestions. Running jobs finish normally.">Pause</button></div></div>
+      <button class="ws-dash-tile" id="workspace-dash-workers" data-nav="command" data-tone="idle" type="button" title="Open Command view · live work (D)"><span class="ws-dash-kicker">WORKERS</span><strong class="ws-dash-value" id="workspace-dash-workers-value">0 running</strong><span class="ws-dash-note" id="workspace-dash-workers-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-attention" data-tone="idle" data-target="review" type="button" title="Questions waiting for you and work to review"><span class="ws-dash-kicker">NEEDS YOU</span><strong class="ws-dash-value" id="workspace-dash-attention-value">Nothing waiting</strong><span class="ws-dash-note" id="workspace-dash-attention-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-next" data-tone="idle" type="button" title="Show the queue"><span class="ws-dash-kicker">UP NEXT</span><strong class="ws-dash-value" id="workspace-dash-next-value">Queue is empty</strong><span class="ws-dash-note" id="workspace-dash-next-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-machine" data-nav="explorer" data-tone="idle" type="button" title="Machine status (opens the Explorer)"><span class="ws-dash-kicker">MACHINE</span><strong class="ws-dash-value" id="workspace-dash-machine-value">Checking…</strong><span class="ws-dash-note" id="workspace-dash-machine-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-usage" data-tone="idle" type="button" title="Open the usage tracker in Model Lab"><span class="ws-dash-kicker">USAGE</span><strong class="ws-dash-value" id="workspace-dash-usage-value">No reading yet</strong><span class="ws-dash-note" id="workspace-dash-usage-note"></span></button>
+    </section>
     <div class="ws-columns">
       <section class="ws-conversation" aria-label="Conversation with your companion">
-        <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div><button id="workspace-stop-all" class="ghost mini" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button><button id="workspace-restart" class="ghost mini" title="Stop every agent, save progress, and restart Studio.">Restart</button><button id="workspace-pause" class="ghost mini" title="Pause new work. Running jobs finish normally.">Pause</button></div>
+        <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div><button id="workspace-stop-all" class="ghost mini" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button><button id="workspace-restart" class="ghost mini" title="Stop every agent, save progress, and restart Studio.">Restart</button></div>
         <div id="workspace-thread" class="ws-thread" role="log" aria-label="Project conversation" aria-live="polite" aria-relevant="additions"></div>
         <form id="workspace-form" class="ws-composer">
           <div class="ws-compose-top"><div class="ws-modes" role="group" aria-label="Message purpose"><button type="button" id="workspace-mode-chat" aria-pressed="true">Talk together</button><button type="button" id="workspace-mode-work" aria-pressed="false">Give a task</button></div><span id="workspace-composer-context"></span></div>
@@ -3875,7 +3904,7 @@ body.music-preview-active #idle-hud { display: none !important; }
 </header>
 <nav class="tabs" id="tabs" aria-label="Surfaces and tools">
   <button class="home-tab" data-nav="workspace" title="Your workspace (H)">← Workspace</button>
-  <button id="nav-command" class="home-tab" data-nav="command" data-return-label="Back to Command" title="Command view (D)"><svg class="glyph glyph-home" aria-hidden="true" focusable="false"><use href="#g-command"/></svg><svg class="glyph glyph-back" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span><kbd class="key">D</kbd><span class="dot live" data-badge="progress" data-badge-mode="dot" hidden></span></button>
+  <button id="nav-command" class="home-tab" data-nav="command" data-return-label="Back to Command" title="Command view (D)"><svg class="glyph glyph-home" aria-hidden="true" focusable="false"><use href="#g-command"/></svg><svg class="glyph glyph-back" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span><kbd class="key">D</kbd><span class="dot live" data-badge="progress" data-badge-mode="dot" hidden></span><span class="count warn" data-badge="questions" hidden></span></button>
   <span class="tabs-sep" aria-hidden="true"></span>
   <button class="tab active" data-tab="booklet" title="Model catalog (1)"><span class="label">Model catalog</span><kbd class="key">1</kbd></button>
   <button class="tab" data-tab="graph" title="Model Lab (2)"><span class="label">Model Lab</span><kbd class="key">2</kbd></button>
@@ -3912,7 +3941,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         <button id="model-lab-tab-usage" role="tab" aria-selected="false" aria-controls="model-lab-usage" tabindex="-1" data-lab-view="usage">Usage</button>
         <button id="model-lab-tab-tracker" role="tab" aria-selected="false" aria-controls="model-lab-tracker" tabindex="-1" data-lab-view="tracker">Tracker</button>
         <button id="model-lab-tab-context" role="tab" aria-selected="false" aria-controls="model-lab-context" tabindex="-1" data-lab-view="context">Context</button>
-        <button id="model-lab-tab-compare" role="tab" aria-selected="false" aria-controls="model-lab-compare" tabindex="-1" data-lab-view="compare">Compare <span class="lab-soon">Planned</span></button>
+        <button id="model-lab-tab-compare" role="tab" aria-selected="false" aria-controls="model-lab-compare" tabindex="-1" data-lab-view="compare" hidden>Compare <span class="lab-soon">Planned</span></button>
       </div>
       <p id="model-lab-status" class="lab-status" role="status" aria-live="polite"></p>
       <section id="model-lab-rankings" role="tabpanel" aria-labelledby="model-lab-tab-rankings">
@@ -4160,7 +4189,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         </section>
         <details class="settings-optional"><summary>Jev connection & optional task suggestions</summary>
           <p class="muted">Choose where Jev is routed: the Vercel AI Gateway, TypeSafe's Jev API directly, OpenCode Zen (including its free Jev tier), or OpenRouter. Each route keeps its own key, stored encrypted; switching never moves a key between routes. The key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
-          <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: a hosted gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option><option value="zen">OpenCode Zen</option><option value="openrouter">OpenRouter</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled"><span class="track"></span><span>Intake classification</span></label></div>
+          <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: a hosted gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option><option value="zen">OpenCode Zen</option><option value="openrouter">OpenRouter</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled" checked><span class="track"></span><span>Intake classification</span></label></div>
           <p class="muted" id="jev-status" role="status">Checking Jev…</p>
         </details>
         <details class="settings-optional"><summary>Diagnostics & app updates</summary>
@@ -4209,18 +4238,18 @@ body.music-preview-active #idle-hud { display: none !important; }
   <div class="rail-stats" id="tree-stats">no session yet</div>
 </aside>
 <canvas id="idle-layer-far" aria-hidden="true" hidden></canvas>
-<canvas id="idle-layer" tabindex="0" role="application" aria-label="Command constellation" hidden></canvas>
+<canvas id="idle-layer" tabindex="0" role="application" aria-label="Command view" hidden></canvas>
 <div id="idle-hud" hidden>
   <div class="cmd-top">
     <div class="cmd-brand">
       <div class="monogram small" aria-hidden="true">M+</div>
       <div class="cmd-brand-text">
         <span class="eyebrow">Mefi's Studio</span>
-        <h1 class="cmd-heading">Command center</h1>
+        <h1 class="cmd-heading">Command view</h1>
         <div id="idle-telemetry" class="cmd-tele" role="group" aria-label="Live status">
           <button class="pill" data-tele="sessions" title="Fit the whole constellation"><b class="num">0</b><span class="unit">sessions</span></button>
           <button class="pill" data-tele="progress" title="Jump to the next in-progress todo" hidden><i class="dot live" aria-hidden="true"></i><b class="num">0</b><span class="unit">in progress</span></button>
-          <button class="pill" data-tele="tasks" data-nav="tasks" title="Open Tasks (T)" hidden><b class="num">0</b><span class="unit">open tasks</span></button>
+          <button class="pill" data-tele="tasks" data-nav="tasks" title="Open the Task board (T)" hidden><b class="num">0</b><span class="unit">open tasks</span></button>
           <button class="pill" data-tele="ideas" data-nav="ideas" title="Open Feature ideas (I)" hidden><b class="num">0</b><span class="unit">unread ideas</span></button>
           <button class="pill" data-tele="machine" data-nav="machine" title="Machine status (opens the Explorer)" hidden><i class="dot" aria-hidden="true"></i><span class="unit">machine · busy</span></button>
           <button class="pill" id="idle-pill-assistant" data-tele="assistant" data-tone="ok" title="Select the assistant (M)" hidden><i class="dot" aria-hidden="true"></i><span class="unit">assistant</span></button>
@@ -4277,7 +4306,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, settings, assistant, done and questions">
     <header class="rail-tabs" role="tablist" aria-label="Panel views">
       <button id="cmd-rail-tab-work" class="rail-tab" role="tab" aria-selected="true" aria-controls="idle-feed" data-rail-view="work">Work<span id="cmd-rail-work-badge" class="count" hidden></span></button>
-      <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings">Settings</button>
+      <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings">Work settings</button>
       <button id="cmd-rail-tab-assistant" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-chat" tabindex="-1" data-rail-view="assistant">Assistant<span id="cmd-rail-assistant-badge" class="count" hidden></span></button>
       <button id="cmd-rail-tab-done" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-done" tabindex="-1" data-rail-view="done">Done</button>
       <button id="cmd-rail-tab-ask" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-asks" tabindex="-1" data-rail-view="ask">Ask<span id="cmd-rail-ask-badge" class="count warn" hidden></span></button>
@@ -4442,7 +4471,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       <button class="primary" data-nav="booklet" data-variant="desktop-only">Open the Booklet</button>
       <button class="ghost" data-nav="help" data-variant="desktop-only">Shortcuts</button>
       <button id="cmd-empty-retry" class="primary" data-variant="store">Retry</button>
-      <button class="ghost" data-nav="tasks" data-variant="store">Open Tasks</button>
+      <button class="ghost" data-nav="tasks" data-variant="store">Open the Task board</button>
       <button id="cmd-empty-assistant" class="ghost" title="Select the assistant node and focus its composer (M)" hidden>Message the assistant</button>
     </div>
   </div>
@@ -4478,7 +4507,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     <header class="explorer-head sheet-head">
       <button class="sheet-back ghost mini" data-nav-close="tasks" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
       <div class="sheet-title">
-        <div class="eyebrow">A-Eyes</div>
+        <div class="eyebrow">Work</div>
         <h2 id="tasks-heading">Task board</h2>
       </div>
       <div class="sheet-links" data-sheet-links="tasks" role="group" aria-label="Other tools"></div>
@@ -4532,12 +4561,12 @@ body.music-preview-active #idle-hud { display: none !important; }
     <header class="explorer-head sheet-head">
       <button class="sheet-back ghost mini" data-nav-close="ideas" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
       <div class="sheet-title">
-        <div class="eyebrow">A-Eyes</div>
+        <div class="eyebrow">Work</div>
         <h2 id="ideas-heading">Feature ideas</h2>
       </div>
       <div class="sheet-links" data-sheet-links="ideas" role="group" aria-label="Other tools"></div>
       <div class="sheet-actions">
-        <button id="ideas-view" class="ghost" title="Toggle list / feature graph">Graph view</button>
+        <button id="ideas-view" class="ghost" title="Toggle list / feature graph">Feature graph</button>
         <button id="ideas-scan" class="ghost" title="Scan recent chats for ideas">Scan chats</button>
         <button id="ideas-ai" class="ghost" title="AI review of scanned ideas (needs a key)">AI review</button>
         <button id="ideas-clean" class="ghost" title="Remove done/accepted ideas from the list">Clean done</button>
@@ -4566,7 +4595,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     <header class="explorer-head sheet-head">
       <button class="sheet-back ghost mini" data-nav-close="overhead" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
       <div class="sheet-title">
-        <div class="eyebrow">A-Eyes</div>
+        <div class="eyebrow">Monitor</div>
         <h2 id="overhead-heading">Overhead</h2>
       </div>
       <div class="sheet-links" data-sheet-links="overhead" role="group" aria-label="Other tools"></div>
@@ -4621,7 +4650,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     <header class="explorer-head sheet-head">
       <button class="sheet-back ghost mini" data-nav-close="analyzer" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
       <div class="sheet-title">
-        <div class="eyebrow">A-Eyes</div>
+        <div class="eyebrow">Monitor</div>
         <h2 id="analyzer-heading">Analyzer</h2>
       </div>
       <div class="sheet-links" data-sheet-links="analyzer" role="group" aria-label="Other tools"></div>
@@ -4665,11 +4694,11 @@ body.music-preview-active #idle-hud { display: none !important; }
     <header class="explorer-head sheet-head">
       <button class="sheet-back ghost mini" data-nav-close="explorer" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
       <div class="sheet-title">
-        <div class="eyebrow">A-Eyes</div>
+        <div class="eyebrow">Monitor</div>
         <h2 id="explorer-heading">Session explorer</h2>
       </div>
       <div class="sheet-links" role="group" aria-label="Other tools">
-        <button id="tasks-open" class="dock-item small" title="Tasks (T)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg><span class="label">Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
+        <button id="tasks-open" class="dock-item small" title="Task board (T)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg><span class="label">Task board</span><span class="count" data-badge="tasks" hidden></span></button>
         <button id="ideas-open" class="dock-item small" title="Feature ideas (I)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-ideas"/></svg><span class="label">Ideas</span><span class="count" id="ideas-badge" data-badge="ideas" hidden>0</span></button>
         <button id="overhead-open" class="dock-item small" title="Overhead (O)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-overhead"/></svg><span class="label">Overhead</span></button>
         <button class="dock-item small" data-nav="analyzer" title="Analyzer (A)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-analyzer"/></svg><span class="label">Analyzer</span></button>
@@ -4692,7 +4721,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         <div id="explorer-detail" class="explorer-detail"><p class="muted">Pick a session on the left, or a node in the rail behind this sheet.</p></div>
       </section>
       <aside class="explorer-col">
-        <h3>Assistant <span class="badge premium" id="assistant-model">deepseek-v4.1-flash</span></h3>
+        <h3>Assistant <span class="badge premium" id="assistant-model">not connected</span></h3>
         <p class="eyes-status" id="assistant-status">idle</p>
         <p class="eyes-status assistant-service" id="assistant-service" role="status">service starting…</p>
         <div id="assistant-thread" class="assistant-thread" aria-live="polite" aria-label="Assistant thread"></div>
@@ -8407,7 +8436,43 @@ body.music-preview-active #idle-hud { display: none !important; }
     "ox-alpha-free: documented/known but not on the live roster"
   ]
 }</script>
-<script>// Bounded, opt-in measurements. No task text, DOM content or request payloads.
+<script>// One vocabulary for every task badge in the renderer. The board, Your work,
+// Plans and Command all pass a scheduler stage (backlog.taskStates[].stage) or
+// a raw task.status through label(), so one state reads the same everywhere.
+// Loaded before every other renderer module; touches neither DOM nor store.
+(() => {
+  "use strict";
+  const LABELS = {
+    open: "Open", ready: "Ready", queued: "Ready",
+    approval: "Awaiting approval",
+    waiting: "Waiting",
+    running: "Working", active: "Working",
+    review: "Verifying", verifying: "Verifying", awaiting_verification: "Verifying",
+    blocked: "Needs attention",
+    grouped: "In a plan", absorbed: "In a plan",
+    cooling: "Retry scheduled",
+    planning: "Planning",
+    done: "Done", completed: "Done", archived: "Archived",
+    unknown: "Unknown",
+  };
+  // options.short drops the verification qualifier for narrow tags.
+  function label(stage, task, options = {}) {
+    const key = String(stage ?? task?.status ?? "open").toLowerCase();
+    const finished = key === "done" || key === "completed" || key === "archived";
+    if (finished && task?.status === "archived") return LABELS.archived;
+    if (key === "done" || key === "completed") {
+      if (options.short) return LABELS.done;
+      const state = task?.verification?.state;
+      if (state === "verified") return "Done · Verified";
+      if (state === "manual") return "Done · Confirmed by you";
+      return LABELS.done;
+    }
+    return LABELS[key] ?? key.replace(/_/g, " ");
+  }
+  window.MefiStage = Object.freeze({ LABELS: Object.freeze({ ...LABELS }), label });
+})();
+
+// Bounded, opt-in measurements. No task text, DOM content or request payloads.
 (function () {
   "use strict";
   function create({ now = () => performance.now(), wallNow = () => Date.now() } = {}) {
@@ -8891,7 +8956,8 @@ body.music-preview-active #idle-hud { display: none !important; }
   const SVG_NS = "http://www.w3.org/2000/svg";
   const ESC_HELP = "Close the top-most layer: palette → help → sheet → Command (clear selection, then leave)";
   const BADGE_THROTTLE_MS = 2000;
-  const BADGE_POLL_MS = 20000;
+  // Pushes keep the counts live; this backstop only catches a missed push.
+  const BADGE_POLL_MS = 120000;
   const RESUME_KEY = "mefiStudio.resume";
   // Fields a live-update reload carries across: text-like inputs and textareas
   // that have an id. Checkboxes and selects are settings and persist elsewhere.
@@ -8902,7 +8968,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   const state = { sheet: null, transient: null, returnTo: null, focusReturn: { sheet: null, transient: null } };
   // assistant holds the service tone (ok | busy | warn | offline | paused), painted
   // as a dot on the Explorer's dock item and tool button.
-  const badges = { sessions: 0, progress: 0, tasks: 0, ideas: 0, machine: null, assistant: null };
+  const badges = { sessions: 0, progress: 0, tasks: 0, ideas: 0, machine: null, assistant: null, questions: 0 };
   let lastBadgeRefresh = 0;
 
   // A record with no key, or a multi-character display key such as "Ctrl K",
@@ -8932,6 +8998,22 @@ body.music-preview-active #idle-hud { display: none !important; }
   const openTasks = (tasks) => (Array.isArray(tasks) ? tasks : []).filter((task) => task.status === "open" || task.status === "active").length;
   const unreadIdeas = (ideas) => (Array.isArray(ideas) ? ideas : []).filter((idea) => !idea.read).length;
   const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+  const openQuestions = (state) => (Array.isArray(state?.questions) ? state.questions : []).filter((question) => question && question.status === "open");
+  // Decisions the agents are waiting on: a count on every Command entry point
+  // and one toast per new question, whichever view is up. The first payload
+  // seeds what is already known so a restart never re-announces old asks.
+  let knownQuestions = null;
+  function noticeQuestions(state) {
+    if (!state || !Array.isArray(state.questions)) return;
+    const open = openQuestions(state);
+    setBadge("questions", open.length);
+    if (knownQuestions === null) { knownQuestions = new Set(state.questions.map((question) => question.id)); return; }
+    for (const question of open) {
+      if (knownQuestions.has(question.id)) continue;
+      knownQuestions.add(question.id);
+      window.MefiToast?.(`Decision needed: ${question.title}`, "warn", { action: { label: "Answer", run: () => go("command", { rail: "ask" }) } });
+    }
+  }
 
   // ---- registry ----------------------------------------------------------
 
@@ -8956,6 +9038,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       key: "D",
       glyph: "g-command",
       badge: "progress",
+      alert: "questions",
       desc: "The node tree / constellation — sessions, agents, todos and tasks",
       searchTerms: "node tree live work monitor progress workers",
       showIn: showIn({ palette: true, help: true, footer: true }),
@@ -9071,8 +9154,8 @@ body.music-preview-active #idle-hud { display: none !important; }
       kind: "overlay",
       layer: "sheet",
       group: "tools",
-      key: null,
-      glyph: "g-ideas",
+      key: "P",
+      glyph: "g-plans",
       badge: null,
       desc: "Explore an idea, settle decisions, and create reviewed tasks",
       searchTerms: "plan an idea planning questions specification approval",
@@ -9170,7 +9253,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     },
     {
       id: "music", label: "Music & themes", short: "Music", kind: "overlay", layer: "sheet",
-      group: "tools", glyph: "g-music", badge: null, commandPrimary: true,
+      group: "tools", key: "U", glyph: "g-music", badge: null, commandPrimary: true,
       desc: "Local music, Spotify links, AI suggestions, and Studio themes",
       searchTerms: "color colour appearance accent theme sound audio background",
       showIn: showIn({ dock: true, palette: true, help: true }),
@@ -9285,7 +9368,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     },
     {
       id: "machine",
-      label: "Machine status",
+      label: "Machine status (in the Explorer)",
       short: "Machine",
       kind: "action",
       layer: null,
@@ -9612,6 +9695,14 @@ body.music-preview-active #idle-hud { display: none !important; }
       } else {
         element.className = "count";
       }
+      element.hidden = true;
+      list.push(element);
+    }
+    if (dest.alert) {
+      // A warning count: decisions the agents are waiting on.
+      const element = document.createElement("span");
+      element.className = "count warn";
+      element.dataset.badge = dest.alert;
       element.hidden = true;
       list.push(element);
     }
@@ -10636,6 +10727,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     window.mefiStudio?.onAssistant?.((payload) => {
       window.MefiTree?.applyAssistant?.(payload);
       setBadge("assistant", window.MefiTree?.assistantSummary?.()?.tone ?? null);
+      noticeQuestions(payload?.state);
     });
     window.addEventListener("mefi:eyes-activity", (event) => {
       if (!event.detail?.todos) return;
@@ -11461,8 +11553,12 @@ body.music-preview-active #idle-hud { display: none !important; }
       const button = $(`tab-${name}`);
       button.addEventListener("click", () => show(name));
       button.addEventListener("keydown", (event) => {
-        const target = event.key === "ArrowRight" ? (index + 1) % views.length : event.key === "ArrowLeft" ? (index + views.length - 1) % views.length : event.key === "Home" ? 0 : event.key === "End" ? views.length - 1 : -1;
-        if (target < 0) return; event.preventDefault(); show(views[target]); $(`tab-${views[target]}`).focus();
+        // Arrow keys cycle only the tabs that are shown; a hidden tab (Compare
+        // until it runs) is skipped instead of being reachable by keyboard.
+        const order = views.filter((view) => !$(`tab-${view}`)?.hidden);
+        const at = order.indexOf(name);
+        const target = at < 0 ? -1 : event.key === "ArrowRight" ? (at + 1) % order.length : event.key === "ArrowLeft" ? (at + order.length - 1) % order.length : event.key === "Home" ? 0 : event.key === "End" ? order.length - 1 : -1;
+        if (target < 0) return; event.preventDefault(); show(order[target]); $(`tab-${order[target]}`).focus();
       });
     }
     $("refresh").addEventListener("click", refresh);
@@ -11787,6 +11883,8 @@ body.music-preview-active #idle-hud { display: none !important; }
   function render() {
     const report = state.report;
     if (!report) return;
+    // The workspace's usage tile listens; it never reads on its own.
+    if (typeof CustomEvent === "function") window.dispatchEvent?.(new CustomEvent("mefi:usage-report", { detail: report }));
     const full = $("model-lab-tracker-body");
     if (full) renderFull(full, report);
     const compactBody = $("cmd-usage-body");
@@ -11849,8 +11947,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (save) writeStore("mefiStudio.cmdUsageCollapsed", state.collapsed ? "1" : "0");
   }
   function openTab() {
-    window.MefiIdle?.exit?.();
-    window.MefiBooklet?.showTab?.("graph");
+    // Through the registry so the "Back to Command" return state is recorded.
+    if (window.MefiNav?.go) window.MefiNav.go("graph");
+    else { window.MefiIdle?.exit?.(); window.MefiBooklet?.showTab?.("graph"); }
     window.MefiModelLab?.show?.("tracker");
   }
   function open() {
@@ -11873,7 +11972,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     });
   }
 
-  window.MefiUsageTracker = { refresh, tick, open, openTab, init };
+  window.MefiUsageTracker = { refresh, tick, open, openTab, init, report: () => state.report };
   init();
 })();
 
@@ -21675,7 +21774,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     }
     const status = node.task?.status ?? "open";
     const className = status === "active" ? "badge premium" : status === "done" ? "badge free" : "badge";
-    return { text: status === "awaiting_verification" ? "Verifying" : status, className };
+    return { text: window.MefiStage?.label?.(status, node.task) ?? status, className };
   }
 
   function appendTaskGroupInfo(info, node) {
@@ -22008,7 +22107,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         for (const task of filed.slice(0, 8)) {
           const item = document.createElement("div");
           item.className = "cp-note checkpoint-note";
-          const status = busy.has(task.id) ? "running" : String(task.status ?? "open").replace("_", " ");
+          const status = busy.has(task.id) ? (window.MefiStage?.label?.("running") ?? "running") : (window.MefiStage?.label?.(task.status, task, { short: true }) ?? String(task.status ?? "open").replace("_", " "));
           item.textContent = `${task.title ?? "task"} · ${status}`;
           item.title = task.prompt ?? task.title ?? "";
           item.style.cursor = "pointer";
@@ -22992,8 +23091,10 @@ body.music-preview-active #idle-hud { display: none !important; }
 
   function applyEnterParams(params) {
     // A live-update reload hands back what saveState() captured: the selected
-    // node by id (any kind) and the zoom, restored in that order.
+    // node by id (any kind) and the zoom, restored in that order. A rail tab
+    // ("ask" for waiting decisions) can be named by any caller.
     let applied = false;
+    if (typeof params?.rail === "string" && typeof setRailTab === "function") { setRailTab(params.rail, { focus: true }); applied = true; }
     const selectedId = typeof params?.selected === "string" ? params.selected : "";
     if (selectedId && select(selectedId)) applied = true;
     if (typeof params?.zoom === "number" && Number.isFinite(params.zoom)) {
@@ -24956,6 +25057,7 @@ body.music-preview-active #idle-hud { display: none !important; }
 
   function renderAssistant() {
     renderAssistantService();
+    if (els.model) els.model.textContent = state.assistant?.ai?.model || "not connected";
     els.brief.textContent = "";
     if (!state.briefing) {
       const hint = document.createElement("p");
@@ -25313,6 +25415,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       machineEvents: "machine-events",
       openButton: "tree-explore",
       service: "assistant-service",
+      model: "assistant-model",
       thread: "assistant-thread",
       input: "assistant-input",
       send: "assistant-send",
@@ -26013,6 +26116,7 @@ body.music-preview-active #idle-hud { display: none !important; }
 
   const COLORS = ["#e6c98d", "#9db7ff", "#57ff9a", "#f2a2e8", "#ffb38a", "#86d1d6", "#c9a8ff", "#ffd479"];
   const FILTERS = ["all", "open", "review", "done"];
+  const stageLabel = (stage, task, options) => window.MefiStage?.label?.(stage, task, options) ?? String(stage ?? task?.status ?? "open");
   const READINESS_FILTERS = { all: "All scheduling states", ready: "Ready", running: "Working", review: "Verifying", waiting: "Waiting or retrying", blocked: "Needs attention" };
   // A row that just finished pulses green for a few seconds — the board's
   // echo of the constellation's done pulse — before it settles under the mark.
@@ -26153,12 +26257,12 @@ body.music-preview-active #idle-hud { display: none !important; }
 
   function describe(task) {
     const stage = taskStage(task);
-    if (stage === "done") return { stage, label: task.status === "archived" ? "Archived" : "Done", summary: doneSummary(task) };
+    if (stage === "done") return { stage, label: stageLabel("done", task), summary: doneSummary(task) };
     if (task?.status === "awaiting_verification" || task?.status === "verifying") {
-      return { stage, label: "Checking completion", summary: "The worker finished. Completion checks are pending; this work is not marked done yet." };
+      return { stage, label: stageLabel("review"), summary: "The worker finished. Completion checks are pending; this work is not marked done yet." };
     }
-    if (stage === "review") return { stage, label: "Needs review", summary: task?.verification?.reason || task?.lastRunError || "The last attempt could not be confirmed. Review its result before retrying or marking it done." };
-    return { stage, label: task?.status === "active" ? "Working" : "Open", summary: task?.lastRunError || task?.prompt || "Ready for the assistant." };
+    if (stage === "review") return { stage, label: stageLabel("blocked"), summary: task?.verification?.reason || task?.lastRunError || "The last attempt could not be confirmed. Review its result before retrying or marking it done." };
+    return { stage, label: stageLabel(task?.status === "active" ? "running" : "open"), summary: task?.lastRunError || task?.prompt || "Ready for the assistant." };
   }
 
   function retryDescription(at) {
@@ -26231,8 +26335,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     };
     dot.className = `src-tag ${STATUS_TAG[task.status] ?? "collision"}`;
     const scheduled = scheduledTask(task);
-    const readinessLabels = { ready: "READY", approval: "AWAITING APPROVAL", waiting: "WAITING", running: "RUNNING", review: "VERIFYING", blocked: "BLOCKED", grouped: "IN PLAN", cooling: "RETRY LATER", done: task.status === "archived" ? "ARCHIVED" : "DONE" };
-    dot.textContent = readinessLabels[scheduled?.stage] || (needsReview(task) ? "REVIEW" : String(task.status ?? "open").toUpperCase());
+    dot.textContent = (scheduled?.stage ? stageLabel(scheduled.stage, task, { short: true }) : needsReview(task) ? stageLabel("blocked") : stageLabel(task.status, task, { short: true })).toUpperCase();
     if (scheduled) { dot.dataset.readiness = scheduled.stage; dot.title = scheduled.reason || ""; li.dataset.readiness = scheduled.stage; }
     const text = document.createElement("span");
     text.className = "task-name";
@@ -26412,7 +26515,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     const head = node("div", "task-overview-card-head");
     const kind = planning ? "PLAN & DISCUSSION" : group.kind === "approved-plan" ? "APPROVED PLAN" : group.kind === "task" ? "TASK" : group.kind === "task-delegation" ? "SHARED TASK & SUBTASKS" : "PLAN & FOLLOW-UPS";
     head.append(node("span", "eyebrow", kind));
-    const badge = node("span", "task-overview-status", ({ planning: "Planning", running: "Working", review: "Checking completion", blocked: "Needs attention", done: "Confirmed", waiting: "Waiting" })[stage]);
+    const badge = node("span", "task-overview-status", stageLabel(stage));
     badge.dataset.stage = stage;
     head.append(badge);
     card.append(head, node("h3", "task-overview-title", group.title || group.task?.title || "Untitled plan"));
@@ -26899,7 +27002,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       link.type = "button"; link.dataset.taskAction = "view-subtask"; link.dataset.taskId = child.id; link.disabled = !child.task;
       link.addEventListener("click", () => window.MefiTasks.selectTask(child.id));
       const stage = overviewProgress(child.task), scheduled = child.task && scheduledTask(child.task);
-      const label = !child.task ? "Board status unavailable" : scheduled?.stage === "approval" ? "Needs build approval" : ({ done: "Confirmed", running: "Working", review: "Checking completion", blocked: "Needs attention", waiting: "Waiting" })[stage];
+      const label = !child.task ? "Board status unavailable" : scheduled?.stage === "approval" ? stageLabel("approval") : stageLabel(stage, child.task);
       row.append(link, node("span", "task-context-hint", label));
       if (scheduled?.reason) row.append(node("p", "task-context-hint", scheduled.reason));
       list.append(row);
@@ -27975,7 +28078,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     });
     el.view?.addEventListener("click", () => {
       state.view = state.view === "graph" ? "list" : "graph";
-      el.view.textContent = state.view === "graph" ? "Graph view" : "List view";
+      el.view.textContent = state.view === "graph" ? "Feature graph" : "List view";
       // `hidden`, not display: it is what drawGraph()'s early return reads.
       el.canvas.hidden = state.view !== "graph";
       drawGraph();
@@ -28016,8 +28119,9 @@ body.music-preview-active #idle-hud { display: none !important; }
   // Task/snapshot refresh cadence while the sheet is open. Polls pause while
   // document.hidden and back off while a poll reads the same data, so an idle
   // app makes far fewer IPC round trips; fresh data snaps back to the base.
-  const POLL_INTERVAL_MS = 5000;
-  const POLL_MAX_MS = 30000;
+  // Pushed board changes refresh the sheet at once (init); these only backstop.
+  const POLL_INTERVAL_MS = 15000;
+  const POLL_MAX_MS = 60000;
   let pollTimer = null;
   let pollDelay = POLL_INTERVAL_MS;
 
@@ -28280,6 +28384,12 @@ body.music-preview-active #idle-hud { display: none !important; }
     }
     el.ctx = el.canvas.getContext("2d");
     el.openButton?.addEventListener("click", open);
+    window.mefiStudio?.onTasks?.(() => {
+      if (!initialized || el.overlay?.hidden || document.visibilityState !== "visible") return;
+      clearTimeout(pollTimer);
+      pollDelay = POLL_INTERVAL_MS;
+      pollTimer = setTimeout(poll, 250);
+    });
     el.close?.addEventListener("click", close);
     el.overlay?.addEventListener("click", (event) => {
       if (event.target === el.overlay) close();
@@ -29657,7 +29767,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   "use strict";
   const $ = (id) => document.getElementById(`workspace-${id}`);
   const api = () => window.mefiStudio;
-  const state = { projects: [], activeId: null, tasks: [], ideas: [], backlog: null, assistant: {}, status: {}, filter: "open", query: "", limit: 20, mode: "chat", pending: false, busyAction: null, switching: false, epoch: 0 };
+  const state = { projects: [], activeId: null, tasks: [], ideas: [], backlog: null, assistant: {}, status: {}, machine: null, usage: null, filter: "open", query: "", limit: 20, mode: "chat", pending: false, busyAction: null, switching: false, epoch: 0 };
   let initialized = false;
   let refreshFlight = null;
   let startupPromise = null;
@@ -29861,8 +29971,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     const scheduled = state.backlog?.taskStates?.find((item) => item.id === task.id);
     const stage = done(task) ? "done" : task.status === "active" ? "running" : scheduled?.stage || (description.stage === "review" ? "review" : "ready");
     const filter = stage === "done" ? "done" : ["review", "blocked", "approval"].includes(stage) ? "review" : "open";
-    const labels = { ready: "Ready", running: "Working", approval: "Awaiting build approval", review: "Awaiting verification", blocked: "Needs attention", cooling: "Retry scheduled", waiting: "Waiting on prerequisites", grouped: "Included in a plan", done: "Done" };
-    return { stage, filter, label: labels[stage] || description.label, summary: stage === "ready" ? task.prompt || description.summary || scheduled?.reason : scheduled?.reason || description.summary, retryAt: scheduled?.retryAt, groupId: scheduled?.groupId, dependencies: scheduled?.dependencies, canRetry: scheduled?.canRetry };
+    return { stage, filter, label: window.MefiStage?.label?.(stage, task) || description.label, summary: stage === "ready" ? task.prompt || description.summary || scheduled?.reason : scheduled?.reason || description.summary, retryAt: scheduled?.retryAt, groupId: scheduled?.groupId, dependencies: scheduled?.dependencies, canRetry: scheduled?.canRetry };
   }
   function cardAction(label, action, payload) {
     const button = text("button", "ghost mini", label);
@@ -29952,6 +30061,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     controls();
   }
   function renderBacklog() {
+    renderDashboard();
     renderBuildMode();
     const backlog = state.backlog;
     const counts = backlog?.counts || {};
@@ -30118,6 +30228,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     $("pause").textContent = held ? "Start agents" : paused ? "Resume" : "Pause";
     $("pause").title = held ? "Start the assistant and the coding workers. Nothing has run since Studio opened." : "Pause new work. Running jobs finish normally.";
     $("connection").textContent = !api() ? "Browser preview" : held ? "Agents waiting for you" : paused ? "New work paused" : workersOff ? "Coding workers off" : assistant.ai?.keyPresent === false ? "Connect an AI in Settings" : working ? "Working with you" : "Ready when you are";
+    renderDashboard();
     $("connection").classList.toggle("working", working);
     const logs = (assistant.log || []).filter((entry) => entry.kind !== "tick").slice(-8).reverse();
     const signature = JSON.stringify(logs);
@@ -30127,6 +30238,89 @@ body.music-preview-active #idle-hud { display: none !important; }
       if (!logs.length) $("activity-list").append(text("li", "", "Real activity will appear here as the assistant works."));
       $("activity-count").textContent = logs.length || "";
     }
+  }
+  // The real run state, read from the two switches the backend actually has:
+  // the assistant service (paused / running) and work admission (execute).
+  // Every surface that says "paused" now says it from here.
+  function runState() {
+    const assistant = state.assistant;
+    const assistantPaused = assistant.status === "paused" || assistant.prefs?.paused === true;
+    const admissionOff = state.status.execute === false;
+    const running = state.status.running || [];
+    const held = assistantPaused || admissionOff;
+    const keyMissing = assistant.ai?.keyPresent === false;
+    const label = !api() ? "Browser preview" : assistantPaused && admissionOff ? "Paused" : assistantPaused ? "Assistant paused" : admissionOff ? "New work held" : keyMissing ? "No AI connected" : running.length ? "Working" : "Ready";
+    const note = !api() ? "Live status needs the desktop app." : assistantPaused && admissionOff ? "All new work is held. Running jobs finish normally." : assistantPaused ? "The assistant is paused; queued tasks still start when a worker is free." : admissionOff ? "Queued tasks wait; the assistant still replies and takes answers." : keyMissing ? "Connect an AI in Settings to start." : state.status.waiting ? String(state.status.waiting) : running.length ? `${running.length} job${running.length === 1 ? "" : "s"} running` : "Waiting for work.";
+    return { held, label, note, running, tone: !api() ? "idle" : held ? "held" : keyMissing ? "warn" : running.length ? "busy" : "ok" };
+  }
+  const showFilter = (filter) => { state.filter = filter; state.limit = 20; $("work-list").scrollTop = 0; renderWork(); };
+  // Studio at a glance: the landing strip answers "is anything waiting on me,
+  // is anything running, is the machine holding work" before the conversation.
+  // Service, workers, attention and next come from state this module already
+  // holds; the machine and usage tiles are painted by their own feeds.
+  function renderDashboard() {
+    if (!$("dash-service")) return;
+    const run = runState();
+    $("dash-service").dataset.tone = run.tone;
+    $("dash-service-value").textContent = run.label;
+    $("dash-service-note").textContent = run.note;
+    $("pause").textContent = run.held ? "Resume" : "Pause";
+    $("pause").title = run.held ? "Let new work start again." : "Hold all new work: queued tasks, builds and the assistant's own suggestions. Running jobs finish normally.";
+    const running = run.running;
+    const limit = state.status.adaptiveParallel ? null : Number(state.status.parallel) || null;
+    $("dash-workers").dataset.tone = running.length ? "busy" : "idle";
+    $("dash-workers-value").textContent = running.length ? `${running.length} building` : "0 running";
+    $("dash-workers-note").textContent = running.length ? running.map((job) => job.title || "task").slice(0, 2).join(" · ") : limit ? `Up to ${limit} at once` : state.status.adaptiveParallel ? "Machine managed" : "";
+    const questions = (Array.isArray(state.assistant.questions) ? state.assistant.questions : []).filter((question) => question?.status === "open");
+    const review = scoped(state.tasks).filter((task) => taskView(task).filter === "review");
+    const waiting = questions.length + review.length;
+    $("dash-attention").dataset.tone = questions.length ? "warn" : review.length ? "busy" : "idle";
+    $("dash-attention").dataset.target = questions.length ? "ask" : "review";
+    $("dash-attention-value").textContent = waiting ? `${waiting} waiting` : "Nothing waiting";
+    $("dash-attention-note").textContent = [questions.length ? `${questions.length} question${questions.length === 1 ? "" : "s"} to answer` : "", review.length ? `${review.length} to review` : ""].filter(Boolean).join(" · ");
+    const next = (state.backlog?.next || [])[0];
+    const nextTask = next ? scoped(state.tasks).find((task) => task.id === next.id) : null;
+    const ready = state.backlog?.counts?.ready || 0;
+    $("dash-next").dataset.tone = next ? "ok" : "idle";
+    $("dash-next-value").textContent = nextTask?.title || next?.title || (ready ? `${ready} ready` : "Queue is empty");
+    $("dash-next-note").textContent = next ? `${ready} ready${state.backlog?.summary ? ` · ${state.backlog.summary}` : ""}` : state.backlog?.summary || "";
+  }
+  function renderMachineTile() {
+    if (!$("dash-machine")) return;
+    const status = state.machine;
+    if (!status) { $("dash-machine").dataset.tone = "idle"; $("dash-machine-value").textContent = api() ? "Checking…" : "Desktop app only"; $("dash-machine-note").textContent = ""; return; }
+    const resources = status.capacity?.resources || {};
+    const exclusive = status.leases?.exclusive === true;
+    const held = status.wait === true;
+    const busy = status.leases?.busy === true;
+    $("dash-machine").dataset.tone = exclusive ? "warn" : held ? "held" : busy ? "busy" : "ok";
+    $("dash-machine-value").textContent = exclusive ? "Reserved by a test" : held ? "Holding new workers" : busy ? "Busy" : "Free";
+    const parts = [];
+    if (Number.isFinite(resources.availableMemoryMB)) parts.push(`${(resources.availableMemoryMB / 1024).toFixed(1)} GB free`);
+    if (Number.isFinite(resources.lagMs)) parts.push(`${Math.round(resources.lagMs)} ms lag`);
+    if (held && status.capacity?.reason) parts.push(String(status.capacity.reason));
+    $("dash-machine-note").textContent = parts.join(" · ");
+  }
+  function renderUsageTile() {
+    if (!$("dash-usage")) return;
+    const report = state.usage;
+    if (!report) { $("dash-usage").dataset.tone = "idle"; $("dash-usage-value").textContent = api() ? "No reading yet" : "Desktop app only"; $("dash-usage-note").textContent = ""; return; }
+    const credits = report.credits?.ok ? report.credits.usage : null;
+    const today = report.local?.ok === false ? null : report.local?.today;
+    const percent = (window) => (window && Number.isFinite(window.percent) ? `${Math.round(window.percent)}%` : null);
+    const rolling = percent(credits?.rolling), weekly = percent(credits?.weekly);
+    if (rolling || weekly) {
+      $("dash-usage-value").textContent = `5h ${rolling ?? "—"} · week ${weekly ?? "—"}`;
+      $("dash-usage").dataset.tone = (credits?.rolling?.percent >= 90 || credits?.weekly?.percent >= 90) ? "warn" : "ok";
+    } else if (today) {
+      $("dash-usage-value").textContent = `${today.calls ?? 0} calls today`;
+      $("dash-usage").dataset.tone = "ok";
+    } else {
+      $("dash-usage-value").textContent = "Usage unavailable";
+      $("dash-usage").dataset.tone = "idle";
+    }
+    const cost = Number(today?.usage?.costUsd);
+    $("dash-usage-note").textContent = today ? `Today · ${today.calls ?? 0} calls${Number.isFinite(cost) ? ` · $${cost.toFixed(2)}` : ""}` : report.credits?.error || "";
   }
   function renderJev(value) {
     const status = value?.status || value;
@@ -30263,6 +30457,9 @@ body.music-preview-active #idle-hud { display: none !important; }
   function enter() {
     init(); window.MefiIdle?.exit?.(); $("layer").hidden = false;
     document.body.classList.add("workspace-active");
+    renderMachineTile(); renderUsageTile();
+    // Usage has no push; one read on entry (cached 5 min by the tracker).
+    if (api()) window.MefiUsageTracker?.refresh?.()?.catch?.(() => {});
     $("layer").focus({ preventScroll: true });
     // Startup already reads and paints the workspace. Opening it underneath
     // the loading layer joins that work instead of issuing a second batch.
@@ -30330,6 +30527,10 @@ body.music-preview-active #idle-hud { display: none !important; }
     $("reveal").addEventListener("click", () => api()?.shellReveal(project()?.path));
     $("stop-all")?.addEventListener("click", () => void stopAllAgents());
     $("restart")?.addEventListener("click", () => void restartStudio());
+    // The one pause control. Pause holds every kind of new work (queued tasks,
+    // builds, the assistant's own suggestions) exactly as Command's New work
+    // switch does; Resume reopens admission and wakes the assistant. Running
+    // jobs are never interrupted by either.
     $("pause").addEventListener("click", async () => {
       $("pause").disabled = true;
       try {
@@ -30356,7 +30557,14 @@ body.music-preview-active #idle-hud { display: none !important; }
     }
     const syncThemeChoice = () => {
       const theme = window.MefiMusic?.status?.().theme;
-      if (theme) $("accent").value = theme === "forest" ? "sage" : theme;
+      if (!theme) return;
+      const choice = theme === "forest" ? "sage" : theme;
+      // The select must carry the option or it goes blank, and the saved accent
+      // follows the real theme so data-accent never drifts from it.
+      const options = $("accent").options ? [...$("accent").options] : null;
+      if (options && !options.some((option) => option.value === choice)) return;
+      $("accent").value = choice;
+      if (storage.get("accent", "aurora") !== choice) { storage.set("accent", choice); personalize(); }
     };
     window.addEventListener("mefi-theme-change", syncThemeChoice);
     syncThemeChoice();
@@ -30368,6 +30576,11 @@ body.music-preview-active #idle-hud { display: none !important; }
     api()?.onIdeas?.((ideas) => { if (ideas?.some((idea) => idea.projectId && idea.projectId !== state.activeId)) return; revisions.ideas += 1; state.ideas = ideas || []; if (active()) renderWork(); scheduleBacklogRead(); });
     api()?.onAssistant?.((payload) => { if (payload?.state?.projectId && payload.state.projectId !== state.activeId) return; revisions.assistant += 1; if (payload?.state) state.assistant = payload.state; if (active()) { renderThread(); renderCompanion(); } });
     api()?.onAssistantStatus?.((status) => { if (status?.projectId && status.projectId !== state.activeId) return; revisions.status += 1; state.status = status || {}; renderBuildMode(); controls(); if (active()) { renderCompanion(); renderWork(); } scheduleBacklogRead(); });
+    api()?.onMachineStatus?.((status) => { state.machine = status || null; if (active()) renderMachineTile(); });
+    window.addEventListener("mefi:usage-report", (event) => { state.usage = event.detail || null; if (active()) renderUsageTile(); });
+    $("dash-attention")?.addEventListener("click", () => { if ($("dash-attention").dataset.target === "ask") window.MefiNav?.go?.("command", { rail: "ask" }); else showFilter("review"); });
+    $("dash-next")?.addEventListener("click", () => showFilter("open"));
+    $("dash-usage")?.addEventListener("click", () => window.MefiUsageTracker?.openTab?.());
     personalize(); renderProjects(); renderWork(); renderBacklog();
     loadInitialWorkspace();
     if (!api()) $("jev").textContent = "Desktop app connects your tools";
@@ -31136,18 +31349,19 @@ body.music-preview-active #idle-hud { display: none !important; }
   }
   function taskProgress(task, tasks) {
     if (!task) return { stage: "unknown", label: "Waiting for board status" };
+    const label = (stage, fallback) => window.MefiStage?.label?.(stage, task) ?? fallback;
     if (["done", "archived", "completed"].includes(task.status)) {
-      if (task.verification?.state === "verified") return { stage: "done", label: "Verified" };
-      if (task.verification?.state === "manual") return { stage: "done", label: "Confirmed by you" };
-      return { stage: "review", label: "Completed · review evidence" };
+      if (task.verification?.state === "verified") return { stage: "done", label: label("done", "Done · Verified") };
+      if (task.verification?.state === "manual") return { stage: "done", label: label("done", "Done · Confirmed by you") };
+      return { stage: "review", label: "Done · Review evidence" };
     }
-    if (["awaiting_verification", "verifying"].includes(task.status)) return { stage: "review", label: "Awaiting verification" };
-    if (["active", "running"].includes(task.status) || task.runId) return { stage: "running", label: "Builder working" };
-    if (task.verification?.state === "failed" || (task.runFailures || 0) >= 5 || (task.verifyAttempts || 0) >= 3) return { stage: "blocked", label: "Needs your review" };
-    if (task.absorbedInto) return { stage: "waiting", label: "Included in a grouped task" };
-    if (task.dependsOn?.some((id) => !tasks.some((other) => other.id === id && ["done", "archived", "completed"].includes(other.status)))) return { stage: "waiting", label: "Waiting on a task" };
-    if (task.nextRunAt > Date.now()) return { stage: "waiting", label: "Retry scheduled" };
-    return { stage: "queued", label: "Queued" };
+    if (["awaiting_verification", "verifying"].includes(task.status)) return { stage: "review", label: label("review", "Verifying") };
+    if (["active", "running"].includes(task.status) || task.runId) return { stage: "running", label: label("running", "Working") };
+    if (task.verification?.state === "failed" || (task.runFailures || 0) >= 5 || (task.verifyAttempts || 0) >= 3) return { stage: "blocked", label: label("blocked", "Needs attention") };
+    if (task.absorbedInto) return { stage: "waiting", label: label("grouped", "In a plan") };
+    if (task.dependsOn?.some((id) => !tasks.some((other) => other.id === id && ["done", "archived", "completed"].includes(other.status)))) return { stage: "waiting", label: `${label("waiting", "Waiting")} · on a task` };
+    if (task.nextRunAt > Date.now()) return { stage: "waiting", label: label("cooling", "Retry scheduled") };
+    return { stage: "queued", label: label("ready", "Ready") };
   }
   function executionRows(item) {
     const tasks = state.tasks || [];
@@ -31534,8 +31748,8 @@ body.music-preview-active #idle-hud { display: none !important; }
   }
   function startWorkPoll() {
     stopWorkPoll();
-    if (window.MefiBoot?.pollStart) window.MefiBoot.pollStart("planning.work", refreshWork, 4000);
-    else if (typeof setInterval === "function") workTimer = setInterval(refreshWork, 4000);
+    if (window.MefiBoot?.pollStart) window.MefiBoot.pollStart("planning.work", refreshWork, 30000);
+    else if (typeof setInterval === "function") workTimer = setInterval(refreshWork, 30000);
     void refreshWork();
   }
   async function refresh({ refreshTasks = true } = {}) {
@@ -31569,6 +31783,14 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (initialized || !$("overlay")) return; initialized = true;
     $("new").addEventListener("click", () => { if (state.busy) return; state.selected = "new"; render(); note(); $("title")?.focus(); });
     $("refresh").addEventListener("click", () => refresh()); $("close").addEventListener("click", close);
+    // A pushed board change repaints an open plan's workflow at once; the poll
+    // below is only a backstop for a missed push.
+    api()?.onTasks?.((tasks) => {
+      if (!state.opened || !Array.isArray(tasks)) return;
+      const next = tasks.filter((task) => !task.projectId || task.projectId === state.projectId);
+      if (JSON.stringify(next) === JSON.stringify(state.tasks) && !state.workError) return;
+      state.tasks = next; state.workError = null; renderWorkflow(plan()); controls();
+    });
     $("overlay").addEventListener("click", (event) => { if (event.target === $("overlay")) close(); });
     $("sheet").addEventListener("keydown", (event) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }
@@ -32272,7 +32494,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   const { fmt, privacyLabel } = window.MefiGraph;
 
   // Global toasts: quiet confirmations that do not need a panel status line.
-  window.MefiToast = (message, kind = "info") => {
+  window.MefiToast = (message, kind = "info", options = {}) => {
     let host = document.getElementById("toast-host");
     if (!host) {
       host = document.createElement("div");
@@ -32282,12 +32504,24 @@ body.music-preview-active #idle-hud { display: none !important; }
     const toast = document.createElement("div");
     toast.className = `toast ${kind}`;
     toast.textContent = message;
-    host.append(toast);
-    requestAnimationFrame(() => toast.classList.add("show"));
-    setTimeout(() => {
+    const dismiss = () => {
       toast.classList.remove("show");
       setTimeout(() => toast.remove(), 300);
-    }, 2600);
+    };
+    // An action keeps the toast clickable and on screen long enough to use it.
+    const action = options?.action;
+    if (action && typeof action.run === "function") {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "toast-action";
+      button.textContent = action.label || "Open";
+      button.addEventListener("click", () => { dismiss(); action.run(); });
+      toast.classList.add("has-action");
+      toast.append(button);
+    }
+    host.append(toast);
+    requestAnimationFrame(() => toast.classList.add("show"));
+    setTimeout(dismiss, action ? 9000 : 2600);
   };
 
   // Every store access is guarded, exactly as nav.js and idle.js guard theirs: a

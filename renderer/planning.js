@@ -96,18 +96,19 @@
   }
   function taskProgress(task, tasks) {
     if (!task) return { stage: "unknown", label: "Waiting for board status" };
+    const label = (stage, fallback) => window.MefiStage?.label?.(stage, task) ?? fallback;
     if (["done", "archived", "completed"].includes(task.status)) {
-      if (task.verification?.state === "verified") return { stage: "done", label: "Verified" };
-      if (task.verification?.state === "manual") return { stage: "done", label: "Confirmed by you" };
-      return { stage: "review", label: "Completed · review evidence" };
+      if (task.verification?.state === "verified") return { stage: "done", label: label("done", "Done · Verified") };
+      if (task.verification?.state === "manual") return { stage: "done", label: label("done", "Done · Confirmed by you") };
+      return { stage: "review", label: "Done · Review evidence" };
     }
-    if (["awaiting_verification", "verifying"].includes(task.status)) return { stage: "review", label: "Awaiting verification" };
-    if (["active", "running"].includes(task.status) || task.runId) return { stage: "running", label: "Builder working" };
-    if (task.verification?.state === "failed" || (task.runFailures || 0) >= 5 || (task.verifyAttempts || 0) >= 3) return { stage: "blocked", label: "Needs your review" };
-    if (task.absorbedInto) return { stage: "waiting", label: "Included in a grouped task" };
-    if (task.dependsOn?.some((id) => !tasks.some((other) => other.id === id && ["done", "archived", "completed"].includes(other.status)))) return { stage: "waiting", label: "Waiting on a task" };
-    if (task.nextRunAt > Date.now()) return { stage: "waiting", label: "Retry scheduled" };
-    return { stage: "queued", label: "Queued" };
+    if (["awaiting_verification", "verifying"].includes(task.status)) return { stage: "review", label: label("review", "Verifying") };
+    if (["active", "running"].includes(task.status) || task.runId) return { stage: "running", label: label("running", "Working") };
+    if (task.verification?.state === "failed" || (task.runFailures || 0) >= 5 || (task.verifyAttempts || 0) >= 3) return { stage: "blocked", label: label("blocked", "Needs attention") };
+    if (task.absorbedInto) return { stage: "waiting", label: label("grouped", "In a plan") };
+    if (task.dependsOn?.some((id) => !tasks.some((other) => other.id === id && ["done", "archived", "completed"].includes(other.status)))) return { stage: "waiting", label: `${label("waiting", "Waiting")} · on a task` };
+    if (task.nextRunAt > Date.now()) return { stage: "waiting", label: label("cooling", "Retry scheduled") };
+    return { stage: "queued", label: label("ready", "Ready") };
   }
   function executionRows(item) {
     const tasks = state.tasks || [];
@@ -494,8 +495,8 @@
   }
   function startWorkPoll() {
     stopWorkPoll();
-    if (window.MefiBoot?.pollStart) window.MefiBoot.pollStart("planning.work", refreshWork, 4000);
-    else if (typeof setInterval === "function") workTimer = setInterval(refreshWork, 4000);
+    if (window.MefiBoot?.pollStart) window.MefiBoot.pollStart("planning.work", refreshWork, 30000);
+    else if (typeof setInterval === "function") workTimer = setInterval(refreshWork, 30000);
     void refreshWork();
   }
   async function refresh({ refreshTasks = true } = {}) {
@@ -529,6 +530,14 @@
     if (initialized || !$("overlay")) return; initialized = true;
     $("new").addEventListener("click", () => { if (state.busy) return; state.selected = "new"; render(); note(); $("title")?.focus(); });
     $("refresh").addEventListener("click", () => refresh()); $("close").addEventListener("click", close);
+    // A pushed board change repaints an open plan's workflow at once; the poll
+    // below is only a backstop for a missed push.
+    api()?.onTasks?.((tasks) => {
+      if (!state.opened || !Array.isArray(tasks)) return;
+      const next = tasks.filter((task) => !task.projectId || task.projectId === state.projectId);
+      if (JSON.stringify(next) === JSON.stringify(state.tasks) && !state.workError) return;
+      state.tasks = next; state.workError = null; renderWorkflow(plan()); controls();
+    });
     $("overlay").addEventListener("click", (event) => { if (event.target === $("overlay")) close(); });
     $("sheet").addEventListener("keydown", (event) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }

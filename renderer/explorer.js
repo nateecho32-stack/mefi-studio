@@ -900,6 +900,7 @@
 
   function renderAssistant() {
     renderAssistantService();
+    if (els.model) els.model.textContent = state.assistant?.ai?.model || "not connected";
     els.brief.textContent = "";
     if (!state.briefing) {
       const hint = document.createElement("p");
@@ -1257,6 +1258,7 @@
       machineEvents: "machine-events",
       openButton: "tree-explore",
       service: "assistant-service",
+      model: "assistant-model",
       thread: "assistant-thread",
       input: "assistant-input",
       send: "assistant-send",
