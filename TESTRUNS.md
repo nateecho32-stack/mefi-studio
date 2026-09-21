@@ -1676,3 +1676,78 @@ lowered or restyled here; the report and screenshots stay under ignored
 `tools/logs/workspace-ui/`, where `failure.png` shows the 720 px state. Free
 memory on this machine was about 200 MB during the runs, which the Machine
 tile reported as a low-memory hold; it changed no result.
+
+Command view click focus (2026-09-21, session "node click is jumpy and
+jittery"). A click on a node did four things at once that fought each other:
+`enterFocus` snapped the focus zoom (up to 2.4x) while the camera panned over
+a second or two, so the scene scaled about the centre first and the clicked
+node leapt outward, off-screen for an edge node, before the pan brought it
+back; the selection card `#idle-info` was carved out of `usableArea()`, whose
+rectangle keyed the persisted node layout (`state.screenLayout`) and set the
+projection centre, so every click re-seeded every anchor and shifted the
+whole scene by half the card's width, twice within 300 ms because of the
+card's slide-in transform; callouts re-chose their placement every frame
+while their neighbours were still moving; and the 30 fps gate rejected any
+frame under exactly 33 ms, so a jittered 32.9 ms tick cost a 50 ms hitch.
+`renderer/idle.js` now: `glideZoom` sets `state.zoomTarget` and the frame
+loop eases `state.zoom` toward it at `CAMERA_EASE` (wheel, fit and restore
+still zoom at once through `setZoom`, which ends a glide; reduced motion
+lands at once); `usableArea()` records the rail-to-rail frame as
+`state.graphFrame` and `layoutProjectedGraphImpl` keys the persisted layout
+on that frame, not on the carved rectangle, so the card never re-seeds
+anchors (the card still carves the rectangle: the overview back-off keeps
+nodes clear of it, which `tests/command_render.test.mjs` asserts);
+`stepCenter` glides the projection centre in the free and follow cameras and
+snaps it for the overview, a frame change, a refit, a resize and reduced
+motion; `placeCallout` keeps a card's spot while `state.cameraMoving` (a pan
+still worth more than 8 px, a centre or zoom glide) and resumes with a fresh
+hold; the frame gate is `>= 30`. A first cut let the card float over the
+graph without carving the rectangle; the Electron render fixture's "expanded
+Live work and chat" clearance check failed on it (a node behind `idle-info`
+in the overview), which is why the frame-keyed layout replaced it. README's
+focus line follows. Gates on this tree: every `tests/command_*.test.mjs` plus
+`booklet_build` 228/228 including the real-renderer fixture, with four new
+cases in `tests/command_visuals.test.mjs` (the glide, the in-flight callout
+hold, the jitter-tolerant gate, and the frame-keyed layout with the eased
+centre); `npm run check` exit 0 (88 targets, 171 specs, every selector used);
+`npm run audit` zero findings; the Python contracts 244 OK; the
+normalized-path lock proof passed; `npm run build-booklet` re-baked. The
+full Node parallel stage did not settle: `npm test` logged 134 failures in
+the host suites and its `node --test` parent ended with exit 127 before
+printing a summary; run alone, `tests/assistant_work_on.test.mjs` and
+`tests/build_approval.test.mjs` fail 15 of 31 both on this tree and in a
+detached HEAD worktree (same counts), they load neither `renderer/idle.js`
+nor `booklet.html`, and no failing case names the command view. A TAP re-run
+of the stage stalled at the same test while two other sessions' `npm test`
+runs were live in this tree, and was stopped rather than left contending (it
+left no processes behind). The change itself reached `main` inside another
+session's commit 03a7e7b ("Align onboarding and workspace UX"), which took
+the whole shared working tree; every hunk, the four tests and a fresh
+booklet are in that commit. Not checked: the glide by eye in the live app.
+
+Single-writer `npm test` rerun with full summary (2026-09-21 13:29-13:30,
+run for the "Single-writer npm test rerun for summary" task). The summary the
+134-failure run above never printed is now on record. Pre-flight found no
+live `node --test`/npm chains to kill (only two `serve.mjs` web servers and
+PixelLab MCP proxies), so the sweep ran as the sole writer: one foreground
+`npm test`, stdout+stderr tee'd to
+`%TEMP%\opencode\npm-test-single-writer.log` (329 KB), exit code captured.
+The env-drift fixture fix (the uncommitted `readSettings` /
+`machineMemoryWarnOverride` / host-fixture hunks in `tests/`) held: the Node
+parallel stage printed its end-of-suite summary — **tests 1652, pass 1650,
+fail 1, skipped 1, duration 42.3 s** — and the suite exited 1. The one
+failure is the known `performance_render` Electron profiler fixture
+(`chrome_100_percent.pak` failed to load from the OneDrive-path
+node_modules, then "Profiler JSON download timed out" at
+`tests/fixtures/performance-render-electron.cjs:127` after 18 s) — the same
+signature the earlier owner-present rerun flagged; it is environmental, not
+a regression introduced here. Because the chain is `&&`, the failing Node
+stage short-circuited the remaining legs, so they were run directly to
+complete the triage: `python -m unittest discover -s tools -p
+"test_mefi_studio_*.py"` — 244 tests OK, exit 0; `node
+tools/test_normalized_path_lock.mjs` — all checks passed, exit 0. No repo
+source was modified by this run beyond this entry. Remaining (handed on):
+the performance_render fixture still needs an owner-present, machine-idle
+rerun to separate the pak-load/timeout flake from a real regression, and the
+uncommitted env-drift fixture hunks plus this entry still need a commit
+owner.

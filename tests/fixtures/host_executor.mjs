@@ -157,6 +157,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     section("function assistantSuperviseJobs(", "function assistantStaleWork("),
     section("async function setAutopilot(", "// Settings may override the defaults"),
     section("let autopilotBootPromise = null;", "async function readSettings("),
+    section("function machineMemoryWarnOverride(", "let machineTimer = null;"),
   ].join("\n"), env);
   if (realWatches) vm.runInContext(section("function watchJobProgress(", "// Starts eligible work"), env);
   if (realPool) {

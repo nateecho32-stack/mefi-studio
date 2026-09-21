@@ -116,7 +116,7 @@ test("real selection, file claims and fill loop run independent tasks together b
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", workTitleKey: (value) => value,
     conflictsWithLiveFix: () => false, queuedWorkCount: () => board.tasks.filter((task) => task.status === "open").length,
     compareWork: (a, b) => a.createdAt - b.createdAt, mutateBoard: async (fn) => fn(board), withBoardLock: async (fn) => fn(),
-    logLine() {}, setAutopilotWaiting: (reason) => { autopilot.waiting = reason; }, pushAutopilotHistory() {},
+    logLine() {}, setAutopilotWaiting: (reason) => { autopilot.waiting = reason; }, pushAutopilotHistory() {}, readSettings: async () => ({}), machineMemoryWarnOverride: () => false,
     EXECUTOR_STAGGER_MS: 3000, setTimeout: (fn) => { queueMicrotask(fn); return { unref() {} }; },
     fakeSpawn: (entry) => { launched.push(entry.taskId); return "spawned"; },
   });

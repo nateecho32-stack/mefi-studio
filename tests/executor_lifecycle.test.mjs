@@ -355,7 +355,7 @@ function dispatchHost({ interrupt = null, refuse = false, throwClaim = false, ed
     executorRunEnv: async () => ({ via: "fixture" }), getEyes: async () => ({ readJson: async (key) => structuredClone(board[key]) }),
     getPolicyModule: async () => null, warmPolicyBaseline() {}, resolveActivePolicyIdentity: async () => null,
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", workTitleKey: (text) => text, conflictsWithLiveFix: () => false,
-    queuedWorkCount: () => 1, compareWork: () => 0, logLine() {},
+    queuedWorkCount: () => 1, compareWork: () => 0, logLine() {}, readSettings: async () => ({}), machineMemoryWarnOverride: () => false,
     withBoardLock: async (fn) => fn(),
     mutateBoard: async (fn) => {
       mutations += 1;

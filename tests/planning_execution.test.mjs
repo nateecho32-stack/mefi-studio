@@ -66,7 +66,7 @@ test("an approved plan joins the paused queue and its dependent dispatches only 
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", workTitleKey: (value) => value,
     conflictsWithLiveFix: () => false, queuedWorkCount: () => board.tasks.filter((task) => task.status === "open").length,
     compareWork: (a, b) => a.createdAt - b.createdAt, mutateBoard, withBoardLock: async (fn) => fn(),
-    logLine() {}, setAutopilotWaiting: (reason) => { autopilot.waiting = reason; }, pushAutopilotHistory() {},
+    logLine() {}, setAutopilotWaiting: (reason) => { autopilot.waiting = reason; }, pushAutopilotHistory() {}, readSettings: async () => ({}), machineMemoryWarnOverride: () => false,
     refreshAutopilotQueue: async () => {}, assistantClip: (value, limit) => String(value ?? "").slice(0, limit),
     EXECUTOR_STAGGER_MS: 3000, setTimeout: (fn) => { queueMicrotask(fn); return { unref() {} }; },
     fakeSpawn: (entry) => { launched.push(entry.taskId); return "spawned"; },
