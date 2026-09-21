@@ -483,6 +483,18 @@ the benign-input route is unavailable at the lock screen. No occluded record
 was claimed and the visibility proxy stayed off; the strict native pass from
 run_1789973551180_3 remains the pinned evidence for this thread.
 
+Re-run on 2026-09-21 (run_1789975072230_7, owner-gated commit of the
+occlusion-probe thread): one more fresh
+`node --test tests/occlusion_probe.test.mjs` on the committed tree skipped at
+the same documented capability gate in ~17.4 s — desktop still locked
+(Windows Default Lock Screen foreground, LockApp pid 17300 hwnd 0x1303e2,
+console session 1 "Active", input idle ~22 min, cover hwnd 0x237037c shown
+over probe hwnd 0x45f00c2, 8 focus reassertions, rAF loud at ~60 fps behind
+the cover: ticks 822→907 across the timeline tail). No occluded record was
+claimed and the visibility proxy stayed off; no further code changes were
+pending — a9464fd remains the scoped code commit and the strict native pass
+from run_1789973551180_3 remains the pinned evidence for this thread.
+
 Validated on 2026-09-20: `npm run check`, `npm test` (1,490 parallel Node
 tests with 1,489 passing and one opt-in skip, the serialized occlusion probe
 passing at ~0 ms lag, 243 Python contracts and the normalized-path checks)
