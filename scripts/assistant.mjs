@@ -3890,14 +3890,14 @@ const reportedCheckFailure = (parts) => checkReports(parts).some((text) => /\b(?
 // A denial of remaining work may carry a scoping qualifier — "none within
 // this subtask's scope", "none for this card" — and may close with a
 // parenthetical naming the lane the leftover work went to (the parent's
-// integration, an owner-only/owner-side leftover). Those stay denials of
+// integration, an owner-only/owner-side/owner-bookkeeping leftover). Those stay denials of
 // work owed HERE. "none of the tests
 // pass" and "none in the other module" remain obligations: the qualifier
 // must name this card's own scope, not some other module's state. A bare
 // repo-wide lane ("none in repo scope", "none in the repository") names
 // this work's own scope too, so repo/repository/code/implementation count.
 const noRemainingScopeTail = /^(?:(?:in|within)\s+(?:this\s+|the\s+)?(?:subtask'?s?|task'?s?|card'?s?|attempt'?s?|retry'?s?)?\s*scope|(?:in|within)\s+(?:this\s+|the\s+)?(?:repo(?:sitory)?|code|implementation)'?s?(?:\s+scope)?|for\s+(?:this|the)\s+(?:card|task|subtask|attempt|retry|scope|work))$/i;
-const handedElsewhereNote = /\b(?:parent|integration|deferred|handed(?:\s+(?:off|on|over))?|follow-?ups?|out\s+of\s+scope|owner[-\s]?(?:only|side)|owner(?:'s)?\s+(?:responsibilit(?:y|ies)|hands?))\b/i;
+const handedElsewhereNote = /\b(?:parent|integration|deferred|handed(?:\s+(?:off|on|over))?|follow-?ups?|out\s+of\s+scope|owner[-\s]?(?:only|side)|owner[-\s/]*bookkeeping|owner(?:'s)?\s+(?:responsibilit(?:y|ies)|hands?))\b/i;
 const noRemainingWork = (text) => {
   let body = str(text).trim().replace(/[.!\s]+$/, "");
   const note = /^(.*)\s*\(([^()]*)\)$/.exec(body);

@@ -78,6 +78,8 @@ test("owner-side remaining notes are handoffs, not outstanding obligations", () 
     "none in repo scope (owner-side board hygiene: flip the two cards)",
     "none (owner's responsibility: reword the delegated acceptance)",
     "none for this card (owner-only wording left to the board owner)",
+    "none in repo scope (owner/bookkeeping: the stored acceptance lives in Studio's task store)",
+    "none in repo scope (owner / bookkeeping: the stale acceptance is the owner's to flip)",
   ]) {
     assert.notEqual(
       verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining } } }).reason,
@@ -87,9 +89,11 @@ test("owner-side remaining notes are handoffs, not outstanding obligations", () 
   }
   // The owner marker only discharges a denial of this scope: a genuine
   // obligation phrased without a denial, and a leftover handed to the owner
-  // but named against another module, both stay outstanding.
+  // but named against another module, both stay outstanding. A bare
+  // "bookkeeping" does not name a lane, so it stays outstanding too.
   assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "the owner still has to migrate the store" } } }).reason, "outstanding obligations remain");
   assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "none in the other module (owner-only)" } } }).reason, "outstanding obligations remain");
+  assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "none in repo scope (bookkeeping in the other module)" } } }).reason, "outstanding obligations remain");
 });
 
 test("done+verified retries with 0 changed files discharge on a green scoped-check rerun", () => {
