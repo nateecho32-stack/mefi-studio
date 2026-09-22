@@ -25,6 +25,28 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Closing verification for the per-feature model-config landing card
+(2026-09-22, ~11:1x, run_1790091744134_39 for task_6b445d8ac92eeed6 "Land
+the per-feature model-config tree"). Re-verified at HEAD instead of trusting
+the prior report: all eight waited-on paths — main.cjs, preload.cjs,
+scripts/assistant.mjs, scripts/task-context.cjs, scripts/agent-issues.cjs,
+scripts/brains.cjs, tests/agent_issues.test.mjs, tests/brains_map.test.mjs —
+landed in a16b752 (exactly those 8 files, +2198/−26), with main.cjs evolved
+further by e3ad851 and 31f69f0, and all clean in `git status --porcelain`
+this pass, so no re-commit was made. The follow-on rerun card
+task_baa66f9ab1ec0f2e is done and verified (its own row: e936982, full
+npm test exit 0 on the settled tree), so no re-trigger was needed. The two
+earlier retries of this card looped on verification mechanics, not
+substance: the first ran its checks through a PowerShell pipe the runner
+does not observe as a check, and the second answered "remaining: none for
+this card", which the verifier does not recognize as no-remaining-work.
+This pass ran the checks bare so they count: `node --test
+tests/agent_issues.test.mjs tests/brains_map.test.mjs` — 26 tests /
+26 pass / 0 fail / 0 skipped, exit 0, and `npm run check` — all five
+stages ok (100 targets, 200 specs, no merge in progress, every class
+selector used, 100 files syntax). A sibling session's in-flight
+package-lock.json hunk was left untouched.
+
 Scoped-check rerun un-sticking the two collision-delegate verification
 loops (2026-09-22, ~16:0x, run_1790091633044_35 for
 task_93c9907b18ec3928 "Unstick collision-delegate verification loops",
