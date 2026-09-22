@@ -128,10 +128,24 @@ test("an occluded booklet window's worker/MessageChannel channel answers while r
         t.diagnostic(`occlusion capability absent; strict phase exercised via the visibility proxy (not occlusion): rAF growth ${proxy.rafGrowth}; probe ${JSON.stringify(proxy.probe.answered)}; lag ${proxy.probe.lagMs}ms of ${proxy.probeSamples.length} samples (${proxy.probeSamples.map((sample) => sample.lagMs).join(", ")}); worker drift ${proxy.worker.driftMs}ms; MessageChannel ${proxy.messageChannelMs}ms; recovered=${Boolean(proxy.recovered)}`);
         return;
       }
+      // No proxy record means the opt-in signal was not requested: the default
+      // path must decline explicitly and never silently substitute hide()/show()
+      // for coverage (the "hide is not coverage" contract, still awaiting owner
+      // sign-off). Pin both halves so an accidental default-on flip fails here.
+      assert.equal(report.occlusionProxy, undefined, "the visibility proxy must not run without MEFI_OCCLUSION_PROXY=visibility");
+      assert.ok(report.occlusionProxyDeclined, "the unsupported path without the proxy must record the decline (no silent substitution)");
+      assert.match(String(report.occlusionProxyDeclined), /owner sign-off/, "the decline must name the owner sign-off gate for the hide-is-not-coverage contract");
       t.diagnostic(`occlusion capability absent on this desktop: ${unsupported.reason}; cover visible=${unsupported.coverVisible}, window=${JSON.stringify(unsupported.windowState)}, cover=${unsupported.coverHandle}, probe=${unsupported.probeHandle}, win32 foreground=${JSON.stringify(unsupported.foreground)}, focus reassertions=${unsupported.reassertions}, rAF stayed loud (timeline tail=${JSON.stringify(unsupported.timelineTail)})`);
       t.skip("this desktop never emits Electron occlusion events (visibility never flipped, rAF stayed loud under a focused cover)");
       return;
     }
+
+    // Native occlusion was actually observed, so the hide()/show() visibility
+    // proxy must stay unused and `occluded` must be the only occluded record.
+    // This is the reviewer's "proxy is unused when real occlusion is available"
+    // guard, and it keeps the contract decision from quietly changing meaning on
+    // occlusion-capable desktops.
+    assert.equal(report.occlusionProxy, undefined, "the visibility proxy must stay unused when native occlusion is observed");
 
     assert.equal(report.occluded.windowState.minimized, false, "occlusion must be coverage, not minimize");
     assert.equal(report.occluded.rafGrowth, 0, `rAF must stay silent while occluded (growth=${report.occluded.rafGrowth})`);
