@@ -25,6 +25,26 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 afternoon - retry after the second "split" decision: repo-side half re-verified at HEAD, host-side flip carried by the new card (task_4dc2a045b8d46b20, run run_1790100903971_2)
+
+The owner answered this card's b300702 scope question with "split the extra
+work out" (1790100324909), which created the carrier card
+task_b5ec79917d8514b2 for the host-side remainder. This retry therefore owns
+only the repo-side half and re-verified it first-hand at HEAD 6acf79f (the
+tree had moved past 1e61b58): feature commits c272b58 / e3ad851 / 31f69f0 /
+d1c4d78 / 96d15c6 are all ancestors of HEAD; the wiring is intact
+(`require` at main.cjs:58; `worktreeManager` `prepare` at main.cjs:9489,
+`discard` at 9498/9699, `settle` at 9516); fresh
+`node --test tests/executor_worktree.test.mjs` -> 11/11 pass, exit 0
+(12.0 s); `.mefi/worktrees` does not exist and `git worktree list` shows
+only the standing mb/mm/wt-* checkouts, no per-run residue; the default is
+still opt-in (`enabled()` at scripts/executor-worktrees.cjs:62 requires
+`MEFI_STUDIO_WORKTREE_RUNS === "1"` exactly). Landing cards
+task_7b773505d7c6eb43 and task_2dd9dc18291f2625 remain `open` on the board —
+the flip is host-side only and was not done from this worker; the task
+store was not touched. Sibling in-flight files (~32 modified, 2 untracked)
+were present and untouched; this commit adds only this row.
+
 ## 2026-09-22 midday - full-gate retry on a tree that never went quiet: node stage all green, the one Python failure races the sibling's booklet rebuild (task_cff03b8e4922cc5d, run run_1790099546420_7)
 
 The quiet-tree precondition could not be met: renderer/brains.js (13:00:14),
