@@ -229,6 +229,20 @@ test("walk with me stays in the corner, follows the menus, highlights the real c
   assert.match(env.el("progress").textContent, /Step 3 of 7/);
 });
 
+test("the guided walk moves focus to its own Next when a stop has no real control, keeping the tour keyboard-continuable", () => {
+  const env = environment(); env.guide.open();
+  // A stop that points at a real control focuses that control.
+  env.el("steps").children[WORKSPACE].click();
+  env.el("action").click();
+  assert.equal(env.document.activeElement, env.get("workspace-add-project"));
+  // Connections has no single control to land on, so focus goes to the coach's Next.
+  env.guide.open();
+  env.el("steps").children[CONNECT].click();
+  env.el("action").click();
+  assert.equal(env.document.activeElement, env.el("coach-next"));
+  assert.deepEqual(env.routes.slice(-1), ["studio"]);
+});
+
 test("the workspace stop ticks itself off when the user actually selects a project", () => {
   const env = environment(); env.guide.open();
   env.el("steps").children[WORKSPACE].click();

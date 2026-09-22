@@ -543,27 +543,33 @@
   }
   // Safe destinations: navigation and highlighting only. Nothing is submitted,
   // approved or started from a lesson.
+  // Returns the real control it focused, if any, so the coach knows whether it
+  // still needs to hand focus to its own primary button.
   function routeTo(lesson) {
     const route = lesson.route;
+    let focused = null;
     if (["project", "task", "review"].includes(route)) {
       window.MefiNav?.go?.("workspace");
       if (route === "task") {
         document.getElementById("workspace-mode-work")?.click();
-        document.getElementById("workspace-input")?.focus?.();
+        focused = document.getElementById("workspace-input") ?? null;
+        focused?.focus?.();
       } else if (route === "review") {
         const review = document.getElementById("workspace-review");
         review?.click(); review?.focus?.();
+        focused = review ?? null;
       }
     } else window.MefiNav?.go?.(route);
     if (lesson.menu) window.MefiSidebar?.open?.();
     highlight(lesson.target);
-    if (route === "project") document.getElementById("workspace-add-project")?.focus?.();
+    if (route === "project") { focused = document.getElementById("workspace-add-project") ?? null; focused?.focus?.(); }
     const at = state.step;
     later(() => {
       if (state.mode !== "coach" || state.step !== at) return;
       if (lesson.menu) window.MefiSidebar?.open?.();
       highlight(lesson.target);
     });
+    return focused;
   }
   function visit(route) {
     close();
@@ -594,7 +600,11 @@
     $("overlay").hidden = true;
     releaseLayer();
     renderCoach(); renderInvitation();
-    if (options.navigate !== false) routeTo(lessons[state.step]);
+    // The walk is keyboard-continuable: when the stop has a real control, focus
+    // lands there (routeTo returns it); otherwise focus the coach's own Next so
+    // the tour never strands focus on the hidden sheet behind it.
+    const focused = options.navigate !== false ? routeTo(lessons[state.step]) : null;
+    if (!focused) $("coach-next")?.focus?.();
   }
   function advance() {
     state.done[state.step] = true;
