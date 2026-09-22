@@ -2086,3 +2086,50 @@ uncommitted package-lock.json drift (an engines>=24 node), and the 09:2x
 entries stamp full suites into a mid-edit tree non-evidence. The shared
 package-lock drift was left untouched and out of this commit. No repo
 source modified beyond the new test and this entry.
+
+## 2026-09-22 evening - performance_render profiler timeout triage: solo rerun passes 2/2; the timeout is parallel-stage starvation, not a fixture regression (task_5bc54727ee0fe3be, run run_1790120572424_10)
+
+The card asked for a rerun to separate machine-load flake from a real
+`performance_render` fixture regression after a prior run saw
+`chrome_100_percent.pak` fail to load and then "Profiler JSON download timed
+out" (the `performance-render-electron.cjs` download-budget reject). Ground
+truth first, on this checkout:
+
+- The `.pak` files are present and whole: `node_modules/electron/dist/`
+  holds `chrome_100_percent.pak` (719,654 B), `chrome_200_percent.pak`
+  (1,269,017 B) and `resources.pak` (12,435,445 B); `dist/resources/` carries
+  `default_app.asar`. So the pak-load line is a transient read (OneDrive
+  hydration / disk contention), not a missing-file regression. The fixture's
+  load-timeout line is now the pace-scaled `downloadCapture` budget
+  (`performance-render-electron.cjs:137`, up to 30 s scaled by an observed
+  250 ms timer pace), landed in `478cdb3` ("Give performance_render the 80s
+  kill and 100s timeout headroom under load").
+
+Fresh solo evidence, exactly one writer, no competing `node --test`/`npm`
+chain alive (pre-flight found none; `node` procs were IDE/PixelLab MCP only):
+`node --test tests/performance_render.test.mjs` -> **tests 2 / pass 2 / fail 0
+/ cancelled 0 / skipped 0, duration 29,371 ms, exit 0** (both the renderer and
+the desktop-host fixtures). Host at launch: CPU 0 %, free RAM 649 MB,
+0 `electron.exe`, 14 `node.exe`. Full output tee'd to
+`%TEMP%\opencode\perf_render_solo_20260922-185328.log`; screenshots and
+report.json under `%TEMP%\opencode\perf_render_solo_capture`.
+
+The same evening's single-writer full `npm test`
+(`%TEMP%\opencode\npmtest-task_cb3fe2a4-20260922-184653.log`, sibling
+task_cb3fe2a4) failed with **tests 2331 / pass 2323 / fail 0 / cancelled 5 /
+skipped 3, 291 s, exit 1**, and all five cancellations were *outer*
+`node:test` timeouts in Electron capture fixtures, not the download-budget
+signature: `command_render` (100 s), `performance_render` both tests (100 s),
+`startup_render` (65 s), `task_overview_render` (45 s). Five independent
+Electron fixtures starving together while `performance_render` passes 2/2
+solo in 29 s is the parallel-stage saturation signature, not a
+performance_render regression - so the card's flake-vs-regression question
+resolves to **machine-load flake**.
+
+Not done here: an attended, unlocked, machine-idle rerun is still the only
+way to reproduce the stray pak-load line itself; and if the suite is to keep
+recording green end-of-suite summaries on a loaded desktop, the owner may
+want the Electron fixtures' `node:test` timeouts (currently 45-100 s) and the
+parallel stage's width reconsidered, since under saturation the fixture's own
+80 s kill never gets to emit its classified failure before `node:test`
+cancels at 100 s. No fixture/test source modified beyond this entry.
