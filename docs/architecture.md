@@ -282,7 +282,9 @@ revision history stay in the project's ignored local `planning.json`.
   Code); **Heavy** runs the high-end one (GLM 5.3, `opus`). Tier models are
   saved per builder CLI, and the Settings line shows what each tier resolves
   to before anything runs.
-- Keys live in the OS keystore (`safeStorage`; DPAPI on Windows). Headless
+- Keys live in the OS keystore (`safeStorage`; DPAPI on Windows); their
+  ciphertext persists in `auth.json` beside `settings.json`, so preferences
+  stay copyable and credentials stay machine-bound. Headless
   setup: `MEFI_STUDIO_KEY=... electron . --set-key`,
   `MEFI_STUDIO_ZAI_KEY=... electron . --set-zai-key`, and
   `MEFI_STUDIO_CUSTOM_KEY=... electron . --set-custom-key`.

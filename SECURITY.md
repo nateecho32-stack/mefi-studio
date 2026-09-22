@@ -4,15 +4,18 @@
 
 - **Keys stay on your machine.** API keys entered in Settings are encrypted
   with the OS keystore (DPAPI on Windows) inside
-  `%APPDATA%\Mefi's Studio AI+\settings.json`. Only "key present / absent"
-  status crosses into the renderer. Keys are bound to the Windows account that
-  saved them and cannot be decrypted elsewhere.
+  `%APPDATA%\Mefi's Studio AI+\auth.json`, a credentials file kept separate
+  from the `settings.json` preferences so the two never travel together. Only
+  "key present / absent" status crosses into the renderer. Keys are bound to
+  the Windows account that saved them and cannot be decrypted elsewhere.
 - **No telemetry, no hosted account.** Studio only talks to the providers and
   CLIs you connect, and to GitHub's release API when it checks for updates.
 - **Local state is never committed or packaged.** Tasks, conversations,
   databases, captures and settings live under `data/` (source install) or the
   portable build's own `resources/app/data`; both are ignored by git and
-  skipped by the packager.
+  skipped by the packager. The saved-key file `auth.json` sits beside
+  `settings.json` in the same local data folder and is equally never committed
+  or packaged.
 - **Agents run real commands.** Coding workers (`opencode`, `claude`, `codex`,
   `grok`, `agy`) edit files in the project folder you chose. Use **Verify
   first** (Auto build off) if you want to approve each task before it runs.

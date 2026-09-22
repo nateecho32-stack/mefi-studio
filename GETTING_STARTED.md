@@ -98,10 +98,11 @@ capabilities: a saved key alone never proves a build can start.
   TypeSafe, OpenCode Zen or OpenRouter); without one Studio uses fixed model
   defaults. Without any connection, the catalog, manual planning and saved work
   still function.
-- Keys are encrypted with the Windows keystore inside
-  `%APPDATA%\Mefi's Studio AI+\settings.json` and are bound to the Windows
-  account that saved them. A new user enters their own keys — copying the file
-  between machines does not work. Headless installs can pass keys with
+- Keys are encrypted with the Windows keystore and stored in
+  `%APPDATA%\Mefi's Studio AI+\auth.json`, a credentials file kept separate
+  from the `settings.json` preferences. They are bound to the Windows account
+  that saved them. A new user enters their own keys — copying the file between
+  machines does not work. Headless installs can pass keys with
   `electron . --set-key`, `--set-zai-key`, `--set-gateway-key`,
   `--set-jev-key`, `--set-zen-key`, `--set-openrouter-key` and
   `--set-custom-key`; the README's Keys section pairs each flag with its
@@ -141,9 +142,9 @@ one stays editable in **Settings & connections** or the workspace.
 Settings, keys, tasks, conversations, captures and databases are local state
 and do not travel. Only `data/curated.json` and `data/models.json` belong to
 the repository, and a source install and a portable build keep separate local
-stores. Never copy `settings.json` to another machine: its encrypted fields
-cannot be decrypted there. Build the new machine's own state with the steps
-above.
+stores. Never copy `auth.json` to another machine: its encrypted fields
+cannot be decrypted there. `settings.json` holds preferences only, but it is
+still local state — build the new machine's own state with the steps above.
 
 ## 1. Choose the folder you want to work on
 

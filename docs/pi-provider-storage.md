@@ -84,7 +84,9 @@ model catalog ships with the CLI and can be refreshed from pi.dev
   of files users are encouraged to edit and diff. Studio's single `settings.json`
   mixes encrypted blobs with ordinary preferences; a separate auth file would make
   "never copy settings.json to another machine" (GETTING_STARTED.md:144) easier to
-  honor. No change made here.
+  honor. Adopted 2026-09-22 (`task_88a18406f34104ca`): ciphertexts now persist to
+  `auth.json` beside `settings.json` (same DPAPI encryption, new home), with a
+  one-time migration on load; the env-alias tiers and precedence are unchanged.
 - pi's `!command` key form is a cheap pattern for secret-manager users; Studio's
   env-alias mechanism covers the CI case but not OS keychains/1Password.
 - pi's project-trust gate before loading `.pi/` config is a deliberate contrast to
