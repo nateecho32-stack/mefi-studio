@@ -25,6 +25,41 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 afternoon - second full-gate rerun for the 6c5e94 follow-up card after the usage-limit stall (task_7a3b221956f9aa64, run run_1790094001667_115)
+
+Second full-gate row for this card, run from scratch on the quiet tree. The
+first pass (run_1790091912218_46, row landed as 1fec86b) ran the whole gate
+green, yet verification closed with "sentinel seen, 0 changed files" and left
+obligations open; the six dispatches after that all died on the 5-hour usage
+limit before any command ran (usage-limit tails, not test failures). This
+pass re-ran every gate itself and trusts neither earlier report.
+
+Preconditions verified independently, not from the handoff: HEAD e3cd322
+("Booklet contract: brains assets inlined exactly once, no src leftovers"),
+tree fully clean and nothing staged at start; the gate target of card
+task_bf79bd8c1d8fced5 — c272b58 (scripts/executor-worktrees.cjs lifecycle
+module) and e3ad851 (main.cjs wiring, buildable worktree runs) with follow-ons
+31f69f0 and d1c4d78 — all still on HEAD's history. Three commits landed since
+the first row and are exercised by this run: fa35236 (CHANGELOG-only), b8f1a7a
+(TESTRUNS.md + tools/verify_dev_app.mjs, neither suite-read), and e3cd322
+(booklet contract: tests/booklet_build.test.mjs assertions plus the 247th
+Python contract).
+
+`npm test` end-to-end, exit 0, ~82 s, every stage separately green: parallel
+node 1959 tests / 1956 pass / 0 fail / 3 skipped in 39.3 s (the three skips
+are the documented environment-conditional ones); serialized
+eyes_toggle_electron 1/1 (3.2 s, baseline 2 fetches/295 ms, one resume snap,
+6 fetches total); occlusion_probe 1/1 (5.6 s) with the documented capability
+skip NOT taken this time — real occlusion engaged (document.hidden, occluded
+rAF growth 0, worker drift ~152 ms, lag 0 ms of 1 sample); Python contracts
+247/247 OK in 30.4 s; normalized-path lock 6/6 ok. `npm run check` exit 0
+(targets 100/100, spec-collisions 200 unique no orphans, css merge skip, all
+selectors used across 5 stylesheets, syntax ok 100 files). `npm run audit`
+exit 0 with 0 findings / 0 warnings (checkedAt 2026-09-22T16:23:21Z).
+node v24.15.0, npm 11.12.1. HEAD did not move during any gate this time; no
+suite reads TESTRUNS.md. The task store was not modified from this worker.
+This commit adds only this section.
+
 ## 2026-09-22 afternoon - restart-dev-app re-dispatch loop diagnosed; scoped named check added (task_5494e9f92f34b95a, run run_1790091964934_47)
 
 Card task_cd738240985f9b00 ("Restart dev app after repair — follow-up
