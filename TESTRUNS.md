@@ -29,6 +29,27 @@ only above the anchor (decision recorded 2026-09-22, pinned by
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - TESTRUNS append helper hardened with read-verify-write: a mid-run concurrent edit now aborts non-zero with no write instead of being clobbered; contracts 11/11 (task_delegate_b4f73d934d18f69906d57de9, run_1790108056387_13)
+
+The committed helper (76ee209) already did lock-serialized atomic newest-first
+insertion, but its write path never re-verified the snapshot bytes before the
+temp-file+rename replace: a non-cooperating editor saving between the locked
+read and the rename would have been silently reverted. appendTestrunsRow now
+re-reads the target right before the atomic replace and throws (CLI exit 1, no
+write, concurrent bytes left intact) on any drift since the snapshot. Saves
+that land while the helper waits for the lock were already incorporated
+because the snapshot is taken under the lock - now pinned by a spawn-level
+test that holds the lock, mutates, releases. lockPathFor exported for tests.
+
+Checks: `node --test tests/append_testruns_row.test.mjs` 11/11 (was 9/9; new
+mid-run-abort contract fires deterministically via a side-effecting block
+toString inside the read-to-write window, plus the parked-lock handoff test),
+`node --test tests/check_testruns.test.mjs` 9/9, full `npm run check` green
+before this row; this row itself inserted by the helper at the true top and
+`node scripts/check-testruns.mjs` re-run green afterwards. Touches only
+scripts/append-testruns-row.mjs, tests/append_testruns_row.test.mjs and this
+row.
+
 ## 2026-09-22 late evening - verification-loop closure for the main.cjs refactor card: landed bytes re-confirmed at a93e9aa, check green (task_c5a704c58fcda993, run run_1790107636695_7)
 
 Retry 3 after two "outstanding obligations remain" denials that were the

@@ -4,10 +4,12 @@
 // full row block ("## YYYY-MM-DD ..." plus body), holds a cross-process lock,
 // re-reads the live file under that lock, splices the row in at the position
 // that keeps the live region newest-first (the true top for a fresh run, the
-// right slot for a late-arriving older one), writes temp-file + rename so
-// readers never see a torn file, and rolls back if the gate audit would fail
-// afterwards. Rows are supplied as one quoted argument, a --file path, or
-// stdin; --dry-run reports the landing spot without writing.
+// right slot for a late-arriving older one), re-reads the target to verify
+// the bytes still match that snapshot (a concurrent edit by a non-cooperating
+// writer aborts non-zero with no write instead of being clobbered), writes
+// temp-file + rename so readers never see a torn file, and rolls back if the
+// gate audit would fail afterwards. Rows are supplied as one quoted argument,
+// a --file path, or stdin; --dry-run reports the landing spot without writing.
 import { closeSync, copyFileSync, existsSync, fsyncSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
@@ -26,7 +28,7 @@ function sleep(ms) {
 // The lock lives in the OS temp dir (not the repo root) so OneDrive never
 // syncs it and no check ever sees it; every process on the machine resolves
 // the same target path to the same lock file.
-function lockPathFor(target) {
+export function lockPathFor(target) {
   const key = createHash("sha256").update(resolve(target).toLowerCase()).digest("hex").slice(0, 12);
   return join(tmpdir(), `testruns-${key}.lock`);
 }
@@ -189,6 +191,14 @@ export function appendTestrunsRow(packageRoot, blockText, { dryRun = false } = {
     if (dryRun) {
       return { dryRun: true, heading: plan.heading, date: plan.newDate, insertLine: plan.insertAt + 1, before: plan.before };
     }
+    // Read-verify-write: the outgoing body was built from the snapshot in
+    // `raw`, so a non-cooperating editor that saved since that read would be
+    // silently reverted by the rename. Re-read and abort on any byte drift;
+    // the caller re-runs and lands on top of the fresh content instead.
+    const reread = readFileSync(target);
+    if (!reread.equals(raw)) {
+      throw new Error(`append-testruns-row: TESTRUNS.md changed mid-run (${raw.length} -> ${reread.length} bytes since the snapshot read) - no write performed, re-run to append onto the fresh content`);
+    }
     const how = atomicReplace(target, Buffer.from(spliceRow(text, plan, eol), "utf8"));
     const post = auditTestruns(packageRoot);
     if (post.problems.length > 0) {
@@ -215,10 +225,12 @@ const USAGE = `usage: node scripts/append-testruns-row.mjs [options] [row block]
 
 The block must start with a "## YYYY-MM-DD ..." heading followed by the row
 body. It is inserted so the live region stays newest-first, under a
-cross-process lock, written atomically (temp file + rename), then verified
-with the scripts/check-testruns.mjs rules; on any post-write problem the
-file is rolled back byte-for-byte. Refuses to run while the gate already
-flags the file (duplicate headings, conflict copies, malformed tail).`;
+cross-process lock, with the snapshot re-verified right before an atomic
+write (temp file + rename): a concurrent mid-run edit aborts with a non-zero
+exit and no write. The result is then verified with the
+scripts/check-testruns.mjs rules; on any post-write problem the file is
+rolled back byte-for-byte. Refuses to run while the gate already flags the
+file (duplicate headings, conflict copies, malformed tail).`;
 
 export function main(argv = process.argv.slice(2)) {
   let rootOpt = null;

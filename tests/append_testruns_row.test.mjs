@@ -7,12 +7,12 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, mkdtempSync, openSync, readFileSync, rmSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { appendTestrunsRow, main, planInsertion } from "../scripts/append-testruns-row.mjs";
+import { appendTestrunsRow, lockPathFor, main, planInsertion } from "../scripts/append-testruns-row.mjs";
 import { auditTestruns } from "../scripts/check-testruns.mjs";
 
 const scriptPath = fileURLToPath(new URL("../scripts/append-testruns-row.mjs", import.meta.url));
@@ -222,6 +222,77 @@ test("two concurrent CLI appends both survive under the lock, newest-first", asy
     assert.ok(i23 < i22 && i22 < i20, "still newest-first regardless of arrival order");
     assert.deepEqual(auditTestruns(root).problems, []);
   } finally {
+    cleanup(root, blocks);
+  }
+});
+
+test("a mid-run change to the file aborts with no write (read-verify-write)", () => {
+  const root = makeFixture();
+  try {
+    const pristine = readFileSync(join(root, "TESTRUNS.md"), "utf8");
+    // String(blockText) fires inside planInsertion - after the snapshot read,
+    // before the pre-write verify - so this lands exactly in the mid-run
+    // window a non-cooperating editor would save into.
+    const block = {
+      toString() {
+        writeFileSync(join(root, "TESTRUNS.md"), `${pristine}## 2026-09-25 noon - concurrent editor saved mid-run (run_x)\n\nIntruder body.\n`);
+        return "## 2026-09-22 noon - helper run (run_c)\n\nBody c.\n";
+      },
+    };
+    assert.throws(() => appendTestrunsRow(root, block), /changed mid-run/);
+    const after = readFileSync(join(root, "TESTRUNS.md"), "utf8");
+    assert.ok(after.includes("concurrent editor saved mid-run"), "the concurrent editor's bytes survive unclobbered");
+    assert.ok(!after.includes("(run_c)"), "the helper's row was never written");
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("a save landing while the helper waits for the lock is incorporated, not clobbered", async () => {
+  const root = makeFixture();
+  const blocks = mkdtempSync(join(tmpdir(), "append-testruns-blocks-"));
+  const target = join(root, "TESTRUNS.md");
+  const lockPath = lockPathFor(target);
+  const takeLock = () => {
+    const fh = openSync(lockPath, "wx");
+    try {
+      writeSync(fh, "held by test\n");
+    } finally {
+      closeSync(fh);
+    }
+  };
+  try {
+    writeFileSync(join(blocks, "r3.md"), "## 2026-09-22 noon - helper run (run_c)\n\nBody c.\n");
+    takeLock(); // the child cannot take its snapshot until this is released
+    const child = spawn(process.execPath, [scriptPath, "--root", root, "--file", join(blocks, "r3.md")]);
+    const pristine = readFileSync(target, "utf8");
+    writeFileSync(
+      target,
+      pristine.replace(
+        "## 2026-09-20 evening - second run (run_b)",
+        "## 2026-09-21 morning - parked-writer save (run_w)\n\nBody w.\n\n## 2026-09-20 evening - second run (run_b)",
+      ),
+    );
+    unlinkSync(lockPath);
+    const { code, stderr } = await new Promise((res) => {
+      let err = "";
+      child.stderr.on("data", (d) => (err += d));
+      child.on("close", (c) => res({ code: c, stderr: err }));
+    });
+    assert.equal(code, 0, `helper should succeed after the handoff: ${stderr}`);
+    const text = read(root);
+    const iw = text.indexOf("parked-writer save");
+    const ic = text.indexOf("helper run (run_c)");
+    const i20 = text.indexOf("## 2026-09-20 evening");
+    assert.ok(iw !== -1 && ic !== -1, "both the parked save and the helper row are present");
+    assert.ok(ic < iw && iw < i20, "newest-first holds across the lock handoff");
+    assert.deepEqual(auditTestruns(root).problems, []);
+  } finally {
+    try {
+      unlinkSync(lockPath);
+    } catch {
+      // child already removed it
+    }
     cleanup(root, blocks);
   }
 });
