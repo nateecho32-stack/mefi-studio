@@ -146,3 +146,38 @@ test("CLI routes keep their dedicated rescue and never join the armed walk", asy
   const routes = host.routes({ skip: "grok", role: "routine" });
   assert.deepEqual([...routes.map((row) => row.provider)], ["zai", "opencode"], "CLI providers are never silent retry targets");
 });
+
+test("an auto route takes the first usable provider and walks the rest only when armed", async () => {
+  const armed = routeHost({ settings: { aiAutoFallback: true, aiAutoProviders: ["grok", "zai", "opencode"] } });
+  const on = await armed.resolve();
+  assert.equal(on.ok, true);
+  assert.equal(on.provider, "zai", "the unavailable CLI is skipped for the first usable route");
+  assert.equal(on.fallback.provider, "opencode");
+  assert.deepEqual([...on.fallbacks.map((row) => row.provider)], ["opencode"]);
+  const off = routeHost({ settings: { aiAutoProviders: ["zai", "opencode"] } });
+  const plain = await off.resolve();
+  assert.equal(plain.ok, true);
+  assert.equal(plain.provider, "zai");
+  assert.equal(plain.fallback, null, "auto still answers the first route; it just never retries unasked");
+  assert.deepEqual([...plain.fallbacks], []);
+});
+
+test("an auto route with nothing usable names the saved order and what to do", async () => {
+  const host = routeHost({ settings: { aiAutoProviders: ["zai", "opencode"] }, keys: { zaiApiKeyEncrypted: null, apiKeyEncrypted: null } });
+  const result = await host.resolve();
+  assert.equal(result.ok, false);
+  assert.match(result.error, /no usable provider in the auto order \(z\.ai GLM > OpenCode Go\)/);
+  assert.match(result.error, /save a key, install a CLI or change the order/);
+  assert.deepEqual(host.fetches, []);
+});
+
+test("a custom endpoint that reports no model degrades to the keyed route once armed", async () => {
+  const host = routeHost({
+    settings: { aiProvider: "custom", aiAutoFallback: true, aiAutoProviders: ["custom", "zai"], customEndpoint: "https://api.example.com/v1/chat/completions" },
+  });
+  const result = await host.resolve();
+  assert.equal(result.ok, true);
+  assert.equal(result.provider, "zai");
+  assert.match(host.logs.join("\n"), /custom endpoint cannot answer \(the custom endpoint reported no model.*answering via z\.ai GLM/);
+  assert.equal(host.fetches.length, 1, "only the primary's own probe ran");
+});
