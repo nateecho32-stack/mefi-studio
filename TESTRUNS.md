@@ -64,6 +64,39 @@ eyes-toggle TESTRUNS entry 06:28, an in-flight session-continuity edit
 to main.cjs last written 06:31 — after the gate finished) and was left
 untouched; committing that work belongs to its own card.
 
+Green exit-0 full `node scripts/run-node-tests.mjs` closing the eyes
+toggle card (2026-09-22, 06:26, run_1790076152216_4 for
+task_a272d75c6e9c5bf5, settling task_11085243b2d2452f "Stabilize eyes
+toggle timing fixture" on this evidence). Preconditions verified before
+launch, not assumed: the flake fixes are committed (ce3e6ec —
+eyes_toggle/occlusion runner+fixture fixes; cb93e79 — occlusion
+skip-on-external-destroy; plus the runner's tree-settle preflight
+logged below), `git status` clean on HEAD 3138002, no sibling suite in
+flight (the concurrent gate attempt's last test process had drained;
+only MCP-proxy node processes remained), and the live Studio main
+window (pid 26912) was minimized per the card's quiet-desktop
+requirement. The run: exit 0 in 58 s with the memory floor at ~0.5 GB
+available — parallel stage 161 suites, 1819 tests / 1816 pass / 0
+fail / 3 skipped (including the documented environment-conditional
+live-gateway and vm-modules skips); serialized eyes_toggle_electron
+1/1 in ~3.1 s — baseline 2 fetches/298 ms, hidden 0/1200 ms, one
+resume snap, fetch gaps 298-1256 ms, 6 fetches total — the log-tail
+toggle assertion that used to drift (146 solo vs 158 in-suite) stable
+in-suite; serialized occlusion_probe 1/1 strict native occlusion
+(document.hidden signal, occluded rAF growth 0, lag 32 ms, worker
+drift 160 ms, MessageChannel 1 ms, 0 console errors). This chain also
+supersedes the sibling gate attempt minutes earlier
+(npmtest-gate-run_1790076061072.log + command-render-solo-rerun.log:
+command_render "Clear empties the done log through the host" red
+in-suite and in a solo rerun under the same memory floor): that
+transient-saturation reading is withdrawn — the red was the a418a84
+Clear confirm gate, not load: the new done-log confirm toast left the
+fixture's wait unanswered, and the identical solo run passes after
+exactly one change, 2415c29 teaching the fixture to approve the toast
+(command-render-solo-rerun.log red -> command-render-solo-fixed.log
+green, 1/1). Full log:
+%TEMP%\opencode\node-tests-full-a272.log (177 KB, kept).
+
 Rotating in-suite vm ReferenceErrors root-caused to source drift, runner
 gained a settle preflight (2026-09-21, night, run_1790038455313_19 for
 task_b98d5abec0a9f2cc "Root-cause rotating in-suite vm ReferenceErrors").
