@@ -24,6 +24,37 @@ red run as a regression, check it against the table below.
 
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
+Quiet-tree full-gate rerun for the 6c5e94 follow-up card, exit 0
+(2026-09-22, ~15:4x, run_1790091912218_46 for task_7a3b221956f9aa64
+"Full-gate rerun on the quiet tree — follow-up 6c5e94", parent
+task_64d0e2f342af618c "Follow-up: Follow-up: Per-session worktrees for
+executor runs"). Preconditions verified independently before launching,
+not taken from the handoff: the gate target of card task_bf79bd8c1d8fced5
+is the landed worktree module + wiring — c272b58
+(scripts/executor-worktrees.cjs lifecycle module) and e3ad851 (main.cjs
+wiring, buildable worktree runs) both on HEAD's history with follow-ons
+31f69f0 and d1c4d78; the tree was fully clean and nothing staged at
+start (HEAD cb79b9f). `npm test` ran end-to-end, exit 0 on every stage:
+parallel node 1959 tests / 1956 pass / 0 fail / 3 skipped in 37.0 s
+(1959 counts d1c4d78's npm-ci kill-switch gating test; the three skips
+are the documented environment-conditional ones); serialized
+eyes_toggle_electron 1/1 (3.3 s, baseline 2 fetches/298 ms, one resume
+snap, 6 fetches total); occlusion_probe took the documented capability
+skip (visibility never flipped under a focused cover); Python contracts
+246/246 OK in 35.8 s; normalized-path lock 6/6 ok. The same pass also
+ran `npm run check` exit 0 (targets 100/100, spec-collisions 200 unique
+no orphans, css merge skip, all selectors used, syntax ok 100 files) and
+`npm run audit` exit 0 with 0 findings / 0 warnings. Settle honest note:
+HEAD moved cb79b9f -> 6e5f233 during the run — a TESTRUNS.md-only
+sibling commit that is the original card's own retry row
+(run_1790091813384_42 for task_bf79bd8c1d8fced5), so that card now
+carries its own fresh green gate row and this row discharges only the
+follow-up; no test-read source moved, no suite reads TESTRUNS.md, and
+the runner raised no moved-sources diagnosis. After the run a sibling
+session holds an in-flight edit on tests/fixtures/occlusion-probe-electron.cjs
+(46 insertions / 6 deletions, occlusion-hardening work) that was left
+untouched. This commit adds only this row.
+
 
 Visible-phase foreground robustness for the occlusion-probe fixture
 (2026-09-22, run_1790091834654_43 for task_03ad46c09bd30216 "Visible-phase
