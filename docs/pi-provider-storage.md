@@ -38,12 +38,16 @@ custom streaming; their OAuth tokens also land in `auth.json`. The built-in
 model catalog ships with the CLI and can be refreshed from pi.dev
 (`pi update --models`); a cached copy keeps offline startup working.
 
-## How Studio stores providers and config today
+## How Studio stores providers and config
 
-- One store: `%APPDATA%\Mefi's Studio AI+\settings.json` (`main.cjs:122`), holding
-  both preferences and provider credentials.
+- At study time (2026-09-22) Studio kept one store:
+  `%APPDATA%\Mefi's Studio AI+\settings.json`, mixing preferences and provider
+  credentials. This study's takeaway changed that the same day (commit
+  `2457a7d`): ciphertext now persists to `auth.json` beside `settings.json`
+  (`main.cjs:123-127`, `scripts/auth-store.cjs`), and `readSettings()` serves
+  callers one merged view with a one-time migration off the legacy fields.
 - Keys are DPAPI-encrypted through Electron `safeStorage` and kept as separate
-  base64 fields — `zaiApiKeyEncrypted`, `apiKeyEncrypted` (OpenCode Go),
+  base64 fields in `auth.json` — `zaiApiKeyEncrypted`, `apiKeyEncrypted` (OpenCode Go),
   `customApiKeyEncrypted`, `gatewayApiKeyEncrypted`, `jevApiKeyEncrypted`,
   `zenApiKeyEncrypted`, `openrouterApiKeyEncrypted`, `githubTokenEncrypted`
   (`main.cjs:12761-12789`, `:13847-13990`).
@@ -69,9 +73,9 @@ model catalog ships with the CLI and can be refreshed from pi.dev
 
 | Aspect | pi | Studio |
 |---|---|---|
-| Config files | Split: `settings.json`, `auth.json`, `models.json` in `~/.pi/agent` | Single `settings.json` in Electron `userData` |
-| Keys at rest | Plaintext `auth.json` (docs: keep private) | DPAPI/`safeStorage`-encrypted base64 fields |
-| Key sources | `--api-key` → `auth.json` → `models.json` → env var / ambient cloud | Env var (headless) → encrypted settings field; env aliases for shared names |
+| Config files | Split: `settings.json`, `auth.json`, `models.json` in `~/.pi/agent` | Split since this study: `settings.json` + `auth.json` in Electron `userData` |
+| Keys at rest | Plaintext `auth.json` (docs: keep private) | DPAPI/`safeStorage`-encrypted base64 fields in `auth.json` |
+| Key sources | `--api-key` → `auth.json` → `models.json` → env var / ambient cloud | Env var (headless) → encrypted `auth.json` field; env aliases for shared names |
 | Secret managers | `!command` values in `auth.json`/`models.json` | None (env aliases only) |
 | Provider set | Many built-ins + arbitrary entries in `models.json` + extensions | Fixed catalog + one custom OpenAI-compatible endpoint + CLI builders |
 | Per-model metadata | Rich, user-editable (`baseUrl`, `api`, `inputLimits`, `promptCache`, cost) | Catalog in `data/models.json`; per-provider routine/heavy picks in settings |
@@ -82,11 +86,13 @@ model catalog ships with the CLI and can be refreshed from pi.dev
 
 - pi's file split (settings vs auth vs models) keeps machine-bound credentials out
   of files users are encouraged to edit and diff. Studio's single `settings.json`
-  mixes encrypted blobs with ordinary preferences; a separate auth file would make
-  "never copy settings.json to another machine" (GETTING_STARTED.md:144) easier to
-  honor. Adopted 2026-09-22 (`task_88a18406f34104ca`): ciphertexts now persist to
+  mixed encrypted blobs with ordinary preferences; a separate auth file makes the
+  machine-bound-key warning easier to honor. Adopted 2026-09-22
+  (`task_88a18406f34104ca`, commit `2457a7d`): ciphertexts now persist to
   `auth.json` beside `settings.json` (same DPAPI encryption, new home), with a
-  one-time migration on load; the env-alias tiers and precedence are unchanged.
+  one-time migration on load; the env-alias tiers and precedence are unchanged
+  (GETTING_STARTED.md:102-105 now warns about copying `auth.json`, not
+  `settings.json`).
 - pi's `!command` key form is a cheap pattern for secret-manager users; Studio's
   env-alias mechanism covers the CI case but not OS keychains/1Password.
 - pi's project-trust gate before loading `.pi/` config is a deliberate contrast to
