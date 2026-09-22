@@ -25,6 +25,30 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - TESTRUNS concurrent-editor alert triaged as unverifiable, prior collision verified intact first-hand, structural gate scripts/check-testruns.mjs added to "check" so future append collisions fail the gate (run_1790105837299_25)
+
+The dispatch named sessions ses_f359e43c/ses_f3573159/ses_f3572383 and an
+"owner final version to adopt"; none of those IDs exist anywhere in the
+A-Eyes data (data/eyes-*.json grep zero matches), TESTRUNS.md carried zero
+uncommitted bytes at HEAD e24f429, no OneDrive conflict-copy siblings exist,
+and the file's newest commit ad5bba2 is the already-verified 35-session
+collision repair - so there was no owner version to adopt and nothing to
+clobber. Root cause of the recurring alerts is structural: sessions append
+newest-first rows by hand with no lock and no automated integrity check, so
+stale-anchor inserts and duplicate/clobbered rows are only ever caught by
+manual repair (ad5bba2 was exactly that). Fix:
+scripts/check-testruns.mjs, wired into `npm run check` (and standalone as
+`npm run check:testruns`), verifies the preamble and known-failures table
+are intact, all H2 headings unique, live-region rows (above "Read Before
+Any Tests") strictly newest-first by date, exactly one trailing newline, no
+UTF-8 BOM, and no TESTRUNS* conflict-copy siblings in the repo root; the
+frozen archive below the guide keeps its blessed order untouched. Checks:
+`node scripts/check-testruns.mjs` ok (57 live rows) and full
+`npm run check` green including the new stage. Sibling in-flight dirty
+files (renderer/brains*, tests/brains_ui.test.mjs, booklet) left
+byte-for-byte as found, nothing staged; this commit touches only
+scripts/check-testruns.mjs, package.json and this row.
+
 ## 2026-09-22 late evening - main.cjs refactor gate on the settled-in-worktree loop-cleanup edit: check green, node 2064/2060/1/3 with the lone red a documented mid-run vm read (solo rerun green), Python 247 OK, lock green (task_c5a704c58fcda993, run run_1790104668687_12)
 
 The card asked for a dedicated gate on the in-flight main.cjs edit once it
