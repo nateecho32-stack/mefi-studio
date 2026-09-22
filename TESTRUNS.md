@@ -25,6 +25,40 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - fourth full-gate rerun for 6c5e94: why the card stuck unverified, and a quiet-HEAD gate in a throwaway worktree (task_7a3b221956f9aa64, run run_1790095876536_5)
+
+Why the card stayed unverified through three green rows (`1fec86b`,
+`21f9e33`, `f8694c6` — all present on main, TESTRUNS-only): the last failed
+verification ran 11:37:11, and `1f00796` (the `noRemainingScopeTail` scoped
+denial reader) landed 11:42:14 — every prior "remaining: none for this card"
+was rejected by the pre-fix verifier as an outstanding obligation. The
+packaged app now carries the fixed reader, so the loop cause is gone; this
+row is the rerun the retries kept asking for.
+
+The shared tree is not quiet: a sibling's in-flight radio-stations feature
+(uncommitted `renderer/music.js` et al.) adds `station: null` to the music
+settings object, and three landed assertions refuse the extra key
+(`tests/music.test.mjs:98`, `:215`, `:264` — `git show HEAD:renderer/music.js`
+has no station; the key exists only in the working-tree diff). A first
+`npm test` in the shared tree exit 1 with exactly those three failures plus
+the runner's "sources changed while the suite was running" note; they belong
+to the sibling's landing commit, which must update those tests in the same
+change. Landed code is not implicated.
+
+The gate therefore ran against landed content only, in a throwaway detached
+worktree of HEAD `1a9a760` with the shared `node_modules` junctioned (the
+per-session worktree feature this card exists to gate): `npm test` exit 0 in
+90 s — node 1962 tests / 1959 pass / 0 fail / 3 skipped (the documented
+environment-conditional skips), serialized `eyes_toggle_electron` 1/1 and
+`occlusion_probe` 1/1, Python contracts 247 tests in 34.6 s OK,
+normalized-path lock all ok. `npm run check` exit 0 (check-targets ok,
+merge-css skip, all-selectors-used across 5 stylesheets, check-syntax ok 100
+files); `npm run audit` exit 0 with findings `[]` / 0 warnings (checkedAt
+2026-09-22T16:57:31Z). node v24.15.0, npm 11.12.1. The junction was unlinked
+as a link before `git worktree remove` — no `.mefi/worktrees` residue; the
+sibling dirty files were never touched, and the task store was not modified
+from this worker. This commit adds only this section.
+
 ## 2026-09-22 evening - verifier taught to discharge done+verified retries with 0 changed files (task_8cc401d711b549ba, run run_1790094227868_122)
 
 The false "outstanding obligations" loop this closes is documented two rows
