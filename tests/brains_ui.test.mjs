@@ -11,6 +11,7 @@ import brains from "../scripts/brains.cjs";
 
 const source = await readFile(new URL("../renderer/brains.js", import.meta.url), "utf8");
 const flush = async () => { for (let index = 0; index < 40; index += 1) await Promise.resolve(); };
+let focusDocument = null;
 
 class Element {
   constructor(tag = "div") {
@@ -46,7 +47,14 @@ class Element {
   removeAttribute(key) { delete this.attrs[key]; }
   addEventListener(name, fn) { (this.listeners[name] ??= []).push(fn); }
   removeEventListener(name, fn) { this.listeners[name] = (this.listeners[name] ?? []).filter((item) => item !== fn); }
-  focus() { this.focused = true; }
+  // With focusDocument set, focus() behaves like a browser's: it moves
+  // document.activeElement and runs the element's own focus listeners.
+  focus() {
+    this.focused = true;
+    if (!focusDocument) return;
+    focusDocument.activeElement = this;
+    for (const fn of this.listeners.focus ?? []) fn({ target: this });
+  }
   scrollTo() {}
   setPointerCapture() {}
   getBoundingClientRect() { return { ...this.rect, right: this.rect.left + this.rect.width, bottom: this.rect.top + this.rect.height }; }
@@ -515,4 +523,72 @@ test("Tidy lines the parts up, and Ctrl Z puts them back", async () => {
   assert.notEqual(where(), before);
   await ui.key({ key: "z", ctrlKey: true });
   assert.equal(where(), before);
+});
+
+test("putting focus back after a rebuild never changes what is picked", async () => {
+  const ui = await editor();
+  ui.canvas.contains = (node) => { for (let item = node; item; item = item.parentElement) if (item === ui.canvas) return true; return false; };
+  focusDocument = ui.context.document;
+  try {
+    await pick(ui, "n_jev_classify");
+    await pick(ui, "n_model_pick", { shiftKey: true });
+    assert.match(ui.inspector().textContent, /2 parts picked/, "the focused first part does not pull the selection back to itself");
+    await ui.key({ key: "Escape" });
+    assert.match(ui.status(), /Selection cleared/);
+    assert.equal(ui.nodes().filter((node) => node.dataset.selected === "true").length, 0, "and Escape really clears it");
+  } finally {
+    focusDocument = null;
+  }
+});
+
+test("edits made while a save is on its way stay on the canvas, and stay unsaved", async () => {
+  let release = null;
+  const ui = await editor({
+    bridge: {
+      brainsSave: (candidate) => {
+        const sent = brains.normalizeMap(JSON.parse(JSON.stringify(candidate)));
+        return new Promise((resolve) => { release = () => resolve({ ok: true, map: sent, compiled: brains.compileMap(sent) }); });
+      },
+    },
+  });
+  await wireOne(ui);
+  await ui.key({ key: "s", ctrlKey: true });
+  await pick(ui, "n_idea_planner");
+  await ui.key({ key: "ArrowRight" });
+  release();
+  await flush();
+  assert.equal(ui.nodes().find((node) => node.dataset.node === "n_idea_planner").style.left, "60px", "the nudge made during the save is kept");
+  assert.equal(ui.elements.get("brains-save").disabled, false, "and it still needs saving");
+  assert.equal(ui.elements.get("brains-dirty").hidden, false);
+});
+
+test("a map at the host's part limit refuses one more instead of losing it on save", async () => {
+  const nodes = Array.from({ length: 120 }, (_, index) => ({ id: `n${index}`, type: "note", title: `Note ${index}`, x: (index % 12) * 260, y: Math.floor(index / 12) * 140, config: { text: "" } }));
+  const ui = await editor({ map: { id: "full", name: "Full", grants: [], edges: [], nodes } });
+  await part(ui, "note").fire("click");
+  assert.equal(ui.nodes().length, 120);
+  assert.match(ui.status(), /at most 120 parts/);
+});
+
+test("the live map cannot be deleted from the editor", async () => {
+  const map = { ...brains.defaultMap(), id: "mine", name: "Mine", builtIn: false };
+  const ui = await editor({ map, extraIds: ["brains-more-menu"] });
+  assert.equal(ui.elements.get("brains-delete").disabled, true);
+  assert.match(ui.elements.get("brains-delete").title, /Make another map live first/);
+});
+
+test("Tidy keeps every part inside the host's coordinate range", async () => {
+  const ui = await editor({ extraIds: ["brains-tidy"] });
+  await ui.elements.get("brains-tidy").fire("click");
+  for (const node of ui.nodes()) {
+    const left = Number(node.style.left.replace("px", ""));
+    assert.ok(left >= -4000 && left + 236 <= 4000, `${node.dataset.node} at ${left}`);
+  }
+});
+
+test("Duplicate is not offered for a map that was never saved", async () => {
+  const ui = await editor();
+  await ui.elements.get("brains-new").fire("click");
+  await flush();
+  assert.equal(ui.elements.get("brains-duplicate").disabled, true);
 });

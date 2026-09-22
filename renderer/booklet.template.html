@@ -1140,7 +1140,7 @@
           <button id="brains-zoom-in" class="ghost mini icon" type="button" title="Zoom in (+)" aria-label="Zoom in"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-zoom-in"/></svg></button>
           <span class="brains-divider" aria-hidden="true"></span>
           <button id="brains-fit" class="ghost mini" type="button" title="Fit the whole map in view (F)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-fit"/></svg><span class="label">Fit</span></button>
-          <button id="brains-tidy" class="ghost mini" type="button" title="Line the parts up in pipeline order. Ctrl Z puts them back."><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-sliders"/></svg><span class="label">Tidy</span></button>
+          <button id="brains-tidy" class="ghost mini" type="button" title="Line the parts up in pipeline order. Ctrl Z puts them back."><svg class="glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="1.5" y="3" width="3.5" height="4" rx="1"/><rect x="6.25" y="3" width="3.5" height="4" rx="1"/><rect x="11" y="3" width="3.5" height="4" rx="1"/><rect x="6.25" y="9.5" width="3.5" height="4" rx="1"/></svg><span class="label">Tidy</span></button>
           <button id="brains-help" class="ghost mini icon" type="button" title="What the marks mean, and every shortcut (?)" aria-label="Legend and shortcuts"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg></button>
         </div>
         <div class="brains-minimap" id="brains-minimap" aria-hidden="true" title="Overview: drag to move the view" hidden><svg id="brains-minimap-svg" preserveAspectRatio="xMidYMid meet"></svg></div>
@@ -1164,6 +1164,7 @@
           <h3 id="brains-shortcuts-title">Reading and driving the map</h3>
           <button class="ghost mini icon" type="button" data-close="shortcuts" title="Close (Esc)" aria-label="Close shortcuts"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg></button>
         </div>
+        <div class="brains-shortcuts-body" tabindex="0" aria-label="Legend and shortcuts">
         <div class="brains-shortcut-cols">
           <dl>
             <dt>Wire two parts</dt><dd>Drag from an end to an end, or click both</dd>
@@ -1195,10 +1196,11 @@
           <li><span class="brains-legend-swatch groups" aria-hidden="true"><i data-group="intake"></i><i data-group="check"></i><i data-group="plan"></i><i data-group="assistant"></i><i data-group="routing"></i><i data-group="build"></i><i data-group="decide"></i></span><span>Colour is the stage a part belongs to: intake, checks, planning, assistant, routing, build, decisions. A wire takes the colour of the part it leaves.</span></li>
           <li><span class="brains-node-badge" data-runs="map">Map rules</span><span>The map itself decides here. Editing it changes behaviour as soon as the map is saved.</span></li>
           <li><span class="brains-node-badge" data-runs="draft">Note</span><span>A drawing only: saved and shown, but nothing runs it.</span></li>
-          <li><span class="brains-node-switch" aria-hidden="true"><svg class="glyph" focusable="false"><use href="#g-sliders"/></svg></span><span>Moves a real switch when the map goes live. Every other part holds settings for a stage the studio already runs.</span></li>
+          <li><span class="brains-node-switch" aria-hidden="true"><svg class="glyph" viewBox="0 0 16 16" focusable="false"><rect x="1.5" y="4.5" width="13" height="7" rx="3.5"/><circle cx="10.5" cy="8" r="2" fill="currentColor"/></svg></span><span>Moves a real switch when the map goes live. Every other part holds settings for a stage the studio already runs.</span></li>
           <li><span class="brains-legend-swatch wire feedback" aria-hidden="true"></span><span>A dashed wire is a feedback wire: what it carries lands on the next pass.</span></li>
           <li><span class="brains-legend-swatch dot" aria-hidden="true"></span><span>A red ring is a required end with nothing wired, and a red part or wire is a problem to fix before the map can go live.</span></li>
         </ul>
+        </div>
       </div>
     </div>
     <div class="brains-dialog" id="brains-dialog" hidden></div>

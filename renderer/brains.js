@@ -94,7 +94,7 @@
   const snap = (value) => Math.max(-LIMIT, Math.min(LIMIT, Math.round(value / GRID) * GRID));
   const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
   const RUNS = {
-    host: { label: "Live stage", short: "Studio", detail: "The studio already runs this stage. This node holds its settings, and making the map live moves the switch behind it." },
+    host: { label: "Live stage", short: "Studio", detail: "The studio already runs this stage; this node holds its settings." },
     map: { label: "Run by the map", short: "Map rules", detail: "This node's rules are what the studio follows — editing it changes behaviour as soon as the map is saved." },
     draft: { label: "Drawing only", short: "Note", detail: "Saved and drawn, but nothing executes it." },
   };
@@ -140,6 +140,22 @@
   function specHeight(spec) {
     const rows = Math.max(spec?.inputs.length ?? 0, spec?.outputs.length ?? 0, 1);
     return HEAD_H + rows * PORT_H + FOOT_H;
+  }
+
+  // A toggle, drawn here rather than borrowed from the sprite: the sprite's
+  // sliders icon already stands for some parts' kind.
+  function switchIcon() {
+    const icon = svg("svg");
+    icon.setAttribute("class", "glyph");
+    icon.setAttribute("viewBox", "0 0 16 16");
+    icon.setAttribute("aria-hidden", "true");
+    icon.setAttribute("focusable", "false");
+    const track = svg("rect");
+    for (const [key, value] of Object.entries({ x: "1.5", y: "4.5", width: "13", height: "7", rx: "3.5" })) track.setAttribute(key, value);
+    const knob = svg("circle");
+    for (const [key, value] of Object.entries({ cx: "10.5", cy: "8", r: "2", fill: "currentColor" })) knob.setAttribute(key, value);
+    icon.append(track, knob);
+    return icon;
   }
 
   function nodeHeight(node) {
@@ -210,6 +226,13 @@
     state.pending = null;
     if (state.selection?.kind === "node" && !nodeById(state.selection.id)) state.selection = null;
     if (state.selection?.kind === "edge" && !state.map.edges.some((edge) => edge.id === state.selection.id)) state.selection = null;
+    state.picked = new Set([...state.picked].filter((id) => nodeById(id)));
+    if (state.selection?.kind !== "node") {
+      // The primary part is gone: a surviving picked part takes its place.
+      const next = [...state.picked][0];
+      state.selection = next ? { kind: "node", id: next } : state.selection?.kind === "edge" ? state.selection : null;
+      if (!next) state.picked = new Set();
+    }
     refreshDirty();
     status(direction === "undo" ? "Undone." : "Redone.");
     renderAll();
@@ -315,7 +338,10 @@
       el.canvasWrap.style.backgroundSize = `${size}px ${size}px`;
       el.canvasWrap.style.backgroundPosition = `${x}px ${y}px`;
     }
-    if (el.zoomLevel) el.zoomLevel.textContent = `${Math.round(zoom * 100)}%`;
+    if (el.zoomLevel) {
+      el.zoomLevel.textContent = `${Math.round(zoom * 100)}%`;
+      el.zoomLevel.setAttribute("aria-label", `${Math.round(zoom * 100)}% zoom. Press for 100%.`);
+    }
     if (el.zoomIn) el.zoomIn.disabled = zoom >= ZOOM_MAX - 0.001;
     if (el.zoomOut) el.zoomOut.disabled = zoom <= ZOOM_MIN + 0.001;
     renderMinimapView();
@@ -400,6 +426,30 @@
       y: padTop + (h - padTop - padBottom - box.h * zoom) / 2 - box.y * zoom,
     };
     applyView({ animate });
+    fittedView = { ...state.view };
+  }
+
+  // When the canvas changes size (a side panel hides or shows, the window is
+  // resized) a fitted map is fitted again, and any other view keeps the map
+  // where it was on screen instead of sliding with the canvas edge.
+  let fittedView = null;
+  let wrapLeft = null;
+  function onWrapResize() {
+    const rect = el.canvasWrap?.getBoundingClientRect?.();
+    if (!rect || !rect.width || el.overlay?.hidden) {
+      wrapLeft = null;
+      return;
+    }
+    const fitted = fittedView && Math.abs(fittedView.x - state.view.x) < 0.5 && Math.abs(fittedView.y - state.view.y) < 0.5 && Math.abs(fittedView.zoom - state.view.zoom) < 0.0005;
+    if (fitted && !state.gesture) fit();
+    else {
+      if (wrapLeft !== null && rect.left !== wrapLeft && !state.gesture) {
+        state.view.x += wrapLeft - rect.left;
+        applyView();
+      }
+      renderMinimapView();
+    }
+    wrapLeft = rect.left;
   }
 
   function centerOn(node, { animate = true, zoom = null } = {}) {
@@ -478,10 +528,19 @@
     return { node: active.dataset.node, port: active.dataset.port ?? null, dir: active.dataset.dir ?? null };
   }
 
+  // Putting focus back after a rebuild is bookkeeping, not a choice: the part
+  // box's focus listener ignores it, or it would re-select the part that had
+  // focus and undo whatever selection the rebuild was drawing.
+  let restoring = false;
   function restoreFocus(target) {
     if (!target) return;
     const into = target.port ? portButtons.get(`${target.node}|${target.port}|${target.dir}`) : nodeBoxes.get(target.node);
-    into?.focus?.({ preventScroll: true });
+    restoring = true;
+    try {
+      into?.focus?.({ preventScroll: true });
+    } finally {
+      restoring = false;
+    }
   }
 
   function renderCanvas() {
@@ -524,12 +583,15 @@
       box.style.left = `${node.x}px`;
       box.style.top = `${node.y}px`;
       box.style.height = `${height}px`;
+      box.dataset.rows = String((height - HEAD_H - FOOT_H) / PORT_H);
       box.tabIndex = 0;
       box.setAttribute("role", "group");
       box.setAttribute("aria-label", `${node.title}, ${spec ? groupLabel(spec.group) : "unknown"} part${problemText ? `. ${problemText}` : ""}`);
       box.addEventListener("focus", () => {
+        if (restoring) return;
         const fresh = !(state.selection?.kind === "node" && state.selection.id === node.id);
-        if (fresh) select({ kind: "node", id: node.id });
+        // Tabbing onto a part that is already picked keeps the group.
+        if (fresh) select({ kind: "node", id: node.id }, { keepPicked: state.picked.has(node.id) });
         // Reached with Tab, a part off screen is brought into view and named;
         // pressed with the pointer, the view must not slide out from under a drag.
         if (state.gesture) return;
@@ -553,7 +615,7 @@
         const mark = document.createElement("span");
         mark.className = "brains-node-switch";
         mark.title = `Moves "${gate.label}" when this map goes live. ${gate.detail}`;
-        mark.append(glyph("g-sliders"));
+        mark.append(switchIcon());
         top.append(mark);
       }
       if (problemText) {
@@ -575,7 +637,10 @@
         top.append(badge);
       }
       const title = document.createElement("b");
-      title.textContent = node.title;
+      const titleText = document.createElement("span");
+      titleText.className = "brains-node-title";
+      titleText.textContent = node.title;
+      title.append(titleText);
       head.append(top, title);
       if (!spec) {
         const unknown = document.createElement("span");
@@ -885,6 +950,7 @@
       renderCanvas();
       return;
     }
+    if (!roomFor(0, 1)) { renderCanvas(); return; }
     if (record) checkpoint();
     state.map.edges.push({ id, from: { ...from }, to: { ...to } });
     touch(`Wired ${nodeById(from.node)?.title} → ${nodeById(to.node)?.title}.`);
@@ -910,6 +976,7 @@
   }
 
   function cancelWire(message = "Wire cancelled.") {
+    if (state.gesture?.kind === "wire") state.gesture = null;
     if (!state.pending) return;
     state.pending = null;
     hideGhost();
@@ -931,6 +998,10 @@
     if (!doomed.length) return;
     checkpoint();
     const ids = new Set(doomed.map((node) => node.id));
+    if (state.pending && ids.has(state.pending.node)) {
+      state.pending = null;
+      hideGhost();
+    }
     state.map.nodes = state.map.nodes.filter((item) => !ids.has(item.id));
     state.map.edges = state.map.edges.filter((edge) => !ids.has(edge.from.node) && !ids.has(edge.to.node));
     state.selection = null;
@@ -988,6 +1059,22 @@
 
   // ---- adding parts --------------------------------------------------------------
 
+  // The host keeps at most maxNodes parts and maxEdges wires and drops the
+  // rest on save without a word, so the editor refuses before that happens.
+  function roomFor(parts, wires = 0) {
+    const maxNodes = state.catalog?.limits?.maxNodes ?? 120;
+    const maxEdges = state.catalog?.limits?.maxEdges ?? 240;
+    if (state.map.nodes.length + parts > maxNodes) {
+      status(`A map holds at most ${maxNodes} parts, and this one has ${state.map.nodes.length}.`, "warn");
+      return false;
+    }
+    if (state.map.edges.length + wires > maxEdges) {
+      status(`A map holds at most ${maxEdges} wires, and this one has ${state.map.edges.length}.`, "warn");
+      return false;
+    }
+    return true;
+  }
+
   function freeId(type) {
     const base = `n_${type.replace(/[^a-z0-9]+/gi, "_")}`;
     if (!nodeById(base)) return base;
@@ -1009,6 +1096,8 @@
       for (let row = 0; row < 14; row += 1) {
         const x = start.x + column * (NODE_W + GRID * 3);
         const y = start.y + row * GRID * 2;
+        // A spot past the host's range would be moved on save.
+        if (x > LIMIT || y > LIMIT) continue;
         if (!overlaps(x, y, height)) return { x, y };
       }
     }
@@ -1035,6 +1124,7 @@
   function addNode(type, at = null) {
     const spec = typeOf(type);
     if (!spec || !state.map) return null;
+    if (!roomFor(1, state.pending ? 1 : 0)) return null;
     checkpoint();
     const spot = freeSpot(at ?? naturalSpot(), specHeight(spec));
     const node = {
@@ -1081,6 +1171,8 @@
     if (!state.map) return;
     const group = isPicked(id) && state.picked.size > 1 ? pickedNodes() : [nodeById(id)].filter(Boolean);
     if (!group.length) return;
+    const picked = new Set(group.map((node) => node.id));
+    if (!roomFor(group.length, state.map.edges.filter((edge) => picked.has(edge.from.node) && picked.has(edge.to.node)).length)) return;
     checkpoint();
     const ids = new Map();
     const copies = [];
@@ -1183,6 +1275,12 @@
     const heightOf = (column) => column.reduce((sum, id) => sum + nodeHeight(nodeById(id)), 0) + GAP_Y * (column.length - 1);
     const tallest = Math.max(...columns.filter(Boolean).map(heightOf));
     const middle = new Map();
+    // The host clamps x and y to ±4000, which would drop a long pipeline's
+    // last columns onto their neighbours; a pipeline too long for one row
+    // continues on a band underneath, and the row starts far enough left.
+    const perBand = Math.max(1, Math.floor((2 * LIMIT - NODE_W) / GAP_X) + 1);
+    const inBand = Math.min(columns.length, perBand);
+    const startX = Math.max(-LIMIT, Math.min(40, LIMIT - ((inBand - 1) * GAP_X + NODE_W)));
     columns.forEach((column, index) => {
       if (!column) return;
       const weight = (id) => {
@@ -1190,10 +1288,10 @@
         return feeds.length ? feeds.reduce((sum, pred) => sum + middle.get(pred), 0) / feeds.length : nodeById(id).y;
       };
       column.sort((a, b) => weight(a) - weight(b));
-      let y = 40 + (tallest - heightOf(column)) / 2;
+      let y = 40 + Math.floor(index / perBand) * (tallest + GAP_Y * 4) + (tallest - heightOf(column)) / 2;
       for (const id of column) {
         const node = nodeById(id);
-        node.x = 40 + index * GAP_X;
+        node.x = snap(startX + (index % perBand) * GAP_X);
         node.y = snap(y);
         middle.set(id, node.y + nodeHeight(node) / 2);
         y += nodeHeight(node) + GAP_Y;
@@ -1286,23 +1384,26 @@
     const name = document.createElement("b");
     name.textContent = part.label;
     top.append(name);
+    // What runs it and how many the map has go on a line of their own, so
+    // the name always keeps the full width.
+    const meta = document.createElement("span");
+    meta.className = "brains-part-meta";
     if (part.runs !== "host") {
       const runs = document.createElement("span");
       runs.className = "brains-part-runs";
       runs.dataset.runs = part.runs;
       runs.textContent = RUNS[part.runs]?.label ?? part.runs;
-      top.append(runs);
+      meta.append(runs);
     }
-    // How many of this part the open map already has.
     const used = document.createElement("span");
     used.className = "brains-part-used";
     used.hidden = true;
-    top.append(used);
+    meta.append(used);
     partUse.set(part.type, used);
     const summary = document.createElement("span");
     summary.className = "brains-part-summary";
     summary.textContent = part.summary;
-    button.append(top, summary);
+    button.append(top, meta, summary);
     button.title = `${part.summary}\n\n${RUNS[part.runs]?.detail ?? ""}\n\nClick to add it where the canvas is looking, or drag it to a spot.`;
     button.addEventListener("click", () => addNode(part.type));
     button.addEventListener("dragstart", (event) => {
@@ -1363,7 +1464,7 @@
   function searchNodes() {
     const query = state.search.query.trim().toLowerCase();
     const finding = state.search.mode === "find";
-    if ((!query && !finding) || state.pending || !state.map) return [];
+    if ((!query && !finding) || (!finding && state.pending) || !state.map) return [];
     // A title that starts with what was typed comes first, then one that
     // contains it, then a match on the part's kind or stage.
     const rank = (node) => {
@@ -1638,7 +1739,7 @@
       checkpoint(`title:${node.id}`);
       node.title = clean(title.value, 60) || (spec?.label ?? node.type);
       // Only the title on the canvas changes; the rest is not rebuilt per key.
-      const shown = nodeBoxes.get(node.id)?.querySelector?.(".brains-node-head b");
+      const shown = nodeBoxes.get(node.id)?.querySelector?.(".brains-node-title");
       if (shown) shown.textContent = node.title;
       refreshDirty();
       renderToolbar();
@@ -1659,7 +1760,8 @@
     const runs = document.createElement("p");
     runs.className = "brains-runs";
     runs.dataset.runs = spec.runs;
-    runs.textContent = `${RUNS[spec.runs]?.label ?? spec.runs}: ${RUNS[spec.runs]?.detail ?? ""}`;
+    const switchNote = spec.runs !== "host" ? "" : spec.gate ? " Making the map live moves the switch below." : " Making the map live moves no switch for it.";
+    runs.textContent = `${RUNS[spec.runs]?.label ?? spec.runs}: ${RUNS[spec.runs]?.detail ?? ""}${switchNote}`;
     el.inspector.append(runs);
     if (spec.gate && state.catalog?.gates?.[spec.gate]) {
       const gate = state.catalog.gates[spec.gate];
@@ -1777,7 +1879,7 @@
     const ids = new Set(group.map((node) => node.id));
     const inside = state.map.edges.filter((edge) => ids.has(edge.from.node) && ids.has(edge.to.node)).length;
     const crossing = state.map.edges.filter((edge) => ids.has(edge.from.node) !== ids.has(edge.to.node)).length;
-    el.inspector.append(note(`${plural(inside, "wire")} run between them and ${plural(crossing, "wire")} lead in or out. Drag any of them to move them all; arrow keys nudge them together.`));
+    el.inspector.append(note(`${plural(inside, "wire")} ${inside === 1 ? "runs" : "run"} between them and ${plural(crossing, "wire")} ${crossing === 1 ? "leads" : "lead"} in or out. Drag any of them to move them all; arrow keys nudge them together.`));
     const listing = document.createElement("div");
     listing.className = "brains-actions brains-picked";
     for (const node of group) {
@@ -1930,8 +2032,8 @@
       }
       return wrap;
     }
-    const input = document.createElement(setting.key === "text" ? "textarea" : "input");
-    if (setting.key === "text") input.rows = 3; else input.type = "text";
+    const input = document.createElement("input");
+    input.type = "text";
     input.dataset.fkey = fkey;
     input.value = String(value ?? "");
     input.addEventListener("input", () => {
@@ -2129,6 +2231,21 @@
     count.dataset.level = errors.length ? "error" : "warn";
     count.textContent = [errors.length ? plural(errors.length, "error") : "", warnings.length ? plural(warnings.length, "warning") : ""].filter(Boolean).join(" · ");
     el.problems.append(count);
+    el.problems.dataset.expanded = String(Boolean(state.problemsExpanded));
+    // The toggle comes straight after the count, so it is never scrolled
+    // out of the short status bar.
+    if (state.problems.length > 8) {
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "brains-problem brains-problem-more";
+      more.textContent = state.problemsExpanded ? "Show fewer" : `Show all ${state.problems.length}`;
+      more.setAttribute("aria-expanded", String(Boolean(state.problemsExpanded)));
+      more.addEventListener("click", () => {
+        state.problemsExpanded = !state.problemsExpanded;
+        renderProblems();
+      });
+      el.problems.append(more);
+    }
     const shown = state.problemsExpanded ? state.problems.length : 8;
     for (const problem of [...errors, ...warnings].slice(0, shown)) {
       const row = document.createElement("button");
@@ -2143,17 +2260,6 @@
         scrollTo(problem.nodeId ?? state.map?.edges.find((edge) => edge.id === problem.edgeId)?.from.node);
       });
       el.problems.append(row);
-    }
-    if (state.problems.length > 8) {
-      const more = document.createElement("button");
-      more.type = "button";
-      more.className = "brains-problem brains-problem-more";
-      more.textContent = state.problemsExpanded ? "Show fewer" : `…and ${state.problems.length - 8} more`;
-      more.addEventListener("click", () => {
-        state.problemsExpanded = !state.problemsExpanded;
-        renderProblems();
-      });
-      el.problems.append(more);
     }
   }
 
@@ -2226,8 +2332,18 @@
         : state.dirty ? "Saves this map, then shows every switch it would move before anything changes."
         : "Make this the pipeline the studio follows. You see every switch it moves first.";
     }
-    if (el.deleteMap) el.deleteMap.disabled = state.busy || !state.map || state.map.builtIn || Boolean(state.draft);
-    if (el.duplicate) el.duplicate.disabled = state.busy || !state.map;
+    // Deleting the live map would make another one live without showing the
+    // switches it moves, so another map has to go live first.
+    if (el.deleteMap) {
+      el.deleteMap.disabled = state.busy || !state.map || state.map.builtIn || Boolean(state.draft) || live;
+      el.deleteMap.title = live ? "This map is live. Make another map live first." : state.map?.builtIn ? "The shipped pipeline cannot be deleted. Reset it instead." : "Delete this map";
+    }
+    // A draft or a new map has never been saved: duplicating it would save
+    // only the copy and lose the original, so it is saved first instead.
+    if (el.duplicate) {
+      el.duplicate.disabled = state.busy || !state.map || Boolean(state.draft);
+      el.duplicate.title = state.draft ? "Save this map first; then it can be copied." : "Copy this map, wires and all";
+    }
     if (el.discard) el.discard.disabled = state.busy || !state.dirty;
     // While the host is answering, nothing else that talks to it can start.
     for (const button of [el.newMap, el.reset, el.draft, el.emptyDraft]) if (button) button.disabled = state.busy;
@@ -2311,6 +2427,7 @@
     panel.setAttribute("aria-modal", "true");
     panel.setAttribute("aria-labelledby", "brains-dialog-title");
     panel.noValidate = true;
+    panel.tabIndex = -1;
     if (eyebrow) panel.append(note(eyebrow, "eyebrow"));
     const heading = document.createElement("h3");
     heading.id = "brains-dialog-title";
@@ -2411,7 +2528,11 @@
     dialogState = null;
     el.dialog.hidden = true;
     el.dialog.textContent = "";
-    (returnFocus?.isConnected ? returnFocus : el.canvasWrap)?.focus?.({ preventScroll: true });
+    // A dialog opened from the Map menu cannot hand focus back to the menu
+    // item (the menu is closed by then): the Map button takes it instead.
+    const visible = returnFocus?.isConnected && returnFocus.getClientRects?.().length > 0;
+    const back = visible ? returnFocus : returnFocus?.closest?.(".brains-menu") ? el.more : el.canvasWrap;
+    back?.focus?.({ preventScroll: true });
     resolve(result);
   }
 
@@ -2433,13 +2554,24 @@
       return;
     }
     if (event.key === "Tab" && dialogState?.panel) {
-      // Keep Tab inside the panel while it is open.
-      const focusable = [...dialogState.panel.querySelectorAll("button, input, textarea, select")].filter((item) => !item.disabled);
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      // Keep Tab inside the panel while it is open, even when focus has
+      // wandered to its text or everything in it is disabled while busy.
+      const panel = dialogState.panel;
+      const focusable = [...panel.querySelectorAll("button, input, textarea, select")].filter((item) => !item.disabled);
+      const active = document.activeElement;
+      if (!focusable.length) {
+        event.preventDefault();
+        panel.focus();
+      } else if (!panel.contains(active)) {
+        event.preventDefault();
+        (event.shiftKey ? focusable[focusable.length - 1] : focusable[0]).focus();
+      } else if (event.shiftKey && active === focusable[0]) {
+        event.preventDefault();
+        focusable[focusable.length - 1].focus();
+      } else if (!event.shiftKey && active === focusable[focusable.length - 1]) {
+        event.preventDefault();
+        focusable[0].focus();
+      }
     }
     event.stopPropagation();
   }
@@ -2519,15 +2651,20 @@
     }
     state.busy = true;
     renderToolbar();
+    const sent = JSON.stringify(state.map);
     try {
       const result = await api.brainsSave(state.map);
       if (!result?.ok) { status(result?.error ?? "That map could not be saved.", "warn"); return false; }
       const wasDraft = Boolean(state.draft);
-      state.map = result.map;
-      state.compiled = result.compiled ?? null;
-      state.problems = result.compiled?.problems ?? [];
-      savedSnapshot = JSON.stringify(state.map);
-      state.dirty = false;
+      savedSnapshot = JSON.stringify(result.map);
+      // Edits made while the save was on its way stay on the canvas, and
+      // stay marked unsaved; only an untouched map takes the host's copy.
+      if (JSON.stringify(state.map) === sent) {
+        state.map = result.map;
+        state.compiled = result.compiled ?? null;
+        state.problems = result.compiled?.problems ?? [];
+      }
+      refreshDirty();
       state.draft = null;
       const list = await api.brainsState();
       state.maps = list?.maps ?? state.maps;
@@ -2651,6 +2788,7 @@
     const api = bridge();
     if (!api?.brainsSave) return;
     setMenu(false);
+    if (from && state.draft) return;
     // A copy is "save as": it takes the canvas as it stands, edits included.
     if (!from && !(await settleChanges("start a new map"))) return;
     const edited = Boolean(from) && state.dirty;
@@ -2732,7 +2870,7 @@
   async function removeMap() {
     const api = bridge();
     setMenu(false);
-    if (!api?.brainsDelete || !state.map || state.map.builtIn || state.draft) return;
+    if (!api?.brainsDelete || !state.map || state.map.builtIn || state.draft || state.map.id === state.activeId) return;
     const answer = await ask({
       eyebrow: "Delete",
       title: `Delete "${state.map.name}"?`,
@@ -2765,10 +2903,10 @@
     if (!answer) return;
     const result = await api.brainsReset(state.map.id);
     if (!result?.ok) { status(result?.error ?? "That map could not be reset.", "warn"); return; }
-    views.delete(state.map.id);
     const id = state.map.id;
     state.map = null;
     await load({ id });
+    fit({ animate: true });
     status("Reset to the shipped pipeline.");
   }
 
@@ -2811,6 +2949,7 @@
     savedSnapshot = null;
     state.dirty = true;
     state.selection = null;
+    state.picked = new Set();
     state.pending = null;
     state.draft = { from, model: drafted.model ?? null };
     resetHistory();
@@ -2883,9 +3022,12 @@
     }
     state.pending = null;
     state.gesture = null;
+    el.marquee?.remove?.();
+    if (el.canvasWrap) delete el.canvasWrap.dataset.gesture;
     el.overlay.hidden = true;
     setMenu(false);
     if (el.shortcuts) el.shortcuts.hidden = true;
+    shortcutsReturn = null;
     closeSearch();
     window.MefiNav?.release?.("brains");
   }
@@ -2941,9 +3083,9 @@
   }
 
   function onWrapPointerDown(event) {
-    if (event.target?.closest?.(`.brains-node, ${CHROME}`)) return;
-    if (event.target?.dataset?.edge) return;
+    if (event.target?.closest?.(CHROME)) return;
     const middle = event.button === 1;
+    if (!middle && (event.target?.closest?.(".brains-node") || event.target?.dataset?.edge)) return;
     if (event.button > 0 && !middle) return;
     suppressClick = false;
     if (event.shiftKey && !middle) {
@@ -3127,6 +3269,11 @@
   }
 
   function finishWireDrag(event) {
+    // Escape during the drag already cancelled it.
+    if (!state.pending) {
+      hideGhost();
+      return;
+    }
     const target = event.target;
     const port = target?.closest?.(".brains-port");
     if (port) {
@@ -3198,6 +3345,7 @@
     if (!types.includes(PART_MIME)) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
+    el.canvasWrap?.classList.add("drop-ready");
   }
 
   function onDrop(event) {
@@ -3207,6 +3355,78 @@
     event.preventDefault();
     const point = toWorld(event.clientX, event.clientY);
     addNode(type, { x: point.x - NODE_W / 2, y: point.y - HEAD_H / 2 });
+  }
+
+  // Escape in the middle of a drag puts everything back where the press
+  // found it: the parts, the view, the picked set, or the armed wire.
+  function abortGesture() {
+    const gesture = state.gesture;
+    if (!gesture) return;
+    state.gesture = null;
+    state.drag = null;
+    suppressClick = true;
+    if (el.canvasWrap) delete el.canvasWrap.dataset.gesture;
+    if (gesture.kind === "pan") {
+      state.view.x = gesture.viewX;
+      state.view.y = gesture.viewY;
+      applyView();
+    } else if (gesture.kind === "node" && gesture.moved) {
+      for (const [id, origin] of gesture.origins ?? []) {
+        const node = nodeById(id);
+        if (node) { node.x = origin.x; node.y = origin.y; }
+      }
+      if (history.past.length === gesture.depth) {
+        history.past.pop();
+        history.future = gesture.future ?? [];
+      }
+      refreshDirty();
+      renderCanvas();
+      renderToolbar();
+    } else if (gesture.kind === "marquee") {
+      el.marquee?.remove?.();
+      state.picked = new Set(gesture.base);
+      paintPicked();
+    } else if (gesture.kind === "wire") {
+      state.pending = null;
+      hideGhost();
+      renderCanvas();
+    }
+    status("Cancelled.");
+  }
+
+  // The legend and shortcuts sheet is modal: focus moves into it, Tab stays
+  // in it, and no key reaches the canvas behind it.
+  let shortcutsReturn = null;
+  function openShortcuts() {
+    if (!el.shortcuts) return;
+    shortcutsReturn = typeof document !== "undefined" ? document.activeElement : null;
+    el.shortcuts.hidden = false;
+    el.shortcuts.querySelector?.("[data-close]")?.focus?.();
+  }
+
+  function closeShortcuts() {
+    if (!el.shortcuts || el.shortcuts.hidden) return;
+    el.shortcuts.hidden = true;
+    const back = shortcutsReturn?.isConnected && shortcutsReturn.getClientRects?.().length ? shortcutsReturn : el.canvasWrap;
+    shortcutsReturn = null;
+    back?.focus?.({ preventScroll: true });
+  }
+
+  function shortcutsKeys(event) {
+    if (event.key === "Escape" || event.key === "?") {
+      stop(event);
+      closeShortcuts();
+      return;
+    }
+    if (event.key === "Tab") {
+      const stops = [...(el.shortcuts.querySelectorAll?.("button, [tabindex='0']") ?? [])];
+      const index = stops.indexOf(document.activeElement);
+      event.preventDefault();
+      stops[(index + (event.shiftKey ? -1 : 1) + stops.length) % stops.length]?.focus?.();
+    }
+    // Arrows and Page keys still scroll the focused panel; nothing else
+    // reaches the canvas or the app behind it.
+    event.stopPropagation();
   }
 
   function typing(target) {
@@ -3227,13 +3447,16 @@
 
   function onKey(event) {
     if (!el.overlay || el.overlay.hidden) return;
+    // A layer opened above the editor (the palette, help, the walkthrough)
+    // owns the keyboard, and so does any field outside the sheet.
+    const layer = window.MefiNav?.top?.();
+    if (layer && layer !== "brains") return;
+    const target = event.target;
+    if (target && target !== document.body && target !== document.documentElement
+      && typeof el.overlay.contains === "function" && typeof target.closest === "function" && !el.overlay.contains(target)) return;
     if (dialogState) { dialogKeys(event); return; }
     if (el.menu && !el.menu.hidden && menuKeys(event)) return;
-    if (el.shortcuts && !el.shortcuts.hidden && (event.key === "Escape" || event.key === "?")) {
-      stop(event);
-      el.shortcuts.hidden = true;
-      return;
-    }
+    if (el.shortcuts && !el.shortcuts.hidden) { shortcutsKeys(event); return; }
     if (state.search.open) {
       if (event.key === "Escape") { stop(event); closeSearch(); return; }
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -3247,8 +3470,12 @@
         chooseEntry(searchEntries()[state.search.index]);
         return;
       }
-      // The search is modal: Tab stays in its field.
-      if (event.key === "Tab") event.preventDefault();
+      // The search is modal: Tab stays in its field, and every other key is
+      // the query's. If focus wandered off the field it is brought back, so
+      // a letter lands there instead of opening another part of the app.
+      if (event.key === "Tab") { event.preventDefault(); return; }
+      if (target !== el.searchInput) el.searchInput?.focus?.();
+      if (!event.ctrlKey && !event.metaKey && !event.altKey) event.stopPropagation();
       return;
     }
     const mod = event.ctrlKey || event.metaKey;
@@ -3257,34 +3484,47 @@
     // Ctrl S saves from anywhere, including the field being typed in: every
     // field has already written its value into the map by then.
     if (mod && lower === "s") { stop(event); void save(); return; }
-    if (typing(event.target)) {
+    // Text fields keep their own undo; a checkbox or a select has none, so
+    // there Ctrl Z walks the editor's history.
+    const textEntry = Boolean(target?.closest?.("textarea, [contenteditable], input:not([type=checkbox]):not([type=radio]):not([type=range])"));
+    if (mod && (lower === "z" || lower === "y") && !textEntry) {
+      stop(event);
+      stepHistory(lower === "y" || event.shiftKey ? "redo" : "undo");
+      return;
+    }
+    if (typing(target)) {
       // Escape leaves a field for the canvas rather than closing the editor.
       if (key === "Escape") {
         stop(event);
-        event.target.blur?.();
+        target.blur?.();
         el.canvasWrap?.focus?.({ preventScroll: true });
       }
       return;
     }
-    if (mod && lower === "z") { stop(event); stepHistory(event.shiftKey ? "redo" : "undo"); return; }
-    if (mod && lower === "y") { stop(event); stepHistory("redo"); return; }
     if (mod && lower === "d") {
       stop(event);
       if (state.selection?.kind === "node") duplicateNode(state.selection.id);
       return;
     }
-    const onCanvas = canvasHasKeys(event.target);
+    const onCanvas = canvasHasKeys(target);
     if (mod && lower === "a" && onCanvas) { stop(event); pickAll(); return; }
     if (mod && lower === "f") { stop(event); openSearch(null, { mode: "find" }); return; }
     if (key === "F8") { stop(event); stepProblem(event.shiftKey ? -1 : 1); return; }
     if (mod || event.altKey) return;
     if (key === " " || event.code === "Space") {
-      // A focused button (a port, a part card, a toolbar button) keeps its
-      // own Space; everywhere else Space searches the parts.
-      if (!onCanvas && event.target?.closest?.("button, a, summary, [role=button], [role=menuitem]")) return;
-      if (onCanvas && event.target !== el.canvasWrap && event.target?.closest?.(".brains-port")) return;
+      // A focused button (a port, a part card, a view control) keeps its own
+      // Space; the canvas and the parts on it search the parts.
+      if (target !== el.canvasWrap && target?.closest?.("button, a, summary, [role=button], [role=menuitem]")) return;
       stop(event);
       openSearch();
+      return;
+    }
+    // Escape steps back one layer at a time: a drag in progress is undone,
+    // then an armed wire, then the selection, and only then does the editor
+    // close.
+    if (key === "Escape" && state.gesture?.moved) {
+      stop(event);
+      abortGesture();
       return;
     }
     if (key === "Escape" && state.pending) {
@@ -3292,8 +3532,6 @@
       cancelWire();
       return;
     }
-    // Escape steps back one layer at a time: a selection clears first, and
-    // the next Escape closes the editor.
     if (key === "Escape" && state.selection && onCanvas) {
       stop(event);
       select(null);
@@ -3323,7 +3561,7 @@
     if (key === "]") { stop(event); togglePanel("inspector"); return; }
     if (key === "?") {
       stop(event);
-      if (el.shortcuts) el.shortcuts.hidden = false;
+      openShortcuts();
       return;
     }
   }
@@ -3350,7 +3588,7 @@
     loadLayout();
     applyLayout();
     el.close?.addEventListener("click", close);
-    el.overlay.addEventListener("click", (event) => { if (event.target === el.overlay) close(); });
+    el.overlay.addEventListener("click", (event) => { if (event.target === el.overlay && pressedOnBackdrop(el.overlay)) close(); });
     el.save?.addEventListener("click", () => void save());
     el.activate?.addEventListener("click", () => void activate());
     el.newMap?.addEventListener("click", () => void newMap());
@@ -3398,9 +3636,13 @@
     el.zoomLevel?.addEventListener("click", () => zoomTo(1, null, { animate: true }));
     el.fit?.addEventListener("click", () => fit({ animate: true }));
     el.tidy?.addEventListener("click", () => tidy());
-    el.help?.addEventListener("click", () => { if (el.shortcuts) el.shortcuts.hidden = !el.shortcuts.hidden; });
+    el.help?.addEventListener("click", () => { if (el.shortcuts?.hidden) openShortcuts(); else closeShortcuts(); });
+    // A backdrop closes its layer only when the press began on it: a drag that
+    // merely ends over the backdrop (a pan, a text selection) must not.
+    let pressedOn = null;
+    el.overlay.addEventListener("pointerdown", (event) => { pressedOn = event.target; }, true);
     el.shortcuts?.addEventListener("click", (event) => {
-      if (event.target === el.shortcuts || event.target?.closest?.("[data-close]")) el.shortcuts.hidden = true;
+      if ((event.target === el.shortcuts && pressedOn === el.shortcuts) || event.target?.closest?.("[data-close]")) closeShortcuts();
     });
     el.toggleParts?.addEventListener("click", () => togglePanel("parts"));
     el.toggleInspector?.addEventListener("click", () => togglePanel("inspector"));
@@ -3412,13 +3654,14 @@
       state.gesture = { kind: "mini", moved: true, startX: event.clientX, startY: event.clientY };
     });
     el.dialog?.addEventListener("pointerdown", (event) => { if (event.target === el.dialog) finishDialog(null); });
+    function pressedOnBackdrop(backdrop) { return pressedOn === null || pressedOn === backdrop; }
     el.searchInput?.addEventListener("input", () => { state.search.query = el.searchInput.value; state.search.index = 0; renderSearch(); });
-    el.search?.addEventListener("click", (event) => { if (event.target === el.search) closeSearch(); });
+    el.search?.addEventListener("click", (event) => { if (event.target === el.search && pressedOnBackdrop(el.search)) closeSearch(); });
     document.addEventListener("keydown", onKey, true);
     document.addEventListener("pointerdown", (event) => {
       if (el.menu && !el.menu.hidden && !event.target?.closest?.(".brains-more")) setMenu(false);
     }, true);
-    if (typeof ResizeObserver === "function" && el.canvasWrap) new ResizeObserver(() => renderMinimapView()).observe(el.canvasWrap);
+    if (typeof ResizeObserver === "function" && el.canvasWrap) new ResizeObserver(onWrapResize).observe(el.canvasWrap);
     applyView();
     bridge()?.onBrains?.((payload) => {
       if (!payload?.maps) return;
