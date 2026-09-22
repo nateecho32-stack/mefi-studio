@@ -52,6 +52,17 @@ test("Auto keeps the previous route untouched: the pinned override, the free fir
   assert.equal(zai.model, "glm-5.3-flash");
 });
 
+test("Auto runs any model the owner pins, on the z.ai route too; only the first scan's free pick yields to the plan", async () => {
+  const pinned = await host({ aiProvider: "zai", executorModels: { opencode: "opencode-go/deepseek-v4.1-flash" } }).route();
+  assert.equal(pinned.cli, "opencode");
+  assert.equal(pinned.modelArgs, " --model opencode-go/deepseek-v4.1-flash", "the pin is the owner's choice of model and account");
+  assert.equal(pinned.modelProvider, undefined, "a pinned builder is not re-routed to the GLM pair");
+  assert.equal(pinned.parallelCap, null, "a paid pin keeps the full pool");
+  const scanned = await host({ aiProvider: "zai", executorModels: { opencode: "opencode/nemotron-3.5-lightning-free" }, firstRun: { builder: { free: true, model: "opencode/nemotron-3.5-lightning-free" } } }).route();
+  assert.equal(scanned.modelProvider, "zai", "the scan's free suggestion does not displace the coding plan");
+  assert.equal(scanned.model, "glm-5.3-flash");
+});
+
 test("Fast and Heavy pin the z.ai GLM pair on the coding plan and skip per-task selection", async () => {
   const fast = await host({ aiProvider: "auto", executorTier: "fast" }).route();
   assert.equal(fast.cli, "opencode");

@@ -1449,15 +1449,24 @@ const ZAI_MODEL_HEAVY = "glm-5.3";
 // secret, and the assistant asks the server which model is loaded when no
 // override is saved.
 const LMSTUDIO_ENDPOINT = "http://127.0.0.1:1234/v1/chat/completions";
+// OpenCode Zen: the pay-as-you-go side of the same OpenCode account, billed
+// to the Zen balance rather than the Go plan. Its whole catalog answers with
+// one key (saved beside Jev's Zen route, or opencode's own OPENCODE_API_KEY),
+// but OpenAI's models only speak the Responses API there, so a gpt-* model
+// is sent to /responses and everything else to chat completions.
+const ZEN_ENDPOINT = "https://opencode.ai/zen/v1/chat/completions";
+const ZEN_RESPONSES_ENDPOINT = "https://opencode.ai/zen/v1/responses";
+const ZEN_MODEL_ROUTINE = "gpt-6-luna";
+const ZEN_MODEL_HEAVY = "gpt-6-sol";
 // Any other OpenAI-compatible endpoint (OpenRouter, Together, vLLM, a proxy,
 // a hosted gateway): its URL is a plain preference, its key lives in its own
 // encrypted field, and only a saved key makes the route usable.
-const AI_PROVIDERS = ["auto", "zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
+const AI_PROVIDERS = ["auto", "zai", "opencode", "zen", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
 // Auto mode's provider pool. The owner saves an ordered subset in
 // aiAutoProviders; the first usable entry answers. "auto" itself is never a
 // candidate.
-const AI_AUTO_PROVIDERS = ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
-const AUTO_PROVIDER_NAMES = { zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" };
+const AI_AUTO_PROVIDERS = ["zai", "opencode", "zen", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
+const AUTO_PROVIDER_NAMES = { zai: "z.ai GLM", opencode: "OpenCode Go", zen: "OpenCode Zen", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" };
 
 // The roster talks to itself: every AI pass sees the exchange and may answer
 // it. The rule is shared so the three build prompts describe one protocol.
@@ -1722,6 +1731,43 @@ function assistantModelOverride(settings, role, provider = "") {
   return pick(models[roleKey]);
 }
 
+// The assistant's two roles may each answer through their own provider:
+// Heavy (plans, briefs, reviews, the analyzer read) and Routine (reading the
+// ask, checks, chat). An unset role follows the main pick, so one choice
+// still routes everything exactly as before.
+function roleProvider(settings, role) {
+  const saved = settings.aiRoleProviders && typeof settings.aiRoleProviders === "object" ? settings.aiRoleProviders[role === "heavy" ? "heavy" : "routine"] : "";
+  if (AI_AUTO_PROVIDERS.includes(saved)) return saved;
+  return AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
+}
+
+// What each role would run right now, for the Settings placeholders: the
+// saved model, the provider's built-in default, or "" where the CLI or the
+// endpoint decides. Jev may still pick per call within a keyed provider.
+function assistantRoleModels(settings) {
+  return Object.fromEntries(["routine", "heavy"].map((role) => {
+    const provider = roleProvider(settings, role);
+    if (provider === "auto") return [role, { provider, model: "", source: "auto" }];
+    const saved = assistantModelOverride(settings, role, provider);
+    const builtIn = provider === "zai" ? (role === "heavy" ? ZAI_MODEL_HEAVY : ZAI_MODEL_ROUTINE)
+      : provider === "opencode" ? ASSISTANT_MODEL
+        : provider === "zen" ? (role === "heavy" ? ZEN_MODEL_HEAVY : ZEN_MODEL_ROUTINE) : "";
+    return [role, { provider, model: saved || builtIn, source: saved ? "saved" : builtIn ? "default" : "provider" }];
+  }));
+}
+
+// Zen sends OpenAI's models to the Responses API and the rest of its catalog
+// to chat completions.
+function zenEndpoint(model) {
+  return /^gpt-/i.test(String(model ?? "")) ? ZEN_RESPONSES_ENDPOINT : ZEN_ENDPOINT;
+}
+
+// Planning, brain drafts and the analyzer read are data-only: a CLI's own
+// tools must never turn a discussion into a change. Claude Code is spawned
+// with --tools= (no tools at all), so it may answer them; every other CLI
+// keeps its tools and stays out.
+const DATA_ONLY_CLIS = new Set(["claude"]);
+
 // The builder's model is saved per CLI for the same reason: switching builders
 // must not carry one CLI's model id into another.
 function executorModelOverride(settings, cli = "") {
@@ -1940,8 +1986,16 @@ async function compatEndpointModel(endpoint) {
 // key is needed, and the model saved for
 // that provider (if any) is passed on the CLI. "lmstudio" talks to the local
 // server, also keyless. `allowCli: false` resolves the same preference order
-// with every CLI route excluded - the fallback pass a failed CLI call lands on.
-async function resolveAiCandidate(provider, role, settings, { allowCli, zaiKey, goKey }) {
+// with every CLI route excluded - the fallback pass a failed CLI call lands on;
+// a Set (DATA_ONLY_CLIS) admits only the CLIs it names.
+function cliAllowed(allowCli, provider) {
+  return allowCli === true || (allowCli instanceof Set && allowCli.has(provider));
+}
+function zenRoute(settings, role, apiKey) {
+  const model = assistantModelOverride(settings, role, "zen") || (role === "heavy" ? ZEN_MODEL_HEAVY : ZEN_MODEL_ROUTINE);
+  return { provider: "zen", endpoint: zenEndpoint(model), model, apiKey };
+}
+async function resolveAiCandidate(provider, role, settings, { allowCli, zaiKey, goKey, zenKey }) {
   if (provider === "zai" || provider === "opencode") {
     const apiKey = provider === "zai" ? zaiKey : goKey;
     if (!apiKey) return null;
@@ -1949,8 +2003,9 @@ async function resolveAiCandidate(provider, role, settings, { allowCli, zaiKey, 
       ? { provider, endpoint: ZAI_ENDPOINT, model: assistantModelOverride(settings, role, "zai") || (role === "heavy" ? ZAI_MODEL_HEAVY : ZAI_MODEL_ROUTINE), apiKey }
       : { provider, endpoint: ASSISTANT_ENDPOINT, model: assistantModelOverride(settings, role, "opencode") || ASSISTANT_MODEL, apiKey };
   }
+  if (provider === "zen") return zenKey ? zenRoute(settings, role, zenKey) : null;
   if (provider === "grok" || provider === "claude" || provider === "codex" || provider === "antigravity") {
-    if (!allowCli) return null;
+    if (!cliAllowed(allowCli, provider)) return null;
     const available = provider === "grok" ? await grokCliAvailable() : provider === "claude" ? await claudeCliAvailable() : provider === "codex" ? await codexCliAvailable() : await antigravityCliAvailable();
     return available ? { provider, endpoint: null, model: assistantModelOverride(settings, role, provider), apiKey: null, cli: true } : null;
   }
@@ -1970,11 +2025,11 @@ async function resolveAiCandidate(provider, role, settings, { allowCli, zaiKey, 
   return null;
 }
 
-async function resolveAutoRoute(role, settings, { allowCli, zaiKey, goKey }) {
+async function resolveAutoRoute(role, settings, { allowCli, zaiKey, goKey, zenKey }) {
   const order = normalizeAutoProviders(settings.aiAutoProviders);
   const candidates = [];
   for (const id of order) {
-    const candidate = await resolveAiCandidate(id, role, settings, { allowCli, zaiKey, goKey });
+    const candidate = await resolveAiCandidate(id, role, settings, { allowCli, zaiKey, goKey, zenKey });
     if (candidate) candidates.push(candidate);
   }
   if (!candidates.length) {
@@ -1995,12 +2050,13 @@ async function resolveAutoRoute(role, settings, { allowCli, zaiKey, goKey }) {
 // only when a saved model spares this pass a probe: once the fallback is
 // armed this walk runs on every call, and a 5 s endpoint probe per request
 // would be its own outage. The failed provider is never its own fallback.
-function armedFallbackRoutes(settings, { skip = "", role = "routine", zaiKey, goKey } = {}) {
+function armedFallbackRoutes(settings, { skip = "", role = "routine", zaiKey, goKey, zenKey } = {}) {
   const routes = [];
   for (const id of normalizeAutoProviders(settings.aiAutoProviders)) {
     if (id === skip) continue;
     if (id === "zai" && zaiKey) routes.push({ provider: id, endpoint: ZAI_ENDPOINT, model: assistantModelOverride(settings, role, "zai") || (role === "heavy" ? ZAI_MODEL_HEAVY : ZAI_MODEL_ROUTINE), apiKey: zaiKey });
     else if (id === "opencode" && goKey) routes.push({ provider: id, endpoint: ASSISTANT_ENDPOINT, model: assistantModelOverride(settings, role, "opencode") || ASSISTANT_MODEL, apiKey: goKey });
+    else if (id === "zen" && zenKey) routes.push(zenRoute(settings, role, zenKey));
     else if (id === "custom") {
       const endpoint = normalizeCompatEndpoint(settings.customEndpoint);
       const key = endpoint ? decryptKey(settings, "customApiKeyEncrypted") : null;
@@ -2016,27 +2072,32 @@ function armedFallbackRoutes(settings, { skip = "", role = "routine", zaiKey, go
 
 async function resolveAiRoute(role = "routine", { allowCli = true } = {}) {
   const settings = await readSettings();
-  const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
+  const provider = roleProvider(settings, role);
   const zaiKey = decryptKey(settings, "zaiApiKeyEncrypted");
   const goKey = decryptKey(settings, "apiKeyEncrypted");
+  const zenKey = decryptKey(settings, "zenApiKeyEncrypted");
   // Armed, an explicit route carries the same retry list an auto route does,
   // so a call that fails mid-flight (a lapsed subscription answering 401)
   // degrades the same way; unarmed it stays absolute, exactly as before.
   const withFallbacks = (route) => {
-    const rest = autoFallbackEnabled(settings) ? armedFallbackRoutes(settings, { skip: route.provider, role, zaiKey, goKey }) : [];
+    const rest = autoFallbackEnabled(settings) ? armedFallbackRoutes(settings, { skip: route.provider, role, zaiKey, goKey, zenKey }) : [];
     return { ...route, fallback: rest[0] ?? null, fallbacks: rest };
   };
   // A provider that cannot answer at all degrades only down the armed walk;
   // when nothing can rescue it the original honest error stands.
   const degrade = (id, error) => {
-    const rest = autoFallbackEnabled(settings) ? armedFallbackRoutes(settings, { skip: id, role, zaiKey, goKey }) : [];
+    const rest = autoFallbackEnabled(settings) ? armedFallbackRoutes(settings, { skip: id, role, zaiKey, goKey, zenKey }) : [];
     if (!rest.length) return { ok: false, error };
     logLine(`[assistant] ${AUTO_PROVIDER_NAMES[id] ?? id} cannot answer (${error}) — answering via ${AUTO_PROVIDER_NAMES[rest[0].provider] ?? rest[0].provider}`);
     return { ok: true, ...rest[0], fallback: rest[1] ?? null, fallbacks: rest.slice(1) };
   };
   if (provider === "grok" || provider === "claude" || provider === "codex" || provider === "antigravity") {
-    if (allowCli) return { ok: true, provider, model: assistantModelOverride(settings, role, provider), endpoint: null, apiKey: null, cli: true, fallback: null };
-    return resolveAutoRoute(role, settings, { allowCli: false, zaiKey, goKey });
+    if (cliAllowed(allowCli, provider)) return { ok: true, provider, model: assistantModelOverride(settings, role, provider), endpoint: null, apiKey: null, cli: true, fallback: null };
+    return resolveAutoRoute(role, settings, { allowCli, zaiKey, goKey, zenKey });
+  }
+  if (provider === "zen") {
+    if (!zenKey) return degrade("zen", "no OpenCode Zen key - save one on the OpenCode Zen tile under Providers, or export OPENCODE_API_KEY");
+    return withFallbacks({ ok: true, ...zenRoute(settings, role, zenKey) });
   }
   if (provider === "lmstudio") {
     const endpoint = normalizeLmStudioEndpoint(settings.lmStudioEndpoint);
@@ -2061,7 +2122,7 @@ async function resolveAiRoute(role = "routine", { allowCli = true } = {}) {
     if (!zaiKey) return degrade("zai", "no z.ai key saved - add one in the Studio tab");
     return withFallbacks({ ok: true, provider: "zai", endpoint: ZAI_ENDPOINT, model: assistantModelOverride(settings, role, "zai") || (role === "heavy" ? ZAI_MODEL_HEAVY : ZAI_MODEL_ROUTINE), apiKey: zaiKey });
   }
-  return resolveAutoRoute(role, settings, { allowCli, zaiKey, goKey });
+  return resolveAutoRoute(role, settings, { allowCli, zaiKey, goKey, zenKey });
 }
 
 const modelPerformanceStores = new Map();
@@ -2079,7 +2140,7 @@ const modelRoutingPending = new Map();
 const modelRoutingBackoff = new Map();
 function routingSettingsKey(settings) {
   return crypto.createHash("sha256").update(JSON.stringify([
-    settings.aiProvider, settings.modelSelection, settings.aiModels, settings.aiModelsByProvider,
+    settings.aiProvider, settings.aiRoleProviders, settings.modelSelection, settings.aiModels, settings.aiModelsByProvider,
     settings.jevRoute, settings.gatewayApiKeyEncrypted, settings.jevApiKeyEncrypted,
     settings.zenApiKeyEncrypted, settings.openrouterApiKeyEncrypted,
     settings.zaiApiKeyEncrypted, settings.apiKeyEncrypted,
@@ -2403,17 +2464,20 @@ async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = n
       "user-agent": "mefi-studio/0.1 (A-Eyes)",
     };
     if (sessionHeader) headers["x-opencode-session"] = sessionHeader;
+    // A /responses endpoint (OpenAI's models on Zen) gets the same request
+    // in the Responses shape, and its reply is read back as a chat reply.
+    const responses = /\/responses$/i.test(endpoint);
     const response = await fetch(endpoint, {
       method: "POST",
       signal: controller.signal,
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify(responses ? responsesRequest(body) : body),
     });
     if (!response.ok) {
       observed.errorKind = response.status === 401 || response.status === 403 ? "auth" : response.status === 429 ? "quota" : "transport";
       return resultOf({ ok: false, errorKind: observed.errorKind, error: `assistant HTTP ${response.status}: ${(await response.text()).slice(0, 200)}` });
     }
-    const payload = await response.json();
+    const payload = responses ? responsesAsChat(await response.json()) : await response.json();
     observed.model = typeof payload.model === "string" ? payload.model : model;
     const usage = payload.usage ?? {};
     observed.tokenUsage = { inputTokens: usage.prompt_tokens ?? null, outputTokens: usage.completion_tokens ?? null,
@@ -2440,6 +2504,33 @@ async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = n
       at: startedAt, elapsedMs: Date.now() - startedAt, requestedEffort: body.reasoning_effort ?? null,
       appliedEffort: null, escalationOf, ...observed });
   }
+}
+
+// The Responses API takes the system prompt as `instructions` and the rest
+// as `input`; reasoning models refuse a temperature, so none is sent.
+function responsesRequest(body) {
+  const messages = Array.isArray(body.messages) ? body.messages : [];
+  const instructions = messages.filter((message) => message.role === "system").map((message) => message.content).join("\n\n");
+  const request = { model: body.model, input: messages.filter((message) => message.role !== "system").map(({ role, content }) => ({ role, content })), max_output_tokens: body.max_tokens };
+  if (instructions) request.instructions = instructions;
+  if (body.reasoning_effort) request.reasoning = { effort: body.reasoning_effort };
+  return request;
+}
+
+// A Responses reply in the chat-completions shape chatCompletion reads: the
+// output_text parts as the message, reasoning summaries as reasoning, and an
+// incomplete reply's reason as its finish.
+function responsesAsChat(payload = {}) {
+  const items = Array.isArray(payload.output) ? payload.output : [];
+  const text = items.filter((item) => item?.type === "message").flatMap((item) => item.content ?? []).filter((part) => part?.type === "output_text").map((part) => part.text ?? "").join("");
+  const reasoning = items.filter((item) => item?.type === "reasoning").flatMap((item) => item.summary ?? []).map((part) => part?.text ?? "").join("\n");
+  const usage = payload.usage ?? {};
+  return {
+    model: payload.model,
+    usage: { prompt_tokens: usage.input_tokens, completion_tokens: usage.output_tokens, total_tokens: usage.total_tokens,
+      prompt_tokens_details: { cached_tokens: usage.input_tokens_details?.cached_tokens }, cost_usd: usage.cost_usd },
+    choices: [{ message: { content: text, reasoning_content: reasoning }, finish_reason: payload.status === "incomplete" ? payload.incomplete_details?.reason ?? "incomplete" : payload.status ?? null }],
+  };
 }
 
 // The CLI routes print one JSON object in their headless modes: the reply
@@ -2791,6 +2882,11 @@ async function executorRunEnv() {
     const openDefault = (note) => builderModel
       ? { cli: "opencode", env: executorOpencodeEnv(), modelArgs: ` --model ${builderModel}`, model: builderModel, free: freeBuilder, parallelCap: freeBuilder ? 1 : null, via: `${builderModel}${freeBuilder ? " · free, one at a time" : ""}${note ? ` · ${note}` : ""}` }
       : { cli: "opencode", env: executorOpencodeEnv(), modelArgs: "", via: note ? `opencode default · ${note}` : "opencode default" };
+    // Any provider/model the owner pins is theirs to run, on every route —
+    // the z.ai plan included. The first scan's free pick is only a starting
+    // point, so the z.ai coding plan still answers ahead of it.
+    const scanPick = settings.firstRun?.builder?.free === true && settings.firstRun?.builder?.model === builderModel;
+    if (builderModel && !scanPick) return openDefault();
     if (provider === "opencode") return openDefault();
     const zaiEnv = await zaiOpencodeEnv();
     const mefiZai = () => ({ cli: "opencode", env: executorOpencodeEnv(zaiEnv), modelProvider: "zai", model: ZAI_MODEL_ROUTINE, modelArgs: ` --model mefi-zai/${ZAI_MODEL_ROUTINE}`, via: `mefi-zai/${ZAI_MODEL_ROUTINE}` });
@@ -2881,36 +2977,42 @@ async function assistantFetch(system, user, maxTokens = 6000, { role = "routine"
   // a missing binary, a timeout or an empty reply falls back once to the
   // keyed HTTP routes — the rest of the auto order, never back to a CLI.
   if (route.cli === true || route.provider === "grok" || route.provider === "claude" || route.provider === "codex" || route.provider === "antigravity") {
-    // A paused CLI is not spawned at all — its failures tend to run to the
-    // full 180 s timeout — so the turn goes straight to the fallback below.
-    const gate = providerBreaker.enter(route.provider);
-    let cli = gate.allowed ? null : providerSkipped(route.provider, gate);
-    if (gate.allowed) {
-      const startedAt = Date.now();
-      try {
-        cli = route.provider === "grok" ? await grokCompletion(system, user, route.model)
-          : route.provider === "claude" ? await claudeCompletion(system, user, route.model)
-            : route.provider === "codex" ? await codexCompletion(system, user, route.model)
-              : await antigravityCompletion(system, user, route.model);
-      } finally {
-        settleProvider(route.provider, gate, cli);
-      }
-      const observationId = crypto.randomUUID();
-      await recordModelCall({ id: observationId, model: cli.model || route.model || `${route.provider}-default`, provider: route.provider, taskType, source: "request",
-        at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : "error", errorKind: cli.ok ? null : "cli", tokenUsage: cli.tokenUsage ?? {}, costUsd: cli.costUsd ?? null });
-      cli.observationId = observationId;
-      if (cli.ok) {
-        if (assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = cli.model;
-        return cli;
-      }
-    }
-    const http = await resolveAiRoute(role, { allowCli: false });
-    if (!http.ok) return cli;
-    const retried = await httpAssistantCall(http, system, user, maxTokens, { taskType, role });
-    if (retried.ok) logLine(`[assistant] ${route.provider} cli failed (${String(cli.error ?? "").slice(0, 90)}) — answered via ${retried.model}`);
-    return retried.ok ? retried : cli;
+    return cliAssistantCall(route, system, user, maxTokens, { role, taskType });
   }
   return httpAssistantCall(route, system, user, maxTokens, { taskType, role });
+}
+
+// The CLI half of assistantFetch, shared with the data-only callers
+// (planning, brain drafts, the analyzer read) that may ride Claude Code.
+async function cliAssistantCall(route, system, user, maxTokens, { role = "routine", taskType = role, source = "request" } = {}) {
+  // A paused CLI is not spawned at all — its failures tend to run to the
+  // full 180 s timeout — so the turn goes straight to the fallback below.
+  const gate = providerBreaker.enter(route.provider);
+  let cli = gate.allowed ? null : providerSkipped(route.provider, gate);
+  if (gate.allowed) {
+    const startedAt = Date.now();
+    try {
+      cli = route.provider === "grok" ? await grokCompletion(system, user, route.model)
+        : route.provider === "claude" ? await claudeCompletion(system, user, route.model)
+          : route.provider === "codex" ? await codexCompletion(system, user, route.model)
+            : await antigravityCompletion(system, user, route.model);
+    } finally {
+      settleProvider(route.provider, gate, cli);
+    }
+    const observationId = crypto.randomUUID();
+    await recordModelCall({ id: observationId, model: cli.model || route.model || `${route.provider}-default`, provider: route.provider, taskType, source,
+      at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : "error", errorKind: cli.ok ? null : "cli", tokenUsage: cli.tokenUsage ?? {}, costUsd: cli.costUsd ?? null });
+    cli.observationId = observationId;
+    if (cli.ok) {
+      if (assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = cli.model;
+      return cli;
+    }
+  }
+  const http = await resolveAiRoute(role, { allowCli: false });
+  if (!http.ok) return cli;
+  const retried = await httpAssistantCall(http, system, user, maxTokens, { taskType, source, role });
+  if (retried.ok) logLine(`[assistant] ${route.provider} cli failed (${String(cli.error ?? "").slice(0, 90)}) — answered via ${retried.model}`);
+  return retried.ok ? retried : cli;
 }
 
 // The HTTP half of assistantFetch: body shaping (the reasoning knobs), the
@@ -2935,7 +3037,7 @@ async function httpAssistantCall(route, system, user, maxTokens, { taskType = "r
     if (candidate.model === ZAI_MODEL_HEAVY) {
       body.reasoning_effort = "low";
       body.thinking = { type: "enabled" };
-    } else if (candidate.provider === "opencode") {
+    } else if (candidate.provider === "opencode" || candidate.provider === "zen") {
       body.reasoning_effort = "low";
     }
     return body;
@@ -3048,10 +3150,11 @@ async function runAssistant(mode = "brief", sessionId = null, payload = null) {
   // clears the gate when its order lists a keyless provider.
   const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
   const keyless = provider === "grok" || provider === "claude" || provider === "codex" || provider === "antigravity" || provider === "lmstudio"
-    || (provider === "auto" && normalizeAutoProviders(settings.aiAutoProviders).some((id) => ["grok", "claude", "codex", "antigravity", "lmstudio"].includes(id)));
-  const anyKey = ["apiKeyEncrypted", "zaiApiKeyEncrypted", "customApiKeyEncrypted"].some((field) => keyAvailable(settings, field));
+    || (provider === "auto" && normalizeAutoProviders(settings.aiAutoProviders).some((id) => ["grok", "claude", "codex", "antigravity", "lmstudio"].includes(id)))
+    || ["routine", "heavy"].some((role) => ["grok", "claude", "codex", "antigravity", "lmstudio"].includes(roleProvider(settings, role)));
+  const anyKey = ["apiKeyEncrypted", "zaiApiKeyEncrypted", "zenApiKeyEncrypted", "customApiKeyEncrypted"].some((field) => keyAvailable(settings, field));
   if (!keyless && !anyKey) {
-    return { ok: false, error: "no API key saved - add a z.ai or OpenCode Go key in the Studio tab" };
+    return { ok: false, error: "no API key saved - add a z.ai, OpenCode Go or OpenCode Zen key in the Studio tab" };
   }
   const eyes = await getEyes();
   let facts;
@@ -7109,11 +7212,11 @@ const BRAIN_DRAFT_SYSTEM = [
 async function brainsDraft(payload = {}) {
   const request = String(payload?.text ?? "").trim().slice(0, 600);
   if (!request) return { ok: false, error: "Say what this brain should do." };
-  const route = await resolveAiRoute("heavy", { allowCli: false });
-  if (!route.ok) return { ok: false, error: "Drafting a brain needs a saved z.ai or OpenCode Go key in Settings & connections. You can still build one by hand." };
+  const route = await resolveAiRoute("heavy", { allowCli: DATA_ONLY_CLIS });
+  if (!route.ok) return { ok: false, error: "Drafting a brain needs a saved z.ai, OpenCode Go or OpenCode Zen key, or Claude Code, in Settings & connections. You can still build one by hand." };
   const parts = brains.catalog().nodes.map((node) => `${node.type}: ${node.summary} in[${node.inputs.map((item) => item.id).join(",") || "-"}] out[${node.outputs.map((item) => item.id).join(",") || "-"}]`);
   const user = `Catalog:\n${parts.join("\n")}\n\nBuild a pipeline for this request:\n${request}`;
-  const reply = await httpAssistantCall(route, BRAIN_DRAFT_SYSTEM, user, 2500, { taskType: "brain-draft", source: "brains", role: "heavy" });
+  const reply = await (route.cli ? cliAssistantCall : httpAssistantCall)(route, BRAIN_DRAFT_SYSTEM, user, 2500, { taskType: "brain-draft", source: "brains", role: "heavy" });
   if (!reply.ok) return { ok: false, error: reply.error ?? "The model could not draft this brain." };
   let parsed = null;
   try {
@@ -8004,11 +8107,12 @@ function planningService() {
         assistantAskForWork("you created tasks from an approved plan");
       },
       complete: async ({ system, user }, { kind }) => {
-        // Planning replies are data-only HTTP requests. A CLI's implicit tools
-        // must never turn discussion into production changes.
-        const route = await resolveAiRoute(kind === "spec" ? "heavy" : "routine", { allowCli: false });
-        if (!route.ok) return { ok: false, error: "AI planning needs a saved z.ai or OpenCode Go key in Settings & connections. You can create questions, record decisions, and write the specification manually." };
-        return httpAssistantCall(route, system, user, kind === "spec" ? 7000 : 2500, { taskType: `planning-${kind}`, source: "planning", role: kind === "spec" ? "heavy" : "routine" });
+        // Planning replies are data-only. A CLI's implicit tools must never
+        // turn discussion into production changes, so only a tool-less CLI
+        // (Claude Code with --tools=) may answer; the rest stay on HTTP.
+        const route = await resolveAiRoute(kind === "spec" ? "heavy" : "routine", { allowCli: DATA_ONLY_CLIS });
+        if (!route.ok) return { ok: false, error: "AI planning needs a saved z.ai, OpenCode Go or OpenCode Zen key, or Claude Code, in Settings & connections. You can create questions, record decisions, and write the specification manually." };
+        return (route.cli ? cliAssistantCall : httpAssistantCall)(route, system, user, kind === "spec" ? 7000 : 2500, { taskType: `planning-${kind}`, source: "planning", role: kind === "spec" ? "heavy" : "routine" });
       },
       gatherContext: async ({ plan, questionId, useWeb }) => {
         const question = plan.questions.find((item) => item.id === questionId);
@@ -12532,10 +12636,11 @@ async function analyzerAi(kind, payload) {
     const report = analyzerProjectReports.get(project.id);
     if (!report) return { ok: false, projectId: project.id, error: "Analyze the current project before requesting a deep read." };
     user = projectAnalyzerContext(report);
-    // Historical documents cannot give a CLI permission to run tools.
-    const route = await resolveAiRoute("heavy", { allowCli: false });
-    if (!route.ok) return { ok: false, projectId: project.id, error: "AI project reads need a saved z.ai or OpenCode Go key. The local project analysis is available without a key." };
-    call = await httpAssistantCall(route, ASSISTANT_ANALYZER_SYSTEM, user, 6000, { role: "heavy", taskType: "analyzer", source: "analyzer" });
+    // Historical documents cannot give a CLI permission to run tools: only a
+    // CLI spawned with no tools at all may read them.
+    const route = await resolveAiRoute("heavy", { allowCli: DATA_ONLY_CLIS });
+    if (!route.ok) return { ok: false, projectId: project.id, error: "AI project reads need a saved z.ai, OpenCode Go or OpenCode Zen key, or Claude Code. The local project analysis is available without a key." };
+    call = await (route.cli ? cliAssistantCall : httpAssistantCall)(route, ASSISTANT_ANALYZER_SYSTEM, user, 6000, { role: "heavy", taskType: "analyzer", source: "analyzer" });
   } else {
     user = JSON.stringify({ kind, payload }).slice(0, 14000);
     call = await assistantFetch(ASSISTANT_ANALYZER_SYSTEM, user, 6000, { role: "heavy", taskType: "analyzer" });
@@ -13116,12 +13221,22 @@ function registerIpc() {
       jevRoute,
       routingDecision: modelRoutingDecisions.get(projects.current().id) ?? null,
       provider: AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto",
+      // A role's own provider, or "" when it follows the main pick.
+      roleProviders: Object.fromEntries(["routine", "heavy"].map((role) => {
+        const saved = settings.aiRoleProviders?.[role];
+        return [role, AI_AUTO_PROVIDERS.includes(saved) ? saved : ""];
+      })),
+      roleModels: assistantRoleModels(settings),
       // Auto mode's ordered provider list and its opt-in failure walk; older
       // settings only have the single-purpose aiFallbackOpenCode.
       autoProviders: normalizeAutoProviders(settings.aiAutoProviders),
       autoFallback: autoFallbackEnabled(settings),
       hasZai: keyAvailable(settings, "zaiApiKeyEncrypted"),
       hasOpenCode: keyAvailable(settings, "apiKeyEncrypted"),
+      hasZen: keyAvailable(settings, "zenApiKeyEncrypted"),
+      // "env" when the key comes from a variable (opencode's OPENCODE_API_KEY),
+      // so the Zen tile can say where it came from. Status only, never the key.
+      zenKeySource: keySourceFor(settings, "zenApiKeyEncrypted"),
       hasCustom: keyAvailable(settings, "customApiKeyEncrypted"),
       // Endpoint preferences (not secrets): the effective local server URL and
       // the user's own OpenAI-compatible endpoint, empty when unset.
@@ -13164,6 +13279,20 @@ function registerIpc() {
     if (patch.provider !== undefined) {
       if (!AI_PROVIDERS.includes(patch.provider)) return { ok: false, error: `unknown provider: ${patch.provider}` };
       settings.aiProvider = patch.provider;
+    }
+    // Per-role providers: `roleProviders: { heavy: "claude" }`. Empty clears
+    // the role so it follows the main pick again.
+    if (patch.roleProviders !== undefined && typeof patch.roleProviders === "object") {
+      const saved = settings.aiRoleProviders && typeof settings.aiRoleProviders === "object" ? settings.aiRoleProviders : {};
+      for (const role of ["routine", "heavy"]) {
+        if (patch.roleProviders[role] === undefined) continue;
+        const value = String(patch.roleProviders[role] ?? "");
+        if (value && !AI_AUTO_PROVIDERS.includes(value)) return { ok: false, error: `unknown provider for the ${role} role: ${value}` };
+        if (value) saved[role] = value;
+        else delete saved[role];
+      }
+      if (Object.keys(saved).length) settings.aiRoleProviders = saved;
+      else delete settings.aiRoleProviders;
     }
     if (patch.autoFallback !== undefined) settings.aiAutoFallback = Boolean(patch.autoFallback);
     // The auto order is the owner's preference list: ordered, deduped, and

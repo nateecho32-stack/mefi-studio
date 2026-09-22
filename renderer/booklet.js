@@ -2,6 +2,11 @@
 (function () {
   "use strict";
   const { fmt, privacyLabel } = window.MefiGraph;
+  // Tell the Start here walkthrough that a provider connection was saved. Only
+  // a successful save announces; a failed or cancelled save must not advance it.
+  const noteConnectionSaved = (which) => {
+    try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent("mefi:connection-saved", { detail: { provider: which || null } })); } catch {}
+  };
 
   // Global toasts: quiet confirmations that do not need a panel status line.
   window.MefiToast = (message, kind = "info", options = {}) => {
@@ -466,20 +471,31 @@
     // builder pickers are rebuilt from it plus the live flags below, so what
     // is ready on this machine reads first and anything else stays selectable
     // with its missing piece named beside it.
-    const providerNames = { auto: "Auto (your order)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
-    const providerKinds = { auto: "auto", zai: "key", opencode: "key", grok: "cli", claude: "cli", codex: "cli", antigravity: "cli", lmstudio: "local", custom: "custom" };
+    const providerNames = { auto: "Auto (your order)", zai: "z.ai GLM", opencode: "OpenCode Go", zen: "OpenCode Zen", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
+    const providerKinds = { auto: "auto", zai: "key", opencode: "key", zen: "key", grok: "cli", claude: "cli", codex: "cli", antigravity: "cli", lmstudio: "local", custom: "custom" };
     const providerRegistry = Object.keys(providerNames).map((id) => ({ id, name: providerNames[id], kind: providerKinds[id] }));
     const builderIds = ["opencode", "grok", "claude", "codex", "antigravity"];
     const builderNames = { opencode: "OpenCode", grok: "Grok", claude: "Claude Code", codex: "Codex", antigravity: "Antigravity" };
     const providerSelect = document.getElementById("ai-provider");
+    const roleRoutine = document.getElementById("ai-role-routine");
+    const roleHeavy = document.getElementById("ai-role-heavy");
+    // The provider a role answers through: its own pick when one is set,
+    // otherwise whatever Assistant answers via picks.
+    function roleProviderOf(role) {
+      const own = (role === "heavy" ? roleHeavy : roleRoutine).value;
+      if (own && providerNames[own]) return own;
+      return providerNames[providerSelect.value] ? providerSelect.value : "auto";
+    }
+    // The roles saved on a provider of their own, heavy first.
+    const splitRoles = (routing) => ["heavy", "routine"].filter((role) => providerNames[routing?.roleProviders?.[role]]);
     const executorCli = document.getElementById("executor-cli");
     function cliInstalled(id) {
       return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === id && cli.installed);
     }
     function keyState(which) {
-      const known = setup.keys[which];
+      const known = setup.keys[which] ?? null;
       if (known !== null) return known ? "key saved" : "no key saved";
-      const flag = which === "zai" ? setup.routing?.hasZai : setup.routing?.hasOpenCode;
+      const flag = which === "zai" ? setup.routing?.hasZai : which === "zen" ? setup.routing?.hasZen : setup.routing?.hasOpenCode;
       return flag === true ? "key saved" : flag === false ? "no key saved" : "key unknown";
     }
     // The auto order is tried top to bottom; usability here comes from the same
@@ -489,6 +505,7 @@
     function autoProviderUsable(id) {
       if (id === "zai") return setup.keys.zai === true || setup.routing?.hasZai === true;
       if (id === "opencode") return setup.keys.opencode === true || setup.routing?.hasOpenCode === true;
+      if (id === "zen") return setup.routing?.hasZen === true;
       if (id === "custom") return Boolean(setup.routing?.customEndpoint) && (setup.keys.custom === true || setup.routing?.hasCustom === true);
       if (id === "lmstudio") return true;
       return cliInstalled(id);
@@ -554,6 +571,11 @@
       const entryFor = (id, name, availability) => ({ id, state: stateOf(availability), label: `${name} — ${availability.note}` });
       const [auto, ...providers] = providerRegistry.map((entry) => entryFor(entry.id, entry.name, providerAvailability(entry.id)));
       renderPicker(providerSelect, [auto, ...providers.sort(byReadiness)]);
+      // Each role may answer elsewhere; "Same as above" follows the main pick
+      // and says which one that is.
+      const mainId = providerNames[setup.routing?.provider] ? setup.routing.provider : "";
+      const same = { id: "", state: mainId ? stateOf(providerAvailability(mainId)) : "unknown", label: mainId ? `Same as above — ${providerNames[mainId]}` : "Same as above" };
+      for (const select of [roleRoutine, roleHeavy]) renderPicker(select, [same, ...providers]);
       renderPicker(executorCli, builderIds.map((id) => entryFor(id, builderNames[id], cliAvailability(id))).sort(byReadiness));
       renderAutoOrder();
       renderAutoOrderAdd();
@@ -593,7 +615,19 @@
           : provider === "custom" ? (routing.hasCustom ? "key saved" : "no key saved")
           : provider === "auto" ? (autoFirst ? `will use ${providerNames[autoFirst]}` : "no usable provider in this order yet")
           : keyState(provider);
-        setPill(setupAssistant, stateOf(providerAvailability(provider)), `${providerNames[provider]} · ${detail}`);
+        // A role on its own provider is named, and the pill is only as ready
+        // as the least ready provider actually answering.
+        const split = splitRoles(routing);
+        if (!split.length) setPill(setupAssistant, stateOf(providerAvailability(provider)), `${providerNames[provider]} · ${detail}`);
+        else {
+          const answering = split.map((role) => routing.roleProviders[role]).concat(split.length === 2 ? [] : [provider]);
+          const worst = { ready: 0, unknown: 1, missing: 2 };
+          const state = answering.map((id) => stateOf(providerAvailability(id))).reduce((a, b) => (worst[b] > worst[a] ? b : a), "ready");
+          const roles = split.map((role) => `${role === "heavy" ? "plans" : "reads"} on ${providerNames[routing.roleProviders[role]]}`).join(" · ");
+          setPill(setupAssistant, state, split.length === 2 ? roles : `${providerNames[provider]} · ${detail} · ${roles}`);
+        }
+        // The Zen key lives in its own tile; opencode's OPENCODE_API_KEY counts.
+        setPill(document.getElementById("zen-key-status"), routing.hasZen ? "ready" : "missing", routing.hasZen ? (routing.zenKeySource === "env" ? "key from environment" : "key saved (encrypted)") : "no key saved");
       }
       if (setup.routingError) setPill(setupSelection, "unknown", "status unavailable");
       else if (!routing) setPill(setupSelection, "unknown", "checking…");
@@ -612,7 +646,7 @@
         const order = autoOrderOf(routing).map((id) => `${providerNames[id] ?? id}${autoProviderUsable(id) ? "" : " (unavailable)"}`);
         readiness.textContent = `auto order: ${order.join(" → ")}`;
       }
-      else if (selected === "zai" || selected === "opencode") readiness.textContent = `${keyState(selected)} — this provider's saved model applies`;
+      else if (selected === "zai" || selected === "opencode" || selected === "zen") readiness.textContent = `${keyState(selected)} — this provider's saved model applies`;
       else if (selected === "custom") readiness.textContent = `${routing.customEndpoint ? "endpoint saved" : "no endpoint saved"}, ${setup.keys.custom ? "key saved" : "no key saved"}`;
       else if (selected === "lmstudio") readiness.textContent = "local server — no key needed; its loaded model is detected automatically";
       else if (setup.cliError) readiness.textContent = "CLI status unavailable";
@@ -649,16 +683,29 @@
     document.getElementById("save-key").addEventListener("click", async () => {
       const value = document.getElementById("api-key").value.trim();
       const result = await window.mefiStudio.setApiKey(value, "opencode");
-      if (result?.ok) { setup.keys.opencode = Boolean(value); setPill(keyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); }
+      if (result?.ok) { setup.keys.opencode = Boolean(value); setPill(keyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("opencode"); }
       else setPill(keyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("api-key").value = "";
+      await loadAiRouting();
+    });
+
+    // One Zen key serves the assistant's Zen route and Jev's, so a save
+    // refreshes both; clearing it falls back to OPENCODE_API_KEY when set.
+    document.getElementById("save-zen-key").addEventListener("click", async () => {
+      const input = document.getElementById("zen-key");
+      const value = input.value.trim();
+      const result = await window.mefiStudio.setApiKey(value, "zen");
+      input.value = "";
+      if (!result?.ok) setPill(document.getElementById("zen-key-status"), "unknown", `save failed: ${result?.error ?? "unknown"}`);
+      else noteConnectionSaved("zen");
+      await refreshJev();
       await loadAiRouting();
     });
 
     document.getElementById("save-zai-key").addEventListener("click", async () => {
       const value = document.getElementById("zai-key").value.trim();
       const result = await window.mefiStudio.setApiKey(value, "zai");
-      if (result?.ok) { setup.keys.zai = Boolean(value); setPill(zaiKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); }
+      if (result?.ok) { setup.keys.zai = Boolean(value); setPill(zaiKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("zai"); }
       else setPill(zaiKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("zai-key").value = "";
       await loadAiRouting();
@@ -669,7 +716,7 @@
     document.getElementById("save-custom-key").addEventListener("click", async () => {
       const value = document.getElementById("custom-key").value.trim();
       const result = await window.mefiStudio.setApiKey(value, "custom");
-      if (result?.ok) { setup.keys.custom = Boolean(value); setPill(customKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); }
+      if (result?.ok) { setup.keys.custom = Boolean(value); setPill(customKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("custom"); }
       else setPill(customKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("custom-key").value = "";
       await loadAiRouting();
@@ -709,6 +756,7 @@
         const result = await window.mefiStudio.setApiKey(input.value.trim(), jevRouteFields[jevRouteOf()].key);
         input.value = "";
         if (!result?.ok) { jevStatus.textContent = `Save failed: ${result?.error ?? "unknown"}`; return; }
+        noteConnectionSaved(jevRouteFields[jevRouteOf()].key);
         await refreshJev();
         await loadAiRouting();
       } catch { input.value = ""; jevStatus.textContent = "Could not save Jev key"; }
@@ -820,6 +868,20 @@
           : `${tierNames[tier]} tier: ${cliName} runs ${active.model || "its CLI default"}${tier === "free" ? ", one worker at a time" : ""}.`;
       executorTierStatus.textContent = `${lead} ${["free", "fast", "heavy"].map(describe).join(" · ")}.`;
     }
+    // Each model field names the provider it saves to, and its placeholder is
+    // what that role runs while the field is empty — the host resolves it,
+    // the same way the tier table reads for builders.
+    function renderRoleModels(routing) {
+      for (const [role, input, scopeId] of [["routine", modelRoutine, "model-scope-note"], ["heavy", modelHeavy, "model-heavy-scope"]]) {
+        const entry = routing?.roleModels?.[role];
+        if (!entry) continue;
+        const scope = document.getElementById(scopeId);
+        if (scope) scope.textContent = entry.provider === "auto" ? "for the auto order" : `on ${providerNames[entry.provider] ?? entry.provider}`;
+        input.placeholder = entry.model
+          ? `${entry.model}${entry.source === "default" ? " · default" : ""}`
+          : entry.provider === "auto" ? "automatic selection" : providerKinds[entry.provider] === "cli" ? "CLI default" : "the server's loaded model";
+      }
+    }
     const customEndpoint = document.getElementById("custom-endpoint");
     function evidenceText(evidence, taskType) {
       const workerNote = taskType === "coding" ? " Available measurements describe Studio HTTP requests; CLI worker timing and billing are not measured." : "";
@@ -872,14 +934,19 @@
           autoOrder = autoOrderOf(routing);
           renderAutoOrder();
           renderAutoOrderAdd();
-          // Models follow the selected provider: the keyed HTTP routes (and
-          // "auto") may show the role-wide fallback, CLI and local routes show
-          // only what was saved for them.
-          const selectedProvider = providerNames[routing.provider] ? routing.provider : "auto";
-          const scoped = selectedProvider === "auto" ? null : routing.providerModels?.[selectedProvider];
-          const fallbackAllowed = selectedProvider === "auto" || selectedProvider === "zai" || selectedProvider === "opencode";
-          modelRoutine.value = scoped?.routine ?? (fallbackAllowed ? routing.models?.routine ?? "" : "");
-          modelHeavy.value = scoped?.heavy ?? (fallbackAllowed ? routing.models?.heavy ?? "" : "");
+          roleRoutine.value = routing.roleProviders?.routine ?? "";
+          roleHeavy.value = routing.roleProviders?.heavy ?? "";
+          // Models follow the provider each role answers through: the keyed
+          // HTTP routes (and "auto") may show the role-wide fallback, CLI and
+          // local routes show only what was saved for them.
+          const modelFor = (role) => {
+            const selectedProvider = roleProviderOf(role);
+            const scoped = selectedProvider === "auto" ? null : routing.providerModels?.[selectedProvider];
+            const fallbackAllowed = selectedProvider === "auto" || selectedProvider === "zai" || selectedProvider === "opencode" || selectedProvider === "zen";
+            return scoped?.[role] ?? (fallbackAllowed ? routing.models?.[role] ?? "" : "");
+          };
+          modelRoutine.value = modelFor("routine");
+          modelHeavy.value = modelFor("heavy");
           executorCli.value = routing.executorCli ?? "opencode";
           executorTier.value = tierNames[routing.executorTier] ? routing.executorTier : "auto";
           syncExecutorModel(routing);
@@ -887,6 +954,7 @@
           customEndpoint.value = routing.customEndpoint ?? "";
         }
         renderExecutorTiers(routing);
+        renderRoleModels(routing);
         syncSegmented();
         const selection = routing.modelSelection ?? "jev";
         const cliProvider = routing.provider === "grok" ? "Grok CLI" : routing.provider === "claude" ? "Claude Code CLI" : routing.provider === "codex" ? "Codex CLI" : routing.provider === "antigravity" ? "Antigravity CLI" : null;
@@ -901,6 +969,8 @@
                 : routing.jevConfigured
                   ? "Jev model selection ready · task fit, speed and cost. Explicit model overrides take priority."
                   : "Jev model selection is waiting for a Jev key. Save one below for the selected route; usual defaults apply until connected.";
+        const split = splitRoles(routing);
+        if (split.length) routingStatus.textContent += ` ${split.map((role) => `${role === "heavy" ? "Heavy" : "Routine"} passes answer via ${providerNames[routing.roleProviders[role]]}`).join("; ")}.`;
         const decision = routing.routingDecision;
         routingEvidence.hidden = !decision;
         routingEvidence.textContent = decision ? evidenceText(decision.evidence, decision.taskType) : "";
@@ -924,7 +994,7 @@
     // Auto order editor: the host stores the same ordered array. The editor
     // only reorders, adds and removes, then saves the whole list; every save
     // re-reads routing so the controls stay authoritative.
-    const autoProviderIds = ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
+    const autoProviderIds = ["zai", "opencode", "zen", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
     let autoOrder = ["zai", "opencode"];
     function renderAutoOrder() {
       autoOrderList.replaceChildren(...autoOrder.map((id, index) => {
@@ -985,7 +1055,7 @@
       if (!autoProviderIds.includes(id) || autoOrder.includes(id)) return;
       return saveAutoOrder([...autoOrder, id], `${providerNames[id] ?? id} added to the auto order`);
     });
-    const routingControls = [providerSelect, modelSelection, fallbackToggle, autoOrderAdd, autoOrderAddButton, modelRoutine, modelHeavy, executorCli, executorTier, executorModel, lmStudioEndpoint, customEndpoint];
+    const routingControls = [providerSelect, roleRoutine, roleHeavy, modelSelection, fallbackToggle, autoOrderAdd, autoOrderAddButton, modelRoutine, modelHeavy, executorCli, executorTier, executorModel, lmStudioEndpoint, customEndpoint];
     for (const control of routingControls) control.disabled = true;
     renderSetupState();
     syncSegmented();
@@ -1011,8 +1081,13 @@
     providerSelect.addEventListener("change", () => saveRouting({ provider: providerSelect.value }, `assistant answers via ${providerSelect.value}`, { syncControls: true }));
     modelSelection.addEventListener("change", () => saveRouting({ modelSelection: modelSelection.value }, `model selection: ${modelSelection.value}`));
     fallbackToggle.addEventListener("change", () => saveRouting({ autoFallback: fallbackToggle.checked }, "provider fallback saved"));
+    // A role's provider reloads that role's model field from the provider it
+    // now answers through.
+    for (const [select, role] of [[roleRoutine, "routine"], [roleHeavy, "heavy"]]) {
+      select.addEventListener("change", () => saveRouting({ roleProviders: { [role]: select.value } }, `${role} passes answer via ${select.value ? providerNames[select.value] ?? select.value : "the main pick"}`, { syncControls: true }));
+    }
     const saveModel = (which, value) => {
-      const provider = providerNames[providerSelect.value] ? providerSelect.value : "auto";
+      const provider = roleProviderOf(which);
       const trimmed = value.trim();
       const confirmation = `${provider} ${which} model ${trimmed ? `"${trimmed}"` : "uses the provider default"}`;
       return provider === "auto"

@@ -10,6 +10,10 @@ import { Element } from "./fixtures/renderer-dom.mjs";
 const source = await readFile(new URL("../renderer/booklet.js", import.meta.url), "utf8");
 const template = await readFile(new URL("../renderer/booklet.template.html", import.meta.url), "utf8");
 const studio = source.slice(source.indexOf("  function initStudio()"), source.indexOf("  // ---- wire up ----"));
+// The save handlers announce a saved connection through this IIFE-scoped
+// helper, which sits above initStudio; the slice below starts inside it, so
+// pull the definition in alongside the studio body.
+const announce = source.slice(source.indexOf("  const noteConnectionSaved"), source.indexOf("  // Global toasts"));
 const flush = async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); };
 const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
 
@@ -44,7 +48,7 @@ function environment(overrides = {}, bridge = {}) {
   };
   const document = { getElementById: (id) => ids.get(id) || null, createElement: (tag) => new Element(tag), querySelectorAll: () => [] };
   const context = vm.createContext({ document, window: { mefiStudio: api }, state: { doc: { models: [] } }, updateSpeedModels() {}, studioLog: (line) => logs.push(line) });
-  vm.runInContext(`${studio}\ninitStudio();`, context);
+  vm.runInContext(`${announce}\n${studio}\ninitStudio();`, context);
   return { get: (id) => ids.get(id), settings, writes, saved, api, logs, reads: () => reads };
 }
 
@@ -358,10 +362,44 @@ test("the auto order renders as a numbered preference list and saves whole-list 
   assert.deepEqual(env.get("auto-order-list").children.map((row) => row.dataset.provider), ["grok", "zai", "opencode"], "the reordered list is re-read from the host");
 });
 
+test("each role picks its own provider and its model field follows that provider", async () => {
+  const env = environment({ provider: "zai", roleProviders: { routine: "zen", heavy: "claude" }, providerModels: { zen: { routine: "gpt-6-luna" }, claude: { heavy: "claude-opus-5-5" }, zai: { routine: "zai-routine", heavy: "zai-heavy" } } }); await flush();
+  assert.equal(env.get("ai-role-routine").value, "zen");
+  assert.equal(env.get("ai-role-heavy").value, "claude");
+  assert.equal(env.get("ai-model-routine").value, "gpt-6-luna", "the routine field edits the provider routine answers through");
+  assert.equal(env.get("ai-model-heavy").value, "claude-opus-5-5");
+  assert.match(env.get("ai-routing-status").textContent, /Heavy passes answer via Claude Code CLI; Routine passes answer via OpenCode Zen\./);
+  env.get("ai-model-heavy").value = "claude-opus-5";
+  await env.get("ai-model-heavy").trigger("change");
+  assert.deepEqual(env.writes.at(-1), { providerModels: { claude: { heavy: "claude-opus-5" } } }, "a heavy model saves under the heavy role's provider, not the main pick");
+  env.get("ai-role-heavy").value = "";
+  await env.get("ai-role-heavy").trigger("change");
+  assert.deepEqual(env.writes.at(-1), { roleProviders: { heavy: "" } }, "Same as above clears the role");
+});
+
+test("role fields name their provider, show what runs when empty, and Zen reads as a keyed route", async () => {
+  const env = environment({ provider: "zen", hasZen: true, zenKeySource: "env", roleProviders: { routine: "", heavy: "claude" },
+    roleModels: { routine: { provider: "zen", model: "gpt-6-luna", source: "default" }, heavy: { provider: "claude", model: "", source: "provider" } } }); await flush();
+  assert.equal(env.get("model-scope-note").textContent, "on OpenCode Zen");
+  assert.equal(env.get("model-heavy-scope").textContent, "on Claude Code CLI");
+  assert.equal(env.get("ai-model-routine").placeholder, "gpt-6-luna · default", "the placeholder is the model that runs");
+  assert.equal(env.get("ai-model-heavy").placeholder, "CLI default");
+  assert.equal(env.get("ai-role-routine").children[0].textContent, "Same as above — OpenCode Zen", "Same as above names the main pick");
+  assert.match(env.get("provider-readiness").textContent, /^key saved — this provider's saved model applies/, "Zen is a keyed route, not a missing CLI");
+  assert.equal(env.get("zen-key-status").textContent, "key from environment");
+  assert.equal(env.get("setup-assistant").textContent, "OpenCode Zen · key saved · plans on Claude Code CLI");
+  env.get("zen-key").value = "fixture-zen-key";
+  const reads = env.reads();
+  await env.get("save-zen-key").trigger("click");
+  assert.deepEqual(env.saved, ["zen"], "the tile saves the one Zen credential");
+  assert.equal(env.get("zen-key").value, "");
+  assert.ok(env.reads() > reads, "a Zen save re-reads routing");
+});
+
 test("the auto order adds and removes providers and never leaves it empty", async () => {
   const env = environment({ provider: "auto", autoProviders: ["zai"] }); await flush();
   const add = env.get("auto-order-add");
-  assert.deepEqual(add.children.map((option) => option.value), ["opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"], "the picker lists exactly the missing providers");
+  assert.deepEqual(add.children.map((option) => option.value), ["opencode", "zen", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"], "the picker lists exactly the missing providers");
   add.value = "opencode";
   await env.get("auto-order-add-button").trigger("click");
   assert.deepEqual(env.writes, [{ autoProviders: ["zai", "opencode"] }]);

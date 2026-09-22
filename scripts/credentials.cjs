@@ -34,7 +34,8 @@ const SHARED_KEYS = Object.freeze({
   customApiKeyEncrypted: Object.freeze([]),
   gatewayApiKeyEncrypted: Object.freeze(["AI_GATEWAY_API_KEY"]),
   jevApiKeyEncrypted: Object.freeze(["TYPESAFE_API_KEY"]),
-  zenApiKeyEncrypted: Object.freeze(["OPENCODE_ZEN_API_KEY"]),
+  // opencode itself reads OPENCODE_API_KEY for Zen.
+  zenApiKeyEncrypted: Object.freeze(["OPENCODE_ZEN_API_KEY", "OPENCODE_API_KEY"]),
   openrouterApiKeyEncrypted: Object.freeze(["OPENROUTER_API_KEY"]),
   githubTokenEncrypted: Object.freeze(["GH_TOKEN", "GITHUB_TOKEN"]),
 });

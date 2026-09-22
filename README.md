@@ -39,7 +39,7 @@
 | **Git** | Cloning | |
 | **Python 3** | `npm test` only | Must be on PATH as `python`. |
 | **A builder CLI** (optional) | Building tasks | `opencode` is preferred; `claude`, `codex`, `grok` and `agy` are detected. Without one Studio still plans, chats and browses the catalog, but no build can start. |
-| **An API key or local model** (optional) | The companion | z.ai, OpenCode Go, a CLI login, LM Studio or any OpenAI-compatible endpoint. |
+| **An API key or local model** (optional) | The companion | z.ai, OpenCode Go or Zen, a CLI login, LM Studio or any OpenAI-compatible endpoint. |
 
 ## Install and run
 

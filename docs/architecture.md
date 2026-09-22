@@ -252,6 +252,15 @@ revision history stay in the project's ignored local `planning.json`.
   saved uses its own default, and the keyed HTTP routes keep the role-wide
   Routine/Heavy overrides. Missing a subscription or key for one option never
   blocks the others — the readiness line names what the selected option has.
+- **Each role can answer through its own provider.** *Heavy answers via*
+  covers plan specs, briefs, reviews, the overseer and the analyzer read;
+  *Routine answers via* covers reading the ask, checks, advisory agents and
+  chat. Either can be left on *Same as above*. **OpenCode Zen** is one of the
+  providers, with its own tile under Providers, billed to the Zen balance
+  with the Zen key or opencode's `OPENCODE_API_KEY`; OpenAI's models there
+  go to its Responses endpoint.
+  Plan specs, brain drafts and the analyzer read stay data-only, so the only
+  CLI they may use is Claude Code, which runs with `--tools=` (no tools).
 - **Jev routing** chooses where classifier calls go — the Vercel AI Gateway
   (`typesafe-ai/jev`), TypeSafe's Jev API directly (`jev-1.13.0`), OpenCode
   Zen (`jev-1.13`, including its free tier), or OpenRouter
@@ -281,7 +290,9 @@ revision history stay in the project's ignored local `planning.json`.
   quick economical model (GLM 5.3 Flash on the z.ai plan, `sonnet` on Claude
   Code); **Heavy** runs the high-end one (GLM 5.3, `opus`). Tier models are
   saved per builder CLI, and the Settings line shows what each tier resolves
-  to before anything runs.
+  to before anything runs. Under Auto, any provider/model you pin for
+  OpenCode runs on every route; only the first scan's free suggestion yields
+  to the z.ai plan.
 - Keys live in the OS keystore (`safeStorage`; DPAPI on Windows); their
   ciphertext persists in `auth.json` beside `settings.json`, so preferences
   stay copyable and credentials stay machine-bound. Headless

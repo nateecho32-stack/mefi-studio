@@ -16,8 +16,8 @@ function section(start, end) {
   return source.slice(from, to);
 }
 const okReply = () => ({ ok: true, json: async () => ({ model: "reported-model", usage: { prompt_tokens: 20, completion_tokens: 30, total_tokens: 50 }, choices: [{ message: { content: "Planning reply" } }] }) });
-function host(settings, responses = [okReply()], { clis = [] } = {}) {
-  const calls = [], observations = [], admitted = [], wakes = [], project = { id: "fixture", path: "/fixture" };
+function host(settings, responses = [okReply()], { clis = [], claudeReply = null } = {}) {
+  const calls = [], cliCalls = [], observations = [], admitted = [], wakes = [], project = { id: "fixture", path: "/fixture" };
   const installed = new Set(clis);
   const context = vm.createContext({
     path, crypto, AbortController, setTimeout, clearTimeout,
@@ -28,9 +28,9 @@ function host(settings, responses = [okReply()], { clis = [] } = {}) {
     jevShadowIntake: (tasks) => { admitted.push(structuredClone(tasks)); return new Promise(() => {}); },
     ensureAssistant: async () => {}, refreshAutopilotQueue: async () => {}, assistantAskForWork: (reason) => wakes.push(reason),
     mutateBoard() { throw new Error("Model suggestions must not create tasks"); },
-    AI_PROVIDERS: ["auto", "zai", "opencode", "grok", "claude", "codex", "antigravity"],
-    AI_AUTO_PROVIDERS: ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"],
-    AUTO_PROVIDER_NAMES: { zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" },
+    AI_PROVIDERS: ["auto", "zai", "opencode", "zen", "grok", "claude", "codex", "antigravity"],
+    AI_AUTO_PROVIDERS: ["zai", "opencode", "zen", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"],
+    AUTO_PROVIDER_NAMES: { zai: "z.ai GLM", opencode: "OpenCode Go", zen: "OpenCode Zen", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio", custom: "custom endpoint" },
     grokCliAvailable: async () => installed.has("grok"),
     claudeCliAvailable: async () => installed.has("claude"),
     codexCliAvailable: async () => installed.has("codex"),
@@ -38,6 +38,9 @@ function host(settings, responses = [okReply()], { clis = [] } = {}) {
     ASSISTANT_ENDPOINT: "https://opencode.invalid", ZAI_ENDPOINT: "https://zai.invalid",
     LMSTUDIO_ENDPOINT: "http://127.0.0.1:1234/v1/chat/completions",
     ASSISTANT_MODEL: "routine-go", ZAI_MODEL_ROUTINE: "routine-zai", ZAI_MODEL_HEAVY: "heavy-zai",
+    ZEN_ENDPOINT: "https://zen.invalid/v1/chat/completions", ZEN_RESPONSES_ENDPOINT: "https://zen.invalid/v1/responses",
+    ZEN_MODEL_ROUTINE: "routine-zen", ZEN_MODEL_HEAVY: "heavy-zen",
+    claudeCompletion: async (system, user, model) => { cliCalls.push({ system, user, model }); return claudeReply ?? { ok: true, text: "Planned on Claude Code", model: model || "claude-default" }; },
     readSettings: async () => structuredClone(settings), decryptKey: (value, key) => value[key] ? `fixture-${key}` : null,
     applyModelRouting: async (route) => route,
     assistantState: { ai: {} }, assistantSessionId: async () => "fixture-session",
@@ -47,10 +50,11 @@ function host(settings, responses = [okReply()], { clis = [] } = {}) {
   vm.runInContext([
     section("// Single-model routes have one model concept", "const modelPerformanceStores"),
     section("async function chatCompletion(", "// The Grok CLI"),
+    section("async function cliAssistantCall(", "// The HTTP half of assistantFetch"),
     section("async function httpAssistantCall(", "function normalizeBriefing("),
     section("const planningServices =", "async function planningRequest("),
   ].join("\n"), context);
-  return { context, calls, observations, admitted, wakes, complete: (kind) => context.planningService().complete({ system: "No tools", user: "private planning decisions" }, { kind }) };
+  return { context, calls, cliCalls, observations, admitted, wakes, complete: (kind) => context.planningService().complete({ system: "No tools", user: "private planning decisions" }, { kind }) };
 }
 
 test("approved planning task admission reaches advisory Jev without delaying the existing scheduler", async () => {
@@ -92,7 +96,7 @@ test("planning with Grok selected uses saved HTTP credentials and never invokes 
   assert.equal(h.calls[0].endpoint, "https://zai.invalid");
   assert.equal(h.calls[0].body.tools, undefined);
   const unconfigured = host({ aiProvider: "grok" });
-  assert.match((await unconfigured.complete("question")).error, /saved z.ai or OpenCode Go key/);
+  assert.match((await unconfigured.complete("question")).error, /saved z.ai, OpenCode Go or OpenCode Zen key, or Claude Code/);
   assert.equal(unconfigured.calls.length, 0);
   assert.equal(unconfigured.observations.length, 0);
 });
@@ -181,4 +185,75 @@ test("an auto order with nothing usable names the list instead of a fixed pair",
   const route = await h.context.resolveAiRoute("routine");
   assert.equal(route.ok, false);
   assert.match(route.error, /no usable provider in the auto order \(custom endpoint > LM Studio\)/);
+});
+
+const responsesReply = () => ({ ok: true, json: async () => ({ model: "gpt-6-luna", status: "completed",
+  usage: { input_tokens: 11, output_tokens: 7, total_tokens: 18, input_tokens_details: { cached_tokens: 3 } },
+  output: [{ type: "reasoning", summary: [] }, { type: "message", content: [{ type: "output_text", text: "Read on Zen" }] }] }) });
+
+test("each role answers through its own provider: heavy on Claude Code, routine on OpenCode Zen", async () => {
+  const h = host({ aiProvider: "zai", zaiApiKeyEncrypted: "fixture", zenApiKeyEncrypted: "fixture",
+    aiRoleProviders: { heavy: "claude", routine: "zen" },
+    aiModelsByProvider: { claude: { heavy: "claude-opus-5-5" }, zen: { routine: "gpt-6-luna" } } }, [responsesReply()], { clis: ["claude"] });
+  const question = await h.complete("question");
+  assert.equal(question.ok, true);
+  assert.equal(question.text, "Read on Zen");
+  assert.equal(h.calls[0].endpoint, "https://zen.invalid/v1/responses", "OpenAI's models on Zen speak the Responses API");
+  assert.deepEqual(h.calls[0].body, { model: "gpt-6-luna", input: [{ role: "user", content: "private planning decisions" }], max_output_tokens: 2500, instructions: "No tools", reasoning: { effort: "low" } });
+  assert.equal(h.calls[0].options.headers.authorization, "Bearer fixture-zenApiKeyEncrypted");
+  assert.equal(h.observations[0].tokenUsage.totalTokens, 18);
+  const spec = await h.complete("spec");
+  assert.equal(spec.ok, true);
+  assert.equal(spec.text, "Planned on Claude Code");
+  assert.deepEqual(h.cliCalls.map((call) => call.model), ["claude-opus-5-5"]);
+  assert.equal(h.calls.length, 1, "the plan spec never touched an HTTP route");
+  assert.deepEqual(h.observations.map((row) => [row.provider, row.taskType, row.source]), [["zen", "planning-question", "planning"], ["claude", "planning-spec", "planning"]]);
+});
+
+test("a role with no usable provider of its own follows the main pick", async () => {
+  const h = host({ aiProvider: "zai", zaiApiKeyEncrypted: "fixture", aiRoleProviders: { heavy: "bogus", routine: "auto" } });
+  await h.complete("question");
+  await h.complete("spec");
+  assert.deepEqual(h.calls.map((call) => [call.endpoint, call.body.model]), [["https://zai.invalid", "routine-zai"], ["https://zai.invalid", "heavy-zai"]]);
+});
+
+test("a role on a CLI that keeps its tools still plans over HTTP", async () => {
+  const h = host({ aiProvider: "zai", zaiApiKeyEncrypted: "fixture", aiRoleProviders: { heavy: "codex" } }, undefined, { clis: ["codex", "claude"] });
+  const result = await h.complete("spec");
+  assert.equal(result.ok, true);
+  assert.equal(h.cliCalls.length, 0);
+  assert.equal(h.calls[0].endpoint, "https://zai.invalid");
+});
+
+test("a failed Claude Code plan falls back once to the keyed HTTP routes", async () => {
+  const h = host({ aiProvider: "claude", zaiApiKeyEncrypted: "fixture", aiModelsByProvider: { claude: { heavy: "claude-opus-5-5" } } }, undefined,
+    { clis: ["claude"], claudeReply: { ok: false, error: "claude error: overloaded" } });
+  const result = await h.complete("spec");
+  assert.equal(result.ok, true);
+  assert.equal(h.cliCalls.length, 1);
+  assert.deepEqual(h.calls.map((call) => [call.endpoint, call.body.model]), [["https://zai.invalid", "heavy-zai"]]);
+  assert.deepEqual(h.observations.map((row) => [row.provider, row.status]), [["claude", "error"], ["zai", "ok"]]);
+});
+
+test("OpenCode Zen sends the rest of its catalog to chat completions", async () => {
+  const h = host({ aiProvider: "zen", zenApiKeyEncrypted: "fixture", aiModelsByProvider: { zen: { routine: "deepseek-v4.1-flash" } } });
+  await h.complete("question");
+  await h.complete("spec");
+  assert.deepEqual(h.calls.map((call) => [call.endpoint, call.body.model]), [["https://zen.invalid/v1/chat/completions", "deepseek-v4.1-flash"], ["https://zen.invalid/v1/chat/completions", "heavy-zen"]]);
+  assert.equal(h.calls[0].body.reasoning_effort, "low");
+  assert.equal(h.calls[0].options.headers["x-opencode-session"], undefined, "the Go session header stays on the Go route");
+  const missing = host({ aiProvider: "zen" });
+  assert.match((await missing.complete("question")).error, /saved z.ai, OpenCode Go or OpenCode Zen key, or Claude Code/);
+  assert.equal(missing.calls.length, 0);
+});
+
+test("Settings reads what each role runs: saved, the provider default, or the CLI's own", () => {
+  const h = host({});
+  const models = (settings) => JSON.parse(JSON.stringify(h.context.assistantRoleModels(settings)));
+  assert.deepEqual(models({ aiProvider: "zai", aiRoleProviders: { heavy: "claude", routine: "zen" }, aiModelsByProvider: { claude: { heavy: "claude-opus-5-5" } } }), {
+    routine: { provider: "zen", model: "routine-zen", source: "default" },
+    heavy: { provider: "claude", model: "claude-opus-5-5", source: "saved" },
+  });
+  assert.deepEqual(models({ aiProvider: "codex" }).heavy, { provider: "codex", model: "", source: "provider" }, "a CLI with nothing saved runs its own default");
+  assert.deepEqual(models({}).routine, { provider: "auto", model: "", source: "auto" });
 });

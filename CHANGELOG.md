@@ -22,6 +22,25 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   where memory and board disagree, duplicate card families and duplicate
   lessons. Switches: the `memoryAlign`, `loopGuard` and `loopGuardApply`
   prefs. See docs/agent-loop.md §10.
+- **Planning and reading can each answer through their own provider, and
+  OpenCode Zen is a route.** Settings › Model routing gains *Routine answers
+  via* and *Heavy answers via*: leave either on *Same as above* and routing
+  is unchanged, or send heavy passes (plan specs, briefs, reviews, the
+  analyzer read) to one provider and routine passes (reading the ask,
+  checks, chat) to another. Each role's model field names the provider it
+  saves to, and its placeholder shows the model that role runs while the
+  field is empty. The Assistant overview pill names a split, such as "plans
+  on Claude Code CLI · reads on OpenCode Zen". **OpenCode Zen** joins the
+  providers, with its own tile under Providers, and the auto order. It is
+  billed to the Zen balance; the key it uses also serves Jev's Zen route, and
+  opencode's own `OPENCODE_API_KEY` counts when nothing is saved. OpenAI's models
+  there only answer the Responses API, so a `gpt-*` model is sent to
+  `/zen/v1/responses` and read back as a chat reply; the rest of Zen's catalog
+  stays on chat completions. Plan specs, brain drafts and the analyzer read
+  may now ride Claude Code: it is spawned with `--tools=`, so it has no tools
+  to turn a discussion into a change. Every other CLI still keeps those calls
+  on HTTP, and a failed Claude Code turn falls back once to the keyed HTTP
+  routes.
 - **Ad-free radio in Style & sound.** A new source tab plays twelve
   listener-funded stations from SomaFM and Radio Paradise, stations that
   carry no advertising at all, through Studio's own player, so the node tree
@@ -114,6 +133,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 - The overseer's playbook keeps its learned hot and cold file paths across
   reviews (every review used to drop them), merges near-duplicate lessons and
   retires local-finding lessons that have stayed clear for four reviews.
+- **A builder model you pin runs, whatever the route.** Under the Auto coding
+  tier, a model pinned for OpenCode was ignored whenever routing pointed at
+  z.ai, and builders ran the GLM pair instead, although Settings said a
+  pinned model wins. Any provider/model pinned there now runs on every route.
+  Only the first scan's free suggestion still yields to the z.ai coding plan.
 - **Brain maps: New, Duplicate and Build with AI work in the app.** All three
   asked their question with `window.prompt`, which Electron does not
   implement, so they silently did nothing; they now ask in a panel inside the

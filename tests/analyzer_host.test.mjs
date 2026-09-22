@@ -27,7 +27,7 @@ const report = (overrides = {}) => ({
 
 function fixture(options = {}) {
   let current = projectA;
-  const calls = { getAnalyzer: 0, services: [], lists: [], scans: [], files: [], ideas: [], routes: [], http: [], assistant: [] };
+  const calls = { getAnalyzer: 0, services: [], lists: [], scans: [], files: [], ideas: [], routes: [], http: [], cli: [], assistant: [] };
   const savedPlans = new Map([[projectA.id, [{ id: "old-a", title: "Old A plan" }]], [projectB.id, [{ id: "old-b", title: "Old B plan" }]]]);
   const analyzer = {
     async analyzeProject(input) {
@@ -50,8 +50,10 @@ function fixture(options = {}) {
       } };
     },
     ASSISTANT_ANALYZER_SYSTEM: "Fixture analyzer instruction",
+    DATA_ONLY_CLIS: new Set(["claude"]),
     resolveAiRoute: async (...args) => { calls.routes.push(args); return options.route || { ok: true, provider: "fixture-http" }; },
     httpAssistantCall: async (...args) => { calls.http.push(args); return options.httpReply || { ok: true, text: '{"summary":"Evidence-led suggestion","ideas":[]}' }; },
+    cliAssistantCall: async (...args) => { calls.cli.push(args); return { ok: true, text: '{"summary":"Read on a tool-less CLI","ideas":[]}' }; },
     assistantFetch: async (...args) => { calls.assistant.push(args); throw new Error("Project analysis must not invoke CLI-capable assistant routing"); },
   });
   vm.runInContext(helpers, context);
@@ -174,8 +176,11 @@ test("project AI uses the host report and an explicit HTTP route without CLI too
   const result = await f.analyzerAi("project", { projectId: projectA.id, summary: "UNTRUSTED_RENDERER_SENTINEL", tools: ["shell"] });
   assert.equal(result.ok, true);
   assert.equal(result.result.summary, "Evidence-led suggestion");
-  assert.deepEqual(plain(f.calls.routes), [["heavy", { allowCli: false }]]);
+  assert.equal(f.calls.routes.length, 1);
+  assert.equal(f.calls.routes[0][0], "heavy");
+  assert.deepEqual([...f.calls.routes[0][1].allowCli], ["claude"], "only a CLI spawned with no tools may read the project");
   assert.equal(f.calls.assistant.length, 0);
+  assert.equal(f.calls.cli.length, 0);
   assert.equal(f.calls.http.length, 1);
   const [, system, user, budget, metadata] = f.calls.http[0];
   assert.equal(system, "Fixture analyzer instruction");
@@ -184,6 +189,19 @@ test("project AI uses the host report and an explicit HTTP route without CLI too
   assert.equal(user.includes('"tools"'), false);
   assert.equal(budget, 6000);
   assert.deepEqual(plain(metadata), { role: "heavy", taskType: "analyzer", source: "analyzer" });
+});
+
+test("project AI rides Claude Code when heavy passes answer there, never the general CLI gate", async () => {
+  const f = fixture({ route: { ok: true, provider: "claude", cli: true, model: "claude-opus-5-5" } });
+  f.analyzerProjectReports.set(projectA.id, report());
+  const result = await f.analyzerAi("project", { projectId: projectA.id });
+  assert.equal(result.ok, true);
+  assert.equal(result.result.summary, "Read on a tool-less CLI");
+  assert.equal(f.calls.http.length, 0);
+  assert.equal(f.calls.assistant.length, 0, "the CLI-capable assistantFetch gate stays out of project reads");
+  assert.equal(f.calls.cli.length, 1);
+  assert.equal(f.calls.cli[0][0].provider, "claude");
+  assert.deepEqual(plain(f.calls.cli[0][4]), { role: "heavy", taskType: "analyzer", source: "analyzer" });
 });
 
 test("project AI requires this project's report and rejects a stale project before routing", async () => {
@@ -205,7 +223,7 @@ test("missing HTTP credentials leave local analysis available without a CLI fall
   await f.runAnalyzer({ kind: "project" });
   const result = await f.analyzerAi("project", { projectId: projectA.id });
   assert.equal(result.ok, false);
-  assert.match(result.error, /saved z.ai or OpenCode Go key/);
+  assert.match(result.error, /saved z.ai, OpenCode Go or OpenCode Zen key, or Claude Code/);
   assert.equal(f.analyzerProjectReports.has(projectA.id), true);
   assert.equal(f.calls.http.length, 0);
   assert.equal(f.calls.assistant.length, 0);

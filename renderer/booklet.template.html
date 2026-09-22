@@ -414,6 +414,17 @@
               <button id="save-key" class="mini">Save</button>
             </div>
           </article>
+          <article class="provider-tile" data-provider="zen">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">Zen</span>
+              <div class="provider-title"><span class="provider-name">OpenCode Zen</span><span class="provider-kind">API key · Zen balance</span></div>
+              <span class="provider-pill" id="zen-key-status" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body">
+              <input type="password" id="zen-key" placeholder="Paste API key" autocomplete="off" aria-label="OpenCode Zen API key" title="The same key serves Jev's Zen route. With nothing saved, opencode's own OPENCODE_API_KEY is used.">
+              <button id="save-zen-key" class="mini">Save</button>
+            </div>
+          </article>
           <article class="provider-tile" data-provider="lmstudio">
             <div class="provider-tile-head">
               <span class="provider-mark" aria-hidden="true">LM</span>
@@ -496,6 +507,7 @@
                 <option value="auto">Auto — first ready provider in your order</option>
                 <option value="zai">z.ai GLM</option>
                 <option value="opencode">OpenCode Go</option>
+                <option value="zen">OpenCode Zen</option>
                 <option value="grok">Grok CLI</option>
                 <option value="claude">Claude Code CLI</option>
                 <option value="codex">Codex CLI</option>
@@ -519,11 +531,39 @@
           <div class="settings-column">
             <p class="settings-eyebrow">Models & selection</p>
             <div class="field-grid">
-              <label class="field"><span class="field-label">Routine model <span class="field-scope" id="model-scope-note">for this provider</span></span>
-                <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model this provider uses for routine passes (replies, briefs, chat). Saved per provider; empty = the provider's own default.">
+              <label class="field"><span class="field-label">Routine answers via <span class="field-scope">reading, checks, chat</span></span>
+                <select id="ai-role-routine" title="Provider for routine passes: reading the ask, checks, advisory agents and chat. Same as above = whatever Assistant answers via picks.">
+                  <option value="">Same as above</option>
+                  <option value="zai">z.ai GLM</option>
+                  <option value="opencode">OpenCode Go</option>
+                  <option value="zen">OpenCode Zen</option>
+                  <option value="grok">Grok CLI</option>
+                  <option value="claude">Claude Code CLI</option>
+                  <option value="codex">Codex CLI</option>
+                  <option value="antigravity">Antigravity CLI</option>
+                  <option value="lmstudio">LM Studio (local)</option>
+                  <option value="custom">Custom endpoint</option>
+                </select>
               </label>
-              <label class="field"><span class="field-label">Heavy model</span>
-                <input type="text" id="ai-model-heavy" placeholder="same as routine" spellcheck="false" autocomplete="off" title="Model this provider uses for heavy passes (overseer, improver, analyzer read). Saved per provider; empty = routine's model where the provider has one, otherwise the provider's default.">
+              <label class="field"><span class="field-label">Heavy answers via <span class="field-scope">plans, briefs, reviews</span></span>
+                <select id="ai-role-heavy" title="Provider for heavy passes: plan specs, briefs, reviews, the overseer and the analyzer read. Same as above = whatever Assistant answers via picks.">
+                  <option value="">Same as above</option>
+                  <option value="zai">z.ai GLM</option>
+                  <option value="opencode">OpenCode Go</option>
+                  <option value="zen">OpenCode Zen</option>
+                  <option value="grok">Grok CLI</option>
+                  <option value="claude">Claude Code CLI</option>
+                  <option value="codex">Codex CLI</option>
+                  <option value="antigravity">Antigravity CLI</option>
+                  <option value="lmstudio">LM Studio (local)</option>
+                  <option value="custom">Custom endpoint</option>
+                </select>
+              </label>
+              <label class="field"><span class="field-label">Routine model <span class="field-scope" id="model-scope-note">for this provider</span></span>
+                <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model for routine passes (reading the ask, checks, chat), saved for the provider routine answers through; empty = that provider's own default, shown as the placeholder.">
+              </label>
+              <label class="field"><span class="field-label">Heavy model <span class="field-scope" id="model-heavy-scope">for this provider</span></span>
+                <input type="text" id="ai-model-heavy" placeholder="same as routine" spellcheck="false" autocomplete="off" title="Model for heavy passes (plans, briefs, reviews, the overseer, the analyzer read), saved for the provider heavy answers through; empty = routine's model where that provider has one, otherwise its default, shown as the placeholder.">
               </label>
             </div>
             <div class="field">
@@ -1095,10 +1135,10 @@
           </div>
         </div>
         <span class="brains-divider" aria-hidden="true"></span>
-        <span class="brains-dirty" id="brains-dirty" hidden>Unsaved changes</span>
+        <span class="brains-dirty" id="brains-dirty" title="Unsaved changes" hidden>Unsaved changes</span>
         <button id="brains-save" class="mini" type="button" title="Save this map (Ctrl S)">Save</button>
         <button id="brains-activate" class="mini primary" type="button" title="Make this the pipeline the studio follows">Make this live</button>
-        <button id="brains-close" class="ghost sheet-close" type="button" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+        <button id="brains-close" class="ghost sheet-close" type="button" title="Close (Esc)" aria-label="Close"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>
     </header>
     <div class="brains-body" id="brains-body" data-parts="shown" data-inspector="shown">

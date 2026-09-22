@@ -165,7 +165,10 @@ class MefiStudioRoutingTests(unittest.TestCase):
     def test_provider_router_prefers_zai_and_never_silent_bills_opencode(self):
         body = _function_body(self.main, "resolveAiRoute")
         self.assertTrue(body, "resolveAiRoute must exist")
-        self.assertIn('AI_PROVIDERS.includes(settings.aiProvider)', body)
+        # Each role may name its own provider; an unset role falls back to
+        # the main pick exactly as before.
+        self.assertIn("const provider = roleProvider(settings, role)", body)
+        self.assertIn('AI_PROVIDERS.includes(settings.aiProvider)', _function_body(self.main, "roleProvider"))
         self.assertIn('decryptKey(settings, "zaiApiKeyEncrypted")', body)
         self.assertIn('decryptKey(settings, "apiKeyEncrypted")', body)
         # Explicit picks are absolute: explicit "opencode" is the only way the
@@ -188,12 +191,12 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # never receives an x-opencode-session header. assistantFetch splits
         # its HTTP half into httpAssistantCall (the grok-CLI fallback lands
         # there), so the wire shape is pinned on the function that owns it.
-        fetch = _function_body(self.main, "assistantFetch")
+        cli = _function_body(self.main, "cliAssistantCall")
         http = _function_body(self.main, "httpAssistantCall")
         self.assertTrue(http, "httpAssistantCall must exist — the grok fallback lands on it")
         self.assertIn('candidate.provider === "opencode" ? await assistantSessionId() : null', http)
         self.assertIn("route.fallbacks", http, "the fallback walk follows the saved order")
-        self.assertIn('resolveAiRoute(role, { allowCli: false })', fetch, "a failed CLI call falls back to the keyed HTTP routes")
+        self.assertIn('resolveAiRoute(role, { allowCli: false })', cli, "a failed CLI call falls back to the keyed HTTP routes")
 
     def test_auto_provider_order_is_normalized_validated_and_saved(self):
         # The saved order is the user's preference list: ordered, deduped,
@@ -203,7 +206,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn("AI_AUTO_PROVIDERS.includes(id)", normalize)
         self.assertIn("!order.includes(id)", normalize)
         self.assertIn('["zai", "opencode"]', normalize)
-        self.assertIn('AI_AUTO_PROVIDERS = ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"]', self.main)
+        self.assertIn('AI_AUTO_PROVIDERS = ["zai", "opencode", "zen", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"]', self.main)
         # The opt-in fallback switch generalized: aiAutoFallback first, the
         # older aiFallbackOpenCode field honored for settings already written.
         fallback = _function_body(self.main, "autoFallbackEnabled")
@@ -285,10 +288,15 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn("child.stdin?.write", complete, "the prompt rides stdin, never the command line")
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "claude"', body, "the router returns the CLI route without a key")
-        self.assertRegex(self.main, r'AI_PROVIDERS = \["auto", "zai", "opencode", "grok", "claude", "codex", "antigravity",.*"lmstudio", "custom"\]')
+        self.assertRegex(self.main, r'AI_PROVIDERS = \["auto", "zai", "opencode", "zen", "grok", "claude", "codex", "antigravity",.*"lmstudio", "custom"\]')
         fetch = _function_body(self.main, "assistantFetch")
         self.assertIn('route.provider === "grok" || route.provider === "claude"', fetch)
-        self.assertIn("claudeCompletion(system, user, route.model)", fetch)
+        # The CLI half is shared with the data-only callers (planning, brain
+        # drafts, the analyzer read), which may ride Claude Code alone.
+        cli = _function_body(self.main, "cliAssistantCall")
+        self.assertIn("cliAssistantCall(route, system, user, maxTokens", fetch)
+        self.assertIn("claudeCompletion(system, user, route.model)", cli)
+        self.assertIn('const DATA_ONLY_CLIS = new Set(["claude"])', self.main, "only the CLI spawned with --tools= may answer data-only calls")
         # Builders: same subscription login, agentic print mode, prompt on stdin.
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn('cli === "claude"', spawn)
@@ -311,8 +319,8 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn('cliReply("codex", parseCodexCliResult(text), text', complete)
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "codex"', body)
-        fetch = _function_body(self.main, "assistantFetch")
-        self.assertIn("codexCompletion(system, user, route.model)", fetch)
+        cli = _function_body(self.main, "cliAssistantCall")
+        self.assertIn("codexCompletion(system, user, route.model)", cli)
         # Builders: approvals and the sandbox bypassed because nobody is at the
         # keyboard, plain stdout so the sentinel protocol stays readable.
         spawn = _function_body(self.main, "spawnNextJob")
@@ -369,8 +377,8 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertIn("child.stdin?.write", complete, "the prompt rides stdin, never the command line")
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "antigravity"', body)
-        fetch = _function_body(self.main, "assistantFetch")
-        self.assertIn("antigravityCompletion(system, user, route.model)", fetch)
+        cli = _function_body(self.main, "cliAssistantCall")
+        self.assertIn("antigravityCompletion(system, user, route.model)", cli)
         # Builders: agentic print mode, permissions skipped, model before -p.
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn('cli === "antigravity"', spawn)
