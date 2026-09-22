@@ -8,6 +8,11 @@ const { randomUUID, createHash } = require("node:crypto");
 
 const FORMAT_VERSION = 1;
 const QUESTION_TYPES = ["discussion", "research", "prototype", "prerequisite"];
+// Who a line of the interview came from. A human "answer" states a requirement;
+// everything the assistant writes stays a proposal until the human resolves the
+// question. Kinds are scoped by author so a model reply can never be filed as
+// something the human said. Notes saved before kinds existed read as "note".
+const NOTE_KINDS = Object.freeze({ user: ["note", "answer"], assistant: ["question", "interpretation", "advice", "conflict"] });
 const LIMITS = Object.freeze({ plans: 300, title: 180, destination: 16000, outOfScope: 12000, unknowns: 80, questions: 80, question: 4000, resolution: 16000, evidence: 16000, spec: 60000, tasks: 40, prompt: 16000, acceptance: 4000, notes: 200, note: 16000 });
 const lockKey = Symbol.for("mefi-studio.planning-store-locks");
 const locks = globalThis[lockKey] ??= new Map();
@@ -83,6 +88,15 @@ function settled(plan) {
   if (plan.questions.some((question) => question.status !== "resolved")) fail("Resolve every planning question before drafting or approving the specification.");
 }
 
+// The interview's own gate: the human has read back what the plan now says the
+// feature is. Any later change to the destination, unknowns or decisions clears
+// it, so a specification is never drafted from an understanding nobody reviewed.
+// Deliberately absent from approved()/validatePlan(): plans saved before this
+// gate existed stay readable, and only new mutations have to pass it.
+function reviewed(plan) {
+  if (!Number.isFinite(plan.reviewedAt)) fail("Review what this plan now says the feature is, and confirm it, before drafting or approving a specification.");
+}
+
 function approved(plan) {
   settled(plan);
   if (!plan.spec || plan.spec.stale || !Number.isFinite(plan.spec.approvedAt)) fail("Review and approve the current specification before creating implementation tasks.");
@@ -101,6 +115,7 @@ function validatePlan(plan, projectId, { history = true } = {}) {
   string(plan.outOfScope, "Out of scope", LIMITS.outOfScope, { optional: true });
   if (!Number.isSafeInteger(plan.version) || plan.version < 1) fail("Plan version is invalid.");
   time(plan.createdAt, "Plan creation time"); time(plan.updatedAt, "Plan update time");
+  if (plan.reviewedAt != null) time(plan.reviewedAt, "Understanding review time");
   if (!["planning", "ready", "converting", "converted"].includes(plan.status)) fail("Plan status is invalid.");
   const unknowns = array(plan.unknowns, "Unknowns", LIMITS.unknowns);
   for (const unknown of unknowns) { identifier(unknown?.id, "Unknown ID"); string(unknown?.text, "Unknown", LIMITS.question); }
@@ -118,6 +133,7 @@ function validatePlan(plan, projectId, { history = true } = {}) {
     for (const note of array(question.notes, "Question notes", LIMITS.notes)) {
       identifier(note?.id, "Note ID"); time(note?.at, "Note time");
       if (!["user", "assistant"].includes(note.author)) fail("Note author is invalid.");
+      if (note.kind != null && !NOTE_KINDS[note.author].includes(note.kind)) fail("Note kind does not belong to its author.");
       string(note.text, "Note", LIMITS.note);
     }
   }
@@ -167,6 +183,7 @@ function record(plan, action, now, details = {}) {
 
 function invalidate(plan) {
   plan.status = "planning";
+  delete plan.reviewedAt;
   if (plan.spec) { plan.spec.stale = true; delete plan.spec.approvedAt; }
 }
 
@@ -183,6 +200,13 @@ function reopenQuestions(plan, initialIds) {
   return [...affected];
 }
 
+// Read downstream by builders: a suggestion must never look like a requirement.
+const NOTE_LABELS = Object.freeze({
+  answer: "You answered", note: "You noted", question: "Mefi asked",
+  interpretation: "Mefi read that back (unconfirmed)", advice: "Mefi suggested", conflict: "Mefi flagged a conflict",
+});
+const noteLabel = (note) => NOTE_LABELS[note.kind] || (note.author === "user" ? NOTE_LABELS.note : NOTE_LABELS.advice);
+
 function implementationIds(plan) {
   return plan.spec.tasks.map((task) => `task_planning_${createHash("sha256").update(`${plan.id}\n${plan.spec.id}\n${task.id}`).digest("hex").slice(0, 24)}`);
 }
@@ -197,7 +221,7 @@ function applyPlanningAction(plans, payload, { project, now = Date.now(), actor 
     const action = payload.action;
     if (actor === "assistant" && !["add-unknown", "add-question", "add-note", "draft-spec"].includes(action)) fail("The assistant can propose planning content; only you can confirm decisions and approve work.");
     if (["begin-conversion", "mark-converted"].includes(action) && actor !== "host") fail("Only the host can record implementation task creation.");
-    if (["resolve", "approve-spec"].includes(action) && actor !== "user") fail("This decision needs explicit human confirmation.");
+    if (["resolve", "approve-spec", "confirm-understanding"].includes(action) && actor !== "user") fail("This decision needs explicit human confirmation.");
     time(now, "Mutation time");
     if (!Array.isArray(plans)) fail("Planning data is invalid.");
     if (action === "create") {
@@ -271,15 +295,21 @@ function applyPlanningAction(plans, payload, { project, now = Date.now(), actor 
         const item = question();
         if (actor === "host") fail("Question notes must identify a user or assistant author.");
         if (item.notes.length >= LIMITS.notes) fail(`A question can have at most ${LIMITS.notes} notes.`);
-        item.notes.push({ id: `note_${randomUUID()}`, at: now, author: actor, text: string(payload.text, "Note", LIMITS.note) }); break;
+        const kind = payload.kind ?? (actor === "user" ? "note" : "advice");
+        if (!NOTE_KINDS[actor].includes(kind)) fail("A note can only carry a kind belonging to its own author.");
+        item.notes.push({ id: `note_${randomUUID()}`, at: now, author: actor, kind, text: string(payload.text, "Note", LIMITS.note) }); break;
+      }
+      case "confirm-understanding": {
+        settled(plan);
+        plan.reviewedAt = now; break;
       }
       case "draft-spec": {
-        settled(plan);
+        settled(plan); reviewed(plan);
         plan.spec = { id: `spec_${randomUUID()}`, text: string(payload.text, "Specification", LIMITS.spec), tasks: normalizeTasks(payload.tasks), stale: false, createdAt: now };
         plan.status = "planning"; break;
       }
       case "approve-spec": {
-        settled(plan);
+        settled(plan); reviewed(plan);
         if (!plan.spec || plan.spec.stale) fail("Draft a specification from the current decisions before approving it.");
         plan.spec.approvedAt = now; plan.status = "ready"; break;
       }
@@ -307,7 +337,7 @@ function buildImplementationTasks(plan, { project, now = Date.now() } = {}) {
   if (!object(project) || plan?.projectId !== project.id) fail("Plan belongs to a different project.");
   validatePlan(plan, project.id); approved(plan); time(now, "Task creation time");
   const ids = implementationIds(plan), idMap = new Map(plan.spec.tasks.map((task, index) => [task.id, ids[index]]));
-  const decisions = plan.questions.map((question, index) => `${index + 1}. ${question.question}\nType: ${question.type}\nDecision confirmed by you: ${question.resolution}${question.evidence ? `\nEvidence: ${question.evidence}` : ""}${question.notes.length ? `\nDiscussion notes (context, not additional decisions):\n${question.notes.map((note) => `${note.author}: ${note.text}`).join("\n")}` : ""}`).join("\n\n");
+  const decisions = plan.questions.map((question, index) => `${index + 1}. ${question.question}\nType: ${question.type}\nDecision confirmed by you: ${question.resolution}${question.evidence ? `\nEvidence: ${question.evidence}` : ""}${question.notes.length ? `\nInterview record (context, not additional decisions):\n${question.notes.map((note) => `${noteLabel(note)}: ${note.text}`).join("\n")}` : ""}`).join("\n\n");
   const breakdown = plan.spec.tasks.map((task) => `${task.id}: ${task.title}\n${task.prompt}\nAcceptance criteria:\n${task.acceptance.map((criterion) => `- ${criterion}`).join("\n")}${task.dependsOn.length ? `\nPrerequisites: ${task.dependsOn.join(", ")}` : ""}`).join("\n\n");
   return plan.spec.tasks.map((task, index) => ({
     id: ids[index], title: task.title, projectId: project.id, projectPath: project.path, projectName: project.name,
@@ -371,4 +401,4 @@ function createPlanningStore({ filePath, project, now = Date.now } = {}) {
   };
 }
 
-module.exports = { FORMAT_VERSION, QUESTION_TYPES, LIMITS, applyPlanningAction, buildImplementationTasks, createPlanningStore };
+module.exports = { FORMAT_VERSION, QUESTION_TYPES, NOTE_KINDS, NOTE_LABELS, LIMITS, applyPlanningAction, buildImplementationTasks, createPlanningStore };

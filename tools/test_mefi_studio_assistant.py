@@ -315,6 +315,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         cls.idle = (STUDIO / "renderer" / "idle.js").read_text(encoding="utf-8")
         cls.explorer = (STUDIO / "renderer" / "explorer.js").read_text(encoding="utf-8")
         cls.readme = (STUDIO / "README.md").read_text(encoding="utf-8")
+        cls.architecture = (STUDIO / "docs" / "architecture.md").read_text(encoding="utf-8")
         cls.gitignore = (STUDIO / ".gitignore").read_text(encoding="utf-8")
         cls.guide = (ROOT / "TESTRUNS.md").read_text(encoding="utf-8")
         cls.module = ASSISTANT.read_text(encoding="utf-8")
@@ -504,7 +505,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn('return deferred ? "deferred"', next_job, "a blocked file skips this pick; the executor is not parked")
         self.assertIn("waiting on live editors", dispatch, "deferred file claims surface as waiting, not as a machine-busy park")
         self.assertEqual(len(re.findall(r"async function releaseExecutorClaim\(", self.main)), 1, "claim release must be declared once")
-        self.assertIn("watches test leases", self.readme, "the lease-aware machine coordination is documented")
+        self.assertIn("watches test leases", self.architecture, "the lease-aware machine coordination is documented")
         self.assertEqual(1, len(re.findall(r"const EXECUTOR_PARALLEL_MAX = 12", self.main)), "one EXECUTOR_PARALLEL_MAX — a second copy is merge corruption")
         self.assertEqual(1, len(re.findall(r"function assistantParallel\(", self.main)), "assistantParallel must be declared exactly once")
         self.assertEqual(1, len(re.findall(r"let executorFillInFlight", self.main)), "the fill mutex is a single binding")
@@ -644,9 +645,10 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertIn('Work on "', explorer)
 
     def test_readme_documents_the_assistant(self):
-        self.assertIn("Assistant that keeps working", self.readme)
-        self.assertIn("service loop", self.readme)
-        self.assertIn("overseer", self.readme, "the README names the overseer")
+        self.assertIn("docs/architecture.md", self.readme, "the README links the feature walkthrough")
+        self.assertIn("Assistant that keeps working", self.architecture)
+        self.assertIn("service loop", self.architecture)
+        self.assertIn("overseer", self.architecture, "the walkthrough names the overseer")
 
     def test_overseer_is_wired_above_the_assistant(self):
         # The R&D layer: its own prompt, its own job on the roster, a cadence
@@ -1303,7 +1305,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         for marker in ("appendNodeFolder", "Context folder (", "assistantNodeContext"):
             with self.subTest(idle=marker):
                 self.assertIn(marker, self.idle)
-        self.assertIn("node folder", self.readme.lower())
+        self.assertIn("node folder", self.architecture.lower())
 
     def test_push_memory_compiles_a_primer_and_supersedes(self):
         # Recall's loop, in-process: typed cells, one write gate, a compile

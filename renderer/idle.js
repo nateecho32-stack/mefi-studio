@@ -6874,6 +6874,34 @@
     return true;
   }
 
+  // The whole tree back in view: the camera glides out to the fitted frame
+  // at the same rate a click closed in (pan targets to the origin, zoom
+  // target 1, fit recomputed for the current window). Reduced motion lands
+  // at once, the way the frame loop snaps every glide.
+  function frameTree() {
+    state.camera.tx = 0;
+    state.camera.ty = 0;
+    state.camera.tz = 0;
+    autoFit();
+    glideZoom(1);
+    if (noMotion()) {
+      state.camera.x = 0;
+      state.camera.y = 0;
+      state.camera.z = 0;
+    }
+  }
+
+  // Letting go of a node by hand (empty canvas, Esc, the card's close
+  // button): the selection and the focus clear, and the tree comes back
+  // into frame. Nothing to let go of leaves the camera where the user put it.
+  function releaseNode() {
+    const held = Boolean(state.selected || state.focus);
+    exitFocus();
+    selectNode(null);
+    if (held) frameTree();
+    return held;
+  }
+
   function setCardStyle(style) {
     state.cardStyle = CARD_STYLES.includes(style) ? style : "auto";
     writeStore("mefiStudio.cmdCardStyle", state.cardStyle);
@@ -8166,7 +8194,7 @@
     close.title = "Clear selection (Esc)";
     close.setAttribute("aria-label", "Clear selection");
     close.append(glyph("g-close"));
-    close.addEventListener("click", () => selectNode(null));
+    close.addEventListener("click", () => releaseNode());
     kicker.append(eyebrow, badge, close);
 
     const title = document.createElement("h3");
@@ -9185,13 +9213,8 @@
       clearSearch();
       return true;
     }
-    if (state.focus) {
-      exitFocus();
-      selectNode(null);
-      return true;
-    }
-    if (state.selected) {
-      selectNode(null);
+    if (state.focus || state.selected) {
+      releaseNode();
       return true;
     }
     exit();
@@ -10098,9 +10121,10 @@
         const node = state.panning.node;
         // A click on a node or its callout focuses it: the camera closes in
         // (less on a parent, so its children stay in frame) and the rest of
-        // the tree keeps turning, softly blurred, behind it. Empty canvas lets go.
+        // the tree keeps turning, softly blurred, behind it. Empty canvas
+        // lets go and brings the whole tree back into view.
         if (node) enterFocus(node);
-        else selectNode(null);
+        else releaseNode();
       }
       state.panning = null;
       state.rotating = null;

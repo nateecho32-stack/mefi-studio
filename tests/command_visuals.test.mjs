@@ -287,6 +287,7 @@ function calloutFixture({ nodes = [], area = { x: 0, y: 0, w: 1200, h: 800 } } =
     focusOn: (node) => { state.camera.tx = -node.x; state.camera.ty = -node.y; state.camera.tz = -node.z; },
     setZoom: (value) => { state.zoom = value; state.zoomTarget = null; },
     glideZoom: (value) => { state.zoomTarget = value; },
+    autoFit: () => { calls.push(["autoFit"]); },
     setOrbit: (mode) => { state.orbit = mode === "auto" || mode === true ? "auto" : "paused"; calls.push(["orbit", state.orbit]); },
     writeStore: (key, value) => stores.set(key, value), readStore: (key) => stores.get(key) ?? null,
   });
@@ -430,6 +431,34 @@ test("focus closes in by kind, turns the tree slowly, and lets go of the orbit i
   assert.equal(env.exitFocus(), false);
   state.hoverCallout = null;
   assert.equal(env.splitIds(), null, "nothing focused or hovered means nothing goes to the far layer");
+});
+
+test("letting go of a node brings the whole tree back into view", () => {
+  // Empty canvas, Esc and the card's close button all release the node:
+  // the selection and focus clear, the pan glides back to the origin and the
+  // zoom glides to the fitted frame. With nothing held, a stray click on the
+  // canvas leaves the camera where the user put it.
+  const task = { id: "task:t", kind: "task", x: 200, y: 30, z: -40 };
+  const { env, state, calls } = calloutFixture({ nodes: [task] });
+  state.zoom = 1.3;
+  state.camera.tx = -50; state.camera.ty = -20; state.camera.tz = 10;
+  assert.equal(env.releaseNode(), false, "nothing to let go of");
+  assert.deepEqual([state.camera.tx, state.camera.ty, state.camera.tz, state.zoomTarget ?? null], [-50, -20, 10, null], "a stray click keeps the user's camera");
+  assert.ok(!calls.some(([kind]) => kind === "autoFit"), "no refit without a release");
+  env.enterFocus(task);
+  assert.deepEqual([state.camera.tx, state.camera.ty, state.camera.tz], [-200, -30, 40], "focus centres the node");
+  assert.equal(state.zoomTarget, 2.4);
+  assert.equal(env.releaseNode(), true);
+  assert.equal(state.selected, null);
+  assert.equal(state.focus, null);
+  assert.deepEqual([state.camera.tx, state.camera.ty, state.camera.tz], [0, 0, 0], "the pan glides back to the origin");
+  assert.equal(state.zoomTarget, 1, "the zoom glides back to the fitted frame");
+  assert.ok(calls.some(([kind]) => kind === "autoFit"), "the fit is recomputed for the current window");
+  assert.equal(state.orbit, "paused", "the borrowed orbit still goes back");
+  const idleSrc = idle;
+  for (const marker of ["else releaseNode();", "close.addEventListener(\"click\", () => releaseNode());", "if (state.focus || state.selected) {\n      releaseNode();"]) {
+    assert.ok(idleSrc.replace(/\r\n/g, "\n").includes(marker), `idle.js carries ${marker}`);
+  }
 });
 
 test("the orbit drifts slowly behind a focused node, where a plain selection would hold it", () => {

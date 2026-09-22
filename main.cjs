@@ -2060,7 +2060,7 @@ async function readOpenrouterAccount(apiKey) {
   if (!key.ok) return key;
   let parsed;
   try { parsed = parseOpenrouterKey(key.payload); }
-  catch (error) { return { ok: false, code: "shape", error: error.message }; }
+  catch (error) { return { ok: false, code: error.code || "shape", error: error.message }; }
   // The balance needs a management key; an ordinary key is refused (403) and
   // the reading then stands on the key's own usage alone.
   const credits = await accountGet(OPENROUTER_CREDITS_URL, { apiKey, label: "OpenRouter" });
@@ -2072,16 +2072,18 @@ async function readGatewayAccount(apiKey) {
   const result = await accountGet(GATEWAY_CREDITS_URL, { apiKey, label: "Vercel AI Gateway" });
   if (!result.ok) return result;
   try { return { ok: true, credits: parseGatewayCredits(result.payload) }; }
-  catch (error) { return { ok: false, code: "shape", error: error.message }; }
+  catch (error) { return { ok: false, code: error.code || "shape", error: error.message }; }
 }
 // z.ai's quota endpoint is the one its own usage plugin calls (the raw key in
 // the authorization header, no bearer prefix), not a documented API; a changed
-// reply is reported as unreadable, never guessed at.
+// reply is reported as unreadable, never guessed at. A refused key comes back
+// as HTTP 200 with a { code: 401, success: false } envelope, which the parser
+// turns into an "auth" failure so the panel names the rejected key.
 async function readZaiAccount(apiKey) {
   const result = await accountGet(ZAI_QUOTA_URL, { apiKey, label: "z.ai", authorization: apiKey, headers: { "accept-language": "en-US,en" } });
   if (!result.ok) return result;
   try { return { ok: true, quota: parseZaiQuota(result.payload) }; }
-  catch (error) { return { ok: false, code: "shape", error: error.message }; }
+  catch (error) { return { ok: false, code: error.code || "shape", error: redactSecret(error.message, apiKey) }; }
 }
 
 async function usageAccounts() {

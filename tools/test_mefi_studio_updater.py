@@ -58,6 +58,7 @@ class MefiStudioUpdaterTests(unittest.TestCase):
         cls.updater = read_text(UPDATER)
         cls.overhead = read_text(STUDIO / "renderer" / "overhead.js")
         cls.package = json.loads(read_text(STUDIO / "package.json") or "{}")
+        cls.architecture = read_text(STUDIO / "docs" / "architecture.md")
         cls.readme = read_text(STUDIO / "README.md")
         cls.guide = read_text(ROOT / "TESTRUNS.md")
 
@@ -280,7 +281,7 @@ console.log(JSON.stringify({ queued, exitsWhileQueued, reloads: calls.reload.map
 
     def test_docs_register_this_contract(self):
         self.assertIn("`tools/test_mefi_studio_updater.py`", self.guide)
-        self.assertIn("## Live update", self.readme)
+        self.assertIn("## Live update", self.architecture)
 
     # ---- real engine on fixtures -------------------------------------------
     def test_classify_table(self):

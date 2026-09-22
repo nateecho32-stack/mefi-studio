@@ -168,7 +168,14 @@ test("z.ai's quota is read the way its own plugin reads it and refused when the 
   const changed = accountFixture({ "https://api.z.ai/api/monitor/usage/quota/limit": { body: { data: { something: "else" } } } });
   const shape = await changed.context.readZaiAccount("zai-key");
   assert.equal(shape.ok, false);
+  assert.equal(shape.code, "shape");
   assert.match(shape.error, /no limits/);
+  // a refused key arrives as HTTP 200 with an envelope; the reader reports it as an auth failure
+  const refused = accountFixture({ "https://api.z.ai/api/monitor/usage/quota/limit": { body: { code: 401, msg: "token expired or incorrect", success: false } } });
+  const auth = await refused.context.readZaiAccount("zai-key");
+  assert.equal(auth.ok, false);
+  assert.equal(auth.code, "auth");
+  assert.match(auth.error, /z\.ai rejected the saved key \(401\)/);
   const down = accountFixture({ "https://api.z.ai/api/monitor/usage/quota/limit": () => { throw new Error("dns failed for zai-key"); } });
   const network = await down.context.readZaiAccount("zai-key");
   assert.equal(network.code, "network");
@@ -236,7 +243,7 @@ test("every route that can report usage does: CLI JSON replies and Jev charges r
 });
 
 test("both surfaces exist in the template and are driven by the tracker module", () => {
-  for (const id of ["model-lab-tab-tracker", "model-lab-tracker", "model-lab-tracker-body", "model-lab-tracker-refresh", "cmd-usage", "cmd-usage-body", "cmd-usage-toggle", "cmd-usage-refresh", "cmd-usage-open"]) {
+  for (const id of ["model-lab-tab-tracker", "model-lab-tracker", "model-lab-tracker-body", "model-lab-tracker-refresh", "cmd-usage-pop", "cmd-usage-body", "cmd-usage-toggle", "cmd-usage-brief", "cmd-usage-dot", "cmd-usage-refresh", "cmd-usage-open"]) {
     assert.match(template, new RegExp(`id="${id}"`), `missing #${id}`);
   }
   assert.match(template, /aria-label="Usage across connected providers"/);

@@ -40,6 +40,18 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   known-environmental-failures table at the top of `TESTRUNS.md`.
 
 ### Changed
+- **Plans** leads with an interview instead of an advice desk. Mefi asks the
+  question that would most change what gets built, waits for your answer, reads
+  it back as an unconfirmed interpretation, raises a conflict when a new answer
+  contradicts an earlier one, and follows what you said into the next question;
+  asking it to explain the tradeoffs is now the secondary action. Every
+  interview line is labelled by origin — your answer, Mefi's reading, its
+  recommendation, its question — and a reading can only be copied into your
+  decision box for you to edit and record. A batch of questions now sees what
+  you actually said, not only decisions already written down.
+- A specification waits for **What we understand**: the plan is read back to
+  you and drafting or approving needs your explicit confirmation. Changing the
+  destination, an unknown or any decision withdraws it.
 - Destructive actions ask first, in Studio's own style: clearing the Done
   log, removing a project and switching away from working agents use a toast
   confirm with one committing button instead of a one-click wipe or the OS

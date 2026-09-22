@@ -262,6 +262,10 @@ test("the other providers' readings are normalized and refused when unusable", (
   assert.equal(parseZaiQuota({ limits: [{ type: "TOKENS_LIMIT", unit: 3, number: 5, percentage: 150 }] }).rolling.percent, 100, "a percentage past the cap is clamped");
   assert.throws(() => parseZaiQuota({ data: {} }), /no limits/);
   assert.throws(() => parseZaiQuota({ data: { limits: [{ type: "OTHER" }] } }), /no recognisable window/);
+  // z.ai refuses a key with HTTP 200 and an envelope: that is an auth failure, named, not a changed shape
+  assert.throws(() => parseZaiQuota({ code: 401, msg: "token expired or incorrect", success: false }), (error) => error.code === "auth" && /z\.ai rejected the saved key \(401\): token expired or incorrect\. Save a current key/.test(error.message));
+  assert.throws(() => parseZaiQuota({ code: 1001, msg: "Authentication parameter not received in Header, unable to authenticate", success: false }), (error) => error.code === "auth" && /rejected the saved key \(1001\)/.test(error.message));
+  assert.throws(() => parseZaiQuota({ code: 500, msg: "busy", success: false }), (error) => error.code === "http" && /could not be read \(code 500\): busy/.test(error.message));
 });
 
 test("status errors explain the account state without echoing a credential or raw body", () => {

@@ -148,6 +148,38 @@ red attempt before the serialized fixtures ran at all. No
 hysteresis-related failure appeared in either attempt — the
 machine_capacity suite passed both times.
 
+Independent re-run of the same runner plus the npm-test tail
+(2026-09-21, late night, run_1790038076467_15 for the same
+task_29e6146a127aaf79, verifying the row above on the current tree).
+`npm test` attempt 2 on this clock confirmed the runner green through
+every stage — parallel stage 1732 tests / 1730 pass / 0 fail / 2 skipped
+in 53.3 s (the same two environment-conditional skips), serialized
+eyes_toggle 1/1 in 4.7 s (baseline 2/304 ms, hidden 0/1200 ms, one
+resume snap, 6 fetches total), serialized occlusion_probe
+environment-skip (this desktop never emitted occlusion events while a
+Claude window held the foreground, matching the run_1790035430350_1
+precedent) — and then exposed a real regression the node-only runner
+cannot see: the python unittest stage failed
+test_fixture_local_replies_are_grounded because 0ac92e8's longer help
+line ("open issues and tickets") pushed "roster" past the 600-char
+REPLY_MAX_CHARS clip in scripts/assistant.mjs's localReply help case
+(committed test red on committed code). Fixed on this clock by trimming
+the help wording only ("the whole roster out" -> "the roster out", "They
+talk to each other too" -> "They talk to each other", "read what they
+said" -> "read the mail", "the request inbox and quiet sessions" ->
+"the inbox and quiet sessions"; "request inbox" remains in the agents
+line) so the clipped reply again ends at "sends the roster out." with
+every asserted piece inside 600 — the python test is green solo and the
+node help-routing suite still passes. Two other npm test attempts on
+this clock went red purely from host saturation (0.18 GB free RAM,
+Memory Compression 1.3 GB, CPU 55-74% from Discord, two Claude
+sessions and a Defender scan): performance_render Profiler-JSON
+download timeouts (one with the kill-contract "Performance fixture
+timed out: PID" marker), startup_render 65 s and task_overview_render
+45 s node:test budget timeouts — all in the documented
+load-dependent classes above, no source regression, and
+machine_capacity (the hysteresis pin) green in every attempt.
+
 "Land the fixture/runner files once green" audit (2026-09-21, night,
 run_1790036793362_3 for task_bc33fdd783d99ad5, re-carded todo from the
 task_073a02b3a82eec7d gate family). The deliverable was verified already
@@ -2510,3 +2542,53 @@ what should close task_11085243b2d2452f.
 ## 2026-09-21 evening - node callout plates (session "Node tabs polish")
 
 renderer/idle.js callouts redrawn as tab-shaped plates (paper backdrop, rounded top, tinted bottom bar the leader meets; counts moved to a colour-coded status line under the title; CALLOUT_MAX_W 224 -> 236; CALLOUT_SUB_H 13). booklet.html rebuilt. Gates: node --test tests/command_visuals.test.mjs 23/23; tests/command_render + command_graph + command_motion + command_performance + command_activity 133/133 (real Electron renderer 35.7 s); check-syntax ok (91 files); check-targets ok. Verified in the browser pane with a fake-bridge preview at 1440x900: six cards placed, full titles, hover/selected states drawn.
+
+## 2026-09-21 evening - selection card polish (session "Node tabs polish", second pass)
+
+renderer/styles.css selection-card block (~1463-1540) and renderer/idle.js renderInfo: title 17px display, fact list boxed by hairlines with the todo meter inline in the todos row, empty dash rows dropped (assistant / anchored to), task refs+logs+ideas folded into one "context" row, task status row and empty prompt paragraph removed (kicker badge carries the status), .card-cps summaries match .card-sub small caps, primary action full-width with a quieter ghost strip. booklet.html rebuilt (once retried after an EPERM rename while a peer/OneDrive held the file). Gates: command_visuals + command_render + command_graph + command_motion + command_performance + command_activity + command_new_work 162/162 (80 s); check-syntax ok; check-css --unused ok. Verified in the browser pane (fake bridge) on the session and task cards.
+
+
+## 2026-09-21 evening - Plans becomes an interview (session "Wayfinder interview")
+
+Plans led with an advice desk ("Ask Mefi" on a question card, then type your
+own decision) instead of the agent-led interview it was meant to be. Turned the
+interview into the primary flow without loosening a single human gate.
+scripts/planning.cjs: notes gained an author-scoped `kind` (user: note/answer;
+assistant: question/interpretation/advice/conflict, legacy notes read as
+"note"), so a model reply can never be filed as something you said; new
+user-only `confirm-understanding` action sets `plan.reviewedAt`, which
+`invalidate()` clears and which `draft-spec`/`approve-spec` now require. The
+gate is deliberately NOT in `settled()`/`approved()`/`validatePlan()` - plans
+saved before it exist stay readable, and only new mutations must pass it.
+scripts/planning-service.cjs: new `interview` assist kind (understood /
+conflict / next question / followUp / complete), the prompt context now carries
+bounded interview lines for EVERY question with a provenance legend and
+`confirmedByUser` in place of a bare `resolution` (the old shape sent notes
+only for the selected questionId, so "Suggest questions" never saw what you
+actually told it), and `spec` refuses until `reviewedAt` is set.
+renderer/planning.js: section 2 is the interview panel (pendingAsk picks Mefi's
+newest follow-up, else a question you have not answered, else the next ready
+one; `awaiting` distinguishes "your turn to answer" from "your turn to
+decide"), transcript lines are labelled by origin, an interpretation carries
+"Use as my decision" that only prefills the resolution box, section 5 "What we
+understand" is the new review gate, "Ask Mefi" became the secondary "Explain
+the tradeoffs", and the stage rail gained "Your review" between decisions and
+spec. Gates: the six planning suites 75/75 (were 67 before the six new
+acceptance tests: ask-and-wait, answer-steers-follow-up + a later question pass
+that sees the raw answer, contradiction raises a conflict, an interview turn
+cannot resolve/review/approve, spec waits for the reviewed understanding,
+leave-and-return restores the pending ask); npm run test:fast 1734 tests /
+1732 pass / 0 fail / 2 skipped; check-syntax ok (91 files); check-css --unused
+ok; check-targets ok (91/91). booklet.html rebuilt. Verified in the browser
+pane with a fake-bridge preview of the Plans overlay (scratchpad serve.mjs
+mapping /src/ onto the repo, overlay markup copied from booklet.template.html,
+a stub window.mefiStudio that refuses every write): the follow-up question on
+the table, the three provenance labels drawn, the composer and its Send
+answer / Explain the tradeoffs / Record my decision row, and the review section
+listing the confirmed decision plus what is still unresolved.
+
+Not ours, seen on this clock: tests/command_render fails solo with
+"__assistant__ retains its label position" (actual null). That is the peer
+"Node tabs polish" session's in-flight renderer/idle.js + styles.css work, not
+the planning change - no planning source is loaded by the Command view, and the
+fast suite (which skips the Electron fixtures) is green.

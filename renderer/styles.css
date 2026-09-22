@@ -2901,10 +2901,14 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .cmd-chat.collapsed .feed-state { margin-left: 6px; font-size: 10px; max-width: 12em; }
 #idle-hud .cmd-card { top: calc(var(--command-panel-top) + 66px); right: 24px; width: 300px; max-height: calc(100vh - var(--command-panel-top) - 170px); background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 12px; box-shadow: 0 12px 32px #0005; }
 #idle-hud.chat-log-open .cmd-card { right: 340px; }
-#idle-hud .cmd-bottom { bottom: 22px; gap: 9px; }
-#idle-hud .cmd-hint { font-size: 10px; color: var(--muted); opacity: .7; letter-spacing: .02em; }
-#idle-hud .cmd-dock { display: flex; flex-wrap: nowrap; align-items: center; gap: 3px; padding: 6px 8px; border-radius: 16px; max-width: calc(100vw - 48px); min-height: 48px; background: var(--cmd-surface); border-color: var(--cmd-edge); box-shadow: var(--cmd-shadow); }
-#idle-hud .dock-item { min-height: 35px; padding: 6px 11px; gap: 7px; border-radius: 9px; font-size: 12px; color: var(--muted); }
+/* the bottom bar sits left, right after the Legend / Usage corner, instead of centred:
+   the corner column is --command-corner-width wide, the bar starts one gap past it,
+   and it may run no further than the right inset (or, at desktop widths, the rail). */
+#idle-hud { --command-corner-width: 172px; --command-corner-gap: 14px; --command-dock-max: calc(100vw - 24px - var(--command-corner-width) - var(--command-corner-gap) - 24px); }
+#idle-hud .cmd-bottom { left: calc(24px + var(--command-corner-width) + var(--command-corner-gap)); right: auto; bottom: 22px; padding: 0; align-items: flex-start; gap: 9px; max-width: var(--command-dock-max); }
+#idle-hud .cmd-hint { font-size: 10px; color: var(--muted); opacity: .7; letter-spacing: .02em; text-align: left; padding-left: 10px; }
+#idle-hud .cmd-dock { display: flex; flex-wrap: nowrap; align-items: center; gap: 3px; padding: 6px 8px; border-radius: 16px; max-width: var(--command-dock-max); min-height: 48px; background: var(--cmd-surface); border-color: var(--cmd-edge); box-shadow: var(--cmd-shadow); }
+#idle-hud .dock-item { min-width: 0; min-height: 35px; padding: 6px 11px; gap: 7px; border-radius: 9px; font-size: 12px; color: var(--muted); }
 #idle-hud .dock-item .glyph { color: inherit; }
 #idle-hud .dock-item .label { display: inline; }
 #idle-hud .dock-item:hover { color: var(--ivory); background: var(--cmd-hover); border-color: transparent; }
@@ -2926,16 +2930,24 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .cmd-more-links .key { display: inline; margin-left: auto; }
 #idle-hud .cmd-follow-status { position: absolute; top: var(--command-panel-top); left: calc(48px + var(--command-feed-width)); right: 348px; padding: 9px 13px; border: 1px solid var(--hairline); border-left: 2px solid var(--gold); border-radius: 7px; background: var(--cmd-surface); color: var(--gold-bright); font-size: 12px; line-height: 1.5; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #idle-hud .cmd-follow-status[hidden] { display: none; }
-#idle-hud .cmd-legend { display: flex; bottom: 30px; left: 24px; }
-#idle-hud #idle-legend-toggle { background: var(--cmd-surface); border-color: var(--cmd-edge); color: var(--ivory); }
-#idle-hud #idle-legend-toggle .glyph { color: inherit; }
-#idle-hud #idle-legend-toggle:hover, #idle-hud #idle-legend-toggle[aria-expanded="true"] { background: var(--cmd-raised); border-color: var(--gold); }
+/* the corner: Legend pill at the floor, the Usage pill above it, both lists opening upward */
+#idle-hud .cmd-legend { display: flex; bottom: 30px; left: 24px; gap: 6px; max-width: 320px; }
+#idle-hud .cmd-legend .pill { background: var(--cmd-surface); border-color: var(--cmd-edge); color: var(--ivory); }
+#idle-hud .cmd-legend .pill .glyph { color: inherit; }
+#idle-hud .cmd-legend .pill:hover, #idle-hud .cmd-legend .pill[aria-expanded="true"] { background: var(--cmd-raised); border-color: var(--gold); }
+#idle-hud .usage-brief { color: var(--muted); font-variant-numeric: tabular-nums; }
+#idle-hud .usage-brief:empty { display: none; }
+#idle-hud .usage-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+#idle-hud .usage-dot[hidden] { display: none; }
 #idle-hud .legend-list { background: var(--cmd-surface); border-color: var(--cmd-edge); }
+/* an open corner list reaches over the hint line; the hint steps out of the way until it closes */
+#idle-hud .cmd-legend:has(.legend-list:not([hidden]), .usage-pop:not([hidden])) ~ .cmd-bottom .cmd-hint { opacity: 0; }
 @media (max-width: 1440px) {
   #idle-hud { --command-feed-width: 304px; }
   #idle-hud .cmd-tools button { padding-inline: 7px; }
   #idle-hud .cmd-tools #idle-cam-follow .label, #idle-hud .cmd-tools #idle-cam-orbit .label { display: none; }
   #idle-hud .cmd-tele .pill { font-size: 10px; padding-inline: 7px; }
+  #idle-hud .dock-item { padding-inline: 9px; gap: 6px; font-size: 11.5px; }
 }
 @media (max-width: 1100px) {
   #idle-hud { --command-feed-width: 272px; --command-panel-top: 158px; }
@@ -2953,7 +2965,10 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
   #idle-hud .cmd-chat.collapsed { width: max-content; max-width: 235px; }
   #idle-hud .cmd-follow-status { right: 296px; left: calc(36px + var(--command-feed-width)); font-size: 11px; padding-inline: 7px; }
   #idle-hud.chat-log-open .cmd-card { right: 18px; }
+  /* no corner here: the bar returns to the centre */
   #idle-hud .cmd-legend, #idle-hud .cmd-hint { display: none; }
+  #idle-hud .cmd-bottom { left: 0; right: 0; max-width: none; padding: 0 12px; align-items: center; }
+  #idle-hud .cmd-dock { max-width: calc(100vw - 36px); }
   #idle-hud .dock-item { padding-inline: 9px; }
 }
 @media (max-height: 780px) {
@@ -3232,17 +3247,84 @@ body.command-active .walkthrough-coach { right: 392px; }
 .settings-group select { max-width: 100%; }
 .settings-group input[type="password"] { flex: 1 1 260px; min-width: 0; }
 .settings-group label { max-width: 100%; }
-.key-list { display: grid; gap: 6px; margin-top: 8px; }
-.key-row { margin: 0; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(8, 8, 11, 0.35); }
-.key-provider { flex: 0 0 96px; font: 600 var(--fs-sm)/1.3 var(--font-ui); color: var(--ivory); letter-spacing: .02em; }
-.key-row-custom input[type="text"] { flex: 1 1 240px; min-width: 0; }
-.key-status { flex: 1 0 100%; font-size: var(--fs-xs); }
-.auto-order { flex-direction: column; align-items: flex-start; gap: 8px; }
+/* Settings cards share a small vocabulary: eyebrows between groups, labelled fields, quiet status lines, two columns on wide screens. */
+.settings-eyebrow { margin: 16px 0 8px; color: var(--gold); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: var(--track-eyebrow); text-transform: uppercase; }
+.settings-card-head + .settings-eyebrow { margin-top: 8px; }
+.settings-status { margin: 8px 0 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.6; }
+.settings-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.settings-foot .settings-status { margin: 0; }
+.settings-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px 28px; margin-top: 4px; }
+.settings-column { min-width: 0; display: grid; gap: 12px; align-content: start; }
+.settings-column > .settings-eyebrow { margin: 6px 0 -4px; }
+.settings-column > .settings-status { margin: 0; }
+.settings-column > .settings-foot { margin: 0; }
+.field { display: grid; gap: 5px; min-width: 0; position: relative; }
+.field-label { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .03em; }
+.field-scope { font-weight: 400; opacity: .75; }
+.field-hint { color: var(--dim); font-size: var(--fs-xs); line-height: 1.5; }
+.field > select, .field > input { width: 100%; max-width: 100%; box-sizing: border-box; }
+.field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.settings-help { margin-top: 2px; }
+.settings-help > summary { color: var(--dim); font-size: var(--fs-xs); cursor: pointer; }
+.settings-help > summary:hover { color: var(--muted); }
+.settings-help > p { margin: 6px 0 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.65; }
+
+/* Segmented controls mirror a visually hidden <select>, which stays the saved value the host reads. */
+.segmented { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(8, 8, 11, 0.55); }
+.segmented > button { min-height: 42px; padding: 5px 9px; display: grid; gap: 1px; justify-items: start; text-align: left; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font-size: var(--fs-sm); font-weight: 600; box-shadow: none; }
+.segmented > button small { font-weight: 400; font-size: var(--fs-2xs); color: var(--dim); white-space: normal; line-height: 1.3; }
+.segmented > button:hover { background: var(--tint-gold-2); transform: none; box-shadow: none; }
+.segmented > button[aria-pressed="true"] { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--gold-dim); }
+.segmented > button[aria-pressed="true"] small { color: var(--muted); }
+.segmented[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+.segmented-source { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: -1px; opacity: 0; pointer-events: none; }
+
+/* Providers: a grid of connection tiles — mark, name, kind and readiness pill, then the tile's own control. */
+.provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px; }
+.provider-tile { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 12px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 55%), rgba(8, 8, 11, 0.4); box-shadow: var(--inset-hi); min-width: 0; }
+.provider-tile:has(.provider-pill[data-state="ready"]) { border-color: color-mix(in srgb, var(--live) 28%, var(--hairline)); }
+.provider-tile[data-provider="custom"] { grid-column: 1 / -1; }
+.provider-tile-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.provider-mark { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--hairline-strong); background: radial-gradient(circle at 30% 25%, var(--tint-gold-3), transparent 60%), rgba(8, 8, 11, 0.6); color: var(--gold-bright); font: 700 12px/1 var(--font-display); letter-spacing: .02em; }
+.provider-title { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
+.provider-name { color: var(--ivory); font: 600 var(--fs-sm)/1.3 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.provider-kind { color: var(--dim); font-size: var(--fs-2xs); letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.provider-tile-body { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.provider-tile-body input[type="text"], .provider-tile-body input[type="password"] { flex: 1 1 160px; min-width: 0; min-height: var(--ctl-h-sm); padding: 5px 10px; font-size: var(--fs-sm); }
+.provider-hint { flex: 1 1 160px; color: var(--muted); font-size: var(--fs-xs); line-height: 1.5; }
+.provider-pill { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font-size: var(--fs-2xs); white-space: nowrap; }
+.provider-pill::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: .55; }
+.provider-pill[data-state="ready"] { color: var(--ivory); border-color: color-mix(in srgb, var(--live) 45%, transparent); }
+.provider-pill[data-state="ready"]::before { background: var(--live); opacity: 1; box-shadow: 0 0 6px var(--live-dim); }
+.provider-pill[data-state="missing"] { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.provider-pill[data-state="missing"]::before { background: var(--warn); opacity: 1; }
+.settings-nav-badge { margin-left: auto; padding: 1px 7px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--live) 40%, transparent); color: var(--live); font-size: var(--fs-2xs); font-weight: 600; white-space: nowrap; }
+.settings-nav-badge[hidden] { display: none; }
+
+/* Coding tiers: what each tier resolves to right now, the active one marked. */
+.tier-table { display: grid; gap: 4px; }
+.tier-table[hidden] { display: none; }
+.tier-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--hairline); border-radius: 8px; background: rgba(8, 8, 11, 0.3); }
+.tier-row[aria-current="true"] { border-color: var(--gold-dim); background: var(--tint-gold-2); }
+.tier-name { color: var(--ivory); font-size: var(--fs-sm); font-weight: 600; }
+.tier-model { color: var(--ivory); font: 500 var(--fs-xs)/1.4 var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tier-model[data-state="missing"] { color: var(--warn); font-family: var(--font-ui); }
+.tier-model[data-state="unknown"] { color: var(--muted); font-family: var(--font-ui); }
+.tier-source { color: var(--dim); font-size: var(--fs-2xs); white-space: nowrap; }
+@media (max-width: 1180px) {
+  .settings-columns { grid-template-columns: minmax(0, 1fr); }
+}
+.auto-order { display: grid; gap: 8px; }
 .auto-order-list { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 0; padding: 0; }
-.auto-order-item { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
-.auto-order-index { color: var(--muted); font-size: 11px; min-width: 1.2em; text-align: right; }
-.auto-order-name { color: var(--ivory); font-size: 12.5px; flex: 1 1 auto; }
+.auto-order-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px 5px 10px; border: 1px solid var(--hairline); border-radius: 9px; background: rgba(8, 8, 11, 0.35); }
+.auto-order-item::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: .55; }
+.auto-order-item[data-state="ready"]::before { background: var(--live); opacity: 1; box-shadow: 0 0 6px var(--live-dim); }
+.auto-order-item[data-state="missing"]::before { background: var(--warn); opacity: 1; }
+.auto-order-index { color: var(--dim); font: 600 11px/1 var(--font-mono); min-width: 1.2em; text-align: right; }
+.auto-order-name { color: var(--ivory); font-size: var(--fs-sm); flex: 1 1 auto; }
+.auto-order-item > button { min-height: var(--ctl-h-xs); min-width: var(--ctl-h-xs); padding: 0 6px; font-size: var(--fs-xs); border-radius: var(--r-xs); }
 .auto-order-add { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
+.auto-order-add > select { flex: 1 1 200px; min-width: 0; min-height: var(--ctl-h-sm); padding: 4px 10px; font-size: var(--fs-sm); }
 .settings-optional { padding: 14px 20px; border-top: 0; }
 .settings-optional > summary { display: flex; align-items: center; gap: 12px; padding: 0; color: var(--ivory); cursor: pointer; font-size: 13px; list-style: none; }
 .settings-optional > summary::marker, .settings-optional > summary::-webkit-details-marker { display: none; content: ""; }
@@ -3262,8 +3344,10 @@ body.command-active .walkthrough-coach { right: 392px; }
 .setup-state { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin: 14px 0 10px; }
 .setup-state-item { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 9px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
 .setup-state-label { color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
-.setup-state-item > span:last-child { color: var(--ivory); font-size: 12.5px; line-height: 1.5; }
-.setup-state-item > span:last-child { color: var(--ivory); font-size: 12.5px; line-height: 1.5; }
+.setup-state-item > span:last-child { display: flex; align-items: center; gap: 7px; color: var(--ivory); font-size: 12.5px; line-height: 1.5; }
+.setup-state-item > span:last-child::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); opacity: .55; }
+.setup-state-item > span:last-child[data-state="ready"]::before { background: var(--live); opacity: 1; box-shadow: 0 0 6px var(--live-dim); }
+.setup-state-item > span:last-child[data-state="missing"]::before { background: var(--warn); opacity: 1; }
 #auto-setup-status { font-size: 12px; line-height: 1.7; }
 .ws-compose-bottom { flex-wrap: wrap; }
 .ws-compose-bottom > span { flex: 1 1 120px; }
@@ -3292,6 +3376,7 @@ body.command-active .walkthrough-coach { right: 392px; }
   .walkthrough-footer > div { width: 100%; justify-content: flex-end; }
   .settings-heading { flex-wrap: wrap; }
   .setup-head { flex-wrap: wrap; }
+  .segmented { grid-auto-flow: row; grid-auto-columns: auto; }
 }
 @media (prefers-reduced-motion: reduce) { #idle-hud .cmd-music-level i { transition: none; } }
 
@@ -3577,32 +3662,52 @@ body.command-active .walkthrough-coach { right: 392px; }
 .tracker-cell > strong { color: var(--ivory); font-weight: 600; }
 @media (max-width: 680px) { .tracker-windows { grid-template-columns: 1fr; } }
 
-/* the Command rail's bottom-right footer: pinned under the tab panels */
-#idle-hud .cmd-usage { flex: none; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); pointer-events: auto; }
-#idle-hud .cmd-usage-head { display: flex; align-items: flex-start; gap: 5px; }
-#idle-hud .cmd-usage-title { flex: 1; min-width: 0; margin: 0; font: 600 12px/1.3 var(--font-ui); }
-#idle-hud .cmd-usage-title .feed-toggle { flex-wrap: wrap; row-gap: 2px; min-height: 24px; font-size: 11px; }
-#idle-hud .cmd-usage-title .feed-toggle > span:first-child { order: 0; }
-#idle-hud .cmd-usage-title .feed-toggle .glyph { order: 1; }
-#idle-hud .cmd-usage-title .feed-toggle .feed-state { order: 2; flex: 1 0 100%; margin-left: 0; text-align: left; white-space: normal; overflow: visible; text-overflow: clip; font-size: 10px; line-height: 1.45; }
-#idle-hud .cmd-usage-head button { flex: none; }
-#idle-hud .cmd-usage-head .ghost.mini { min-height: 24px; padding: 2px 8px; font-size: 10px; }
+/* the Command corner's Usage breakdown: opens upward from the Usage pill at the bottom-left */
+#idle-hud .usage-pop { display: flex; flex-direction: column; gap: 8px; width: 300px; max-width: calc(100vw - 48px); max-height: min(60vh, 520px); overflow: auto; padding: 10px 12px 12px; border: 1px solid var(--cmd-edge); border-radius: 12px; background: var(--cmd-surface); box-shadow: var(--cmd-shadow); pointer-events: auto; }
+#idle-hud .usage-pop[hidden] { display: none; }
+#idle-hud .cmd-usage-head { display: flex; align-items: center; gap: 5px; }
+#idle-hud .cmd-usage-title { flex: 1; min-width: 0; margin: 0; font: 600 12px/1.3 var(--font-ui); color: var(--ivory); }
+#idle-hud .cmd-usage-head .ghost.mini { flex: none; min-height: 24px; padding: 2px 8px; font-size: 10px; }
+#idle-hud .cmd-usage-state { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
 #idle-hud .cmd-usage-body { display: flex; flex-direction: column; gap: 6px; }
 #idle-hud .cmd-usage-body[hidden] { display: none; }
-#idle-hud .cmd-usage .tracker-windows { grid-template-columns: 1fr; gap: 5px; }
-#idle-hud .cmd-usage .tracker-window { grid-template-columns: 22px 1fr 38px; gap: 6px; font-size: 10px; }
-#idle-hud .cmd-usage .tracker-window-label { font-size: 10px; }
-#idle-hud .cmd-usage .tracker-window-value { font-size: 10px; min-width: 0; }
-#idle-hud .cmd-usage .tracker-bar { height: 5px; border-radius: 3px; }
-#idle-hud .cmd-usage .tracker-lead { display: grid; gap: 5px; padding: 7px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
-#idle-hud .cmd-usage .tracker-lead-name { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; color: var(--ivory); font-size: 10.5px; }
-#idle-hud .cmd-usage .tracker-lead-name small { color: var(--muted); font-size: 9.5px; white-space: nowrap; }
-#idle-hud .cmd-usage .tracker-kicker { margin: 5px 0 0; color: var(--muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
-#idle-hud .cmd-usage .tracker-rows { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
-#idle-hud .cmd-usage .tracker-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-size: 10px; line-height: 1.45; }
-#idle-hud .cmd-usage .tracker-row-label { color: var(--ivory); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#idle-hud .cmd-usage .tracker-row-value { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
-#idle-hud .cmd-usage .tracker-row[data-tone="warn"] .tracker-row-value { color: var(--warn); }
-#idle-hud .cmd-usage .tracker-line { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
-#idle-hud .cmd-usage .tracker-line-warn { color: var(--warn); }
-#idle-hud .cmd-usage .tracker-line-account { color: var(--ivory); }
+#idle-hud .usage-pop .tracker-windows { grid-template-columns: 1fr; gap: 5px; }
+#idle-hud .usage-pop .tracker-window { grid-template-columns: 22px 1fr 38px; gap: 6px; font-size: 10px; }
+#idle-hud .usage-pop .tracker-window-label { font-size: 10px; }
+#idle-hud .usage-pop .tracker-window-value { font-size: 10px; min-width: 0; }
+#idle-hud .usage-pop .tracker-bar { height: 5px; border-radius: 3px; }
+#idle-hud .usage-pop .tracker-lead { display: grid; gap: 5px; padding: 7px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
+#idle-hud .usage-pop .tracker-lead-name { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; color: var(--ivory); font-size: 10.5px; }
+#idle-hud .usage-pop .tracker-lead-name small { color: var(--muted); font-size: 9.5px; white-space: nowrap; }
+#idle-hud .usage-pop .tracker-kicker { margin: 5px 0 0; color: var(--muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+#idle-hud .usage-pop .tracker-rows { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+#idle-hud .usage-pop .tracker-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-size: 10px; line-height: 1.45; }
+#idle-hud .usage-pop .tracker-row-label { color: var(--ivory); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#idle-hud .usage-pop .tracker-row-value { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+/* a failed read carries its whole reason: the row stacks and the text wraps instead of starving the label */
+#idle-hud .usage-pop .tracker-row[data-tone="warn"] { grid-template-columns: 1fr; gap: 1px; }
+#idle-hud .usage-pop .tracker-row[data-tone="warn"] .tracker-row-value { color: var(--warn); text-align: left; white-space: normal; overflow-wrap: anywhere; }
+#idle-hud .usage-pop .tracker-line { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+#idle-hud .usage-pop .tracker-line-warn { color: var(--warn); overflow-wrap: anywhere; }
+#idle-hud .usage-pop .tracker-line-account { color: var(--ivory); }
+
+/* ============================================================
+   Command floor at desktop widths: the dock has moved left, so the
+   rail may run down to the dock's floor; wider still, the rail grows
+   and its five tabs get the room they were missing.
+   ============================================================ */
+@media (min-width: 1600px) {
+  #idle-hud .cmd-rail { bottom: 22px; }
+  #idle-hud { --command-dock-max: calc(100vw - 24px - var(--command-corner-width) - var(--command-corner-gap) - 16px - var(--command-rail-width) - 24px); }
+}
+/* the narrow rail (288px) keeps all five tabs on one line: Assistant tightens instead of clipping */
+@media (max-width: 1100px) {
+  #idle-hud .rail-tab { font-size: 10px; letter-spacing: 0; padding: 5px 2px 4px; }
+}
+@media (min-width: 1760px) {
+  #idle-hud { --command-rail-width: 392px; }
+  #idle-hud .rail-tabs { gap: 3px; padding: 4px; }
+  #idle-hud .rail-tab { min-height: 48px; gap: 4px; font-size: 11px; }
+  #idle-hud .rail-tab .glyph { width: 15px; height: 15px; }
+  #idle-hud .rail-tab .count { top: 4px; right: 5px; }
+}

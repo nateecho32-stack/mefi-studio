@@ -86,6 +86,7 @@ test("an approved plan joins the paused queue and its dependent dispatches only 
     return result;
   };
   await action("create", { title: "CSV exports", destination: "Export filtered rows", outOfScope: "Email delivery" });
+  await action("confirm-understanding");
   await action("draft-spec", { text: "Serialize visible rows and add a download control.", tasks: [
     { id: "serializer", title: "Implement CSV export", prompt: "Implement CSV field escaping.", acceptance: ["Round-trip comma and newline fields"], dependsOn: [] },
     { id: "download", title: "Implement CSV export", prompt: "Use the serializer from the prerequisite.", acceptance: ["Download only visible rows"], dependsOn: ["serializer"] },

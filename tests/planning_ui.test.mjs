@@ -28,6 +28,8 @@ function savedPlan() {
   const project = { id: "project-a" }; const plans = [];
   let result = planning.applyPlanningAction(plans, { action: "create", title: "Saved idea", destination: "Saved outcome", outOfScope: "" }, { project });
   assert.equal(result.ok, true);
+  result = planning.applyPlanningAction(plans, { action: "confirm-understanding", planId: result.plan.id, version: result.plan.version }, { project });
+  assert.equal(result.ok, true);
   result = planning.applyPlanningAction(plans, { action: "draft-spec", planId: result.plan.id, version: result.plan.version, text: "Saved specification", tasks: [{ id: "first", title: "Build the thing", prompt: "Implement the saved outcome", acceptance: ["Outcome is verified"], dependsOn: [] }] }, { project });
   assert.equal(result.ok, true);
   return result.plan;
@@ -191,6 +193,70 @@ test("failed specification save keeps every task field and blocks stale approval
   const restarted = await environment(env.data["project-a"][0], env.storage);
   assert.equal(restarted.el("task-prompt-0").value, "Carefully revised task brief");
   assert.equal(restarted.el("approve").disabled, true);
+});
+
+function interviewPlan() {
+  const item = savedPlan(); item.spec = null; delete item.reviewedAt;
+  item.questions = [{ id: "rows", question: "Which rows should the export contain?", type: "discussion", status: "open", dependsOn: [], resolution: "", evidence: "", resolvedBy: null, notes: [
+    { id: "n1", at: 1, author: "user", kind: "answer", text: "Just what I can see on screen." },
+    { id: "n2", at: 2, author: "assistant", kind: "interpretation", text: "Only the rows left after the active filters." },
+    { id: "n3", at: 3, author: "assistant", kind: "question", text: "Should the applied filters appear in the file name?" },
+  ] }];
+  return item;
+}
+
+test("the interview waits on Mefi's own question and keeps it after you leave and return", async () => {
+  const item = interviewPlan();
+  const env = await environment(item);
+  assert.match(env.el("interview-ask").textContent, /appear in the file name/);
+  assert.equal(env.el("stage-explore").dataset.state, "current");
+  const transcript = env.el("interview-section").textContent;
+  for (const label of ["You answered", "Mefi understood this — not yet your decision", "Mefi asked"]) assert.match(transcript, new RegExp(label));
+  assert.equal(env.calls.length, 0, "opening the interview asks Mefi nothing on its own");
+  await env.input("interview-answer", "Yes, include the filters.");
+  env.ui.close(); await env.ui.open({ planId: item.id }); await flush();
+  assert.match(env.el("interview-ask").textContent, /appear in the file name/);
+  assert.equal(env.el("interview-answer").value, "Yes, include the filters.");
+  await env.el("interview-send").trigger("click");
+  assert.equal(env.calls.at(-1).kind, "interview");
+  assert.equal(env.calls.at(-1).questionId, "rows");
+  assert.equal(env.calls.at(-1).message, "Yes, include the filters.");
+  assert.equal(env.calls.at(-1).action, undefined, "an interview turn is a request for a question, never a write");
+  assert.equal(env.data["project-a"][0].questions[0].status, "open");
+});
+
+test("Mefi's reading of your answer only ever reaches the decision box for you to record", async () => {
+  const env = await environment(interviewPlan());
+  await env.el("use-note-n2").trigger("click");
+  assert.equal(env.el("resolution-rows").value, "Only the rows left after the active filters.");
+  assert.equal(env.calls.length, 0, "a reading is not a decision until you record it");
+  assert.equal(env.data["project-a"][0].questions[0].status, "open");
+  await env.input("resolution-rows", "Only the rows left after the active filters, plus the filters in the file name.");
+  await env.el("resolve-form-rows").trigger("submit");
+  assert.equal(env.calls.at(-1).action, "resolve");
+  assert.equal(env.data["project-a"][0].questions[0].resolvedBy, "user");
+  assert.match(env.el("review-section").textContent, /Confirmed by you/);
+  assert.match(env.el("review-section").textContent, /1 line Mefi proposed that your decision does not include/);
+});
+
+test("no specification is drafted or approved until you confirm what the plan says", async () => {
+  const item = savedPlan(); delete item.reviewedAt;
+  const env = await environment(item);
+  for (const id of ["draft-spec", "save-spec", "approve"]) assert.equal(env.el(id).disabled, true, id);
+  assert.equal(env.el("stage-review").dataset.state, "current");
+  assert.match(env.el("review-section").textContent, /Saved outcome/);
+  await env.el("draft-spec").trigger("click");
+  assert.equal(env.calls.length, 0, "a locked draft button cannot reach Mefi");
+  await env.el("confirm-understanding").trigger("click");
+  assert.equal(env.calls.at(-1).action, "confirm-understanding");
+  assert.ok(env.data["project-a"][0].reviewedAt);
+  assert.equal(env.el("confirm-understanding").disabled, true);
+  for (const id of ["draft-spec", "save-spec", "approve"]) assert.equal(env.el(id).disabled, false, id);
+  assert.equal(env.el("stage-review").dataset.state, "complete");
+  await env.input("destination", "A different outcome");
+  await env.el("details-form").trigger("submit");
+  assert.equal(env.data["project-a"][0].reviewedAt, undefined, "changing the destination withdraws the reading you confirmed");
+  assert.equal(env.el("approve").disabled, true);
 });
 
 test("stale saved specifications require a fresh revision and frozen plans show saved content", async () => {

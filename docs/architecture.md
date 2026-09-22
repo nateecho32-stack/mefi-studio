@@ -72,14 +72,26 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
 
 ### Planning
 
-**Plan an idea** opens **Plans** for work whose route is unclear: give the plan
-a destination and an out-of-scope boundary, collect unknowns, resolve questions
-after their dependencies, then write or request a specification with small
-tasks, acceptance checks and prerequisites. Approve the draft, then explicitly
-create its tasks. Assistant suggestions and discussion never resolve a question
-or approve work, and planning itself cannot launch coding workers. Manual
-controls work without an AI key; plans and their revision history stay in the
-project's ignored local `planning.json`.
+**Plan an idea** opens **Plans** for work whose route is unclear. Describe the
+outcome in your own words, then Mefi interviews you: it asks the one question
+that would most change what gets built, waits for your answer, reads that
+answer back as an unconfirmed interpretation, raises a conflict when you
+contradict yourself, and follows what you actually said into the next question.
+Every line of the interview is labelled by where it came from — your answer,
+Mefi's reading, its recommendation, its question — and only a decision you
+record yourself becomes a requirement. You can still ask for a batch of
+questions, ask it to explain the tradeoffs on one, or write the whole plan by
+hand.
+
+Once every unknown is settled and every question decided, **What we understand**
+reads the plan back to you and waits for your confirmation; no specification is
+drafted or approved until you give it, and changing the destination, an unknown
+or any decision withdraws it. Then write or request a specification with small
+tasks, acceptance checks and prerequisites, approve the draft, and explicitly
+create its tasks. Assistant suggestions and interview lines never resolve a
+question, confirm the understanding or approve work, and planning itself cannot
+launch coding workers. Manual controls work without an AI key; plans and their
+revision history stay in the project's ignored local `planning.json`.
 
 ### The assistant and the agent loop
 

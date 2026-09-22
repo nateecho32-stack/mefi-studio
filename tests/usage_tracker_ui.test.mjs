@@ -107,7 +107,10 @@ test("the compact Command panel leads with the live plan account, then one align
   assert.equal(rows.length, 2, "connected providers and recorded totals are two aligned lists");
   assert.equal(rows[0].children.length, 5, "every provider but the lead gets one row");
   assert.equal(rows[0].children[0].className, "tracker-row");
-  assert.match(env.get("cmd-usage-state").textContent, /Updated .* · OpenCode Go 5h 42% · wk 34%/, "the collapsed header still says the one thing worth knowing");
+  assert.match(env.get("cmd-usage-state").textContent, /Updated .* · OpenCode Go 5h 42% · wk 34%/, "the popover's status line says the one thing worth knowing");
+  assert.equal(env.get("cmd-usage-brief").textContent, "5h 42% · wk 34%", "the pill carries the lead account's two windows");
+  assert.equal(env.get("cmd-usage-dot").hidden, false, "a rate-limited monthly window lights the pill's dot");
+  assert.match(env.get("cmd-usage-toggle").title, /OpenCode Go 5h 42%/, "the pill's tooltip is the full status");
 });
 
 test("with no Go key the z.ai quota leads the compact panel instead of empty Go bars", async () => {
@@ -175,7 +178,9 @@ test("a failed account read is stated plainly and never invented from local spen
   assert.notEqual(body.children[0].className, "tracker-lead", "no live reading means no bars");
   assert.match(compact, /OpenRouter · OpenRouter rejected the saved key/, "the failed read leads, stated plainly");
   assert.match(compact, /OpenRouter\s+OpenRouter rejected the saved key \(401\)/);
-  assert.match(env.get("cmd-usage-state").textContent, /1 account read unavailable/, "the missing Go key is not a failed read; the rejected OpenRouter key is");
+  assert.match(env.get("cmd-usage-state").textContent, /1 account read unavailable \(OpenRouter\)/, "the missing Go key is not a failed read; the rejected OpenRouter key is, and it is named");
+  assert.equal(env.get("cmd-usage-dot").hidden, false, "a failed read lights the pill's dot");
+  assert.equal(env.get("cmd-usage-brief").textContent, "today 2 calls", "no live account: the pill falls back to today's recorded calls");
   const full = env.get("model-lab-tracker-body").textContent;
   assert.match(full, /Unavailable/);
   assert.match(full, /No OpenCode Go key is saved/);
@@ -212,17 +217,26 @@ test("a build without the accounts bridge still shows the Go windows from the ol
   assert.match(env.get("cmd-usage-body").textContent, /42%/);
 });
 
-test("the footer collapses, and a project change forces a fresh reading", async () => {
+test("the Usage pill opens the breakdown above it, closes it again, and a project change forces a fresh reading", async () => {
   let reads = 0;
   const env = environment({ tracker: async () => { reads += 1; return localReport(); } });
+  assert.equal(env.get("cmd-usage-pop").hidden, true, "the breakdown starts closed");
+  assert.equal(env.get("cmd-usage-toggle").attrs["aria-expanded"], "false");
   await env.window.MefiUsageTracker.refresh({ force: true });
   await flush();
   assert.equal(reads, 1);
   env.get("cmd-usage-toggle").click();
+  assert.equal(env.get("cmd-usage-pop").hidden, false);
+  assert.equal(env.get("cmd-usage-body").hidden, false);
+  assert.equal(env.get("cmd-usage-toggle").attrs["aria-expanded"], "true");
+  assert.equal(reads, 1, "opening within the freshness window reuses the reading it just made");
+  env.get("cmd-usage-toggle").click();
+  assert.equal(env.get("cmd-usage-pop").hidden, true);
   assert.equal(env.get("cmd-usage-body").hidden, true);
   assert.equal(env.get("cmd-usage-toggle").attrs["aria-expanded"], "false");
-  env.get("cmd-usage-toggle").click();
-  assert.equal(env.get("cmd-usage-body").hidden, false);
+  env.window.MefiUsageTracker.setOpen(true);
+  env.get("cmd-usage-open").click();
+  assert.equal(env.get("cmd-usage-pop").hidden, true, "Details closes the breakdown before leaving Command");
   env.emit("mefi:project-changed");
   await flush();
   assert.equal(reads, 2);

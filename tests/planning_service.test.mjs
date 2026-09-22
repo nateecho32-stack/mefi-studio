@@ -13,7 +13,7 @@ async function fixture(t, overrides = {}) {
   t.after(() => rm(root, { recursive: true, force: true }));
   const project = { id: "test_project", name: "Fixture", path: root };
   const store = createPlanningStore({ filePath: path.join(root, "planning.json"), project });
-  const state = { board: { tasks: [] }, wakeups: 0, calls: 0, failBoard: false, failFinalSave: false, reply: { ok: true, text: "Explore the two options and record your preference." } };
+  const state = { board: { tasks: [] }, wakeups: 0, calls: 0, prompts: [], failBoard: false, failFinalSave: false, reply: { ok: true, text: "Explore the two options and record your preference." } };
   const service = createPlanningService({ project,
     store: { ...store, transaction: (fn) => store.transaction(async (plans) => {
       const result = await fn(plans);
@@ -27,7 +27,7 @@ async function fixture(t, overrides = {}) {
       return result;
     },
     onConverted: async () => { state.wakeups++; },
-    complete: async () => { state.calls++; return state.reply; },
+    complete: async (prompt, options) => { state.calls++; state.prompts.push({ prompt, options }); return state.reply; },
     ...overrides,
   });
   const action = async (action, fields = {}, id = null) => {
@@ -50,6 +50,8 @@ test("only an approved settled plan explicitly converts, once, with mapped depen
   assert.equal(f.state.board.tasks.length, 0);
   const questionId = (await f.plan()).questions[0].id;
   await f.action("resolve", { questionId, resolution: "Only the displayed rows", evidence: "User selected this behavior" });
+  assert.equal((await f.action("draft-spec", draft)).ok, false, "a specification needs a reviewed understanding");
+  await f.action("confirm-understanding");
   assert.equal((await f.action("draft-spec", draft)).ok, true);
   assert.equal((await f.action("convert")).ok, false);
   await f.action("approve-spec");
@@ -70,7 +72,7 @@ test("only an approved settled plan explicitly converts, once, with mapped depen
 
 test("conversion recovers after board failure and after a saved board with failed final plan save", async (t) => {
   const f = await fixture(t);
-  await f.action("draft-spec", draft); await f.action("approve-spec");
+  await f.action("confirm-understanding"); await f.action("draft-spec", draft); await f.action("approve-spec");
   f.state.failBoard = true;
   const failure = await f.action("convert");
   assert.equal(failure.ok, false);
@@ -135,8 +137,109 @@ test("discussion saves user intent on transport failure and assistant advice can
   const reply = await f.service.assist({ projectId: f.project.id, planId: plan.id, version: plan.version, kind: "question", questionId: plan.questions[0].id });
   assert.equal(reply.ok, true, reply.error);
   assert.equal(reply.plan.questions[0].notes.at(-1).author, "assistant");
+  assert.equal(reply.plan.questions[0].notes.at(-1).kind, "advice", "a recommendation is filed as a recommendation");
   assert.equal(reply.plan.questions[0].status, "open");
+  assert.equal(reply.plan.questions[0].resolution, "");
   assert.equal(f.state.board.tasks.length, 0);
+});
+
+// The interview, end to end: Mefi asks, you answer, it reads your answer back
+// as a proposal, and it follows what you said. Nothing it writes is a decision.
+test("an underspecified request makes Mefi ask and wait instead of answering for you", async (t) => {
+  const f = await fixture(t);
+  f.state.reply = { ok: true, text: JSON.stringify({ understood: "You want every row exported.", question: "Which rows belong in the file, only what is on screen or every matching row? It changes the query and the file size.", type: "discussion", dependsOn: [], followUp: false, complete: false, note: "Starting with scope." }) };
+  const plan = await f.plan();
+  const result = await f.service.assist({ projectId: f.project.id, planId: plan.id, version: plan.version, kind: "interview" });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.plan.questions.length, 1);
+  assert.match(result.plan.questions[0].question, /only what is on screen/);
+  assert.equal(result.plan.questions[0].status, "open");
+  assert.equal(result.plan.questions[0].resolution, "");
+  // Nothing had been answered, so a reading offered anyway is the model's own
+  // words and is dropped rather than saved as something you said.
+  assert.deepEqual(result.plan.questions[0].notes, []);
+  assert.equal(result.plan.reviewedAt, undefined);
+  assert.equal((await f.action("draft-spec", draft)).ok, false);
+  assert.match(f.state.prompts.at(-1).prompt.system, /Your job this turn is to ask, not to answer/);
+});
+
+test("your answer is kept as yours, read back unconfirmed, and sharpens the next question", async (t) => {
+  const f = await fixture(t);
+  await f.action("add-question", { question: "Which rows should the export contain?", type: "discussion", dependsOn: [] });
+  const questionId = (await f.plan()).questions[0].id;
+  f.state.reply = { ok: true, text: JSON.stringify({ understood: "Only the rows left after the active filters.", conflict: null, question: "You have not said whether the applied filters should appear in the file name. Should they?", type: "discussion", dependsOn: [], followUp: true, complete: false }) };
+  const plan = await f.plan();
+  const result = await f.service.assist({ projectId: f.project.id, planId: plan.id, version: plan.version, kind: "interview", questionId, message: "Just what I can see on screen." });
+  assert.equal(result.ok, true, result.error);
+  assert.deepEqual(result.plan.questions[0].notes.map((note) => [note.author, note.kind]), [["user", "answer"], ["assistant", "interpretation"], ["assistant", "question"]]);
+  assert.equal(result.plan.questions.length, 1, "a follow-up sharpens the same question instead of starting a fresh checklist");
+  assert.equal(result.plan.questions[0].status, "open", "reading your answer back is not recording your decision");
+  assert.equal(result.askedQuestionId, questionId);
+  assert.match(f.state.prompts.at(-1).prompt.user, /Just what I can see on screen/);
+  // The gap that made follow-ups generic: a later question pass now sees the
+  // raw answer, not only decisions that were already written down.
+  f.state.reply = { ok: true, text: JSON.stringify({ questions: [], unknowns: [], note: "Nothing new." }) };
+  const after = await f.plan();
+  await f.service.assist({ projectId: f.project.id, planId: after.id, version: after.version, kind: "questions" });
+  assert.match(f.state.prompts.at(-1).prompt.user, /Just what I can see on screen/);
+  assert.match(f.state.prompts.at(-1).prompt.user, /Only the rows left after the active filters/);
+});
+
+test("contradicting an earlier answer raises a conflict for you to settle, not a silent rewrite", async (t) => {
+  const f = await fixture(t);
+  await f.action("add-question", { question: "Which rows should the export contain?", type: "discussion", dependsOn: [] });
+  const questionId = (await f.plan()).questions[0].id;
+  await f.action("add-note", { questionId, text: "Just the visible rows." });
+  f.state.reply = { ok: true, text: JSON.stringify({ understood: "Every matching row, not only the visible page.", conflict: "Earlier you said only the visible rows and now you say every matching row. Which should stand?", question: null, followUp: true, complete: false }) };
+  const plan = await f.plan();
+  const result = await f.service.assist({ projectId: f.project.id, planId: plan.id, version: plan.version, kind: "interview", questionId, message: "Actually it should cover everything that matches." });
+  assert.equal(result.ok, true, result.error);
+  assert.deepEqual(result.plan.questions[0].notes.map((note) => note.kind), ["note", "answer", "interpretation", "conflict"]);
+  assert.match(result.plan.questions[0].notes.at(-1).text, /Which should stand/);
+  assert.equal(result.plan.questions[0].status, "open");
+  assert.equal(result.plan.questions[0].resolution, "");
+});
+
+test("an interview turn cannot resolve, review, or approve on your behalf", async (t) => {
+  const f = await fixture(t);
+  await f.action("add-question", { question: "Which rows should the export contain?", type: "discussion", dependsOn: [] });
+  const questionId = (await f.plan()).questions[0].id;
+  f.state.reply = { ok: true, text: JSON.stringify({ understood: "Only the visible rows.", question: null, complete: true, status: "resolved", resolution: "Only the visible rows", resolvedBy: "user", reviewedAt: Date.now(), note: "That settles it." }) };
+  const plan = await f.plan();
+  const result = await f.service.assist({ projectId: f.project.id, planId: plan.id, version: plan.version, kind: "interview", questionId, message: "Only what I can see." });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.interviewComplete, true);
+  assert.equal(result.plan.questions[0].status, "open");
+  assert.equal(result.plan.questions[0].resolvedBy, null);
+  assert.equal(result.plan.reviewedAt, undefined);
+  assert.equal((await f.service.assist({ projectId: f.project.id, planId: plan.id, version: result.plan.version, kind: "spec" })).ok, false);
+});
+
+test("a specification waits for your reviewed understanding and builds only on confirmed answers", async (t) => {
+  const f = await fixture(t);
+  await f.action("add-question", { question: "Which rows should the export contain?", type: "discussion", dependsOn: [] });
+  const questionId = (await f.plan()).questions[0].id;
+  await f.action("add-note", { questionId, text: "I was leaning towards every matching row." });
+  await f.action("resolve", { questionId, resolution: "Only the displayed rows", evidence: "You chose this" });
+  let plan = await f.plan();
+  const blocked = await f.service.assist({ projectId: f.project.id, planId: plan.id, version: plan.version, kind: "spec" });
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.error, /Review what this plan now says/);
+  await f.action("confirm-understanding");
+  plan = await f.plan();
+  assert.ok(plan.reviewedAt);
+  f.state.reply = { ok: true, text: JSON.stringify(draft) };
+  const result = await f.service.assist({ projectId: f.project.id, planId: plan.id, version: plan.version, kind: "spec" });
+  assert.equal(result.ok, true, result.error);
+  const context = JSON.parse(f.state.prompts.at(-1).prompt.user);
+  assert.equal(context.questions[0].confirmedByUser, "Only the displayed rows");
+  assert.deepEqual(context.questions[0].interview.map((line) => line.text), ["I was leaning towards every matching row."]);
+  assert.match(f.state.prompts.at(-1).prompt.system, /never confirmed/);
+  // Reopening a decision withdraws the review, so no later draft or approval
+  // can rest on an understanding nobody read back.
+  await f.action("reopen", { questionId });
+  assert.equal((await f.plan()).reviewedAt, undefined);
+  assert.equal((await f.action("approve-spec")).ok, false);
 });
 
 test("AI cannot draft early or overwrite a plan changed during a reply", async (t) => {
@@ -160,6 +263,7 @@ test("AI cannot draft early or overwrite a plan changed during a reply", async (
 test("AI specification drafting saves an unapproved review artifact and requires explicit approval", async (t) => {
   const f = await fixture(t);
   f.state.reply = { ok: true, text: JSON.stringify({ ...draft, approvedAt: Date.now(), status: "converted" }) };
+  await f.action("confirm-understanding");
   const plan = await f.plan();
   const result = await f.service.assist({ projectId: f.project.id, planId: plan.id, version: plan.version, kind: "spec" });
   assert.equal(result.ok, true, result.error);
@@ -204,7 +308,7 @@ test("assistant planning summaries count the full project but expose only bounde
 
 test("concurrent conversion requests admit one task set and stale converted retries preserve board edits", async (t) => {
   const f = await fixture(t);
-  await f.action("draft-spec", draft); await f.action("approve-spec");
+  await f.action("confirm-understanding"); await f.action("draft-spec", draft); await f.action("approve-spec");
   const plan = await f.plan();
   const payload = { action: "convert", projectId: f.project.id, planId: plan.id, version: plan.version };
   const results = await Promise.all(Array.from({ length: 4 }, () => f.service.action(payload)));
@@ -223,7 +327,7 @@ test("concurrent conversion requests admit one task set and stale converted retr
 
 test("conversion refuses conflicting task origin metadata before adding any tasks", async (t) => {
   const f = await fixture(t);
-  await f.action("draft-spec", draft); await f.action("approve-spec");
+  await f.action("confirm-understanding"); await f.action("draft-spec", draft); await f.action("approve-spec");
   const tasks = buildImplementationTasks(await f.plan(), { project: f.project });
   for (const key of ["planningId", "planningSpecId", "planningTaskId", "projectId", "source"]) {
     const conflicting = { ...tasks[1], [key]: "unrelated" };
@@ -241,7 +345,7 @@ test("conversion refuses conflicting task origin metadata before adding any task
 
 test("a queue wakeup failure cannot turn durable task admission into a failed conversion", async (t) => {
   const f = await fixture(t, { onConverted: async () => { throw new Error("Scheduler unavailable"); } });
-  await f.action("draft-spec", draft); await f.action("approve-spec");
+  await f.action("confirm-understanding"); await f.action("draft-spec", draft); await f.action("approve-spec");
   const result = await f.action("convert");
   assert.equal(result.ok, true);
   assert.match(result.note, /Tasks were saved/);
@@ -257,7 +361,7 @@ test("conversion reports only newly admitted durable tasks and remains silent on
     for (const task of tasks) assert.ok(f.state.board.tasks.some((saved) => saved.id === task.id), "classification follows durable task admission");
     admissions.push(...structuredClone(tasks));
   } });
-  await f.action("draft-spec", draft); await f.action("approve-spec");
+  await f.action("confirm-understanding"); await f.action("draft-spec", draft); await f.action("approve-spec");
   f.state.failBoard = true;
   assert.equal((await f.action("convert")).ok, false);
   assert.equal(admissions.length, 0, "a failed board write never reaches downstream intake");
@@ -274,7 +378,7 @@ test("conversion reports only newly admitted durable tasks and remains silent on
 test("partial conversion recovery reports only missing tasks added to the board", async (t) => {
   const admissions = [];
   const f = await fixture(t, { onConverted: async (tasks) => admissions.push(...tasks) });
-  await f.action("draft-spec", draft); await f.action("approve-spec");
+  await f.action("confirm-understanding"); await f.action("draft-spec", draft); await f.action("approve-spec");
   const tasks = buildImplementationTasks(await f.plan(), { project: f.project });
   f.state.board.tasks = [tasks[0]];
   assert.equal((await f.action("convert")).ok, true);
@@ -285,11 +389,11 @@ test("distinct approved tasks sharing titles survive compaction, grouping and an
   const f = await fixture(t);
   const sharedTitle = "Implement reviewed export";
   const firstDraft = { ...draft, tasks: draft.tasks.map((task) => ({ ...task, title: sharedTitle })) };
-  await f.action("draft-spec", firstDraft); await f.action("approve-spec"); await f.action("convert");
+  await f.action("confirm-understanding"); await f.action("draft-spec", firstDraft); await f.action("approve-spec"); await f.action("convert");
   const created = await f.action("create", { title: "Second export plan", destination: "Export JSON", outOfScope: "CSV changes" });
   const secondPlanId = created.plan.id;
   const secondDraft = { text: "Export JSON reports.", tasks: firstDraft.tasks.map((task) => ({ ...task, prompt: `JSON scope: ${task.prompt}`, acceptance: [`JSON check: ${task.acceptance[0]}`] })) };
-  await f.action("draft-spec", secondDraft, secondPlanId); await f.action("approve-spec", {}, secondPlanId); await f.action("convert", {}, secondPlanId);
+  await f.action("confirm-understanding", {}, secondPlanId); await f.action("draft-spec", secondDraft, secondPlanId); await f.action("approve-spec", {}, secondPlanId); await f.action("convert", {}, secondPlanId);
   assert.equal(f.state.board.tasks.length, 4);
   const first = f.state.board.tasks[0];
   first.status = "active"; first.runId = "fixture-owner"; first.lease = { at: Date.now(), pid: process.pid };

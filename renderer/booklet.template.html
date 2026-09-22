@@ -342,11 +342,11 @@
   </section>
   <section id="tab-studio" hidden>
     <div class="panel settings-panel">
-      <div class="settings-heading"><div><p class="eyebrow">Studio</p><h2>Settings & connections</h2><p class="muted">Connect your assistant, choose your coding workers, and manage optional tools. Keys are stored encrypted on this machine and never shown again.</p></div><button class="ghost" data-nav="onboarding"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg>Start here</button></div>
+      <div class="settings-heading"><div><p class="eyebrow">Studio</p><h2>Settings & connections</h2><p class="muted">Connect what you have under Providers, then choose who answers and who builds. Keys are stored encrypted on this machine and never shown again.</p></div><button class="ghost" data-nav="onboarding"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg>Start here</button></div>
       <div class="settings-layout">
         <nav id="settings-nav" class="settings-nav" aria-label="Settings sections">
           <button type="button" class="settings-nav-item" data-settings-jump="settings-setup" aria-current="true"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span class="label">Auto setup</span></button>
-          <button type="button" class="settings-nav-item" data-settings-jump="settings-assistant" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-key"/></svg><span class="label">Assistant</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-assistant" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-key"/></svg><span class="label">Providers</span><span class="settings-nav-badge" id="settings-nav-providers-count" hidden></span></button>
           <button type="button" class="settings-nav-item" data-settings-jump="settings-routing" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-route"/></svg><span class="label">Model routing</span></button>
           <button type="button" class="settings-nav-item" data-settings-jump="settings-workers" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-wrench"/></svg><span class="label">Coding workers</span></button>
           <button type="button" class="settings-nav-item" data-settings-jump="settings-jev" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-target"/></svg><span class="label">Jev</span></button>
@@ -362,130 +362,221 @@
           <span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-spark"/></svg></span>
           <div>
             <h3 id="settings-setup-heading">Auto setup</h3>
-            <p class="muted">One pass over what this machine already has: saved keys or a reachable local server choose the assistant route, installed CLIs choose the builders, and a saved Jev key turns on task-aware model selection. It sends no request, changes no key, and keeps every model override.</p>
+            <p class="muted">Reads what this machine already has and applies only the changes needed: keys, servers and CLIs choose the routes, a Jev key turns on task-aware selection. Sends nothing, changes no key, keeps every model override.</p>
           </div>
           <button id="auto-setup" class="primary">Run auto setup</button>
         </div>
         <div class="setup-state">
-          <div class="setup-state-item"><span class="setup-state-label">Assistant</span><span id="setup-assistant">checking…</span></div>
-          <div class="setup-state-item"><span class="setup-state-label">Model selection</span><span id="setup-selection">checking…</span></div>
-          <div class="setup-state-item"><span class="setup-state-label">Builders</span><span id="setup-builders">checking…</span></div>
+          <div class="setup-state-item"><span class="setup-state-label">Assistant</span><span id="setup-assistant" data-state="unknown">checking…</span></div>
+          <div class="setup-state-item"><span class="setup-state-label">Model selection</span><span id="setup-selection" data-state="unknown">checking…</span></div>
+          <div class="setup-state-item"><span class="setup-state-label">Builders</span><span id="setup-builders" data-state="unknown">checking…</span></div>
         </div>
-        <p class="muted" id="auto-setup-status" role="status">Not run yet. Auto setup applies only the changes that are needed and explains each one.</p>
+        <p class="settings-status" id="auto-setup-status" role="status">Not run yet. Auto setup applies only the changes that are needed and explains each one.</p>
         </section>
         <section class="settings-group settings-card" id="settings-assistant" aria-labelledby="settings-assistant-heading">
-        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-key"/></svg></span><div><h3 id="settings-assistant-heading">Assistant connection</h3><p class="muted">Save a key for the provider you use, then choose its routing below. Grok, Claude Code, Codex and Antigravity use their CLI's own login; LM Studio needs no key.</p></div></div>
-        <div class="key-list">
-        <div class="row key-row"><span class="key-provider">z.ai</span>
-          <input type="password" id="zai-key" placeholder="z.ai Coding Plan API key (stored encrypted)" autocomplete="off" aria-label="z.ai Coding Plan API key">
-          <button id="save-zai-key">Save z.ai key</button>
-          <span class="muted key-status" id="zai-key-status">checking…</span>
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-key"/></svg></span><div><h3 id="settings-assistant-heading">Providers</h3><p class="muted">Every route Studio can answer or build with. Save a key, point at a server, or sign in to a CLI; routing picks from whatever lights up.</p></div></div>
+        <p class="settings-eyebrow">Keys & servers</p>
+        <div class="provider-grid">
+          <article class="provider-tile" data-provider="zai">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">z</span>
+              <div class="provider-title"><span class="provider-name">z.ai GLM</span><span class="provider-kind">API key · Coding Plan</span></div>
+              <span class="provider-pill" id="zai-key-status" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body">
+              <input type="password" id="zai-key" placeholder="Paste API key" autocomplete="off" aria-label="z.ai Coding Plan API key">
+              <button id="save-zai-key" class="mini">Save</button>
+            </div>
+          </article>
+          <article class="provider-tile" data-provider="opencode">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">Go</span>
+              <div class="provider-title"><span class="provider-name">OpenCode Go</span><span class="provider-kind">API key · billed per use</span></div>
+              <span class="provider-pill" id="key-status" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body">
+              <input type="password" id="api-key" placeholder="Paste API key" autocomplete="off" aria-label="OpenCode Go API key">
+              <button id="save-key" class="mini">Save</button>
+            </div>
+          </article>
+          <article class="provider-tile" data-provider="lmstudio">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">LM</span>
+              <div class="provider-title"><span class="provider-name">LM Studio</span><span class="provider-kind">Local server · no key</span></div>
+              <span class="provider-pill" id="lmstudio-status" data-state="ready">no key needed</span>
+            </div>
+            <div class="provider-tile-body">
+              <input type="text" id="lmstudio-endpoint" placeholder="http://127.0.0.1:1234/v1/chat/completions" spellcheck="false" autocomplete="off" aria-label="LM Studio endpoint" title="The local LM Studio server's chat-completions URL; saved when you leave the field. Its loaded model is detected automatically.">
+            </div>
+          </article>
+          <article class="provider-tile" data-provider="custom">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">API</span>
+              <div class="provider-title"><span class="provider-name">Custom endpoint</span><span class="provider-kind">OpenAI-compatible · your key</span></div>
+              <span class="provider-pill" id="custom-key-status" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body">
+              <input type="text" id="custom-endpoint" placeholder="https://host/v1" spellcheck="false" autocomplete="off" aria-label="Custom provider endpoint" title="Your own OpenAI-compatible endpoint. A bare base URL gains the chat-completions path; saved when you leave the field.">
+              <input type="password" id="custom-key" placeholder="API key" autocomplete="off" aria-label="Custom provider API key">
+              <button id="save-custom-key" class="mini">Save</button>
+            </div>
+          </article>
         </div>
-        <div class="row key-row"><span class="key-provider">OpenCode Go</span>
-          <input type="password" id="api-key" placeholder="OpenCode Go API key (stored encrypted)" autocomplete="off" aria-label="OpenCode Go API key">
-          <button id="save-key">Save OpenCode key</button>
-          <span class="muted key-status" id="key-status">checking…</span>
+        <p class="settings-eyebrow">CLI logins</p>
+        <div class="provider-grid">
+          <article class="provider-tile" data-provider="opencode-cli">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">OC</span>
+              <div class="provider-title"><span class="provider-name">OpenCode</span><span class="provider-kind">Builder · plan or free models</span></div>
+              <span class="provider-pill" data-cli-status="opencode" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body"><span class="provider-hint">Carries your z.ai plan as the mefi-zai provider when that key is saved.</span><button class="ghost mini" data-cli="opencode" title="Open the OpenCode TUI in the repo; carries the Studio mefi-zai provider (your z.ai plan) when a key is saved">Open</button></div>
+          </article>
+          <article class="provider-tile" data-provider="grok">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">Gk</span>
+              <div class="provider-title"><span class="provider-name">Grok</span><span class="provider-kind">CLI login · xAI account</span></div>
+              <span class="provider-pill" data-cli-status="grok" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body"><span class="provider-hint">Answers and builds on its own login.</span><button class="ghost mini" data-cli="grok" title="Open the Grok CLI in the repo on its own login">Open</button></div>
+          </article>
+          <article class="provider-tile" data-provider="claude">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">CC</span>
+              <div class="provider-title"><span class="provider-name">Claude Code</span><span class="provider-kind">CLI login · subscription</span></div>
+              <span class="provider-pill" data-cli-status="claude" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body"><span class="provider-hint">Answers and builds on your Claude subscription.</span><button class="ghost mini" data-cli="claude" title="Open Claude Code in the repo on its own account">Open</button></div>
+          </article>
+          <article class="provider-tile" data-provider="codex">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">Cx</span>
+              <div class="provider-title"><span class="provider-name">Codex</span><span class="provider-kind">CLI login · ChatGPT</span></div>
+              <span class="provider-pill" data-cli-status="codex" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body"><span class="provider-hint">Answers and builds on your ChatGPT login.</span><button class="ghost mini" data-cli="codex" title="Open Codex CLI in the repo on its own account">Open</button></div>
+          </article>
+          <article class="provider-tile" data-provider="antigravity">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">Ag</span>
+              <div class="provider-title"><span class="provider-name">Antigravity</span><span class="provider-kind">CLI login · Google account</span></div>
+              <span class="provider-pill" data-cli-status="antigravity" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body"><span class="provider-hint">Answers and builds on your Google account.</span><button class="ghost mini" data-cli="antigravity" title="Open the Antigravity CLI in the repo on your Google account">Open</button></div>
+          </article>
         </div>
-        <div class="row key-row key-row-custom"><span class="key-provider">Custom</span>
-          <input type="text" id="custom-endpoint" placeholder="Custom endpoint — https://host/v1 (OpenAI-compatible)" spellcheck="false" autocomplete="off" aria-label="Custom provider endpoint">
-          <input type="password" id="custom-key" placeholder="Custom API key (stored encrypted)" autocomplete="off" aria-label="Custom provider API key">
-          <button id="save-custom-key">Save custom key</button>
-          <span class="muted key-status" id="custom-key-status">checking…</span>
-        </div>
+        <div class="settings-foot">
+          <button class="ghost mini" id="cli-test-zai" title="Verify OpenCode sees the Studio-managed mefi-zai GLM provider">Test z.ai link in OpenCode</button>
+          <span class="settings-status" id="cli-status">checking…</span>
         </div>
         </section>
         <section class="settings-group settings-card" id="settings-routing" aria-labelledby="settings-routing-heading">
-        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-route"/></svg></span><div><h3 id="settings-routing-heading">Model routing</h3><p class="muted">Who pays for assistant calls, and how each task's model is chosen. Models are saved per provider, so switching routes cannot carry one provider's model into another; use whichever option you already have: a saved key, an installed CLI login, or a local server.</p></div></div>
-        <div class="row">
-          <label class="muted">AI routing
-            <select id="ai-provider">
-              <option value="auto">Auto — first usable provider in your order</option>
-              <option value="zai">z.ai only — never bill OpenCode</option>
-              <option value="opencode">OpenCode Go only</option>
-              <option value="grok">Grok CLI — the assistant answers through the grok CLI's own login</option>
-              <option value="claude">Claude Code CLI — the assistant answers on your Claude Code subscription login</option>
-              <option value="codex">Codex CLI — the assistant answers through codex on your ChatGPT login</option>
-              <option value="antigravity">Antigravity CLI — the assistant answers through agy on your Google account</option>
-              <option value="lmstudio">LM Studio — a local server on this machine, no key</option>
-              <option value="custom">Custom endpoint — your own OpenAI-compatible URL and key</option>
-            </select>
-          </label>
-          <span class="muted" id="provider-readiness" role="status">checking…</span>
-        </div>
-        <div class="row auto-order">
-          <span class="muted">Auto order — used when AI routing is Auto: the first usable provider answers, and with fallback enabled a failed HTTP route retries down the list.</span>
-          <ol class="auto-order-list" id="auto-order-list" aria-label="Auto provider preference order"></ol>
-          <div class="auto-order-add">
-            <select id="auto-order-add" aria-label="Provider to add to the auto order"></select>
-            <button class="ghost" id="auto-order-add-button" type="button">Add provider</button>
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-route"/></svg></span><div><h3 id="settings-routing-heading">Model routing</h3><p class="muted">Who answers the assistant, and how each task's model is chosen. Ready routes list first; the rest stay selectable and can be set up later. Models are saved per provider, so switching never mixes them.</p></div></div>
+        <div class="settings-columns">
+          <div class="settings-column">
+            <p class="settings-eyebrow">Who answers</p>
+            <label class="field"><span class="field-label">Assistant answers via</span>
+              <select id="ai-provider">
+                <option value="auto">Auto — first ready provider in your order</option>
+                <option value="zai">z.ai GLM</option>
+                <option value="opencode">OpenCode Go</option>
+                <option value="grok">Grok CLI</option>
+                <option value="claude">Claude Code CLI</option>
+                <option value="codex">Codex CLI</option>
+                <option value="antigravity">Antigravity CLI</option>
+                <option value="lmstudio">LM Studio (local)</option>
+                <option value="custom">Custom endpoint</option>
+              </select>
+              <span class="field-hint" id="provider-readiness" role="status">checking…</span>
+            </label>
+            <div class="auto-order">
+              <span class="field-label">Auto order</span>
+              <ol class="auto-order-list" id="auto-order-list" aria-label="Auto provider preference order"></ol>
+              <div class="auto-order-add">
+                <select id="auto-order-add" aria-label="Provider to add to the auto order"></select>
+                <button class="ghost mini" id="auto-order-add-button" type="button">Add</button>
+              </div>
+              <span class="field-hint">The first ready provider answers. With fallback on, a failed HTTP route retries down the list.</span>
+            </div>
+            <label class="switch" title="Off by default: when an HTTP route fails, retry on the next ready HTTP provider in the auto order (this can bill that provider)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>Fall back to the next provider on failure</span></label>
+          </div>
+          <div class="settings-column">
+            <p class="settings-eyebrow">Models & selection</p>
+            <div class="field-grid">
+              <label class="field"><span class="field-label">Routine model <span class="field-scope" id="model-scope-note">for this provider</span></span>
+                <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model this provider uses for routine passes (replies, briefs, chat). Saved per provider; empty = the provider's own default.">
+              </label>
+              <label class="field"><span class="field-label">Heavy model</span>
+                <input type="text" id="ai-model-heavy" placeholder="same as routine" spellcheck="false" autocomplete="off" title="Model this provider uses for heavy passes (overseer, improver, analyzer read). Saved per provider; empty = routine's model where the provider has one, otherwise the provider's default.">
+              </label>
+            </div>
+            <div class="field">
+              <span class="field-label">Model selection</span>
+              <div class="segmented" role="group" aria-label="Model selection" data-segmented-for="ai-model-selection">
+                <button type="button" data-value="jev" aria-pressed="false">Jev<small>task fit, speed & cost</small></button>
+                <button type="button" data-value="fixed" aria-pressed="false">Fixed<small>provider defaults</small></button>
+              </div>
+              <select id="ai-model-selection" class="segmented-source" aria-hidden="true" tabindex="-1" aria-describedby="ai-routing-help">
+                <option value="jev">Jev — task fit, speed & cost</option>
+                <option value="fixed">Fixed defaults</option>
+              </select>
+            </div>
+            <p class="settings-status" id="ai-routing-status" role="status">Checking model selection…</p>
+            <p class="settings-status" id="ai-routing-decision" role="status">No selection recorded yet.</p>
+            <p class="settings-status" id="ai-routing-evidence" hidden></p>
+            <div class="settings-foot"><button class="ghost mini" id="ai-routing-refresh">Refresh selection</button></div>
+            <details class="settings-help"><summary>How Jev chooses</summary><p id="ai-routing-help">Jev ranks the models within your chosen provider for each task by catalog quality, estimated price, and your project's measured timing, errors, ratings and reported costs; missing evidence stays unknown. Each selection is one small billed gateway request and needs a Jev key (below); when Jev is unavailable the usual default runs. Model overrides always win. CLI routes use their saved model or CLI default; LM Studio and custom endpoints answer with the model loaded at their URL unless you save an override.</p></details>
           </div>
         </div>
-        <div class="row">
-          <label class="muted">Routine model <span class="muted" id="model-scope-note">for this provider</span>
-            <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model this provider uses for routine passes (replies, briefs, chat). Saved per provider; empty = the provider's own default." style="width: 15em">
-          </label>
-          <label class="muted">Heavy model
-            <input type="text" id="ai-model-heavy" placeholder="same as routine" spellcheck="false" autocomplete="off" title="Model this provider uses for heavy passes (overseer, improver, analyzer read). Saved per provider; empty = routine's model where the provider has one, otherwise the provider's default." style="width: 15em">
-          </label>
-          <label class="switch" title="Off by default: when an HTTP route fails, retry on the next usable HTTP provider in the auto order (this can bill that provider)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>Fall back to the next provider on failure</span></label>
-        </div>
-        <div class="row">
-          <label class="muted">Model selection
-            <select id="ai-model-selection" aria-describedby="ai-routing-help">
-              <option value="jev">Jev — task fit, speed & cost</option>
-              <option value="fixed">Fixed defaults</option>
-            </select>
-          </label>
-          <label class="muted">LM Studio endpoint
-            <input type="text" id="lmstudio-endpoint" placeholder="http://127.0.0.1:1234/v1/chat/completions" spellcheck="false" autocomplete="off" title="The local LM Studio server's chat-completions URL. Used only when AI routing is LM Studio." style="width: 24em">
-          </label>
-          <button class="ghost" id="ai-routing-refresh">Refresh selection</button>
-        </div>
-        <p class="muted" id="ai-routing-help">Jev ranks available models within your chosen provider for each task using catalog quality and estimated prices, plus your project's measured timing, errors, ratings and reported costs. Missing evidence stays unknown. Selection uses a small billed gateway request. Save a Jev gateway key below to enable it; a timeout or unavailable Jev uses the usual default. Model overrides take priority. Grok, Claude Code, Codex and Antigravity use their saved model or CLI default; LM Studio and custom endpoints answer from the URL above (load one model or save a model override).</p>
-        <p class="muted" id="ai-routing-status" role="status">Checking model selection…</p>
-        <p class="muted" id="ai-routing-decision" role="status">No selection recorded yet.</p>
-        <p class="muted" id="ai-routing-evidence" hidden></p>
         </section>
         <section class="settings-group settings-card" id="settings-workers" aria-labelledby="settings-workers-heading">
-        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-wrench"/></svg></span><div><h3 id="settings-workers-heading">Coding workers</h3><p class="muted">Workers carry out queued tasks in your selected project. Choose a provider whose CLI is installed and signed in, then a coding tier: <strong>Auto</strong> lets Studio pick per task (Jev or the stand-in judge within your provider, otherwise the CLI default), <strong>Free</strong> runs a free model one worker at a time, <strong>Fast</strong> runs the quick economical model, and <strong>Heavy</strong> runs the high-end one. Tier models are saved per CLI; a tier without a model of its own uses Studio's default for that CLI, or the CLI's own default — except Free, which never falls back to a billed model.</p></div></div>
-        <div class="row">
-          <label class="muted">Builders run on
-            <select id="executor-cli">
-              <option value="opencode">OpenCode run</option>
-              <option value="grok">Grok CLI — grok builds every queued job on its own login</option>
-              <option value="claude">Claude Code — claude builds every queued job on your subscription login</option>
-              <option value="codex">Codex — codex builds every queued job on your ChatGPT login</option>
-              <option value="antigravity">Antigravity — agy builds every queued job on your Google account</option>
-            </select>
-          </label>
-          <label class="muted">Coding tier
-            <select id="executor-tier" title="What each build may cost: Auto picks per task, Free runs free models one at a time, Fast runs the quick economical model, Heavy runs the high-end one">
-              <option value="auto">Auto — Studio picks per task</option>
-              <option value="free">Free — free models, one worker at a time</option>
-              <option value="fast">Fast — quick, economical models</option>
-              <option value="heavy">Heavy — high-end models for hard work</option>
-            </select>
-          </label>
-          <label class="muted"><span id="executor-model-label">Pinned model</span> <span class="muted" id="builder-scope-note">for this CLI</span>
-            <input type="text" id="executor-model" placeholder="CLI default" spellcheck="false" autocomplete="off" title="Model this builder runs with for the selected tier (grok -m / claude --model / codex -m / agy --model; OpenCode takes provider/model). Saved per builder and per tier; empty = the tier's default." style="width: 15em">
-          </label>
-        </div>
-        <p class="muted executor-tiers" id="executor-tier-status" role="status">Checking coding tiers…</p>
-        <div class="row">
-          <span class="muted">Coding CLIs</span>
-          <button class="ghost" data-cli="opencode" title="Open the OpenCode TUI in the repo; carries the Studio mefi-zai provider (your z.ai plan) when a key is saved">OpenCode</button>
-          <button class="ghost" data-cli="grok" title="Open the Grok CLI in the repo on its own login">Grok</button>
-          <button class="ghost" data-cli="codex" title="Open Codex CLI in the repo on its own account">Codex</button>
-          <button class="ghost" data-cli="claude" title="Open Claude Code in the repo on its own account">Claude Code</button>
-          <button class="ghost" data-cli="antigravity" title="Open the Antigravity CLI in the repo on your Google account">Antigravity</button>
-          <button class="ghost" id="cli-test-zai" title="Verify OpenCode sees the Studio-managed mefi-zai GLM provider">Test z.ai link</button>
-          <span class="muted" id="cli-status">checking…</span>
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-wrench"/></svg></span><div><h3 id="settings-workers-heading">Coding workers</h3><p class="muted">Workers carry out queued tasks in your selected project. Pick a builder whose CLI is installed and signed in, then what each build may cost.</p></div></div>
+        <div class="settings-columns">
+          <div class="settings-column">
+            <p class="settings-eyebrow">Builder</p>
+            <label class="field"><span class="field-label">Builders run on</span>
+              <select id="executor-cli">
+                <option value="opencode">OpenCode run</option>
+                <option value="grok">Grok CLI — grok builds every queued job on its own login</option>
+                <option value="claude">Claude Code — claude builds every queued job on your subscription login</option>
+                <option value="codex">Codex — codex builds every queued job on your ChatGPT login</option>
+                <option value="antigravity">Antigravity — agy builds every queued job on your Google account</option>
+              </select>
+            </label>
+            <label class="field"><span class="field-label"><span id="executor-model-label">Pinned model</span> <span class="field-scope" id="builder-scope-note">for this CLI</span></span>
+              <input type="text" id="executor-model" placeholder="CLI default" spellcheck="false" autocomplete="off" title="Model this builder runs with for the selected tier (grok -m / claude --model / codex -m / agy --model; OpenCode takes provider/model). Saved per builder and per tier; empty = the tier's default.">
+            </label>
+            <details class="settings-help"><summary>How tiers resolve</summary><p>Tier models are saved per CLI. A tier without a model of its own uses Studio's default for that CLI or the CLI's own default; Free never falls back to a billed model. Auto lets Jev or the stand-in judge pick per task within your provider, and a pinned model wins.</p></details>
+          </div>
+          <div class="settings-column">
+            <p class="settings-eyebrow">Coding tier</p>
+            <div class="field">
+              <div class="segmented" role="group" aria-label="Coding tier" data-segmented-for="executor-tier">
+                <button type="button" data-value="auto" aria-pressed="false">Auto<small>Studio picks per task</small></button>
+                <button type="button" data-value="free" aria-pressed="false">Free<small>one worker at a time</small></button>
+                <button type="button" data-value="fast" aria-pressed="false">Fast<small>quick & economical</small></button>
+                <button type="button" data-value="heavy" aria-pressed="false">Heavy<small>high-end models</small></button>
+              </div>
+              <select id="executor-tier" class="segmented-source" aria-hidden="true" tabindex="-1" title="What each build may cost: Auto picks per task, Free runs free models one at a time, Fast runs the quick economical model, Heavy runs the high-end one">
+                <option value="auto">Auto — Studio picks per task</option>
+                <option value="free">Free — free models, one worker at a time</option>
+                <option value="fast">Fast — quick, economical models</option>
+                <option value="heavy">Heavy — high-end models for hard work</option>
+              </select>
+            </div>
+            <div class="tier-table" id="executor-tier-table" aria-label="What each tier runs" hidden></div>
+            <p class="settings-status executor-tiers" id="executor-tier-status" role="status">Checking coding tiers…</p>
+          </div>
         </div>
         </section>
         <details class="settings-optional settings-card" id="settings-jev"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-target"/></svg></span><span class="settings-summary-text"><b>Jev connection</b><span>Task-aware model selection and optional task suggestions</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <p class="muted">Choose where Jev is routed: the Vercel AI Gateway, TypeSafe's Jev API directly, OpenCode Zen (including its free Jev tier), or OpenRouter. Each route keeps its own key, stored encrypted; switching never moves a key between routes. The key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
           <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: a hosted gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option><option value="zen">OpenCode Zen</option><option value="openrouter">OpenRouter</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled" checked><span class="track"></span><span>Intake classification</span></label></div>
           <p class="muted" id="jev-status" role="status">Checking Jev…</p>
+        </details>
+        <details class="settings-optional settings-card" id="settings-studio"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-studio"/></svg></span><span class="settings-summary-text"><b>Studio</b><span>Where a launch lands; your name, theme and motion live under Make yourself at home in the sidebar</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+          <div class="row"><label class="switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span>Open Workspace on launch</span></label></div>
+          <p class="muted">Off means Studio opens straight into Command view after the project chooser.</p>
         </details>
         <details class="settings-optional settings-card" id="settings-updates"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-update"/></svg></span><span class="settings-summary-text"><b>Updates & diagnostics</b><span>Live update, published builds and a speed probe</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
         <div class="row">
@@ -503,10 +594,6 @@
           </div>
           <p class="muted">Published builds are checked on GitHub every 20 minutes. The portable app can download and install one from here; in development the checker reports only.</p>
           <div class="row tight update-row" data-release-row>
-        <details class="settings-optional settings-card" id="settings-studio"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-studio"/></svg></span><span class="settings-summary-text"><b>Studio</b><span>Where a launch lands; your name, theme and motion live under Make yourself at home in the sidebar</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
-          <div class="row"><label class="switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span>Open Workspace on launch</span></label></div>
-          <p class="muted">Off means Studio opens straight into Command view after the project chooser.</p>
-        </details>
             <button id="release-check" class="ghost" title="Ask GitHub for the newest published build now">Check GitHub</button>
             <button id="release-apply" class="ghost" hidden disabled>Update</button>
             <span class="eyes-status" id="release-status" role="status">release: not checked</span>
@@ -780,23 +867,21 @@
     <ul id="cmd-ask-list" class="ask-list" aria-label="Questions and suggestions"></ul>
   </section>
     </div>
-  <section id="cmd-usage" class="cmd-usage" aria-label="Usage across connected providers">
-    <header class="cmd-usage-head">
-      <h2 class="cmd-usage-title">
-        <button id="cmd-usage-toggle" class="feed-toggle" type="button" aria-expanded="true" aria-controls="cmd-usage-body" title="Collapse usage">
-          <span>Usage</span><span id="cmd-usage-state" class="feed-state">waiting</span>
-          <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg>
-        </button>
-      </h2>
-      <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and every connected account">Refresh</button>
-      <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Model Lab">Details</button>
-    </header>
-    <div id="cmd-usage-body" class="cmd-usage-body"></div>
-  </section>
   </aside>
+  <!-- bottom-left corner: the Legend pill with the Usage pill above it; both lists open upward -->
   <div id="cmd-legend" class="cmd-legend">
     <button id="idle-legend-toggle" class="pill" aria-expanded="false" aria-controls="cmd-legend-list" title="What the colours and rings mean"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-legend"/></svg><span class="label">Legend</span></button>
+    <button id="cmd-usage-toggle" class="pill usage-pill" type="button" aria-expanded="false" aria-controls="cmd-usage-pop" title="Usage across connected providers"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-graph"/></svg><span class="label">Usage</span><span id="cmd-usage-brief" class="usage-brief"></span><i id="cmd-usage-dot" class="usage-dot" aria-hidden="true" hidden></i></button>
     <ul id="cmd-legend-list" class="legend-list" hidden></ul>
+    <section id="cmd-usage-pop" class="usage-pop" aria-label="Usage across connected providers" hidden>
+      <header class="cmd-usage-head">
+        <h2 id="cmd-usage-title" class="cmd-usage-title">Usage</h2>
+        <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and every connected account">Refresh</button>
+        <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Model Lab">Details</button>
+      </header>
+      <p id="cmd-usage-state" class="cmd-usage-state" role="status" aria-live="polite">Waiting for a reading…</p>
+      <div id="cmd-usage-body" class="cmd-usage-body" hidden></div>
+    </section>
   </div>
   <div id="cmd-empty" class="cmd-empty" data-variant="desktop-only" role="status" hidden>
     <div class="eyebrow">Command</div>

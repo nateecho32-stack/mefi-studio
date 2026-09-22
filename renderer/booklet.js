@@ -462,9 +462,17 @@
     const setupAssistant = document.getElementById("setup-assistant");
     const setupSelection = document.getElementById("setup-selection");
     const setupBuilders = document.getElementById("setup-builders");
+    // One registry for every route Studio can answer with. The routing and
+    // builder pickers are rebuilt from it plus the live flags below, so what
+    // is ready on this machine reads first and anything else stays selectable
+    // with its missing piece named beside it.
     const providerNames = { auto: "Auto (your order)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
+    const providerKinds = { auto: "auto", zai: "key", opencode: "key", grok: "cli", claude: "cli", codex: "cli", antigravity: "cli", lmstudio: "local", custom: "custom" };
+    const providerRegistry = Object.keys(providerNames).map((id) => ({ id, name: providerNames[id], kind: providerKinds[id] }));
+    const builderIds = ["opencode", "grok", "claude", "codex", "antigravity"];
     const builderNames = { opencode: "OpenCode", grok: "Grok", claude: "Claude Code", codex: "Codex", antigravity: "Antigravity" };
-    const singleModelProviders = new Set(["grok", "claude", "codex", "antigravity", "lmstudio", "custom"]);
+    const providerSelect = document.getElementById("ai-provider");
+    const executorCli = document.getElementById("executor-cli");
     function cliInstalled(id) {
       return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === id && cli.installed);
     }
@@ -485,10 +493,97 @@
       if (id === "lmstudio") return true;
       return cliInstalled(id);
     }
+    // Availability of one route from the flags already in hand: ready, not
+    // ready, or unknown while a read is still in flight. Every picker label,
+    // status pill and overview tile reads from here so they never disagree.
+    function cliAvailability(id) {
+      if (setup.cliError) return { ready: null, note: "CLI status unavailable" };
+      if (!setup.clis) return { ready: null, note: "checking CLI…" };
+      return cliInstalled(id) ? { ready: true, note: "CLI installed" } : { ready: false, note: "CLI not found" };
+    }
+    function providerAvailability(id) {
+      const kind = providerKinds[id];
+      if (kind === "auto") {
+        if (!setup.routing) return { ready: null, note: "checking…" };
+        const first = autoOrderOf(setup.routing).find((entry) => autoProviderUsable(entry));
+        return first ? { ready: true, note: `will use ${providerNames[first]}` } : { ready: false, note: "nothing in the order is ready yet" };
+      }
+      if (kind === "key") {
+        const state = keyState(id);
+        return { ready: state === "key saved" ? true : state === "no key saved" ? false : null, note: state };
+      }
+      if (kind === "custom") {
+        if (!setup.routing && setup.keys.custom === null) return { ready: null, note: "checking…" };
+        const endpoint = Boolean(setup.routing?.customEndpoint);
+        const key = setup.keys.custom ?? setup.routing?.hasCustom === true;
+        if (endpoint && key) return { ready: true, note: "endpoint and key saved" };
+        return { ready: false, note: !endpoint && !key ? "no endpoint or key saved" : !endpoint ? "no endpoint saved" : "no key saved" };
+      }
+      if (kind === "local") return { ready: true, note: "local server · no key needed" };
+      return cliAvailability(id);
+    }
+    const stateOf = (availability) => availability.ready === true ? "ready" : availability.ready === false ? "missing" : "unknown";
+    function setPill(element, state, text) {
+      if (!element) return;
+      if (text !== undefined) element.textContent = text;
+      element.setAttribute("data-state", state);
+    }
+    // Rebuild a picker from labelled entries and keep the current choice. It
+    // only runs when a label changed, so an open picker is never torn down
+    // under the pointer by a refresh that changed nothing.
+    const pickerSignatures = new Map();
+    function renderPicker(select, entries) {
+      const signature = entries.map((entry) => `${entry.id}\t${entry.state}\t${entry.label}`).join("\n");
+      if (pickerSignatures.get(select) === signature) return;
+      pickerSignatures.set(select, signature);
+      const current = select.value;
+      select.replaceChildren(...entries.map((entry) => {
+        const option = document.createElement("option");
+        option.value = entry.id;
+        option.textContent = entry.label;
+        option.dataset.state = entry.state;
+        return option;
+      }));
+      select.value = current;
+    }
+    // Ready routes list first; the rest stay selectable with what they still
+    // need spelled out, so nothing is locked to a fixed menu.
+    function renderProviderPickers() {
+      const rank = { ready: 0, unknown: 1, missing: 2 };
+      const byReadiness = (a, b) => rank[a.state] - rank[b.state];
+      const entryFor = (id, name, availability) => ({ id, state: stateOf(availability), label: `${name} — ${availability.note}` });
+      const [auto, ...providers] = providerRegistry.map((entry) => entryFor(entry.id, entry.name, providerAvailability(entry.id)));
+      renderPicker(providerSelect, [auto, ...providers.sort(byReadiness)]);
+      renderPicker(executorCli, builderIds.map((id) => entryFor(id, builderNames[id], cliAvailability(id))).sort(byReadiness));
+      renderAutoOrder();
+      renderAutoOrderAdd();
+    }
+    // Segmented controls mirror a <select> that stays the saved value: a
+    // click sets the select and fires its change, and every routing read
+    // re-syncs the pressed state. Without the markup (tests) they are no-ops.
+    const segmentedGroups = Array.from(document.querySelectorAll("#studio-desktop [data-segmented-for]"));
+    function syncSegmented() {
+      for (const group of segmentedGroups) {
+        const select = document.getElementById(group.dataset.segmentedFor);
+        if (!select) continue;
+        for (const button of group.querySelectorAll("button[data-value]")) button.setAttribute("aria-pressed", String(button.dataset.value === select.value));
+        group.setAttribute("aria-disabled", String(Boolean(select.disabled)));
+      }
+    }
+    for (const group of segmentedGroups) {
+      group.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-value]");
+        const select = document.getElementById(group.dataset.segmentedFor);
+        if (!button || !select || select.disabled || select.value === button.dataset.value) return;
+        select.value = button.dataset.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        syncSegmented();
+      });
+    }
     function renderSetupState() {
       const routing = setup.routing;
-      if (setup.routingError) setupAssistant.textContent = "status unavailable";
-      else if (!routing) setupAssistant.textContent = "checking…";
+      if (setup.routingError) setPill(setupAssistant, "unknown", "status unavailable");
+      else if (!routing) setPill(setupAssistant, "unknown", "checking…");
       else {
         const provider = providerNames[routing.provider] ? routing.provider : "auto";
         const order = autoOrderOf(routing);
@@ -498,18 +593,17 @@
           : provider === "custom" ? (routing.hasCustom ? "key saved" : "no key saved")
           : provider === "auto" ? (autoFirst ? `will use ${providerNames[autoFirst]}` : "no usable provider in this order yet")
           : keyState(provider);
-        setupAssistant.textContent = `${providerNames[provider]} · ${detail}`;
+        setPill(setupAssistant, stateOf(providerAvailability(provider)), `${providerNames[provider]} · ${detail}`);
       }
-      if (setup.routingError) setupSelection.textContent = "status unavailable";
-      else if (!routing) setupSelection.textContent = "checking…";
-      else if ((routing.modelSelection ?? "jev") === "fixed") setupSelection.textContent = "Fixed defaults · overrides win";
-      else setupSelection.textContent = routing.jevConfigured ? "Jev · task fit, speed & cost" : "Jev · waiting for a gateway key";
-      if (setup.cliError) setupBuilders.textContent = "CLI status unavailable";
-      else if (!setup.clis) setupBuilders.textContent = "checking…";
+      if (setup.routingError) setPill(setupSelection, "unknown", "status unavailable");
+      else if (!routing) setPill(setupSelection, "unknown", "checking…");
+      else if ((routing.modelSelection ?? "jev") === "fixed") setPill(setupSelection, "ready", "Fixed defaults · overrides win");
+      else setPill(setupSelection, routing.jevConfigured ? "ready" : "missing", routing.jevConfigured ? "Jev · task fit, speed & cost" : "Jev · waiting for a gateway key");
+      if (setup.cliError) setPill(setupBuilders, "unknown", "CLI status unavailable");
+      else if (!setup.clis) setPill(setupBuilders, "unknown", "checking…");
       else {
-        const builderIds = ["opencode", "grok", "claude", "codex", "antigravity"];
         const installed = setup.clis.filter((cli) => cli.installed && builderIds.includes(cli.id));
-        setupBuilders.textContent = installed.length ? `${installed.map((cli) => cli.name).join(", ")} installed` : "No builder CLI detected — install OpenCode, Grok, Claude Code, Codex or Antigravity";
+        setPill(setupBuilders, installed.length ? "ready" : "missing", installed.length ? `${installed.map((cli) => cli.name).join(", ")} installed` : "No builder CLI detected — install OpenCode, Grok, Claude Code, Codex or Antigravity");
       }
       const readiness = document.getElementById("provider-readiness");
       const selected = routing && providerNames[routing.provider] ? routing.provider : null;
@@ -524,29 +618,39 @@
       else if (setup.cliError) readiness.textContent = "CLI status unavailable";
       else if (!setup.clis) readiness.textContent = "checking CLI…";
       else readiness.textContent = cliInstalled(selected) ? "CLI installed on this machine" : "CLI not found — you can still save its model and install it later";
+      // The nav counts routes that are ready now; the local server is assumed, not probed, so it stays out.
+      const navCount = document.getElementById("settings-nav-providers-count");
+      if (navCount) {
+        const ready = providerRegistry.filter((entry) => entry.kind !== "auto" && entry.kind !== "local" && providerAvailability(entry.id).ready === true).length;
+        navCount.textContent = `${ready} ready`;
+        navCount.hidden = ready === 0;
+      }
+      renderProviderPickers();
     }
-    renderSetupState();
 
     const keyStatus = document.getElementById("key-status");
     const zaiKeyStatus = document.getElementById("zai-key-status");
     const customKeyStatus = document.getElementById("custom-key-status");
+    const keyPills = { opencode: keyStatus, zai: zaiKeyStatus, custom: customKeyStatus };
+    const showKeyState = (which, saved) => setPill(keyPills[which], saved ? "ready" : "missing", saved ? "key saved (encrypted)" : "no key saved");
     window.mefiStudio
       .getApiKey("opencode")
-      .then((key) => { setup.keys.opencode = Boolean(key?.saved); keyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
-      .catch(() => (keyStatus.textContent = "key status unavailable"));
+      .then((key) => { setup.keys.opencode = Boolean(key?.saved); showKeyState("opencode", setup.keys.opencode); renderSetupState(); })
+      .catch(() => setPill(keyStatus, "unknown", "key status unavailable"));
     window.mefiStudio
       .getApiKey("zai")
-      .then((key) => { setup.keys.zai = Boolean(key?.saved); zaiKeyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
-      .catch(() => (zaiKeyStatus.textContent = "key status unavailable"));
+      .then((key) => { setup.keys.zai = Boolean(key?.saved); showKeyState("zai", setup.keys.zai); renderSetupState(); })
+      .catch(() => setPill(zaiKeyStatus, "unknown", "key status unavailable"));
     window.mefiStudio
       .getApiKey("custom")
-      .then((key) => { setup.keys.custom = Boolean(key?.saved); customKeyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
-      .catch(() => (customKeyStatus.textContent = "key status unavailable"));
+      .then((key) => { setup.keys.custom = Boolean(key?.saved); showKeyState("custom", setup.keys.custom); renderSetupState(); })
+      .catch(() => setPill(customKeyStatus, "unknown", "key status unavailable"));
 
     document.getElementById("save-key").addEventListener("click", async () => {
       const value = document.getElementById("api-key").value.trim();
       const result = await window.mefiStudio.setApiKey(value, "opencode");
-      keyStatus.textContent = result?.ok ? (value ? "key saved (encrypted)" : "key cleared") : `save failed: ${result?.error ?? "unknown"}`;
+      if (result?.ok) { setup.keys.opencode = Boolean(value); setPill(keyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); }
+      else setPill(keyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("api-key").value = "";
       await loadAiRouting();
     });
@@ -554,7 +658,8 @@
     document.getElementById("save-zai-key").addEventListener("click", async () => {
       const value = document.getElementById("zai-key").value.trim();
       const result = await window.mefiStudio.setApiKey(value, "zai");
-      zaiKeyStatus.textContent = result?.ok ? (value ? "key saved (encrypted)" : "key cleared") : `save failed: ${result?.error ?? "unknown"}`;
+      if (result?.ok) { setup.keys.zai = Boolean(value); setPill(zaiKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); }
+      else setPill(zaiKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("zai-key").value = "";
       await loadAiRouting();
     });
@@ -564,7 +669,8 @@
     document.getElementById("save-custom-key").addEventListener("click", async () => {
       const value = document.getElementById("custom-key").value.trim();
       const result = await window.mefiStudio.setApiKey(value, "custom");
-      customKeyStatus.textContent = result?.ok ? (value ? "key saved (encrypted)" : "key cleared") : `save failed: ${result?.error ?? "unknown"}`;
+      if (result?.ok) { setup.keys.custom = Boolean(value); setPill(customKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); }
+      else setPill(customKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("custom-key").value = "";
       await loadAiRouting();
     });
@@ -631,7 +737,6 @@
     // bills another provider by surprise. Provider choice and model selection
     // are independent; explicit role models take priority over Jev. Status
     // refreshes never erase unsaved model inputs.
-    const providerSelect = document.getElementById("ai-provider");
     const modelSelection = document.getElementById("ai-model-selection");
     const routingStatus = document.getElementById("ai-routing-status");
     const routingDecision = document.getElementById("ai-routing-decision");
@@ -643,7 +748,6 @@
     const autoOrderAddButton = document.getElementById("auto-order-add-button");
     const modelRoutine = document.getElementById("ai-model-routine");
     const modelHeavy = document.getElementById("ai-model-heavy");
-    const executorCli = document.getElementById("executor-cli");
     const executorModel = document.getElementById("executor-model");
     const executorTier = document.getElementById("executor-tier");
     const executorModelLabel = document.getElementById("executor-model-label");
@@ -670,10 +774,38 @@
       executorModel.value = routing?.executorTierModels?.[cli]?.[tier] ?? "";
       executorModel.placeholder = entry.model && entry.source !== "saved" ? `${entry.model} · ${tierSources[entry.source] ?? entry.source}` : tier === "free" ? "no free model saved" : "CLI default";
     }
+    // The tier table shows what each tier would run for the chosen builder,
+    // with the active tier marked; the sentence below it stays the status line.
+    function renderTierTable(routing, cli, tier) {
+      const table = document.getElementById("executor-tier-table");
+      if (!table) return;
+      if (!routing?.executorTierDefaults) { table.hidden = true; return; }
+      table.hidden = false;
+      table.replaceChildren(...["free", "fast", "heavy"].map((name) => {
+        const entry = tierEntry(routing, cli, name);
+        const row = document.createElement("div");
+        row.className = "tier-row";
+        row.dataset.tier = name;
+        row.setAttribute("aria-current", String(name === tier));
+        const label = document.createElement("span");
+        label.className = "tier-name";
+        label.textContent = tierNames[name];
+        const model = document.createElement("span");
+        model.className = "tier-model";
+        model.textContent = entry.model || (name === "free" ? "no free model saved" : "CLI default");
+        model.dataset.state = entry.model ? "ready" : name === "free" ? "missing" : "unknown";
+        const source = document.createElement("span");
+        source.className = "tier-source";
+        source.textContent = entry.model ? (entry.source === "saved" ? "saved" : tierSources[entry.source] ?? entry.source) : "";
+        row.append(label, model, source);
+        return row;
+      }));
+    }
     function renderExecutorTiers(routing) {
       const cli = executorCli.value || "opencode";
       const tier = tierNames[executorTier.value] ? executorTier.value : "auto";
       const cliName = builderNames[cli] ?? cli;
+      renderTierTable(routing, cli, tier);
       if (!routing?.executorTierDefaults) { executorTierStatus.textContent = "Coding tiers need the desktop app."; return; }
       const describe = (name) => {
         const entry = tierEntry(routing, cli, name);
@@ -755,6 +887,7 @@
           customEndpoint.value = routing.customEndpoint ?? "";
         }
         renderExecutorTiers(routing);
+        syncSegmented();
         const selection = routing.modelSelection ?? "jev";
         const cliProvider = routing.provider === "grok" ? "Grok CLI" : routing.provider === "claude" ? "Claude Code CLI" : routing.provider === "codex" ? "Codex CLI" : routing.provider === "antigravity" ? "Antigravity CLI" : null;
         routingStatus.textContent = selection === "fixed"
@@ -798,6 +931,7 @@
         const item = document.createElement("li");
         item.className = "auto-order-item";
         item.dataset.provider = id;
+        item.setAttribute("data-state", stateOf(providerAvailability(id)));
         const position = document.createElement("span");
         position.className = "auto-order-index";
         position.textContent = String(index + 1);
@@ -834,7 +968,7 @@
       autoOrderAdd.replaceChildren(...remaining.map((id) => {
         const option = document.createElement("option");
         option.value = id;
-        option.textContent = providerNames[id] ?? id;
+        option.textContent = `${providerNames[id] ?? id} — ${providerAvailability(id).note}`;
         return option;
       }));
       autoOrderAdd.disabled = remaining.length === 0;
@@ -853,9 +987,12 @@
     });
     const routingControls = [providerSelect, modelSelection, fallbackToggle, autoOrderAdd, autoOrderAddButton, modelRoutine, modelHeavy, executorCli, executorTier, executorModel, lmStudioEndpoint, customEndpoint];
     for (const control of routingControls) control.disabled = true;
+    renderSetupState();
+    syncSegmented();
     loadAiRouting({ syncControls: true }).finally(() => {
       for (const control of routingControls) control.disabled = false;
       renderAutoOrderAdd();
+      syncSegmented();
     });
     routingRefresh.addEventListener("click", () => loadAiRouting());
     async function saveRouting(payload, confirmation, { syncControls = false } = {}) {
@@ -977,9 +1114,14 @@
           const match = clis.find((cli) => cli.id === button.dataset.cli);
           button.disabled = Boolean(match && !match.installed);
         });
+        document.querySelectorAll("#studio-desktop [data-cli-status]").forEach((pill) => {
+          const match = clis.find((cli) => cli.id === pill.dataset.cliStatus);
+          setPill(pill, !match ? "unknown" : match.installed ? "ready" : "missing", !match ? "not checked" : match.installed ? "installed" : "not found");
+        });
       } catch {
         cliStatus.textContent = "CLI status unavailable";
         setup.cliError = true;
+        document.querySelectorAll("#studio-desktop [data-cli-status]").forEach((pill) => setPill(pill, "unknown", "status unavailable"));
       }
       renderSetupState();
     }

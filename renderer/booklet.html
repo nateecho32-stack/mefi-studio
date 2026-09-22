@@ -2908,10 +2908,14 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .cmd-chat.collapsed .feed-state { margin-left: 6px; font-size: 10px; max-width: 12em; }
 #idle-hud .cmd-card { top: calc(var(--command-panel-top) + 66px); right: 24px; width: 300px; max-height: calc(100vh - var(--command-panel-top) - 170px); background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 12px; box-shadow: 0 12px 32px #0005; }
 #idle-hud.chat-log-open .cmd-card { right: 340px; }
-#idle-hud .cmd-bottom { bottom: 22px; gap: 9px; }
-#idle-hud .cmd-hint { font-size: 10px; color: var(--muted); opacity: .7; letter-spacing: .02em; }
-#idle-hud .cmd-dock { display: flex; flex-wrap: nowrap; align-items: center; gap: 3px; padding: 6px 8px; border-radius: 16px; max-width: calc(100vw - 48px); min-height: 48px; background: var(--cmd-surface); border-color: var(--cmd-edge); box-shadow: var(--cmd-shadow); }
-#idle-hud .dock-item { min-height: 35px; padding: 6px 11px; gap: 7px; border-radius: 9px; font-size: 12px; color: var(--muted); }
+/* the bottom bar sits left, right after the Legend / Usage corner, instead of centred:
+   the corner column is --command-corner-width wide, the bar starts one gap past it,
+   and it may run no further than the right inset (or, at desktop widths, the rail). */
+#idle-hud { --command-corner-width: 172px; --command-corner-gap: 14px; --command-dock-max: calc(100vw - 24px - var(--command-corner-width) - var(--command-corner-gap) - 24px); }
+#idle-hud .cmd-bottom { left: calc(24px + var(--command-corner-width) + var(--command-corner-gap)); right: auto; bottom: 22px; padding: 0; align-items: flex-start; gap: 9px; max-width: var(--command-dock-max); }
+#idle-hud .cmd-hint { font-size: 10px; color: var(--muted); opacity: .7; letter-spacing: .02em; text-align: left; padding-left: 10px; }
+#idle-hud .cmd-dock { display: flex; flex-wrap: nowrap; align-items: center; gap: 3px; padding: 6px 8px; border-radius: 16px; max-width: var(--command-dock-max); min-height: 48px; background: var(--cmd-surface); border-color: var(--cmd-edge); box-shadow: var(--cmd-shadow); }
+#idle-hud .dock-item { min-width: 0; min-height: 35px; padding: 6px 11px; gap: 7px; border-radius: 9px; font-size: 12px; color: var(--muted); }
 #idle-hud .dock-item .glyph { color: inherit; }
 #idle-hud .dock-item .label { display: inline; }
 #idle-hud .dock-item:hover { color: var(--ivory); background: var(--cmd-hover); border-color: transparent; }
@@ -2933,16 +2937,24 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .cmd-more-links .key { display: inline; margin-left: auto; }
 #idle-hud .cmd-follow-status { position: absolute; top: var(--command-panel-top); left: calc(48px + var(--command-feed-width)); right: 348px; padding: 9px 13px; border: 1px solid var(--hairline); border-left: 2px solid var(--gold); border-radius: 7px; background: var(--cmd-surface); color: var(--gold-bright); font-size: 12px; line-height: 1.5; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #idle-hud .cmd-follow-status[hidden] { display: none; }
-#idle-hud .cmd-legend { display: flex; bottom: 30px; left: 24px; }
-#idle-hud #idle-legend-toggle { background: var(--cmd-surface); border-color: var(--cmd-edge); color: var(--ivory); }
-#idle-hud #idle-legend-toggle .glyph { color: inherit; }
-#idle-hud #idle-legend-toggle:hover, #idle-hud #idle-legend-toggle[aria-expanded="true"] { background: var(--cmd-raised); border-color: var(--gold); }
+/* the corner: Legend pill at the floor, the Usage pill above it, both lists opening upward */
+#idle-hud .cmd-legend { display: flex; bottom: 30px; left: 24px; gap: 6px; max-width: 320px; }
+#idle-hud .cmd-legend .pill { background: var(--cmd-surface); border-color: var(--cmd-edge); color: var(--ivory); }
+#idle-hud .cmd-legend .pill .glyph { color: inherit; }
+#idle-hud .cmd-legend .pill:hover, #idle-hud .cmd-legend .pill[aria-expanded="true"] { background: var(--cmd-raised); border-color: var(--gold); }
+#idle-hud .usage-brief { color: var(--muted); font-variant-numeric: tabular-nums; }
+#idle-hud .usage-brief:empty { display: none; }
+#idle-hud .usage-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+#idle-hud .usage-dot[hidden] { display: none; }
 #idle-hud .legend-list { background: var(--cmd-surface); border-color: var(--cmd-edge); }
+/* an open corner list reaches over the hint line; the hint steps out of the way until it closes */
+#idle-hud .cmd-legend:has(.legend-list:not([hidden]), .usage-pop:not([hidden])) ~ .cmd-bottom .cmd-hint { opacity: 0; }
 @media (max-width: 1440px) {
   #idle-hud { --command-feed-width: 304px; }
   #idle-hud .cmd-tools button { padding-inline: 7px; }
   #idle-hud .cmd-tools #idle-cam-follow .label, #idle-hud .cmd-tools #idle-cam-orbit .label { display: none; }
   #idle-hud .cmd-tele .pill { font-size: 10px; padding-inline: 7px; }
+  #idle-hud .dock-item { padding-inline: 9px; gap: 6px; font-size: 11.5px; }
 }
 @media (max-width: 1100px) {
   #idle-hud { --command-feed-width: 272px; --command-panel-top: 158px; }
@@ -2960,7 +2972,10 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
   #idle-hud .cmd-chat.collapsed { width: max-content; max-width: 235px; }
   #idle-hud .cmd-follow-status { right: 296px; left: calc(36px + var(--command-feed-width)); font-size: 11px; padding-inline: 7px; }
   #idle-hud.chat-log-open .cmd-card { right: 18px; }
+  /* no corner here: the bar returns to the centre */
   #idle-hud .cmd-legend, #idle-hud .cmd-hint { display: none; }
+  #idle-hud .cmd-bottom { left: 0; right: 0; max-width: none; padding: 0 12px; align-items: center; }
+  #idle-hud .cmd-dock { max-width: calc(100vw - 36px); }
   #idle-hud .dock-item { padding-inline: 9px; }
 }
 @media (max-height: 780px) {
@@ -3239,17 +3254,84 @@ body.command-active .walkthrough-coach { right: 392px; }
 .settings-group select { max-width: 100%; }
 .settings-group input[type="password"] { flex: 1 1 260px; min-width: 0; }
 .settings-group label { max-width: 100%; }
-.key-list { display: grid; gap: 6px; margin-top: 8px; }
-.key-row { margin: 0; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(8, 8, 11, 0.35); }
-.key-provider { flex: 0 0 96px; font: 600 var(--fs-sm)/1.3 var(--font-ui); color: var(--ivory); letter-spacing: .02em; }
-.key-row-custom input[type="text"] { flex: 1 1 240px; min-width: 0; }
-.key-status { flex: 1 0 100%; font-size: var(--fs-xs); }
-.auto-order { flex-direction: column; align-items: flex-start; gap: 8px; }
+/* Settings cards share a small vocabulary: eyebrows between groups, labelled fields, quiet status lines, two columns on wide screens. */
+.settings-eyebrow { margin: 16px 0 8px; color: var(--gold); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: var(--track-eyebrow); text-transform: uppercase; }
+.settings-card-head + .settings-eyebrow { margin-top: 8px; }
+.settings-status { margin: 8px 0 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.6; }
+.settings-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
+.settings-foot .settings-status { margin: 0; }
+.settings-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px 28px; margin-top: 4px; }
+.settings-column { min-width: 0; display: grid; gap: 12px; align-content: start; }
+.settings-column > .settings-eyebrow { margin: 6px 0 -4px; }
+.settings-column > .settings-status { margin: 0; }
+.settings-column > .settings-foot { margin: 0; }
+.field { display: grid; gap: 5px; min-width: 0; position: relative; }
+.field-label { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .03em; }
+.field-scope { font-weight: 400; opacity: .75; }
+.field-hint { color: var(--dim); font-size: var(--fs-xs); line-height: 1.5; }
+.field > select, .field > input { width: 100%; max-width: 100%; box-sizing: border-box; }
+.field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.settings-help { margin-top: 2px; }
+.settings-help > summary { color: var(--dim); font-size: var(--fs-xs); cursor: pointer; }
+.settings-help > summary:hover { color: var(--muted); }
+.settings-help > p { margin: 6px 0 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.65; }
+
+/* Segmented controls mirror a visually hidden <select>, which stays the saved value the host reads. */
+.segmented { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(8, 8, 11, 0.55); }
+.segmented > button { min-height: 42px; padding: 5px 9px; display: grid; gap: 1px; justify-items: start; text-align: left; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font-size: var(--fs-sm); font-weight: 600; box-shadow: none; }
+.segmented > button small { font-weight: 400; font-size: var(--fs-2xs); color: var(--dim); white-space: normal; line-height: 1.3; }
+.segmented > button:hover { background: var(--tint-gold-2); transform: none; box-shadow: none; }
+.segmented > button[aria-pressed="true"] { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--gold-dim); }
+.segmented > button[aria-pressed="true"] small { color: var(--muted); }
+.segmented[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+.segmented-source { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: -1px; opacity: 0; pointer-events: none; }
+
+/* Providers: a grid of connection tiles — mark, name, kind and readiness pill, then the tile's own control. */
+.provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px; }
+.provider-tile { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 12px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 55%), rgba(8, 8, 11, 0.4); box-shadow: var(--inset-hi); min-width: 0; }
+.provider-tile:has(.provider-pill[data-state="ready"]) { border-color: color-mix(in srgb, var(--live) 28%, var(--hairline)); }
+.provider-tile[data-provider="custom"] { grid-column: 1 / -1; }
+.provider-tile-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.provider-mark { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--hairline-strong); background: radial-gradient(circle at 30% 25%, var(--tint-gold-3), transparent 60%), rgba(8, 8, 11, 0.6); color: var(--gold-bright); font: 700 12px/1 var(--font-display); letter-spacing: .02em; }
+.provider-title { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
+.provider-name { color: var(--ivory); font: 600 var(--fs-sm)/1.3 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.provider-kind { color: var(--dim); font-size: var(--fs-2xs); letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.provider-tile-body { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.provider-tile-body input[type="text"], .provider-tile-body input[type="password"] { flex: 1 1 160px; min-width: 0; min-height: var(--ctl-h-sm); padding: 5px 10px; font-size: var(--fs-sm); }
+.provider-hint { flex: 1 1 160px; color: var(--muted); font-size: var(--fs-xs); line-height: 1.5; }
+.provider-pill { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font-size: var(--fs-2xs); white-space: nowrap; }
+.provider-pill::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: .55; }
+.provider-pill[data-state="ready"] { color: var(--ivory); border-color: color-mix(in srgb, var(--live) 45%, transparent); }
+.provider-pill[data-state="ready"]::before { background: var(--live); opacity: 1; box-shadow: 0 0 6px var(--live-dim); }
+.provider-pill[data-state="missing"] { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.provider-pill[data-state="missing"]::before { background: var(--warn); opacity: 1; }
+.settings-nav-badge { margin-left: auto; padding: 1px 7px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--live) 40%, transparent); color: var(--live); font-size: var(--fs-2xs); font-weight: 600; white-space: nowrap; }
+.settings-nav-badge[hidden] { display: none; }
+
+/* Coding tiers: what each tier resolves to right now, the active one marked. */
+.tier-table { display: grid; gap: 4px; }
+.tier-table[hidden] { display: none; }
+.tier-row { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--hairline); border-radius: 8px; background: rgba(8, 8, 11, 0.3); }
+.tier-row[aria-current="true"] { border-color: var(--gold-dim); background: var(--tint-gold-2); }
+.tier-name { color: var(--ivory); font-size: var(--fs-sm); font-weight: 600; }
+.tier-model { color: var(--ivory); font: 500 var(--fs-xs)/1.4 var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tier-model[data-state="missing"] { color: var(--warn); font-family: var(--font-ui); }
+.tier-model[data-state="unknown"] { color: var(--muted); font-family: var(--font-ui); }
+.tier-source { color: var(--dim); font-size: var(--fs-2xs); white-space: nowrap; }
+@media (max-width: 1180px) {
+  .settings-columns { grid-template-columns: minmax(0, 1fr); }
+}
+.auto-order { display: grid; gap: 8px; }
 .auto-order-list { display: flex; flex-direction: column; gap: 6px; list-style: none; margin: 0; padding: 0; }
-.auto-order-item { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
-.auto-order-index { color: var(--muted); font-size: 11px; min-width: 1.2em; text-align: right; }
-.auto-order-name { color: var(--ivory); font-size: 12.5px; flex: 1 1 auto; }
+.auto-order-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px 5px 10px; border: 1px solid var(--hairline); border-radius: 9px; background: rgba(8, 8, 11, 0.35); }
+.auto-order-item::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: .55; }
+.auto-order-item[data-state="ready"]::before { background: var(--live); opacity: 1; box-shadow: 0 0 6px var(--live-dim); }
+.auto-order-item[data-state="missing"]::before { background: var(--warn); opacity: 1; }
+.auto-order-index { color: var(--dim); font: 600 11px/1 var(--font-mono); min-width: 1.2em; text-align: right; }
+.auto-order-name { color: var(--ivory); font-size: var(--fs-sm); flex: 1 1 auto; }
+.auto-order-item > button { min-height: var(--ctl-h-xs); min-width: var(--ctl-h-xs); padding: 0 6px; font-size: var(--fs-xs); border-radius: var(--r-xs); }
 .auto-order-add { display: flex; gap: var(--s2); align-items: center; flex-wrap: wrap; }
+.auto-order-add > select { flex: 1 1 200px; min-width: 0; min-height: var(--ctl-h-sm); padding: 4px 10px; font-size: var(--fs-sm); }
 .settings-optional { padding: 14px 20px; border-top: 0; }
 .settings-optional > summary { display: flex; align-items: center; gap: 12px; padding: 0; color: var(--ivory); cursor: pointer; font-size: 13px; list-style: none; }
 .settings-optional > summary::marker, .settings-optional > summary::-webkit-details-marker { display: none; content: ""; }
@@ -3269,8 +3351,10 @@ body.command-active .walkthrough-coach { right: 392px; }
 .setup-state { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin: 14px 0 10px; }
 .setup-state-item { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 9px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
 .setup-state-label { color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
-.setup-state-item > span:last-child { color: var(--ivory); font-size: 12.5px; line-height: 1.5; }
-.setup-state-item > span:last-child { color: var(--ivory); font-size: 12.5px; line-height: 1.5; }
+.setup-state-item > span:last-child { display: flex; align-items: center; gap: 7px; color: var(--ivory); font-size: 12.5px; line-height: 1.5; }
+.setup-state-item > span:last-child::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); opacity: .55; }
+.setup-state-item > span:last-child[data-state="ready"]::before { background: var(--live); opacity: 1; box-shadow: 0 0 6px var(--live-dim); }
+.setup-state-item > span:last-child[data-state="missing"]::before { background: var(--warn); opacity: 1; }
 #auto-setup-status { font-size: 12px; line-height: 1.7; }
 .ws-compose-bottom { flex-wrap: wrap; }
 .ws-compose-bottom > span { flex: 1 1 120px; }
@@ -3299,6 +3383,7 @@ body.command-active .walkthrough-coach { right: 392px; }
   .walkthrough-footer > div { width: 100%; justify-content: flex-end; }
   .settings-heading { flex-wrap: wrap; }
   .setup-head { flex-wrap: wrap; }
+  .segmented { grid-auto-flow: row; grid-auto-columns: auto; }
 }
 @media (prefers-reduced-motion: reduce) { #idle-hud .cmd-music-level i { transition: none; } }
 
@@ -3584,35 +3669,55 @@ body.command-active .walkthrough-coach { right: 392px; }
 .tracker-cell > strong { color: var(--ivory); font-weight: 600; }
 @media (max-width: 680px) { .tracker-windows { grid-template-columns: 1fr; } }
 
-/* the Command rail's bottom-right footer: pinned under the tab panels */
-#idle-hud .cmd-usage { flex: none; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--hairline); pointer-events: auto; }
-#idle-hud .cmd-usage-head { display: flex; align-items: flex-start; gap: 5px; }
-#idle-hud .cmd-usage-title { flex: 1; min-width: 0; margin: 0; font: 600 12px/1.3 var(--font-ui); }
-#idle-hud .cmd-usage-title .feed-toggle { flex-wrap: wrap; row-gap: 2px; min-height: 24px; font-size: 11px; }
-#idle-hud .cmd-usage-title .feed-toggle > span:first-child { order: 0; }
-#idle-hud .cmd-usage-title .feed-toggle .glyph { order: 1; }
-#idle-hud .cmd-usage-title .feed-toggle .feed-state { order: 2; flex: 1 0 100%; margin-left: 0; text-align: left; white-space: normal; overflow: visible; text-overflow: clip; font-size: 10px; line-height: 1.45; }
-#idle-hud .cmd-usage-head button { flex: none; }
-#idle-hud .cmd-usage-head .ghost.mini { min-height: 24px; padding: 2px 8px; font-size: 10px; }
+/* the Command corner's Usage breakdown: opens upward from the Usage pill at the bottom-left */
+#idle-hud .usage-pop { display: flex; flex-direction: column; gap: 8px; width: 300px; max-width: calc(100vw - 48px); max-height: min(60vh, 520px); overflow: auto; padding: 10px 12px 12px; border: 1px solid var(--cmd-edge); border-radius: 12px; background: var(--cmd-surface); box-shadow: var(--cmd-shadow); pointer-events: auto; }
+#idle-hud .usage-pop[hidden] { display: none; }
+#idle-hud .cmd-usage-head { display: flex; align-items: center; gap: 5px; }
+#idle-hud .cmd-usage-title { flex: 1; min-width: 0; margin: 0; font: 600 12px/1.3 var(--font-ui); color: var(--ivory); }
+#idle-hud .cmd-usage-head .ghost.mini { flex: none; min-height: 24px; padding: 2px 8px; font-size: 10px; }
+#idle-hud .cmd-usage-state { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
 #idle-hud .cmd-usage-body { display: flex; flex-direction: column; gap: 6px; }
 #idle-hud .cmd-usage-body[hidden] { display: none; }
-#idle-hud .cmd-usage .tracker-windows { grid-template-columns: 1fr; gap: 5px; }
-#idle-hud .cmd-usage .tracker-window { grid-template-columns: 22px 1fr 38px; gap: 6px; font-size: 10px; }
-#idle-hud .cmd-usage .tracker-window-label { font-size: 10px; }
-#idle-hud .cmd-usage .tracker-window-value { font-size: 10px; min-width: 0; }
-#idle-hud .cmd-usage .tracker-bar { height: 5px; border-radius: 3px; }
-#idle-hud .cmd-usage .tracker-lead { display: grid; gap: 5px; padding: 7px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
-#idle-hud .cmd-usage .tracker-lead-name { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; color: var(--ivory); font-size: 10.5px; }
-#idle-hud .cmd-usage .tracker-lead-name small { color: var(--muted); font-size: 9.5px; white-space: nowrap; }
-#idle-hud .cmd-usage .tracker-kicker { margin: 5px 0 0; color: var(--muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
-#idle-hud .cmd-usage .tracker-rows { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
-#idle-hud .cmd-usage .tracker-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-size: 10px; line-height: 1.45; }
-#idle-hud .cmd-usage .tracker-row-label { color: var(--ivory); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#idle-hud .cmd-usage .tracker-row-value { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
-#idle-hud .cmd-usage .tracker-row[data-tone="warn"] .tracker-row-value { color: var(--warn); }
-#idle-hud .cmd-usage .tracker-line { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
-#idle-hud .cmd-usage .tracker-line-warn { color: var(--warn); }
-#idle-hud .cmd-usage .tracker-line-account { color: var(--ivory); }
+#idle-hud .usage-pop .tracker-windows { grid-template-columns: 1fr; gap: 5px; }
+#idle-hud .usage-pop .tracker-window { grid-template-columns: 22px 1fr 38px; gap: 6px; font-size: 10px; }
+#idle-hud .usage-pop .tracker-window-label { font-size: 10px; }
+#idle-hud .usage-pop .tracker-window-value { font-size: 10px; min-width: 0; }
+#idle-hud .usage-pop .tracker-bar { height: 5px; border-radius: 3px; }
+#idle-hud .usage-pop .tracker-lead { display: grid; gap: 5px; padding: 7px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
+#idle-hud .usage-pop .tracker-lead-name { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; color: var(--ivory); font-size: 10.5px; }
+#idle-hud .usage-pop .tracker-lead-name small { color: var(--muted); font-size: 9.5px; white-space: nowrap; }
+#idle-hud .usage-pop .tracker-kicker { margin: 5px 0 0; color: var(--muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+#idle-hud .usage-pop .tracker-rows { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
+#idle-hud .usage-pop .tracker-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-size: 10px; line-height: 1.45; }
+#idle-hud .usage-pop .tracker-row-label { color: var(--ivory); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#idle-hud .usage-pop .tracker-row-value { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+/* a failed read carries its whole reason: the row stacks and the text wraps instead of starving the label */
+#idle-hud .usage-pop .tracker-row[data-tone="warn"] { grid-template-columns: 1fr; gap: 1px; }
+#idle-hud .usage-pop .tracker-row[data-tone="warn"] .tracker-row-value { color: var(--warn); text-align: left; white-space: normal; overflow-wrap: anywhere; }
+#idle-hud .usage-pop .tracker-line { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+#idle-hud .usage-pop .tracker-line-warn { color: var(--warn); overflow-wrap: anywhere; }
+#idle-hud .usage-pop .tracker-line-account { color: var(--ivory); }
+
+/* ============================================================
+   Command floor at desktop widths: the dock has moved left, so the
+   rail may run down to the dock's floor; wider still, the rail grows
+   and its five tabs get the room they were missing.
+   ============================================================ */
+@media (min-width: 1600px) {
+  #idle-hud .cmd-rail { bottom: 22px; }
+  #idle-hud { --command-dock-max: calc(100vw - 24px - var(--command-corner-width) - var(--command-corner-gap) - 16px - var(--command-rail-width) - 24px); }
+}
+/* the narrow rail (288px) keeps all five tabs on one line: Assistant tightens instead of clipping */
+@media (max-width: 1100px) {
+  #idle-hud .rail-tab { font-size: 10px; letter-spacing: 0; padding: 5px 2px 4px; }
+}
+@media (min-width: 1760px) {
+  #idle-hud { --command-rail-width: 392px; }
+  #idle-hud .rail-tabs { gap: 3px; padding: 4px; }
+  #idle-hud .rail-tab { min-height: 48px; gap: 4px; font-size: 11px; }
+  #idle-hud .rail-tab .glyph { width: 15px; height: 15px; }
+  #idle-hud .rail-tab .count { top: 4px; right: 5px; }
+}
 
 /* Integrated music room. Shared theme tokens also colour Command and boards. */
 :root[data-studio-theme] .primary { background: linear-gradient(180deg, var(--gold-bright), var(--gold)); }
@@ -3915,6 +4020,13 @@ body.music-preview-active #idle-hud { display: none !important; }
 .planning-note { padding: 10px 12px; margin: 8px 0; background: var(--bg); border-left: 2px solid var(--hairline-strong); border-radius: 0 8px 8px 0; }
 .planning-note strong { font-size: 12px; color: var(--gold-bright); }
 .planning-note p { margin: 5px 0; white-space: pre-wrap; font-size: 13px; }
+/* Where a line came from. Your own words read as settled; anything Mefi
+   proposed stays visibly unconfirmed until you record it as a decision. */
+.planning-note[data-note-kind="answer"] { border-left-color: var(--gold); }
+.planning-note[data-note-kind="interpretation"], .planning-note[data-note-kind="conflict"] { border-left-style: dashed; }
+.planning-note[data-note-kind="conflict"] strong { color: #f0c073; }
+.planning-interview { border-color: var(--hairline-strong); background: var(--tint-gold-2); }
+.planning-interview-ask { margin: 8px 0 14px; font-size: 16px; line-height: 1.55; }
 .planning-confirm { padding: 18px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: var(--tint-gold-2); }
 .planning-confirm p { line-height: 1.6; margin: 0 0 10px; font-size: 13px; }
 .planning-empty { padding: 20px 0; color: var(--muted); line-height: 1.7; font-size: 14px; }
@@ -4341,11 +4453,11 @@ body.music-preview-active #idle-hud { display: none !important; }
   </section>
   <section id="tab-studio" hidden>
     <div class="panel settings-panel">
-      <div class="settings-heading"><div><p class="eyebrow">Studio</p><h2>Settings & connections</h2><p class="muted">Connect your assistant, choose your coding workers, and manage optional tools. Keys are stored encrypted on this machine and never shown again.</p></div><button class="ghost" data-nav="onboarding"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg>Start here</button></div>
+      <div class="settings-heading"><div><p class="eyebrow">Studio</p><h2>Settings & connections</h2><p class="muted">Connect what you have under Providers, then choose who answers and who builds. Keys are stored encrypted on this machine and never shown again.</p></div><button class="ghost" data-nav="onboarding"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg>Start here</button></div>
       <div class="settings-layout">
         <nav id="settings-nav" class="settings-nav" aria-label="Settings sections">
           <button type="button" class="settings-nav-item" data-settings-jump="settings-setup" aria-current="true"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span class="label">Auto setup</span></button>
-          <button type="button" class="settings-nav-item" data-settings-jump="settings-assistant" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-key"/></svg><span class="label">Assistant</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-assistant" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-key"/></svg><span class="label">Providers</span><span class="settings-nav-badge" id="settings-nav-providers-count" hidden></span></button>
           <button type="button" class="settings-nav-item" data-settings-jump="settings-routing" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-route"/></svg><span class="label">Model routing</span></button>
           <button type="button" class="settings-nav-item" data-settings-jump="settings-workers" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-wrench"/></svg><span class="label">Coding workers</span></button>
           <button type="button" class="settings-nav-item" data-settings-jump="settings-jev" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-target"/></svg><span class="label">Jev</span></button>
@@ -4361,130 +4473,221 @@ body.music-preview-active #idle-hud { display: none !important; }
           <span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-spark"/></svg></span>
           <div>
             <h3 id="settings-setup-heading">Auto setup</h3>
-            <p class="muted">One pass over what this machine already has: saved keys or a reachable local server choose the assistant route, installed CLIs choose the builders, and a saved Jev key turns on task-aware model selection. It sends no request, changes no key, and keeps every model override.</p>
+            <p class="muted">Reads what this machine already has and applies only the changes needed: keys, servers and CLIs choose the routes, a Jev key turns on task-aware selection. Sends nothing, changes no key, keeps every model override.</p>
           </div>
           <button id="auto-setup" class="primary">Run auto setup</button>
         </div>
         <div class="setup-state">
-          <div class="setup-state-item"><span class="setup-state-label">Assistant</span><span id="setup-assistant">checking…</span></div>
-          <div class="setup-state-item"><span class="setup-state-label">Model selection</span><span id="setup-selection">checking…</span></div>
-          <div class="setup-state-item"><span class="setup-state-label">Builders</span><span id="setup-builders">checking…</span></div>
+          <div class="setup-state-item"><span class="setup-state-label">Assistant</span><span id="setup-assistant" data-state="unknown">checking…</span></div>
+          <div class="setup-state-item"><span class="setup-state-label">Model selection</span><span id="setup-selection" data-state="unknown">checking…</span></div>
+          <div class="setup-state-item"><span class="setup-state-label">Builders</span><span id="setup-builders" data-state="unknown">checking…</span></div>
         </div>
-        <p class="muted" id="auto-setup-status" role="status">Not run yet. Auto setup applies only the changes that are needed and explains each one.</p>
+        <p class="settings-status" id="auto-setup-status" role="status">Not run yet. Auto setup applies only the changes that are needed and explains each one.</p>
         </section>
         <section class="settings-group settings-card" id="settings-assistant" aria-labelledby="settings-assistant-heading">
-        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-key"/></svg></span><div><h3 id="settings-assistant-heading">Assistant connection</h3><p class="muted">Save a key for the provider you use, then choose its routing below. Grok, Claude Code, Codex and Antigravity use their CLI's own login; LM Studio needs no key.</p></div></div>
-        <div class="key-list">
-        <div class="row key-row"><span class="key-provider">z.ai</span>
-          <input type="password" id="zai-key" placeholder="z.ai Coding Plan API key (stored encrypted)" autocomplete="off" aria-label="z.ai Coding Plan API key">
-          <button id="save-zai-key">Save z.ai key</button>
-          <span class="muted key-status" id="zai-key-status">checking…</span>
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-key"/></svg></span><div><h3 id="settings-assistant-heading">Providers</h3><p class="muted">Every route Studio can answer or build with. Save a key, point at a server, or sign in to a CLI; routing picks from whatever lights up.</p></div></div>
+        <p class="settings-eyebrow">Keys & servers</p>
+        <div class="provider-grid">
+          <article class="provider-tile" data-provider="zai">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">z</span>
+              <div class="provider-title"><span class="provider-name">z.ai GLM</span><span class="provider-kind">API key · Coding Plan</span></div>
+              <span class="provider-pill" id="zai-key-status" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body">
+              <input type="password" id="zai-key" placeholder="Paste API key" autocomplete="off" aria-label="z.ai Coding Plan API key">
+              <button id="save-zai-key" class="mini">Save</button>
+            </div>
+          </article>
+          <article class="provider-tile" data-provider="opencode">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">Go</span>
+              <div class="provider-title"><span class="provider-name">OpenCode Go</span><span class="provider-kind">API key · billed per use</span></div>
+              <span class="provider-pill" id="key-status" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body">
+              <input type="password" id="api-key" placeholder="Paste API key" autocomplete="off" aria-label="OpenCode Go API key">
+              <button id="save-key" class="mini">Save</button>
+            </div>
+          </article>
+          <article class="provider-tile" data-provider="lmstudio">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">LM</span>
+              <div class="provider-title"><span class="provider-name">LM Studio</span><span class="provider-kind">Local server · no key</span></div>
+              <span class="provider-pill" id="lmstudio-status" data-state="ready">no key needed</span>
+            </div>
+            <div class="provider-tile-body">
+              <input type="text" id="lmstudio-endpoint" placeholder="http://127.0.0.1:1234/v1/chat/completions" spellcheck="false" autocomplete="off" aria-label="LM Studio endpoint" title="The local LM Studio server's chat-completions URL; saved when you leave the field. Its loaded model is detected automatically.">
+            </div>
+          </article>
+          <article class="provider-tile" data-provider="custom">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">API</span>
+              <div class="provider-title"><span class="provider-name">Custom endpoint</span><span class="provider-kind">OpenAI-compatible · your key</span></div>
+              <span class="provider-pill" id="custom-key-status" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body">
+              <input type="text" id="custom-endpoint" placeholder="https://host/v1" spellcheck="false" autocomplete="off" aria-label="Custom provider endpoint" title="Your own OpenAI-compatible endpoint. A bare base URL gains the chat-completions path; saved when you leave the field.">
+              <input type="password" id="custom-key" placeholder="API key" autocomplete="off" aria-label="Custom provider API key">
+              <button id="save-custom-key" class="mini">Save</button>
+            </div>
+          </article>
         </div>
-        <div class="row key-row"><span class="key-provider">OpenCode Go</span>
-          <input type="password" id="api-key" placeholder="OpenCode Go API key (stored encrypted)" autocomplete="off" aria-label="OpenCode Go API key">
-          <button id="save-key">Save OpenCode key</button>
-          <span class="muted key-status" id="key-status">checking…</span>
+        <p class="settings-eyebrow">CLI logins</p>
+        <div class="provider-grid">
+          <article class="provider-tile" data-provider="opencode-cli">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">OC</span>
+              <div class="provider-title"><span class="provider-name">OpenCode</span><span class="provider-kind">Builder · plan or free models</span></div>
+              <span class="provider-pill" data-cli-status="opencode" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body"><span class="provider-hint">Carries your z.ai plan as the mefi-zai provider when that key is saved.</span><button class="ghost mini" data-cli="opencode" title="Open the OpenCode TUI in the repo; carries the Studio mefi-zai provider (your z.ai plan) when a key is saved">Open</button></div>
+          </article>
+          <article class="provider-tile" data-provider="grok">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">Gk</span>
+              <div class="provider-title"><span class="provider-name">Grok</span><span class="provider-kind">CLI login · xAI account</span></div>
+              <span class="provider-pill" data-cli-status="grok" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body"><span class="provider-hint">Answers and builds on its own login.</span><button class="ghost mini" data-cli="grok" title="Open the Grok CLI in the repo on its own login">Open</button></div>
+          </article>
+          <article class="provider-tile" data-provider="claude">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">CC</span>
+              <div class="provider-title"><span class="provider-name">Claude Code</span><span class="provider-kind">CLI login · subscription</span></div>
+              <span class="provider-pill" data-cli-status="claude" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body"><span class="provider-hint">Answers and builds on your Claude subscription.</span><button class="ghost mini" data-cli="claude" title="Open Claude Code in the repo on its own account">Open</button></div>
+          </article>
+          <article class="provider-tile" data-provider="codex">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">Cx</span>
+              <div class="provider-title"><span class="provider-name">Codex</span><span class="provider-kind">CLI login · ChatGPT</span></div>
+              <span class="provider-pill" data-cli-status="codex" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body"><span class="provider-hint">Answers and builds on your ChatGPT login.</span><button class="ghost mini" data-cli="codex" title="Open Codex CLI in the repo on its own account">Open</button></div>
+          </article>
+          <article class="provider-tile" data-provider="antigravity">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">Ag</span>
+              <div class="provider-title"><span class="provider-name">Antigravity</span><span class="provider-kind">CLI login · Google account</span></div>
+              <span class="provider-pill" data-cli-status="antigravity" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body"><span class="provider-hint">Answers and builds on your Google account.</span><button class="ghost mini" data-cli="antigravity" title="Open the Antigravity CLI in the repo on your Google account">Open</button></div>
+          </article>
         </div>
-        <div class="row key-row key-row-custom"><span class="key-provider">Custom</span>
-          <input type="text" id="custom-endpoint" placeholder="Custom endpoint — https://host/v1 (OpenAI-compatible)" spellcheck="false" autocomplete="off" aria-label="Custom provider endpoint">
-          <input type="password" id="custom-key" placeholder="Custom API key (stored encrypted)" autocomplete="off" aria-label="Custom provider API key">
-          <button id="save-custom-key">Save custom key</button>
-          <span class="muted key-status" id="custom-key-status">checking…</span>
-        </div>
+        <div class="settings-foot">
+          <button class="ghost mini" id="cli-test-zai" title="Verify OpenCode sees the Studio-managed mefi-zai GLM provider">Test z.ai link in OpenCode</button>
+          <span class="settings-status" id="cli-status">checking…</span>
         </div>
         </section>
         <section class="settings-group settings-card" id="settings-routing" aria-labelledby="settings-routing-heading">
-        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-route"/></svg></span><div><h3 id="settings-routing-heading">Model routing</h3><p class="muted">Who pays for assistant calls, and how each task's model is chosen. Models are saved per provider, so switching routes cannot carry one provider's model into another; use whichever option you already have: a saved key, an installed CLI login, or a local server.</p></div></div>
-        <div class="row">
-          <label class="muted">AI routing
-            <select id="ai-provider">
-              <option value="auto">Auto — first usable provider in your order</option>
-              <option value="zai">z.ai only — never bill OpenCode</option>
-              <option value="opencode">OpenCode Go only</option>
-              <option value="grok">Grok CLI — the assistant answers through the grok CLI's own login</option>
-              <option value="claude">Claude Code CLI — the assistant answers on your Claude Code subscription login</option>
-              <option value="codex">Codex CLI — the assistant answers through codex on your ChatGPT login</option>
-              <option value="antigravity">Antigravity CLI — the assistant answers through agy on your Google account</option>
-              <option value="lmstudio">LM Studio — a local server on this machine, no key</option>
-              <option value="custom">Custom endpoint — your own OpenAI-compatible URL and key</option>
-            </select>
-          </label>
-          <span class="muted" id="provider-readiness" role="status">checking…</span>
-        </div>
-        <div class="row auto-order">
-          <span class="muted">Auto order — used when AI routing is Auto: the first usable provider answers, and with fallback enabled a failed HTTP route retries down the list.</span>
-          <ol class="auto-order-list" id="auto-order-list" aria-label="Auto provider preference order"></ol>
-          <div class="auto-order-add">
-            <select id="auto-order-add" aria-label="Provider to add to the auto order"></select>
-            <button class="ghost" id="auto-order-add-button" type="button">Add provider</button>
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-route"/></svg></span><div><h3 id="settings-routing-heading">Model routing</h3><p class="muted">Who answers the assistant, and how each task's model is chosen. Ready routes list first; the rest stay selectable and can be set up later. Models are saved per provider, so switching never mixes them.</p></div></div>
+        <div class="settings-columns">
+          <div class="settings-column">
+            <p class="settings-eyebrow">Who answers</p>
+            <label class="field"><span class="field-label">Assistant answers via</span>
+              <select id="ai-provider">
+                <option value="auto">Auto — first ready provider in your order</option>
+                <option value="zai">z.ai GLM</option>
+                <option value="opencode">OpenCode Go</option>
+                <option value="grok">Grok CLI</option>
+                <option value="claude">Claude Code CLI</option>
+                <option value="codex">Codex CLI</option>
+                <option value="antigravity">Antigravity CLI</option>
+                <option value="lmstudio">LM Studio (local)</option>
+                <option value="custom">Custom endpoint</option>
+              </select>
+              <span class="field-hint" id="provider-readiness" role="status">checking…</span>
+            </label>
+            <div class="auto-order">
+              <span class="field-label">Auto order</span>
+              <ol class="auto-order-list" id="auto-order-list" aria-label="Auto provider preference order"></ol>
+              <div class="auto-order-add">
+                <select id="auto-order-add" aria-label="Provider to add to the auto order"></select>
+                <button class="ghost mini" id="auto-order-add-button" type="button">Add</button>
+              </div>
+              <span class="field-hint">The first ready provider answers. With fallback on, a failed HTTP route retries down the list.</span>
+            </div>
+            <label class="switch" title="Off by default: when an HTTP route fails, retry on the next ready HTTP provider in the auto order (this can bill that provider)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>Fall back to the next provider on failure</span></label>
+          </div>
+          <div class="settings-column">
+            <p class="settings-eyebrow">Models & selection</p>
+            <div class="field-grid">
+              <label class="field"><span class="field-label">Routine model <span class="field-scope" id="model-scope-note">for this provider</span></span>
+                <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model this provider uses for routine passes (replies, briefs, chat). Saved per provider; empty = the provider's own default.">
+              </label>
+              <label class="field"><span class="field-label">Heavy model</span>
+                <input type="text" id="ai-model-heavy" placeholder="same as routine" spellcheck="false" autocomplete="off" title="Model this provider uses for heavy passes (overseer, improver, analyzer read). Saved per provider; empty = routine's model where the provider has one, otherwise the provider's default.">
+              </label>
+            </div>
+            <div class="field">
+              <span class="field-label">Model selection</span>
+              <div class="segmented" role="group" aria-label="Model selection" data-segmented-for="ai-model-selection">
+                <button type="button" data-value="jev" aria-pressed="false">Jev<small>task fit, speed & cost</small></button>
+                <button type="button" data-value="fixed" aria-pressed="false">Fixed<small>provider defaults</small></button>
+              </div>
+              <select id="ai-model-selection" class="segmented-source" aria-hidden="true" tabindex="-1" aria-describedby="ai-routing-help">
+                <option value="jev">Jev — task fit, speed & cost</option>
+                <option value="fixed">Fixed defaults</option>
+              </select>
+            </div>
+            <p class="settings-status" id="ai-routing-status" role="status">Checking model selection…</p>
+            <p class="settings-status" id="ai-routing-decision" role="status">No selection recorded yet.</p>
+            <p class="settings-status" id="ai-routing-evidence" hidden></p>
+            <div class="settings-foot"><button class="ghost mini" id="ai-routing-refresh">Refresh selection</button></div>
+            <details class="settings-help"><summary>How Jev chooses</summary><p id="ai-routing-help">Jev ranks the models within your chosen provider for each task by catalog quality, estimated price, and your project's measured timing, errors, ratings and reported costs; missing evidence stays unknown. Each selection is one small billed gateway request and needs a Jev key (below); when Jev is unavailable the usual default runs. Model overrides always win. CLI routes use their saved model or CLI default; LM Studio and custom endpoints answer with the model loaded at their URL unless you save an override.</p></details>
           </div>
         </div>
-        <div class="row">
-          <label class="muted">Routine model <span class="muted" id="model-scope-note">for this provider</span>
-            <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model this provider uses for routine passes (replies, briefs, chat). Saved per provider; empty = the provider's own default." style="width: 15em">
-          </label>
-          <label class="muted">Heavy model
-            <input type="text" id="ai-model-heavy" placeholder="same as routine" spellcheck="false" autocomplete="off" title="Model this provider uses for heavy passes (overseer, improver, analyzer read). Saved per provider; empty = routine's model where the provider has one, otherwise the provider's default." style="width: 15em">
-          </label>
-          <label class="switch" title="Off by default: when an HTTP route fails, retry on the next usable HTTP provider in the auto order (this can bill that provider)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>Fall back to the next provider on failure</span></label>
-        </div>
-        <div class="row">
-          <label class="muted">Model selection
-            <select id="ai-model-selection" aria-describedby="ai-routing-help">
-              <option value="jev">Jev — task fit, speed & cost</option>
-              <option value="fixed">Fixed defaults</option>
-            </select>
-          </label>
-          <label class="muted">LM Studio endpoint
-            <input type="text" id="lmstudio-endpoint" placeholder="http://127.0.0.1:1234/v1/chat/completions" spellcheck="false" autocomplete="off" title="The local LM Studio server's chat-completions URL. Used only when AI routing is LM Studio." style="width: 24em">
-          </label>
-          <button class="ghost" id="ai-routing-refresh">Refresh selection</button>
-        </div>
-        <p class="muted" id="ai-routing-help">Jev ranks available models within your chosen provider for each task using catalog quality and estimated prices, plus your project's measured timing, errors, ratings and reported costs. Missing evidence stays unknown. Selection uses a small billed gateway request. Save a Jev gateway key below to enable it; a timeout or unavailable Jev uses the usual default. Model overrides take priority. Grok, Claude Code, Codex and Antigravity use their saved model or CLI default; LM Studio and custom endpoints answer from the URL above (load one model or save a model override).</p>
-        <p class="muted" id="ai-routing-status" role="status">Checking model selection…</p>
-        <p class="muted" id="ai-routing-decision" role="status">No selection recorded yet.</p>
-        <p class="muted" id="ai-routing-evidence" hidden></p>
         </section>
         <section class="settings-group settings-card" id="settings-workers" aria-labelledby="settings-workers-heading">
-        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-wrench"/></svg></span><div><h3 id="settings-workers-heading">Coding workers</h3><p class="muted">Workers carry out queued tasks in your selected project. Choose a provider whose CLI is installed and signed in, then a coding tier: <strong>Auto</strong> lets Studio pick per task (Jev or the stand-in judge within your provider, otherwise the CLI default), <strong>Free</strong> runs a free model one worker at a time, <strong>Fast</strong> runs the quick economical model, and <strong>Heavy</strong> runs the high-end one. Tier models are saved per CLI; a tier without a model of its own uses Studio's default for that CLI, or the CLI's own default — except Free, which never falls back to a billed model.</p></div></div>
-        <div class="row">
-          <label class="muted">Builders run on
-            <select id="executor-cli">
-              <option value="opencode">OpenCode run</option>
-              <option value="grok">Grok CLI — grok builds every queued job on its own login</option>
-              <option value="claude">Claude Code — claude builds every queued job on your subscription login</option>
-              <option value="codex">Codex — codex builds every queued job on your ChatGPT login</option>
-              <option value="antigravity">Antigravity — agy builds every queued job on your Google account</option>
-            </select>
-          </label>
-          <label class="muted">Coding tier
-            <select id="executor-tier" title="What each build may cost: Auto picks per task, Free runs free models one at a time, Fast runs the quick economical model, Heavy runs the high-end one">
-              <option value="auto">Auto — Studio picks per task</option>
-              <option value="free">Free — free models, one worker at a time</option>
-              <option value="fast">Fast — quick, economical models</option>
-              <option value="heavy">Heavy — high-end models for hard work</option>
-            </select>
-          </label>
-          <label class="muted"><span id="executor-model-label">Pinned model</span> <span class="muted" id="builder-scope-note">for this CLI</span>
-            <input type="text" id="executor-model" placeholder="CLI default" spellcheck="false" autocomplete="off" title="Model this builder runs with for the selected tier (grok -m / claude --model / codex -m / agy --model; OpenCode takes provider/model). Saved per builder and per tier; empty = the tier's default." style="width: 15em">
-          </label>
-        </div>
-        <p class="muted executor-tiers" id="executor-tier-status" role="status">Checking coding tiers…</p>
-        <div class="row">
-          <span class="muted">Coding CLIs</span>
-          <button class="ghost" data-cli="opencode" title="Open the OpenCode TUI in the repo; carries the Studio mefi-zai provider (your z.ai plan) when a key is saved">OpenCode</button>
-          <button class="ghost" data-cli="grok" title="Open the Grok CLI in the repo on its own login">Grok</button>
-          <button class="ghost" data-cli="codex" title="Open Codex CLI in the repo on its own account">Codex</button>
-          <button class="ghost" data-cli="claude" title="Open Claude Code in the repo on its own account">Claude Code</button>
-          <button class="ghost" data-cli="antigravity" title="Open the Antigravity CLI in the repo on your Google account">Antigravity</button>
-          <button class="ghost" id="cli-test-zai" title="Verify OpenCode sees the Studio-managed mefi-zai GLM provider">Test z.ai link</button>
-          <span class="muted" id="cli-status">checking…</span>
+        <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-wrench"/></svg></span><div><h3 id="settings-workers-heading">Coding workers</h3><p class="muted">Workers carry out queued tasks in your selected project. Pick a builder whose CLI is installed and signed in, then what each build may cost.</p></div></div>
+        <div class="settings-columns">
+          <div class="settings-column">
+            <p class="settings-eyebrow">Builder</p>
+            <label class="field"><span class="field-label">Builders run on</span>
+              <select id="executor-cli">
+                <option value="opencode">OpenCode run</option>
+                <option value="grok">Grok CLI — grok builds every queued job on its own login</option>
+                <option value="claude">Claude Code — claude builds every queued job on your subscription login</option>
+                <option value="codex">Codex — codex builds every queued job on your ChatGPT login</option>
+                <option value="antigravity">Antigravity — agy builds every queued job on your Google account</option>
+              </select>
+            </label>
+            <label class="field"><span class="field-label"><span id="executor-model-label">Pinned model</span> <span class="field-scope" id="builder-scope-note">for this CLI</span></span>
+              <input type="text" id="executor-model" placeholder="CLI default" spellcheck="false" autocomplete="off" title="Model this builder runs with for the selected tier (grok -m / claude --model / codex -m / agy --model; OpenCode takes provider/model). Saved per builder and per tier; empty = the tier's default.">
+            </label>
+            <details class="settings-help"><summary>How tiers resolve</summary><p>Tier models are saved per CLI. A tier without a model of its own uses Studio's default for that CLI or the CLI's own default; Free never falls back to a billed model. Auto lets Jev or the stand-in judge pick per task within your provider, and a pinned model wins.</p></details>
+          </div>
+          <div class="settings-column">
+            <p class="settings-eyebrow">Coding tier</p>
+            <div class="field">
+              <div class="segmented" role="group" aria-label="Coding tier" data-segmented-for="executor-tier">
+                <button type="button" data-value="auto" aria-pressed="false">Auto<small>Studio picks per task</small></button>
+                <button type="button" data-value="free" aria-pressed="false">Free<small>one worker at a time</small></button>
+                <button type="button" data-value="fast" aria-pressed="false">Fast<small>quick & economical</small></button>
+                <button type="button" data-value="heavy" aria-pressed="false">Heavy<small>high-end models</small></button>
+              </div>
+              <select id="executor-tier" class="segmented-source" aria-hidden="true" tabindex="-1" title="What each build may cost: Auto picks per task, Free runs free models one at a time, Fast runs the quick economical model, Heavy runs the high-end one">
+                <option value="auto">Auto — Studio picks per task</option>
+                <option value="free">Free — free models, one worker at a time</option>
+                <option value="fast">Fast — quick, economical models</option>
+                <option value="heavy">Heavy — high-end models for hard work</option>
+              </select>
+            </div>
+            <div class="tier-table" id="executor-tier-table" aria-label="What each tier runs" hidden></div>
+            <p class="settings-status executor-tiers" id="executor-tier-status" role="status">Checking coding tiers…</p>
+          </div>
         </div>
         </section>
         <details class="settings-optional settings-card" id="settings-jev"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-target"/></svg></span><span class="settings-summary-text"><b>Jev connection</b><span>Task-aware model selection and optional task suggestions</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
           <p class="muted">Choose where Jev is routed: the Vercel AI Gateway, TypeSafe's Jev API directly, OpenCode Zen (including its free Jev tier), or OpenRouter. Each route keeps its own key, stored encrypted; switching never moves a key between routes. The key connects Jev for model selection above and optional task suggestions. Intake classification compares incoming work with existing tasks and records suggestions; its switch does not change model selection.</p>
           <div class="row"><label class="muted">Route <select id="jev-route" title="Where Jev calls are routed: a hosted gateway or TypeSafe's Jev API directly"><option value="vercel">Vercel AI Gateway</option><option value="typesafe">Jev API — TypeSafe</option><option value="zen">OpenCode Zen</option><option value="openrouter">OpenRouter</option></select></label><input type="password" id="jev-key" placeholder="Vercel gateway API key (stored encrypted)" autocomplete="off" aria-label="Jev API key"><button id="save-jev-key">Save Jev key</button><button id="test-jev">Test Jev connection</button><label class="switch"><input type="checkbox" id="jev-enabled" checked><span class="track"></span><span>Intake classification</span></label></div>
           <p class="muted" id="jev-status" role="status">Checking Jev…</p>
+        </details>
+        <details class="settings-optional settings-card" id="settings-studio"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-studio"/></svg></span><span class="settings-summary-text"><b>Studio</b><span>Where a launch lands; your name, theme and motion live under Make yourself at home in the sidebar</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+          <div class="row"><label class="switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span>Open Workspace on launch</span></label></div>
+          <p class="muted">Off means Studio opens straight into Command view after the project chooser.</p>
         </details>
         <details class="settings-optional settings-card" id="settings-updates"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-update"/></svg></span><span class="settings-summary-text"><b>Updates & diagnostics</b><span>Live update, published builds and a speed probe</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
         <div class="row">
@@ -4502,10 +4705,6 @@ body.music-preview-active #idle-hud { display: none !important; }
           </div>
           <p class="muted">Published builds are checked on GitHub every 20 minutes. The portable app can download and install one from here; in development the checker reports only.</p>
           <div class="row tight update-row" data-release-row>
-        <details class="settings-optional settings-card" id="settings-studio"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-studio"/></svg></span><span class="settings-summary-text"><b>Studio</b><span>Where a launch lands; your name, theme and motion live under Make yourself at home in the sidebar</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
-          <div class="row"><label class="switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span>Open Workspace on launch</span></label></div>
-          <p class="muted">Off means Studio opens straight into Command view after the project chooser.</p>
-        </details>
             <button id="release-check" class="ghost" title="Ask GitHub for the newest published build now">Check GitHub</button>
             <button id="release-apply" class="ghost" hidden disabled>Update</button>
             <span class="eyes-status" id="release-status" role="status">release: not checked</span>
@@ -4779,23 +4978,21 @@ body.music-preview-active #idle-hud { display: none !important; }
     <ul id="cmd-ask-list" class="ask-list" aria-label="Questions and suggestions"></ul>
   </section>
     </div>
-  <section id="cmd-usage" class="cmd-usage" aria-label="Usage across connected providers">
-    <header class="cmd-usage-head">
-      <h2 class="cmd-usage-title">
-        <button id="cmd-usage-toggle" class="feed-toggle" type="button" aria-expanded="true" aria-controls="cmd-usage-body" title="Collapse usage">
-          <span>Usage</span><span id="cmd-usage-state" class="feed-state">waiting</span>
-          <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg>
-        </button>
-      </h2>
-      <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and every connected account">Refresh</button>
-      <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Model Lab">Details</button>
-    </header>
-    <div id="cmd-usage-body" class="cmd-usage-body"></div>
-  </section>
   </aside>
+  <!-- bottom-left corner: the Legend pill with the Usage pill above it; both lists open upward -->
   <div id="cmd-legend" class="cmd-legend">
     <button id="idle-legend-toggle" class="pill" aria-expanded="false" aria-controls="cmd-legend-list" title="What the colours and rings mean"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-legend"/></svg><span class="label">Legend</span></button>
+    <button id="cmd-usage-toggle" class="pill usage-pill" type="button" aria-expanded="false" aria-controls="cmd-usage-pop" title="Usage across connected providers"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-graph"/></svg><span class="label">Usage</span><span id="cmd-usage-brief" class="usage-brief"></span><i id="cmd-usage-dot" class="usage-dot" aria-hidden="true" hidden></i></button>
     <ul id="cmd-legend-list" class="legend-list" hidden></ul>
+    <section id="cmd-usage-pop" class="usage-pop" aria-label="Usage across connected providers" hidden>
+      <header class="cmd-usage-head">
+        <h2 id="cmd-usage-title" class="cmd-usage-title">Usage</h2>
+        <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and every connected account">Refresh</button>
+        <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Model Lab">Details</button>
+      </header>
+      <p id="cmd-usage-state" class="cmd-usage-state" role="status" aria-live="polite">Waiting for a reading…</p>
+      <div id="cmd-usage-body" class="cmd-usage-body" hidden></div>
+    </section>
   </div>
   <div id="cmd-empty" class="cmd-empty" data-variant="desktop-only" role="status" hidden>
     <div class="eyebrow">Command</div>
@@ -11985,7 +12182,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   const REFRESH_MS = 5 * 60 * 1000;
   const STALE_MS = 5000;
   const WINDOW_LABELS = [["rolling", "5-hour window", "5h"], ["weekly", "Weekly window", "Wk"], ["monthly", "Monthly window", "Mo"]];
-  const state = { initialized: false, collapsed: false, read: 0, at: 0, report: null, pending: null };
+  const state = { initialized: false, open: false, read: 0, at: 0, report: null, pending: null };
   const $ = (id) => document.getElementById(id);
   const api = () => window.mefiStudio;
   const rows = (value) => Array.isArray(value) ? value : [];
@@ -12013,9 +12210,6 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (!Number.isFinite(date.getTime())) return "";
     return Math.abs(date.getTime() - Date.now()) < 86400000 ? clock(date) : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   };
-  const readStore = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
-  const writeStore = (key, value) => { try { localStorage.setItem(key, value); } catch {} };
-
   function element(tag, className = "", text = "") {
     const node = document.createElement(tag);
     node.className = className;
@@ -12338,11 +12532,30 @@ body.music-preview-active #idle-hud { display: none !important; }
   }
 
   // A missing OpenCode Go key is not a failed read once the accounts read is
-  // authoritative: the older credits bridge simply has nothing to say.
+  // authoritative: the older credits bridge simply has nothing to say. A read
+  // that did fail is named, so the note says which account to look at.
   function readNote(report) {
     const noKey = report.credits?.ok === false && report.credits?.code === "no-key" && report.accounts?.ok === true;
-    const failed = accountsOf(report).filter((account) => account.read !== "none" && !account.ok && !(noKey && account.provider === "opencode-go")).length;
-    return report.credits?.ok === false && !noKey ? " · live account read unavailable" : failed ? ` · ${failed} account read${failed === 1 ? "" : "s"} unavailable` : "";
+    const failed = accountsOf(report).filter((account) => account.read !== "none" && !account.ok && !(noKey && account.provider === "opencode-go"));
+    if (report.credits?.ok === false && !noKey) return " · live account read unavailable";
+    if (!failed.length) return "";
+    return ` · ${failed.length} account read${failed.length === 1 ? "" : "s"} unavailable (${failed.map((account) => account.label).join(", ")})`;
+  }
+  // The pill itself carries one short reading: the lead account's first two
+  // windows, or today's recorded calls when nothing live is connected. The
+  // dot beside it lights when a read failed or a window is nearly spent.
+  function briefOf(report) {
+    if (!report) return "";
+    const lead = leadAccount(report);
+    if (lead) return leadWindows(lead).slice(0, 2).map(([short, record]) => `${short.toLowerCase()} ${record && finite(record.percent) ? percent(record.percent) : "—"}`).join(" · ");
+    const local = report.local?.ok === false ? null : report.local;
+    return local ? `today ${calls(local.today.calls)}` : "no reading";
+  }
+  function toneOf(report) {
+    if (!report) return "";
+    if (readNote(report)) return "warn";
+    const lead = leadAccount(report);
+    return lead && leadWindows(lead).some(([, record]) => hot(record)) ? "warn" : "";
   }
   function statusOf(report) {
     if (!report) return "Waiting for a reading…";
@@ -12375,12 +12588,20 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (fullStatus) fullStatus.textContent = statusOf(report);
     const compactState = $("cmd-usage-state");
     if (compactState) compactState.textContent = compactStatus(report);
+    const brief = $("cmd-usage-brief");
+    if (brief) brief.textContent = briefOf(report);
+    const dot = $("cmd-usage-dot");
+    if (dot) { const tone = toneOf(report); dot.hidden = !tone; dot.setAttribute("data-tone", tone || "ok"); }
+    const toggle = $("cmd-usage-toggle");
+    if (toggle) toggle.title = `${compactStatus(report)} · click for the breakdown`;
   }
   function setStatus(text) {
     const fullStatus = $("model-lab-tracker-status");
     if (fullStatus) fullStatus.textContent = text;
     const compactState = $("cmd-usage-state");
     if (compactState) compactState.textContent = text;
+    const brief = $("cmd-usage-brief");
+    if (brief && !state.report) brief.textContent = text === "Reading usage…" ? "reading…" : "";
   }
 
   function refresh({ force = false } = {}) {
@@ -12417,18 +12638,20 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (!document.body?.classList?.contains?.("command-active")) return;
     if (Date.now() - state.at >= REFRESH_MS) refresh();
   }
-  function setCompactCollapsed(collapsed, save = true) {
-    state.collapsed = Boolean(collapsed);
+  // The Usage pill at the bottom-left opens the breakdown above it; opening
+  // also asks for a reading when the last one is older than a few seconds.
+  function setOpen(open) {
+    state.open = Boolean(open);
+    const pop = $("cmd-usage-pop");
+    if (pop) pop.hidden = !state.open;
     const body = $("cmd-usage-body");
-    if (body) body.hidden = state.collapsed;
+    if (body) body.hidden = !state.open;
     const toggle = $("cmd-usage-toggle");
-    if (toggle) {
-      toggle.setAttribute("aria-expanded", String(!state.collapsed));
-      toggle.title = state.collapsed ? "Expand usage" : "Collapse usage";
-    }
-    if (save) writeStore("mefiStudio.cmdUsageCollapsed", state.collapsed ? "1" : "0");
+    if (toggle) toggle.setAttribute("aria-expanded", String(state.open));
+    if (state.open) refresh();
   }
   function openTab() {
+    setOpen(false);
     // Through the registry so the "Back to Command" return state is recorded.
     if (window.MefiNav?.go) window.MefiNav.go("graph");
     else { window.MefiIdle?.exit?.(); window.MefiBooklet?.showTab?.("graph"); }
@@ -12444,8 +12667,12 @@ body.music-preview-active #idle-hud { display: none !important; }
     $("model-lab-tracker-refresh")?.addEventListener("click", () => refresh({ force: true }));
     $("cmd-usage-refresh")?.addEventListener("click", () => refresh({ force: true }));
     $("cmd-usage-open")?.addEventListener("click", openTab);
-    $("cmd-usage-toggle")?.addEventListener("click", () => setCompactCollapsed(!state.collapsed));
-    setCompactCollapsed(readStore("mefiStudio.cmdUsageCollapsed") === "1", false);
+    $("cmd-usage-toggle")?.addEventListener("click", () => setOpen(!state.open));
+    // A click anywhere outside the corner closes the breakdown.
+    document.addEventListener?.("pointerdown", (event) => {
+      if (state.open && !event.target?.closest?.("#cmd-legend")) setOpen(false);
+    });
+    setOpen(false);
     window.addEventListener("mefi:project-changed", () => {
       state.read += 1;
       state.at = 0;
@@ -12454,7 +12681,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     });
   }
 
-  window.MefiUsageTracker = { refresh, tick, open, openTab, init, report: () => state.report };
+  window.MefiUsageTracker = { refresh, tick, open, openTab, init, setOpen, report: () => state.report };
   init();
 })();
 
@@ -21485,6 +21712,34 @@ body.music-preview-active #idle-hud { display: none !important; }
     return true;
   }
 
+  // The whole tree back in view: the camera glides out to the fitted frame
+  // at the same rate a click closed in (pan targets to the origin, zoom
+  // target 1, fit recomputed for the current window). Reduced motion lands
+  // at once, the way the frame loop snaps every glide.
+  function frameTree() {
+    state.camera.tx = 0;
+    state.camera.ty = 0;
+    state.camera.tz = 0;
+    autoFit();
+    glideZoom(1);
+    if (noMotion()) {
+      state.camera.x = 0;
+      state.camera.y = 0;
+      state.camera.z = 0;
+    }
+  }
+
+  // Letting go of a node by hand (empty canvas, Esc, the card's close
+  // button): the selection and the focus clear, and the tree comes back
+  // into frame. Nothing to let go of leaves the camera where the user put it.
+  function releaseNode() {
+    const held = Boolean(state.selected || state.focus);
+    exitFocus();
+    selectNode(null);
+    if (held) frameTree();
+    return held;
+  }
+
   function setCardStyle(style) {
     state.cardStyle = CARD_STYLES.includes(style) ? style : "auto";
     writeStore("mefiStudio.cmdCardStyle", state.cardStyle);
@@ -22777,7 +23032,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     close.title = "Clear selection (Esc)";
     close.setAttribute("aria-label", "Clear selection");
     close.append(glyph("g-close"));
-    close.addEventListener("click", () => selectNode(null));
+    close.addEventListener("click", () => releaseNode());
     kicker.append(eyebrow, badge, close);
 
     const title = document.createElement("h3");
@@ -23796,13 +24051,8 @@ body.music-preview-active #idle-hud { display: none !important; }
       clearSearch();
       return true;
     }
-    if (state.focus) {
-      exitFocus();
-      selectNode(null);
-      return true;
-    }
-    if (state.selected) {
-      selectNode(null);
+    if (state.focus || state.selected) {
+      releaseNode();
       return true;
     }
     exit();
@@ -24709,9 +24959,10 @@ body.music-preview-active #idle-hud { display: none !important; }
         const node = state.panning.node;
         // A click on a node or its callout focuses it: the camera closes in
         // (less on a parent, so its children stay in frame) and the rest of
-        // the tree keeps turning, softly blurred, behind it. Empty canvas lets go.
+        // the tree keeps turning, softly blurred, behind it. Empty canvas
+        // lets go and brings the whole tree back into view.
         if (node) enterFocus(node);
-        else selectNode(null);
+        else releaseNode();
       }
       state.panning = null;
       state.rotating = null;
@@ -32122,8 +32373,9 @@ body.music-preview-active #idle-hud { display: none !important; }
   else init();
 })();
 
-// Project-local decisions and reviewed task handoffs. Model calls happen only
-// after explicit buttons; suggestions never record decisions or approve work.
+// Project-local decisions and reviewed task handoffs. Mefi interviews you here
+// and organizes what you say; model calls happen only after explicit buttons,
+// and nothing it writes becomes your answer, your decision, or your approval.
 (() => {
   "use strict";
   const $ = (name) => document.getElementById(`plans-${name}`);
@@ -32143,13 +32395,34 @@ body.music-preview-active #idle-hud { display: none !important; }
   const frozen = (item) => ["converted", "converting"].includes(item?.status);
   const ready = (item, question) => (question.dependsOn || []).every((id) => item.questions.some((other) => other.id === id && other.status === "resolved"));
   const settled = (item) => !(item.unknowns || []).length && (item.questions || []).every((question) => question.status === "resolved");
+  const confirmed = (item) => Boolean(item?.reviewedAt);
+  // Where every line of the interview came from. Only your own answer states a
+  // requirement; a reading or suggestion stays a proposal until you resolve the
+  // question yourself. Notes saved before kinds existed read as plain notes.
+  const noteLabels = { answer: "You answered", note: "Your note", question: "Mefi asked", interpretation: "Mefi understood this — not yet your decision", advice: "Mefi suggested", conflict: "Mefi flagged a conflict" };
+  const noteLabel = (note) => noteLabels[note.kind] || (note.author === "user" ? noteLabels.note : noteLabels.advice);
+  // The one thing Mefi is waiting on: its newest follow-up, else a question it
+  // opened that you have not answered, else the next question ready to explore.
+  // `awaiting` separates the first two — your turn to answer — from the last,
+  // where the interview has said its piece and the decision is yours to record.
+  function pendingAsk(item) {
+    const open = (item?.questions || []).filter((question) => question.status === "open");
+    for (const question of [...open].reverse()) {
+      const last = (question.notes || []).at(-1);
+      if (last?.author === "assistant" && ["question", "conflict"].includes(last.kind)) return { question, ask: last.text, followUp: true, awaiting: true };
+    }
+    const fresh = [...open].reverse().find((question) => !(question.notes || []).some((note) => note.author === "user"));
+    if (fresh) return { question: fresh, ask: fresh.question, followUp: false, awaiting: true };
+    const next = open.find((question) => ready(item, question)) || open[0];
+    return next ? { question: next, ask: next.question, followUp: false, awaiting: false } : null;
+  }
   const unsavedDestination = (item) => Boolean(item && draft().details && ["title", "destination", "outOfScope"].some((key) => draft().details[key] !== item[key]));
   const unsavedQuestions = (item) => Boolean(item?.questions?.some((question) => { const edit = draft().editDirty?.[question.id] && draft().edits?.[question.id]; return edit && (edit.question !== question.question || edit.type !== question.type || JSON.stringify([...edit.dependsOn].sort()) !== JSON.stringify([...question.dependsOn].sort())); }));
   const unsavedPlan = (item) => !frozen(item) && (unsavedDestination(item) || unsavedQuestions(item) || Boolean(draft().unknown?.trim()) || Boolean(draft().question?.question?.trim()));
   function reviewGates() {
     const item = plan(); if (!item) return;
     const pending = unsavedPlan(item); const dirty = Boolean(draft().specDirty);
-    const locks = { "suggest-questions": pending, "draft-spec": pending || dirty || !settled(item), "save-spec": pending || !settled(item), approve: pending || dirty || !settled(item) || !item.spec || Boolean(item.spec?.stale) || Boolean(item.spec?.approvedAt), convert: item.status === "converting" ? false : pending || dirty || !item.spec?.approvedAt || !item.spec?.tasks?.length };
+    const locks = { "suggest-questions": pending, "confirm-understanding": pending || !settled(item) || confirmed(item), "draft-spec": pending || dirty || !settled(item) || !confirmed(item), "save-spec": pending || !settled(item) || !confirmed(item), approve: pending || dirty || !settled(item) || !confirmed(item) || !item.spec || Boolean(item.spec?.stale) || Boolean(item.spec?.approvedAt), convert: item.status === "converting" ? false : pending || dirty || !item.spec?.approvedAt || !item.spec?.tasks?.length };
     for (const [id, locked] of Object.entries(locks)) if ($(id)) { $(id).disabled = state.busy || locked; $(id).dataset.locked = String(Boolean(locked)); }
   }
   function holdHandoff() {
@@ -32207,7 +32480,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   }
   const typeChoices = [["discussion", "Discussion — make a choice"], ["research", "Research — gather evidence"], ["prototype", "Prototype — try it out"], ["prerequisite", "Prerequisite — establish a fact"]];
   const countLabel = (count, noun) => `${count} ${noun}${count === 1 ? "" : "s"}`;
-  const flowStages = [["idea", "The idea"], ["explore", "Explore"], ["decisions", "Your decisions"], ["spec", "Specification"], ["approval", "Your approval"], ["build", "Build"], ["verify", "Verify"]];
+  const flowStages = [["idea", "The idea"], ["explore", "Mefi asks"], ["decisions", "Your decisions"], ["review", "Your review"], ["spec", "Specification"], ["approval", "Your approval"], ["build", "Build"], ["verify", "Verify"]];
   function navigateTo(...ids) {
     const target = ids.map($).find((element) => element && !element.disabled);
     if (!target) return;
@@ -32251,15 +32524,17 @@ body.music-preview-active #idle-hud { display: none !important; }
     const complete = work.length > 0 && work.every((task) => task.stage === "done");
     let current = !item ? "idea" : frozen(item) ? (complete || work.some((task) => task.stage === "review") ? "verify" : "build")
       : unknowns || (!questions.length && !item.spec) ? "explore"
-      : resolved.length < questions.length ? (frontier.some((question) => question.notes?.length) ? "decisions" : "explore")
+      : resolved.length < questions.length ? (!pendingAsk(item)?.awaiting && frontier.some((question) => question.notes?.length) ? "decisions" : "explore")
+      : !confirmed(item) ? "review"
       : !item.spec || item.spec.stale ? "spec" : !item.spec.approvedAt ? "approval" : "build";
     if (state.pending?.assist) current = state.pending.kind === "spec" ? "spec" : "explore";
     const completed = new Set(item ? ["idea"] : []);
     if (item && !unknowns && (questions.length > 0 || item.spec) && resolved.length === questions.length) { completed.add("explore"); completed.add("decisions"); }
+    if (confirmed(item)) completed.add("review");
     if (item?.spec && !item.spec.stale) completed.add("spec");
     if (item?.spec?.approvedAt) completed.add("approval");
     if (complete) { completed.add("build"); completed.add("verify"); }
-    return { current, completed, questions, resolved, frontier, blocked, unknowns, work, complete };
+    return { current, completed, questions, resolved, frontier, blocked, unknowns, work, complete, ask: pendingAsk(item) };
   }
   function renderWorkflow(item) {
     let area = $("workflow");
@@ -32274,13 +32549,14 @@ body.music-preview-active #idle-hud { display: none !important; }
     badge.dataset.state = flow.complete ? "complete" : "waiting";
     const rail = node("ol", "planning-flow-rail", undefined, area); rail.setAttribute("aria-label", "Planning and work stages");
     const decided = `${flow.resolved.length}/${flow.questions.length} recorded`;
-    const subtitles = { idea: item ? "Destination saved" : "Set a destination", explore: `${flow.frontier.length} ready · ${flow.blocked.length} blocked`, decisions: decided, spec: item?.spec?.stale ? "Needs revision" : item?.spec ? "Draft saved" : "Shape the build", approval: item?.spec?.approvedAt ? "Approved by you" : "Review together", build: frozen(item) ? `${flow.work.filter((task) => task.stage === "running").length} working · ${countLabel(item.taskIds?.length || 0, "task")}` : "Create tasks", verify: frozen(item) ? `${flow.work.filter((task) => task.stage === "done").length}/${flow.work.length} confirmed` : "Check the result" };
+    const subtitles = { idea: item ? "Destination saved" : "Set a destination", explore: flow.ask?.awaiting ? "Waiting for your answer" : `${flow.frontier.length} ready · ${flow.blocked.length} blocked`, decisions: decided, review: confirmed(item) ? "Confirmed by you" : "Read it back", spec: item?.spec?.stale ? "Needs revision" : item?.spec ? "Draft saved" : "Shape the build", approval: item?.spec?.approvedAt ? "Approved by you" : "Review together", build: frozen(item) ? `${flow.work.filter((task) => task.stage === "running").length} working · ${countLabel(item.taskIds?.length || 0, "task")}` : "Create tasks", verify: frozen(item) ? `${flow.work.filter((task) => task.stage === "done").length}/${flow.work.length} confirmed` : "Check the result" };
     for (const [index, [id, label]] of flowStages.entries()) {
       const row = node("li", "", undefined, rail);
       const jump = () => {
         if (id === "idea") navigateTo("title", "destination-section");
-        else if (id === "explore") navigateTo(flow.unknowns ? "unknown-text" : "questions-section", "destination-section");
+        else if (id === "explore") navigateTo("interview-answer", "interview-start", "interview-section", "destination-section");
         else if (id === "decisions") { const question = flow.frontier[0] || flow.questions[0]; navigateTo(question ? `resolution-${question.id}` : "questions-section", question ? `question-card-${question.id}` : "destination-section"); }
+        else if (id === "review") navigateTo("confirm-understanding", "review-section", "destination-section");
         else if (id === "spec") navigateTo("spec-text", "specification-section", "destination-section");
         else if (id === "approval") navigateTo("approval-section", "destination-section");
         else navigateTo("execution", "approval-section", "destination-section");
@@ -32296,9 +32572,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     status.dataset.active = String(Boolean(state.pending?.assist));
     status.setAttribute("aria-busy", String(Boolean(state.pending?.assist)));
     node("span", "planning-flow-dot", "", status).setAttribute("aria-hidden", "true");
-    const next = { idea: "Start with the outcome you want. Nothing runs until you choose the next action.", explore: flow.unknowns ? `${flow.unknowns} unknown${flow.unknowns === 1 ? " needs" : "s need"} a question or a reason to set aside.` : flow.frontier.length ? `${flow.frontier.length} question${flow.frontier.length === 1 ? " is" : "s are"} ready. Open one to discuss options or record your choice.` : "Add a question yourself or ask Mefi to suggest what needs exploring.", decisions: "Read the discussion and evidence, then record your own decisions.", spec: "The decisions are settled. Draft the specification and its small implementation tasks.", approval: "Review the saved specification, task briefs, and acceptance checks before approving.", build: item?.status === "converted" ? "Tasks follow the current queue and Pause settings. Their board status is shown below." : item?.status === "converting" ? "Finish creating the approved tasks. Existing tasks will be reused." : "Your specification is approved. Create its tasks when you are ready.", verify: flow.complete ? "Every linked task has verified evidence or your recorded confirmation." : "A worker result is ready for verification. Open the task to inspect its evidence." };
+    const next = { idea: "Start with the outcome you want. Nothing runs until you choose the next action.", explore: flow.ask?.awaiting ? "Mefi is waiting for your answer. Reply in your own words; it reads your answer back before moving on." : flow.unknowns ? `${flow.unknowns} unknown${flow.unknowns === 1 ? " needs" : "s need"} a question or a reason to set aside.` : "Let Mefi ask you the next question, or add one yourself.", decisions: "Read the interview back, then record your own decisions.", review: "Read what this plan now says the feature is. Nothing is drafted until you confirm it.", spec: "The decisions are settled. Draft the specification and its small implementation tasks.", approval: "Review the saved specification, task briefs, and acceptance checks before approving.", build: item?.status === "converted" ? "Tasks follow the current queue and Pause settings. Their board status is shown below." : item?.status === "converting" ? "Finish creating the approved tasks. Existing tasks will be reused." : "Your specification is approved. Create its tasks when you are ready.", verify: flow.complete ? "Every linked task has verified evidence or your recorded confirmation." : "A worker result is ready for verification. Open the task to inspect its evidence." };
     const pendingQuestion = flow.questions.find((question) => question.id === state.pending?.questionId);
-    node("span", "", state.pending?.assist ? state.pending.kind === "spec" ? "Mefi is drafting the specification from your saved decisions…" : state.pending.kind === "question" ? `Mefi is exploring: ${pendingQuestion?.question || "the selected question"}` : "Mefi is looking for questions in your saved destination…" : next[flow.current], status);
+    node("span", "", state.pending?.assist ? state.pending.kind === "spec" ? "Mefi is drafting the specification from your saved decisions…" : state.pending.kind === "interview" ? "Mefi is reading your answer and working out what to ask next…" : state.pending.kind === "question" ? `Mefi is exploring: ${pendingQuestion?.question || "the selected question"}` : "Mefi is looking for questions in your saved destination…" : next[flow.current], status);
     if (item && !frozen(item)) renderQuestionMap(area, item, flow);
     if (frozen(item)) renderExecution(area, item, flow.work);
   }
@@ -32329,7 +32605,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         node("span", "planning-map-label", `Q${index + 1} · ${question.type}`, jump);
         node("strong", "", question.question, jump);
         node("span", "planning-map-state", questionState === "resolved" ? "✓ Decision recorded" : questionState === "ready" ? "● Ready to explore" : "↳ Waiting on a decision", jump);
-        if (question.notes?.length && questionState !== "resolved") node("small", "", `${question.notes.length} discussion note${question.notes.length === 1 ? "" : "s"} · your decision is open`, jump);
+        if (question.notes?.length && questionState !== "resolved") node("small", "", `${countLabel(question.notes.length, "interview line")} · your decision is open`, jump);
         if (question.dependsOn?.length) {
           const links = node("div", "planning-map-links", undefined, card); node("span", "", "After", links);
           for (const id of question.dependsOn) {
@@ -32415,7 +32691,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (!locked) submit(edit, item ? "Save destination" : "Create plan", "save-details");
   }
   function unknowns(item) {
-    const area = section("2. What don't we know yet?", "Capture uncertainties. Turn one into a question, or explain why it no longer needs an answer.");
+    const area = section("3. Loose ends we noticed", "Uncertainties too vague to decide yet. Turn one into a question, or explain why it no longer needs an answer.");
     const local = draft(); const locked = frozen(item);
     for (const unknown of item.unknowns || []) {
       const card = node("article", "planning-card", undefined, area); node("p", "", unknown.text, card);
@@ -32435,6 +32711,89 @@ body.music-preview-active #idle-hud { display: none !important; }
       field(edit, "Something we're unsure about", "unknown-text", local.unknown, (value) => { local.unknown = value; holdHandoff(); }, { required: true, rows: 2, maxLength: 4000, placeholder: "We don't know whether…" });
       submit(edit, "Add unknown", "add-unknown");
     }
+  }
+  // The interview, shown wherever a question appears. Each line says where it
+  // came from, and Mefi's reading of your answer can only ever be copied into
+  // your decision box for you to edit and record yourself.
+  function transcript(parent, item, question, locked = false) {
+    const local = draft(); const wrap = node("div", "planning-notes", undefined, parent);
+    for (const entry of question.notes || []) {
+      const row = node("div", "planning-note", undefined, wrap);
+      row.dataset.noteKind = entry.kind || (entry.author === "user" ? "note" : "advice");
+      node("strong", "", noteLabel(entry), row); node("p", "", entry.text, row);
+      if (entry.kind === "interpretation" && question.status !== "resolved" && !locked) button("Use as my decision", row, () => {
+        local.answers ||= {}; (local.answers[question.id] ||= { resolution: "", evidence: "" }).resolution = entry.text;
+        persist(); render(); navigateTo(`resolution-${question.id}`, `question-card-${question.id}`);
+        note("Mefi's reading is in your decision box. Edit it until it says what you mean, then record it.");
+      }, `use-note-${entry.id}`);
+    }
+    if (!(question.notes || []).length) node("p", "planning-subtle", "Nothing said about this yet.", wrap);
+    return wrap;
+  }
+  function interviewPanel(item) {
+    const area = section("2. Mefi's questions for you", "Mefi asks, you answer in your own words, and it reads your answer back before moving on. Nothing here records a decision — you do that under each question.");
+    area.id = "plans-interview-section"; area.tabIndex = -1;
+    if (frozen(item)) { node("p", "planning-subtle", "This plan is on the task board. Its interview stays below as a record.", area); return; }
+    const local = draft(); const values = local.interview ||= { message: "", useWeb: false };
+    const pending = unsavedPlan(item); const ask = pendingAsk(item);
+    const card = node("article", "planning-card planning-interview", undefined, area);
+    if (!ask) {
+      node("p", "planning-interview-ask", item.questions?.length ? "Mefi has nothing open. Ask it to keep going, or review what you understand together." : "Mefi hasn't asked anything yet. It will start with the one question that would most change what gets built.", card);
+      const actions = node("div", "planning-actions", undefined, card);
+      button(item.questions?.length ? "Ask me something else" : "Start the interview", actions, async () => { if (await act("interview", { kind: "interview" }, null, "Mefi asked a question. Answer it in your own words.", true)) navigateTo("interview-answer"); }, "interview-start", true, pending);
+      if (item.questions?.length && settled(item)) navigation("Review what we understand ↓", actions, () => navigateTo("confirm-understanding", "review-section"), "interview-to-review", "ghost mini");
+      node("p", "planning-subtle", pending ? "Save your destination, unknown, or question edits first." : "Uses your configured assistant connection. You can also write the questions yourself below.", card);
+      return;
+    }
+    const index = item.questions.indexOf(ask.question) + 1;
+    node("span", "planning-pill", ask.followUp ? `Follow-up on Q${index}` : `Q${index} · ${typeChoices.find(([type]) => type === ask.question.type)?.[1] || ask.question.type}`, card).dataset.state = "ready";
+    node("p", "planning-interview-ask", ask.ask, card).id = "plans-interview-ask";
+    const talk = node("details", "", undefined, card); talk.open = local.interviewOpen !== false;
+    node("summary", "", `What we've said about this${ask.question.notes?.length ? ` · ${countLabel(ask.question.notes.length, "line")}` : ""}`, talk);
+    talk.addEventListener("toggle", () => { local.interviewOpen = talk.open; persist(); });
+    transcript(talk, item, ask.question);
+    field(card, "Your answer", "interview-answer", values.message, (value) => { values.message = value; }, { rows: 4, maxLength: 16000, placeholder: "Answer in your own words. Say what you want to be true, not how to build it." });
+    const checkLabel = node("label", "planning-check", undefined, card); const check = node("input", "", undefined, checkLabel); check.type = "checkbox"; check.checked = Boolean(values.useWeb);
+    node("span", "", "Let Mefi cite web references", checkLabel);
+    check.addEventListener("change", () => { values.useWeb = check.checked; persist(); });
+    const actions = node("div", "planning-actions", undefined, card);
+    const clean = (saved) => { delete saved.interview; };
+    button("Send answer", actions, async () => {
+      if (!values.message.trim()) { note("Type your answer first, or ask Mefi to explain the tradeoffs.", true); navigateTo("interview-answer"); return; }
+      if (await act("interview", { kind: "interview", questionId: ask.question.id, message: values.message, useWeb: values.useWeb }, clean, "Mefi read your answer back. Check what it understood, then answer the next question.", true)) navigateTo("interview-answer", "interview-start");
+    }, "interview-send", true, pending);
+    button("Explain the tradeoffs", actions, () => act("question", { kind: "question", questionId: ask.question.id, message: values.message, useWeb: values.useWeb }, clean, "Mefi explained the tradeoffs. It still needs your answer.", true), "interview-explain", false, pending);
+    navigation("Record my decision ↓", actions, () => navigateTo(`resolution-${ask.question.id}`, `question-card-${ask.question.id}`), "interview-to-decision", "ghost mini");
+    node("p", "planning-subtle", pending ? "Save your destination, unknown, or question edits first." : "Uses your configured assistant connection. Mefi does the asking and the organizing; every decision stays yours.", card);
+  }
+  // The gate the specification waits behind: what this plan now says the
+  // feature is, in your words, with anything Mefi only proposed kept separate.
+  function review(item) {
+    const area = section("5. What we understand", "Read this back before anything is drafted. It is built from your decisions, not from Mefi's suggestions.");
+    area.id = "plans-review-section"; area.tabIndex = -1;
+    node("p", "planning-answer", `Destination: ${item.destination}`, area);
+    if (item.outOfScope) node("p", "planning-answer planning-subtle", `Outside this plan: ${item.outOfScope}`, area);
+    const decided = (item.questions || []).filter((question) => question.status === "resolved");
+    for (const [index, question] of decided.entries()) {
+      const row = node("article", "planning-card", undefined, area);
+      node("h4", "", `${index + 1}. ${question.question}`, row);
+      node("p", "planning-answer", question.resolution, row);
+      node("p", "planning-subtle", question.evidence ? `Confirmed by you · Evidence: ${question.evidence}` : "Confirmed by you", row);
+      const proposed = (question.notes || []).filter((note) => note.author === "assistant" && ["interpretation", "advice"].includes(note.kind));
+      if (!proposed.length) continue;
+      const more = node("details", "", undefined, row);
+      node("summary", "", `${countLabel(proposed.length, "line")} Mefi proposed that your decision does not include`, more);
+      for (const entry of proposed) { const line = node("div", "planning-note", undefined, more); line.dataset.noteKind = entry.kind; node("strong", "", noteLabel(entry), line); node("p", "", entry.text, line); }
+    }
+    if (!decided.length) node("p", "planning-subtle", "No decisions were needed. The destination above is the whole understanding.", area);
+    const open = [...(item.questions || []).filter((question) => question.status !== "resolved").map((question) => question.question), ...(item.unknowns || []).map((unknown) => unknown.text)];
+    if (open.length) node("p", "planning-subtle", `Still unresolved: ${open.join(" · ")}`, area);
+    if (frozen(item)) return;
+    const confirm = node("div", "planning-confirm", undefined, area);
+    node("p", "", confirmed(item) ? `You confirmed this on ${new Date(item.reviewedAt).toLocaleString()}. Changing the destination, an unknown, or any decision asks you to read it again.`
+      : settled(item) ? "Confirm this is the feature you meant. Mefi drafts the specification only from what you confirm here."
+      : "Finish the interview first: every question needs your decision, and every unknown a question or a reason to set it aside.", confirm);
+    button(confirmed(item) ? "Understanding confirmed" : "Yes, this is what I meant", confirm, () => act("confirm-understanding", {}, null, "Understanding confirmed. You can draft the specification now."), "confirm-understanding", true, !settled(item) || confirmed(item) || unsavedPlan(item));
   }
   function questionEditor(parent, item, existing) {
     const local = draft(); const id = existing?.id;
@@ -32459,20 +32818,23 @@ body.music-preview-active #idle-hud { display: none !important; }
     const pill = node("span", "planning-pill", resolved ? "Decided" : canResolve ? "Ready to explore" : "Waiting on a decision", card); pill.dataset.state = resolved ? "resolved" : canResolve ? "ready" : "waiting";
     node("h4", "", question.question, card);
     node("p", "planning-subtle", `${typeChoices.find(([type]) => type === question.type)?.[1] || question.type}${question.dependsOn?.length ? ` · Depends on: ${question.dependsOn.map((dependency) => item.questions.find((other) => other.id === dependency)?.question || "Missing question").join("; ")}` : ""}`, card);
-    const talk = node("details", "", undefined, card); talk.open = Boolean(local.talkOpen?.[id]); node("summary", "", `Think it through${question.notes?.length ? ` · ${countLabel(question.notes.length, "note")}` : " together"}`, talk);
+    const talk = node("details", "", undefined, card); talk.open = Boolean(local.talkOpen?.[id]); node("summary", "", `The interview on this question${question.notes?.length ? ` · ${countLabel(question.notes.length, "line")}` : " · nothing said yet"}`, talk);
     talk.addEventListener("toggle", () => { local.talkOpen ||= {}; local.talkOpen[id] = talk.open; persist(); });
-    const conversation = node("div", "planning-notes", undefined, talk);
-    for (const entry of question.notes || []) { const row = node("div", "planning-note", undefined, conversation); node("strong", "", entry.author === "assistant" ? "Mefi · suggestion" : "You", row); node("p", "", entry.text, row); }
+    transcript(talk, item, question, locked);
     if (!locked && !resolved) {
       const values = local.conversations[id] ||= { message: "", useWeb: false };
-      field(talk, "Your thoughts, options, or a question for Mefi", `note-${id}`, values.message, (value) => { values.message = value; }, { rows: 3, maxLength: 16000, placeholder: "Compare the options, explain a tradeoff, or add what you've learned…" });
+      field(talk, "Answer this, or ask Mefi about it", `note-${id}`, values.message, (value) => { values.message = value; }, { rows: 3, maxLength: 16000, placeholder: "Answer in your own words, or ask what the tradeoffs are…" });
       const checkLabel = node("label", "planning-check", undefined, talk); const check = node("input", "", undefined, checkLabel); check.type = "checkbox"; check.checked = Boolean(values.useWeb);
       node("span", "", "Include web references in Mefi's answer", checkLabel); check.addEventListener("change", () => { values.useWeb = check.checked; persist(); });
       const actions = node("div", "planning-actions", undefined, talk);
       const clean = (saved) => { delete saved.conversations?.[id]; saved.talkOpen ||= {}; saved.talkOpen[id] = true; };
+      button("Send answer", actions, async () => {
+        if (!values.message.trim()) { note("Type your answer first, or ask Mefi to explain the tradeoffs.", true); navigateTo(`note-${id}`); return; }
+        if (await act("interview", { kind: "interview", questionId: id, message: values.message, useWeb: values.useWeb }, clean, "Mefi read your answer back. Check what it understood, then answer the next question.", true)) navigateTo("interview-answer", `note-${id}`);
+      }, `answer-${id}`, true);
+      button("Explain the tradeoffs", actions, () => act("question", { kind: "question", questionId: id, message: values.message, useWeb: values.useWeb }, clean, "Mefi explained the tradeoffs. Your decision is still open below.", true), `ask-${id}`);
       button("Save my note", actions, () => act("add-note", { questionId: id, text: values.message }, clean, "Your note is saved."), `save-note-${id}`);
-      button("Ask Mefi", actions, () => act("question", { kind: "question", questionId: id, message: values.message, useWeb: values.useWeb }, clean, "Read Mefi's suggestion below, then make your decision.", true), `ask-${id}`, true);
-      node("p", "planning-subtle", "Uses your configured assistant connection. Suggestions add context; you make the decision below.", talk);
+      node("p", "planning-subtle", "Uses your configured assistant connection. Mefi's lines are proposals; only the decision you record below is a requirement.", talk);
     }
     if (resolved) {
       node("p", "planning-answer", question.resolution, card);
@@ -32489,12 +32851,12 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (!locked) { const edit = node("details", "", undefined, card); node("summary", "", "Edit this question or its prerequisites", edit); questionEditor(edit, item, question); }
   }
   function questions(item) {
-    const area = section("3. Work through the questions", "Discuss a choice, gather research, or try a small prototype. Record a decision only after you've reviewed the result.");
+    const area = section("4. Every question and your decision", "The full map of what the interview opened. Record a decision only after you have reviewed what was said.");
     area.id = "plans-questions-section"; area.tabIndex = -1;
     if (!frozen(item)) {
       const actions = node("div", "planning-actions", undefined, area);
-      button("Suggest questions", actions, () => act("questions", { kind: "questions" }, null, "Questions added for you to review.", true), "suggest-questions", false, unsavedPlan(item));
-      node("span", "planning-subtle", "Uses the saved destination and your configured assistant.", actions);
+      button("Suggest more questions", actions, () => act("questions", { kind: "questions" }, null, "Questions added for you to review.", true), "suggest-questions", false, unsavedPlan(item));
+      node("span", "planning-subtle", "A batch of open questions in one go. The interview above asks them one at a time and follows what you say.", actions);
     }
     for (const question of item.questions || []) questionCard(area, item, question);
     if (!item.questions.length) node("p", "planning-subtle", "Start with one question that could change what you build.", area);
@@ -32502,16 +32864,16 @@ body.music-preview-active #idle-hud { display: none !important; }
   }
   function newSlice() { return { id: `slice-${Date.now().toString(36)}-${++sliceCounter}`, title: "", prompt: "", acceptance: "", dependsOn: [] }; }
   function specification(item) {
-    const area = section("4. Turn decisions into a build plan", "Review the specification and small tasks. Each task needs a clear brief, acceptance checks, and any tasks it must wait for.");
+    const area = section("6. Turn decisions into a build plan", "Review the specification and small tasks. Each task needs a clear brief, acceptance checks, and any tasks it must wait for.");
     area.id = "plans-specification-section"; area.tabIndex = -1;
     const local = draft(); const locked = frozen(item);
     if (!local.specDirty || locked) { delete local.spec; delete local.specDirty; }
     const values = local.spec ||= { text: item.spec?.text || "", tasks: (item.spec?.tasks || []).map((task) => ({ ...task, acceptance: Array.isArray(task.acceptance) ? task.acceptance.join("\n") : task.acceptance || "", dependsOn: [...(task.dependsOn || [])] })) };
     const markDirty = () => { local.specDirty = true; reviewGates(); };
-    if (!settled(item) && !locked) node("p", "planning-subtle", "Draft here as you think. Settle all unknowns and questions before asking Mefi for a specification or approving tasks.", area);
+    if (!locked && (!settled(item) || !confirmed(item))) node("p", "planning-subtle", settled(item) ? "Draft here as you think. Confirm what you understand in section 5 before asking Mefi for a specification or approving tasks." : "Draft here as you think. Settle all unknowns and questions, then confirm what you understand, before drafting or approving.", area);
     if (!locked) {
       const actions = node("div", "planning-actions", undefined, area);
-      button("Draft specification with Mefi", actions, () => act("spec", { kind: "spec" }, (saved) => { delete saved.spec; delete saved.specDirty; }, "Specification drafted. Review the text, task briefs and acceptance checks.", true), "draft-spec", false, !settled(item) || Boolean(local.specDirty) || unsavedPlan(item));
+      button("Draft specification with Mefi", actions, () => act("spec", { kind: "spec" }, (saved) => { delete saved.spec; delete saved.specDirty; }, "Specification drafted. Review the text, task briefs and acceptance checks.", true), "draft-spec", false, !settled(item) || !confirmed(item) || Boolean(local.specDirty) || unsavedPlan(item));
       if (local.specDirty) node("span", "planning-subtle", "Save your draft before asking Mefi to revise it.", actions);
     }
     const edit = form(area, "spec-form", () => act("draft-spec", { text: values.text, tasks: values.tasks.map((task) => ({ ...task, acceptance: task.acceptance.split("\n").map((line) => line.trim()).filter(Boolean) })) }, (saved) => { delete saved.spec; delete saved.specDirty; }, "Specification draft saved. Review it before approving."), "Specification and implementation tasks", locked);
@@ -32527,7 +32889,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (!locked) {
       const actions = node("div", "planning-actions", undefined, edit);
       button("+ Add a task", actions, () => { values.tasks.push(newSlice()); markDirty(); persist(); render(); $(`task-title-${values.tasks.length - 1}`)?.focus(); }, "add-slice");
-      submit(actions, "Save specification draft", "save-spec", !settled(item) || unsavedPlan(item));
+      submit(actions, "Save specification draft", "save-spec", !settled(item) || !confirmed(item) || unsavedPlan(item));
       node("p", "planning-subtle", local.specDirty ? "You have unsaved specification edits. Saving a revision clears any earlier approval." : "You can write this entire plan yourself; an assistant connection is optional.", edit);
     }
     const approve = node("div", "planning-confirm", undefined, area);
@@ -32541,9 +32903,9 @@ body.music-preview-active #idle-hud { display: none !important; }
       node("p", "", "Task creation started. Finish adding the approved tasks to the queue. Existing tasks will be reused.", approve);
       button("Finish creating tasks", approve, () => act("convert", {}, null, "Approved tasks are in your project's queue."), "convert", true);
     } else {
-      node("p", "", unsavedPlan(item) ? "Save your destination, unknown, or question changes before drafting or approving the specification." : item.spec?.stale ? "Earlier decisions changed. Review and save a fresh specification before approving it." : item.spec?.approvedAt && !local.specDirty ? "You've approved this specification. Creating tasks adds them to the current queue; they can begin when scheduling is on and their prerequisites are complete." : "Your approval confirms the saved specification and every task brief. Approval alone keeps the work here until you choose to create the tasks.", approve);
+      node("p", "", unsavedPlan(item) ? "Save your destination, unknown, or question changes before drafting or approving the specification." : !confirmed(item) ? "Confirm what you understand in section 5 first. Approval builds on the reading you confirmed, not on Mefi's suggestions." : item.spec?.stale ? "Earlier decisions changed. Review and save a fresh specification before approving it." : item.spec?.approvedAt && !local.specDirty ? "You've approved this specification. Creating tasks adds them to the current queue; they can begin when scheduling is on and their prerequisites are complete." : "Your approval confirms the saved specification and every task brief. Approval alone keeps the work here until you choose to create the tasks.", approve);
       const actions = node("div", "planning-actions", undefined, approve);
-      button(item.spec?.approvedAt ? "Specification approved" : "Approve specification", actions, () => act("approve-spec", {}, null, "Specification approved. You can now create the tasks."), "approve", false, !item.spec || !settled(item) || Boolean(local.specDirty) || Boolean(item.spec?.approvedAt) || item.spec?.stale || unsavedPlan(item));
+      button(item.spec?.approvedAt ? "Specification approved" : "Approve specification", actions, () => act("approve-spec", {}, null, "Specification approved. You can now create the tasks."), "approve", false, !item.spec || !settled(item) || !confirmed(item) || Boolean(local.specDirty) || Boolean(item.spec?.approvedAt) || item.spec?.stale || unsavedPlan(item));
       const count = item.spec?.tasks?.length || 0;
       button(`Create ${count} ${count === 1 ? "task" : "tasks"}`, actions, () => act("convert", {}, null, "Approved tasks are in your project's queue."), "convert", true, !item.spec?.approvedAt || Boolean(local.specDirty) || !count || unsavedPlan(item));
     }
@@ -32553,7 +32915,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     const local = draft(); const area = node("details", "planning-card", undefined, $("detail")); area.id = "plans-history";
     node("summary", "", `Plan history · ${countLabel(item.history.length, "saved revision")}`, area);
     node("p", "planning-subtle", "Earlier decisions and specifications remain available here after you change the plan. Copy any text you want to use in a new revision.", area);
-    const labels = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Discussion note saved", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created" };
+    const labels = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Interview line saved", "confirm-understanding": "Understanding confirmed", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created" };
     const limit = local.historyLimit || 12;
     for (const entry of [...item.history].reverse().slice(0, limit)) {
       const row = node("details", "", undefined, area);
@@ -32675,7 +33037,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (!state.projectId) { node("p", "planning-empty", "Open the desktop app and choose a project to start planning.", $("detail")); controls(); return; }
     const item = plan();
     renderWorkflow(item);
-    details(item); if (item) { unknowns(item); questions(item); specification(item); history(item); }
+    details(item); if (item) { interviewPanel(item); unknowns(item); questions(item); review(item); specification(item); history(item); }
     existingWork(item);
     controls();
   }
@@ -33931,9 +34293,17 @@ body.music-preview-active #idle-hud { display: none !important; }
     const setupAssistant = document.getElementById("setup-assistant");
     const setupSelection = document.getElementById("setup-selection");
     const setupBuilders = document.getElementById("setup-builders");
+    // One registry for every route Studio can answer with. The routing and
+    // builder pickers are rebuilt from it plus the live flags below, so what
+    // is ready on this machine reads first and anything else stays selectable
+    // with its missing piece named beside it.
     const providerNames = { auto: "Auto (your order)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
+    const providerKinds = { auto: "auto", zai: "key", opencode: "key", grok: "cli", claude: "cli", codex: "cli", antigravity: "cli", lmstudio: "local", custom: "custom" };
+    const providerRegistry = Object.keys(providerNames).map((id) => ({ id, name: providerNames[id], kind: providerKinds[id] }));
+    const builderIds = ["opencode", "grok", "claude", "codex", "antigravity"];
     const builderNames = { opencode: "OpenCode", grok: "Grok", claude: "Claude Code", codex: "Codex", antigravity: "Antigravity" };
-    const singleModelProviders = new Set(["grok", "claude", "codex", "antigravity", "lmstudio", "custom"]);
+    const providerSelect = document.getElementById("ai-provider");
+    const executorCli = document.getElementById("executor-cli");
     function cliInstalled(id) {
       return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === id && cli.installed);
     }
@@ -33954,10 +34324,97 @@ body.music-preview-active #idle-hud { display: none !important; }
       if (id === "lmstudio") return true;
       return cliInstalled(id);
     }
+    // Availability of one route from the flags already in hand: ready, not
+    // ready, or unknown while a read is still in flight. Every picker label,
+    // status pill and overview tile reads from here so they never disagree.
+    function cliAvailability(id) {
+      if (setup.cliError) return { ready: null, note: "CLI status unavailable" };
+      if (!setup.clis) return { ready: null, note: "checking CLI…" };
+      return cliInstalled(id) ? { ready: true, note: "CLI installed" } : { ready: false, note: "CLI not found" };
+    }
+    function providerAvailability(id) {
+      const kind = providerKinds[id];
+      if (kind === "auto") {
+        if (!setup.routing) return { ready: null, note: "checking…" };
+        const first = autoOrderOf(setup.routing).find((entry) => autoProviderUsable(entry));
+        return first ? { ready: true, note: `will use ${providerNames[first]}` } : { ready: false, note: "nothing in the order is ready yet" };
+      }
+      if (kind === "key") {
+        const state = keyState(id);
+        return { ready: state === "key saved" ? true : state === "no key saved" ? false : null, note: state };
+      }
+      if (kind === "custom") {
+        if (!setup.routing && setup.keys.custom === null) return { ready: null, note: "checking…" };
+        const endpoint = Boolean(setup.routing?.customEndpoint);
+        const key = setup.keys.custom ?? setup.routing?.hasCustom === true;
+        if (endpoint && key) return { ready: true, note: "endpoint and key saved" };
+        return { ready: false, note: !endpoint && !key ? "no endpoint or key saved" : !endpoint ? "no endpoint saved" : "no key saved" };
+      }
+      if (kind === "local") return { ready: true, note: "local server · no key needed" };
+      return cliAvailability(id);
+    }
+    const stateOf = (availability) => availability.ready === true ? "ready" : availability.ready === false ? "missing" : "unknown";
+    function setPill(element, state, text) {
+      if (!element) return;
+      if (text !== undefined) element.textContent = text;
+      element.setAttribute("data-state", state);
+    }
+    // Rebuild a picker from labelled entries and keep the current choice. It
+    // only runs when a label changed, so an open picker is never torn down
+    // under the pointer by a refresh that changed nothing.
+    const pickerSignatures = new Map();
+    function renderPicker(select, entries) {
+      const signature = entries.map((entry) => `${entry.id}\t${entry.state}\t${entry.label}`).join("\n");
+      if (pickerSignatures.get(select) === signature) return;
+      pickerSignatures.set(select, signature);
+      const current = select.value;
+      select.replaceChildren(...entries.map((entry) => {
+        const option = document.createElement("option");
+        option.value = entry.id;
+        option.textContent = entry.label;
+        option.dataset.state = entry.state;
+        return option;
+      }));
+      select.value = current;
+    }
+    // Ready routes list first; the rest stay selectable with what they still
+    // need spelled out, so nothing is locked to a fixed menu.
+    function renderProviderPickers() {
+      const rank = { ready: 0, unknown: 1, missing: 2 };
+      const byReadiness = (a, b) => rank[a.state] - rank[b.state];
+      const entryFor = (id, name, availability) => ({ id, state: stateOf(availability), label: `${name} — ${availability.note}` });
+      const [auto, ...providers] = providerRegistry.map((entry) => entryFor(entry.id, entry.name, providerAvailability(entry.id)));
+      renderPicker(providerSelect, [auto, ...providers.sort(byReadiness)]);
+      renderPicker(executorCli, builderIds.map((id) => entryFor(id, builderNames[id], cliAvailability(id))).sort(byReadiness));
+      renderAutoOrder();
+      renderAutoOrderAdd();
+    }
+    // Segmented controls mirror a <select> that stays the saved value: a
+    // click sets the select and fires its change, and every routing read
+    // re-syncs the pressed state. Without the markup (tests) they are no-ops.
+    const segmentedGroups = Array.from(document.querySelectorAll("#studio-desktop [data-segmented-for]"));
+    function syncSegmented() {
+      for (const group of segmentedGroups) {
+        const select = document.getElementById(group.dataset.segmentedFor);
+        if (!select) continue;
+        for (const button of group.querySelectorAll("button[data-value]")) button.setAttribute("aria-pressed", String(button.dataset.value === select.value));
+        group.setAttribute("aria-disabled", String(Boolean(select.disabled)));
+      }
+    }
+    for (const group of segmentedGroups) {
+      group.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-value]");
+        const select = document.getElementById(group.dataset.segmentedFor);
+        if (!button || !select || select.disabled || select.value === button.dataset.value) return;
+        select.value = button.dataset.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+        syncSegmented();
+      });
+    }
     function renderSetupState() {
       const routing = setup.routing;
-      if (setup.routingError) setupAssistant.textContent = "status unavailable";
-      else if (!routing) setupAssistant.textContent = "checking…";
+      if (setup.routingError) setPill(setupAssistant, "unknown", "status unavailable");
+      else if (!routing) setPill(setupAssistant, "unknown", "checking…");
       else {
         const provider = providerNames[routing.provider] ? routing.provider : "auto";
         const order = autoOrderOf(routing);
@@ -33967,18 +34424,17 @@ body.music-preview-active #idle-hud { display: none !important; }
           : provider === "custom" ? (routing.hasCustom ? "key saved" : "no key saved")
           : provider === "auto" ? (autoFirst ? `will use ${providerNames[autoFirst]}` : "no usable provider in this order yet")
           : keyState(provider);
-        setupAssistant.textContent = `${providerNames[provider]} · ${detail}`;
+        setPill(setupAssistant, stateOf(providerAvailability(provider)), `${providerNames[provider]} · ${detail}`);
       }
-      if (setup.routingError) setupSelection.textContent = "status unavailable";
-      else if (!routing) setupSelection.textContent = "checking…";
-      else if ((routing.modelSelection ?? "jev") === "fixed") setupSelection.textContent = "Fixed defaults · overrides win";
-      else setupSelection.textContent = routing.jevConfigured ? "Jev · task fit, speed & cost" : "Jev · waiting for a gateway key";
-      if (setup.cliError) setupBuilders.textContent = "CLI status unavailable";
-      else if (!setup.clis) setupBuilders.textContent = "checking…";
+      if (setup.routingError) setPill(setupSelection, "unknown", "status unavailable");
+      else if (!routing) setPill(setupSelection, "unknown", "checking…");
+      else if ((routing.modelSelection ?? "jev") === "fixed") setPill(setupSelection, "ready", "Fixed defaults · overrides win");
+      else setPill(setupSelection, routing.jevConfigured ? "ready" : "missing", routing.jevConfigured ? "Jev · task fit, speed & cost" : "Jev · waiting for a gateway key");
+      if (setup.cliError) setPill(setupBuilders, "unknown", "CLI status unavailable");
+      else if (!setup.clis) setPill(setupBuilders, "unknown", "checking…");
       else {
-        const builderIds = ["opencode", "grok", "claude", "codex", "antigravity"];
         const installed = setup.clis.filter((cli) => cli.installed && builderIds.includes(cli.id));
-        setupBuilders.textContent = installed.length ? `${installed.map((cli) => cli.name).join(", ")} installed` : "No builder CLI detected — install OpenCode, Grok, Claude Code, Codex or Antigravity";
+        setPill(setupBuilders, installed.length ? "ready" : "missing", installed.length ? `${installed.map((cli) => cli.name).join(", ")} installed` : "No builder CLI detected — install OpenCode, Grok, Claude Code, Codex or Antigravity");
       }
       const readiness = document.getElementById("provider-readiness");
       const selected = routing && providerNames[routing.provider] ? routing.provider : null;
@@ -33993,29 +34449,39 @@ body.music-preview-active #idle-hud { display: none !important; }
       else if (setup.cliError) readiness.textContent = "CLI status unavailable";
       else if (!setup.clis) readiness.textContent = "checking CLI…";
       else readiness.textContent = cliInstalled(selected) ? "CLI installed on this machine" : "CLI not found — you can still save its model and install it later";
+      // The nav counts routes that are ready now; the local server is assumed, not probed, so it stays out.
+      const navCount = document.getElementById("settings-nav-providers-count");
+      if (navCount) {
+        const ready = providerRegistry.filter((entry) => entry.kind !== "auto" && entry.kind !== "local" && providerAvailability(entry.id).ready === true).length;
+        navCount.textContent = `${ready} ready`;
+        navCount.hidden = ready === 0;
+      }
+      renderProviderPickers();
     }
-    renderSetupState();
 
     const keyStatus = document.getElementById("key-status");
     const zaiKeyStatus = document.getElementById("zai-key-status");
     const customKeyStatus = document.getElementById("custom-key-status");
+    const keyPills = { opencode: keyStatus, zai: zaiKeyStatus, custom: customKeyStatus };
+    const showKeyState = (which, saved) => setPill(keyPills[which], saved ? "ready" : "missing", saved ? "key saved (encrypted)" : "no key saved");
     window.mefiStudio
       .getApiKey("opencode")
-      .then((key) => { setup.keys.opencode = Boolean(key?.saved); keyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
-      .catch(() => (keyStatus.textContent = "key status unavailable"));
+      .then((key) => { setup.keys.opencode = Boolean(key?.saved); showKeyState("opencode", setup.keys.opencode); renderSetupState(); })
+      .catch(() => setPill(keyStatus, "unknown", "key status unavailable"));
     window.mefiStudio
       .getApiKey("zai")
-      .then((key) => { setup.keys.zai = Boolean(key?.saved); zaiKeyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
-      .catch(() => (zaiKeyStatus.textContent = "key status unavailable"));
+      .then((key) => { setup.keys.zai = Boolean(key?.saved); showKeyState("zai", setup.keys.zai); renderSetupState(); })
+      .catch(() => setPill(zaiKeyStatus, "unknown", "key status unavailable"));
     window.mefiStudio
       .getApiKey("custom")
-      .then((key) => { setup.keys.custom = Boolean(key?.saved); customKeyStatus.textContent = key?.saved ? "key saved (encrypted)" : "no key saved"; renderSetupState(); })
-      .catch(() => (customKeyStatus.textContent = "key status unavailable"));
+      .then((key) => { setup.keys.custom = Boolean(key?.saved); showKeyState("custom", setup.keys.custom); renderSetupState(); })
+      .catch(() => setPill(customKeyStatus, "unknown", "key status unavailable"));
 
     document.getElementById("save-key").addEventListener("click", async () => {
       const value = document.getElementById("api-key").value.trim();
       const result = await window.mefiStudio.setApiKey(value, "opencode");
-      keyStatus.textContent = result?.ok ? (value ? "key saved (encrypted)" : "key cleared") : `save failed: ${result?.error ?? "unknown"}`;
+      if (result?.ok) { setup.keys.opencode = Boolean(value); setPill(keyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); }
+      else setPill(keyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("api-key").value = "";
       await loadAiRouting();
     });
@@ -34023,7 +34489,8 @@ body.music-preview-active #idle-hud { display: none !important; }
     document.getElementById("save-zai-key").addEventListener("click", async () => {
       const value = document.getElementById("zai-key").value.trim();
       const result = await window.mefiStudio.setApiKey(value, "zai");
-      zaiKeyStatus.textContent = result?.ok ? (value ? "key saved (encrypted)" : "key cleared") : `save failed: ${result?.error ?? "unknown"}`;
+      if (result?.ok) { setup.keys.zai = Boolean(value); setPill(zaiKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); }
+      else setPill(zaiKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("zai-key").value = "";
       await loadAiRouting();
     });
@@ -34033,7 +34500,8 @@ body.music-preview-active #idle-hud { display: none !important; }
     document.getElementById("save-custom-key").addEventListener("click", async () => {
       const value = document.getElementById("custom-key").value.trim();
       const result = await window.mefiStudio.setApiKey(value, "custom");
-      customKeyStatus.textContent = result?.ok ? (value ? "key saved (encrypted)" : "key cleared") : `save failed: ${result?.error ?? "unknown"}`;
+      if (result?.ok) { setup.keys.custom = Boolean(value); setPill(customKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); }
+      else setPill(customKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("custom-key").value = "";
       await loadAiRouting();
     });
@@ -34100,7 +34568,6 @@ body.music-preview-active #idle-hud { display: none !important; }
     // bills another provider by surprise. Provider choice and model selection
     // are independent; explicit role models take priority over Jev. Status
     // refreshes never erase unsaved model inputs.
-    const providerSelect = document.getElementById("ai-provider");
     const modelSelection = document.getElementById("ai-model-selection");
     const routingStatus = document.getElementById("ai-routing-status");
     const routingDecision = document.getElementById("ai-routing-decision");
@@ -34112,7 +34579,6 @@ body.music-preview-active #idle-hud { display: none !important; }
     const autoOrderAddButton = document.getElementById("auto-order-add-button");
     const modelRoutine = document.getElementById("ai-model-routine");
     const modelHeavy = document.getElementById("ai-model-heavy");
-    const executorCli = document.getElementById("executor-cli");
     const executorModel = document.getElementById("executor-model");
     const executorTier = document.getElementById("executor-tier");
     const executorModelLabel = document.getElementById("executor-model-label");
@@ -34139,10 +34605,38 @@ body.music-preview-active #idle-hud { display: none !important; }
       executorModel.value = routing?.executorTierModels?.[cli]?.[tier] ?? "";
       executorModel.placeholder = entry.model && entry.source !== "saved" ? `${entry.model} · ${tierSources[entry.source] ?? entry.source}` : tier === "free" ? "no free model saved" : "CLI default";
     }
+    // The tier table shows what each tier would run for the chosen builder,
+    // with the active tier marked; the sentence below it stays the status line.
+    function renderTierTable(routing, cli, tier) {
+      const table = document.getElementById("executor-tier-table");
+      if (!table) return;
+      if (!routing?.executorTierDefaults) { table.hidden = true; return; }
+      table.hidden = false;
+      table.replaceChildren(...["free", "fast", "heavy"].map((name) => {
+        const entry = tierEntry(routing, cli, name);
+        const row = document.createElement("div");
+        row.className = "tier-row";
+        row.dataset.tier = name;
+        row.setAttribute("aria-current", String(name === tier));
+        const label = document.createElement("span");
+        label.className = "tier-name";
+        label.textContent = tierNames[name];
+        const model = document.createElement("span");
+        model.className = "tier-model";
+        model.textContent = entry.model || (name === "free" ? "no free model saved" : "CLI default");
+        model.dataset.state = entry.model ? "ready" : name === "free" ? "missing" : "unknown";
+        const source = document.createElement("span");
+        source.className = "tier-source";
+        source.textContent = entry.model ? (entry.source === "saved" ? "saved" : tierSources[entry.source] ?? entry.source) : "";
+        row.append(label, model, source);
+        return row;
+      }));
+    }
     function renderExecutorTiers(routing) {
       const cli = executorCli.value || "opencode";
       const tier = tierNames[executorTier.value] ? executorTier.value : "auto";
       const cliName = builderNames[cli] ?? cli;
+      renderTierTable(routing, cli, tier);
       if (!routing?.executorTierDefaults) { executorTierStatus.textContent = "Coding tiers need the desktop app."; return; }
       const describe = (name) => {
         const entry = tierEntry(routing, cli, name);
@@ -34224,6 +34718,7 @@ body.music-preview-active #idle-hud { display: none !important; }
           customEndpoint.value = routing.customEndpoint ?? "";
         }
         renderExecutorTiers(routing);
+        syncSegmented();
         const selection = routing.modelSelection ?? "jev";
         const cliProvider = routing.provider === "grok" ? "Grok CLI" : routing.provider === "claude" ? "Claude Code CLI" : routing.provider === "codex" ? "Codex CLI" : routing.provider === "antigravity" ? "Antigravity CLI" : null;
         routingStatus.textContent = selection === "fixed"
@@ -34267,6 +34762,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         const item = document.createElement("li");
         item.className = "auto-order-item";
         item.dataset.provider = id;
+        item.setAttribute("data-state", stateOf(providerAvailability(id)));
         const position = document.createElement("span");
         position.className = "auto-order-index";
         position.textContent = String(index + 1);
@@ -34303,7 +34799,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       autoOrderAdd.replaceChildren(...remaining.map((id) => {
         const option = document.createElement("option");
         option.value = id;
-        option.textContent = providerNames[id] ?? id;
+        option.textContent = `${providerNames[id] ?? id} — ${providerAvailability(id).note}`;
         return option;
       }));
       autoOrderAdd.disabled = remaining.length === 0;
@@ -34322,9 +34818,12 @@ body.music-preview-active #idle-hud { display: none !important; }
     });
     const routingControls = [providerSelect, modelSelection, fallbackToggle, autoOrderAdd, autoOrderAddButton, modelRoutine, modelHeavy, executorCli, executorTier, executorModel, lmStudioEndpoint, customEndpoint];
     for (const control of routingControls) control.disabled = true;
+    renderSetupState();
+    syncSegmented();
     loadAiRouting({ syncControls: true }).finally(() => {
       for (const control of routingControls) control.disabled = false;
       renderAutoOrderAdd();
+      syncSegmented();
     });
     routingRefresh.addEventListener("click", () => loadAiRouting());
     async function saveRouting(payload, confirmation, { syncControls = false } = {}) {
@@ -34446,9 +34945,14 @@ body.music-preview-active #idle-hud { display: none !important; }
           const match = clis.find((cli) => cli.id === button.dataset.cli);
           button.disabled = Boolean(match && !match.installed);
         });
+        document.querySelectorAll("#studio-desktop [data-cli-status]").forEach((pill) => {
+          const match = clis.find((cli) => cli.id === pill.dataset.cliStatus);
+          setPill(pill, !match ? "unknown" : match.installed ? "ready" : "missing", !match ? "not checked" : match.installed ? "installed" : "not found");
+        });
       } catch {
         cliStatus.textContent = "CLI status unavailable";
         setup.cliError = true;
+        document.querySelectorAll("#studio-desktop [data-cli-status]").forEach((pill) => setPill(pill, "unknown", "status unavailable"));
       }
       renderSetupState();
     }

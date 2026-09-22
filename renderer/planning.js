@@ -1,5 +1,6 @@
-// Project-local decisions and reviewed task handoffs. Model calls happen only
-// after explicit buttons; suggestions never record decisions or approve work.
+// Project-local decisions and reviewed task handoffs. Mefi interviews you here
+// and organizes what you say; model calls happen only after explicit buttons,
+// and nothing it writes becomes your answer, your decision, or your approval.
 (() => {
   "use strict";
   const $ = (name) => document.getElementById(`plans-${name}`);
@@ -19,13 +20,34 @@
   const frozen = (item) => ["converted", "converting"].includes(item?.status);
   const ready = (item, question) => (question.dependsOn || []).every((id) => item.questions.some((other) => other.id === id && other.status === "resolved"));
   const settled = (item) => !(item.unknowns || []).length && (item.questions || []).every((question) => question.status === "resolved");
+  const confirmed = (item) => Boolean(item?.reviewedAt);
+  // Where every line of the interview came from. Only your own answer states a
+  // requirement; a reading or suggestion stays a proposal until you resolve the
+  // question yourself. Notes saved before kinds existed read as plain notes.
+  const noteLabels = { answer: "You answered", note: "Your note", question: "Mefi asked", interpretation: "Mefi understood this — not yet your decision", advice: "Mefi suggested", conflict: "Mefi flagged a conflict" };
+  const noteLabel = (note) => noteLabels[note.kind] || (note.author === "user" ? noteLabels.note : noteLabels.advice);
+  // The one thing Mefi is waiting on: its newest follow-up, else a question it
+  // opened that you have not answered, else the next question ready to explore.
+  // `awaiting` separates the first two — your turn to answer — from the last,
+  // where the interview has said its piece and the decision is yours to record.
+  function pendingAsk(item) {
+    const open = (item?.questions || []).filter((question) => question.status === "open");
+    for (const question of [...open].reverse()) {
+      const last = (question.notes || []).at(-1);
+      if (last?.author === "assistant" && ["question", "conflict"].includes(last.kind)) return { question, ask: last.text, followUp: true, awaiting: true };
+    }
+    const fresh = [...open].reverse().find((question) => !(question.notes || []).some((note) => note.author === "user"));
+    if (fresh) return { question: fresh, ask: fresh.question, followUp: false, awaiting: true };
+    const next = open.find((question) => ready(item, question)) || open[0];
+    return next ? { question: next, ask: next.question, followUp: false, awaiting: false } : null;
+  }
   const unsavedDestination = (item) => Boolean(item && draft().details && ["title", "destination", "outOfScope"].some((key) => draft().details[key] !== item[key]));
   const unsavedQuestions = (item) => Boolean(item?.questions?.some((question) => { const edit = draft().editDirty?.[question.id] && draft().edits?.[question.id]; return edit && (edit.question !== question.question || edit.type !== question.type || JSON.stringify([...edit.dependsOn].sort()) !== JSON.stringify([...question.dependsOn].sort())); }));
   const unsavedPlan = (item) => !frozen(item) && (unsavedDestination(item) || unsavedQuestions(item) || Boolean(draft().unknown?.trim()) || Boolean(draft().question?.question?.trim()));
   function reviewGates() {
     const item = plan(); if (!item) return;
     const pending = unsavedPlan(item); const dirty = Boolean(draft().specDirty);
-    const locks = { "suggest-questions": pending, "draft-spec": pending || dirty || !settled(item), "save-spec": pending || !settled(item), approve: pending || dirty || !settled(item) || !item.spec || Boolean(item.spec?.stale) || Boolean(item.spec?.approvedAt), convert: item.status === "converting" ? false : pending || dirty || !item.spec?.approvedAt || !item.spec?.tasks?.length };
+    const locks = { "suggest-questions": pending, "confirm-understanding": pending || !settled(item) || confirmed(item), "draft-spec": pending || dirty || !settled(item) || !confirmed(item), "save-spec": pending || !settled(item) || !confirmed(item), approve: pending || dirty || !settled(item) || !confirmed(item) || !item.spec || Boolean(item.spec?.stale) || Boolean(item.spec?.approvedAt), convert: item.status === "converting" ? false : pending || dirty || !item.spec?.approvedAt || !item.spec?.tasks?.length };
     for (const [id, locked] of Object.entries(locks)) if ($(id)) { $(id).disabled = state.busy || locked; $(id).dataset.locked = String(Boolean(locked)); }
   }
   function holdHandoff() {
@@ -83,7 +105,7 @@
   }
   const typeChoices = [["discussion", "Discussion — make a choice"], ["research", "Research — gather evidence"], ["prototype", "Prototype — try it out"], ["prerequisite", "Prerequisite — establish a fact"]];
   const countLabel = (count, noun) => `${count} ${noun}${count === 1 ? "" : "s"}`;
-  const flowStages = [["idea", "The idea"], ["explore", "Explore"], ["decisions", "Your decisions"], ["spec", "Specification"], ["approval", "Your approval"], ["build", "Build"], ["verify", "Verify"]];
+  const flowStages = [["idea", "The idea"], ["explore", "Mefi asks"], ["decisions", "Your decisions"], ["review", "Your review"], ["spec", "Specification"], ["approval", "Your approval"], ["build", "Build"], ["verify", "Verify"]];
   function navigateTo(...ids) {
     const target = ids.map($).find((element) => element && !element.disabled);
     if (!target) return;
@@ -127,15 +149,17 @@
     const complete = work.length > 0 && work.every((task) => task.stage === "done");
     let current = !item ? "idea" : frozen(item) ? (complete || work.some((task) => task.stage === "review") ? "verify" : "build")
       : unknowns || (!questions.length && !item.spec) ? "explore"
-      : resolved.length < questions.length ? (frontier.some((question) => question.notes?.length) ? "decisions" : "explore")
+      : resolved.length < questions.length ? (!pendingAsk(item)?.awaiting && frontier.some((question) => question.notes?.length) ? "decisions" : "explore")
+      : !confirmed(item) ? "review"
       : !item.spec || item.spec.stale ? "spec" : !item.spec.approvedAt ? "approval" : "build";
     if (state.pending?.assist) current = state.pending.kind === "spec" ? "spec" : "explore";
     const completed = new Set(item ? ["idea"] : []);
     if (item && !unknowns && (questions.length > 0 || item.spec) && resolved.length === questions.length) { completed.add("explore"); completed.add("decisions"); }
+    if (confirmed(item)) completed.add("review");
     if (item?.spec && !item.spec.stale) completed.add("spec");
     if (item?.spec?.approvedAt) completed.add("approval");
     if (complete) { completed.add("build"); completed.add("verify"); }
-    return { current, completed, questions, resolved, frontier, blocked, unknowns, work, complete };
+    return { current, completed, questions, resolved, frontier, blocked, unknowns, work, complete, ask: pendingAsk(item) };
   }
   function renderWorkflow(item) {
     let area = $("workflow");
@@ -150,13 +174,14 @@
     badge.dataset.state = flow.complete ? "complete" : "waiting";
     const rail = node("ol", "planning-flow-rail", undefined, area); rail.setAttribute("aria-label", "Planning and work stages");
     const decided = `${flow.resolved.length}/${flow.questions.length} recorded`;
-    const subtitles = { idea: item ? "Destination saved" : "Set a destination", explore: `${flow.frontier.length} ready · ${flow.blocked.length} blocked`, decisions: decided, spec: item?.spec?.stale ? "Needs revision" : item?.spec ? "Draft saved" : "Shape the build", approval: item?.spec?.approvedAt ? "Approved by you" : "Review together", build: frozen(item) ? `${flow.work.filter((task) => task.stage === "running").length} working · ${countLabel(item.taskIds?.length || 0, "task")}` : "Create tasks", verify: frozen(item) ? `${flow.work.filter((task) => task.stage === "done").length}/${flow.work.length} confirmed` : "Check the result" };
+    const subtitles = { idea: item ? "Destination saved" : "Set a destination", explore: flow.ask?.awaiting ? "Waiting for your answer" : `${flow.frontier.length} ready · ${flow.blocked.length} blocked`, decisions: decided, review: confirmed(item) ? "Confirmed by you" : "Read it back", spec: item?.spec?.stale ? "Needs revision" : item?.spec ? "Draft saved" : "Shape the build", approval: item?.spec?.approvedAt ? "Approved by you" : "Review together", build: frozen(item) ? `${flow.work.filter((task) => task.stage === "running").length} working · ${countLabel(item.taskIds?.length || 0, "task")}` : "Create tasks", verify: frozen(item) ? `${flow.work.filter((task) => task.stage === "done").length}/${flow.work.length} confirmed` : "Check the result" };
     for (const [index, [id, label]] of flowStages.entries()) {
       const row = node("li", "", undefined, rail);
       const jump = () => {
         if (id === "idea") navigateTo("title", "destination-section");
-        else if (id === "explore") navigateTo(flow.unknowns ? "unknown-text" : "questions-section", "destination-section");
+        else if (id === "explore") navigateTo("interview-answer", "interview-start", "interview-section", "destination-section");
         else if (id === "decisions") { const question = flow.frontier[0] || flow.questions[0]; navigateTo(question ? `resolution-${question.id}` : "questions-section", question ? `question-card-${question.id}` : "destination-section"); }
+        else if (id === "review") navigateTo("confirm-understanding", "review-section", "destination-section");
         else if (id === "spec") navigateTo("spec-text", "specification-section", "destination-section");
         else if (id === "approval") navigateTo("approval-section", "destination-section");
         else navigateTo("execution", "approval-section", "destination-section");
@@ -172,9 +197,9 @@
     status.dataset.active = String(Boolean(state.pending?.assist));
     status.setAttribute("aria-busy", String(Boolean(state.pending?.assist)));
     node("span", "planning-flow-dot", "", status).setAttribute("aria-hidden", "true");
-    const next = { idea: "Start with the outcome you want. Nothing runs until you choose the next action.", explore: flow.unknowns ? `${flow.unknowns} unknown${flow.unknowns === 1 ? " needs" : "s need"} a question or a reason to set aside.` : flow.frontier.length ? `${flow.frontier.length} question${flow.frontier.length === 1 ? " is" : "s are"} ready. Open one to discuss options or record your choice.` : "Add a question yourself or ask Mefi to suggest what needs exploring.", decisions: "Read the discussion and evidence, then record your own decisions.", spec: "The decisions are settled. Draft the specification and its small implementation tasks.", approval: "Review the saved specification, task briefs, and acceptance checks before approving.", build: item?.status === "converted" ? "Tasks follow the current queue and Pause settings. Their board status is shown below." : item?.status === "converting" ? "Finish creating the approved tasks. Existing tasks will be reused." : "Your specification is approved. Create its tasks when you are ready.", verify: flow.complete ? "Every linked task has verified evidence or your recorded confirmation." : "A worker result is ready for verification. Open the task to inspect its evidence." };
+    const next = { idea: "Start with the outcome you want. Nothing runs until you choose the next action.", explore: flow.ask?.awaiting ? "Mefi is waiting for your answer. Reply in your own words; it reads your answer back before moving on." : flow.unknowns ? `${flow.unknowns} unknown${flow.unknowns === 1 ? " needs" : "s need"} a question or a reason to set aside.` : "Let Mefi ask you the next question, or add one yourself.", decisions: "Read the interview back, then record your own decisions.", review: "Read what this plan now says the feature is. Nothing is drafted until you confirm it.", spec: "The decisions are settled. Draft the specification and its small implementation tasks.", approval: "Review the saved specification, task briefs, and acceptance checks before approving.", build: item?.status === "converted" ? "Tasks follow the current queue and Pause settings. Their board status is shown below." : item?.status === "converting" ? "Finish creating the approved tasks. Existing tasks will be reused." : "Your specification is approved. Create its tasks when you are ready.", verify: flow.complete ? "Every linked task has verified evidence or your recorded confirmation." : "A worker result is ready for verification. Open the task to inspect its evidence." };
     const pendingQuestion = flow.questions.find((question) => question.id === state.pending?.questionId);
-    node("span", "", state.pending?.assist ? state.pending.kind === "spec" ? "Mefi is drafting the specification from your saved decisions…" : state.pending.kind === "question" ? `Mefi is exploring: ${pendingQuestion?.question || "the selected question"}` : "Mefi is looking for questions in your saved destination…" : next[flow.current], status);
+    node("span", "", state.pending?.assist ? state.pending.kind === "spec" ? "Mefi is drafting the specification from your saved decisions…" : state.pending.kind === "interview" ? "Mefi is reading your answer and working out what to ask next…" : state.pending.kind === "question" ? `Mefi is exploring: ${pendingQuestion?.question || "the selected question"}` : "Mefi is looking for questions in your saved destination…" : next[flow.current], status);
     if (item && !frozen(item)) renderQuestionMap(area, item, flow);
     if (frozen(item)) renderExecution(area, item, flow.work);
   }
@@ -205,7 +230,7 @@
         node("span", "planning-map-label", `Q${index + 1} · ${question.type}`, jump);
         node("strong", "", question.question, jump);
         node("span", "planning-map-state", questionState === "resolved" ? "✓ Decision recorded" : questionState === "ready" ? "● Ready to explore" : "↳ Waiting on a decision", jump);
-        if (question.notes?.length && questionState !== "resolved") node("small", "", `${question.notes.length} discussion note${question.notes.length === 1 ? "" : "s"} · your decision is open`, jump);
+        if (question.notes?.length && questionState !== "resolved") node("small", "", `${countLabel(question.notes.length, "interview line")} · your decision is open`, jump);
         if (question.dependsOn?.length) {
           const links = node("div", "planning-map-links", undefined, card); node("span", "", "After", links);
           for (const id of question.dependsOn) {
@@ -291,7 +316,7 @@
     if (!locked) submit(edit, item ? "Save destination" : "Create plan", "save-details");
   }
   function unknowns(item) {
-    const area = section("2. What don't we know yet?", "Capture uncertainties. Turn one into a question, or explain why it no longer needs an answer.");
+    const area = section("3. Loose ends we noticed", "Uncertainties too vague to decide yet. Turn one into a question, or explain why it no longer needs an answer.");
     const local = draft(); const locked = frozen(item);
     for (const unknown of item.unknowns || []) {
       const card = node("article", "planning-card", undefined, area); node("p", "", unknown.text, card);
@@ -311,6 +336,89 @@
       field(edit, "Something we're unsure about", "unknown-text", local.unknown, (value) => { local.unknown = value; holdHandoff(); }, { required: true, rows: 2, maxLength: 4000, placeholder: "We don't know whether…" });
       submit(edit, "Add unknown", "add-unknown");
     }
+  }
+  // The interview, shown wherever a question appears. Each line says where it
+  // came from, and Mefi's reading of your answer can only ever be copied into
+  // your decision box for you to edit and record yourself.
+  function transcript(parent, item, question, locked = false) {
+    const local = draft(); const wrap = node("div", "planning-notes", undefined, parent);
+    for (const entry of question.notes || []) {
+      const row = node("div", "planning-note", undefined, wrap);
+      row.dataset.noteKind = entry.kind || (entry.author === "user" ? "note" : "advice");
+      node("strong", "", noteLabel(entry), row); node("p", "", entry.text, row);
+      if (entry.kind === "interpretation" && question.status !== "resolved" && !locked) button("Use as my decision", row, () => {
+        local.answers ||= {}; (local.answers[question.id] ||= { resolution: "", evidence: "" }).resolution = entry.text;
+        persist(); render(); navigateTo(`resolution-${question.id}`, `question-card-${question.id}`);
+        note("Mefi's reading is in your decision box. Edit it until it says what you mean, then record it.");
+      }, `use-note-${entry.id}`);
+    }
+    if (!(question.notes || []).length) node("p", "planning-subtle", "Nothing said about this yet.", wrap);
+    return wrap;
+  }
+  function interviewPanel(item) {
+    const area = section("2. Mefi's questions for you", "Mefi asks, you answer in your own words, and it reads your answer back before moving on. Nothing here records a decision — you do that under each question.");
+    area.id = "plans-interview-section"; area.tabIndex = -1;
+    if (frozen(item)) { node("p", "planning-subtle", "This plan is on the task board. Its interview stays below as a record.", area); return; }
+    const local = draft(); const values = local.interview ||= { message: "", useWeb: false };
+    const pending = unsavedPlan(item); const ask = pendingAsk(item);
+    const card = node("article", "planning-card planning-interview", undefined, area);
+    if (!ask) {
+      node("p", "planning-interview-ask", item.questions?.length ? "Mefi has nothing open. Ask it to keep going, or review what you understand together." : "Mefi hasn't asked anything yet. It will start with the one question that would most change what gets built.", card);
+      const actions = node("div", "planning-actions", undefined, card);
+      button(item.questions?.length ? "Ask me something else" : "Start the interview", actions, async () => { if (await act("interview", { kind: "interview" }, null, "Mefi asked a question. Answer it in your own words.", true)) navigateTo("interview-answer"); }, "interview-start", true, pending);
+      if (item.questions?.length && settled(item)) navigation("Review what we understand ↓", actions, () => navigateTo("confirm-understanding", "review-section"), "interview-to-review", "ghost mini");
+      node("p", "planning-subtle", pending ? "Save your destination, unknown, or question edits first." : "Uses your configured assistant connection. You can also write the questions yourself below.", card);
+      return;
+    }
+    const index = item.questions.indexOf(ask.question) + 1;
+    node("span", "planning-pill", ask.followUp ? `Follow-up on Q${index}` : `Q${index} · ${typeChoices.find(([type]) => type === ask.question.type)?.[1] || ask.question.type}`, card).dataset.state = "ready";
+    node("p", "planning-interview-ask", ask.ask, card).id = "plans-interview-ask";
+    const talk = node("details", "", undefined, card); talk.open = local.interviewOpen !== false;
+    node("summary", "", `What we've said about this${ask.question.notes?.length ? ` · ${countLabel(ask.question.notes.length, "line")}` : ""}`, talk);
+    talk.addEventListener("toggle", () => { local.interviewOpen = talk.open; persist(); });
+    transcript(talk, item, ask.question);
+    field(card, "Your answer", "interview-answer", values.message, (value) => { values.message = value; }, { rows: 4, maxLength: 16000, placeholder: "Answer in your own words. Say what you want to be true, not how to build it." });
+    const checkLabel = node("label", "planning-check", undefined, card); const check = node("input", "", undefined, checkLabel); check.type = "checkbox"; check.checked = Boolean(values.useWeb);
+    node("span", "", "Let Mefi cite web references", checkLabel);
+    check.addEventListener("change", () => { values.useWeb = check.checked; persist(); });
+    const actions = node("div", "planning-actions", undefined, card);
+    const clean = (saved) => { delete saved.interview; };
+    button("Send answer", actions, async () => {
+      if (!values.message.trim()) { note("Type your answer first, or ask Mefi to explain the tradeoffs.", true); navigateTo("interview-answer"); return; }
+      if (await act("interview", { kind: "interview", questionId: ask.question.id, message: values.message, useWeb: values.useWeb }, clean, "Mefi read your answer back. Check what it understood, then answer the next question.", true)) navigateTo("interview-answer", "interview-start");
+    }, "interview-send", true, pending);
+    button("Explain the tradeoffs", actions, () => act("question", { kind: "question", questionId: ask.question.id, message: values.message, useWeb: values.useWeb }, clean, "Mefi explained the tradeoffs. It still needs your answer.", true), "interview-explain", false, pending);
+    navigation("Record my decision ↓", actions, () => navigateTo(`resolution-${ask.question.id}`, `question-card-${ask.question.id}`), "interview-to-decision", "ghost mini");
+    node("p", "planning-subtle", pending ? "Save your destination, unknown, or question edits first." : "Uses your configured assistant connection. Mefi does the asking and the organizing; every decision stays yours.", card);
+  }
+  // The gate the specification waits behind: what this plan now says the
+  // feature is, in your words, with anything Mefi only proposed kept separate.
+  function review(item) {
+    const area = section("5. What we understand", "Read this back before anything is drafted. It is built from your decisions, not from Mefi's suggestions.");
+    area.id = "plans-review-section"; area.tabIndex = -1;
+    node("p", "planning-answer", `Destination: ${item.destination}`, area);
+    if (item.outOfScope) node("p", "planning-answer planning-subtle", `Outside this plan: ${item.outOfScope}`, area);
+    const decided = (item.questions || []).filter((question) => question.status === "resolved");
+    for (const [index, question] of decided.entries()) {
+      const row = node("article", "planning-card", undefined, area);
+      node("h4", "", `${index + 1}. ${question.question}`, row);
+      node("p", "planning-answer", question.resolution, row);
+      node("p", "planning-subtle", question.evidence ? `Confirmed by you · Evidence: ${question.evidence}` : "Confirmed by you", row);
+      const proposed = (question.notes || []).filter((note) => note.author === "assistant" && ["interpretation", "advice"].includes(note.kind));
+      if (!proposed.length) continue;
+      const more = node("details", "", undefined, row);
+      node("summary", "", `${countLabel(proposed.length, "line")} Mefi proposed that your decision does not include`, more);
+      for (const entry of proposed) { const line = node("div", "planning-note", undefined, more); line.dataset.noteKind = entry.kind; node("strong", "", noteLabel(entry), line); node("p", "", entry.text, line); }
+    }
+    if (!decided.length) node("p", "planning-subtle", "No decisions were needed. The destination above is the whole understanding.", area);
+    const open = [...(item.questions || []).filter((question) => question.status !== "resolved").map((question) => question.question), ...(item.unknowns || []).map((unknown) => unknown.text)];
+    if (open.length) node("p", "planning-subtle", `Still unresolved: ${open.join(" · ")}`, area);
+    if (frozen(item)) return;
+    const confirm = node("div", "planning-confirm", undefined, area);
+    node("p", "", confirmed(item) ? `You confirmed this on ${new Date(item.reviewedAt).toLocaleString()}. Changing the destination, an unknown, or any decision asks you to read it again.`
+      : settled(item) ? "Confirm this is the feature you meant. Mefi drafts the specification only from what you confirm here."
+      : "Finish the interview first: every question needs your decision, and every unknown a question or a reason to set it aside.", confirm);
+    button(confirmed(item) ? "Understanding confirmed" : "Yes, this is what I meant", confirm, () => act("confirm-understanding", {}, null, "Understanding confirmed. You can draft the specification now."), "confirm-understanding", true, !settled(item) || confirmed(item) || unsavedPlan(item));
   }
   function questionEditor(parent, item, existing) {
     const local = draft(); const id = existing?.id;
@@ -335,20 +443,23 @@
     const pill = node("span", "planning-pill", resolved ? "Decided" : canResolve ? "Ready to explore" : "Waiting on a decision", card); pill.dataset.state = resolved ? "resolved" : canResolve ? "ready" : "waiting";
     node("h4", "", question.question, card);
     node("p", "planning-subtle", `${typeChoices.find(([type]) => type === question.type)?.[1] || question.type}${question.dependsOn?.length ? ` · Depends on: ${question.dependsOn.map((dependency) => item.questions.find((other) => other.id === dependency)?.question || "Missing question").join("; ")}` : ""}`, card);
-    const talk = node("details", "", undefined, card); talk.open = Boolean(local.talkOpen?.[id]); node("summary", "", `Think it through${question.notes?.length ? ` · ${countLabel(question.notes.length, "note")}` : " together"}`, talk);
+    const talk = node("details", "", undefined, card); talk.open = Boolean(local.talkOpen?.[id]); node("summary", "", `The interview on this question${question.notes?.length ? ` · ${countLabel(question.notes.length, "line")}` : " · nothing said yet"}`, talk);
     talk.addEventListener("toggle", () => { local.talkOpen ||= {}; local.talkOpen[id] = talk.open; persist(); });
-    const conversation = node("div", "planning-notes", undefined, talk);
-    for (const entry of question.notes || []) { const row = node("div", "planning-note", undefined, conversation); node("strong", "", entry.author === "assistant" ? "Mefi · suggestion" : "You", row); node("p", "", entry.text, row); }
+    transcript(talk, item, question, locked);
     if (!locked && !resolved) {
       const values = local.conversations[id] ||= { message: "", useWeb: false };
-      field(talk, "Your thoughts, options, or a question for Mefi", `note-${id}`, values.message, (value) => { values.message = value; }, { rows: 3, maxLength: 16000, placeholder: "Compare the options, explain a tradeoff, or add what you've learned…" });
+      field(talk, "Answer this, or ask Mefi about it", `note-${id}`, values.message, (value) => { values.message = value; }, { rows: 3, maxLength: 16000, placeholder: "Answer in your own words, or ask what the tradeoffs are…" });
       const checkLabel = node("label", "planning-check", undefined, talk); const check = node("input", "", undefined, checkLabel); check.type = "checkbox"; check.checked = Boolean(values.useWeb);
       node("span", "", "Include web references in Mefi's answer", checkLabel); check.addEventListener("change", () => { values.useWeb = check.checked; persist(); });
       const actions = node("div", "planning-actions", undefined, talk);
       const clean = (saved) => { delete saved.conversations?.[id]; saved.talkOpen ||= {}; saved.talkOpen[id] = true; };
+      button("Send answer", actions, async () => {
+        if (!values.message.trim()) { note("Type your answer first, or ask Mefi to explain the tradeoffs.", true); navigateTo(`note-${id}`); return; }
+        if (await act("interview", { kind: "interview", questionId: id, message: values.message, useWeb: values.useWeb }, clean, "Mefi read your answer back. Check what it understood, then answer the next question.", true)) navigateTo("interview-answer", `note-${id}`);
+      }, `answer-${id}`, true);
+      button("Explain the tradeoffs", actions, () => act("question", { kind: "question", questionId: id, message: values.message, useWeb: values.useWeb }, clean, "Mefi explained the tradeoffs. Your decision is still open below.", true), `ask-${id}`);
       button("Save my note", actions, () => act("add-note", { questionId: id, text: values.message }, clean, "Your note is saved."), `save-note-${id}`);
-      button("Ask Mefi", actions, () => act("question", { kind: "question", questionId: id, message: values.message, useWeb: values.useWeb }, clean, "Read Mefi's suggestion below, then make your decision.", true), `ask-${id}`, true);
-      node("p", "planning-subtle", "Uses your configured assistant connection. Suggestions add context; you make the decision below.", talk);
+      node("p", "planning-subtle", "Uses your configured assistant connection. Mefi's lines are proposals; only the decision you record below is a requirement.", talk);
     }
     if (resolved) {
       node("p", "planning-answer", question.resolution, card);
@@ -365,12 +476,12 @@
     if (!locked) { const edit = node("details", "", undefined, card); node("summary", "", "Edit this question or its prerequisites", edit); questionEditor(edit, item, question); }
   }
   function questions(item) {
-    const area = section("3. Work through the questions", "Discuss a choice, gather research, or try a small prototype. Record a decision only after you've reviewed the result.");
+    const area = section("4. Every question and your decision", "The full map of what the interview opened. Record a decision only after you have reviewed what was said.");
     area.id = "plans-questions-section"; area.tabIndex = -1;
     if (!frozen(item)) {
       const actions = node("div", "planning-actions", undefined, area);
-      button("Suggest questions", actions, () => act("questions", { kind: "questions" }, null, "Questions added for you to review.", true), "suggest-questions", false, unsavedPlan(item));
-      node("span", "planning-subtle", "Uses the saved destination and your configured assistant.", actions);
+      button("Suggest more questions", actions, () => act("questions", { kind: "questions" }, null, "Questions added for you to review.", true), "suggest-questions", false, unsavedPlan(item));
+      node("span", "planning-subtle", "A batch of open questions in one go. The interview above asks them one at a time and follows what you say.", actions);
     }
     for (const question of item.questions || []) questionCard(area, item, question);
     if (!item.questions.length) node("p", "planning-subtle", "Start with one question that could change what you build.", area);
@@ -378,16 +489,16 @@
   }
   function newSlice() { return { id: `slice-${Date.now().toString(36)}-${++sliceCounter}`, title: "", prompt: "", acceptance: "", dependsOn: [] }; }
   function specification(item) {
-    const area = section("4. Turn decisions into a build plan", "Review the specification and small tasks. Each task needs a clear brief, acceptance checks, and any tasks it must wait for.");
+    const area = section("6. Turn decisions into a build plan", "Review the specification and small tasks. Each task needs a clear brief, acceptance checks, and any tasks it must wait for.");
     area.id = "plans-specification-section"; area.tabIndex = -1;
     const local = draft(); const locked = frozen(item);
     if (!local.specDirty || locked) { delete local.spec; delete local.specDirty; }
     const values = local.spec ||= { text: item.spec?.text || "", tasks: (item.spec?.tasks || []).map((task) => ({ ...task, acceptance: Array.isArray(task.acceptance) ? task.acceptance.join("\n") : task.acceptance || "", dependsOn: [...(task.dependsOn || [])] })) };
     const markDirty = () => { local.specDirty = true; reviewGates(); };
-    if (!settled(item) && !locked) node("p", "planning-subtle", "Draft here as you think. Settle all unknowns and questions before asking Mefi for a specification or approving tasks.", area);
+    if (!locked && (!settled(item) || !confirmed(item))) node("p", "planning-subtle", settled(item) ? "Draft here as you think. Confirm what you understand in section 5 before asking Mefi for a specification or approving tasks." : "Draft here as you think. Settle all unknowns and questions, then confirm what you understand, before drafting or approving.", area);
     if (!locked) {
       const actions = node("div", "planning-actions", undefined, area);
-      button("Draft specification with Mefi", actions, () => act("spec", { kind: "spec" }, (saved) => { delete saved.spec; delete saved.specDirty; }, "Specification drafted. Review the text, task briefs and acceptance checks.", true), "draft-spec", false, !settled(item) || Boolean(local.specDirty) || unsavedPlan(item));
+      button("Draft specification with Mefi", actions, () => act("spec", { kind: "spec" }, (saved) => { delete saved.spec; delete saved.specDirty; }, "Specification drafted. Review the text, task briefs and acceptance checks.", true), "draft-spec", false, !settled(item) || !confirmed(item) || Boolean(local.specDirty) || unsavedPlan(item));
       if (local.specDirty) node("span", "planning-subtle", "Save your draft before asking Mefi to revise it.", actions);
     }
     const edit = form(area, "spec-form", () => act("draft-spec", { text: values.text, tasks: values.tasks.map((task) => ({ ...task, acceptance: task.acceptance.split("\n").map((line) => line.trim()).filter(Boolean) })) }, (saved) => { delete saved.spec; delete saved.specDirty; }, "Specification draft saved. Review it before approving."), "Specification and implementation tasks", locked);
@@ -403,7 +514,7 @@
     if (!locked) {
       const actions = node("div", "planning-actions", undefined, edit);
       button("+ Add a task", actions, () => { values.tasks.push(newSlice()); markDirty(); persist(); render(); $(`task-title-${values.tasks.length - 1}`)?.focus(); }, "add-slice");
-      submit(actions, "Save specification draft", "save-spec", !settled(item) || unsavedPlan(item));
+      submit(actions, "Save specification draft", "save-spec", !settled(item) || !confirmed(item) || unsavedPlan(item));
       node("p", "planning-subtle", local.specDirty ? "You have unsaved specification edits. Saving a revision clears any earlier approval." : "You can write this entire plan yourself; an assistant connection is optional.", edit);
     }
     const approve = node("div", "planning-confirm", undefined, area);
@@ -417,9 +528,9 @@
       node("p", "", "Task creation started. Finish adding the approved tasks to the queue. Existing tasks will be reused.", approve);
       button("Finish creating tasks", approve, () => act("convert", {}, null, "Approved tasks are in your project's queue."), "convert", true);
     } else {
-      node("p", "", unsavedPlan(item) ? "Save your destination, unknown, or question changes before drafting or approving the specification." : item.spec?.stale ? "Earlier decisions changed. Review and save a fresh specification before approving it." : item.spec?.approvedAt && !local.specDirty ? "You've approved this specification. Creating tasks adds them to the current queue; they can begin when scheduling is on and their prerequisites are complete." : "Your approval confirms the saved specification and every task brief. Approval alone keeps the work here until you choose to create the tasks.", approve);
+      node("p", "", unsavedPlan(item) ? "Save your destination, unknown, or question changes before drafting or approving the specification." : !confirmed(item) ? "Confirm what you understand in section 5 first. Approval builds on the reading you confirmed, not on Mefi's suggestions." : item.spec?.stale ? "Earlier decisions changed. Review and save a fresh specification before approving it." : item.spec?.approvedAt && !local.specDirty ? "You've approved this specification. Creating tasks adds them to the current queue; they can begin when scheduling is on and their prerequisites are complete." : "Your approval confirms the saved specification and every task brief. Approval alone keeps the work here until you choose to create the tasks.", approve);
       const actions = node("div", "planning-actions", undefined, approve);
-      button(item.spec?.approvedAt ? "Specification approved" : "Approve specification", actions, () => act("approve-spec", {}, null, "Specification approved. You can now create the tasks."), "approve", false, !item.spec || !settled(item) || Boolean(local.specDirty) || Boolean(item.spec?.approvedAt) || item.spec?.stale || unsavedPlan(item));
+      button(item.spec?.approvedAt ? "Specification approved" : "Approve specification", actions, () => act("approve-spec", {}, null, "Specification approved. You can now create the tasks."), "approve", false, !item.spec || !settled(item) || !confirmed(item) || Boolean(local.specDirty) || Boolean(item.spec?.approvedAt) || item.spec?.stale || unsavedPlan(item));
       const count = item.spec?.tasks?.length || 0;
       button(`Create ${count} ${count === 1 ? "task" : "tasks"}`, actions, () => act("convert", {}, null, "Approved tasks are in your project's queue."), "convert", true, !item.spec?.approvedAt || Boolean(local.specDirty) || !count || unsavedPlan(item));
     }
@@ -429,7 +540,7 @@
     const local = draft(); const area = node("details", "planning-card", undefined, $("detail")); area.id = "plans-history";
     node("summary", "", `Plan history · ${countLabel(item.history.length, "saved revision")}`, area);
     node("p", "planning-subtle", "Earlier decisions and specifications remain available here after you change the plan. Copy any text you want to use in a new revision.", area);
-    const labels = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Discussion note saved", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created" };
+    const labels = { create: "Plan created", update: "Destination saved", "add-unknown": "Unknown added", "remove-unknown": "Unknown set aside", "add-question": "Question added", "edit-question": "Question edited", resolve: "Decision recorded", reopen: "Decision reopened", "add-note": "Interview line saved", "confirm-understanding": "Understanding confirmed", "draft-spec": "Specification drafted", "approve-spec": "Specification approved", "begin-conversion": "Task creation started", "mark-converted": "Tasks created" };
     const limit = local.historyLimit || 12;
     for (const entry of [...item.history].reverse().slice(0, limit)) {
       const row = node("details", "", undefined, area);
@@ -551,7 +662,7 @@
     if (!state.projectId) { node("p", "planning-empty", "Open the desktop app and choose a project to start planning.", $("detail")); controls(); return; }
     const item = plan();
     renderWorkflow(item);
-    details(item); if (item) { unknowns(item); questions(item); specification(item); history(item); }
+    details(item); if (item) { interviewPanel(item); unknowns(item); questions(item); review(item); specification(item); history(item); }
     existingWork(item);
     controls();
   }

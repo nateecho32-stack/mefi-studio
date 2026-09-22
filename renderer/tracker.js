@@ -7,7 +7,7 @@
   const REFRESH_MS = 5 * 60 * 1000;
   const STALE_MS = 5000;
   const WINDOW_LABELS = [["rolling", "5-hour window", "5h"], ["weekly", "Weekly window", "Wk"], ["monthly", "Monthly window", "Mo"]];
-  const state = { initialized: false, collapsed: false, read: 0, at: 0, report: null, pending: null };
+  const state = { initialized: false, open: false, read: 0, at: 0, report: null, pending: null };
   const $ = (id) => document.getElementById(id);
   const api = () => window.mefiStudio;
   const rows = (value) => Array.isArray(value) ? value : [];
@@ -35,9 +35,6 @@
     if (!Number.isFinite(date.getTime())) return "";
     return Math.abs(date.getTime() - Date.now()) < 86400000 ? clock(date) : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   };
-  const readStore = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
-  const writeStore = (key, value) => { try { localStorage.setItem(key, value); } catch {} };
-
   function element(tag, className = "", text = "") {
     const node = document.createElement(tag);
     node.className = className;
@@ -360,11 +357,30 @@
   }
 
   // A missing OpenCode Go key is not a failed read once the accounts read is
-  // authoritative: the older credits bridge simply has nothing to say.
+  // authoritative: the older credits bridge simply has nothing to say. A read
+  // that did fail is named, so the note says which account to look at.
   function readNote(report) {
     const noKey = report.credits?.ok === false && report.credits?.code === "no-key" && report.accounts?.ok === true;
-    const failed = accountsOf(report).filter((account) => account.read !== "none" && !account.ok && !(noKey && account.provider === "opencode-go")).length;
-    return report.credits?.ok === false && !noKey ? " · live account read unavailable" : failed ? ` · ${failed} account read${failed === 1 ? "" : "s"} unavailable` : "";
+    const failed = accountsOf(report).filter((account) => account.read !== "none" && !account.ok && !(noKey && account.provider === "opencode-go"));
+    if (report.credits?.ok === false && !noKey) return " · live account read unavailable";
+    if (!failed.length) return "";
+    return ` · ${failed.length} account read${failed.length === 1 ? "" : "s"} unavailable (${failed.map((account) => account.label).join(", ")})`;
+  }
+  // The pill itself carries one short reading: the lead account's first two
+  // windows, or today's recorded calls when nothing live is connected. The
+  // dot beside it lights when a read failed or a window is nearly spent.
+  function briefOf(report) {
+    if (!report) return "";
+    const lead = leadAccount(report);
+    if (lead) return leadWindows(lead).slice(0, 2).map(([short, record]) => `${short.toLowerCase()} ${record && finite(record.percent) ? percent(record.percent) : "—"}`).join(" · ");
+    const local = report.local?.ok === false ? null : report.local;
+    return local ? `today ${calls(local.today.calls)}` : "no reading";
+  }
+  function toneOf(report) {
+    if (!report) return "";
+    if (readNote(report)) return "warn";
+    const lead = leadAccount(report);
+    return lead && leadWindows(lead).some(([, record]) => hot(record)) ? "warn" : "";
   }
   function statusOf(report) {
     if (!report) return "Waiting for a reading…";
@@ -397,12 +413,20 @@
     if (fullStatus) fullStatus.textContent = statusOf(report);
     const compactState = $("cmd-usage-state");
     if (compactState) compactState.textContent = compactStatus(report);
+    const brief = $("cmd-usage-brief");
+    if (brief) brief.textContent = briefOf(report);
+    const dot = $("cmd-usage-dot");
+    if (dot) { const tone = toneOf(report); dot.hidden = !tone; dot.setAttribute("data-tone", tone || "ok"); }
+    const toggle = $("cmd-usage-toggle");
+    if (toggle) toggle.title = `${compactStatus(report)} · click for the breakdown`;
   }
   function setStatus(text) {
     const fullStatus = $("model-lab-tracker-status");
     if (fullStatus) fullStatus.textContent = text;
     const compactState = $("cmd-usage-state");
     if (compactState) compactState.textContent = text;
+    const brief = $("cmd-usage-brief");
+    if (brief && !state.report) brief.textContent = text === "Reading usage…" ? "reading…" : "";
   }
 
   function refresh({ force = false } = {}) {
@@ -439,18 +463,20 @@
     if (!document.body?.classList?.contains?.("command-active")) return;
     if (Date.now() - state.at >= REFRESH_MS) refresh();
   }
-  function setCompactCollapsed(collapsed, save = true) {
-    state.collapsed = Boolean(collapsed);
+  // The Usage pill at the bottom-left opens the breakdown above it; opening
+  // also asks for a reading when the last one is older than a few seconds.
+  function setOpen(open) {
+    state.open = Boolean(open);
+    const pop = $("cmd-usage-pop");
+    if (pop) pop.hidden = !state.open;
     const body = $("cmd-usage-body");
-    if (body) body.hidden = state.collapsed;
+    if (body) body.hidden = !state.open;
     const toggle = $("cmd-usage-toggle");
-    if (toggle) {
-      toggle.setAttribute("aria-expanded", String(!state.collapsed));
-      toggle.title = state.collapsed ? "Expand usage" : "Collapse usage";
-    }
-    if (save) writeStore("mefiStudio.cmdUsageCollapsed", state.collapsed ? "1" : "0");
+    if (toggle) toggle.setAttribute("aria-expanded", String(state.open));
+    if (state.open) refresh();
   }
   function openTab() {
+    setOpen(false);
     // Through the registry so the "Back to Command" return state is recorded.
     if (window.MefiNav?.go) window.MefiNav.go("graph");
     else { window.MefiIdle?.exit?.(); window.MefiBooklet?.showTab?.("graph"); }
@@ -466,8 +492,12 @@
     $("model-lab-tracker-refresh")?.addEventListener("click", () => refresh({ force: true }));
     $("cmd-usage-refresh")?.addEventListener("click", () => refresh({ force: true }));
     $("cmd-usage-open")?.addEventListener("click", openTab);
-    $("cmd-usage-toggle")?.addEventListener("click", () => setCompactCollapsed(!state.collapsed));
-    setCompactCollapsed(readStore("mefiStudio.cmdUsageCollapsed") === "1", false);
+    $("cmd-usage-toggle")?.addEventListener("click", () => setOpen(!state.open));
+    // A click anywhere outside the corner closes the breakdown.
+    document.addEventListener?.("pointerdown", (event) => {
+      if (state.open && !event.target?.closest?.("#cmd-legend")) setOpen(false);
+    });
+    setOpen(false);
     window.addEventListener("mefi:project-changed", () => {
       state.read += 1;
       state.at = 0;
@@ -476,6 +506,6 @@
     });
   }
 
-  window.MefiUsageTracker = { refresh, tick, open, openTab, init, report: () => state.report };
+  window.MefiUsageTracker = { refresh, tick, open, openTab, init, setOpen, report: () => state.report };
   init();
 })();

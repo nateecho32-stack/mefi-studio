@@ -26,7 +26,7 @@ function fixture() {
   const current = () => plans.find((plan) => plan.id === id);
   const action = (kind, fields = {}, actor = "user") => applyPlanningAction(plans, { action: kind, planId: id, version: current().version, ...fields }, { project, now: clock++, actor });
   const ok = (kind, fields = {}, actor = "user") => { const result = action(kind, fields, actor); assert.equal(result.ok, true, result.error); return result.plan; };
-  const ready = () => { ok("draft-spec", draft); return ok("approve-spec"); };
+  const ready = () => { ok("confirm-understanding"); ok("draft-spec", draft); return ok("approve-spec"); };
   return { plans, current, action, ok, ready };
 }
 
@@ -50,6 +50,8 @@ test("unknowns and open questions gate specs and human approval", () => {
   assert.equal(f.action("draft-spec", draft).ok, false);
   assert.equal(f.action("resolve", { questionId: plan.questions[0].id, resolution: "   " }).ok, false);
   f.ok("resolve", { questionId: plan.questions[0].id, resolution: "Use local JSON", evidence: "Existing project reader supports JSON." });
+  assert.equal(f.action("draft-spec", draft).ok, false, "a specification needs a reviewed understanding");
+  f.ok("confirm-understanding");
   f.ok("draft-spec", draft);
   assert.equal(f.action("approve-spec", {}, "assistant").ok, false);
   const approved = f.ok("approve-spec");
@@ -109,6 +111,7 @@ test("changing scope reopens all decisions and only a new draft can approve chan
   assert.equal(f.current().questions[0].status, "open");
   f.ok("resolve", { questionId, resolution: "JSON files scoped to each project" });
   assert.equal(f.action("approve-spec").ok, false, "stale text cannot become approved after decisions are resolved again");
+  f.ok("confirm-understanding");
   f.ok("draft-spec", draft);
   assert.equal(f.ok("approve-spec").status, "ready");
 });
@@ -122,18 +125,28 @@ test("assistant proposals and discussion notes cannot impersonate human decision
   }
   f.ok("add-note", { questionId, text: "JSON is supported by the existing reader.", author: "user" }, "assistant");
   assert.equal(f.current().questions[0].notes[0].author, "assistant");
+  assert.equal(f.current().questions[0].notes[0].kind, "advice");
   assert.equal(f.current().questions[0].status, "open");
+  // An interview line can only carry a kind belonging to its own author, so a
+  // model reply can never be filed as something the human answered.
+  for (const kind of ["answer", "note"]) assert.equal(f.action("add-note", { questionId, text: "You told me to use JSON.", kind }, "assistant").ok, false);
+  for (const kind of ["question", "interpretation", "advice", "conflict"]) assert.equal(f.action("add-note", { questionId, text: "Mefi asked me this.", kind }).ok, false);
+  f.ok("add-note", { questionId, text: "You want it to stay local.", kind: "interpretation" }, "assistant");
+  assert.equal(f.current().questions[0].status, "open", "a reading of your answer is not your decision");
   f.ok("resolve", { questionId, resolution: "Use JSON" });
+  f.ok("confirm-understanding");
   f.ok("draft-spec", draft, "assistant");
   f.ok("approve-spec");
   const approvedAt = f.current().spec.approvedAt;
-  f.ok("add-note", { questionId, text: "I reviewed the prototype.", author: "assistant" });
-  assert.equal(f.current().questions[0].notes[1].author, "user");
+  f.ok("add-note", { questionId, text: "I reviewed the prototype.", author: "assistant", kind: "answer" });
+  assert.equal(f.current().questions[0].notes.at(-1).author, "user");
   assert.equal(f.current().spec.approvedAt, approvedAt);
   assert.equal(f.current().status, "ready", "informational notes do not discard approval");
   const tasks = buildImplementationTasks(f.current(), { project, now: 999 });
-  assert.match(tasks[0].prompt, /assistant: JSON is supported by the existing reader/);
-  assert.match(tasks[0].prompt, /user: I reviewed the prototype/);
+  assert.match(tasks[0].prompt, /Mefi suggested: JSON is supported by the existing reader/);
+  assert.match(tasks[0].prompt, /Mefi read that back \(unconfirmed\): You want it to stay local/);
+  assert.match(tasks[0].prompt, /You answered: I reviewed the prototype/);
+  assert.match(tasks[0].prompt, /Decision confirmed by you: Use JSON/);
 });
 
 test("question edits reopen affected decisions while keeping independent decisions resolved", () => {
@@ -168,6 +181,7 @@ test("unknown promotion is atomic when a stale or invalid proposal fails", () =>
 
 test("draft task validation rejects missing criteria, dependencies, cycles, and excessive text", () => {
   const f = fixture();
+  f.ok("confirm-understanding");
   const saved = structuredClone(f.plans);
   const invalidDrafts = [
     { ...draft, tasks: [] },
