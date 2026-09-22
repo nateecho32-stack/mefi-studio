@@ -52,6 +52,49 @@ Same caveat as the c08f9d9 row: this validates the uncommitted working-tree
 bytes as they sat; the sibling's eventual commit still owes the official
 post-commit quiet-tree diff-and-rerun check.
 
+## 2026-09-22 late evening - A-Eyes TESTRUNS.md collision resolved: 35 serialized appends verified intact, three stale-anchor rows restored to newest-first, no row content changed (task_ba5a61a843ca418c, run run_1790104600538_10)
+
+The 13:18-14:09 alert was a handoff, not a live clash: every session's edit
+landed as its own path-limited commit (verified commit-per-row through
+42797b9 at 14:24, which appended correctly mid-repair and is preserved),
+the working tree carried no uncommitted TESTRUNS.md bytes, and a structural
+pass over the accumulated file found zero duplicate headings and one shared
+run id (run_1790085745914_2) that is a legitimate morning
+invalidated-attempt + green-retry pair, not a duplicate. The one real
+defect was insertion at a stale anchor - rows written below the row that
+was file-top when their run started instead of the current top, inverting
+newest-first: b7c8451 (14:16:30, then the newest entry, sat below the
+14:06/14:07/14:09 rows), 89eda29 (13:55:21 below 78340ff 13:54:20) and
+adf21a7 (13:52:06 below eafc8dc 13:51:10). Each was moved as a
+byte-identical block, verified by multiset comparison of all row blocks
+before/after; two near-1-minute pairs where commit order and run-start
+order disagree (a690fcd/17ba279, c4caee1/51e2c21 - the latter deliberately
+repositioned by 9788722) stay as their authors placed them. Post-move
+checks: same rows plus this one, window order now commit-descending,
+npm run check exit 0. Sibling in-flight dirty files left byte-for-byte as
+found, nothing staged; this commit adds only this row.
+
+## 2026-09-22 late evening - full gate green on the content-stable tree at c08f9d9 with the loop-cleanup sibling still uncommitted - node 2064/2061/0/3, serialized pair green, Python 247 OK, lock 6/6 (task_a8602009d0a8749d, run run_1790103883860_6)
+
+The card wanted one quiet-tree pass once the live loop-cleanup sibling
+commits. The sibling never committed inside this window: HEAD drifted
+a32c1d5 -> c08f9d9 via four other sessions' TESTRUNS/docs rows while the
+cleanup's 16 files stayed dirty, with mtimes churning as late as 14:10 but
+SHA-256 content static from a 14:12:52 snapshot through the run and a
+post-run re-hash. So this is a content-stable pass over c2ced15-final plus
+the sibling's uncommitted bytes, not the requested post-commit pass. Run
+conditions: 1.65 GB free (above the ~0.5 GB floor), no other test-runner
+processes live, no "sources moved mid-run" flag in the output. `npm test`
+exit 0: parallel node 2064 tests / 2061 pass / 0 fail / 3 skipped (36.3 s)
+— the parent row 8fcd78b's lone red is gone, the dirty overseerMiss
+assertion in executor_continuation now passes against the dirty main.cjs,
+so the sibling tree is self-consistent; serialized eyes log tail 1/1 and
+occlusion probe 1/1 (ran, not skipped); Python 247 tests OK (32.0 s);
+normalized-path lock 6/6. Caveat for the next pass: this validates the
+working-tree bytes as they sat; if the sibling's eventual commit differs
+from the 14:12:52 hashes, the official post-commit quiet-tree run still
+needs one rerun on those landed bytes.
+
 ## 2026-09-22 late evening - seventh-gen carrier retry 3: split-out scope green at thrice-drifted HEAD bec545e, remaining-prose reshaped to the verified parent form, flip stays owner-only (task_b015afd76934e639, run run_1790104002615_9)
 
 Retry 3 after two "unverified - outstanding obligations remain" verdicts. Both
@@ -116,27 +159,6 @@ re-tested ancestors 5/5 (2457a7d, 6a9a299, c2ced15, 8fcd78b, a32c1d5). Fresh
 `npm run check` -> exit 0 (targets 101, specs 205, selectors, syntax) racing
 the sibling's 16-file loop-cleanup drift, which stays byte-for-byte as found,
 nothing staged; this commit adds only this row.
-
-## 2026-09-22 late evening - full gate green on the content-stable tree at c08f9d9 with the loop-cleanup sibling still uncommitted - node 2064/2061/0/3, serialized pair green, Python 247 OK, lock 6/6 (task_a8602009d0a8749d, run run_1790103883860_6)
-
-The card wanted one quiet-tree pass once the live loop-cleanup sibling
-commits. The sibling never committed inside this window: HEAD drifted
-a32c1d5 -> c08f9d9 via four other sessions' TESTRUNS/docs rows while the
-cleanup's 16 files stayed dirty, with mtimes churning as late as 14:10 but
-SHA-256 content static from a 14:12:52 snapshot through the run and a
-post-run re-hash. So this is a content-stable pass over c2ced15-final plus
-the sibling's uncommitted bytes, not the requested post-commit pass. Run
-conditions: 1.65 GB free (above the ~0.5 GB floor), no other test-runner
-processes live, no "sources moved mid-run" flag in the output. `npm test`
-exit 0: parallel node 2064 tests / 2061 pass / 0 fail / 3 skipped (36.3 s)
-— the parent row 8fcd78b's lone red is gone, the dirty overseerMiss
-assertion in executor_continuation now passes against the dirty main.cjs,
-so the sibling tree is self-consistent; serialized eyes log tail 1/1 and
-occlusion probe 1/1 (ran, not skipped); Python 247 tests OK (32.0 s);
-normalized-path lock 6/6. Caveat for the next pass: this validates the
-working-tree bytes as they sat; if the sibling's eventual commit differs
-from the 14:12:52 hashes, the official post-commit quiet-tree run still
-needs one rerun on those landed bytes.
 
 ## 2026-09-22 late evening - seventh-gen carrier retry re-verifies green at twice-moved HEAD 8fcd78b; both landing cards re-read still open, flip stays owner-only (task_b015afd76934e639, run run_1790103762055_1)
 
@@ -292,6 +314,25 @@ syntax ok); `.mefi/worktrees` absent and `git worktree list` shows only the
 five standing checkouts. Nothing in this card's scope remains owed; task store
 read-only; this commit adds only this row.
 
+## 2026-09-22 late evening - sixth-generation carrier re-verified green at HEAD c2ced15 after the sibling landing; flip stays owner-only (task_b5ec79917d8514b2, run run_1790103166390_15)
+
+Third "split" decision (1790102964154) kept the scope unchanged: repo-side
+obligations only, the flip of landing cards task_7b773505d7c6eb43 /
+task_2dd9dc18291f2625 is owner-side (both re-checked `open` in the store,
+read-only, store untouched). Re-verified everything first-hand at HEAD
+c2ced15 — the tree moved past 5bc25d1/1a9664a when the settled session-
+continuity worktree work landed (c2ced15), which shifted the wiring lines:
+feature commits c272b58 / 136f866 / e3ad851 / 31f69f0 / d1c4d78 / 96d15c6
+all ancestors of HEAD (`git merge-base --is-ancestor` each); wiring live
+(`require` now at main.cjs:59, `worktreeManager` guard 9492, `enabled()`
+9493, `prepare` 9494, `discard` 9503, `settle` 9521); opt-in intact
+(scripts/executor-worktrees.cjs:62 requires `MEFI_STUDIO_WORKTREE_RUNS ===
+"1"` exactly); fresh `node --test tests/executor_worktree.test.mjs` -> 11
+tests / 11 pass / 0 fail, exit 0 (11.9 s); `.mefi` absent and `git worktree
+list` shows only the standing mb/mm/wt-* checkouts; `npm run check` exit 0
+(101 targets, 205 specs unique, all selectors used, syntax ok). This commit
+adds only this row; nothing else staged.
+
 ## 2026-09-22 late evening - sixth-gen carrier retry re-verified green on the twice-moved tree, HEAD drifted 9788722 -> c2ced15 and every repo-side obligation still holds (task_261f3a1af9aeda2d, run run_1790103104379_13)
 
 Retry of the split-out card; the prior run's row (4f4dcd9) is context, not
@@ -315,24 +356,18 @@ flip goes out via MEFI_ASK again; it is not this card's remainder. Nothing in
 this card's own scope remains owed; task store untouched; sibling in-flight
 files left exactly as found; this commit adds only this row.
 
-## 2026-09-22 late evening - sixth-generation carrier re-verified green at HEAD c2ced15 after the sibling landing; flip stays owner-only (task_b5ec79917d8514b2, run run_1790103166390_15)
+## 2026-09-22 late evening - landing card closed: the gated 427+/302- main.cjs refactor already landed inside 2457a7d (task_7e5824cf51975676, run run_1790102912783_7)
 
-Third "split" decision (1790102964154) kept the scope unchanged: repo-side
-obligations only, the flip of landing cards task_7b773505d7c6eb43 /
-task_2dd9dc18291f2625 is owner-side (both re-checked `open` in the store,
-read-only, store untouched). Re-verified everything first-hand at HEAD
-c2ced15 — the tree moved past 5bc25d1/1a9664a when the settled session-
-continuity worktree work landed (c2ced15), which shifted the wiring lines:
-feature commits c272b58 / 136f866 / e3ad851 / 31f69f0 / d1c4d78 / 96d15c6
-all ancestors of HEAD (`git merge-base --is-ancestor` each); wiring live
-(`require` now at main.cjs:59, `worktreeManager` guard 9492, `enabled()`
-9493, `prepare` 9494, `discard` 9503, `settle` 9521); opt-in intact
-(scripts/executor-worktrees.cjs:62 requires `MEFI_STUDIO_WORKTREE_RUNS ===
-"1"` exactly); fresh `node --test tests/executor_worktree.test.mjs` -> 11
-tests / 11 pass / 0 fail, exit 0 (11.9 s); `.mefi` absent and `git worktree
-list` shows only the standing mb/mm/wt-* checkouts; `npm run check` exit 0
-(101 targets, 205 specs unique, all selectors used, syntax ok). This commit
-adds only this row; nothing else staged.
+This card asked for the sibling session's settled 427+/302− main.cjs edit to
+be committed path-limited. Verified first-hand that the landing already
+happened and cannot be replayed as its own commit: `git status --porcelain`
+shows main.cjs clean at HEAD 17ba279 (no edit left to land), and 2457a7d
+(13:39:21) carries main.cjs 456+/317− — the 427+/302− refactor plus the auth
+split's own 29+/15− on the same file, so the shared-file path-limit folded
+them; that commit's message itself states it "necessarily also lands the
+sibling session's already-gated uncommitted 427+/302− worktree refactor
+(TESTRUNS 6173a10)", and the auth-split row below records the same fold.
+Content re-checked at HEAD this run, not from reports: `refreshAutopilotQueue(eyes = null, rows = null)` (main.cjs:8107), `autopilotProactivePass()` (8141), `queueExecutorCheckpoint(entry, { force, delay })` (8404), parameter-less `runVerificationJob(s)` (10756/10852), and `git grep` finds zero references to the deleted `taskPriority`/`setProactive` in main.cjs — exactly the 6173a10 fallout scan. Gate evidence for this content already in history: 6173a10 (check/test/audit exit 0 on the settled worktree), c4caee1 (independent full-gate rerun green), and the quiet-tree full gate above (npm test exit 0, node 2062/2059/0/3, Python 247 OK) which ran with 2457a7d's landed content in the tree. Fresh `npm run check` exit 0 this run (101 targets, 205 specs, syntax ok — the narrowest check for a ledger-only commit); nothing was staged before or after. The card flip for this task stays owner-side; task store untouched; sibling in-flight files left exactly as found; this commit adds only this row.
 
 ## 2026-09-22 late evening - parent-gate follow-up retry settles its remaining-prose shape - chain green first-hand at HEAD 17ba279, flip target resolved in its own lane (task_ad390ff083105169, run run_1790102799243_5)
 
@@ -353,19 +388,6 @@ green) after this card's last run, so there is nothing left to flip. One stale
 board artifact remains for the owner to sweep, not work: task_0ced1d7f880a818a,
 a recursive "Follow-up: Follow-up: ..." echo of this card whose substance the
 verified child already landed.
-
-## 2026-09-22 late evening - landing card closed: the gated 427+/302- main.cjs refactor already landed inside 2457a7d (task_7e5824cf51975676, run run_1790102912783_7)
-
-This card asked for the sibling session's settled 427+/302− main.cjs edit to
-be committed path-limited. Verified first-hand that the landing already
-happened and cannot be replayed as its own commit: `git status --porcelain`
-shows main.cjs clean at HEAD 17ba279 (no edit left to land), and 2457a7d
-(13:39:21) carries main.cjs 456+/317− — the 427+/302− refactor plus the auth
-split's own 29+/15− on the same file, so the shared-file path-limit folded
-them; that commit's message itself states it "necessarily also lands the
-sibling session's already-gated uncommitted 427+/302− worktree refactor
-(TESTRUNS 6173a10)", and the auth-split row below records the same fold.
-Content re-checked at HEAD this run, not from reports: `refreshAutopilotQueue(eyes = null, rows = null)` (main.cjs:8107), `autopilotProactivePass()` (8141), `queueExecutorCheckpoint(entry, { force, delay })` (8404), parameter-less `runVerificationJob(s)` (10756/10852), and `git grep` finds zero references to the deleted `taskPriority`/`setProactive` in main.cjs — exactly the 6173a10 fallout scan. Gate evidence for this content already in history: 6173a10 (check/test/audit exit 0 on the settled worktree), c4caee1 (independent full-gate rerun green), and the quiet-tree full gate above (npm test exit 0, node 2062/2059/0/3, Python 247 OK) which ran with 2457a7d's landed content in the tree. Fresh `npm run check` exit 0 this run (101 targets, 205 specs, syntax ok — the narrowest check for a ledger-only commit); nothing was staged before or after. The card flip for this task stays owner-side; task store untouched; sibling in-flight files left exactly as found; this commit adds only this row.
 
 ## 2026-09-22 late evening - quiet-tree full gate green: the withheld npm test of the auth split (2457a7d) plus build-booklet, both exit 0 (task_5e0a126238bab8fb, run run_1790102559644_4)
 
