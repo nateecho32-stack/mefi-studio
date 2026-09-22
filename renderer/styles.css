@@ -3731,7 +3731,6 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .usage-pop .tracker-row[data-tone="warn"] .tracker-row-value { color: var(--warn); text-align: left; white-space: normal; overflow-wrap: anywhere; }
 #idle-hud .usage-pop .tracker-line { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 #idle-hud .usage-pop .tracker-line-warn { color: var(--warn); overflow-wrap: anywhere; }
-#idle-hud .usage-pop .tracker-line-account { color: var(--ivory); }
 
 /* ============================================================
    Command floor at desktop widths: the dock has moved left, so the

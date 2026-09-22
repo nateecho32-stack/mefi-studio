@@ -3740,7 +3740,6 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .usage-pop .tracker-row[data-tone="warn"] .tracker-row-value { color: var(--warn); text-align: left; white-space: normal; overflow-wrap: anywhere; }
 #idle-hud .usage-pop .tracker-line { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 #idle-hud .usage-pop .tracker-line-warn { color: var(--warn); overflow-wrap: anywhere; }
-#idle-hud .usage-pop .tracker-line-account { color: var(--ivory); }
 
 /* ============================================================
    Command floor at desktop widths: the dock has moved left, so the
@@ -4582,7 +4581,8 @@ body.music-preview-active #idle-hud { display: none !important; }
 .brains-rail-toggle[aria-expanded="false"] { color: var(--gold-bright); border-color: var(--gold-dim); }
 .brains-banner { position: absolute; top: 10px; left: 50%; z-index: 4; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; width: max-content; max-width: calc(100% - 110px); padding: 6px 6px 6px 12px; border: 1px solid var(--gold-dim); border-radius: 14px; background: var(--glass-hard); backdrop-filter: var(--blur); box-shadow: var(--shadow-2); font-size: 12px; line-height: 1.4; color: var(--gold-bright); animation: brains-pop var(--dur-2) var(--ease); }
 .brains-banner > .glyph { color: var(--gold-bright); }
-.brains-banner > span { min-width: 0; }
+.brains-banner { flex-wrap: wrap; justify-content: flex-end; }
+.brains-banner > span { min-width: 0; flex: 1 1 220px; }
 .brains-banner button { flex: none; }
 .brains-empty-state { position: absolute; inset: 0; z-index: 2; margin: auto; width: min(430px, calc(100% - 40px)); height: fit-content; display: grid; gap: 8px; justify-items: center; text-align: center; padding: 26px 24px; border: 1px dashed var(--hairline-strong); border-radius: 18px; background: var(--glass); backdrop-filter: var(--blur); }
 .brains-empty-state .eyebrow { margin: 0; }
@@ -4757,7 +4757,6 @@ textarea.brains-dialog-input { min-height: 104px; resize: vertical; }
   .brains-head .sheet-title { min-width: 0; }
   .brains-toolbar .label { display: none; }
   .brains-toolbar #brains-draft .label, .brains-toolbar .brains-menu .label { display: inline; }
-  .brains-menu { left: 0; right: auto; }
   .brains-minimap { width: 168px; height: 96px; }
 }
 @container brains-sheet (max-width: 900px) {
@@ -5313,6 +5312,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
                 <option value="auto">Auto — first ready provider in your order</option>
                 <option value="zai">z.ai GLM</option>
                 <option value="opencode">OpenCode Go</option>
+                <option value="zen">OpenCode Zen</option>
                 <option value="grok">Grok CLI</option>
                 <option value="claude">Claude Code CLI</option>
                 <option value="codex">Codex CLI</option>
@@ -5336,6 +5336,34 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           <div class="settings-column">
             <p class="settings-eyebrow">Models & selection</p>
             <div class="field-grid">
+              <label class="field"><span class="field-label">Routine answers via <span class="field-scope">reading, checks, chat</span></span>
+                <select id="ai-role-routine" title="Provider for routine passes: reading the ask, checks, advisory agents and chat. Same as above = whatever Assistant answers via picks.">
+                  <option value="">Same as above</option>
+                  <option value="zai">z.ai GLM</option>
+                  <option value="opencode">OpenCode Go</option>
+                  <option value="zen">OpenCode Zen</option>
+                  <option value="grok">Grok CLI</option>
+                  <option value="claude">Claude Code CLI</option>
+                  <option value="codex">Codex CLI</option>
+                  <option value="antigravity">Antigravity CLI</option>
+                  <option value="lmstudio">LM Studio (local)</option>
+                  <option value="custom">Custom endpoint</option>
+                </select>
+              </label>
+              <label class="field"><span class="field-label">Heavy answers via <span class="field-scope">plans, briefs, reviews</span></span>
+                <select id="ai-role-heavy" title="Provider for heavy passes: plan specs, briefs, reviews, the overseer and the analyzer read. Same as above = whatever Assistant answers via picks.">
+                  <option value="">Same as above</option>
+                  <option value="zai">z.ai GLM</option>
+                  <option value="opencode">OpenCode Go</option>
+                  <option value="zen">OpenCode Zen</option>
+                  <option value="grok">Grok CLI</option>
+                  <option value="claude">Claude Code CLI</option>
+                  <option value="codex">Codex CLI</option>
+                  <option value="antigravity">Antigravity CLI</option>
+                  <option value="lmstudio">LM Studio (local)</option>
+                  <option value="custom">Custom endpoint</option>
+                </select>
+              </label>
               <label class="field"><span class="field-label">Routine model <span class="field-scope" id="model-scope-note">for this provider</span></span>
                 <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model this provider uses for routine passes (replies, briefs, chat). Saved per provider; empty = the provider's own default.">
               </label>
@@ -5912,10 +5940,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           </div>
         </div>
         <span class="brains-divider" aria-hidden="true"></span>
-        <span class="brains-dirty" id="brains-dirty" hidden>Unsaved changes</span>
+        <span class="brains-dirty" id="brains-dirty" title="Unsaved changes" hidden>Unsaved changes</span>
         <button id="brains-save" class="mini" type="button" title="Save this map (Ctrl S)">Save</button>
         <button id="brains-activate" class="mini primary" type="button" title="Make this the pipeline the studio follows">Make this live</button>
-        <button id="brains-close" class="ghost sheet-close" type="button" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+        <button id="brains-close" class="ghost sheet-close" type="button" title="Close (Esc)" aria-label="Close"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>
     </header>
     <div class="brains-body" id="brains-body" data-parts="shown" data-inspector="shown">
@@ -31370,6 +31398,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   // box's focus listener ignores it, or it would re-select the part that had
   // focus and undo whatever selection the rebuild was drawing.
   let restoring = false;
+  let tabbedAt = -Infinity;
+  const tabbedRecently = () => Date.now() - tabbedAt < 600;
   function restoreFocus(target) {
     if (!target) return;
     const into = target.port ? portButtons.get(`${target.node}|${target.port}|${target.dir}`) : nodeBoxes.get(target.node);
@@ -31426,7 +31456,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       box.setAttribute("role", "group");
       box.setAttribute("aria-label", `${node.title}, ${spec ? groupLabel(spec.group) : "unknown"} part${problemText ? `. ${problemText}` : ""}`);
       box.addEventListener("focus", () => {
-        if (restoring) return;
+        if (restoring || !tabbedRecently()) return;
         const fresh = !(state.selection?.kind === "node" && state.selection.id === node.id);
         // Tabbing onto a part that is already picked keeps the group.
         if (fresh) select({ kind: "node", id: node.id }, { keepPicked: state.picked.has(node.id) });
@@ -31902,12 +31932,16 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   function roomFor(parts, wires = 0) {
     const maxNodes = state.catalog?.limits?.maxNodes ?? 120;
     const maxEdges = state.catalog?.limits?.maxEdges ?? 240;
-    if (state.map.nodes.length + parts > maxNodes) {
-      status(`A map holds at most ${maxNodes} parts, and this one has ${state.map.nodes.length}.`, "warn");
+    const nodes = state.map.nodes.length;
+    const edges = state.map.edges.length;
+    if (nodes + parts > maxNodes) {
+      status(parts === 1 ? `This map already has ${nodes} parts, the most a map can hold.`
+        : `That would make ${nodes + parts} parts; a map holds at most ${maxNodes}.`, "warn");
       return false;
     }
-    if (state.map.edges.length + wires > maxEdges) {
-      status(`A map holds at most ${maxEdges} wires, and this one has ${state.map.edges.length}.`, "warn");
+    if (edges + wires > maxEdges) {
+      status(wires === 1 ? `This map already has ${edges} wires, the most a map can hold.`
+        : `That would make ${edges + wires} wires; a map holds at most ${maxEdges}.`, "warn");
       return false;
     }
     return true;
@@ -31962,7 +31996,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   function addNode(type, at = null) {
     const spec = typeOf(type);
     if (!spec || !state.map) return null;
-    if (!roomFor(1, state.pending ? 1 : 0)) return null;
+    const fits = state.pending && partFits(spec);
+    if (!roomFor(1, fits ? 1 : 0)) return null;
     checkpoint();
     const spot = freeSpot(at ?? naturalSpot(), specHeight(spec));
     const node = {
@@ -32110,28 +32145,54 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     for (const node of [...nodes].sort(byPlace)) (columns[rank.get(node.id)] ??= []).push(node.id);
     const GAP_X = 300;
     const GAP_Y = 40;
+    // No column taller than this: one wide stage is cut into several columns
+    // rather than running past the host's y limit.
+    const SLOT_MAX = 2400;
     const heightOf = (column) => column.reduce((sum, id) => sum + nodeHeight(nodeById(id)), 0) + GAP_Y * (column.length - 1);
-    const tallest = Math.max(...columns.filter(Boolean).map(heightOf));
+    // Pass one orders each rank by where the parts that feed it sit.
     const middle = new Map();
-    // The host clamps x and y to ±4000, which would drop a long pipeline's
-    // last columns onto their neighbours; a pipeline too long for one row
-    // continues on a band underneath, and the row starts far enough left.
-    const perBand = Math.max(1, Math.floor((2 * LIMIT - NODE_W) / GAP_X) + 1);
-    const inBand = Math.min(columns.length, perBand);
-    const startX = Math.max(-LIMIT, Math.min(40, LIMIT - ((inBand - 1) * GAP_X + NODE_W)));
-    columns.forEach((column, index) => {
-      if (!column) return;
+    const ordered = [];
+    const provisional = Math.max(...columns.filter(Boolean).map(heightOf));
+    for (const column of columns) {
+      if (!column) continue;
       const weight = (id) => {
         const feeds = incoming.get(id).filter((pred) => middle.has(pred));
         return feeds.length ? feeds.reduce((sum, pred) => sum + middle.get(pred), 0) / feeds.length : nodeById(id).y;
       };
       column.sort((a, b) => weight(a) - weight(b));
-      let y = 40 + Math.floor(index / perBand) * (tallest + GAP_Y * 4) + (tallest - heightOf(column)) / 2;
+      let y = (provisional - heightOf(column)) / 2;
       for (const id of column) {
+        middle.set(id, y + nodeHeight(nodeById(id)) / 2);
+        y += nodeHeight(nodeById(id)) + GAP_Y;
+      }
+      ordered.push(column);
+    }
+    // Pass two cuts tall ranks into slots and places them. The host clamps x
+    // and y to ±4000, which would drop the tail of a long pipeline onto its
+    // neighbours, so a row too long for the range continues on a band
+    // underneath, and the whole layout starts far enough up and left to fit.
+    const slots = [];
+    for (const column of ordered) {
+      let slot = [];
+      for (const id of column) {
+        if (slot.length && heightOf([...slot, id]) > SLOT_MAX) { slots.push(slot); slot = []; }
+        slot.push(id);
+      }
+      if (slot.length) slots.push(slot);
+    }
+    const bandHeight = Math.max(...slots.map(heightOf));
+    const perBand = Math.max(1, Math.floor((2 * LIMIT - NODE_W) / GAP_X) + 1);
+    const bands = Math.ceil(slots.length / perBand);
+    const inBand = Math.min(slots.length, perBand);
+    const startX = Math.max(-LIMIT, Math.min(40, LIMIT - ((inBand - 1) * GAP_X + NODE_W)));
+    const span = bands * bandHeight + (bands - 1) * GAP_Y * 4;
+    const startY = Math.max(-LIMIT, Math.min(40, LIMIT - span));
+    slots.forEach((slot, index) => {
+      let y = startY + Math.floor(index / perBand) * (bandHeight + GAP_Y * 4) + (bandHeight - heightOf(slot)) / 2;
+      for (const id of slot) {
         const node = nodeById(id);
         node.x = snap(startX + (index % perBand) * GAP_X);
         node.y = snap(y);
-        middle.set(id, node.y + nodeHeight(node) / 2);
         y += nodeHeight(node) + GAP_Y;
       }
     });
@@ -33420,6 +33481,18 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     if (!el.menu || !el.more) return;
     el.menu.hidden = !open;
     el.more.setAttribute("aria-expanded", String(open));
+    if (open && typeof el.menu.getBoundingClientRect === "function") {
+      // Right-aligned under the button unless that would cross the sheet's
+      // left edge (a wrapped toolbar), then left-aligned.
+      el.menu.style.left = "";
+      el.menu.style.right = "";
+      const sheet = el.overlay.querySelector?.(".brains-sheet")?.getBoundingClientRect?.();
+      const menu = el.menu.getBoundingClientRect();
+      if (sheet && menu.left < sheet.left + 8) {
+        el.menu.style.left = "0";
+        el.menu.style.right = "auto";
+      }
+    }
     if (open) [...el.menu.querySelectorAll("button")].find((item) => !item.disabled && !item.hidden)?.focus();
   }
 
@@ -33473,6 +33546,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   function togglePanel(which) {
+    const toggle = which === "parts" ? el.toggleParts : el.toggleInspector;
+    if (toggle && typeof getComputedStyle === "function" && getComputedStyle(toggle).display === "none") {
+      status(`The ${which === "parts" ? "parts rail" : "inspector"} does not fit at this width. Space still searches the parts.`);
+      return;
+    }
     state.layout[which] = !state.layout[which];
     saveLayout();
     applyLayout();
@@ -33494,10 +33572,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       const result = await api.brainsSave(state.map);
       if (!result?.ok) { status(result?.error ?? "That map could not be saved.", "warn"); return false; }
       const wasDraft = Boolean(state.draft);
-      savedSnapshot = JSON.stringify(result.map);
       // Edits made while the save was on its way stay on the canvas, and
-      // stay marked unsaved; only an untouched map takes the host's copy.
-      if (JSON.stringify(state.map) === sent) {
+      // stay marked unsaved; only an untouched map takes the host's copy. The
+      // baseline is what was sent, so undoing those edits reads as saved.
+      const adopt = JSON.stringify(state.map) === sent;
+      savedSnapshot = adopt ? JSON.stringify(result.map) : sent;
+      if (adopt) {
         state.map = result.map;
         state.compiled = result.compiled ?? null;
         state.problems = result.compiled?.problems ?? [];
@@ -33507,7 +33587,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       const list = await api.brainsState();
       state.maps = list?.maps ?? state.maps;
       state.activeId = list?.activeId ?? state.activeId;
-      status(wasDraft ? `Saved the draft as "${state.map.name}".` : `Saved "${state.map.name}".`);
+      const savedName = result.map?.name ?? state.map.name;
+      status(`${wasDraft ? `Saved the draft as "${savedName}".` : `Saved "${savedName}".`}${state.dirty ? " Edits made since are not saved yet." : ""}`);
       return true;
     } catch (error) {
       status(`Could not save: ${error.message}`, "warn");
@@ -33553,6 +33634,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const api = bridge();
     if (!api?.brainsActivate || !state.map || state.busy) return;
     if (state.dirty && !(await save())) return;
+    // Going live applies the saved map. If edits landed while it was saving,
+    // the screen and the saved map differ, and that is not what gets applied.
+    if (state.dirty) {
+      status("Edits arrived while saving. Save again, then make it live.", "warn");
+      return;
+    }
     let plan = null;
     try { plan = await api.brainsGatePlan(state.map.id); } catch { plan = null; }
     const moves = plan?.moves ?? [];
@@ -33574,7 +33661,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       if (!result?.ok) { status(result?.error ?? "That map could not go live.", "warn"); return; }
       state.activeId = state.map.id;
       status(result.moved?.length ? `"${state.map.name}" is live · moved ${result.moved.join(", ")}.` : `"${state.map.name}" is live.`);
-      await load({ id: state.map.id, keepSelection: true });
+      // Activation changes which map is live, not the map: the list is read
+      // again, and whatever is on the canvas stays as it is.
+      const list = await api.brainsState();
+      state.maps = list?.maps ?? state.maps;
+      state.activeId = list?.activeId ?? state.activeId;
+      renderAll();
     } catch (error) {
       status(`Could not activate: ${error.message}`, "warn");
     } finally {
@@ -33610,7 +33702,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     if (answer.action === "discard") return true;
     // The plain-confirm fallback means "discard"; the dialog's OK means save.
     if (!el.dialog) return true;
-    return save();
+    if (!(await save())) return false;
+    if (state.dirty) {
+      status("Edits arrived while saving. Save them too before you go on.", "warn");
+      return false;
+    }
+    return true;
   }
 
   async function switchTo(id) {
@@ -34285,6 +34382,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 
   function onKey(event) {
     if (!el.overlay || el.overlay.hidden) return;
+    if (event.key === "Tab") tabbedAt = Date.now();
     // A layer opened above the editor (the palette, help, the walkthrough)
     // owns the keyboard, and so does any field outside the sheet.
     const layer = window.MefiNav?.top?.();
@@ -39619,20 +39717,29 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // builder pickers are rebuilt from it plus the live flags below, so what
     // is ready on this machine reads first and anything else stays selectable
     // with its missing piece named beside it.
-    const providerNames = { auto: "Auto (your order)", zai: "z.ai GLM", opencode: "OpenCode Go", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
-    const providerKinds = { auto: "auto", zai: "key", opencode: "key", grok: "cli", claude: "cli", codex: "cli", antigravity: "cli", lmstudio: "local", custom: "custom" };
+    const providerNames = { auto: "Auto (your order)", zai: "z.ai GLM", opencode: "OpenCode Go", zen: "OpenCode Zen", grok: "Grok CLI", claude: "Claude Code CLI", codex: "Codex CLI", antigravity: "Antigravity CLI", lmstudio: "LM Studio (local)", custom: "Custom endpoint" };
+    const providerKinds = { auto: "auto", zai: "key", opencode: "key", zen: "key", grok: "cli", claude: "cli", codex: "cli", antigravity: "cli", lmstudio: "local", custom: "custom" };
     const providerRegistry = Object.keys(providerNames).map((id) => ({ id, name: providerNames[id], kind: providerKinds[id] }));
     const builderIds = ["opencode", "grok", "claude", "codex", "antigravity"];
     const builderNames = { opencode: "OpenCode", grok: "Grok", claude: "Claude Code", codex: "Codex", antigravity: "Antigravity" };
     const providerSelect = document.getElementById("ai-provider");
+    const roleRoutine = document.getElementById("ai-role-routine");
+    const roleHeavy = document.getElementById("ai-role-heavy");
+    // The provider a role answers through: its own pick when one is set,
+    // otherwise whatever Assistant answers via picks.
+    function roleProviderOf(role) {
+      const own = (role === "heavy" ? roleHeavy : roleRoutine)?.value;
+      if (own && providerNames[own]) return own;
+      return providerNames[providerSelect.value] ? providerSelect.value : "auto";
+    }
     const executorCli = document.getElementById("executor-cli");
     function cliInstalled(id) {
       return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === id && cli.installed);
     }
     function keyState(which) {
-      const known = setup.keys[which];
+      const known = setup.keys[which] ?? null;
       if (known !== null) return known ? "key saved" : "no key saved";
-      const flag = which === "zai" ? setup.routing?.hasZai : setup.routing?.hasOpenCode;
+      const flag = which === "zai" ? setup.routing?.hasZai : which === "zen" ? setup.routing?.hasZen : setup.routing?.hasOpenCode;
       return flag === true ? "key saved" : flag === false ? "no key saved" : "key unknown";
     }
     // The auto order is tried top to bottom; usability here comes from the same
@@ -39642,6 +39749,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     function autoProviderUsable(id) {
       if (id === "zai") return setup.keys.zai === true || setup.routing?.hasZai === true;
       if (id === "opencode") return setup.keys.opencode === true || setup.routing?.hasOpenCode === true;
+      if (id === "zen") return setup.routing?.hasZen === true;
       if (id === "custom") return Boolean(setup.routing?.customEndpoint) && (setup.keys.custom === true || setup.routing?.hasCustom === true);
       if (id === "lmstudio") return true;
       return cliInstalled(id);
@@ -39707,6 +39815,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       const entryFor = (id, name, availability) => ({ id, state: stateOf(availability), label: `${name} — ${availability.note}` });
       const [auto, ...providers] = providerRegistry.map((entry) => entryFor(entry.id, entry.name, providerAvailability(entry.id)));
       renderPicker(providerSelect, [auto, ...providers.sort(byReadiness)]);
+      // Each role may answer elsewhere; "Same as above" follows the main pick.
+      for (const select of [roleRoutine, roleHeavy]) if (select) renderPicker(select, [{ id: "", state: "ready", label: "Same as above" }, ...providers]);
       renderPicker(executorCli, builderIds.map((id) => entryFor(id, builderNames[id], cliAvailability(id))).sort(byReadiness));
       renderAutoOrder();
       renderAutoOrderAdd();
@@ -40025,14 +40135,19 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           autoOrder = autoOrderOf(routing);
           renderAutoOrder();
           renderAutoOrderAdd();
-          // Models follow the selected provider: the keyed HTTP routes (and
-          // "auto") may show the role-wide fallback, CLI and local routes show
-          // only what was saved for them.
-          const selectedProvider = providerNames[routing.provider] ? routing.provider : "auto";
-          const scoped = selectedProvider === "auto" ? null : routing.providerModels?.[selectedProvider];
-          const fallbackAllowed = selectedProvider === "auto" || selectedProvider === "zai" || selectedProvider === "opencode";
-          modelRoutine.value = scoped?.routine ?? (fallbackAllowed ? routing.models?.routine ?? "" : "");
-          modelHeavy.value = scoped?.heavy ?? (fallbackAllowed ? routing.models?.heavy ?? "" : "");
+          if (roleRoutine) roleRoutine.value = routing.roleProviders?.routine ?? "";
+          if (roleHeavy) roleHeavy.value = routing.roleProviders?.heavy ?? "";
+          // Models follow the provider each role answers through: the keyed
+          // HTTP routes (and "auto") may show the role-wide fallback, CLI and
+          // local routes show only what was saved for them.
+          const modelFor = (role) => {
+            const selectedProvider = roleProviderOf(role);
+            const scoped = selectedProvider === "auto" ? null : routing.providerModels?.[selectedProvider];
+            const fallbackAllowed = selectedProvider === "auto" || selectedProvider === "zai" || selectedProvider === "opencode" || selectedProvider === "zen";
+            return scoped?.[role] ?? (fallbackAllowed ? routing.models?.[role] ?? "" : "");
+          };
+          modelRoutine.value = modelFor("routine");
+          modelHeavy.value = modelFor("heavy");
           executorCli.value = routing.executorCli ?? "opencode";
           executorTier.value = tierNames[routing.executorTier] ? routing.executorTier : "auto";
           syncExecutorModel(routing);
@@ -40054,6 +40169,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
                 : routing.jevConfigured
                   ? "Jev model selection ready · task fit, speed and cost. Explicit model overrides take priority."
                   : "Jev model selection is waiting for a Jev key. Save one below for the selected route; usual defaults apply until connected.";
+        const split = ["heavy", "routine"].filter((role) => providerNames[routing.roleProviders?.[role]]);
+        if (split.length) routingStatus.textContent += ` ${split.map((role) => `${role === "heavy" ? "Heavy" : "Routine"} passes answer via ${providerNames[routing.roleProviders[role]]}`).join("; ")}.`;
         const decision = routing.routingDecision;
         routingEvidence.hidden = !decision;
         routingEvidence.textContent = decision ? evidenceText(decision.evidence, decision.taskType) : "";
@@ -40077,7 +40194,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // Auto order editor: the host stores the same ordered array. The editor
     // only reorders, adds and removes, then saves the whole list; every save
     // re-reads routing so the controls stay authoritative.
-    const autoProviderIds = ["zai", "opencode", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
+    const autoProviderIds = ["zai", "opencode", "zen", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
     let autoOrder = ["zai", "opencode"];
     function renderAutoOrder() {
       autoOrderList.replaceChildren(...autoOrder.map((id, index) => {
@@ -40138,7 +40255,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       if (!autoProviderIds.includes(id) || autoOrder.includes(id)) return;
       return saveAutoOrder([...autoOrder, id], `${providerNames[id] ?? id} added to the auto order`);
     });
-    const routingControls = [providerSelect, modelSelection, fallbackToggle, autoOrderAdd, autoOrderAddButton, modelRoutine, modelHeavy, executorCli, executorTier, executorModel, lmStudioEndpoint, customEndpoint];
+    const routingControls = [providerSelect, roleRoutine, roleHeavy, modelSelection, fallbackToggle, autoOrderAdd, autoOrderAddButton, modelRoutine, modelHeavy, executorCli, executorTier, executorModel, lmStudioEndpoint, customEndpoint].filter(Boolean);
     for (const control of routingControls) control.disabled = true;
     renderSetupState();
     syncSegmented();
@@ -40164,8 +40281,13 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     providerSelect.addEventListener("change", () => saveRouting({ provider: providerSelect.value }, `assistant answers via ${providerSelect.value}`, { syncControls: true }));
     modelSelection.addEventListener("change", () => saveRouting({ modelSelection: modelSelection.value }, `model selection: ${modelSelection.value}`));
     fallbackToggle.addEventListener("change", () => saveRouting({ autoFallback: fallbackToggle.checked }, "provider fallback saved"));
+    // A role's provider reloads that role's model field from the provider it
+    // now answers through.
+    for (const [select, role] of [[roleRoutine, "routine"], [roleHeavy, "heavy"]]) {
+      select?.addEventListener("change", () => saveRouting({ roleProviders: { [role]: select.value } }, `${role} passes answer via ${select.value ? providerNames[select.value] ?? select.value : "the main pick"}`, { syncControls: true }));
+    }
     const saveModel = (which, value) => {
-      const provider = providerNames[providerSelect.value] ? providerSelect.value : "auto";
+      const provider = roleProviderOf(which);
       const trimmed = value.trim();
       const confirmation = `${provider} ${which} model ${trimmed ? `"${trimmed}"` : "uses the provider default"}`;
       return provider === "auto"
