@@ -3664,7 +3664,10 @@ export function findQueuedVerification({ taskId = null, attemptKey = null, queue
 // "The run said done" is a claim, not evidence. Verification is decided by the
 // attempt's acceptance contract:
 //   • partial work (a nonempty remaining list, or the worker's own
-//     MEFI_RESULT "remaining:" text) is never verified;
+//     MEFI_RESULT "remaining:" text) is never verified — except that a
+//     done+verified retry (priorVerified) whose own scoped-check rerun is
+//     recorded green discharges its changed-file obligation with 0 edits,
+//     because re-checking landed work changes nothing by design;
 //   • a session-attributed attempt needs the store to show its edits; reported
 //     tests require recorded command outcomes from that same attempt;
 //   • a test/audit-only attempt needs actual successful check executions;
@@ -3679,7 +3682,23 @@ const checkReports = (parts) => [parts?.tests, parts?.ran, parts?.verified, part
 const reportedCheckFailure = (parts) => checkReports(parts).some((text) => /\b(?:fail(?:ed|ures?)?|errors?|broken)\b/i.test(
   text.replace(/\b(?:0|zero|no)\s+(?:fail(?:ed|ures?)?|errors?)\b/gi, ""),
 ));
-const noRemainingWork = (text) => /^(?:none|nothing|nil|n\/a|no (?:remaining|outstanding) (?:work|tasks?|items?|obligations?))(?:\s+(?:in|within)\s+(?:this\s+)?scope)?[.!\s]*$/i.test(text);
+// A denial of remaining work may carry a scoping qualifier — "none within
+// this subtask's scope", "none for this card" — and may close with a
+// parenthetical naming the lane the leftover work went to (the parent's
+// integration). Those stay denials of work owed HERE. "none of the tests
+// pass" and "none in the other module" remain obligations: the qualifier
+// must name this card's own scope, not some other module's state.
+const noRemainingScopeTail = /^(?:(?:in|within)\s+(?:this\s+|the\s+)?(?:subtask'?s?|task'?s?|card'?s?|attempt'?s?|retry'?s?)?\s*scope|for\s+(?:this|the)\s+(?:card|task|subtask|attempt|retry|scope|work))$/i;
+const handedElsewhereNote = /\b(?:parent|integration|deferred|handed(?:\s+(?:off|on|over))?|follow-?ups?|out\s+of\s+scope)\b/i;
+const noRemainingWork = (text) => {
+  let body = str(text).trim().replace(/[.!\s]+$/, "");
+  const note = /^(.*)\s*\(([^()]*)\)$/.exec(body);
+  if (note && handedElsewhereNote.test(note[2])) body = note[1].trim().replace(/[.!\s]+$/, "");
+  const head = /^(none|nothing|nil|n\/a|no (?:remaining|outstanding) (?:work|tasks?|items?|obligations?))(?:\s+(.+))?$/i.exec(body);
+  if (!head) return false;
+  const rest = (head[2] ?? "").trim().replace(/[.!\s]+$/, "");
+  return !rest || noRemainingScopeTail.test(rest);
+};
 const namesCheck = (text) => !/^(?:none|nothing|n\/a|not (?:run|tested)|skipped|unavailable|pending|passed|ok|done)[.!\s]*$/i.test(text)
   && !/\b(?:not run|not tested|did not run|didn't run|could not run|couldn't run|unable to run|skipped)\b/i.test(text);
 
@@ -3749,13 +3768,22 @@ export function claimedCommitHash(parts = {}) {
   return null;
 }
 
-export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSession = false, observedChecks = [], resolvedHandoffs = [], remaining = [], resultNote = null, commit = null, priorAttempts = 0 } = {}) {
+export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSession = false, observedChecks = [], resolvedHandoffs = [], remaining = [], resultNote = null, commit = null, priorAttempts = 0, priorVerified = false } = {}) {
   const parts = (resultNote && isObject(resultNote) ? resultNote.parts : null) ?? {};
   const namedChecks = checkReports(parts).some(namesCheck);
   const remainingText = str(parts.remaining);
   const remainingKey = (value) => str(value).toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   const handedOffAndFinished = remainingKey(remainingText) && asArray(resolvedHandoffs).some((title) => remainingKey(title) === remainingKey(remainingText));
   const outstanding = (remainingText.length > 0 && !noRemainingWork(remainingText) && !handedOffAndFinished) || asArray(remaining).length > 0;
+  // A done+verified retry re-checks work that already verified once: a
+  // faithful scoped-check rerun changes 0 files by design, so the attempt's
+  // own fresh green recorded checks discharge the changed-file obligation.
+  // The rerun must be this attempt's recorded checks (red or pending results
+  // fail above), the card must carry no handed-on follow-up list, and only
+  // the remaining PROSE may be unfamiliar. Ordinary cards, red reruns, and
+  // real remaining lists fail exactly as before.
+  const observedSummary = hasSession === true ? summarizeObservedChecks(observedChecks) : { total: 0, passed: 0, failed: 0, pending: 0 };
+  const rerunDischarges = priorVerified === true && outstanding && Math.max(0, Number(changedFiles) || 0) === 0 && observedSummary.passed > 0 && asArray(remaining).length === 0;
   // The runner's commit observation resolves the claimed abbreviation to a
   // real commit and reports the scoped path status. A claim the runner could
   // not match — unknown hash, git failure, no observation — is not evidence.
@@ -3769,8 +3797,10 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSessi
     changedFiles: Math.max(0, Number(changedFiles) || 0),
     hasSession: hasSession === true,
     namedChecks,
-    observedChecks: hasSession === true ? summarizeObservedChecks(observedChecks) : { total: 0, passed: 0, failed: 0, pending: 0 },
+    observedChecks: observedSummary,
     outstanding,
+    priorVerified: priorVerified === true,
+    rerunDischarges,
     commit: { claimed: commitClaim, hash: commitMatched ? resolvedHash : null, clean: commitClean },
   };
   const fail = (reason) => {
@@ -3782,10 +3812,12 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSessi
   if (evidence.observedChecks.failed) return fail("recorded checks failed in the attempt's session");
   if (evidence.observedChecks.pending) return fail("recorded checks have no completed exit result");
   if (!evidence.verdictOk) return fail("the run did not report success");
-  if (outstanding) return fail("outstanding obligations remain");
+  if (outstanding && !rerunDischarges) return fail("outstanding obligations remain");
   if (evidence.hasSession) {
     if (evidence.namedChecks && !evidence.observedChecks.passed) return fail("reported checks have no recorded passing execution");
-    if (evidence.observedChecks.passed) return pass(`${evidence.observedChecks.passed} recorded check(s) passed in the attempt's session`);
+    if (evidence.observedChecks.passed) return pass(evidence.rerunDischarges
+      ? `${evidence.observedChecks.passed} recorded check(s) passed — fresh green scoped-check rerun discharges the done+verified retry with 0 changed files`
+      : `${evidence.observedChecks.passed} recorded check(s) passed in the attempt's session`);
     if (evidence.changedFiles > 0) return pass(`${evidence.changedFiles} changed file(s) in the attempt's session`);
     if (evidence.commit.claimed) {
       if (evidence.commit.hash && evidence.commit.clean === true) return pass(`commit ${evidence.commit.hash.slice(0, 12)} observed with a clean path status`);

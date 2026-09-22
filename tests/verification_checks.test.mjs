@@ -43,6 +43,33 @@ test("scoped-none remaining text is not an outstanding obligation", () => {
   assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "none in the other module" } } }).reason, "outstanding obligations remain");
 });
 
+test("done+verified retries with 0 changed files discharge on a green scoped-check rerun", () => {
+  // The documented collision-delegate loop shapes: verification-only
+  // attempts whose scoped checks re-ran green over already-landed work, with
+  // scoped-denial remaining prose the reader must not read as an obligation.
+  for (const remaining of ["none within this subtask's scope", "none in scope (parent handles final integration)", "none for this card"]) {
+    const verdict = verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 0, observedChecks: [check()], resultNote: { parts: { done: "re-verified the merged state", remaining } } });
+    assert.equal(verdict.state, "verified", remaining);
+    assert.match(verdict.reason, /recorded check\(s\) passed/);
+  }
+  // The literal done+verified retry: the card verified once (priorVerified),
+  // the retry re-ran its scoped checks green, changed nothing, and only the
+  // remaining prose is unfamiliar — the rerun is the changed-file evidence.
+  const retried = verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 0, priorVerified: true, observedChecks: [check()], resultNote: { parts: { done: "scoped checks re-ran green", remaining: "the odd handoff phrasing the denial reader cannot know" } } });
+  assert.equal(retried.state, "verified");
+  assert.match(retried.reason, /discharges the done\+verified retry/);
+  assert.equal(retried.evidence.rerunDischarges, true);
+  assert.equal(retried.evidence.priorVerified, true);
+  // The discharge is not blanket: without the prior verified card the same
+  // retry stays an obligation, a red rerun never discharges, a handed-on
+  // remaining list still gates, and a rerun with no recorded execution
+  // proves nothing.
+  assert.equal(verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 0, observedChecks: [check()], resultNote: { parts: { done: "scoped checks re-ran green", remaining: "the odd handoff phrasing the denial reader cannot know" } } }).reason, "outstanding obligations remain");
+  assert.equal(verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 0, priorVerified: true, observedChecks: [check("npm test", { exitCode: 1, passed: false })], resultNote: { parts: { done: "x", remaining: "odd phrasing" } } }).reason, "recorded checks failed in the attempt's session");
+  assert.equal(verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 0, priorVerified: true, observedChecks: [check()], remaining: ["a follow-up"], resultNote: { parts: { done: "x", remaining: "odd phrasing" } } }).reason, "outstanding obligations remain");
+  assert.equal(verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 0, priorVerified: true, resultNote: { parts: { done: "no rerun recorded", remaining: "odd phrasing" } } }).reason, "outstanding obligations remain");
+});
+
 test("only recognizable direct check commands provide check evidence", () => {
   for (const command of ["npm test", "npm run check", "node --test tests/board.test.mjs", "python -m unittest discover -s tools", "python tools/verify_command.py", 'cd "C:/my project" && npm test', "cargo test"]) {
     assert.equal(isVerificationCommand(command), true, command);

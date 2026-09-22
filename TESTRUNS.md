@@ -25,6 +25,39 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - verifier taught to discharge done+verified retries with 0 changed files (task_8cc401d711b549ba, run run_1790094227868_122)
+
+The false "outstanding obligations" loop this closes is documented two rows
+of 2026-09-22 below (the collision-delegate loops and the per-feature card
+retry): verification-only attempts whose scoped checks re-ran green over
+already-landed work died at the outstanding gate because their remaining
+prose ("none within this subtask's scope", "none in scope (parent handles
+final integration)", "none for this card") is a scoped denial the reader did
+not recognize, and done+verified retries with 0 changed files had no
+discharge path at all. Three changes: `noRemainingWork`
+(scripts/assistant.mjs) now reads scoping qualifiers and a
+parent/integration parenthetical as denials — "none of the tests pass" and
+"none in the other module" stay obligations; `verifyCompletion` takes
+`priorVerified` and discharges the changed-file obligation when the retry's
+own scoped-check rerun is recorded green (0 changed files, no handed-on
+remaining list, red/pending reruns still fail); main.cjs stamps a durable
+`verifiedOnce` at verified settle and passes `priorVerified` (stamp or a
+prior "verified —" log line) into the task settle call. Scoped evidence:
+`node --test tests/verification_checks.test.mjs
+tests/executor_result_protocol.test.mjs` — 18/18, including the new
+discharge unit tests (positive + four negative shapes) and a host
+integration test that settles a seeded done+verified retry with 0 files and
+a green rerun to `done` with no re-run loop; plus
+tests/board.test.mjs, tests/executor_parallel.test.mjs,
+tests/policy_experience.test.mjs 50/50; `npm run check` all five stages ok;
+`npm run audit` 0 findings. Full `npm test`: parallel 1962 tests / 1956
+pass / 3 fail, all three in tests/music.test.mjs on the new `station`
+preference key — a sibling session's in-flight renderer/music.js +
+renderer/booklet.html work (untouched here, the runner flagged moved
+sources mid-run), not this change; serialized eyes_toggle 1/1, Python
+contracts 247/247 OK, lock checks ok. This commit adds this row and the
+verifier change only.
+
 ## 2026-09-22 evening - re-verification of the visible-phase foreground card on a concurrently loaded tree (task_03ad46c09bd30216, run run_1790094834453_140)
 
 Third pass over this card, run while several sibling sessions were

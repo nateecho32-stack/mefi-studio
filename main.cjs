@@ -11110,6 +11110,13 @@ async function autopilotHousekeeping() {
         const attempt = task.lastAttempt ?? {};
         if (dwelling(attempt)) continue;
         if (overseerRunPending(task)) continue;
+        // A retry of a card that already verified done once is
+        // verification-only: its faithful scoped-check rerun changes 0
+        // files, and the verifier counts its fresh green recorded checks as
+        // the evidence. The durable stamp covers retries after this change;
+        // the log scan recovers cards that verified before it existed.
+        const priorVerified = task.verifiedOnce === true
+          || (Array.isArray(task.logs) && task.logs.some((row) => row?.kind === "status" && /^verified\b/u.test(String(row.text))));
         const files = attemptChanges(attempt, task.title);
         if (files === null) { waitForEvidence(task); continue; }
         const observedChecks = attemptChecks(attempt, task.title);
@@ -11125,6 +11132,7 @@ async function autopilotHousekeeping() {
           resultNote: attempt.result ?? null,
           commit: attemptCommit(attempt),
           priorAttempts: Number(task.verifyAttempts) || 0,
+          priorVerified,
         });
         // Policy Lab PR0 — the receipt for this settlement. The board keeps
         // settling by the verdict exactly as before; the receipt records what
@@ -11151,6 +11159,10 @@ async function autopilotHousekeeping() {
         if (verdict.state === "verified") {
           task.status = "done";
           task.doneAt = now;
+          // Durable across retries and reopens: a later attempt of this card
+          // is a verification-only retry, and its green scoped rerun can
+          // discharge the changed-file obligation with 0 edits.
+          task.verifiedOnce = true;
           delete task.runId;
           delete task.lease;
           delete task.verifyAttempts;

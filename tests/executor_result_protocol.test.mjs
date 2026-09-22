@@ -75,3 +75,24 @@ test("ignoring an echoed success cannot erase a current unfinished obligation", 
   assert.equal(saved.verification.reason, "outstanding obligations remain");
   assert.equal(saved.verifyAttempts, 1);
 });
+
+// The documented collision-delegate loop: a card that already verified done
+// once is retried, its faithful scoped-check rerun changes 0 files (the work
+// landed before pickup), and the green rerun must discharge the obligation
+// instead of reopening the card forever.
+test("a done+verified retry with 0 changed files discharges on its green scoped rerun", async () => {
+  const h = executorHost({ tasks: [{ id: "reverify-fixture", title: "Re-verify landed work", prompt: "Re-verify the landed work", status: "open", createdAt: 1,
+    logs: [{ at: 1, kind: "status", text: "verified — sentinel seen, 3 changed file(s)" }] }] });
+  h.wake(); await h.pump();
+  await h.finish("reverify-fixture", { lines: [
+    "MEFI_RESULT: done: scoped checks re-ran green over the landed work; remaining: the odd handoff phrasing the denial reader cannot know",
+    "MEFI_JOB_DONE",
+  ], files: [], observedChecks: [{ command: "npm run check", status: "completed", exitCode: 0, startedAt: 900000, finishedAt: 950000, passed: true }] });
+  h.advance(31000); await h.pump();
+  const saved = h.board().tasks[0];
+  assert.equal(saved.status, "done", "the fresh green scoped-check rerun discharges the done+verified retry");
+  assert.match(saved.verification.reason, /discharges the done\+verified retry/);
+  assert.equal(saved.verifiedOnce, true, "the durable prior-verified stamp survives for later retries");
+  assert.equal(saved.verifyAttempts, undefined);
+  assert.equal(h.starts.length, 1, "a discharged retry does not loop into another build");
+});
