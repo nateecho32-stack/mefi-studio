@@ -627,6 +627,23 @@
       void runMap({ automatic: true });
     }
   }
+  // Real user actions tick the matching stop off. The events are emitted only
+  // after the underlying action succeeded, and ticking is idempotent: a repeat
+  // never regresses a stop or duplicates progress.
+  const REVIEW_STATES = ["done", "awaiting_verification", "archived"];
+  function tickStop(index) {
+    if (!lessons[index] || isDone(index)) return;
+    state.done[index] = true;
+    save();
+    if (state.mode === "coach") renderCoach();
+    if (state.mode === "sheet" && $("overlay") && !$("overlay").hidden) render();
+    renderInvitation();
+  }
+  function taskOpened(event) {
+    tickStop(MONITOR);
+    const detail = event?.detail || {};
+    if (detail.review === true || REVIEW_STATES.includes(detail.status)) tickStop(REVIEW);
+  }
   function init() {
     if (initialized || !$("overlay")) return;
     initialized = true;
@@ -639,6 +656,10 @@
     });
     window.addEventListener("mefi:build-mode", renderBuildMode);
     window.addEventListener("mefi:project-changed", projectChanged);
+    window.addEventListener("mefi:connection-saved", () => tickStop(CONNECT));
+    window.addEventListener("mefi:task-created", () => tickStop(CREATE));
+    window.addEventListener("mefi:plan-created", () => tickStop(CREATE));
+    window.addEventListener("mefi:task-opened", taskOpened);
     window.addEventListener("mefi:nav", () => {
       if (state.mode !== "coach") return;
       const at = state.step;

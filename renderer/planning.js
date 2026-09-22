@@ -5,6 +5,11 @@
   "use strict";
   const $ = (name) => document.getElementById(`plans-${name}`);
   const api = () => window.mefiStudio;
+  // Tell the Start here walkthrough that a real planning action happened. The
+  // guide's own listener ticks the matching stop; failures never announce.
+  const announce = (name, detail) => {
+    try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent(name, { detail })); } catch {}
+  };
   const state = { projectId: null, projectName: "Your project", plans: [], selected: "new", busy: false, pending: null, tasks: null, workError: null, epoch: 0, opened: false, readId: 0, workReadId: 0, existing: null, existingOpen: false };
   let initialized = false;
   let workTimer = null;
@@ -277,6 +282,8 @@
       if (epoch !== state.epoch || projectId !== state.projectId || selected !== state.selected) return false;
       accept(result); if (clean) clean(savedDraft); if (action === "create") delete drafts[key]; persist();
       render(); note(result.note || success);
+      if (action === "create") announce("mefi:plan-created", { planId: result.plan?.id || current?.id || null, projectId });
+      if (action === "convert") announce("mefi:task-created", { planId: current?.id || null, projectId });
       if (action === "convert") window.MefiWorkspace?.refresh?.(true);
       return true;
     } catch (error) {

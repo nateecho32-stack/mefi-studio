@@ -4,6 +4,11 @@
   "use strict";
   const $ = (id) => document.getElementById(`workspace-${id}`);
   const api = () => window.mefiStudio;
+  // Tell the Start here walkthrough that a real board action happened. The
+  // guide's own listener ticks the matching stop; failures never announce.
+  const announce = (name, detail) => {
+    try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent(name, { detail })); } catch {}
+  };
   // Questions that interrupt or destroy (switching away from working agents,
   // removing a project) go through the styled toast confirm and fall back to
   // the OS dialog; when neither exists the answer is no, never a silent yes.
@@ -651,6 +656,7 @@
         state.filter = "open"; state.query = ""; state.limit = 20; $("work-search").value = "";
         createdTask = result.task?.id ? { id: result.task.id, projectId: id } : null;
         if ($("created-task")) $("created-task").hidden = !createdTask;
+        if (createdTask) announce("mefi:task-created", { taskId: createdTask.id, projectId: id });
       }
       const refreshed = await refresh(true);
       if (mode === "work") {

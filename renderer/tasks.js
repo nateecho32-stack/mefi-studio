@@ -3,6 +3,11 @@
   "use strict";
 
   const COLORS = ["#e6c98d", "#9db7ff", "#57ff9a", "#f2a2e8", "#ffb38a", "#86d1d6", "#c9a8ff", "#ffd479"];
+  // Tell the Start here walkthrough that a real board action happened. The
+  // guide's own listener ticks the matching stop; failures never announce.
+  const announce = (name, detail) => {
+    try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent(name, { detail })); } catch {}
+  };
   const FILTERS = ["all", "open", "review", "done"];
   const stageLabel = (stage, task, options) => window.MefiStage?.label?.(stage, task, options) ?? String(stage ?? task?.status ?? "open");
   const READINESS_FILTERS = { all: "All scheduling states", ready: "Ready", running: "Working", review: "Verifying", waiting: "Waiting or retrying", blocked: "Needs attention" };
@@ -1342,6 +1347,7 @@
         const message = `Task created · ${state.backlog?.paused ? "queued until you resume" : "added to the project queue"}`;
         status(message, false);
         window.MefiToast?.(message, "good");
+        announce("mefi:task-created", { taskId: result.task.id, projectId: result.task.projectId || projectId || null });
         return result.task;
       } catch (error) {
         if (epoch === projectEpoch) {
@@ -1380,6 +1386,7 @@
     renderList();
     renderDetail();
     window.MefiToast?.(`Task created · ${task.title}`, "good");
+    announce("mefi:task-created", { taskId: task.id, projectId: task.projectId || state.projectId || null });
     if (state.prefs.autoReference !== false && state.prefs.useReference !== false) gather();
     return task;
   }
@@ -1392,6 +1399,8 @@
     if (typeof params.taskId === "string" && params.taskId) state.selected = params.taskId;
     return load(params)
       .then(() => {
+        const task = params.taskId ? selectedTask() : null;
+        if (task) announce("mefi:task-opened", { taskId: task.id, projectId: task.projectId || state.projectId || null, status: task.status || null });
         revealSelected();
         if (params.gather) gather();
       })
@@ -1570,6 +1579,7 @@
       state.selected = id;
       state.readiness = "all";
       const task = selectedTask();
+      if (task) announce("mefi:task-opened", { taskId: task.id, projectId: task.projectId || state.projectId || null, status: task.status || null });
       if (task && state.filter !== "all" && taskStage(task) !== state.filter) state.filter = taskStage(task);
       state.query = "";
       if (els.search) els.search.value = "";
