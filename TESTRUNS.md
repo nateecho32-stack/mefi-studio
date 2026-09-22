@@ -25,6 +25,29 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - sibling main.cjs refactor verification retry: independent full-gate rerun green on the settled uncommitted 427+/302- tree (task_d770727341b466b7, run run_1790101761830_27)
+
+Retry 1 settled "unverified — outstanding obligations remain" for the same
+prose-shape trap the rows below document: the prior `MEFI_RESULT` carried
+"remaining: the refactor itself is still uncommitted" — landing is the
+sibling session's call, out of this verify-only card's scope, and
+`verifyCompletion` reads any non-denial remaining prose as this card's own
+obligation (scripts/assistant.mjs:3782). Its verification pass had also run
+`npm run check` alone. This retry re-verified first-hand on the settled
+tree: `git status --porcelain` shows main.cjs still carrying the uncommitted
+427+/302− refactor plus sibling sessions' in-flight files (41 entries,
+nothing staged); `git show --name-only` confirms 6173a10 and every commit
+after it (d30d5ec, 5bc25d1, 1a9664a) touch TESTRUNS.md only, so no
+test-read source moved since the gated state. Full gate set re-run
+independently and sequentially at HEAD 5bc25d1→1a9664a (TESTRUNS-only
+drift mid-pass; the runner reported no sources-moved warning): `npm run
+check` exit 0 (100 targets, 204 specs, CSS + syntax ok); `npm test` exit 0
+(node stage fail 0, Python 247 OK in 73.8 s, worktree lock check passed);
+`npm run audit` exit 0 with `ok: true`, 0 findings / 0 errors / 0 warnings.
+The card's obligation — its own gate run on the settled edit — is
+discharged; committing main.cjs stays with the refactor's own session.
+Task store untouched; this commit adds only this row.
+
 ## 2026-09-22 late evening - fifth-generation worktree follow-up retry: same prose-shape trap, evidence re-verified green at HEAD 5bc25d1, flip stays with the owner (task_fece4ffd34e38932, run run_1790101684741_24)
 
 Retry 1 (receipt rcp_0f25afd788ac3037) settled "unverified — outstanding
