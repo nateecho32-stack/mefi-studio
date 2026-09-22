@@ -301,6 +301,65 @@ test("a mid-run change to the file aborts with no write (read-verify-write)", ()
   }
 });
 
+test("a save landing after the row is staged is caught by the pre-swap verify, not clobbered", () => {
+  const root = makeFixture();
+  const target = join(root, "TESTRUNS.md");
+  try {
+    const pristine = readFileSync(target, "utf8");
+    // beforeRename fires inside atomicReplace after the replacement temp is
+    // fully written and fsynced, i.e. in the tightest window between the
+    // snapshot and the swap - the last place a non-cooperating save can slip
+    // in. It must abort with no write.
+    assert.throws(
+      () =>
+        appendTestrunsRow(root, "## 2026-09-22 noon - helper run (run_c)\n\nBody c.\n", {
+          hooks: {
+            beforeRename: () =>
+              writeFileSync(target, `${pristine}## 2026-09-24 noon - late intruder save (run_z)\n\nIntruder body.\n`),
+          },
+        }),
+      /changed mid-run/,
+    );
+    const after = readFileSync(target, "utf8");
+    assert.ok(after.includes("late intruder save"), "the concurrent save survives in the tight window");
+    assert.ok(!after.includes("(run_c)"), "the helper's row never landed");
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("a save landing on top of the append is not destroyed by the rollback path", () => {
+  const root = makeFixture();
+  const target = join(root, "TESTRUNS.md");
+  try {
+    const pristine = readFileSync(target, "utf8");
+    // afterWrite lets a concurrent save land between the helper's own write
+    // and its post-append gate audit. The appended row makes the gate red, but
+    // restoring `raw` would destroy the concurrent bytes - so the helper must
+    // leave the live content in place and report, never silently clobber.
+    const written = { buf: null };
+    assert.throws(
+      () =>
+        appendTestrunsRow(root, "## 2026-09-22 noon - helper run (run_c)\n\nBody c.\n", {
+          hooks: {
+            afterWrite: (buf) => {
+              written.buf = buf;
+              writeFileSync(target, `${buf.toString("utf8")}## 2026-09-20 evening - second run (run_b)\n`);
+            },
+          },
+        }),
+      /post-append gate check failed/,
+    );
+    const after = readFileSync(target, "utf8");
+    assert.ok(after.includes("(run_c)"), "the helper did not roll back over the concurrent edit");
+    assert.equal((after.match(/second run \(run_b\)/g) ?? []).length, 2, "the concurrent duplicate heading survived");
+    assert.notEqual(after, pristine, "file is not the pre-write snapshot");
+    assert.ok(written.buf !== null, "the write actually happened before the concurrent save");
+  } finally {
+    cleanup(root);
+  }
+});
+
 test("a save landing while the helper waits for the lock is incorporated, not clobbered", async () => {
   const root = makeFixture();
   const blocks = mkdtempSync(join(tmpdir(), "append-testruns-blocks-"));

@@ -4,11 +4,13 @@
 // full row block ("## YYYY-MM-DD ..." plus body), holds a cross-process lock,
 // re-reads the live file under that lock, splices the row in at the position
 // that keeps the live region newest-first (the true top for a fresh run, the
-// right slot for a late-arriving older one), re-reads the target to verify
-// the bytes still match that snapshot (a concurrent edit by a non-cooperating
-// writer aborts non-zero with no write instead of being clobbered), writes
-// temp-file + rename so readers never see a torn file, and rolls back if the
-// gate audit would fail afterwards. Rows are supplied as one quoted argument,
+// right slot for a late-arriving older one), re-reads the target immediately
+// before the swap to verify the bytes still match that snapshot (a concurrent
+// edit by a non-cooperating writer aborts non-zero with no write instead of
+// being clobbered), writes temp-file + rename so readers never see a torn
+// file, and rolls back if the gate audit would fail afterwards - unless a
+// concurrent edit already landed, in which case it leaves that content alone
+// rather than destroying it. Rows are supplied as one quoted argument,
 // a --file path, or stdin - either a full pre-built block or, when the text
 // parses as a JSON object / arrives as --date/--title/... flags, as fields
 // formatted into the canonical row shape the gate audits; --dry-run reports
@@ -67,7 +69,7 @@ function acquireLock(target) {
   }
 }
 
-function atomicReplace(target, buf) {
+function atomicReplace(target, buf, { expectCurrent = null, beforeRename = null } = {}) {
   const tmp = join(dirname(target), `.${basename(target)}.new-${process.pid}-${Math.random().toString(36).slice(2, 8)}`);
   const fh = openSync(tmp, "w");
   try {
@@ -77,6 +79,20 @@ function atomicReplace(target, buf) {
     closeSync(fh);
   }
   try {
+    if (beforeRename) beforeRename();
+    // Compare-and-swap as close to the rename as the OS allows. The
+    // replacement bytes are already staged and fsynced, so re-reading here
+    // leaves only the read->rename window: a non-cooperating save that landed
+    // at any point since the snapshot read is detected and aborts with no
+    // write (the staged temp is discarded below) instead of being clobbered.
+    if (expectCurrent) {
+      const current = readFileSync(target);
+      if (!Buffer.isBuffer(current) || !current.equals(expectCurrent)) {
+        throw new Error(
+          "append-testruns-row: TESTRUNS.md changed mid-run while staging the row - no write performed, re-run to append onto the fresh content"
+        );
+      }
+    }
     let lastErr = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -227,7 +243,7 @@ function spliceRow(text, plan, eol) {
   return [...lines.slice(0, plan.insertAt), ...rendered, blank, ...lines.slice(plan.insertAt)].join("\n");
 }
 
-export function appendTestrunsRow(packageRoot, blockText, { dryRun = false } = {}) {
+export function appendTestrunsRow(packageRoot, blockText, { dryRun = false, hooks = {} } = {}) {
   const target = join(packageRoot, "TESTRUNS.md");
   if (!existsSync(target) || !statSync(target).isFile()) {
     throw new Error(`append-testruns-row: TESTRUNS.md not found under ${packageRoot}`);
@@ -248,18 +264,26 @@ export function appendTestrunsRow(packageRoot, blockText, { dryRun = false } = {
     }
     // Read-verify-write: the outgoing body was built from the snapshot in
     // `raw`, so a non-cooperating editor that saved since that read would be
-    // silently reverted by the rename. Re-read and abort on any byte drift;
-    // the caller re-runs and lands on top of the fresh content instead.
-    const reread = readFileSync(target);
-    if (!reread.equals(raw)) {
-      throw new Error(`append-testruns-row: TESTRUNS.md changed mid-run (${raw.length} -> ${reread.length} bytes since the snapshot read) - no write performed, re-run to append onto the fresh content`);
-    }
-    const how = atomicReplace(target, Buffer.from(spliceRow(text, plan, eol), "utf8"));
+    // silently reverted by the rename. The snapshot is re-verified inside
+    // atomicReplace immediately before the swap (the tightest window the OS
+    // allows); any byte drift aborts with no write and the caller re-runs
+    // onto the fresh content instead.
+    const written = Buffer.from(spliceRow(text, plan, eol), "utf8");
+    const how = atomicReplace(target, written, { expectCurrent: raw, beforeRename: hooks.beforeRename });
+    if (hooks.afterWrite) hooks.afterWrite(written);
     const post = auditTestruns(packageRoot);
     if (post.problems.length > 0) {
-      atomicReplace(target, raw); // never leave the gate red: restore the exact prior bytes
+      const current = readFileSync(target);
+      if (current.equals(written)) {
+        atomicReplace(target, raw); // untouched since our write: restore the exact prior bytes
+      } else {
+        // A non-cooperating save landed on top of (or alongside) our write.
+        // Restoring `raw` here would destroy that editor's bytes, so leave the
+        // live content alone and surface the problem for a deliberate merge.
+        console.error("append-testruns-row: post-append gate check failed and the file changed concurrently - leaving the live content in place (no destructive rollback)");
+      }
       const list = post.problems.map((p) => `  - ${p}`).join("\n");
-      throw new Error(`append-testruns-row: post-append gate check failed, rolled back:\n${list}`);
+      throw new Error(`append-testruns-row: post-append gate check failed, not rolled back onto a concurrent edit:\n${list}`);
     }
     return { heading: plan.heading, date: plan.newDate, insertLine: plan.insertAt + 1, before: plan.before, write: how, rows: post.rows };
   } finally {
