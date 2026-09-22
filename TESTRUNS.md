@@ -25,6 +25,29 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Visible-phase foreground robustness for the occlusion-probe fixture
+(2026-09-22, run_1790091834654_43 for task_03ad46c09bd30216 "Visible-phase
+foreground robustness", parent task_e65d8260beb42082). The visible phase
+raised the probe window with a plain `window.focus()` — deniable under the
+Windows foreground lock, the same denial the cover already works around with
+`app.focus({ steal: true })` — and judged "must answer via frames" on the
+lowest-lag sample while the probe's in-page channels race two rAF ticks
+against a ~150ms unthrottled timer, so under load a healthy window's worker
+answer could win the race and shadow its frames answer (flake observed
+2026-09-22). The fixture now raises/re-raises the probe window with the same
+sanctioned steal as the cover, resamples (same bounded 3 attempts) until a
+sample both answers via frames and reads <100ms, and prefers frames-answering
+samples in bestSample — the occluded/proxy phases are unchanged (their
+samples must never answer via frames, asserted per-sample). Retries still
+cannot mask real failures: throttling answers via frames never, a wedged page
+answers via nothing, on every sample. Verified live:
+`node --test tests/occlusion_probe.test.mjs` 1/1 pass, 0 skipped — the run
+even engaged real native occlusion (via document.hidden, occluded rAF growth
+0, occluded probe answered workerDriftMs 166ms / lag 0ms, recovered), so the
+changed visible phase and the untouched occluded contract both exercised
+green; `npm run check` all five stages ok. Changed only
+tests/fixtures/occlusion-probe-electron.cjs and this file.
+
 Closing verification for the per-feature model-config landing card
 (2026-09-22, ~11:1x, run_1790091744134_39 for task_6b445d8ac92eeed6 "Land
 the per-feature model-config tree"). Re-verified at HEAD instead of trusting

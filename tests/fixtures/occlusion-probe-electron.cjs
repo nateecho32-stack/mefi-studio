@@ -49,6 +49,18 @@
 // window/cover state, Win32 foreground identity, timeline tail — and exits
 // cleanly so the test can skip with an explicit reason, exactly like
 // `occlusionUnsupported`.
+// The visible phase gets foreground robustness of its own: plain
+// window.focus() is deniable under the Windows foreground lock (the cover
+// already needs app.focus({ steal: true }) for exactly that), and the probe's
+// in-page channels race two rAF ticks against a ~150ms unthrottled timer —
+// under load a healthy foregrounded window can lose that race on one sample.
+// The phase therefore raises the probe window with the same sanctioned steal
+// as the cover and resamples until a sample answers via the frames channel
+// and reads clean (bounded retries), with the best-sample choice preferring
+// frames answers so a faster worker answer cannot shadow the proof that the
+// page actually paints. Retries cannot mask the failures this probe exists
+// to catch: a throttled regression never answers via frames, and a wedged
+// page answers via nothing (sentinel), on every sample.
 
 const { app, BrowserWindow, screen } = require("electron");
 const assert = require("node:assert/strict");
@@ -331,17 +343,33 @@ app.whenReady().then(async () => {
   // while the failures this probe exists to catch — throttling regression
   // (frames answer), wedged page (sentinel) — fail on every single sample, so
   // retries cannot mask them. Every sample is reported for diagnosis.
-  async function sampleProbe() {
+  // The probe's two aliveness channels race inside the page: two rAF ticks
+  // against a ~150ms unthrottled timer, whichever answers first wins. Under
+  // load a healthy foreground window can still lose that race on a single
+  // sample, so the visible phase passes its own `acceptable` predicate and
+  // keeps sampling — same bounded 3 attempts — until a sample both answered
+  // via frames and read clean, while the throttled phases keep breaking on
+  // lagMs alone (their samples must never answer via frames at all).
+  async function sampleProbe({ acceptable = null } = {}) {
     const samples = [];
     for (let attempt = 0; attempt < 3; attempt += 1) {
       if (attempt > 0) await pause(400);
       const sample = await runProbe();
       samples.push(sample);
-      if (sample.lagMs < 100) break;
+      if (acceptable ? acceptable(sample) : sample.lagMs < 100) break;
     }
     return samples;
   }
-  const bestSample = (samples) => samples.reduce((best, sample) => (sample.lagMs < best.lagMs ? sample : best));
+  // A frames answer is the ground truth of "painting normally", so it beats a
+  // lower-lag worker answer before lagMs is compared — otherwise a clean
+  // frames sample could sit next to a faster worker sample and the visible
+  // phase would judge the worker one. The occluded and proxy phases never
+  // have a frames-answering sample to prefer (asserted per-sample), so the
+  // preference changes nothing there.
+  const bestSample = (samples) => samples.reduce((best, sample) => {
+    if ((best.answered?.frames === true) !== (sample.answered?.frames === true)) return sample.answered?.frames === true ? sample : best;
+    return sample.lagMs < best.lagMs ? sample : best;
+  });
 
   // OS-level identity helpers live at module scope (shared by the
   // occlusionUnsupported and windowLost records); see nativeWindowHandle
@@ -350,8 +378,15 @@ app.whenReady().then(async () => {
   await window.loadFile(path.join(studio, "renderer", "booklet.html"));
 
   // Raise and focus so nothing already on the desktop counts as occluding the
-  // probe window before the fixture's own cover window exists.
+  // probe window before the fixture's own cover window exists. Windows'
+  // foreground lock denies SetForegroundWindow to a background process, so a
+  // plain window.focus() can be a no-op (the cover runs into the same denial
+  // below) — and a probe window that never actually reaches foreground can
+  // keep losing the in-page frames race, which surfaces as the load-dependent
+  // "must answer via frames" flake. app.focus({ steal: true }) is the same
+  // sanctioned foreground grab the cover uses.
   window.show();
+  app.focus({ steal: true });
   window.focus();
 
   report.csp = await run(`
@@ -392,7 +427,7 @@ app.whenReady().then(async () => {
   while (Date.now() < visibleDeadline) {
     visibleState = await run("return { hidden: document.hidden, visibility: document.visibilityState, ticks: window.__rafTicks|0, focused: document.hasFocus() };");
     if (visibleState.ticks >= 5 && !visibleState.hidden) break;
-    if (Date.now() - raised > 2000) { raised = Date.now(); window.moveTop(); window.focus(); }
+    if (Date.now() - raised > 2000) { raised = Date.now(); window.moveTop(); app.focus({ steal: true }); window.focus(); }
     await pause(200);
   }
   report.visible = {
@@ -412,7 +447,12 @@ app.whenReady().then(async () => {
     assert.equal(visibleState.hidden, false, `visible phase must not start occluded: ${JSON.stringify(visibleState)}`);
     report.visible.visibilitySignalReliable = true;
   }
-  report.visible.probeSamples = await sampleProbe();
+  // Frames-channel resampling: under load the first sample can lose the
+  // in-page race to the unthrottled timer, so keep sampling until a sample
+  // answered via frames and read clean (bounded by sampleProbe's 3 attempts).
+  report.visible.probeSamples = await sampleProbe({
+    acceptable: (sample) => sample.answered?.frames === true && sample.lagMs < 100,
+  });
   report.visible.probe = bestSample(report.visible.probeSamples);
   assert.equal(report.visible.probe.answered?.frames, true, `visible probe must answer via frames, got ${JSON.stringify(report.visible.probe)}`);
   assert.ok(report.visible.probe.lagMs < 100, `visible probe lag should be ~0, got ${report.visible.probe.lagMs}ms (samples=${JSON.stringify(report.visible.probeSamples.map((sample) => sample.lagMs))})`);
