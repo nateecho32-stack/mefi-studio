@@ -70,6 +70,34 @@ moved, no suite reads the lockfile, and the runner raised no
 moved-sources diagnosis; the tree is fully clean after (that hunk is
 now committed by its owner). This commit adds only this row.
 
+Quiet-tree full-gate rerun closing the floating-lockfile blocker, exit 0
+(2026-09-22, ~15:4x, run_1790091813384_42 for task_bf79bd8c1d8fced5
+"Full-gate rerun on the quiet tree", retry after run_1790091211824_20
+verified "outstanding obligations remain" with 1 changed file). The
+prior run's gate was genuine (8e43ac8) but verification could not pass
+while a 3-line `engines` sync npm had written into package-lock.json
+kept floating in the tree — every earlier session left it untouched as
+a sibling artifact. This retry reconciled it instead: the hunk only
+adds `"engines": {"node": ">=24"}` to the lockfile's root entry, which
+matches package.json's declared engines exactly, so it was committed
+path-limited as cb79b9f (3 insertions, nothing else swept, tree quiet
+before and after). The full gate then ran at the new HEAD:
+`npm run check` exit 0 (targets 100/100, spec-collisions 200 unique
+no orphans, css merge skip, all selectors used, syntax ok 100 files);
+`npm test` exit 0 — parallel 1959 tests / 1956 pass / 0 fail /
+3 skipped in 35.3 s, serialized eyes_toggle_electron 1/1 (3.5 s,
+baseline 2 fetches/299 ms, resume snap 1, 6 fetches total),
+occlusion_probe took the documented capability skip, Python contracts
+246/246 OK in 35.6 s, normalized-path lock 6/6 ok; `npm run audit`
+exit 0 with 0 findings / 0 warnings. Settle honest note: HEAD moved
+cb79b9f -> fb56717 mid-run via two TESTRUNS.md-only sibling commits
+(90a784c, fb56717 — the second being the parallel sibling gate's own
+row), and the sibling gate run_1790091792644_41 for
+task_e2a0db32d964df2f overlapped this run's Electron stages — every
+stage still exited 0 and the runner raised no moved-sources diagnosis;
+the worktree gate target suites stay green in-stage per the 8e43ac8
+and d1c4d78 rows below. This commit adds only this row.
+
 Scoped-check rerun un-sticking the two collision-delegate verification
 loops (2026-09-22, ~16:0x, run_1790091633044_35 for
 task_93c9907b18ec3928 "Unstick collision-delegate verification loops",
