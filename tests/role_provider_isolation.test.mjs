@@ -124,3 +124,29 @@ test("an unknown role provider is refused and writes nothing", async () => {
   assert.deepEqual(h.settings().aiRoleProviders, base().aiRoleProviders, "the refused patch never lands");
   assert.equal(h.state.writes, 0);
 });
+
+test("malformed or unknown feature settings are dropped, never saved as a broken route", async () => {
+  const h = host(base());
+  // An unknown provider is skipped while the known provider in the same patch lands.
+  const unknown = await h.apply({ providerModels: { bogus: { routine: "invented" }, zai: { routine: "zai-routine-2" } } });
+  assert.equal(unknown.ok, true);
+  assert.deepEqual(h.settings().aiModelsByProvider, { zai: { routine: "zai-routine-2", heavy: "zai-heavy" }, zen: { routine: "zen-routine" } }, "the unknown provider never enters the saved map");
+  // A provider whose value is not a role map is ignored rather than dereferenced.
+  await h.apply({ providerModels: { zai: "not-a-role-map" } });
+  assert.deepEqual(h.settings().aiModelsByProvider, { zai: { routine: "zai-routine-2", heavy: "zai-heavy" }, zen: { routine: "zen-routine" } });
+  // An unknown builder CLI is skipped while the known one in the same patch lands.
+  await h.apply({ executorTierModels: { bogus: { fast: "x" }, claude: { heavy: "opus" } } });
+  assert.deepEqual(h.settings().executorTierModels, { claude: { heavy: "opus" } }, "the unknown builder never enters the saved map");
+  // A non-object roleProviders patch is ignored instead of crashing.
+  await h.apply({ roleProviders: "claude" });
+  assert.deepEqual(h.settings().aiRoleProviders, base().aiRoleProviders, "the malformed patch leaves the saved role map untouched");
+});
+
+test("an OpenCode tier model that is not provider/model is refused and writes nothing", async () => {
+  const h = host(base());
+  const result = await h.apply({ executorTierModels: { opencode: { fast: "glm-5.3-flash" } } });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /provider\/model ids/);
+  assert.equal(h.state.writes, 0, "the invalid route is refused before it can reach a shell");
+  assert.equal("executorTierModels" in h.settings(), false);
+});
