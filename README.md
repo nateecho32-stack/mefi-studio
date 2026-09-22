@@ -148,6 +148,7 @@ npm run audit            # renderer/template contract audit
 | [docs/agent-loop.md](docs/agent-loop.md) | How a chat message becomes a verified task, with file references |
 | [docs/performance.md](docs/performance.md) | Measurements and how to reproduce them |
 | [docs/ux-audit.md](docs/ux-audit.md) | The UX audit and its phased plan |
+| [docs/pi-provider-storage.md](docs/pi-provider-storage.md) | How pi's coding agent stores provider config, and the settings/auth split Studio adopted from it |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Check gates, test-file rules, parallel-session etiquette |
 | [SECURITY.md](SECURITY.md) · [CHANGELOG.md](CHANGELOG.md) | Reporting and what changed |
 | [docs/archive/](docs/archive/) | Historical audits and handoffs, kept for the reasoning |
