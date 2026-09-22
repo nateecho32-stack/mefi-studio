@@ -1,7 +1,9 @@
 # Mefi's Studio AI+
 
 This is the standalone Electron application repository. Read `README.md` for
-features and `TESTRUNS.md` before running tests.
+the overview, `docs/architecture.md` for the feature walkthrough and glossary,
+`CONTRIBUTING.md` for the gates, and `TESTRUNS.md` before running tests.
+Longer-form docs live under `docs/`; superseded ones under `docs/archive/`.
 
 - Application sources live at the root: `main.cjs`, `preload.cjs`, `scripts/`,
   `renderer/`, `assets/`. Run npm commands from this directory.

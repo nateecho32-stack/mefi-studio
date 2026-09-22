@@ -39,7 +39,7 @@ Two spec trees, two runners, one naming rule per tree:
 The rules below are enforced by `npm run check:specs`
 (`scripts/spec-collisions.mjs`), which runs as part of `npm run check`,
 guarded by synthetic-fixture tests in `tests/spec_collisions.test.mjs`, and
-gated in CI by `.github/workflows/spec-collisions.yml` (audit + guard tests +
+gated in CI by `.github/workflows/ci.yml` (audit + guard tests +
 full check on every push and pull request).
 
 ### 1. Spec basenames are unique across `tools/` and `tests/`
@@ -106,6 +106,18 @@ Workers may run in parallel against this repository. Before editing:
   `tools/test_assistant_write_lock.py`,
   `tools/test_mefi_studio_normalized_path_lock.py`, and
   `tools/test_normalized_path_lock.mjs` (run directly with `node`).
+
+## Documentation
+
+- `README.md` is the front door; keep it short and put detail in `docs/`.
+- `docs/architecture.md` holds the feature walkthrough and glossary; update it
+  when a screen or control is renamed.
+- Dated audits, handoffs and one-off logs go to `docs/archive/` with a
+  "Historical record" banner instead of staying at the root.
+- README screenshots live in `docs/images/` (1440 px wide, 256-colour PNG);
+  capture them from seeded sample data, never from a real project.
+- `CHANGELOG.md` follows Keep a Changelog; add a line under *Unreleased* with
+  user-visible changes.
 
 ## Repository hygiene
 

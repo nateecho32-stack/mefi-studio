@@ -5,381 +5,136 @@
 <h1 align="center">Mefi's Studio AI+</h1>
 
 <p align="center">
-  <strong>A personal multi-project workspace with an AI companion, an agent task loop, and visible work results.</strong>
+  <strong>A local-first desktop workspace where you talk an idea through with an AI companion, hand it over as a task, watch coding agents build it, and verify the result.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/nateecho32-stack/mefi-studio/actions/workflows/spec-collisions.yml"><img src="https://github.com/nateecho32-stack/mefi-studio/actions/workflows/spec-collisions.yml/badge.svg?branch=main&style=flat-square" alt="Studio checks"></a>
+  <a href="https://github.com/nateecho32-stack/mefi-studio/actions/workflows/ci.yml"><img src="https://github.com/nateecho32-stack/mefi-studio/actions/workflows/ci.yml/badge.svg?branch=main&style=flat-square" alt="Studio checks"></a>
   <img src="https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square&logo=windows&logoColor=white" alt="Platform: Windows">
-  <img src="https://img.shields.io/badge/electron-44.4.1-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron 44.4.1">
   <img src="https://img.shields.io/badge/node-24-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white" alt="Node 24">
-  <img src="https://img.shields.io/badge/keys-OS%20keystore%20encrypted-6F42C1?style=flat-square" alt="Keys encrypted with the OS keystore">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/local--first-no%20telemetry-2EA043?style=flat-square" alt="Local-first, no telemetry">
 </p>
 
-Mefi's Studio AI+ is a desktop workspace for working with an AI assistant across
-projects. Pick a project, talk an idea through, or choose **Give a task** to
-create real work on its board; the companion moves between Listen, Make, and
-Review as actual work changes.
+<p align="center">
+  <img src="docs/images/workspace.png" width="900" alt="The workspace: a status strip, a conversation with the companion, and the project's work queue">
+</p>
 
-The in-app walkthrough opens on first launch and explains choosing a folder,
-connecting tools, creating one clear task, following its activity and reviewing
-its result. Each lesson can **Walk me…** through the matching menu with a small
-coach that highlights the control, ticks stops off as you go and remembers your
-place. [GETTING_STARTED.md](GETTING_STARTED.md) covers the same path in writing.
+**Quick links:** [Install](#install-and-run) · [First launch](#first-launch) · [Tour](#a-short-tour) · [Keys and privacy](#keys-and-privacy) · [Docs](#documentation) · [Contributing](#contributing)
 
-Every launch starts on a project chooser: pick the folder to open, then
-**Open studio** (the agents stay off until you press **Start agents** in the
-workspace or the tray) or **Open and start agents**. Nothing runs before you
-choose.
+## What it does
 
-## Quick start
+- **One folder at a time.** Pick a project folder and Studio scans it locally. Tasks, conversations, plans and references stay with that project.
+- **Talk, then hand over.** *Talk together* to think an idea through, or *Give a task* to put real work on the board with acceptance checks.
+- **Agents do the work, visibly.** Coding workers (OpenCode, Claude Code, Codex, Grok or Antigravity CLIs) build tasks while an always-on service loop organises, audits and briefs. The **Command view** shows every session, task and agent as a live node tree.
+- **"Done" means verified.** A finished attempt waits in *Review* with its evidence until checks pass or you confirm it.
+- **Everything stays on your machine.** Keys are encrypted with the OS keystore, there is no telemetry and no hosted account.
 
-### Run from source
+## Requirements
+
+| | Needed for | Notes |
+| --- | --- | --- |
+| **Windows 10/11** | Everything | Keys are protected by the Windows keystore (DPAPI). Other platforms are untested. |
+| **Node 24 + npm** | Running from source | `npm ci` downloads Electron once (about 110 MB). The portable build needs neither. |
+| **Git** | Cloning | |
+| **Python 3** | `npm test` only | Must be on PATH as `python`. |
+| **A builder CLI** (optional) | Building tasks | `opencode` is preferred; `claude`, `codex`, `grok` and `agy` are detected. Without one Studio still plans, chats and browses the catalog, but no build can start. |
+| **An API key or local model** (optional) | The companion | z.ai, OpenCode Go, a CLI login, LM Studio or any OpenAI-compatible endpoint. |
+
+## Install and run
 
 ```powershell
-npm ci                   # once; downloads Electron (~110 MB)
-npm run build-booklet    # build the committed renderer
-npm start                # desktop app
-npm run start:web        # browser-only fallback: http://localhost:4173
-npm run capture          # screenshot tour -> tools/logs/mefi_studio_captures/
+git clone https://github.com/nateecho32-stack/mefi-studio.git
+cd mefi-studio
+npm ci                   # once; downloads Electron
+npm run build-booklet    # bundles renderer/ into the committed renderer/booklet.html
+npm start
 ```
 
-`npm start` needs a normal shell: if `ELECTRON_RUN_AS_NODE` is set (some agent
-harnesses set it), main.cjs refuses to start with the fix printed.
+- `npm start` needs a normal shell. If `ELECTRON_RUN_AS_NODE` is set (some agent harnesses set it), Studio refuses to start and prints the fix.
+- `Run Mefi's Studio AI+.cmd` starts the portable build when one exists in `dist/`, otherwise the source install.
+- **Portable build:** download a release, extract the whole folder, then open `Mefi Studio AI+.exe`. It keeps its own data next to the executable.
+- `npm run start:web` serves a browser-only preview on <http://localhost:4173>; it cannot launch workers.
 
-On Windows, double-click `Run Mefi's Studio AI+.cmd`; it starts the portable
-build when available, otherwise the development install. Portable downloads
-must be extracted in full before opening `Mefi Studio AI+.exe`.
+## First launch
 
-### Packaging a release
+1. **Choose a project** on the launch screen, then **Open studio** (agents stay off) or **Open and start agents**. Nothing runs before you choose.
+2. **Follow the walkthrough.** *Start here* opens on the first launch with seven short stops: scan, workspace, first map, connections, create, monitor, review. Each stop's **Walk with me** opens the real menu and highlights the control. It remembers your place.
+3. **Check the connection.** A fresh install runs **auto setup** by itself on the first launch, from the keys, CLIs and local servers already on the machine, and **Settings & connections** says what it chose. Press **Run auto setup** again after adding a key or CLI, or pick a route yourself. No key yet? The catalog, manual planning and saved work all work without one.
+4. **Give one clear task** and watch it move from *Ready* to *Working* to *Review*.
 
-Run `npm run check`, `npm test` and `npm run audit`, then `npm run
-package:release`. That creates a fresh folder under `dist/releases/` with only
-the two public catalogs in its data directory; zip the entire folder before
-opening it. `npm run package` refreshes the everyday portable build in
-`dist/Mefi Studio AI+/` while preserving its existing local data. Neither path
-seeds a new build with your settings, tasks, conversations, credentials or
-caches, and neither uploads anything.
+[GETTING_STARTED.md](GETTING_STARTED.md) covers the same path in detail, including what every task state means and what to do next.
 
-### One repository, many projects
+## A short tour
 
-A fresh install opens with no project: choose a folder in **Projects** and
-Studio scans it locally before any work starts. Set `MEFI_STUDIO_REPO` to open
-a working repository directly for headless or developer launches. The optional
-Ruins Runner integration uses `MEFI_STUDIO_GAME_ROOT`, or a sibling
-`2d Trippy Hell` folder when present — a fresh clone works without the game.
+### Your workspace (`H`)
 
-## Highlights
+The home screen. **Studio at a glance** shows the service state with a single Pause / Resume, running workers, what needs you, what is up next, the machine gauge and today's usage. Below it: the conversation with your companion and **Your work** (Queue, Ideas, Review, Done).
 
-| Capability | What it does |
-| --- | --- |
-| **Assistant that keeps working** | An always-on service loop ticks in the main process — organising, auditing, fixing, tidying and briefing — whether or not a window is open. |
-| **Visible agent loop** | Watcher, machine, auditor, keeper, thinker, briefer and responder roles run as satellites around the assistant node and report their findings home. |
-| **Planning that becomes work** | Plans settle unknowns and decisions into a specification, then explicitly create board tasks with acceptance checks. |
-| **Verified results** | "The run said done" is not done: attempts settle to `awaiting_verification` with evidence attached, and housekeeping verifies them. |
-| **Model Lab** | Measured latency, throughput, errors and reported cost per project, with unknown values left unknown. |
-| **Live update** | Studio watches its own source tree and restyles, hot-swaps modules, or reloads with full UI state restored. |
+### Command view (`D`)
 
-## What's inside
+<p align="center">
+  <img src="docs/images/command.png" width="900" alt="Command view: sessions, tasks and agents as a 3D node tree, with the Live work rail on the right">
+</p>
 
-### Workspace and work
+Every session, task and agent is a node. Agents orbit the assistant, fly to the task they work on, and say what they are doing in speech bubbles. The right rail holds **Work**, **Agents** (Autopilot, parallel builds, build mode, Swarm / Cluster), **Assistant**, **Done** and **Ask**, where agents wait for your decision with a recommended option.
 
-- **Projects** keeps each folder's tasks, conversations, drafts, references and
-  work logs together. The studio menu opens from the grip on the left edge
-  (hover, click or Tab to it): Your workspace, Command view, Task board and
-  Plans at the top, the project list, a tools grid, and Settings, Music and
-  Start here in its bottom row. Running work must finish before a project
-  change.
-- **Your work** separates open work, attempts needing **Review**, and verified
-  or manually confirmed **Done** tasks; archived completions stay visible.
-- **Auto build** stays on by default. Turn it off for **Verify first** so each
-  task waits in Review until you choose **Approve build**. Approval covers the
-  saved task scope and is saved across restarts for all projects.
-- **Studio at a glance** sits above the conversation: the service state with
-  the single **Pause / Resume** control, running workers, what needs you (open
-  questions and work to review), what is up next, the machine gauge and
-  today's usage. Each tile opens the view that owns it, and a new agent
-  question raises a toast with an **Answer** button from any view.
-- **Work through backlog** works the project's existing tasks and ideas first,
-  keeping a small runnable buffer; **Pause** holds every kind of new work (the
-  same hold as Command's **New work** switch) while current workers finish.
-- The **task board** opens as plan cards with progress and a current step, and
-  holds prerequisites, handoff context and task history. Missing prerequisites
-  and dependency cycles are surfaced for correction.
-- **Ctrl K** finds tools and tasks by familiar terms; **Make yourself at home**
-  sets your name, companion name, accent and movement preference.
+### Start here walkthrough
 
-### Planning
+<p align="center">
+  <img src="docs/images/walkthrough.png" width="900" alt="The seven-stop Start here walkthrough">
+</p>
 
-**Plan an idea** opens **Plans** for work whose route is unclear: give the plan
-a destination and an out-of-scope boundary, collect unknowns, resolve questions
-after their dependencies, then write or request a specification with small
-tasks, acceptance checks and prerequisites. Approve the draft, then explicitly
-create its tasks. Assistant suggestions and discussion never resolve a question
-or approve work, and planning itself cannot launch coding workers. Manual
-controls work without an AI key; plans and their revision history stay in the
-project's ignored local `planning.json`.
+### Settings & connections (`4`)
 
-### The assistant and the agent loop
+<p align="center">
+  <img src="docs/images/settings.png" width="900" alt="Settings: auto setup, assistant connection, model routing, coding workers">
+</p>
 
-- The assistant can always be messaged and is always working: a **service loop**
-  ticks every 30 seconds (every two minutes while hidden), organising the node
-  tree, scanning the machine, running the Auditor every five minutes, fixing and
-  tidying on cadence, and (with Proactive on) briefing every five minutes.
-- Messaging is a real chatbot: multiline composer, quick-ask chips, follow-ups
-  resolved against the last reply, replies grounded in the current board,
-  inbox, open folder and the folder's own scanned plan documents, and plain
-  keywords that work without AI. Asking for work queues it; vague chatter gets
-  a yes/no offer instead of an accidental job.
-- **Work on it** makes a node the assistant's next piece of work — pinned to
-  the front of the board and started at demand priority. Every session, todo and
-  task acts as a **node folder** of typed context cells that compile into chat
-  replies and executor prompts.
-- The **overseer** reviews how the assistant works, keeps a playbook and lesson
-  counts, files bounded upgrade requests, and repairs the loop (resume stale
-  sessions, re-arm interrupted work) every fifteen minutes.
-- The agents **talk to each other**: a scout that sees something another role
-  owns writes it a note — the watcher tells the keeper about stale sessions and
-  the auditor about colliding files, the machine tells the foreman when it is
-  holding new starts, the auditor and the compactor tell the foreman what is
-  ready to hand out, the keeper tells the compactor what it pruned, a finished
-  builder tells the agent it called what for, and the overseer says why it woke
-  a role. Unread mail pulls its reader onto the next tick, and the reader takes
-  its notes as it starts. On the tree a note rides a packet between the two
-  agents' orbs; the assistant card lists the exchange under **Said to each
-  other**, the AI passes see it as `chatter` and may answer with notes of their
-  own, and asking about **agents** in chat reads the latest lines.
-- Closing the window hides Studio to a tray icon and the loop keeps running;
-  builders journal their progress and checkpoint before quit, and interrupted
-  work resumes on the next start instead of being duplicated.
+### Also in the box
 
-### Command center and the node tree
+**Task board** (`T`) with briefs, prerequisites, attempts and evidence · **Plans** (`P`) that turn an unclear idea into a specification and tasks · **Ideas** (`I`) inbox · **Model catalog** (`1`) and **Model Lab** (`2`) with measured latency, cost and usage · **Activity & evidence** (`3`), a read-only view of the coding sessions · **Session explorer** (`E`), **Analyzer** (`A`), **Overhead** (`O`), **Music & themes** (`U`) · `Ctrl K` finds any tool, task or setting · `?` lists every shortcut.
 
-- **Live work** shows the current worker and step, readiness counts, the
-  readable agent roster (each role's status, name, elapsed time and current
-  task) and a ranked queue; **Settings** holds the queue controls, while
-  **Agents** in the toolbar chooses how the roster shares work between
-  **Swarm** (across the queue) and **Cluster** (one goal at a time).
-- The rail's **Agents** tab gathers the queue controls (Autopilot, Parallel
-  builds, Build mode, Agent mode) under an at-a-glance strip that shows the
-  switch, the running builds and their cap, and the coordination mode.
-- **Parallel builds** defaults to **Machine managed**: admission follows
-  measured app responsiveness, with optional manual limits of one to three
-  workers. High CPU alone never limits builds.
-- **Follow** frames the active task; **Fit** repairs the layout. Pick node style
-  (**Classic orbs**, **Soft glass**, **Minimal**, **Halo**, **Crystal**) and
-  arrangement (**Constellation**, **Branches**, **Rings**, **Helix**,
-  **Terraces**) per project, in 2D or real 3D.
-- The sky follows the colour theme — Aurora ribbons, Deep space, Nebula,
-  Rising embers, Fireflies, Soft bokeh, Warm dust — or pick a **Backdrop**
-  (plus Quiet grid and Minimal) in the Ambience pop. **Speech bubbles** beside
-  the agents say what each one is doing: a **→** bubble is a finding going
-  home, a **←** one is it landing, and a diamond packet rides the line between
-  the two agents.
-- Every agent wears its role glyph (an eye for the watcher, a hammer for a
-  builder, a crown for the overseer…), spins a ring while it works, dashes one
-  while it waits its turn, and leaves a coloured wake when it flies to a node.
-- Sessions, tasks, the assistant and working agents carry a **callout**: a
-  leader rising from the orb into a horizontal top bar, the title above it
-  with its number (S1, T4…), a check or status mark and the done/left counts,
-  and below it a bubble with what the agents think or do there. Cards keep
-  their spot while the tree turns and step aside to a compact label rather
-  than overlap; hovering one lifts it and softens everything else; clicking
-  it (or its orb) **focuses** the node: the camera glides in (scale and pan
-  together, less on a parent so its children stay in frame), the tree slides
-  over for the card instead of jumping, and the rest of the tree keeps
-  turning slowly behind a blur until Esc or an empty click. **Card style**
-  in the Ambience pop picks outlined, filled, or auto (filled when hovered,
-  selected or running).
-- Lines say what they mean: the hub link is doubled, a task's anchor is
-  dotted and marches while its worker runs, an agent's tether is dashed, a
-  finished cluster is stippled, and a done todo's link fades green.
-- The Done tab lists the builds that finished off, from the executor ledger;
-  **Clear** wipes it. The absorb is the tree's: a finished node collapses
-  into its host and its brief stays readable on that card under
-  **Absorbed work**.
-- **Music & themes** plays your local files or Spotify links and recolours
-  Studio; **Audio link** wires bass, mids and treble to the live tree
-  (including desktop audio and microphone sources) only when you enable it.
+The full feature walkthrough, in Studio's own vocabulary with a glossary, is in [docs/architecture.md](docs/architecture.md).
 
-### Model Lab and routing
+## Keys and privacy
 
-- **Model Lab** records per-project latency, delivered tokens/s, errors,
-  reported usage and USD cost, with human and model ratings kept separate;
-  opening it never runs paid measurements. **Context** previews the current
-  task brief within a chosen token budget and reports what was shortened.
-- **Usage tracker** sums two ledgers per day, provider and model: the calls
-  Studio made itself (assistant HTTP and CLI routes, Jev, speed probes) and
-  every coding-session turn OpenCode's own store recorded for the project
-  (the builders' runs on Go, Zen, OpenRouter or the z.ai plan), read on the
-  eyes worker. Each connected provider gets its own account reading over its
-  saved key — OpenCode Go's 5-hour/weekly/monthly windows, z.ai's plan quota,
-  OpenRouter's key usage and limit, the Vercel AI Gateway balance — and a
-  provider with no account API (Zen, TypeSafe, the Grok/Claude/Antigravity
-  CLIs, a local server) says so plainly. The CLI routes run in their JSON
-  output mode so their token counts reach the ledger. Live readings and the
-  local estimate stay clearly separate; a plan or subscription reports no
-  per-call cost, so those calls are shown as unpriced rather than free. A
-  compact version sits at the bottom of the Command rail, and the full view
-  is the Model Lab **Tracker** tab. Opening it and every five minutes while it
-  is visible is the only time the accounts are asked; no prompts are sent.
-- **AI routing** picks who pays — Auto walks an ordered provider list you edit
-  in Settings (the first usable provider answers, and the opt-in fallback
-  walks down the list), plus z.ai only, OpenCode Go only, the Grok, Claude
-  Code or Antigravity CLIs on their own logins, a local LM Studio server, or a
-  custom OpenAI-compatible endpoint with your own key. **Model selection** uses
-  Jev or fixed defaults.
-- **Models are saved per provider and per builder CLI**, so switching routes
-  never carries one provider's model id into another; a provider with nothing
-  saved uses its own default, and the keyed HTTP routes keep the role-wide
-  Routine/Heavy overrides. Missing a subscription or key for one option never
-  blocks the others — the readiness line names what the selected option has.
-- **Jev routing** chooses where classifier calls go — the Vercel AI Gateway
-  (`typesafe-ai/jev`), TypeSafe's Jev API directly (`jev-1.13.0`), OpenCode
-  Zen (`jev-1.13`, including its free tier), or OpenRouter
-  (`typesafe/jev-1.13`) — each route keeping its own encrypted key. Headless
-  setup: `MEFI_STUDIO_GATEWAY_KEY=... electron . --set-gateway-key`,
-  `MEFI_STUDIO_JEV_KEY=... electron . --set-jev-key`,
-  `MEFI_STUDIO_ZEN_KEY=... electron . --set-zen-key`,
-  `MEFI_STUDIO_OPENROUTER_KEY=... electron . --set-openrouter-key`, and
-  `MEFI_JEV_ROUTE=zen` (or `vercel`, `typesafe`, `openrouter`) to pick the
-  route.
-- **Auto setup** in Settings reads saved-key flags, installed CLIs and (only
-  when nothing else is available) a live local server, then applies the
-  matching provider, model selection and builder in one pass. It sends no paid
-  request, changes no key, keeps model overrides, reports every choice, and
-  leaves the same controls editable afterward. A fresh install runs it by
-  itself on its first launch, and the walkthrough's scan step reads its plan,
-  so a machine with only a signed-in coding CLI is configured before the first
-  task.
-- Builders run through `opencode run` (with a Studio-managed z.ai provider),
-  the Grok CLI, Claude Code (`claude -p` on your subscription login), Codex
-  (`codex exec` on your ChatGPT login), or Antigravity (`agy` on your Google
-  account), with automatic one-time fallback decided by the failure kind.
-- A **coding tier** in Settings › Coding workers decides what each build may
-  cost. **Auto** keeps per-task selection (Jev or the stand-in judge within
-  your provider, otherwise the CLI default); **Free** runs a free model one
-  worker at a time and never falls back to a billed default; **Fast** runs the
-  quick economical model (GLM 5.3 Flash on the z.ai plan, `sonnet` on Claude
-  Code); **Heavy** runs the high-end one (GLM 5.3, `opus`). Tier models are
-  saved per builder CLI, and the Settings line shows what each tier resolves
-  to before anything runs.
-- Keys live in the OS keystore (`safeStorage`; DPAPI on Windows). Headless
-  setup: `MEFI_STUDIO_KEY=... electron . --set-key`,
-  `MEFI_STUDIO_ZAI_KEY=... electron . --set-zai-key`, and
-  `MEFI_STUDIO_CUSTOM_KEY=... electron . --set-custom-key`.
+- Keys are entered once in Settings and stored encrypted in the OS keystore; only "saved / not saved" reaches the UI. Headless setup: `MEFI_STUDIO_KEY=... electron . --set-key` and friends (see [.env.example](.env.example)).
+- Git tracks only `data/curated.json` and `data/models.json`. Tasks, conversations, settings, databases and captures stay local and are never packaged.
+- Agents run real commands in the project folder you chose. Turn **Auto build** off (*Verify first*) to approve each task before it runs.
+- See [SECURITY.md](SECURITY.md) for reporting.
 
-### Verification, storage and experiments
-
-- A finished attempt settles to `awaiting_verification` with its evidence
-  (sentinel, exit code, spawned session); failed or pending checks block
-  completion, and unavailable evidence waits without consuming a retry.
-- The JSON views are the authoritative board. `node scripts/reconcile-board.mjs`
-  repairs a backlog offline, and `node scripts/reconcile-store-fork.mjs`
-  (`--dry-run` to preview) syncs the missing slice with the packaged app's store.
-- The **Policy Lab** is observation-only: dispatches append episodes under
-  `data/policy-lab/`, and `npm run policy-lab` replays candidate configurations
-  against them. No live dispatch changes are made.
-- The **Jev intake classifier** runs in shadow mode at admission, recording
-  `jev-proposal` events; it can never suppress work, merge tasks or spawn
-  agents. The governor's kill switch is `settings.jevShadow === false`.
-
-### A-Eyes, tools and diagnostics
-
-- **A-Eyes** reads the OpenCode session store read-only: change feed with diffs,
-  per-session totals, PNG evidence with pins, and a log tail. Clicking a node
-  in the 3D rail filters the feed and focuses the assistant.
-- The **session explorer** (`E`) carries the always-on thread, collateral
-  watch, local Auditor and request inbox, with checkpoint actions
-  (Reference / Explore / Restore / Expand).
-- The **Analyzer** (`A`) compares plans and notes with current source, listing
-  `file:line` evidence, missing references and unverified completion claims.
-  It runs locally; the optional AI read sends bounded excerpts only when asked.
-- **Tasks**, **Ideas**, **Overhead** and the **Performance profiler** cover task
-  logs and references, a feature-idea inbox and graph, task-to-session mapping,
-  and in-app frame/scope/hitch capture with JSON export.
-- **Machine coordination** watches test leases and live processes, holds new
-  starts when Studio becomes laggy, and auto-kills strays, hangs and over-age
-  runs (every kill is logged and queued to the inbox).
-
-### Live update
-
-Studio watches its own source tree: CSS restyles in place, `scripts/*.mjs`
-modules hot-swap, renderer files reload with tab, selection, scroll and focus
-restored, and `main.cjs` restarts the app. Edits are batched, changed scripts
-are syntax-checked first, and a broken file or three restarts a minute **hold**
-the update instead of crashing. The `data/` directory is never written by the
-updater or packaging.
-
-### Release updates
-
-A packaged copy also reads the repository's latest GitHub release every 20
-minutes. When a newer build exists, the App updates block shows **Update to
-vX.Y.Z**: it downloads the release zip, verifies the published `.sha256` (or
-the API digest) when one exists, stages the portable folder, and a helper
-script waits for the app to exit, copies the payload into place — never
-`resources/app/data` — and relaunches. In development the checker only
-reports; the live update above applies source changes.
-
-Build and publish a release with `node scripts/package-release.mjs --version
-vX.Y.Z --publish`, or push a `v*` tag and let
-`.github/workflows/release.yml` run. A private repository needs a read-only
-token: save one in App updates, set `MEFI_STUDIO_GITHUB_TOKEN`, or let Studio
-reuse the GitHub CLI's `gh auth token`.
-
-## Tests
+## Tests and checks
 
 ```powershell
-npm test                 # Node behavioral tests + Python contracts
 npm run check            # targets, spec collisions, CSS cascade gates, syntax
-npm run audit            # application audit
+npm test                 # Node behavioural tests + Python contracts
+npm run audit            # renderer/template contract audit
 ```
 
-The Python contracts (`python -m unittest discover -s tools -p
-"test_mefi_studio_*.py"`) cover catalog math, booklet self-containment and the
-launcher shape; none need network, Electron or LÖVE. See
-[TESTRUNS.md](TESTRUNS.md) for every run and [PERFORMANCE.md](PERFORMANCE.md)
-for startup measurements. After a `renderer/styles.css` merge, prove the
-cascade with `npm run check:css` instead of eyeballing diffs.
-
-## Keys
-
-`H` workspace · `D` Command view · `1` Model catalog · `2` Model Lab · `3`
-Activity & evidence · `4` Settings · `E` explorer · `T` task board · `P`
-plans · `I` ideas · `O` overhead · `A` analyzer · `U` music & themes ·
-`Ctrl K` palette · `R` refresh catalog · `G` pin the node tree · `M` message
-the assistant (inside Command) · `?` shortcut sheet · `Esc` closes the
-top-most layer.
-
-## Privacy and security
-
-- Keys are encrypted with the OS keystore; only connection status crosses into
-  the renderer.
-- Git tracks only `data/curated.json` and `data/models.json`. Tasks,
-  conversations, settings, databases, captures and build output stay on your
-  computer.
-- Packaging never seeds a build with your personal state, profiler reports
-  contain measurements rather than task text or paths, and there is no
-  telemetry and no hosted account.
-
-## Love2D studio
-
-The Settings tab's "Optional · Ruins Runner & Love2D" group launches the
-external Ruins Runner checkout's dev tool exactly
-like `Run Dev Tool (LOVE2D).cmd` (windowed LÖVE 11.5 with
-`dev/dev_tool_love_project`). If the runtime is missing, run
-`tools/build-windows.ps1` from the game root.
+`npm test` needs Python 3 on PATH and a real desktop: two fixtures drive Electron windows and are timing-sensitive. [CONTRIBUTING.md](CONTRIBUTING.md) explains the gates and conventions; [TESTRUNS.md](TESTRUNS.md) is the maintainers' lab notebook of past runs and flake triage, not a guide.
 
 ## Documentation
 
-| Guide | What it covers |
+| Read this | For |
 | --- | --- |
-| [GETTING_STARTED.md](GETTING_STARTED.md) | First launch, new-machine setup and your first project |
-| [TESTRUNS.md](TESTRUNS.md) | Every test run, workload settings and measured results |
-| [FEATURE_AUDIT.md](FEATURE_AUDIT.md) | Verified scope and remaining gaps |
-| [PERFORMANCE.md](PERFORMANCE.md) | Startup measurements and reproduction |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Repository conventions and test-file rules |
-| [MIGRATION.md](MIGRATION.md) | Moving an existing installation |
-| [AGENT_LOOP_VERIFICATION.md](AGENT_LOOP_VERIFICATION.md) | How the agent loop is verified |
-| [HANDOFF_mefi_studio_assistant.md](HANDOFF_mefi_studio_assistant.md) | Assistant internals handoff |
+| [GETTING_STARTED.md](GETTING_STARTED.md) | First launch, new-machine checklist, your first task, what each state means |
+| [docs/architecture.md](docs/architecture.md) | Glossary and the detailed feature walkthrough |
+| [docs/agent-loop.md](docs/agent-loop.md) | How a chat message becomes a verified task, with file references |
+| [docs/performance.md](docs/performance.md) | Measurements and how to reproduce them |
+| [docs/ux-audit.md](docs/ux-audit.md) | The UX audit and its phased plan |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Check gates, test-file rules, parallel-session etiquette |
+| [SECURITY.md](SECURITY.md) · [CHANGELOG.md](CHANGELOG.md) | Reporting and what changed |
+| [docs/archive/](docs/archive/) | Historical audits and handoffs, kept for the reasoning |
+
+## Optional: Ruins Runner
+
+Studio can launch the author's LÖVE game from Settings › Integrations when a checkout is found (`MEFI_STUDIO_GAME_ROOT`, or a sibling `2d Trippy Hell` folder). A fresh clone works without it.
+
+## Contributing
+
+Issues and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md); the pull-request template lists the three gates. Bug reports are most useful with the version, the install kind, the selected route and builder, and the task state you saw.
+
+## License
+
+[MIT](LICENSE) © 2026 MefiMaxi
