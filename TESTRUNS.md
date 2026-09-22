@@ -25,6 +25,16 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - correction: the auth-split row below belongs to task_88a18406f34104ca - it was swept into 0ebf5fe (task_214a666a0948a828, run run_1790102522200_3)
+
+One-line reattribution per the 9788722 pattern: the auth/settings split row
+(task_88a18406f34104ca, run run_1790101780278_28) below landed inside 0ebf5fe
+while its run was still in flight; that run has since finished and committed
+its code files at 2457a7d (no TESTRUNS row of its own), so the row stands as
+written — verified first-hand via `git show 0ebf5fe --stat` (TESTRUNS.md +54/-1
+carrying both rows) and `git show 2457a7d --stat` (8 code files, no ledger
+edit); attribution corrected here, nothing removed or rewritten.
+
 ## 2026-09-22 late evening - sixth-gen carrier (the split-out card) takes its scope from the decision log: extra work is board-side only, repo-side re-verified green at HEAD 9788722 (task_261f3a1af9aeda2d, run run_1790102049200_35)
 
 This card was spawned at the owner's 18:31:54 "split the extra work out"
