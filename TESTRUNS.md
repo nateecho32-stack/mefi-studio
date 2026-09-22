@@ -25,6 +25,28 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - split-out follow-up resolved to host-side-only remainder; worktree workstream re-verified at HEAD (task_4dc2a045b8d46b20, run run_1790099398213_3)
+
+Scope decided from the parent plan's decision log, not guessed: the plan card
+(task_plan_mucx9cxs_0) carries one decision — "split the extra work out"
+(1790098036160) — and its finishing run (run_1790098067116_10) plus questions
+q_1790087415865_3 / q_1790097789226_1 show every generation of this chain's
+"uncovered work" was the same two host-side items: flipping landing card
+task_7b773505d7c6eb43 (and its parent task_2dd9dc18291f2625) to done, and the
+MEFI_STUDIO_WORKTREE_RUNS default — answered, it stays opt-in
+(`enabled()` is `MEFI_STUDIO_WORKTREE_RUNS === "1"` exactly). Nothing
+implementable remains in the repo. Re-derived first-hand at HEAD 1e61b58:
+feature commits c272b58 / e3ad851 / 31f69f0 / d1c4d78 / 96d15c6 all exist on
+main; wiring present (`require` near main.cjs:58; `worktreeManager`
+`prepare`/`discard`/`settle` call sites around the run loop); fresh
+`node --test tests/executor_worktree.test.mjs` -> 11/11 pass, exit 0
+(39.4 s); `git worktree list` shows no `.mefi/worktrees` checkouts and the
+directory does not exist on disk — no residue; nothing staged before or
+after. The landing cards are still `open` in the board; the status flip is
+host-side only and is asked via MEFI_ASK — the task store was not modified
+from this worker. Sibling in-flight files (~30 modified, 2 untracked) were
+present and untouched; this commit adds only this row.
+
 ## 2026-09-22 evening - ledger-row evidence added to the done+verified discharge (task_8cc401d711b549ba, run run_1790097856627_4)
 
 The requirement's second clause, left unimplemented by the 1f00796 row two
