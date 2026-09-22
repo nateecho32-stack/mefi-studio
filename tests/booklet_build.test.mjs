@@ -128,6 +128,19 @@ test("booklet build on fixtures: the output exists, is non-empty and self-contai
       assert.ok(consumerAt > helperAt, `${consumer} loads after the shared grouping helper`);
     }
 
+    // Brains assets ride along verbatim, exactly once: a build that appended
+    // them twice or left a src/href reference behind fails here, mirroring the
+    // committed-booklet contract in tools/test_mefi_studio_booklet.py.
+    for (const asset of ["brains.css", "brains.js"]) {
+      const source = await readFile(path.join(root, "renderer", asset), "utf8");
+      assert.equal(
+        html.split(source).length - 1,
+        1,
+        `${asset} must be inlined verbatim exactly once`
+      );
+      assert.ok(!html.includes(asset), `${asset} must leave no filename reference behind`);
+    }
+
     const baked = JSON.parse(data);
     assert.deepEqual(
       baked.models.map((model) => model.id),

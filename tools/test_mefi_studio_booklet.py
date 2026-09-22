@@ -18,6 +18,13 @@ STUDIO = ROOT
 BOOKLET = STUDIO / "renderer" / "booklet.html"
 TEMPLATE = STUDIO / "renderer" / "booklet.template.html"
 CATALOG = STUDIO / "data" / "models.json"
+BRAINS_CSS = STUDIO / "renderer" / "brains.css"
+BRAINS_JS = STUDIO / "renderer" / "brains.js"
+
+
+def normalized(text):
+    """Newline-normalized copy so CRLF/LF working trees compare the same."""
+    return text.replace("\r\n", "\n")
 
 
 class MefiStudioBookletTests(unittest.TestCase):
@@ -27,6 +34,9 @@ class MefiStudioBookletTests(unittest.TestCase):
         cls.template = TEMPLATE.read_text(encoding="utf-8")
         cls.catalog = json.loads(CATALOG.read_text(encoding="utf-8-sig"))
         cls.guide = (ROOT / "TESTRUNS.md").read_text(encoding="utf-8")
+        cls.booklet_norm = normalized(cls.booklet)
+        cls.brains_css = normalized(BRAINS_CSS.read_text(encoding="utf-8"))
+        cls.brains_js = normalized(BRAINS_JS.read_text(encoding="utf-8"))
 
     def test_template_placeholders_are_documented(self):
         self.assertIn("__BOOKLET_DATA__", self.template)
@@ -40,6 +50,47 @@ class MefiStudioBookletTests(unittest.TestCase):
         self.assertNotRegex(self.booklet, r"<script[^>]+src=")
         self.assertNotRegex(self.booklet, r"<link[^>]+href=")
         self.assertNotRegex(self.booklet, r"src=['\"]https?:")
+
+    def test_brains_assets_are_inlined_exactly_once(self):
+        # The committed booklet is the build-booklet output: brains.css and
+        # brains.js must ride along verbatim, exactly once each, with no
+        # src/href reference left behind. Anchors that only exist in the
+        # brains assets keep the count honest even if neighboring content
+        # shifts; the full-source counts catch a double-append outright.
+        for label, source, anchors in (
+            (
+                "brains.css",
+                self.brains_css,
+                (".brains-overlay {", ".brains-sheet {", "Brain maps — the pipeline editor"),
+            ),
+            (
+                "brains.js",
+                self.brains_js,
+                ("Brain maps: the pipeline editor",),
+            ),
+        ):
+            with self.subTest(asset=label):
+                self.assertEqual(
+                    1,
+                    self.booklet_norm.count(source),
+                    f"{label} must be inlined verbatim exactly once",
+                )
+                for anchor in anchors:
+                    with self.subTest(asset=label, anchor=anchor):
+                        self.assertEqual(
+                            1,
+                            self.booklet_norm.count(anchor),
+                            f"{label} anchor must appear exactly once",
+                        )
+        for filename in ("brains.js", "brains.css"):
+            with self.subTest(leftover=filename):
+                self.assertNotIn(
+                    filename,
+                    self.booklet,
+                    "inlined assets must leave no filename reference behind",
+                )
+        self.assertNotRegex(self.booklet, r"<script[^>]+brains\.js")
+        self.assertNotRegex(self.booklet, r"<link[^>]+brains\.css")
 
     def test_club_blackout_shell_is_baked(self):
         for marker in ("--gold:", "--live:", 'id="tree-rail"', 'id="tab-eyes"', "no-motion"):
