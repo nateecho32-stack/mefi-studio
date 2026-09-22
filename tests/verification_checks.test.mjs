@@ -69,6 +69,29 @@ test("honest denials naming a repo/code/implementation scope are not outstanding
   assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "none in the implementation backlog" } } }).reason, "outstanding obligations remain");
 });
 
+test("owner-side remaining notes are handoffs, not outstanding obligations", () => {
+  const claim = { verdictOk: true, hasSession: true, changedFiles: 0, resultNote: { parts: { done: "work landed", remaining: "none in repo scope" } } };
+  for (const remaining of [
+    "none in repo scope (handed off to the owner)",
+    "none in repo scope (owner-only: the stale acceptance lives in Studio's task store)",
+    "none in repo scope (owner only: flip the landing cards)",
+    "none in repo scope (owner-side board hygiene: flip the two cards)",
+    "none (owner's responsibility: reword the delegated acceptance)",
+    "none for this card (owner-only wording left to the board owner)",
+  ]) {
+    assert.notEqual(
+      verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining } } }).reason,
+      "outstanding obligations remain",
+      remaining,
+    );
+  }
+  // The owner marker only discharges a denial of this scope: a genuine
+  // obligation phrased without a denial, and a leftover handed to the owner
+  // but named against another module, both stay outstanding.
+  assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "the owner still has to migrate the store" } } }).reason, "outstanding obligations remain");
+  assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "none in the other module (owner-only)" } } }).reason, "outstanding obligations remain");
+});
+
 test("done+verified retries with 0 changed files discharge on a green scoped-check rerun", () => {
   // The documented collision-delegate loop shapes: verification-only
   // attempts whose scoped checks re-ran green over already-landed work, with
