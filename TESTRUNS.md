@@ -49,6 +49,29 @@ renderer sources, nothing stale left for the landing sequence. Task store
 untouched; sibling in-flight files left exactly as found; this commit adds
 only this row.
 
+## 2026-09-22 evening - retry 1 after the third-generation row: split honored, repo-side green re-confirmed at HEAD 1adbf24, flip still host-side (task_b5ec79917d8514b2, run run_1790101232178_12)
+
+The prior run's verification receipt (rcp_3e4d27c0b935b102) said "outstanding
+obligations remain" only because its result named the host-side remainder; the
+owner's "split" decision (1790101192893) already scoped that out. This retry
+honors the split: the task store and landing cards
+task_7b773505d7c6eb43 / task_2dd9dc18291f2625 were not touched. Confirmed the
+prior evidence row 1adbf24 is intact — it is HEAD, changed TESTRUNS.md only
+(+20), and the working tree had no stray file from that run (TESTRUNS.md
+clean; the ~39 modified + 2 untracked files are sibling in-flight work, left
+exactly as found). Re-verified repo-side claims first-hand at HEAD 1adbf24:
+feature commits c272b58 / 136f866 / e3ad851 / 31f69f0 / d1c4d78 / 96d15c6 all
+ancestors of HEAD; wiring live (require at main.cjs:58, worktreeManager at
+9487, prepare 9489, discard 9498); opt-in intact
+(scripts/executor-worktrees.cjs:62 `enabled()` requires
+`MEFI_STUDIO_WORKTREE_RUNS === "1"` exactly); fresh `node --test
+tests/executor_worktree.test.mjs` -> 11 tests / 11 pass / 0 fail, exit 0;
+`git worktree list` shows only the standing mb/mm/wt-* checkouts, no
+`.mefi/worktrees`. `npm run check` exit 0 (targets 100/100, 204 specs unique,
+all selectors used, syntax ok, 100 files). Sole remainder is unchanged and
+owner-only: flip the two landing cards to done. This commit adds only this
+row.
+
 ## 2026-09-22 evening - third-generation follow-up re-verified at HEAD 6acf79f: landing-card obligations discharged, flip stays host-side (task_b5ec79917d8514b2, run run_1790100921654_3)
 
 Scope recovered from the parent card's decision log, not guessed: the parent
