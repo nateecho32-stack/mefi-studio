@@ -567,7 +567,7 @@ test("a map at the host's part limit refuses one more instead of losing it on sa
   const ui = await editor({ map: { id: "full", name: "Full", grants: [], edges: [], nodes } });
   await part(ui, "note").fire("click");
   assert.equal(ui.nodes().length, 120);
-  assert.match(ui.status(), /at most 120 parts/);
+  assert.match(ui.status(), /already has 120 parts, the most a map can hold/);
 });
 
 test("the live map cannot be deleted from the editor", async () => {
@@ -591,4 +591,36 @@ test("Duplicate is not offered for a map that was never saved", async () => {
   await ui.elements.get("brains-new").fire("click");
   await flush();
   assert.equal(ui.elements.get("brains-duplicate").disabled, true);
+});
+
+test("Tidy splits a stage too tall for the host's range into columns", async () => {
+  const nodes = Array.from({ length: 60 }, (_, index) => ({ id: `n${index}`, type: "note", title: `Note ${index}`, x: 40, y: 40 + index * 20, config: { text: "" } }));
+  const ui = await editor({ map: { id: "tall", name: "Tall", grants: [], edges: [], nodes }, extraIds: ["brains-tidy"] });
+  await ui.elements.get("brains-tidy").fire("click");
+  const boxes = ui.nodes().map((node) => ({ x: Number(node.style.left.replace("px", "")), y: Number(node.style.top.replace("px", "")) }));
+  for (const box of boxes) assert.ok(box.y >= -4000 && box.y + 110 <= 4000, `y ${box.y}`);
+  const overlapping = boxes.filter((a, i) => boxes.some((b, j) => j !== i && Math.abs(a.x - b.x) < 236 && Math.abs(a.y - b.y) < 110));
+  assert.equal(overlapping.length, 0, "no two parts share a spot");
+});
+
+test("undoing the edits made during a save reads as saved again", async () => {
+  let release = null;
+  const ui = await editor({
+    bridge: {
+      brainsSave: (candidate) => {
+        const sent = brains.normalizeMap(JSON.parse(JSON.stringify(candidate)));
+        return new Promise((resolve) => { release = () => resolve({ ok: true, map: sent, compiled: brains.compileMap(sent) }); });
+      },
+    },
+  });
+  await pick(ui, "n_idea_planner");
+  await ui.key({ key: "ArrowRight" });
+  await ui.key({ key: "s", ctrlKey: true });
+  await pick(ui, "n_user_request");
+  await ui.key({ key: "ArrowRight" });
+  release();
+  await flush();
+  assert.equal(ui.elements.get("brains-save").disabled, false, "the edit made during the save is unsaved");
+  await ui.key({ key: "z", ctrlKey: true });
+  assert.equal(ui.elements.get("brains-save").disabled, true, "undoing it lands exactly on what was saved");
 });

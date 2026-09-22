@@ -440,16 +440,18 @@
       wrapLeft = null;
       return;
     }
+    const sheetLeft = el.canvasWrap.closest?.(".brains-sheet")?.getBoundingClientRect?.().left ?? 0;
+    const left = rect.left - sheetLeft;
     const fitted = fittedView && Math.abs(fittedView.x - state.view.x) < 0.5 && Math.abs(fittedView.y - state.view.y) < 0.5 && Math.abs(fittedView.zoom - state.view.zoom) < 0.0005;
     if (fitted && !state.gesture) fit();
     else {
-      if (wrapLeft !== null && rect.left !== wrapLeft && !state.gesture) {
-        state.view.x += wrapLeft - rect.left;
+      if (wrapLeft !== null && left !== wrapLeft && !state.gesture) {
+        state.view.x += wrapLeft - left;
         applyView();
       }
       renderMinimapView();
     }
-    wrapLeft = rect.left;
+    wrapLeft = left;
   }
 
   function centerOn(node, { animate = true, zoom = null } = {}) {
@@ -532,6 +534,8 @@
   // box's focus listener ignores it, or it would re-select the part that had
   // focus and undo whatever selection the rebuild was drawing.
   let restoring = false;
+  let tabbedAt = -Infinity;
+  const tabbedRecently = () => Date.now() - tabbedAt < 600;
   function restoreFocus(target) {
     if (!target) return;
     const into = target.port ? portButtons.get(`${target.node}|${target.port}|${target.dir}`) : nodeBoxes.get(target.node);
@@ -588,7 +592,7 @@
       box.setAttribute("role", "group");
       box.setAttribute("aria-label", `${node.title}, ${spec ? groupLabel(spec.group) : "unknown"} part${problemText ? `. ${problemText}` : ""}`);
       box.addEventListener("focus", () => {
-        if (restoring) return;
+        if (restoring || !tabbedRecently()) return;
         const fresh = !(state.selection?.kind === "node" && state.selection.id === node.id);
         // Tabbing onto a part that is already picked keeps the group.
         if (fresh) select({ kind: "node", id: node.id }, { keepPicked: state.picked.has(node.id) });
@@ -739,6 +743,7 @@
     if (!el.wires || !state.map) return;
     const badEdges = new Set(state.problems.filter((item) => item.level === "error" && item.edgeId).map((item) => item.edgeId));
     const lit = lighting();
+    const hits = [];
     for (const edge of state.map.edges) {
       const from = portPoint(edge.from.node, edge.from.port, "out");
       const to = portPoint(edge.to.node, edge.to.port, "in");
@@ -764,13 +769,19 @@
         hit.setAttribute("class", "brains-wire-hit");
         hit.dataset.edge = edge.id;
         hit.append(label);
-        el.wireHits.append(hit);
+        // Backward wires loop under the map, so they count as the longest.
+        hits.push({ hit, span: Math.abs(to.x - from.x) + Math.abs(to.y - from.y) + (to.x < from.x ? 1e6 : 0) });
       } else {
         path.append(label);
       }
       el.wires.append(path);
       wirePaths.set(edge.id, { path, hit });
     }
+    // The wide pick bands overlap where wires run close together; the
+    // shortest wires go on top, so a long wire never hides a short one it
+    // passes over.
+    hits.sort((a, b) => b.span - a.span);
+    for (const { hit } of hits) el.wireHits.append(hit);
   }
 
   function wireTitle(edge) {
@@ -1064,12 +1075,16 @@
   function roomFor(parts, wires = 0) {
     const maxNodes = state.catalog?.limits?.maxNodes ?? 120;
     const maxEdges = state.catalog?.limits?.maxEdges ?? 240;
-    if (state.map.nodes.length + parts > maxNodes) {
-      status(`A map holds at most ${maxNodes} parts, and this one has ${state.map.nodes.length}.`, "warn");
+    const nodes = state.map.nodes.length;
+    const edges = state.map.edges.length;
+    if (nodes + parts > maxNodes) {
+      status(parts === 1 ? `This map already has ${nodes} parts, the most a map can hold.`
+        : `That would make ${nodes + parts} parts; a map holds at most ${maxNodes}.`, "warn");
       return false;
     }
-    if (state.map.edges.length + wires > maxEdges) {
-      status(`A map holds at most ${maxEdges} wires, and this one has ${state.map.edges.length}.`, "warn");
+    if (edges + wires > maxEdges) {
+      status(wires === 1 ? `This map already has ${edges} wires, the most a map can hold.`
+        : `That would make ${edges + wires} wires; a map holds at most ${maxEdges}.`, "warn");
       return false;
     }
     return true;
@@ -1124,7 +1139,8 @@
   function addNode(type, at = null) {
     const spec = typeOf(type);
     if (!spec || !state.map) return null;
-    if (!roomFor(1, state.pending ? 1 : 0)) return null;
+    const fits = state.pending && partFits(spec);
+    if (!roomFor(1, fits ? 1 : 0)) return null;
     checkpoint();
     const spot = freeSpot(at ?? naturalSpot(), specHeight(spec));
     const node = {
@@ -1272,28 +1288,54 @@
     for (const node of [...nodes].sort(byPlace)) (columns[rank.get(node.id)] ??= []).push(node.id);
     const GAP_X = 300;
     const GAP_Y = 40;
+    // No column taller than this: one wide stage is cut into several columns
+    // rather than running past the host's y limit.
+    const SLOT_MAX = 2400;
     const heightOf = (column) => column.reduce((sum, id) => sum + nodeHeight(nodeById(id)), 0) + GAP_Y * (column.length - 1);
-    const tallest = Math.max(...columns.filter(Boolean).map(heightOf));
+    // Pass one orders each rank by where the parts that feed it sit.
     const middle = new Map();
-    // The host clamps x and y to ±4000, which would drop a long pipeline's
-    // last columns onto their neighbours; a pipeline too long for one row
-    // continues on a band underneath, and the row starts far enough left.
-    const perBand = Math.max(1, Math.floor((2 * LIMIT - NODE_W) / GAP_X) + 1);
-    const inBand = Math.min(columns.length, perBand);
-    const startX = Math.max(-LIMIT, Math.min(40, LIMIT - ((inBand - 1) * GAP_X + NODE_W)));
-    columns.forEach((column, index) => {
-      if (!column) return;
+    const ordered = [];
+    const provisional = Math.max(...columns.filter(Boolean).map(heightOf));
+    for (const column of columns) {
+      if (!column) continue;
       const weight = (id) => {
         const feeds = incoming.get(id).filter((pred) => middle.has(pred));
         return feeds.length ? feeds.reduce((sum, pred) => sum + middle.get(pred), 0) / feeds.length : nodeById(id).y;
       };
       column.sort((a, b) => weight(a) - weight(b));
-      let y = 40 + Math.floor(index / perBand) * (tallest + GAP_Y * 4) + (tallest - heightOf(column)) / 2;
+      let y = (provisional - heightOf(column)) / 2;
       for (const id of column) {
+        middle.set(id, y + nodeHeight(nodeById(id)) / 2);
+        y += nodeHeight(nodeById(id)) + GAP_Y;
+      }
+      ordered.push(column);
+    }
+    // Pass two cuts tall ranks into slots and places them. The host clamps x
+    // and y to ±4000, which would drop the tail of a long pipeline onto its
+    // neighbours, so a row too long for the range continues on a band
+    // underneath, and the whole layout starts far enough up and left to fit.
+    const slots = [];
+    for (const column of ordered) {
+      let slot = [];
+      for (const id of column) {
+        if (slot.length && heightOf([...slot, id]) > SLOT_MAX) { slots.push(slot); slot = []; }
+        slot.push(id);
+      }
+      if (slot.length) slots.push(slot);
+    }
+    const bandHeight = Math.max(...slots.map(heightOf));
+    const perBand = Math.max(1, Math.floor((2 * LIMIT - NODE_W) / GAP_X) + 1);
+    const bands = Math.ceil(slots.length / perBand);
+    const inBand = Math.min(slots.length, perBand);
+    const startX = Math.max(-LIMIT, Math.min(40, LIMIT - ((inBand - 1) * GAP_X + NODE_W)));
+    const span = bands * bandHeight + (bands - 1) * GAP_Y * 4;
+    const startY = Math.max(-LIMIT, Math.min(40, LIMIT - span));
+    slots.forEach((slot, index) => {
+      let y = startY + Math.floor(index / perBand) * (bandHeight + GAP_Y * 4) + (bandHeight - heightOf(slot)) / 2;
+      for (const id of slot) {
         const node = nodeById(id);
         node.x = snap(startX + (index % perBand) * GAP_X);
         node.y = snap(y);
-        middle.set(id, node.y + nodeHeight(node) / 2);
         y += nodeHeight(node) + GAP_Y;
       }
     });
@@ -2537,6 +2579,12 @@
   }
 
   function dialogKeys(event) {
+    const behind = dialogState?.panel && typeof dialogState.panel.contains === "function" && event.target && !dialogState.panel.contains(event.target);
+    if (behind && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
@@ -2562,7 +2610,7 @@
       if (!focusable.length) {
         event.preventDefault();
         panel.focus();
-      } else if (!panel.contains(active)) {
+      } else if (active === panel || !panel.contains(active)) {
         event.preventDefault();
         (event.shiftKey ? focusable[focusable.length - 1] : focusable[0]).focus();
       } else if (event.shiftKey && active === focusable[0]) {
@@ -2582,6 +2630,18 @@
     if (!el.menu || !el.more) return;
     el.menu.hidden = !open;
     el.more.setAttribute("aria-expanded", String(open));
+    if (open && typeof el.menu.getBoundingClientRect === "function") {
+      // Right-aligned under the button unless that would cross the sheet's
+      // left edge (a wrapped toolbar), then left-aligned.
+      el.menu.style.left = "";
+      el.menu.style.right = "";
+      const sheet = el.overlay.querySelector?.(".brains-sheet")?.getBoundingClientRect?.();
+      const menu = el.menu.getBoundingClientRect();
+      if (sheet && menu.left < sheet.left + 8) {
+        el.menu.style.left = "0";
+        el.menu.style.right = "auto";
+      }
+    }
     if (open) [...el.menu.querySelectorAll("button")].find((item) => !item.disabled && !item.hidden)?.focus();
   }
 
@@ -2635,6 +2695,13 @@
   }
 
   function togglePanel(which) {
+    const toggle = which === "parts" ? el.toggleParts : el.toggleInspector;
+    if (toggle && typeof getComputedStyle === "function" && getComputedStyle(toggle).display === "none") {
+      const notice = `The ${which === "parts" ? "parts rail" : "inspector"} does not fit at this width. Space still searches the parts.`;
+      status(notice);
+      window.MefiToast?.(notice, "info");
+      return;
+    }
     state.layout[which] = !state.layout[which];
     saveLayout();
     applyLayout();
@@ -2656,10 +2723,12 @@
       const result = await api.brainsSave(state.map);
       if (!result?.ok) { status(result?.error ?? "That map could not be saved.", "warn"); return false; }
       const wasDraft = Boolean(state.draft);
-      savedSnapshot = JSON.stringify(result.map);
       // Edits made while the save was on its way stay on the canvas, and
-      // stay marked unsaved; only an untouched map takes the host's copy.
-      if (JSON.stringify(state.map) === sent) {
+      // stay marked unsaved; only an untouched map takes the host's copy. The
+      // baseline is what was sent, so undoing those edits reads as saved.
+      const adopt = JSON.stringify(state.map) === sent;
+      savedSnapshot = adopt ? JSON.stringify(result.map) : sent;
+      if (adopt) {
         state.map = result.map;
         state.compiled = result.compiled ?? null;
         state.problems = result.compiled?.problems ?? [];
@@ -2669,7 +2738,8 @@
       const list = await api.brainsState();
       state.maps = list?.maps ?? state.maps;
       state.activeId = list?.activeId ?? state.activeId;
-      status(wasDraft ? `Saved the draft as "${state.map.name}".` : `Saved "${state.map.name}".`);
+      const savedName = result.map?.name ?? state.map.name;
+      status(`${wasDraft ? `Saved the draft as "${savedName}".` : `Saved "${savedName}".`}${state.dirty ? " Edits made since are not saved yet." : ""}`);
       return true;
     } catch (error) {
       status(`Could not save: ${error.message}`, "warn");
@@ -2715,6 +2785,12 @@
     const api = bridge();
     if (!api?.brainsActivate || !state.map || state.busy) return;
     if (state.dirty && !(await save())) return;
+    // Going live applies the saved map. If edits landed while it was saving,
+    // the screen and the saved map differ, and that is not what gets applied.
+    if (state.dirty) {
+      status("Edits arrived while saving. Save again, then make it live.", "warn");
+      return;
+    }
     let plan = null;
     try { plan = await api.brainsGatePlan(state.map.id); } catch { plan = null; }
     const moves = plan?.moves ?? [];
@@ -2736,7 +2812,12 @@
       if (!result?.ok) { status(result?.error ?? "That map could not go live.", "warn"); return; }
       state.activeId = state.map.id;
       status(result.moved?.length ? `"${state.map.name}" is live · moved ${result.moved.join(", ")}.` : `"${state.map.name}" is live.`);
-      await load({ id: state.map.id, keepSelection: true });
+      // Activation changes which map is live, not the map: the list is read
+      // again, and whatever is on the canvas stays as it is.
+      const list = await api.brainsState();
+      state.maps = list?.maps ?? state.maps;
+      state.activeId = list?.activeId ?? state.activeId;
+      renderAll();
     } catch (error) {
       status(`Could not activate: ${error.message}`, "warn");
     } finally {
@@ -2772,7 +2853,12 @@
     if (answer.action === "discard") return true;
     // The plain-confirm fallback means "discard"; the dialog's OK means save.
     if (!el.dialog) return true;
-    return save();
+    if (!(await save())) return false;
+    if (state.dirty) {
+      status("Edits arrived while saving. Save them too before you go on.", "warn");
+      return false;
+    }
+    return true;
   }
 
   async function switchTo(id) {
@@ -3365,8 +3451,11 @@
     state.gesture = null;
     state.drag = null;
     suppressClick = true;
+    const clear = () => setTimeout(() => { suppressClick = false; }, 0);
+    window.addEventListener?.("pointerup", clear, { once: true, capture: true });
+    window.addEventListener?.("pointercancel", clear, { once: true, capture: true });
     if (el.canvasWrap) delete el.canvasWrap.dataset.gesture;
-    if (gesture.kind === "pan") {
+    if (gesture.kind === "pan" || gesture.kind === "mini") {
       state.view.x = gesture.viewX;
       state.view.y = gesture.viewY;
       applyView();
@@ -3418,6 +3507,11 @@
       closeShortcuts();
       return;
     }
+    if ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === "a") {
+      event.preventDefault();
+      const body = el.shortcuts.querySelector?.(".brains-shortcuts-body");
+      if (body) window.getSelection?.()?.selectAllChildren?.(body);
+    }
     if (event.key === "Tab") {
       const stops = [...(el.shortcuts.querySelectorAll?.("button, [tabindex='0']") ?? [])];
       const index = stops.indexOf(document.activeElement);
@@ -3447,6 +3541,7 @@
 
   function onKey(event) {
     if (!el.overlay || el.overlay.hidden) return;
+    if (event.key === "Tab") tabbedAt = Date.now();
     // A layer opened above the editor (the palette, help, the walkthrough)
     // owns the keyboard, and so does any field outside the sheet.
     const layer = window.MefiNav?.top?.();
@@ -3649,9 +3744,11 @@
     el.minimap?.addEventListener("pointerdown", (event) => {
       event.preventDefault?.();
       event.stopPropagation?.();
+      const viewX = state.view.x;
+      const viewY = state.view.y;
       const point = miniPoint(event);
       if (point) centerAtWorld(point);
-      state.gesture = { kind: "mini", moved: true, startX: event.clientX, startY: event.clientY };
+      state.gesture = { kind: "mini", moved: true, startX: event.clientX, startY: event.clientY, viewX, viewY };
     });
     el.dialog?.addEventListener("pointerdown", (event) => { if (event.target === el.dialog) finishDialog(null); });
     function pressedOnBackdrop(backdrop) { return pressedOn === null || pressedOn === backdrop; }
