@@ -25,6 +25,34 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - seventh-generation carrier re-verifies the split-out scope: repo side green at drifted HEAD 08990ac, the only extra work is still the owner-only flip (task_b015afd76934e639, run run_1790103285400_17)
+
+Scope decided from the parent's decision log, quoted: task_261f3a1af9aeda2d
+records the owner decision "You decided: split the extra work out"
+(kind missing / choice split, 1790102969000) and its own result names the
+uncovered item exactly — "extra work is the owner-only card flip" of
+landing cards task_7b773505d7c6eb43 / task_2dd9dc18291f2625. That flip is
+board hygiene the worker cannot perform (task store read-only), so this
+card's repo-side duty is first-hand re-verification, not re-performance.
+
+HEAD drifted once more mid-run (1a5111f -> 08990ac, the 7e5824cf landing-card
+retry row). Everything re-run at 08990ac, not from reports: the six feature
+commits c272b58 / 136f866 / e3ad851 / 31f69f0 / d1c4d78 / 96d15c6 plus the
+three evidence rows 23bdd5c / a973b73 / 009da87 are ancestors
+(merge-base --is-ancestor, 9/9 true); wiring live in the committed blob
+(`require("./scripts/executor-worktrees.cjs")` main.cjs:59,
+`worktreeManager` gate 9490-9519, `cwd: entry.worktree?.path || runRoot` at
+10383/10397/10415/10436/10455); opt-in exact
+(scripts/executor-worktrees.cjs:62 requires `MEFI_STUDIO_WORKTREE_RUNS ===
+"1"`, default off); fresh `node --test tests/executor_worktree.test.mjs` ->
+11 tests / 11 pass / 0 fail, exit 0 (12.2 s); `.mefi` absent and
+`git worktree list` shows only the five standing checkouts — no per-run
+residue. Both landing cards re-read from the store read-only: still open,
+so the flip goes out via MEFI_ASK; splitting again would only regenerate
+this same carrier. Sibling in-flight files (`docs/agent-loop.md`,
+`main.cjs`, dirty at verification time) left byte-for-byte as found,
+nothing staged; this commit adds only this row.
+
 ## 2026-09-22 late evening - landing-card retry resolves the verifier flag: changedFiles:1 is a sibling's in-flight docs edit, landing intact and green at 1a5111f (task_7e5824cf51975676, run run_1790103332486_19)
 
 Retry of the closing row adf21a7, which the verifier held as "outstanding
