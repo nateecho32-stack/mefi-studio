@@ -8929,7 +8929,9 @@ async function prepareClusterJob(job, entry, tasks) {
       agent.report = { role: agent.role, ok, text: ok ? String(result.text).slice(0, 12000) : "", error: ok ? null : agent.step };
       return agent.report;
     }));
-    if (agents.every((agent) => agent.report)) {
+    // Only advice worth reusing: two failed answers (a provider outage, a
+    // refused key) would otherwise stop re-claims from asking again for 30 min.
+    if (agents.every((agent) => agent.report) && reports.some((report) => report.ok)) {
       for (const [key, value] of clusterAdvice) if (Date.now() - value.at >= CLUSTER_ADVICE_TTL_MS) clusterAdvice.delete(key);
       clusterAdvice.set(adviceKey, { signature: adviceSignature, at: Date.now(), reports });
     }

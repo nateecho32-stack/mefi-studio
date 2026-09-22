@@ -372,3 +372,27 @@ test("a claim dropped at the capacity gate reuses its answered advisory when re-
   assert.match(h.starts[0].child.prompt, /cluster-reviewer finding/);
   assert.ok(h.autopilot.clusterAgents.every((row) => row.status === "done" && /reused from an earlier claim/i.test(row.step)));
 });
+
+test("an advisory where both advisors failed is not reused, so the re-claim asks again", async () => {
+  let starved = false;
+  const h = executorHost({ mode: "cluster", tasks: [task("outage")], workerCapacity: async () => (starved
+    ? { canStart: false, reason: "Machine memory is low (382 MB available; 440 MB needed before another worker).", resources: null }
+    : { canStart: true, reason: null, resources: { cpuPercent: 15, availableMemoryMB: 8192, totalMemoryMB: 32768 } }) });
+  const complete = h.env.httpAssistantCall;
+  h.env.httpAssistantCall = async (...args) => { await complete(...args); return { ok: false, error: "429 rate limited" }; };
+  const held = holdSupport(h);
+  const first = h.env.spawnNextJob();
+  await flushUntil(() => held.pending.length === 2);
+  starved = true;
+  held.release();
+  assert.equal(await first, "resources");
+  assert.equal(h.supportCalls.length, 2);
+  starved = false;
+  const second = h.env.spawnNextJob();
+  await flushUntil(() => held.pending.length === 2);
+  held.release();
+  assert.equal(await second, "spawned");
+  assert.equal(h.supportCalls.length, 4, "failed advice is asked for again, not reused");
+  assert.equal(h.contextCalls.length, 2);
+  assert.deepEqual(h.starts.map((row) => row.taskId), ["outage"]);
+});
