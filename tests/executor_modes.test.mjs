@@ -347,3 +347,28 @@ test("a claim released by a reap and then by its own gate records one release", 
   assert.equal(h.board().tasks[0].status, "open");
   assert.equal(h.board().tasks[0].runId, undefined);
 });
+
+test("a claim dropped at the capacity gate reuses its answered advisory when re-claimed", async () => {
+  let starved = false;
+  const h = executorHost({ mode: "cluster", tasks: [task("starved")], workerCapacity: async () => (starved
+    ? { canStart: false, reason: "Machine memory is low (382 MB available; 440 MB needed before another worker).", resources: null }
+    : { canStart: true, reason: null, resources: { cpuPercent: 15, availableMemoryMB: 8192, totalMemoryMB: 32768 } }) });
+  const held = holdSupport(h);
+  const first = h.env.spawnNextJob();
+  await flushUntil(() => held.pending.length === 2);
+  starved = true;
+  held.release();
+  assert.equal(await first, "resources");
+  assertUnclaimed(h, "starved");
+  assert.equal(h.supportCalls.length, 2, "the first claim paid for both advisors before the gate cut it");
+  assert.equal(h.contextCalls.length, 1, "the reference search also ran once");
+  starved = false;
+  const second = h.env.spawnNextJob();
+  assert.equal(await second, "spawned");
+  assert.equal(h.supportCalls.length, 2, "the re-claim does not pay for the same two calls again");
+  assert.equal(h.contextCalls.length, 1, "the re-claim does not repeat the reference search");
+  assert.deepEqual(h.starts.map((row) => row.taskId), ["starved"]);
+  assert.match(h.starts[0].child.prompt, /cluster-planner finding/);
+  assert.match(h.starts[0].child.prompt, /cluster-reviewer finding/);
+  assert.ok(h.autopilot.clusterAgents.every((row) => row.status === "done" && /reused from an earlier claim/i.test(row.step)));
+});

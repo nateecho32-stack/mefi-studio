@@ -8831,12 +8831,33 @@ async function releaseExecutorClaim(eyes, job, entry) {
   });
 }
 
+// Advice a released claim already paid for. Machine pressure that rises
+// during the advisory (a sibling worker ramping up) releases the claim after
+// the planner and reviewer have answered — a quarter of claims on 2026-09-22,
+// every one a capacity gate — and the re-claim used to pay for the same two
+// calls and code search again. The signature carries the brief and the card's
+// last finished run, so advice is reused only until a worker has run on it.
+const CLUSTER_ADVICE_TTL_MS = 30 * 60 * 1000;
+const clusterAdvice = new Map();
+
 // The Assistant's existing planners and reviewers prepare both agent modes.
 // Their calls are read-only; the host alone admits scoped builder subtasks.
 async function prepareClusterJob(job, entry, tasks) {
   let accepting = true;
   const current = () => accepting && agentModes.normalizeMode(autopilot.mode) === entry.mode && (autopilot.modeRevision ?? 0) === entry.modeRevision && autopilot.execute && assistantState?.status !== "paused" && !projectSwitching && !executorUpdateHold() && !entry.finished;
   const canDelegate = taskDelegation.canPlan({ ...job.ref, runProgress: entry.resumeCheckpoint ?? null });
+  const adviceKey = `${entry.projectPath ?? ""}|${job.kind}:${job.ref?.id ?? job.title}`;
+  const adviceSignature = JSON.stringify([entry.mode, canDelegate, job.title, job.prompt, job.ref?.lastAttempt?.runId ?? null]);
+  const saved = clusterAdvice.get(adviceKey);
+  if (saved?.signature === adviceSignature && Date.now() - saved.at < CLUSTER_ADVICE_TTL_MS) {
+    autopilot.clusterAgents = saved.reports.map((report) => ({ id: `${entry.id}:${report.role}`, role: report.role, mode: entry.mode, status: report.ok ? "done" : "failed", taskId: entry.taskId, taskTitle: entry.title, step: report.ok ? "Findings reused from an earlier claim" : report.error }));
+    emitAutopilot();
+    entry.clusterReports = saved.reports;
+    entry.adviceReused = true;
+    const planner = saved.reports.find((report) => report.role === "planner" && report.ok);
+    if (current() && canDelegate && planner) entry.delegationPlan = taskDelegation.parsePlan(planner.text);
+    return agentModes.supportBrief(saved.reports);
+  }
   const agents = ["planner", "reviewer"].map((role) => ({ id: `${entry.id}:${role}`, role, mode: entry.mode, status: "queued", taskId: entry.taskId, taskTitle: entry.title, step: "Waiting for task context" }));
   autopilot.clusterAgents = agents;
   const publish = () => { if (autopilot.clusterAgents === agents) emitAutopilot(); };
@@ -8908,6 +8929,10 @@ async function prepareClusterJob(job, entry, tasks) {
       agent.report = { role: agent.role, ok, text: ok ? String(result.text).slice(0, 12000) : "", error: ok ? null : agent.step };
       return agent.report;
     }));
+    if (agents.every((agent) => agent.report)) {
+      for (const [key, value] of clusterAdvice) if (Date.now() - value.at >= CLUSTER_ADVICE_TTL_MS) clusterAdvice.delete(key);
+      clusterAdvice.set(adviceKey, { signature: adviceSignature, at: Date.now(), reports });
+    }
     return reports;
   })();
   try {
