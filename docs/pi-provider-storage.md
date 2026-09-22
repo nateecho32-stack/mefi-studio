@@ -51,12 +51,13 @@ model catalog ships with the CLI and can be refreshed from pi.dev
   credentials. This study's takeaway changed that the same day (commit
   `2457a7d`): ciphertext now persists to `auth.json` beside `settings.json`
   (`main.cjs:123-127`, `scripts/auth-store.cjs`), and `readSettings()` serves
-  callers one merged view with a one-time migration off the legacy fields.
+  callers one merged view with a one-time migration off the legacy fields
+  (`readSettings()`/`writeSettings()` `main.cjs:12240-12267`).
 - Keys are DPAPI-encrypted through Electron `safeStorage` and kept as separate
   base64 fields in `auth.json` — `zaiApiKeyEncrypted`, `apiKeyEncrypted` (OpenCode Go),
   `customApiKeyEncrypted`, `gatewayApiKeyEncrypted`, `jevApiKeyEncrypted`,
   `zenApiKeyEncrypted`, `openrouterApiKeyEncrypted`, `githubTokenEncrypted`
-  (`main.cjs:12761-12789`, `:13847-13990`).
+  (write sites `main.cjs:14283-14417`; field map `main.cjs:13153-13156`).
 - Each field has environment fallbacks behind it: `MEFI_STUDIO_*` names plus
   shared aliases other tools already use (`AI_GATEWAY_API_KEY`, `TYPESAFE_API_KEY`,
   `OPENCODE_ZEN_API_KEY`, `OPENROUTER_API_KEY`, `GH_TOKEN`/`GITHUB_TOKEN`)
@@ -65,7 +66,7 @@ model catalog ships with the CLI and can be refreshed from pi.dev
 - Provider set is fixed in the UI: z.ai GLM, OpenCode Go, LM Studio (local, no
   key), one custom OpenAI-compatible endpoint (URL + key), plus CLI builders that
   run on their own logins (OpenCode, Grok, Claude Code, Codex, Antigravity)
-  (`renderer/booklet.template.html:392-487`).
+  (`renderer/booklet.template.html:394-493`).
 - Per-provider model settings (routine/heavy), auto-provider order and fallback
   live in the same settings store; the committed `data/models.json` is the model
   catalog. Credentials are app-wide, never scoped per project
@@ -97,7 +98,7 @@ model catalog ships with the CLI and can be refreshed from pi.dev
   (`task_88a18406f34104ca`, commit `2457a7d`): ciphertexts now persist to
   `auth.json` beside `settings.json` (same DPAPI encryption, new home), with a
   one-time migration on load; the env-alias tiers and precedence are unchanged
-  (GETTING_STARTED.md:102-105 now warns about copying `auth.json`, not
+  (GETTING_STARTED.md:101-105 now warns about copying `auth.json`, not
   `settings.json`).
 - pi's `!command` key form is a cheap pattern for secret-manager users; Studio's
   env-alias mechanism covers the CI case but not OS keychains/1Password.
@@ -112,5 +113,8 @@ docs at `https://pi.dev/docs/latest/providers`, `.../settings` and
 `https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/`.
 The re-check under `task_idea_mud7ldcn_0` confirmed every claim above and added
 `models-store.json`, `trust.json` and the `auth.json` `0600` permissions; no
-Studio code changed on that pass. `task_idea_mucpv6bo_0` and
+Studio code changed on that pass. Studio line-number citations are a
+2026-09-22 snapshot and drift as the tree changes (the named symbols — `AUTH_PATH`,
+`readSettings`, `KEY_FIELDS`, the provider tiles — remain the anchor); the
+`main.cjs` credential-field ranges were re-checked against the current tree. `task_idea_mucpv6bo_0` and
 `task_idea_mud7ldcn_0` are duplicate cards for this one idea.
