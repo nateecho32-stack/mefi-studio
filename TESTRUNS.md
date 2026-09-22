@@ -25,6 +25,38 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - closing full-gate pass for the per-feature model-config idea card (task_idea_mubob3xr_0, run run_1790094521980_132)
+
+Closing verification for "Per-feature model config with graceful fallbacks".
+The implementation was re-verified first-hand at HEAD rather than trusted
+from run_1790082165537_103's report: `armedFallbackRoutes` (main.cjs:1991)
+plus the `withFallbacks`/`degrade` wiring in `resolveAiRoute`
+(main.cjs:2010-2058) are present, the 9-test suite
+`tests/explicit_route_fallback.test.mjs` landed with the routing hunks in
+520e22b, and the prior attempt's 9-file obligation has no uncommitted
+remainder — `git status --porcelain` showed those paths clean at pickup.
+The delegated gate obligations are also on record (rows for
+task_baa66f9ab1ec0f2e at 10:28/10:36 and task_d9f157833b296be0 at 10:40);
+this pass repeats the narrow suites and the whole gate at current HEAD so
+the parent card carries its own first-hand evidence. Narrow: `node --test
+tests/explicit_route_fallback.test.mjs tests/planning_routing.test.mjs` —
+21 tests / 21 pass / 0 fail / 0 skipped, exit 0. `npm run check` — all
+five stages ok (100/100 targets, 200 specs unique with no orphans, merge
+skip, all selectors used, 100 files syntax). Full `npm test` verbatim,
+exit 0 on every stage: parallel 173 suites (9 launch Electron), 1959
+tests / 1956 pass / 0 fail / 3 skipped (the documented
+environment-conditional skips); serialized eyes_toggle_electron 1/1;
+occlusion_probe took the documented capability skip (visibility never
+flipped, unattended desktop); Python contracts 247/247 OK in 37.2 s (one
+more than the 10:4x rows — a sibling landed a new contract since);
+normalized-path lock all ok. Settle honest note: HEAD moved 56087b2 ->
+96d15c6 (a sibling's worktree-path canonicalization commit) while this
+gate ran and four sibling in-flight files are dirty now (main.cjs,
+renderer/booklet.html, scripts/assistant.mjs,
+tests/verification_checks.test.mjs) — the runner's settle preflight
+passed and it raised no moved-sources diagnosis, the gate exited 0, and
+those files were left untouched. This commit adds only this row.
+
 ## 2026-09-22 evening - third full-gate rerun for the 6c5e94 follow-up card on a concurrently loaded tree (task_7a3b221956f9aa64, run run_1790094398262_129)
 
 Third full-gate row for this card. Preconditions verified first-hand: start
