@@ -8,19 +8,22 @@
 //
 // Opt-in (MEFI_STUDIO_WORKTREE_RUNS=1) until the owner flips the default: a
 // worktree starts from HEAD, so in-flight uncommitted work in the shared
-// tree stays invisible to a run until it lands.
+// tree stays invisible to a run until it lands. Each checkout gets the
+// shared node_modules through a junction (npm ci fallback) so builds and
+// tests run inside it.
 
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
 const GIT_TIMEOUT_MS = 120000;
+const NPM_TIMEOUT_MS = 10 * 60 * 1000;
 
-function runGit(root, args) {
+function runProcess(exe, root, args, timeoutMs = GIT_TIMEOUT_MS) {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn("git", args, { cwd: root, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+      child = spawn(exe, args, { cwd: root, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     } catch (error) {
       resolve({ code: -1, stdout: "", stderr: String(error?.message ?? error) });
       return;
@@ -37,7 +40,7 @@ function runGit(root, args) {
     const timer = setTimeout(() => {
       try { child.kill(); } catch {}
       close(-1);
-    }, GIT_TIMEOUT_MS);
+    }, timeoutMs);
     timer.unref?.();
     child.stdout?.setEncoding("utf8");
     child.stderr?.setEncoding("utf8");
@@ -49,6 +52,10 @@ function runGit(root, args) {
     });
     child.on("close", (code) => close(code ?? -1));
   });
+}
+
+function runGit(root, args) {
+  return runProcess("git", root, args);
 }
 
 function enabled(env = process.env) {
@@ -66,16 +73,20 @@ async function isRepo(root) {
   return probe.code === 0 && probe.stdout.trim() === "true";
 }
 
-// The worktree root lives inside the repository; ignore it in the LOCAL
-// exclude file so no tracked .gitignore (shared with every session) moves.
+// The worktree root lives inside the repository, and the node_modules link
+// (below) must read as ignored even where the project tracks no rule for it —
+// otherwise every settle mistakes its own junction for uncommitted edits. Both
+// go in the LOCAL exclude file so no tracked .gitignore (shared with every
+// session) moves.
 async function excludeWorktrees(root) {
   const where = await runGit(root, ["rev-parse", "--git-path", "info/exclude"]);
   if (where.code !== 0) return;
   const file = path.resolve(root, where.stdout.trim());
   try {
     const current = fs.readFileSync(file, "utf8");
-    if (current.split(/\r?\n/).some((line) => line.trim() === ".mefi/worktrees/")) return;
-    fs.appendFileSync(file, `${current.endsWith("\n") ? "" : "\n"}.mefi/worktrees/\n`);
+    const lines = current.split(/\r?\n/);
+    const missing = [".mefi/worktrees/", "node_modules/"].filter((rule) => !lines.some((line) => line.trim() === rule));
+    if (missing.length) fs.appendFileSync(file, `${current.endsWith("\n") ? "" : "\n"}${missing.join("\n")}\n`);
   } catch {
     // A missing exclude file only costs status noise; it never blocks a run.
   }
@@ -86,6 +97,44 @@ async function worktreeExists(root, dir) {
   if (list.code !== 0) return false;
   const wanted = path.resolve(dir);
   return list.stdout.split(/\r?\n/).some((line) => line.startsWith("worktree ") && path.resolve(line.slice(9).trim()) === wanted);
+}
+
+// A fresh checkout carries no dependencies, so `npm test` inside it would die
+// on a missing node_modules. The shared install is exposed through a junction
+// (no admin rights on Windows, no copy cost, one install for every run); the
+// link is verified by resolving it back, because a OneDrive-synced root can
+// hand out a junction that does not actually resolve. Fallback when the root
+// has no install: `npm ci` from the checkout's own lockfile.
+async function ensureNodeModules({ root, path: wtPath } = {}) {
+  const shared = path.join(root, "node_modules");
+  const link = path.join(wtPath, "node_modules");
+  try {
+    if (fs.statSync(shared).isDirectory()) {
+      try { fs.rmSync(link, { force: true }); } catch {}
+      try {
+        fs.symlinkSync(shared, link, "junction");
+        if (path.resolve(fs.realpathSync(link)) === path.resolve(fs.realpathSync(shared))) return "junction";
+      } catch {}
+      try { fs.rmSync(link, { force: true }); } catch {}
+      return "missing";
+    }
+  } catch {}
+  if (!fs.existsSync(path.join(wtPath, "package-lock.json"))) return "missing";
+  if (process.env.MEFI_STUDIO_WORKTREE_NPM_CI === "0") return "missing";
+  // npm is npm.cmd on Windows: without a shell the spawn throws EINVAL.
+  const installed = process.platform === "win32"
+    ? await runProcess("cmd.exe", wtPath, ["/d", "/s", "/c", "npm ci --no-audit --no-fund --loglevel=error"], NPM_TIMEOUT_MS)
+    : await runProcess("npm", wtPath, ["ci", "--no-audit", "--no-fund", "--loglevel=error"], NPM_TIMEOUT_MS);
+  return installed.code === 0 ? "installed" : "missing";
+}
+
+// Removing a checkout must never recurse into the shared install: the junction
+// goes first, as a link. A real npm-ci install stays and is deleted with the
+// checkout itself by `git worktree remove`.
+function dropNodeModulesLink(wtPath) {
+  try {
+    if (fs.lstatSync(path.join(wtPath, "node_modules")).isSymbolicLink()) fs.unlinkSync(path.join(wtPath, "node_modules"));
+  } catch {}
 }
 
 async function prepare({ root, runId, base = "HEAD" } = {}) {
@@ -99,6 +148,7 @@ async function prepare({ root, runId, base = "HEAD" } = {}) {
   // stale checkout is disposable; the branch may hold unmerged commits, so it
   // is renamed aside for inspection instead of deleted.
   if (await worktreeExists(root, dir)) {
+    dropNodeModulesLink(dir);
     const removed = await runGit(root, ["worktree", "remove", "--force", dir]);
     if (removed.code !== 0) throw new Error(`worktree: cannot clear stale checkout: ${removed.stderr.trim().slice(0, 160)}`);
   }
@@ -109,10 +159,12 @@ async function prepare({ root, runId, base = "HEAD" } = {}) {
   }
   const added = await runGit(root, ["worktree", "add", "-b", branch, dir, base]);
   if (added.code !== 0) throw new Error(`worktree: checkout failed: ${added.stderr.trim().slice(0, 160)}`);
-  return { root, path: dir, branch, runId: id };
+  const nodeModules = await ensureNodeModules({ root, path: dir }).catch(() => "missing");
+  return { root, path: dir, branch, runId: id, nodeModules };
 }
 
 async function removeWorktree(worktree) {
+  dropNodeModulesLink(worktree.path);
   const soft = await runGit(worktree.root, ["worktree", "remove", worktree.path]);
   if (soft.code === 0) return true;
   const forced = await runGit(worktree.root, ["worktree", "remove", "--force", worktree.path]);

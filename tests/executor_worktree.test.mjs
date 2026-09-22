@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, writeFile, readFile, rm } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { mkdtemp, writeFile, readFile, rm, mkdir } from "node:fs/promises";
+import { existsSync, realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import worktrees from "../scripts/executor-worktrees.cjs";
@@ -121,4 +121,36 @@ test("prepare refuses roots that are not git work trees", async () => {
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("a checkout shares the root install through a junction and cleanup never deletes the shared node_modules", async (t) => {
+  const repo = await makeRepo();
+  t.after(() => rm(repo, { recursive: true, force: true }));
+  await mkdir(path.join(repo, "node_modules", "probe-pkg"), { recursive: true });
+  await writeFile(path.join(repo, "node_modules", "probe-pkg", "marker.txt"), "shared\n");
+  const wt = await worktrees.prepare({ root: repo, runId: "run_7" });
+  assert.equal(wt.nodeModules, "junction");
+  assert.equal(
+    await readFile(path.join(wt.path, "node_modules", "probe-pkg", "marker.txt"), "utf8"),
+    "shared\n",
+    "the run resolves the shared install through the link",
+  );
+  assert.equal(realpathSync(path.join(wt.path, "node_modules")), realpathSync(path.join(repo, "node_modules")));
+  const result = await worktrees.settle(wt); // nothing committed: clean remove path
+  assert.equal(result.merged, true);
+  assert.equal(existsSync(wt.path), false, "the checkout is removed");
+  assert.equal(
+    await readFile(path.join(repo, "node_modules", "probe-pkg", "marker.txt"), "utf8"),
+    "shared\n",
+    "removing the checkout never recursed into the shared install",
+  );
+});
+
+test("no shared install and no lockfile leaves the checkout unbuildable but runnable", async (t) => {
+  const repo = await makeRepo();
+  t.after(() => rm(repo, { recursive: true, force: true }));
+  const wt = await worktrees.prepare({ root: repo, runId: "run_8" });
+  assert.equal(wt.nodeModules, "missing", "no junction and no npm ci without a lockfile to install from");
+  assert.equal(existsSync(path.join(wt.path, "node_modules")), false);
+  await worktrees.discard(wt);
 });

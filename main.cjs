@@ -9368,7 +9368,9 @@ async function spawnNextJob() {
   // Merge-back for whichever terminal path the run takes (normal finish or a
   // stale-run discard): serialized per repository by the module's queue, and
   // every non-success outcome keeps the branch — and the checkout too when the
-  // run left uncommitted edits — so no run result is silently dropped.
+  // run left uncommitted edits — so no run result is silently dropped. Call
+  // sites guard with typeof: the finish path is also sliced into vm test
+  // hosts that do not carry this prologue.
   const settleEntryWorktree = () => {
     if (!entry.worktree || !worktreeManager) return;
     worktreeManager.settle(entry.worktree)
@@ -9484,6 +9486,24 @@ async function spawnNextJob() {
       collabBit = ` CAUTION shared git index: a previous run left staged-but-uncommitted file(s) (${stagedWarning.files.slice(0, 3).join(", ")}) — commit them as one atomic path-limited commit or unstage them BEFORE editing, or a plain commit here sweeps them.`;
     }
   } catch {}
+  // Restart coverage: the parked map is in-memory, so a Studio restart drops
+  // every warning it held. The index itself is the durable signal — when no
+  // fresh parked entry exists, a dispatch-time porcelain probe re-derives the
+  // same caution straight from git, so the advice survives restarts (and
+  // persists for as long as the files are genuinely staged) without a
+  // file-backed store. The production probe is synchronous (spawnSync in
+  // scripts/eyes.mjs), so the typeof keeps the common path await-free; async
+  // git observation (the vm test hosts) rides the same await.
+  if (!collabBit) {
+    try {
+      const probed = typeof eyes.gitPorcelain === "function" && typeof eyes.parsePorcelain === "function" ? eyes.gitPorcelain({ root: runRoot }) : "";
+      const porcelain = typeof probed === "string" ? probed : await probed;
+      const stagedNow = typeof porcelain === "string" && porcelain ? eyes.parsePorcelain(porcelain).filter((row) => row.staged && !row.untracked) : [];
+      if (stagedNow.length) {
+        collabBit = ` CAUTION shared git index: the index currently holds staged-but-uncommitted file(s) (${stagedNow.slice(0, 3).map((row) => row.path).join(", ")}) — commit them as one atomic path-limited commit or unstage them BEFORE editing, or a plain commit here sweeps them.`;
+      }
+    } catch {}
+  }
   if (claim?.advice) collabBit += ` ${String(claim.advice).replace(/["\r\n]+/g, " ").slice(0, 420)}`;
   // File claims cover live editors; this catches a peer session that already
   // implemented the same feature under a different file set.
@@ -9535,7 +9555,7 @@ async function spawnNextJob() {
   } catch (error) {
     logLine(`[autopilot] could not build the worker prompt for "${assistantClip(job.title, 60)}": ${String(error?.message ?? error).slice(0, 160)}`);
     // Nothing spawned from the checkout yet: it goes back whole, no merge.
-    if (entry.worktree) await worktreeManager?.discard(entry.worktree).catch(() => {});
+    if (entry.worktree && typeof worktreeManager === "object" && worktreeManager) await worktreeManager.discard(entry.worktree).catch(() => {});
     await cancelClaim();
     return "lost";
   }
@@ -9923,7 +9943,7 @@ async function spawnNextJob() {
       discardEntry();
       // The stale run still worked on its own branch; merge that back rather
       // than stranding the checkout, exactly like a live finish would.
-      settleEntryWorktree();
+      if (typeof settleEntryWorktree === "function") settleEntryWorktree();
       logLine(`[autopilot] stale result ignored — "${String(job.title).slice(0, 60)}" is no longer owned by ${entry.id}`);
       emitAutopilot();
       assistantAskForWork("a stale worker released its slot");
@@ -10003,7 +10023,7 @@ async function spawnNextJob() {
     // very function was about to settle.
     discardEntry();
     // Per-run worktree merge-back after the run's own settlement.
-    settleEntryWorktree();
+    if (typeof settleEntryWorktree === "function") settleEntryWorktree();
     // Per-job failure isolation: a failed run after real runtime is the task's
     // problem — it cools down via runFailures above and the pool keeps working.
     // The only pause left is for infrastructure: a spawn error, or a run that
