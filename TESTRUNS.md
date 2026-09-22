@@ -35,21 +35,21 @@ pickup. First full `npm test` on this clock went red in the parallel stage
 (1819 tests / 1815 pass / 1 fail) on command_render "real Command renderer
 paints finite task nodes..." failing `Timed out: Clear empties the done log
 through the host` (tests/fixtures/command-render-electron.cjs until():152
-via :930) â€” and the solo rerun failed with the identical signature at a
+via :930) — and the solo rerun failed with the identical signature at a
 0.36 GB free-RAM floor, which ruled out the documented GPU-contention class
 (those pass solo). Root cause: a418a84 (2026-09-21 20:37, after the last
 green full gate run_1790035430350_1) made Clear ask first through
-window.MefiConfirm â€” a 12 s toast whose committing button nobody presses in
+window.MefiConfirm — a 12 s toast whose committing button nobody presses in
 the offscreen fixture, resolving false, so the host clear never fires and
 the fixture's 5 s until expires deterministically: committed test red on
 committed code, missed because no full gate ran between a418a84 and here.
-Fix: the fixture now pins the ask and approves it like a user â€” after
+Fix: the fixture now pins the ask and approves it like a user — after
 clicking cmd-done-clear it waits for the `#toast-host .toast-action`
 "Clear" button and clicks it before the host-clear wait (fixture-only
 change; renderer untouched, build-booklet rebuilt byte-identical, hash
 f98dd2322a01). Evidence: `node --test tests/command_render.test.mjs` solo
 1/1 exit 0 on the same starved host; full `npm test` rerun exit 0 through
-the whole chain â€” parallel stage 1819 tests / 1816 pass / 0 fail /
+the whole chain — parallel stage 1819 tests / 1816 pass / 0 fail /
 3 skipped in 34.0 s (the documented environment-conditional skips, incl.
 the in-process vm-modules source check), serialized eyes_toggle_electron
 1/1 in 3.2 s (one hide/show toggle, no duplicates), serialized
@@ -61,7 +61,7 @@ passed; the runner's settle preflight reported no mid-run source drift.
 syntax) and `npm run audit` clean (0 findings) on the same tree. A
 concurrent session's uncommitted work was landing around the run (the
 eyes-toggle TESTRUNS entry 06:28, an in-flight session-continuity edit
-to main.cjs last written 06:31 â€” after the gate finished) and was left
+to main.cjs last written 06:31 — after the gate finished) and was left
 untouched; committing that work belongs to its own card.
 
 Rotating in-suite vm ReferenceErrors root-caused to source drift, runner
@@ -72,7 +72,7 @@ node-tests-full2.log, 17:35/17:38): every reported failure is a
 section()/vm-eval test throwing "ReferenceError: X is not defined" where X
 (ASSISTANT_MAIL_RULE, assistantTakeMail, pickerHeld) is either stubbed in
 the current test sandboxes or declared at the markers the current
-main.cjs/renderer/idle.js answer ΓÇö i.e. the eval'd slices came from bytes
+main.cjs/renderer/idle.js answer — i.e. the eval'd slices came from bytes
 that were not the settled tree. The reads themselves succeeded (no EBUSY,
 no missing-section asserts), so the children read transient or stale
 content while sibling sessions had those exact files mid-edit that evening
@@ -83,7 +83,7 @@ set rotated (executor_modes+expand_finished_guard vs
 boot_poll_visibility+command_graph+command_visuals) while every file
 passes solo against settled bytes. Discriminating evidence on the quiet
 current tree: two full `node scripts/run-node-tests.mjs` runs (1738
-tests) produced zero vm/section failures ΓÇö run 1 failed only
+tests) produced zero vm/section failures — run 1 failed only
 performance_render (Profiler JSON download timeout) and run 2 only
 command_render (initial painted task frames timeout, 73 s under the
 active sibling session), both the separately tracked live-Electron
@@ -103,18 +103,18 @@ clean; both full runs above exercised the real runner end to end
 diagnostics). Sibling concurrent suite runs: checked at task start, none
 running (only MCP proxies and one other agent CLI). Not claimed here: a
 green exit-0 full-suite run (the two verification runs each hit one known
-Electron-under-load flake while the sibling session was active) ΓÇö that
+Electron-under-load flake while the sibling session was active) — that
 remains the toggle card's own gate; and the mid-edit window cannot be
 closed for edits that start after launch, only diagnosed.
 
-performance_render residual flake CAPTURED under real suite contention ΓÇö
+performance_render residual flake CAPTURED under real suite contention —
 fixture-internal, uncovered by the kill contract (2026-09-21, night,
 run_1790036825250_4 for task_3d33701ba75b4e48 "Capture residual flake
 detail"). This closes the capture obligation left by the 14-run loaded
 loop below and supersedes the child handoff's 19:15:35 "exit1Captured"
 meta (run-20260921-191535): that record came from an intermediate harness
-revision and is invalid evidence ΓÇö exitCode null, no stdout/stderr
-preserved, classification unclassified ΓÇö it is retained on disk as a
+revision and is invalid evidence — exitCode null, no stdout/stderr
+preserved, classification unclassified — it is retained on disk as a
 buggy-harness artifact only. Valid capture: full `npm test` (pid 41816,
 log npmtest-20260921-193008.log) plus a node_modules OneDrive churn
 writer (2 s cadence, 5 min) ran while the current full-capture harness
@@ -126,30 +126,30 @@ vs ~10 s unloaded) under 100% CPU, 45 MB free RAM, 39 node + 8 electron
 processes: test 1 "real performance profiler catches blocking work..."
 hit node:test's 50000 ms budget, test 2 "desktop performance capture
 measures real Electron processes..." failed with the exact historical
-signature ΓÇö `Error: Profiler JSON download timed out` at
+signature — `Error: Profiler JSON download timed out` at
 tests/fixtures/performance-render-electron.cjs:127:47 (the 5 s
 will-download completion timer in downloadCapture()), runFixture
 assert 1 !== 0. Classification per the established rules:
 fixture-internal-uncovered (download-timeout + :127 stack frame); the
 kill contract's "Performance fixture timed out: PID" marker is absent
-and its 150 s harness hard-kill never fired ΓÇö the hardened kill
+and its 150 s harness hard-kill never fired — the hardened kill
 contract is not implicated. Root cause anatomy: the renderer's
 profiler-export click -> will-download -> capture.json write pipeline
 exceeds its fixed 5 s budget when the host is saturated; the in-suite
 performance_render copy inside the same concurrent npm test survived
 (36.3 s + 8.1 s, slowed but green), so the flake is a load-dependent
 fixed-budget miss, not state corruption. Ambient-load note: the
-concurrent suite itself degraded as predicted ΓÇö serialized
+concurrent suite itself degraded as predicted — serialized
 occlusion_probe failed "rAF must stay silent while occluded
 (growth=2)" this run (environment-conditional per run_1790035430350_1)
 and the child's 19:15 concurrent suite failed executor_parallel
-"session tool edits remain attributable" (0 !== 3) ΓÇö both are
+"session tool edits remain attributable" (0 !== 3) — both are
 contention symptoms, not performance_render regressions. Stale
 `%TEMP%\mefi-performance-render-*` dirs re-audited: 0 remain (the
 fixture teardown reclaimed both once load subsided). Suggested
 follow-up (out of scope here): make downloadCapture's 5 s budget
 load-tolerant (deadline scaled to observed fixture pace or one retry)
-ΓÇö small fixture-only change, needs its own card. `npm run check` exit
+— small fixture-only change, needs its own card. `npm run check` exit
 0 after this row.
 
 Full node suite green after the cap-boundary hysteresis, on top of the
@@ -160,13 +160,13 @@ latch in scripts/machine.mjs (landed in 3198c4d, on HEAD 0c9ce23):
 severeCapSamples consecutive readings below memorySevereFloorMB engage
 the cap, the same count of consecutive readings at or above floor plus
 memorySevereReleaseMarginMB release it, and recovery-band readings hold
-the latch while resetting both streaks ΓÇö so solitary 299/451 blips can
+the latch while resetting both streaks — so solitary 299/451 blips can
 no longer toggle parallelism; tests/machine_capacity.test.mjs pins the
 streak behavior. `node scripts/run-node-tests.mjs` exited 0 through the
 whole chain on the current tree, which also carries the concurrent
 sessions' uncommitted work (machine.mjs telemetry line, assistant.mjs
 scope qualifier, commit-evidence and project-work tests): parallel stage
-1732 tests / 1730 pass / 0 fail / 2 skipped in 42.1 s ΓÇö the same two
+1732 tests / 1730 pass / 0 fail / 2 skipped in 42.1 s — the same two
 known environment-conditional skips as run_1790035430350_1 (live
 gateway Jev-model resolution without credentials; in-process vm-modules
 source check needing --experimental-vm-modules); serialized
@@ -174,30 +174,30 @@ eyes_toggle_electron 1/1 in 6.6 s (baseline 2 fetches/285 ms, hidden
 0/1200 ms, one resume snap, fetch gaps 285-1306 ms, 6 fetches total);
 serialized occlusion_probe 1/1 strict native occlusion pass in 7.4 s
 (document.hidden signal, occluded rAF growth 0, lag 0 ms, worker drift
-158 ms, MessageChannel 0 ms, 0 console errors) ΓÇö where run_1790035430350_1
+158 ms, MessageChannel 0 ms, 0 console errors) — where run_1790035430350_1
 had taken that probe's occlusionUnsupported environment skip. A first
 invocation of the same runner minutes earlier went red under desktop
-contention (parallel stage 97.4 s vs 42.1 s green): five red entries ΓÇö
-3 fail plus 2 cancelled ΓÇö namely performance_render and node_paint_cache
+contention (parallel stage 97.4 s vs 42.1 s green): five red entries —
+3 fail plus 2 cancelled — namely performance_render and node_paint_cache
 50 s timeouts, package_privacy spawnSync ETIMEDOUT, eyes_worker 150 ms
 store-read timeout, and the commit_evidence unscoped-check assertion;
 every one of them passed in the green retry with no source change
 between invocations, and the runner's exit-code chaining stopped that
 red attempt before the serialized fixtures ran at all. No
-hysteresis-related failure appeared in either attempt ΓÇö the
+hysteresis-related failure appeared in either attempt — the
 machine_capacity suite passed both times.
 
 Independent re-run of the same runner plus the npm-test tail
 (2026-09-21, late night, run_1790038076467_15 for the same
 task_29e6146a127aaf79, verifying the row above on the current tree).
 `npm test` attempt 2 on this clock confirmed the runner green through
-every stage ΓÇö parallel stage 1732 tests / 1730 pass / 0 fail / 2 skipped
+every stage — parallel stage 1732 tests / 1730 pass / 0 fail / 2 skipped
 in 53.3 s (the same two environment-conditional skips), serialized
 eyes_toggle 1/1 in 4.7 s (baseline 2/304 ms, hidden 0/1200 ms, one
 resume snap, 6 fetches total), serialized occlusion_probe
 environment-skip (this desktop never emitted occlusion events while a
 Claude window held the foreground, matching the run_1790035430350_1
-precedent) ΓÇö and then exposed a real regression the node-only runner
+precedent) — and then exposed a real regression the node-only runner
 cannot see: the python unittest stage failed
 test_fixture_local_replies_are_grounded because 0ac92e8's longer help
 line ("open issues and tickets") pushed "roster" past the 600-char
@@ -208,14 +208,14 @@ talk to each other too" -> "They talk to each other", "read what they
 said" -> "read the mail", "the request inbox and quiet sessions" ->
 "the inbox and quiet sessions"; "request inbox" remains in the agents
 line) so the clipped reply again ends at "sends the roster out." with
-every asserted piece inside 600 ΓÇö the python test is green solo and the
+every asserted piece inside 600 — the python test is green solo and the
 node help-routing suite still passes. Two other npm test attempts on
 this clock went red purely from host saturation (0.18 GB free RAM,
 Memory Compression 1.3 GB, CPU 55-74% from Discord, two Claude
 sessions and a Defender scan): performance_render Profiler-JSON
 download timeouts (one with the kill-contract "Performance fixture
 timed out: PID" marker), startup_render 65 s and task_overview_render
-45 s node:test budget timeouts ΓÇö all in the documented
+45 s node:test budget timeouts — all in the documented
 load-dependent classes above, no source regression, and
 machine_capacity (the hysteresis pin) green in every attempt.
 
@@ -232,12 +232,12 @@ the serialized fixture tests, and the only uncommitted test files
 (commit_evidence, project_work + 8 modified) belong to the
 commit-evidence family under its own commit card. Fresh gate attempts
 on this attempt's clock could not reproduce green purely from host
-load ΓÇö machine at a 0.38/13.77 GB memory floor: full runner run 1 red
+load — machine at a 0.38/13.77 GB memory floor: full runner run 1 red
 (occlusion_probe lag samples 173/1901/1303 ms under parallel-stage
 contention; solo rerun exit 0, skipped via the cb93e79 guard with the
 forensic pointing at an external foreground process closing the probe
 window), full runner run 2 red on a different, diff-free committed
-fixture (node_paint_cache "No pixel fixture report" ΓÇö the documented
+fixture (node_paint_cache "No pixel fixture report" — the documented
 Electron-under-load class). No fixture or runner file was edited to
 force green; the combined-tree full gate stays carded separately
 (task_3762737ae025181) and should rerun on an unloaded machine.
@@ -245,7 +245,7 @@ force green; the combined-tree full gate stays carded separately
 Second-user reports: schema-less OpenCode store, "open issues" reply,
 planning modal blind to existing maps/tickets (2026-09-21, night).
 Reports came as Discord screenshots from another machine, so nothing
-reproduced locally. (1) "Store unavailable ┬╖ no such table: session":
+reproduced locally. (1) "Store unavailable · no such table: session":
 `storePresent` in scripts/eyes.mjs now checks sqlite_master (5 s cache,
 cleared by closeReadDb) and a store file carrying none of
 session/message/part/todo reads as empty; a partial store (fixtures build
@@ -271,7 +271,7 @@ eyes_missing_store 4/4 (two new), assistant_question_routing,
 planning_service, planning_ui (new cases) green; full
 run-node-tests 1732 tests: first run 1 fail (executor_parallel's
 part-only fixture, fixed by the any-core-table rule), rerun 2 fails
-that pass alone (node_paint_cache, performance_render ΓÇö Electron
+that pass alone (node_paint_cache, performance_render — Electron
 fixture timeouts under load), 1728 pass otherwise; npm run check exit 0
 (91 targets, 179 specs, CSS all used); npm run audit 0 findings;
 build-booklet rebuilt renderer/booklet.html; fake-bridge browser preview
@@ -289,7 +289,7 @@ receipt trust, unit + real-git tests) was re-verified present and green,
 and its deployment was proven, not assumed: sha256 of String(
 verifyCompletion) from this tree equals evaluator.sourceSha256
 e51b386ebc464a928ae896c5b8797252f7658be02c72977f59eca9a1c0644ca4 in
-receipt rcp_ccc78643aae122d6 ΓÇö the live app was already evaluating with
+receipt rcp_ccc78643aae122d6 — the live app was already evaluating with
 the new code when it failed. The loop's true cause was the receipt's
 input outstanding: true: noRemainingWork rejected "none in scope"
 (the attempt's remaining text) and the outstanding gate fires before
@@ -310,7 +310,7 @@ Cover-window interference verification re-pass (2026-09-21, night,
 run_1790035748558_5 for task_17537ddbe6106840, retry after
 run_1790031638041_10's recorded checks could not be confirmed).
 Re-established ground truth on HEAD 0c9ce23: the coverLost work is
-committed (cb93e79 ΓÇö occlusion-probe-electron.cjs cover "closed"
+committed (cb93e79 — occlusion-probe-electron.cjs cover "closed"
 listener with the coverTeardownStarted self-destroy flag plus
 coverLostRecord routing in finish(), occlusion_probe.test.mjs skip
 before any per-phase assert), and this session re-proved every claim
@@ -319,7 +319,7 @@ from scratch rather than trusting the report: `npm run check` clean
 tests/occlusion_probe.test.mjs` passed strict native occlusion
 (document.hidden, occluded rAF growth 0, lag 0 ms, 1 pass / 0 fail);
 and the live interference itself, reproduced via an external Win32
-WM_CLOSE posted to the "occluder" cover mid-occluded-measure ΓÇö
+WM_CLOSE posted to the "occluder" cover mid-occluded-measure —
 fixture-direct exited 0 with the coverLost record (phase=
 occluded-measure, trigger, coverDestroyed=true, measuredRafGrowth=
 null for the never-finished measure) and the same close under the
@@ -331,7 +331,7 @@ uncommitted work, untouched here.
 
 Memory-cap telemetry surfaced in the Explorer Machine panel and briefing
 facts (2026-09-21, night, run_1790035560126_2 for task_c87b4bfb6577188c,
-parent task_653bec47a4549e05 "Persistent-memory guard ΓÇö follow-up e2b151").
+parent task_653bec47a4549e05 "Persistent-memory guard — follow-up e2b151").
 This row also logs run_1790027578783_19, the parent build that authored the
 severe-memory parallelism cap (severeCapSamples hysteresis, holdKind
 "memory-cap", resources.memorySevereCapped in scripts/machine.mjs plus the
@@ -340,10 +340,10 @@ surfacing as this card's scope; that code landed in 3198c4d (verified via
 git log -S memorySevereCapped) and its full-gate runs are logged below
 (run_1790028566027_42, run_1790035430350_1). This attempt:
 scripts/machine.mjs describe() now pushes "Severe-memory parallelism cap
-still latched ΓÇö new worker starts stay capped until free memory recovers"
+still latched — new worker starts stay capped until free memory recovers"
 whenever memorySevereCapped is true without the active memory-cap hold (the
 drained-pool case where admission is clear for one worker but parallelism
-is not ΓÇö tests/machine_capacity.test.mjs pins both the hold-reason summary
+is not — tests/machine_capacity.test.mjs pins both the hold-reason summary
 and the latched-clear summary); renderer/explorer.js renderMachine reads
 status.capacity.resources and shows a "memory cap" badge (trains tone, info
 tint, hover title) while the latch holds, keeps "busy" under the active
@@ -360,7 +360,7 @@ unused selectors, syntax). The concurrent commit-evidence session's
 uncommitted work (main.cjs autopilotHousekeeping, the verifyCompletion
 block in scripts/assistant.mjs, scripts/eyes-client.cjs, scripts/eyes.mjs,
 scripts/receipts.mjs, tests/verification_checks.test.mjs, untracked
-tests/commit_evidence.test.mjs) was left untouched ΓÇö the assistant.mjs
+tests/commit_evidence.test.mjs) was left untouched — the assistant.mjs
 edit here is the buildFacts allowlist line only. Full npm test not run in
 this attempt; the three touched suites plus the check gate cover the
 change, and the full-gate baseline for this tree is logged in
@@ -374,26 +374,26 @@ green run could not be confirmed: that run's TESTRUNS row stands (see
 run_1790028566027_42 below) and its only leftover, the then-
 uncommitted cap code, has since landed, so this attempt re-proved the
 gate on the current tree. Pre-run verification: HEAD 0c9ce23 carries
-the cap (3198c4d touches scripts/machine.mjs ΓÇö the severeCapSamples
-hysteresis ΓÇö and tests/machine_capacity.test.mjs, confirmed via git
+the cap (3198c4d touches scripts/machine.mjs — the severeCapSamples
+hysteresis — and tests/machine_capacity.test.mjs, confirmed via git
 log) plus the later cb93e79 and 0c9ce23, while the concurrent
 session's uncommitted verifyCompletion/commit-evidence work (main.cjs,
 scripts/assistant.mjs, scripts/eyes-client.cjs, scripts/eyes.mjs,
 scripts/receipts.mjs, tests/verification_checks.test.mjs, untracked
 tests/commit_evidence.test.mjs) sat in the worktree untouched. Full
 `npm test` exited 0 through the whole chain: the main node stage 1719
-tests / 1717 pass / 0 fail / 2 skipped in 41.3 s ΓÇö the same two known
+tests / 1717 pass / 0 fail / 2 skipped in 41.3 s — the same two known
 environment-conditional skips as before (the live gateway Jev-model
 resolution without credentials, and the in-process vm-modules source
 check needing --experimental-vm-modules); serialized eyes_toggle 1/1
 (3.5 s, fetch gaps 295-1264 ms, 6 fetches); serialized occlusion_probe
 took its documented occlusionUnsupported environment skip this time
 (1 skip / 0 fail, 19.0 s: this desktop never emitted occlusion events
-ΓÇö cover shown focused but visibility never flipped and rAF never went
-silent within 15 s, 8 focus reassertions ΓÇö where run_1790028566027_42
+— cover shown focused but visibility never flipped and rAF never went
+silent within 15 s, 8 focus reassertions — where run_1790028566027_42
 and cb93e79's landing run both saw the strict native pass); python
 contracts 246 OK in 48.5 s; normalized-path lock checks 6/6 "all
-checks passed". The suite grew 1695 ΓåÆ 1719 tests since that run
+checks passed". The suite grew 1695 → 1719 tests since that run
 (landed sibling work plus the in-flight commit-evidence tests). The
 concurrent session's uncommitted work remains uncommitted for its
 owner; committing it (and this row) is follow-up scope, not test
@@ -414,10 +414,10 @@ skips with that reason before any per-phase assert, exactly like
 windowLost. Reviewed the full diff hunk by hunk, then serialized
 `node --test tests/occlusion_probe.test.mjs` passed strict native
 occlusion (document.hidden signal, occluded rAF growth 0, lag 0 ms,
-worker drift 161 ms, 1 pass / 0 fail, no skip ΓÇö the interrupted
+worker drift 161 ms, 1 pass / 0 fail, no skip — the interrupted
 run_1790030986320_1 ERR_ASSERTION exit-1 tail was that same probe
 under interference) and `npm run check` clean (90 targets, 177 specs,
-css, syntax). Not run here: the full npm test gate ΓÇö 3a6ef13's gate
+css, syntax). Not run here: the full npm test gate — 3a6ef13's gate
 was green on this tree's siblings and the changed files are exactly
 the serialized probe above. The one-line package-lock.json
 "license": "MIT" sync (package.json already declared it at HEAD;
@@ -553,7 +553,7 @@ harness is reusable as-is.
 Full npm test after the severe-memory parallelism cap merge (2026-09-21,
 evening). Run run_1790028566027_42 for task_cf5dbf3b66810435 (parent
 task_1a265efeeb6cbdd3 "Persistent-memory guard"). Pre-run verification: the
-cap change is present in the working tree (uncommitted, adopted as-is) ΓÇö
+cap change is present in the working tree (uncommitted, adopted as-is) —
 `scripts/machine.mjs` latches `severeMemoryCap` on any under-floor sample
 (300 MB severe floor), releases only at floor + release margin, and reports
 holdKind "memory-cap" with runningCount in the reason while recovering;
@@ -561,13 +561,13 @@ holdKind "memory-cap" with runningCount in the reason while recovering;
 recovery band refusing re-admission on the memory override, and the distinct
 holdKind. Full `npm test` (unmodified tree, concurrent sessions' uncommitted
 work untouched) exited 0 through the whole `&&` chain: the main node stage
-1695 tests / 1693 pass / 0 fail / 2 skipped in 47.8 s ΓÇö the two skips are the
+1695 tests / 1693 pass / 0 fail / 2 skipped in 47.8 s — the two skips are the
 known environment-conditional ones ("live: the gateway resolves the pinned
 Jev model" without credentials, and the in-process vm-modules source check
 that needs --experimental-vm-modules); the two exclusive Electron fixtures
 each ran in their own invocation and passed: eyes_toggle 1/1 (3.6 s,
 load-tolerant span judgement) and occlusion_probe 1/1 strict native
-(6.3 s ΓÇö occlusion via document.hidden, occluded rAF growth 0, worker-channel
+(6.3 s — occlusion via document.hidden, occluded rAF growth 0, worker-channel
 lag 0 ms); `python -m unittest discover -s tools` 246 OK in 43.7 s;
 `node tools/test_normalized_path_lock.mjs` 6/6 with "all checks passed". The
 previously documented performance_render Electron Profiler flake did not
@@ -577,11 +577,11 @@ the parent task's follow-up.
 
 check-css CRLF normalization (2026-09-21, evening). Build of
 run_1790028119882_30 for task_f2faf80852cb9049: made
-`scripts/check-css.mjs` line-ending agnostic ΓÇö `cascadeWinners` now folds
+`scripts/check-css.mjs` line-ending agnostic — `cascadeWinners` now folds
 `\r\n`/`\r` to `\n` in memory (single funnel for the default HEAD-vs-worktree
 mode, the two-file form and every `--merge` side through `mergeResolution`;
 files are never rewritten). Reproduced the reported failure first
-(`node scripts/check-css.mjs` ΓåÆ `CASCADE-DIVERGED: 7 mismatch(es)`, all
+(`node scripts/check-css.mjs` → `CASCADE-DIVERGED: 7 mismatch(es)`, all
 `\r\n`-vs-`\n` inside multi-line values), then exit 0
 `CASCADE-EQUIVALENT: winners identical for all 6401 ... keys` after the fix.
 Regression tests added: CRLF-candidate equivalence + real-change-still-diverges
@@ -590,11 +590,11 @@ CRLF-resolution-vs-LF-git-sides case (clean, plus reverted still flagged) in
 `tests/check_css_merge.test.mjs`. `node --test` on the three check-css suites
 37/37; `npm run check` clean (90 targets, 176 specs, css merge-skip/unused,
 syntax); `npm run audit` clean (0 findings); `node --test
-tests/auditor_dom.test.mjs` 4/4 (auditor imports findUnusedSelectors ΓÇö
+tests/auditor_dom.test.mjs` 4/4 (auditor imports findUnusedSelectors —
 behavior unchanged). Full `npm test`: `tests/performance_render.test.mjs`
-fails (Profiler JSON download timed out ΓÇö Electron fixture under load, file
+fails (Profiler JSON download timed out — Electron fixture under load, file
 modified by a concurrent session; same class as the documented
-eyes_toggle/occlusion Electron flakes) ΓÇö not touched by this change, which is
+eyes_toggle/occlusion Electron flakes) — not touched by this change, which is
 pure-Node CSS comparison. Concurrent session's uncommitted work left
 untouched.
 
@@ -604,7 +604,7 @@ work already in the tree rather than rewriting it. Root cause reproduced, not
 guessed: recreating the old serialized stage (both display fixtures in one
 `node --test` invocation, the pre-fix `runGroup(exclusive)` shape) plus four
 CPU spinners fails eyes_toggle with "show must snap exactly one immediate
-refresh (got 2)" ΓÇö the occlusion fixture's always-on-top cover reasserts
+refresh (got 2)" — the occlusion fixture's always-on-top cover reasserts
 `app.focus({ steal: true })` every 2s, flapping the eyes window's visibility
 so the shipped listener correctly snaps once per real visibilitychange. The
 landed fix is the combination already staged in the worktree:
@@ -617,13 +617,13 @@ the test wrapper's count-based `<= 6` doubling window replaced by the same
 span judgement and the stale "while minimized" message corrected; the
 occlusion fixture recognizes external window destruction (`windowLost`:
 phase, trigger, window/cover state, Win32 foreground identity, timeline
-tail) at its shared exit and the test skips with that reason ΓÇö the live app
+tail) at its shared exit and the test skips with that reason — the live app
 holding the desktop destroying the probe window mid-occluded-phase is a
 diagnostic, not a contract failure. Verified: `node --test
 tests/eyes_toggle_electron.test.mjs` isolated 1/1; `node --test
 tests/occlusion_probe.test.mjs` isolated passes strictly natively
 (document.hidden detection, occluded rAF growth 0, worker-channel lag 0ms);
-eyes_toggle under four CPU spinners alone passes (load tolerance holds ΓÇö
+eyes_toggle under four CPU spinners alone passes (load tolerance holds —
 the flake needs the window fight, which the runner separation removes); the
 new stage shape (one invocation per fixture, sequential) under the same load
 passes both; `node --check` on every changed file and `npm run check` (90
@@ -636,11 +636,11 @@ evidence is the targeted equivalent), and the worktree changes are
 uncommitted.
 
 First-map plan verification, 7 ideas (2026-09-21, evening). Run
-run_1790027371112_14 for task_plan_mubs2uat_0 ΓÇö read/verify checklist, no
+run_1790027371112_14 for task_plan_mubs2uat_0 — read/verify checklist, no
 source changes: `npm run build-booklet` reproduced `renderer/booklet.html`
 byte-identical (39 models, hash f98dd2322a01; git shows no renderer diff).
 `npm run check:css` (default HEAD-vs-worktree mode) FAILS on this checkout
-with 7 winner mismatches that are all pure CRLF artifacts ΓÇö `core.autocrlf`
+with 7 winner mismatches that are all pure CRLF artifacts — `core.autocrlf`
 is true, the working copy is CRLF and the HEAD blob is LF; comparing both
 sides LF-normalized through `cascadeEquivalence` gives 0 problems across 6401
 winner keys, and the modes `npm run check` actually wires pass
@@ -652,7 +652,7 @@ verification_checks + verification_evidence 17/17, package_privacy 1/1
 cache never ship; live portable state preserved across rebuilds). Website
 previewed over HTTP per website/README.md (`python -m http.server`): index,
 wiki shell, pages.json, download and `wiki/pages/home.md` all 200, then the
-server was stopped. Docs surveyed: GETTING_STARTED (npm ci ΓåÆ build-booklet ΓåÆ
+server was stopped. Docs surveyed: GETTING_STARTED (npm ci → build-booklet →
 npm start; clear ELECTRON_RUN_AS_NODE), AGENT_LOOP_VERIFICATION (verified
 2026-09-19; claimed checks need session-attributed recorded execution),
 FEATURE_AUDIT (partials: verification, collision sandboxing, photographer
@@ -661,11 +661,11 @@ run-node-tests.mjs / fixture edits left untouched.
 
 Silent-probe resourcePass resume verification (2026-09-21, evening). Resume of
 run_1790027270074_12 for task_9f795c0f862dd7ae: the interrupted session's two
-code todos had already landed ΓÇö `b1d4042` scoped the resourcePass silence rule
+code todos had already landed — `b1d4042` scoped the resourcePass silence rule
 (main.cjs `samplerLagMs` gates the poll's lag on
 `measureWorkerLag.cache?.silent`, so a frozen renderer feeds the sampler null
 instead of the 1000ms sentinel) and `tests/foreman_lag_gate.test.mjs`'s
-resource-pass test pins it ΓÇö so this run verified rather than re-edited:
+resource-pass test pins it — so this run verified rather than re-edited:
 `node --test tests/foreman_lag_gate.test.mjs` 8/8 (including "the resource
 pass applies the same silence rule"), the lag-gate trio
 (`worker_responsiveness`, `machine_capacity`, `assistant_lag_gate`) 47/47,
@@ -675,7 +675,7 @@ findings). Full `npm test`: the parallel `node --test` stage 1682 tests, 1680
 pass, 0 fail; the serialized display stage had `eyes_toggle_electron` flake
 under suite load (one fetch while hidden) and pass 1/1 isolated, while
 `occlusion_probe` fails while the live Mefi Studio app holds the interactive
-desktop ΓÇö the probe window is destroyed mid-occluded-phase ("Object has been
+desktop — the probe window is destroyed mid-occluded-phase ("Object has been
 destroyed" through `fixtures/occlusion-probe-electron.cjs` `run()`), which is
 not the fixture's capability-gated skip path and is unrelated to the
 resourcePass change (the fixture reads main.cjs only as text for the probe
@@ -683,7 +683,7 @@ expression); it needs a re-run without the live app on the desktop.
 
 Mefi first map verification (2026-09-21, evening). Resume of run_1790021119814_13
 (progress 0 at interruption) for task_86a2670145d882c9; no source changes were
-needed ΓÇö the prior session's first-map implementation is already committed and
+needed — the prior session's first-map implementation is already committed and
 all of the map's first-task verification commands pass on a clean tree:
 `node --test tests/first_map.test.mjs` 6/6 and
 `node --test tests/first_run_service.test.mjs` 9/9; `npm run build-booklet`
@@ -694,7 +694,7 @@ coverage); `npm run check:specs` ok (175 specs, unique basenames, no orphans);
 check-css merge/unused and check-syntax (90 files).
 
 Coding tiers, Codex CLI and the Command usage dropdown (2026-09-21 16:00). Settings
-ΓÇ║ Coding workers gained a coding tier (`executorTier`: Auto / Free / Fast /
+› Coding workers gained a coding tier (`executorTier`: Auto / Free / Fast /
 Heavy) with per-CLI tier models (`executorTierModels`) resolved by
 `executorTierDefaults` in main.cjs (z.ai GLM pair on the plan, the first scan's
 free pick, Claude Code's `sonnet`/`opus` aliases, otherwise the CLI default;
@@ -715,7 +715,7 @@ case, performance_render, renderer_recovery, task_overview_render) passing
 alone; Python contracts 246 OK. Browser check with a fake bridge on the built
 booklet: Codex in both selects, tier switching updates the model field,
 placeholder and status line, the usage dropdown renders lead + rows and the
-collapsed header reads `Updated ΓÇª ┬╖ z.ai GLM 5h 40.5% ┬╖ wk 12%`. Not run: a
+collapsed header reads `Updated … · z.ai GLM 5h 40.5% · wk 12%`. Not run: a
 real `codex exec` build (no paid run started).
 
 Menu cleanup pass (2026-09-21, afternoon). The studio sidebar is one menu with
@@ -794,7 +794,7 @@ screen. The packaged copy was refreshed with `npm run package`.
 Command view visual layer (2026-09-21, branch `command-visuals` in the
 `mefi-studio-wt-command-visuals` worktree): backdrop scenes keyed to the colour
 theme with an Ambience override (`renderer/idle.js` drawBackdrop), speech
-bubbles beside the agents for hops, findings (ΓåÆ leaving, ΓåÉ landing), thoughts
+bubbles beside the agents for hops, findings (→ leaving, ← landing), thoughts
 and replies, the foreman's hand-out packet, per-role glyphs, status rings and
 flight wakes shared with the rail through `MefiTree.agentGlyph`, and the
 Done-tab Absorb that flies its records into the assistant orb and keeps the
@@ -814,11 +814,11 @@ bridge: no store, no main process) produced the look-gate PNGs for every theme
 scene, the three overrides, agents at work with bubbles and packets, the
 absorb flight and both absorbed ledgers, with zero renderer errors.
 
-Second pass the same day, same branch ΓÇö callouts and focus: every session,
+Second pass the same day, same branch — callouts and focus: every session,
 task, the hub and each agent working somewhere without a card gets a callout
 (a leader at seventy degrees into a horizontal top bar, the numbered title
 with a status mark and done/left counts above it, agent thoughts below it),
-placed among fixed side ├ù up/down ├ù length candidates that avoid other
+placed among fixed side × up/down × length candidates that avoid other
 cards, the HUD and orbs, kept between frames, held briefly when blocked and
 stepped aside to a compact label rather than overlapped (running work and
 the card the user is on may take a crowded spot). Hover lifts a card and
@@ -1176,9 +1176,9 @@ durations in milliseconds; they are diagnostic measurements, not test thresholds
 | 32 nodes, 2D | 3.542 | 3.042 | 1.587 | 1.249 |
 | 154 nodes, 2D | 6.082 | 5.398 | 3.309 | 2.728 |
 
-Node work fell 18ΓÇô32% and measured frame work 11ΓÇô30% on these averages. Timing
-varied substantially: dense 3D frame means ranged 4.400ΓÇô7.761 ms before and
-4.504ΓÇô6.332 ms after. Three scenarios had overlapping before/after ranges,
+Node work fell 18–32% and measured frame work 11–30% on these averages. Timing
+varied substantially: dense 3D frame means ranged 4.400–7.761 ms before and
+4.504–6.332 ms after. Three scenarios had overlapping before/after ranges,
 so these runs do not establish a live-app FPS guarantee. Source hashes matched
 within each pair, node counts matched, and all captures reported no renderer
 errors, external requests or process launches. Full data and screenshots stay
@@ -1209,7 +1209,7 @@ booklet-build and update-continuity checks passed, including both real Electron
 profiler launches. Python discovery passed all 211 contracts and normalized-path
 ownership passed all six checks. The final combined `npm test` run passed 986
 Node tests, skipped one and failed one in the concurrently edited Command audio
-fixture: `tests/command_render.test.mjs`, ΓÇ£Audio fixture task disappearedΓÇ¥. The
+fixture: `tests/command_render.test.mjs`, “Audio fixture task disappeared”. The
 profiler suites passed in that run; the full-suite gate remains unpassed.
 Complete logs are in the local temporary directory as
 `mefi-profiler-combined-test.log`, `mefi-profiler-final-focused.log`,
@@ -1229,21 +1229,21 @@ also runs the isolated Electron rendering and recovery fixtures.
 
 The renderer responsiveness probe behind those lag readings is
 `main.cjs` `measureWorkerLag`: one renderer script pairs two independent
-aliveness channels so an occluded window is never mistaken for a stalled one ΓÇö
+aliveness channels so an occluded window is never mistaken for a stalled one —
 a two-frame `requestAnimationFrame` chain (frames stop when a background window
 is throttled) beside a dedicated Web Worker timer that posts its own drift past
 a 150 ms schedule (worker timers are not frame-throttled); when worker
 construction is refused or errors, an unthrottled `MessageChannel` round-trip
 takes over. The script runs through `rendererValue` with a `null` fallback and a
 1000 ms timeout. Scoring: frames answered reads the renderer's own in-page frame
-chain, `max(0, framesMs ΓêÆ 50)` from `performance.now()` inside the probe (a
+chain, `max(0, framesMs − 50)` from `performance.now()` inside the probe (a
 50 ms allowance covers a normal frame period), so high CPU with a live view
-still admits workers ΓÇö host dispatch/reply wall time is not renderer lag, and
-counting it (the old `elapsed ΓêÆ 50` rule) manufactured renderer-lag holds that
+still admits workers — host dispatch/reply wall time is not renderer lag, and
+counting it (the old `elapsed − 50` rule) manufactured renderer-lag holds that
 blocked new starts on a healthy machine (a healthy window read 452 ms mid-suite);
 a page that does not report `framesMs` keeps the wall-clock reading; only the
 worker answered means frames were merely
-throttled and the reading is `max(0, workerDriftMs ΓêÆ 200, elapsed ΓêÆ 200)` ΓÇö an
+throttled and the reading is `max(0, workerDriftMs − 200, elapsed − 200)` — an
 occluded-but-live window reads ~0 while a main thread wedged after script eval
 keeps growing; neither channel answered, or a non-numeric worker reading, keeps
 the 1000 ms sentinel as genuine unresponsiveness evidence, and a forced
@@ -1261,7 +1261,7 @@ with controlled clocks and view doubles to pin the script shape (exactly two
 `requestAnimationFrame` calls timed by in-page `performance.now()` into
 `framesMs`, `new Worker` with `postMessage(Date.now() - t0)`,
 the MessageChannel fallback on refusal or worker error), all three scoring
-branches (frames judge only the renderer's own frame chain ΓÇö host wall time
+branches (frames judge only the renderer's own frame chain — host wall time
 around the probe is not renderer lag when frames answer, and a page without
 `framesMs` keeps the wall-clock reading), sentinel recovery, visibility
 invalidation, cache/in-flight sharing
@@ -1295,14 +1295,14 @@ classification) passed before its documented capability-gated skip on this
 RDP desktop (occlusion tracker never engages).
 
 Validated on 2026-09-21 (run_1789980594010_11, silent-probe starvation fix):
-live evidence of an overnight alert ("1000 ms lag ΓÇª waiting for 2 responsive
+live evidence of an overnight alert ("1000 ms lag … waiting for 2 responsive
 readings", canStart false, CPU idle, 585-730 MB free) showed the unattended
 session-frozen renderer answered neither aliveness channel, so every probe
-re-read the 1000 ms sentinel, latched the ΓëÑ300 ms critical hold and recovery
-could never complete ΓÇö the queue starved while the host idled. The probe now
+re-read the 1000 ms sentinel, latched the ≥300 ms critical hold and recovery
+could never complete — the queue starved while the host idled. The probe now
 stamps `silent` on its cache when neither channel answers (return value and
 pinned sentinel semantics unchanged), and the foreman feeds the sampler and
-lag gate `null` for such readings ΓÇö the hidden-window precedent: silence is
+lag gate `null` for such readings — the hidden-window precedent: silence is
 absence of evidence, so gating falls to the healthy host and the latched hold
 clears on two host-responsive samples; any answering channel restores full
 renderer gating. `node --test tests/worker_responsiveness.test.mjs
@@ -1316,7 +1316,7 @@ adopted the uncommitted memory-admission work from the worldgen memory-overrun
 triage session and closed its remaining integration gap. The sampler's
 structured hold classification (holdKind memory/memory-severe/lag/unknown,
 memoryShortfall tier, memoryWarning, requiredMemoryMB) existed so consumers
-never parse reason text, but buildFacts still stripped it ΓÇö A-Eyes saw only
+never parse reason text, but buildFacts still stripped it — A-Eyes saw only
 numbers plus lagPressure, so a memory hold was indistinguishable from a lag
 hold in facts and replies. buildFacts now carries the four fields and
 executorLine names the memory-shaped remedy ("finishing or compacting
@@ -1330,7 +1330,7 @@ clean.
 
 Validated on 2026-09-21 (run_1789990618971_12, memory-warn-override closure):
 the "205 MB available vs 300 MB severe floor; capacity.canStart=false even
-with override" alert is the severe tier behaving as designed ΓÇö 205 MB sits
+with override" alert is the severe tier behaving as designed — 205 MB sits
 under memorySevereFloorMB (300), which the override must never lift, so the
 admission work itself needs no code change. Adopted the triage session's
 uncommitted work wholesale (two-tier sampler admission, the settings/env
@@ -1356,8 +1356,8 @@ framesMs classification): `MEFI_OCCLUSION_PROXY=visibility node --test
 tests/occlusion_probe.test.mjs` passed, exercising the downstream occluded-phase
 branch via the sanctioned hide()/show() proxy (not occlusion): rAF growth 0
 while hidden, probe answered via the unthrottled worker channel
-(workerDriftMs 164 ΓåÆ lag 0 ms of 1 sample under
-`max(0, workerDriftMs ΓêÆ 200, wallMs ΓêÆ 200)`), MessageChannel 0 ms, rAF resumed
+(workerDriftMs 164 → lag 0 ms of 1 sample under
+`max(0, workerDriftMs − 200, wallMs − 200)`), MessageChannel 0 ms, rAF resumed
 after show(). The plain `node --test tests/occlusion_probe.test.mjs` still
 skips at the capability gate (cover shown focused, 8 focus reassertions, rAF
 loud, NULL Win32 foreground, console session 1, ~3.3 h input idle), and
@@ -1366,21 +1366,21 @@ loud, NULL Win32 foreground, console session 1, ~3.3 h input idle), and
 remains "not rendered", not covered, pending owner sign-off.
 
 Validated on 2026-09-21 (run_1789973551180_3, strict native occlusion pinned,
-proxy off): on the console desktop (session 1, WTSConnectState Active ΓÇö not
+proxy off): on the console desktop (session 1, WTSConnectState Active — not
 RDP, input desktop Default, not locked) the plain
 `node --test tests/occlusion_probe.test.mjs` first still skipped at the
 capability gate with a self-describing record: cover shown focused, 8 focus
 reassertions, rAF loud at ~60 fps behind the cover, NULL Win32 foreground,
-page `hasFocus()` false throughout, ~3.4 h input idle ΓÇö the tracker is inert
+page `hasFocus()` false throughout, ~3.4 h input idle — the tracker is inert
 on an unattended desktop, which is the real mechanism behind this machine's
 "occlusion never engages", not a hard capability gap. One benign input nudge
 (SendInput mouse move, no click or keys) reset the idle clock and the rerun
 passed strictly in ~6.3 s: detection signal `document.hidden` (native tracker
 engaged), probe window visible and never minimized, occluded rAF growth 0,
 every probe sample answered via the unthrottled worker channel
-(workerDriftMs 157 ΓåÆ lag 0 ms of 1 sample), blob worker still constructed,
+(workerDriftMs 157 → lag 0 ms of 1 sample), blob worker still constructed,
 MessageChannel 0 ms, rAF resumed after the cover was removed, 0 console
-errors, `MEFI_OCCLUSION_PROXY` unset throughout ΓÇö the visibility proxy stayed
+errors, `MEFI_OCCLUSION_PROXY` unset throughout — the visibility proxy stayed
 off and no `occluded` record was ever claimed from it. The occluded ~0 ms
 reading is now pinned natively under the framesMs classification.
 
@@ -1401,7 +1401,7 @@ fixture/worker-test hardening, and the TESTRUNS rows above); one more fresh
 capability gate with the desktop locked (Windows Default Lock Screen
 foreground, LockApp pid 17300, console session 1 "Active", input idle ~15
 min, cover shown focused, 8 focus reassertions, rAF loud at ~60 fps behind
-the cover) ΓÇö the same inert-unattended-tracker state recorded above, where
+the cover) — the same inert-unattended-tracker state recorded above, where
 the benign-input route is unavailable at the lock screen. No occluded record
 was claimed and the visibility proxy stayed off; the strict native pass from
 run_1789973551180_3 remains the pinned evidence for this thread.
@@ -1409,25 +1409,25 @@ run_1789973551180_3 remains the pinned evidence for this thread.
 Re-run on 2026-09-21 (run_1789975072230_7, owner-gated commit of the
 occlusion-probe thread): one more fresh
 `node --test tests/occlusion_probe.test.mjs` on the committed tree skipped at
-the same documented capability gate in ~17.4 s ΓÇö desktop still locked
+the same documented capability gate in ~17.4 s — desktop still locked
 (Windows Default Lock Screen foreground, LockApp pid 17300 hwnd 0x1303e2,
 console session 1 "Active", input idle ~22 min, cover hwnd 0x237037c shown
 over probe hwnd 0x45f00c2, 8 focus reassertions, rAF loud at ~60 fps behind
-the cover: ticks 822ΓåÆ907 across the timeline tail). No occluded record was
+the cover: ticks 822→907 across the timeline tail). No occluded record was
 claimed and the visibility proxy stayed off; no further code changes were
-pending ΓÇö a9464fd remains the scoped code commit and the strict native pass
+pending — a9464fd remains the scoped code commit and the strict native pass
 from run_1789973551180_3 remains the pinned evidence for this thread.
 
 Re-run on 2026-09-21 (run_1790017587654_66, owner-gated commit of the
 occlusion-probe thread): one more fresh
 `node --test tests/occlusion_probe.test.mjs` on the committed tree passed
-strictly in ~8.9 s ΓÇö the console desktop was attended again, so the native
+strictly in ~8.9 s — the console desktop was attended again, so the native
 tracker engaged (detection signal `document.hidden`; not the proxy, not the
 capability-gated skip), with occluded rAF growth 0, the probe answering every
-sample over the unthrottled worker channel (workerDriftMs 165 ΓåÆ lag 0 ms of
+sample over the unthrottled worker channel (workerDriftMs 165 → lag 0 ms of
 1 sample), blob worker still constructed, MessageChannel 0 ms, rAF resumed
 after the cover was removed, 0 console errors, and `MEFI_OCCLUSION_PROXY`
-unset throughout ΓÇö the proxy stayed off and no occluded record was claimed
+unset throughout — the proxy stayed off and no occluded record was claimed
 from it. The strict native pass is reconfirmed on today's tree, re-pinning
 run_1789973551180_3's record; a9464fd remains the scoped code commit
 (`main.cjs` framesMs classification and the hardened fixture, already in
@@ -1507,7 +1507,7 @@ npm run check
 npm test
 ```
 
-`npm run check` verifies package-script targets and JavaScript syntax and runs the spec-collision audit (`npm run check:specs`, `scripts/spec-collisions.mjs`) that enforces the CONTRIBUTING.md test-file conventions. `npm run check:css` (`scripts/check-css.mjs`) is the standalone CSS-refactor safety gate: it computes the cascade-winning declaration for every (selector-context, property, importance) key in a stylesheet and proves a candidate (by default the working copy of `renderer/styles.css`) keeps exactly the same winners as the base ref (by default `HEAD`), reporting missing/changed/new winners and exiting non-zero on divergence; both sides are CRLF/LF-normalized in memory before comparison (`cascadeWinners` folds `\r\n`/`\r` to `\n`, files are never rewritten), so `core.autocrlf` checkouts with a CRLF worktree against LF blobs compare clean, and the same normalization carries through the `--merge` sides. `tests/check_css.test.mjs` pins the winner extraction, cascade-equivalence comparison and the CLI exit codes (`node scripts/check-css.mjs base.css candidate.css` also works on bare files; `npm run check:css -- pre-merge.css post-merge.css` is the same two-file form used to prove a styles.css merge ΓÇö see "Verifying a session edit-collision handoff" below). `npm run check:css:merge` (`scripts/check-css.mjs --merge`) is the collision-resolution form folded into the same convention: after a styles.css merge conflict it checks **both sides against the merge base** (ours `HEAD`, theirs `MERGE_HEAD`, base their `git merge-base`) and fails when the resolution drops a one-sided winner change, resurrects a one-sided deletion, or settles a both-sides change on neither side's value; it runs inside the `npm run check` chain and is a no-op (`MERGE-CSS-SKIP`, exit 0) when no merge is in progress, with `--theirs <ref>` auditing any branch pair. Guarded by `tests/check_css_merge.test.mjs`. `npm run check:css:unused` (`scripts/check-css.mjs --unused`) is the dead-selector half of the same audit: it scans every `renderer/*.css` (or explicit file arguments), extracts the class tokens of each winner-bearing selector (rules with no declarations carry no winners and are skipped; `@keyframes` internals are not candidates) and flags any selector whose class never appears in the surrounding renderer html/js/css usage, exiting 1 with `UNUSED-SELECTOR` lines; `--allow cls,...` keeps a documented dynamic class out of the report. It also runs inside the `npm run check` chain and stays clean on this tree (`ALL-SELECTORS-USED`). Guarded by `tests/check_css_unused.test.mjs`. `npm test` runs the Node behavioral suite in `tests/`, all Python contracts in `tools/`, and the normalized-path lock proof (`node tools/test_normalized_path_lock.mjs`, the A-Eyes overseer directive's named check) as its closing gate. To investigate one layer or one contract:
+`npm run check` verifies package-script targets and JavaScript syntax and runs the spec-collision audit (`npm run check:specs`, `scripts/spec-collisions.mjs`) that enforces the CONTRIBUTING.md test-file conventions. `npm run check:css` (`scripts/check-css.mjs`) is the standalone CSS-refactor safety gate: it computes the cascade-winning declaration for every (selector-context, property, importance) key in a stylesheet and proves a candidate (by default the working copy of `renderer/styles.css`) keeps exactly the same winners as the base ref (by default `HEAD`), reporting missing/changed/new winners and exiting non-zero on divergence; both sides are CRLF/LF-normalized in memory before comparison (`cascadeWinners` folds `\r\n`/`\r` to `\n`, files are never rewritten), so `core.autocrlf` checkouts with a CRLF worktree against LF blobs compare clean, and the same normalization carries through the `--merge` sides. `tests/check_css.test.mjs` pins the winner extraction, cascade-equivalence comparison and the CLI exit codes (`node scripts/check-css.mjs base.css candidate.css` also works on bare files; `npm run check:css -- pre-merge.css post-merge.css` is the same two-file form used to prove a styles.css merge — see "Verifying a session edit-collision handoff" below). `npm run check:css:merge` (`scripts/check-css.mjs --merge`) is the collision-resolution form folded into the same convention: after a styles.css merge conflict it checks **both sides against the merge base** (ours `HEAD`, theirs `MERGE_HEAD`, base their `git merge-base`) and fails when the resolution drops a one-sided winner change, resurrects a one-sided deletion, or settles a both-sides change on neither side's value; it runs inside the `npm run check` chain and is a no-op (`MERGE-CSS-SKIP`, exit 0) when no merge is in progress, with `--theirs <ref>` auditing any branch pair. Guarded by `tests/check_css_merge.test.mjs`. `npm run check:css:unused` (`scripts/check-css.mjs --unused`) is the dead-selector half of the same audit: it scans every `renderer/*.css` (or explicit file arguments), extracts the class tokens of each winner-bearing selector (rules with no declarations carry no winners and are skipped; `@keyframes` internals are not candidates) and flags any selector whose class never appears in the surrounding renderer html/js/css usage, exiting 1 with `UNUSED-SELECTOR` lines; `--allow cls,...` keeps a documented dynamic class out of the report. It also runs inside the `npm run check` chain and stays clean on this tree (`ALL-SELECTORS-USED`). Guarded by `tests/check_css_unused.test.mjs`. `npm test` runs the Node behavioral suite in `tests/`, all Python contracts in `tools/`, and the normalized-path lock proof (`node tools/test_normalized_path_lock.mjs`, the A-Eyes overseer directive's named check) as its closing gate. To investigate one layer or one contract:
 
 ```powershell
 node --test "tests/**/*.test.mjs"
@@ -1522,8 +1522,8 @@ output to a file and grep the failure out of that file (for example
 never through `Select-Object -Last N`: in run_1789855386972_4 the suite one-shot
 `FAILED (failures=1)` (203 tests) and passed on the two following runs, but the
 `-Last 5` pipe discarded the traceback, so the flaking test name was lost. The
-strongest identified source ΓÇö the live `main.cjs` duplicate-declaration scan in
-`tools/test_mefi_studio_assistant.py` racing a sibling session's in-flight edit ΓÇö
+strongest identified source — the live `main.cjs` duplicate-declaration scan in
+`tools/test_mefi_studio_assistant.py` racing a sibling session's in-flight edit —
 now re-reads the file through a short settle before failing (real merge
 corruption still persists and fails); if a one-shot failure reproduces, capture
 the test name from the saved output and pin its fixture the same way.
@@ -1538,7 +1538,7 @@ failed deterministically in `tests/command_graph.test.mjs` ("all five layouts
 leave room for working node rings", helix 47.0px < 47.9px at 1100px) while that
 owner session was still editing; per the adopt-don't-clobber rule the edit was
 allowed to settle, the file then passed solo, and only the full chain was
-re-run and recorded here ΓÇö a mid-edit failure is a handoff signal first, not
+re-run and recorded here — a mid-edit failure is a handoff signal first, not
 automatically a layout bug.
 
 The Python suite skips Node-dependent checks when Node is unavailable. A hidden Electron smoke runs on Windows when the installed Electron binary exists; its subprocess timeout is 120 seconds. It boots a temporary copy with only the catalog data, isolated Electron profile and board database, and process cleanup disabled in the resource manager. The user's live app state is not used. Install dependencies with `npm ci` before checking or packaging the app.
@@ -1555,7 +1555,7 @@ basename, and that tree used to keep full old-repo snapshots (such as the
 `loop-performance-baseline/` performance baseline) whose `test_mefi_studio_*.py`
 copies duplicated the live `tools/` basenames and would silently shadow the live
 contracts. Per CONTRIBUTING.md rule 1 all `.local-migration/` spec copies have
-been pruned ΓÇö the snapshots keep only non-spec sources and data ΓÇö and Studio's
+been pruned — the snapshots keep only non-spec sources and data — and Studio's
 runners (`npm test`, `npm run check:specs`) never scan that folder anyway.
 Always discover with `-s tools` (npm test) or `node --test` on `tests/`,
 exactly as written above.
@@ -1591,13 +1591,13 @@ the working copy, which is the check to run before committing a CSS refactor;
 classes appear in no renderer html/js/css usage.
 
 For a live merge conflict, `--merge` proves the resolution against both sides
-and the merge base ΓÇö `npm run check:css:merge` (also a step in the
+and the merge base — `npm run check:css:merge` (also a step in the
 `npm run check` chain): ours is `HEAD`, theirs is `MERGE_HEAD` (or
 `--theirs <ref>` for any branch pair), the base is their `git merge-base`,
 and the gate exits 1 with `MERGE-LOST` (a one-sided winner change the
 resolution dropped), `MERGE-UNDELETED` (a one-sided deletion the resolution
 revived) or `MERGE-UNRESOLVED` (a both-sides change settled on neither
-side's value ΓÇö `MERGE-DECISION` lines record the keys where one side was
+side's value — `MERGE-DECISION` lines record the keys where one side was
 deliberately picked), plus exit 1 while conflict markers are still present.
 It skips with `MERGE-CSS-SKIP`/exit 0 when no merge is in progress, so the
 check chain stays green between merges. Guarded by
@@ -1612,7 +1612,7 @@ resolved as handoffs in commit `11acd9a`, with no re-edit needed: every file
 parses (`python -m py_compile`-equivalent AST parse for the two contracts,
 `JSON.parse` for package.json, `node --check` for check-css.mjs), no duplicate
 test names or script keys survived either session's edits, and the named
-checks pass ΓÇö `python tools/test_mefi_studio_catalog.py` (7/7),
+checks pass — `python tools/test_mefi_studio_catalog.py` (7/7),
 `python tools/test_mefi_studio_idle.py` (18/18),
 `node scripts/check-css.mjs` / `--merge` / `--unused` (all exit 0), and
 `npm run check` (check-targets full coverage, spec-collisions clean,
@@ -1689,26 +1689,26 @@ full-suite gate remains unpassed. Complete logs are retained locally as
 | `tools/test_mefi_studio_catalog.py` | Mefi's Studio AI+ (repository root) catalog contract: offline snapshot shape and unique ids, typical-request cost recomputed from price + token mix, quality indices only with a declared `AA`/`AA*` source and a recorded AA index version (never guessed), plan caps in `{15, 30, 60, unlimited}`, promos carrying their base cap, task-preset weights summing to 1, and endpoint-map resolution. The live committed-catalog loads (`setUpClass` reading `data/models.json` + `data/curated.json`) are guarded by the shared `tools/flake_capture.py` retry: parallel agent runs can be caught mid catalog rebuild (atomic rename, OneDrive hydration), so a one-shot failure that clears on immediate re-run is recorded to `data/python-flake-capture.jsonl` (local only) and surfaced as a skip instead of failing the gate; a failure that reproduces re-raises the original. No network, no Node. |
 | `tools/test_mefi_studio_booklet.py` | Mefi's Studio AI+ booklet contract: the built `renderer/booklet.html` bakes exactly the snapshot catalog, stays self-contained (no `<script src>`, no `<link>`, no remote resources), keeps the refresh-on-open markers (`no-store`, six-hour focus refresh, `mefiStudio.readCatalog`), and ships print styles; template placeholders and Node syntax checks when Node exists. The behavioral half is `tests/booklet_build.test.mjs` (`node --test tests/booklet_build.test.mjs` from the repository root, part of `npm test`): the real `scripts/build-booklet.mjs` `build()` runs on a fixture root (committed template + styles + renderer scripts, a two-model catalog) and the smoke asserts the output `booklet.html` exists and is non-empty with all three placeholders replaced, non-empty baked style/code blocks, the baked catalog matching the fixture, a rebuild over identical inputs reporting `changed:false`, and a missing renderer input rejecting with no output written. |
 | `tools/test_mefi_studio_launcher.py` | Mefi's Studio AI+ launcher contract: Electron entry `main.cjs` with pinned electron, windowed `love.exe` on `dev/dev_tool_love_project` with the optional game checkout (`GAME_ROOT`) as cwd, never `lovec.exe` for interactive launches, smoke only through `Run Dev Tool (LOVE2D).cmd --smoke`, taskkill cleanup, the `ELECTRON_RUN_AS_NODE` guard, the preload IPC surface (catalog, studio, speed probe, A-Eyes), the `capture` script, and the renderer staying node-free. When Electron is installed on a Windows runner it also boots the real hidden `--smoke` window and asserts the rendered card count. |
-| `tools/test_mefi_studio_eyes.py` | A-Eyes contracts: the OpenCode store is opened read-only, the main process registers the eyes IPC + 1.5 s activity poll, the preload exposes the bridge, the Club Blackout tokens and 3D task-tree rail exist, and a **fixture OpenCode database** is dumped through the real `scripts/eyes.mjs` to pin change math (edit diff `+2/-1`, write content `+3`, patch file sets, reads excluded from changes but present in activity), collision detection with owners and `HH:MMΓÇôHH:MM` overlap windows (shared-window prompts, gap-tolerated handoffs labelled edit spans; the explorer rows and detail tooltips show the same ranges), overlap-window validation in request inputs (overlapRangeOf: corrupt/NaN/inverted windows normalize to null, zero-length windows stay real), and boundary coverage (adjacent windows touching at one instant, a gap of exactly overlapMs inclusive vs one past it excluded, contained windows intersecting to the inner session's window, a three-session nested group whose common intersection is the innermost session's single instant, and zero-length single-instant pairs), inactive-owner handoff (confirm before further edits; ownership is not silently reassigned), `assistantFacts()` carrying owner/ownership/presence/handoff and uncommitted-only features vs HEAD (session-touched dirty/untracked files; deletes and untouched dirty files omitted), live `assistantFacts({ root: REPO_ROOT })`, the live store + executor reading that presence, the collisions IPC returning live file presence, the explorer collateral watch listing live solo editors (even with no briefing) plus per-file owners, duplicate-declaration merge-corruption requests, title-overlap adopt-don't-clobber advice, and briefing-to-fix-request conversion; the renderer poll pause ΓÇö boot.js's shared poll guard (every `pollStart` clears before it sets, so a hidden tab issues no fetch and hide/show toggles never stack intervals) with nav.js's badge poll registered through it, pinned in source and in the built `booklet.html`. Its fixture databases are built only by the shared `_fixture_db`/`_boundary_db` helpers inside per-run `tempfile.TemporaryDirectory()` dirs ΓÇö unique fixture naming, pinned by the contract itself (`test_fixture_databases_use_unique_per_run_temp_dirs`) so two sessions can run the suite concurrently without re-colliding, and the module pins its own unique basename against the unittest-discovery shadow that `npm run check:specs` guards repo-wide. Node-only half skips cleanly without Node. Re-verified 2026-09-20 (run_1789892663373_3, idle-session false alert fix): `python tools/test_mefi_studio_eyes.py` 18/18 OK, `node --test tests/eyes_missing_store.test.mjs` 2/2, `python tools/test_mefi_studio_assistant.py` 66/66, `npm run check` ok; `listSessions` now reports a session whose final part is a step-finish with reason "stop" as `finished` (fixture: ses_a stop ΓåÆ true, ses_b tool-calls ΓåÆ false), `assistantFacts` carries the flag, and the A-Eyes review prompt may not alert finished sessions as idle/stalled/unscoped ΓÇö the live session `ses_f426eaf6bffeD1yfipKpRBQjOL` (the "Idle session lacks recorded work" false alarm) reads back `finished: true`. |
-| `tools/test_mefi_studio_auditor.py` | The third agent's contract: runs the real local auditor (`scripts/auditor.mjs`) against the repo and fails on any error-level finding ΓÇö un-bundled renderer scripts, preload channels without main handlers, listened events nothing sends, renderer DOM lookups missing from the template, studio tests missing from TESTRUNS/`test_sets.json`, npm script targets that do not exist, and unparseable data files. Also pins the auditor/checkpoint IPC wiring, and the package.json `check` chain leading with the check-targets audit (`scripts/check-targets.mjs`, `npm run check:targets`): every referenced target exists on disk, node paths in other scripts are not stale, and every `scripts/*.mjs` + `renderer/*.js` source (plus the `main` entry) is covered by the chain ΓÇö the behavioral half is `tests/check_targets.test.mjs` (`node --test tests/` from the repository root, part of `npm test`). Both live-tree probes (the auditor run and the check-targets coverage walk) are guarded by the shared `tools/flake_capture.py` retry: the suite audits a tree that parallel agent runs edit concurrently, so a one-shot failure that clears on immediate re-run is recorded to `data/python-flake-capture.jsonl` (local only) and surfaced as a skip instead of failing the gate ΓÇö the capture that names which test flaked (the "203 tests, failures=1 then passed twice" occurrence); a failure that reproduces re-raises the original. No network, no key, no Electron. |
-| `tools/test_mefi_studio_analyzer.py` | Analyzer contracts: runs the real engine (`scripts/analyzer.mjs`) against a fixture work tree ΓÇö file analysis finds outline entries, TODO markers, and referenced paths that exist vs are missing, while idea verification reports related work with evidence hits for grounded ideas and `new`/0% for nonsense. Also pins the analyzer IPC/preload/overlay wiring. No network, no key. |
-| `tools/test_mefi_studio_idle.py` | Dream mode contracts: the five-minute quiet clock and input reset, the four Zen audio profiles with slow/quick tempo mapping, the task-vs-external split (edit/write/patch pulse the path, reads/searches vaporize as blue-white particles), per-path touch brightness that fades and brightens when multiple agents share a path, and the idle-only collision negative case (`test_collision_boost_only_marks_live_activity`): `checkCollisions` adopts only `entry.active === true` sessions ΓÇö never the legacy string shape ΓÇö for both collision groups and presence editors, so a settled idle-only group never enters the live set and the collision tint plus amber rim cannot fire on it; the `MefiTree.snapshot` API the view renders from, bundled `idle.js`, template HUD ids, and the Electron autoplay policy that lets bells play without a gesture. Verified 2026-09-19 (run_1789869685873_3): `python tools/test_mefi_studio_idle.py` 18/18 OK, `node --check renderer/idle.js` exit 0, booklet rebuild in sync (stable hash f98dd2322a01). |
-| `tools/test_mefi_studio_tasks.py` | Task/reference/ideas contracts: the real reference engine (`scripts/reference.mjs`) against fixture data ΓÇö code hits, matching node-tree sessions, chat idea scanning, PNG name matching, and web staying off unless asked; plus the tasks/ideas/prefs IPC + preload wiring and the tasks/ideas/overhead overlay templates with their toggles (web, node history, blur menu, auto reference). No network. |
-| `tools/test_mefi_studio_machine.py` | Machine coordination contracts: fixtures through the real `scripts/machine.mjs` ΓÇö live vs dead lease records (a dead exclusive lease must not block width, stale holders are reported not pruned), and process classification into healthy / hang (no CPU progress) / orphan (dead parent) / over-age, with only strays killable. Pins the resource-manager IPC + preload + explorer Machine panel, the briefing facts carrying lease/run state, and the gitignored generated status files. Both fixtures are built only inside per-run `tempfile.TemporaryDirectory()` dirs ΓÇö every `--classify-fixture`/`--leases-fixture` hand-off reads a path derived from that run's own temp dir, pinned by the suite itself (`test_fixtures_use_unique_per_run_temp_dirs`) so concurrent runs never share fixture paths. No PowerShell or LOVE is launched. Re-verified 2026-09-20 (run_1789899771330_12, lag-gating overlap fix committed): `node --test tests/machine_capacity.test.mjs` 16/16 (includes the zero-lag recovery-sample test ΓÇö a latched hold cites the pending responsive readings, never the healthy 0 ms sample), `python tools/test_mefi_studio_machine.py` 6/6 OK. The foreman-side counterpart `scripts/assistant.mjs` `createMachineLagGate` (two consecutive strictly-above samples hold, one spike is only a resample, any finite at-or-below reading resets the streak, non-finite readings are never evidence) and its `--lag-gate-fixture` CLI replay are pinned by `tests/assistant_lag_gate.test.mjs`; re-verified 2026-09-20 (run_1789902527718_37) 7/7. The live consumer is the foreman: `main.cjs` `spawnNextJob`'s `readCapacity` lazily creates one shared gate (`machineLagGate ??= assistant.createMachineLagGate({ threshold: 100 })`, mirroring the sampler's `lagBusyMs`), samples it after every fresh `measureWorkerLag` reading (a hidden window's null never advances the streak), forces `canStart:false` with a two-sample reason on hold while exposing the verdict as `lagGate` on the capacity object the briefing facts read, drops the gate when `applyModules` hot-swaps `scripts/assistant.mjs`, and leaves machine.mjs's latched hold in charge (host lag, single critical spikes, recovery hysteresis) ΓÇö pinned by `tests/foreman_lag_gate.test.mjs`; re-verified 2026-09-20 (run_1789904197969_2) 5/5, and 28/28 alongside `tests/assistant_lag_gate.test.mjs` + `tests/machine_capacity.test.mjs` with `npm run check` clean. Fixed 2026-09-20 (run_1789918519136_24, self-blocking start hold): the gate had counted cached replays of one `measureWorkerLag` probe (the 750 ms cache and in-flight joins hand the same reading to several admission reads), manufacturing "two samples in a row" from a single spike ΓÇö the reported "renderer lag 1000 ms" hold while both sessions ran. Each probe now carries an id on the sampler cache and is counted once (replays reuse the recorded verdict), and a live hold forces a fresh probe on every read so the hold rests on current evidence and lifts on the first responsive reading instead of coasting on cached lag; re-verified 2026-09-20 6/6 in `tests/foreman_lag_gate.test.mjs` (new probe-once/re-sample behavioral test), 103/103 across the executor/machine/lag suites, `npm run check` clean. |
+| `tools/test_mefi_studio_eyes.py` | A-Eyes contracts: the OpenCode store is opened read-only, the main process registers the eyes IPC + 1.5 s activity poll, the preload exposes the bridge, the Club Blackout tokens and 3D task-tree rail exist, and a **fixture OpenCode database** is dumped through the real `scripts/eyes.mjs` to pin change math (edit diff `+2/-1`, write content `+3`, patch file sets, reads excluded from changes but present in activity), collision detection with owners and `HH:MM–HH:MM` overlap windows (shared-window prompts, gap-tolerated handoffs labelled edit spans; the explorer rows and detail tooltips show the same ranges), overlap-window validation in request inputs (overlapRangeOf: corrupt/NaN/inverted windows normalize to null, zero-length windows stay real), and boundary coverage (adjacent windows touching at one instant, a gap of exactly overlapMs inclusive vs one past it excluded, contained windows intersecting to the inner session's window, a three-session nested group whose common intersection is the innermost session's single instant, and zero-length single-instant pairs), inactive-owner handoff (confirm before further edits; ownership is not silently reassigned), `assistantFacts()` carrying owner/ownership/presence/handoff and uncommitted-only features vs HEAD (session-touched dirty/untracked files; deletes and untouched dirty files omitted), live `assistantFacts({ root: REPO_ROOT })`, the live store + executor reading that presence, the collisions IPC returning live file presence, the explorer collateral watch listing live solo editors (even with no briefing) plus per-file owners, duplicate-declaration merge-corruption requests, title-overlap adopt-don't-clobber advice, and briefing-to-fix-request conversion; the renderer poll pause — boot.js's shared poll guard (every `pollStart` clears before it sets, so a hidden tab issues no fetch and hide/show toggles never stack intervals) with nav.js's badge poll registered through it, pinned in source and in the built `booklet.html`. Its fixture databases are built only by the shared `_fixture_db`/`_boundary_db` helpers inside per-run `tempfile.TemporaryDirectory()` dirs — unique fixture naming, pinned by the contract itself (`test_fixture_databases_use_unique_per_run_temp_dirs`) so two sessions can run the suite concurrently without re-colliding, and the module pins its own unique basename against the unittest-discovery shadow that `npm run check:specs` guards repo-wide. Node-only half skips cleanly without Node. Re-verified 2026-09-20 (run_1789892663373_3, idle-session false alert fix): `python tools/test_mefi_studio_eyes.py` 18/18 OK, `node --test tests/eyes_missing_store.test.mjs` 2/2, `python tools/test_mefi_studio_assistant.py` 66/66, `npm run check` ok; `listSessions` now reports a session whose final part is a step-finish with reason "stop" as `finished` (fixture: ses_a stop → true, ses_b tool-calls → false), `assistantFacts` carries the flag, and the A-Eyes review prompt may not alert finished sessions as idle/stalled/unscoped — the live session `ses_f426eaf6bffeD1yfipKpRBQjOL` (the "Idle session lacks recorded work" false alarm) reads back `finished: true`. |
+| `tools/test_mefi_studio_auditor.py` | The third agent's contract: runs the real local auditor (`scripts/auditor.mjs`) against the repo and fails on any error-level finding — un-bundled renderer scripts, preload channels without main handlers, listened events nothing sends, renderer DOM lookups missing from the template, studio tests missing from TESTRUNS/`test_sets.json`, npm script targets that do not exist, and unparseable data files. Also pins the auditor/checkpoint IPC wiring, and the package.json `check` chain leading with the check-targets audit (`scripts/check-targets.mjs`, `npm run check:targets`): every referenced target exists on disk, node paths in other scripts are not stale, and every `scripts/*.mjs` + `renderer/*.js` source (plus the `main` entry) is covered by the chain — the behavioral half is `tests/check_targets.test.mjs` (`node --test tests/` from the repository root, part of `npm test`). Both live-tree probes (the auditor run and the check-targets coverage walk) are guarded by the shared `tools/flake_capture.py` retry: the suite audits a tree that parallel agent runs edit concurrently, so a one-shot failure that clears on immediate re-run is recorded to `data/python-flake-capture.jsonl` (local only) and surfaced as a skip instead of failing the gate — the capture that names which test flaked (the "203 tests, failures=1 then passed twice" occurrence); a failure that reproduces re-raises the original. No network, no key, no Electron. |
+| `tools/test_mefi_studio_analyzer.py` | Analyzer contracts: runs the real engine (`scripts/analyzer.mjs`) against a fixture work tree — file analysis finds outline entries, TODO markers, and referenced paths that exist vs are missing, while idea verification reports related work with evidence hits for grounded ideas and `new`/0% for nonsense. Also pins the analyzer IPC/preload/overlay wiring. No network, no key. |
+| `tools/test_mefi_studio_idle.py` | Dream mode contracts: the five-minute quiet clock and input reset, the four Zen audio profiles with slow/quick tempo mapping, the task-vs-external split (edit/write/patch pulse the path, reads/searches vaporize as blue-white particles), per-path touch brightness that fades and brightens when multiple agents share a path, and the idle-only collision negative case (`test_collision_boost_only_marks_live_activity`): `checkCollisions` adopts only `entry.active === true` sessions — never the legacy string shape — for both collision groups and presence editors, so a settled idle-only group never enters the live set and the collision tint plus amber rim cannot fire on it; the `MefiTree.snapshot` API the view renders from, bundled `idle.js`, template HUD ids, and the Electron autoplay policy that lets bells play without a gesture. Verified 2026-09-19 (run_1789869685873_3): `python tools/test_mefi_studio_idle.py` 18/18 OK, `node --check renderer/idle.js` exit 0, booklet rebuild in sync (stable hash f98dd2322a01). |
+| `tools/test_mefi_studio_tasks.py` | Task/reference/ideas contracts: the real reference engine (`scripts/reference.mjs`) against fixture data — code hits, matching node-tree sessions, chat idea scanning, PNG name matching, and web staying off unless asked; plus the tasks/ideas/prefs IPC + preload wiring and the tasks/ideas/overhead overlay templates with their toggles (web, node history, blur menu, auto reference). No network. |
+| `tools/test_mefi_studio_machine.py` | Machine coordination contracts: fixtures through the real `scripts/machine.mjs` — live vs dead lease records (a dead exclusive lease must not block width, stale holders are reported not pruned), and process classification into healthy / hang (no CPU progress) / orphan (dead parent) / over-age, with only strays killable. Pins the resource-manager IPC + preload + explorer Machine panel, the briefing facts carrying lease/run state, and the gitignored generated status files. Both fixtures are built only inside per-run `tempfile.TemporaryDirectory()` dirs — every `--classify-fixture`/`--leases-fixture` hand-off reads a path derived from that run's own temp dir, pinned by the suite itself (`test_fixtures_use_unique_per_run_temp_dirs`) so concurrent runs never share fixture paths. No PowerShell or LOVE is launched. Re-verified 2026-09-20 (run_1789899771330_12, lag-gating overlap fix committed): `node --test tests/machine_capacity.test.mjs` 16/16 (includes the zero-lag recovery-sample test — a latched hold cites the pending responsive readings, never the healthy 0 ms sample), `python tools/test_mefi_studio_machine.py` 6/6 OK. The foreman-side counterpart `scripts/assistant.mjs` `createMachineLagGate` (two consecutive strictly-above samples hold, one spike is only a resample, any finite at-or-below reading resets the streak, non-finite readings are never evidence) and its `--lag-gate-fixture` CLI replay are pinned by `tests/assistant_lag_gate.test.mjs`; re-verified 2026-09-20 (run_1789902527718_37) 7/7. The live consumer is the foreman: `main.cjs` `spawnNextJob`'s `readCapacity` lazily creates one shared gate (`machineLagGate ??= assistant.createMachineLagGate({ threshold: 100 })`, mirroring the sampler's `lagBusyMs`), samples it after every fresh `measureWorkerLag` reading (a hidden window's null never advances the streak), forces `canStart:false` with a two-sample reason on hold while exposing the verdict as `lagGate` on the capacity object the briefing facts read, drops the gate when `applyModules` hot-swaps `scripts/assistant.mjs`, and leaves machine.mjs's latched hold in charge (host lag, single critical spikes, recovery hysteresis) — pinned by `tests/foreman_lag_gate.test.mjs`; re-verified 2026-09-20 (run_1789904197969_2) 5/5, and 28/28 alongside `tests/assistant_lag_gate.test.mjs` + `tests/machine_capacity.test.mjs` with `npm run check` clean. Fixed 2026-09-20 (run_1789918519136_24, self-blocking start hold): the gate had counted cached replays of one `measureWorkerLag` probe (the 750 ms cache and in-flight joins hand the same reading to several admission reads), manufacturing "two samples in a row" from a single spike — the reported "renderer lag 1000 ms" hold while both sessions ran. Each probe now carries an id on the sampler cache and is counted once (replays reuse the recorded verdict), and a live hold forces a fresh probe on every read so the hold rests on current evidence and lifts on the first responsive reading instead of coasting on cached lag; re-verified 2026-09-20 6/6 in `tests/foreman_lag_gate.test.mjs` (new probe-once/re-sample behavioral test), 103/103 across the executor/machine/lag suites, `npm run check` clean. |
 | `tools/test_mefi_studio_fixture_paths.py` | Generalized unique-fixture contract sweeping every sibling `tools/test_mefi_studio_*.py` suite so no contract can regress to shared fixture paths (the recurrence behind the A-Eyes eyes-test collisions and the flaky machine lease fixture): no suite writes a fixture into the repository tree (no repo-anchored `write_*` target, no repo-anchored `.db` path) or the shared `tools/logs` evidence tree, every `tempfile.TemporaryDirectory(` usage is a context-managed per-run block, and no suite shares a discovery basename with a sibling (the unittest-shadow rule `npm run check:specs` guards repo-wide). Generalizes the per-suite pins in `test_mefi_studio_eyes.py` (`test_fixture_databases_use_unique_per_run_temp_dirs`) and `test_mefi_studio_machine.py` (`test_fixtures_use_unique_per_run_temp_dirs`). Pure source scan: no network, no Node. |
-| `tools/test_mefi_studio_updater.py` | Live-update contracts: fixture trees through the real `scripts/updater.mjs` ΓÇö the reload/restart/ignore classify table (renderer scripts and styles reload, `main.cjs`/`preload.cjs`/`package.json`/`scripts/**`/`assets/**` restart, generated `booklet.html`, `data/`, `dist/`, dotfiles and editor temp files ignored, restart winning over reload), content-hashed snapshot + diff against a cheap stat poll, payload sync that creates and deletes but never touches the payload's live `data/` ΓÇö and that reports one unreplaceable destination instead of aborting the rest, leaves no `.sync-tmp` behind and holds the update rather than reloading or relaunching into a half-written payload, retrying the whole held set once the lock clears ΓÇö syntax validation that holds a broken file instead of relaunching into a crash, reading `renderer/*.js` with the booklet's classic-script goal (a top-level `await`/`import`/`export` is held) while `main.cjs` and `scripts/**.mjs` keep `node --check`, the quiet-period debounce restarting on every notify so a write burst longer than the quiet period is still one action, and `maxWaitMs` forcing a pass through an endless burst, the idle safety-net poll pausing while the window is hidden (the host's `hidden` probe) and backing off on unchanged reads toward `POLL_MAX_MS` (`POLL_INTERVAL_MS`/`POLL_BACKOFF_FACTOR` exported, snapped back by any watcher hint or change, so a change made while hidden still applies on the first visible walk and no surface goes stale; `renderer/overhead.js`'s sheet poll carries the same pause/backoff, its `window.MefiOverhead` export pinned only to the `open`/`close` consumer surface (not a verbatim member list) in source and in the built `booklet.html`), manual apply while auto-restart is off (including an apply that lands mid-run, which is queued and still applied), the three-restarts-in-60-seconds loop guard checked before the build so a held restart never leaves the payload ahead of the process, and the packaged Electron-runtime guard. Also builds the booklet into a temp root through the exported `build({ root })` without touching the committed one, and pins the wiring: `update:status`/`update:set`/`update:apply` IPC, the preload names, the template's update ids, the SMOKE/CAPTURE/CLI skip, and the `--updated` relaunch; and runs `main.cjs`'s own `applyRestart` and `update:apply` handler against the engine, so a manual "Restart now" stays out of the restart-loop history (three presses do not hold the next real update), an apply queued behind a run in flight never relaunches the app, and neither does a deferred or held apply. The sleep-timing probes on the real engine ΓÇö the debounce burst test and the idle-poll pause/backoff test ΓÇö plus the build-test's live `data/models.json` comparison read are guarded by the shared `tools/flake_capture.py` retry: a machine loaded by parallel agent runs can transiently overrun the quiet period, and the live catalog read belongs to the same flake family as the catalog suite's `setUpClass` loads, so a one-shot failure that clears on immediate re-run is recorded to `data/python-flake-capture.jsonl` (local only) and surfaced as a skip instead of failing the gate; a failure that reproduces re-raises the original. No Electron, no network; the Node half skips cleanly without Node. |
+| `tools/test_mefi_studio_updater.py` | Live-update contracts: fixture trees through the real `scripts/updater.mjs` — the reload/restart/ignore classify table (renderer scripts and styles reload, `main.cjs`/`preload.cjs`/`package.json`/`scripts/**`/`assets/**` restart, generated `booklet.html`, `data/`, `dist/`, dotfiles and editor temp files ignored, restart winning over reload), content-hashed snapshot + diff against a cheap stat poll, payload sync that creates and deletes but never touches the payload's live `data/` — and that reports one unreplaceable destination instead of aborting the rest, leaves no `.sync-tmp` behind and holds the update rather than reloading or relaunching into a half-written payload, retrying the whole held set once the lock clears — syntax validation that holds a broken file instead of relaunching into a crash, reading `renderer/*.js` with the booklet's classic-script goal (a top-level `await`/`import`/`export` is held) while `main.cjs` and `scripts/**.mjs` keep `node --check`, the quiet-period debounce restarting on every notify so a write burst longer than the quiet period is still one action, and `maxWaitMs` forcing a pass through an endless burst, the idle safety-net poll pausing while the window is hidden (the host's `hidden` probe) and backing off on unchanged reads toward `POLL_MAX_MS` (`POLL_INTERVAL_MS`/`POLL_BACKOFF_FACTOR` exported, snapped back by any watcher hint or change, so a change made while hidden still applies on the first visible walk and no surface goes stale; `renderer/overhead.js`'s sheet poll carries the same pause/backoff, its `window.MefiOverhead` export pinned only to the `open`/`close` consumer surface (not a verbatim member list) in source and in the built `booklet.html`), manual apply while auto-restart is off (including an apply that lands mid-run, which is queued and still applied), the three-restarts-in-60-seconds loop guard checked before the build so a held restart never leaves the payload ahead of the process, and the packaged Electron-runtime guard. Also builds the booklet into a temp root through the exported `build({ root })` without touching the committed one, and pins the wiring: `update:status`/`update:set`/`update:apply` IPC, the preload names, the template's update ids, the SMOKE/CAPTURE/CLI skip, and the `--updated` relaunch; and runs `main.cjs`'s own `applyRestart` and `update:apply` handler against the engine, so a manual "Restart now" stays out of the restart-loop history (three presses do not hold the next real update), an apply queued behind a run in flight never relaunches the app, and neither does a deferred or held apply. The sleep-timing probes on the real engine — the debounce burst test and the idle-poll pause/backoff test — plus the build-test's live `data/models.json` comparison read are guarded by the shared `tools/flake_capture.py` retry: a machine loaded by parallel agent runs can transiently overrun the quiet period, and the live catalog read belongs to the same flake family as the catalog suite's `setUpClass` loads, so a one-shot failure that clears on immediate re-run is recorded to `data/python-flake-capture.jsonl` (local only) and surfaced as a skip instead of failing the gate; a failure that reproduces re-raises the original. No Electron, no network; the Node half skips cleanly without Node. |
 | `tests/release_updater.test.mjs` | GitHub release-update contracts through the real `scripts/release-updater.mjs`: semver parsing and precedence (`v` prefix, prerelease ordering), release normalization choosing the platform zip plus its `.sha256` sibling and API digest, the `releases/latest` check (newer/equal/older, private-repo 404 token hint, 401/403 refusal, missing zip asset, malformed tag, offline) with a fake fetch recording URL and Authorization, streaming download to disk with sha256 and progress, checksum parsing, the dependency-free streaming zip writer + central-directory extractor round-tripping nested/unicode/payload entries, zip-slip refusal on a crafted archive, staging that finds the portable root and rejects a non-portable archive, and the PowerShell apply helper (`Wait-Process` on the host pid, robocopy with the `resources/app/data` exclusion, `--released <version>` relaunch, cleanup, apostrophe escaping). Pins the wiring: `main.cjs`'s watcher reads the module's 20-minute `CHECK_INTERVAL_MS`, exposes `release:status/check/apply`, resolves a saved/`gh` token and announces `--released`; preload, the template and `nav.js` carry the button. |
-| `tools/test_mefi_studio_routing.py` | Provider routing and coding-CLI contracts for Mefi's Studio AI+: the z.ai key lives in its own `zaiApiKeyEncrypted` field (headless `MEFI_STUDIO_ZAI_KEY` + `--set-zai-key` included), only a saved/encrypted status crosses `settings:get-key` IPC ΓÇö never the raw key, which is also never interpolated into logs or prompts; the assistant router walks the owner's ordered auto provider list (`aiAutoProviders`; default z.ai > OpenCode, first usable wins, `aiAutoFallback` ΓÇö formerly `aiFallbackOpenCode` ΓÇö walking the HTTP entries on failure), explicit `zai` errors rather than silently billing OpenCode, explicit `opencode` never touches the z.ai key; glm-5.3-flash is the routine route and glm-5.3 the heavy one (improve/overseer passes) with its own `thinking.type`/`reasoning_effort` shape; autopilot `opencode run` jobs ride the Studio-managed `mefi-zai` provider via `OPENCODE_CONFIG_CONTENT` + `MEFI_ZAI_API_KEY` process env (key never written to OpenCode's auth store); the CLI panel detects `opencode`/`codex`/`claude` via `where.exe`, launches them detached, and the z.ai link probe runs `opencode models mefi-zai` under the injected env; the speed probe splits glm-* models onto `ZAI_API_KEY` + the coding-plan endpoint and keeps the `x-opencode-session` header off z.ai. Claude Code rides its own subscription login through headless `claude -p` (prompt on stdin, `--tools=` for replies, `--dangerously-skip-permissions` for builders, no Anthropic API key), LM Studio answers keyless from its loopback server with endpoint normalization and a `/v1/models` fallback, and the custom route pairs any OpenAI-compatible URL with its own encrypted `customApiKeyEncrypted` field (`--set-custom-key` / `MEFI_STUDIO_CUSTOM_KEY`). When `node` and `opencode` are on PATH a live half runs the real `zaiProviderConfig()` through `opencode models mefi-zai --pure`; that half skips cleanly without them. No paid API call is ever made. |
+| `tools/test_mefi_studio_routing.py` | Provider routing and coding-CLI contracts for Mefi's Studio AI+: the z.ai key lives in its own `zaiApiKeyEncrypted` field (headless `MEFI_STUDIO_ZAI_KEY` + `--set-zai-key` included), only a saved/encrypted status crosses `settings:get-key` IPC — never the raw key, which is also never interpolated into logs or prompts; the assistant router walks the owner's ordered auto provider list (`aiAutoProviders`; default z.ai > OpenCode, first usable wins, `aiAutoFallback` — formerly `aiFallbackOpenCode` — walking the HTTP entries on failure), explicit `zai` errors rather than silently billing OpenCode, explicit `opencode` never touches the z.ai key; glm-5.3-flash is the routine route and glm-5.3 the heavy one (improve/overseer passes) with its own `thinking.type`/`reasoning_effort` shape; autopilot `opencode run` jobs ride the Studio-managed `mefi-zai` provider via `OPENCODE_CONFIG_CONTENT` + `MEFI_ZAI_API_KEY` process env (key never written to OpenCode's auth store); the CLI panel detects `opencode`/`codex`/`claude` via `where.exe`, launches them detached, and the z.ai link probe runs `opencode models mefi-zai` under the injected env; the speed probe splits glm-* models onto `ZAI_API_KEY` + the coding-plan endpoint and keeps the `x-opencode-session` header off z.ai. Claude Code rides its own subscription login through headless `claude -p` (prompt on stdin, `--tools=` for replies, `--dangerously-skip-permissions` for builders, no Anthropic API key), LM Studio answers keyless from its loopback server with endpoint normalization and a `/v1/models` fallback, and the custom route pairs any OpenAI-compatible URL with its own encrypted `customApiKeyEncrypted` field (`--set-custom-key` / `MEFI_STUDIO_CUSTOM_KEY`). When `node` and `opencode` are on PATH a live half runs the real `zaiProviderConfig()` through `opencode models mefi-zai --pure`; that half skips cleanly without them. No paid API call is ever made. |
 | `tools/test_mefi_studio_tree_keyboard.py` | Tree-rail keyboard + ARIA contracts for Mefi's Studio AI+ (`renderer/tree3d.js`): the template ships `#tree-canvas` as a labelled, focusable `role="tree"` container and `init()` re-asserts that over one hidden `role="treeitem"` proxy it owns via `aria-owns`; `onCanvasKeyDown` keeps the ArrowUp/Down/Left/Right sibling walk (Home/End to the ends, Escape dropping the focus, every branch preventDefault'd), Enter/Space activate through the same `activateNode` path the click handler uses (selection rides `mefi:tree-select`), and `setKbdFocus` keeps the roving `aria-activedescendant` on `tree-kbd-item` with the focused node's label and `aria-selected` state, cleared on blur and Escape, with `buildGraph` re-pointing the focus after a rebuild. Removing any binding fails the file. The behavioral half is `tests/tree3d_keyboard.test.mjs` (`node --test tests/tree3d_keyboard.test.mjs` from the repository root): tree3d.js runs against a minimal DOM stub, synthetic ArrowDown/ArrowUp/Enter/Space/Home/Escape events drive the rail, and the test asserts the selection moves between two sessions and toggles off, the proxy announces each node's label with `aria-selected` in step, and the activedescendant follows the focus and clears. Re-verified 2026-09-19 in run_1789852550913_2: the behavioral half passes solo, passes in one shared process with the palette suite (`--test-isolation=none`, the `?keyboard-test` import keeps tree3d.js out of the shared module cache), and passes four times concurrently as separate processes; `tests/spec_collisions.test.mjs` is 4/4 and `npm run check:specs` reports 82 specs with unique basenames and no orphans. |
-| `tools/test_mefi_studio_palette.py` | Command palette contracts for Mefi's Studio AI+ (`renderer/palette.js`): the window keydown handler keeps its Escape branch (preventDefault then `close()`, the guarded close that also restores opener focus), and the roving `aria-activedescendant` stays bound to the `#palette-input` element itself ΓÇö set to the active option id in `setActiveOption`, cleared when the result list empties and again in `close()`, on an input the template ships with `id="palette-input"` and the `combobox` role. The highlight chain is pinned end to end: `render()` writes the `palette-option-N` ids, `aria-selected` and the `.active` class from `state.index` and refreshes `setActiveOption()` on both the empty and populated paths, `setActiveOption` reads the `li.active` row, and the shared ArrowUp/ArrowDown branch preventDefaults, wraps `state.index` around both ends of the filtered list (Down past the last row lands on the first, Up from the first lands on the last, within the 40 rows shown, and an empty list is a no-op) and re-renders in that order. Escape's restore is pinned too: `open()` captures the opener before claiming the layer, `close()` releases the nav layer before `restoreOpener()`, and the restore refocuses only a connected, unhidden, non-body opener once, dropping it afterwards. The pointer path stays focus-free: option rows never take a tabindex and the hover/click handlers never call `.focus()`, while the CSS gives the input and the option rows an outline only under `:focus-visible` (plain `:focus` suppresses the shared input ring instead), pinned in `styles.css` and the built `booklet.html`. Removing any binding fails the file. The behavioral half is `tests/palette_keyboard.test.mjs` (`node --test tests/palette_keyboard.test.mjs` from the repository root): palette.js runs against a minimal DOM stub, synthetic window keydown events drive the list over three destinations, and the test asserts ArrowDown wraps last-to-first and ArrowUp wraps first-to-last with `aria-activedescendant` following, Escape closes and hands focus back to the opener element, and reopening from a second opener then running Enter executes the active destination and restores that opener too. Re-verified 2026-09-19 in run_1789852777607_4: the behavioral half passes solo, passes in one shared process with the tree3d keyboard suite (`--test-isolation=none`, the `?keyboard-test` import keeps palette.js out of the shared module cache), and passes four times concurrently as separate processes. Re-verified 2026-09-19 in run_1789853206630_8 with a strengthened suite: a `type()` helper fires the input listeners for real so the wrap span is exercised against filtered sets too (a one-row `task` query wraps onto itself and a two-row `bo` query wraps ArrowUp first-to-last and back), each followed by an Escape that still restores the opener. Re-verified 2026-09-19 in run_1789854441344_3: the behavioral half passes solo and in one shared process with the tree3d keyboard suite (--test-isolation=none), and the contract half tools/test_mefi_studio_palette.py is 8/8 OK. Re-verified 2026-09-19 in run_1789867745068_11: 5/5 solo, with the filtered-session Escape now asserted preventDefault'd and aria-expanded=false alongside the opener restore. |
-| `tools/test_mefi_studio_assistant.py` | Always-on assistant contracts: fixtures through the real `scripts/assistant.mjs` ΓÇö tree organisation into active / working / stale / folded with a capped display order and hidden folded todos, housekeeping (done tasks archived after 24 h with a log line, ideas and completion history retained, resolved audit and collision requests and 3-day-old auto requests cleared, exact duplicates deduped, manual requests never touched, checkpoints of vanished sessions dropped and lists capped at 50, `changed:false` on a second pass), intent routing for a dozen phrasings (punctuation and casing ignored, a leading imperative verb becomes a request), grounded local replies (counts from the fixture, "put on the task board as the next piece of work" for requests, help listing the commands, unreadable facts named instead of invented), the 5/10/20/40/60-minute AI backoff table and `normalizeState` on garbage, and the agent pool: the ordered role roster with cadences, `dueRoles` (cadence elapsed, queued/running never re-enqueued, the briefer gated on proactive + key + backoff), `applyAgentEvent` roster transitions with accurate `pool.running/queued` counts and the combined action text, running rows reset to idle on load, `parallel`/`aiParallel` prefs clamped, and "N agents working" on the tree summary; and the work journal: `pendingWork` on the raw saved state (in-flight jobs, unanswered messages, interrupted roles, closed-for time), `applyWork` add/update/remove with the cap of 40, the `resumeSummary` boot line, the `resume-work` intent and the status reply listing what is being worked on. Also pins the wiring: `assistant:state/message/control/prefs` IPC and the preload names, `startAssistant` scheduled from `app.whenReady` with a `setTimeout` chain (no `setInterval`), `powerSaveBlocker`, the gitignored `data/eyes-assistant.json`, the Explorer composer/thread/activity ids and the Command view pill, tree3d and idle.js handling the `assistant` and `folded` node kinds, the `M` key in the help rows, and the README's "Always-on assistant" section. Node focus: `state.focus` normalization, the `focused on ΓÇª` tree sublabel, replies naming the focused node when nothing else matches, `assistant:focus` IPC + `assistantFocus` preload, `assistantFocusSubject` grounding the responder's hop and claiming a focused session on the queued request, and the rail/Command click ΓåÆ `focusAssistant` wiring with the ring, pulse and card row. The overseer ΓÇö the R&D layer above the assistant ΓÇö is pinned too: `state.overseer` playbook normalisation on garbage, `overseerDigest` telemetry (error roles, unanswered replies, stale journal jobs, AI health), the deterministic `overseerReview` (a finding that repeats becomes a lesson, `overseerMerge` dedupes lessons by text and rolls the score history), `overseerTune` clamped to the safe pref bands, the stale-session rescue plan (`staleRescues`: oldest first, capped per pass, deduped against the inbox/history/board on the title key, horizon from the policy; the digest carries the tree's stale count and oldest quiet time and the review files a stale-sessions finding), the repair-pass wiring that files the rescues as `overseer` requests and hands the staliest session to the assistant's focus, the `overseer` intent + reply, `ASSISTANT_OVERSEER_SYSTEM` / `assistantOverseerJob` / `assistant:control overseer` wiring, the Oversee buttons, and the satellite drawn above the assistant node. Node folders ΓÇö every session/todo/task node acting as a folder for its own context ΓÇö are pinned too: `state.nodeFolders` normalisation on junk, `applyNodeContext` append/dedupe/cap (8 entries, junk ignored), `nodeFolderLines` formatting, `clearNodeFolder`, the keeper's tidy cleaning finished nodes' folders (task gone or archived/done past the tidy clock, session gone and quiet past the checkpoint horizon, entries older than 7 days pruned, `foldersCleaned` counted in the housekeeping text), the facts carrying the focused node's folder and replies quoting it (`Folder: ΓÇª`), and the wiring: the executor's run verdicts / reference gathers / chat replies / owner notes landing on folders (`assistant:node-context` IPC + `assistantNodeContext` preload), and the Command card's *Context folder* section (`appendNodeFolder`). Also covered by the behavioral board-invariant suite `tests/board.test.mjs` (`node --test tests/` from the repository root, or `npm test` there): fixtures through the pure module pin the idea-scan delta race (a stale snapshot cannot revert promotion), same-theme plan merges (membership unioned, prompt rebuilt, every idea rewired to the survivor), optional explicitly configured plan expiration relinking ideas without discarding old obligations, dangling-link repair, file-scoped Fix families, claim-sparing duplicate collapse, the `ownershipFence` settlement rule, and the housekeeping sweep (stuck claims requeue, chat requests never age out, claimed copies win title collapse), plus the AI review's task groups folding near-duplicate open tasks into plans (obligations carried in the prompt, ideas relinked, claimed members and unknown titles spared, taken themes never re-minted, capped membership, grouped plans retained by default like idea plans).  The board's SQLite store (`scripts/eyes.mjs` `enableBoardStore`/`boardMutate`) has its own behavioral suite in `tests/board_store.test.mjs`: round-trip fidelity of arbitrary row fields, ordering preservation, first-run migration from the JSON views with DB-wins afterwards, in-place mutation persisting through `boardMutate`, no-op passes writing nothing, throwing mutators rolling the whole `BEGIN IMMEDIATE` transaction back, view files refreshing on commit, the cross-process claim race (N `tests/fixtures/claim_worker.mjs` racers, one winner), and the concurrent executor smoke (`tests/fixtures/executor_slot.mjs`): more parallel-executor slots than open tasks drain the board with no double claims, every settled card in `awaiting_verification` behind the ownership fence, and a `{pid, at}` collision lease naming the claiming slot. No network, no key, no Electron; the Node half skips cleanly without Node. The Policy Lab suites (`tests/policy*.test.mjs`, same `node --test tests/` invocation / `npm test`) pin the lab's contracts: the baseline policy port matching `compareWork`'s frozen ordering (worth bands, oldest inside a band, pins by recency, the age-direction trap), bounded allowlisted config validation with content-hashed identities, operator controls a policy cannot move (pause ΓçÆ empty batch, locked pins always first, concurrency clamped to the offered maximum, repeated observations cannot inflate obligations), receipt trust labels (runner-observed edits are the only positive learning label; worker-named checks stay `self-reported`; partial/failed/missing evidence never positive; prompts hashed not stored; unknown cost stays null), append-only event/receipt stores with torn-tail tolerance and refused invalid events, episode trees with retry/handoff/paraphrase lineage and descendant cost rollup, whole-root-intent chronological splits that refuse a straddling duplicate, read-only prompt-free dataset export, masked replay (no outcome keys in observations, off-frontier picks flagged, UNSUPPORTED selections gain nothing and cost nothing, represented costs charged on reveal, budget-truncation reports itself censored, stopping a branch preserves outstanding obligations, two policies cannot mutate the dataset, the baseline follows the recorded picks), invariant gates hard-rejecting lock-ignoring / concurrency-bursting / obligation-losing candidates, the incumbent always present in the comparison with verified work untradeable for cost, honest empty-store reporting with no claims, byte-reproducible report artifacts, consented atomic crash-safe promotion (a crash leaves exactly one active version) with rollback changing future dispatch only, and source pins that main.cjs keeps the recorder observation-only (records are never awaited, failures swallowed, smoke/capture/CLI stay silent, receipts appended outside the housekeeping transaction, live activation disabled with dispatch frozen on the baseline). The Jev intake-classifier suites (`tests/jev.test.mjs`, same invocation) pin the decision client and builders: gateway config defaults and clamps, key resolution (env wins, then the DPAPI-encrypted `gatewayApiKeyEncrypted`; never logged, never in a tracked file), the evaluation wire (`/v4/ai/evaluation-model` with the gateway protocol/spec headers, the model id riding `ai-model-id`, id-keyed questions with choice criteria maps, `noul`ΓåÆboolean mapping, state clipping, score-unmapped errors), strict question-spec and answer validation (out-of-option choices, unknown question ids, wrong answer shapes, missing answers and prose-without-JSON are errors, never guesses), classify() against a stub fetch (validated answers plus chargeable `modelCalls`/token usage, transport/HTTP/unusable-reply failures, timeout abort), `listModels`, self-contained question prompts that name both compared sides, deterministic retrieval that refuses near-zero-overlap comparisons (`retrieveCandidate`), conservative interpretation (only exact `same_obligation` attaches evidence without merging records; `adds_scope` proposes a linked follow-up; uncertainty holds for review; a claimed resolution routes to verification and is never itself evidence), `jev-proposal` experience events that validate and stay invisible to episode construction, the shadow-intake wiring pins (hooked fire-and-forget after the admission mutation, never awaited; `settings.jevShadow === false` kill switch; smoke/capture/CLI silence; two-minute interval, three-proposal cap, one-hour backoff after two failures; retrieval before the single batched call; every call charged as `jev-shadow-intake` in the improvement-budget ledger), the keystore-contract source pins, and a live half that runs only with `MEFI_JEV_LIVE_TEST=1` and `AI_GATEWAY_API_KEY` exported, and skips cleanly otherwise. |
-| `tools/test_mefi_studio_normalized_path_lock.py` | Executor lock contracts for Mefi's Studio AI+ (`scripts/assistant.mjs` via a Node stdin driver, plus static pins): the spawn-loop file lock normalizes before comparing ΓÇö `filesOverlap`/`sameFile` collapse forward/backward separators, drop trailing separators, fold case, match an absolute path against its repo-relative tail and a bare basename against the same basename under any folder ΓÇö so two spellings of one file (the A-Eyes `test_mefi_studio_eyes.py` collision) are one claim; `claimWork` defers the second pick with reason `claimed` and advice naming the held file, a finished job releases its claim, an unrelated file proceeds, no lease file is ever written (that hung dispatch on OneDrive), the collision theme keys share the normalizer (`sameFileLabel`), and `main.cjs` consults `claimWork` before dispatch. Node half skips cleanly without Node. |
-| `tools/test_mefi_studio_claim_registry.py` | npm-test discovery shim: re-exports the claim-registry contracts from `tools/test_claim_registry.py` (the A-Eyes overseer directive names that file) so the dev set runs them. That file races `./tools/x.py` against its absolute form through the real `scripts/assistant.mjs` write-lock registry ΓÇö `writeClaimKey` resolves relative paths against the module root and folds separators and case into one key, two racing sessions on one path yield exactly one `refuse` with reason `claimed`, `claimWork` defers dispatch while the claim lives, `releaseWrite` frees the path only for the owner, and the refused session may then take it; static pins cover the `writeClaims` map, the registry API, the `claimWork` consultation, and `main.cjs`'s `claimWrite`/`releaseWrite` wiring. Node half skips cleanly without Node. Standalone: `python -m unittest discover -s tools -p "test_claim_registry.py"`, `python -m unittest tools.test_mefi_studio_claim_registry` (the shim falls back to a package-relative import), or run the Node driver directly. |
+| `tools/test_mefi_studio_palette.py` | Command palette contracts for Mefi's Studio AI+ (`renderer/palette.js`): the window keydown handler keeps its Escape branch (preventDefault then `close()`, the guarded close that also restores opener focus), and the roving `aria-activedescendant` stays bound to the `#palette-input` element itself — set to the active option id in `setActiveOption`, cleared when the result list empties and again in `close()`, on an input the template ships with `id="palette-input"` and the `combobox` role. The highlight chain is pinned end to end: `render()` writes the `palette-option-N` ids, `aria-selected` and the `.active` class from `state.index` and refreshes `setActiveOption()` on both the empty and populated paths, `setActiveOption` reads the `li.active` row, and the shared ArrowUp/ArrowDown branch preventDefaults, wraps `state.index` around both ends of the filtered list (Down past the last row lands on the first, Up from the first lands on the last, within the 40 rows shown, and an empty list is a no-op) and re-renders in that order. Escape's restore is pinned too: `open()` captures the opener before claiming the layer, `close()` releases the nav layer before `restoreOpener()`, and the restore refocuses only a connected, unhidden, non-body opener once, dropping it afterwards. The pointer path stays focus-free: option rows never take a tabindex and the hover/click handlers never call `.focus()`, while the CSS gives the input and the option rows an outline only under `:focus-visible` (plain `:focus` suppresses the shared input ring instead), pinned in `styles.css` and the built `booklet.html`. Removing any binding fails the file. The behavioral half is `tests/palette_keyboard.test.mjs` (`node --test tests/palette_keyboard.test.mjs` from the repository root): palette.js runs against a minimal DOM stub, synthetic window keydown events drive the list over three destinations, and the test asserts ArrowDown wraps last-to-first and ArrowUp wraps first-to-last with `aria-activedescendant` following, Escape closes and hands focus back to the opener element, and reopening from a second opener then running Enter executes the active destination and restores that opener too. Re-verified 2026-09-19 in run_1789852777607_4: the behavioral half passes solo, passes in one shared process with the tree3d keyboard suite (`--test-isolation=none`, the `?keyboard-test` import keeps palette.js out of the shared module cache), and passes four times concurrently as separate processes. Re-verified 2026-09-19 in run_1789853206630_8 with a strengthened suite: a `type()` helper fires the input listeners for real so the wrap span is exercised against filtered sets too (a one-row `task` query wraps onto itself and a two-row `bo` query wraps ArrowUp first-to-last and back), each followed by an Escape that still restores the opener. Re-verified 2026-09-19 in run_1789854441344_3: the behavioral half passes solo and in one shared process with the tree3d keyboard suite (--test-isolation=none), and the contract half tools/test_mefi_studio_palette.py is 8/8 OK. Re-verified 2026-09-19 in run_1789867745068_11: 5/5 solo, with the filtered-session Escape now asserted preventDefault'd and aria-expanded=false alongside the opener restore. |
+| `tools/test_mefi_studio_assistant.py` | Always-on assistant contracts: fixtures through the real `scripts/assistant.mjs` — tree organisation into active / working / stale / folded with a capped display order and hidden folded todos, housekeeping (done tasks archived after 24 h with a log line, ideas and completion history retained, resolved audit and collision requests and 3-day-old auto requests cleared, exact duplicates deduped, manual requests never touched, checkpoints of vanished sessions dropped and lists capped at 50, `changed:false` on a second pass), intent routing for a dozen phrasings (punctuation and casing ignored, a leading imperative verb becomes a request), grounded local replies (counts from the fixture, "put on the task board as the next piece of work" for requests, help listing the commands, unreadable facts named instead of invented), the 5/10/20/40/60-minute AI backoff table and `normalizeState` on garbage, and the agent pool: the ordered role roster with cadences, `dueRoles` (cadence elapsed, queued/running never re-enqueued, the briefer gated on proactive + key + backoff), `applyAgentEvent` roster transitions with accurate `pool.running/queued` counts and the combined action text, running rows reset to idle on load, `parallel`/`aiParallel` prefs clamped, and "N agents working" on the tree summary; and the work journal: `pendingWork` on the raw saved state (in-flight jobs, unanswered messages, interrupted roles, closed-for time), `applyWork` add/update/remove with the cap of 40, the `resumeSummary` boot line, the `resume-work` intent and the status reply listing what is being worked on. Also pins the wiring: `assistant:state/message/control/prefs` IPC and the preload names, `startAssistant` scheduled from `app.whenReady` with a `setTimeout` chain (no `setInterval`), `powerSaveBlocker`, the gitignored `data/eyes-assistant.json`, the Explorer composer/thread/activity ids and the Command view pill, tree3d and idle.js handling the `assistant` and `folded` node kinds, the `M` key in the help rows, and the README's "Always-on assistant" section. Node focus: `state.focus` normalization, the `focused on …` tree sublabel, replies naming the focused node when nothing else matches, `assistant:focus` IPC + `assistantFocus` preload, `assistantFocusSubject` grounding the responder's hop and claiming a focused session on the queued request, and the rail/Command click → `focusAssistant` wiring with the ring, pulse and card row. The overseer — the R&D layer above the assistant — is pinned too: `state.overseer` playbook normalisation on garbage, `overseerDigest` telemetry (error roles, unanswered replies, stale journal jobs, AI health), the deterministic `overseerReview` (a finding that repeats becomes a lesson, `overseerMerge` dedupes lessons by text and rolls the score history), `overseerTune` clamped to the safe pref bands, the stale-session rescue plan (`staleRescues`: oldest first, capped per pass, deduped against the inbox/history/board on the title key, horizon from the policy; the digest carries the tree's stale count and oldest quiet time and the review files a stale-sessions finding), the repair-pass wiring that files the rescues as `overseer` requests and hands the staliest session to the assistant's focus, the `overseer` intent + reply, `ASSISTANT_OVERSEER_SYSTEM` / `assistantOverseerJob` / `assistant:control overseer` wiring, the Oversee buttons, and the satellite drawn above the assistant node. Node folders — every session/todo/task node acting as a folder for its own context — are pinned too: `state.nodeFolders` normalisation on junk, `applyNodeContext` append/dedupe/cap (8 entries, junk ignored), `nodeFolderLines` formatting, `clearNodeFolder`, the keeper's tidy cleaning finished nodes' folders (task gone or archived/done past the tidy clock, session gone and quiet past the checkpoint horizon, entries older than 7 days pruned, `foldersCleaned` counted in the housekeeping text), the facts carrying the focused node's folder and replies quoting it (`Folder: …`), and the wiring: the executor's run verdicts / reference gathers / chat replies / owner notes landing on folders (`assistant:node-context` IPC + `assistantNodeContext` preload), and the Command card's *Context folder* section (`appendNodeFolder`). Also covered by the behavioral board-invariant suite `tests/board.test.mjs` (`node --test tests/` from the repository root, or `npm test` there): fixtures through the pure module pin the idea-scan delta race (a stale snapshot cannot revert promotion), same-theme plan merges (membership unioned, prompt rebuilt, every idea rewired to the survivor), optional explicitly configured plan expiration relinking ideas without discarding old obligations, dangling-link repair, file-scoped Fix families, claim-sparing duplicate collapse, the `ownershipFence` settlement rule, and the housekeeping sweep (stuck claims requeue, chat requests never age out, claimed copies win title collapse), plus the AI review's task groups folding near-duplicate open tasks into plans (obligations carried in the prompt, ideas relinked, claimed members and unknown titles spared, taken themes never re-minted, capped membership, grouped plans retained by default like idea plans).  The board's SQLite store (`scripts/eyes.mjs` `enableBoardStore`/`boardMutate`) has its own behavioral suite in `tests/board_store.test.mjs`: round-trip fidelity of arbitrary row fields, ordering preservation, first-run migration from the JSON views with DB-wins afterwards, in-place mutation persisting through `boardMutate`, no-op passes writing nothing, throwing mutators rolling the whole `BEGIN IMMEDIATE` transaction back, view files refreshing on commit, the cross-process claim race (N `tests/fixtures/claim_worker.mjs` racers, one winner), and the concurrent executor smoke (`tests/fixtures/executor_slot.mjs`): more parallel-executor slots than open tasks drain the board with no double claims, every settled card in `awaiting_verification` behind the ownership fence, and a `{pid, at}` collision lease naming the claiming slot. No network, no key, no Electron; the Node half skips cleanly without Node. The Policy Lab suites (`tests/policy*.test.mjs`, same `node --test tests/` invocation / `npm test`) pin the lab's contracts: the baseline policy port matching `compareWork`'s frozen ordering (worth bands, oldest inside a band, pins by recency, the age-direction trap), bounded allowlisted config validation with content-hashed identities, operator controls a policy cannot move (pause ⇒ empty batch, locked pins always first, concurrency clamped to the offered maximum, repeated observations cannot inflate obligations), receipt trust labels (runner-observed edits are the only positive learning label; worker-named checks stay `self-reported`; partial/failed/missing evidence never positive; prompts hashed not stored; unknown cost stays null), append-only event/receipt stores with torn-tail tolerance and refused invalid events, episode trees with retry/handoff/paraphrase lineage and descendant cost rollup, whole-root-intent chronological splits that refuse a straddling duplicate, read-only prompt-free dataset export, masked replay (no outcome keys in observations, off-frontier picks flagged, UNSUPPORTED selections gain nothing and cost nothing, represented costs charged on reveal, budget-truncation reports itself censored, stopping a branch preserves outstanding obligations, two policies cannot mutate the dataset, the baseline follows the recorded picks), invariant gates hard-rejecting lock-ignoring / concurrency-bursting / obligation-losing candidates, the incumbent always present in the comparison with verified work untradeable for cost, honest empty-store reporting with no claims, byte-reproducible report artifacts, consented atomic crash-safe promotion (a crash leaves exactly one active version) with rollback changing future dispatch only, and source pins that main.cjs keeps the recorder observation-only (records are never awaited, failures swallowed, smoke/capture/CLI stay silent, receipts appended outside the housekeeping transaction, live activation disabled with dispatch frozen on the baseline). The Jev intake-classifier suites (`tests/jev.test.mjs`, same invocation) pin the decision client and builders: gateway config defaults and clamps, key resolution (env wins, then the DPAPI-encrypted `gatewayApiKeyEncrypted`; never logged, never in a tracked file), the evaluation wire (`/v4/ai/evaluation-model` with the gateway protocol/spec headers, the model id riding `ai-model-id`, id-keyed questions with choice criteria maps, `noul`→boolean mapping, state clipping, score-unmapped errors), strict question-spec and answer validation (out-of-option choices, unknown question ids, wrong answer shapes, missing answers and prose-without-JSON are errors, never guesses), classify() against a stub fetch (validated answers plus chargeable `modelCalls`/token usage, transport/HTTP/unusable-reply failures, timeout abort), `listModels`, self-contained question prompts that name both compared sides, deterministic retrieval that refuses near-zero-overlap comparisons (`retrieveCandidate`), conservative interpretation (only exact `same_obligation` attaches evidence without merging records; `adds_scope` proposes a linked follow-up; uncertainty holds for review; a claimed resolution routes to verification and is never itself evidence), `jev-proposal` experience events that validate and stay invisible to episode construction, the shadow-intake wiring pins (hooked fire-and-forget after the admission mutation, never awaited; `settings.jevShadow === false` kill switch; smoke/capture/CLI silence; two-minute interval, three-proposal cap, one-hour backoff after two failures; retrieval before the single batched call; every call charged as `jev-shadow-intake` in the improvement-budget ledger), the keystore-contract source pins, and a live half that runs only with `MEFI_JEV_LIVE_TEST=1` and `AI_GATEWAY_API_KEY` exported, and skips cleanly otherwise. |
+| `tools/test_mefi_studio_normalized_path_lock.py` | Executor lock contracts for Mefi's Studio AI+ (`scripts/assistant.mjs` via a Node stdin driver, plus static pins): the spawn-loop file lock normalizes before comparing — `filesOverlap`/`sameFile` collapse forward/backward separators, drop trailing separators, fold case, match an absolute path against its repo-relative tail and a bare basename against the same basename under any folder — so two spellings of one file (the A-Eyes `test_mefi_studio_eyes.py` collision) are one claim; `claimWork` defers the second pick with reason `claimed` and advice naming the held file, a finished job releases its claim, an unrelated file proceeds, no lease file is ever written (that hung dispatch on OneDrive), the collision theme keys share the normalizer (`sameFileLabel`), and `main.cjs` consults `claimWork` before dispatch. Node half skips cleanly without Node. |
+| `tools/test_mefi_studio_claim_registry.py` | npm-test discovery shim: re-exports the claim-registry contracts from `tools/test_claim_registry.py` (the A-Eyes overseer directive names that file) so the dev set runs them. That file races `./tools/x.py` against its absolute form through the real `scripts/assistant.mjs` write-lock registry — `writeClaimKey` resolves relative paths against the module root and folds separators and case into one key, two racing sessions on one path yield exactly one `refuse` with reason `claimed`, `claimWork` defers dispatch while the claim lives, `releaseWrite` frees the path only for the owner, and the refused session may then take it; static pins cover the `writeClaims` map, the registry API, the `claimWork` consultation, and `main.cjs`'s `claimWrite`/`releaseWrite` wiring. Node half skips cleanly without Node. Standalone: `python -m unittest discover -s tools -p "test_claim_registry.py"`, `python -m unittest tools.test_mefi_studio_claim_registry` (the shim falls back to a package-relative import), or run the Node driver directly. |
 | `tools/test_mefi_studio_assistant_write_lock.py` | npm-test discovery shim: re-exports the write-lock serialization contracts from `tools/test_assistant_write_lock.py` (the A-Eyes overseer directive names that file) so the dev set runs them. That file proves two same-path writers serialize: both race the same file under `tools/x.py` and an upper-case backslash absolute spelling, exactly one writer is refused while the case-normalized claim map holds one entry, dispatch defers the second writer's pick until the winner releases, and the registry is empty once the handoff completes; static pins cover the `writeClaims` map key (`toLowerCase`), the `claimWork` gate, and `main.cjs` registering `entry.files` under the run id at dispatch and releasing them in `finish()`. Node half skips cleanly without Node. Standalone: `python -m unittest discover -s tools -p "test_assistant_write_lock.py"` or `python -m unittest tools.test_mefi_studio_assistant_write_lock` (the shim falls back to a package-relative import). |
-| `tools/test_mefi_studio_builder_intel.py` | npm-test discovery shim: re-exports the builder outcome reporting contracts from `tools/test_builder_intel.py` (the A-Eyes overseer directive names that file) so the dev set runs them. That file feeds one failed and one finished executor run through the real `scripts/assistant.mjs` `hearReport` ΓÇö the same call `main.cjs`'s `assistantHearBuilder` makes ΓÇö and asserts the digest counts `fails=1`/`reports=1` in either order (outcomes are events, so a later finish cannot erase an earlier failure), outcomes older than half an hour drop out of the window, and each done/fail appends a structured event (job id, role `builder`, exit code, verdict) that survives a state save/reload and is parsed by the test itself, with a killed run's unknown exit code kept null rather than 0; static pins cover `assistantHearBuilder(entry, job, ok, errorMessage = "", exitCode = null)`, the `jobId`/`exit` threading into the report, the fallback intel row and the emitted intel facts, and the executor finish path passing `code ?? null`. Node half skips cleanly without Node. Standalone: `python -m unittest discover -s tools -p "test_builder_intel.py"` or `python -m unittest tools.test_mefi_studio_builder_intel` (the shim falls back to a package-relative import). |
-| `tools/test_normalized_path_lock.mjs` | Node proof for the A-Eyes overseer directive (`node tools/test_normalized_path_lock.mjs` from the repository root; exit 0 = the lock holds; it also closes `npm test` so the proof is a named check in the standard pipeline): two concurrent claims on the same file under two spellings of its path yield exactly one rejection through the real `scripts/assistant.mjs` registry ΓÇö plus release-then-retry, idempotent same-owner re-claims, `claimWork` deferring a pick whose path the registry holds, all-or-nothing multi-file claims, and foreign owners being unable to release someone else's claim. Verified 2026-09-19: 6/6 checks pass, `tools/test_claim_registry.py` 2/2, `tools/test_assistant_write_lock.py` 2/2, both `test_mefi_studio_*` shims 2/2 each. Re-verified 2026-09-19 in run_1789850103724_1 with the same results (proof exit 0, both contracts OK, no mojibake in the proof's output strings, `main.cjs` claim/release wiring confirmed at dispatch and finish). Re-verified 2026-09-19 in run_1789851482100_2: proof 6/6, contracts 2/2 + 2/2, full discovery set 202 OK; fixed both shims to also import package-style (`python -m unittest tools.test_mefi_studio_claim_registry` used to fail with `ModuleNotFoundError`) and pinned that in the shim rows above. Re-verified 2026-09-19 in run_1789854672162_6: proof 6/6, both contracts 2/2 (directive-named and package spellings), full `test_mefi_studio_*` discovery set 203 OK, `npm run check:specs` 84 specs/unique basenames/no orphans, `tests/spec_collisions.test.mjs` 4/4, and `.local-migration/` holds zero `test_*.py` copies. |
-| `tools/test_mefi_studio_offline_probe.py` | Offline-with-key AI probe contracts for Mefi's Studio AI+ (the A-Eyes overseer directive): `planOfflineProbe` in `scripts/assistant.mjs` (run through the real module via Node, no network, no key, no Electron) queues exactly one probe for the one state nothing used to watch ΓÇö `keyPresent === true`, `online === false`, `failures === 0`, no owed `backoffUntil` ΓÇö at the 90-second base delay; a pending probe (`pendingUntil` in the future) blocks a duplicate queue, a failed probe doubles the wait per recorded attempt (capped at 30 minutes by `offlineProbeDelayMs`), and no key / online / a recorded real failure / an owed backoff / a garbage state all return null so the existing online/failure handling stays in charge. Static pins on `main.cjs`: `assistantTick` arms `scheduleAssistantAiProbe()` after the `keyPresent` refresh and before the no-project early return, the scheduler queues at most one timer (clear-before-re-arm, `unref`'d), the runner re-checks the plan and skips SMOKE/Capture/paused states before any `assistantFetch`, a passing probe flips online through the shared `assistantAiOk()` path and clears the `ai-offline` problem, a failed probe grows `backoffUntil` without touching `failures` (a probe is not a real call) and requeues with the grown delay, and `assistantAiOk`/`assistantPause`/`stopAssistant` reset the probe bookkeeping. |
-| `tools/test_mefi_studio_verification_scheduling.py` | Overseer verification-scheduling contract for Mefi's Studio AI+ (the A-Eyes overseer directive): when a builder reports `MEFI_RESULT: done`, `scheduleVerificationOnDone` in `scripts/assistant.mjs` queues the overseer's own verification run ΓÇö `npm run check` first, then the task's focused tests resolved from its scope (`refs`/`files`, test-shaped paths only) plus the report's ran clause ΓÇö and a done report queues EXACTLY ONE verification job: a retried report for the same attempt and a second done line queue nothing (`verificationJobKey` dedupes per task id + attempt, attempts never share a key), while failed/partial/missing results, prose merely quoting the protocol mid-line, and tasks with no test-shaped scope (check-only run) queue zero jobs. The behavioral half drives the real exports (`scheduleVerificationOnDone`, `focusedTestsForTask`, `verificationJobKey`, `findQueuedVerification`, `parseExecutorResult`) through a Node stdin driver; the static half pins the exports and `main.cjs`'s settlement wiring ΓÇö the job is queued inside the transaction that marks the card `awaiting_verification` (`task.verificationRun`) so it can never close unverified, and `runVerificationJobs()` drains the queue after settlement. Direct requests settle through the same scheduler inside their `verifying` transaction, keyed by request identity (`agentModes.requestKey`: `id:<id>` or `request:<digest>`, never a task id), the row records the queued `verificationRun`, and the runner stamps the observed state back onto the request row by that identity; the lifecycle fixture pins exactly-once queuing for both kinds, including across a failed-write retry ΓÇö the queue push survives a rolled-back store write, so the retried settlement recovers the row's lost `verificationRun` stamp by looking the queued job up by key (`findQueuedVerification`), which is what the runner matches observed results onto. Node checks skip cleanly without Node; no network, no key, no Electron. |
+| `tools/test_mefi_studio_builder_intel.py` | npm-test discovery shim: re-exports the builder outcome reporting contracts from `tools/test_builder_intel.py` (the A-Eyes overseer directive names that file) so the dev set runs them. That file feeds one failed and one finished executor run through the real `scripts/assistant.mjs` `hearReport` — the same call `main.cjs`'s `assistantHearBuilder` makes — and asserts the digest counts `fails=1`/`reports=1` in either order (outcomes are events, so a later finish cannot erase an earlier failure), outcomes older than half an hour drop out of the window, and each done/fail appends a structured event (job id, role `builder`, exit code, verdict) that survives a state save/reload and is parsed by the test itself, with a killed run's unknown exit code kept null rather than 0; static pins cover `assistantHearBuilder(entry, job, ok, errorMessage = "", exitCode = null)`, the `jobId`/`exit` threading into the report, the fallback intel row and the emitted intel facts, and the executor finish path passing `code ?? null`. Node half skips cleanly without Node. Standalone: `python -m unittest discover -s tools -p "test_builder_intel.py"` or `python -m unittest tools.test_mefi_studio_builder_intel` (the shim falls back to a package-relative import). |
+| `tools/test_normalized_path_lock.mjs` | Node proof for the A-Eyes overseer directive (`node tools/test_normalized_path_lock.mjs` from the repository root; exit 0 = the lock holds; it also closes `npm test` so the proof is a named check in the standard pipeline): two concurrent claims on the same file under two spellings of its path yield exactly one rejection through the real `scripts/assistant.mjs` registry — plus release-then-retry, idempotent same-owner re-claims, `claimWork` deferring a pick whose path the registry holds, all-or-nothing multi-file claims, and foreign owners being unable to release someone else's claim. Verified 2026-09-19: 6/6 checks pass, `tools/test_claim_registry.py` 2/2, `tools/test_assistant_write_lock.py` 2/2, both `test_mefi_studio_*` shims 2/2 each. Re-verified 2026-09-19 in run_1789850103724_1 with the same results (proof exit 0, both contracts OK, no mojibake in the proof's output strings, `main.cjs` claim/release wiring confirmed at dispatch and finish). Re-verified 2026-09-19 in run_1789851482100_2: proof 6/6, contracts 2/2 + 2/2, full discovery set 202 OK; fixed both shims to also import package-style (`python -m unittest tools.test_mefi_studio_claim_registry` used to fail with `ModuleNotFoundError`) and pinned that in the shim rows above. Re-verified 2026-09-19 in run_1789854672162_6: proof 6/6, both contracts 2/2 (directive-named and package spellings), full `test_mefi_studio_*` discovery set 203 OK, `npm run check:specs` 84 specs/unique basenames/no orphans, `tests/spec_collisions.test.mjs` 4/4, and `.local-migration/` holds zero `test_*.py` copies. |
+| `tools/test_mefi_studio_offline_probe.py` | Offline-with-key AI probe contracts for Mefi's Studio AI+ (the A-Eyes overseer directive): `planOfflineProbe` in `scripts/assistant.mjs` (run through the real module via Node, no network, no key, no Electron) queues exactly one probe for the one state nothing used to watch — `keyPresent === true`, `online === false`, `failures === 0`, no owed `backoffUntil` — at the 90-second base delay; a pending probe (`pendingUntil` in the future) blocks a duplicate queue, a failed probe doubles the wait per recorded attempt (capped at 30 minutes by `offlineProbeDelayMs`), and no key / online / a recorded real failure / an owed backoff / a garbage state all return null so the existing online/failure handling stays in charge. Static pins on `main.cjs`: `assistantTick` arms `scheduleAssistantAiProbe()` after the `keyPresent` refresh and before the no-project early return, the scheduler queues at most one timer (clear-before-re-arm, `unref`'d), the runner re-checks the plan and skips SMOKE/Capture/paused states before any `assistantFetch`, a passing probe flips online through the shared `assistantAiOk()` path and clears the `ai-offline` problem, a failed probe grows `backoffUntil` without touching `failures` (a probe is not a real call) and requeues with the grown delay, and `assistantAiOk`/`assistantPause`/`stopAssistant` reset the probe bookkeeping. |
+| `tools/test_mefi_studio_verification_scheduling.py` | Overseer verification-scheduling contract for Mefi's Studio AI+ (the A-Eyes overseer directive): when a builder reports `MEFI_RESULT: done`, `scheduleVerificationOnDone` in `scripts/assistant.mjs` queues the overseer's own verification run — `npm run check` first, then the task's focused tests resolved from its scope (`refs`/`files`, test-shaped paths only) plus the report's ran clause — and a done report queues EXACTLY ONE verification job: a retried report for the same attempt and a second done line queue nothing (`verificationJobKey` dedupes per task id + attempt, attempts never share a key), while failed/partial/missing results, prose merely quoting the protocol mid-line, and tasks with no test-shaped scope (check-only run) queue zero jobs. The behavioral half drives the real exports (`scheduleVerificationOnDone`, `focusedTestsForTask`, `verificationJobKey`, `findQueuedVerification`, `parseExecutorResult`) through a Node stdin driver; the static half pins the exports and `main.cjs`'s settlement wiring — the job is queued inside the transaction that marks the card `awaiting_verification` (`task.verificationRun`) so it can never close unverified, and `runVerificationJobs()` drains the queue after settlement. Direct requests settle through the same scheduler inside their `verifying` transaction, keyed by request identity (`agentModes.requestKey`: `id:<id>` or `request:<digest>`, never a task id), the row records the queued `verificationRun`, and the runner stamps the observed state back onto the request row by that identity; the lifecycle fixture pins exactly-once queuing for both kinds, including across a failed-write retry — the queue push survives a rolled-back store write, so the retried settlement recovers the row's lost `verificationRun` stamp by looking the queued job up by key (`findQueuedVerification`), which is what the runner matches observed results onto. Node checks skip cleanly without Node; no network, no key, no Electron. |
 
 
 ## App commands and captures
@@ -1832,7 +1832,7 @@ run/pause controls, and short desktop layouts. Screenshots and the report are wr
 
 For Command, run `python tools/verify_command.py`. The isolated Electron fixture
 contains four sessions, 66 tasks, 105 ideas, queued work, and synthetic worker and
-agent status. It checks layout at 1920├ù1200, 1463├ù943, 1280├ù720, and 900├ù900;
+agent status. It checks layout at 1920×1200, 1463×943, 1280×720, and 900×900;
 current task and stage, graph search, details, navigation, disclosures, and music
 settings. Network and child processes are blocked; no worker or audio capture is
 started. Screenshots and the report go to ignored `tools/logs/command-ui/final/`.
@@ -1908,13 +1908,13 @@ fixture stores and fake transport rather than live user state or model calls.
 | `tests/machine_reads.test.mjs` | Shared UI scans, brief cache freshness, fresh enforcement and failure recovery. |
 | `tests/renderer_startup.test.mjs` | Concurrent IPC sharing without stale caching, populated-tree readiness, bounded boot, reduced motion and valid canvas radii. |
 | `tests/boot_poll_visibility.test.mjs` | The shared poll guard's visibility timing contract on a virtual clock: hidden tabs set no interval and fire nothing, hide/show cycles never stack timers (one live interval per key across 25 rapid cycles), resume sets a fresh full interval so hidden time drifts nothing and is never replayed as a catch-up burst, and an in-flight request completing while hidden cannot resurrect the paused timer; source-shape pins hold each tick's hidden bail ahead of its fetch with a show snap-back for nav, eyes.log, tasks.board, explorer.state and idle's Command timers; and the shipped tasks/explorer/idle ticks are extracted verbatim, compiled against stubs and driven through the guard to prove hidden silence, sheet gates and exact cadence for the overlay polls. |
-| `tests/occlusion_probe.test.mjs` | Live-Chromium proof of the occlusion-vs-lag disambiguation behind `measureWorkerLag`: a real Electron fixture loads the actual `renderer/booklet.html`, proves the blob worker constructs under the page CSP (`worker-src blob:`), covers the visible window with an always-on-top window (native occlusion, never minimize), asserts rAF stays silent for 3s while the worker/MessageChannel channel keeps answering, and extracts the probe expression from `main.cjs` so the occluded window reads ~0 ms instead of the 1000 ms sentinel, with rAF resuming once the cover is removed. Load-tolerant by scheduling: `npm test` runs it through `scripts/run-node-tests.mjs`, which drains the parallel `node --test` stage first and only then starts this fixture in a second, serialized `node --test` invocation, because sibling test files loading the CPU inflate the IPC wall time and worker drift the lagMs reading subtracts (best of 3 samples still read 452 ms mid-suite on a healthy window before isolation; isolated it reads ~0). The visible and occluded phases additionally resample the probe up to 3 times (~400ms apart, stopping at the first <100 ms reading) and judge the cleanest sample; every sample must still answer via the unthrottled channel (never frames, never the sentinel), so neither isolation nor retries can mask a real throttling regression or wedged page, and all samples are recorded in the report for diagnosis. Needs a display; skips on headless Linux. Run alone with `node --test tests/occlusion_probe.test.mjs`. Capability-gated: on desktops where Chromium's native occlusion tracker never engages (focused cover shown, window visible and unminimized, yet `document.hidden` never flips and rAF stays loud for the whole 15s wait ΓÇö e.g. some RDP sessions), the fixture writes an `occlusionUnsupported` record with the cover/window state and timeline tail and exits cleanly, and the test skips with that explicit reason after the visible-phase CSP/worker/probe assertions still ran; the record also carries foreground-window identity for diagnosis ΓÇö Win32 `GetForegroundWindow` (title/pid/process, NULL reported as an observation, never an error) and, in every snapshot including the NULL one, a self-describing `session` block ΓÇö active console session id (`WTSGetActiveConsoleSessionId`), the session's `WTSConnectState`, input-desktop openability/lock state (`OpenInputDesktop` + `UOI_NAME`; locked/secure desktops report `inputDesktopLocked: true`), and `GetLastInputInfo` idle ms, so an unattended/locked desktop explains a NULL foreground at a glance ΓÇö, both windows' native hwnd handles, per-sample `document.hasFocus()` stamps in the timeline, and the focus-reassertion count, so a dead tracker (cover held foreground, page saw no focus, rAF still loud ΓÇö seen live on a physical Win11 console desktop with `GetForegroundWindow` returning NULL) is distinguishable from a failed focus steal, and the fixture's exit line states the capability absence instead of printing a bare pass; every strict occlusion assertion remains active on any desktop that does produce real occlusion. Opt-in alternate strict-phase signal (decided 2026-09-21, run_1789966618403_11): on such desktops `MEFI_OCCLUSION_PROXY=visibility` lets the fixture exercise the downstream occluded-phase branch with hide()/show() ΓÇö results land in a separate `occlusionProxy` record (signal named, rAF-silence/unthrottled-channel/~0-lag/recovery asserted, `occluded` pinned absent) because hide() proves "not rendered", never "covered": the proxy is default-off and promoting it to sanctioned occlusion remains a contract change awaiting owner sign-off; without the flag the fixture records `occlusionProxyDeclined` and the test skips exactly as before. |
-| `tests/eyes_toggle_electron.test.mjs` | Live-Chromium execution of the eyes log-tail acceptance: the shipped `renderer/boot.js` poll guard plus the shipped `renderer/eyes.js` `refreshLog` tick and visibilitychange listener are extracted from disk at runtime and wired against a counting `eyesLog` stub in a real Electron renderer, the window is hidden and shown exactly once (a real visibility toggle; minimize does not flip `document.hidden` on this build, so hide/show is the deterministic toggle), and the fetch calls are counted with per-call `document.hidden` stamps: visible baseline cadence, zero fetches across a hidden stretch, exactly one immediate snap-back fetch on show, then the baseline cadence with no doubled count (a leaked second interval or double-registered listener would double it) and no near-zero fetch gaps (the duplicate signature). Throttling stays at the production default, so the hidden pause is corroborated both by the fetch counts and by `MefiBoot.pollActive` reporting the interval torn down while hidden and live again after show ΓÇö throttling cannot fake that teardown. Runs serialized after the parallel stage alongside the occlusion probe because both drive real windows. Needs a display; skips on headless Linux. Run alone with `node --test tests/eyes_toggle_electron.test.mjs`. |
-| `tests/eyes_overlap_boundaries.test.mjs` | The Node-side eyes-contract mirror of `tools/test_mefi_studio_eyes.py`: the real `scripts/eyes.mjs` `collisions()` drives a fixture OpenCode database (built with `node:sqlite` in per-run temp dirs) to pin the temporal-overlap boundary cases ΓÇö adjacent windows touching at one instant, a gap of exactly `overlapMs` inclusive vs one just past it excluded, a contained window intersecting to the inner session's span, a three-session nested group whose common intersection collapses to the innermost single instant, zero-length single-edit pairs ΓÇö plus `overlapRangeOf` validation (corrupt/NaN/inverted windows normalize to null; zero-length stays real). Run alone with `node --test tests/eyes_overlap_boundaries.test.mjs`. |
+| `tests/occlusion_probe.test.mjs` | Live-Chromium proof of the occlusion-vs-lag disambiguation behind `measureWorkerLag`: a real Electron fixture loads the actual `renderer/booklet.html`, proves the blob worker constructs under the page CSP (`worker-src blob:`), covers the visible window with an always-on-top window (native occlusion, never minimize), asserts rAF stays silent for 3s while the worker/MessageChannel channel keeps answering, and extracts the probe expression from `main.cjs` so the occluded window reads ~0 ms instead of the 1000 ms sentinel, with rAF resuming once the cover is removed. Load-tolerant by scheduling: `npm test` runs it through `scripts/run-node-tests.mjs`, which drains the parallel `node --test` stage first and only then starts this fixture in a second, serialized `node --test` invocation, because sibling test files loading the CPU inflate the IPC wall time and worker drift the lagMs reading subtracts (best of 3 samples still read 452 ms mid-suite on a healthy window before isolation; isolated it reads ~0). The visible and occluded phases additionally resample the probe up to 3 times (~400ms apart, stopping at the first <100 ms reading) and judge the cleanest sample; every sample must still answer via the unthrottled channel (never frames, never the sentinel), so neither isolation nor retries can mask a real throttling regression or wedged page, and all samples are recorded in the report for diagnosis. Needs a display; skips on headless Linux. Run alone with `node --test tests/occlusion_probe.test.mjs`. Capability-gated: on desktops where Chromium's native occlusion tracker never engages (focused cover shown, window visible and unminimized, yet `document.hidden` never flips and rAF stays loud for the whole 15s wait — e.g. some RDP sessions), the fixture writes an `occlusionUnsupported` record with the cover/window state and timeline tail and exits cleanly, and the test skips with that explicit reason after the visible-phase CSP/worker/probe assertions still ran; the record also carries foreground-window identity for diagnosis — Win32 `GetForegroundWindow` (title/pid/process, NULL reported as an observation, never an error) and, in every snapshot including the NULL one, a self-describing `session` block — active console session id (`WTSGetActiveConsoleSessionId`), the session's `WTSConnectState`, input-desktop openability/lock state (`OpenInputDesktop` + `UOI_NAME`; locked/secure desktops report `inputDesktopLocked: true`), and `GetLastInputInfo` idle ms, so an unattended/locked desktop explains a NULL foreground at a glance —, both windows' native hwnd handles, per-sample `document.hasFocus()` stamps in the timeline, and the focus-reassertion count, so a dead tracker (cover held foreground, page saw no focus, rAF still loud — seen live on a physical Win11 console desktop with `GetForegroundWindow` returning NULL) is distinguishable from a failed focus steal, and the fixture's exit line states the capability absence instead of printing a bare pass; every strict occlusion assertion remains active on any desktop that does produce real occlusion. Opt-in alternate strict-phase signal (decided 2026-09-21, run_1789966618403_11): on such desktops `MEFI_OCCLUSION_PROXY=visibility` lets the fixture exercise the downstream occluded-phase branch with hide()/show() — results land in a separate `occlusionProxy` record (signal named, rAF-silence/unthrottled-channel/~0-lag/recovery asserted, `occluded` pinned absent) because hide() proves "not rendered", never "covered": the proxy is default-off and promoting it to sanctioned occlusion remains a contract change awaiting owner sign-off; without the flag the fixture records `occlusionProxyDeclined` and the test skips exactly as before. |
+| `tests/eyes_toggle_electron.test.mjs` | Live-Chromium execution of the eyes log-tail acceptance: the shipped `renderer/boot.js` poll guard plus the shipped `renderer/eyes.js` `refreshLog` tick and visibilitychange listener are extracted from disk at runtime and wired against a counting `eyesLog` stub in a real Electron renderer, the window is hidden and shown exactly once (a real visibility toggle; minimize does not flip `document.hidden` on this build, so hide/show is the deterministic toggle), and the fetch calls are counted with per-call `document.hidden` stamps: visible baseline cadence, zero fetches across a hidden stretch, exactly one immediate snap-back fetch on show, then the baseline cadence with no doubled count (a leaked second interval or double-registered listener would double it) and no near-zero fetch gaps (the duplicate signature). Throttling stays at the production default, so the hidden pause is corroborated both by the fetch counts and by `MefiBoot.pollActive` reporting the interval torn down while hidden and live again after show — throttling cannot fake that teardown. Runs serialized after the parallel stage alongside the occlusion probe because both drive real windows. Needs a display; skips on headless Linux. Run alone with `node --test tests/eyes_toggle_electron.test.mjs`. |
+| `tests/eyes_overlap_boundaries.test.mjs` | The Node-side eyes-contract mirror of `tools/test_mefi_studio_eyes.py`: the real `scripts/eyes.mjs` `collisions()` drives a fixture OpenCode database (built with `node:sqlite` in per-run temp dirs) to pin the temporal-overlap boundary cases — adjacent windows touching at one instant, a gap of exactly `overlapMs` inclusive vs one just past it excluded, a contained window intersecting to the inner session's span, a three-session nested group whose common intersection collapses to the innermost single instant, zero-length single-edit pairs — plus `overlapRangeOf` validation (corrupt/NaN/inverted windows normalize to null; zero-length stays real). Run alone with `node --test tests/eyes_overlap_boundaries.test.mjs`. |
 | `tests/eyes_missing_store.test.mjs` | First-run eyes behavior when the machine has never run OpenCode: every listing read (`listSessions`, `listChanges`, `listTodos`, `activitySince`, `listChatTexts`, `collisions`, `filePresence`, `findRunSession`, `assistantFacts`) treats a never-created store as empty instead of throwing, so the boot session-tree step shows "no recent sessions" rather than gating the app, check evidence stays explicitly unavailable, and a store that exists but cannot be read still raises the real failure. |
 | `tests/model_auto_setup.test.mjs` | The auto-setup planner's pure decisions: saved-key precedence over installed CLIs, either Jev route's key enabling task-aware selection, builder choice from installed OpenCode/Grok CLIs, refusing an empty machine with guidance, a no-op for an already-configured machine, and disarming an armed fallback whose auto order has no second usable provider; `tests/jev_routing_ui.test.mjs` covers the Settings card's host summary, honest refusal, in-flight click guard, read-only setup overview, and the auto-order editor (numbered preference list, add/remove, whole-list saves, generalized fallback switch). |
-| `tests/verification_drain.test.mjs` | Overseer verification-drain contracts against the real `main.cjs` drain slice with stubbed spawn/store/timers: queued jobs pair up two at a time (`VERIFICATION_PARALLEL = 2`) so a done-report burst no longer stacks behind one serial `npm run check` ΓÇö the first two spawn together, a freed slot picks the third up before the drain resolves, and the queue empties; commands stay sequential inside one job (a failed check ends it, the focused test never runs, and the failed state, per-command tail and log line are stamped onto the card); request rows are stamped by `agentModes.requestKey` identity, never a task id; and each landed result arms exactly one coalesced 1-second settle timer that runs one housekeeping pass (no kick while the debounce is pending, one pass for two results), so cards close without waiting for the next autopilot tick. The job's cwd honors npm's package boundary: a project folder with its own `package.json` keeps its root, one without (a game checkout, a notes tree) has the whole job moved to the Studio checkout (`SOURCE_ROOT`, payload root as last resort) with the move logged, instead of `npm run check` dying ENOENT before any real check executes. No real child processes or timers. |
-| `tests/finished_claims_guard.test.mjs` | Finished-uncommitted dispatch dedupe through the real `scripts/assistant.mjs` `claimWork`/`shouldHoldWork`: a pick whose file scope overlaps a finished session's uncommitted edits defers with reason `finished-uncommitted` (held files and owning session named in the advice), `shouldHoldWork` parks it, and `main.cjs` dispatch consults the hold and logs "held for verification: finished session ΓÇª"; case/spelling path differences still collide through the shared normalizer, an active session's dirty files or a cleared session never trigger the hold, committed work releases it, non-overlapping scope is never held, collision-resolution jobs still run through the hold instead of being parked, a sibling in-flight job's claim wins, the task's own failed-verification fix retry is exempt from its own attempt's hold (evidence-keyed on the unverified verdict, counted verify attempts and the attempt's session rather than the title; a foreign holder alongside the own attempt still holds the shared file, and the exemption never bypasses an in-flight sibling claim), and `finishedClaims` stays silent without a file scope. |
+| `tests/verification_drain.test.mjs` | Overseer verification-drain contracts against the real `main.cjs` drain slice with stubbed spawn/store/timers: queued jobs pair up two at a time (`VERIFICATION_PARALLEL = 2`) so a done-report burst no longer stacks behind one serial `npm run check` — the first two spawn together, a freed slot picks the third up before the drain resolves, and the queue empties; commands stay sequential inside one job (a failed check ends it, the focused test never runs, and the failed state, per-command tail and log line are stamped onto the card); request rows are stamped by `agentModes.requestKey` identity, never a task id; and each landed result arms exactly one coalesced 1-second settle timer that runs one housekeeping pass (no kick while the debounce is pending, one pass for two results), so cards close without waiting for the next autopilot tick. The job's cwd honors npm's package boundary: a project folder with its own `package.json` keeps its root, one without (a game checkout, a notes tree) has the whole job moved to the Studio checkout (`SOURCE_ROOT`, payload root as last resort) with the move logged, instead of `npm run check` dying ENOENT before any real check executes. No real child processes or timers. |
+| `tests/finished_claims_guard.test.mjs` | Finished-uncommitted dispatch dedupe through the real `scripts/assistant.mjs` `claimWork`/`shouldHoldWork`: a pick whose file scope overlaps a finished session's uncommitted edits defers with reason `finished-uncommitted` (held files and owning session named in the advice), `shouldHoldWork` parks it, and `main.cjs` dispatch consults the hold and logs "held for verification: finished session …"; case/spelling path differences still collide through the shared normalizer, an active session's dirty files or a cleared session never trigger the hold, committed work releases it, non-overlapping scope is never held, collision-resolution jobs still run through the hold instead of being parked, a sibling in-flight job's claim wins, the task's own failed-verification fix retry is exempt from its own attempt's hold (evidence-keyed on the unverified verdict, counted verify attempts and the attempt's session rather than the title; a foreign holder alongside the own attempt still holds the shared file, and the exemption never bypasses an in-flight sibling claim), and `finishedClaims` stays silent without a file scope. |
 
 `tools/benchmark_startup.py` measures real Electron loading in an isolated,
 offscreen temporary app. Run `python tools/benchmark_startup.py --runs 3`;
@@ -1947,7 +1947,7 @@ September reliability and Model Lab suites (included in `npm test`):
 
 | Suite | Behavior covered |
 |---|---|
-| `tests/executor_lifecycle.test.mjs` | Exact run-marker session attribution, saved Pause at boot, stale settlement fencing, result-save retries, registry release on early exits, and replaced-child exit races; plus the lease-read fail-closed latch in `spawnNextJob`'s `readLeases` ΓÇö an unreadable board (missing `getMachine().leaseStatus` export or a throwing read) parks dispatch as `busy` on an `{ exclusive: true, unreadable: true }` stub instead of reading the machine as free, the fault is logged once per incident and cleared by a healthy read (a returning fault logs again), and a failed post-claim recheck drops the claim and releases its reservation without launching a child. |
+| `tests/executor_lifecycle.test.mjs` | Exact run-marker session attribution, saved Pause at boot, stale settlement fencing, result-save retries, registry release on early exits, and replaced-child exit races; plus the lease-read fail-closed latch in `spawnNextJob`'s `readLeases` — an unreadable board (missing `getMachine().leaseStatus` export or a throwing read) parks dispatch as `busy` on an `{ exclusive: true, unreadable: true }` stub instead of reading the machine as free, the fault is logged once per incident and cleared by a healthy read (a returning fault logs again), and a failed post-claim recheck drops the claim and releases its reservation without launching a child. |
 | `tests/assistant_pool.test.mjs` | Separate bounded reply/background lanes, cadence fairness, accurate concurrent role status, durable queued work and Pause winning asynchronous repair races. |
 | `tests/assistant_coordination.test.mjs` | Live ownership checked inside the repair transaction, fresh foreign leases retained, Pause during overseer review, distinct instruction reference jobs and run-local builder failure routing. |
 | `tests/request_admission.test.mjs` | Duplicate batch admission/promotion, preservation of distinct prompt scopes within a batch, pin priority, held/claimed/completed states and full task briefs through chat admission. |
@@ -2059,8 +2059,8 @@ Workspace tour checks actual left-edge coordinates for the handle and drawer
 and moves the pointer outside the drawer to verify dismissal. The 24-check,
 23-screenshot rerun passed under ignored `tools/logs/left-sidebar/`.
 Build, syntax/target checks and audit passed. The full Node run encountered an
-unrelated reproducible failure in `tests/board_store.test.mjs`, ΓÇ£stale fork:
-a migrated database missing view rows degrades loudly to file modeΓÇ¥ (expected
+unrelated reproducible failure in `tests/board_store.test.mjs`, “stale fork:
+a migrated database missing view rows degrades loudly to file mode” (expected
 two file-backed rows, received zero); the sidebar behavior suite passed.
 
 The visible tab was removed. `python tools/verify_workspace.py --output
@@ -2088,7 +2088,7 @@ Fit validation (2026-09-19): the 128 focused graph, motion, topology and
 performance checks passed. The isolated Fit tour passed at wide and desktop
 sizes with 16 captures. Both toolbar Fit and F restored a broad arrangement
 after an edge-on drag, preserving all 30 links and six full work titles.
-Fitted depth spanned 32ΓÇô34% of the clear viewport's shorter dimension;
+Fitted depth spanned 32–34% of the clear viewport's shorter dimension;
 curvature checks rejected a tilted flat plane. Actual 20-degree turns in
 both directions kept anchors fixed and work rings apart. Repeated Fit and
 2D pan/zoom recovery passed, with no renderer errors, network requests or
@@ -2195,9 +2195,9 @@ from the passing Command renderer checks. Local reports remain under ignored
 `tools/logs/panel-*` paths.
 
 Full-suite validation in run_1789866914430_3 (2026-09-19): `npm test` passed
-end to end on one working tree ΓÇö Node 859 tests / 858 pass / 0 fail / 1
+end to end on one working tree — Node 859 tests / 858 pass / 0 fail / 1
 opt-in skip, Python discovery 211 contracts OK, normalized-path lock proof
-6/6 ΓÇö and `npm run audit` reported zero findings. The fixture-paths contract
+6/6 — and `npm run audit` reported zero findings. The fixture-paths contract
 (`tools/test_mefi_studio_fixture_paths.py`, 6 tests) passed standalone via
 `python -m unittest tools.test_mefi_studio_fixture_paths` and inside the real
 `-s tools -p "test_mefi_studio_*.py"` discovery alongside Node, confirming
@@ -2242,7 +2242,7 @@ only, applies only real changes, and leaves every key and model override
 untouched.
 
 Booklet and gate re-verification (2026-09-20, second pass): re-ran `npm run
-build-booklet` over the settled tree ΓÇö the rebuild is byte-identical (same
+build-booklet` over the settled tree — the rebuild is byte-identical (same
 SHA-256 before and after, catalog hash f98dd2322a01, 39 models), confirming the
 committed `renderer/booklet.html` matches the renderer sources exactly. Then
 `npm run check` passed (75 targets, 145 unique specs, CSS cascade/unused
@@ -2282,7 +2282,7 @@ pm test pipeline and
 pm run audit (ok, zero findings). Node stage: 1,439
 tests, 1,437 pass, 1 skip, and one load-sensitive flake
 (tests/command_render.test.mjs "real Command renderer paints finite task
-nodes..." ΓÇö analyser peak kick 0.0257 under the 0.04 threshold at
+nodes..." — analyser peak kick 0.0257 under the 0.04 threshold at
 tests/fixtures/command-render-electron.cjs:614 while the suite ran in parallel;
 it passed twice when re-run in isolation, exit 0 both times). Python stage: 243
 tests OK (one skip); normalized-path lock: all checks passed. No reconciliation
@@ -2298,13 +2298,13 @@ pass, 1 skip, and one parallel-load flake in `tests/expand_finished_guard.test.m
 `['Real work']`, saw `['   ', 'Real work']`; it passes 4/4 in isolation and in
 both later full runs), so that run's Python and path-lock stages did not start.
 `tests/command_render.test.mjs` passed inside that parallel run (ok 548).
-Runs 2 and 3: full pipeline exit 0 ΓÇö Node stage clean including
+Runs 2 and 3: full pipeline exit 0 — Node stage clean including
 `command_render`, 243 Python contracts OK (one skip), normalized-path lock
 passed. The windowed-sampling fixture now samples by audio time across drum
 cycles with timer fallback (tests/fixtures/command-render-electron.cjs:548),
 so the earlier kick 0.0257 drop-out did not recur in any of the three runs.
 Measured peaks from the same Electron fixture on this tree: kick 0.6728,
-snare 1.0, hat 1.0 (frames 118/129/108) ΓÇö each clears the `> 0.04` assertion
+snare 1.0, hat 1.0 (frames 118/129/108) — each clears the `> 0.04` assertion
 at tests/command_render.test.mjs:110 with 16.8x/25x/25x margin. Full run-1 log
 kept locally as `%TEMP%\mefi-parallel-load-test.log`.
 
@@ -2387,7 +2387,7 @@ fakes). The other five: `performance_render` (profiler JSON download timed
 out at 26 s under the full run) passes alone, 2/2; `task_overview_render`
 asserted the pre-UX stage vocabulary in
 `tests/fixtures/task-overview-render-electron.cjs` and now expects
-`Done ┬╖ Verified` / `Verifying` from `renderer/stage-labels.js`, 1/1;
+`Done · Verified` / `Verifying` from `renderer/stage-labels.js`, 1/1;
 `usage_tracker_host` pinned the exact `window.MefiUsageTracker` member list,
 which the tracker snapshot extended with `report`, and the regex now allows
 extra members, 14/14; the two `workspace_ui` failures are a merge choice, not
@@ -2496,18 +2496,18 @@ PixelLab MCP proxies), so the sweep ran as the sole writer: one foreground
 `%TEMP%\opencode\npm-test-single-writer.log` (329 KB), exit code captured.
 The env-drift fixture fix (the uncommitted `readSettings` /
 `machineMemoryWarnOverride` / host-fixture hunks in `tests/`) held: the Node
-parallel stage printed its end-of-suite summary ΓÇö **tests 1652, pass 1650,
-fail 1, skipped 1, duration 42.3 s** ΓÇö and the suite exited 1. The one
+parallel stage printed its end-of-suite summary — **tests 1652, pass 1650,
+fail 1, skipped 1, duration 42.3 s** — and the suite exited 1. The one
 failure is the known `performance_render` Electron profiler fixture
 (`chrome_100_percent.pak` failed to load from the OneDrive-path
 node_modules, then "Profiler JSON download timed out" at
-`tests/fixtures/performance-render-electron.cjs:127` after 18 s) ΓÇö the same
+`tests/fixtures/performance-render-electron.cjs:127` after 18 s) — the same
 signature the earlier owner-present rerun flagged; it is environmental, not
 a regression introduced here. Because the chain is `&&`, the failing Node
 stage short-circuited the remaining legs, so they were run directly to
 complete the triage: `python -m unittest discover -s tools -p
-"test_mefi_studio_*.py"` ΓÇö 244 tests OK, exit 0; `node
-tools/test_normalized_path_lock.mjs` ΓÇö all checks passed, exit 0. No repo
+"test_mefi_studio_*.py"` — 244 tests OK, exit 0; `node
+tools/test_normalized_path_lock.mjs` — all checks passed, exit 0. No repo
 source was modified by this run beyond this entry. Remaining (handed on):
 the performance_render fixture still needs an owner-present, machine-idle
 rerun to separate the pak-load/timeout flake from a real regression, and the
