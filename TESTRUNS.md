@@ -25,6 +25,31 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - A-Eyes "auth split entirely uncommitted" alert closed: stale by construction, 2457a7d verified in HEAD, prior denial was the prose-shape verdict again (run run_1790103450505_24)
+
+The alert's seven-plus-one files (including the then-untracked
+scripts/auth-store.cjs) were observed dirty while the split's own run
+(run_1790101780278_28, session ses_f359e43cfffe04srM2wizinp4D) was still in
+flight; that run finished code 0 / sawDone true (store read-only check) and
+committed its files at 2457a7d (13:39:21), but the alert never re-checked, so
+every retry inherited a stale premise. Verified first-hand this run, not from
+reports: `git merge-base --is-ancestor 2457a7d HEAD` -> true at HEAD 08990ac;
+`git show --stat 2457a7d` carries all 8 files of the alert set (GETTING_STARTED,
+SECURITY, docs/architecture, docs/first-run-opencode, docs/pi-provider-storage,
+main.cjs, scripts/auth-store.cjs, tests/auth_split.test.mjs);
+`git status --porcelain` shows only ` M docs/agent-loop.md` — a sibling docs
+edit, not an auth file, left byte-for-byte as found. The prior attempt's
+"outstanding obligations remain" denial is the known prose-shape pattern (cf.
+rows 1a9664a / 5bc25d1 / run_1790102799243_5): its remaining note was cut
+mid-parenthetical, so the parenthetical branch never matched and the verifier
+counted an obligation the substance had already discharged. Fresh gates this
+run: `node --test tests/auth_split.test.mjs tests/env_credentials.test.mjs` ->
+14 tests / 14 pass / 0 fail, exit 0; `npm run check` -> exit 0 (101 targets,
+205 specs, syntax ok — the ledger-only commit check). Full-suite evidence for
+the landed content already in history (quiet-tree gate at 17ba279: npm test
+exit 0, build-booklet exit 0). Nothing to commit for the auth scope; this
+commit adds only this row, path-limited.
+
 ## 2026-09-22 late evening - seventh-generation carrier re-verifies the split-out scope: repo side green at drifted HEAD 08990ac, the only extra work is still the owner-only flip (task_b015afd76934e639, run run_1790103285400_17)
 
 Scope decided from the parent's decision log, quoted: task_261f3a1af9aeda2d
