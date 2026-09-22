@@ -25,6 +25,42 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+performance_render historical full-`npm test` contention signature verified
+and closed (2026-09-22, ~08:4x, run_1790084276208_9 for
+task_37a437c156658816 "classify historical full-npm-test contention
+signature"). The historical-condition repro and classification were already
+captured and landed by the 2026-09-21 night row below (run_1790036825250_4:
+full `npm test` parallel stage plus serialized display fixtures plus a
+node_modules OneDrive churn writer while the flake-loop harness ran the
+performance_render suite); this attempt audited every on-disk artifact of
+that capture instead of re-landing it, per the adopt-don't-clobber handoff.
+Audit result — all committed claims reproduce from the files: run-20260921-
+193144/meta.json (exit1Captured true, harnessKilled false, iteration 1 exit
+1 in 80.2 s, before-snapshot 100% CPU / 45 MB free RAM / 39 node + 8
+electron processes); iter-01/stdout.log (test 1 "real performance profiler
+catches blocking work..." hit node:test's 50000 ms budget; test 2 failed
+`Error: Profiler JSON download timed out` at
+tests/fixtures/performance-render-electron.cjs:127:47, runFixture assert
+1 !== 0); iter-01/desktop-host/report.json failure text identical, elapsedMs
+10522. Classification per run-flake-loop.ps1's signature rules:
+fixture-internal-uncovered (download-timeout + :127 stack frame) — the 5 s
+will-download fixed budget inside downloadCapture() expired under host
+saturation; explicitly not kill-contract-covered (no "Performance fixture
+timed out: PID" marker, the 150 s harness hard kill never fired), not the
+GPU-contention class (those suites pass solo), and not state corruption
+(the in-suite performance_render copy survived slowed-but-green in the same
+concurrent run). Current-tree check on this clock: the committed
+load-tolerant downloadCapture budget (paceFactor-scaled 5-30 s, message
+prefix preserved so the harness classifier still matches) is present at
+tests/fixtures/performance-render-electron.cjs:132-138, and solo
+`node --test tests/performance_render.test.mjs` passed 2/2 in 12.4 s with
+zero leftover electron processes. Honest limit: the load-tolerant budget has
+solo + synthetic-12-spinner evidence but has not been re-run under a fresh
+full-`npm test` + churn condition on today's tree; the 2026-09-21 capture
+remains the only under-condition repro, and the loop harness
+(tools/logs/performance-render-flake-loop/run-flake-loop.ps1, gitignored)
+is reusable as-is for that if it is ever wanted.
+
 Full `npm test` gate green on the combined tree at HEAD 7dbd66f (2026-09-22,
 ~10:0x, run_1790082653725_120 for task_3762737ae0251810 "Full npm test gate —
 follow-up ef8e2f"). The commits the earlier full-gate card waited on had
