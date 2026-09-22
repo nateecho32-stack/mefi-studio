@@ -34,19 +34,18 @@ function completedTask(task) {
 
 function dependencyState(item, tasks = []) {
   // Most rows have no prerequisites; skip building the whole-board map for them.
-  if (!dependencyIds(item).length) return { dependencies: [] };
+  const ids = dependencyIds(item);
+  if (!ids.length) return { dependencies: [] };
   const projectId = item?.projectId ?? item?.delegation?.projectId;
   const projectPath = item?.projectPath ?? item?.delegation?.projectPath;
   const normalizedPath = (value) => String(value).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
   const inProject = (task) => !(projectId != null && task.projectId != null && task.projectId !== projectId)
     && !(projectPath && task.projectPath && normalizedPath(task.projectPath) !== normalizedPath(projectPath));
   const byId = new Map(rows(tasks).filter(inProject).map((task) => [task.id, task]));
-  const ids = dependencyIds(item);
   const dependencies = ids.map((id) => {
     const task = byId.get(id);
     return { id, title: task?.title || id, status: task?.status || "missing", done: completedTask(task) };
   });
-  if (!ids.length) return { dependencies };
   const missing = dependencies.filter((task) => task.status === "missing");
   if (missing.length) return { stage: "blocked", reason: `Missing prerequisite: ${missing.map((task) => task.title).join(", ")}`, dependencies, blockedBy: "dependencies", canRetry: false };
   const visiting = new Set();
