@@ -14,25 +14,53 @@
     const toast = document.createElement("div");
     toast.className = `toast ${kind}`;
     toast.textContent = message;
+    let timer = null;
+    let gone = false;
     const dismiss = () => {
+      if (gone) return;
+      gone = true;
+      clearTimeout(timer);
       toast.classList.remove("show");
       setTimeout(() => toast.remove(), 300);
+      options?.onDismiss?.();
     };
-    // An action keeps the toast clickable and on screen long enough to use it.
+    // An action keeps the toast clickable and on screen long enough to use it;
+    // an error stays long enough to read; hovering any interactive toast holds it.
     const action = options?.action;
     if (action && typeof action.run === "function") {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "toast-action";
       button.textContent = action.label || "Open";
-      button.addEventListener("click", () => { dismiss(); action.run(); });
+      button.addEventListener("click", () => { action.run(); dismiss(); });
       toast.classList.add("has-action");
       toast.append(button);
     }
+    if (kind === "bad") toast.style.pointerEvents = "auto";
+    const life = Number(options?.duration) || (action ? 9000 : kind === "bad" ? 7000 : 2600);
+    const arm = (ms) => { clearTimeout(timer); timer = setTimeout(dismiss, ms); };
+    toast.addEventListener("mouseenter", () => clearTimeout(timer));
+    toast.addEventListener("mouseleave", () => arm(Math.max(1500, life / 3)));
     host.append(toast);
     requestAnimationFrame(() => toast.classList.add("show"));
-    setTimeout(dismiss, action ? 9000 : 2600);
+    arm(life);
+    return { dismiss, element: toast };
   };
+
+  // A question with one committing button, in the same toast host. Resolves
+  // true when the button is pressed and false when the toast times out or is
+  // dismissed. This replaces window.confirm (an unstyled OS modal) for the few
+  // destructive actions: clearing the done log, removing or switching a project.
+  window.MefiConfirm = (message, options = {}) => new Promise((resolve) => {
+    let settled = false;
+    const settle = (value) => { if (!settled) { settled = true; resolve(value); } };
+    if (typeof window.MefiToast !== "function") { settle(false); return; }
+    window.MefiToast(message, options.kind || "info", {
+      duration: Number(options.duration) || 12000,
+      action: { label: options.label || "Confirm", run: () => settle(true) },
+      onDismiss: () => settle(false),
+    });
+  });
 
   // Every store access is guarded, exactly as nav.js and idle.js guard theirs: a
   // blocked or private store throws on read, and an unguarded throw here would

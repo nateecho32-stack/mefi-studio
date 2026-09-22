@@ -151,7 +151,8 @@ project's ignored local `planning.json`.
   over for the card instead of jumping, and the rest of the tree keeps
   turning slowly behind a blur until Esc or an empty click. **Card style**
   in the Ambience pop picks outlined, filled, or auto (filled when hovered,
-  selected or running).
+  selected or running). Whether a launch lands on the workspace or straight
+  in Command view is set under **Settings › Studio**.
 - Lines say what they mean: the hub link is doubled, a task's anchor is
   dotted and marches while its worker runs, an agent's tether is dashed, a
   finished cluster is stippled, and a done todo's link fades green.

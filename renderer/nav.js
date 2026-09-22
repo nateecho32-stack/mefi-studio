@@ -1846,6 +1846,30 @@
     });
     initUpdates();
     initRelease();
+    keyHint();
+  }
+
+  // One-time tip, once per device: outside a text field, single letters move
+  // around Studio, and nothing on screen says so. It waits for the first
+  // launch's walkthrough (or any other transient) to close, then points at
+  // the shortcut sheet.
+  const KEY_HINT_STORE = "mefiStudio.keyHint.v1";
+  function keyHint() {
+    if (readStore(KEY_HINT_STORE) === "1" || typeof window.MefiToast !== "function") return;
+    let tries = 0;
+    const booting = () => {
+      const gate = document.getElementById("boot-layer");
+      return Boolean(gate) && !gate.hidden && getComputedStyle(gate).display !== "none";
+    };
+    const attempt = () => {
+      if ((state.transient !== null || booting()) && tries++ < 120) { setTimeout(attempt, booting() ? 1500 : 5000); return; }
+      try { localStorage.setItem(KEY_HINT_STORE, "1"); } catch { /* the tip may show again next launch */ }
+      window.MefiToast("Tip: outside a text field, single keys move around Studio. H workspace, D Command view, T task board. Press ? for the full list.", "info", {
+        duration: 12000,
+        action: { label: "Show keys", run: () => go("help") },
+      });
+    };
+    setTimeout(attempt, 4000);
   }
 
   window.MefiNav = {

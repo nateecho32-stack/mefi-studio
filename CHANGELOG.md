@@ -40,6 +40,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   known-environmental-failures table at the top of `TESTRUNS.md`.
 
 ### Changed
+- Destructive actions ask first, in Studio's own style: clearing the Done
+  log, removing a project and switching away from working agents use a toast
+  confirm with one committing button instead of a one-click wipe or the OS
+  `confirm()` dialog.
+- Error toasts stay for 7 s and hold while hovered; a one-time tip explains
+  the single-key navigation and points at the `?` shortcut sheet.
+- **Open Workspace on launch** moved from the Command view's Ambience popover
+  to Settings › Studio; the workspace's Jev pill explains what Jev is on hover.
 - OpenCode store reads moved to a worker thread; sessions are scoped by folder.
 - One status vocabulary across the board, workspace, plans and Command view.
 - Naming pass: "Command view" everywhere, "Task board", "Activity & evidence".

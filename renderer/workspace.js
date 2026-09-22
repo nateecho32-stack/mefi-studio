@@ -4,6 +4,13 @@
   "use strict";
   const $ = (id) => document.getElementById(`workspace-${id}`);
   const api = () => window.mefiStudio;
+  // Questions that interrupt or destroy (switching away from working agents,
+  // removing a project) go through the styled toast confirm and fall back to
+  // the OS dialog; when neither exists the answer is no, never a silent yes.
+  const confirmAction = async (question, label) => {
+    if (typeof window.MefiConfirm === "function") return window.MefiConfirm(question, { label });
+    return typeof window.confirm === "function" ? window.confirm(question) : false;
+  };
   const state = { projects: [], activeId: null, tasks: [], ideas: [], backlog: null, assistant: {}, status: {}, machine: null, usage: null, filter: "open", query: "", limit: 20, mode: "chat", pending: false, busyAction: null, switching: false, epoch: 0 };
   let initialized = false;
   let refreshFlight = null;
@@ -152,7 +159,7 @@
         const saveable = result.busy === true && !/already in progress/i.test(String(result.error ?? ""));
         if (!saveable) throw new Error(result.error || "The project could not be opened.");
         const question = `Agents are still working in ${project()?.name || "this project"}. Save their progress, stop them, and switch to ${target?.name || "the other project"}?`;
-        const approved = typeof window.confirm === "function" ? window.confirm(question) : false;
+        const approved = await confirmAction(question, "Save & switch");
         if (!approved) throw new Error(result.error || "Project switch canceled.");
         feedback("Saving agent progress, then switching…", false, "sidebar");
         result = await api().projectsSelect(id, { saveProgress: true });
@@ -580,7 +587,7 @@
       label = status.enabled === false ? "paused in Settings" : !status.configured ? "connect in Settings" : status.accountingPending ? "waiting for usage accounting" : status.lastError ? "needs attention in Settings" : status.phase === "running" ? "reviewing task intake" : status.lastSuccessAt ? "task intake ready" : "configured · awaiting first intake";
     }
     $("jev").textContent = `Jev · ${label}`;
-    $("jev").title = status?.lastError || "Jev advises on related tasks. Your work stays on the board.";
+    $("jev").title = status?.lastError || "Jev is Studio's optional model-selection service: with a key it picks a model per task and advises on related tasks; without one, fixed defaults apply. Your work stays on the board. Set it up under Settings › Jev.";
   }
   function setMode(mode) {
     if (state.pending || state.switching) return;
@@ -764,8 +771,8 @@
     $("remove-project")?.addEventListener("click", async () => {
       const current = project();
       if (!current || state.pending || state.busyAction || state.switching) return;
-      const question = `Remove "${current.name}" from Studio's project list?\n\nThe folder and its local work stay on disk. Open the same folder again to restore them.`;
-      const approved = typeof window.confirm === "function" ? window.confirm(question) : false;
+      const question = `Remove "${current.name}" from Studio's project list? The folder and its local work stay on disk; open the same folder again to restore them.`;
+      const approved = await confirmAction(question, "Remove");
       if (!approved) return;
       state.switching = true; controls();
       try {

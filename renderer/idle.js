@@ -2035,12 +2035,19 @@
   }
 
   // Clear: the host wipes the finish rows from the executor ledger and the tab
-  // reads empty. No ceremony here — the absorb flight belongs to the nodes on
-  // the tree, which collapse into their host when their work finishes off.
+  // reads empty. It asks first, because the rows go for good and the button
+  // sits beside the filters where a stray click is easy. No other ceremony —
+  // the absorb flight belongs to the nodes on the tree, which collapse into
+  // their host when their work finishes off.
   async function clearDoneLog() {
     if (state.doneClearing || !el.doneList || !window.mefiStudio?.assistantClearDoneLog) return;
     const entries = state.doneEntries ?? [];
     if (!entries.length) return;
+    if (typeof window.MefiConfirm === "function") {
+      const count = entries.length;
+      const approved = await window.MefiConfirm(`Clear ${count} record${count === 1 ? "" : "s"} from the done log? This cannot be undone.`, { label: "Clear" });
+      if (!approved || state.doneClearing) return;
+    }
     state.doneClearing = true;
     if (el.doneClear) el.doneClear.disabled = true;
     try {

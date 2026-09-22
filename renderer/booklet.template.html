@@ -149,7 +149,7 @@
         <p id="workspace-work-summary" class="ws-work-summary-line" role="status" aria-live="polite"></p>
         <div id="workspace-work-list" class="ws-work-list"></div>
         <button id="workspace-show-more" class="ghost mini ws-show-more" type="button" hidden>Show more</button>
-        <details class="ws-activity"><summary>Behind the scenes <span id="workspace-activity-count"></span></summary><ol id="workspace-activity-list"></ol></details><div class="ws-jeV" id="workspace-jev">Jev · checking connection</div>
+        <details class="ws-activity"><summary>Behind the scenes <span id="workspace-activity-count"></span></summary><ol id="workspace-activity-list"></ol></details><div class="ws-jeV" id="workspace-jev" title="Jev is the optional model-selection service: with a key it picks a model per task; without one, fixed defaults apply. Set it up under Settings › Jev.">Jev · checking connection</div>
       </aside>
     </div>
   </div>
@@ -350,6 +350,7 @@
           <button type="button" class="settings-nav-item" data-settings-jump="settings-routing" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-route"/></svg><span class="label">Model routing</span></button>
           <button type="button" class="settings-nav-item" data-settings-jump="settings-workers" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-wrench"/></svg><span class="label">Coding workers</span></button>
           <button type="button" class="settings-nav-item" data-settings-jump="settings-jev" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-target"/></svg><span class="label">Jev</span></button>
+          <button type="button" class="settings-nav-item" data-settings-jump="settings-studio" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-studio"/></svg><span class="label">Studio</span></button>
           <button type="button" class="settings-nav-item" data-settings-jump="settings-updates" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-update"/></svg><span class="label">Updates & diagnostics</span></button>
           <button type="button" class="settings-nav-item" data-settings-jump="settings-integrations" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plug"/></svg><span class="label">Integrations</span></button>
           <button type="button" class="settings-nav-item" data-settings-jump="settings-log" aria-current="false"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-legend"/></svg><span class="label">Log</span></button>
@@ -502,6 +503,10 @@
           </div>
           <p class="muted">Published builds are checked on GitHub every 20 minutes. The portable app can download and install one from here; in development the checker reports only.</p>
           <div class="row tight update-row" data-release-row>
+        <details class="settings-optional settings-card" id="settings-studio"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-studio"/></svg></span><span class="settings-summary-text"><b>Studio</b><span>Where a launch lands; your name, theme and motion live under Make yourself at home in the sidebar</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+          <div class="row"><label class="switch" title="On: every launch lands on Your workspace. Off: Studio opens straight into Command view. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span>Open Workspace on launch</span></label></div>
+          <p class="muted">Off means Studio opens straight into Command view after the project chooser.</p>
+        </details>
             <button id="release-check" class="ghost" title="Ask GitHub for the newest published build now">Check GitHub</button>
             <button id="release-apply" class="ghost" hidden disabled>Update</button>
             <span class="eyes-status" id="release-status" role="status">release: not checked</span>
@@ -593,9 +598,6 @@
     <label class="pop-row" title="The sky behind the node tree. Follow theme picks the scene that belongs to your colour theme in Music &amp; themes."><span class="grow">Backdrop</span><select id="idle-backdrop"></select></label>
     <label class="switch pop-row" title="Agents say what they are doing beside their orb: hops, findings going home, replies and thoughts."><span class="grow">Speech bubbles</span><input type="checkbox" id="idle-bubbles"><span class="track"></span></label>
     <label class="pop-row" title="How the thought bubble under a card is drawn. Auto keeps them outlined and fills the one you hover, select or that has a worker running."><span class="grow">Card style</span><select id="idle-card-style"><option value="auto">Auto</option><option value="outline">Outline</option><option value="filled">Filled</option></select></label>
-    <hr class="pop-sep">
-    <div class="eyebrow">Startup</div>
-    <label class="switch pop-row" title="Open your project workspace on launch"><span class="grow">Open Workspace on launch</span><input type="checkbox" id="idle-home"><span class="track"></span></label>
   </div>
   <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" aria-live="polite" hidden></aside>
   <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
