@@ -25,6 +25,33 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - main.cjs refactor gate on the settled-in-worktree loop-cleanup edit: check green, node 2064/2060/1/3 with the lone red a documented mid-run vm read (solo rerun green), Python 247 OK, lock green (task_c5a704c58fcda993, run run_1790104668687_12)
+
+The card asked for a dedicated gate on the in-flight main.cjs edit once it
+settled. By this pass the brief's 47+/64− snapshot had evolved to 34+/20− (the
+sibling kept refining; still uncommitted). Static parity review of the diff:
+`consecutiveFailures` is gone repo-wide (0 references after removal from the
+autopilot state, both resume paths, the finish path and adoptProject);
+`doneClearing` survives declared at main.cjs:7379 owned by the clear path, only
+the trim's redundant flag copy removed; the `runVerificationJobs()` call site
+now matches the parameter-less signature at main.cjs:10857 (the old `job`
+argument was already ignored); no `ipcMain.handle/on` registrations touched;
+plus the measurement-only `setAutopilotWaiting` masking, the overseerMiss
+settle-note helper, the `delete next.verification` restart of the evidence
+streak, and the learn-loop guard against a project switch mid-merge. Gates:
+`node --check main.cjs` exit 0; `npm run check` exit 0 (101 files); `npm test`
+node stage 2064 tests / 2060 pass / 1 fail / 3 skipped (60 s) — the lone red
+was brains_ui "Escape clears the selection before anything closes"
+(`ReferenceError: abortGesture is not defined`), a vm-section read of
+renderer/brains.js while the sibling edited it (the runner itself flagged
+"sources changed while the suite was running"); solo rerun of that one test
+passes 1/1, the documented rotating-ReferenceError environmental row. That
+suite does not load main.cjs. Because the node stage exited 1, the later
+stages ran directly: Python 247 OK (42.6 s), normalized-path lock all green.
+Same caveat as the c08f9d9 row: this validates the uncommitted working-tree
+bytes as they sat; the sibling's eventual commit still owes the official
+post-commit quiet-tree diff-and-rerun check.
+
 ## 2026-09-22 late evening - seventh-gen carrier retry 3: split-out scope green at thrice-drifted HEAD bec545e, remaining-prose reshaped to the verified parent form, flip stays owner-only (task_b015afd76934e639, run run_1790104002615_9)
 
 Retry 3 after two "unverified - outstanding obligations remain" verdicts. Both
