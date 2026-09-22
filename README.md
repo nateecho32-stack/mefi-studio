@@ -20,7 +20,27 @@
   <img src="docs/images/workspace.png" width="900" alt="The workspace: a status strip, a conversation with the companion, and the project's work queue">
 </p>
 
-**Quick links:** [Install](#install-and-run) · [First launch](#first-launch) · [Tour](#a-short-tour) · [Keys and privacy](#keys-and-privacy) · [Docs](#documentation) · [Contributing](#contributing)
+**Quick links:** [What's new](#whats-new-in-030) · [Install](#install-and-run) · [First launch](#first-launch) · [Tour](#a-short-tour) · [Keys and privacy](#keys-and-privacy) · [Docs](#documentation) · [Contributing](#contributing)
+
+## What's new in 0.3.0
+
+One navigation rail, Brain maps as a real node editor, ad-free radio, and an
+agent loop that finishes what it starts. It is on `main` now; the portable
+build follows with the 0.3.0 release. The full list is in the
+[changelog](CHANGELOG.md).
+
+<p align="center">
+  <img src="docs/images/release-0.3.0/main.png" width="900" alt="Mefi's Studio AI+ 0.3.0: navigation rail, Brain maps editor, ad-free radio and a steadier agent loop">
+</p>
+
+<p align="center">
+  <img src="docs/images/release-0.3.0/navigation-rail.png" width="440" alt="One rail replaces three menus: every destination grouped Home, Work, Live, Models and Settings">
+  <img src="docs/images/release-0.3.0/brain-maps.png" width="440" alt="Brain maps as a node editor: pan and zoom with a minimap, wires dragged end to end, undo and Tidy">
+</p>
+<p align="center">
+  <img src="docs/images/release-0.3.0/ad-free-radio.png" width="440" alt="Ad-free radio in Style and sound: twelve listener-funded stations from SomaFM and Radio Paradise">
+  <img src="docs/images/release-0.3.0/agent-loop.png" width="440" alt="The agent loop finishes what it starts: 15 of 15 hand-off cards and 9 of 9 slow-start tasks done, 56% less host CPU">
+</p>
 
 ## What it does
 
