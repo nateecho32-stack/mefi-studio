@@ -25,6 +25,28 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Landing confirmation for the per-feature model-config tree (2026-09-22,
+10:39-10:40, run_1790091413818_26 for task_6b445d8ac92eeed6 "Land the
+per-feature model-config tree", parent "whats left to do?"). This card's
+commit obligation was already discharged by a sibling session before pickup:
+`git show --name-only a16b752` ("Land brain maps, the agent-issues decision
+lane and Command inspect mode", 09:24) contains all eight waited-on paths —
+main.cjs, preload.cjs, scripts/assistant.mjs, scripts/task-context.cjs,
+scripts/agent-issues.cjs, scripts/brains.cjs, tests/agent_issues.test.mjs,
+tests/brains_map.test.mjs — with main.cjs evolved further in e3ad851 and
+31f69f0, all committed; `git status --porcelain` showed those paths clean
+throughout this pass, so no re-commit was made. Narrow check on the landed
+pair: `node --test tests/agent_issues.test.mjs
+tests/brains_map.test.mjs` — 26 tests / 26 pass / 0 fail / 0 skipped in
+0.13 s, exit 0. `npm run check` — all five stages ok (100/100 targets
+through the syntax pass, 200 specs with unique basenames and no orphans, no
+merge in progress, every class selector used, 100 files in-process syntax).
+The follow-on rerun card task_baa66f9ab1ec0f2e had already run green on the
+settled tree and recorded its own row below (e936982), so both of this
+card's obligations are met without re-triggering. This commit adds only
+this row; a sibling session's in-flight package-lock.json hunk was left
+untouched.
+
 Settled-tree full-gate rerun, exit 0 (2026-09-22, 10:36-10:38,
 run_1790091305943_21 for task_baa66f9ab1ec0f2e "Full-gate rerun after
 in-flight work settles", parent idea "Per-feature model config with
