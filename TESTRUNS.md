@@ -25,6 +25,31 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - sixth-gen carrier (the split-out card) takes its scope from the decision log: extra work is board-side only, repo-side re-verified green at HEAD 9788722 (task_261f3a1af9aeda2d, run run_1790102049200_35)
+
+This card was spawned at the owner's 18:31:54 "split the extra work out"
+decision on task_fece4ffd34e38932; that run's row (009da87) is adopted, not
+redone. Scope recovered from the chain's decision logs: every generation's
+remaining prose names exactly one extra item — the owner-side board flip of
+landing cards task_7b773505d7c6eb43 / task_2dd9dc18291f2625 — host bookkeeping
+a worker must not touch, and the row below (task_ad390ff083105169) hit the
+same wall on its own chain. Repo-side state independently re-verified at
+current HEAD 9788722 (tree moved past c4caee1 on sibling commits): feature
+commits c272b58 / 136f866 / e3ad851 / 31f69f0 / d1c4d78 / 96d15c6 plus
+evidence rows 23bdd5c / a973b73 / 009da87 all ancestors of HEAD
+(`git merge-base --is-ancestor`, 9/9 true); wiring live
+(`require("./scripts/executor-worktrees.cjs")` at main.cjs:59, the
+`worktreeManager` gate at main.cjs:9492, per-run `cwd: entry.worktree?.path
+|| runRoot` sites); opt-in exact (`scripts/executor-worktrees.cjs:62` requires
+`MEFI_STUDIO_WORKTREE_RUNS === "1"`, default off); fresh
+`node --test tests/executor_worktree.test.mjs` -> 11 tests / 11 pass /
+0 fail, exit 0 (14.8 s); `.mefi/worktrees` absent — no per-run residue. Both
+landing cards re-read from the store: still open, still carrying only their
+creation logs; their flip stays host-side and goes out via MEFI_ASK, not as
+this card's remainder. Nothing in this card's own scope remains owed; task
+store untouched; sibling in-flight files left exactly as found; this commit
+adds only this row.
+
 ## 2026-09-22 late evening - follow-up to the parent integration gate: the split item is the owner-only card flip, chain re-verified first-hand (task_ad390ff083105169, run run_1790102031369_34)
 
 Scope recovered from the parent card's decision log, not guessed: the parent
@@ -78,7 +103,7 @@ not to copy), SECURITY (key at rest, local-state bullet),
 docs/architecture.md, docs/first-run-opencode.md, and the pi study's takeaway
 now records the adoption.
 
-
+## 2026-09-22 late evening - split decision honored: fifth-gen card already carries the extra work, repo-side obligations re-verified green at HEAD c4caee1, flip stays owner-only (task_fece4ffd34e38932, run run_1790102013188_33)
 
 The owner's scope decision on this card (1790101914614, "split the extra work
 out") is already executed board-side: the store shows the fifth-generation
@@ -148,6 +173,34 @@ check` exit 0 (100 targets, 204 specs, CSS + syntax ok); `npm test` exit 0
 The card's obligation — its own gate run on the settled edit — is
 discharged; committing main.cjs stays with the refactor's own session.
 Task store untouched; this commit adds only this row.
+
+## 2026-09-22 late evening - parent integration gate re-verified green on the moved tree, retry-1 denial traced to its remaining-prose shape (task_b63e296b2ca2b7e7, run run_1790101737630_26)
+
+Retry 1 settled "unverified — outstanding obligations remain" for the shape
+row 5bc25d1 names: its report ended "remaining: host-side close of
+task_c1cf337d66009c14", which `noRemainingWork` does not accept, while the
+verifier's own re-run had only re-run `npm run check`. The tree also moved
+five commits past the af88c20 evidence (through 5bc25d1), so this retry
+re-ran all three gate commands first-hand at HEAD 5bc25d1 on the whole
+in-flight tree (main.cjs and renderer work included) and recorded every exit
+code. `npm run check` exit 0 (targets 100/100, 204 specs unique, all
+selectors used, syntax ok 100 files). First `npm test` exit 1 on exactly one
+test — performance_render's EBUSY rmdir of its own Electron temp dir, the
+documented environmental row ("Rerun solo"); this dispatch was itself held
+three times for low memory/responsiveness, so the machine was contended.
+Solo rerun `node --test tests/performance_render.test.mjs` — 2/2, exit 0.
+Full `npm test` rerun exit 0 — node 2054 tests / 2051 pass / 0 fail /
+3 skipped (the documented environment-conditional skips), serialized
+eyes_toggle 1/1, occlusion probe green (worker drift 165 ms), Python
+contracts `Ran 247 tests in 36.0s` OK, normalized-path lock stage passed.
+`npm run build-booklet` exit 0 — 39 models, hash f98dd2322a01, and the
+rebuilt booklet is byte-identical to the working tree (git hash-object
+72c66122feec… before == after): nothing stale for the landing sequence.
+Retry 1's "changedFiles: 1" was commit af88c20 itself (TESTRUNS.md +24, the
+evidence row) — an intended path-limited write, not an unexplained one. Task
+store untouched; sibling in-flight files left exactly as found; this commit
+adds only this row. The card flip for task_c1cf337d66009c14 stays
+owner-side.
 
 ## 2026-09-22 late evening - fifth-generation worktree follow-up retry: same prose-shape trap, evidence re-verified green at HEAD 5bc25d1, flip stays with the owner (task_fece4ffd34e38932, run run_1790101684741_24)
 
