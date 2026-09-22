@@ -25,6 +25,33 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - landing-card retry resolves the verifier flag: changedFiles:1 is a sibling's in-flight docs edit, landing intact and green at 1a5111f (task_7e5824cf51975676, run run_1790103332486_19)
+
+Retry of the closing row adf21a7, which the verifier held as "outstanding
+obligations remain · changedFiles: 1" despite its `npm run check` passing
+(receipt rcp_a46aa3ddf11a8d15). The flag was investigated, not assumed away:
+`git status --porcelain` at HEAD 1a5111f shows exactly one modified file,
+`docs/agent-loop.md` (213+/93−) — a sibling session's in-flight documentation
+edit, not this card's scope; it even cites the landed refactor's own signature
+(`queueExecutorCheckpoint`, main.cjs:8404) at its line 132, so it depends on the
+landing rather than disputing it. Left byte-for-byte as found, nothing staged,
+per the shared-index protocol. The landing itself re-verified first-hand, not
+from adf21a7's prose: `git log adf21a7..HEAD -- main.cjs` is empty (no commit
+since the closing row touched the file, so the landed bytes are unchanged
+through c2ced15's 42-file landing and after), and the four 6173a10 signatures
+re-grep at their exact recorded lines — `refreshAutopilotQueue(eyes = null,
+rows = null)` main.cjs:8107, `autopilotProactivePass()` 8141,
+`queueExecutorCheckpoint(entry, { force, delay })` 8404, single-param
+`runVerificationJob(planned)` 10756 — with `taskPriority`/`setProactive` still
+holding zero references in main.cjs (only their own copies in
+scripts/assistant.mjs and scripts/policy.mjs, plus prose). Fresh `npm run
+check` exit 0 this run (101 targets, 205 specs, syntax ok); full-gate evidence
+for this content already in history (6173a10, c4caee1, quiet-tree 6a9a299).
+Nothing further is owed on this card: the landing is committed (fold in
+2457a7d), the closing row exists (adf21a7), and the only dirty file belongs to
+another session. Card flip stays owner-side; task store untouched; this commit
+adds only this row.
+
 ## 2026-09-22 late evening - third split retry honors the twice-recorded split decision; no re-ask, repo side independently green at c2ced15 (task_fece4ffd34e38932, run run_1790103149788_14)
 
 The card cycled twice on owner "split the extra work out" decisions
