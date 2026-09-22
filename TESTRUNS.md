@@ -25,6 +25,26 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Settled-tree full-gate rerun, exit 0 (2026-09-22, 10:36-10:38,
+run_1790091305943_21 for task_baa66f9ab1ec0f2e "Full-gate rerun after
+in-flight work settles", parent idea "Per-feature model config with
+graceful fallbacks"). This is the rerun the two rows below anticipated:
+they certified the combined tree while the six monitor-loop paths were
+still uncommitted in-flight (and the earlier attempt's verification
+flagged exactly that outstanding tree), so this run is the first
+complete `npm test` on the settled combined tree — HEAD 31f69f0, which
+landed those six paths on top of 17d35a3 plus the two TESTRUNS-only
+commits. Exit 0 on every stage: parallel 1958 tests / 1955 pass /
+0 fail / 3 skipped in 36.5 s; serialized eyes_toggle_electron 1/1
+(3.7 s, baseline 2 fetches, one resume snap, 6 fetches total);
+occlusion_probe took the documented capability skip (visibility never
+flipped, unattended desktop); Python contracts 246/246 OK in 33.7 s;
+normalized-path lock all ok. Settle check for this run: HEAD was
+31f69f0 before and after, and `git status --porcelain` captured before
+and after is byte-identical and empty — the in-flight work this task
+waited on had fully settled, no sibling landed mid-run, and the runner
+raised no moved-sources diagnosis. This commit adds only this row.
+
 Landing verification for the combined in-flight tree (2026-09-22, 10:35,
 run_1790091189066_19 for task_2fe0bffe3a85cde1 "Land the sweep-advice
 main.cjs hunk", parent "Feed the staged-sweep warning into the next
