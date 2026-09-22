@@ -29,6 +29,35 @@ only above the anchor (decision recorded 2026-09-22, pinned by
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - TESTRUNS append helper scripts/append-testruns-row.mjs: lock-serialized atomic newest-first insertion with gate-audit rollback; contracts tests/append_testruns_row.test.mjs 9/9 (run_1790106299967_29, task_1ce49050ba42afe1)
+
+The write-side companion to scripts/check-testruns.mjs (a1eea61): instead of
+only detecting duplicate headings and stale-anchor ordering after a hand
+edit, sessions append with `node scripts/append-testruns-row.mjs --file
+<block>` (a quoted positional or stdin also work). The helper holds a
+cross-process lock (temp-dir file keyed by the target path, breakable after
+30 s stale), re-reads TESTRUNS.md under the lock, splices the row above the
+first live row with an equal-or-older date - the true top for a fresh run,
+the correct slot for a late backfill, bottom-of-region just above the guide
+for the oldest - keeps the on-disk CRLF convention byte-for-byte outside the
+inserted block, writes temp-file + fsync + rename (copyFileSync fallback if
+Windows holds the target), then re-runs the check-testruns audit and rolls
+back to the exact prior bytes on any new problem. It refuses to run at all
+while the gate already flags the file (duplicate H2, conflict-copy sibling,
+malformed tail, BOM), so appends never bury a known problem.
+
+Checks: `node --test tests/append_testruns_row.test.mjs` 9/9 (true-top
+insert, CRLF byte-exactness, late-backfill ordering, oldest-row-at-guide,
+malformed/duplicate/gate refusals with the file left byte-identical,
+dry-run, CLI forms, two concurrent CLI appends both surviving under the
+lock) and full `npm run check` green before this row - check-targets 103
+targets full coverage (the new script rides the check-syntax discovery
+pass), spec-collisions 207 unique basenames, check-testruns 59 live rows;
+this row itself was inserted by the helper and `node
+scripts/check-testruns.mjs` re-run green afterwards. Touches only
+scripts/append-testruns-row.mjs, tests/append_testruns_row.test.mjs and
+this row; nothing else staged.
+
 ## 2026-09-22 late evening - archive below "Read Before Any Tests" blessed as-is: newest-first gate stays live-region-only, exemption documented and pinned by tests, missing anchor now fails loudly (task_87f7dbf510f14bef, run run_1790106278990_28)
 
 Decision on the a-eyes card: bless, do not normalize. Evidence gathered
