@@ -48,6 +48,25 @@ flip goes out via MEFI_ASK again; it is not this card's remainder. Nothing in
 this card's own scope remains owed; task store untouched; sibling in-flight
 files left exactly as found; this commit adds only this row.
 
+## 2026-09-22 late evening - sixth-generation carrier re-verified green at HEAD c2ced15 after the sibling landing; flip stays owner-only (task_b5ec79917d8514b2, run run_1790103166390_15)
+
+Third "split" decision (1790102964154) kept the scope unchanged: repo-side
+obligations only, the flip of landing cards task_7b773505d7c6eb43 /
+task_2dd9dc18291f2625 is owner-side (both re-checked `open` in the store,
+read-only, store untouched). Re-verified everything first-hand at HEAD
+c2ced15 — the tree moved past 5bc25d1/1a9664a when the settled session-
+continuity worktree work landed (c2ced15), which shifted the wiring lines:
+feature commits c272b58 / 136f866 / e3ad851 / 31f69f0 / d1c4d78 / 96d15c6
+all ancestors of HEAD (`git merge-base --is-ancestor` each); wiring live
+(`require` now at main.cjs:59, `worktreeManager` guard 9492, `enabled()`
+9493, `prepare` 9494, `discard` 9503, `settle` 9521); opt-in intact
+(scripts/executor-worktrees.cjs:62 requires `MEFI_STUDIO_WORKTREE_RUNS ===
+"1"` exactly); fresh `node --test tests/executor_worktree.test.mjs` -> 11
+tests / 11 pass / 0 fail, exit 0 (11.9 s); `.mefi` absent and `git worktree
+list` shows only the standing mb/mm/wt-* checkouts; `npm run check` exit 0
+(101 targets, 205 specs unique, all selectors used, syntax ok). This commit
+adds only this row; nothing else staged.
+
 ## 2026-09-22 late evening - parent-gate follow-up retry settles its remaining-prose shape - chain green first-hand at HEAD 17ba279, flip target resolved in its own lane (task_ad390ff083105169, run run_1790102799243_5)
 
 Retry 1's "unverified — outstanding obligations remain" was the prose-shape
