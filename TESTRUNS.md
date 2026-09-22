@@ -25,6 +25,38 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - third full-gate rerun for the 6c5e94 follow-up card on a concurrently loaded tree (task_7a3b221956f9aa64, run run_1790094398262_129)
+
+Third full-gate row for this card. Preconditions verified first-hand: start
+HEAD 21f9e33 (the second full-gate row) over landing commit e3cd322; gate
+targets of task_bf79bd8c1d8fced5 still on history (c272b58 worktree module,
+e3ad851 wiring, 31f69f0 + d1c4d78 follow-ons; `scripts/executor-worktrees.cjs`
+and `tests/executor_worktree.test.mjs` present on disk); tree clean, nothing
+staged. node v24.15.0, npm 11.12.1. Two other-session evidence rows (56087b2,
+5852541, TESTRUNS.md-only) landed mid-suite and tripped the run-node-tests
+"sources changed" advisory twice; both were treated as noise, not regressions.
+
+`npm test` was run end-to-end twice; each full run had exactly one
+timing-sensitive failure and the two failures were disjoint files: run 1 node
+stage 1959 tests / 1955 pass / 1 fail / 3 skipped with only
+performance_render.test.mjs:72 (profiler JSON download 5260 ms @1.05x), run 2
+with only eyes_worker.test.mjs:91 (150 ms store read timeout). Both are
+documented load signatures (the perf-profiler table row and the eyes_worker
+read-past-timeout note), and the host was measured loaded during the runs
+(60% CPU, sibling claude/electron sessions). Documented remediation applied
+and confirmed: solo `node --test tests/performance_render.test.mjs` passed
+2/2 exit 0 in 12.7 s on the second solo attempt (first solo attempt 1/2 with
+the other test in the file timing out — same contention signature), solo
+`node --test tests/eyes_worker.test.mjs` exit 0. The `&&`-gated tail stages
+were then run individually to completion: Python contracts 247/247 OK in
+54.0 s exit 0; normalized-path lock 6/6 ok exit 0. `npm run check` exit 0
+(targets 100/100, spec-collisions 200 unique no orphans, css merge skip, all
+selectors used across 5 stylesheets, syntax ok 100 files). `npm run audit`
+exit 0 with 0 findings / 0 warnings (checkedAt 2026-09-22T16:35:47Z). Gate
+conclusion: every suite green in-suite except one rotating documented flake
+per pass, each flake green solo, all three `npm test` stages and both
+supporting gates exit 0 first-hand at this HEAD.
+
 ## 2026-09-22 evening - scope pass for the third worktree follow-up: both split obligations verified discharged (task_8d38294b586a1490, run run_1790094266535_124)
 
 Scope decided from the parent's decision log (task_64d0e2f342af618c,
