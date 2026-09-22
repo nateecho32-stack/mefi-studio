@@ -622,3 +622,36 @@ test("workspace tool menu groups destinations and excludes duplicated sidebar li
   for (const id of ["workspace", "command", "tasks", "plans", "studio", "music", "onboarding"]) assert.ok(!destinations.includes(id));
   assert.equal(new Set(destinations).size, destinations.length);
 });
+
+test("a machine without OpenCode is still configured: the scan shows auto setup's route and Use this setup stays available", async () => {
+  const auto = { ok: true, applied: false, planned: true, summary: "Assistant on Claude Code CLI, fixed model defaults, builders on Claude Code.", notes: ["No assistant key saved: the assistant answers through the Claude Code CLI's own subscription login."] };
+  const { host, calls } = bridge({
+    firstScan: async (payload) => { calls.push(["scan", payload]); return { ok: true, plan: { ...PLAN, ok: false, opencode: { installed: false }, nextSteps: ["Install the OpenCode CLI."] }, autoSetup: auto }; },
+    firstScanApply: async (payload) => { calls.push(["apply", payload]); return { ok: true, summary: "OpenCode is not usable yet; " + auto.summary, notes: ["Auto setup: " + auto.summary], autoSetup: { ...auto, applied: true } }; },
+  });
+  const env = environment(new Map(), { host }); env.guide.open();
+  await env.settle();
+  env.el("scan-run").click();
+  await env.settle();
+  assert.match(env.el("scan-status").textContent, /auto setup found a working route: Assistant on Claude Code CLI/);
+  const facts = env.el("scan-facts").children.map((item) => item.textContent);
+  assert.match(facts[0], /OpenCode is not installed/);
+  assert.match(facts[facts.length - 1], /^Auto setup: Assistant on Claude Code CLI/);
+  const notes = env.el("scan-notes").children.map((item) => item.textContent);
+  assert.ok(notes.includes("Next: Install the OpenCode CLI."));
+  assert.ok(notes.some((text) => text.startsWith("Setup: No assistant key saved")));
+  assert.equal(env.el("scan-apply").hidden, false, "the route can be saved without OpenCode");
+  env.el("scan-apply").click();
+  await env.settle();
+  assert.equal(calls.filter((call) => call[0] === "apply").length, 1);
+  assert.match(env.el("scan-status").textContent, /Setup saved\. OpenCode is not usable yet; Assistant on Claude Code CLI.*Auto setup: Assistant on Claude Code CLI/);
+  assert.equal(JSON.parse(env.storage.get(KEY)).done[SCAN], true);
+});
+
+test("a first launch that already ran auto setup is reported at the scan stop before any scan", async () => {
+  const { host } = bridge({ firstRunStatus: async () => ({ ok: true, firstRun: null, autoSetup: { at: 1, automatic: true, summary: "Assistant on z.ai GLM, fixed model defaults, builders on OpenCode." } }) });
+  const env = environment(new Map(), { host }); env.guide.open();
+  await env.settle();
+  assert.match(env.el("scan-status").textContent, /Auto setup ran on first launch: Assistant on z\.ai GLM.*Run the scan/);
+  assert.equal(JSON.parse(env.storage.get(KEY)).done[SCAN], false, "auto setup alone does not complete the scan stop");
+});

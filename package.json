@@ -7,6 +7,9 @@
   "description": "A personal multi-project workspace with an AI companion, agent task loop, and visible work results.",
   "main": "main.cjs",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "start": "electron .",
     "start:web": "node scripts/serve.mjs",

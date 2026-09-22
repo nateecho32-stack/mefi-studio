@@ -119,7 +119,7 @@ class MefiStudioMachineTests(unittest.TestCase):
                         "width": 2,
                         "exclusive": False,
                         "label": "pipeline:ui",
-                        "agent": "tomps",
+                        "agent": "peer-a",
                         "startedUtc": fresh,
                     }
                 ),

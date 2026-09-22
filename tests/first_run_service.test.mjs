@@ -29,7 +29,7 @@ const RUN_OK = [
 ].join("\n") + "\n";
 const RUN_REFUSED = JSON.stringify({ type: "error", sessionID: "ses_x", error: { name: "APIError", data: { message: "Error from provider (Console): OpenCode's free tier can only be used from within OpenCode", statusCode: 403 } } }) + "\n";
 
-function harness({ settings = {}, exec, projectOpen = true, ideas = [], analyze = async () => ({ inventory: { files: 3 } }), assistant = { ok: false }, smoke = false } = {}) {
+function harness({ settings = {}, exec, projectOpen = true, ideas = [], analyze = async () => ({ inventory: { files: 3 } }), assistant = { ok: false }, smoke = false, autoSetup = null } = {}) {
   const state = { settings: structuredClone(settings), writes: [], ideas: structuredClone(ideas), ideaWrites: [], mapFiles: [], sent: [], progress: [], logs: [], calls: [] };
   const scanOutputs = {
     "where opencode": "C:\\Users\\me\\AppData\\Roaming\\npm\\opencode\n", "opencode --version": "1.18.31\n", "opencode auth list": AUTH,
@@ -47,6 +47,7 @@ function harness({ settings = {}, exec, projectOpen = true, ideas = [], analyze 
     writeSettings: async (next) => { state.settings = structuredClone(next); state.writes.push(structuredClone(next)); },
     decryptKey: (settings, field) => (settings?.[field] ? "secret" : null),
     assistantRoute: async () => assistant,
+    autoSetup,
     projects: { current: () => ({ id: "project_1", name: "probe", path: "C:\\probe" }), open: () => projectOpen },
     analyzeProject: analyze,
     runEnv: () => ({ OPENCODE_CONFIG_CONTENT: '{"snapshot":false}' }),
@@ -302,4 +303,52 @@ test("a paid explorer runs on OpenCode's default model and cancel kills the runn
   assert.equal(originalKill, scanner.killTree);
   assert.equal(service.cancel().cancelled, false);
   void killed;
+});
+
+test("the scan carries auto setup's plan without writing, and Use this setup runs it for real", async () => {
+  const runs = [];
+  const summary = "Assistant on Claude Code CLI, fixed model defaults, builders on OpenCode.";
+  const autoSetup = async (options = {}) => {
+    runs.push(options);
+    if (options.apply === false) return { ok: true, applied: false, planned: true, summary, notes: ["OpenCode CLI found: builders run through it."], changes: { provider: "claude" } };
+    return { ok: true, applied: true, summary, notes: ["OpenCode CLI found: builders run through it."], changes: { provider: "claude" } };
+  };
+  const { service, state } = harness({ autoSetup });
+  const scan = await service.scan();
+  assert.deepEqual(runs, [{ apply: false }], "the scan only plans");
+  assert.equal(scan.autoSetup.planned, true);
+  assert.equal(scan.autoSetup.summary, summary);
+  assert.deepEqual(state.writes, [], "a scan never writes settings");
+  const result = await service.apply();
+  assert.deepEqual(runs, [{ apply: false }, { apply: true }], "Use this setup applies it once");
+  assert.ok(result.applied.includes("autoSetup"), "an applied pass is reported");
+  assert.deepEqual(result.autoSetup.changes, { provider: "claude" });
+  assert.match(result.notes.join(" "), /Auto setup: Assistant on Claude Code CLI/);
+  assert.match(result.summary, /^Explorer /, "a usable OpenCode keeps the scan's own summary");
+});
+
+test("auto setup that throws or finds nothing never blocks the first-run apply", async () => {
+  const { service, state } = harness({ autoSetup: async () => { throw new Error("where.exe exploded"); } });
+  const scan = await service.scan();
+  assert.equal(scan.autoSetup.ok, false);
+  assert.match(scan.autoSetup.error, /where\.exe exploded/);
+  const result = await service.apply();
+  assert.equal(result.ok, true);
+  assert.ok(!result.applied.includes("autoSetup"));
+  assert.equal(state.writes.length, 1, "the first-run record is still written once");
+  const nothing = harness({ autoSetup: async () => ({ ok: false, error: "Nothing to set up yet - save a key or install a CLI." }) });
+  await nothing.service.scan();
+  const applied = await nothing.service.apply();
+  assert.equal(applied.ok, true);
+  assert.doesNotMatch(applied.notes.join(" "), /Nothing to set up/, "a usable OpenCode does not need the auto-setup excuse");
+  const status = await nothing.service.status();
+  assert.equal(status.autoSetup, null, "status mirrors the settings record, absent here");
+});
+
+test("status mirrors the first-launch auto-setup record the host saved", async () => {
+  const record = { at: 99, automatic: true, summary: "Assistant on z.ai GLM, fixed model defaults, builders on OpenCode.", notes: [] };
+  const { service } = harness({ settings: { autoSetup: record } });
+  const status = await service.status();
+  assert.deepEqual(status.autoSetup, record);
+  assert.equal(status.firstRun, null);
 });

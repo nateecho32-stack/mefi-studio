@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { focusedTestsForTask, isVerificationCommand } from "../scripts/assistant.mjs";
 
-const SPACED_TASK_REF = "C:/Users/tomps/OneDrive/Desktop/Coding projects/mefi-studio/tests/worker_responsiveness.test.mjs";
+const SPACED_TASK_REF = "C:/Users/example/Desktop/Coding projects/mefi-studio/tests/worker_responsiveness.test.mjs";
 
 test("focused node commands quote spaced absolute test paths", () => {
   const commands = focusedTestsForTask({ refs: [SPACED_TASK_REF] }, null);

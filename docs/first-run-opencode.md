@@ -343,7 +343,7 @@ done by this file.
    models vanish).
 7. **Docs and tests** — GETTING_STARTED "New machine checklist" and
    "Connect one assistant and one builder" gain the scan; README's
-   walkthrough paragraph names six stops; FEATURE_AUDIT rows "Requests use
+   walkthrough paragraph names six stops; feature-audit rows (`docs/archive/feature-audit-2026-09-19.md`) "Requests use
    smaller models" and "Old plans supply unfinished work" change state.
 
 ## 7. Gaps and edge cases

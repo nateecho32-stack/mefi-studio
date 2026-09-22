@@ -251,7 +251,7 @@
     try { target.classList?.[error ? "add" : "remove"]?.("error"); } catch {}
   }
   const allowFree = () => $("scan-allow-free")?.checked !== false;
-  function scanFacts(plan) {
+  function scanFacts(plan, auto = null) {
     if (!plan) return [];
     const facts = [];
     const cli = plan.opencode || {};
@@ -264,14 +264,19 @@
     facts.push(`Explorer: ${plan.explorer?.model || "OpenCode's default model"} — ${plan.explorer?.reason || ""}`.trim());
     facts.push(`Builder: ${plan.builder?.model || "OpenCode's default model"} — ${plan.builder?.reason || ""}`.trim());
     facts.push(`Judge: ${plan.judge?.kind || "fixed"} — ${plan.judge?.reason || ""}`.trim());
+    // Auto setup's plan rides along with the scan: the assistant route and
+    // builder CLI this machine's keys, CLIs and local servers already allow.
+    if (auto?.ok) facts.push(`Auto setup: ${auto.summary || "a working route was found."}`);
+    else if (auto?.error) facts.push(`Auto setup: ${auto.error}`);
     return facts;
   }
-  function scanNotes(plan) {
+  function scanNotes(plan, auto = null) {
     if (!plan) return [];
     return [
       ...(plan.warnings || []).map((text) => `Warning: ${text}`),
       ...(plan.nextSteps || []).map((text) => `Next: ${text}`),
       ...(plan.disclosures || []).map((text) => `Note: ${text}`),
+      ...(auto?.ok ? (auto.notes || []).map((text) => `Setup: ${text}`) : []),
     ];
   }
   function renderScan() {
@@ -281,8 +286,8 @@
     if ($("scan-run")) $("scan-run").disabled = scanBusy;
     if ($("scan-apply")) { $("scan-apply").hidden = !(scanResult?.ok && scanResult.plan); $("scan-apply").disabled = scanBusy; }
     const plan = scanResult?.ok ? scanResult.plan : null;
-    $("scan-facts")?.replaceChildren(...scanFacts(plan).map((text) => node("li", "", text)));
-    $("scan-notes")?.replaceChildren(...scanNotes(plan).map((text) => node("li", "", text)));
+    $("scan-facts")?.replaceChildren(...scanFacts(plan, scanResult?.autoSetup).map((text) => node("li", "", text)));
+    $("scan-notes")?.replaceChildren(...scanNotes(plan, scanResult?.autoSetup).map((text) => node("li", "", text)));
     if (!panel.hidden && !scanSynced) syncScanStatus();
   }
   // A setup saved in an earlier session (or from Settings) counts; the guide
@@ -292,7 +297,12 @@
     scanSynced = true;
     if (!fn) return;
     Promise.resolve().then(() => fn()).then((status) => {
-      if (!status?.firstRun) return;
+      if (!status?.firstRun) {
+        // A fresh install's first launch ran auto setup by itself; the scan
+        // adds OpenCode's free explorer and builder on top of that route.
+        if (status?.autoSetup?.summary && !scanResult) setPanelStatus("scan-status", `Auto setup ran on first launch: ${status.autoSetup.summary} Run the scan to add OpenCode's free explorer and builder.`);
+        return;
+      }
       if (!state.done[SCAN]) { state.done[SCAN] = true; save(); }
       if (!scanResult) setPanelStatus("scan-status", `Setup saved${status.firstRun.appliedAt ? ` on ${new Date(status.firstRun.appliedAt).toLocaleDateString()}` : ""}: explorer ${status.firstRun.explorer?.model || "OpenCode default"}, builder ${status.firstRun.builder?.model || "OpenCode default"}, judge ${status.firstRun.judge?.kind || "fixed"}. Run the scan again after linking a provider.`);
       render();
@@ -314,7 +324,9 @@
       const result = await fn({ prefs: { allowFreeTraining: allowFree() } });
       scanResult = result;
       if (!result?.ok) setPanelStatus("scan-status", result?.error || "The scan did not finish.", true);
-      else setPanelStatus("scan-status", result.plan?.ok ? "Scan complete. Review the facts below, then choose Use this setup and continue: it saves these choices (no key), maps your selected folder and asks the linked AI what to do next." : "Scan complete, but OpenCode is not usable yet. Follow the next steps below, then scan again.", !result.plan?.ok);
+      else if (result.plan?.ok) setPanelStatus("scan-status", "Scan complete. Review the facts below, then choose Use this setup and continue: it saves these choices (no key), maps your selected folder and asks the linked AI what to do next.");
+      else if (result.autoSetup?.ok) setPanelStatus("scan-status", `Scan complete. OpenCode is not usable yet, but auto setup found a working route: ${result.autoSetup.summary} Choose Use this setup to save it; install OpenCode later for the free explorer.`);
+      else setPanelStatus("scan-status", "Scan complete, but OpenCode is not usable yet. Follow the next steps below, then scan again.", true);
     } catch (error) {
       setPanelStatus("scan-status", error?.message || "The scan failed.", true);
     } finally {

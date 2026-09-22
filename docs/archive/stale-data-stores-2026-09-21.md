@@ -1,5 +1,7 @@
 # Stale legacy data-store copies — swept 2026-09-21
 
+> **Historical record.** A one-off cleanup log for files that lived in the git-ignored `dist/` payload. Nothing here applies to a fresh clone.
+
 The five top-level data files below were dead pre-store-fork copies, frozen at
 the store fork on **2026-09-20 01:20 local (06:20Z)**. Nothing wrote them after
 the fork, so the frozen machine gauge could be mistaken for a live reading.

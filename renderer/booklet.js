@@ -684,6 +684,17 @@
       return `${observed} Catalog quality: ${benchmark}; catalog price estimate: ${estimate}. Estimates are separate from your billed cost.${workerNote}`;
     }
     let routingRead = 0;
+    // The first launch of a fresh install runs auto setup by itself (main's
+    // firstLaunchAutoSetup); its saved record shows under the button until
+    // the button is pressed in this session.
+    let autoSetupPressed = false;
+    function renderAutoSetupRecord(record) {
+      const status = document.getElementById("auto-setup-status");
+      if (!status || !record?.summary) return;
+      const when = record.at ? ` on ${new Date(record.at).toLocaleDateString()}` : "";
+      const notes = Array.isArray(record.notes) && record.notes.length ? ` ${record.notes.join(" ")}` : "";
+      status.textContent = `Ran by itself on first launch${when}: ${record.summary}${notes}`;
+    }
     async function loadAiRouting({ syncControls = false } = {}) {
       const read = ++routingRead;
       routingRefresh.disabled = true;
@@ -693,6 +704,7 @@
         setup.routing = routing;
         setup.routingError = false;
         renderSetupState();
+        if (!autoSetupPressed && routing.autoSetup?.automatic) renderAutoSetupRecord(routing.autoSetup);
         if (syncControls) {
           providerSelect.value = routing.provider;
           modelSelection.value = routing.modelSelection ?? "jev";
@@ -891,6 +903,7 @@
     } else {
       autoSetupButton.addEventListener("click", async () => {
         if (autoSetupButton.disabled) return;
+        autoSetupPressed = true;
         autoSetupButton.disabled = true;
         autoSetupStatus.textContent = "Checking saved keys and installed CLIs…";
         try {
@@ -911,6 +924,13 @@
         } finally {
           autoSetupButton.disabled = false;
         }
+      });
+      // The host's own first-launch pass: show its record and re-read the
+      // controls it changed, unless the button was already pressed here.
+      window.mefiStudio.onAutoSetup?.((record) => {
+        if (!autoSetupPressed) renderAutoSetupRecord(record);
+        studioLog(`> auto setup (first launch): ${record?.summary ?? "applied"}`);
+        void loadAiRouting({ syncControls: true }).then(() => refreshCliStatus()).catch(() => {});
       });
     }
 

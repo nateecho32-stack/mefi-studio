@@ -33,3 +33,14 @@ Thumbs.db
 desktop.ini
 .vscode/
 *.lnk
+
+# Local-only Claude Code config (preview launch.json) and the untracked site
+.claude/
+website/
+
+# Editor swap and merge leftovers
+.idea/
+*.swp
+*.swo
+*.orig
+*.rej

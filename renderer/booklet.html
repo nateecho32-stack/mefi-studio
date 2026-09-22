@@ -1468,6 +1468,9 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 @keyframes pop-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 
 /* --- selection card #idle-info.cmd-card --- */
+/* One node, read top to bottom: what it is and how it stands (kicker), its
+   name, a short fact list boxed by hairlines, the folders, then one primary
+   action on its own row with the quieter ones beneath it. */
 .cmd-card {
   position: absolute; top: 92px; right: var(--hud-inset);
   width: 340px;
@@ -1484,25 +1487,33 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .cmd-card::-webkit-scrollbar-button { display: none; height: 0; }
 @keyframes card-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
 
-.card-kicker { display: flex; align-items: center; gap: var(--s2); margin-bottom: var(--s2); }
+.card-kicker { display: flex; align-items: center; gap: var(--s2); margin-bottom: 6px; }
+.card-kicker .badge { padding: 2px 7px; }
 .card-close { margin-left: auto; color: var(--muted); border-color: transparent; }
 .card-close:hover { color: var(--ivory); background: var(--tint-gold-2); transform: none; box-shadow: none; }
 .card-title {
-  margin: 0 0 var(--s2);
-  font: 600 var(--fs-base)/1.3 var(--font-display);
+  margin: 0 0 var(--s3);
+  font: 600 var(--fs-lg)/1.25 var(--font-display);
   color: var(--ivory);
   overflow-wrap: anywhere;
 }
+/* the fact list: a boxed two-column table, keys quiet and values plain */
 .cmd-card .kv {
-  display: grid; grid-template-columns: 84px minmax(0, 1fr);
-  gap: 5px var(--s2);
+  display: grid; grid-template-columns: minmax(68px, max-content) minmax(0, 1fr);
+  gap: 6px var(--s3);
   font-size: var(--fs-sm);
-  margin: var(--s2) 0;
+  margin: 0;
+  padding: var(--s2) 0;
+  border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline);
   align-items: baseline;
 }
-.cmd-card .kv .k { color: var(--dim); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: 0.06em; }
+.cmd-card .kv .k { color: var(--dim); font-size: var(--fs-2xs); line-height: 1.5; text-transform: uppercase; letter-spacing: 0.06em; }
 .cmd-card .kv > span:not(.k) { color: var(--ivory); font-variant-numeric: tabular-nums; }
 .cmd-card .kv > span { overflow-wrap: anywhere; }
+/* the todo progress lives in its own row instead of floating under the table */
+.cmd-card .kv .kv-meter { display: block; height: 4px; margin-top: 5px; background: #0b0b0f; border-radius: 2px; overflow: hidden; }
+.cmd-card .kv .kv-meter i { display: block; height: 100%; width: var(--pct, 0%); border-radius: 2px; background: linear-gradient(90deg, var(--gold), var(--gold-bright)); }
+.cmd-card .kv + p.muted { margin-top: var(--s2); }
 /* a <button> inside the kv grid that must read as text; all:unset drops the ring, so restore it */
 .link-value {
   all: unset;
@@ -1518,10 +1529,11 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .cmd-card .meter { margin: 6px 0 2px; }
 .cmd-card .meter i,
 .meter i[style*="--pct"] { width: var(--pct, 0%); }
-.cmd-card > .muted { font-size: var(--fs-sm); margin: var(--s2) 0 0; }
+.cmd-card > .muted { font-size: var(--fs-sm); line-height: 1.5; margin: var(--s2) 0 0; }
 
+/* section folds share one heading style with .card-sub: small caps in gold */
 .card-cps { margin-top: var(--s3); font-size: var(--fs-sm); }
-.card-cps > summary { color: var(--gold); font-size: var(--fs-sm); letter-spacing: var(--track-ui); margin-bottom: 6px; }
+.card-cps > summary { color: var(--gold); font: 600 var(--fs-2xs)/1.4 var(--font-ui); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
 .card-cps > summary:hover { color: var(--gold-bright); }
 .cmd-card .cp-note { margin: 6px 0 var(--s1); }
 .cmd-card .cp-actions { gap: 5px; margin-bottom: var(--s2); }
@@ -1539,7 +1551,9 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   border-top: 1px solid var(--hairline);
 }
 .card-actions > button { min-height: var(--ctl-h-sm); padding: 0 10px; font-size: var(--fs-sm); }
-.card-actions > .primary:only-child { width: 100%; }
+/* the main action takes its own row; the rest sit under it as a quieter strip */
+.card-actions > .primary { flex: 1 1 100%; }
+.card-actions > .ghost { flex: 1 1 auto; min-height: 26px; padding: 0 9px; font-size: var(--fs-xs); }
 
 /* --- A-Eyes feed #idle-feed.cmd-feed: left rail, sits under .cmd-card --- */
 .cmd-feed {
@@ -2783,7 +2797,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #idle-hud #idle-music-toggle[data-state="error"] { color: var(--warn); }
 #idle-hud .pop { top: 70px; right: 24px; }
 #idle-hud .cmd-feed { display: flex; left: 24px; top: var(--command-panel-top); bottom: var(--command-panel-bottom); width: var(--command-feed-width); padding: 16px; border-radius: 16px; background: var(--cmd-surface); border-color: var(--cmd-edge); font-size: 13px; box-shadow: var(--cmd-shadow); backdrop-filter: none; }
-#idle-hud .feed-head { flex: none; flex-wrap: nowrap; gap: 8px; padding: 0 0 10px; margin-bottom: 12px; border-bottom: 1px solid var(--hairline); min-height: 30px; }
+#idle-hud .feed-head { flex: none; flex-wrap: nowrap; }
 #idle-hud .feed-title { margin: 0; font: 600 14px/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
 #idle-hud .feed-head .feed-title { flex: 1; min-width: 0; }
 #idle-hud .feed-toggle { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; min-height: 30px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--ivory); font: inherit; text-align: left; box-shadow: none; }
@@ -2807,12 +2821,15 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 @keyframes command-panel-return { from { opacity: .3; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 #idle-hud .feed-state { font-size: 11px; color: var(--muted); }
 #idle-hud .feed-dot[data-state="running"] { box-shadow: none; }
-#idle-hud .feed-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; flex: none; margin-bottom: 12px; }
+#idle-hud .feed-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; flex: none; margin-bottom: 12px; }
 #idle-hud .feed-metrics[hidden] { display: none; }
-#idle-hud .feed-metric { min-width: 0; min-height: 42px; padding: 8px 10px; display: flex; align-items: center; justify-content: flex-start; gap: 9px; background: var(--cmd-raised); border: 1px solid var(--cmd-edge); border-radius: 7px; color: var(--muted); font-size: 11px; line-height: 1.25; text-align: left; white-space: normal; }
+#idle-hud .feed-metric { min-width: 0; min-height: 52px; padding: 7px 7px 6px; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 2px; background: var(--cmd-raised); border: 1px solid var(--cmd-edge); border-radius: 8px; color: var(--muted); font-size: 9.5px; line-height: 1.2; letter-spacing: .02em; text-align: left; white-space: normal; }
 #idle-hud .feed-metric:hover { background: var(--cmd-hover); border-color: var(--hairline-strong); transform: none; box-shadow: none; }
-#idle-hud .feed-metric strong { flex: none; min-width: 1.2ch; font-size: 20px; color: var(--ivory); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+#idle-hud .feed-metric strong { flex: none; min-width: 1.2ch; font-size: 19px; color: var(--ivory); font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+#idle-hud .feed-metric span { overflow-wrap: anywhere; }
 #idle-hud .feed-metric[data-empty="true"] strong { color: var(--muted); }
+#idle-hud .feed-metric[data-state="ready"][data-empty="false"] strong { color: var(--gold-bright); }
+#idle-hud .feed-metric[data-state="review"][data-empty="false"] strong { color: var(--info); }
 #idle-hud .feed-metric[data-state="blocked"][data-empty="false"] { border-color: color-mix(in srgb, var(--warn) 48%, var(--cmd-edge)); background: color-mix(in srgb, var(--warn) 7%, var(--cmd-surface)); }
 #idle-hud .feed-metric[data-state="blocked"][data-empty="false"] strong { color: var(--warn); }
 #idle-hud .feed-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; overscroll-behavior-y: contain; padding: 2px 7px 4px 2px; scroll-padding-block: 4px; }
@@ -2869,26 +2886,26 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .feed-row { font-size: 11px; line-height: 1.5; padding: 5px 0; }
 #idle-hud .feed-meta { margin: 0; padding-top: 6px; white-space: normal; font-size: 10px; line-height: 1.6; color: var(--dim); }
 #idle-hud .cmd-chat { top: var(--command-panel-top); bottom: auto; max-height: calc(100vh - var(--command-panel-top) - var(--command-panel-bottom)); right: 24px; width: 300px; padding: 16px; border-color: var(--cmd-edge); border-radius: 16px; background: var(--cmd-surface); box-shadow: var(--cmd-shadow); }
-#idle-hud .chat-log-head { margin-bottom: 14px; padding: 0 0 13px; flex-wrap: nowrap; gap: 7px; }
-#idle-hud .chat-log-title { font: 600 14px/1.3 var(--font-ui); text-transform: none; letter-spacing: 0; color: var(--ivory); }
-#idle-hud .chat-log-head .feed-state { font-size: 10px; }
-#idle-hud .chat-log-body { flex: 0 1 auto; gap: 12px; }
-#idle-hud .chat-log-thread { flex: 0 1 auto; min-height: 60px; max-height: 48vh; gap: 14px; padding: 0 2px 5px 0; }
-#idle-hud .chat-log-thread .assistant-msg { font-size: 12px; line-height: 1.7; padding: 10px 12px; border-radius: 7px; }
-#idle-hud .chat-log-thread .assistant-msg.user { background: var(--cmd-raised); border-color: var(--cmd-edge); color: var(--ivory); margin-left: 16px; }
+#idle-hud .chat-log-head { flex-wrap: nowrap; gap: 7px; }
+#idle-hud .chat-log-title { font: 600 13.5px/1.3 var(--font-ui); text-transform: none; letter-spacing: -.01em; color: var(--ivory); }
+#idle-hud .chat-log-head .feed-state { font-size: 10.5px; }
+#idle-hud .chat-log-body { flex: 1; min-height: 0; gap: 10px; }
+#idle-hud .chat-log-thread { flex: 1; min-height: 80px; max-height: none; gap: 12px; padding: 2px 6px 6px 0; scrollbar-gutter: stable; }
+#idle-hud .chat-log-thread .assistant-msg { font-size: 12px; line-height: 1.65; padding: 9px 11px; border-radius: 10px; }
+#idle-hud .chat-log-thread .assistant-msg.user { max-width: 88%; margin-left: auto; background: var(--tint-gold-2); border-color: var(--gold-dim); color: var(--ivory); border-bottom-right-radius: 3px; }
 #idle-hud .chat-log-thread .assistant-msg.assistant { border: 0; border-left: 2px solid var(--hairline-strong); border-radius: 0; background: transparent; padding: 2px 0 2px 12px; }
+#idle-hud .chat-log-thread .assistant-msg.thinking { border-left-style: dashed; }
 #idle-hud .chat-log-thread .when { color: var(--dim); font-size: 10px; margin-top: 5px; }
-#idle-hud .chat-chips { flex: none; margin: 1px 0 0; gap: 5px; }
-#idle-hud .chat-chips button { min-height: 25px; padding: 3px 7px; font-size: 10px; color: var(--muted); background: transparent; border-color: var(--hairline); border-radius: 5px; }
-#idle-hud .chat-chips button:hover { color: var(--ivory); background: var(--cmd-raised); }
-#idle-hud .chat-log-composer { border-top: 1px solid var(--hairline); padding-top: 12px; gap: 7px; }
-#idle-hud .chat-log-composer textarea { background: var(--bg); color: var(--ivory); border-color: var(--cmd-edge); border-radius: 9px; padding: 9px 10px; font-size: 11px; }
-#idle-hud .chat-log-composer .primary { background: var(--cmd-raised); border-color: var(--hairline-strong); color: var(--ivory); border-radius: 6px; min-height: 35px; box-shadow: none; }
+#idle-hud .chat-chips { flex: none; margin: 0; gap: 5px; }
+#idle-hud .chat-chips button { min-height: 24px; padding: 2px 9px; font-size: 10px; color: var(--muted); background: transparent; border-color: var(--hairline); border-radius: 999px; }
+#idle-hud .chat-chips button:hover { color: var(--ivory); background: var(--cmd-raised); border-color: var(--hairline-strong); }
+#idle-hud .chat-log-composer { border-top: 1px solid var(--hairline); padding-top: 10px; gap: 6px; }
+#idle-hud .chat-log-composer textarea { background: var(--bg); color: var(--ivory); border-color: var(--cmd-edge); border-radius: 9px; padding: 9px 10px; font-size: 11.5px; }
+#idle-hud .chat-log-composer .primary { background: var(--cmd-raised); border-color: var(--hairline-strong); color: var(--ivory); border-radius: 7px; min-height: 36px; box-shadow: none; }
 #idle-hud .chat-log-composer .primary:hover { background: var(--cmd-hover); border-color: var(--gold-dim); }
 #idle-hud .cmd-chat.collapsed { bottom: auto; width: max-content; max-width: 300px; min-height: 48px; padding: 9px 12px; border-radius: 14px; }
 #idle-hud .cmd-chat.collapsed .chat-log-head { padding: 0; margin: 0; border: 0; }
 #idle-hud .cmd-chat.collapsed .feed-state { margin-left: 6px; font-size: 10px; max-width: 12em; }
-#idle-hud #cmd-chat-toggle { width: 27px; min-height: 27px; padding: 0; border-radius: 7px; background: var(--cmd-raised); border-color: var(--cmd-edge); }
 #idle-hud .cmd-card { top: calc(var(--command-panel-top) + 66px); right: 24px; width: 300px; max-height: calc(100vh - var(--command-panel-top) - 170px); background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 12px; box-shadow: 0 12px 32px #0005; }
 #idle-hud.chat-log-open .cmd-card { right: 340px; }
 #idle-hud .cmd-bottom { bottom: 22px; gap: 9px; }
@@ -3286,42 +3303,55 @@ body.command-active .walkthrough-coach { right: 392px; }
 @media (prefers-reduced-motion: reduce) { #idle-hud .cmd-music-level i { transition: none; } }
 
 /* ============================================================
-   The right rail: Work · Assistant · Done · Ask
-   The live-work feed and the assistant chat used to sit on
-   opposite edges. They now share one docked, tabbed panel on the
-   right. The inner panels keep their own ids, heads and collapse
-   controls; the rail owns position, size and tab visibility.
+   The right rail: Work · Agents · Assistant · Done · Ask
+   The live-work feed, the agent settings, the assistant chat, the
+   done log and the questions share one docked panel. The tab strip
+   is a segmented control (glyph over label, badge in the corner);
+   every view opens with the same head (title · state · actions) so
+   the panel reads as one surface whichever tab is up. The inner
+   panels keep their own ids and collapse controls; the rail owns
+   position, size and tab visibility.
    ============================================================ */
 #idle-hud { --command-rail-width: 344px; }
 #idle-hud .cmd-rail {
   position: absolute; top: var(--command-panel-top); right: 24px; bottom: var(--command-panel-bottom);
   width: var(--command-rail-width);
   display: flex; flex-direction: column;
-  padding: 12px;
+  padding: 10px 12px 12px;
   border: 1px solid var(--cmd-edge); border-radius: 16px;
   background: var(--cmd-surface); box-shadow: var(--cmd-shadow);
   font-size: 13px; z-index: 1; pointer-events: auto;
 }
 #idle-hud .cmd-rail.rail-collapsed { bottom: auto; }
+
+/* the tab strip */
 #idle-hud .rail-tabs {
-  display: flex; align-items: center; flex-wrap: wrap; row-gap: 4px; gap: 3px; flex: none;
-  padding: 0 0 10px; margin-bottom: 10px; border-bottom: 1px solid var(--hairline);
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; flex: none;
+  padding: 3px; margin-bottom: 10px;
+  border: 1px solid var(--cmd-edge); border-radius: 11px; background: var(--cmd-raised);
 }
 #idle-hud .rail-tab {
-  position: relative; display: inline-flex; align-items: center; gap: 5px;
-  min-height: 30px; padding: 0 7px;
-  border: 1px solid transparent; border-radius: 7px;
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  min-width: 0; min-height: 44px; padding: 5px 3px 4px;
+  border: 1px solid transparent; border-radius: 8px;
   background: transparent; color: var(--muted);
-  font: 500 12px/1.3 var(--font-ui); letter-spacing: .01em; box-shadow: none;
+  font: 500 10.5px/1.2 var(--font-ui); letter-spacing: .01em; box-shadow: none;
+  transition: color var(--dur-2) var(--ease), background var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease);
 }
+#idle-hud .rail-tab .glyph { flex: none; width: 14px; height: 14px; opacity: .78; }
+#idle-hud .rail-tab-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #idle-hud .rail-tab:hover { color: var(--ivory); background: var(--cmd-hover); transform: none; }
-#idle-hud .rail-tab[aria-selected="true"] { color: var(--gold-bright); background: var(--tint-gold-2); border-color: var(--hairline); }
+#idle-hud .rail-tab:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+#idle-hud .rail-tab[aria-selected="true"] { color: var(--gold-bright); background: var(--cmd-surface); border-color: var(--hairline-strong); box-shadow: 0 1px 2px #0004; }
+#idle-hud .rail-tab[aria-selected="true"] .glyph { opacity: 1; }
 #idle-hud .rail-tab .count {
-  position: static; min-width: 17px; height: 17px; padding: 0 4px;
-  font-size: 10px; border: 1px solid var(--cmd-edge); border-radius: 5px;
-  background: var(--cmd-raised); color: var(--ivory); box-shadow: none;
+  position: absolute; top: 3px; right: 4px;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  font: 600 9.5px/1 var(--font-ui); font-variant-numeric: tabular-nums;
+  border: 1px solid var(--cmd-edge); border-radius: 999px;
+  background: var(--cmd-surface); color: var(--ivory); box-shadow: none;
 }
-#idle-hud .rail-tab .count.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--cmd-edge)); }
+#idle-hud .rail-tab .count.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--cmd-edge)); background: color-mix(in srgb, var(--warn) 12%, var(--cmd-surface)); }
 #idle-hud .rail-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 #idle-hud .cmd-rail .cmd-feed,
 #idle-hud .cmd-rail .cmd-chat,
@@ -3345,21 +3375,37 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .cmd-rail .cmd-feed.collapsed .feed-head,
 #idle-hud .cmd-rail .cmd-chat.collapsed .chat-log-head { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
 
-/* the two rail views that own a head (done/ask have .rail-view-head) */
+/* one head for every view: title · live state · actions */
 #idle-hud .rail-view-head {
-  display: flex; align-items: center; gap: 8px; flex: none;
-  padding-bottom: 9px; margin-bottom: 9px; border-bottom: 1px solid var(--hairline);
+  display: flex; align-items: center; gap: 8px; flex: none; min-height: 28px;
+  padding: 0 0 9px; margin-bottom: 10px; border-bottom: 1px solid var(--hairline);
 }
-#idle-hud .rail-view-title { margin: 0; font: 600 14px/1.3 var(--font-ui); color: var(--ivory); }
-#idle-hud .rail-view-head .feed-state { flex: 1; min-width: 0; font-size: 10px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#idle-hud .rail-view-head button { flex: none; min-height: 26px; padding: 3px 8px; font-size: 11px; }
+#idle-hud .rail-view-title { margin: 0; flex: none; min-width: 0; font: 600 13.5px/1.3 var(--font-ui); letter-spacing: -.01em; color: var(--ivory); text-transform: none; }
+#idle-hud button.rail-view-title { min-height: 0; padding: 0; border: 0; border-radius: 3px; background: transparent; box-shadow: none; }
+#idle-hud button.rail-view-title:hover { color: var(--gold-bright); background: transparent; transform: none; box-shadow: none; }
+#idle-hud .rail-view-head .feed-dot { flex: none; }
+#idle-hud .rail-view-head .feed-state { flex: 1; min-width: 0; font-size: 10.5px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#idle-hud .rail-view-head .ghost.mini { flex: none; min-height: 26px; padding: 3px 8px; font-size: 11px; border-radius: 6px; }
+#idle-hud .rail-view-head .ghost.mini.rail-fold { width: 26px; min-width: 26px; padding: 0; font-size: 13px; line-height: 1; background: var(--cmd-raised); border-color: var(--cmd-edge); }
 #idle-hud .rail-view-note { flex: none; margin: 0 0 10px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+#idle-hud .rail-view-note b { color: var(--ivory); font-weight: 600; }
 
-/* the settings view: a settings list (label · control · hint) in two
-   groups, Queue and Safety, with the long explanations folded underneath */
+/* filter chips: a small segmented control under a view's note (Done) */
+#idle-hud .rail-filter { display: flex; gap: 3px; flex: none; margin: 0 0 10px; padding: 3px; border: 1px solid var(--cmd-edge); border-radius: 8px; background: var(--cmd-raised); }
+#idle-hud .rail-filter-btn { flex: 1; min-width: 0; min-height: 24px; padding: 2px 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--muted); font: 500 10.5px/1.2 var(--font-ui); box-shadow: none; white-space: nowrap; }
+#idle-hud .rail-filter-btn:hover { color: var(--ivory); background: var(--cmd-hover); transform: none; box-shadow: none; }
+#idle-hud .rail-filter-btn[aria-pressed="true"] { color: var(--ivory); background: var(--cmd-surface); border-color: var(--hairline-strong); }
+#idle-hud .rail-filter-btn b { margin-left: 4px; color: var(--dim); font-weight: 500; font-variant-numeric: tabular-nums; }
+#idle-hud .rail-filter-btn b:empty { display: none; }
+#idle-hud .rail-filter-btn[data-done-filter="failed"][aria-pressed="true"] b { color: var(--bad); }
+#idle-hud .rail-filter-btn[data-done-filter="ok"][aria-pressed="true"] b { color: var(--live); }
+
+/* the Agents view: a glance strip, then a settings list (label · control ·
+   hint) in two groups, Queue and Safety, with the long explanations folded
+   underneath */
 #idle-hud .cmd-settings .settings-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; overscroll-behavior-y: contain; padding: 0 7px 4px 2px; }
 #idle-hud .agents-glance { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 0 0 12px; }
-#idle-hud .agents-chip { display: grid; gap: 2px; min-width: 0; padding: 7px 9px; border: 1px solid var(--cmd-edge); border-radius: 9px; background: var(--cmd-raised); transition: border-color var(--dur-2) var(--ease), background var(--dur-2) var(--ease); }
+#idle-hud .agents-chip { display: grid; gap: 3px; min-width: 0; padding: 8px 9px; border: 1px solid var(--cmd-edge); border-radius: 9px; background: var(--cmd-raised); transition: border-color var(--dur-2) var(--ease), background var(--dur-2) var(--ease); }
 #idle-hud .agents-chip-k { font: 650 9px/1.3 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
 #idle-hud .agents-chip b { font: 600 12px/1.3 var(--font-ui); color: var(--ivory); overflow-wrap: anywhere; }
 #idle-hud .agents-chip[data-tone="ok"] { border-color: var(--gold-dim); background: var(--tint-gold-2); }
@@ -3388,8 +3434,14 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .setting-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 6px 0 8px; }
 #idle-hud .setting-actions .feed-state { flex: 1; min-width: 0; text-align: right; }
 
-/* visible explanations for the queue controls */
-#idle-hud .control-help { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+/* the New work strip at the top of the Assistant view: the switch with its
+   state word, and one short line saying what it gates */
+#idle-hud .new-work-strip { display: flex; flex-direction: column; gap: 4px; flex: none; padding: 8px 10px 9px; border: 1px solid var(--cmd-edge); border-radius: 9px; background: var(--cmd-raised); }
+#idle-hud .new-work-strip .new-work-toggle { margin: 0; gap: 8px; font: 600 11.5px/1.3 var(--font-ui); color: var(--ivory); white-space: nowrap; }
+#idle-hud .new-work-strip .new-work-state { margin-left: auto; padding: 1px 7px; border: 1px solid var(--cmd-edge); border-radius: 999px; background: var(--cmd-surface); color: var(--muted); font: 600 9.5px/1.5 var(--font-ui); letter-spacing: .04em; text-transform: uppercase; }
+#idle-hud .new-work-strip:has(input:checked:not(:disabled)) .new-work-state { color: var(--live); border-color: color-mix(in srgb, var(--live) 40%, var(--cmd-edge)); }
+#idle-hud .new-work-strip:has(input:not(:checked):not(:disabled):not(:indeterminate)) .new-work-state { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--cmd-edge)); }
+#idle-hud .control-help { margin: 0; color: var(--muted); font-size: 10.5px; line-height: 1.5; }
 #idle-hud .feed-help { flex: none; margin: 2px 0 12px; padding: 0 10px; border: 1px solid var(--cmd-edge); border-radius: 8px; background: var(--cmd-raised); }
 #idle-hud .feed-help > summary { cursor: pointer; color: var(--muted); font-size: 11px; padding: 8px 0; }
 #idle-hud .feed-help > summary:hover, #idle-hud .feed-help[open] > summary { color: var(--ivory); }
@@ -3401,17 +3453,18 @@ body.command-active .walkthrough-coach { right: 392px; }
 /* the done log */
 #idle-hud .done-list {
   list-style: none; margin: 0; padding: 0 2px 0 0;
-  flex: 1; min-height: 0; overflow-y: auto;
+  flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable;
   display: flex; flex-direction: column; gap: 6px;
 }
 #idle-hud .done-row {
   display: flex; flex-direction: column; gap: 3px;
-  padding: 9px 10px; border: 1px solid var(--cmd-edge); border-left: 2px solid var(--live);
-  border-radius: 8px; background: var(--cmd-raised); font-size: 12px;
+  padding: 9px 10px 9px 12px; border: 1px solid var(--cmd-edge); border-left: 3px solid var(--live);
+  border-radius: 9px; background: var(--cmd-raised); font-size: 12px;
 }
-#idle-hud .done-row[data-ok="false"] { border-left-color: var(--bad); }
+#idle-hud .done-row[data-ok="false"] { border-left-color: var(--bad); background: color-mix(in srgb, var(--bad) 4%, var(--cmd-raised)); }
 #idle-hud .done-row-head { display: flex; align-items: center; gap: 6px; }
-#idle-hud .done-verdict { font: 600 10px/1.4 var(--font-ui); text-transform: uppercase; letter-spacing: .06em; color: var(--live); }
+#idle-hud .done-verdict { display: inline-flex; align-items: center; gap: 5px; font: 650 9.5px/1.4 var(--font-ui); text-transform: uppercase; letter-spacing: .08em; color: var(--live); }
+#idle-hud .done-verdict::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 5px currentColor; }
 #idle-hud .done-row[data-ok="false"] .done-verdict { color: var(--bad); }
 #idle-hud .done-when { margin-left: auto; color: var(--dim); font-size: 10px; font-variant-numeric: tabular-nums; }
 #idle-hud .done-title { color: var(--ivory); line-height: 1.45; overflow-wrap: anywhere; }
@@ -3421,7 +3474,7 @@ body.command-active .walkthrough-coach { right: 392px; }
 }
 #idle-hud button.done-title:hover { color: var(--gold-bright); background: transparent; transform: none; box-shadow: none; }
 #idle-hud .done-detail { color: var(--muted); font-size: 11px; line-height: 1.45; }
-#idle-hud .done-empty, #idle-hud .ask-empty { margin: 0; padding: 8px 2px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+#idle-hud .done-empty, #idle-hud .ask-empty { margin: 0; padding: 18px 12px; border: 1px dashed var(--hairline-strong); border-radius: 9px; color: var(--muted); font-size: 11.5px; line-height: 1.6; text-align: center; }
 
 /* the absorbed ledger: the work that sank into a node on the tree, readable on
    its card and in the rail console while the assistant is selected */
@@ -3430,25 +3483,27 @@ body.command-active .walkthrough-coach { right: 392px; }
 .absorbed-ledger { max-height: 220px; overflow-y: auto; }
 .absorbed-row[data-ok="false"] { color: var(--bad); }
 
-/* collapse: the head keeps the count and the Clear button, the list tucks away */
+/* collapse: the head keeps the count and the Clear button, the rest tucks away */
 #idle-hud .cmd-done.done-collapsed .rail-view-note,
+#idle-hud .cmd-done.done-collapsed .rail-filter,
 #idle-hud .cmd-done.done-collapsed .done-list { display: none; }
 
 /* the ask cards */
 #idle-hud .ask-list {
   list-style: none; margin: 0; padding: 0 2px 0 0;
-  flex: 1; min-height: 0; overflow-y: auto;
+  flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable;
   display: flex; flex-direction: column; gap: 10px;
 }
+#idle-hud .ask-divider { margin: 6px 0 -4px; padding: 0; font: 650 9.5px/1.4 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--dim); }
 #idle-hud .ask-card {
   display: flex; flex-direction: column; gap: 7px;
-  padding: 11px; border: 1px solid var(--cmd-edge); border-left: 3px solid var(--gold);
+  padding: 11px 11px 11px 12px; border: 1px solid var(--cmd-edge); border-left: 3px solid var(--gold);
   border-radius: 9px; background: var(--cmd-raised);
 }
 #idle-hud .ask-card[data-kind="suggestion"] { border-left-color: var(--info); }
 #idle-hud .ask-card[data-status="answered"], #idle-hud .ask-card[data-status="dismissed"], #idle-hud .ask-card[data-status="expired"], #idle-hud .ask-card[data-status="superseded"] { opacity: .62; }
 #idle-hud .ask-head { display: flex; align-items: center; gap: 6px; }
-#idle-hud .ask-kind { font: 600 10px/1.4 var(--font-ui); text-transform: uppercase; letter-spacing: .08em; color: var(--gold); }
+#idle-hud .ask-kind { font: 650 9.5px/1.4 var(--font-ui); text-transform: uppercase; letter-spacing: .08em; color: var(--gold); }
 #idle-hud .ask-card[data-kind="suggestion"] .ask-kind { color: var(--info); }
 #idle-hud .ask-when { margin-left: auto; color: var(--dim); font-size: 10px; font-variant-numeric: tabular-nums; }
 #idle-hud .ask-title { margin: 0; font: 600 13px/1.45 var(--font-ui); color: var(--ivory); overflow-wrap: anywhere; }
@@ -3481,16 +3536,21 @@ body.command-active .walkthrough-coach { right: 392px; }
 @media (max-width: 1440px) { #idle-hud { --command-rail-width: 320px; } }
 @media (max-width: 1100px) {
   #idle-hud { --command-rail-width: 288px; }
-  #idle-hud .cmd-rail { right: 18px; padding: 10px; }
+  #idle-hud .cmd-rail { right: 18px; padding: 9px 10px 10px; }
   #idle-hud .cmd-card, #idle-hud.chat-log-open .cmd-card { right: calc(18px + var(--command-rail-width) + 14px); }
   #idle-hud .cmd-follow-status { left: 18px; right: calc(18px + var(--command-rail-width) + 14px); }
+  #idle-hud .feed-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
   #idle-hud { --command-rail-width: 252px; }
-  #idle-hud .cmd-rail { right: 12px; padding: 9px; }
+  #idle-hud .cmd-rail { right: 12px; padding: 8px 9px 9px; }
   #idle-hud .cmd-card, #idle-hud.chat-log-open .cmd-card { right: calc(12px + var(--command-rail-width) + 10px); }
   #idle-hud .cmd-follow-status { left: 12px; right: 12px; }
-  #idle-hud .rail-tab { padding: 0 6px; font-size: 11px; }
+  #idle-hud .rail-tab { min-height: 40px; padding: 4px 0 3px; font-size: 9px; letter-spacing: 0; }
+  #idle-hud .rail-tab .glyph { width: 13px; height: 13px; }
+  #idle-hud .rail-tab .count { top: 2px; right: 2px; min-width: 14px; height: 14px; font-size: 9px; }
+  /* the switch keeps its state word; the sentence under it yields to the thread */
+  #idle-hud .new-work-strip .control-help { display: none; }
 }
 
 /* ============================================================
@@ -4540,39 +4600,41 @@ body.music-preview-active #idle-hud { display: none !important; }
   <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
   <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, agents, assistant, done and questions">
     <header class="rail-tabs" role="tablist" aria-label="Panel views">
-      <button id="cmd-rail-tab-work" class="rail-tab" role="tab" aria-selected="true" aria-controls="idle-feed" data-rail-view="work">Work<span id="cmd-rail-work-badge" class="count" hidden></span></button>
-      <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings">Agents</button>
-      <button id="cmd-rail-tab-assistant" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-chat" tabindex="-1" data-rail-view="assistant">Assistant<span id="cmd-rail-assistant-badge" class="count" hidden></span></button>
-      <button id="cmd-rail-tab-done" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-done" tabindex="-1" data-rail-view="done">Done</button>
-      <button id="cmd-rail-tab-ask" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-asks" tabindex="-1" data-rail-view="ask">Ask<span id="cmd-rail-ask-badge" class="count warn" hidden></span></button>
+      <button id="cmd-rail-tab-work" class="rail-tab" role="tab" aria-selected="true" aria-controls="idle-feed" data-rail-view="work" title="Work · what is running and what is queued"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg><span class="rail-tab-label">Work</span><span id="cmd-rail-work-badge" class="count" hidden></span></button>
+      <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings" title="Agents · how the queue runs"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-agents"/></svg><span class="rail-tab-label">Agents</span></button>
+      <button id="cmd-rail-tab-assistant" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-chat" tabindex="-1" data-rail-view="assistant" title="Assistant · the conversation and the New work switch"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span class="rail-tab-label">Assistant</span><span id="cmd-rail-assistant-badge" class="count" hidden></span></button>
+      <button id="cmd-rail-tab-done" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-done" tabindex="-1" data-rail-view="done" title="Done · builds that finished"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plans"/></svg><span class="rail-tab-label">Done</span></button>
+      <button id="cmd-rail-tab-ask" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-asks" tabindex="-1" data-rail-view="ask" title="Ask · decisions waiting on you"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg><span class="rail-tab-label">Ask</span><span id="cmd-rail-ask-badge" class="count warn" hidden></span></button>
     </header>
     <div id="cmd-rail-body" class="rail-body">
   <aside id="cmd-chat" class="cmd-chat" role="tabpanel" aria-label="Assistant chat log" hidden>
-    <header class="chat-log-head">
+    <header class="rail-view-head chat-log-head">
       <i id="cmd-chat-dot" class="feed-dot" aria-hidden="true"></i>
-      <button id="cmd-chat-jump" class="chat-log-title" title="Select the assistant (M)">Assistant</button>
+      <button id="cmd-chat-jump" class="rail-view-title chat-log-title" type="button" title="Select the assistant on the tree (M)">Assistant</button>
       <span id="cmd-chat-state" class="feed-state">idle</span>
-      <button id="cmd-chat-toggle" class="ghost mini" aria-expanded="true" title="Collapse the chat log">&ndash;</button>
+      <button id="cmd-chat-toggle" class="ghost mini rail-fold" type="button" aria-expanded="true" title="Collapse the chat log">&ndash;</button>
     </header>
     <div id="cmd-chat-body" class="chat-log-body">
-      <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="cmd-chat-new-work" role="switch" aria-describedby="idle-new-work-help" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="cmd-chat-new-work-state" aria-hidden="true">Loading…</span></label>
-      <p id="idle-new-work-help" class="control-help">The master switch for starting anything new: queued tasks, builds and work the assistant suggests. Off pauses admission — running jobs, replies and your answers to questions still work.</p>
+      <div class="new-work-strip" role="group" aria-label="New work">
+        <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="cmd-chat-new-work" role="switch" aria-describedby="idle-new-work-help" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="cmd-chat-new-work-state" class="new-work-state" aria-hidden="true">Loading…</span></label>
+        <p id="idle-new-work-help" class="control-help">The master switch for anything new: queued tasks, builds and suggested work. Off pauses admission; running jobs, replies and your answers still go through.</p>
+      </div>
       <div id="cmd-chat-thread" class="assistant-thread chat-log-thread" aria-live="polite"></div>
       <div class="chat-chips" aria-label="Quick asks">
-        <button class="ghost mini" data-cmdchat-msg="status">Status</button>
-        <button class="ghost mini" data-cmdchat-msg="what should I work on">What next?</button>
-        <button class="ghost mini" data-cmdchat-msg="read the log">Log</button>
-        <button class="ghost mini" data-cmdchat-msg="what is the auto builder doing">Builder</button>
+        <button class="ghost mini" type="button" data-cmdchat-msg="status">Status</button>
+        <button class="ghost mini" type="button" data-cmdchat-msg="what should I work on">What next?</button>
+        <button class="ghost mini" type="button" data-cmdchat-msg="read the log">Log</button>
+        <button class="ghost mini" type="button" data-cmdchat-msg="what is the auto builder doing">Builder</button>
       </div>
       <div class="assistant-composer chat-log-composer">
         <textarea id="cmd-chat-input" class="grow" rows="1" placeholder="Message the assistant… (Enter)" aria-label="Message the assistant" autocomplete="off" spellcheck="false"></textarea>
-        <button id="cmd-chat-send" class="primary mini">Send</button>
+        <button id="cmd-chat-send" class="primary mini" type="button">Send</button>
       </div>
     </div>
   </aside>
   <aside id="idle-feed" class="cmd-feed" role="tabpanel" aria-label="Live work">
-    <header class="feed-head">
-      <h2 class="feed-title"><button id="idle-feed-toggle" class="feed-toggle" type="button" aria-expanded="true" aria-controls="idle-feed-content" title="Collapse live work">
+    <header class="rail-view-head feed-head">
+      <h2 class="rail-view-title feed-title"><button id="idle-feed-toggle" class="feed-toggle" type="button" aria-expanded="true" aria-controls="idle-feed-content" title="Collapse live work">
         <i id="idle-feed-dot" class="feed-dot" aria-hidden="true"></i>
         <span>Live work</span><span id="idle-feed-state" class="feed-state">idle</span>
         <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg>
@@ -4606,21 +4668,21 @@ body.music-preview-active #idle-hud { display: none !important; }
       <ul id="idle-chat-work" class="pin-list assistant-activity feed-chat-work"></ul>
       <details id="idle-chat-absorbed" class="card-cps feed-absorbed" hidden><summary>Absorbed work</summary><div id="idle-chat-absorbed-list"></div></details>
       <div id="idle-chat-chips" class="chat-chips" aria-label="Quick asks">
-        <button class="ghost mini" data-msg="status">Status</button>
-        <button class="ghost mini" data-msg="what should I work on">What next?</button>
-        <button class="ghost mini" data-msg="read the log">Log</button>
-        <button class="ghost mini" data-msg="help">Help</button>
+        <button class="ghost mini" type="button" data-msg="status">Status</button>
+        <button class="ghost mini" type="button" data-msg="what should I work on">What next?</button>
+        <button class="ghost mini" type="button" data-msg="read the log">Log</button>
+        <button class="ghost mini" type="button" data-msg="help">Help</button>
       </div>
       <div class="assistant-composer feed-chat-composer">
         <textarea id="idle-chat-input" class="grow" rows="1" placeholder="Message the assistant… (Enter)" aria-label="Message the assistant" autocomplete="off" spellcheck="false"></textarea>
-        <button id="idle-chat-send" class="primary mini">Send</button>
+        <button id="idle-chat-send" class="primary mini" type="button">Send</button>
       </div>
       <div class="feed-chat-actions">
-        <button id="idle-chat-overseer" class="ghost mini" title="The overseer reviews the assistant's own work, tunes prefs and files upgrades">Oversee</button>
-        <button id="idle-chat-tidy" class="ghost mini" title="Archive done tasks, prune finished ideas, clear resolved requests">Tidy</button>
-        <button id="idle-chat-fix" class="ghost mini" title="Repair the catalog and data files, check the live update">Fix</button>
-        <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="idle-chat-pause" role="switch" aria-describedby="idle-new-work-help" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="idle-chat-new-work-state" aria-hidden="true">Loading…</span></label>
-        <button id="idle-chat-explorer" class="ghost mini" title="The full assistant surface in the Session explorer (E)">Explorer</button>
+        <button id="idle-chat-overseer" class="ghost mini" type="button" title="The overseer reviews the assistant's own work, tunes prefs and files upgrades">Oversee</button>
+        <button id="idle-chat-tidy" class="ghost mini" type="button" title="Archive done tasks, prune finished ideas, clear resolved requests">Tidy</button>
+        <button id="idle-chat-fix" class="ghost mini" type="button" title="Repair the catalog and data files, check the live update">Fix</button>
+        <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="idle-chat-pause" role="switch" aria-describedby="idle-new-work-help" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="idle-chat-new-work-state" class="new-work-state" aria-hidden="true">Loading…</span></label>
+        <button id="idle-chat-explorer" class="ghost mini" type="button" title="The full assistant surface in the Session explorer (E)">Explorer</button>
       </div>
     </div>
     </div>
@@ -4692,18 +4754,23 @@ body.music-preview-active #idle-hud { display: none !important; }
   </section>
   <section id="cmd-done" class="cmd-done" role="tabpanel" aria-labelledby="cmd-rail-tab-done" hidden>
     <div class="rail-view-head">
-      <h2 class="rail-view-title">Done log</h2>
+      <h2 class="rail-view-title">Done</h2>
       <span id="cmd-done-state" class="feed-state" role="status" aria-live="polite">Loading…</span>
-      <button id="cmd-done-toggle" class="ghost mini" type="button" aria-expanded="true" aria-controls="cmd-done-list" title="Collapse the done log">&ndash;</button>
       <button id="cmd-done-refresh" class="ghost mini" type="button" title="Re-read the executor ledger">Refresh</button>
       <button id="cmd-done-clear" class="ghost mini" type="button" title="Clear every record — the done log clears for good" disabled>Clear</button>
+      <button id="cmd-done-toggle" class="ghost mini rail-fold" type="button" aria-expanded="true" aria-controls="cmd-done-list" title="Collapse the done log">&ndash;</button>
     </div>
-    <p class="rail-view-note">Builds that finished off, from the durable executor ledger. <b>Done</b> means the worker reported success; <b>Failed</b> means it stopped early. On the tree the finished node collapses into its host and is absorbed; its brief stays readable on that card. <b>Clear</b> wipes this log.</p>
+    <p class="rail-view-note">Builds that finished, from the durable executor ledger. <b>Done</b> means the worker reported success; <b>Failed</b> means it stopped early. A finished node collapses into its host on the tree; its brief stays readable on that card.</p>
+    <div id="cmd-done-filter" class="rail-filter" role="group" aria-label="Filter the done log">
+      <button class="rail-filter-btn" type="button" data-done-filter="all" aria-pressed="true">All<b></b></button>
+      <button class="rail-filter-btn" type="button" data-done-filter="ok" aria-pressed="false">Done<b></b></button>
+      <button class="rail-filter-btn" type="button" data-done-filter="failed" aria-pressed="false">Failed<b></b></button>
+    </div>
     <ul id="cmd-done-list" class="done-list" aria-label="Completed work"></ul>
   </section>
   <section id="cmd-asks" class="cmd-asks" role="tabpanel" aria-labelledby="cmd-rail-tab-ask" hidden>
     <div class="rail-view-head">
-      <h2 class="rail-view-title">Questions</h2>
+      <h2 class="rail-view-title">Ask</h2>
       <span id="cmd-ask-state" class="feed-state" role="status" aria-live="polite">Nothing waiting</span>
     </div>
     <p class="rail-view-note">When an agent needs a decision it asks here with a recommended option. Nothing moves until you answer; your choice is recorded and sent to the assistant, which acts on it or explains what changed.</p>
@@ -14701,8 +14768,9 @@ body.music-preview-active #idle-hud { display: none !important; }
   const CALLOUT_SIN = Math.sin(CALLOUT_ANGLE);
   const CALLOUT_LENGTHS = [46, 74, 106, 140];
   const CALLOUT_MIN_W = 116;
-  const CALLOUT_MAX_W = 224;
+  const CALLOUT_MAX_W = 236;
   const CALLOUT_TITLE_H = 17;
+  const CALLOUT_SUB_H = 13; // the status line under the title (done/left, %, verifying)
   const CALLOUT_LINE_H = 14;
   const CALLOUT_BUDGET = 6; // full cards at rest; the rest fall back to compact labels, cards on hover / selection / focus
   const CALLOUT_HOLD_MS = 260;
@@ -14819,6 +14887,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     doneAt: 0,
     doneLoading: false,
     doneCollapsed: readStore("mefiStudio.cmdDoneCollapsed") === "1",
+    doneFilter: "all",
     doneClearing: false,
     askSending: false,
     lastAssistantSelected: false,
@@ -16576,34 +16645,55 @@ body.music-preview-active #idle-hud { display: none !important; }
     }
   }
 
+  // The filter chips over the list: every record, only the successes, or
+  // only the failures. Each chip carries its count so the split is readable
+  // without switching.
+  const DONE_FILTERS = ["all", "ok", "failed"];
+  const doneOk = (entry) => entry?.ok !== false;
+
+  function setDoneFilter(name) {
+    state.doneFilter = DONE_FILTERS.includes(name) ? name : "all";
+    renderDone();
+  }
+
   function renderDone() {
     if (!el.doneList) return;
     const entries = state.doneEntries ?? [];
+    const okCount = entries.filter(doneOk).length;
+    const failedCount = entries.length - okCount;
     if (el.doneClear) {
       el.doneClear.disabled = state.doneClearing || !entries.length;
       el.doneClear.title = entries.length
         ? `Clear ${entries.length} record${entries.length === 1 ? "" : "s"} — the done log clears for good`
         : "Nothing to clear yet";
     }
+    const filter = DONE_FILTERS.includes(state.doneFilter) ? state.doneFilter : "all";
+    for (const button of el.doneFilters ?? []) {
+      const name = button.dataset.doneFilter;
+      button.setAttribute("aria-pressed", String(name === filter));
+      const count = button.querySelector("b");
+      if (count) count.textContent = entries.length ? String(name === "ok" ? okCount : name === "failed" ? failedCount : entries.length) : "";
+    }
+    const shown = filter === "all" ? entries : entries.filter((entry) => doneOk(entry) === (filter === "ok"));
     el.doneList.textContent = "";
-    if (!entries.length) {
+    if (!shown.length) {
       const empty = document.createElement("li");
       empty.className = "done-empty";
-      empty.textContent = window.mefiStudio
-        ? "Nothing has finished yet. Builds that finish off land here."
-        : "The done log is available in the desktop app.";
+      empty.textContent = !window.mefiStudio ? "The done log is available in the desktop app."
+        : !entries.length ? "Nothing has finished yet. Builds that finish off land here."
+        : filter === "failed" ? "No failed builds in this log." : "No successful builds in this log.";
       el.doneList.append(empty);
     }
-    for (const entry of entries) {
+    for (const entry of shown) {
       const row = document.createElement("li");
       row.className = "done-row";
-      row.dataset.ok = String(entry.ok !== false);
+      row.dataset.ok = String(doneOk(entry));
       row.dataset.kind = entry.kind === "build" ? "build" : "run";
       const head = document.createElement("div");
       head.className = "done-row-head";
       const verdict = document.createElement("span");
       verdict.className = "done-verdict";
-      verdict.textContent = entry.ok ? "Done" : "Failed";
+      verdict.textContent = doneOk(entry) ? "Done" : "Failed";
       const when = document.createElement("span");
       when.className = "done-when";
       when.textContent = agoLabel(entry.at) ?? "";
@@ -16628,7 +16718,9 @@ body.music-preview-active #idle-hud { display: none !important; }
       }
       el.doneList.append(row);
     }
-    if (el.doneState) el.doneState.textContent = entries.length ? `${entries.length} record${entries.length === 1 ? "" : "s"}` : "Nothing yet";
+    if (el.doneState) el.doneState.textContent = !entries.length ? "Nothing yet"
+      : failedCount ? `${okCount} done · ${failedCount} failed`
+      : `${entries.length} record${entries.length === 1 ? "" : "s"}`;
   }
 
   // The Ask cards: every open decision with its options, the recommended one
@@ -16645,7 +16737,17 @@ body.music-preview-active #idle-hud { display: none !important; }
       empty.textContent = "Nothing is waiting on you. When an agent needs a decision, it asks here with a recommended option.";
       el.askList.append(empty);
     }
-    for (const question of [...open, ...closed]) el.askList.append(askCard(question));
+    for (const question of open) el.askList.append(askCard(question));
+    if (closed.length) {
+      // The answered history sits under a divider so open decisions stay
+      // visibly ahead of what is already settled.
+      const divider = document.createElement("li");
+      divider.className = "ask-divider";
+      divider.setAttribute("role", "presentation");
+      divider.textContent = open.length ? "Recently answered" : "Answered";
+      el.askList.append(divider);
+    }
+    for (const question of closed) el.askList.append(askCard(question));
     if (el.askState) el.askState.textContent = open.length ? `${open.length} waiting` : questions.length ? "All answered" : "Nothing waiting";
   }
 
@@ -20936,19 +21038,22 @@ body.music-preview-active #idle-hud { display: none !important; }
   }
 
   // The card's measurements: its width from the title row, the title clipped
-  // to what is left beside the number and the counts, the bubble lines
-  // wrapped (one remark may take two lines; two remarks take one each).
+  // to what is left beside the number, the status line (the counts) under
+  // it on its own row so a long title is not squeezed by "2 done · 1 left",
+  // the bubble lines wrapped (one remark may take two lines; two remarks
+  // take one each).
   function calloutSize(ctx, content) {
     const numberW = content.number ? measure(ctx, CALLOUT_NUMBER_FONT, content.number) + 13 : 0;
-    const countsW = content.counts ? measure(ctx, CALLOUT_COUNTS_FONT, content.counts) + 10 : 0;
+    const countsW = content.counts ? measure(ctx, CALLOUT_COUNTS_FONT, content.counts) + 28 : 0;
     const fullTitle = measure(ctx, CALLOUT_TITLE_FONT, content.title);
-    const w = Math.max(CALLOUT_MIN_W, Math.min(CALLOUT_MAX_W, 22 + numberW + fullTitle + countsW + 8));
-    const title = clipLine(ctx, CALLOUT_TITLE_FONT, content.title, Math.max(30, w - 22 - numberW - countsW - 8));
+    const w = Math.max(CALLOUT_MIN_W, countsW, Math.min(CALLOUT_MAX_W, 22 + numberW + fullTitle + 8));
+    const title = clipLine(ctx, CALLOUT_TITLE_FONT, content.title, Math.max(30, w - 22 - numberW - 8));
+    const subH = content.counts ? CALLOUT_SUB_H : 0;
     let lines = [];
     if (content.lines.length === 1) lines = speechLines(ctx, content.lines[0].text, w - 22 - (SPEECH_MARKS[content.lines[0].kind] ? 13 : 0)).map((text, index) => ({ text, kind: index === 0 ? content.lines[0].kind : "cont" }));
     else lines = content.lines.map((line) => ({ text: clipLine(ctx, CALLOUT_LINE_FONT, line.text, w - 22 - (SPEECH_MARKS[line.kind] ? 13 : 0)), kind: line.kind }));
     const bubbleH = lines.length ? 9 + lines.length * CALLOUT_LINE_H : 0;
-    return { w, title, lines, bubbleH };
+    return { w, title, lines, subH, bubbleH };
   }
 
   // Distance from a point to a segment, for routing leaders around orbs.
@@ -20975,11 +21080,14 @@ body.music-preview-active #idle-hud { display: none !important; }
     const ex = p.x + candidate.side * CALLOUT_COS * (r + candidate.length);
     const ey = p.y + candidate.vert * CALLOUT_SIN * (r + candidate.length);
     const x = candidate.side > 0 ? ex : ex - size.w;
-    const top = ey - CALLOUT_TITLE_H - 3;
-    const h = CALLOUT_TITLE_H + 3 + (size.bubbleH ? size.bubbleH + 4 : 2);
+    // The plate: the title row, then the status line when there is one, its
+    // bottom edge on the bar.
+    const plateH = CALLOUT_TITLE_H + 3 + (size.subH ?? 0);
+    const top = ey - plateH;
+    const h = plateH + (size.bubbleH ? size.bubbleH + 4 : 2);
     return {
       side: candidate.side, vert: candidate.vert, length: candidate.length,
-      sx, sy, ex, ey, w: size.w,
+      sx, sy, ex, ey, w: size.w, plateH,
       rect: { x, y: top, w: size.w, h },
       bubble: size.bubbleH ? { x, y: ey + 4, w: size.w, h: size.bubbleH } : null,
     };
@@ -21153,10 +21261,13 @@ body.music-preview-active #idle-hud { display: none !important; }
     ctx.restore();
   }
 
-  // One card: leader and rim dot, the top bar in the node's own style (double
-  // for the hub, dashed for an agent, a square cap for a task), the title row
-  // above it, the bubble below. Hover lifts the card a touch and glows it;
-  // outside a focused branch it paints dimmer (and on the blurred layer).
+  // One card: a tab-shaped plate (rounded top, paper backdrop) whose bottom
+  // edge is the bar in the node's own style (double for the hub, dashed for
+  // an agent, a square cap for a task), the leader and its rim dot from the
+  // bar's near corner to the orb, the title row on the plate with the status
+  // line under it, the bubble hanging below. Hover lifts the card a touch and
+  // glows it; outside a focused branch it paints dimmer (and on the blurred
+  // layer).
   function drawCallout(ctx, node, layout, content, size, { lifted = false, dimmed = false, still = true } = {}) {
     const tint = node.kind === "agent" ? agentRgb(node.role) : colorOf(node);
     const styleChoice = state.cardStyle === "auto" ? (lifted || state.selected?.id === node.id || content.mark === "live" ? "filled" : "outline") : state.cardStyle;
@@ -21165,57 +21276,71 @@ body.music-preview-active #idle-hud { display: none !important; }
     const alpha = (node._fade ?? 1) * (dimmed ? 0.5 : forward ? 1 : 0.86) * Math.max(0.4, emphasis(node));
     const paper = state.canvasPalette?.background ?? "#101620";
     const { sx, sy, ex, ey, side, rect, bubble, w } = layout;
+    const plateH = layout.plateH ?? CALLOUT_TITLE_H + 3 + (size.subH ?? 0);
+    const filled = styleChoice === "filled";
     ctx.save();
     ctx.globalAlpha = alpha;
     if (lifted && !still) {
       ctx.translate(ex, ey); ctx.scale(1.06, 1.06); ctx.translate(-ex, -ey);
       ctx.shadowColor = rgba(tint, 0.35); ctx.shadowBlur = 14;
     }
-    ctx.strokeStyle = rgba(tint, forward ? 0.75 : 0.5); ctx.lineWidth = 1; ctx.lineCap = "round";
+    // The plate: paper first so the sky never shows through the words, then
+    // a wash of the node's tint, then a hairline in it.
+    const plate = () => { ctx.beginPath(); ctx.roundRect(rect.x, rect.y, w, plateH, [7, 7, 0, 0]); };
+    plate();
+    ctx.fillStyle = paper; ctx.globalAlpha = alpha * (filled ? 0.94 : 0.78); ctx.fill(); ctx.globalAlpha = alpha;
+    ctx.fillStyle = rgba(tint, filled ? 0.14 : 0.06); ctx.fill();
+    ctx.shadowBlur = 0;
+    plate();
+    ctx.strokeStyle = rgba(tint, forward ? 0.6 : filled ? 0.45 : 0.32); ctx.lineWidth = 1; ctx.stroke();
+    // The leader from the bar's near corner down to the orb, with its rim dot.
+    ctx.strokeStyle = rgba(tint, forward ? 0.8 : 0.55); ctx.lineWidth = 1; ctx.lineCap = "round";
     ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
-    ctx.fillStyle = rgba(tint, 0.85); ctx.beginPath(); ctx.arc(sx, sy, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = rgba(tint, 0.9); ctx.beginPath(); ctx.arc(sx, sy, 1.8, 0, Math.PI * 2); ctx.fill();
+    // The bar along the plate's bottom edge.
     const barEnd = ex + side * w;
-    ctx.lineWidth = forward ? 1.5 : 1.2;
-    ctx.strokeStyle = rgba(tint, forward ? 0.8 : 0.6);
+    ctx.lineWidth = forward ? 2 : 1.5;
+    ctx.strokeStyle = rgba(tint, forward ? 0.95 : 0.75);
     if (node.kind === "assistant") {
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.moveTo(ex, ey - 1.5); ctx.lineTo(barEnd, ey - 1.5); ctx.moveTo(ex, ey + 1.5); ctx.lineTo(barEnd, ey + 1.5); ctx.stroke();
     } else {
       if (node.kind === "agent") ctx.setLineDash([5, 3]);
       ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(barEnd, ey); ctx.stroke();
       ctx.setLineDash([]);
-      if (node.kind === "task" || node.kind === "task-group") { ctx.fillStyle = rgba(tint, 0.9); ctx.fillRect(barEnd - (side > 0 ? 3 : 0), ey - 1.5, 3, 3); }
+      if (node.kind === "task" || node.kind === "task-group") { ctx.fillStyle = rgba(tint, 0.95); ctx.fillRect(barEnd - (side > 0 ? 3.5 : 0), ey - 2, 3.5, 4); }
     }
-    ctx.shadowBlur = 0;
-    let x = rect.x + 4;
-    const baseline = ey - 5;
+    // The title row: mark, number chip, title.
+    let x = rect.x + 6;
+    const baseline = rect.y + 14;
     drawCalloutMark(ctx, content.mark, x + 5, baseline - 4, tint);
-    x += 14;
+    x += 15;
     if (content.number) {
       ctx.font = CALLOUT_NUMBER_FONT;
       const nw = ctx.measureText(content.number).width + 8;
-      ctx.beginPath(); ctx.roundRect(x, baseline - 11, nw, 13, 3); ctx.fillStyle = rgba(tint, 0.2); ctx.fill();
-      ctx.fillStyle = rgba(tint, 1); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(content.number, x + 4, baseline - 1);
+      ctx.beginPath(); ctx.roundRect(x, baseline - 10.5, nw, 13, 3.5); ctx.fillStyle = rgba(tint, filled ? 0.28 : 0.2); ctx.fill();
+      ctx.fillStyle = rgba(tint, 1); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(content.number, x + 4, baseline - 0.5);
       x += nw + 5;
     }
     ctx.font = CALLOUT_TITLE_FONT; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = rgba(NODE_RGB.session, 0.95);
+    ctx.fillStyle = rgba(NODE_RGB.session, 0.96);
     ctx.fillText(size.title, x, baseline);
-    if (content.counts) {
-      ctx.font = CALLOUT_COUNTS_FONT; ctx.textAlign = "right";
-      ctx.fillStyle = content.mark === "error" ? rgba(NODE_RGB.amber, 0.95) : rgba(NODE_RGB.pending, 0.95);
-      ctx.fillText(content.counts, rect.x + rect.w - 4, baseline);
-      ctx.textAlign = "left";
+    // The status line under the title, in the colour of what it says.
+    if (content.counts && size.subH) {
+      const statusRgb = content.mark === "error" ? NODE_RGB.amber : content.mark === "verify" ? NODE_RGB.verify : content.mark === "check" ? NODE_RGB.done : content.mark === "live" ? tint : NODE_RGB.pending;
+      ctx.font = CALLOUT_COUNTS_FONT; ctx.textAlign = "left";
+      ctx.fillStyle = rgba(statusRgb, content.mark === "dot" ? 0.95 : 0.85);
+      ctx.fillText(content.counts, rect.x + 21, baseline + CALLOUT_SUB_H);
     }
     if (bubble && size.lines.length) {
       ctx.beginPath(); ctx.roundRect(bubble.x, bubble.y, bubble.w, bubble.h, 7);
-      if (styleChoice === "filled") {
+      if (filled) {
         ctx.fillStyle = paper; ctx.globalAlpha = alpha * 0.92; ctx.fill(); ctx.globalAlpha = alpha;
         ctx.fillStyle = rgba(tint, 0.12); ctx.fill();
         ctx.strokeStyle = rgba(tint, 0.8);
       } else {
-        ctx.fillStyle = paper; ctx.globalAlpha = alpha * 0.45; ctx.fill(); ctx.globalAlpha = alpha;
-        ctx.strokeStyle = rgba(tint, 0.55);
+        ctx.fillStyle = paper; ctx.globalAlpha = alpha * 0.6; ctx.fill(); ctx.globalAlpha = alpha;
+        ctx.strokeStyle = rgba(tint, 0.5);
       }
       ctx.lineWidth = 1;
       if (size.lines.some((line) => line.kind === "think")) ctx.setLineDash([3, 3]);
@@ -22640,6 +22765,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       v.textContent = String(value);
       if (title) v.title = String(title);
       kv.append(k, v);
+      return v;
     };
     const linkRow = (key, label, handler) => {
       const k = document.createElement("span");
@@ -23042,25 +23168,28 @@ body.music-preview-active #idle-hud { display: none !important; }
     } else if (node.kind === "task") {
       const task = node.task;
       const anchor = node.anchorSessionId ? nodeForSession(node.anchorSessionId) : null;
-      row("status", task.status === "awaiting_verification" ? "Verifying" : task.status);
+      // The kicker badge already says the status; the table starts with what it does not.
       if (node.readOnly) row("view", "read-only group member");
       const hold = node.doneHold ? state.doneHold.get(node.id) : null;
       if (hold) row("absorb", hold.ackedAt ? "read — sinking in" : "finished — click to read before it sinks");
-      row("refs", (task.refs ?? []).length);
-      row("logs", (task.logs ?? []).length);
-      row("ideas", (task.ideas ?? []).length);
+      // Three counters read as one line: what the task carries with it.
+      const carried = [["refs", (task.refs ?? []).length], ["logs", (task.logs ?? []).length], ["ideas", (task.ideas ?? []).length]];
+      row("context", carried.some(([, count]) => count) ? carried.filter(([, count]) => count).map(([name, count]) => `${count} ${name}`).join(" · ") : "nothing attached yet");
       if (anchor) linkRow("anchored to", anchor.label ?? anchor.id, () => {
         selectNode(anchor);
         focusNode(anchor, { zoom: 1.4 });
       });
-      else row("anchored to", "—");
+      // The assistant row only when it says something: focused here, or busy elsewhere.
       const taskFocus = assistantFull()?.focus;
       if (taskFocus?.kind === "task" && taskFocus.id === node.id) linkRow("assistant", "focused on this · unfocus", () => focusAssistant(null));
-      else row("assistant", taskFocus?.id ? `on "${String(taskFocus.label || taskFocus.id).slice(0, 30)}"` : "—");
-      const prompt = document.createElement("p");
-      prompt.className = node.readOnly ? "muted" : "muted clamp-3";
-      prompt.textContent = task.prompt ?? "";
-      info.append(kv, prompt);
+      else if (taskFocus?.id) row("assistant", `on "${String(taskFocus.label || taskFocus.id).slice(0, 30)}"`);
+      info.append(kv);
+      if (String(task.prompt ?? "").trim()) {
+        const prompt = document.createElement("p");
+        prompt.className = node.readOnly ? "muted" : "muted clamp-3";
+        prompt.textContent = task.prompt;
+        info.append(prompt);
+      }
       appendTaskGroupInfo(info, node);
       if (!node.readOnly) appendNodeFolder(info, node);
       if (node.groupMember?.canonical !== false) action("Open in Tasks", () => primaryAction(node), { primary: true, title: "Tasks (T)" });
@@ -23110,7 +23239,15 @@ body.music-preview-active #idle-hud { display: none !important; }
         if (node.model) row("model", node.model);
         const ago = agoLabel(node.updated);
         if (ago) row("updated", node.stale ? `${ago} · stale` : ago);
-        row("todos", node.stale ? "hidden while stale" : `${done}/${todos.length}`);
+        const todoCell = row("todos", node.stale ? "hidden while stale" : todos.length ? `${done} of ${todos.length} done` : "none yet");
+        if (!node.stale && todos.length) {
+          const meter = document.createElement("span");
+          meter.className = "kv-meter";
+          const bar = document.createElement("i");
+          bar.style.setProperty("--pct", `${Math.round((done / todos.length) * 100)}%`);
+          meter.append(bar);
+          todoCell.append(meter);
+        }
         const touch = state.touches.get(node.id);
         if (touch) row("touches", `${touch.count} in 90s`);
       } else {
@@ -23120,7 +23257,6 @@ body.music-preview-active #idle-hud { display: none !important; }
             focusNode(session, { zoom: 1.4 });
           });
         }
-        row("status", String(node.status ?? "pending").replace("_", " "));
         const index = todos.findIndex((entry) => entry.id === node.id);
         if (index >= 0) row("step", `${index + 1} of ${todos.length}`);
         if (session?.agent) row("agent", session.agent);
@@ -23130,17 +23266,8 @@ body.music-preview-active #idle-hud { display: none !important; }
       if (notes.length) row("checkpoints", notes.length);
       const focused = assistantFull()?.focus;
       if (focused?.kind === node.kind && focused.id === node.id) linkRow("assistant", "focused on this · unfocus", () => focusAssistant(null));
-      else row("assistant", focused?.id ? `on "${String(focused.label || focused.id).slice(0, 30)}"` : "—");
+      else if (focused?.id) row("assistant", `on "${String(focused.label || focused.id).slice(0, 30)}"`);
       info.append(kv);
-
-      if (node.kind === "session" && todos.length) {
-        const meter = document.createElement("div");
-        meter.className = "meter";
-        const bar = document.createElement("i");
-        meter.append(bar);
-        bar.style.setProperty("--pct", `${Math.round((done / todos.length) * 100)}%`);
-        info.append(meter);
-      }
 
       if (notes.length) {
         const details = document.createElement("details");
@@ -24116,6 +24243,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     el.doneRefresh = document.getElementById("cmd-done-refresh");
     el.doneToggle = document.getElementById("cmd-done-toggle");
     el.doneClear = document.getElementById("cmd-done-clear");
+    el.doneFilters = [...document.querySelectorAll("#cmd-done-filter [data-done-filter]")];
     el.asks = document.getElementById("cmd-asks");
     el.askList = document.getElementById("cmd-ask-list");
     el.askState = document.getElementById("cmd-ask-state");
@@ -24373,6 +24501,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     el.doneRefresh?.addEventListener("click", () => void loadDoneLog());
     el.doneToggle?.addEventListener("click", () => setDoneCollapsed(!state.doneCollapsed));
     el.doneClear?.addEventListener("click", () => void clearDoneLog());
+    for (const button of el.doneFilters ?? []) button.addEventListener("click", () => setDoneFilter(button.dataset.doneFilter));
     setDoneCollapsed(state.doneCollapsed, { save: false });
     setRailTab(state.railTab, { save: false });
     document.getElementById("idle-chat-explorer")?.addEventListener("click", () => nav("explorer", { assistant: true }));
@@ -32859,7 +32988,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     try { target.classList?.[error ? "add" : "remove"]?.("error"); } catch {}
   }
   const allowFree = () => $("scan-allow-free")?.checked !== false;
-  function scanFacts(plan) {
+  function scanFacts(plan, auto = null) {
     if (!plan) return [];
     const facts = [];
     const cli = plan.opencode || {};
@@ -32872,14 +33001,19 @@ body.music-preview-active #idle-hud { display: none !important; }
     facts.push(`Explorer: ${plan.explorer?.model || "OpenCode's default model"} — ${plan.explorer?.reason || ""}`.trim());
     facts.push(`Builder: ${plan.builder?.model || "OpenCode's default model"} — ${plan.builder?.reason || ""}`.trim());
     facts.push(`Judge: ${plan.judge?.kind || "fixed"} — ${plan.judge?.reason || ""}`.trim());
+    // Auto setup's plan rides along with the scan: the assistant route and
+    // builder CLI this machine's keys, CLIs and local servers already allow.
+    if (auto?.ok) facts.push(`Auto setup: ${auto.summary || "a working route was found."}`);
+    else if (auto?.error) facts.push(`Auto setup: ${auto.error}`);
     return facts;
   }
-  function scanNotes(plan) {
+  function scanNotes(plan, auto = null) {
     if (!plan) return [];
     return [
       ...(plan.warnings || []).map((text) => `Warning: ${text}`),
       ...(plan.nextSteps || []).map((text) => `Next: ${text}`),
       ...(plan.disclosures || []).map((text) => `Note: ${text}`),
+      ...(auto?.ok ? (auto.notes || []).map((text) => `Setup: ${text}`) : []),
     ];
   }
   function renderScan() {
@@ -32889,8 +33023,8 @@ body.music-preview-active #idle-hud { display: none !important; }
     if ($("scan-run")) $("scan-run").disabled = scanBusy;
     if ($("scan-apply")) { $("scan-apply").hidden = !(scanResult?.ok && scanResult.plan); $("scan-apply").disabled = scanBusy; }
     const plan = scanResult?.ok ? scanResult.plan : null;
-    $("scan-facts")?.replaceChildren(...scanFacts(plan).map((text) => node("li", "", text)));
-    $("scan-notes")?.replaceChildren(...scanNotes(plan).map((text) => node("li", "", text)));
+    $("scan-facts")?.replaceChildren(...scanFacts(plan, scanResult?.autoSetup).map((text) => node("li", "", text)));
+    $("scan-notes")?.replaceChildren(...scanNotes(plan, scanResult?.autoSetup).map((text) => node("li", "", text)));
     if (!panel.hidden && !scanSynced) syncScanStatus();
   }
   // A setup saved in an earlier session (or from Settings) counts; the guide
@@ -32900,7 +33034,12 @@ body.music-preview-active #idle-hud { display: none !important; }
     scanSynced = true;
     if (!fn) return;
     Promise.resolve().then(() => fn()).then((status) => {
-      if (!status?.firstRun) return;
+      if (!status?.firstRun) {
+        // A fresh install's first launch ran auto setup by itself; the scan
+        // adds OpenCode's free explorer and builder on top of that route.
+        if (status?.autoSetup?.summary && !scanResult) setPanelStatus("scan-status", `Auto setup ran on first launch: ${status.autoSetup.summary} Run the scan to add OpenCode's free explorer and builder.`);
+        return;
+      }
       if (!state.done[SCAN]) { state.done[SCAN] = true; save(); }
       if (!scanResult) setPanelStatus("scan-status", `Setup saved${status.firstRun.appliedAt ? ` on ${new Date(status.firstRun.appliedAt).toLocaleDateString()}` : ""}: explorer ${status.firstRun.explorer?.model || "OpenCode default"}, builder ${status.firstRun.builder?.model || "OpenCode default"}, judge ${status.firstRun.judge?.kind || "fixed"}. Run the scan again after linking a provider.`);
       render();
@@ -32922,7 +33061,9 @@ body.music-preview-active #idle-hud { display: none !important; }
       const result = await fn({ prefs: { allowFreeTraining: allowFree() } });
       scanResult = result;
       if (!result?.ok) setPanelStatus("scan-status", result?.error || "The scan did not finish.", true);
-      else setPanelStatus("scan-status", result.plan?.ok ? "Scan complete. Review the facts below, then choose Use this setup and continue: it saves these choices (no key), maps your selected folder and asks the linked AI what to do next." : "Scan complete, but OpenCode is not usable yet. Follow the next steps below, then scan again.", !result.plan?.ok);
+      else if (result.plan?.ok) setPanelStatus("scan-status", "Scan complete. Review the facts below, then choose Use this setup and continue: it saves these choices (no key), maps your selected folder and asks the linked AI what to do next.");
+      else if (result.autoSetup?.ok) setPanelStatus("scan-status", `Scan complete. OpenCode is not usable yet, but auto setup found a working route: ${result.autoSetup.summary} Choose Use this setup to save it; install OpenCode later for the free explorer.`);
+      else setPanelStatus("scan-status", "Scan complete, but OpenCode is not usable yet. Follow the next steps below, then scan again.", true);
     } catch (error) {
       setPanelStatus("scan-status", error?.message || "The scan failed.", true);
     } finally {
@@ -33972,6 +34113,17 @@ body.music-preview-active #idle-hud { display: none !important; }
       return `${observed} Catalog quality: ${benchmark}; catalog price estimate: ${estimate}. Estimates are separate from your billed cost.${workerNote}`;
     }
     let routingRead = 0;
+    // The first launch of a fresh install runs auto setup by itself (main's
+    // firstLaunchAutoSetup); its saved record shows under the button until
+    // the button is pressed in this session.
+    let autoSetupPressed = false;
+    function renderAutoSetupRecord(record) {
+      const status = document.getElementById("auto-setup-status");
+      if (!status || !record?.summary) return;
+      const when = record.at ? ` on ${new Date(record.at).toLocaleDateString()}` : "";
+      const notes = Array.isArray(record.notes) && record.notes.length ? ` ${record.notes.join(" ")}` : "";
+      status.textContent = `Ran by itself on first launch${when}: ${record.summary}${notes}`;
+    }
     async function loadAiRouting({ syncControls = false } = {}) {
       const read = ++routingRead;
       routingRefresh.disabled = true;
@@ -33981,6 +34133,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         setup.routing = routing;
         setup.routingError = false;
         renderSetupState();
+        if (!autoSetupPressed && routing.autoSetup?.automatic) renderAutoSetupRecord(routing.autoSetup);
         if (syncControls) {
           providerSelect.value = routing.provider;
           modelSelection.value = routing.modelSelection ?? "jev";
@@ -34179,6 +34332,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     } else {
       autoSetupButton.addEventListener("click", async () => {
         if (autoSetupButton.disabled) return;
+        autoSetupPressed = true;
         autoSetupButton.disabled = true;
         autoSetupStatus.textContent = "Checking saved keys and installed CLIs…";
         try {
@@ -34199,6 +34353,13 @@ body.music-preview-active #idle-hud { display: none !important; }
         } finally {
           autoSetupButton.disabled = false;
         }
+      });
+      // The host's own first-launch pass: show its record and re-read the
+      // controls it changed, unless the button was already pressed here.
+      window.mefiStudio.onAutoSetup?.((record) => {
+        if (!autoSetupPressed) renderAutoSetupRecord(record);
+        studioLog(`> auto setup (first launch): ${record?.summary ?? "applied"}`);
+        void loadAiRouting({ syncControls: true }).then(() => refreshCliStatus()).catch(() => {});
       });
     }
 

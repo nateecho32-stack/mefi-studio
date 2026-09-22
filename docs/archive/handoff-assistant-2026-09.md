@@ -1,5 +1,7 @@
 # Mefi's Studio AI+ — Always-on Assistant Handoff
 
+> **Historical record.** Written before the extraction into this repository; its nested paths and test counts describe the old layout. Kept for the design notes only.
+
 Branch `claude/wonderful-hamilton-ql8jnf`, all work under `mefi-studio/` plus its tests
 in `tools/test_mefi_studio_*.py` and one row per test in `TESTRUNS.md`. Everything below
 was verified on a Linux VM with Electron 44 under `xvfb-run` and no OpenCode store or API

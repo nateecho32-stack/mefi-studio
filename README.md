@@ -249,7 +249,10 @@ project's ignored local `planning.json`.
   when nothing else is available) a live local server, then applies the
   matching provider, model selection and builder in one pass. It sends no paid
   request, changes no key, keeps model overrides, reports every choice, and
-  leaves the same controls editable afterward.
+  leaves the same controls editable afterward. A fresh install runs it by
+  itself on its first launch, and the walkthrough's scan step reads its plan,
+  so a machine with only a signed-in coding CLI is configured before the first
+  task.
 - Builders run through `opencode run` (with a Studio-managed z.ai provider),
   the Grok CLI, Claude Code (`claude -p` on your subscription login), Codex
   (`codex exec` on your ChatGPT login), or Antigravity (`agy` on your Google

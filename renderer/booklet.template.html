@@ -601,39 +601,41 @@
   <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
   <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, agents, assistant, done and questions">
     <header class="rail-tabs" role="tablist" aria-label="Panel views">
-      <button id="cmd-rail-tab-work" class="rail-tab" role="tab" aria-selected="true" aria-controls="idle-feed" data-rail-view="work">Work<span id="cmd-rail-work-badge" class="count" hidden></span></button>
-      <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings">Agents</button>
-      <button id="cmd-rail-tab-assistant" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-chat" tabindex="-1" data-rail-view="assistant">Assistant<span id="cmd-rail-assistant-badge" class="count" hidden></span></button>
-      <button id="cmd-rail-tab-done" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-done" tabindex="-1" data-rail-view="done">Done</button>
-      <button id="cmd-rail-tab-ask" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-asks" tabindex="-1" data-rail-view="ask">Ask<span id="cmd-rail-ask-badge" class="count warn" hidden></span></button>
+      <button id="cmd-rail-tab-work" class="rail-tab" role="tab" aria-selected="true" aria-controls="idle-feed" data-rail-view="work" title="Work · what is running and what is queued"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg><span class="rail-tab-label">Work</span><span id="cmd-rail-work-badge" class="count" hidden></span></button>
+      <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings" title="Agents · how the queue runs"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-agents"/></svg><span class="rail-tab-label">Agents</span></button>
+      <button id="cmd-rail-tab-assistant" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-chat" tabindex="-1" data-rail-view="assistant" title="Assistant · the conversation and the New work switch"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span class="rail-tab-label">Assistant</span><span id="cmd-rail-assistant-badge" class="count" hidden></span></button>
+      <button id="cmd-rail-tab-done" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-done" tabindex="-1" data-rail-view="done" title="Done · builds that finished"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plans"/></svg><span class="rail-tab-label">Done</span></button>
+      <button id="cmd-rail-tab-ask" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-asks" tabindex="-1" data-rail-view="ask" title="Ask · decisions waiting on you"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg><span class="rail-tab-label">Ask</span><span id="cmd-rail-ask-badge" class="count warn" hidden></span></button>
     </header>
     <div id="cmd-rail-body" class="rail-body">
   <aside id="cmd-chat" class="cmd-chat" role="tabpanel" aria-label="Assistant chat log" hidden>
-    <header class="chat-log-head">
+    <header class="rail-view-head chat-log-head">
       <i id="cmd-chat-dot" class="feed-dot" aria-hidden="true"></i>
-      <button id="cmd-chat-jump" class="chat-log-title" title="Select the assistant (M)">Assistant</button>
+      <button id="cmd-chat-jump" class="rail-view-title chat-log-title" type="button" title="Select the assistant on the tree (M)">Assistant</button>
       <span id="cmd-chat-state" class="feed-state">idle</span>
-      <button id="cmd-chat-toggle" class="ghost mini" aria-expanded="true" title="Collapse the chat log">&ndash;</button>
+      <button id="cmd-chat-toggle" class="ghost mini rail-fold" type="button" aria-expanded="true" title="Collapse the chat log">&ndash;</button>
     </header>
     <div id="cmd-chat-body" class="chat-log-body">
-      <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="cmd-chat-new-work" role="switch" aria-describedby="idle-new-work-help" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="cmd-chat-new-work-state" aria-hidden="true">Loading…</span></label>
-      <p id="idle-new-work-help" class="control-help">The master switch for starting anything new: queued tasks, builds and work the assistant suggests. Off pauses admission — running jobs, replies and your answers to questions still work.</p>
+      <div class="new-work-strip" role="group" aria-label="New work">
+        <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="cmd-chat-new-work" role="switch" aria-describedby="idle-new-work-help" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="cmd-chat-new-work-state" class="new-work-state" aria-hidden="true">Loading…</span></label>
+        <p id="idle-new-work-help" class="control-help">The master switch for anything new: queued tasks, builds and suggested work. Off pauses admission; running jobs, replies and your answers still go through.</p>
+      </div>
       <div id="cmd-chat-thread" class="assistant-thread chat-log-thread" aria-live="polite"></div>
       <div class="chat-chips" aria-label="Quick asks">
-        <button class="ghost mini" data-cmdchat-msg="status">Status</button>
-        <button class="ghost mini" data-cmdchat-msg="what should I work on">What next?</button>
-        <button class="ghost mini" data-cmdchat-msg="read the log">Log</button>
-        <button class="ghost mini" data-cmdchat-msg="what is the auto builder doing">Builder</button>
+        <button class="ghost mini" type="button" data-cmdchat-msg="status">Status</button>
+        <button class="ghost mini" type="button" data-cmdchat-msg="what should I work on">What next?</button>
+        <button class="ghost mini" type="button" data-cmdchat-msg="read the log">Log</button>
+        <button class="ghost mini" type="button" data-cmdchat-msg="what is the auto builder doing">Builder</button>
       </div>
       <div class="assistant-composer chat-log-composer">
         <textarea id="cmd-chat-input" class="grow" rows="1" placeholder="Message the assistant… (Enter)" aria-label="Message the assistant" autocomplete="off" spellcheck="false"></textarea>
-        <button id="cmd-chat-send" class="primary mini">Send</button>
+        <button id="cmd-chat-send" class="primary mini" type="button">Send</button>
       </div>
     </div>
   </aside>
   <aside id="idle-feed" class="cmd-feed" role="tabpanel" aria-label="Live work">
-    <header class="feed-head">
-      <h2 class="feed-title"><button id="idle-feed-toggle" class="feed-toggle" type="button" aria-expanded="true" aria-controls="idle-feed-content" title="Collapse live work">
+    <header class="rail-view-head feed-head">
+      <h2 class="rail-view-title feed-title"><button id="idle-feed-toggle" class="feed-toggle" type="button" aria-expanded="true" aria-controls="idle-feed-content" title="Collapse live work">
         <i id="idle-feed-dot" class="feed-dot" aria-hidden="true"></i>
         <span>Live work</span><span id="idle-feed-state" class="feed-state">idle</span>
         <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg>
@@ -667,21 +669,21 @@
       <ul id="idle-chat-work" class="pin-list assistant-activity feed-chat-work"></ul>
       <details id="idle-chat-absorbed" class="card-cps feed-absorbed" hidden><summary>Absorbed work</summary><div id="idle-chat-absorbed-list"></div></details>
       <div id="idle-chat-chips" class="chat-chips" aria-label="Quick asks">
-        <button class="ghost mini" data-msg="status">Status</button>
-        <button class="ghost mini" data-msg="what should I work on">What next?</button>
-        <button class="ghost mini" data-msg="read the log">Log</button>
-        <button class="ghost mini" data-msg="help">Help</button>
+        <button class="ghost mini" type="button" data-msg="status">Status</button>
+        <button class="ghost mini" type="button" data-msg="what should I work on">What next?</button>
+        <button class="ghost mini" type="button" data-msg="read the log">Log</button>
+        <button class="ghost mini" type="button" data-msg="help">Help</button>
       </div>
       <div class="assistant-composer feed-chat-composer">
         <textarea id="idle-chat-input" class="grow" rows="1" placeholder="Message the assistant… (Enter)" aria-label="Message the assistant" autocomplete="off" spellcheck="false"></textarea>
-        <button id="idle-chat-send" class="primary mini">Send</button>
+        <button id="idle-chat-send" class="primary mini" type="button">Send</button>
       </div>
       <div class="feed-chat-actions">
-        <button id="idle-chat-overseer" class="ghost mini" title="The overseer reviews the assistant's own work, tunes prefs and files upgrades">Oversee</button>
-        <button id="idle-chat-tidy" class="ghost mini" title="Archive done tasks, prune finished ideas, clear resolved requests">Tidy</button>
-        <button id="idle-chat-fix" class="ghost mini" title="Repair the catalog and data files, check the live update">Fix</button>
-        <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="idle-chat-pause" role="switch" aria-describedby="idle-new-work-help" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="idle-chat-new-work-state" aria-hidden="true">Loading…</span></label>
-        <button id="idle-chat-explorer" class="ghost mini" title="The full assistant surface in the Session explorer (E)">Explorer</button>
+        <button id="idle-chat-overseer" class="ghost mini" type="button" title="The overseer reviews the assistant's own work, tunes prefs and files upgrades">Oversee</button>
+        <button id="idle-chat-tidy" class="ghost mini" type="button" title="Archive done tasks, prune finished ideas, clear resolved requests">Tidy</button>
+        <button id="idle-chat-fix" class="ghost mini" type="button" title="Repair the catalog and data files, check the live update">Fix</button>
+        <label class="switch mini new-work-toggle" title="Allow new work to start. Turning this off pauses new work; current jobs can finish."><input type="checkbox" id="idle-chat-pause" role="switch" aria-describedby="idle-new-work-help" disabled><span class="track" aria-hidden="true"></span><span>New work</span><span id="idle-chat-new-work-state" class="new-work-state" aria-hidden="true">Loading…</span></label>
+        <button id="idle-chat-explorer" class="ghost mini" type="button" title="The full assistant surface in the Session explorer (E)">Explorer</button>
       </div>
     </div>
     </div>
@@ -753,18 +755,23 @@
   </section>
   <section id="cmd-done" class="cmd-done" role="tabpanel" aria-labelledby="cmd-rail-tab-done" hidden>
     <div class="rail-view-head">
-      <h2 class="rail-view-title">Done log</h2>
+      <h2 class="rail-view-title">Done</h2>
       <span id="cmd-done-state" class="feed-state" role="status" aria-live="polite">Loading…</span>
-      <button id="cmd-done-toggle" class="ghost mini" type="button" aria-expanded="true" aria-controls="cmd-done-list" title="Collapse the done log">&ndash;</button>
       <button id="cmd-done-refresh" class="ghost mini" type="button" title="Re-read the executor ledger">Refresh</button>
       <button id="cmd-done-clear" class="ghost mini" type="button" title="Clear every record — the done log clears for good" disabled>Clear</button>
+      <button id="cmd-done-toggle" class="ghost mini rail-fold" type="button" aria-expanded="true" aria-controls="cmd-done-list" title="Collapse the done log">&ndash;</button>
     </div>
-    <p class="rail-view-note">Builds that finished off, from the durable executor ledger. <b>Done</b> means the worker reported success; <b>Failed</b> means it stopped early. On the tree the finished node collapses into its host and is absorbed; its brief stays readable on that card. <b>Clear</b> wipes this log.</p>
+    <p class="rail-view-note">Builds that finished, from the durable executor ledger. <b>Done</b> means the worker reported success; <b>Failed</b> means it stopped early. A finished node collapses into its host on the tree; its brief stays readable on that card.</p>
+    <div id="cmd-done-filter" class="rail-filter" role="group" aria-label="Filter the done log">
+      <button class="rail-filter-btn" type="button" data-done-filter="all" aria-pressed="true">All<b></b></button>
+      <button class="rail-filter-btn" type="button" data-done-filter="ok" aria-pressed="false">Done<b></b></button>
+      <button class="rail-filter-btn" type="button" data-done-filter="failed" aria-pressed="false">Failed<b></b></button>
+    </div>
     <ul id="cmd-done-list" class="done-list" aria-label="Completed work"></ul>
   </section>
   <section id="cmd-asks" class="cmd-asks" role="tabpanel" aria-labelledby="cmd-rail-tab-ask" hidden>
     <div class="rail-view-head">
-      <h2 class="rail-view-title">Questions</h2>
+      <h2 class="rail-view-title">Ask</h2>
       <span id="cmd-ask-state" class="feed-state" role="status" aria-live="polite">Nothing waiting</span>
     </div>
     <p class="rail-view-note">When an agent needs a decision it asks here with a recommended option. Nothing moves until you answer; your choice is recorded and sent to the assistant, which acts on it or explains what changed.</p>

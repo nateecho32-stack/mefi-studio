@@ -193,7 +193,7 @@ machine gauge looks idle from the landing view.
    idle.js:7882 arms a 1 s timer at load that is never cleared;
    profiler.js:59 keeps sampling with its sheet closed. Every one of these is
    a main-process read on the box that is already starved (see
-   PERFORMANCE.md and the eyes-worker work).
+   [performance.md](performance.md) and the eyes-worker work).
 
 ## 7. How we work with Studio: the dev loop
 

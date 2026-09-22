@@ -168,3 +168,14 @@ test("no detected builder leaves the saved executor alone and says so", () => {
   assert.equal(plan.changes.executorCli, undefined);
   assert.match(plan.notes.join(" "), /No builder CLI detected/);
 });
+
+test("only a pristine settings file lets the first launch run auto setup by itself", () => {
+  const needs = context.firstLaunchNeedsSetup;
+  assert.equal(typeof needs, "function", "firstLaunchNeedsSetup must sit beside the planner in main.cjs");
+  assert.equal(needs({}), true);
+  assert.equal(needs(undefined), true);
+  assert.equal(needs({ zaiApiKeyEncrypted: "x", aiModels: { routine: "glm" } }), true, "a saved key alone is not a configuration choice");
+  for (const saved of [{ aiProvider: "zai" }, { executorCli: "claude" }, { modelSelection: "fixed" }, { firstRun: { version: 1 } }, { autoSetup: { at: 1 } }]) {
+    assert.equal(needs(saved), false, `${Object.keys(saved)[0]} hands control back to Settings`);
+  }
+});

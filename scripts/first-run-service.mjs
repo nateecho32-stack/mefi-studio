@@ -25,7 +25,7 @@ export function createFirstRunService(deps = {}) {
   const {
     scanner, mapper, judge, readSettings, writeSettings, decryptKey = () => null, assistantRoute = async () => ({ ok: false }),
     projects, analyzeProject = async () => null, runEnv = () => ({}), readIdeas = async () => [], writeIdeas = async () => {},
-    writeMapFile = async () => {}, readMapFile = async () => null, assistModule = null, assistantChat = null, send = () => {}, progress = () => {}, log = () => {},
+    writeMapFile = async () => {}, readMapFile = async () => null, assistModule = null, assistantChat = null, autoSetup = null, send = () => {}, progress = () => {}, log = () => {},
     exec = scanner?.spawnExec, env = process.env, platform = process.platform, now = Date.now, smoke = false, mapTimeoutMs = MAP_TIMEOUT_MS,
   } = deps;
   for (const [name, value] of Object.entries({ scanner, mapper, judge, readSettings, writeSettings, projects })) {
@@ -47,6 +47,13 @@ export function createFirstRunService(deps = {}) {
     preferFree: typeof prefs.preferFree === "boolean" ? prefs.preferFree : settings?.firstRun?.preferFree === true,
   });
 
+  // The host's auto setup (main.cjs autoSetup): apply: false only plans. It
+  // is optional so the service still runs where the host has none.
+  async function autoPlan(options) {
+    if (typeof autoSetup !== "function") return null;
+    try { return await autoSetup(options); } catch (error) { return { ok: false, error: errorText(error) }; }
+  }
+
   async function routeOk() {
     try { return (await assistantRoute())?.ok === true; } catch { return false; }
   }
@@ -56,6 +63,7 @@ export function createFirstRunService(deps = {}) {
     return {
       ok: true,
       firstRun: settings?.firstRun ?? null,
+      autoSetup: settings?.autoSetup ?? null,
       scanned: Boolean(lastScan),
       scanAt: lastScan?.at ?? null,
       mapping: { running: mapping.running, projectId: mapping.projectId, startedAt: mapping.startedAt, step: mapping.step, tools: mapping.tools },
@@ -75,9 +83,12 @@ export function createFirstRunService(deps = {}) {
       const keys = keysOf(settings);
       const chosen = { ...prefsFrom(settings, prefs), assistantRoute: await routeOk() };
       const plan = scanner.planFirstRun({ scan: result, keys, prefs: chosen });
-      lastScan = { at: now(), scan: result, keys, prefs: chosen, plan };
-      log(`[first-run] scan: opencode ${plan.opencode.installed ? plan.opencode.version ?? "installed" : "missing"}, ${plan.providers.linked.length} linked provider(s), ${plan.providers.free.count} free model(s), judge ${plan.judge.kind}`);
-      return { ok: true, at: lastScan.at, scan: slimScan(result), plan, prefs: chosen };
+      // Auto setup's plan rides along (nothing written): the route and builder
+      // CLI this machine allows even when OpenCode is missing.
+      const auto = await autoPlan({ apply: false });
+      lastScan = { at: now(), scan: result, keys, prefs: chosen, plan, autoSetup: auto };
+      log(`[first-run] scan: opencode ${plan.opencode.installed ? plan.opencode.version ?? "installed" : "missing"}, ${plan.providers.linked.length} linked provider(s), ${plan.providers.free.count} free model(s), judge ${plan.judge.kind}${auto ? `, auto setup ${auto.ok ? auto.summary : `unavailable (${auto.error})`}` : ""}`);
+      return { ok: true, at: lastScan.at, scan: slimScan(result), plan, prefs: chosen, autoSetup: auto };
     })().finally(() => { scanning = null; });
     return scanning;
   }
@@ -128,11 +139,21 @@ export function createFirstRunService(deps = {}) {
       applied.push("modelSelection");
     }
     await writeSettings(next);
+    // Auto setup reconciles the assistant route and the builder CLI with what
+    // the machine has (saved keys, installed CLIs, a local server), so a
+    // machine without OpenCode still leaves this step configured.
+    const auto = await autoPlan({ apply: true });
+    if (auto?.applied === true) applied.push("autoSetup");
     const notes = [];
+    if (auto?.ok) notes.push(`Auto setup: ${auto.summary}`);
+    else if (auto?.error && !plan.ok) notes.push(`Auto setup: ${auto.error}`);
     if (firstRun.builder.model) notes.push("The free builder model is saved: choose the Free coding tier in Settings to run it one worker at a time (Auto keeps it as OpenCode's pinned model when the z.ai plan is not in use).");
     if (plan.judge.kind === "assistant" || plan.judge.kind === "opencode-free") notes.push("The stand-in judge is saved; routing and intake use it once the judge route is wired (until then fixed defaults apply).");
     log(`[first-run] applied: ${applied.join(", ")}`);
-    return { ok: true, firstRun, plan, applied, notes, summary: `Explorer ${firstRun.explorer.model ?? "OpenCode default"}, builder ${firstRun.builder.model ?? "OpenCode default"}, judge ${firstRun.judge.kind}.` };
+    const summary = plan.ok || !auto?.ok
+      ? `Explorer ${firstRun.explorer.model ?? "OpenCode default"}, builder ${firstRun.builder.model ?? "OpenCode default"}, judge ${firstRun.judge.kind}.`
+      : `OpenCode is not usable yet; ${auto.summary}`;
+    return { ok: true, firstRun, plan, applied, notes, summary, autoSetup: auto };
   }
 
   function consumeEvents(buffer, onEvent) {

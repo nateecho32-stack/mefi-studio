@@ -183,8 +183,9 @@
   const CALLOUT_SIN = Math.sin(CALLOUT_ANGLE);
   const CALLOUT_LENGTHS = [46, 74, 106, 140];
   const CALLOUT_MIN_W = 116;
-  const CALLOUT_MAX_W = 224;
+  const CALLOUT_MAX_W = 236;
   const CALLOUT_TITLE_H = 17;
+  const CALLOUT_SUB_H = 13; // the status line under the title (done/left, %, verifying)
   const CALLOUT_LINE_H = 14;
   const CALLOUT_BUDGET = 6; // full cards at rest; the rest fall back to compact labels, cards on hover / selection / focus
   const CALLOUT_HOLD_MS = 260;
@@ -301,6 +302,7 @@
     doneAt: 0,
     doneLoading: false,
     doneCollapsed: readStore("mefiStudio.cmdDoneCollapsed") === "1",
+    doneFilter: "all",
     doneClearing: false,
     askSending: false,
     lastAssistantSelected: false,
@@ -2058,34 +2060,55 @@
     }
   }
 
+  // The filter chips over the list: every record, only the successes, or
+  // only the failures. Each chip carries its count so the split is readable
+  // without switching.
+  const DONE_FILTERS = ["all", "ok", "failed"];
+  const doneOk = (entry) => entry?.ok !== false;
+
+  function setDoneFilter(name) {
+    state.doneFilter = DONE_FILTERS.includes(name) ? name : "all";
+    renderDone();
+  }
+
   function renderDone() {
     if (!el.doneList) return;
     const entries = state.doneEntries ?? [];
+    const okCount = entries.filter(doneOk).length;
+    const failedCount = entries.length - okCount;
     if (el.doneClear) {
       el.doneClear.disabled = state.doneClearing || !entries.length;
       el.doneClear.title = entries.length
         ? `Clear ${entries.length} record${entries.length === 1 ? "" : "s"} — the done log clears for good`
         : "Nothing to clear yet";
     }
+    const filter = DONE_FILTERS.includes(state.doneFilter) ? state.doneFilter : "all";
+    for (const button of el.doneFilters ?? []) {
+      const name = button.dataset.doneFilter;
+      button.setAttribute("aria-pressed", String(name === filter));
+      const count = button.querySelector("b");
+      if (count) count.textContent = entries.length ? String(name === "ok" ? okCount : name === "failed" ? failedCount : entries.length) : "";
+    }
+    const shown = filter === "all" ? entries : entries.filter((entry) => doneOk(entry) === (filter === "ok"));
     el.doneList.textContent = "";
-    if (!entries.length) {
+    if (!shown.length) {
       const empty = document.createElement("li");
       empty.className = "done-empty";
-      empty.textContent = window.mefiStudio
-        ? "Nothing has finished yet. Builds that finish off land here."
-        : "The done log is available in the desktop app.";
+      empty.textContent = !window.mefiStudio ? "The done log is available in the desktop app."
+        : !entries.length ? "Nothing has finished yet. Builds that finish off land here."
+        : filter === "failed" ? "No failed builds in this log." : "No successful builds in this log.";
       el.doneList.append(empty);
     }
-    for (const entry of entries) {
+    for (const entry of shown) {
       const row = document.createElement("li");
       row.className = "done-row";
-      row.dataset.ok = String(entry.ok !== false);
+      row.dataset.ok = String(doneOk(entry));
       row.dataset.kind = entry.kind === "build" ? "build" : "run";
       const head = document.createElement("div");
       head.className = "done-row-head";
       const verdict = document.createElement("span");
       verdict.className = "done-verdict";
-      verdict.textContent = entry.ok ? "Done" : "Failed";
+      verdict.textContent = doneOk(entry) ? "Done" : "Failed";
       const when = document.createElement("span");
       when.className = "done-when";
       when.textContent = agoLabel(entry.at) ?? "";
@@ -2110,7 +2133,9 @@
       }
       el.doneList.append(row);
     }
-    if (el.doneState) el.doneState.textContent = entries.length ? `${entries.length} record${entries.length === 1 ? "" : "s"}` : "Nothing yet";
+    if (el.doneState) el.doneState.textContent = !entries.length ? "Nothing yet"
+      : failedCount ? `${okCount} done · ${failedCount} failed`
+      : `${entries.length} record${entries.length === 1 ? "" : "s"}`;
   }
 
   // The Ask cards: every open decision with its options, the recommended one
@@ -2127,7 +2152,17 @@
       empty.textContent = "Nothing is waiting on you. When an agent needs a decision, it asks here with a recommended option.";
       el.askList.append(empty);
     }
-    for (const question of [...open, ...closed]) el.askList.append(askCard(question));
+    for (const question of open) el.askList.append(askCard(question));
+    if (closed.length) {
+      // The answered history sits under a divider so open decisions stay
+      // visibly ahead of what is already settled.
+      const divider = document.createElement("li");
+      divider.className = "ask-divider";
+      divider.setAttribute("role", "presentation");
+      divider.textContent = open.length ? "Recently answered" : "Answered";
+      el.askList.append(divider);
+    }
+    for (const question of closed) el.askList.append(askCard(question));
     if (el.askState) el.askState.textContent = open.length ? `${open.length} waiting` : questions.length ? "All answered" : "Nothing waiting";
   }
 
@@ -6418,19 +6453,22 @@
   }
 
   // The card's measurements: its width from the title row, the title clipped
-  // to what is left beside the number and the counts, the bubble lines
-  // wrapped (one remark may take two lines; two remarks take one each).
+  // to what is left beside the number, the status line (the counts) under
+  // it on its own row so a long title is not squeezed by "2 done · 1 left",
+  // the bubble lines wrapped (one remark may take two lines; two remarks
+  // take one each).
   function calloutSize(ctx, content) {
     const numberW = content.number ? measure(ctx, CALLOUT_NUMBER_FONT, content.number) + 13 : 0;
-    const countsW = content.counts ? measure(ctx, CALLOUT_COUNTS_FONT, content.counts) + 10 : 0;
+    const countsW = content.counts ? measure(ctx, CALLOUT_COUNTS_FONT, content.counts) + 28 : 0;
     const fullTitle = measure(ctx, CALLOUT_TITLE_FONT, content.title);
-    const w = Math.max(CALLOUT_MIN_W, Math.min(CALLOUT_MAX_W, 22 + numberW + fullTitle + countsW + 8));
-    const title = clipLine(ctx, CALLOUT_TITLE_FONT, content.title, Math.max(30, w - 22 - numberW - countsW - 8));
+    const w = Math.max(CALLOUT_MIN_W, countsW, Math.min(CALLOUT_MAX_W, 22 + numberW + fullTitle + 8));
+    const title = clipLine(ctx, CALLOUT_TITLE_FONT, content.title, Math.max(30, w - 22 - numberW - 8));
+    const subH = content.counts ? CALLOUT_SUB_H : 0;
     let lines = [];
     if (content.lines.length === 1) lines = speechLines(ctx, content.lines[0].text, w - 22 - (SPEECH_MARKS[content.lines[0].kind] ? 13 : 0)).map((text, index) => ({ text, kind: index === 0 ? content.lines[0].kind : "cont" }));
     else lines = content.lines.map((line) => ({ text: clipLine(ctx, CALLOUT_LINE_FONT, line.text, w - 22 - (SPEECH_MARKS[line.kind] ? 13 : 0)), kind: line.kind }));
     const bubbleH = lines.length ? 9 + lines.length * CALLOUT_LINE_H : 0;
-    return { w, title, lines, bubbleH };
+    return { w, title, lines, subH, bubbleH };
   }
 
   // Distance from a point to a segment, for routing leaders around orbs.
@@ -6457,11 +6495,14 @@
     const ex = p.x + candidate.side * CALLOUT_COS * (r + candidate.length);
     const ey = p.y + candidate.vert * CALLOUT_SIN * (r + candidate.length);
     const x = candidate.side > 0 ? ex : ex - size.w;
-    const top = ey - CALLOUT_TITLE_H - 3;
-    const h = CALLOUT_TITLE_H + 3 + (size.bubbleH ? size.bubbleH + 4 : 2);
+    // The plate: the title row, then the status line when there is one, its
+    // bottom edge on the bar.
+    const plateH = CALLOUT_TITLE_H + 3 + (size.subH ?? 0);
+    const top = ey - plateH;
+    const h = plateH + (size.bubbleH ? size.bubbleH + 4 : 2);
     return {
       side: candidate.side, vert: candidate.vert, length: candidate.length,
-      sx, sy, ex, ey, w: size.w,
+      sx, sy, ex, ey, w: size.w, plateH,
       rect: { x, y: top, w: size.w, h },
       bubble: size.bubbleH ? { x, y: ey + 4, w: size.w, h: size.bubbleH } : null,
     };
@@ -6635,10 +6676,13 @@
     ctx.restore();
   }
 
-  // One card: leader and rim dot, the top bar in the node's own style (double
-  // for the hub, dashed for an agent, a square cap for a task), the title row
-  // above it, the bubble below. Hover lifts the card a touch and glows it;
-  // outside a focused branch it paints dimmer (and on the blurred layer).
+  // One card: a tab-shaped plate (rounded top, paper backdrop) whose bottom
+  // edge is the bar in the node's own style (double for the hub, dashed for
+  // an agent, a square cap for a task), the leader and its rim dot from the
+  // bar's near corner to the orb, the title row on the plate with the status
+  // line under it, the bubble hanging below. Hover lifts the card a touch and
+  // glows it; outside a focused branch it paints dimmer (and on the blurred
+  // layer).
   function drawCallout(ctx, node, layout, content, size, { lifted = false, dimmed = false, still = true } = {}) {
     const tint = node.kind === "agent" ? agentRgb(node.role) : colorOf(node);
     const styleChoice = state.cardStyle === "auto" ? (lifted || state.selected?.id === node.id || content.mark === "live" ? "filled" : "outline") : state.cardStyle;
@@ -6647,57 +6691,71 @@
     const alpha = (node._fade ?? 1) * (dimmed ? 0.5 : forward ? 1 : 0.86) * Math.max(0.4, emphasis(node));
     const paper = state.canvasPalette?.background ?? "#101620";
     const { sx, sy, ex, ey, side, rect, bubble, w } = layout;
+    const plateH = layout.plateH ?? CALLOUT_TITLE_H + 3 + (size.subH ?? 0);
+    const filled = styleChoice === "filled";
     ctx.save();
     ctx.globalAlpha = alpha;
     if (lifted && !still) {
       ctx.translate(ex, ey); ctx.scale(1.06, 1.06); ctx.translate(-ex, -ey);
       ctx.shadowColor = rgba(tint, 0.35); ctx.shadowBlur = 14;
     }
-    ctx.strokeStyle = rgba(tint, forward ? 0.75 : 0.5); ctx.lineWidth = 1; ctx.lineCap = "round";
+    // The plate: paper first so the sky never shows through the words, then
+    // a wash of the node's tint, then a hairline in it.
+    const plate = () => { ctx.beginPath(); ctx.roundRect(rect.x, rect.y, w, plateH, [7, 7, 0, 0]); };
+    plate();
+    ctx.fillStyle = paper; ctx.globalAlpha = alpha * (filled ? 0.94 : 0.78); ctx.fill(); ctx.globalAlpha = alpha;
+    ctx.fillStyle = rgba(tint, filled ? 0.14 : 0.06); ctx.fill();
+    ctx.shadowBlur = 0;
+    plate();
+    ctx.strokeStyle = rgba(tint, forward ? 0.6 : filled ? 0.45 : 0.32); ctx.lineWidth = 1; ctx.stroke();
+    // The leader from the bar's near corner down to the orb, with its rim dot.
+    ctx.strokeStyle = rgba(tint, forward ? 0.8 : 0.55); ctx.lineWidth = 1; ctx.lineCap = "round";
     ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
-    ctx.fillStyle = rgba(tint, 0.85); ctx.beginPath(); ctx.arc(sx, sy, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = rgba(tint, 0.9); ctx.beginPath(); ctx.arc(sx, sy, 1.8, 0, Math.PI * 2); ctx.fill();
+    // The bar along the plate's bottom edge.
     const barEnd = ex + side * w;
-    ctx.lineWidth = forward ? 1.5 : 1.2;
-    ctx.strokeStyle = rgba(tint, forward ? 0.8 : 0.6);
+    ctx.lineWidth = forward ? 2 : 1.5;
+    ctx.strokeStyle = rgba(tint, forward ? 0.95 : 0.75);
     if (node.kind === "assistant") {
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.moveTo(ex, ey - 1.5); ctx.lineTo(barEnd, ey - 1.5); ctx.moveTo(ex, ey + 1.5); ctx.lineTo(barEnd, ey + 1.5); ctx.stroke();
     } else {
       if (node.kind === "agent") ctx.setLineDash([5, 3]);
       ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(barEnd, ey); ctx.stroke();
       ctx.setLineDash([]);
-      if (node.kind === "task" || node.kind === "task-group") { ctx.fillStyle = rgba(tint, 0.9); ctx.fillRect(barEnd - (side > 0 ? 3 : 0), ey - 1.5, 3, 3); }
+      if (node.kind === "task" || node.kind === "task-group") { ctx.fillStyle = rgba(tint, 0.95); ctx.fillRect(barEnd - (side > 0 ? 3.5 : 0), ey - 2, 3.5, 4); }
     }
-    ctx.shadowBlur = 0;
-    let x = rect.x + 4;
-    const baseline = ey - 5;
+    // The title row: mark, number chip, title.
+    let x = rect.x + 6;
+    const baseline = rect.y + 14;
     drawCalloutMark(ctx, content.mark, x + 5, baseline - 4, tint);
-    x += 14;
+    x += 15;
     if (content.number) {
       ctx.font = CALLOUT_NUMBER_FONT;
       const nw = ctx.measureText(content.number).width + 8;
-      ctx.beginPath(); ctx.roundRect(x, baseline - 11, nw, 13, 3); ctx.fillStyle = rgba(tint, 0.2); ctx.fill();
-      ctx.fillStyle = rgba(tint, 1); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(content.number, x + 4, baseline - 1);
+      ctx.beginPath(); ctx.roundRect(x, baseline - 10.5, nw, 13, 3.5); ctx.fillStyle = rgba(tint, filled ? 0.28 : 0.2); ctx.fill();
+      ctx.fillStyle = rgba(tint, 1); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(content.number, x + 4, baseline - 0.5);
       x += nw + 5;
     }
     ctx.font = CALLOUT_TITLE_FONT; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = rgba(NODE_RGB.session, 0.95);
+    ctx.fillStyle = rgba(NODE_RGB.session, 0.96);
     ctx.fillText(size.title, x, baseline);
-    if (content.counts) {
-      ctx.font = CALLOUT_COUNTS_FONT; ctx.textAlign = "right";
-      ctx.fillStyle = content.mark === "error" ? rgba(NODE_RGB.amber, 0.95) : rgba(NODE_RGB.pending, 0.95);
-      ctx.fillText(content.counts, rect.x + rect.w - 4, baseline);
-      ctx.textAlign = "left";
+    // The status line under the title, in the colour of what it says.
+    if (content.counts && size.subH) {
+      const statusRgb = content.mark === "error" ? NODE_RGB.amber : content.mark === "verify" ? NODE_RGB.verify : content.mark === "check" ? NODE_RGB.done : content.mark === "live" ? tint : NODE_RGB.pending;
+      ctx.font = CALLOUT_COUNTS_FONT; ctx.textAlign = "left";
+      ctx.fillStyle = rgba(statusRgb, content.mark === "dot" ? 0.95 : 0.85);
+      ctx.fillText(content.counts, rect.x + 21, baseline + CALLOUT_SUB_H);
     }
     if (bubble && size.lines.length) {
       ctx.beginPath(); ctx.roundRect(bubble.x, bubble.y, bubble.w, bubble.h, 7);
-      if (styleChoice === "filled") {
+      if (filled) {
         ctx.fillStyle = paper; ctx.globalAlpha = alpha * 0.92; ctx.fill(); ctx.globalAlpha = alpha;
         ctx.fillStyle = rgba(tint, 0.12); ctx.fill();
         ctx.strokeStyle = rgba(tint, 0.8);
       } else {
-        ctx.fillStyle = paper; ctx.globalAlpha = alpha * 0.45; ctx.fill(); ctx.globalAlpha = alpha;
-        ctx.strokeStyle = rgba(tint, 0.55);
+        ctx.fillStyle = paper; ctx.globalAlpha = alpha * 0.6; ctx.fill(); ctx.globalAlpha = alpha;
+        ctx.strokeStyle = rgba(tint, 0.5);
       }
       ctx.lineWidth = 1;
       if (size.lines.some((line) => line.kind === "think")) ctx.setLineDash([3, 3]);
@@ -8122,6 +8180,7 @@
       v.textContent = String(value);
       if (title) v.title = String(title);
       kv.append(k, v);
+      return v;
     };
     const linkRow = (key, label, handler) => {
       const k = document.createElement("span");
@@ -8524,25 +8583,28 @@
     } else if (node.kind === "task") {
       const task = node.task;
       const anchor = node.anchorSessionId ? nodeForSession(node.anchorSessionId) : null;
-      row("status", task.status === "awaiting_verification" ? "Verifying" : task.status);
+      // The kicker badge already says the status; the table starts with what it does not.
       if (node.readOnly) row("view", "read-only group member");
       const hold = node.doneHold ? state.doneHold.get(node.id) : null;
       if (hold) row("absorb", hold.ackedAt ? "read — sinking in" : "finished — click to read before it sinks");
-      row("refs", (task.refs ?? []).length);
-      row("logs", (task.logs ?? []).length);
-      row("ideas", (task.ideas ?? []).length);
+      // Three counters read as one line: what the task carries with it.
+      const carried = [["refs", (task.refs ?? []).length], ["logs", (task.logs ?? []).length], ["ideas", (task.ideas ?? []).length]];
+      row("context", carried.some(([, count]) => count) ? carried.filter(([, count]) => count).map(([name, count]) => `${count} ${name}`).join(" · ") : "nothing attached yet");
       if (anchor) linkRow("anchored to", anchor.label ?? anchor.id, () => {
         selectNode(anchor);
         focusNode(anchor, { zoom: 1.4 });
       });
-      else row("anchored to", "—");
+      // The assistant row only when it says something: focused here, or busy elsewhere.
       const taskFocus = assistantFull()?.focus;
       if (taskFocus?.kind === "task" && taskFocus.id === node.id) linkRow("assistant", "focused on this · unfocus", () => focusAssistant(null));
-      else row("assistant", taskFocus?.id ? `on "${String(taskFocus.label || taskFocus.id).slice(0, 30)}"` : "—");
-      const prompt = document.createElement("p");
-      prompt.className = node.readOnly ? "muted" : "muted clamp-3";
-      prompt.textContent = task.prompt ?? "";
-      info.append(kv, prompt);
+      else if (taskFocus?.id) row("assistant", `on "${String(taskFocus.label || taskFocus.id).slice(0, 30)}"`);
+      info.append(kv);
+      if (String(task.prompt ?? "").trim()) {
+        const prompt = document.createElement("p");
+        prompt.className = node.readOnly ? "muted" : "muted clamp-3";
+        prompt.textContent = task.prompt;
+        info.append(prompt);
+      }
       appendTaskGroupInfo(info, node);
       if (!node.readOnly) appendNodeFolder(info, node);
       if (node.groupMember?.canonical !== false) action("Open in Tasks", () => primaryAction(node), { primary: true, title: "Tasks (T)" });
@@ -8592,7 +8654,15 @@
         if (node.model) row("model", node.model);
         const ago = agoLabel(node.updated);
         if (ago) row("updated", node.stale ? `${ago} · stale` : ago);
-        row("todos", node.stale ? "hidden while stale" : `${done}/${todos.length}`);
+        const todoCell = row("todos", node.stale ? "hidden while stale" : todos.length ? `${done} of ${todos.length} done` : "none yet");
+        if (!node.stale && todos.length) {
+          const meter = document.createElement("span");
+          meter.className = "kv-meter";
+          const bar = document.createElement("i");
+          bar.style.setProperty("--pct", `${Math.round((done / todos.length) * 100)}%`);
+          meter.append(bar);
+          todoCell.append(meter);
+        }
         const touch = state.touches.get(node.id);
         if (touch) row("touches", `${touch.count} in 90s`);
       } else {
@@ -8602,7 +8672,6 @@
             focusNode(session, { zoom: 1.4 });
           });
         }
-        row("status", String(node.status ?? "pending").replace("_", " "));
         const index = todos.findIndex((entry) => entry.id === node.id);
         if (index >= 0) row("step", `${index + 1} of ${todos.length}`);
         if (session?.agent) row("agent", session.agent);
@@ -8612,17 +8681,8 @@
       if (notes.length) row("checkpoints", notes.length);
       const focused = assistantFull()?.focus;
       if (focused?.kind === node.kind && focused.id === node.id) linkRow("assistant", "focused on this · unfocus", () => focusAssistant(null));
-      else row("assistant", focused?.id ? `on "${String(focused.label || focused.id).slice(0, 30)}"` : "—");
+      else if (focused?.id) row("assistant", `on "${String(focused.label || focused.id).slice(0, 30)}"`);
       info.append(kv);
-
-      if (node.kind === "session" && todos.length) {
-        const meter = document.createElement("div");
-        meter.className = "meter";
-        const bar = document.createElement("i");
-        meter.append(bar);
-        bar.style.setProperty("--pct", `${Math.round((done / todos.length) * 100)}%`);
-        info.append(meter);
-      }
 
       if (notes.length) {
         const details = document.createElement("details");
@@ -9598,6 +9658,7 @@
     el.doneRefresh = document.getElementById("cmd-done-refresh");
     el.doneToggle = document.getElementById("cmd-done-toggle");
     el.doneClear = document.getElementById("cmd-done-clear");
+    el.doneFilters = [...document.querySelectorAll("#cmd-done-filter [data-done-filter]")];
     el.asks = document.getElementById("cmd-asks");
     el.askList = document.getElementById("cmd-ask-list");
     el.askState = document.getElementById("cmd-ask-state");
@@ -9855,6 +9916,7 @@
     el.doneRefresh?.addEventListener("click", () => void loadDoneLog());
     el.doneToggle?.addEventListener("click", () => setDoneCollapsed(!state.doneCollapsed));
     el.doneClear?.addEventListener("click", () => void clearDoneLog());
+    for (const button of el.doneFilters ?? []) button.addEventListener("click", () => setDoneFilter(button.dataset.doneFilter));
     setDoneCollapsed(state.doneCollapsed, { save: false });
     setRailTab(state.railTab, { save: false });
     document.getElementById("idle-chat-explorer")?.addEventListener("click", () => nav("explorer", { assistant: true }));

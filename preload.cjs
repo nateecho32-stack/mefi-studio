@@ -24,6 +24,9 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   getAiRouting: () => ipcRenderer.invoke("settings:get-ai-routing"),
   setAiRouting: (patch) => ipcRenderer.invoke("settings:set-ai-routing", patch),
   autoSetup: () => ipcRenderer.invoke("settings:auto-setup"),
+  // The first launch of a fresh install runs auto setup by itself (main.cjs
+  // firstLaunchAutoSetup) and announces the saved record here.
+  onAutoSetup: (callback) => ipcRenderer.on("setup:auto-setup", (_event, data) => callback(data)),
   // First run on OpenCode (renderer/onboarding.js): scan, apply, map.
   firstRunStatus: () => ipcRenderer.invoke("setup:first-run-status"),
   firstScan: (payload) => ipcRenderer.invoke("setup:first-scan", payload ?? {}),

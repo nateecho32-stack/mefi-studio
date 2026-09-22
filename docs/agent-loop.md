@@ -2,8 +2,8 @@
 
 A grounded walkthrough of Mefi's Studio AI+'s autonomous agent loop, from a
 chat message to a verified task, with file:line citations checked against the
-current sources on 2026-09-21. Companion reading: `AGENT_LOOP_VERIFICATION.md`
-(what has been verified about planning/integration) and `README.md`.
+current sources on 2026-09-21. Companion reading: [`agent-loop-verification.md`](agent-loop-verification.md)
+(what has been verified about planning/integration) and the [README](../README.md).
 
 ## 1. Intake: chat becomes a board task
 

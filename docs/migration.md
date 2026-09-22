@@ -18,5 +18,5 @@ The local `.local-migration/` directory contains a pre-edit source backup and
 hash manifest and is excluded from Git.
 
 See `README.md` for launch commands and the optional external game connection.
-`HANDOFF_mefi_studio_assistant.md` is a historical implementation record;
+[`archive/handoff-assistant-2026-09.md`](archive/handoff-assistant-2026-09.md) is a historical implementation record;
 its old nested paths and test counts describe the pre-extraction layout.

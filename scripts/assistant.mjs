@@ -4852,10 +4852,10 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
     }
     case "help": {
       lines.push("Ask me about: status, tasks, open issues and tickets, ideas, collisions, machine, agents, the log.");
-      lines.push('Ask "what should I work on" and I pick from the board, the request inbox and quiet sessions.');
+      lines.push('Ask "what should I work on" and I pick from the board, the inbox and quiet sessions.');
       lines.push("I can tidy, fix, organize, pause, resume, and resume the work — and clear the queue when the backlog needs collapsing.");
       lines.push("The overseer sits above me — ask it to review the workflow and it scores my work, tunes prefs and files upgrades.");
-      lines.push("My agents: overseer, watcher, machine, auditor, keeper, thinker, briefer, improver, grower, ideas, reference — an instruction queues it to the request inbox and sends the whole roster out. They talk to each other too — ask about agents to read what they said.");
+      lines.push("My agents: overseer, watcher, machine, auditor, keeper, thinker, briefer, improver, grower, ideas, reference — an instruction queues it to the request inbox and sends the roster out. They talk to each other — ask about agents to read the mail.");
       break;
     }
     case "log": {

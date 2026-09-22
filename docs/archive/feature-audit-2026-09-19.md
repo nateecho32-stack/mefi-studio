@@ -1,5 +1,7 @@
 # Studio feature audit — September 19, 2026
 
+> **Historical record.** Written on 2026-09-19 against that day's tree and the screenshots of one chat session. Later work (the workspace dashboard, coding tiers, agent mail, the UX pass) is not reflected here. Kept for the reasoning; do not treat the table as current.
+
 This checks the capabilities described in the supplied screenshots and the
 Studio requirements in this conversation. It distinguishes implemented paths
 from broader promises. Passing the test suite does not prove every provider,

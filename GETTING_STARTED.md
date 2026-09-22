@@ -67,9 +67,12 @@ it locally — no AI request — showing old plans and starting points in
 
 ### Connect one assistant and one builder
 
-Open **Settings & connections** and either press **Run auto setup** or pick a
-route yourself. The assistant (conversation) and the builder (coding work) are
-separate capabilities: a saved key alone never proves a build can start.
+A fresh install runs **auto setup** by itself on its first launch, from the
+keys, CLIs and local servers already on the machine, and Settings says what it
+chose. Open **Settings & connections** to review that choice, press **Run auto
+setup** again after adding a key or CLI, or pick a route yourself. The
+assistant (conversation) and the builder (coding work) are separate
+capabilities: a saved key alone never proves a build can start.
 
 | What you have | Choose | What it needs |
 | --- | --- | --- |
@@ -146,10 +149,10 @@ preference is saved for all projects and can be changed at any time.
 
 ## 2. Connect your tools
 
-Open **Settings & connections**. Configure your assistant connection and coding
-provider using the connection controls there, or choose **Run auto setup** to
-apply a configuration from the keys, CLIs and local servers already on this
-machine. The setup overview above the controls shows what was detected; auto
+Open **Settings & connections**. A fresh install already ran auto setup once on
+its first launch; configure your assistant connection and coding provider using
+the connection controls there, or choose **Run auto setup** to apply a
+configuration from the keys, CLIs and local servers already on this machine. The setup overview above the controls shows what was detected; auto
 setup explains each choice and never sends a request or changes a saved key.
 You do not need every option: save the model for the provider you actually
 have (models are kept per provider, so switching never mixes them), and the

@@ -17,11 +17,12 @@ set "DEV_EXE=%ROOT%\node_modules\electron\dist\electron.exe"
 if not exist "%DEV_EXE%" (
     echo Mefi's Studio AI+ is not installed yet.
     echo.
-    echo Run once:
+    echo Run once from a terminal (needs Node 24 and npm):
     echo   cd /d "%ROOT%"
-    echo   npm install
-    echo   node node_modules\electron\install.js
-    echo   npm run package
+    echo   npm ci
+    echo   npm run build-booklet
+    echo Then open this launcher again, or run: npm start
+    echo Full steps: README.md and GETTING_STARTED.md in this folder.
     pause
     exit /b 1
 )

@@ -1,5 +1,146 @@
 # Test Runs
 
+performance_render residual flake CAPTURED under real suite contention —
+fixture-internal, uncovered by the kill contract (2026-09-21, night,
+run_1790036825250_4 for task_3d33701ba75b4e48 "Capture residual flake
+detail"). This closes the capture obligation left by the 14-run loaded
+loop below and supersedes the child handoff's 19:15:35 "exit1Captured"
+meta (run-20260921-191535): that record came from an intermediate harness
+revision and is invalid evidence — exitCode null, no stdout/stderr
+preserved, classification unclassified — it is retained on disk as a
+buggy-harness artifact only. Valid capture: full `npm test` (pid 41816,
+log npmtest-20260921-193008.log) plus a node_modules OneDrive churn
+writer (2 s cadence, 5 min) ran while the current full-capture harness
+(tools/logs/performance-render-flake-loop/run-flake-loop.ps1, per-iter
+stdout/stderr + host snapshots) ran `node --test
+tests/performance_render.test.mjs`. Iteration 1 (run-20260921-193144/
+iter-01) exited 1 from the process itself (harnessKilled false, 80.2 s
+vs ~10 s unloaded) under 100% CPU, 45 MB free RAM, 39 node + 8 electron
+processes: test 1 "real performance profiler catches blocking work..."
+hit node:test's 50000 ms budget, test 2 "desktop performance capture
+measures real Electron processes..." failed with the exact historical
+signature — `Error: Profiler JSON download timed out` at
+tests/fixtures/performance-render-electron.cjs:127:47 (the 5 s
+will-download completion timer in downloadCapture()), runFixture
+assert 1 !== 0. Classification per the established rules:
+fixture-internal-uncovered (download-timeout + :127 stack frame); the
+kill contract's "Performance fixture timed out: PID" marker is absent
+and its 150 s harness hard-kill never fired — the hardened kill
+contract is not implicated. Root cause anatomy: the renderer's
+profiler-export click -> will-download -> capture.json write pipeline
+exceeds its fixed 5 s budget when the host is saturated; the in-suite
+performance_render copy inside the same concurrent npm test survived
+(36.3 s + 8.1 s, slowed but green), so the flake is a load-dependent
+fixed-budget miss, not state corruption. Ambient-load note: the
+concurrent suite itself degraded as predicted — serialized
+occlusion_probe failed "rAF must stay silent while occluded
+(growth=2)" this run (environment-conditional per run_1790035430350_1)
+and the child's 19:15 concurrent suite failed executor_parallel
+"session tool edits remain attributable" (0 !== 3) — both are
+contention symptoms, not performance_render regressions. Stale
+`%TEMP%\mefi-performance-render-*` dirs re-audited: 0 remain (the
+fixture teardown reclaimed both once load subsided). Suggested
+follow-up (out of scope here): make downloadCapture's 5 s budget
+load-tolerant (deadline scaled to observed fixture pace or one retry)
+— small fixture-only change, needs its own card. `npm run check` exit
+0 after this row.
+
+Full node suite green after the cap-boundary hysteresis, on top of the
+memory-cap merge (2026-09-21, late night, run_1790036998516_6 for
+task_29e6146a127aaf79, parent task_12e1b622aa97c583 "Cap boundary
+hysteresis"). The change under test is the severe-memory cap's boundary
+latch in scripts/machine.mjs (landed in 3198c4d, on HEAD 0c9ce23):
+severeCapSamples consecutive readings below memorySevereFloorMB engage
+the cap, the same count of consecutive readings at or above floor plus
+memorySevereReleaseMarginMB release it, and recovery-band readings hold
+the latch while resetting both streaks — so solitary 299/451 blips can
+no longer toggle parallelism; tests/machine_capacity.test.mjs pins the
+streak behavior. `node scripts/run-node-tests.mjs` exited 0 through the
+whole chain on the current tree, which also carries the concurrent
+sessions' uncommitted work (machine.mjs telemetry line, assistant.mjs
+scope qualifier, commit-evidence and project-work tests): parallel stage
+1732 tests / 1730 pass / 0 fail / 2 skipped in 42.1 s — the same two
+known environment-conditional skips as run_1790035430350_1 (live
+gateway Jev-model resolution without credentials; in-process vm-modules
+source check needing --experimental-vm-modules); serialized
+eyes_toggle_electron 1/1 in 6.6 s (baseline 2 fetches/285 ms, hidden
+0/1200 ms, one resume snap, fetch gaps 285-1306 ms, 6 fetches total);
+serialized occlusion_probe 1/1 strict native occlusion pass in 7.4 s
+(document.hidden signal, occluded rAF growth 0, lag 0 ms, worker drift
+158 ms, MessageChannel 0 ms, 0 console errors) — where run_1790035430350_1
+had taken that probe's occlusionUnsupported environment skip. A first
+invocation of the same runner minutes earlier went red under desktop
+contention (parallel stage 97.4 s vs 42.1 s green): five red entries —
+3 fail plus 2 cancelled — namely performance_render and node_paint_cache
+50 s timeouts, package_privacy spawnSync ETIMEDOUT, eyes_worker 150 ms
+store-read timeout, and the commit_evidence unscoped-check assertion;
+every one of them passed in the green retry with no source change
+between invocations, and the runner's exit-code chaining stopped that
+red attempt before the serialized fixtures ran at all. No
+hysteresis-related failure appeared in either attempt — the
+machine_capacity suite passed both times.
+
+"Land the fixture/runner files once green" audit (2026-09-21, night,
+run_1790036793362_3 for task_bc33fdd783d99ad5, re-carded todo from the
+task_073a02b3a82eec7d gate family). The deliverable was verified already
+landed, not re-landed: 3a6ef13 carries the fixture files
+(command_graph, command_visuals, executor_continuation,
+verification_drain) with its green-gate TESTRUNS row, ce3e6ec the
+eyes_toggle/occlusion runner+fixture fixes, cb93e79 the occlusion
+skip-on-external-destroy hardening; `git status` shows zero pending
+diffs on scripts/run-node-tests.mjs, package.json, tests/fixtures/ or
+the serialized fixture tests, and the only uncommitted test files
+(commit_evidence, project_work + 8 modified) belong to the
+commit-evidence family under its own commit card. Fresh gate attempts
+on this attempt's clock could not reproduce green purely from host
+load — machine at a 0.38/13.77 GB memory floor: full runner run 1 red
+(occlusion_probe lag samples 173/1901/1303 ms under parallel-stage
+contention; solo rerun exit 0, skipped via the cb93e79 guard with the
+forensic pointing at an external foreground process closing the probe
+window), full runner run 2 red on a different, diff-free committed
+fixture (node_paint_cache "No pixel fixture report" — the documented
+Electron-under-load class). No fixture or runner file was edited to
+force green; the combined-tree full gate stays carded separately
+(task_3762737ae025181) and should rerun on an unloaded machine.
+
+Second-user reports: schema-less OpenCode store, "open issues" reply,
+planning modal blind to existing maps/tickets (2026-09-21, night).
+Reports came as Discord screenshots from another machine, so nothing
+reproduced locally. (1) "Store unavailable · no such table: session":
+`storePresent` in scripts/eyes.mjs now checks sqlite_master (5 s cache,
+cleared by closeReadDb) and a store file carrying none of
+session/message/part/todo reads as empty; a partial store (fixtures build
+only `part`) still reads, and a read of a missing table still throws.
+New `storeStatus()` (on the eyes-worker allowlist) explains missing /
+no-session-table / legacy storage/ layouts; eyes:state, the watcher's
+problem list and usage:tracker carry its note, and the Command empty
+card shows "No sessions in the store yet" with the fix instead of a
+modal. (2) "What are the open issues currently in the project?" fell to
+chat and echoed focus + memory; the tasks intent now matches open
+issues/tickets/bugs phrasings (queue cleaning and the fix pass keep
+their routes) and the reply adds the repo's tracker line from the new
+`projectWork` fact. (3) New scripts/project-work.cjs reads the
+mattpocock-skills layout (docs/agents/issue-tracker.md, wayfinder maps
+and tickets under .scratch/<effort>/, `gh issue list` for GitHub
+trackers with a 6 s timeout) plus agents/skills/commands from .claude/,
+.opencode/, opencode.json, ~/.claude, ~/.config/opencode and installed
+Claude plugins; planning:list returns it as `existing` and the modal
+renders "Already in this project" with a Plan-from-this-map button.
+(4) Usage panel "Unknown" for unpriced calls now reads "unpriced" ($0
+when no calls). Evidence: tests/project_work.test.mjs 5/5,
+eyes_missing_store 4/4 (two new), assistant_question_routing,
+planning_service, planning_ui (new cases) green; full
+run-node-tests 1732 tests: first run 1 fail (executor_parallel's
+part-only fixture, fixed by the any-core-table rule), rerun 2 fails
+that pass alone (node_paint_cache, performance_render — Electron
+fixture timeouts under load), 1728 pass otherwise; npm run check exit 0
+(91 targets, 179 specs, CSS all used); npm run audit 0 findings;
+build-booklet rebuilt renderer/booklet.html; fake-bridge browser preview
+showed the modal panel, Plan-from-map filling the destination, and the
+Command card's store note. Uncommitted; peer sessions have other
+uncommitted edits in the same tree (explorer.js, machine.mjs,
+receipts.mjs and their tests).
+
 Commit-evidence verification loop closed on the remaining-text gate
 (2026-09-21, night, run_1790035904812_8 for task_326aafb524dcb758).
 The prior attempt's feature work (claimedCommitHash + commit branch in
@@ -2297,3 +2438,7 @@ run_1790029681239_2; occlusion_probe strict pass with Studio minimized,
 this entry. Handed on: root-cause the rotating in-suite ReferenceErrors and
 land one green exit-0 full-suite run; that green run - not this entry - is
 what should close task_11085243b2d2452f.
+
+## 2026-09-21 evening - node callout plates (session "Node tabs polish")
+
+renderer/idle.js callouts redrawn as tab-shaped plates (paper backdrop, rounded top, tinted bottom bar the leader meets; counts moved to a colour-coded status line under the title; CALLOUT_MAX_W 224 -> 236; CALLOUT_SUB_H 13). booklet.html rebuilt. Gates: node --test tests/command_visuals.test.mjs 23/23; tests/command_render + command_graph + command_motion + command_performance + command_activity 133/133 (real Electron renderer 35.7 s); check-syntax ok (91 files); check-targets ok. Verified in the browser pane with a fake-bridge preview at 1440x900: six cards placed, full titles, hover/selected states drawn.

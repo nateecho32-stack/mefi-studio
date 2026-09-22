@@ -1600,6 +1600,15 @@ function autoFallbackEnabled(settings) {
   return settings.aiFallbackOpenCode === true;
 }
 
+// A fresh install is one the owner has not configured at all: no route, no
+// builder, no model-selection choice, no first-run record and no earlier
+// automatic pass. Only that state lets the first launch run auto setup by
+// itself; one saved choice of any kind hands control back to Settings.
+function firstLaunchNeedsSetup(settings = {}) {
+  if (!settings || typeof settings !== "object") return true;
+  return !settings.aiProvider && !settings.executorCli && !settings.modelSelection && !settings.firstRun && !settings.autoSetup;
+}
+
 // Auto setup: one pass that turns what this machine already has into a working
 // configuration. Saved keys choose the assistant route, an installed CLI
 // chooses the builders, and a saved Jev key (either route) enables task-aware
@@ -10560,6 +10569,35 @@ function send(channel, payload) {
   if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
 }
 
+// registerIpc installs the real auto setup (it needs the CLI probes that live
+// there); until then the first-launch pass reports itself unavailable.
+let runAutoSetup = async () => ({ ok: false, error: "Auto setup is not registered yet." });
+
+// A fresh install configures itself. The first interactive launch with no
+// route, builder or first-run choice saved runs auto setup once from what the
+// machine already has (saved keys, installed CLIs, a local server): it sends
+// no request and writes no key, and the record it saves tells Settings and the
+// walkthrough what happened. A machine with nothing to set up yet is checked
+// again on the next launch, until the owner saves something.
+async function firstLaunchAutoSetup() {
+  const settings = await readSettings();
+  if (!firstLaunchNeedsSetup(settings)) return { ok: true, skipped: true };
+  const result = await runAutoSetup();
+  if (!result?.ok) {
+    logLine(`[setup] first launch: ${result?.error ?? "auto setup unavailable"}`);
+    return result;
+  }
+  const record = { at: Date.now(), automatic: true, applied: result.applied === true, summary: String(result.summary ?? ""), notes: Array.isArray(result.notes) ? result.notes.map(String) : [] };
+  const next = await readSettings();
+  if (!next.autoSetup) {
+    next.autoSetup = record;
+    await writeSettings(next);
+  }
+  logLine(`[setup] first launch: ${record.summary}`);
+  send("setup:auto-setup", record);
+  return { ...result, record };
+}
+
 function logLine(line) {
   send("studio:log", String(line).replace(/\r?\n$/, ""));
 }
@@ -11482,6 +11520,13 @@ function registerIpc() {
       executorTierModels: Object.fromEntries(EXECUTOR_CLIS.map((cli) => [cli, executorTierModels(settings, cli)])),
       executorTierDefaults: Object.fromEntries(EXECUTOR_CLIS.map((cli) => [cli, executorTierDefaults(settings, cli, { zai: tierZai })])),
       executorTierZai: tierZai,
+      // The automatic first-launch pass, so Settings can say it happened.
+      autoSetup: settings.autoSetup && typeof settings.autoSetup === "object" ? {
+        at: Number(settings.autoSetup.at) || null,
+        automatic: settings.autoSetup.automatic === true,
+        summary: String(settings.autoSetup.summary ?? "").slice(0, 300),
+        notes: Array.isArray(settings.autoSetup.notes) ? settings.autoSetup.notes.map((note) => String(note).slice(0, 300)).slice(0, 8) : [],
+      } : null,
     };
   });
 
@@ -11620,6 +11665,7 @@ function registerIpc() {
       progress: (payload) => send("setup:first-map-progress", payload),
       log: logLine,
       assistModule,
+      autoSetup: (options) => autoSetup(options),
       assistantChat: (system, user) => assistantFetch(system, user, 1200, { role: "routine", taskType: "setup-assist" }),
       readMapFile: async (name) => (await getEyes()).readJson(path.join(STUDIO_ROOT, "data", name), null),
       smoke: SMOKE || CAPTURE || CLI_MODE,
@@ -11633,7 +11679,10 @@ function registerIpc() {
   ipcMain.handle("setup:first-map-cancel", async () => (await firstRun()).cancel());
   ipcMain.handle("setup:first-assist", async (_event, payload) => (await firstRun()).assist(payload ?? {}));
 
-  ipcMain.handle("settings:auto-setup", async () => {
+  // Auto setup as one callable: Settings' button, the walkthrough's scan
+  // (apply: false plans without writing) and its apply step, and the first
+  // interactive launch of a fresh install (firstLaunchAutoSetup) share it.
+  async function autoSetup({ apply = true } = {}) {
     const settings = await readSettings();
     const keys = {
       zai: Boolean(decryptKey(settings, "zaiApiKeyEncrypted")),
@@ -11658,6 +11707,7 @@ function registerIpc() {
     if (Object.keys(plan.changes).length === 0) {
       return { ...plan, applied: false, summary: `Already set up - ${summary.charAt(0).toLowerCase()}${summary.slice(1)}` };
     }
+    if (!apply) return { ...plan, applied: false, planned: true, summary };
     // Re-read before writing so a concurrent key or routing save is not lost.
     const next = await readSettings();
     if (plan.changes.provider !== undefined) next.aiProvider = plan.changes.provider;
@@ -11667,7 +11717,9 @@ function registerIpc() {
     await writeSettings(next);
     logLine(`[setup] auto setup: ${summary}`);
     return { ...plan, applied: true, summary };
-  });
+  }
+  runAutoSetup = autoSetup;
+  ipcMain.handle("settings:auto-setup", () => autoSetup());
 
   ipcMain.handle("speed:probe", async (_event, { modelId }) => runSpeedProbe(modelId));
 
@@ -12630,6 +12682,9 @@ app.whenReady().then(() => {
   // The assistant service runs on its own clock, renderer or not; the smoke
   // exercises its keyless path, the capture tour never needs it.
   if (!CAPTURE && !CLI_MODE) setTimeout(() => startAssistant().catch((error) => logLine(`[assistant] start failed: ${error?.message ?? error}`)), 1500);
+  // A fresh install: auto setup runs once from what the machine has (see
+  // firstLaunchAutoSetup); the renderer hears about it on setup:auto-setup.
+  if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => firstLaunchAutoSetup().catch((error) => logLine(`[setup] first launch auto setup failed: ${error?.message ?? error}`)), 4000);
   if (CAPTURE) {
     window.webContents.once("did-finish-load", () => captureTabs());
     setTimeout(() => {
