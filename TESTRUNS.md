@@ -25,6 +25,30 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Quiet-tree full-gate rerun over the landed worktree module + wiring, exit 0
+(2026-09-22, 10:38-10:42, run_1790091211824_20 for
+task_bf79bd8c1d8fced5 "Full-gate rerun on the quiet tree", parent
+"Per-session worktrees for executor runs"). Preconditions verified
+first-hand before launching: the combined in-flight tree landed as 31f69f0
+(start-kill grace, settle-only verification prefetch, monitor-loop tool),
+`git status --porcelain` was empty, and the one sibling `run-node-tests`
+node stage in flight at pickup (PID 23216) was waited out, so this gate
+ran solo; `npm run check` (all five stages) and `npm run audit` (0
+findings, 0 warnings) were green immediately before. Exit 0: node stage
+173 suites (9 launch Electron), 1958 tests / 1955 pass / 0 fail /
+3 skipped in 35.8 s (the documented environment-conditional skips);
+Python contracts 246/246 OK in 31.6 s; normalized-path lock all ok;
+serialized eyes_toggle_electron 1/1 (3.1 s, baseline 2 fetches/296 ms,
+one resume snap, 6 fetches total); occlusion_probe took the documented
+capability skip (visibility never flipped). The card's target suites ran
+green in-stage: worktree prepare/settle lifecycle (3.6 s) and
+keep-worktree-on-uncommitted-edits (2.8 s). Settle honest note: the
+before/after `git status` snapshots differ by one outside-process change
+— a 3-line `engines` sync npm wrote into package-lock.json mid-run; no
+test-read source moved, no suite reads the lockfile, and the runner
+raised no moved-sources diagnosis; the hunk belongs to a sibling session
+and was left untouched. This commit adds only this row.
+
 Restart-coverage verification for the staged-index warning card
 (2026-09-22, ~15:0x, run_1790091589134_33 for task_d89c17863bf8ccdb
 "Restart coverage for staged-index warnings", parent
