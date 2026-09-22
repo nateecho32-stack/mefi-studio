@@ -927,6 +927,10 @@ app.whenReady().then(async () => {
   await run("document.getElementById('cmd-done-toggle').click();");
   await until("!document.getElementById('cmd-done').classList.contains('done-collapsed') && getComputedStyle(document.getElementById('cmd-done-list')).display!=='none'", "the done log expands again");
   await run("document.getElementById('cmd-done-clear').click();");
+  // Clearing asks first (a418a84): the confirm toast's committing button must
+  // be pressed before the host wipes the ledger, so approve it like a user.
+  await until("[...document.querySelectorAll('#toast-host .toast-action')].some(button=>button.textContent==='Clear')", "Clear asks before it wipes the log");
+  await run("[...document.querySelectorAll('#toast-host .toast-action')].find(button=>button.textContent==='Clear').click();");
   await until("window.commandFixture.doneClears()===1 && document.querySelector('#cmd-done-list .done-empty')!==null", "Clear empties the done log through the host");
   await until("!document.getElementById('cmd-done').classList.contains('absorbing')", "the Done tab never takes the absorb class");
   await shot("done-cleared");
