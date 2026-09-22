@@ -25,6 +25,31 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - repeat verification for the visible-phase foreground card (task_03ad46c09bd30216, run run_1790094247017_123)
+
+Closing verification for "Visible-phase foreground robustness". The
+implementation landed as 379c5b1 (fixture + the row below only — 2 files,
+verified via `git show --stat`, not the 6 dirty working-tree files the
+sentinel saw, which belonged to sibling sessions); both dispatches after it
+died on the 5-hour usage limit before running anything. This pass trusts no
+prior report and re-derived the evidence: `git diff HEAD` on
+tests/fixtures/occlusion-probe-electron.cjs is empty, so the committed steal
+(`app.focus({ steal: true })` at raise + re-raise) and the frames-channel
+resampling (`acceptable` predicate — a sample must answer via frames AND read
+<100ms within the same bounded 3 attempts — plus `bestSample` preferring
+frames answers) are what actually runs. Then `node --test
+tests/occlusion_probe.test.mjs` seven times back-to-back: 7/7 exit 0, six
+engaging real native occlusion (document.hidden flip, occluded rAF growth 0,
+worker drift 151-166ms, MessageChannel 0ms, recovery after cover removal) and
+one taking the documented capability skip — no "must answer via frames"
+failure in any run, which is the flake this card exists to kill. (A first
+looped attempt printed exit 1 with no test output: `Select-Object -First 6`
+stopped the pipeline after exactly the 6 summary lines and killed node — a
+capture artifact, per the known-failures table's "never through
+`Select-Object -Last N`" note, not a test result.) `npm run check` exit 0,
+all five stages ok (100 targets, 200 specs, merge skip, all selectors used,
+100 files syntax). This commit adds only this row.
+
 ## 2026-09-22 afternoon - second full-gate rerun for the 6c5e94 follow-up card after the usage-limit stall (task_7a3b221956f9aa64, run run_1790094001667_115)
 
 Second full-gate row for this card, run from scratch on the quiet tree. The
