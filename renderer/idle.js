@@ -1821,36 +1821,52 @@
   // One thread renderer for both surfaces (the rail console and the right-side
   // chat log): the newest bubbles, a thinking bubble while a reply is pending,
   // and the scroll pinned to the tail only while the reader already is.
+  // Every feed push repaints the chat log, and most pushes (a worker's stdout
+  // lines) change nothing the thread shows; rebuilding it anyway cost two
+  // forced layouts of the whole document per push (7.6 ms each on the live
+  // Command view), so a thread that would read the same is left alone.
+  const threadPainted = new WeakMap();
   function fillThread(container, full) {
     if (!container) return;
+    const bridge = Boolean(window.mefiStudio?.assistantMessage);
+    const messages = threadMessages(full);
+    const rows = messages.map((message) => {
+      const thought = message.role === "thinking";
+      return [
+        message.role === "user" ? "user" : thought ? "assistant thinking" : "assistant",
+        String(message.text ?? ""),
+        thought
+          ? `${agoLabel(message.at) ?? ""} · thinking`
+          : `${agoLabel(message.at) ?? ""}${message.role !== "user" && message.via === "local" ? " · local" : ""}`,
+      ];
+    });
+    const live = String(full?.thinking?.text ?? "").trim();
+    const last = messages[messages.length - 1];
+    const sameLive = Boolean(live && last?.role === "thinking" && String(last.text ?? "") === live);
+    const pending = replyPending(full) && !sameLive;
+    const signature = JSON.stringify([bridge, rows, pending, pending && live]);
+    if (threadPainted.get(container) === signature && container.firstChild) return;
+    threadPainted.set(container, signature);
     const pinned = container.scrollTop + container.clientHeight >= container.scrollHeight - 28;
     const top = container.scrollTop;
     container.textContent = "";
-    const bridge = Boolean(window.mefiStudio?.assistantMessage);
-    const messages = threadMessages(full);
     if (!messages.length) {
       const empty = document.createElement("p");
       empty.className = "muted";
       empty.textContent = bridge ? "No messages yet — ask for a status, or give it work." : "The thread lives in the desktop app.";
       container.append(empty);
     }
-    for (const message of messages) {
-      const thought = message.role === "thinking";
+    for (const [kind, text, label] of rows) {
       const bubble = document.createElement("div");
-      bubble.className = `assistant-msg ${message.role === "user" ? "user" : thought ? "assistant thinking" : "assistant"}`;
-      bubble.textContent = String(message.text ?? "");
+      bubble.className = `assistant-msg ${kind}`;
+      bubble.textContent = text;
       const when = document.createElement("span");
       when.className = "when";
-      when.textContent = thought
-        ? `${agoLabel(message.at) ?? ""} · thinking`
-        : `${agoLabel(message.at) ?? ""}${message.role !== "user" && message.via === "local" ? " · local" : ""}`;
+      when.textContent = label;
       bubble.append(when);
       container.append(bubble);
     }
-    const live = String(full?.thinking?.text ?? "").trim();
-    const last = messages[messages.length - 1];
-    const sameLive = Boolean(live && last?.role === "thinking" && String(last.text ?? "") === live);
-    if (replyPending(full) && !sameLive) container.append(thinkingBubble(full));
+    if (pending) container.append(thinkingBubble(full));
     container.scrollTop = pinned ? container.scrollHeight : top;
   }
 
@@ -4850,7 +4866,30 @@
       if (state.feed.length > 40) state.feed.length = 40;
     }
     state.feedDirty = true;
-    if (state.active) renderFeed();
+    if (state.active) paintFeedSoon();
+  }
+
+  // Each renderFeed rebuilds the whole rail (feed rows, roster, queue, chat
+  // log), and a worker's stdout arrives here a line at a time, a dozen a
+  // second with several running. A push after a quiet FEED_PUSH_MS paints at
+  // once; pushes inside that window share one trailing paint, so a burst
+  // costs at most four rail rebuilds a second instead of one per line.
+  const FEED_PUSH_MS = 250;
+  let feedPaintTimer = 0;
+  let feedPaintedAt = 0;
+  function paintFeedSoon() {
+    if (feedPaintTimer) return;
+    const wait = feedPaintedAt + FEED_PUSH_MS - Date.now();
+    if (wait <= 0) {
+      feedPaintedAt = Date.now();
+      renderFeed();
+      return;
+    }
+    feedPaintTimer = setTimeout(() => {
+      feedPaintTimer = 0;
+      feedPaintedAt = Date.now();
+      if (state.active) renderFeed();
+    }, wait);
   }
 
   function feedLine(item) {

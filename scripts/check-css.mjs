@@ -124,12 +124,43 @@ export function selectorClasses(selector) {
   return [...classes];
 }
 
+// The usage side of findUnusedSelectors: every word-like token, and every
+// literal a template interpolation composes class names from (the word run
+// before `${`, spaces or tabs between, trailing hyphens dropped). Parts may be
+// texts or earlier indexes; the result is their union, which is exactly the
+// index of the texts joined by line breaks, because neither a token nor a
+// prefix can cross one. Callers checking several sheets against one shared
+// corpus index each file once instead of re-reading megabytes per sheet (the
+// auditor did that on the main process every pass: 350 ms). The prefix scan
+// walks back from each `${` rather than running /([\w-]+)[ \t]*\$\{/g, which
+// retried the word class at every letter of the corpus.
+const WORD_CHAR = /[\w-]/;
+export function usageIndex(parts) {
+  const tokens = new Set();
+  const prefixes = new Set();
+  for (const part of [].concat(parts)) {
+    if (part && typeof part === "object") {
+      for (const token of part.tokens) tokens.add(token);
+      for (const prefix of part.prefixes) prefixes.add(prefix);
+      continue;
+    }
+    const text = String(part ?? "");
+    for (const token of text.match(/[\w-]+/g) ?? []) tokens.add(token);
+    for (let at = text.indexOf("${"); at !== -1; at = text.indexOf("${", at + 2)) {
+      let end = at;
+      while (end > 0 && (text[end - 1] === " " || text[end - 1] === "\t")) end--;
+      let start = end;
+      while (start > 0 && WORD_CHAR.test(text[start - 1])) start--;
+      if (start < end) prefixes.add(text.slice(start, end).replace(/-+$/, ""));
+    }
+  }
+  return { tokens, prefixes: [...prefixes] };
+}
+
 export function findUnusedSelectors(cssText, usageText, { allow = [] } = {}) {
   const css = blankComments(cssText);
-  const usage = new Set(usageText.match(/[\w-]+/g) ?? []);
-  const dynamicPrefixes = new Set();
-  for (const match of usageText.matchAll(/([\w-]+)[ \t]*\$\{/g)) dynamicPrefixes.add(match[1].replace(/-+$/, ""));
-  const composed = (name) => [...dynamicPrefixes].some((prefix) => name === prefix || name.startsWith(`${prefix}-`));
+  const { tokens: usage, prefixes: dynamicPrefixes } = typeof usageText === "string" ? usageIndex(usageText) : usageText;
+  const composed = (name) => dynamicPrefixes.some((prefix) => name === prefix || name.startsWith(`${prefix}-`));
   const allowed = new Set(allow);
   const unused = [];
   (function walk(from, to) {
@@ -284,6 +315,12 @@ async function runUnused(targets, allow) {
     sheets = names.filter((name) => name.endsWith(".css")).map((name) => path.join(renderer, name)).sort();
   }
   let dead = 0;
+  // Each sibling file is read and indexed once for every sheet that counts it.
+  const indexes = new Map();
+  const indexOf = (file) => {
+    if (!indexes.has(file)) indexes.set(file, readFile(file, "utf8").then((text) => usageIndex(text)));
+    return indexes.get(file);
+  };
   for (const target of sheets.map((file) => path.resolve(file))) {
     let cssText;
     let siblings;
@@ -302,8 +339,8 @@ async function runUnused(targets, allow) {
       console.error(`check-css: cannot read ${target}: ${err.message}`);
       return 2;
     }
-    const usageText = (await Promise.all(siblings.map((name) => readFile(path.join(path.dirname(target), name), "utf8")))).join("\n");
-    for (const hit of findUnusedSelectors(cssText, usageText, { allow })) {
+    const usage = usageIndex(await Promise.all(siblings.map((name) => indexOf(path.join(path.dirname(target), name)))));
+    for (const hit of findUnusedSelectors(cssText, usage, { allow })) {
       dead++;
       console.log(`UNUSED-SELECTOR ${path.relative(process.cwd(), target)}:${hit.line}: ${hit.selector} (missing ${hit.missing.join(" ")})`);
     }

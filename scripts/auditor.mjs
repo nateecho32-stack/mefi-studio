@@ -8,7 +8,7 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import studioPaths from "./paths.cjs";
-import { findUnusedSelectors } from "./check-css.mjs";
+import { findUnusedSelectors, usageIndex } from "./check-css.mjs";
 
 const STUDIO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -188,9 +188,12 @@ export async function audit({ root = STUDIO } = {}) {
     rendererEntries.filter((name) => name.endsWith(".html") && name !== "booklet.html").map((name) => readIfExists(path.join(RENDERER, name)))
   )).filter(Boolean).join("\n");
   const cssTexts = await Promise.all(cssFiles.map((name) => readIfExists(path.join(RENDERER, name))));
+  // The html/js corpus and each sheet are indexed once; a sheet's usage is
+  // their union minus itself (same result as re-reading the joined text).
+  const sharedUsage = usageIndex([htmlText, scriptText]);
+  const sheetUsage = cssTexts.map((text) => usageIndex(text ?? ""));
   cssFiles.forEach((name, i) => {
-    const otherCss = cssTexts.filter((_, j) => j !== i).filter(Boolean).join("\n");
-    const unused = findUnusedSelectors(cssTexts[i] ?? "", `${htmlText}\n${scriptText}\n${otherCss}`);
+    const unused = findUnusedSelectors(cssTexts[i] ?? "", usageIndex([sharedUsage, ...sheetUsage.filter((_, j) => j !== i)]));
     for (const hit of unused.slice(0, 12)) {
       add("warn", "css", `renderer/${name} line ${hit.line}: selector "${hit.selector}" keeps winner keys but its classes (${hit.missing.join(" ")}) never appear in renderer html/js/css usage`);
     }

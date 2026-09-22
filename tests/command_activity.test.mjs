@@ -510,3 +510,74 @@ test("feed rows fold repeats and a worker transcript but keep distinct lines", (
     "run:1:started: Fix the settings panel",
   ]);
 });
+
+// A worker's stdout reaches the feed a line at a time, a dozen a second with
+// several running, and each renderFeed rebuilds the whole rail. A push after
+// a quiet window paints at once; pushes inside it share one trailing paint.
+test("feed pushes paint at once after a quiet window and share one trailing paint in a burst", () => {
+  const text = source.replace(/\r\n/g, "\n");
+  const from = text.indexOf("  const transcriptRow = ");
+  const to = text.indexOf("  function feedLine(item) {", from);
+  let clock = 10_000, renders = 0;
+  const timers = [];
+  const state = { feed: [], active: true, feedDirty: false };
+  const env = vm.createContext({
+    state, Math, Date: { now: () => clock },
+    renderFeed() { if (!state.feedDirty) return; state.feedDirty = false; renders += 1; },
+    setTimeout: (fn, ms) => { timers.push({ fn, at: clock + ms }); return timers.length; },
+  });
+  vm.runInContext(text.slice(from, to), env);
+  env.pushFeed({ kind: "log", text: "[assistant] foreman asked to hand out work" });
+  assert.equal(renders, 1, "the first push after a quiet window paints immediately");
+  for (let step = 0; step < 30; step += 1) { clock += 5; env.pushFeed({ kind: "log", text: `[opencode] step ${step}` }); }
+  assert.equal(renders, 1, "a burst inside the window does not repaint per line");
+  assert.equal(timers.length, 1, "the burst shares one trailing paint");
+  assert.equal(timers[0].at, 10_000 + 250, "the trailing paint lands when the window closes");
+  clock = timers[0].at; timers.shift().fn();
+  assert.equal(renders, 2, "the trailing paint shows the burst's last line");
+  assert.equal(state.feed[0].text, "[opencode] step 29");
+  clock += 400; env.pushFeed({ kind: "alert", text: "worker CLI not starting" });
+  assert.equal(renders, 3, "a push after the window is quiet again paints at once");
+  clock += 10; env.pushFeed({ kind: "log", text: "[opencode] later" });
+  state.active = false;
+  clock = timers[0].at; timers.shift().fn();
+  assert.equal(renders, 3, "leaving Command drops the trailing paint");
+});
+
+// The chat log repaints on every feed push; the thread under it only rebuilds
+// (and measures its scroll, a forced layout) when what it shows changed.
+test("the chat thread rebuilds only when a bubble, its age label or the pending reply changed", () => {
+  const text = source.replace(/\r\n/g, "\n");
+  const from = text.indexOf("  // Drop a just-repeated user/assistant pair.");
+  const to = text.indexOf("  function commandChatActivity(", from);
+  assert.ok(from > 0 && to > from, "thread boundary");
+  let label = "2m ago";
+  const env = vm.createContext({
+    window: { mefiStudio: { assistantMessage() {} } },
+    document: { createElement: (tag) => new Element(tag) },
+    agoLabel: () => label,
+    replyPending: (full) => Boolean(full?.pending),
+    thinkingBubble: () => { const bubble = new Element("div"); bubble.className = "assistant-msg assistant thinking"; return bubble; },
+  });
+  vm.runInContext(`${text.slice(from, to)}\nthis.fillThread = fillThread;`, env);
+  const thread = new Element("div");
+  const full = { messages: [{ role: "user", text: "status?", at: 1 }, { role: "assistant", text: "Two builds running.", at: 2, via: "local" }] };
+  env.fillThread(thread, full);
+  const first = thread.children.slice();
+  assert.equal(first.length, 2);
+  assert.match(first[1].textContent, /Two builds running\.2m ago · local/);
+  thread.scrollTop = 40; thread.scrollHeight = 900;
+  env.fillThread(thread, { messages: full.messages.map((message) => ({ ...message })) });
+  assert.ok(thread.children.every((child, index) => child === first[index]), "an unchanged thread keeps its bubbles");
+  assert.equal(thread.scrollTop, 40, "and leaves the reader's scroll alone");
+  label = "3m ago";
+  env.fillThread(thread, full);
+  assert.notEqual(thread.children[0], first[0], "a new age label repaints");
+  const relabelled = thread.children.slice();
+  env.fillThread(thread, { ...full, pending: true });
+  assert.equal(thread.children.length, 3, "a pending reply adds the thinking bubble");
+  assert.notEqual(thread.children[0], relabelled[0]);
+  env.fillThread(thread, { messages: [...full.messages, { role: "assistant", text: "Done.", at: 3 }] });
+  assert.equal(thread.children.length, 3);
+  assert.match(thread.children[2].textContent, /^Done\./);
+});

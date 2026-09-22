@@ -369,6 +369,7 @@
     if (name === "studio") {
       initStudio();
       syncSettingsNav();
+      if (studioLogStale) paintStudioLog();
     }
     writeStore("mefiStudio.tab", name);
   }
@@ -414,19 +415,31 @@
   }
 
   // ---- studio ----
-  // Every builder worker's stdout streams here a line at a time. Appending
-  // each one to the element's text rebuilt an ever-growing string (and, with
-  // the log open, re-laid-out the whole block per line); keep the newest
-  // STUDIO_LOG_LINES and rewrite the block from that bounded buffer.
+  // Every builder worker's stdout streams here a line at a time, a dozen a
+  // second while several run. Appending each one to the element's text
+  // rebuilt an ever-growing string, and pinning the scroll to the tail forced
+  // a layout of the whole document per line even with the card folded shut
+  // (9 ms a line on the live Command view). Keep the newest STUDIO_LOG_LINES,
+  // paint at most once a frame, and only while the card is open on a shown
+  // tab; opening the card or the tab paints what arrived meanwhile.
   const STUDIO_LOG_LINES = 400;
   const studioLogLines = [];
+  let studioLogFrame = 0;
+  let studioLogStale = false;
+  function paintStudioLog() {
+    studioLogFrame = 0;
+    const log = document.getElementById("studio-log");
+    if (!log) return;
+    const card = log.closest?.("details");
+    if ((card && !card.open) || log.closest?.("[hidden]")) { studioLogStale = true; return; }
+    studioLogStale = false;
+    log.textContent = studioLogLines.join("\n");
+    log.scrollTop = log.scrollHeight;
+  }
   function studioLog(line) {
     studioLogLines.push(String(line));
     if (studioLogLines.length > STUDIO_LOG_LINES) studioLogLines.splice(0, studioLogLines.length - STUDIO_LOG_LINES);
-    const log = document.getElementById("studio-log");
-    if (!log) return;
-    log.textContent = studioLogLines.join("\n");
-    log.scrollTop = log.scrollHeight;
+    if (!studioLogFrame) studioLogFrame = requestAnimationFrame(paintStudioLog);
   }
 
   function updateSpeedModels() {
@@ -456,6 +469,7 @@
     }
     hint.textContent = "Uses the separate game project's cached LÖVE runtime and documented smoke-test script when available.";
     window.mefiStudio.onStudioLog((line) => studioLog(line));
+    document.getElementById("settings-log")?.addEventListener("toggle", () => { if (studioLogStale) paintStudioLog(); });
 
     const speedModel = document.getElementById("speed-model");
     updateSpeedModels();

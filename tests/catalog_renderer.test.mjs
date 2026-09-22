@@ -157,7 +157,33 @@ test("speed probes reject duplicate clicks, refresh measurements and recover aft
   env.window.mefiStudio.speedProbe = async () => { throw new Error("fixture probe failed"); };
   button.dispatch("click"); await flush();
   assert.equal(button.disabled, false);
+  // The connection log paints on the next frame, not once per line.
+  env.frame();
   assert.match(env.get("studio-log").textContent, /fixture probe failed/);
+});
+
+// Worker stdout streams into the connection log a line at a time; with its
+// card folded (nearly always) painting it forced a whole-document layout per
+// line. Lines wait while the card is shut and paint once a frame while open.
+test("the connection log paints once a frame and only while its card is open", async () => {
+  let push = null;
+  const env = environment({ onStudioLog: (callback) => { push = callback; } }); await flush();
+  env.window.MefiBooklet.showTab("studio"); await flush();
+  assert.equal(typeof push, "function");
+  const log = env.get("studio-log"), card = env.get("settings-log");
+  card.open = false;
+  log.closest = (selector) => (selector === "details" ? card : null);
+  env.frame();
+  const before = log.textContent;
+  push("[opencode] one"); push("[opencode] two");
+  env.frame();
+  assert.equal(log.textContent, before, "a folded card is not painted");
+  card.open = true; card.dispatch("toggle");
+  assert.match(log.textContent, /\[opencode\] one\n\[opencode\] two$/, "opening the card paints what arrived meanwhile");
+  push("[opencode] three"); push("[opencode] four");
+  assert.doesNotMatch(log.textContent, /three/, "lines wait for the next frame");
+  env.frame();
+  assert.match(log.textContent, /two\n\[opencode\] three\n\[opencode\] four$/, "one paint carries every line of the frame");
 });
 
 test("catalog typing batches paints and reuses formatted cards without losing unchanged details", async () => {

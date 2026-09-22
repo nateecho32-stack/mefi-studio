@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { findUnusedSelectors } from "../scripts/check-css.mjs";
+import { findUnusedSelectors, usageIndex } from "../scripts/check-css.mjs";
 
 const STUDIO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CLI = path.join(STUDIO, "scripts", "check-css.mjs");
@@ -107,6 +107,23 @@ test("findUnusedSelectors: a prefix only counts when it touches an interpolation
   const usage = 'element("label", "music-effect", null, effects);';
   const hits = findUnusedSelectors(css, usage);
   assert.equal(hits.length, 1, "a plain string near no interpolation composes nothing");
+});
+
+// usageIndex replaced a /([\w-]+)[ \t]*\$\{/g scan and a per-sheet re-read of
+// the joined corpus. Its prefixes must match that regex exactly, and an index
+// built from parts (or from earlier indexes) must equal the joined text's.
+test("usageIndex: prefixes match the interpolation regex and parts index as their joined text", () => {
+  const regexPrefixes = (text) => [...new Set([...text.matchAll(/([\w-]+)[ \t]*\$\{/g)].map((m) => m[1].replace(/-+$/, "")))].sort();
+  for (const text of ["ab ${ cd${", "x${y${", " ${", "a-b--${c}", "tab\t\t${x}", "$${", "--${", "a\n${b}", "`card-${kind} ${x}`", "a${b}c ${d}", "é${x}", ""]) {
+    assert.deepEqual([...usageIndex(text).prefixes].sort(), regexPrefixes(text), JSON.stringify(text));
+  }
+  const parts = [USAGE, "`feed-${kind}`\nrow-${n}", ".x-${y} { }"];
+  const joined = usageIndex(parts.join("\n"));
+  for (const index of [usageIndex(parts), usageIndex([usageIndex(parts[0]), parts[1], usageIndex(parts[2])])]) {
+    assert.deepEqual([...index.tokens].sort(), [...joined.tokens].sort());
+    assert.deepEqual([...index.prefixes].sort(), [...joined.prefixes].sort());
+  }
+  assert.deepEqual(findUnusedSelectors(SHEET, usageIndex(USAGE.split("\n"))), findUnusedSelectors(SHEET, USAGE));
 });
 
 test("CLI --unused: unused class exits 1 with UNUSED-SELECTOR lines; usage from siblings exits 0", async () => {
