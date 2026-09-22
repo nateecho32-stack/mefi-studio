@@ -424,13 +424,14 @@ VERIFY_METHOD = r'''
     await this.until("['command_task_00','command_task_16','command_task_17'].every(id=>window.MefiIdle.debugNodes().some(node=>node.id==='task:'+id))", "each synthetic builder owns a real task node");
     this.setContentSize(1280,720); await sleep(250);
     await this.run("document.getElementById('idle-feed-scroll').scrollTop=0;");
-    const cards = await this.run("const rail=document.getElementById('idle-feed-now'),worklist=document.getElementById('idle-feed-scroll'),panel=document.getElementById('idle-feed');return {panel:panel.getBoundingClientRect().toJSON(),worklist:worklist.getBoundingClientRect().toJSON(),scroll:worklist.scrollHeight,client:worklist.clientHeight,scrollWidth:worklist.scrollWidth,clientWidth:worklist.clientWidth,overflow:getComputedStyle(worklist).overflowY,currentOverflow:getComputedStyle(rail).overflowY,activityOverflow:getComputedStyle(document.getElementById('idle-feed-activity')).overflowY,titles:[...rail.querySelectorAll('.feed-current-title')].map(el=>el.textContent),metrics:document.getElementById('idle-feed-metrics').getBoundingClientRect().toJSON()};");
+    const cards = await this.run("const rail=document.getElementById('idle-feed-now'),worklist=document.getElementById('idle-feed-scroll'),panel=document.getElementById('idle-feed');return {panel:panel.getBoundingClientRect().toJSON(),worklist:worklist.getBoundingClientRect().toJSON(),scroll:worklist.scrollHeight,client:worklist.clientHeight,scrollWidth:worklist.scrollWidth,clientWidth:worklist.clientWidth,overflow:getComputedStyle(worklist).overflowY,currentOverflow:getComputedStyle(rail).overflowY,activityOverflow:getComputedStyle(document.getElementById('idle-feed-activity')).overflowY,scrollers:[panel,...panel.querySelectorAll('*')].filter(el=>{const o=getComputedStyle(el).overflowY;return (o==='auto'||o==='scroll')&&el.clientHeight>0;}).map(el=>el.id||el.className.split(' ')[0]),titles:[...rail.querySelectorAll('.feed-current-title')].map(el=>el.textContent),metrics:document.getElementById('idle-feed-metrics').getBoundingClientRect().toJSON()};");
     assert.equal(cards.titles.length,3);
     for (const task of titles) assert(cards.titles.includes(task.title), "each concurrent build keeps its own title");
     assert(cards.worklist.height>=140 && cards.worklist.bottom<=cards.panel.bottom+1, "the shared work list keeps a usable bounded scroll area");
     assert.equal(cards.overflow,'auto');
     assert.equal(cards.currentOverflow,'visible', "current builds do not create a nested scroller");
     assert.equal(cards.activityOverflow,'visible', "attention, roster and queue share the current-work scroller");
+    assert.deepEqual(cards.scrollers,['idle-feed-scroll'], "the work panel is one scroller, not a stack of capped wells");
     assert(cards.scroll>cards.client, "additional builders and queue entries scroll in one work list");
     assert(cards.scrollWidth<=cards.clientWidth+1, "the shared work list never scrolls horizontally");
     assert(cards.metrics.bottom<=cards.worklist.top, "readiness stays above the scrolling work list");

@@ -2,6 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+// The shared renderer DOM stand-in, so a template restructure lands in one
+// place instead of nineteen private copies. See tests/fixtures/renderer-dom.mjs.
+import { Element } from "./fixtures/renderer-dom.mjs";
+
 
 const source = await readFile(new URL("../renderer/booklet.js", import.meta.url), "utf8");
 const template = await readFile(new URL("../renderer/booklet.template.html", import.meta.url), "utf8");
@@ -11,22 +15,7 @@ const deferred = () => { let resolve; const promise = new Promise((done) => { re
 
 function environment(overrides = {}, bridge = {}) {
   const ids = new Map(); const writes = []; const logs = [];
-  class Element {
-    constructor(tag = "") {
-      this.tagName = String(tag).toUpperCase();
-      this.value = ""; this.textContent = ""; this.checked = false; this.disabled = false; this.hidden = false; this.listeners = {};
-      this.children = []; this.dataset = {}; this.attributes = {};
-    }
-    addEventListener(name, callback) { (this.listeners[name] ||= []).push(callback); }
-    setAttribute(name, value) { this.attributes[name] = String(value); }
-    getAttribute(name) { return this.attributes[name] ?? null; }
-    append(...nodes) { this.children.push(...nodes); }
-    appendChild(node) { this.children.push(node); return node; }
-    replaceChildren(...nodes) { this.children = [...nodes]; }
-    querySelectorAll() { return []; }
-    async trigger(name) { for (const callback of this.listeners[name] || []) await callback({ target: this }); await flush(); }
-  }
-  for (const match of template.matchAll(/\bid="([^"]+)"/g)) ids.set(match[1], new Element());
+    for (const match of template.matchAll(/\bid="([^"]+)"/g)) ids.set(match[1], new Element());
   const settings = { provider: "auto", autoProviders: ["zai", "opencode"], autoFallback: false, models: {}, executorCli: "opencode", executorModel: "", modelSelection: "jev", jevConfigured: false, jevRoute: "vercel", routingDecision: null, ...overrides };
   let reads = 0;
   const saved = [];

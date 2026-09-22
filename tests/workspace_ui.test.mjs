@@ -3,37 +3,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
+// The shared renderer DOM stand-in, so a template restructure lands in one
+// place instead of nineteen private copies. See tests/fixtures/renderer-dom.mjs.
+import { Element } from "./fixtures/renderer-dom.mjs";
+
 const source = await readFile(new URL("../renderer/workspace.js", import.meta.url), "utf8");
 const stageSource = await readFile(new URL("../renderer/stage-labels.js", import.meta.url), "utf8");
 const flush = async () => { for (let i = 0; i < 30; i += 1) await Promise.resolve(); };
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
-
-class Element {
-  constructor(tag = "div") {
-    this.tagName = tag; this.children = []; this.dataset = {}; this.attrs = {}; this.listeners = {};
-    this.value = ""; this.hidden = false; this.disabled = false; this.scrollTop = 0; this.clientHeight = 400; this.scrollHeight = 400;
-    const classes = new Set();
-    this.classList = { add: (...names) => names.forEach((n) => classes.add(n)), remove: (...names) => names.forEach((n) => classes.delete(n)), toggle: (n, on) => on ? classes.add(n) : classes.delete(n), contains: (n) => classes.has(n) };
-  }
-  set textContent(value) { this.ownText = String(value); this.children = []; }
-  get textContent() { return (this.ownText ?? "") + this.children.map((child) => child.textContent).join(""); }
-  get firstChild() { return this.children[0] || this; }
-  append(...children) { this.children.push(...children); }
-  replaceChildren(...children) { this.ownText = ""; this.children = children; }
-  setAttribute(key, value) { this.attrs[key] = value; }
-  removeAttribute(key) { delete this.attrs[key]; }
-  addEventListener(name, fn) { (this.listeners[name] ??= []).push(fn); }
-  async trigger(name, event = {}) { await Promise.all((this.listeners[name] ?? []).map((fn) => fn({ target: this, preventDefault() {}, ...event }))); }
-  focus() { this.focused = true; }
-  querySelectorAll(selector) {
-    const matches = (node) => selector === "[data-work-filter]" ? !!node.dataset.workFilter
-      : selector === "[data-project-id]" ? !!node.dataset.projectId
-      : selector === "button" ? node.tagName === "button"
-      : selector === "span" ? node.tagName === "span" : false;
-    return this.children.flatMap((child) => [...(matches(child) ? [child] : []), ...child.querySelectorAll(selector)]);
-  }
-  querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
-}
 
 async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter = true, desktop = true, bootActive = () => false } = {}) {
   const elements = new Map(); const storage = new Map(); const events = {};

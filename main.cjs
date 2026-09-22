@@ -55,6 +55,7 @@ const boardGrouping = require("./scripts/board-grouping.cjs");
 const taskContext = require("./scripts/task-context.cjs");
 const chatWork = require("./scripts/chat-work.cjs");
 const taskHandoffs = require("./scripts/task-handoffs.cjs");
+const executorWorktrees = require("./scripts/executor-worktrees.cjs");
 const agentModes = require("./scripts/agent-modes.cjs");
 const agentIssues = require("./scripts/agent-issues.cjs");
 const brains = require("./scripts/brains.cjs");
@@ -9160,6 +9161,7 @@ async function spawnNextJob() {
     handoffs: [], // MEFI_NEXT work this run passed to the next agent
     calls: new Set(), // MEFI_CALL roster roles it asked to follow up
     issues: [], // MEFI_ASK decisions it could not make for itself
+    worktree: null, // per-run git worktree ({ root, path, branch }): own index, serialized merge-back
 
     depth: Number(job.ref?.depth) || 0, // how far down a handoff chain this run sits
   };
@@ -9336,6 +9338,46 @@ async function spawnNextJob() {
     await cancelClaim();
     return "lost";
   }
+  // Per-run worktree checkout (opt-in, MEFI_STUDIO_WORKTREE_RUNS=1): the run
+  // gets its own checkout and its own git index, so concurrent executor runs
+  // cannot contend on the shared .git/index or sweep each other's staged
+  // files; the run branch is merged back serialized per repo after it
+  // settles. Any failure falls back to the shared tree — dispatch never dies
+  // for this. The typeof guard keeps the vm-sliced test hosts inert here.
+  const worktreeManager = typeof executorWorktrees === "object" && executorWorktrees !== null ? executorWorktrees : null;
+  if (worktreeManager && worktreeManager.enabled()) {
+    const runWorktree = await worktreeManager.prepare({ root: runRoot, runId: entry.id }).catch((error) => {
+      logLine(`[autopilot] worktree checkout unavailable for ${entry.id}: ${String(error?.message ?? error).slice(0, 160)}`);
+      return null;
+    });
+    if (runWorktree) {
+      // The checkout added an await between the gates and the spawn, so the
+      // gates are rechecked: a pause that landed mid-checkout cancels the
+      // claim instead of spawning onto a cancelled run.
+      if (!autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || projectSwitching || !manualCapacityAvailable(entry)) {
+        await worktreeManager.discard(runWorktree).catch(() => {});
+        await cancelClaim();
+        return "lost";
+      }
+      entry.worktree = runWorktree;
+      if (runWorktree.nodeModules === "missing") {
+        logLine(`[autopilot] worktree for ${entry.id} has no usable node_modules — npm commands inside it may fail`);
+      }
+    }
+  }
+  // Merge-back for whichever terminal path the run takes (normal finish or a
+  // stale-run discard): serialized per repository by the module's queue, and
+  // every non-success outcome keeps the branch — and the checkout too when the
+  // run left uncommitted edits — so no run result is silently dropped.
+  const settleEntryWorktree = () => {
+    if (!entry.worktree || !worktreeManager) return;
+    worktreeManager.settle(entry.worktree)
+      .then((result) => {
+        if (!result?.merged) logLine(`[autopilot] worktree merge-back kept branch ${entry.worktree.branch}: ${String(result?.reason ?? "unknown").slice(0, 160)}`);
+        else if (result.keptWorktree) logLine(`[autopilot] worktree kept for recovery (${String(result.reason ?? "").slice(0, 120)}): ${result.keptWorktree}`);
+      })
+      .catch((error) => logLine(`[autopilot] worktree merge-back failed: ${String(error?.message ?? error).slice(0, 160)}`));
+  };
   // Policy Lab PR1 — the attempt's identity: handoff lineage, the claim, the
   // route and the acceptance baseline it will be judged against. The prompt
   // is hashed, never stored — chat text stays out of the experiment record.
@@ -9492,6 +9534,8 @@ async function spawnNextJob() {
     prompt = `${head}${tailFlat}`;
   } catch (error) {
     logLine(`[autopilot] could not build the worker prompt for "${assistantClip(job.title, 60)}": ${String(error?.message ?? error).slice(0, 160)}`);
+    // Nothing spawned from the checkout yet: it goes back whole, no merge.
+    if (entry.worktree) await worktreeManager?.discard(entry.worktree).catch(() => {});
     await cancelClaim();
     return "lost";
   }
@@ -9877,6 +9921,9 @@ async function spawnNextJob() {
     delete entry.settlementError;
     if (!settled) {
       discardEntry();
+      // The stale run still worked on its own branch; merge that back rather
+      // than stranding the checkout, exactly like a live finish would.
+      settleEntryWorktree();
       logLine(`[autopilot] stale result ignored — "${String(job.title).slice(0, 60)}" is no longer owned by ${entry.id}`);
       emitAutopilot();
       assistantAskForWork("a stale worker released its slot");
@@ -9955,6 +10002,8 @@ async function spawnNextJob() {
     // "stuck" claim (no live run behind the runId) and re-queued work this
     // very function was about to settle.
     discardEntry();
+    // Per-run worktree merge-back after the run's own settlement.
+    settleEntryWorktree();
     // Per-job failure isolation: a failed run after real runtime is the task's
     // problem — it cools down via runFailures above and the pool keeps working.
     // The only pause left is for infrastructure: a spawn error, or a run that
@@ -10100,7 +10149,7 @@ async function spawnNextJob() {
       if (route.model) grokArgs.push("-m", route.model);
       grokArgs.push(prompt);
       return spawn("grok", grokArgs, {
-        cwd: runRoot,
+        cwd: entry.worktree?.path || runRoot,
         env: { ...process.env, ...route.env },
         windowsHide: true,
         stdio: ["ignore", "pipe", "pipe"],
@@ -10114,7 +10163,7 @@ async function spawnNextJob() {
       // characters before it enters the command string.
       const selected = cliModelArg(route.model);
       const child = spawn("cmd.exe", ["/d", "/s", "/c", `claude -p --output-format text --dangerously-skip-permissions${selected ? ` --model ${selected}` : ""}`], {
-        cwd: runRoot,
+        cwd: entry.worktree?.path || runRoot,
         env: { ...process.env, ...route.env },
         windowsHide: true,
         stdio: ["pipe", "pipe", "pipe"],
@@ -10132,7 +10181,7 @@ async function spawnNextJob() {
       // characters before it enters the command string.
       const selected = cliModelArg(route.model);
       const child = spawn("cmd.exe", ["/d", "/s", "/c", `codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check --color never${selected ? ` -m ${selected}` : ""} -`], {
-        cwd: runRoot,
+        cwd: entry.worktree?.path || runRoot,
         env: { ...process.env, ...route.env },
         windowsHide: true,
         stdio: ["pipe", "pipe", "pipe"],
@@ -10153,7 +10202,7 @@ async function spawnNextJob() {
       if (selected) args.push("--model", selected);
       args.push("--dangerously-skip-permissions", "--print-timeout", "60m", "--output-format", "text", "-p");
       const child = spawn("agy", args, {
-        cwd: runRoot,
+        cwd: entry.worktree?.path || runRoot,
         env: { ...process.env, ...route.env },
         windowsHide: true,
         stdio: ["pipe", "pipe", "pipe"],
@@ -10172,7 +10221,7 @@ async function spawnNextJob() {
     // the positional entirely — the CLI then prints help and exits 1.
     // Write + end gives a clean prompt and a clean EOF, no wedge, no mangling.
     const child = spawn("cmd.exe", ["/d", "/s", "/c", `opencode run --auto${route.modelArgs}`], {
-      cwd: runRoot,
+      cwd: entry.worktree?.path || runRoot,
       env: { ...process.env, ...route.env },
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],

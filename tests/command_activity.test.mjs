@@ -3,20 +3,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
+// The shared renderer DOM stand-in, so a template restructure lands in one
+// place instead of nineteen private copies. See tests/fixtures/renderer-dom.mjs.
+import { Element } from "./fixtures/renderer-dom.mjs";
+
 const source = await readFile(new URL("../renderer/idle.js", import.meta.url), "utf8");
 const feedSource = source.slice(source.indexOf("  function feedLine("), source.indexOf("  // The composer is a textarea"));
 const preferenceSource = source.slice(source.indexOf("  async function autopilotPrefs("), source.indexOf("  // A message must always produce a reply"));
 const chatSource = source.slice(source.indexOf("  function commandChatActivity("), source.indexOf("  // The right-side chat log:"));
-class Element {
-  constructor(tag = "div") { this.tagName = tag; this.children = []; this.dataset = {}; this.style = {}; this.listeners = {}; this.attrs = {}; this.hidden = false; this.classList = { add() {} }; }
-  set textContent(text) { this.text = String(text); this.children = []; }
-  get textContent() { return (this.text || "") + this.children.map((child) => child.textContent).join(""); }
-  append(...children) { this.children.push(...children); }
-  setAttribute(name, value) { this.attrs[name] = String(value); }
-  addEventListener(name, callback) { this.listeners[name] = callback; }
-  closest() { return null; }
-  click() { return this.listeners.click?.(); }
-}
 function environment({ assistant = {}, full = {}, backlog = null, requests = [], nodes = [], bridge = {}, timers = {} } = {}) {
   const el = Object.fromEntries(["feed", "feedDot", "feedState", "feedNow", "feedMetrics", "feedAttention", "feedQueue", "feedQueueCount", "feedAgents", "feedAgentsCount", "feedMenu", "feedDrop", "feedList", "feedMeta", "feedActivity", "feedParallel", "feedBuildMode", "feedAgentMode", "feedAgentModeNote"].map((key) => [key, new Element()]));
   const state = { active: false, feedDirty: true, assistant, requests, nodes, feed: [], tasks: [], backlog, backlogRevision: 0, backlogReadAt: 0, backlogReadPending: false, feedMenuOpen: false };
@@ -306,7 +300,7 @@ test("Machine managed is the default and opting into a manual limit updates both
   assert.match(picker.title, /while Studio remains responsive/);
   assert.match(picker.title, /staggered to recheck performance/);
   picker.value = "3";
-  picker.listeners.change();
+  await picker.trigger("change");
   await flush();
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ adaptiveParallel: false, parallel: 3 }]);
   assert.equal(picker.value, "3");
