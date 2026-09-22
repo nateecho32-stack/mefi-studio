@@ -83,6 +83,12 @@ Two named sub-gates run inside `npm run check` and work standalone:
 - `npm run check:specs` (`scripts/spec-collisions.mjs`) — duplicate spec
   names and unshimmed contracts; see "Test file conventions" below.
 
+Record each test run in `TESTRUNS.md` by appending through
+`node scripts/append-testruns-row.mjs` (row block as a quoted argument,
+`--file <path|->` or stdin; `--dry-run` previews the landing spot) instead
+of editing the file by hand: it holds a cross-process lock, keeps rows
+newest-first and rolls back if the post-write gate audit fails.
+
 Rebuild the model booklet after editing renderer sources
 (`npm run build-booklet`; the generated `renderer/booklet.html` is committed).
 
