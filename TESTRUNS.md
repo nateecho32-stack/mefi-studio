@@ -25,6 +25,66 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - ledger-row evidence added to the done+verified discharge (task_8cc401d711b549ba, run run_1790097856627_4)
+
+The requirement's second clause, left unimplemented by the 1f00796 row two
+below: "a fresh green scoped-check rerun (or a TESTRUNS row) as the
+changed-file for verification-only cards". A done+verified retry whose only
+edit is the TESTRUNS.md row documenting its green rerun reported 1 changed
+file, so the `changedFiles === 0` discharge never fired and the card could
+still loop on "outstanding obligations remain" — the exact shape the
+run_1790091211824_20 row below records (verified "outstanding obligations
+remain" with 1 changed file). Two changes: `verifyCompletion`
+(scripts/assistant.mjs) takes `ledgerChanges` and discharges when the retry's
+changed files are exactly covered by ledger rows (a claim larger than the
+file count never over-discharges; the evidence records `ledgerChanges`);
+main.cjs counts the attempt's session file rows whose path basename is
+`TESTRUN.md`/`TESTRUNS.md` and passes the count into the task settle call.
+The 0-file path, the scoped-denial reader, and the `verifiedOnce` stamp from
+1f00796 are untouched. Scoped evidence: `node --test
+tests/verification_checks.test.mjs tests/executor_result_protocol.test.mjs`
+19/19 — including a new host integration test that settles a seeded
+done+verified retry whose only session change is `TESTRUNS.md` to `done`
+with no re-run loop, and its negative twin (a `src/feature.js` + ledger
+pair stays "outstanding obligations remain"); the unit test adds the
+ledger-row positive plus code-file, partial-coverage, never-verified, and
+over-claim negatives. `node --test tests/board.test.mjs
+tests/executor_parallel.test.mjs tests/policy_experience.test.mjs
+tests/verification_drain.test.mjs tests/executor_continuation.test.mjs` with
+the two above: 97/97, exit 0. `npm run check` all five stages ok (100
+targets, 204 specs, css merge skip, all selectors used, syntax ok 100
+files). The card's own earlier false failure (16:42:58, 44 s after 1f00796
+landed) was the running app still judging with the pre-fix module — the
+packaged app now carries the fixed reader, per the row below. This commit
+adds this row and the verifier change only.
+
+
+
+A-Eyes warned and Overseer reported a `main.cjs` SyntaxError at line 2014
+blocking updates after multi-session edits. Root cause is in
+`data/eyes-requests.json`: a live collision request records two sessions
+editing `main.cjs` in the same window (09:38–09:42, 9 edits vs 1 around
+09:41), the known transient-broken state the environmental-failures row for
+racing sibling edits already describes. The updater behaved as designed —
+its syntax hold (`scripts/updater.mjs:515`, verdict from
+`scripts/check-syntax.mjs`) refused to apply while the file was broken, which
+is the "blocking updates" Overseer saw. The repair landed in `4e64b7f`
+(12:17): at verification time `git diff HEAD -- main.cjs` was empty and the
+line-2014 region (`resolveAiRoute`) parsed clean. No code was changed in this
+pass; every main.cjs copy was verified instead — root, packaged
+`dist/Mefi Studio AI+/resources/app/main.cjs`, and all three worktrees
+(mgctl, command-visuals, ux-phase0) pass `node --check`, and
+`data/machine-status.json` shows no leases or holds (canStart true). A
+sibling session began a further in-flight main.cjs edit (47+/64−) during this
+pass; it was re-checked immediately and also parses — `node --check` and the
+repo gate both exit 0 on the loaded tree. Evidence:
+`node scripts/check-syntax.mjs main.cjs` exit 0 solo; `npm run check`
+exit 0 (targets 100/100, 204 specs, selectors used, syntax ok over
+100 files); `node --test tests/check_syntax.test.mjs
+tests/updater_deferred.test.mjs` — 12 pass, 1 capability-gated skip, 0 fail,
+including the deferred-retry suite that proves a held syntax verdict
+re-validates new source before any restart. This row is the only change.
+
 ## 2026-09-22 evening - performance_render timeout headroom for the loaded full gate (task_07a6989d1e5972eb, run run_1790097924274_6)
 
 The remaining non-adaptive deadlines in performance_render were the outer
