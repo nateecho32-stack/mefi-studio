@@ -25,6 +25,26 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - parent-gate follow-up retry settles its remaining-prose shape - chain green first-hand at HEAD 17ba279, flip target resolved in its own lane (task_ad390ff083105169, run run_1790102799243_5)
+
+Retry 1's "unverified — outstanding obligations remain" was the prose-shape
+verdict again (cf. the 1a9664a and 5bc25d1 rows): the attempt's remaining note
+was cut mid-parenthetical — "none for this card (flip handed off to the owner",
+no closing paren — so the parenthetical branch of the remaining-work parser
+never matched and the verifier counted an obligation. The substance was always
+complete: this card's scope from the parent decision log was the owner-only
+flip of task_c1cf337d66009c14, recorded in row 0ebf5fe. This run re-verified
+the chain first-hand with `git merge-base --is-ancestor`: af88c20, 51e2c21,
+0ebf5fe, and the child's correction row a690fcd (task_214a666a0948a828, done
+and verified — reattributes the swept auth-split row run_1790101780278_28 to
+task_88a18406f34104ca) are all in HEAD, and `npm run check` exit 0 (all five
+stages, 101 targets/files). The flip itself discharged in its own lane:
+task_c1cf337d66009c14 finished verified (6/6 files parse, 4 recorded checks
+green) after this card's last run, so there is nothing left to flip. One stale
+board artifact remains for the owner to sweep, not work: task_0ced1d7f880a818a,
+a recursive "Follow-up: Follow-up: ..." echo of this card whose substance the
+verified child already landed.
+
 ## 2026-09-22 late evening - quiet-tree full gate green: the withheld npm test of the auth split (2457a7d) plus build-booklet, both exit 0 (task_5e0a126238bab8fb, run run_1790102559644_4)
 
 This row supplies the full-suite evidence the split row below withheld under
