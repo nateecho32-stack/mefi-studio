@@ -33,6 +33,12 @@ jobs:
           python-version: "3.13"
       - name: Install pinned dependencies
         run: npm ci
+      # npm ci leaves node_modules/electron without its dist/, so packaging
+      # stops at "electron dist missing". Fetching the binary explicitly is the
+      # remedy scripts/package-portable.mjs names, and it is a no-op when the
+      # postinstall already placed it.
+      - name: Fetch the Electron binary
+        run: node node_modules/electron/install.js
       - name: Full check gate
         run: npm run check
       - name: Behavioral and isolated desktop checks
