@@ -25,6 +25,25 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Independent full-gate rerun, concurrent with the row below, same green
+result (2026-09-22, 10:28-10:29, run_1790090737796_6 for
+task_baa66f9ab1ec0f2e "Full-gate rerun after in-flight work settles",
+parent idea "Per-feature model config with graceful fallbacks"). Launched
+six seconds after the row below's run on the identical combined tree
+(HEAD 17d35a3 plus the six in-flight monitor-loop paths), so the two
+complete `npm test` chains overlapped for most of their length — two full
+gates at once on one tree, the load scenario the environmental-failures
+table warns about, and neither surfaced a flake. Exit 0: parallel stage
+173 suites (9 launch Electron), 1958 tests / 1955 pass / 0 fail /
+3 skipped in 36.3 s; serialized eyes_toggle_electron 1/1 (3.1 s,
+baseline 2 fetches, one resume snap, 6 fetches total); occlusion_probe
+took the documented capability skip (visibility never flipped); Python
+contracts 246/246 OK in 30.1 s; normalized-path lock all ok. Settle
+check for this run: `git status --porcelain` captured before and after
+is byte-identical — no sibling landed and no source moved mid-run, so
+the vm suites read a still tree and the runner raised no
+moved-sources diagnosis. This commit adds only this row.
+
 Green exit-0 full `npm test` gate for the parent integration-gate chain
 (2026-09-22, 10:27–10:29, run_1790090677908_4 for task_0b1780b06ba74eb0).
 This is the settled-tree rerun the previous attempt (run_1790040270702_1:
