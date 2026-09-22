@@ -29,6 +29,28 @@ only above the anchor (decision recorded 2026-09-22, pinned by
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - Shared-file handoff closed a second time: both collision cards already done+verified in the store, all five sessions' edits intact and green, no repo edit owed (run_1790113906623_36)
+
+Retry of the card whose prior run settled "outstanding obligations remain".
+Diagnosed at the source this time, not from the prose: the two A-Eyes cards
+behind this warn (task_12bfa38470c7263e "Resolve collision: append_testruns_row.test.mjs
++1 more" and task_f484b1899073c63e "Resolve collision: onboarding.test.mjs +1 more")
+are both status=done and verification=verified with an empty `remaining` array in
+the store - the handoff was adopted, nothing is outstanding. A nonempty
+`task.remaining` is the one input that makes verifyCompletion fail before any
+green check can pass (scripts/assistant.mjs:4035); neither card has one, so no
+repo re-run could ever have changed the prior verdict - it was the report's
+`remaining:` prose shape, exactly as the row below documents.
+
+Re-verified first-hand at HEAD 56115dc rather than trusting the reports: both
+test files are committed and clean (`git status --porcelain` empty for them),
+`node --test tests/append_testruns_row.test.mjs tests/onboarding.test.mjs` ->
+50 tests / 50 pass / 0 fail (append 18, onboarding 32), no duplicate test titles
+and no merge-conflict markers, and `npm run check` exit 0 (103 targets, 214
+specs, ALL-SELECTORS-USED, syntax 103 files, check-testruns 77 live rows
+newest-first, no conflict copies). No file logic changed; this commit adds only
+this row, path-limited, and the shared index is left with nothing staged.
+
 ## 2026-09-22 late evening - Shared-file handoff re-verified at HEAD c996c56 and the "outstanding obligations" loop diagnosed: append_testruns_row + onboarding owner edits intact and green, the denial was result-prose shape not repo work (run_1790113542877_31)
 
 Retry of the card whose prior attempt (ses_f34f2e32cffesalDTiozv8zTzj) settled
