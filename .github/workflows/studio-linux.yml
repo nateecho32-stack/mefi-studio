@@ -1,3 +1,10 @@
+# The Linux gate. ci.yml is the authority on Windows, which is where Studio
+# ships; this job proves the same sources also check, lint, test and audit on a
+# POSIX host, and that the app reaches a window under Xvfb with no GPU.
+#
+# It deliberately leaves out ci.yml's `git diff --exit-code renderer/booklet.html`
+# step: the build writes CRLF, so the committed bundle's currency is a question
+# only the Windows job can answer without a line-ending argument.
 name: Studio checks (Linux)
 
 on:
@@ -24,9 +31,21 @@ jobs:
         run: npm ci
       - name: Gates
         run: npm run check
+      - name: Lint (undefined and unused identifiers)
+        run: npm run lint
       - name: Tests
         run: npm test
+      - name: Application audit
+        run: npm run audit
+      - name: Electron's shared libraries and a headless X server
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libnss3 libgtk-3-0 libgbm1 libxss1
+          # ubuntu-24.04 renamed libasound2 to libasound2t64 in the 64-bit
+          # time_t transition, and ubuntu-latest moves between the two, so ask
+          # for whichever this runner actually has.
+          sudo apt-get install -y --no-install-recommends libasound2t64 \
+            || sudo apt-get install -y --no-install-recommends libasound2
       - name: Headless smoke under Xvfb
         run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb libnss3 libgtk-3-0 libgbm1 libasound2 libxss1
           xvfb-run -a node_modules/electron/dist/electron --no-sandbox --disable-gpu --disable-dev-shm-usage --password-store=basic --user-data-dir="$RUNNER_TEMP/mefi-user-data" . --smoke

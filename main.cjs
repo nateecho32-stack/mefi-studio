@@ -1,9 +1,32 @@
 // Mefi's Studio AI+ — Electron main process (CommonJS: Electron's most reliable main format).
 // Window + IPC for the catalog, the LÖVE launcher, and the optional speed probe.
 
+// Two helpers this file gained after the shipped builds already knew how to
+// carry them: scripts/updater.mjs holds a live payload until every local
+// require in it resolves (missingRequires), and the portable swap robocopies
+// the whole tree, so a real update always brings them along. An install that
+// arrived some other way — a half-finished manual copy, a sync that dropped a
+// file — still launches: without either helper this file behaves exactly as it
+// did before they existed, node's own spawn and settings-only credentials,
+// which is the right answer on Windows and the only one older builds had.
+// The require stays written out so the updater's scanner still sees it.
+function optionalHelper(request, load, fallback) {
+  try {
+    return load();
+  } catch (error) {
+    if (error?.code !== "MODULE_NOT_FOUND" || !String(error?.message ?? "").includes(request)) throw error;
+    console.warn(`[studio] ${request} is missing from this install; falling back to the built-in behaviour`);
+    return fallback;
+  }
+}
+
 // Host-specific spawns (cmd.exe, where.exe, taskkill) are translated on
 // Linux/macOS by scripts/platform.cjs; on Windows this is node's own spawn.
-const { spawn } = require("./scripts/platform.cjs");
+const { spawn } = optionalHelper(
+  "./scripts/platform.cjs",
+  () => require("./scripts/platform.cjs"),
+  { spawn: require("node:child_process").spawn },
+);
 const { existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } = require("node:fs");
 const { appendFile, copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } = require("node:fs/promises");
 const os = require("node:os");
@@ -11,7 +34,20 @@ const crypto = require("node:crypto");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { resolveStudioPaths } = require("./scripts/paths.cjs");
-const credentials = require("./scripts/credentials.cjs");
+// Without the map, a key comes from the settings field and the keystore alone,
+// the way it did before the environment was a source at all.
+const credentials = optionalHelper(
+  "./scripts/credentials.cjs",
+  () => require("./scripts/credentials.cjs"),
+  {
+    ENV_KEYS: {},
+    ownKey: () => null,
+    sharedKey: () => null,
+    envKey: () => null,
+    keySource: (settings, field, { encryptionAvailable } = {}) => (settings?.[field] && encryptionAvailable === true ? "settings" : null),
+    hasKey: (settings, field, { encryptionAvailable } = {}) => Boolean(settings?.[field]) && encryptionAvailable === true,
+  },
+);
 const { createProjects } = require("./scripts/projects.cjs");
 const backlog = require("./scripts/backlog.cjs");
 const boardGrowth = require("./scripts/board-growth.cjs");
@@ -1471,10 +1507,8 @@ async function assistantSessionId() {
   return settings.assistantSession;
 }
 
-function decryptKey(settings, field) {
-  // An exported variable wins over the saved ciphertext and needs no keystore.
-  const fromEnv = credentials.envKey(field);
-  if (fromEnv) return fromEnv;
+// The key saved in Settings, readable only through the keystore that wrote it.
+function savedKey(settings, field) {
   if (!settings?.[field] || !safeStorage.isEncryptionAvailable()) return null;
   try {
     return safeStorage.decryptString(Buffer.from(settings[field], "base64"));
@@ -1483,9 +1517,30 @@ function decryptKey(settings, field) {
   }
 }
 
-// Whether a credential field can be read now, from either source.
+// Three sources in one order, and the order is the compatibility promise:
+//
+//   1. Studio's own MEFI_STUDIO_* variable. Nothing else sets it, so exporting
+//      one says "use this key", and it needs no keystore — this is what lets a
+//      container with no desktop behind it run at all.
+//   2. The key saved in Settings.
+//   3. The variable another tool uses for the same credential (GH_TOKEN,
+//      OPENROUTER_API_KEY, …). Behind the saved key deliberately: plenty of
+//      desktops export those for an unrelated CLI, and an update must not
+//      quietly start sending someone else's token where its owner saved their
+//      own. It answers only when Settings cannot.
+function decryptKey(settings, field) {
+  return credentials.ownKey(field) ?? savedKey(settings, field) ?? credentials.sharedKey(field);
+}
+
+// Whether a credential field can produce a key now, from any of the three.
 function keyAvailable(settings, field) {
   return credentials.hasKey(settings, field, { encryptionAvailable: safeStorage.isEncryptionAvailable() });
+}
+
+// Which source would answer: "env", "settings", or null. Status only — this
+// never carries the key itself.
+function keySourceFor(settings, field) {
+  return credentials.keySource(settings, field, { encryptionAvailable: safeStorage.isEncryptionAvailable() });
 }
 
 // Single-model routes have one model concept: when no heavy value is saved,
@@ -11465,7 +11520,10 @@ function registerIpc() {
     const settings = await readSettings();
     // Status only — a saved key never crosses IPC back to the renderer.
     const field = keyFieldFor(which);
-    return { saved: Boolean(decryptKey(settings, field)), encrypted: safeStorage.isEncryptionAvailable(), via: credentials.envKey(field) ? "env" : "settings" };
+    // `via` says which source answers, so the UI can tell an owner that an
+    // exported variable is in play and that editing Settings will not change
+    // what the app sends. It is a source name, never the key.
+    return { saved: Boolean(decryptKey(settings, field)), encrypted: safeStorage.isEncryptionAvailable(), via: keySourceFor(settings, field) };
   });
 
   ipcMain.handle("settings:set-key", async (_event, apiKey, which = "opencode") => {

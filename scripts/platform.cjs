@@ -24,10 +24,34 @@ function isKillCall(command, args) {
   return command === KILL && Array.isArray(args) && args[0] === "/pid" && /^\d+$/.test(String(args[1] ?? ""));
 }
 
+// Enough of a ChildProcess for the call sites that never reach a real one.
+// The stubs stand in for a spawn, so they carry the members the callers touch
+// on the result of one: main.cjs unrefs the terminal-window child and kills
+// the taskkill child on its timeout, and a missing member there would throw a
+// TypeError instead of producing the failure the caller is written to handle.
+// The streams are null, as they are for a `stdio: "ignore"` spawn.
+function stubChild() {
+  return Object.assign(new EventEmitter(), {
+    pid: null,
+    exitCode: null,
+    signalCode: null,
+    killed: false,
+    connected: false,
+    stdin: null,
+    stdout: null,
+    stderr: null,
+    stdio: [null, null, null],
+    kill() { this.killed = true; return true; },
+    unref() { return this; },
+    ref() { return this; },
+    disconnect() {},
+  });
+}
+
 // A child that fails before it starts, the way a missing tool would: the
 // error event fires on the next tick so listeners attached after spawn see it.
 function failedChild(message, code) {
-  const child = Object.assign(new EventEmitter(), { pid: null, killed: false, kill() { this.killed = true; } });
+  const child = stubChild();
   process.nextTick(() => child.emit("error", Object.assign(new Error(message), { code })));
   return child;
 }
@@ -36,25 +60,41 @@ function failedChild(message, code) {
 // gone, a non-zero close when it could not be removed. A tree that is already
 // gone counts as removed — that is the state the caller wants.
 function killTreeChild(pid, kill) {
-  const child = Object.assign(new EventEmitter(), { pid: null, killed: false, kill() { this.killed = true; } });
-  process.nextTick(() => {
-    let code = 0;
-    try {
-      // A shell spawned by this module is detached, so its pid names a process
-      // group and the negative pid removes the group (the CLI and its children).
-      kill(-pid, "SIGKILL");
-    } catch (groupError) {
-      if (groupError?.code !== "ESRCH") {
-        try {
-          kill(pid, "SIGKILL");
-        } catch (error) {
-          if (error?.code !== "ESRCH") code = 1;
-        }
-      }
-    }
-    child.emit("close", code);
-  });
+  const child = stubChild();
+  // The signal goes out now, not on a later tick. main.cjs removes the LÖVE
+  // child and every autopilot group from process.on("exit"), and Node abandons
+  // the nextTick queue the moment an exit handler returns, so a deferred kill
+  // would never fire there and quitting would orphan every detached tree.
+  // Only the close event, which needs a listener attached after spawn returns,
+  // waits for the tick.
+  const code = killTree(pid, kill);
+  process.nextTick(() => child.emit("close", code));
   return child;
+}
+
+// 0 when nothing of the tree is left, 1 when it could not be removed.
+function killTree(pid, kill) {
+  // pid 0 is "every process in my own group" and pid 1 is init: a pid that low
+  // is a bad argument, never a child of ours, and signalling it would take the
+  // app down with it.
+  if (!Number.isInteger(pid) || pid <= 1) return 1;
+  let code = 1;
+  // A shell spawned by this module is detached, so its pid names a process
+  // group and the negative pid removes the group (the CLI and its children).
+  // A pid that leads no group — anything passed straight through — still has
+  // to die, so the direct signal is the fallback.
+  for (const target of [-pid, pid]) {
+    try {
+      kill(target, "SIGKILL");
+      return 0;
+    } catch (error) {
+      // Nothing under that name: already gone, which is the state the caller
+      // wants, though the narrower target is still worth trying. Anything else
+      // (EPERM) is a real refusal to report.
+      code = error?.code === "ESRCH" ? 0 : 1;
+    }
+  }
+  return code;
 }
 
 function createSpawn({ platform = process.platform, spawnImpl = child_process.spawn, kill = process.kill.bind(process) } = {}) {

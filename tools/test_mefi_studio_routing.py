@@ -79,9 +79,23 @@ class MefiStudioRoutingTests(unittest.TestCase):
         for field in ('zai: "zaiApiKeyEncrypted"', 'gateway: "gatewayApiKeyEncrypted"', 'jev: "jevApiKeyEncrypted"', 'zen: "zenApiKeyEncrypted"', 'openrouter: "openrouterApiKeyEncrypted"'):
             with self.subTest(field=field):
                 self.assertIn(field, self.main)
+        # Reading a credential is three sources in one order: Studio's own
+        # MEFI_STUDIO_* variable, then the saved field, then the variable
+        # another tool shares for the same credential. Only the middle one
+        # touches the keystore, so decryptKey delegates to savedKey.
         body = _function_body(self.main, "decryptKey")
         self.assertTrue(body, "decryptKey must exist")
-        self.assertIn("safeStorage.decryptString", body)
+        self.assertIn("credentials.ownKey(field)", body)
+        self.assertIn("savedKey(settings, field)", body)
+        self.assertIn("credentials.sharedKey(field)", body)
+        self.assertLess(
+            body.index("savedKey(settings, field)"),
+            body.index("credentials.sharedKey(field)"),
+            "a saved key outranks another tool's variable",
+        )
+        saved = _function_body(self.main, "savedKey")
+        self.assertTrue(saved, "savedKey must exist")
+        self.assertIn("safeStorage.decryptString", saved)
         # Both headless setters exist and write their own field.
         self.assertIn("--set-zai-key", self.main)
         self.assertIn("MEFI_STUDIO_ZAI_KEY", self.main)

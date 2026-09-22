@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { spawn as realSpawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import platform from "../scripts/platform.cjs";
 import { processSnapshot } from "../scripts/machine.mjs";
@@ -77,7 +78,7 @@ test("on Linux taskkill removes the process group and reports taskkill's exit co
 
 test("a tree that is already gone counts as removed; a live process that refuses the group signal is killed by pid", async () => {
   const gone = createSpawn({ platform: "linux", spawnImpl: recorder().spawnImpl, kill: () => { throw Object.assign(new Error("no such process"), { code: "ESRCH" }); } });
-  assert.equal(await once(gone("taskkill", killArgs(1)), "close"), 0);
+  assert.equal(await once(gone("taskkill", killArgs(4242)), "close"), 0);
 
   const kills = [];
   const noGroup = createSpawn({ platform: "linux", spawnImpl: recorder().spawnImpl, kill: (pid, signal) => {
@@ -89,6 +90,47 @@ test("a tree that is already gone counts as removed; a live process that refuses
 
   const stuck = createSpawn({ platform: "linux", spawnImpl: recorder().spawnImpl, kill: () => { throw Object.assign(new Error("not permitted"), { code: "EPERM" }); } });
   assert.equal(await once(stuck("taskkill", killArgs(9)), "close"), 1, "a tree that could not be removed is reported, so the caller retries");
+});
+
+// main.cjs removes the LÖVE child and every autopilot group from
+// process.on("exit"), and Node abandons the nextTick queue the moment an exit
+// handler returns. A signal deferred to a tick would never leave the building.
+test("the group signal goes out synchronously, so a kill from an exit handler still lands", () => {
+  const kills = [];
+  const spawn = createSpawn({ platform: "linux", spawnImpl: recorder().spawnImpl, kill: (pid, signal) => kills.push([pid, signal]) });
+  spawn("taskkill", killArgs(4242), { windowsHide: true, stdio: "ignore" });
+  assert.deepEqual(kills, [[-4242, "SIGKILL"]], "signalled during the call, with no tick awaited");
+});
+
+test("a pid that can only be a mistake is refused instead of signalled", async () => {
+  const kills = [];
+  const spawn = createSpawn({ platform: "linux", spawnImpl: recorder().spawnImpl, kill: (pid, signal) => kills.push([pid, signal]) });
+  // kill(0) signals every process in the caller's own group and pid 1 is init:
+  // either would take the app, or the whole session, down with the target.
+  for (const pid of [0, 1]) {
+    assert.equal(await once(spawn("taskkill", killArgs(pid)), "close"), 1, `pid ${pid} is refused`);
+  }
+  assert.deepEqual(kills, [], "nothing was signalled");
+});
+
+// Both stubs stand in for a spawn, so the members main.cjs touches on a real
+// child have to be there: a missing one throws a TypeError and loses the
+// failure the call site was written to report.
+test("a stubbed child carries the ChildProcess members its call site uses", async () => {
+  const spawn = createSpawn({ platform: "linux", spawnImpl: recorder().spawnImpl, kill: () => {} });
+
+  const consoleWindow = spawn("cmd.exe", ["/d", "/s", "/c", "start", "Mefi Claude Code", "cmd", "/k", "claude"], { detached: true, stdio: "ignore" });
+  const refused = once(consoleWindow, "error");
+  // main.cjs logs the refusal through an error listener and then unrefs.
+  assert.equal(consoleWindow.unref(), consoleWindow, "unref is a no-op that returns the child");
+  assert.equal(consoleWindow.stdout, null, "the streams match a stdio: \"ignore\" spawn");
+  assert.equal((await refused).code, "ENOTSUP");
+
+  const killer = spawn("taskkill", killArgs(4242), { windowsHide: true, stdio: "ignore" });
+  // main.cjs kills this one when its own 15 s timeout wins the race.
+  assert.equal(killer.kill(), true);
+  assert.equal(killer.killed, true);
+  assert.equal(await once(killer, "close"), 0);
 });
 
 test("the exported spawn on this host matches the platform it runs on", () => {
@@ -125,6 +167,22 @@ test("the Linux process snapshot reads LÖVE processes from ps with the Windows 
     { pid: 310, parentPid: 1, name: "love", commandLine: "/usr/bin/love /work/game", startedAt: 1_000_000_000 - 125_000, cpuMs: 2000, memMB: 20 },
     { pid: 311, parentPid: 310, name: "lovec", commandLine: "lovec --smoke", startedAt: 1_000_000_000 - 60_000, cpuMs: 3_723_000, memMB: 4 },
   ]);
+});
+
+// The shim postdates builds that are already installed. A real update carries
+// it (scripts/updater.mjs holds a payload until every local require resolves,
+// and the portable swap copies the whole tree), but an install that arrived
+// some other way must still launch.
+test("the host falls back to node's own spawn when the shim is missing", async () => {
+  const main = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
+  const from = main.indexOf("const { spawn } = optionalHelper(");
+  assert.ok(from > 0, "the shim is loaded through the guard");
+  const guarded = main.slice(from, main.indexOf("const { existsSync", from));
+  assert.ok(guarded.includes('require("./scripts/platform.cjs")'), "the require is written out so the updater's scanner sees it");
+  assert.ok(guarded.includes('{ spawn: require("node:child_process").spawn }'), "Windows behaviour without the shim is what it always was");
+  const guard = main.slice(main.indexOf("function optionalHelper("), main.indexOf("const { spawn } = optionalHelper("));
+  assert.ok(guard.includes('error?.code !== "MODULE_NOT_FOUND"'), "only a missing module is absorbed");
+  assert.ok(guard.includes("String(error?.message ?? \"\").includes(request)"), "a module missing inside the helper still throws");
 });
 
 test("a host without ps yields an empty snapshot instead of an error", async () => {
