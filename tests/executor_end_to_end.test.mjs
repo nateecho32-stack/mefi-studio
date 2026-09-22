@@ -41,6 +41,34 @@ test("dispatch enforces shared-index commit hygiene and surfaces leftover staged
   assert.ok(!clean.logs.some((line) => /shared git index/.test(line)), "a clean index stays quiet");
 });
 
+test("a finish-time staged-index warning rides exactly the next dispatch in that repo as collab advice", async () => {
+  // Dependents gate dispatch until verification, so each prompt is built at a
+  // controlled moment: after the sweep arms, after the index heals, etc.
+  const h = executorHost({ tasks: [task("first"), task("second", { dependsOn: ["first"], createdAt: 2 }), task("third", { dependsOn: ["first"], createdAt: 3 })], gitStage: "M  src/swept.js\n" });
+  h.wake(); await h.pump();
+  assert.ok(!/CAUTION shared git index/.test(h.starts[0].child.prompt), "a clean history carries no sweep advice");
+  await h.finish("first"); await h.pump();
+  assert.equal(h.autopilot.stagedIndexWarnings?.size, 1, "the finish sweep parks the warning on the dispatcher");
+  // The index heals from here on: later runs' finish sweeps must not re-arm.
+  const baseEyes = await h.env.getEyes();
+  h.env.getEyes = async () => ({ ...baseEyes, gitPorcelain: async () => "" });
+  h.advance(31000); h.wake(); await h.pump();
+  assert.match(h.starts[1].child.prompt, /CAUTION shared git index: a previous run left staged-but-uncommitted file\(s\) \(src\/swept\.js\)/);
+  assert.match(h.starts[1].child.prompt, /BEFORE editing/);
+  await h.finish("second"); h.advance(31000); h.wake(); await h.pump();
+  assert.ok(!/CAUTION shared git index/.test(h.starts[2].child.prompt), "the advice is consumed by one read, not repeated forever");
+  assert.equal(h.autopilot.stagedIndexWarnings?.size, 0);
+});
+
+test("a staged-index warning older than half an hour is dropped instead of advising a healed repo", async () => {
+  const h = executorHost({ tasks: [task("first"), task("second", { dependsOn: ["first"], createdAt: 2 })], gitStage: "M  src/swept.js\n" });
+  h.wake(); await h.pump();
+  await h.finish("first"); await h.pump();
+  h.advance(31 * 60 * 1000); h.wake(); await h.pump();
+  assert.ok(!/CAUTION shared git index/.test(h.starts[1].child.prompt), "stale warnings age out");
+  assert.equal(h.autopilot.stagedIndexWarnings?.size, 0, "the stale entry is consumed, not left behind");
+});
+
 test("manual Pause remains durable through a completing job, repeated wakes and expired breaker time", async () => {
   const h = executorHost({ tasks: [task("first"), task("second", { createdAt: 2 })] });
   h.wake(); await h.pump();
