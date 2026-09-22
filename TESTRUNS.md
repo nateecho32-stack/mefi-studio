@@ -25,6 +25,27 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - fourth-generation carrier: remainder confirmed owner-only, repo re-verified at HEAD 06dc84d (task_fece4ffd34e38932, run run_1790101296453_15)
+
+Scope decided from the parent card's (task_b5ec79917d8514b2) decision log,
+not guessed: one decision — "split the extra work out" (1790101192893) — and
+its uncovered work is the same item every generation found: flipping landing
+cards task_7b773505d7c6eb43 / task_2dd9dc18291f2625 to done, which duplicates
+of each other asking for the same landed work. Both cards are still `open` on
+the board at dispatch time; the task store was not modified from this worker.
+Re-verified the discharged obligations first-hand at HEAD 06dc84d (tree moved
+past the parent rows 1adbf24 / 93287af): feature commits c272b58 / 136f866 /
+e3ad851 / 31f69f0 / d1c4d78 / 96d15c6 all ancestors of HEAD; wiring live
+(require at main.cjs:58); opt-in default intact
+(scripts/executor-worktrees.cjs:62 `enabled()` requires
+`MEFI_STUDIO_WORKTREE_RUNS === "1"` exactly); `.mefi/worktrees` absent and
+`git worktree list` shows only the standing mb/mm/wt-* checkouts; fresh
+`node --test tests/executor_worktree.test.mjs` -> 11 tests / 11 pass / 0
+fail, exit 0 (65.1 s). TESTRUNS.md was clean before this row; sibling
+in-flight files untouched; this commit adds only this row. The flip itself is
+a board action only the owner can take and is asked via MEFI_ASK; splitting
+it again would spawn another empty carrier card, so no handoff was raised.
+
 ## 2026-09-22 evening - parent integration gate green on the whole in-flight tree: check / test / build-booklet all exit 0, midday booklet race resolved (task_b63e296b2ca2b7e7, run run_1790101049993_6)
 
 The gate task_c1cf337d66009c14 needs before closing: all three commands over
