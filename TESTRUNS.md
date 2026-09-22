@@ -50,6 +50,38 @@ on the board with their repo-side obligations verifiably discharged — the
 flip is the owner's. Task store untouched; sibling in-flight files left as
 found; this commit adds only this row.
 
+## 2026-09-22 late evening - worktree follow-up carrier retry fixes its remaining-prose shape: repo-side green at 5bc25d1, flip handed to the owner (task_b5ec79917d8514b2, run run_1790101552767_22)
+
+Retries 1 and 2 (receipts rcp_3e4d27c0b935b102, rcp_dad5e9b58505bedf) ran
+their scoped checks green yet settled "unverified — outstanding obligations
+remain": the owner-scoped landing-card flip was reported inside the
+MEFI_RESULT remaining prose, and verifyCompletion counts any non-denial
+remainder as outstanding — `noRemainingWork` (scripts/assistant.mjs) accepts
+a bare "none" plus a card-scope tail or a handed-elsewhere parenthetical
+(parent, integration, deferred, handed off, follow-ups, out of scope). The
+split decision (1790101192893) scoped the flip of task_7b773505d7c6eb43 /
+task_2dd9dc18291f2625 to the owner — both cards are still `open` in the
+task store (read-only check, store untouched) — so no worker re-run could
+ever discharge it; only the report shape could break the loop, the same
+root cause the collision-delegate card hit one commit earlier (5bc25d1
+below). The running dist gate copy (assistant.mjs:3697-3706, 3782) matches
+the committed reader.
+
+Re-verified every repo-side obligation first-hand at HEAD 5bc25d1 (the tree
+moved past 6acf79f / 1adbf24 / 93287af / 06dc84d / 23bdd5c / 9bfd803 since
+the earlier rows): feature commits c272b58 / 136f866 / e3ad851 / 31f69f0 /
+d1c4d78 / 96d15c6 are all ancestors of HEAD; the wiring is live (require at
+main.cjs:58, worktreeManager prepare at main.cjs:9489, discard at 9498/9699,
+settle at 9516); the opt-in default is intact
+(scripts/executor-worktrees.cjs:62 `enabled()` requires
+`MEFI_STUDIO_WORKTREE_RUNS === "1"` exactly); fresh `node --test
+tests/executor_worktree.test.mjs` -> 11 tests / 11 pass / 0 fail, exit 0
+(16.6 s); `git worktree list` shows only the standing mb/mm/wt-* checkouts
+and `.mefi/worktrees` does not exist. This report therefore carries the
+flip as a handed-elsewhere parenthetical — "none (owner-side flip handed
+off)" — plus an owner MEFI_ASK card; no product or test code touched;
+sibling in-flight files preserved; this commit adds only this row.
+
 ## 2026-09-22 late evening - collision-delegate retry 3 discharges by fixing its own remaining-prose shape: all scoped checks green again (task_93c9907b18ec3928, run run_1790101430261_20)
 
 Retries 1 and 2 (receipts rcp_2474eaa83c45b800, rcp_6afc42cbf6392c24) both ran
