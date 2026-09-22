@@ -25,6 +25,31 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Scoped-check rerun un-sticking the two collision-delegate verification
+loops (2026-09-22, ~16:0x, run_1790091633044_35 for
+task_93c9907b18ec3928 "Unstick collision-delegate verification loops",
+parent task_94b29c15a3479597). Both delegates of the booklet/routing
+collision (task_delegate_d9f299382ce7faa99dfc1f15 on booklet.js +
+model_auto_setup, task_delegate_f86594532fe0532c3d541359 on README +
+routing tests + template) had already reported done with their scheduled
+verification chains passing, then looped on "0 changed file(s),
+outstanding obligations" — correct in mechanism, not in substance: the
+merge had landed before pickup, so a faithful re-check changes nothing.
+Re-ran every recorded scoped check from the project root at HEAD this
+run, all exit 0 and matching the delegates' own counts exactly:
+`node --test tests/model_auto_setup.test.mjs` — 16 tests / 16 pass /
+0 fail (92 ms); `python -m unittest discover -s tools -p
+test_mefi_studio_routing.py` — Ran 23 tests, OK (2.28 s);
+`node --test tests/jev_routing_ui.test.mjs` — 19 tests / 19 pass /
+0 fail (208 ms); plus the shared `npm run check` prefix of both chains
+— targets ok (100/100), spec-collisions ok (200, unique, no orphans),
+css merge skip (no merge in progress), all selectors used, syntax ok
+(100 files). No host-side remainder: each delegate's full recorded
+check list re-executed green, so both delegates can verify and
+task_c1cf337d66009c14 can integrate. No product or test code touched;
+this commit adds only this row, and a sibling session's in-flight
+package-lock.json hunk was left untouched.
+
 Quiet-tree full-gate rerun over the landed worktree module + wiring, exit 0
 (2026-09-22, 10:38-10:42, run_1790091211824_20 for
 task_bf79bd8c1d8fced5 "Full-gate rerun on the quiet tree", parent
