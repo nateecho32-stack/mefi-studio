@@ -25,6 +25,33 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - seventh-gen carrier retry 3: split-out scope green at thrice-drifted HEAD bec545e, remaining-prose reshaped to the verified parent form, flip stays owner-only (task_b015afd76934e639, run run_1790104002615_9)
+
+Retry 3 after two "unverified - outstanding obligations remain" verdicts. Both
+denials were the documented prose-shape pattern (cf. rows 1a9664a / 5bc25d1 /
+run_1790103450505_24): the results kept naming "owner-only flip of the two
+landing cards" as this card's remaining work, so the sentinel counted an
+obligation the worker is forbidden to perform (task store is read-only for
+workers; the parent task_261f3a1af9aeda2d verified green with "remaining: none
+for this card"). Substance unchanged, so re-verified first-hand again at HEAD
+drifted 8fcd78b -> bec545e (two sibling rows aa3f192, bec545e, no split-out code
+touched): nine feature/evidence commits still ancestors (merge-base 9/9 true);
+wiring live in the committed blob (require "./scripts/executor-worktrees.cjs"
+main.cjs, worktreeManager gate, five `cwd: entry.worktree?.path || runRoot`
+fallbacks); opt-in exact (scripts/executor-worktrees.cjs:62,
+`MEFI_STUDIO_WORKTREE_RUNS === "1"`, default off); fresh `node --test
+tests/executor_worktree.test.mjs` -> 11 tests / 11 pass / 0 fail, exit 0 (10.0
+s); no `.mefi` residue and `git worktree list` shows only the five standing
+checkouts; fresh `npm run check` -> exit 0 (205 specs, all selectors used,
+syntax 101 files) racing the sibling's 16-file loop-cleanup drift. Both landing
+cards task_7b773505d7c6eb43 / task_2dd9dc18291f2625 re-read from the store
+read-only this run: both still `open`; their repo-side obligations were
+discharged long ago (c272b58 / 136f866 / e3ad851 and the feature's evidence
+rows), so the flip is owner-only board hygiene, surfaced again via MEFI_ASK —
+no further split, no child card, nothing left repo-side for this carrier.
+Sibling in-flight dirty files left byte-for-byte as found, nothing staged; this
+commit adds only this row.
+
 ## 2026-09-22 late evening - stale auth-split-uncommitted alert re-closed first-hand: 2457a7d re-verified in HEAD, narrow auth gates 14/14 actually run this time, check green (run_1790103952563_8)
 
 Retry of run_1790103450505_24 (row b14140e) after "verification: outstanding
