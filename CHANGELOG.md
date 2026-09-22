@@ -87,6 +87,16 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   can be clicked, hovered and deleted again (the parts layer covered them).
   Switching maps no longer throws away unsaved edits without asking, and
   Make this live no longer carries on when the save before it failed.
+- **Brain maps: the host's empty-map switch is reachable, and a map that
+  calls another brain no longer lists a false problem.** The editor asked to
+  keep an empty map by putting `allowEmpty` on the map, and the preload bridge
+  forwards only the map, so the host refused every such save with "A brain
+  map needs at least one node." The request now rides beside the map, as
+  `brainsSave(map, { allowEmpty: true })`; a flag on the map itself still
+  counts for nothing. The map switcher checked each map without the other
+  saved maps, so every configured **Another brain** part read as calling a
+  missing map and a clean map showed "· 1 problem"; the list now checks
+  against the saved maps, as the editor already did.
 - **Run smoke and Launch Ruins Runner start the game again.** Both handed
   cmd.exe a hand-quoted script path, and Node re-escaped those quotes into
   `\"`, which cmd cannot read, so every launch failed with
