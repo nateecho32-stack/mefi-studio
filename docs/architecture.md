@@ -125,6 +125,19 @@ revision history stay in the project's ignored local `planning.json`.
 - Closing the window hides Studio to a tray icon and the loop keeps running;
   builders journal their progress and checkpoint before quit, and interrupted
   work resumes on the next start instead of being duplicated.
+- Builders can run in **per-session worktrees** (opt-in,
+  `MEFI_STUDIO_WORKTREE_RUNS=1`): each dispatch gets its own checkout and its
+  own git index under `.mefi/worktrees/<runId>` on a `mefi/<runId>` branch, so
+  concurrent runs cannot contend on the shared index or sweep each other's
+  staged files; the branch merges back into the working repository one run at
+  a time after it settles. The checkout shares the repository's `node_modules`
+  through a junction (an `npm ci` from its own lockfile is the fallback; set
+  `MEFI_STUDIO_WORKTREE_NPM_CI=0` to skip it), so builds and tests run inside
+  it. Nothing is dropped silently: a merge-back that fails keeps the branch, a
+  run that left uncommitted edits keeps its checkout for recovery, and a
+  crashed attempt's branch is renamed aside (`mefi/orphan/...`) instead of
+  deleted. A worktree starts from HEAD, so a run does not see other sessions'
+  uncommitted work until it lands.
 
 ### Command center and the node tree
 
