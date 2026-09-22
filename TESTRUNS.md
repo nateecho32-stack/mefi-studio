@@ -25,6 +25,26 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - persistent-memory guard discharged: full npm test green for the severe-memory parallelism cap, boundary hysteresis already pinned (task_1a265efeeb6cbdd3, run run_1790101379524_18)
+
+The retry's outstanding obligation was the full-gate evidence for the
+severe-memory parallelism cap (the narrow 34+56/check/audit run covered only
+the scoped suites). Verified first-hand that the cap is committed, not just
+claimed: `scripts/machine.mjs` carries the latch (severeCapSamples: 2 — two
+consecutive under-floor readings engage, two consecutive readings past floor
+plus margin release, per-call resampling keeps it alive past its hold) and
+landed in 3198c4d, an ancestor of HEAD; the working tree is clean for
+machine.mjs and its tests. The optional cap-boundary hysteresis handoff is
+also already implemented and pinned: tests/machine_capacity.test.mjs:339-397
+covers consecutive engage, consecutive release, and the observed 197 -> 526 ->
+354 MB oscillation staying held — so no flicker hardening was left to do.
+Scoped rerun `node tests/machine_capacity.test.mjs` 27/27 before the gate.
+Full `npm test` exit 0 — node stage 2054 tests / 2051 pass / 0 fail /
+3 skipped (the documented environment-conditional skips, same baseline as the
+rows below), occlusion probe ran (worker drift 164 ms, no failure), Python
+contracts `Ran 247 tests in 38.125s` OK, normalized-path lock green. Task
+store untouched; this commit adds only this row.
+
 ## 2026-09-22 evening - quiet-tree full-gate rerun green end-to-end: midday booklet race gone, one documented perf flake on the first attempt (task_cff03b8e4922cc5d, run run_1790100967469_4)
 
 The sibling landed its last wave at 13:17:55-56 — renderer/brains.js and
