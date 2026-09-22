@@ -79,6 +79,7 @@ test("inserts a fresh run at the true top of the live region", () => {
     const prevTop = lines.indexOf("## 2026-09-20 evening - second run (run_b)");
     const guide = lines.indexOf("## Read Before Any Tests");
     assert.ok(tableIdx !== -1 && tableIdx < res.insertLine - 1, "lands below the known-failures table");
+    assert.ok(res.insertLine - 1 < guide, "the live newest-first region is above the anchor, not below it (contrast the brief's inverted wording)");
     assert.equal(lines[prevTop - 1], "", "blank line separates the new block from the old top");
     assert.equal(lines[prevTop - 2], "Body c.");
     assert.ok(lines.indexOf("## 2026-09-10 archive - first archived row (run_arch1)") < lines.indexOf("## 2026-09-12 archive - second archived row (run_arch2)"), "archive order untouched");

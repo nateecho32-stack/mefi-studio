@@ -174,6 +174,12 @@ export function planInsertion(text, blockText) {
     }
   }
 
+  // The live newest-first region sits ABOVE "## Read Before Any Tests": the
+  // archive below that anchor is deliberately exempt and frozen (decision in
+  // check-testruns.mjs, pinned by tests/check_testruns.test.mjs). A brief that
+  // says "directly below the anchor" is inverted relative to this layout -
+  // splicing below the anchor would write into the blessed archive - so the
+  // true top of the live region is the first dated row above the guide.
   const live = []; // dated rows above the guide, in file order
   let guideIdx = -1;
   let started = false;
