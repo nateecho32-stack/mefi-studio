@@ -318,3 +318,32 @@ test("one failed advisor cannot discard the successful peer's findings or hold t
   assert.match(h.starts[0].child.prompt, /cluster-planner finding/);
   assert.ok(h.autopilot.clusterAgents.some((row) => row.role === "reviewer" && row.status === "failed"));
 });
+
+// Stop all lands while a claim's advisory is in flight: the reap releases the
+// claim, then the dispatch resumes and reaches its own paused gate. The
+// release ledger measures why claims are dropped, so it gets one row, not two.
+test("a claim released by a reap and then by its own gate records one release", async () => {
+  const h = executorHost({ tasks: [task("stop-mid-advisory")] });
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const http = h.env.httpAssistantCall;
+  h.env.httpAssistantCall = async (...args) => { await gate; return http(...args); };
+  h.wake();
+  const pumping = h.pump();
+  const turns = async (predicate) => {
+    for (let turn = 0; turn < 100 && !predicate(); turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    assert.ok(predicate(), "the claim's advisory must be in flight");
+  };
+  await turns(() => typeof h.autopilot.jobs[0]?.reap === "function" && (h.autopilot.clusterAgents ?? []).some((agent) => agent.status === "running"));
+  const entry = h.autopilot.jobs[0];
+  h.autopilot.execute = false;
+  h.autopilot.clusterCancel?.("New work stopped");
+  await entry.reap(1, "stopped by user");
+  release();
+  await pumping;
+  for (let turn = 0; turn < 50; turn += 1) await Promise.resolve();
+  const rows = h.records.filter((row) => row?.event === "release");
+  assert.deepEqual(rows.map((row) => row.reason), ["stopped by user"]);
+  assert.equal(h.board().tasks[0].status, "open");
+  assert.equal(h.board().tasks[0].runId, undefined);
+});

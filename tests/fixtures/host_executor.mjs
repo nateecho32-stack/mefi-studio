@@ -35,7 +35,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
   const root = path.resolve("fixture-only-project");
   const state = { ...(realPool ? assistant.emptyState(now) : {}), status: paused ? "paused" : "running", prefs: { backlogMode: true, parallel: poolParallel, aiParallel }, agents: [] };
   const pool = { queue: [], running: new Map(), seq: 0, waiters: [] };
-  const autopilot = { enabled: true, execute, autoBuild, mode, modeRevision: 0, clusterFocus: null, clusterAgents: [], parallel, adaptiveParallel, jobs: [], consecutiveFailures: 0, infraFailures: 0, parkedUntil: 0, minutes: 5, history: [] };
+  const autopilot = { enabled: true, execute, autoBuild, mode, modeRevision: 0, clusterFocus: null, clusterAgents: [], parallel, adaptiveParallel, jobs: [], infraFailures: 0, parkedUntil: 0, minutes: 5, history: [] };
   let settings = copy(savedSettings ?? { ui: { autopilot: { enabled: true, execute, autoBuild, mode, parallel, adaptiveParallel, minutes: 5 } } });
   const machine = {
     leaseStatus: async () => ({ exclusive: false }),

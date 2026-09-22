@@ -57,6 +57,25 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   count, because the route did answer. Until now a route that timed out cost
   every assistant turn up to 120 s (180 s for a CLI) before the fallback was
   tried.
+- **The agent loop does less twice and says less that means nothing.** The
+  autopilot tick no longer repeats the roster's work: with a key set, the
+  briefer, watcher and auditor already brief and scan on their own cadences,
+  and the foreman the tick wakes already settles, promotes and dispatches.
+  On the live install that was about 30 extra paid brief calls an hour.
+  Housekeeping reads the board with a plain read instead of a no-op
+  transaction. Idle passes stop posting "0 queued" rows to the Command feed.
+  A claim writes no "autopilot picked up task" line; that was a third of all
+  card log lines, and half of them belonged to claims released before any
+  worker started. Claims and releases no longer snapshot the whole task into
+  its history: status and run id are not brief context. Each release now
+  records its reason in the executor log. A finished run writes one line
+  naming the checks it queued instead of two. Worker transcripts lose colour
+  codes and sentinel echoes. Cluster advice keeps size markers instead of
+  raw text, which had been 42% of the saved history. The waiting reason is
+  pushed only when it changes, and the Workspace re-reads only the backlog
+  when a push arrives. In the loop monitor's steady hour, board transactions
+  fell from 134 to 99, log lines from 135 to 87 and host CPU from 257 to
+  112 ms, with every card settling exactly as before.
 
 ### Fixed
 - **Brain maps: New, Duplicate and Build with AI work in the app.** All three
@@ -96,6 +115,31 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   went from none done in two hours (19 kills, 57 slot-minutes burned) to
   all nine (3 kills, 9 slot-minutes). Runs that genuinely never speak now
   cost about a fifth more slot time before they are killed.
+- **A retry is no longer verified by an earlier attempt's check.** A card's
+  overseer check result was never cleared. A later attempt that changed
+  nothing and ran nothing was accepted on the old run's pass; on the live
+  board that is how 26 cards reached Done. The result now counts only for the
+  attempt it was queued for. A stale failure no longer reopens a later
+  attempt, and a Done you set by hand is no longer reopened by one either.
+  The verdict names who ran the check, and a retry's note carries the failing
+  command and its output, which the next worker's brief quotes.
+- **Long result lines are kept.** A worker's `MEFI_RESULT` line over 300
+  characters was dropped whole. 13 of 30 recent reports were lost that way,
+  and with them the overseer check they should have queued. Long lines are
+  now clipped instead.
+- **Failure notes name the failure.** A run's recorded last line was often a
+  bare colour-reset code, so the card, the feed and the next worker's prompt
+  said "failed: \u001b[0m". Tails are now colour-stripped and blank-free.
+- **Stale snapshot locks are swept.** The sweep that clears an OpenCode
+  snapshot `index.lock` left behind by a killed worker threw before removing
+  anything, on every call.
+- **The Command header shows Pause.** A stale waiting reason ("waiting ·
+  tasks cooling down") no longer outlives a pause or a stop, and the
+  Assistant hub's working and queued counts no longer blink off on every
+  status push.
+- **The worker's collaboration advice is no longer cut mid-sentence.** Its
+  file-ownership and live-editor instructions were clipped to 320 characters,
+  less than its own parts.
 
 ### Security
 - **Coding workers no longer inherit Studio's own keys.** A headless or

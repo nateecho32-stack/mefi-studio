@@ -4825,6 +4825,10 @@
   // same eyes rows the live activity push already delivered. A repeat of the
   // same kind/tool/file/session/text folds into the newest row as a ×N count
   // instead of flooding the list; different log lines keep their own rows.
+  // A worker's streamed transcript is the exception: consecutive [opencode]
+  // lines share one live row showing the latest line, or a single run would
+  // push every run-history row out of the 40.
+  const transcriptRow = (row) => row?.kind === "log" && /^\[opencode\]/.test(row.text ?? "");
   function pushFeed(item) {
     const { id, ...rest } = item;
     if (id && state.feed.some((entry) => entry.id === id)) return;
@@ -4836,10 +4840,11 @@
       (newest.tool ?? null) === (rest.tool ?? null) &&
       (newest.file ?? null) === (rest.file ?? null) &&
       (newest.sessionId ?? null) === (rest.sessionId ?? null) &&
-      (newest.text ?? null) === (rest.text ?? null)
+      ((newest.text ?? null) === (rest.text ?? null) || (transcriptRow(newest) && transcriptRow(rest)))
     ) {
       newest.count = (newest.count ?? 1) + 1;
       newest.at = Date.now();
+      if (transcriptRow(rest)) newest.text = rest.text;
     } else {
       state.feed.unshift({ id: id ?? `${Date.now()}-${Math.random()}`, at: Date.now(), ...rest });
       if (state.feed.length > 40) state.feed.length = 40;

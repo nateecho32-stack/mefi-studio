@@ -141,7 +141,7 @@ function finishHost({ kind = "task", owner = "run_100_1", missing = false, failW
   let board = { tasks: kind === "task" && !missing ? [structuredClone(ref)] : [], requests: kind === "request" && !missing ? [structuredClone(ref)] : [] };
   if (duplicate) board.requests.push({ ...ref, runId: undefined, status: undefined });
   const entry = { id: "run_100_1", taskId: kind === "task" ? "task" : null, title: ref.title, startedAt: 1, finished: false, spoke: true, sawDone: false, outputTail: ["new failure context"], handoffs: [{ title: "Follow up", prompt: "More work" }], resultNote: { raw: "done: changed; remaining: a follow-up", parts: { done: "changed", remaining: "a follow-up" } } };
-  const autopilot = { execute: true, jobs: [entry], parallel: 1, consecutiveFailures: 0, infraFailures: 0 };
+  const autopilot = { execute: true, jobs: [entry], parallel: 1, infraFailures: 0 };
   const effects = [], timers = [], logs = [], records = [], roles = [];
   const verificationJobs = [];
   let mutations = 0;
@@ -266,7 +266,6 @@ test("an operator stop saves progress and returns the card to the queue without 
     assert.equal(row.runProgress.pending, true);
     assert.deepEqual(row.runProgress.outputTail, ["edits landed; tests still running"]);
     assert.equal(row.interruptedAttempt.pending, true);
-    assert.equal(host.autopilot.consecutiveFailures, 0);
     assert.equal(host.autopilot.infraFailures, 0);
     assert.ok(!host.effects.includes("heard"), "a stop is not announced as a failure");
     assert.ok(!host.effects.includes("handoff"));

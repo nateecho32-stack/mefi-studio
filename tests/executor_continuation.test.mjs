@@ -209,7 +209,8 @@ test("a done card whose overseer run later failed reopens on the failing evidenc
   assert.equal(task.verification.changedFiles, null);
   assert.equal(task.nextRunAt, NOW + 60000);
   assert.match(notes.join("\n"), /reopened "Settled before its run finished" — recorded checks failed/);
-  assert.match(task.logs.at(-1).text, /^reopened — overseer check failed — recorded checks failed in the overseer's verification run · retry 1\/3$/);
+  // The failing command and its tail ride on the note: the retry's brief quotes the log.
+  assert.equal(task.logs.at(-1).text, "reopened — overseer check failed — recorded checks failed in the overseer's verification run (npm run check failed — timed out: killed after budget) · retry 1/3");
 });
 
 test("a user's manual Done is not reopened by an overseer run that failed before it", async () => {

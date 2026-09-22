@@ -5151,7 +5151,6 @@ async function assistantOverseerRepair(now, { manual = false } = {}) {
     autopilot.execute = true;
     autopilot.parkedUntil = 0;
     autopilot.infraFailures = 0;
-    autopilot.consecutiveFailures = 0;
     autopilot.lastError = null;
     pushAutopilotHistory("resumed", "overseer cleared the breaker park");
     fixed.push("cleared the executor's breaker park");
@@ -7509,7 +7508,6 @@ const autopilot = {
   capacityWaiting: false,
   resourceBackoffUntil: 0,
   jobs: [], // in-flight runs: {id, kind, title, source, ref, child, pid, startedAt, sessionId, taskId, finished}
-  consecutiveFailures: 0,
   infraFailures: 0, // spawn errors / instant exits — 3 in a row parks the executor for a cooldown
   parkedUntil: 0, // breaker trip timestamp + cooldown; the executor re-arms itself when it passes
   lastPassAt: 0,
@@ -7549,7 +7547,7 @@ async function executorLog(record) {
     if (executorLogSized[target] || doneClearing) return;
     executorLogSized[target] = true;
     if ((await stat(target)).size <= 4 * 1024 * 1024) return;
-    doneClearing = true;
+    // A clear waits on this same chain, so the trim needs no flag of its own.
     const temp = `${target}.trim`;
     try {
       const kept = (await readFile(target, "utf8")).split("\n").filter((row) => row.trim()).slice(-5000);
@@ -7557,8 +7555,6 @@ async function executorLog(record) {
       await rename(temp, target);
     } catch {
       await rm(temp, { force: true }).catch(() => {});
-    } finally {
-      doneClearing = false;
     }
   }).catch(() => {});
   executorLogChain = run;
@@ -7666,8 +7662,9 @@ async function sweepSnapshotLocks() {
   }
 }
 
-// Only what a renderer reads. Every top-level key is sent on every push,
-// never conditionally: the Command view merges pushes into its slot.
+// Only what a renderer reads. Every top-level key is sent every time, never
+// conditionally: Command merges IPC replies (setAutopilot, assistant:control)
+// into its slot, and a push replaces all but the graph summary keys.
 function autopilotStatus() {
   return {
     enabled: autopilot.enabled,
@@ -7710,10 +7707,11 @@ function emitAutopilot() {
 }
 
 // A transition emits; an unchanged reason does not — both renderers read the
-// status on entry. Digits are masked so a memory hold whose MB figure drifts
-// is not a new reason on every foreman pass.
+// status on entry. Measurements (MB, GB, ms, %) are masked so a memory hold
+// whose figure drifts is not a new reason on every foreman pass; counts and
+// limits ("1 of 2", "(2/2)") still emit.
 function setAutopilotWaiting(reason) {
-  const key = (value) => (value == null ? null : String(value).replace(/\d+(?:\.\d+)?/g, "#"));
+  const key = (value) => (value == null ? null : String(value).replace(/\d+(?:\.\d+)?\s*(?:MB|GB|ms|%)/g, "#"));
   const changed = key(autopilot.waiting) !== key(reason);
   autopilot.waiting = reason;
   if (changed) emitAutopilot();
@@ -8135,11 +8133,13 @@ async function requestBaseline(eyes) {
 // The tick's own brief, for key setups the briefer's key gate cannot see
 // (keyless CLI, custom key). The watcher and auditor file collision,
 // duplicate and audit requests keylessly on their own cadences. It keeps the
-// briefer's 5-minute cadence and logs only news: new requests or a changed error.
+// briefer's 5-minute cadence (with the roster's 0.9 tolerance, so a tick that
+// lands a moment early still briefs) and logs only news: new requests or a
+// changed error.
 let autopilotTickBriefAt = null;
 let autopilotLastBriefError = null;
 async function autopilotProactivePass() {
-  if (autopilotTickBriefAt !== null && Date.now() - autopilotTickBriefAt < 5 * 60000) return { ok: true, added: 0, skipped: "brief cadence" };
+  if (autopilotTickBriefAt !== null && Date.now() - autopilotTickBriefAt < 0.9 * 5 * 60000) return { ok: true, added: 0, skipped: "brief cadence" };
   autopilotTickBriefAt = Date.now();
   const eyes = await getEyes();
   let briefing = null;
@@ -8520,7 +8520,6 @@ async function executeNextRequest() {
         autopilot.execute = true;
         autopilot.parkedUntil = 0;
         autopilot.infraFailures = 0;
-        autopilot.consecutiveFailures = 0;
         autopilot.lastError = null;
         pushAutopilotHistory("resumed", "executor resumed after cooldown");
         logLine("[autopilot] executor re-armed after the park cooldown");
@@ -8559,6 +8558,9 @@ async function executeNextRequest() {
       }
     }
     autopilot.capacityWaiting = stop === "resources" || stop === "busy";
+    // Nothing left to start and nothing running: a finished run's failure
+    // tail is history now, not the reason the backlog is holding.
+    if (stop === "empty" && !autopilot.jobs.length && !autopilot.parkedUntil) autopilot.lastError = null;
     if (stop === "cluster" && autopilot.jobs.length) autopilot.clusterWaiting = autopilot.jobs.some((job) => job.mode !== "cluster") ? "Cluster is waiting for current workers to finish" : "Cluster agents are working on the focused task";
     // A full manual pool never enters spawnNextJob. Report that gate rather
     // than clearing the wait and making another explicit request look idle.
@@ -9312,6 +9314,9 @@ async function spawnNextJob() {
   // reap(code, reason), so a non-string first argument defers to the second.
   const cancelClaim = (reason = null, reapReason = null) => {
     entry.releaseReason ??= (typeof reason === "string" && reason) || (typeof reapReason === "string" && reapReason) || null;
+    // A reap (stop, ghost sweep) may already have released this claim while
+    // the dispatch was awaiting; a second call must not log a second release.
+    if (entry.finished && !entry.settlementPending) return Promise.resolve();
     if (releaseInFlight) return releaseInFlight;
     releaseInFlight = (async () => {
       try {
@@ -9894,6 +9899,8 @@ async function spawnNextJob() {
           board.requests = board.requests.map((item) => {
             if (item !== owned) return item;
             const next = { ...item, status: "verifying", lastAttempt: attempt };
+            // A new attempt starts a new evidence streak, as a task's does.
+            delete next.verification;
             // Direct requests owe the same follow-ups as task-backed runs.
             // Keep them on the parent before attempting the separate queue write.
             if (entry.handoffs.length) next.remaining = entry.handoffs.slice(0, EXECUTOR_MAX_HANDOFFS).map((handoff) => handoff.title);
@@ -10218,20 +10225,18 @@ async function spawnNextJob() {
     // that false positive is what used to park the executor on a healthy CLI.
     const infraFail = !userStop && (errorMessage != null || (!ok && !entry.spoke && Date.now() - entry.startedAt < 15000));
     if (ok) {
-      autopilot.consecutiveFailures = 0;
       autopilot.infraFailures = 0;
       autopilot.lastError = null;
       pushAutopilotHistory("review", `finished, awaiting verification: ${job.title}`);
       await runExecutorHandoffs(entry, job).catch((error) => logLine(`[autopilot] handoff failed: ${error.message}`));
       // The scheduled verification run executes now, off the finish path's
       // critical section; results are stamped back onto the card.
-      runVerificationJobs(job).catch((error) => logLine(`[autopilot] verification run failed: ${error.message}`));
+      runVerificationJobs().catch((error) => logLine(`[autopilot] verification run failed: ${error.message}`));
     } else if (userStop) {
       // The operator's stop is not the task's or the infrastructure's fault.
       pushAutopilotHistory("stopped", `stopped on request: ${job.title} · progress saved`);
       logLine(`[autopilot] stopped on request: "${assistantClip(job.title, 60)}" — progress saved`);
     } else {
-      autopilot.consecutiveFailures += 1;
       // The last output line usually says what actually went wrong — keep it
       // so the feed and the chat reply can name the issue, not just "exit 1".
       const tail = lastWords;
@@ -11292,6 +11297,12 @@ async function autopilotHousekeeping() {
       if (attempt?.runId && run.key) return String(run.key).split(":").includes(String(attempt.runId)) ? run : null;
       return Number(run.at) >= (Number(attempt?.startedAt) || 0) ? run : null;
     };
+    // The failing overseer command and its tail ride on the settle note: the
+    // card's log is what the retrying worker's brief quotes.
+    const overseerMiss = (run) => {
+      const bad = run?.state === "failed" && Array.isArray(run.results) ? run.results.find((row) => row && !row.ok) : null;
+      return bad ? ` (${bad.command} failed${bad.timedOut ? " — timed out" : ""}${bad.tail ? `: ${String(bad.tail).slice(-200)}` : ""})` : "";
+    };
     if (typeof verify === "function") {
       const tasks = [...board.tasks];
       for (const task of tasks) {
@@ -11324,7 +11335,7 @@ async function autopilotHousekeeping() {
           if (verdict.state === "failed") delete task.nextRunAt;
           else task.nextRunAt = now + 60 * 1000;
           task.verification = { state: verdict.state, at: now, reason: verdict.reason, sentinel: attempt.sawDone === true, exit: attempt.code ?? null, changedFiles: null };
-          note(task, `reopened — overseer check failed — ${verdict.reason}${outcome(verdict)}`);
+          note(task, `reopened — overseer check failed — ${verdict.reason}${overseerMiss(doneRun)}${outcome(verdict)}`);
           verifyNotes.push(`reopened "${assistantClip(task.title, 60)}" — ${verdict.reason}`);
           changedByVerify = true;
           continue;
@@ -11425,7 +11436,7 @@ async function autopilotHousekeeping() {
             task.nextRunAt = now + 60 * 1000;
           }
           task.verification = { state: verdict.state, at: now, reason: verdict.reason, sentinel: attempt.sawDone === true, exit: attempt.code ?? null, changedFiles: files.length };
-          note(task, `unverified — ${verdict.reason}${outcome(verdict)}`);
+          note(task, `unverified — ${verdict.reason}${overseerMiss(overseerRunFor(task, attempt))}${outcome(verdict)}`);
           verifyNotes.push(`reopened "${assistantClip(task.title, 60)}" — ${verdict.reason}`);
         }
         changedByVerify = true;
@@ -11512,7 +11523,10 @@ async function autopilotHousekeeping() {
   // for these (an unavailable read set teaches changed-only paths — path
   // memory is an optimisation, not evidence); the playbook is persisted
   // through the ordinary throttled save.
+  // The lock is released here: a project switch that lands during the read
+  // must not merge this project's paths into the next project's state.
   let learned = false;
+  const learnState = typeof assistantState !== "undefined" ? assistantState : null;
   for (const row of learn) {
     let explored = [];
     if (row.window && typeof eyes.listReads === "function") {
@@ -11521,6 +11535,7 @@ async function autopilotHousekeeping() {
         if (read?.available) explored = read.files;
       } catch {}
     }
+    if (!learnState || assistantState !== learnState || (typeof projectSwitching !== "undefined" && projectSwitching)) break;
     try {
       assistantState.overseer = assistant.mergePaths(assistantState.overseer, { changed: row.changed, explored, root: row.root ?? projectRoot() }, now);
       learned = true;
@@ -11659,7 +11674,6 @@ async function setAutopilot(prefs = {}) {
     if (!autopilot.execute) autopilot.parkedUntil = 0;
     // A manual resume clears the tallies so a tripped breaker starts clean.
     if (resuming) {
-      autopilot.consecutiveFailures = 0;
       autopilot.infraFailures = 0;
       autopilot.parkedUntil = 0;
       autopilot.lastError = null;
@@ -12395,7 +12409,7 @@ async function adoptProject(previous, next, { savedAgents = 0, selected = false 
   autopilot.clusterWaiting = null;
   autopilot.waiting = null;
   autopilot.lastError = null;
-  autopilot.consecutiveFailures = autopilot.infraFailures = autopilot.parkedUntil = 0;
+  autopilot.infraFailures = autopilot.parkedUntil = 0;
   await writeSettings(await readSettings());
   const eyes = await getEyes();
   const [tasks, requests, ideas] = await Promise.all([eyes.readJson(TASKS_PATH, []), eyes.readJson(REQUESTS_PATH, []), eyes.readJson(IDEAS_PATH, [])]);

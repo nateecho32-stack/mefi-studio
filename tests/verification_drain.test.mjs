@@ -73,7 +73,7 @@ function drainHost({ tasks = [], requests = [] } = {}) {
 test("verification jobs run two at a time so a done-report burst does not stack behind one check", async () => {
   const host = drainHost();
   for (const id of ["one", "two", "three"]) host.queue({ key: `k-${id}`, taskId: `t-${id}`, commands: [`check-${id}`] });
-  const drain = host.env.runVerificationJobs({});
+  const drain = host.env.runVerificationJobs();
   assert.deepEqual(host.spawns.map((child) => child.command), ["check-one", "check-two"], "the first pair starts together");
   host.spawns[0].close(0);
   await host.flush();
@@ -88,7 +88,7 @@ test("verification jobs run two at a time so a done-report burst does not stack 
 test("commands stay sequential inside a job and a failed check stamps the card", async () => {
   const host = drainHost({ tasks: [{ id: "t-one", title: "One", verificationRun: { key: "k-one", state: "queued" } }] });
   host.queue({ key: "k-one", taskId: "t-one", commands: ["npm run check", "node --test tests/one.test.mjs"] });
-  const drain = host.env.runVerificationJobs({});
+  const drain = host.env.runVerificationJobs();
   assert.deepEqual(host.spawns.map((child) => child.command), ["npm run check"], "the focused test waits for the check");
   host.spawns[0].stderr.emit("data", "1 failing test\n");
   host.spawns[0].close(1);
@@ -105,7 +105,7 @@ test("request rows are stamped by request identity, not by a task id", async () 
   const request = { at: 7, prompt: "Do work", title: "Req", verificationRun: { key: "k-req", state: "queued" } };
   const host = drainHost({ requests: [request] });
   host.queue({ key: "k-req", taskId: agentModes.requestKey(request), commands: ["npm run check"] });
-  const drain = host.env.runVerificationJobs({});
+  const drain = host.env.runVerificationJobs();
   host.spawns[0].close(0);
   await drain;
   assert.equal(host.board().requests[0].verificationRun.state, "passed");
@@ -116,7 +116,7 @@ test("a landed result kicks one coalesced housekeeping pass instead of waiting f
   const host = drainHost();
   host.queue({ key: "k-a", taskId: "t-a", commands: ["check-a"] });
   host.queue({ key: "k-b", taskId: "t-b", commands: ["check-b"] });
-  const drain = host.env.runVerificationJobs({});
+  const drain = host.env.runVerificationJobs();
   host.spawns[0].close(0);
   host.spawns[1].close(0);
   await drain;
@@ -135,7 +135,7 @@ test("a landed result kicks one coalesced housekeeping pass instead of waiting f
 test("a project folder without package.json has its verification moved to the Studio checkout", async () => {
   const host = drainHost({ tasks: [{ id: "t-game", title: "Game fix", verificationRun: { key: "k-game", state: "queued" } }] });
   host.queue({ key: "k-game", taskId: "t-game", projectPath: "C:/game checkout", commands: ["npm run check"] });
-  const drain = host.env.runVerificationJobs({});
+  const drain = host.env.runVerificationJobs();
   host.spawns[0].close(0);
   await drain;
   assert.equal(host.spawns[0].cwd, "C:/fixture-studio", "npm cannot run where no package.json defines the script");
@@ -146,7 +146,7 @@ test("a project folder without package.json has its verification moved to the St
 test("a project that defines its own npm scripts keeps its own root", async () => {
   const host = drainHost();
   host.queue({ key: "k-app", taskId: "t-app", projectPath: "C:/fixture-root", commands: ["npm run check"] });
-  const drain = host.env.runVerificationJobs({});
+  const drain = host.env.runVerificationJobs();
   host.spawns[0].close(0);
   await drain;
   assert.equal(host.spawns[0].cwd, "C:/fixture-root");
@@ -159,7 +159,7 @@ test("a project that defines its own npm scripts keeps its own root", async () =
 test("a project's own wrapper check keeps the project root even without package.json", async () => {
   const host = drainHost({ tasks: [{ id: "t-love", title: "Game fix", verificationRun: { key: "k-love", state: "queued" } }] });
   host.queue({ key: "k-love", taskId: "t-love", projectPath: "C:/game checkout", commands: ['powershell -NoProfile -ExecutionPolicy Bypass -File "test\\run-check.ps1"'] });
-  const drain = host.env.runVerificationJobs({});
+  const drain = host.env.runVerificationJobs();
   host.spawns[0].close(0);
   await drain;
   assert.equal(host.spawns[0].cwd, "C:/game checkout", "the relative wrapper resolves against the project, so it stays the cwd");
@@ -184,7 +184,7 @@ test("a payload install with no npm checkout falls back to the app payload root"
   const host = drainHost();
   host.pkgRoots.delete("C:/fixture-studio");
   host.queue({ key: "k-orphan", taskId: "t-orphan", projectPath: "C:/game checkout", commands: ["npm run check"] });
-  const drain = host.env.runVerificationJobs({});
+  const drain = host.env.runVerificationJobs();
   host.spawns[0].close(0);
   await drain;
   assert.equal(host.spawns[0].cwd, "C:/fixture-payload");
@@ -201,7 +201,7 @@ test("identical base checks across a burst of done reports share one execution, 
   const created = Date.now() - 1000;
   host.queue({ key: "k-a", taskId: "t-a", projectPath: "C:/fixture-root", commands: ["npm run check"], createdAt: created });
   host.queue({ key: "k-b", taskId: "t-b", projectPath: "C:/fixture-root", commands: ["npm run check", "node --test tests/b.test.mjs"], createdAt: created });
-  const drain = host.env.runVerificationJobs({});
+  const drain = host.env.runVerificationJobs();
   assert.deepEqual(host.spawns.map((child) => child.command), ["npm run check"], "the second job joins the base check already running for the first");
   host.spawns[0].close(0);
   await host.flush();
@@ -217,7 +217,7 @@ test("identical base checks across a burst of done reports share one execution, 
   assert.ok(host.logs.some((line) => line.includes("shared with a sibling run")));
   // A job created after that check started cannot borrow it: its edits are newer.
   host.queue({ key: "k-c", taskId: "t-c", projectPath: "C:/fixture-root", commands: ["npm run check"], createdAt: Date.now() + 5000 });
-  const again = host.env.runVerificationJobs({});
+  const again = host.env.runVerificationJobs();
   assert.equal(host.spawns.length, 3, "a later attempt gets a fresh check");
   host.spawns[2].close(0);
   await again;
@@ -231,7 +231,7 @@ test("a base check that failed is shared as a failure, never re-run per card", a
   const created = Date.now() - 1000;
   host.queue({ key: "k-a", taskId: "t-a", projectPath: "C:/fixture-root", commands: ["npm run check"], createdAt: created });
   host.queue({ key: "k-b", taskId: "t-b", projectPath: "C:/fixture-root", commands: ["npm run check"], createdAt: created });
-  const drain = host.env.runVerificationJobs({});
+  const drain = host.env.runVerificationJobs();
   host.spawns[0].stderr.emit("data", "css merge failed\n");
   host.spawns[0].close(1);
   await drain;

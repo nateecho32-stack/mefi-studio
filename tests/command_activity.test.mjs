@@ -486,3 +486,27 @@ test("an unanswered readiness read releases its gate at the deadline and ignores
   assert.equal(env.state.backlog.summary, "Recovered snapshot");
   assert.equal(env.el.feedMetrics.children[0].textContent, "2Ready");
 });
+
+// The feed folds a repeat of the same line, keeps different lines apart, and
+// folds a streaming worker transcript into one live row so a single run cannot
+// push the run-history rows out of the 40.
+test("feed rows fold repeats and a worker transcript but keep distinct lines", () => {
+  const text = source.replace(/\r\n/g, "\n");
+  const from = text.indexOf("  const transcriptRow = ");
+  const to = text.indexOf("  function feedLine(item) {", from);
+  assert.ok(from > 0 && to > from, "pushFeed boundary");
+  const env = vm.createContext({ state: { feed: [], active: false }, renderFeed() {}, Date, Math });
+  vm.runInContext(text.slice(from, to), env);
+  env.pushFeed({ id: "hist-1-started", noFold: true, kind: "run", text: "started: Fix the settings panel" });
+  env.pushFeed({ kind: "log", text: "[autopilot] verified \"Fix the settings panel\"" });
+  env.pushFeed({ kind: "log", text: "[assistant] foreman asked to hand out work (queue waiting for dispatch)" });
+  env.pushFeed({ kind: "log", text: "[assistant] foreman asked to hand out work (queue waiting for dispatch)" });
+  for (let step = 0; step < 60; step += 1) env.pushFeed({ kind: "log", text: `[opencode] step ${step}: read src/file${step}.js` });
+  const rows = env.state.feed.map((row) => `${row.kind}:${row.count ?? 1}:${row.text}`);
+  assert.deepEqual(rows, [
+    "log:60:[opencode] step 59: read src/file59.js",
+    "log:2:[assistant] foreman asked to hand out work (queue waiting for dispatch)",
+    "log:1:[autopilot] verified \"Fix the settings panel\"",
+    "run:1:started: Fix the settings panel",
+  ]);
+});
