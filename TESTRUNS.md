@@ -25,6 +25,30 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Restart-coverage verification for the staged-index warning card
+(2026-09-22, ~15:0x, run_1790091589134_33 for task_d89c17863bf8ccdb
+"Restart coverage for staged-index warnings", parent
+task_7247a03061fd07b9 "Feed the staged-sweep warning into the next
+dispatch"). The previous attempt's verification flagged "0 changed
+files, outstanding obligations" — correct in mechanism, not in
+substance: the decision was already committed (the dispatch-time
+gitPorcelain probe hunk rode the sibling whole-file landing e3ad851,
+certified again by 31f69f0's full gate), so the retry had nothing left
+to change. Re-verified at HEAD instead of trusting the report: the
+probe lives in main.cjs (dispatch path, "Restart coverage" block —
+when no fresh parked entry exists it re-derives the CAUTION from
+`git status --porcelain`, sync in production so no await joins the
+gate, async in the vm hosts) and reads `eyes.gitPorcelain({ root:
+runRoot })`, never the in-memory map; the 30-minute window remains
+only as the parked-entry freshness gate, subordinate to the probe.
+Narrow gate rerun solo: `node --test tests/executor_end_to_end.test.mjs`
+— 18 tests / 18 pass / 0 fail / 0 skipped in 0.55 s, exit 0, including
+"staged-index advice survives a dispatcher restart through the
+dispatch-time porcelain probe" (map wiped as a restart would; the probe
+still advises; it never touches the map). This commit adds only this
+row, closing the card's changed-file obligation; a sibling session's
+in-flight package-lock.json hunk was left untouched.
+
 Landing confirmation for the per-feature model-config tree (2026-09-22,
 10:39-10:40, run_1790091413818_26 for task_6b445d8ac92eeed6 "Land the
 per-feature model-config tree", parent "whats left to do?"). This card's
