@@ -29,6 +29,33 @@ only above the anchor (decision recorded 2026-09-22, pinned by
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - post-commit gate rerun closes the main.cjs refactor card: 89e4dc9 landed the gated 34+/20- bytes, landed-parity re-verified at HEAD, check green (103 files), node 2091/2088/0/3, Python 247 OK, lock green (task_c5a704c58fcda993, run run_1790107034713_1)
+
+The follow-up the 42797b9 row owed. The loop-cleanup sibling's commit landed
+as 89e4dc9 ("Do the agent loop's housekeeping once and log less noise; fold
+worker transcripts in the feed") with main.cjs at exactly 34 insertions /
+20 deletions - the state the previous pass gated - plus its test, doc and
+CHANGELOG files. Landed-byte parity re-verified at HEAD 76ee209 (no later
+commit touches main.cjs): `consecutiveFailures` 0 references repo-wide;
+`doneClearing` still declared at main.cjs:7379 owned by the clear path
+(guard 7381/7382, reset 7437, trim guard 7547); `runVerificationJobs()`
+parameter-less at main.cjs:10857 with both call sites (10234, 10881)
+matching; the commit diff carries the setAutopilotWaiting measurement-only
+masking, the overseerMiss settle-note helper, `delete next.verification`
+evidence-streak restart, and the learn-loop guard against a project switch
+mid-merge; no `ipcMain.handle/on` registration lines touched. Official
+post-commit rerun: `npm run check` exit 0 (103 targets, testruns gate 60
+live rows); `npm test` node stage 2091 tests / 2088 pass / 0 fail /
+3 skipped (43 s, serialized eyes/occlusion suites green - cleaner than the
+prior pass, whose lone brains_ui vm-read red is the documented rotating
+environmental row), Python 247 OK (44 s), normalized-path lock audit green.
+Caveat: the tree was not fully quiet - the brains-store sibling's
+uncommitted dirt (main.cjs 4+/2- confined to brainsState/brainsSave,
+preload.cjs, scripts/brains.cjs, tests/brains_{map,store}.test.mjs,
+CHANGELOG.md) sat in the worktree; those suites ran green in-stage anyway,
+and their quiet-tree slice-commit stays with their own card
+(task_7aae675692432cb7). This commit touches only this row.
+
 ## 2026-09-22 late evening - TESTRUNS append helper scripts/append-testruns-row.mjs: lock-serialized atomic newest-first insertion with gate-audit rollback; contracts tests/append_testruns_row.test.mjs 9/9 (run_1790106299967_29, task_1ce49050ba42afe1)
 
 The write-side companion to scripts/check-testruns.mjs (a1eea61): instead of
