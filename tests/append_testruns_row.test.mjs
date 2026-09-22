@@ -7,7 +7,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, readdirSync, renameSync, rmSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -147,6 +147,39 @@ test("rejects malformed blocks and duplicate headings without touching the file"
     assert.throws(() => appendTestrunsRow(root, "## 2026-09-22 noon - helper run (run_c)\n\nBody c again.\n"), /duplicate H2/);
     assert.equal(readFileSync(join(root, "TESTRUNS.md"), "utf8"), pristine, "refusals left the file byte-identical");
     assert.deepEqual(auditTestruns(root).problems, []);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("repeated appends accumulate newest-first and a heading-only row is accepted", () => {
+  const root = makeFixture();
+  try {
+    appendTestrunsRow(root, "## 2026-09-21 noon - first extra (run_e1)\n\nBody e1.\n");
+    appendTestrunsRow(root, "## 2026-09-22 noon - second extra (run_e2)\n\nBody e2.\n");
+    const text = read(root);
+    const i22 = text.indexOf("## 2026-09-22 noon - second extra (run_e2)");
+    const i21 = text.indexOf("## 2026-09-21 noon - first extra (run_e1)");
+    const i20 = text.indexOf("## 2026-09-20 evening - second run (run_b)");
+    assert.ok(i22 !== -1 && i21 !== -1 && i20 !== -1, "every append survives");
+    assert.ok(i22 < i21 && i21 < i20, "later appends stack newest-first above earlier ones");
+    assert.ok(text.includes("Body b.") && text.includes("Body e1.") && text.includes("Body e2."), "no earlier row body was dropped");
+    assert.equal(text.indexOf("# Test Runs"), 0, "preamble untouched");
+    assert.deepEqual(auditTestruns(root).problems, []);
+
+    // A canonical row built with no body renders as a heading-only block.
+    const headingOnly = rowFromFields({ date: "2026-09-23", title: "heading only" });
+    assert.equal(headingOnly, "## 2026-09-23 - heading only\n");
+    const res = appendTestrunsRow(root, headingOnly);
+    const lines = read(root).split("\n");
+    assert.equal(lines[res.insertLine - 1], "## 2026-09-23 - heading only");
+    assert.equal(lines[res.insertLine], "", "one blank line separates the heading-only row from the next");
+    assert.ok(res.insertLine - 1 < lines.indexOf("## 2026-09-22 noon - second extra (run_e2)"), "lands at the true top");
+    assert.deepEqual(auditTestruns(root).problems, []);
+
+    // A nonexistent package root is surfaced as the same refusal, not swallowed.
+    assert.throws(() => appendTestrunsRow(join(root, "nope"), "## 2026-09-24 noon - x (run_x)\n\nb.\n"), /TESTRUNS\.md not found/);
+    assert.equal(read(root).includes("(run_x)"), false, "the refused row never landed in the real file");
   } finally {
     cleanup(root);
   }
@@ -384,6 +417,35 @@ test("a save landing after the row is staged is caught by the pre-swap verify, n
     const after = readFileSync(target, "utf8");
     assert.ok(after.includes("late intruder save"), "the concurrent save survives in the tight window");
     assert.ok(!after.includes("(run_c)"), "the helper's row never landed");
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("a save during a failed-rename retry is caught before the next attempt, not clobbered", () => {
+  const root = makeFixture();
+  const target = join(root, "TESTRUNS.md");
+  try {
+    const pristine = readFileSync(target, "utf8");
+    let calls = 0;
+    // The injected rename fails like a Windows AV/OneDrive hold on the first
+    // attempt and lets a non-cooperating editor save during the retry sleep.
+    // The next attempt must re-verify the snapshot and abort, not clobber it.
+    const rename = (src, dst) => {
+      calls++;
+      writeFileSync(target, `${pristine}## 2026-09-24 noon - retry-window intruder (run_r)\n\nIntruder body.\n`);
+      const err = new Error("EPERM: simulated rename hold");
+      err.code = "EPERM";
+      throw err;
+    };
+    assert.throws(
+      () => appendTestrunsRow(root, "## 2026-09-22 noon - helper run (run_c)\n\nBody c.\n", { hooks: { rename } }),
+      /changed mid-run/,
+    );
+    assert.equal(calls, 1, "the retry was aborted by the re-verify after the first failed swap");
+    const after = readFileSync(target, "utf8");
+    assert.ok(after.includes("retry-window intruder"), "the save during the retry window survives");
+    assert.ok(!after.includes("(run_c)"), "the helper's row never landed via a later rename attempt");
   } finally {
     cleanup(root);
   }

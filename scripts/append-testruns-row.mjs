@@ -69,7 +69,7 @@ function acquireLock(target) {
   }
 }
 
-function atomicReplace(target, buf, { expectCurrent = null, beforeRename = null } = {}) {
+function atomicReplace(target, buf, { expectCurrent = null, beforeRename = null, rename = renameSync } = {}) {
   const tmp = join(dirname(target), `.${basename(target)}.new-${process.pid}-${Math.random().toString(36).slice(2, 8)}`);
   const fh = openSync(tmp, "w");
   try {
@@ -80,29 +80,35 @@ function atomicReplace(target, buf, { expectCurrent = null, beforeRename = null 
   }
   try {
     if (beforeRename) beforeRename();
-    // Compare-and-swap as close to the rename as the OS allows. The
-    // replacement bytes are already staged and fsynced, so re-reading here
-    // leaves only the read->rename window: a non-cooperating save that landed
-    // at any point since the snapshot read is detected and aborts with no
-    // write (the staged temp is discarded below) instead of being clobbered.
-    if (expectCurrent) {
+    // Compare-and-swap as close to the swap as the OS allows. The replacement
+    // bytes are already staged and fsynced; the snapshot is re-verified
+    // immediately before EVERY swap attempt (not once before the retry loop)
+    // and before the copy fallback. A failed rename under a Windows AV/OneDrive
+    // hold triggers up to two 150 ms sleeps, the widest window for a
+    // non-cooperating save to land - verifying each attempt aborts with no
+    // write (the staged temp is discarded below) instead of letting the next
+    // attempt clobber that editor's bytes.
+    const verifyCurrent = () => {
+      if (!expectCurrent) return;
       const current = readFileSync(target);
       if (!Buffer.isBuffer(current) || !current.equals(expectCurrent)) {
         throw new Error(
           "append-testruns-row: TESTRUNS.md changed mid-run while staging the row - no write performed, re-run to append onto the fresh content"
         );
       }
-    }
+    };
     let lastErr = null;
     for (let attempt = 0; attempt < 3; attempt++) {
+      verifyCurrent();
       try {
-        renameSync(tmp, target);
+        rename(tmp, target);
         return "rename";
       } catch (err) {
         lastErr = err;
         sleep(150); // Windows: AV or OneDrive can hold the target briefly
       }
     }
+    verifyCurrent();
     copyFileSync(tmp, target); // not atomic, but content-complete last resort
     console.error(`append-testruns-row: rename kept failing (${lastErr && lastErr.code}); fell back to copyFileSync`);
     return "copy-fallback";
@@ -269,7 +275,7 @@ export function appendTestrunsRow(packageRoot, blockText, { dryRun = false, hook
     // allows); any byte drift aborts with no write and the caller re-runs
     // onto the fresh content instead.
     const written = Buffer.from(spliceRow(text, plan, eol), "utf8");
-    const how = atomicReplace(target, written, { expectCurrent: raw, beforeRename: hooks.beforeRename });
+    const how = atomicReplace(target, written, { expectCurrent: raw, beforeRename: hooks.beforeRename, rename: hooks.rename });
     if (hooks.afterWrite) hooks.afterWrite(written);
     const post = auditTestruns(packageRoot);
     if (post.problems.length > 0) {
