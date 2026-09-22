@@ -25,6 +25,29 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - sixth-gen carrier retry re-verified green on the twice-moved tree, HEAD drifted 9788722 -> c2ced15 and every repo-side obligation still holds (task_261f3a1af9aeda2d, run run_1790103104379_13)
+
+Retry of the split-out card; the prior run's row (4f4dcd9) is context, not
+proof, and the reviewer-flagged drift was real: HEAD moved six commits past
+9788722 (through the 456+/317− main.cjs landing 2457a7d) before this run, then
+once more mid-run (adf21a7 -> c2ced15). All checks re-run first-hand at
+c2ced15, not from reports: feature commits c272b58 / 136f866 / e3ad851 /
+31f69f0 / d1c4d78 / 96d15c6 plus evidence rows 23bdd5c / a973b73 / 009da87 all
+ancestors of HEAD (`git merge-base --is-ancestor`, 9/9 true); wiring live at
+HEAD (`require("./scripts/executor-worktrees.cjs")` main.cjs:59,
+`worktreeManager` gate 9492-9521, per-run `cwd: entry.worktree?.path ||
+runRoot` at 10383/10397/10415/10436 — line numbers shifted with 2457a7d,
+content intact); opt-in exact (`scripts/executor-worktrees.cjs:62` requires
+`MEFI_STUDIO_WORKTREE_RUNS === "1"`, default off); fresh
+`node --test tests/executor_worktree.test.mjs` -> 11 tests / 11 pass / 0 fail,
+exit 0 (10.9 s); `.mefi` absent and `git worktree list` shows only the five
+standing checkouts (main/mb/mm/wt-command-visuals/wt-ux-phase0) — no per-run
+residue. Both landing cards re-read from the store read-only:
+task_7b773505d7c6eb43 and task_2dd9dc18291f2625 still open, so the owner-only
+flip goes out via MEFI_ASK again; it is not this card's remainder. Nothing in
+this card's own scope remains owed; task store untouched; sibling in-flight
+files left exactly as found; this commit adds only this row.
+
 ## 2026-09-22 late evening - parent-gate follow-up retry settles its remaining-prose shape - chain green first-hand at HEAD 17ba279, flip target resolved in its own lane (task_ad390ff083105169, run run_1790102799243_5)
 
 Retry 1's "unverified — outstanding obligations remain" was the prose-shape
