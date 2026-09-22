@@ -82,7 +82,7 @@ test("a foreman finishing after Pause retains cleanup and idea handoffs until Re
   const dispatch = new Promise((resolve) => { finishDispatch = resolve; });
   Object.assign(h.env, {
     autopilot: { execute: true, jobs: [], parallel: 1 }, assistantCache: {}, MINUTE_MS: 60000,
-    autopilotHousekeeping: async () => {}, promoteRequestsToTasks: async () => {}, executeNextRequest: () => dispatch,
+    autopilotHousekeeping: async () => {}, classifyPendingWork: async () => ({ ok: true }), promoteRequestsToTasks: async () => {}, executeNextRequest: () => dispatch,
   });
   h.env.assistantState.status = "running";
   vm.runInContext(section("async function assistantForemanJob(", "// The thinker: the assistant itself."), h.env);

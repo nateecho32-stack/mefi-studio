@@ -68,7 +68,7 @@ test("the proactive pass, the foreman ask and the executor fill all wait on the 
     autopilot, TASKS_PATH: "tasks", assistantState: null,
     getEyes: async () => ({ readJson: async () => [] }),
     autopilotProactivePass: async () => { passes += 1; return { added: 0 }; },
-    autopilotHousekeeping: async () => {}, promoteRequestsToTasks: async () => {}, refreshAutopilotQueue: async () => {},
+    autopilotHousekeeping: async () => {}, classifyPendingWork: async () => ({ ok: true }), promoteRequestsToTasks: async () => {}, refreshAutopilotQueue: async () => {},
     pushAutopilotHistory() {}, emitAutopilot() {}, assistantAskForWork() { asks += 1; },
   });
   assert.deepEqual(plain(await pass.autopilotPass()), { ok: true, skipped: "held" });

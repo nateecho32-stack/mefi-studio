@@ -66,11 +66,12 @@ const { createMusicRecommender } = require("./scripts/music-recommendations.cjs"
 const { attachRendererRecovery } = require("./scripts/renderer-recovery.cjs");
 const { createEyesClient, wrapEyes } = require("./scripts/eyes-client.cjs");
 const { createModelPerformanceStore } = require("./scripts/model-performance.cjs");
-const { limitsFromPlan, aggregateUsage, mergeLedgers, opencodeWindows, parseOpencodeUsage, describeOpencodeStatus, describeAccountStatus,
+const { limitsFromPlan, aggregateUsage, mergeLedgers, rollupUsage, formatUsage, opencodeWindows, parseOpencodeUsage, describeOpencodeStatus, describeAccountStatus,
   parseOpenrouterKey, parseOpenrouterCredits, parseGatewayCredits, parseZaiQuota, providerInfo,
   parseClaudeCliResult, parseGrokCliResult, parseAntigravityCliResult, parseCodexCliResult } = require("./scripts/usage-tracker.cjs");
 const { createPerformanceProfiler } = require("./scripts/performance-profiler.cjs");
 const { buildContext } = require("./scripts/context-manager.cjs");
+const { scrubOutbound } = require("./scripts/redaction.cjs");
 const electron = require("electron");
 
 if (typeof electron === "string" || !electron.app) {
@@ -1236,6 +1237,95 @@ async function jevStatus() {
   return { configured: Boolean(resolved), enabled: settings.jevShadow !== false,
     route, routeLabel: config.routeLabel, routes,
     model: config.model, accountingPending: jevPendingCharges.length, ...queue.status() };
+}
+
+// What SHAPE is this work, so Auto can size the shortlist? The owner's dial
+// stays authoritative: an explicit Free/Fast/Heavy tier pins the model before
+// this is ever read (executorRunEnv returns early, and only the Auto branch
+// sets modelProvider "zai"), so a shape can only bias the Auto case.
+//
+// Held in memory, never written to the board. A classifier answer is a
+// routing hint for this session, not task data — the same rule the shadow
+// intake follows, and the same shape as applyModelRouting's own result cache.
+// Losing it on restart costs one unclassified dispatch, which is exactly how
+// every task is dispatched today.
+//
+// It runs on the tick, not at task creation and not inside spawnNextJob's
+// claim: a classification round trip has no business inside a board
+// transaction or on the chat path.
+const WORK_SHAPE_PER_PASS = 3;
+const WORK_SHAPE_TTL_MS = 30 * 60 * 1000;
+const WORK_SHAPE_CACHE_MAX = 200;
+const workShapeCache = new Map();
+
+function workShapeFor(taskId, now = Date.now()) {
+  const held = workShapeCache.get(taskId);
+  if (!held) return null;
+  if (now - held.at > WORK_SHAPE_TTL_MS) {
+    workShapeCache.delete(taskId);
+    return null;
+  }
+  return held.shape;
+}
+
+function rememberWorkShape(taskId, shape, now = Date.now()) {
+  workShapeCache.set(taskId, { shape, at: now });
+  // Oldest out first; a long-lived session must not grow this without bound.
+  while (workShapeCache.size > WORK_SHAPE_CACHE_MAX) {
+    const oldest = workShapeCache.keys().next();
+    if (oldest.done) break;
+    workShapeCache.delete(oldest.value);
+  }
+}
+
+async function classifyPendingWork() {
+  const settings = await readSettings();
+  if (settings.jevShadow === false) return { ok: true, defer: true, reason: "disabled" };
+  const [client, classification, eyes] = await Promise.all([
+    loadModule("scripts/decision-client.mjs"), loadModule("scripts/work-classification.mjs"), getEyes(),
+  ]);
+  const now = Date.now();
+  const tasks = await eyes.readJson(TASKS_PATH, []);
+  const pending = tasks
+    .filter((task) => task?.id && task.title && !task.runId && !workShapeFor(task.id, now) && (!task.status || ["open", "pending", "queued"].includes(task.status)))
+    .slice(0, WORK_SHAPE_PER_PASS);
+  if (!pending.length) return { ok: true, attempted: false, shaped: 0 };
+
+  const route = client.resolveJevRoute(settings);
+  const resolved = client.resolveApiKey({ settings, decrypt: decryptKey, route });
+  const standIn = !resolved && typeof standInJudge === "function" ? await standInJudge(settings, "intake") : null;
+  if (!resolved && !standIn) return { ok: true, defer: true, reason: "no-key" };
+  if (!standIn) {
+    try { await flushJevCharges(); }
+    catch { return { ok: true, defer: true, reason: "accounting-pending" }; }
+  }
+
+  let shaped = 0;
+  for (const task of pending) {
+    const { questions, stateContext } = classification.workShapeQuestions({ title: task.title, brief: task.prompt ?? "" });
+    const result = standIn
+      ? await standIn.classify({ questions, state: stateContext, config: { timeoutMs: standIn.timeoutMs } })
+      : await client.classify({ questions, state: stateContext, apiKey: resolved.key, config: client.gatewayConfig({ route }) });
+    if (!standIn) await chargeJevCall(result, "jev-work-shape", route);
+    // A refused or malformed answer leaves the task unshaped so a later pass
+    // may try again; it never caches the fallback as if it were an answer.
+    if (!result.ok) {
+      logLine(`[jev] work shape unavailable: ${assistantClip(result.error, 160)}`);
+      continue;
+    }
+    const shape = classification.interpretWorkShape(result.answers);
+    if (!shape.intent) continue;
+    rememberWorkShape(task.id, shape, Date.now());
+    shaped += 1;
+    policyRecord("jev-work-shape", {
+      taskId: task.id,
+      title: assistantClip(task.title, 160),
+      intent: shape.intent, complexity: shape.complexity, weight: shape.weight, role: shape.role,
+      model: result.model, elapsedMs: result.elapsedMs,
+    });
+  }
+  if (shaped) logLine(`[jev] shaped ${shaped} task(s) for Auto routing`);
+  return { ok: true, attempted: true, shaped };
 }
 
 function probeJev() {
@@ -2668,6 +2758,14 @@ async function executorRunEnv() {
 }
 
 async function assistantFetch(system, user, maxTokens = 6000, { role = "routine", taskType = role } = {}) {
+  // The transmission gate. Every assistant call — chat, the cadence passes,
+  // the overseer, ideas, the analyzer, setup assist, the judge and the probe —
+  // funnels through here, and the HTTP body is built from `user` a few lines
+  // down while the CLI routes write it to stdin, so scrubbing once here covers
+  // both transports and all eight callers. Callers bound their own payloads;
+  // this only rewrites, never truncates. The system prompts are ours and hold
+  // no user content, so they are left alone.
+  user = scrubOutbound(user);
   const route = await resolveAiRoute(role);
   if (!route.ok) return route;
   // Grok, Claude Code, Codex and Antigravity ride their CLI, not an HTTP
@@ -8433,7 +8531,7 @@ async function spawnNextJob() {
   // changes. CLI-owned accounts retain their configured/default models.
   if (runRoute.modelProvider === "zai") {
     const selected = await applyModelRouting({ ok: true, provider: "zai", model: runRoute.model },
-      { worker: true, taskType: "coding", task: `${job.title}\n${job.prompt}` });
+      { worker: true, taskType: "coding", role: workShapeFor(job.ref?.id)?.role === "heavy" ? "heavy" : "routine", task: `${job.title}\n${job.prompt}` });
     // Only the advertised managed provider models may enter a shell command.
     if ([ZAI_MODEL_ROUTINE, ZAI_MODEL_HEAVY].includes(selected.model)) {
       runRoute.model = selected.model;
@@ -8700,6 +8798,30 @@ async function spawnNextJob() {
       memoryBit = ` Memory: ${compiled.primer.join("; ")}.${compiled.dig ? " DIG REQUIRED: a superseded fact is in that list, verify it before editing." : ""}`;
     }
   } catch {}
+  // Where this corner of the tree usually keeps its work, learned from
+  // attempts that actually verified. A task that declares a file scope is
+  // answered for those areas; one that declares none gets the project's
+  // overall hot files, which is still a better starting point than nothing.
+  let pathsBit = "";
+  try {
+    const declared = [...(Array.isArray(job.ref?.files) ? job.ref.files : []), job.ref?.file].filter((file) => typeof file === "string" && file.trim());
+    const areas = [...new Set(declared.map((file) => assistantModule?.areaOf?.(file)).filter(Boolean))];
+    const seen = new Set();
+    const hot = [];
+    const cold = [];
+    for (const area of areas.length ? areas : [""]) {
+      const found = assistantModule?.pathsForArea?.(assistantState?.overseer, area, 3);
+      for (const kind of ["hot", "cold"]) {
+        for (const entry of found?.[kind] ?? []) {
+          if (seen.has(entry.file)) continue;
+          seen.add(entry.file);
+          (kind === "hot" ? hot : cold).push(entry.file);
+        }
+      }
+    }
+    if (hot.length) pathsBit = ` Usually carries this work: ${hot.slice(0, 4).join(", ")}.`;
+    if (cold.length) pathsBit += ` Looked at before and was not the answer: ${cold.slice(0, 3).join(", ")} - check, do not assume.`;
+  } catch {}
   const failBit = job.ref?.lastRunError
     ? ` Previous run failed (${String(job.ref.lastRunError).slice(0, 160)}). Diagnose and resolve that failure, then finish the original work.`
     : "";
@@ -8728,13 +8850,14 @@ async function spawnNextJob() {
   const failFlat = failBit.replace(/["\r\n]+/g, " ").slice(0, 240);
   const memoryFlat = memoryBit.replace(/["\r\n]+/g, " ").slice(0, 480);
   const collabFlat = collabBit.replace(/["\r\n]+/g, " ").slice(0, 320);
+  const pathsFlat = pathsBit.replace(/["\r\n]+/g, " ").slice(0, 240);
   const clusterFlat = clusterBrief ? ` ${clusterBrief.replace(/[\r\n]+/g, " ").slice(0, 2400)} ` : "";
   const resumeBrief = executorResume.brief({ ...job.ref, runProgress: entry.resumeCheckpoint });
   const resumeFlat = resumeBrief ? ` ${resumeBrief}\n\n` : "";
   const tailFlat = tail.replace(/["\r\n]+/g, " ");
   const promptBudget = Math.max(
     240,
-    EXECUTOR_PROMPT_MAX - tailFlat.length - instructions.length - titleBit.length - failFlat.length - memoryFlat.length - collabFlat.length - clusterFlat.length - resumeFlat.length - 8,
+    EXECUTOR_PROMPT_MAX - tailFlat.length - instructions.length - titleBit.length - failFlat.length - memoryFlat.length - pathsFlat.length - collabFlat.length - clusterFlat.length - resumeFlat.length - 8,
   );
   // The durable brief carries prior findings and successful prerequisite
   // outputs into the next worker instead of restarting from a short title.
@@ -8743,7 +8866,7 @@ async function spawnNextJob() {
     job.prompt = recovery + taskContext.buildTaskHandoff(job.ref, { tasks, maxChars: Math.max(1000, promptBudget - recovery.length) });
   }
   const body = String(job.prompt ?? "").slice(0, promptBudget);
-  const head = `${titleBit}${resumeFlat}${body}${failFlat}${memoryFlat}${collabFlat}${clusterFlat}${instructions}`;
+  const head = `${titleBit}${resumeFlat}${body}${failFlat}${memoryFlat}${pathsFlat}${collabFlat}${clusterFlat}${instructions}`;
   const prompt = `${head}${tailFlat}`;
   // finish() sits above the spawn so a synchronous spawn failure (argument
   // rejects, resource exhaustion — 'error' is the normal channel) still
@@ -9926,7 +10049,7 @@ async function autopilotHousekeeping() {
     return Number.isFinite(since) && since > 0 && Number.isFinite(until) && until > 0 && until >= since ? { since, until } : null;
   };
   const evidenceKey = (attempt, window) => `${attempt.sessionId}|${window.since}|${window.until}`;
-  const evidence = { changes: new Map(), checks: new Map(), commits: new Map() };
+  const evidence = { changes: new Map(), checks: new Map(), commits: new Map(), reads: new Map() };
   // What this pass could not settle yet, and when to look again: a card
   // inside its evidence dwell is due when the dwell expires; a card whose
   // overseer check is still running is settled by that result's own kick;
@@ -9992,6 +10115,17 @@ async function autopilotHousekeeping() {
           evidence.checks.set(key, { error: String(error?.message ?? error) });
         }
       }
+      // The files the worker opened and left alone. Only a verified attempt
+      // ever reads this, and an unavailable store simply teaches nothing —
+      // unlike changes and checks, a missing read set never holds a card in
+      // review, because path memory is an optimisation and not evidence.
+      if (!evidence.reads.has(key) && typeof eyes.listReads === "function") {
+        try {
+          evidence.reads.set(key, await eyes.listReads({ sessionId: attempt.sessionId, ...window, limit: 400 }));
+        } catch {
+          evidence.reads.set(key, { available: false, files: [] });
+        }
+      }
       // A commit-only deliverable claims its commit in the result note; the
       // runner observes that claim against the repo (does the hash resolve,
       // is the scoped path clean) on the eyes worker before the evaluator
@@ -10043,6 +10177,7 @@ async function autopilotHousekeeping() {
     // sessions, and reported check failures all stay unverified; retries are
     // bounded (verifyAttempts) so an unprovable job cannot loop forever.
     let changedByVerify = false;
+    let pathsLearned = false;
     const verifyNotes = [];
     const waitForEvidence = (row) => {
       const reason = "Waiting for the attempt's recorded execution evidence";
@@ -10205,6 +10340,22 @@ async function autopilotHousekeeping() {
             { at: now, kind: "status", text: `verified — ${evidenceText}${Array.isArray(task.remaining) && task.remaining.length ? `, ${task.remaining.length} follow-up(s) handed on` : ""}` },
           ].slice(-40);
           verifyNotes.push(`verified "${assistantClip(task.title, 60)}"`);
+          // Only a verified attempt teaches the path memory: the files it
+          // really changed become hot for their area, and the files it opened
+          // and left alone become cold. An unverified run's file set would
+          // train the board on its own failures, so this sits inside the
+          // verified branch and nowhere else.
+          try {
+            const window = attemptEvidenceWindow(attempt);
+            const key = window ? evidenceKey(attempt, window) : null;
+            const changed = files.flatMap((row) => (row.files?.length ? row.files : [row.file])).filter(Boolean);
+            const readSet = key ? evidence.reads.get(key) : null;
+            const explored = readSet?.available ? readSet.files : [];
+            if (changed.length) {
+              assistantState.overseer = assistant.mergePaths(assistantState.overseer, { changed, explored, root: task.projectPath ?? projectRoot() }, now);
+              pathsLearned = true;
+            }
+          } catch {}
         } else {
           task.verifyAttempts = verdict.attemptNo;
           task.status = "open";
@@ -10302,8 +10453,12 @@ async function autopilotHousekeeping() {
     }
     patch.verifyNotes = verifyNotes;
     patch.policyReceipts = policyReceipts;
+    patch.pathsLearned = pathsLearned;
     return patch;
   });
+  // A verified attempt taught the path memory inside the lock; persist the
+  // playbook here, outside it, through the ordinary throttled save.
+  if (result.pathsLearned) saveAssistant().catch(() => {});
   // Policy Lab PR0 — receipts land in the append-only store and a
   // verification event links each attempt to its receipt in the experience
   // log. Fire-and-forget on purpose: a failed append must never fail
@@ -10372,6 +10527,7 @@ async function autopilotPass() {
       }
       await autopilotHousekeeping();
       await promoteRequestsToTasks();
+      await classifyPendingWork().catch((error) => logLine(`[jev] work shaping failed: ${error.message}`));
       if (draining && assistantState.status !== "paused" && autopilot.execute) await admitBacklogIdeas();
       const tasks = await eyes.readJson(TASKS_PATH, []);
       autopilot.tasksManaged = tasks.filter((task) => task?.source === "a-eyes").length;
@@ -11848,6 +12004,44 @@ function registerIpc() {
         coverage: store.ok
           ? "Totals cover the calls Studio made for this project (assistant HTTP and CLI routes, Jev, speed probes) plus every assistant turn OpenCode's own store holds for coding sessions under this project folder, with the cost each provider reported. A plan or subscription reports no per-call cost, so those calls stay unpriced rather than free."
           : "Totals cover the calls Studio made for this project (assistant HTTP and CLI routes, Jev, speed probes). The OpenCode store could not be read this time, so coding sessions are missing from these numbers until it can.",
+      };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
+
+  // What one card cost. The same two ledgers the tracker reads, scoped to this
+  // task's attempt rather than to a day: the worker's turns by session and
+  // window, Studio's own calls by run id. Only the latest attempt is recorded
+  // on a task, so this is that attempt's cost, not the card's lifetime.
+  ipcMain.handle("usage:task", async (_event, { taskId } = {}) => {
+    try {
+      const now = Date.now();
+      const eyes = await getEyes();
+      const tasks = await eyes.readJson(TASKS_PATH, []);
+      const task = tasks.find((row) => row.id === taskId);
+      if (!task) return { ok: false, error: "That task is not on the board." };
+      const attempt = task.lastAttempt ?? {};
+      const since = Number(attempt.startedAt) || Number(/^run_(\d+)_/.exec(String(attempt.runId ?? ""))?.[1]);
+      const until = Number(attempt.at);
+      const scope = [];
+      if (attempt.runId) scope.push({ runId: String(attempt.runId) });
+      if (attempt.sessionId && Number.isFinite(since) && Number.isFinite(until) && until >= since) {
+        scope.push({ sessionId: String(attempt.sessionId), since, until });
+      }
+      if (!scope.length) return { ok: true, taskId, measured: false, summary: null, line: "", note: "This task has no recorded attempt yet." };
+      const [state, store] = await Promise.all([modelPerformanceStore().read(), codingSessionUsage(now)]);
+      const merged = mergeLedgers({ studio: state.observations, store: store.rows });
+      const summary = rollupUsage(merged, scope);
+      return {
+        ok: true,
+        taskId,
+        measured: summary.calls > 0,
+        summary,
+        line: formatUsage(summary),
+        // Say plainly when half the picture is missing rather than showing a
+        // total that silently leaves the worker's turns out.
+        note: store.ok ? null : "The OpenCode store could not be read, so this attempt's coding turns are missing from these numbers.",
       };
     } catch (error) {
       return { ok: false, error: error.message };

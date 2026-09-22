@@ -39,6 +39,7 @@ const EYES_WORKER_METHODS = Object.freeze([
   "sessionDirectory",
   "findRunSession",
   "listChanges",
+  "listReads",
   "listSessionChecks",
   "listTodos",
   "activitySince",

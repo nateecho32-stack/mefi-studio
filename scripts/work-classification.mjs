@@ -147,3 +147,94 @@ export function interpretMessageKind(answer) {
       return { action: "hold-for-review", reason: "uncertain classification: a human or retry decides" };
   }
 }
+
+// ---- question 3: what shape is this work, so routing can size the model? ----------
+// Studio's dial is the owner's: an explicit Free/Fast/Heavy tier is never
+// overridden. This answers only the Auto case, where the tier already means
+// "decide per task" — and it decides the ROLE that picks the candidate set,
+// not the model. Jev (or the stand-in judge) still chooses from those
+// candidates. Classification biases the shortlist; it never dispatches.
+
+export const WORK_INTENTS = Object.freeze(["explore", "analyze", "implement", "document"]);
+export const WORK_COMPLEXITIES = Object.freeze(["atomic", "compound", "systemic"]);
+export const WORK_WEIGHTS = Object.freeze(["light", "balanced", "deep"]);
+
+// The routing table, one cell per (intent, complexity). A frozen object rather
+// than a switch because a test can then assert the product is fully covered —
+// the stand-in for the compile-time exhaustiveness a typed language would give.
+// Adding a value to either axis fails tests/work_complexity.test.mjs until the
+// cell is filled in on purpose.
+//
+// The shape of the rule: anything systemic reaches for the capable model,
+// because architectural blast radius is where a weak model costs the most;
+// multi-file implementation joins it for the same reason. Documentation and
+// single-file exploration are lookups.
+export const WORK_WEIGHT_TABLE = Object.freeze({
+  "explore:atomic": "light",
+  "explore:compound": "balanced",
+  "explore:systemic": "deep",
+  "analyze:atomic": "balanced",
+  "analyze:compound": "balanced",
+  "analyze:systemic": "deep",
+  "implement:atomic": "balanced",
+  "implement:compound": "deep",
+  "implement:systemic": "deep",
+  "document:atomic": "light",
+  "document:compound": "light",
+  "document:systemic": "balanced",
+});
+
+// Unclassified work routes exactly the way it does today. Misrouting a
+// systemic job to the cheap shortlist is worse than never having classified
+// it, so every failure — no key, a timeout, an unknown answer — lands here.
+export const WORK_SHAPE_DEFAULT = Object.freeze({ intent: null, complexity: null, weight: "balanced", role: "routine", reason: "unclassified: routed the way an unclassified task is routed today" });
+
+export function workShapeQuestions({ title = "", brief = "" } = {}) {
+  const name = clip(title, 200);
+  const detail = clip(brief, 600);
+  const intentPrompt = [
+    `A WORK ITEM is queued: "${name}".`,
+    detail ? `Its brief says: "${detail}".` : "It has no brief beyond its title.",
+    "Decide what the work primarily IS:",
+    "• explore — find out where something lives or how it behaves; discovery, not change.",
+    "• analyze — reason over known, bounded material to reach a judgement.",
+    "• implement — write or change code so behaviour changes.",
+    "• document — produce prose, a reference, or a report from what is already known.",
+  ].join(" ");
+  const complexityPrompt = [
+    `The same work item: "${name}".`,
+    detail ? `Its brief says: "${detail}".` : "It has no brief beyond its title.",
+    "Decide how far it reaches:",
+    "• atomic — one file, clear scope, nothing else depends on the outcome.",
+    "• compound — several files with known dependencies and a bounded blast radius.",
+    "• systemic — cross-cutting; it changes a contract, a shared shape, or how subsystems fit together.",
+    "When the brief does not show which, answer systemic: under-sizing cross-cutting work costs more than over-sizing a small job.",
+  ].join(" ");
+  const stateContext = [`work title: ${name}`, detail ? `work brief: ${detail}` : "work brief: (none)"].join("\n");
+  return {
+    questions: [
+      { id: "work_intent", type: "choice", prompt: intentPrompt, options: [...WORK_INTENTS] },
+      { id: "work_complexity", type: "choice", prompt: complexityPrompt, options: [...WORK_COMPLEXITIES] },
+    ],
+    stateContext,
+  };
+}
+
+// The table lookup, with today's behaviour as the floor. `answers` is the
+// validated map the decision client returns, so an unknown value here means
+// the wire validator let something through that the table does not cover —
+// which must degrade, never throw.
+export function interpretWorkShape(answers) {
+  const intent = answers?.work_intent?.choice;
+  const complexity = answers?.work_complexity?.choice;
+  if (!WORK_INTENTS.includes(intent) || !WORK_COMPLEXITIES.includes(complexity)) return { ...WORK_SHAPE_DEFAULT };
+  const weight = WORK_WEIGHT_TABLE[`${intent}:${complexity}`];
+  if (!WORK_WEIGHTS.includes(weight)) return { ...WORK_SHAPE_DEFAULT };
+  return {
+    intent,
+    complexity,
+    weight,
+    role: weight === "deep" ? "heavy" : "routine",
+    reason: `${intent} work at ${complexity} scope routes to the ${weight} shortlist`,
+  };
+}

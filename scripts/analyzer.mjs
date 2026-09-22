@@ -9,6 +9,7 @@ import { readFile, readdir, stat, lstat, realpath, open, opendir } from "node:fs
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import studioPaths from "./paths.cjs";
+import { safeExcerpt } from "./redaction.cjs";
 
 const STUDIO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { repoRoot: DEFAULT_ROOT } = studioPaths.resolveStudioPaths({ studioRoot: STUDIO });
@@ -274,15 +275,6 @@ const privateName = (name) => name.startsWith(".") || /(?:^|[._-])(?:credentials
 const excludedPart = (part) => PROJECT_SKIP.has(part.toLowerCase()) || privateName(part);
 const isTestFile = (file) => /(?:^|\/)(?:tests?|__tests__|specs?|fixtures)(?:\/|$)|(?:^|[._-])(?:test|spec)(?:[._-]|$)/i.test(file);
 const isSourceFile = (file) => SOURCE_EXTENSIONS.has(path.extname(file).toLowerCase()) && !isTestFile(file) && !/(?:^|\/)(?:docs?|documentation)(?:\/|$)/i.test(file);
-
-function safeExcerpt(value, max = 220) {
-  return String(value ?? "")
-    .replace(/-----BEGIN [\s\S]*?PRIVATE KEY-----[\s\S]*?(?:-----END [\s\S]*?PRIVATE KEY-----|$)/g, "[redacted private key]")
-    .replace(/\b(?:sk-[a-zA-Z0-9_-]{16,}|gh[pousr]_[a-zA-Z0-9_]{16,}|AKIA[A-Z0-9]{16})\b/g, "[redacted credential]")
-    .replace(/((?:password|secret|token|api[_-]?key|authorization)["']?\s*[=:]\s*)(?:["'][^"'\r\n]*["']|[^\s,;}]+)/gi, "$1[redacted]")
-    .replace(/(https?:\/\/)[^\s/@]+:[^\s/@]+@/gi, "$1[redacted]@")
-    .trim().slice(0, max);
-}
 
 function projectKeywords(value) {
   const words = String(value).replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().match(/[a-z][a-z0-9]{2,}/g) || [];

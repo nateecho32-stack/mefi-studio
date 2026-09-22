@@ -617,6 +617,22 @@ export function sameOrganization(a, b) {
 // lesson whose hits grow, and the previous digest is kept so trends, not
 // snapshots, drive the next review.
 export const OVERSEER_LIMITS = { lessons: 24, directives: 40, findings: 8, scores: 12 };
+// Where the work actually landed, remembered per area. A lesson says what keeps
+// going wrong; these say *where* — the files a verified attempt really changed
+// (hot, with a hit count that grows the way lesson hits do) and the files it
+// opened and left alone (cold). The next dispatch gets both, so a builder walks
+// in knowing the two files that usually matter for this corner of the tree and
+// which one looked relevant last time but was not.
+//
+// Only a verified attempt teaches. An unverified run's file set is noise, and
+// writing it would train the board on its own failures.
+//
+// These live under state.overseer on purpose: tidyNodeFolders sweeps a node
+// folder once its task is done or its entries pass FOLDER_LIMITS.entryDays,
+// which is exactly when a path is learned — the playbook is the store that
+// survives that clock.
+export const PATH_LIMITS = { hot: 40, cold: 24, perArea: 8, area: 40, file: 160 };
+
 // Pref keys the overseer may move on its own, each clamped to a safe band; the
 // clamps keep the tuning reversible and away from the pool's edges.
 export const OVERSEER_TUNABLES = { foldAfterMinutes: [15, 240], staleAfterHours: [6, 72], tidyDoneAfterHours: [6, 72], parallel: [1, PARALLEL_MAX], aiParallel: [1, AI_PARALLEL_MAX] };
@@ -625,7 +641,74 @@ const OVERSEER_SEVERITIES = ["info", "warn", "critical"];
 const OVERSEER_DIRECTIVE_KINDS = ["pref", "request", "lesson", "finding"];
 
 export function emptyOverseer() {
-  return { reviews: 0, lastReviewAt: 0, lastSummary: "", score: null, health: "unknown", findings: [], lessons: [], directives: [], scores: [], digest: null };
+  return { reviews: 0, lastReviewAt: 0, lastSummary: "", score: null, health: "unknown", findings: [], lessons: [], directives: [], scores: [], digest: null, hotPaths: [], coldPaths: [] };
+}
+
+// A path is remembered by its repository-relative form with forward slashes, so
+// the same file learned on two machines is one row rather than two.
+export function relativeFile(file, root = "") {
+  let value = String(file ?? "").split("\\").join("/").trim();
+  if (!value) return "";
+  const base = String(root ?? "").split("\\").join("/").replace(/\/+$/, "");
+  if (base && value.toLowerCase().startsWith(`${base.toLowerCase()}/`)) value = value.slice(base.length + 1);
+  return value.replace(/^\.\//, "").replace(/^\/+/, "").slice(0, PATH_LIMITS.file);
+}
+
+// The area a file belongs to: its top path segment, or the filename for a file
+// at the root. Derived rather than declared, because Studio has no work-kind
+// classifier and a directory is the granularity a file-scope hint needs anyway.
+export function areaOf(file) {
+  const value = relativeFile(file);
+  if (!value) return "";
+  const [head, ...rest] = value.split("/");
+  return (rest.length ? head : value).slice(0, PATH_LIMITS.area);
+}
+
+const normalizePathRow = (entry) =>
+  isObject(entry) && str(entry.file).trim()
+    ? { file: clip(entry.file, PATH_LIMITS.file), area: clip(entry.area, PATH_LIMITS.area) || areaOf(entry.file), hits: Math.max(1, Math.floor(num(entry.hits, 1))), firstAt: num(entry.firstAt, 0), lastAt: num(entry.lastAt, 0) }
+    : null;
+
+// Fold one verified attempt into the path memory, with overseerMerge's
+// discipline: dedupe on the file, raise hits, refresh lastAt, sort by hits then
+// recency, clamp. A file that was changed is hot and is removed from cold —
+// evidence beats a previous guess, and the two lists must never disagree about
+// the same file.
+export function mergePaths(overseer, { changed = [], explored = [], root = "" } = {}, now = Date.now()) {
+  const base = normalizeOverseer(overseer);
+  const clean = (list) => [...new Set(asArray(list).map((file) => relativeFile(file, root)).filter(Boolean))];
+  const hotFiles = clean(changed);
+  if (!hotFiles.length) return base;
+  const hotSet = new Set(hotFiles.map((file) => file.toLowerCase()));
+  const coldFiles = clean(explored).filter((file) => !hotSet.has(file.toLowerCase()));
+
+  const fold = (rows, files) => {
+    const out = rows.map((row) => ({ ...row }));
+    for (const file of files) {
+      const key = file.toLowerCase();
+      const existing = out.find((row) => row.file.toLowerCase() === key);
+      if (existing) {
+        existing.hits += 1;
+        existing.lastAt = now;
+      } else out.push({ file, area: areaOf(file), hits: 1, firstAt: now, lastAt: now });
+    }
+    out.sort((a, b) => b.hits - a.hits || b.lastAt - a.lastAt);
+    return out;
+  };
+
+  const hot = fold(base.hotPaths, hotFiles);
+  // A file that just proved itself hot cannot stay on the cold list.
+  const cold = fold(base.coldPaths.filter((row) => !hotSet.has(row.file.toLowerCase())), coldFiles);
+  return { ...base, hotPaths: hot.slice(0, PATH_LIMITS.hot), coldPaths: cold.slice(0, PATH_LIMITS.cold) };
+}
+
+// What the next dispatch should be told about [area]: the files that usually
+// carry the work, and the ones that looked relevant before and were not.
+export function pathsForArea(overseer, area, limit = PATH_LIMITS.perArea) {
+  const base = normalizeOverseer(overseer);
+  const key = String(area ?? "").toLowerCase();
+  const pick = (rows) => rows.filter((row) => !key || row.area.toLowerCase() === key).slice(0, Math.max(1, limit));
+  return { hot: pick(base.hotPaths), cold: pick(base.coldPaths) };
 }
 
 const normalizeOverseerFinding = (entry) =>
@@ -662,6 +745,8 @@ export function normalizeOverseer(raw) {
       OVERSEER_LIMITS.scores,
     ),
     digest: isObject(source.digest) ? source.digest : null,
+    hotPaths: clampTail(asArray(source.hotPaths).map(normalizePathRow).filter(Boolean), PATH_LIMITS.hot),
+    coldPaths: clampTail(asArray(source.coldPaths).map(normalizePathRow).filter(Boolean), PATH_LIMITS.cold),
   };
 }
 

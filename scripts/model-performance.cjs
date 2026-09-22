@@ -52,6 +52,10 @@ function normalizeObservation(input, now = Date.now()) {
     escalationOf: input.escalationOf ? identifier(input.escalationOf, "escalation id") : null,
     escalationReason: ["reasoning", "validation"].includes(input.escalationReason) ? input.escalationReason : null,
     comparisonId: input.comparisonId ? identifier(input.comparisonId, "comparison id") : null,
+    // The attempt this call belongs to, when one was in scope. It is what
+    // joins Studio's own calls to a task: the worker's turns are keyed by
+    // session in OpenCode's store, and these are keyed by run.
+    runId: input.runId ? identifier(input.runId, "run id") : null,
   };
 }
 

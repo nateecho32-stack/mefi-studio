@@ -280,7 +280,7 @@ test("autopilot intervals cannot overlap an unfinished paid pass or run while di
     getEyes: async () => ({ readJson: async () => [] }),
     autopilotProactivePass() { calls += 1; return pass.promise; },
     async autopilotHousekeeping() { housekeeping += 1; },
-    promoteRequestsToTasks: async () => {}, refreshAutopilotQueue: async () => {},
+    classifyPendingWork: async () => ({ ok: true }), promoteRequestsToTasks: async () => {}, refreshAutopilotQueue: async () => {},
     pushAutopilotHistory() {}, emitAutopilot() {}, logLine() {},
     assistantAskForWork() { asks += 1; },
   });
@@ -308,7 +308,7 @@ test("idle foreman does not spin the compactor on a recently reviewed unrunnable
   const autopilot = { execute: true, jobs: [], parallel: 1 };
   const env = host(section("async function assistantForemanJob(", "// The thinker: the assistant itself."), {
     autopilot, executeNextRequest: async () => {}, assistantState: state, assistantCache: {},
-    autopilotHousekeeping: async () => {}, promoteRequestsToTasks: async () => {},
+    autopilotHousekeeping: async () => {}, classifyPendingWork: async () => ({ ok: true }), promoteRequestsToTasks: async () => {},
     MINUTE_MS: 60000, ASSISTANT_PRIORITY: { demand: 2 },
     assistantEnqueueRole: (role) => queued.push(role),
   });

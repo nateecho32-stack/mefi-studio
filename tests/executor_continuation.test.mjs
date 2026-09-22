@@ -54,7 +54,7 @@ test("each ordinary foreman pass verifies prerequisites before dispatching the n
   Object.assign(env, {
     assistantState: { status: "running", prefs: { backlogMode: false }, agents: [] },
     autopilot: { execute: true, parallel: 1, jobs: [] },
-    promoteRequestsToTasks: async () => { order.push("promote"); },
+    classifyPendingWork: async () => ({ ok: true }), promoteRequestsToTasks: async () => { order.push("promote"); },
     admitBacklogIdeas: async () => { throw new Error("ordinary mode must not admit backlog ideas"); },
     executeNextRequest: async () => {
       order.push("dispatch");

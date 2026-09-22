@@ -247,6 +247,7 @@ function managedWorker() {
   const commands = [];
   host.env.ZAI_MODEL_ROUTINE = "glm-5.3-flash";
   host.env.ZAI_MODEL_HEAVY = "glm-5.3";
+  host.env.workShapeFor = () => null;
   host.env.executorRunEnv = async () => route;
   const spawn = host.env.spawn;
   host.env.spawn = (command, args, options) => { commands.push({ command, args: copy(args) }); return spawn(command, args, options); };
@@ -265,9 +266,32 @@ test("managed z.ai worker selection sees the selected task before claiming and c
   assert.equal(selections.length, 1);
   assert.equal(selections[0].options.worker, true);
   assert.equal(selections[0].options.taskType, "coding");
+  assert.equal(selections[0].options.role, "routine", "an unshaped task keeps today's shortlist");
   assert.match(selections[0].options.task, /Fix parser[\s\S]*Preserve escaped strings/);
   assert.equal(host.commands[0].args.at(-1), "opencode run --auto --model mefi-zai/glm-5.3");
   assert.equal(host.board().tasks[0].status, "active");
+});
+
+test("a deep work shape reaches for the capable shortlist, and the owner's tier still wins", async () => {
+  const host = managedWorker(), selections = [];
+  // What classifyPendingWork cached for this task on an earlier tick.
+  host.env.workShapeFor = (taskId) => (taskId === "task-a" ? { intent: "implement", complexity: "systemic", weight: "deep", role: "heavy" } : null);
+  host.env.applyModelRouting = async (route, options) => { selections.push(copy(options)); return { ...route, model: "glm-5.3" }; };
+  assert.equal(await host.env.spawnNextJob(), "spawned");
+  assert.equal(selections[0].role, "heavy", "systemic implementation must not be shortlisted as routine work");
+  assert.equal(selections[0].taskType, "coding", "the shape biases the role, never the ledger's label");
+});
+
+// An explicit Free/Fast/Heavy tier pins the model in executorRunEnv and never
+// sets modelProvider, so a shape cannot reach the selection at all.
+test("a pinned tier never consults the work shape", async () => {
+  const host = managedWorker();
+  let asked = 0;
+  host.env.workShapeFor = () => { asked += 1; return { role: "heavy" }; };
+  host.env.executorRunEnv = async () => ({ cli: "opencode", model: "mefi-zai/glm-5.3-flash", modelArgs: " --model mefi-zai/glm-5.3-flash", tier: "fast", env: {} });
+  host.env.applyModelRouting = async () => { throw new Error("a pinned tier must not route per task"); };
+  assert.equal(await host.env.spawnNextJob(), "spawned");
+  assert.equal(asked, 0, "the owner's dial is authoritative");
 });
 
 for (const interruption of ["pause", "scope"]) test(`${interruption} during worker model selection prevents a stale task launch`, async () => {

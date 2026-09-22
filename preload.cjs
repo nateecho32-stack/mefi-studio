@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   modelPerformanceRate: (payload) => ipcRenderer.invoke("model-performance:rate", payload ?? {}),
   modelLabContext: (payload) => ipcRenderer.invoke("model-lab:context", payload ?? {}),
   usageTracker: () => ipcRenderer.invoke("usage:tracker", {}),
+  usageForTask: (taskId) => ipcRenderer.invoke("usage:task", { taskId }),
   opencodeCredits: () => ipcRenderer.invoke("opencode:credits", {}),
   usageAccounts: () => ipcRenderer.invoke("usage:accounts", {}),
   openExternal: (url) => ipcRenderer.invoke("shell:open", url),

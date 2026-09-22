@@ -76,7 +76,7 @@ function controlHost({ tasks = [], requests = [], ideas = [] } = {}) {
     assistantPause: async () => { state.status = "paused"; },
     assistantResume: async () => { state.status = "running"; },
     autopilotHousekeeping: async () => effects.push("verify"),
-    promoteRequestsToTasks: async () => effects.push("promote requests"),
+    classifyPendingWork: async () => ({ ok: true }), promoteRequestsToTasks: async () => effects.push("promote requests"),
     refreshAutopilotQueue: async () => {}, emitAutopilot: () => {},
   });
   // Use the actual board gateway, including serialized writes and automatic
@@ -192,7 +192,7 @@ test("the real drain pass performs local settlement without calling paid work ge
     autopilotProactivePass: () => { throw new Error("Do not generate while draining"); },
     runAssistant: () => { throw new Error("Do not grow or improve while draining"); },
     autopilotHousekeeping: async () => effects.push("verify"),
-    promoteRequestsToTasks: async () => effects.push("promote requests"),
+    classifyPendingWork: async () => ({ ok: true }), promoteRequestsToTasks: async () => effects.push("promote requests"),
     admitBacklogIdeas: async () => effects.push("admit ideas"),
     refreshAutopilotQueue: async () => {}, pushAutopilotHistory: () => {}, emitAutopilot: () => {},
     assistantAskForWork: () => effects.push("dispatch"), logLine: (text) => { throw new Error(text); },

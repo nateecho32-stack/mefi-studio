@@ -50,6 +50,7 @@ test("an approved plan joins the paused queue and its dependent dispatches only 
     getEyes: async () => ({
       readJson: async (key) => structuredClone(board[key]),
       listChanges: () => [{ file: "src/serializer.js", status: "completed" }],
+      listReads: () => ({ available: true, files: ["src/serializer.js", "src/unrelated.js"], truncated: false }),
       listSessionChecks: ({ sessionId, since, until }) => {
         checkWindows.push({ sessionId, since, until });
         if (!checkEvidenceAvailable) return { available: false, checks: [], truncated: false };
@@ -61,7 +62,7 @@ test("an approved plan joins the paused queue and its dependent dispatches only 
         return { available: true, checks: [check], truncated: false };
       },
     }),
-    getAssistant: async () => assistant, loadModule: async () => history, getReceiptsModule: async () => null, policyRecord() {}, machineLagGate: null,
+    saveAssistant: async () => {}, getAssistant: async () => assistant, loadModule: async () => history, getReceiptsModule: async () => null, policyRecord() {}, machineLagGate: null,
     getPolicyModule: async () => null, warmPolicyBaseline() {}, resolveActivePolicyIdentity: async () => null,
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", workTitleKey: (value) => value,
     conflictsWithLiveFix: () => false, queuedWorkCount: () => board.tasks.filter((task) => task.status === "open").length,

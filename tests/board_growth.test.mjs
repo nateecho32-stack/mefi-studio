@@ -152,7 +152,7 @@ test("timer still settles and dispatches backlog but does not run duplicate expa
     getEyes: async () => ({ readJson: async () => [] }),
     autopilotProactivePass: async () => ({ added: 0 }), growthBoardFacts: async () => ({ growthHeld: true }),
     runAssistant: () => assert.fail("automatic discovery must wait for existing work"),
-    autopilotHousekeeping: async () => effects.push("settle"), promoteRequestsToTasks: async () => effects.push("promote"),
+    autopilotHousekeeping: async () => effects.push("settle"), classifyPendingWork: async () => ({ ok: true }), promoteRequestsToTasks: async () => effects.push("promote"),
     refreshAutopilotQueue: async () => {}, pushAutopilotHistory() {}, emitAutopilot() {},
     assistantAskForWork: () => effects.push("dispatch"), logLine: (line) => assert.fail(line),
   });

@@ -429,6 +429,43 @@ export function listSessionChecks({ dbPath = DEFAULT_DB, sessionId, since, until
   }
 }
 
+// The other half of an attempt's file evidence. listChanges reports what the
+// worker WROTE (toChange keeps only edit/write/patch); this reports what it
+// OPENED and left alone, which is what turns a file into a known dead end
+// rather than an unknown.
+//
+// Only the `read` tool counts. grep and glob are searches over a pattern, not
+// a statement that one file was examined and rejected, so folding them in would
+// mark half the tree cold on a single wide search.
+//
+// Same window discipline as listSessionChecks: an unreadable store is unknown
+// evidence, not an empty read set, so a locked database can never be mistaken
+// for "the worker opened nothing".
+export function listReads({ dbPath = DEFAULT_DB, sessionId, since, until, limit = 400 } = {}) {
+  const unavailable = () => ({ available: false, files: [], truncated: false });
+  if (!checkWindow({ sessionId, since, until })) return unavailable();
+  const cap = Number.isFinite(limit) ? Math.min(2000, Math.max(1, Math.floor(limit))) : 400;
+  try {
+    const db = openDb(dbPath);
+    const rows = db.prepare(`
+      select distinct coalesce(
+        json_extract(data, '$.state.input.filePath'),
+        json_extract(data, '$.state.input.file_path')) file
+      from part
+      where session_id = ? and time_created >= ? and time_created <= ?
+        and json_valid(data)
+        and json_extract(data, '$.type') = 'tool'
+        and json_extract(data, '$.tool') = 'read'
+        and file is not null
+      limit ?
+    `).all(sessionId, since, until, cap + 1);
+    const files = rows.slice(0, cap).map((row) => row.file).filter((file) => typeof file === "string" && file.trim());
+    return { available: true, files, truncated: rows.length > cap };
+  } catch {
+    return unavailable();
+  }
+}
+
 export function listTodos({ dbPath = DEFAULT_DB, sessionId = null } = {}) {
   if (!storePresent(dbPath)) return [];
   const db = openDb(dbPath);

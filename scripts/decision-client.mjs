@@ -52,6 +52,7 @@
 
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { scrubOutbound } from "./redaction.cjs";
 
 export const JEVC_CLIENT_VERSION = 4;
 export const JEV_DOC_MODEL = "jev-1.13.0";
@@ -320,8 +321,21 @@ export function buildSystemoneRequest({ config, questions, state }) {
   };
 }
 
+// Every string that reaches the classifier is scrubbed here, at the one place
+// both protocols' bodies are finished. The Jev path never touches
+// assistantFetch, so without this the intake and routing questions — which
+// quote task titles and briefs — would leave unscrubbed. Headers are left
+// alone: that is where the API key lives.
+function scrubDeep(value) {
+  if (typeof value === "string") return scrubOutbound(value);
+  if (Array.isArray(value)) return value.map(scrubDeep);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, scrubDeep(inner)]));
+  return value;
+}
+
 export function buildClassifyRequest(options) {
-  return options.config.protocol === "evaluation" ? buildEvaluationRequest(options) : buildSystemoneRequest(options);
+  const request = options.config.protocol === "evaluation" ? buildEvaluationRequest(options) : buildSystemoneRequest(options);
+  return { ...request, body: scrubDeep(request.body) };
 }
 
 // ---- response validation ---------------------------------------------------------

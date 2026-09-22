@@ -185,6 +185,17 @@
       if (token !== state.contextRead) return;
       if (!result || result.ok === false) throw new Error(result?.error || "The context could not be read.");
       const target = $("context-sections"); target.replaceChildren();
+      // What the latest attempt actually cost, beside what its context weighs.
+      // Read after the preview so a slow or unavailable ledger never delays it.
+      if (api()?.usageForTask) {
+        api().usageForTask($("context-task").value)
+          .then((cost) => {
+            if (token !== state.contextRead || !cost?.ok) return;
+            const text = cost.measured ? `This attempt cost: ${cost.line}` : cost.note || "No measured calls for this attempt yet.";
+            target.prepend(element("p", "muted", cost.note && cost.measured ? `${text} — ${cost.note}` : text));
+          })
+          .catch(() => {});
+      }
       $("context-status").textContent = `${number(result.estimatedTokens)} estimated tokens / ${number(result.budgetTokens)} budget${result.truncated ? " · some source text is excluded from this preview; saved originals are retained" : ""}`;
       for (const section of rows(result.sections)) {
         const fold = element("details", `lab-context-source${section.included ? "" : " excluded"}`); fold.open = section.included === true;
