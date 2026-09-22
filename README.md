@@ -25,8 +25,9 @@
 ## What's new in 0.3.0
 
 One navigation rail, Brain maps as a real node editor, ad-free radio, and an
-agent loop that finishes what it starts. It is on `main` now; the portable
-build follows with the 0.3.0 release. The full list is in the
+agent loop that finishes what it starts. Get the portable build from the
+[0.3.0 release](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.3.0);
+installed copies are offered it under **App updates**. The full list is in the
 [changelog](CHANGELOG.md).
 
 <p align="center">

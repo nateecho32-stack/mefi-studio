@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-22
+
+One navigation rail, Brain maps as a real node editor, ad-free radio, model
+routing split by role, and an agent loop that finishes what it starts.
+
 ### Added
 - **Loop guard and memory alignment.** The keeper now keeps a small count on
   every card of the failures its own brief caused (charged run failures, and at
@@ -369,5 +374,6 @@ which installed copies pick up through the in-app updater.
   locked or the cover window is destroyed.
 - Project switch drains background work instead of refusing it.
 
-[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.2.0...main
+[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.3.0...main
+[0.3.0]: https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.3.0
 [0.2.0]: https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.2.0
