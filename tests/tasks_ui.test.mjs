@@ -39,7 +39,7 @@ function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = nu
   for (const filter of ["all", "open", "done"]) {
     const button = new Element("button"); button.dataset.filter = filter; get("task-filters").append(button);
   }
-  const saved = []; const notifications = []; let onTasks, onProjects;
+  const saved = []; const notifications = []; const events = []; let onTasks, onProjects;
   const prefs = { taskFilter: filter, autoReference: false };
   const context = vm.createContext({
     window: {
@@ -54,7 +54,9 @@ function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = nu
       },
       MefiNav: { setBadge() {}, claim() {}, release() {} },
       MefiBoot: { pollStart() {} }, MefiToast: (text) => notifications.push(text),
+      dispatchEvent: (event) => { events.push(event); return true; },
     },
+    CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
     document: { readyState: "loading", getElementById: get, createElement: (tag) => new Element(tag), querySelectorAll: () => [], addEventListener() {} },
     setTimeout() {}, setInterval() {}, console,
   });
@@ -62,7 +64,7 @@ function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = nu
   if (overview) vm.runInContext(groupsSource, context);
   vm.runInContext(source, context);
   const api = context.window.MefiTasks; api.init();
-  return { api, get, saved, notifications, broadcast: (rows) => onTasks(rows), project: (activeId) => onProjects({ activeId }) };
+  return { api, get, saved, notifications, events, broadcast: (rows) => onTasks(rows), project: (activeId) => onProjects({ activeId }) };
 }
 
 const rows = [
@@ -126,6 +128,26 @@ test("failed task saves do not leave a fake task in the board", async () => {
   assert.equal(created, null);
   assert.equal(env.api.state.tasks.length, 0);
   assert.match(env.notifications.at(-1), /could not be written/);
+});
+
+test("creating a task announces the walkthrough event, and a failed save never does", async () => {
+  const ok = environment({ tasks: [] });
+  const created = await ok.api.addTask("Announce me");
+  assert.ok(created);
+  assert.deepEqual(ok.events.map((event) => event.type), ["mefi:task-created"]);
+  assert.equal(ok.events[0].detail.taskId, created.id);
+  const failed = environment({ tasks: [], saveOk: false });
+  await failed.api.addTask("Never announced");
+  assert.deepEqual(failed.events, []);
+});
+
+test("selecting a task announces the walkthrough event carrying its status", async () => {
+  const env = environment({ tasks: [{ id: "one", title: "Finish me", status: "done", doneAt: 400 }] });
+  await env.api.open();
+  env.api.selectTask("one");
+  assert.equal(env.events.at(-1).type, "mefi:task-opened");
+  assert.equal(env.events.at(-1).detail.taskId, "one");
+  assert.equal(env.events.at(-1).detail.status, "done");
 });
 
 test("the selected task stays visible when a completion arrives while viewing open work", async () => {

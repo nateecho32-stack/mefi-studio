@@ -13,7 +13,7 @@ const flush = async () => { for (let i = 0; i < 30; i += 1) await Promise.resolv
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 
 async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter = true, desktop = true, bootActive = () => false } = {}) {
-  const elements = new Map(); const storage = new Map(); const events = {};
+  const elements = new Map(); const storage = new Map(); const events = {}; const dispatched = [];
   const get = (id) => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   const el = (name) => get(`workspace-${name}`);
   for (const stage of ["all", "open", "review", "done", "ideas"]) {
@@ -42,7 +42,7 @@ async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter 
   };
   const context = vm.createContext({
     window: {
-      mefiStudio: desktop ? bridge : undefined, dispatchEvent() {}, addEventListener() {},
+      mefiStudio: desktop ? bridge : undefined, dispatchEvent: (event) => { dispatched.push(event); return true; }, addEventListener() {},
       MefiNav: { list: () => [], go() {} }, MefiIdle: { exit() {} }, MefiBoot: { pollStart() {}, isActive: bootActive },
       MefiTasks: { describe: (task) => ({ stage: task.status === "done" ? "done" : task.status === "awaiting_verification" ? "review" : "open", label: task.status, summary: task.prompt || "" }) },
     },
@@ -57,7 +57,7 @@ async function environment({ timerQueue = null, bridgeOverrides = {}, autoEnter 
   await flush();
   if (autoEnter) context.window.MefiWorkspace.enter();
   await flush();
-  return { workspace: context.window.MefiWorkspace, el, bridge, events, storage, projects, nav: context.window.MefiNav };
+  return { workspace: context.window.MefiWorkspace, el, bridge, events, dispatched, storage, projects, nav: context.window.MefiNav };
 }
 
 test("startup readiness waits for projects and populated panels without duplicating cold enters", async () => {
@@ -298,6 +298,23 @@ test("task creation submits once, preserves a later draft, and distinguishes sav
   assert.equal(env.el("retry").hidden, false);
   await env.el("created-task").trigger("click");
   assert.equal(destination[0], "tasks"); assert.equal(destination[1].taskId, "created");
+});
+
+test("a saved task announces the walkthrough event and a failed creation never does", async () => {
+  const env = await environment();
+  env.bridge.tasksCreate = async () => ({ ok: true, task: { id: "created", projectId: "project-a" } });
+  await env.el("mode-work").trigger("click");
+  env.el("input").value = "Announce this task";
+  await env.el("form").trigger("submit");
+  const created = env.dispatched.filter((event) => event.type === "mefi:task-created");
+  assert.equal(created.length, 1);
+  assert.equal(created[0].detail.taskId, "created");
+  const failed = await environment();
+  failed.bridge.tasksCreate = async () => ({ ok: false, error: "Store busy" });
+  await failed.el("mode-work").trigger("click");
+  failed.el("input").value = "Never announced";
+  await failed.el("form").trigger("submit");
+  assert.deepEqual(failed.dispatched.filter((event) => event.type === "mefi:task-created"), []);
 });
 
 test("the optional task outline retains existing intent and never sends work", async () => {

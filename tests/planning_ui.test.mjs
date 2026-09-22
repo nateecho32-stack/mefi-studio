@@ -36,7 +36,7 @@ function savedPlan() {
 }
 
 async function environment(item = savedPlan(), storage = new Map()) {
-  const root = new Element(); const fixed = new Map(); const events = {}; const calls = []; const polls = new Map(); const navigation = []; const documentEvents = {};
+  const root = new Element(); const fixed = new Map(); const events = {}; const calls = []; const polls = new Map(); const navigation = []; const documentEvents = {}; const emitted = [];
   for (const id of ["overlay", "sheet", "notice", "new", "refresh", "close", "project", "list", "detail"]) { const element = new Element(["new", "refresh", "close"].includes(id) ? "button" : "div"); element.id = `plans-${id}`; fixed.set(element.id, element); root.append(element); }
   const find = (id, node = root) => node.id === id ? node : node.children.map((child) => find(id, child)).find(Boolean);
   const el = (id) => find(`plans-${id}`);
@@ -52,12 +52,12 @@ async function environment(item = savedPlan(), storage = new Map()) {
     tasksList: async () => ({ ok: true, projectId: projects.activeId, tasks: structuredClone(tasks[projects.activeId]) }),
   };
   const document = { readyState: "complete", hidden: false, activeElement: null, createElement: (tag) => new Element(tag), getElementById: find, addEventListener: (name, callback) => { documentEvents[name] = callback; } };
-  const context = vm.createContext({ window: { mefiStudio: bridge, addEventListener: (name, callback) => { events[name] = callback; }, MefiNav: { claim() {}, release() {}, go: (...args) => navigation.push(args) }, MefiBoot: { pollStart: (key, fn) => polls.set(key, fn), pollStop: (key) => polls.delete(key) } }, document, localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) }, console });
+  const context = vm.createContext({ window: { mefiStudio: bridge, addEventListener: (name, callback) => { events[name] = callback; }, dispatchEvent: (event) => { emitted.push(event); return true; }, MefiNav: { claim() {}, release() {}, go: (...args) => navigation.push(args) }, MefiBoot: { pollStart: (key, fn) => polls.set(key, fn), pollStop: (key) => polls.delete(key) } }, CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } }, document, localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) }, console });
   vm.runInContext(stageSource, context);
   vm.runInContext(source, context);
   await context.window.MefiPlanning.open({ planId: item.id }); await flush();
   const input = async (id, value) => { const target = el(id); assert.ok(target, `Missing input ${id}`); target.value = value; await target.trigger("input"); };
-  return { ui: context.window.MefiPlanning, el, input, bridge, data, projects, events, calls, storage, polls, tasks, navigation, document, documentEvents };
+  return { ui: context.window.MefiPlanning, el, input, bridge, data, projects, events, calls, emitted, storage, polls, tasks, navigation, document, documentEvents };
 }
 
 test("the workflow follows saved stages and navigation never advances approval or execution", async () => {
@@ -78,6 +78,31 @@ test("the workflow follows saved stages and navigation never advances approval o
   await env.el("stage-spec").trigger("click");
   assert.equal(env.el("destination-section").focused, true);
   assert.equal(env.calls.length, count);
+});
+
+test("creating a plan announces the walkthrough's plan event", async () => {
+  const env = await environment();
+  await env.el("new").trigger("click");
+  await env.input("title", "A brand new plan");
+  await env.input("destination", "A brand new outcome");
+  await env.el("details-form").trigger("submit");
+  assert.deepEqual(env.emitted.map((event) => event.type), ["mefi:plan-created"]);
+  assert.equal(typeof env.emitted[0].detail.planId, "string");
+  assert.ok(env.emitted[0].detail.planId.startsWith("plan_"));
+});
+
+test("creating an approved plan's tasks announces the walkthrough's task event", async () => {
+  const env = await environment();
+  await env.el("approve").trigger("click");
+  const planId = env.data["project-a"][0].id;
+  env.bridge.planningAction = async (payload) => {
+    env.calls.push(structuredClone(payload));
+    if (payload.action === "convert") return { ok: true, plan: { id: planId }, plans: env.data["project-a"] };
+    return { ok: false, error: "unsupported in this fixture" };
+  };
+  await env.el("convert").trigger("click");
+  assert.deepEqual(env.emitted.map((event) => event.type), ["mefi:task-created"]);
+  assert.equal(env.emitted[0].detail.planId, planId);
 });
 
 test("the question map shows the ready frontier, prerequisite links, and human decisions", async () => {

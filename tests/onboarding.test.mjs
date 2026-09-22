@@ -259,6 +259,38 @@ test("the workspace stop ticks itself off when the user actually selects a proje
   assert.doesNotMatch(env.el("invite-steps").children[SCAN].textContent, /✓/);
 });
 
+test("saved actions tick the matching menu stops: a connection, a task or plan, and an opened task", () => {
+  const env = environment();
+  assert.equal(JSON.parse(env.storage.get(KEY) ?? "null"), null);
+  env.emit("mefi:connection-saved", { detail: { provider: "zai" } });
+  const saved = JSON.parse(env.storage.get(KEY));
+  assert.equal(saved.done[CONNECT], true);
+  assert.equal(saved.done[CREATE], false);
+  env.emit("mefi:task-created", { detail: { taskId: "t1" } });
+  assert.equal(JSON.parse(env.storage.get(KEY)).done[CREATE], true);
+  env.emit("mefi:plan-created", { detail: { planId: "p1" } });
+  assert.equal(JSON.parse(env.storage.get(KEY)).done[CREATE], true);
+  assert.equal(JSON.parse(env.storage.get(KEY)).done[MONITOR], false);
+  env.emit("mefi:task-opened", { detail: { taskId: "t1", status: "open" } });
+  assert.equal(JSON.parse(env.storage.get(KEY)).done[MONITOR], true);
+  assert.equal(JSON.parse(env.storage.get(KEY)).done[REVIEW], false);
+  env.emit("mefi:task-opened", { detail: { taskId: "t2", status: "done" } });
+  assert.equal(JSON.parse(env.storage.get(KEY)).done[REVIEW], true);
+});
+
+test("repeated action events never regress or duplicate progress and refresh the coach", () => {
+  const env = environment(); env.guide.open();
+  env.el("steps").children[CONNECT].click();
+  env.el("action").click();
+  env.emit("mefi:connection-saved", { detail: {} });
+  const saved = JSON.parse(env.storage.get(KEY));
+  assert.equal(saved.done[CONNECT], true);
+  assert.match(env.el("coach-hint").textContent, /Connections checked/);
+  env.emit("mefi:connection-saved", { detail: {} });
+  assert.deepEqual(JSON.parse(env.storage.get(KEY)).done, saved.done);
+  assert.match(env.el("invite-steps").children[CONNECT].textContent, /✓/);
+});
+
 test("the invitation can resume as a guided walk at the saved stop", () => {
   const env = environment(new Map([[KEY, JSON.stringify({ version: 2, step: CREATE, status: "reading" })]]));
   assert.match(env.el("invite-walk").textContent, /Walk with me · Create/);
