@@ -25,6 +25,30 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - re-verification of the visible-phase foreground card on a concurrently loaded tree (task_03ad46c09bd30216, run run_1790094834453_140)
+
+Third pass over this card, run while several sibling sessions were
+mid-flight in the shared tree. No code changed: `git diff` on
+tests/fixtures/occlusion-probe-electron.cjs is still empty, so the
+committed 379c5b1 fix (probe-window `app.focus({ steal: true })` at raise
+and re-raise — the cover's own sanctioned grab, confirmed pre-existing at
+its call sites — plus the `acceptable`-predicate resampling and the
+frames-preferring `bestSample`) is what runs. Fresh `node --test
+tests/occlusion_probe.test.mjs` three times back-to-back: 3/3 exit 0, no
+"must answer via frames" failure in any run; the visible phase (this
+card's scope) asserted frames-answer and <100ms lag every time, and all
+three runs then took the documented occlusion-capability skip — the
+desktop was under sibling Electron load holding foreground, the same
+environment-conditional path the 7/7 row already covers with six
+real-occlusion runs. `npm run check` exit 0 (100 targets, 200 specs,
+merge skip, all selectors used, 100 files). The card's recurring
+"verification could not confirm (N changed files)" failures were
+diagnosed, not discharged here: each one coincided with another session's
+uncommitted edits in the shared tree (the 16:29Z failure was
+scripts/executor-worktrees.cjs, which its own card landed minutes later
+as 96d15c6); this card's own obligations — fixture commit 379c5b1 and
+rows 379c5b1/56087b2 — are all committed and re-checked by this run.
+
 ## 2026-09-22 evening - closing full-gate pass for the per-feature model-config idea card (task_idea_mubob3xr_0, run run_1790094521980_132)
 
 Closing verification for "Per-feature model config with graceful fallbacks".
