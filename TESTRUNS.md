@@ -25,6 +25,39 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - per-session worktree follow-up group re-verified at HEAD; landing-card closure stays host-side (task_plan_mucx9cxs_0, run run_1790097361397_4)
+
+Scope recovered from the decision logs, not guessed: member task_8d38294b586a1490's
+obligations are the two split cards of task_64d0e2f342af618c ("split the extra work
+out", 1790094-), and member task_4ad72ce6e6f96f58 is the extra work split out of
+task_8d38294 (q_1790094724337_4 answered "split" at 1790096005851) — host-side
+closure of landing card task_7b773505d7c6eb43, whose repo-side obligations the
+prior run had already verified. Both members re-derived first-hand at HEAD
+d69fd2f; no code changed in this pass.
+
+- Member task_8d38294 (previously verified as rcp_a2aa528cd4d618cd, owner retry):
+  every feature commit is an ancestor of HEAD — `git merge-base --is-ancestor`
+  exit 0 for c272b58 (lifecycle module), e3ad851 (wiring, buildable checkouts),
+  31f69f0 (start-grace), d1c4d78 (npm ci kill-switch pin), 96d15c6 (8.3 path
+  canonicalization), plus rows 7cf07f5 / 17d35a3 / 5852541. Fresh
+  `node --test tests/executor_worktree.test.mjs` -> 11/11 pass, exit 0 (18.0 s;
+  the suite grew by the 8.3 short-path test since the prior 10/10 row).
+  `git worktree list` shows no `.mefi/worktrees` checkouts and
+  `.mefi/worktrees` does not exist on disk after the run — no residue. Gate card
+  task_7a3b221956f9aa64 is done+verified host-side (rows 1fec86b / 21f9e33 /
+  f8694c6 / f66b8d3, the last a quiet-HEAD worktree gate exit 0).
+- Member task_4ad72ce: landing card task_7b773505d7c6eb43's two obligations are
+  verifiably discharged in history — the in-flight main.cjs/module/test edits
+  (junction + leak fix) landed as the commits above, and the feature's TESTRUNS
+  evidence rows exist (17d35a3 and later, through 5852541). The card itself is
+  still `open` in the board; the status flip is host-side only — the task store
+  was not modified from this worker, and the closure is asked via MEFI_ASK.
+- Tree notes: sibling in-flight files (CHANGELOG.md, docs/ux-audit.md,
+  renderer/booklet.html, renderer/music.js, tests/music.test.mjs, README.md,
+  tools/verify_command.py, untracked tests/module_purity.test.mjs) were present,
+  went dirty mid-run, and were never touched; the suite left no edits behind.
+  This commit adds only this row.
+
 ## 2026-09-22 evening - post-replan confirmation pass for the visible-phase foreground card (task_03ad46c09bd30216, run run_1790097316663_2)
 
 The card had already reached a trusted "verified" receipt
