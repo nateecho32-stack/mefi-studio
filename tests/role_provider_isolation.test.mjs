@@ -96,6 +96,26 @@ test("clearing one role or provider leaves the rest in place", async () => {
   assert.deepEqual(p.settings().aiModelsByProvider, { zai: { routine: "zai-routine" } }, "the other provider role stays");
 });
 
+test("a role/provider change survives a save/reload and still leaves the rest alone", async () => {
+  const h = host(base());
+  await h.apply({ roleProviders: { routine: "zen" }, providerModels: { zen: { routine: "zen-routine-9" } } });
+  // writeSettings persists JSON to disk; a reload is that same text read back.
+  const reloaded = host(JSON.parse(JSON.stringify(h.settings())));
+  assert.deepEqual(reloaded.settings().aiRoleProviders, { routine: "zen", heavy: "opencode" }, "the role split survives the round-trip");
+  assert.deepEqual(reloaded.settings().aiModelsByProvider, {
+    zai: { routine: "zai-routine", heavy: "zai-heavy" },
+    zen: { routine: "zen-routine-9" },
+  }, "the provider model survives and the other provider is untouched");
+  assert.deepEqual(reloaded.settings().aiModels, base().aiModels, "role-wide models survive untouched");
+  assert.equal(reloaded.settings().aiProvider, "zai", "the main pick survives untouched");
+  await reloaded.apply({ roleProviders: { heavy: "claude" } });
+  assert.deepEqual(reloaded.settings().aiRoleProviders, { routine: "zen", heavy: "claude" }, "a later change moves only its own role");
+  assert.deepEqual(reloaded.settings().aiModelsByProvider, {
+    zai: { routine: "zai-routine", heavy: "zai-heavy" },
+    zen: { routine: "zen-routine-9" },
+  }, "the reloaded models stay put");
+});
+
 test("an unknown role provider is refused and writes nothing", async () => {
   const h = host(base());
   const result = await h.apply({ roleProviders: { heavy: "bogus" } });
