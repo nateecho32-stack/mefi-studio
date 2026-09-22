@@ -25,6 +25,25 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 midday - full-gate retry on a tree that never went quiet: node stage all green, the one Python failure races the sibling's booklet rebuild (task_cff03b8e4922cc5d, run run_1790099546420_7)
+
+The quiet-tree precondition could not be met: renderer/brains.js (13:00:14),
+brains.css (13:00:19) and main.cjs (12:59:36) were all written within two
+minutes of the 13:01:23 launch, though no sibling suite was in flight at
+start (the earlier command_render and perf-trace runs had exited). `npm
+test` exit 1 in 87.4 s. Node stage fully green — 177 suites, 2031 tests /
+2028 pass / 0 fail / 3 skipped (the documented environment-conditional
+skips), serialized `eyes_toggle_electron` 1/1 and `occlusion_probe` 1/1,
+no sources-moved-mid-run flag. Python contracts: 247 tests in 34.6 s with
+exactly one failure, `test_brains_assets_are_inlined_exactly_once`
+(asset='brains.js', "1 != 0") — the working-tree brains.js had moved past
+the copy inlined in renderer/booklet.html, so the verbatim count was 0;
+the sibling rebuilt booklet.html at 13:02:52, seconds after the run ended,
+and edited brains.js again at 13:03:19, so the failure belongs to that
+landing sequence (edit, build-booklet, commit), not to landed code. The
+normalized-path lock stage was never reached behind the failed Python
+stage. This commit adds only this section.
+
 ## 2026-09-22 evening - worktree follow-up group closure pass: both members' scope discharged, remainder is host-side card flips (task_plan_mucx9cxs_0, run run_1790099521742_6)
 
 Group closure for the two folded members (task_4ad72ce6e6f96f58,
