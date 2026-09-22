@@ -185,6 +185,33 @@ test("repeated appends accumulate newest-first and a heading-only row is accepte
   }
 });
 
+test("equal-date arrivals stack at the top of their day group, not below it", () => {
+  const root = makeFixture();
+  try {
+    // run_b is 2026-09-20 evening. planInsertion's rule is "equal-date arrivals
+    // stack on top of their day group", so a same-date row must outrank the
+    // existing 09-20 row rather than land below it (which a plain "newest <
+    // current" splice would do). Two same-date arrivals must keep that order.
+    const first = appendTestrunsRow(root, "## 2026-09-20 morning - same-day earlier (run_sd1)\n\nBody sd1.\n");
+    const second = appendTestrunsRow(root, "## 2026-09-20 late - same-day later (run_sd2)\n\nBody sd2.\n");
+    const lines = read(root).split("\n");
+    const i2 = lines.indexOf("## 2026-09-20 late - same-day later (run_sd2)");
+    const i1 = lines.indexOf("## 2026-09-20 morning - same-day earlier (run_sd1)");
+    const iB = lines.indexOf("## 2026-09-20 evening - second run (run_b)");
+    const iA = lines.indexOf("## 2026-09-19 morning - first run (run_a)");
+    assert.ok([i2, i1, iB, iA].every((i) => i !== -1), "every same-day row and both originals survive");
+    assert.ok(i2 < i1 && i1 < iB && iB < iA, "same-day arrivals stack newest-on-top of the 09-20 group, above the older 09-19 row");
+    assert.equal(second.insertLine - 1, i2, "the later same-day arrival reports landing at the top");
+    assert.equal(first.insertLine - 1, 12, "the first same-day arrival landed at the true top when it was written");
+    assert.equal(lines[i2 + 1], "", "one blank line separates the new heading from its body");
+    assert.equal(lines[iB - 1], "", "one blank line separates the day group from the pre-existing row");
+    assert.ok(lines.includes("Body a.") && lines.includes("Body b.") && lines.includes("Body sd1.") && lines.includes("Body sd2."), "no earlier row body was dropped");
+    assert.deepEqual(auditTestruns(root).problems, []);
+  } finally {
+    cleanup(root);
+  }
+});
+
 test("refuses cleanly when TESTRUNS.md is absent and creates nothing", () => {
   const root = mkdtempSync(join(tmpdir(), "append-testruns-missing-"));
   try {
