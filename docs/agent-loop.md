@@ -433,3 +433,72 @@ settled cards in either run.
 
 `--first-output` sweeps are how the start budget in §4 was chosen and
 checked.
+
+## 10. Loop guard and memory alignment
+
+The loop above has three ways to go round in circles, and on 2026-09-22 the
+live board did all three: 512 runs over 147 cards, 37 cards with five or more
+runs, and a single follow-up chain seven generations deep.
+
+- **Retries that erase their own budget.** An issue the triage policy may
+  answer by itself used to answer "retry", and the retry cleared
+  `runFailures`, `verifyAttempts` and `nextRunAt`, so the five-failure and
+  three-verification parks could never trip (72 automatic retries against 9
+  by the owner). Settle has already re-armed the card by the time the issue is
+  raised, so `assistantRaiseIssue` now only records the assistant's decision
+  ("Assistant decided: …") and leaves the counters alone. A map with no triage
+  node answers nothing by itself, and an answer about a card that is already
+  done is recorded without reopening it.
+- **Provider outages charged to the card.** A run that ends on a usage limit,
+  a rate limit or a connection that never opened is requeued by settle on its
+  own backoff (5 minutes, doubling to 2 hours while the outage lasts) with no
+  attempt charged: `provider unavailable (exit N) · … · requeued in Xm, no
+  attempt charged`. No issue is raised for it.
+- **Follow-ups of follow-ups.** A "split" answer used to mint
+  `Follow-up: Follow-up: …` cards with no lineage, so the depth cap never
+  applied. Splits now carry `splitFrom`/`splitDepth`, are titled
+  `Follow-up: X`, `Follow-up 2: X`, `Follow-up 3: X`, and a fourth level is
+  refused.
+
+**The loop guard** is the backstop for whatever still circles. Every keeper
+pass (every 10 minutes) reads the card's log lines written since its last
+pass and keeps a small count on the card, `loopLedger`: charged run failures,
+and failed verifications (at most one per attempt, keyed by the verifier's
+reason with the failing command's output stripped). Provider outages, restarts,
+stops on request, lost runs and workers that never started are never counted.
+When a card reaches **6 counted failures, or the same verification reason 4
+times**, since the guard was armed or since the owner's last *Try again*, the
+keeper stamps `loopGuard` and the card shows as blocked: "Loop guard: … ".
+*Try again* (or *Work on it*) clears the hold and restarts the count; nothing
+else does. The verify park and the five-failure park still win when they apply.
+
+**Memory alignment** runs in the same pass. A run's "finished, verifying" line
+is now stored as an observation, not a verification; when the verifier has
+spoken, the keeper appends its verdict to the card's folder ("verified done —
+…", "not verified — …", "parked — …", "loop guard — …", "stopped — resumes
+from saved progress") and supersedes the stale claim. A finished card's folder
+is marked `settled`, so its notes stop reaching other workers' memory primer.
+Owner notes and decisions are never rewritten or evicted by the keeper. Open
+issue questions about finished or deleted cards are superseded. The overseer's
+playbook merges near-duplicate lessons and retires lessons about a local
+finding that has stayed clear for four reviews, and keeps the learned hot and
+cold paths across reviews (they used to be dropped on every review).
+
+**Switches.** `memoryAlign`, `loopGuard` and `loopGuardApply` are assistant
+prefs (`assistant:prefs`), all on by default. `loopGuardApply: false` keeps
+counting and reports "would hold N" without holding anything; `loopGuard:
+false` releases every hold the keeper stamped.
+
+**Seeing it.** The keeper's tidy line in the activity log carries the pass's
+summary ("held 1 looping card · aligned 5 memory notes · 3 stalled
+reviews"). For the whole picture, run the read-only report:
+
+```powershell
+node tools/memory_audit.mjs
+node tools/memory_audit.mjs --data "dist/Mefi Studio AI+/resources/app/data/projects/<projectId>"
+```
+
+It prints every card by state (done, doing, review, stopped, stalled,
+looping, would-hold), where its memory disagrees with the board, duplicate
+card families and duplicate lessons. It reads copies in memory and never
+writes to the data folder (`--json` output goes under `tools/logs/` only).

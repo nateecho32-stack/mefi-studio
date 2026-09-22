@@ -126,6 +126,29 @@ test("explicit task admission reaches Jev once after persistence without waiting
   assert.equal(calls.length, 0);
 });
 
+test("a split follow-up keeps its split lineage through the real task admission, apart from delegation's", async () => {
+  const { context } = host();
+  const board = { tasks: [] };
+  let serial = 0;
+  Object.assign(context, {
+    crypto: { randomBytes: () => ({ toString: () => String(++serial) }) },
+    projectRoot: () => "/fixture-project",
+    workTitleKey: (title) => String(title).trim().toLowerCase(),
+    mutateBoard: async (mutate) => mutate(board),
+    refreshAutopilotQueue: async () => {}, assistantLog() {},
+    getJevQueue: async () => ({ enqueue: () => new Promise(() => {}) }),
+  });
+  vm.runInContext(section("async function assistantCreateTask(", "// The `opencode run` child"), context);
+  await context.assistantCreateTask({ title: "Follow-up 2: Add the retry banner", source: "chat", splitFrom: "task_parent", splitDepth: 2 });
+  const [split] = board.tasks;
+  assert.equal(split.splitFrom, "task_parent");
+  assert.equal(split.splitDepth, 2);
+  assert.equal(split.parentTaskId, undefined, "parentTaskId and depth stay the delegation lineage");
+  assert.equal(split.depth, undefined);
+  const ordinary = await context.assistantCreateTask({ title: "An ordinary task" });
+  assert.equal("splitFrom" in ordinary || "splitDepth" in ordinary, false);
+});
+
 test("smoke, capture, and CLI hosts suppress Jev queue admission", async () => {
   for (const mode of ["SMOKE", "CAPTURE", "CLI_MODE"]) {
     const { context, enqueued } = host();

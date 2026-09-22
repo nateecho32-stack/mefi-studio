@@ -4954,11 +4954,25 @@ async function assistantKeeperJob(now, entry) {
   await consumeReviewedTaskGroups(now);
   const assistant = await getAssistant();
   const store = assistantCache.store;
+  // The board this pass tidies. A project switch while its writes are in
+  // flight hands assistantState to another board: nothing is written back.
+  const projectId = projects.current().id;
   // Checkpoints are a fourth store the gateway does not carry: read them
   // BEFORE the mutation — transactional mutators are synchronous, so nothing
   // may be awaited inside.
   const checkpoints = await (await getEyes()).readJson(CHECKPOINTS_PATH, {});
+  // The audit pass (loop ledger and holds, memory against the board, stale
+  // asks) runs after tidy in the same mutation when the loaded assistant.mjs
+  // has one. It stamps holds only because this host's workState honours them.
+  const audits = typeof assistant.auditPass === "function";
+  const hostCaps = { loopHold: typeof backlog !== "undefined" && backlog?.LOOP_HOLD === 1 };
+  let foldersIn = {};
+  let auditError = null;
   const result = await mutateBoard((board) => {
+    // What the folders were when tidy read them: the write-back below merges
+    // against this, folder by folder.
+    foldersIn = assistantState.nodeFolders ?? {};
+    auditError = null;
     const tidy = assistant.tidy({
       tasks: board.tasks,
       ideas: board.ideas,
@@ -4972,16 +4986,37 @@ async function assistantKeeperJob(now, entry) {
       now,
       prefs: assistantState.prefs,
     });
+    let audit = null;
+    if (audits) {
+      // Never thrown out of the mutator: a failing audit keeps tidy's result.
+      try {
+        audit = assistant.auditPass({
+          tasks: tidy.tasks,
+          nodeFolders: tidy.nodeFolders,
+          questions: assistantState.questions ?? [],
+          sessions: store?.sessions ?? null,
+          now,
+          prefs: assistantState.prefs,
+          armedAt: assistantState.housekeeping?.loopArmedAt || now,
+          hostCaps,
+        });
+      } catch (error) {
+        auditError = error;
+        audit = null;
+      }
+    }
     return {
-      tasks: tidy.tasks,
+      tasks: Array.isArray(audit?.tasks) ? audit.tasks : tidy.tasks,
       ideas: tidy.ideas,
       requests: tidy.requests,
       checkpoints: tidy.checkpoints,
       nodeFolders: tidy.nodeFolders,
       report: tidy.report,
       changed: tidy.changed,
+      audit: audit ? { memoryDelta: audit.memoryDelta, supersedeQuestionIds: audit.supersedeQuestionIds, report: audit.report, text: audit.text } : null,
     };
   });
+  if (auditError) logError(`audit pass failed: ${auditError?.message ?? auditError}`);
   // Checkpoints are a fourth store the gateway does not carry; they were read
   // and compared inside the lock, so their write is serialized with the rest.
   if (result.checkpoints !== undefined) {
@@ -4992,10 +5027,51 @@ async function assistantKeeperJob(now, entry) {
       send("eyes:checkpoints", result.checkpoints);
     }
   }
-  // The node folders live in the assistant state, not a data file: a cleaned
-  // folder is a state change, not a store write.
-  if (!same(assistantState.nodeFolders ?? {}, result.nodeFolders ?? {})) assistantState.nodeFolders = result.nodeFolders ?? {};
   const report = result.report ?? {};
+  // The board write landed on this pass's own board; the assistant state is
+  // another project's now (or the pass was abandoned), so it is left alone.
+  if (entry?.abandoned === true || !assistantState || (assistantState.projectId != null && assistantState.projectId !== projectId)) {
+    return { ok: true, text: `${report.text || "tidied"} · project changed, nothing written back`, intel: { archived: report.tasksArchived ?? 0, pruned: report.ideasPruned ?? 0, cleared: report.requestsCleared ?? 0, dropped: report.checkpointsDropped ?? 0, folders: report.foldersCleaned ?? 0 }, messages: [] };
+  }
+  // The node folders live in the assistant state, not a data file: a cleaned
+  // folder is a state change, not a store write. Merged folder by folder
+  // against what tidy read: a folder written while the board write was in
+  // flight (a run's verdict, the owner's note) keeps that write.
+  const live = assistantState.nodeFolders ?? {};
+  const tidied = result.nodeFolders ?? {};
+  let folders = null;
+  for (const key of new Set([...Object.keys(foldersIn), ...Object.keys(tidied)])) {
+    if (!same(live[key], foldersIn[key]) || same(live[key], tidied[key])) continue;
+    if (!folders) folders = { ...live };
+    if (tidied[key] === undefined) delete folders[key];
+    else folders[key] = tidied[key];
+  }
+  if (folders) assistantState.nodeFolders = folders;
+  const audit = result.audit ?? null;
+  // The audit's memory notes and relabels, onto the live folders: a folder
+  // that is gone by now is skipped, never recreated.
+  if (audit?.memoryDelta && typeof assistant.applyMemoryDelta === "function") {
+    try {
+      const aligned = assistant.applyMemoryDelta(assistantState, audit.memoryDelta);
+      if (aligned !== assistantState && aligned?.nodeFolders) assistantState.nodeFolders = aligned.nodeFolders;
+    } catch (error) {
+      logError(`memory alignment failed: ${error?.message ?? error}`);
+    }
+  }
+  // Open issue asks about work that finished or left the board could only
+  // reopen it if answered. Those still open now are superseded; one answered
+  // meanwhile keeps its answer.
+  const staleAsks = new Set(Array.isArray(audit?.supersedeQuestionIds) ? audit.supersedeQuestionIds : []);
+  let superseded = 0;
+  for (const question of staleAsks.size && Array.isArray(assistantState.questions) ? assistantState.questions : []) {
+    if (!staleAsks.has(question?.id) || question.status !== "open") continue;
+    question.status = "superseded";
+    superseded += 1;
+    assistantEmit({ kind: "question", ...question });
+  }
+  const counts = audit?.report ?? {};
+  const tidyText = report.text || (result.written?.length ? "tidied" : "nothing to tidy");
+  const prior = assistantState.housekeeping ?? {};
   assistantState.housekeeping = {
     lastAt: now,
     tasksArchived: report.tasksArchived ?? 0,
@@ -5003,10 +5079,21 @@ async function assistantKeeperJob(now, entry) {
     requestsCleared: report.requestsCleared ?? 0,
     checkpointsDropped: report.checkpointsDropped ?? 0,
     foldersCleaned: report.foldersCleaned ?? 0,
-    lastText: report.text || (result.written?.length ? "tidied" : "nothing to tidy"),
+    lastText: audit?.text ? (tidyText === "nothing to tidy" ? audit.text : `${tidyText} · ${audit.text}`) : tidyText,
+    // Armed once, by the first pass that audits with the guard on: outcomes
+    // logged before it are never charged. The guard switched off disarms it,
+    // so switching it back on charges nothing logged while it was off.
+    loopArmedAt: audit ? (assistantState.prefs?.loopGuard === false ? 0 : Number(prior.loopArmedAt) || now) : Number(prior.loopArmedAt) || 0,
+    loopsHeld: counts.loopsHeld ?? 0,
+    wouldHold: counts.wouldHold ?? 0,
+    stalled: counts.stalled ?? 0,
+    memoryAligned: counts.memoryAligned ?? 0,
+    questionsSuperseded: superseded,
   };
   assistantLog("tidy", assistantState.housekeeping.lastText);
-  if (entry && result.written?.length) {
+  // Only tidy's own changes are visited: a pass that wrote nothing but loop
+  // counts archived nothing.
+  if (entry && result.written?.length && result.changed !== false) {
     const archived = (Array.isArray(result.tasks) ? result.tasks : []).filter((task) => task && task.id && task.status === "archived");
     const folded = (assistantState.organization?.counts?.folded ?? 0) > 0 && (report.checkpointsDropped || report.requestsCleared) ? [FOLDED_NODE] : [];
     const targets = [...archived.map((task) => taskTarget(task.id)), ...folded];
@@ -6658,6 +6745,11 @@ async function assistantWorkOn(raw) {
         delete task.verification;
         delete task.verifyAttempts;
         delete task.verificationReceiptId;
+        delete task.providerFailures;
+        // The owner's acknowledgement, as backlog.retryTask gives it: a loop
+        // hold is released and the ledger restarts from now.
+        delete task.loopGuard;
+        task.loopLedger = { v: 1, at: now, n: 0, reasons: {} };
         task.status = "open";
       }
       task.pin = true;
@@ -7050,16 +7142,22 @@ async function assistantRaiseIssue(raw, { openAsks = null } = {}) {
   if (!triage.ok) return null;
   const issue = triage.issue;
   assistantLog("issue", `${issue.taskTitle ? `"${assistantClip(issue.taskTitle, 60)}": ` : ""}${issue.kind} — ${issue.title}`);
+  // A map with no triage node settles nothing and asks nothing: the issue
+  // stays in the activity log so nothing is lost.
+  if (!policy.triage) return null;
   if (triage.decision === "auto") {
+    // The assistant's answer is recorded on the card, never applied as a
+    // retry: settle has already re-armed a failed run with its failure
+    // counted, and a retry here would erase the budgets that stop a loop.
     const applied = await assistantIssueAction({ action: triage.answer.verb, payload: { taskId: issue.taskId, issueKind: issue.kind } },
-      `the assistant settled this: ${triage.answer.reason}`);
+      `the assistant settled this: ${triage.answer.reason}`, { origin: "assistant" });
     assistantLog("decision", `settled by the assistant · ${triage.answer.label}${applied?.error ? ` — ${applied.error}` : ""}`);
     await saveAssistant({ force: true });
     return null;
   }
-  if (!policy.triage || !policy.asks) {
-    // A map with no triage or ask node deliberately keeps decisions off the
-    // rail; the issue stays in the activity log so nothing is lost.
+  if (!policy.asks) {
+    // A map with no ask node deliberately keeps decisions off the rail; the
+    // issue stays in the activity log so nothing is lost.
     return null;
   }
   // One open card per task and kind: a run that keeps hitting the same wall
@@ -7072,12 +7170,15 @@ async function assistantRaiseIssue(raw, { openAsks = null } = {}) {
 
 // What an answer does to the work it was about. Every verb writes the decision
 // onto the task first — the worker re-reads its own record, so the next attempt
-// starts from what was decided — and only then re-arms it.
-async function assistantIssueAction(action = {}, note = null) {
+// starts from what was decided — and only then re-arms it. Only the owner's
+// answer re-arms: the assistant's own (origin "assistant") is a record, and an
+// answer about work that has since finished is kept without reopening it.
+async function assistantIssueAction(action = {}, note = null, { origin = "owner" } = {}) {
   const verb = String(action.action ?? "").trim();
   const payload = action.payload ?? {};
   const taskId = typeof payload.taskId === "string" ? payload.taskId : null;
   const text = String(note ?? "").trim().slice(0, 400);
+  const byAssistant = origin === "assistant";
   if (verb === "hold") return { ok: true, held: true };
   if (!taskId) return { ok: false, error: "That decision is not about a task on this board." };
   const wording = {
@@ -7092,11 +7193,27 @@ async function assistantIssueAction(action = {}, note = null) {
   }[verb];
   if (!wording) return { ok: false, error: `unknown decision: ${verb}` };
   let title = null;
+  let finished = false;
+  let split = null;
   const recorded = await mutateBoard((board) => {
     const index = board.tasks.findIndex((task) => task?.id === taskId);
     if (index < 0) return { ok: false, error: "That task is no longer on the board." };
     const task = board.tasks[index];
+    if (verb === "split") {
+      // A split extends a chain from its root title: "Follow-up: X", then
+      // "Follow-up 2: X" and "Follow-up 3: X", so a follow-up's own split never
+      // collides with it. splitFrom/splitDepth carry the lineage (parentTaskId
+      // and depth mean delegation). A chain split before splitDepth existed
+      // counts its own title prefixes.
+      const lead = /^(?:Follow-up(?: \d+)?:\s*)+/i.exec(String(task.title ?? ""))?.[0] ?? "";
+      const levels = [...lead.matchAll(/Follow-up(?: (\d+))?:/gi)].reduce((sum, match) => sum + (Number(match[1]) || 1), 0);
+      const depth = (Number.isInteger(task.splitDepth) && task.splitDepth > 0 ? task.splitDepth : levels) + 1;
+      if (depth > 3) return { ok: false, error: "This follow-up chain is 3 deep; edit the parent or create a task by hand." };
+      const root = assistantClip(String(task.title ?? "").slice(lead.length) || "the task", 60);
+      split = { depth, title: depth === 1 ? `Follow-up: ${root}` : `Follow-up ${depth}: ${root}` };
+    }
     title = task.title;
+    finished = task.status === "done" || task.status === "archived";
     const at = Date.now();
     task.decisions = [...(Array.isArray(task.decisions) ? task.decisions : []), {
       at, kind: payload.issueKind ?? null, choice: verb, text: text || null,
@@ -7105,22 +7222,29 @@ async function assistantIssueAction(action = {}, note = null) {
     if (verb === "grant" && payload.permission) {
       task.grants = [...new Set([...(Array.isArray(task.grants) ? task.grants : []), String(payload.permission).slice(0, 60)])].slice(0, 10);
     }
-    task.logs = [...(task.logs ?? []), { at, kind: "decision", text: `You decided: ${wording}${text ? ` — ${text}` : ""}` }].slice(-40);
+    task.logs = [...(task.logs ?? []), { at, kind: "decision", text: `${byAssistant ? "Assistant decided" : "You decided"}: ${wording}${text ? ` — ${text}` : ""}` }].slice(-40);
     task.updatedAt = at;
     return { ok: true };
   });
   if (!recorded?.ok) return { ok: false, error: recorded?.error ?? "That task could not be updated." };
+  // No retry, pin or counter reset for the assistant's own answer: the
+  // budgets that park a looping card stay intact.
+  if (byAssistant) return { ok: true, task: taskId, decision: verb, rearmed: false };
   // A heavier retry is a routing hint for the next dispatch, held in memory
   // exactly like the classifier's own shape answers.
   if (verb === "retry-deep") rememberWorkShape(taskId, { weight: "deep", intent: "build", complexity: "high", role: "worker" });
+  // A split files the uncovered work as a new card and re-arms nothing, so it
+  // is made even when the card it was split from has finished meanwhile.
   if (verb === "split") {
     const created = await assistantCreateTask({
-      title: `Follow-up: ${assistantClip(title ?? "the task", 60)}`,
+      title: split.title,
       prompt: text || `Work the agent found while building "${title ?? "the task"}" that its brief did not cover. Decide the scope from the parent task's decision log.`,
-      source: "chat", pin: false,
+      source: "chat", pin: false, splitFrom: taskId, splitDepth: split.depth,
     });
     if (!created) return { ok: false, error: "The follow-up task could not be created." };
   }
+  // A late answer never reopens finished work: it stays recorded on the card.
+  if (finished) return { ok: true, task: taskId, decision: verb, rearmed: false };
   if (verb === "replan") {
     // Planning is a surface, not a background pass: the card is re-armed with
     // the decision on it and the plan is opened from the task itself.
@@ -7333,6 +7457,23 @@ async function assistantOfferQuestion() {
 // decides whether it reaches the owner at all or the assistant settles it.
 function assistantBuildFailureQuestion(job, failures, evidence = {}) {
   if (!assistantState || !job?.ref?.id) return null;
+  // Nothing to decide when the stop was not the card's doing. evidence.error
+  // is set only for a start-watchdog kill, which settle requeues uncharged
+  // while start grace remains; a provider outage (usage limit, no connection)
+  // is not the card's fault either. Only this run's own words are read:
+  // job.ref.lastRunError is the previous run's.
+  const startFailures = Number(evidence.startFailures ?? job.ref.startFailures) || 0;
+  if (evidence.error != null && typeof EXECUTOR_START_FAILURE_GRACE === "number" && startFailures < EXECUTOR_START_FAILURE_GRACE) return null;
+  // Settle already requeued an outage on its own backoff with no attempt
+  // charged; there is nothing for anyone to decide. finish() hands over
+  // settle's own verdict (evidence.providerDown), so an outage charged past
+  // its grace is raised like any failure. Without that verdict the same test
+  // settle uses reads this run's error and last words.
+  const tail = (Array.isArray(evidence.outputTail) ? evidence.outputTail : []).filter((line) => line != null).map(String);
+  const outage = typeof evidence.providerDown === "boolean" ? evidence.providerDown
+    : typeof assistantModule !== "undefined" && typeof assistantModule?.isProviderOutage === "function"
+      && assistantModule.isProviderOutage({ error: evidence.error ?? null, lastWords: tail.at(-1) ?? null, resultNote: tail.some((line) => line.startsWith("MEFI_RESULT:")) }) === true;
+  if (outage) return null;
   return assistantRaiseIssue(agentIssues.runFailureIssue({
     task: { id: job.ref.id, title: job.title },
     failures,
@@ -7448,7 +7589,9 @@ async function assistantClearDoneLog() {
 async function assistantSetPrefs(patch = {}) {
   await ensureAssistant();
   const clean = {};
-  for (const key of ["proactive", "keepAwake", "background"]) if (typeof patch?.[key] === "boolean") clean[key] = patch[key];
+  // memoryAlign, loopGuard and loopGuardApply are the keeper audit's kill
+  // switches (assistant.auditPass); loopGuard off releases the keeper's holds.
+  for (const key of ["proactive", "keepAwake", "background", "memoryAlign", "loopGuard", "loopGuardApply"]) if (typeof patch?.[key] === "boolean") clean[key] = patch[key];
   for (const key of ["foldAfterMinutes", "staleAfterHours", "tidyDoneAfterHours"]) {
     const value = Number(patch?.[key]);
     if (patch?.[key] !== undefined && Number.isFinite(value) && value > 0) clean[key] = value;
@@ -8313,7 +8456,7 @@ async function promoteRequestsToTasks() {
 // counts as live too. Conversation admission additionally checks equivalent
 // full briefs, inbox entries and owned workers under the same board lock, and
 // returns { created, existing } so the reply can describe what actually happened.
-async function assistantCreateTask({ title, prompt = "", source = "chat", focused = null, pin = false, conversation = null } = {}) {
+async function assistantCreateTask({ title, prompt = "", source = "chat", focused = null, pin = false, conversation = null, splitFrom = null, splitDepth = null } = {}) {
   const cleanTitle = String(title ?? "").trim().slice(0, 90);
   if (!cleanTitle) return conversation ? { created: null, existing: null } : null;
   const key = workTitleKey(cleanTitle);
@@ -8337,6 +8480,13 @@ async function assistantCreateTask({ title, prompt = "", source = "chat", focuse
   if (pin) {
     task.pin = true;
     task.pinAt = now;
+  }
+  // A split's lineage (assistantIssueAction): the card it was split from and
+  // how deep the follow-up chain runs. Not parentTaskId/depth, which are the
+  // delegation lineage the handoff and delegation guards read.
+  if (typeof splitFrom === "string" && splitFrom) {
+    task.splitFrom = splitFrom.slice(0, 80);
+    task.splitDepth = Math.max(1, Math.floor(Number(splitDepth) || 1));
   }
   const target = focused?.target ?? null;
   if (target?.kind && target?.id) {
@@ -9784,6 +9934,28 @@ async function spawnNextJob() {
     // recorded as sawDone/result, so neither stands in for its last words.
     const said = (line) => !String(line).startsWith(EXECUTOR_DONE_MARK) && !String(line).startsWith("MEFI_RESULT:");
     const lastWords = (entry.outputTail ?? []).filter(said).at(-1) ?? null;
+    // A provider outage (usage limit, rate limit, no connection) ended this
+    // run, not the brief: settle requeues it on the outage backoff with no
+    // attempt charged, so a long outage cannot spend every card's five tries.
+    // assistant.isProviderOutage reads only this run's error and last words,
+    // and the failure question below is handed the same verdict. The grace is
+    // bounded, so a genuine failure misread as an outage still reaches the
+    // five-try park and triage: the try is charged once a run that started on
+    // this route after the card's last outage has finished, or once the card
+    // has sat out 7 outages in a row (5m doubling to 2h: 6.6h, past a 5-hour
+    // usage window).
+    const providerRoute = String((typeof runRoute !== "undefined" ? runRoute?.via : null) ?? "");
+    if (ok) {
+      if (!(autopilot.providerUpAt instanceof Map)) autopilot.providerUpAt = new Map();
+      autopilot.providerUpAt.set(providerRoute, Math.max(Number(autopilot.providerUpAt.get(providerRoute)) || 0, Number(entry.startedAt) || 0));
+    }
+    const providerSaid = !ok && !userStop && typeof assistantModule !== "undefined" && typeof assistantModule?.isProviderOutage === "function"
+      && assistantModule.isProviderOutage({ error: errorMessage, lastWords, sawDone: entry.sawDone, resultNote: entry.resultNote }) === true;
+    const providerStreak = Number(job.ref?.providerFailures) || 0;
+    const providerUp = providerStreak >= 7 || (providerStreak > 0
+      && (Number(autopilot.providerUpAt instanceof Map ? autopilot.providerUpAt.get(providerRoute) : 0) || 0) > (Number(job.ref?.lastAttempt?.at) || 0));
+    const providerDown = providerSaid && !providerUp;
+    const providerCooldown = (streak) => Math.min(2 * 3600 * 1000, 5 * 60000 * 2 ** (Math.max(1, streak) - 1));
     // The durable record: what ran, how it ended, and the tail of what it
     // said (sentinel and result lines aside) — the work log that survives the app.
     executorLog({
@@ -9846,6 +10018,9 @@ async function spawnNextJob() {
           outputTail: entry.outputTail ?? [],
           runId: entry.id,
           sessionId: sessionId ?? null,
+          // Settle's own verdict: an outage it requeues uncharged is asked
+          // about by no one; one charged past its grace goes to triage.
+          providerDown,
         })?.catch?.(() => {});
       } catch {}
     }
@@ -9935,6 +10110,8 @@ async function spawnNextJob() {
             const next = { ...item, status: "verifying", lastAttempt: attempt };
             // A new attempt starts a new evidence streak, as a task's does.
             delete next.verification;
+            // The provider answered this run: an outage streak is over.
+            delete next.providerFailures;
             // Direct requests owe the same follow-ups as task-backed runs.
             // Keep them on the parent before attempting the separate queue write.
             if (entry.handoffs.length) next.remaining = entry.handoffs.slice(0, EXECUTOR_MAX_HANDOFFS).map((handoff) => handoff.title);
@@ -10008,6 +10185,16 @@ async function spawnNextJob() {
               next.nextRunAt = Date.now() + Math.min(30 * 60000, 60000 * 2 ** (next.startFailures - 1));
               return next;
             }
+            if (providerDown) {
+              next.providerFailures = (Number(item.providerFailures) || 0) + 1;
+              next.lastRunError = String(lastWords || errorMessage || `exit ${code ?? "?"}`).slice(0, 160);
+              next.nextRunAt = Date.now() + providerCooldown(next.providerFailures);
+              return next;
+            }
+            // A provider error charged past its grace keeps the streak, so
+            // the next one is charged too; any other failure ends it.
+            if (providerSaid) next.providerFailures = (Number(item.providerFailures) || 0) + 1;
+            else delete next.providerFailures;
             const failures = (item.runFailures ?? 0) + 1;
             next.runFailures = failures;
             next.lastRunError = lastWords || `exit ${code ?? "?"}`;
@@ -10051,6 +10238,7 @@ async function spawnNextJob() {
         delete task.lastRunError;
         delete task.runFailures;
         delete task.startFailures; // the runner did start this time
+        delete task.providerFailures; // and the provider answered it
         delete task.nextRunAt;
         delete task.verification;
         // Follow-ups this run handed on are remaining obligations, kept
@@ -10122,6 +10310,18 @@ async function spawnNextJob() {
         task.nextRunAt = Date.now() + startCooldown;
         task.lastRunError = String(errorMessage ?? "the worker never started").slice(0, 160);
         executorResume.appendLog(task, `worker never started — ${task.lastRunError} · requeued in ${Math.round(startCooldown / 60000)}m, no attempt charged (start ${task.startFailures}/${EXECUTOR_START_FAILURE_GRACE})`, { at: Date.now() });
+      } else if (providerDown) {
+        // The provider was down, not the card: back on the outage backoff
+        // (5m, doubling to 2h while it lasts) with no attempt charged.
+        task.status = "open";
+        delete task.runId;
+        delete task.lease;
+        delete task.doneAt;
+        task.providerFailures = (Number(task.providerFailures) || 0) + 1;
+        const cooldown = providerCooldown(task.providerFailures);
+        task.nextRunAt = Date.now() + cooldown;
+        task.lastRunError = String(lastWords || errorMessage || `exit ${code ?? "?"}`).slice(0, 160);
+        executorResume.appendLog(task, `provider unavailable (exit ${code ?? "?"}) · ${task.lastRunError} · requeued in ${Math.round(cooldown / 60000)}m, no attempt charged`, { at: Date.now() });
       } else {
         // Failure isolation: the task cools down on its own backoff
         // (10m, 20m, 40m… capped at 2h) while the pool keeps running —
@@ -10130,6 +10330,10 @@ async function spawnNextJob() {
         delete task.runId;
         delete task.lease;
         delete task.doneAt;
+        // A provider error charged past its grace keeps the streak, so the
+        // next one is charged too; any other failure ends it.
+        if (providerSaid) task.providerFailures = (Number(task.providerFailures) || 0) + 1;
+        else delete task.providerFailures;
         task.runFailures = (task.runFailures ?? 0) + 1;
         // First miss retries in a minute with the error in the prompt so
         // the next agent works on resolving it; later misses back off.

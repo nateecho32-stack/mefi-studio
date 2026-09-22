@@ -159,6 +159,21 @@ test("Work on reports a claimed builder as preparing until it has a child proces
   assert.equal(h.board().requests.length, 0);
 });
 
+test("Work on it on a loop-held card re-arms it and resets its ledger", async () => {
+  const loopGuard = { v: 1, at: 50, kind: "attempts", count: 6, reason: "run failed exit N", remedy: "Read the last attempts, edit or split the brief, then choose Try again.", by: "keeper" };
+  const h = workOnHost({ paused: true, tasks: [{ id: "held", title: "Looping card", status: "open", prompt: "A looping brief", providerFailures: 1, loopLedger: { v: 1, at: 50, n: 6, reasons: { "run failed exit N": 6 } }, loopGuard, logs: [] }] });
+  assert.equal(h.env.backlog.workState(h.board().tasks[0]).blockedBy, "loop");
+  const result = await h.env.assistantWorkOn({ kind: "task", id: "held", label: "Looping card" });
+  assert.equal(result.ok, true);
+  assert.match(result.where, /pinned "Looping card" to the front of the board/);
+  const task = h.board().tasks[0];
+  assert.equal(task.loopGuard, undefined, "the owner's ask releases the hold");
+  assert.equal(task.providerFailures, undefined);
+  assert.deepEqual(task.loopLedger, { v: 1, at: h.now(), n: 0, reasons: {} }, "nothing logged before the ask is counted again");
+  assert.equal(task.pin, true);
+  assert.equal(h.env.backlog.workState(task, h.now()).stage, "ready");
+});
+
 test("Work on preserves verification and reports it instead of queueing a second attempt", async () => {
   const h = workOnHost({ tasks: [{ id: "review", title: "Saved work", target, status: "awaiting_verification", lastAttempt: { result: "done: fixed" } }] });
   const result = await h.workOn();

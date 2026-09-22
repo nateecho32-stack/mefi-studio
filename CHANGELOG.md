@@ -8,6 +8,20 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Loop guard and memory alignment.** The keeper now keeps a small count on
+  every card of the failures its own brief caused (charged run failures, and at
+  most one failed verification per attempt), and holds a card that reaches 6 of
+  them, or the same verification reason 4 times, since the owner's last *Try
+  again*. Provider outages, restarts and stops are never counted; *Try again*
+  or *Work on it* releases the hold. The same pass brings each card's memory
+  folder in line with the board: a run's "finished, verifying" claim is an
+  observation until the verifier speaks, the verdict is written back, finished
+  cards' notes stop reaching other workers' primer, and owner notes are never
+  evicted. `node tools/memory_audit.mjs` prints the whole picture read-only:
+  every card as done, doing, review, stopped, stalled, looping or would-hold,
+  where memory and board disagree, duplicate card families and duplicate
+  lessons. Switches: the `memoryAlign`, `loopGuard` and `loopGuardApply`
+  prefs. See docs/agent-loop.md §10.
 - **Ad-free radio in Style & sound.** A new source tab plays twelve
   listener-funded stations from SomaFM and Radio Paradise, stations that
   carry no advertising at all, through Studio's own player, so the node tree
@@ -78,6 +92,23 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   112 ms, with every card settling exactly as before.
 
 ### Fixed
+- Automatic answers to a card's own issue no longer erase its retry budget: an
+  auto-settled run-failed, verify, blocked or check-failed issue used to call
+  Retry, which cleared `runFailures`, `verifyAttempts` and the backoff, so
+  the five-failure and three-verification parks never tripped. The assistant
+  now records its decision ("Assistant decided: …") and leaves the card on
+  settle's own backoff; a map with no triage node answers nothing by itself.
+- A provider outage (usage limit, rate limit, API unreachable) no longer spends
+  a card's tries: settle requeues it on an outage backoff (5 min doubling to
+  2 h) with no attempt charged, until another run on the same route succeeds
+  or the card has sat out 7 outages.
+- "Split the extra work out" no longer nests `Follow-up: Follow-up: …` cards
+  without lineage; splits are titled `Follow-up 2/3: …`, carry
+  `splitFrom`/`splitDepth`, stop at depth 3, and a split answered after the
+  card finished still creates its follow-up without reopening the card.
+- The overseer's playbook keeps its learned hot and cold file paths across
+  reviews (every review used to drop them), merges near-duplicate lessons and
+  retires local-finding lessons that have stayed clear for four reviews.
 - **Brain maps: New, Duplicate and Build with AI work in the app.** All three
   asked their question with `window.prompt`, which Electron does not
   implement, so they silently did nothing; they now ask in a panel inside the

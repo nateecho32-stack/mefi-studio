@@ -24,7 +24,10 @@ export const CAPS = { messages: 200, log: 300, fixes: 100, work: 40, questions: 
 export const DEFAULT_POLICY = { foldAfterMinutes: 60, staleAfterHours: 24, maxSessions: 8, maxTodosPerSession: 14 };
 export const PARALLEL_MAX = 12;
 export const AI_PARALLEL_MAX = 6;
-export const DEFAULT_PREFS = { proactive: true, keepAwake: true, background: true, backlogMode: false, foldAfterMinutes: 60, staleAfterHours: 24, tidyDoneAfterHours: 24, parallel: 8, aiParallel: 4 };
+// memoryAlign, loopGuard and loopGuardApply are the keeper audit pass's kill
+// switches (auditPass): aligning memory with the board, counting outcomes, and
+// stamping a hold. loopGuard off also releases every hold the keeper stamped.
+export const DEFAULT_PREFS = { proactive: true, keepAwake: true, background: true, backlogMode: false, foldAfterMinutes: 60, staleAfterHours: 24, tidyDoneAfterHours: 24, parallel: 8, aiParallel: 4, memoryAlign: true, loopGuard: true, loopGuardApply: true };
 
 // One lag spike is a resample signal. The foreman only holds after two
 // consecutive samples strictly above the threshold.
@@ -271,7 +274,10 @@ export function emptyState(now = Date.now()) {
       folded: [],
       counts: { sessions: 0, active: 0, stale: 0, folded: 0, hiddenTodos: 0 },
     },
-    housekeeping: { lastAt: 0, tasksArchived: 0, ideasPruned: 0, requestsCleared: 0, checkpointsDropped: 0, foldersCleaned: 0, lastText: "" },
+    // loopArmedAt is set once, by the first keeper pass that runs the audit:
+    // outcomes logged before it are never charged to a card. The other audit
+    // counters are the last pass's, like the tidy counters beside them.
+    housekeeping: { lastAt: 0, tasksArchived: 0, ideasPruned: 0, requestsCleared: 0, checkpointsDropped: 0, foldersCleaned: 0, lastText: "", loopArmedAt: 0, loopsHeld: 0, wouldHold: 0, stalled: 0, memoryAligned: 0, questionsSuperseded: 0 },
     problems: [],
     questions: [],
     unread: 0,
@@ -506,6 +512,12 @@ export function normalizeState(raw, now = Date.now()) {
       checkpointsDropped: Math.floor(num(housekeeping.checkpointsDropped, 0)),
       foldersCleaned: Math.floor(num(housekeeping.foldersCleaned, 0)),
       lastText: str(housekeeping.lastText),
+      loopArmedAt: num(housekeeping.loopArmedAt, 0),
+      loopsHeld: Math.floor(num(housekeeping.loopsHeld, 0)),
+      wouldHold: Math.floor(num(housekeeping.wouldHold, 0)),
+      stalled: Math.floor(num(housekeeping.stalled, 0)),
+      memoryAligned: Math.floor(num(housekeeping.memoryAligned, 0)),
+      questionsSuperseded: Math.floor(num(housekeeping.questionsSuperseded, 0)),
     };
     state.problems = asArray(raw.problems).map(normalizeProblem).filter(Boolean);
     state.questions = clampTail(asArray(raw.questions).map(normalizeQuestion).filter(Boolean), CAPS.questions);
@@ -736,9 +748,12 @@ const normalizeOverseerFinding = (entry) =>
   isObject(entry) && str(entry.title).trim()
     ? { severity: oneOf(entry.severity, OVERSEER_SEVERITIES, "info"), title: clip(entry.title, 80), detail: clip(entry.detail, 240), persisting: bool(entry.persisting, false) }
     : null;
+// `quiet` counts the reviews in a row that merged without the lesson's own
+// finding (see LOCAL_FINDING_PATTERNS); it only ever retires a local-finding
+// lesson, never one the AI wrote.
 const normalizeOverseerLesson = (entry) =>
   isObject(entry) && str(entry.text).trim()
-    ? { text: clip(entry.text, 200), hits: Math.max(1, Math.floor(num(entry.hits, 1))), firstAt: num(entry.firstAt, 0), lastAt: num(entry.lastAt, 0), source: oneOf(entry.source, ["local", "ai"], "local") }
+    ? { text: clip(entry.text, 200), hits: Math.max(1, Math.floor(num(entry.hits, 1))), firstAt: num(entry.firstAt, 0), lastAt: num(entry.lastAt, 0), source: oneOf(entry.source, ["local", "ai"], "local"), quiet: Math.floor(num(entry.quiet, 0)) }
     : null;
 const normalizeOverseerDirective = (entry) =>
   isObject(entry) && str(entry.text).trim()
@@ -865,6 +880,35 @@ export function overseerDigest(state, now = Date.now()) {
       return { reports: rows.filter((row) => row.facts?.ok !== false).length, fails: rows.filter((row) => row.facts?.ok === false).length };
     })(),
   };
+}
+
+// The titles overseerReview's add() below can produce, one pattern per title
+// (keep the two in step). A lesson made from one of these findings is a status
+// snapshot, not advice: "builders reporting failures: 2 failed runs" says what
+// was true at one review. overseerMerge retires such a lesson once its finding
+// has been absent for LESSON_QUIET_MERGES merges in a row. Group 1 is the
+// finding's identity, so "2 open problems" and "3 open problems" are one
+// finding and "briefer failing" and "auditor failing" are two.
+const LOCAL_FINDING_PATTERNS = [
+  /^(ai link failing)(?=:|$)/i,
+  /^(\S+ failing)(?=:|$)/i,
+  /^\d+ (open problem)s?(?=:|$)/i,
+  /^(unanswered messages)(?=:|$)/i,
+  /^(jobs stuck in flight)(?=:|$)/i,
+  /^(builders reporting failures)(?=:|$)/i,
+  /^(stale sessions waiting)(?=:|$)/i,
+  /^(no api key)(?=:|$)/i,
+  /^(errors rising)(?=:|$)/i,
+  /^(housekeeping stale)(?=:|$)/i,
+];
+const LESSON_QUIET_MERGES = 4;
+function localFindingKey(text) {
+  const flat = str(text).trim();
+  for (const pattern of LOCAL_FINDING_PATTERNS) {
+    const match = pattern.exec(flat);
+    if (match) return match[1].toLowerCase();
+  }
+  return "";
 }
 
 // The deterministic pass — runs keyless, so the overseer keeps working while
@@ -1013,20 +1057,51 @@ export function overseerTune(prefs, tune) {
 // ("Resume: eyes.mjs atomic write guards" arriving twice, three times…)
 // bumps the existing row — a fresh `at`, moved to the tail so clampTail
 // keeps it — instead of appending another copy.
+//
+// Lessons consolidate on top of the exact-text dedupe: rewordings of one
+// lesson (the same tokens once digits are dropped, LESSON_SIMILARITY or more)
+// fold into the newest wording with their hits summed, and a local-finding
+// lesson retires after LESSON_QUIET_MERGES merges without its finding. Path
+// memory is not the review's to change: mergePaths owns it, so it rides
+// through untouched.
 export function overseerMerge(overseer, review, now = Date.now(), { digest = null, via = "local", directives = [] } = {}) {
   const base = normalizeOverseer(overseer);
   const source = isObject(review) ? review : {};
-  const lessons = [...base.lessons];
+  const incoming = [...base.lessons];
   for (const item of asArray(source.lessons)) {
     const text = clip(typeof item === "string" ? item : item?.text, 200);
     if (!text) continue;
     const key = text.toLowerCase();
-    const existing = lessons.find((entry) => entry.text.toLowerCase() === key);
+    const existing = incoming.find((entry) => entry.text.toLowerCase() === key);
     if (existing) {
       existing.hits += 1;
       existing.lastAt = now;
       if (via === "ai") existing.source = "ai";
-    } else lessons.push({ text, hits: 1, firstAt: now, lastAt: now, source: via === "ai" ? "ai" : "local" });
+    } else incoming.push({ text, hits: 1, firstAt: now, lastAt: now, source: via === "ai" ? "ai" : "local", quiet: 0 });
+  }
+  // Which local findings this review still saw: its findings, and the lessons
+  // it carries (an AI review's lesson list is the local one plus its own).
+  const seen = new Set(
+    [...asArray(source.findings).map((entry) => (isObject(entry) ? entry.title : entry)), ...asArray(source.lessons).map((entry) => (isObject(entry) ? entry.text : entry))]
+      .map(localFindingKey)
+      .filter(Boolean),
+  );
+  const lessons = [];
+  for (const group of lessonGroups(incoming)) {
+    const [newest] = group;
+    const firsts = group.map((entry) => entry.firstAt).filter((at) => at > 0);
+    const row = {
+      text: newest.text,
+      hits: group.reduce((sum, entry) => sum + entry.hits, 0),
+      firstAt: firsts.length ? Math.min(...firsts) : 0,
+      lastAt: Math.max(...group.map((entry) => entry.lastAt)),
+      source: group.some((entry) => entry.source === "ai") ? "ai" : "local",
+      quiet: Math.min(...group.map((entry) => entry.quiet)),
+    };
+    const finding = localFindingKey(row.text);
+    if (finding) row.quiet = seen.has(finding) ? 0 : row.quiet + 1;
+    if (finding && row.quiet >= LESSON_QUIET_MERGES) continue; // the snapshot outlived its finding
+    lessons.push(row);
   }
   lessons.sort((a, b) => b.hits - a.hits || b.lastAt - a.lastAt);
   const recorded = [...base.directives];
@@ -1051,7 +1126,42 @@ export function overseerMerge(overseer, review, now = Date.now(), { digest = nul
     directives: clampTail(recorded, OVERSEER_LIMITS.directives),
     scores: clampTail(score === null ? base.scores : [...base.scores, { at: now, score }], OVERSEER_LIMITS.scores),
     digest: digest ?? base.digest,
+    hotPaths: base.hotPaths,
+    coldPaths: base.coldPaths,
   };
+}
+
+// Near-duplicate lessons: the same tokens once digits and punctuation are
+// dropped ("builders reporting failures: 2 failed runs" and "…: 3 failed
+// runs"), by Jaccard similarity, and the same local finding if they come from
+// one. Every lesson lands in exactly one group; a group's rows run newest
+// first, so its first row is the wording overseerMerge keeps (a tie on lastAt
+// goes to the row written later), and the groups keep the order of their
+// first row in the list.
+const LESSON_SIMILARITY = 0.6;
+const lessonTokens = (text) => new Set(compactKey(String(text ?? "").replace(/\d+/g, " ")).split(" ").filter(Boolean));
+function tokenSimilarity(a, b) {
+  if (!a.size && !b.size) return 1;
+  let shared = 0;
+  for (const token of a) if (b.has(token)) shared += 1;
+  return shared / (a.size + b.size - shared);
+}
+export function lessonGroups(lessons) {
+  const rows = asArray(lessons).map(normalizeOverseerLesson).filter(Boolean);
+  const order = rows.map((row, index) => ({ row, index })).sort((a, b) => b.row.lastAt - a.row.lastAt || b.index - a.index);
+  const groups = [];
+  for (const { row, index } of order) {
+    const tokens = lessonTokens(row.text);
+    // Two local findings are two lessons however alike their words:
+    // "cluster-planner failing" is not "cluster-reviewer failing".
+    const finding = localFindingKey(row.text);
+    const group = groups.find((entry) => entry.finding === finding && tokenSimilarity(entry.tokens, tokens) >= LESSON_SIMILARITY);
+    if (group) {
+      group.rows.push(row);
+      group.first = Math.min(group.first, index);
+    } else groups.push({ tokens, finding, rows: [row], first: index });
+  }
+  return groups.sort((a, b) => a.first - b.first).map((group) => group.rows);
 }
 
 // Roles that own an open problem and have not run since it appeared. Cadence
@@ -1408,8 +1518,8 @@ export function mailLines(state, now = Date.now(), { limit = 6, maxAgeMs = MAIL_
 // The folder the way the chat and the cards read it: newest first, one line
 // each — "run · executor · autopilot "fix ipc" — done · 2h ago".
 export function nodeFolderLines(folders, target, { limit = 4, now = Date.now() } = {}) {
-  const key = typeof target === "string" ? target : nodeKeyOf(target);
-  const folder = key && isObject(folders) ? folders[key] : null;
+  const key = typeof target === "string" ? canonicalFolderKey(target) : nodeKeyOf(target);
+  const folder = folderAt(folders, key);
   return asArray(folder?.entries)
     .filter(isObject)
     .slice(-Math.max(1, limit))
@@ -1420,13 +1530,35 @@ export function nodeFolderLines(folders, target, { limit = 4, now = Date.now() }
 // `session:<id>` / `todo:<id>` / `task:<id>` — the folder key of a node target
 // ({ kind, id } as the tree and the focus use them). Null when the node kind
 // carries no folder.
+//
+// Task ids are tree ids: the rail and the focus write `task:<board id>`, so a
+// task's folder is `task:task:<board id>`. A writer that hands over the bare
+// board id (`{ kind: "task", id: "task_x" }`, or the string `task:task_x`) lands
+// on the same folder: without that, one card grew two folders and the chat's
+// notes missed the focus bonus in the builder primer.
 export function nodeKeyOf(target) {
-  return isObject(target) && FOLDER_NODE_KINDS.has(target.kind) && typeof target.id === "string" && target.id ? `${target.kind}:${target.id}` : null;
+  return isObject(target) && FOLDER_NODE_KINDS.has(target.kind) && typeof target.id === "string" && target.id ? canonicalFolderKey(`${target.kind}:${target.id}`) : null;
+}
+function canonicalFolderKey(key) {
+  const value = str(key);
+  return value.startsWith("task:") && !value.startsWith("task:task:") ? `task:${value}` : value;
+}
+// A folder by key from a map that may predate the canonical keys.
+function folderAt(folders, key) {
+  if (!key || !isObject(folders)) return null;
+  if (folders[key]) return folders[key];
+  const legacy = Object.keys(folders).find((name) => canonicalFolderKey(name) === key);
+  return legacy ? folders[legacy] : null;
 }
 
+// A run line that only says the run ended — "finished, verifying", "awaiting
+// verification", "stopped on request" — is an observation, not a
+// verification: the verifier has not spoken yet, and a stopped run did not
+// finish at all. Only a run line with a verdict in it is a `ver`.
+const MEMORY_CLAIM = /\bverifying\b|awaiting verification|stopped on request/i;
 export function inferMemoryCell(kind, text, role) {
   const body = String(text ?? "");
-  if (kind === "run") return /\bfail|\berror\b|gave up|exit [^0]/i.test(body) ? "rsk" : "ver";
+  if (kind === "run") return MEMORY_CLAIM.test(body) ? "obs" : /\bfail|\berror\b|gave up|exit [^0]/i.test(body) ? "rsk" : "ver";
   if (role === "overseer") return /\brisk\b|\bstale\b|\bfail/i.test(body) ? "rsk" : "bel";
   if (kind === "note" || (kind === "chat" && /\bdecid(?:ed|e)|going with|we will\b/i.test(body))) return "dec";
   return "obs";
@@ -1453,27 +1585,69 @@ const normalizeFolderEntry = (entry) => {
   };
 };
 
+// `settled` marks the folder of a task the board calls complete ("done", or
+// "archived" with a completion). The keeper's alignment sets and clears it;
+// compileMemory leaves a settled folder out of every primer but its own task's.
+const FOLDER_SETTLED = ["done", "archived"];
 const normalizeFolder = (folder) => {
   if (!isObject(folder)) return null;
   const raw = asArray(folder.entries).map(normalizeFolderEntry).filter(Boolean);
   if (!raw.length) return null;
   const entries = clampTail(raw, FOLDER_LIMITS.entries);
-  return { updatedAt: num(folder.updatedAt, entries[entries.length - 1].at), entries };
+  const settled = oneOf(folder.settled, FOLDER_SETTLED, null);
+  return { updatedAt: num(folder.updatedAt, entries[entries.length - 1].at), entries, ...(settled ? { settled } : {}) };
 };
 
-// A valid folder map from anything: junk keys and empty folders dropped, every
-// folder clamped to its newest entries, the map itself capped to the folders
-// touched most recently.
-export function normalizeNodeFolders(raw) {
-  const source = isObject(raw) ? raw : {};
-  const kept = [];
-  for (const [key, folder] of Object.entries(source)) {
-    if (!key.includes(":")) continue;
+// Two folders filed under one canonical key (a legacy bare `task:<board id>`
+// beside `task:task:<board id>`) become one: entries in time order, exact
+// repeats once, the newest kept, the later updatedAt.
+function mergeFolders(a, b) {
+  const seen = new Set();
+  const entries = [...a.entries, ...b.entries]
+    .sort((x, y) => x.at - y.at || (x.text < y.text ? -1 : x.text > y.text ? 1 : 0))
+    .filter((entry) => {
+      const id = JSON.stringify([entry.at, entry.kind, entry.text]);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  const settled = a.settled ?? b.settled ?? null;
+  return { updatedAt: Math.max(a.updatedAt, b.updatedAt), entries: clampTail(entries, FOLDER_LIMITS.entries), ...(settled ? { settled } : {}) };
+}
+
+// Every clean folder by canonical key, newest-touched first.
+function collectFolders(raw) {
+  const merged = new Map();
+  for (const [name, folder] of Object.entries(isObject(raw) ? raw : {})) {
+    if (!name.includes(":")) continue;
     const clean = normalizeFolder(folder);
-    if (clean) kept.push([key, clean]);
+    if (!clean) continue;
+    const key = canonicalFolderKey(name);
+    merged.set(key, merged.has(key) ? mergeFolders(merged.get(key), clean) : clean);
   }
-  kept.sort((a, b) => b[1].updatedAt - a[1].updatedAt);
-  return Object.fromEntries(kept.slice(0, FOLDER_LIMITS.folders));
+  return [...merged.entries()].sort((a, b) => b[1].updatedAt - a[1].updatedAt);
+}
+
+// The folder cap, over [key, folder] pairs sorted newest-touched first. Every
+// executor run writes a task folder and its spawned session's echo of the same
+// verdict, so a plain newest-first cut filled the map with session echoes and
+// left about half an hour of memory. Above the cap, session folders beyond the
+// newest FOLDER_SESSION_SHARE go first, oldest first; only then does the cut
+// reach task, todo and the kept session folders.
+const FOLDER_SESSION_SHARE = 6;
+function capFolders(sorted) {
+  if (sorted.length <= FOLDER_LIMITS.folders) return sorted;
+  const excess = sorted.length - FOLDER_LIMITS.folders;
+  const spare = sorted.filter(([key]) => key.startsWith("session:")).slice(FOLDER_SESSION_SHARE);
+  const evicted = new Set(spare.slice(Math.max(0, spare.length - excess)).map(([key]) => key));
+  return sorted.filter(([key]) => !evicted.has(key)).slice(0, FOLDER_LIMITS.folders);
+}
+
+// A valid folder map from anything: junk keys and empty folders dropped, every
+// folder clamped to its newest entries, legacy keys merged into their
+// canonical folder, the map itself capped (capFolders).
+export function normalizeNodeFolders(raw) {
+  return Object.fromEntries(capFolders(collectFolders(raw)));
 }
 
 // One context entry lands on a node's folder: newest last, the cap keeps the
@@ -1482,7 +1656,7 @@ export function normalizeNodeFolders(raw) {
 export function applyNodeContext(state, entry, now = Date.now()) {
   const current = isObject(state) ? state : emptyState(now);
   const source = isObject(entry) ? entry : {};
-  const key = typeof source.key === "string" && source.key.includes(":") ? source.key : nodeKeyOf(source.target);
+  const key = typeof source.key === "string" && source.key.includes(":") ? canonicalFolderKey(source.key) : nodeKeyOf(source.target);
   const clean = normalizeFolderEntry({
     at: num(source.at, now) || now,
     kind: source.kind,
@@ -1495,24 +1669,36 @@ export function applyNodeContext(state, entry, now = Date.now()) {
   });
   if (!key || !clean) return current;
   const folders = normalizeNodeFolders(current.nodeFolders);
-  const folder = folders[key] ? { updatedAt: folders[key].updatedAt, entries: [...folders[key].entries] } : { updatedAt: 0, entries: [] };
+  const folder = folders[key] ? { ...folders[key], entries: [...folders[key].entries] } : { updatedAt: 0, entries: [] };
   const last = folder.entries[folder.entries.length - 1];
   if (last && last.kind === clean.kind && last.text === clean.text) folder.entries[folder.entries.length - 1] = { ...clean, superseded: false };
   else {
-    const incomingKey = compactKey(clean.text);
-    const contra = compactKey(clean.contradicts);
-    for (const existing of folder.entries) {
-      if (existing.superseded) continue;
-      const existingKey = compactKey(existing.text);
-      if (incomingKey && existingKey === incomingKey) existing.superseded = true;
-      else if (contra && (existingKey === contra || existing.text.toLowerCase().includes(String(clean.contradicts).toLowerCase()))) existing.superseded = true;
-    }
+    supersedeEntries(folder.entries, clean);
     folder.entries.push(clean);
   }
   folder.entries = clampTail(folder.entries, FOLDER_LIMITS.entries);
   folder.updatedAt = clean.at;
   folders[key] = folder;
   return { ...current, nodeFolders: normalizeNodeFolders(folders) };
+}
+
+// What the owner pinned: a note, or a decision taken in chat.
+const ownerEntry = (entry) => entry.kind === "note" || entry.cell === "dec";
+
+// The supersede half of the write gate: an older entry with the same title key
+// as the incoming one, or one the incoming entry names in `contradicts`, is
+// flagged instead of left standing as a competing fact. The keeper's own notes
+// pass `spareOwner` so they never flag what the owner pinned.
+function supersedeEntries(entries, clean, { spareOwner = false } = {}) {
+  const incomingKey = compactKey(clean.text);
+  const contra = compactKey(clean.contradicts);
+  for (const existing of entries) {
+    if (existing.superseded) continue;
+    if (spareOwner && ownerEntry(existing)) continue;
+    const existingKey = compactKey(existing.text);
+    if (incomingKey && existingKey === incomingKey) existing.superseded = true;
+    else if (contra && (existingKey === contra || existing.text.toLowerCase().includes(String(clean.contradicts).toLowerCase()))) existing.superseded = true;
+  }
 }
 
 // The write gate Recall-style: one way into a folder. Same bounds as
@@ -1524,19 +1710,23 @@ export function admitMemory(state, proposal, now = Date.now()) {
 // Push memory: compile a budgeted mini-index against the current prompt.
 // Ranked by cell weight, focus, token overlap and recency. Superseded rows
 // stay in the list flagged [SUPERSEDED?] so the agent cannot act on a stale
-// title the way a similarity search would.
+// title the way a similarity search would. A settled folder (its task is
+// complete) speaks only to a job on that same task: finished work stops
+// crowding the primers of everything else.
 export function compileMemory({ query = "", folders = null, lessons = null, focus = null, now = Date.now(), limit = 6 } = {}) {
   const q = compactKey(query);
   const tokens = new Set(q.split(" ").filter((token) => token.length > 2));
   const focusKey = nodeKeyOf(focus);
   const cells = [];
   for (const [key, folder] of Object.entries(isObject(folders) ? folders : {})) {
+    const own = canonicalFolderKey(key) === focusKey;
+    if (!own && oneOf(folder?.settled, FOLDER_SETTLED, null)) continue;
     for (const entry of asArray(folder?.entries)) {
       const mem = normalizeFolderEntry(entry);
       if (!mem) continue;
       const hay = compactKey(`${mem.text} ${key}`);
       let score = MEMORY_CELL_WEIGHT[mem.cell] ?? 1;
-      if (key === focusKey) score += 5;
+      if (own) score += 5;
       if (mem.superseded) score -= 6;
       for (const token of tokens) if (hay.includes(token)) score += 2;
       const ageMin = Math.max(0, (now - mem.at) / MINUTE);
@@ -1568,10 +1758,13 @@ export function compileMemory({ query = "", folders = null, lessons = null, focu
 // not kept — the map only ever lists folders with content.
 export function clearNodeFolder(state, target, now = Date.now()) {
   const current = isObject(state) ? state : emptyState(now);
-  const key = typeof target === "string" ? target : nodeKeyOf(target);
-  if (!key || !isObject(current.nodeFolders) || !current.nodeFolders[key]) return current;
+  const key = typeof target === "string" ? canonicalFolderKey(target) : nodeKeyOf(target);
+  if (!key || !isObject(current.nodeFolders)) return current;
+  // A map saved before the canonical keys may still hold the legacy spelling.
+  const names = Object.keys(current.nodeFolders).filter((name) => canonicalFolderKey(name) === key);
+  if (!names.length) return current;
   const folders = { ...current.nodeFolders };
-  delete folders[key];
+  for (const name of names) delete folders[name];
   return { ...current, nodeFolders: folders };
 }
 
@@ -4137,10 +4330,13 @@ function tidyNodeFolders(folders, { sessions, tasks, now, staleHours }, report) 
     }
     out[key] = { ...folder, entries };
   }
-  const kept = Object.entries(out).sort((a, b) => num(b[1]?.updatedAt, 0) - num(a[1]?.updatedAt, 0)).slice(0, FOLDER_LIMITS.folders);
-  cleaned += Math.max(0, Object.keys(out).length - kept.length);
+  // Legacy keys merge into their canonical folder (not a clean-up); the cap
+  // is normalizeNodeFolders's, counted here so an eviction shows in the report.
+  const collected = collectFolders(out);
+  const kept = capFolders(collected);
+  cleaned += Math.max(0, collected.length - kept.length);
   report.foldersCleaned = cleaned;
-  return normalizeNodeFolders(Object.fromEntries(kept));
+  return Object.fromEntries(kept);
 }
 
 // Housekeeping over the data files. Conservative: a collection that was not
@@ -4166,6 +4362,494 @@ export function tidy({ tasks, ideas, requests, checkpoints, nodeFolders = null, 
   if (report.foldersCleaned) parts.push(`cleaned ${plural(report.foldersCleaned, "node folder")}`);
   report.text = parts.length ? parts.join(" · ") : "nothing to tidy";
   return { ...out, report, changed };
+}
+
+// ---- the keeper's audit pass: loop ledger, memory alignment, analysis -------
+// assistantKeeperJob runs auditPass after tidy(), inside the same board
+// mutation, and it is the only caller: reconcile-board, the fixture CLI and
+// tidy's own second pass never see it. Per card it reads what the card's own
+// log says happened since the guard was armed (or since the owner last chose
+// Try again), counts the attempts that ended without verified progress, and
+// holds a card that keeps looping. It compares every task's memory folder with
+// the board and hands back what should change as a delta; the host applies it
+// after its await, folder by folder, so a note written meanwhile survives.
+//
+// A card gains two fields here and nothing else: loopLedger (the count) and
+// loopGuard (the hold). Neither is in task-context's FIELDS or backlog's
+// BUILD_SCOPE_FIELDS, so a count makes no history revision and voids no build
+// approval; updatedAt and status are never touched.
+export const LOOP_LIMITS = { attempts: 6, verifyReason: 4, stalledHours: 12 };
+const LOOP_REASONS_KEPT = 6;
+
+// A provider outage is not the card's fault: a usage or rate limit that was
+// reached, an HTTP 429 or API error the CLI reports, an overloaded or
+// out-of-quota endpoint, a connection to the API that never opened, a response
+// whose headers never came. Only those error shapes count, never a bare word
+// that a test name, a stack frame or the worker's own prose can carry
+// ("quota", "429", "rate limiter", "unable to connect to the remote server"):
+// a run misread as an outage is never charged, so it could loop unseen.
+const PROVIDER_FAILURE = new RegExp([
+  String.raw`\b(?:usage|rate|5-hour|weekly|session|opus) limit (?:reached|exceeded)\b`,
+  String.raw`\byou(?:'|’)ve hit your (?:usage )?limit\b`,
+  String.raw`\brate[ -]limited\b`,
+  String.raw`\b429 too many requests\b`,
+  String.raw`\bAPI Error: (?:429|5\d\d|Connection error|Request timed out)\b`,
+  String.raw`\b(?:rate_limit|overloaded)_error\b`,
+  String.raw`\binsufficient_quota\b`,
+  String.raw`\bexceeded your (?:current )?quota\b`,
+  String.raw`\bcannot connect to API\b`,
+  String.raw`\bheaders timed out\b`,
+].join("|"), "i");
+export function isProviderFailure(text) {
+  return PROVIDER_FAILURE.test(stripAnsi(text));
+}
+
+// Whether a failed run ended on a provider outage: finish() settle requeues
+// such a run uncharged, and assistantBuildFailureQuestion asks nothing about
+// it, both through this one test. Only the run's own error and its last words
+// (the last line it printed, sentinel and result lines aside) are read: a
+// provider error ends the CLI, while earlier lines are the worker's prose,
+// test names and stack frames. A run that printed its verdict or its result
+// line was working, so its failure is its own.
+export function isProviderOutage({ error = null, lastWords = null, sawDone = false, resultNote = null } = {}) {
+  if (sawDone === true || resultNote) return false;
+  return [error, lastWords].some((line) => line != null && isProviderFailure(String(line)));
+}
+
+// One card log line, classified for the ledger. Colour codes are stripped and
+// every pattern is anchored at the start of the line: these are the host's own
+// status lines (finish(), the verifier, executor-resume, housekeepingSweep),
+// and tests/loop_guard.test.mjs pins each literal to the code that writes it.
+//   run          a charged run failure, unless a provider outage caused it
+//   verify       verification could not confirm the attempt; the reason is the
+//                key a repeated verdict is counted under
+//   attempt-end  the run finished, or verification passed: the next verify
+//                line belongs to a new attempt
+//   ignored      host and provider events, never the card's fault
+const OUTCOME_IGNORED = [
+  [/^provider unavailable\b/i, "provider unavailable"],
+  [/^worker never started\b/, "worker never started"],
+  [/^stopped on request\b/, "stopped on request"],
+  [/^Studio resumed interrupted work\b/, "resumed after a restart"],
+  [/^autopilot run lost — reopened\b/, "run lost"],
+];
+const OUTCOME_VERIFY = /^(?:unverified — |reopened — overseer check failed — |verification could not confirm completion\b|reopened — overseer verification run failed\b)/;
+// The failing overseer command the verifier appends to its note (main.cjs's
+// overseerMiss): " (<command> failed: <tail>)", " (<command> failed — timed
+// out: <tail>)", or either without the tail. No verdict reason has a " (", so
+// the first one that opens such a miss starts it; a command with parentheses
+// of its own still matches.
+const OUTCOME_OVERSEER_MISS = / \(.*? failed(?: — timed out)?(?::|\)|$)/;
+// The verdict's reason: the text after the first "— ", without the overseer's
+// failing command and its output, and without the retry or park tail, digits
+// as N so "3 recorded checks" and "4 recorded checks" count as one reason and
+// one card's repeated failures share a key whatever the command printed.
+function outcomeReason(line) {
+  const start = line.indexOf("— ");
+  let tail = start >= 0 ? line.slice(start + 2) : line;
+  const miss = tail.search(OUTCOME_OVERSEER_MISS);
+  if (miss >= 0) tail = tail.slice(0, miss);
+  const cut = tail.search(/ · retry \d|, retry \d| · parked for manual review/);
+  if (cut >= 0) tail = tail.slice(0, cut);
+  return compactKey(tail).replace(/\d+/g, "N").slice(0, 80).trim();
+}
+export function classifyOutcomeLine(text) {
+  const line = stripAnsi(text).trim();
+  if (!line) return null;
+  for (const [pattern, reason] of OUTCOME_IGNORED) if (pattern.test(line)) return { kind: "ignored", reason };
+  const run = /^autopilot run failed \(exit ([^)]*)\)/.exec(line);
+  if (run) return isProviderFailure(line) ? { kind: "ignored", reason: "provider failure" } : { kind: "run", reason: compactKey(`run failed exit ${run[1]}`) };
+  if (OUTCOME_VERIFY.test(line)) return { kind: "verify", reason: outcomeReason(line) };
+  if (/^run finished\b/.test(line)) return { kind: "attempt-end", reason: "run finished" };
+  if (/^verified — /.test(line)) return { kind: "attempt-end", reason: "verified" };
+  if (isProviderFailure(line)) return { kind: "ignored", reason: "provider failure" };
+  return null;
+}
+
+// backlog.cjs's completedTask, inlined: this module imports nothing new from a
+// module the host has already loaded.
+const completedTaskRow = (task) =>
+  task?.status === "done" || (task?.status === "archived" && Boolean(task.doneAt || task.verification?.state === "verified" || task.completionFromTaskId));
+const waitingTask = (task) => !task.status || task.status === "open" || task.status === "pending" || task.status === "queued";
+const parkedTask = (task) => task.verification?.state === "failed" || num(task.verifyAttempts, 0) >= VERIFY_MAX_ATTEMPTS || num(task.runFailures, 0) >= 5;
+const byCount = ([a, x], [b, y]) => y - x || (a < b ? -1 : a > b ? 1 : 0);
+
+function readLedger(task) {
+  const raw = isObject(task?.loopLedger) ? task.loopLedger : {};
+  const reasons = {};
+  for (const [key, count] of Object.entries(isObject(raw.reasons) ? raw.reasons : {})) if (key && num(count, 0) >= 1) reasons[key] = Math.floor(num(count, 0));
+  return { v: 1, at: num(raw.at, 0), n: Math.floor(num(raw.n, 0)), reasons };
+}
+
+// Fold the lines logged after the baseline (the later of the ledger's own stamp
+// and the arm time) into the ledger. A card is charged once per run failure
+// and at most once per attempt for verification: the verifier can speak twice
+// about one attempt, and that is one failed attempt, not two. Returns the
+// ledger to write, or null when no counted line arrived, so an untouched row
+// keeps its identity.
+function advanceLedger(task, armedAt) {
+  const prior = readLedger(task);
+  const since = Math.max(prior.at, armedAt);
+  const lines = asArray(task.logs).filter((line) => isObject(line) && typeof line.text === "string");
+  // Whether the attempt still open at the baseline already had its verify.
+  let charged = false;
+  for (const line of lines) {
+    if (num(line.at, 0) > since) continue;
+    const kind = classifyOutcomeLine(line.text)?.kind;
+    if (kind === "verify") charged = true;
+    else if (kind === "attempt-end") charged = false;
+  }
+  const reasons = { ...prior.reasons };
+  let n = prior.n;
+  let at = prior.at;
+  let counted = 0;
+  for (const line of lines) {
+    const lineAt = num(line.at, 0);
+    if (lineAt <= since) continue;
+    at = Math.max(at, lineAt);
+    const outcome = classifyOutcomeLine(line.text);
+    if (outcome?.kind === "attempt-end") charged = false;
+    else if (outcome?.kind === "run") {
+      n += 1;
+      counted += 1;
+    } else if (outcome?.kind === "verify" && !charged) {
+      charged = true;
+      n += 1;
+      counted += 1;
+      if (outcome.reason) reasons[outcome.reason] = (reasons[outcome.reason] ?? 0) + 1;
+    }
+  }
+  if (!counted) return null;
+  return { v: 1, at, n, reasons: Object.fromEntries(Object.entries(reasons).sort(byCount).slice(0, LOOP_REASONS_KEPT)) };
+}
+
+// Held at LOOP_LIMITS.attempts charged attempts, or when one verification
+// reason repeats LOOP_LIMITS.verifyReason times. Repeated run failures are no
+// verdict of their own: the 5-failure park already stops those.
+function loopVerdict(ledger) {
+  const [reason = "", count = 0] = Object.entries(ledger.reasons).sort(byCount)[0] ?? [];
+  if (count >= LOOP_LIMITS.verifyReason) return { kind: "verify", count, reason };
+  if (ledger.n >= LOOP_LIMITS.attempts) return { kind: "attempts", count: ledger.n, reason: reason || "the runs failed" };
+  return null;
+}
+const LOOP_NO_EDITS = compactKey("no attributable edits and no named checks");
+const loopRemedy = (reason) =>
+  str(reason).endsWith(LOOP_NO_EDITS)
+    ? "This card changes no files: give it a named check the verifier can run, or close it by hand."
+    : "Read the last attempts, edit or split the brief, then choose Try again.";
+// Only a card waiting for a worker is held: never one a worker holds or has
+// leased, one inside a group, or finished work.
+const loopHoldable = (task) => waitingTask(task) && !task.runId && !task.lease && !task.absorbedInto && !completedTaskRow(task);
+
+// Duplicate families: unresolved cards that are one obligation minted twice —
+// a split's "Follow-up:" chain, a handoff clone renamed " — follow-up xxxxxx",
+// a title clipped with "…". Reported, never merged: cards titled "Audit: css"
+// are different selectors and files, so audit findings never form a family.
+function familyKey(task) {
+  const title = (str(task?.originalTitle).trim() || str(task?.title).trim())
+    .replace(/^(?:follow-up(?:\s+\d+)?:\s*)+/i, "")
+    .replace(/\s+—\s+follow-up\s+\S+$/i, "")
+    .replace(/…$/, "");
+  return /^audit:/i.test(title) ? "" : compactKey(title);
+}
+
+// Review cards and handoff waits nobody has touched for LOOP_LIMITS.stalledHours.
+// Reported only: the verifier and the handoffs own these cards.
+const touchedAt = (task) => Math.max(num(task.updatedAt, 0), ...asArray(task.logs).map((line) => num(line?.at, 0)));
+function stalledTask(task, now) {
+  if (task.status !== "awaiting_verification" && task.status !== "verifying") return false;
+  const touched = touchedAt(task);
+  return touched > 0 && now - touched >= LOOP_LIMITS.stalledHours * HOUR;
+}
+
+// The claim the keeper answers: a run line saying the run finished and waits
+// on its verifier. A stop is no claim — the run did not finish, and the card's
+// verdict is still the previous attempt's — and the quoted title is left out
+// of the test, so a card titled "Fix the verifying spinner" claims nothing.
+const MEMORY_AWAITING = /\bverifying\b|awaiting verification/i;
+function runClaim(entry) {
+  if (entry?.kind !== "run") return false;
+  const outcome = str(entry.text).replace(/^autopilot\s+".*"\s+—\s+/i, "");
+  return MEMORY_AWAITING.test(outcome) && !/stopped on request/i.test(outcome);
+}
+// Whether the card's verdict answers that claim. The verifier waits out its
+// dwell after an attempt ends, so a verdict stamped before the claim belongs to
+// an earlier attempt. A verdict with no stamp is taken at its word: the host
+// stamps every verdict it writes.
+const answersClaim = (verification, claim) => !(typeof verification.at === "number" && Number.isFinite(verification.at)) || verification.at >= claim.at;
+
+// The board's word on a task, written into its memory folder. Runs over each
+// task folder whose card is on the board and returns a delta, never a new map
+// (applyMemoryDelta applies it):
+//   relabel  a stored run line that only claims the run ended ("finished,
+//            verifying") but was filed as a verification becomes an
+//            observation, at no more than the unverified confidence
+//   append   one keeper note per board verdict: verified while the claim is
+//            still the newest entry, done without verification, not verified
+//            (superseding the claim), parked, loop-held, stopped with saved
+//            progress. A note the folder already holds (by title key) is not
+//            written again; the claim-bound notes need no such check, since
+//            once written the claim is no longer the newest entry, and they
+//            wait for a verdict given after the claim (answersClaim).
+//   settle   the folder's settled mark follows the card's completion
+// Owner notes (kind note, cell dec) are never relabelled, superseded or pushed
+// out: the notes a pass writes fit in the slots the owner's entries leave, a
+// note the folder still holds keeping its slot. No note refreshes the folder's
+// updatedAt: a parked card's folder still ages out of the cap like any other.
+// There is no "closed" note, because tidyNodeFolders already drops a completed
+// task's folder on the tidy clock.
+export function alignMemory({ nodeFolders, tasks, now = Date.now() } = {}) {
+  const delta = { relabel: [], append: [], settle: [] };
+  const board = new Map(asArray(tasks).filter((task) => isObject(task) && str(task.id)).map((task) => [str(task.id), task]));
+  for (const [key, folder] of Object.entries(normalizeNodeFolders(nodeFolders))) {
+    if (!key.startsWith("task:task:")) continue;
+    const task = board.get(key.slice("task:task:".length));
+    if (!task) continue;
+    const entries = folder.entries;
+    const newest = entries[entries.length - 1];
+    const claim = runClaim(newest) ? newest : null;
+    for (const entry of entries) {
+      if (entry.kind === "run" && entry.cell === "ver" && MEMORY_CLAIM.test(entry.text)) delta.relabel.push({ key, at: entry.at, text: entry.text, cell: "obs", confidence: Math.min(entry.confidence, 0.7) });
+    }
+    const held = new Set(entries.map((entry) => compactKey(entry.text)));
+    let room = FOLDER_LIMITS.entries - entries.filter(ownerEntry).length;
+    const note = (cell, text, { contradicts = null, once = true } = {}) => {
+      const clean = clip(text, FOLDER_LIMITS.text);
+      const noteKey = compactKey(clean);
+      if (!noteKey) return;
+      if (once && held.has(noteKey)) {
+        room -= 1;
+        return;
+      }
+      if (room <= 0) return;
+      room -= 1;
+      held.add(noteKey);
+      delta.append.push({ key, entry: { at: now, kind: "agent", role: "keeper", text: clean, cell, ...(contradicts ? { contradicts } : {}) } });
+    };
+    const verification = isObject(task.verification) ? task.verification : {};
+    const answered = claim !== null && answersClaim(verification, claim);
+    const why = (text, fallback) => clip(stripAnsi(text), 120) || fallback;
+    const completed = completedTaskRow(task);
+    if (completed) {
+      if (verification.state !== "verified") note("obs", "marked done — not verified");
+      else if (answered) note("ver", `verified done — ${why(verification.reason, "the verifier confirmed it")}`, { once: false });
+    } else if (waitingTask(task)) {
+      if (isObject(task.loopGuard)) note("rsk", `loop guard — ${why(task.loopGuard.reason, "attempts keep ending without verified progress")}`);
+      if (verification.state === "failed" || num(task.verifyAttempts, 0) >= VERIFY_MAX_ATTEMPTS) note("rsk", `parked — ${why(verification.reason, "verification could not confirm it")}`);
+      else if (num(task.runFailures, 0) >= 5) note("rsk", `parked — ${Math.floor(num(task.runFailures, 0))} attempts failed`);
+      else if (verification.state === "unverified" && answered) note("rsk", `not verified — ${why(verification.reason, "the verifier could not confirm it")}`, { contradicts: claim.text, once: false });
+      if (task.runProgress?.pending === true) note("obs", "stopped — resumes from saved progress");
+    }
+    const settled = completed ? (task.status === "done" ? "done" : "archived") : null;
+    if ((folder.settled ?? null) !== settled) delta.settle.push({ key, settled });
+  }
+  return delta;
+}
+
+// Apply alignMemory's delta to a state: relabels matched by (at, text),
+// appends that are not already the folder's newest line, settled marks. A
+// folder that is gone (cleared, evicted, its task deleted) is skipped, never
+// recreated, and no folder's updatedAt moves. A note that finds its folder
+// full pushes out the oldest entry that is neither the owner's nor a note this
+// delta just wrote; with no such entry the note is dropped, never the owner's
+// words. Nothing applied returns the same state object, so the host can
+// compare by identity.
+export function applyMemoryDelta(state, delta) {
+  if (!isObject(state) || !isObject(delta)) return state;
+  const relabel = asArray(delta.relabel).filter(isObject);
+  const append = asArray(delta.append).filter(isObject);
+  const settle = asArray(delta.settle).filter(isObject);
+  if (!relabel.length && !append.length && !settle.length) return state;
+  const folders = normalizeNodeFolders(state.nodeFolders);
+  let touched = false;
+  for (const row of relabel) {
+    const folder = folders[canonicalFolderKey(row.key)];
+    const index = folder ? folder.entries.findIndex((entry) => entry.at === row.at && entry.text === row.text) : -1;
+    if (index < 0) continue;
+    const entry = folder.entries[index];
+    if (ownerEntry(entry)) continue;
+    const next = normalizeFolderEntry({ ...entry, cell: oneOf(row.cell, MEMORY_CELLS, entry.cell), confidence: typeof row.confidence === "number" ? row.confidence : entry.confidence });
+    if (next.cell === entry.cell && next.confidence === entry.confidence) continue;
+    folder.entries[index] = next;
+    touched = true;
+  }
+  const written = new Set();
+  for (const row of append) {
+    const folder = folders[canonicalFolderKey(row.key)];
+    const clean = folder ? normalizeFolderEntry(row.entry) : null;
+    if (!clean) continue;
+    const newest = folder.entries[folder.entries.length - 1];
+    if (newest && compactKey(newest.text) === compactKey(clean.text)) continue;
+    const entries = [...folder.entries];
+    let full = false;
+    while (!full && entries.length >= FOLDER_LIMITS.entries) {
+      const spare = entries.findIndex((entry) => !ownerEntry(entry) && !written.has(entry));
+      if (spare < 0) full = true;
+      else entries.splice(spare, 1);
+    }
+    if (full) continue;
+    supersedeEntries(entries, clean, { spareOwner: true });
+    entries.push(clean);
+    written.add(clean);
+    folder.entries = entries;
+    touched = true;
+  }
+  for (const row of settle) {
+    const folder = folders[canonicalFolderKey(row.key)];
+    if (!folder) continue;
+    const settled = oneOf(row.settled, FOLDER_SETTLED, null);
+    if ((folder.settled ?? null) === settled) continue;
+    if (settled) folder.settled = settled;
+    else delete folder.settled;
+    touched = true;
+  }
+  return touched ? { ...state, nodeFolders: folders } : state;
+}
+
+// What the audit says about one card, for tools/memory_audit.mjs: the card's
+// state in the owner's words, its memory in one line, and what disagrees.
+function auditState(task, { looping, stalled }) {
+  if (completedTaskRow(task) || task.status === "archived") return "done";
+  if (looping) return looping;
+  if (task.status === "active" || task.status === "running") return "doing";
+  if (task.status === "awaiting_verification" || task.status === "verifying") return stalled ? "stalled" : "review";
+  if (task.runProgress?.pending === true || parkedTask(task)) return "stopped";
+  return "open";
+}
+function auditMemory(folder) {
+  if (!folder) return "no memory folder";
+  const newest = folder.entries[folder.entries.length - 1];
+  return `${plural(folder.entries.length, "note")}${folder.settled ? ` · settled (${folder.settled})` : ""} · newest ${newest.cell}${newest.superseded ? " (superseded)" : ""} "${clip(newest.text, 70)}"`;
+}
+function auditIssues(task, folder, { looping, ledger, stalled, family, now }) {
+  const issues = [];
+  const completed = completedTaskRow(task);
+  const verification = isObject(task.verification) ? task.verification : {};
+  if (folder) {
+    const newest = folder.entries[folder.entries.length - 1];
+    const claim = runClaim(newest);
+    if (folder.entries.some((entry) => entry.kind === "run" && entry.cell === "ver" && MEMORY_CLAIM.test(entry.text))) issues.push("an unverified run is stored as a verification");
+    if (claim && completed) issues.push(`memory holds only the run's own claim; the board says ${task.status}`);
+    else if (claim && (verification.state === "unverified" || verification.state === "failed") && answersClaim(verification, newest)) issues.push(`memory holds only the run's own claim; verification said: ${clip(stripAnsi(verification.reason), 80) || verification.state}`);
+    if (folder.settled && !completed) issues.push("memory is settled but the card is open again");
+  }
+  if (looping) issues.push(`${plural(ledger.n, "attempt")} without verified progress${Object.keys(ledger.reasons).length ? ` (${Object.entries(ledger.reasons).sort(byCount)[0][0]})` : ""}`);
+  if (stalled) issues.push(`untouched for ${Math.floor((now - touchedAt(task)) / HOUR)}h ${task.handoffState?.pending > 0 ? "waiting on handed-off work" : "in review"}`);
+  if (family) issues.push(`duplicate family "${family.key}" (${plural(family.members.length, "open card")})`);
+  return issues.length ? issues.join(" · ") : null;
+}
+
+// The keeper's audit pass. Pure and deterministic for a given `now`, and
+// idempotent: a second pass over its own rows changes nothing. `armedAt` is
+// the first audit's time (housekeeping.loopArmedAt): outcomes logged before it
+// are never charged. Holds are stamped only when loopGuardApply is on AND the
+// host says its workState honours them (hostCaps.loopHold); otherwise the card
+// is counted in wouldHold. loopGuard off releases every hold the keeper
+// stamped and counts nothing. memoryAlign off returns an empty delta.
+export function auditPass({ tasks, nodeFolders, questions = [], sessions = null, now = Date.now(), prefs = {}, armedAt, hostCaps = {} } = {}) {
+  const rules = normalizePrefs({ ...DEFAULT_PREFS, ...(isObject(prefs) ? prefs : {}) });
+  const armed = typeof armedAt === "number" && Number.isFinite(armedAt) ? armedAt : now;
+  const stampHolds = rules.loopGuardApply && isObject(hostCaps) && hostCaps.loopHold === true;
+  const report = { loopsHeld: 0, loopsReleased: 0, wouldHold: 0, stalled: 0, families: 0, memoryAligned: 0, questionsSuperseded: 0, cardsLooping: [], familyGroups: [] };
+  const looping = new Map();
+  const ledgers = new Map();
+  const rows = asArray(tasks).map((task) => {
+    if (!isObject(task)) return task;
+    if (!rules.loopGuard) {
+      if (!isObject(task.loopGuard) || task.loopGuard.by !== "keeper") return task;
+      report.loopsReleased += 1;
+      const next = { ...task };
+      delete next.loopGuard;
+      return next;
+    }
+    // Finished, archived and grouped rows are not counted: nothing dispatches
+    // them, and if one reopens its ledger picks up from where it stopped.
+    const idle = completedTaskRow(task) || task.status === "archived" || task.status === "absorbed";
+    const advanced = idle ? null : advanceLedger(task, armed);
+    const ledger = advanced ?? readLedger(task);
+    ledgers.set(str(task.id), ledger);
+    const verdict = loopVerdict(ledger);
+    let next = advanced ? { ...task, loopLedger: advanced } : task;
+    const card = (reason) => report.cardsLooping.push({ id: str(task.id), title: clip(str(task.title), 80), n: ledger.n, reason });
+    if (isObject(task.loopGuard)) {
+      looping.set(str(task.id), "looping");
+      card(str(task.loopGuard.reason) || verdict?.reason || "");
+    } else if (verdict && loopHoldable(task)) {
+      if (stampHolds) {
+        next = { ...next, loopGuard: { v: 1, at: now, kind: verdict.kind, count: verdict.count, reason: verdict.reason, remedy: loopRemedy(verdict.reason), by: "keeper" } };
+        report.loopsHeld += 1;
+        looping.set(str(task.id), "looping");
+      } else {
+        report.wouldHold += 1;
+        looping.set(str(task.id), "would-hold");
+      }
+      card(verdict.reason);
+    }
+    return next;
+  });
+
+  const stalled = new Set();
+  const families = new Map();
+  for (const task of rows) {
+    if (!isObject(task)) continue;
+    if (stalledTask(task, now)) stalled.add(str(task.id));
+    if (completedTaskRow(task) || task.status === "archived" || task.status === "absorbed") continue;
+    const key = familyKey(task);
+    if (!key) continue;
+    if (!families.has(key)) families.set(key, []);
+    families.get(key).push(task);
+  }
+  report.stalled = stalled.size;
+  report.familyGroups = [...families.entries()]
+    .filter(([, members]) => members.length >= 2)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, members]) => ({
+      key,
+      members: members.map((task) => ({ id: str(task.id), title: clip(str(task.title), 80), status: str(task.status) || "open", parentTaskId: str(task.parentTaskId) || null, ...(str(task.splitFrom) ? { splitFrom: str(task.splitFrom) } : {}) })),
+    }));
+  report.families = report.familyGroups.length;
+  const familyOf = new Map(report.familyGroups.flatMap((family) => family.members.map((member) => [member.id, family])));
+
+  const memoryDelta = rules.memoryAlign ? alignMemory({ nodeFolders, tasks: rows, now }) : { relabel: [], append: [], settle: [] };
+  report.memoryAligned = memoryDelta.relabel.length + memoryDelta.append.length + memoryDelta.settle.length;
+
+  // Open issue asks about a card that is gone can no longer be acted on, and
+  // one about a finished card could only re-arm finished work if answered:
+  // the keeper supersedes them after its await. An ask that offers a split
+  // (scope, capability, missing) stays while its card is on the board: the
+  // split files the uncovered work the agent reported as a new card, and
+  // needs nothing re-armed.
+  const board = new Map(rows.filter((task) => isObject(task) && str(task.id)).map((task) => [str(task.id), task]));
+  const offersSplit = (question) => asArray(question.options).some((option) => isObject(option) && (option.id === "split" || option.action?.action === "split"));
+  const supersedeQuestionIds = asArray(questions)
+    .filter((question) => {
+      if (!isObject(question) || (question.status ?? "open") !== "open" || question.source !== "issue") return false;
+      const taskId = str(question.context?.taskId);
+      if (!taskId) return false;
+      const task = board.get(taskId);
+      return !task || (completedTaskRow(task) && !offersSplit(question));
+    })
+    .map((question) => str(question.id))
+    .filter(Boolean);
+  report.questionsSuperseded = supersedeQuestionIds.length;
+
+  const folders = normalizeNodeFolders(nodeFolders);
+  const findings = rows.filter(isObject).map((task) => {
+    const id = str(task.id);
+    const folder = folders[`task:task:${id}`] ?? null;
+    const facts = { looping: looping.get(id) ?? null, stalled: stalled.has(id), ledger: ledgers.get(id) ?? readLedger(task), family: familyOf.get(id) ?? null, now };
+    return { id, title: clip(str(task.title), 80), state: auditState(task, facts), memory: auditMemory(folder), issue: auditIssues(task, folder, facts) };
+  });
+
+  const parts = [];
+  if (report.loopsHeld) parts.push(`held ${plural(report.loopsHeld, "looping card")}`);
+  if (report.loopsReleased) parts.push(`released ${plural(report.loopsReleased, "loop hold")}`);
+  if (report.wouldHold) parts.push(`would hold ${plural(report.wouldHold, "looping card")}`);
+  if (report.stalled) parts.push(plural(report.stalled, "stalled review"));
+  if (report.families) parts.push(plural(report.families, "duplicate family", "duplicate families"));
+  if (report.memoryAligned) parts.push(`aligned ${plural(report.memoryAligned, "memory note")}`);
+  if (report.questionsSuperseded) parts.push(`superseded ${plural(report.questionsSuperseded, "stale question")}`);
+  return { tasks: rows, memoryDelta, supersedeQuestionIds, report, text: parts.join(" · "), findings };
 }
 
 // Work verbs instruct the assistant to do something; query verbs ask it to
@@ -5288,7 +5972,7 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
   const todoRows = asArray(todos).filter((todo) => isObject(todo) && typeof todo.sessionId === "string");
   const focusRow = normalizeFocus(focus);
   const folderKey = focusRow ? nodeKeyOf(focusRow) : null;
-  const folder = folderKey && isObject(nodeFolders) ? nodeFolders[folderKey] : null;
+  const folder = folderAt(nodeFolders, folderKey);
   const compiled = compileMemory({
     query: query || focusRow?.label || "",
     folders: nodeFolders,
@@ -6192,6 +6876,19 @@ function selfTest() {
     const folder = memState.nodeFolders["task:task:task_open"];
     expect(folder && folder.entries.length === 2 && folder.entries[0].superseded === true && folder.entries[1].cell === "rsk", `admit supersedes the prior run ${JSON.stringify(folder)}`);
     expect(inferMemoryCell("run", "autopilot finished — done (exit 0)") === "ver" && inferMemoryCell("run", "autopilot run failed (exit 1)") === "rsk", "run verdicts become verifications or risks");
+    // A run that only says it ended is an observation until the verifier speaks.
+    expect(inferMemoryCell("run", 'autopilot "Wire the retry" — finished, verifying (exit 0)') === "obs" && inferMemoryCell("run", 'autopilot "Wire the retry" — stopped on request — progress saved (exit ?)') === "obs", "claims are observations, not verifications");
+    expect(nodeKeyOf({ kind: "task", id: "task_open" }) === "task:task:task_open" && Object.keys(normalizeNodeFolders({ "task:task_open": memState.nodeFolders["task:task:task_open"] })).join(",") === "task:task:task_open", "a bare task key lands on the canonical folder");
+    // The keeper's audit: a claim filed as a verification is relabelled, the
+    // board's verdict appended once, and a second pass has nothing to say.
+    const claimState = admitMemory(emptyState(result.now), { target, kind: "run", role: "executor", text: 'autopilot "Wire the retry" — finished, verifying (exit 0)', cell: "ver", at: result.now - HOUR }, result.now - HOUR);
+    const reopened = { id: "task_open", status: "open", title: "Wire the retry", verification: { state: "unverified", reason: "no attributable edits and no named checks" }, logs: [] };
+    const audit = auditPass({ tasks: [reopened], nodeFolders: claimState.nodeFolders, now: result.now, armedAt: result.now });
+    const aligned = applyMemoryDelta(claimState, audit.memoryDelta);
+    const alignedFolder = aligned.nodeFolders["task:task:task_open"];
+    expect(audit.memoryDelta.relabel.length === 1 && alignedFolder.entries[0].cell === "obs" && alignedFolder.entries[0].superseded && alignedFolder.entries[1].text.startsWith("not verified") && alignedFolder.updatedAt === claimState.nodeFolders["task:task:task_open"].updatedAt, `alignment relabels and supersedes the claim ${JSON.stringify(alignedFolder)}`);
+    const again = auditPass({ tasks: audit.tasks, nodeFolders: aligned.nodeFolders, now: result.now, armedAt: result.now });
+    expect(again.tasks[0] === audit.tasks[0] && applyMemoryDelta(aligned, again.memoryDelta) === aligned, "a second audit pass changes nothing");
     const compiled = compileMemory({ query: "retry path", folders: memState.nodeFolders, focus: target, now: result.now, limit: 4 });
     expect(compiled.dig && compiled.primer.some((line) => /SUPERSEDED/.test(line)), `compile flags the superseded fact ${JSON.stringify(compiled)}`);
     expect(result.facts.memory && Array.isArray(result.facts.memory.primer), `facts carry a pushed primer ${JSON.stringify(result.facts.memory)}`);

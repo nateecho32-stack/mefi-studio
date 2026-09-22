@@ -53,6 +53,51 @@ test("an explicit retry preserves evidence and obligations while clearing both f
   assert.match(next.logs.at(-1).text, /previous result and remaining work retained/);
 });
 
+// A keeper loop hold (assistant.mjs auditPass) as the host stores it.
+const loopHold = (overrides = {}) => ({ v: 1, at: 60, kind: "verify", count: 4, reason: "no attributable edits and no named checks", remedy: "This card changes no files: give it a named check the verifier can run, or close it by hand.", by: "keeper", ...overrides });
+
+test("a loop-held card is blocked with its reason and remedy, and Try again stays offered", () => {
+  const held = { id: "loop", title: "Looping", status: "open", logs: [], loopLedger: { v: 1, at: 50, n: 6, reasons: { "no attributable edits and no named checks": 4 } }, loopGuard: loopHold() };
+  const state = backlog.workState(held, 100);
+  assert.equal(state.stage, "blocked");
+  assert.equal(state.blockedBy, "loop");
+  assert.equal("canRetry" in state, false, "no canRetry:false, so the workspace keeps its Try again");
+  assert.equal(state.reason, "Loop guard: 4 attempts since your last retry ended without verified progress (no attributable edits and no named checks). This card changes no files: give it a named check the verifier can run, or close it by hand.");
+  assert.equal(backlog.workState({ ...held, nextRunAt: 500 }, 100).blockedBy, "loop", "a hold outranks a cooldown");
+  assert.match(backlog.workState({ ...held, loopGuard: { count: 6 } }, 100).reason, /^Loop guard: 6 attempts .* Read the last attempts, edit or split the brief, then choose Try again\.$/);
+  const summary = backlog.summarizeBacklog({ tasks: [held], now: 100 });
+  assert.equal(summary.counts.blocked, 1);
+  assert.equal(summary.blocked[0].blockedBy, "loop");
+  assert.equal(backlog.LOOP_HOLD, 1, "the keeper's host capability");
+});
+
+test("the verification and failure parks win over a loop hold, and prerequisites still name their wait", () => {
+  const loopGuard = loopHold({ kind: "attempts", count: 6, reason: "run failed exit N" });
+  for (const parked of [{ verifyAttempts: 3 }, { verification: { state: "failed" } }, { runFailures: 5 }]) {
+    const state = backlog.workState({ id: "parked", status: "open", loopGuard, ...parked }, 100);
+    assert.equal(state.stage, "blocked", JSON.stringify(parked));
+    assert.equal(state.blockedBy, undefined, JSON.stringify(parked));
+    assert.doesNotMatch(state.reason, /Loop guard/);
+  }
+  const waiting = backlog.workState({ id: "child", status: "open", loopGuard, dependsOn: ["parent"] }, 100, { tasks: [{ id: "parent", title: "Parent", status: "open" }] });
+  assert.equal(waiting.blockedBy, "dependencies");
+});
+
+test("an owner retry releases a loop hold and restarts its ledger from that moment", () => {
+  const held = { id: "loop", status: "open", providerFailures: 2, loopLedger: { v: 1, at: 50, n: 7, reasons: { "outstanding obligations remain": 4 } }, loopGuard: loopHold({ reason: "outstanding obligations remain" }), logs: [] };
+  const next = backlog.retryTask(held, 100);
+  assert.equal(next.loopGuard, undefined);
+  assert.equal(next.providerFailures, undefined);
+  assert.deepEqual(next.loopLedger, { v: 1, at: 100, n: 0, reasons: {} });
+  assert.equal(backlog.workState(next, 100).stage, "ready");
+  assert.equal(held.loopGuard.count, 4, "the stale snapshot is not edited in place");
+  // Nothing logged before the acknowledgement is charged again.
+  const earlier = { at: 90, kind: "status", text: "unverified — outstanding obligations remain · retry 1/3" };
+  const audited = assistant.auditPass({ tasks: [{ ...next, logs: [...next.logs, earlier] }], nodeFolders: {}, now: 200, armedAt: 10, hostCaps: { loopHold: backlog.LOOP_HOLD === 1 } });
+  assert.equal(audited.tasks[0].loopLedger.n, 0);
+  assert.equal(audited.tasks[0].loopGuard, undefined);
+});
+
 function controlHost({ tasks = [], requests = [], ideas = [] } = {}) {
   let board = { tasks: copy(tasks), requests: copy(requests), ideas: copy(ideas) };
   let chain = Promise.resolve();
@@ -157,6 +202,20 @@ test("group members stay represented by their plan and cannot be retried indepen
   assert.equal(status.taskStates[0].groupId, "plan");
   for (const action of ["retry", "prioritize"]) assert.equal((await env.backlogControl({ action, taskId: "member" })).ok, false);
   assert.equal(board().tasks[0].status, "absorbed");
+});
+
+test("Try again is the release for a loop-held card: prioritizing it alone is refused", async () => {
+  const { env, board } = controlHost({ tasks: [{ id: "held", title: "Looping card", status: "open", logs: [], loopLedger: { v: 1, at: 50, n: 6, reasons: {} }, loopGuard: loopHold({ kind: "attempts", count: 6 }) }] });
+  const status = await env.backlogStatus();
+  assert.equal(status.counts.blocked, 1);
+  assert.equal(status.blocked[0].blockedBy, "loop");
+  assert.equal((await env.backlogControl({ action: "prioritize", taskId: "held" })).ok, false);
+  assert.ok(board().tasks[0].loopGuard, "a refused action leaves the hold");
+  assert.equal((await env.backlogControl({ action: "retry", taskId: "held" })).ok, true);
+  const saved = board().tasks[0];
+  assert.equal(saved.loopGuard, undefined);
+  assert.equal(saved.loopLedger.n, 0);
+  assert.equal(backlog.workState(saved, Date.now()).stage, "ready");
 });
 
 test("promoting a request preserves its retry budget, pin, evidence and remaining work", async () => {

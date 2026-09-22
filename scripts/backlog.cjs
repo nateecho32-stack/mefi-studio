@@ -96,6 +96,15 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true } = 
     return { stage: "blocked", reason: `Completion could not be verified${attempts ? ` after ${attempts} attempt${attempts === 1 ? "" : "s"}` : ""}. Review the result, then retry.` };
   }
   if (Number(item.runFailures) >= 5) return { stage: "blocked", reason: `${Number(item.runFailures)} attempts failed. Review the error, then retry.` };
+  // The keeper's loop hold (assistant.mjs auditPass). The parks above name a
+  // more specific cause, so they win. canRetry stays unset: Try again is the
+  // release (retryTask).
+  if (item.loopGuard && typeof item.loopGuard === "object") {
+    const count = Math.max(0, Math.floor(Number(item.loopGuard.count) || 0));
+    const why = String(item.loopGuard.reason ?? "").trim().slice(0, 120);
+    const remedy = String(item.loopGuard.remedy ?? "").trim().slice(0, 240) || "Read the last attempts, edit or split the brief, then choose Try again.";
+    return { stage: "blocked", blockedBy: "loop", reason: `Loop guard: ${count || "repeated"} attempt${count === 1 ? "" : "s"} since your last retry ended without verified progress${why ? ` (${why})` : ""}. ${remedy}` };
+  }
   if (Number(item.nextRunAt) > now) return { stage: "cooling", reason: "Waiting before another attempt", retryAt: Number(item.nextRunAt) };
   if (item.status && item.status !== "open" && item.status !== "pending" && item.status !== "queued") return { stage: "blocked", reason: `Held (${String(item.status).slice(0, 40)})` };
   if (!buildAllowed(item, { autoBuild })) return { stage: "approval", reason: "Verify first: review this task and approve its build", canApprove: true, buildScope: buildScope(item), ...dependency };
@@ -134,10 +143,17 @@ function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], co
 
 function retryTask(task, now = Date.now()) {
   const next = { ...task, status: "open", updatedAt: now, pin: true, pinAt: now };
-  for (const name of ["runFailures", "nextRunAt", "lastRunError", "verifyAttempts", "verification", "verificationReceiptId", "doneAt", "runId", "lease", "buildApproval"]) delete next[name];
+  for (const name of ["runFailures", "providerFailures", "nextRunAt", "lastRunError", "verifyAttempts", "verification", "verificationReceiptId", "doneAt", "runId", "lease", "buildApproval", "loopGuard"]) delete next[name];
+  // The owner's acknowledgement for the loop guard: the ledger restarts from
+  // now, so outcomes logged before this retry are never counted again.
+  next.loopLedger = { v: 1, at: now, n: 0, reasons: {} };
   // lastAttempt, remaining, refs, and logs are evidence, not retry switches.
   next.logs = [...rows(task.logs), { at: now, kind: "status", text: "Retry requested — previous result and remaining work retained" }].slice(-40);
   return next;
 }
 
-module.exports = { workState, summarizeBacklog, retryTask, dependencyState, dependencyIds, completedTask, validateDependencies, buildScope, hasBuildApproval, buildAllowed };
+// The keeper stamps loop holds only on a host whose workState honours them:
+// assistantKeeperJob passes hostCaps.loopHold from this.
+const LOOP_HOLD = 1;
+
+module.exports = { workState, summarizeBacklog, retryTask, dependencyState, dependencyIds, completedTask, validateDependencies, buildScope, hasBuildApproval, buildAllowed, LOOP_HOLD };

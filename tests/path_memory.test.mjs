@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PATH_LIMITS, areaOf, emptyOverseer, mergePaths, normalizeOverseer, pathsForArea, relativeFile } from "../scripts/assistant.mjs";
+import { PATH_LIMITS, areaOf, emptyOverseer, mergePaths, normalizeOverseer, overseerMerge, pathsForArea, relativeFile } from "../scripts/assistant.mjs";
 
 const ROOT = "C:\\Users\\dev\\Studio";
 const at = (n) => 1_700_000_000_000 + n * 60_000;
@@ -108,4 +108,19 @@ test("stored state round-trips through normalizeOverseer", () => {
   assert.equal(legacy.lessons.length, 1, "the existing playbook is untouched");
   // A hand-edited store must not be able to inject a row without a file.
   assert.deepEqual(normalizeOverseer({ hotPaths: [{ area: "scripts" }, { file: "", hits: 9 }, "nope"] }).hotPaths, []);
+});
+
+test("overseerMerge keeps hotPaths/coldPaths", () => {
+  // The overseer's review runs every 15 minutes and its result replaces the
+  // stored playbook; path memory learned from a verified attempt in between
+  // must survive it, or the next dispatch walks in knowing nothing.
+  const learned = mergePaths(emptyOverseer(), { changed: ["scripts/a.mjs", "renderer/b.js"], explored: ["docs/c.md"] }, at(1));
+  const review = { summary: "fair · builders reporting failures", score: 70, health: "fair", findings: [{ severity: "warn", title: "builders reporting failures", detail: "1 failed run" }], lessons: [] };
+  const merged = overseerMerge(learned, review, at(2));
+  assert.deepEqual(merged.hotPaths, learned.hotPaths);
+  assert.deepEqual(merged.coldPaths, learned.coldPaths);
+  assert.equal(merged.reviews, learned.reviews + 1, "the review itself still landed");
+  const twice = overseerMerge(merged, review, at(3));
+  assert.deepEqual(pathsForArea(twice, "scripts").hot.map((row) => row.file), ["scripts/a.mjs"], "and a second review does not wipe them either");
+  assert.deepEqual(normalizeOverseer(JSON.parse(JSON.stringify(twice))).coldPaths, learned.coldPaths, "the stored form carries them");
 });
