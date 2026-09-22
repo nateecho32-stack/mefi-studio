@@ -25,6 +25,32 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - scope pass for the third worktree follow-up: both split obligations verified discharged (task_8d38294b586a1490, run run_1790094266535_124)
+
+Scope decided from the parent's decision log (task_64d0e2f342af618c,
+"split the extra work out"): the uncovered work is the two split cards'
+obligations, verified here first-hand at HEAD 56087b2 rather than trusted
+from prior reports.
+
+- Landing card task_7b773505d7c6eb43 (never dispatched itself): the feature
+  is present end to end — `scripts/executor-worktrees.cjs`, the `main.cjs`
+  wiring (require at main.cjs:58, per-run `prepare`/`discard` around
+  main.cjs:9354-9376, kill-switch `MEFI_STUDIO_WORKTREE_NPM_CI`), the
+  `docs/architecture.md` opt-in section, and the TESTRUNS rows from d1c4d78 /
+  e3ad851. Fresh `node --test tests/executor_worktree.test.mjs` -> 10/10
+  pass (11.6 s), including the junction cleanup and the lazy
+  `.git/info/exclude` write (asserted by the suite itself).
+- Full-gate card task_7a3b221956f9aa64: gates exited 0 at e3cd322 (rows
+  1fec86b / 21f9e33); `git diff e3cd322..HEAD` touches TESTRUNS.md only, so
+  that evidence still covers HEAD's code. The card's failed verification
+  ("1 changed file") was line-ending noise, not content:
+  `git diff --ignore-all-space --numstat` on renderer/booklet.html was empty
+  (`git ls-files --eol`: index lf, worktree crlf). Restored with
+  `git checkout -- renderer/booklet.html`; `git status --porcelain` is now
+  empty, so the next gate-card retry verifies against a quiet tree.
+- No residue: `git worktree list` shows no `.mefi/worktrees` checkouts on
+  this repo.
+
 ## 2026-09-22 evening - repeat verification for the visible-phase foreground card (task_03ad46c09bd30216, run run_1790094247017_123)
 
 Closing verification for "Visible-phase foreground robustness". The
