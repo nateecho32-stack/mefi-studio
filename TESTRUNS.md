@@ -34,6 +34,10 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - Owner-gated occlusion-probe re-run: scoped commit already landed, fresh strict native-occlusion pass, no pending diff (task_e650d4d5946e92ca, run_1790119518562_6)
+
+Dispatched to re-run the probe and commit the pending main.cjs/tests/fixtures/TESTRUNS.md changes for this thread. Inspection first: the requested scoped commit is already in this repo's history, not pending - a9464fd "Occlusion probe: score renderer lag by its own frame chain; pin strict native occluded record" carries main.cjs, tests/fixtures/occlusion-probe-electron.cjs, tests/worker_responsiveness.test.mjs and TESTRUNS.md, and 9f6ef07 logged the run_1790017587654_66 re-run row; the thread then continued through 2334b00, 66895cd, ce3e6ec, cb93e79 and 379c5b1, all ancestors of HEAD. Nothing occlusion-related is dirty: the Studio index is empty and all four worktrees are clean. The one dirty main.cjs in this tree belongs to the sibling Discord/community thread (scripts/community.cjs, scripts/discord-oauth.cjs) and was left byte-for-byte untouched and never staged. Fresh probe run as the owner asked: the first invocation failed the strict occluded-phase lag under load (samples [262, 1143, 658] ms against the <100 ms assertion), and the immediate rerun passed strict native occlusion - occlusion via document.hidden, occluded rAF growth 0, occluded probe answered workerDriftMs 160 ms / lag 0 ms of 1 sample, MessageChannel 0 ms, console errors 0, with no occlusionUnsupported/windowLost/coverLost skip - consistent with this file's known load sensitivity for the serialized Electron probes. One caveat for the owner: this card's projectPath is the game repo (2d Trippy Hell), which has no main.cjs or occlusion-probe fixture; that mismatch is the repeated verification "changedFiles 0" signature and is owner bookkeeping, not repository work. Only this row is committed; sibling dirty files were left as found.
+
 ## 2026-09-22 late evening - Follow-up: owner/bookkeeping remaining-work denial lane re-verified first-hand; no in-repo implementation remains, only owner-only task-store wording (task_20adaf6b2a814278, run_1790118786107_9) (task_20adaf6b2a814278, run_1790118786107_9)
 
 Scoped this split follow-up from the parent card's decision log, not from prior reports: task_d5268418bac5ed58 decided scope->split and its own result named the split item as the stored delegated acceptance in Studio's task store. Re-verified the parent's owner/bookkeeping lane against the shipped verifier first-hand rather than trusting the report: importing verifyCompletion, the exact parent result prose 'none in repo scope (owner-only: reword the stored delegated acceptance in Studio's task store)', 'none in repo scope (owner/bookkeeping: the stored acceptance lives in Studio's task store)' and 'none in repo scope (owner / bookkeeping: the stale acceptance is the owner's to flip)' all discharge (no 'outstanding obligations remain'), while genuine obligations stay outstanding: 'none in the other module (owner-only)', 'none in repo scope (bookkeeping in the other module)' and 'the owner still has to migrate the store'. Evidence: node --test tests/verification_checks.test.mjs -> 15/15 pass; npm run check was already green on this HEAD in the concurrent sibling run. A git grep confirms no tracked artifact asserts the inverted 'directly below the anchor' wording - the only hits are the helper comment/--help and CONTRIBUTING.md:91 / docs/code-map.md:129 that label that wording frozen. The sole leftover is the stale acceptance on task_delegate_b4f73d934d18f69906d57de9 ('inserts a row directly below "Read Before Any Tests"'), which lives only in Studio's untracked task store; workers may not rewrite it, so it is owner/bookkeeping, not repository work. This row was inserted through the helper itself and is the only artifact committed; sibling staged/dirty files were left byte-for-byte as found.
@@ -109,28 +113,6 @@ Inspected the live working tree first (the brief named no test paths). Two concu
 ## 2026-09-22 late evening - TESTRUNS concurrent-editor fix re-verified and one clobber window closed: atomicReplace now re-verifies the snapshot before EVERY rename retry and before the copy fallback, not once; append contracts 20/20, check 9/9, npm run check exit 0 (task_2ddbeec8fa4c102a, run_1790114368951_38) (task_2ddbeec8fa4c102a, run_1790114368951_38)
 
 Root cause and fix (both first-hand this run). Cause: TESTRUNS.md is a shared notebook sessions edit by hand with read-modify-write and no lock, so a stale snapshot silently clobbered a sibling's row. Fix already landed and re-verified: scripts/append-testruns-row.mjs (cross-process tmpdir lock, snapshot re-verify immediately before the atomic temp+rename swap, non-destructive rollback on a post-append gate failure) plus scripts/check-testruns.mjs wired into npm run check, both named in CONTRIBUTING.md and docs/code-map.md. New this run: atomicReplace previously verified the snapshot only ONCE before the rename retry loop, so a failed swap under a Windows AV/OneDrive hold (up to two 150 ms sleeps) plus the copyFileSync fallback left an unchecked window; it now verifies before each attempt and before the fallback, pinned by a new deterministic contract (injected rename failing once while a save lands). Evidence: node --test tests/append_testruns_row.test.mjs tests/check_testruns.test.mjs -> 29 tests / 29 pass / 0 fail (append 20, check 9); npm run check exit 0 (103 targets, 214 specs, ALL-SELECTORS-USED, syntax 103, check-testruns 78 live rows newest-first, no conflict copies). The alert's named sessions ses_f3573159affewV47uh2daYfiFe / ses_f35723837ffeKhwi6zKddb5gSm and owner ses_f359e43c match zero A-Eyes records, so their convergence is unprovable from the repo and is not a worker obligation. A live sibling session co-edited tests/append_testruns_row.test.mjs during this run (an additive 'repeated appends' contract appeared and is green); it is preserved, not clobbered.
-
-## 2026-09-22 late evening - Shared-file handoff closed a second time: both collision cards already done+verified in the store, all five sessions' edits intact and green, no repo edit owed (run_1790113906623_36)
-
-Retry of the card whose prior run settled "outstanding obligations remain".
-Diagnosed at the source this time, not from the prose: the two A-Eyes cards
-behind this warn (task_12bfa38470c7263e "Resolve collision: append_testruns_row.test.mjs
-+1 more" and task_f484b1899073c63e "Resolve collision: onboarding.test.mjs +1 more")
-are both status=done and verification=verified with an empty `remaining` array in
-the store - the handoff was adopted, nothing is outstanding. A nonempty
-`task.remaining` is the one input that makes verifyCompletion fail before any
-green check can pass (scripts/assistant.mjs:4035); neither card has one, so no
-repo re-run could ever have changed the prior verdict - it was the report's
-`remaining:` prose shape, exactly as the row below documents.
-
-Re-verified first-hand at HEAD 56115dc rather than trusting the reports: both
-test files are committed and clean (`git status --porcelain` empty for them),
-`node --test tests/append_testruns_row.test.mjs tests/onboarding.test.mjs` ->
-50 tests / 50 pass / 0 fail (append 18, onboarding 32), no duplicate test titles
-and no merge-conflict markers, and `npm run check` exit 0 (103 targets, 214
-specs, ALL-SELECTORS-USED, syntax 103 files, check-testruns 77 live rows
-newest-first, no conflict copies). No file logic changed; this commit adds only
-this row, path-limited, and the shared index is left with nothing staged.
 
 ## Read Before Any Tests
 
