@@ -25,6 +25,33 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+performance_render guard task closed with first-hand solo and in-suite
+evidence (2026-09-22, 09:17–09:22, run_1790086407101_20 for
+task_9e1fabae123a9443 "Guard performance_render flake", retry after the
+unverified settlement). Verified the claimed hardening is real and landed
+before crediting it: the 40 s kill/report contract (taskkill /T /F tree-kill,
+exitCode race guard, PID/root timeout diagnostics, timer cleared on exit) is
+committed in 3198c4d and the load-tolerant downloadCapture budget in
+6f3b370/520e22b; both files have zero worktree drift. Deferred to the sibling
+gate: at 09:16 the board showed a live `node --test
+tests/performance_render.test.mjs` plus another suite and 82% CPU; launched
+after they cleared (09:17:12, CPU 31%). Solo `node --test
+tests/performance_render.test.mjs`: 2/2 pass, exit 0, wall 9.8 s (fixtures
+4.5 s/5.1 s). In-suite `node scripts/run-node-tests.mjs` starting inside the
+tail of the sibling 09:16 gate: 1937 tests / 1932 pass / 2 fail / 3 skipped,
+both performance_render tests ✔ — fixtures 24.5 s and 6.1 s under that
+residual load, inside the 40 s kill contract and 50 s test timeout. The two
+failures are executor_end_to_end.test.mjs staged-index warning cases; solo
+rerun 17/17, exit 0 on the same uncommitted tree (the known moving-tree /
+parallel-load table row — sibling main.cjs / scripts/assistant.mjs edits in
+flight, not this task's scope). The ~1/8 loaded-run exit-1 recurrence named
+as remaining by the first attempt is closed by the rows below: the 14-run
+loaded loop with no repro (run_1790028475698_40) and the captured-and-
+classified full-contention signature (fixture-internal download timeout,
+since covered by the pace-scaled downloadCapture budget). Logs:
+%TEMP%\opencode\perf-verify\ (solo1.log, insuite.log, executor-solo.log).
+No source changes this run; this entry is the only edit.
+
 Fresh full-gate green rerun closing the integration-gate chain
 (2026-09-22, 09:13–09:17, run_1790086242215_15 for task_94b29c15a3479597).
 Purpose: the sibling-edits evidence task_336a62b5d249978f asked for — its
