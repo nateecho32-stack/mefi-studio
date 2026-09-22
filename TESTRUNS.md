@@ -45,6 +45,39 @@ booklet, closing the midday race. The normalized-path lock stage was reached
 this time and all checks passed. Sibling dirty files and the task store
 untouched; this commit adds only this row.
 
+## 2026-09-22 evening - sibling main.cjs refactor gated on the settled worktree: all three gates exit 0 (task_d770727341b466b7, run run_1790101083802_7)
+
+The in-flight main.cjs edit this card's parent row saw at 47+/64− settled at
+427+/302− in the shared worktree and was verified there, not from any report.
+Settle evidence first-hand: `Get-Item main.cjs` LastWriteTime 13:09:30 with
+no writes for 12 minutes before pickup, and the full `git diff -- main.cjs`
+SHA-256 identical across a 25-second window (6DDB31AE6086…). The refactor
+is the autopilot/proactive-pass rework: `autopilotProactivePass({useAi})` ->
+`autopilotProactivePass()`, `refreshAutopilotQueue(eyes)` gains a `rows`
+param, `queueExecutorCheckpoint` gains `delay`, `runVerificationJob(s)`
+drop the `fallbackJob`/`job` params, and `taskPriority` / `setProactive`
+are deleted from main.cjs. Fallout scan: no reference to either deleted
+name remains in main.cjs (`taskPriority` lives on as its own copy in
+scripts/assistant.mjs; the scripts/policy.mjs mention is a historical
+comment), and every in-file call site matches the new signatures — one
+cosmetic leftover passes a now-ignored argument
+(`runVerificationJobs(job)` at main.cjs:10223; the parameter-less
+definition ignores it, harmless at runtime). `node --check main.cjs`
+exit 0. Gates, run bare from the project root over this loaded tree:
+`npm run check` exit 0 (targets 100/100, spec-collisions 204 unique no
+orphans, css merge skip, all selectors used, syntax ok 100 files);
+`npm test` exit 0 — parallel node stage 2054 tests / 2051 pass / 0 fail /
+3 skipped (the documented environment-conditional skips), serialized
+eyes_toggle_electron 1/1, occlusion_probe 1/1 with real occlusion engaged,
+Python contracts Ran 247 tests OK in 92.5 s, normalized-path lock all
+passed; `npm run audit` exit 0 with findings [] / 0 warnings (checkedAt
+2026-09-22T18:26:14Z). Settle honest note: HEAD moved ba72edd -> 23bdd5c
+mid-run via TESTRUNS.md-only sibling commits and no test-read source
+moved; ~37 sibling in-flight modified files plus 2 untracked were present
+and untouched, the working-tree main.cjs diff is byte-identical after the
+run (still 427+/302−, uncommitted, owned by its session), and the task
+store was not modified from this worker. This commit adds only this row.
+
 ## 2026-09-22 evening - fourth-generation carrier: remainder confirmed owner-only, repo re-verified at HEAD 06dc84d (task_fece4ffd34e38932, run run_1790101296453_15)
 
 Scope decided from the parent card's (task_b5ec79917d8514b2) decision log,
