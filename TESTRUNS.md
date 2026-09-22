@@ -25,6 +25,28 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - performance_render timeout headroom for the loaded full gate (task_07a6989d1e5972eb, run run_1790097924274_6)
+
+The remaining non-adaptive deadlines in performance_render were the outer
+ones: a 40s fixture kill bound and a 50s per-test timeout. The incident row
+(one 50s timeout under concurrent machine load, 2-of-3 passes) plus the
+2026-09-22 guard row's measurement (~25s for a healthy fixture inside a
+loaded parallel stage) left only 1.6x kill headroom and ~10s of outer slack
+for booklet build + spawn + cleanup. tests/performance_render.test.mjs now
+uses the 80s kill convention command_render and occlusion_probe already
+document, with both test timeouts at 100s so build + cleanup still fit
+between the kill bound and the deadline. Retry and load-aware skip were
+considered and rejected: node:test `retry` relaunches while the timed-out
+first attempt's abandoned Electron may still be live (a timeout never
+cancels the fn), compounding the load that caused the flake, and the
+fixture's internal budgets are already pace-adaptive (6f3b370/520e22b), so
+only the outer bounds needed slack. Evidence: solo
+`node --test tests/performance_render.test.mjs` twice back-to-back, 2/2
+exit 0 both times (fixtures 12.4/6.1s then 15.7/7.2s); `npm run check`
+exit 0 (targets 100/100, 204 specs, selectors used, syntax ok). Sibling
+in-flight files in the shared tree were present and untouched; only this
+test file and this row changed.
+
 ## 2026-09-22 evening - verify-and-close pass for the visible-phase foreground card at HEAD (task_03ad46c09bd30216, run run_1790097832067_3)
 
 The re-plan asked for the fix to be proven real rather than reported: repo-wide

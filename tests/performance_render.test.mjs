@@ -34,6 +34,11 @@ async function runFixture(t, desktopHost = false) {
     let output = "";
     child.stdout.on("data", (chunk) => { output = (output + chunk).slice(-14000); });
     child.stderr.on("data", (chunk) => { output = (output + chunk).slice(-14000); });
+    // A healthy fixture measured ~25s inside a loaded parallel stage (TESTRUNS,
+    // 2026-09-22); the old 40s kill left only 1.6x headroom, so a concurrent
+    // build or sibling suite could kill a legitimate pass. Keep the kill bound
+    // well clear of a loaded-but-healthy run - command_render and
+    // occlusion_probe use the same 80s convention.
     const timer = setTimeout(() => {
       output += `\nPerformance fixture timed out: PID ${child.pid}, root ${fixture}\n`;
       if (child.exitCode !== null) {
@@ -46,7 +51,7 @@ async function runFixture(t, desktopHost = false) {
         const killer = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
         killer.once("error", () => child.kill());
       } else child.kill();
-    }, 40000);
+    }, 80000);
     const code = await new Promise((resolve, reject) => { child.once("error", reject); child.once("exit", resolve); }).finally(() => clearTimeout(timer));
     let report;
     try { report = JSON.parse(await readFile(path.join(fixture, "report.json"), "utf8")); } catch {}
@@ -69,7 +74,7 @@ async function runFixture(t, desktopHost = false) {
   }
 }
 
-test("real performance profiler catches blocking work, freezes captures and fits a narrow window", { skip: !canRun, timeout: 50000 }, async (t) => {
+test("real performance profiler catches blocking work, freezes captures and fits a narrow window", { skip: !canRun, timeout: 100000 }, async (t) => {
   const report = await runFixture(t);
   assert.ok(report.sampledFrames >= 4, "requestAnimationFrame produces real frame timings");
   assert.ok(report.longTaskDetected, "the browser observer identifies the injected blocking work");
@@ -79,7 +84,7 @@ test("real performance profiler catches blocking work, freezes captures and fits
   assert.ok(report.narrowLayout.width <= 601 && !report.narrowLayout.overflow, JSON.stringify(report.narrowLayout));
 });
 
-test("desktop performance capture measures real Electron processes and IPC without exporting payloads", { skip: !canRun, timeout: 50000 }, async (t) => {
+test("desktop performance capture measures real Electron processes and IPC without exporting payloads", { skip: !canRun, timeout: 100000 }, async (t) => {
   const report = await runFixture(t, true);
   assert.ok(report.hostSamples >= 2 && report.processMetricsMeasured && report.ipcMeasured);
   assert.ok(report.hostFrozen && report.exportedCapture && report.payloadExcluded);
