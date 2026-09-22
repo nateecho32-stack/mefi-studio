@@ -25,6 +25,24 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - verify-and-close pass for the visible-phase foreground card at HEAD (task_03ad46c09bd30216, run run_1790097832067_3)
+
+The re-plan asked for the fix to be proven real rather than reported: repo-wide
+grep confirms the steal is in the fixture, not just in prior rows —
+`app.focus({ steal: true })` at raise and at the 2s re-raise
+(tests/fixtures/occlusion-probe-electron.cjs lines 389/430) and on the cover
+(lines 507/529) — and the frames-channel resampling is the bounded
+`sampleProbe` (3 attempts, 400ms apart, every sample recorded) whose visible
+`acceptable` predicate demands a frames answer AND <100ms lag, so retries
+cannot mask a throttling regression. `git diff HEAD --
+tests/fixtures/occlusion-probe-electron.cjs` is empty; the 379c5b1 fixture
+commit and rows 56087b2 / d69fd2f are all on main. Fresh validation at HEAD
+7bbc50f: `node --test tests/occlusion_probe.test.mjs` twice back-to-back,
+2/2 exit 0, no "must answer via frames" failure, first run engaged real
+native occlusion (document.hidden flip, occluded rAF growth 0); `npm run
+check` exit 0. Sibling in-flight files in the shared tree were present and
+untouched. This row is the only change.
+
 ## 2026-09-22 evening - per-session worktree follow-up group re-verified at HEAD; landing-card closure stays host-side (task_plan_mucx9cxs_0, run run_1790097361397_4)
 
 Scope recovered from the decision logs, not guessed: member task_8d38294b586a1490's
