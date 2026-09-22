@@ -25,6 +25,36 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - retry rerun races the live loop-cleanup sibling: node 2062/2058/1/3, the lone red is the sibling's uncommitted overseerMiss, both documented environmental reds stay clear (task_cff03b8e4922cc5d, run run_1790103360751_20)
+
+The card's premise held on the settled tree and again here: row 9bfd803
+(below, run run_1790100967469_4) and the 103.4 s solo re-confirm
+(run_1790101799836_29) already show the midday environmental pair clear with
+no code changes, and 9bfd803 is an ancestor of HEAD. This retry then re-ran
+the full gate first-hand once free memory held above the documented floor:
+0.56-0.57 GB free across three samples (above the ~0.5 GB line of the
+2026-09-21 rows, far from the 0.18-0.38 GB red zone) under the standing load
+of Discord, three opencode sessions, two claude sessions and a Defender scan.
+The gate launched at a tree that showed only docs/agent-loop.md dirty and
+exited 1 in 42.5 s at the parallel stage: 2062 tests / 2058 pass / 1 fail /
+3 skipped. Neither documented environmental red appeared — occlusion_probe
+and node_paint_cache never ran red. The single failure is
+executor_continuation.test.mjs:212, which still asserts the bare "recorded
+checks failed in the overseer's verification run" reopen note while an
+uncommitted working-tree edit adds `overseerMiss` (main.cjs:11302, blame
+all-zero, written 13:59:39 mid-run) appending "(npm run check failed — timed
+out: killed after budget)". A solo rerun of the file fails identically, so it
+is deterministic source/test drift inside the in-flight loop-cleanup sibling
+(10 dirty files by the run's end: main.cjs, scripts/assistant.mjs,
+renderer/idle.js, booklet.html, three more scripts, two tests, one fixture),
+not an environmental class and not landed code — the c2ced15 tree passed this
+suite in the 13:24 green row. No file was edited to force green; the chain
+stopped before the serialized/Python/lock stages, which stand green on the
+rows above. The card's substance — full gate green, environmental reds
+cleared, no code changes — is discharged by the landed rows; this row records
+the retry's first-hand evidence. Sibling files and the task store untouched;
+this commit adds only this row.
+
 ## 2026-09-22 late evening - A-Eyes "auth split entirely uncommitted" alert closed: stale by construction, 2457a7d verified in HEAD, prior denial was the prose-shape verdict again (run run_1790103450505_24)
 
 The alert's seven-plus-one files (including the then-untracked
