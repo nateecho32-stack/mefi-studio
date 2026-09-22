@@ -83,6 +83,7 @@
       <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open Command view: the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span class="label">Command view</span><kbd>D</kbd><span class="count warn" data-badge="questions" hidden></span></button>
       <button class="ws-home ws-shortcut" data-nav="tasks" title="Open your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span class="label">Task board</span><kbd>T</kbd><span class="count" data-badge="tasks" hidden></span></button>
       <button class="ws-home ws-shortcut" data-nav="plans" title="Explore an idea and review its plan (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span class="label">Plans</span><kbd>P</kbd></button>
+      <button class="ws-home ws-shortcut" data-nav="brains" title="Brain maps: the pipeline as a graph you can rewire (B)"><svg class="glyph" aria-hidden="true"><use href="#g-route"/></svg><span class="label">Brain maps</span><kbd>B</kbd></button>
     </nav>
     <div class="ws-section-label"><span>PROJECTS</span><button id="workspace-add-project" class="ghost mini" title="Add an existing project folder" aria-label="Add project">+</button></div>
     <div id="workspace-projects" class="ws-projects" aria-label="Choose a project"></div>
@@ -472,6 +473,7 @@
         </section>
         <section class="settings-group settings-card" id="settings-routing" aria-labelledby="settings-routing-heading">
         <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-route"/></svg></span><div><h3 id="settings-routing-heading">Model routing</h3><p class="muted">Who answers the assistant, and how each task's model is chosen. Ready routes list first; the rest stay selectable and can be set up later. Models are saved per provider, so switching never mixes them.</p></div></div>
+        <p class="muted">The stages behind these switches — who checks the ask, who plans it, who briefs it, when Jev is asked and who picks the model — are drawn as a graph in <button class="ghost mini" data-nav="brains" title="Brain maps (B)">Brain maps</button>. Making a map live moves the switches its parts name.</p>
         <div class="settings-columns">
           <div class="settings-column">
             <p class="settings-eyebrow">Who answers</p>
@@ -690,6 +692,7 @@
   <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
   <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, agents, assistant, done and questions">
     <header class="rail-tabs" role="tablist" aria-label="Panel views">
+      <button id="cmd-rail-tab-node" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-node" tabindex="-1" data-rail-view="node" title="The node you selected" hidden><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-target"/></svg><span class="rail-tab-label">Node</span></button>
       <button id="cmd-rail-tab-work" class="rail-tab" role="tab" aria-selected="true" aria-controls="idle-feed" data-rail-view="work" title="Work · what is running and what is queued"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg><span class="rail-tab-label">Work</span><span id="cmd-rail-work-badge" class="count" hidden></span></button>
       <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings" title="Agents · how the queue runs"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-agents"/></svg><span class="rail-tab-label">Agents</span></button>
       <button id="cmd-rail-tab-assistant" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-chat" tabindex="-1" data-rail-view="assistant" title="Assistant · the conversation and the New work switch"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span class="rail-tab-label">Assistant</span><span id="cmd-rail-assistant-badge" class="count" hidden></span></button>
@@ -697,6 +700,10 @@
       <button id="cmd-rail-tab-ask" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-asks" tabindex="-1" data-rail-view="ask" title="Ask · decisions waiting on you"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg><span class="rail-tab-label">Ask</span><span id="cmd-rail-ask-badge" class="count warn" hidden></span></button>
     </header>
     <div id="cmd-rail-body" class="rail-body">
+  <!-- The selected node's detail. It owns the whole rail while a node is
+       picked, so the reading surface is full height with one scroller; the
+       floating #idle-info card is only the narrow-layout fallback. -->
+  <aside id="cmd-node" class="cmd-node cmd-card" role="tabpanel" aria-labelledby="cmd-rail-tab-node" aria-live="polite" hidden></aside>
   <aside id="cmd-chat" class="cmd-chat" role="tabpanel" aria-label="Assistant chat log" hidden>
     <header class="rail-view-head chat-log-head">
       <i id="cmd-chat-dot" class="feed-dot" aria-hidden="true"></i>
@@ -732,11 +739,15 @@
     </header>
     <div id="idle-feed-content" class="feed-content">
     <div id="idle-feed-metrics" class="feed-metrics" aria-label="Work readiness"></div>
+    <!-- Readiness stays pinned above; everything below it shares ONE scroller,
+         with each section head sticking as you pass it. The roster used to sit
+         outside this region with a 168px cap of its own, which made the panel
+         three separate wheels. -->
+    <div id="idle-feed-scroll" class="feed-scroll" tabindex="0" role="region" aria-label="Current work and queue">
     <section id="idle-feed-agent-section" class="feed-section feed-agents-section" aria-label="Agents">
       <div class="feed-section-head"><h3>Agents <span id="idle-feed-agents-count" class="feed-agents-count" data-state="idle"></span></h3></div>
       <ul id="idle-feed-agents" class="pin-list assistant-activity assistant-roster feed-agents" aria-label="Agent roster"></ul>
     </section>
-    <div id="idle-feed-scroll" class="feed-scroll" tabindex="0" role="region" aria-label="Current work and queue">
     <section class="feed-current" aria-label="Current work">
       <div class="feed-section-head"><h3>Current work</h3></div>
       <div id="idle-feed-now" class="feed-now" aria-live="polite"></div>
@@ -1032,6 +1043,54 @@
         <h3>Active tasks</h3>
         <ul id="overhead-legend" class="pin-list"></ul>
       </aside>
+    </div>
+  </div>
+</div>
+<div class="overlay brains-overlay" id="brains-overlay" hidden>
+  <div class="brains-sheet" role="dialog" aria-modal="true" aria-labelledby="brains-heading" tabindex="-1">
+    <header class="brains-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="brains" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Engine</div>
+        <h2 id="brains-heading">Brain maps</h2>
+      </div>
+      <span class="brains-live" id="brains-live" hidden>Live pipeline</span>
+      <span class="brains-dirty" id="brains-dirty" hidden>Unsaved changes</span>
+      <div class="sheet-links" data-sheet-links="brains" role="group" aria-label="Other tools"></div>
+      <div class="brains-toolbar">
+        <select id="brains-switcher" aria-label="Which brain map"></select>
+        <button id="brains-new" class="ghost mini" type="button" title="Start an empty brain map">New</button>
+        <button id="brains-duplicate" class="ghost mini" type="button" title="Copy this map, wires and all">Duplicate</button>
+        <button id="brains-delete" class="ghost mini" type="button" title="Delete this map">Delete</button>
+        <button id="brains-draft" class="ghost mini" type="button" title="Describe what it should do and the assistant drafts it from the same parts. Nothing is saved until you review it.">Build with AI</button>
+        <button id="brains-save" class="mini" type="button" title="Save this map (Ctrl S)">Save</button>
+        <button id="brains-activate" class="mini" type="button" title="Make this the pipeline the studio follows">Make this live</button>
+        <button id="brains-close" class="ghost sheet-close" type="button" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="brains-body">
+      <aside class="brains-parts" aria-label="Parts">
+        <h3>Parts</h3>
+        <p class="brains-parts-note">Every part says what it can and cannot do, what reach it needs and whether the studio runs it. Click one to add it; press Space on the canvas to search from anywhere.</p>
+        <input id="brains-parts-search" type="search" placeholder="Search parts" aria-label="Search parts">
+        <div id="brains-parts-list"></div>
+      </aside>
+      <div class="brains-canvas-wrap" id="brains-canvas-wrap" tabindex="0" role="application" aria-label="Brain map canvas. Click an output end and then an input end to wire them. Space searches the parts, Delete removes what is selected, Escape cancels a wire.">
+        <svg class="brains-wires" id="brains-wires" aria-hidden="true"></svg>
+        <div class="brains-canvas" id="brains-canvas"></div>
+      </div>
+      <aside class="brains-inspector" id="brains-inspector" aria-label="What the selected part may do"></aside>
+    </div>
+    <div class="brains-status-bar">
+      <div class="brains-problem-list" id="brains-problems" role="status" aria-label="Problems in this map"></div>
+      <p class="brains-status" id="brains-status" role="status">Click an output end, then an input end, to wire two parts together.</p>
+    </div>
+    <div class="brains-search" id="brains-search" hidden>
+      <div class="brains-search-panel">
+        <input id="brains-search-input" type="search" placeholder="Add a part…" aria-label="Search the parts catalog">
+        <ul class="brains-search-list" id="brains-search-list"></ul>
+        <p class="brains-search-hint" id="brains-search-hint"></p>
+      </div>
     </div>
   </div>
 </div>

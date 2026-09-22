@@ -15,6 +15,7 @@ import backlog from "../../scripts/backlog.cjs";
 import taskContext from "../../scripts/task-context.cjs";
 import taskHandoffs from "../../scripts/task-handoffs.cjs";
 import agentModes from "../../scripts/agent-modes.cjs";
+import agentIssues from "../../scripts/agent-issues.cjs";
 import taskDelegation from "../../scripts/task-delegation.cjs";
 import executorResume from "../../scripts/executor-resume.cjs";
 
@@ -71,7 +72,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     assistantModule: { ...assistant,
       claimWrite: (files, id) => { if (files.some((file) => registry.has(file) && registry.get(file) !== id)) return { action: "refuse" }; for (const file of files) registry.set(file, id); return { action: "proceed" }; },
       releaseWrite: (files, id) => { for (const file of files) if (registry.get(file) === id) registry.delete(file); },
-    }, backlog, taskContext, taskHandoffs, agentModes, taskDelegation, executorResume,
+    }, backlog, taskContext, taskHandoffs, agentModes, agentIssues, taskDelegation, executorResume,
     projectSwitching: false, executorUpdateHold: () => null, assistantStopping: false,
     projects: { current: () => ({ id: "fixture", path: root }), active: () => ({ id: "fixture", path: root }), open: () => ({ id: "fixture", path: root }), run: (_project, fn) => fn() },
     projectRoot: () => root, projectDataPath: (key) => path.join(root, key),

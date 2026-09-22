@@ -25,6 +25,23 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Full gate backing the combined in-flight tree landing (2026-09-22, ~14:1x,
+run_1790086456428_22 for task_85b21602201d47e7 "Commit the combined in-flight
+tree" — brain maps, agent-issues decision lane, Command inspect mode,
+provider breaker, windows command-line port; booklet regenerated first via
+`npm run build-booklet`, which brought `renderer/booklet.html` back in sync
+with the edited renderer sources). `npm run check` green (99 targets, no
+collisions, all selectors used, syntax ok). First `npm test`: 1937 tests,
+1932 pass / 2 fail / 3 skip — both fails in `executor_end_to_end.test.mjs`
+(the two staged-index warning cases), the parallel-stage contention class in
+the table above, not the tree: solo `node --test
+tests/executor_end_to_end.test.mjs` immediately after, 17/17 pass, exit 0.
+Full `npm test` rerun then ran the whole chain green (Node stage exit 0,
+Python contracts 246 OK, normalized-path lock "all checks passed").
+`npm run audit` ok, zero findings. occlusion_probe skipped with its usual
+capability-gated record (this desktop never emits Electron occlusion
+events); no other skips or fails.
+
 performance_render guard task closed with first-hand solo and in-suite
 evidence (2026-09-22, 09:17–09:22, run_1790086407101_20 for
 task_9e1fabae123a9443 "Guard performance_render flake", retry after the

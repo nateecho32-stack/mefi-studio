@@ -192,6 +192,16 @@ app.whenReady().then(async () => {
   report.commandRailPaints = await run(`return window.__railPaintFrames-${commandRailFrames};`);
   assert.equal(report.commandRailPaints, 0, "Command must not paint its covered rail");
   assert.ok(report.first.taskPixels > 8, "Command task pixels must be painted, not just a background or DOM shell");
+  // A selected node's detail lives in the rail's #cmd-node panel whenever the
+  // rail is on screen, and falls back to the floating #idle-info card on the
+  // narrow layout that hides the rail. Follow the surface, not the id.
+  const detailSurface = `
+    const detailCard=(()=>{
+      const shown=el=>el&&!el.hidden&&getComputedStyle(el).display!=='none';
+      const rail=document.getElementById('cmd-node');
+      return shown(rail)?rail:document.getElementById('idle-info');
+    })();
+  `;
   report.grouping = await run(`
     const initial=window.MefiIdle.debugNodes();
     if(initial.some(node=>node.id==='task:group_saved'))throw new Error('Collapsed saved member must not clutter graph');
@@ -201,7 +211,8 @@ app.whenReady().then(async () => {
     if(!toggle||toggle.getAttribute('aria-expanded')!=='false')throw new Error('Missing collapsed group control');
     if(document.querySelectorAll('[data-task-group-member]').length!==2)throw new Error('Card must list every saved member');
     document.querySelector('[data-task-group-member="group_saved"]').open=true;
-    const text=document.getElementById('idle-info').textContent;
+    ${detailSurface}
+    const text=detailCard.textContent;
     if(!text.includes('Retain this full requirement')||!text.includes('Earlier work is preserved'))throw new Error('Saved obligation context missing');
     toggle.click();
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
@@ -216,10 +227,13 @@ app.whenReady().then(async () => {
     fs.writeFileSync(target, (await capturePage()).toPNG());
   }
   await run(`
-    const groupCard=document.getElementById('idle-info');
+    ${detailSurface}
+    const groupCard=detailCard;
     if(groupCard.hidden||getComputedStyle(groupCard).display==='none')throw new Error('Group card is hidden');
     window.MefiIdle.select('task:group_saved');
-    const card=document.getElementById('idle-info');
+    const shownAfter=el=>el&&!el.hidden&&getComputedStyle(el).display!=='none';
+    const railAfter=document.getElementById('cmd-node');
+    const card=shownAfter(railAfter)?railAfter:document.getElementById('idle-info');
     if([...card.querySelectorAll('button')].some(button=>['Work on it','Activate','Done'].includes(button.textContent)))throw new Error('Saved child exposes mutation controls');
     window.MefiIdle.select('task:group_fixture');
     document.querySelector('[data-task-group-toggle="group_fixture"]').click();
@@ -244,7 +258,7 @@ app.whenReady().then(async () => {
   const graphSnapshot = () => run(`
     ${waitForGraphPaint}
     const zen=window.MefiIdle.ambientZenStatus().active;
-    const panels=zen?[]:['idle-feed','cmd-chat','idle-info'].flatMap(id=>{
+    const panels=zen?[]:['idle-feed','cmd-chat','cmd-node','idle-info'].flatMap(id=>{
       const panel=document.getElementById(id),style=panel&&getComputedStyle(panel);
       if(!panel||panel.hidden||style.display==='none'||style.visibility==='hidden')return [];
       const rect=panel.getBoundingClientRect();
@@ -299,7 +313,8 @@ app.whenReady().then(async () => {
     const hub=nodes.find(node=>node.kind==='assistant');
     if(!hub||!hub.filedWork.includes('filed_fixture'))throw new Error('The hub must carry the filed chore: '+JSON.stringify(hub&&hub.filedWork));
     window.MefiIdle.select(hub.id);
-    const card=document.getElementById('idle-info');
+    ${detailSurface}
+    const card=detailCard;
     if(card.hidden||!card.textContent.includes('Filed by the assistant'))throw new Error('The hub card must list filed work');
     if(!card.textContent.includes('A-Eyes: repair the store'))throw new Error('Filed chore title missing from the hub card');
     return {ledger:hub.filedWork};

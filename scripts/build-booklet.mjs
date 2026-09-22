@@ -18,10 +18,11 @@ export async function build({ root = ROOT } = {}) {
   const catalog = await readFile(path.join(root, "data", "models.json"), "utf8");
   const parsed = JSON.parse(catalog);
 
-  const [styles, musicStyles, planningStyles, taskGroups, nav, sidebar, graph, modelLab, tracker, tree, idle, explorer, analyzer, tasks, ideas, overhead, palette, eyes, boot, startup, workspace, music, planning, onboarding, booklet] = await Promise.all([
+  const [styles, musicStyles, planningStyles, brainStyles, taskGroups, nav, sidebar, graph, modelLab, tracker, tree, idle, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, music, planning, onboarding, booklet] = await Promise.all([
     readFile(path.join(RENDERER, "styles.css"), "utf8"),
     readFile(path.join(RENDERER, "music.css"), "utf8"),
     readFile(path.join(RENDERER, "planning.css"), "utf8"),
+    readFile(path.join(RENDERER, "brains.css"), "utf8"),
     readFile(path.join(RENDERER, "task-groups.js"), "utf8"),
     readFile(path.join(RENDERER, "nav.js"), "utf8"),
     readFile(path.join(RENDERER, "sidebar.js"), "utf8"),
@@ -35,6 +36,7 @@ export async function build({ root = ROOT } = {}) {
     readFile(path.join(RENDERER, "tasks.js"), "utf8"),
     readFile(path.join(RENDERER, "ideas.js"), "utf8"),
     readFile(path.join(RENDERER, "overhead.js"), "utf8"),
+    readFile(path.join(RENDERER, "brains.js"), "utf8"),
     readFile(path.join(RENDERER, "palette.js"), "utf8"),
     readFile(path.join(RENDERER, "eyes.js"), "utf8"),
     readFile(path.join(RENDERER, "boot.js"), "utf8"),
@@ -54,8 +56,8 @@ export async function build({ root = ROOT } = {}) {
   ]);
   const html = template
     .replace("__BOOKLET_DATA__", () => catalog.trim())
-    .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${profilerStyles}`)
-    .replace("__BOOKLET_CODE__", () => [stageLabels, performanceCore, profiler, taskGroups, nav, sidebar, graph, modelLab, tracker, tree, idle, explorer, analyzer, tasks, ideas, overhead, palette, eyes, boot, startup, workspace, music, planning, onboarding, booklet].join("\n"));
+    .replace("__BOOKLET_STYLES__", () => `${styles}\n${musicStyles}\n${planningStyles}\n${brainStyles}\n${profilerStyles}`)
+    .replace("__BOOKLET_CODE__", () => [stageLabels, performanceCore, profiler, taskGroups, nav, sidebar, graph, modelLab, tracker, tree, idle, explorer, analyzer, tasks, ideas, overhead, brains, palette, eyes, boot, startup, workspace, music, planning, onboarding, booklet].join("\n"));
 
   const out = path.join(RENDERER, "booklet.html");
   let previous = null;

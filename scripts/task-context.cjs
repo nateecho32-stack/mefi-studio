@@ -119,6 +119,17 @@ function buildTaskHandoff(task, { tasks = [], maxChars = 24000, contextPath = nu
   add("Current requirements", task?.prompt || task?.description || task?.ideaDetail, Math.floor(cap * .4));
   if (task?.delegatedFrom) add("Shared task assignment", `Implement only this subtask's scope and owned files. Other builders may be working in this project; preserve their changes. Report concrete results and validation evidence to the Assistant. The parent task performs final integration. Parent task: ${text(task.parentTaskId) || text(task.delegatedFrom.parentTaskId) || "see saved delegation lineage"}.`, 700);
   if (task?.delegation) add("Integrate delegated work", "The Assistant delegated implementation parts of this task to the child builders listed in Dependency outputs. Inspect their actual changes and evidence, finish any gaps within the original scope, integrate the parts and validate the complete result. Child completion alone never completes this parent. Do not delegate these parts again.", 700);
+  // Decisions the owner already made about THIS task, ahead of everything a
+  // previous attempt merely reported: an agent that asked a question and was
+  // answered must start from the answer, not re-litigate it. A grant recorded
+  // here widens this task only — it is not a standing permission.
+  const decisions = rows(task?.decisions).slice(-6);
+  if (decisions.length || rows(task?.grants).length) {
+    add("Decisions already made — follow these", {
+      ...(decisions.length ? { decisions } : {}),
+      ...(rows(task?.grants).length ? { grantedForThisTaskOnly: task.grants } : {}),
+    }, Math.floor(cap * .08));
+  }
   add("Work still remaining", task?.remaining, Math.floor(cap * .1));
   add("Interrupted attempt — saved progress, not completion evidence", task?.interruptedAttempt, Math.floor(cap * .1));
   add("Blockers / last error", { ...(task?.blockers ? { blockers: task.blockers } : {}), ...(task?.lastRunError ? { lastRunError: task.lastRunError } : {}), ...(task?.verification ? { verification: task.verification } : {}) }, Math.floor(cap * .1));

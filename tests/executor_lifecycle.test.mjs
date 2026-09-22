@@ -12,6 +12,7 @@ import * as eyes from "../scripts/eyes.mjs";
 import * as assistant from "../scripts/assistant.mjs";
 import backlog from "../scripts/backlog.cjs";
 import agentModes from "../scripts/agent-modes.cjs";
+import agentIssues from "../scripts/agent-issues.cjs";
 import taskHandoffs from "../scripts/task-handoffs.cjs";
 import executorResume from "../scripts/executor-resume.cjs";
 import { createRequire } from "node:module";
@@ -528,13 +529,13 @@ function childHost({ throwFallback = false, throwKill = false } = {}) {
   const first = makeChild(11), fallback = makeChild(22), finishes = [], timers = [], spawns = [], watches = [], killers = [];
   let now = 100000;
   class Clock extends Date { static now() { return now; } }
-  const entry = { id: "run_100_1", finished: false, spoke: false, handoffs: [], calls: new Set(), outputTail: [], outputLog: [], child: null };
+  const entry = { id: "run_100_1", finished: false, spoke: false, handoffs: [], calls: new Set(), issues: [], outputTail: [], outputLog: [], child: null };
   const env = vm.createContext({
     Date: Clock, entry, runRoute: { grok: true, cli: "grok", opencode: { env: {}, modelArgs: "" } }, runRoot: "C:/fixture", prompt: "fixture brief", startedAt: 1,
     process: { env: {} }, assistantModule: assistant, autopilot: { parallel: 1, jobs: [entry] }, eyes: {}, queueExecutorCheckpoint() {},
     job: { kind: "task", ref: { id: "task" }, title: "Fixture work" },
     EXECUTOR_DONE_MARK: "DONE", EXECUTOR_MAX_HANDOFFS: 3, EXECUTOR_KILL_MS: 600000, EXECUTOR_START_BUDGET_MS: 120000,
-    parseExecutorHandoff: () => null, logLine() {}, pushAutopilotHistory() {}, executorLog: async () => {}, emitAutopilot() {},
+    parseExecutorHandoff: () => null, agentIssues, logLine() {}, pushAutopilotHistory() {}, executorLog: async () => {}, emitAutopilot() {},
     assistantClip: (text) => text, watchRunSession: () => watches.push("fallback"), sweepSnapshotLocks: async () => {},
     setTimeout: (fn, delay) => { Object.assign(fn, { delay, unref() {} }); timers.push(fn); return fn; }, clearTimeout: (timer) => { timer.cancelled = true; },
     spawn: (command) => {

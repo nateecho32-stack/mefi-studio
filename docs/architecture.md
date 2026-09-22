@@ -160,11 +160,23 @@ revision history stay in the project's ignored local `planning.json`.
   than overlap; hovering one lifts it and softens everything else; clicking
   it (or its orb) **focuses** the node: the camera glides in (scale and pan
   together, less on a parent so its children stay in frame), the tree slides
-  over for the card instead of jumping, and the rest of the tree keeps
-  turning slowly behind a blur until Esc or an empty click. **Card style**
-  in the Ambience pop picks outlined, filled, or auto (filled when hovered,
-  selected or running). Whether a launch lands on the workspace or straight
-  in Command view is set under **Settings › Studio**.
+  over instead of jumping, and the rest of the tree keeps turning slowly
+  behind a blur until Esc or an empty click. **Card style** in the Ambience
+  pop picks outlined, filled, or auto (filled when hovered, selected or
+  running). Whether a launch lands on the workspace or straight in Command
+  view is set under **Settings › Studio**.
+- **Inspect mode.** Selecting a node also hands its detail the whole right
+  rail — a **Node** tab appears at the head of the strip and takes the rail
+  at full window height, with one scroller instead of a card inside a card.
+  Everything else steps back to its edge at the same moment: the rail's tabs
+  become a 56px icon column pinned over the detail, the dock folds to its
+  **More tools** pill, **Legend** and **Usage** keep their glyphs and drop
+  their words, and the view toolbar goes glyph-only. Nothing is taken away —
+  every collapsed edge peeks back when you hover it or tab into it, and
+  **Esc** walks out one level per press: the menus return first with the node
+  still open, then the node itself, and the rail goes back to the tab you
+  were on. Below 900px the rail is hidden entirely and the floating card
+  serves the detail as before.
 - Lines say what they mean: the hub link is doubled, a task's anchor is
   dotted and marches while its worker runs, an agent's tether is dashed, a
   finished cluster is stippled, and a done todo's link fades green.

@@ -37,6 +37,7 @@ const INLINE_SCRIPTS = [
   "tasks.js",
   "ideas.js",
   "overhead.js",
+  "brains.js",
   "palette.js",
   "eyes.js",
   "boot.js",
@@ -80,6 +81,7 @@ async function makeFixtureRoot() {
   await copyFile(path.join(RENDERER, "music.css"), path.join(renderer, "music.css"));
   await copyFile(path.join(RENDERER, "planning.css"), path.join(renderer, "planning.css"));
   await copyFile(path.join(RENDERER, "profiler.css"), path.join(renderer, "profiler.css"));
+  await copyFile(path.join(RENDERER, "brains.css"), path.join(renderer, "brains.css"));
   for (const name of INLINE_SCRIPTS) {
     await copyFile(path.join(RENDERER, name), path.join(renderer, name));
   }

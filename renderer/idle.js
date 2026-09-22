@@ -297,6 +297,12 @@
     feedMenuOpen: readStore("mefiStudio.cmdFeedMenu") === "1",
     feedCollapsed: readStore("mefiStudio.cmdFeedCollapsed") === "1",
     railTab: ["work", "settings", "assistant", "done", "ask"].includes(readStore("mefiStudio.cmdRailTab")) ? readStore("mefiStudio.cmdRailTab") : "work",
+    // The tab to come back to when a selection clears. "node" is never stored.
+    railHome: ["work", "settings", "assistant", "done", "ask"].includes(readStore("mefiStudio.cmdRailTab")) ? readStore("mefiStudio.cmdRailTab") : "work",
+    focusMode: false,
+    // Set when Esc takes the menus back by hand. Selecting another node then
+    // leaves the chrome where the owner put it, until the selection clears.
+    focusOptOut: false,
     railCollapsed: false,
     doneEntries: null,
     doneAt: 0,
@@ -1934,7 +1940,10 @@
   // docked panel. Each view keeps its own head and collapse control; the rail
   // only decides which view is on screen and whether the panel shrinks to its
   // header.
-  const RAIL_VIEWS = ["work", "settings", "assistant", "done", "ask"];
+  // "node" is the selected node's own detail. It is a view, not a destination:
+  // its tab only exists while something is picked, and it is never written to
+  // the remembered tab, so clearing the selection lands you back where you were.
+  const RAIL_VIEWS = ["node", "work", "settings", "assistant", "done", "ask"];
 
   function applyRailCollapsed() {
     const collapsed = state.railTab === "work" ? state.feedCollapsed
@@ -1946,7 +1955,11 @@
   }
 
   function setRailTab(name, { save = true, focus = false } = {}) {
-    const view = RAIL_VIEWS.includes(name) ? name : "work";
+    let view = RAIL_VIEWS.includes(name) ? name : "work";
+    // The node view cannot be entered without a node; a stale one falls back to
+    // whatever the owner last chose for themselves.
+    if (view === "node" && !state.selected) view = state.railHome ?? "work";
+    if (view !== "node") state.railHome = view;
     state.railTab = view;
     for (const button of el.railTabs ?? []) {
       const selected = button.dataset.railView === view;
@@ -1954,13 +1967,16 @@
       button.tabIndex = selected ? 0 : -1;
       if (selected && focus) button.focus();
     }
+    if (el.nodePanel) el.nodePanel.hidden = view !== "node";
     if (el.feed) el.feed.hidden = view !== "work";
     if (el.settings) el.settings.hidden = view !== "settings";
     if (el.chatLog) el.chatLog.hidden = view !== "assistant";
     if (el.done) el.done.hidden = view !== "done";
     if (el.asks) el.asks.hidden = view !== "ask";
-    if (save) writeStore("mefiStudio.cmdRailTab", view);
+    // Never remember "node": it belongs to a selection, not to a launch.
+    if (save && view !== "node") writeStore("mefiStudio.cmdRailTab", view);
     applyRailCollapsed();
+    if (view === "node") renderInfo();
     if (view === "settings") renderSettingsPanel();
     if (view === "done") void loadDoneLog();
     if (view === "ask") renderAsks();
@@ -2198,6 +2214,46 @@
       detail.textContent = question.detail;
       card.append(detail);
     }
+    // What the decision is ABOUT. A question raised by an agent carries the
+    // task it belongs to and the evidence it saw, so the card can be read
+    // without opening anything else — and opened from here when it cannot.
+    if (question.context) {
+      const context = question.context;
+      const chips = document.createElement("div");
+      chips.className = "ask-context";
+      if (context.severity) {
+        const severity = document.createElement("span");
+        severity.className = "ask-chip";
+        severity.dataset.severity = context.severity;
+        severity.textContent = context.severity === "blocker" ? "Blocked" : context.severity === "decision" ? "Decision" : "Note";
+        chips.append(severity);
+      }
+      if (context.taskTitle) {
+        const task = document.createElement(context.taskId ? "button" : "span");
+        task.className = "ask-chip task";
+        task.textContent = context.taskTitle;
+        if (context.taskId) {
+          task.type = "button";
+          task.title = "Open this task on the board";
+          task.addEventListener("click", () => nav("tasks", { taskId: context.taskId, filter: "all" }));
+        }
+        chips.append(task);
+      }
+      if (context.file || context.check) {
+        const where = document.createElement("span");
+        where.className = "ask-chip";
+        where.textContent = context.check ? `check: ${context.check}` : context.file;
+        chips.append(where);
+      }
+      if (chips.children.length) card.append(chips);
+      if (Array.isArray(context.evidence) && context.evidence.length) {
+        const evidence = document.createElement("pre");
+        evidence.className = "ask-evidence";
+        evidence.textContent = context.evidence.slice(-3).join("\n");
+        evidence.title = "The last lines the agent printed before it asked";
+        card.append(evidence);
+      }
+    }
     if (question.status === "open") {
       const options = document.createElement("div");
       options.className = "ask-options";
@@ -2243,6 +2299,20 @@
         if (text) void answerQuestion(question.id, null, text, send);
       });
       card.append(custom);
+      // Whether a decision reaches you at all is a node in the live brain
+      // map, so the card links to the part that decided to ask.
+      if (question.source === "issue") {
+        const links = document.createElement("div");
+        links.className = "ask-links";
+        const rules = document.createElement("button");
+        rules.type = "button";
+        rules.className = "ghost mini";
+        rules.textContent = "Why am I being asked?";
+        rules.title = "Open the brain map at the triage part that decided this needs you";
+        rules.addEventListener("click", () => nav("brains", { nodeType: "issue.triage" }));
+        links.append(rules);
+        card.append(links);
+      }
     } else if (question.answer) {
       const note = document.createElement("p");
       note.className = "ask-answer-note";
@@ -2526,8 +2596,17 @@
     return state.selected?.kind === "assistant" && feedVisible();
   }
 
+  // Either rail console counts: the Work tab's inline chat (chatMode) or the
+  // rail's own Assistant tab. Only when neither is on screen does the floating
+  // card draw the assistant.
+  function railOwnsAssistant() {
+    return state.selected?.kind === "assistant" && (feedVisible() || chatLogVisible());
+  }
+
   function composerInput() {
-    return chatMode() ? el.chatInput ?? null : el.info?.querySelector(".assistant-composer input, .assistant-composer textarea") ?? null;
+    if (chatMode()) return el.chatInput ?? null;
+    if (railOwnsAssistant()) return el.chatLogInput ?? null;
+    return infoHost()?.querySelector(".assistant-composer input, .assistant-composer textarea") ?? null;
   }
 
   function focusComposer() {
@@ -3101,6 +3180,38 @@
   function feedVisible() {
     // offsetWidth collapses to 0 when the ≤900px media query hides the panel
     return state.active && !state.feedCollapsed && !!el.feed && !el.feed.hidden && el.feed.offsetWidth > 0;
+  }
+
+  // The rail's own Assistant tab, measured the same way: the ≤900px media
+  // query hides the whole rail, and setRailTab hides the panel off-tab.
+  function chatLogVisible() {
+    return state.active && state.chatLogOpen && !!el.chatLog && !el.chatLog.hidden && el.chatLog.offsetWidth > 0;
+  }
+
+  function railVisible() {
+    return state.active && !!el.rail && !el.rail.hidden && el.rail.offsetWidth > 0;
+  }
+
+  // Inspect mode: the detail owns the rail and every other surface retreats to
+  // its edge. Shaped like setAmbientZen — one body class, then let the CSS and
+  // usableArea() do the work — with one deliberate difference: the HUD stays
+  // interactive. Zen means "leave me alone"; this means "let me read one
+  // thing", so every collapsed edge must still take a click.
+  function setFocusMode(active) {
+    const next = Boolean(active);
+    if (next === state.focusMode) return false;
+    state.focusMode = next;
+    document.body.classList.toggle("command-focus", next);
+    state.graphAreaAt = 0;
+    state.hudRectsAt = 0;
+    return true;
+  }
+
+  // Where a selected node's detail is drawn. The rail owns it whenever the rail
+  // is on screen — full height, one scroller. The floating card is the
+  // narrow-layout fallback, for the ≤900px width that hides the rail outright.
+  function infoHost() {
+    return (railVisible() && el.nodePanel) ? el.nodePanel : el.info;
   }
 
   // The projection centre is the middle of the clear rectangle. When a
@@ -5365,14 +5476,10 @@
       el.feedChat.hidden = !chatting;
       if (chatting) renderChat();
     }
-    // Selecting the assistant brings its thread forward; picking anything else
-    // leaves the rail where the owner put it. (Guarded: the renderer test
-    // slices run single functions without the rail helpers.)
-    const assistantPicked = state.selected?.kind === "assistant";
-    if (assistantPicked !== state.lastAssistantSelected) {
-      state.lastAssistantSelected = assistantPicked;
-      if (assistantPicked && typeof setRailTab === "function") setRailTab("assistant");
-    }
+    // Bringing a selection forward is the rail's "node" view now — selectNode
+    // owns that, for every kind, so the assistant no longer gets a special flip
+    // of its own that raced the floating card's suppression guard.
+    state.lastAssistantSelected = state.selected?.kind === "assistant";
     if (typeof renderRailBadges === "function") renderRailBadges();
     if (state.railTab === "ask" && typeof renderAsks === "function") renderAsks();
     paintChatLog();
@@ -7786,15 +7893,27 @@
       bumpHud();
       return;
     }
-    // Clearing empties the card: focus on one of its buttons (the close button,
-    // Done, or a card whose node just left the graph) would fall to <body>.
-    const focusInCard = !node && Boolean(el.info?.contains(document.activeElement));
+    // Clearing empties the detail: focus on one of its buttons (the close
+    // button, Done, or a card whose node just left the graph) would fall to
+    // <body>. Either surface can hold it, so ask both.
+    const focusInCard = !node && (Boolean(el.info?.contains(document.activeElement)) || Boolean(el.nodePanel?.contains(document.activeElement)));
     state.selected = node ? { id: node.id, kind: node.kind, node, via: options.via ?? "pointer" } : null;
     if (!node) exitFocus(); // letting go of the selection lets go of the focus too
     if (node?.doneHold) ackDoneHold(node.id); // the click is the read
     if (node && !node.readOnly && (node.kind === "session" || node.kind === "todo" || node.kind === "task")) focusAssistant(node);
     if (node) dropPopups();
     computeBranch();
+    // The rail carries the detail: reveal its tab and hand it the rail while a
+    // node is picked, then give the rail back to the tab you were on.
+    if (typeof setRailTab === "function") {
+      if (el.railTabNode) el.railTabNode.hidden = !node || !railVisible();
+      if (node && railVisible()) setRailTab("node", { save: false });
+      else if (state.railTab === "node") setRailTab(state.railHome ?? "work", { save: false });
+    }
+    // Letting go of the selection also forgets that the owner asked for the
+    // menus back, so the next node opens in inspect mode again.
+    if (!node) state.focusOptOut = false;
+    if (typeof setFocusMode === "function") setFocusMode(Boolean(node) && railVisible() && !state.focusOptOut);
     renderInfo();
     // Selecting the assistant swaps the rail into chat mode and back.
     state.feedDirty = true;
@@ -7861,6 +7980,10 @@
     }
     if (id === "ideas") {
       window.MefiIdeas?.open?.(params);
+      return true;
+    }
+    if (id === "brains") {
+      window.MefiBrains?.open?.(params);
       return true;
     }
     if (id === "eyes") {
@@ -8145,14 +8268,26 @@
   }
 
   function renderInfo({ clearDraft = false } = {}) {
-    if (!el.info) return;
+    const host = infoHost();
+    if (!host) return;
     state.graphAreaAt = 0;
     state.hudRectsAt = 0;
+    // Only one detail surface exists at a time: whichever host is not drawing
+    // is emptied and hidden outright. The rail's own panel takes its
+    // visibility from setRailTab, never from here.
+    const spare = host === el.info ? el.nodePanel : el.info;
+    if (spare) { spare.hidden = true; spare.textContent = ""; }
+    const showHost = (visible) => { if (host !== el.nodePanel) host.hidden = !visible; };
     const selected = state.selected;
-    // The assistant's surface moved into the A-Eyes rail; the floating card is
-    // only the fallback for the narrow layout where the rail is hidden.
-    if (selected?.kind === "assistant" && feedVisible()) {
-      el.info.hidden = true;
+    // The assistant's surface moved into the rail; the floating card is only
+    // the fallback for the narrow layout where the rail is hidden. Ask whether
+    // the RAIL owns the assistant, not whether the Work feed is up: selecting
+    // the assistant flips the rail to its Assistant tab (renderFeed), which
+    // hides #idle-feed — and this guard then un-suppressed the card beside the
+    // console the rail was already showing.
+    if (railOwnsAssistant()) {
+      showHost(false);
+      if (host === el.nodePanel) host.textContent = "";
       state.feedDirty = true;
       renderFeed();
       return;
@@ -8162,22 +8297,22 @@
     // heartbeat can never snap the card or the thread back to an end.
     // clearDraft holds the text that was just sent — the draft only drops
     // when it is that text, so a chip send keeps what you were typing.
-    const draftInput = el.info.querySelector(".assistant-composer input, .assistant-composer textarea");
+    const draftInput = host.querySelector(".assistant-composer input, .assistant-composer textarea");
     const draft = draftInput && draftInput.value.trim() !== String(clearDraft ?? "") ? { value: draftInput.value, focused: document.activeElement === draftInput } : null;
-    const oldThread = el.info.querySelector(".assistant-thread");
+    const oldThread = host.querySelector(".assistant-thread");
     const threadTop = oldThread?.scrollTop ?? 0;
     const threadPinned = !oldThread || oldThread.scrollTop + oldThread.clientHeight >= oldThread.scrollHeight - 28;
-    const cardTop = state.cardScrollId === selected?.id ? el.info.scrollTop : 0;
-    el.info.textContent = "";
+    const cardTop = state.cardScrollId === selected?.id ? host.scrollTop : 0;
+    host.textContent = "";
     el.infoParallel = null;
     if (!selected) {
-      el.info.hidden = true;
+      showHost(false);
       state.cardScrollId = null;
       return;
     }
-    el.info.hidden = false;
+    showHost(true);
     const node = selected.node;
-    const info = el.info;
+    const info = host;
     const kinds = { root: "Constellation", session: "Session", todo: "Todo", task: "Task", "task-group": "Task group", assistant: "Assistant", folded: "Finished sessions", agent: "Agent" };
 
     const kicker = document.createElement("div");
@@ -8793,7 +8928,7 @@
     }
     if (node.kind === "session" || node.kind === "assistant" || node.kind === "root") appendAbsorbed(info, node);
     info.append(actions);
-    el.info.scrollTop = cardTop;
+    host.scrollTop = cardTop;
     state.cardScrollId = selected.id;
   }
 
@@ -9213,6 +9348,14 @@
       clearSearch();
       return true;
     }
+    // The menus come back before the selection goes: one Esc to see the rest
+    // of the app again without losing the node you were reading, a second to
+    // let go of the node itself.
+    if (state.focusMode) {
+      state.focusOptOut = true;
+      setFocusMode(false);
+      return true;
+    }
     if (state.focus || state.selected) {
       releaseNode();
       return true;
@@ -9484,10 +9627,14 @@
     state.hoverNode = null;
     state.hoverBubble = null;
     state.branch = null;
-    if (el.info) {
-      el.info.hidden = true;
-      el.info.textContent = "";
+    for (const surface of [el.info, el.nodePanel]) {
+      if (!surface) continue;
+      surface.hidden = true;
+      surface.textContent = "";
     }
+    if (el.railTabNode) el.railTabNode.hidden = true;
+    if (typeof setFocusMode === "function") setFocusMode(false);
+    state.focusOptOut = false;
     state.cardScrollId = null;
     if (el.feedChat) el.feedChat.hidden = true;
     if (el.feedActivity) el.feedActivity.hidden = false;
@@ -9673,6 +9820,8 @@
     el.chatLogNewWorkState = document.getElementById("cmd-chat-new-work-state");
     el.rail = document.getElementById("cmd-rail");
     el.railBody = document.getElementById("cmd-rail-body");
+    el.nodePanel = document.getElementById("cmd-node");
+    el.railTabNode = document.getElementById("cmd-rail-tab-node");
     el.railTabs = [...(el.rail?.querySelectorAll(".rail-tab[data-rail-view]") ?? [])];
     el.railWorkBadge = document.getElementById("cmd-rail-work-badge");
     el.railAssistantBadge = document.getElementById("cmd-rail-assistant-badge");
@@ -9932,7 +10081,9 @@
     // The rail's tabs: one visible view, roving focus, remembered between runs.
     for (const button of el.railTabs ?? []) button.addEventListener("click", () => setRailTab(button.dataset.railView));
     el.rail?.querySelector(".rail-tabs")?.addEventListener("keydown", (event) => {
-      const tabs = el.railTabs ?? [];
+      // The Node tab is only there while something is selected: walk the tabs
+      // that are actually on screen, so an arrow never lands on nothing.
+      const tabs = (el.railTabs ?? []).filter((button) => !button.hidden);
       const index = tabs.findIndex((button) => button.getAttribute("aria-selected") === "true");
       let next = null;
       if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
@@ -10035,7 +10186,7 @@
       const bubbleNode = bubbleAt(x, y);
       if (bubbleNode) {
         selectNode(bubbleNode, { via: "bubble" });
-        const details = el.info?.querySelector("details.card-cps");
+        const details = infoHost()?.querySelector("details.card-cps");
         if (details) {
           details.open = true;
           details.scrollIntoView({ block: "nearest" });

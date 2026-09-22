@@ -408,6 +408,26 @@ function normalizeQuestionOption(entry, index) {
   };
 }
 
+// What a decision is about: the task it belongs to, the run behind it and the
+// evidence the agent saw. Kept across a reload so an answered card can still
+// point at its work, and bounded exactly like the rest of a question.
+function normalizeQuestionContext(entry) {
+  if (!isObject(entry)) return null;
+  const clip = (value, max) => str(value).trim().slice(0, max) || null;
+  const context = {
+    issueKind: clip(entry.issueKind, 40),
+    severity: oneOf(entry.severity, ["blocker", "decision", "note"], null),
+    taskId: clip(entry.taskId, 80),
+    taskTitle: clip(entry.taskTitle, 140),
+    runId: clip(entry.runId, 80),
+    sessionId: clip(entry.sessionId, 80),
+    file: clip(entry.file, 200),
+    check: clip(entry.check, 120),
+    evidence: asArray(entry.evidence).map((line) => clip(line, 200)).filter(Boolean).slice(-4),
+  };
+  return Object.values(context).some((value) => (Array.isArray(value) ? value.length : value)) ? context : null;
+}
+
 function normalizeQuestion(entry, index) {
   if (!isObject(entry) || typeof entry.title !== "string" || !entry.title.trim()) return null;
   const at = num(entry.at, 0);
@@ -429,6 +449,7 @@ function normalizeQuestion(entry, index) {
     title: entry.title.trim().slice(0, 240),
     detail: str(entry.detail).trim().slice(0, 400) || null,
     status: oneOf(entry.status, ["open", "answered", "dismissed", "expired", "superseded"], "open"),
+    ...(normalizeQuestionContext(entry.context) ? { context: normalizeQuestionContext(entry.context) } : {}),
     options,
     answer,
   };

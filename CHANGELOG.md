@@ -8,6 +8,27 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Brain maps.** The agent pipeline as an editable graph (**B**, sidebar,
+  Command dock or palette): typed parts, typed ports and wires between them.
+  The shipped map is the loop the studio already runs, drawn out; editing the
+  live map changes the decision rules straight away, while making a map live
+  shows exactly which switches it moves (build approval, dispatch, briefing,
+  Jev, model choice) and waits for your confirm. **Build with AI** drafts a map
+  from a sentence — the reply is normalized and validated, never executed.
+- **A decision lane for agent issues.** Runs file what needs you as issues
+  instead of only prose: blockers, decisions and notes are triaged by the live
+  brain map's rules, surface as ask cards with the task, check and last output
+  lines they came from, and link back to the triage part that decided to ask.
+- **Inspect mode in Command view.** Clicking a node hands its detail the whole
+  right rail at full window height, and every other surface retreats to its own
+  edge: the rail's tabs become a 56px icon column, the dock folds to its
+  **More tools** pill, **Legend** and **Usage** keep their glyphs and drop their
+  words, and the view toolbar goes glyph-only. Nothing is removed — each
+  collapsed edge peeks back on hover or keyboard focus, and **Esc** steps out
+  one level at a time: first the menus come back with the node still open, then
+  the node itself. Measured at 1896×1198, the detail goes from 300×295 to
+  484×1077 (5.9× the reading area) and the clear canvas from 1124px to 1240px.
+
 - Project chooser on every launch with **Open studio** (agents off) and
   **Open and start agents**.
 - Session continuity: a launch that follows work interrupted less than ten
@@ -45,6 +66,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   known-environmental-failures table at the top of `TESTRUNS.md`.
 
 ### Changed
+- **The Work rail is one scroller.** The agent roster moved inside the work
+  list instead of sitting above it behind a 168px cap of its own, and the
+  technical log lost its 180px cap, so the panel scrolls as one column with its
+  section heads sticking as you pass them. Readiness stays pinned above.
+  Absorbed-work ledgers and the chat-mode work list no longer scroll inside
+  the surface that already scrolls.
 - **Plans** leads with an interview instead of an advice desk. Mefi asks the
   question that would most change what gets built, waits for your answer, reads
   it back as an unconfirmed interpretation, raises a conflict when a new answer

@@ -1446,6 +1446,9 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   border-radius: var(--r-md);
   z-index: var(--z-pop);
   display: flex; flex-direction: column; gap: var(--s2);
+  /* Every other popover in the HUD is capped; this one ran off the bottom on
+     short windows, taking its last rows with it. */
+  max-height: calc(100vh - 96px); overflow-y: auto; overscroll-behavior-y: contain;
   animation: pop-in var(--dur-2) var(--ease);
 }
 .pop .eyebrow { margin-top: 2px; }
@@ -1676,7 +1679,7 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .feed-chat .assistant-service { margin: 0; flex: none; }
 .feed-chat-thread { flex: 1; min-height: 0; max-height: none; margin: 0; padding-right: 2px; }
 .feed-chat-thread .assistant-msg { max-width: 100%; font-size: var(--fs-md); }
-.feed-chat-work { flex: none; max-height: 92px; overflow-y: auto; margin: 0; }
+.feed-chat-work { flex: none; margin: 0; }
 .feed-chat-work:empty { display: none; }
 .feed-chat-composer { margin: 0; flex: none; }
 .feed-chat-actions { display: flex; gap: 4px; flex-wrap: wrap; flex: none; }
@@ -2849,6 +2852,11 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .feed-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
 #idle-hud .feed-section-head h3 { margin: 0; font: 600 12px/1.4 var(--font-ui); color: var(--ivory); }
 #idle-hud .feed-section-head h3 span { display: inline-block; color: var(--muted); margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: var(--cmd-raised); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
+/* The Work panel is one scroller, so its section heads stick as you pass them:
+   the feed reads as a continuous column instead of a stack of little windows.
+   --cmd-surface is the rail's own fill, which the panels are flattened onto. */
+#idle-hud .feed-scroll .feed-section-head { position: sticky; top: 0; z-index: 2; padding-block: 3px; background: var(--cmd-surface); }
+#idle-hud .feed-scroll .feed-technical > summary { position: sticky; top: 0; z-index: 2; background: var(--cmd-surface); }
 #idle-hud .feed-menu { min-height: 26px; color: var(--muted); font-size: 11px; }
 #idle-hud .feed-queue { max-height: none; overflow: visible; gap: 1px; margin: 0; }
 #idle-hud .feed-queue li { align-items: center; gap: 7px; min-height: 46px; padding: 4px 0; border-bottom: 1px solid var(--hairline); }
@@ -2863,7 +2871,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .feed-section summary { display: list-item; cursor: pointer; color: var(--muted); font-size: 12px; padding: 2px 0 6px; }
 #idle-hud .feed-section summary span { float: right; color: var(--dim); font-size: 11px; }
 #idle-hud .feed-agents-section { flex: none; border-top: 0; padding-top: 0; margin-bottom: 12px; }
-#idle-hud .feed-agents { max-height: 168px; margin: 6px 0 0; gap: 6px; overflow-y: auto; }
+#idle-hud .feed-agents { max-height: none; overflow: visible; margin: 6px 0 0; gap: 6px; }
 #idle-hud .feed-agents li { display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 8px 9px; border: 1px solid var(--cmd-edge); border-left: 3px solid var(--gold-dim); border-radius: 8px; background: var(--cmd-raised); font-size: 11px; }
 #idle-hud .feed-agents li.agent-idle { background: transparent; border-color: var(--hairline); }
 #idle-hud .feed-agents li.agent-error { border-color: color-mix(in srgb, var(--bad) 45%, var(--cmd-edge)); }
@@ -2875,7 +2883,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .feed-agents-section .feed-section-head { margin-bottom: 0; }
 #idle-hud .feed-agents-count[data-state="running"] { color: var(--live); }
 #idle-hud .feed-agents-count[data-state="error"] { color: var(--warn); }
-#idle-hud .feed-list { flex: none; max-height: 180px; margin-top: 6px; overflow-y: auto; }
+#idle-hud .feed-list { flex: none; max-height: none; overflow: visible; margin-top: 6px; }
 #idle-hud .feed-row { font-size: 11px; line-height: 1.5; padding: 5px 0; }
 #idle-hud .feed-meta { margin: 0; padding-top: 6px; white-space: normal; font-size: 10px; line-height: 1.6; color: var(--dim); }
 #idle-hud .cmd-chat { top: var(--command-panel-top); bottom: auto; max-height: calc(100vh - var(--command-panel-top) - var(--command-panel-bottom)); right: 24px; width: 300px; padding: 16px; border-color: var(--cmd-edge); border-radius: 16px; background: var(--cmd-surface); box-shadow: var(--cmd-shadow); }
@@ -3403,14 +3411,16 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .cmd-rail.rail-collapsed { bottom: auto; }
 
 /* the tab strip */
+/* Flex, not grid: the Node tab is hidden until something is selected, and a
+   hidden flex item takes no track with it. */
 #idle-hud .rail-tabs {
-  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; flex: none;
+  display: flex; gap: 2px; flex: none;
   padding: 3px; margin-bottom: 10px;
   border: 1px solid var(--cmd-edge); border-radius: 11px; background: var(--cmd-raised);
 }
 #idle-hud .rail-tab {
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  min-width: 0; min-height: 44px; padding: 5px 3px 4px;
+  flex: 1 1 0; min-width: 0; min-height: 44px; padding: 5px 3px 4px;
   border: 1px solid transparent; border-radius: 8px;
   background: transparent; color: var(--muted);
   font: 500 10.5px/1.2 var(--font-ui); letter-spacing: .01em; box-shadow: none;
@@ -3433,6 +3443,7 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .rail-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 #idle-hud .cmd-rail .cmd-feed,
 #idle-hud .cmd-rail .cmd-chat,
+#idle-hud .cmd-rail .cmd-node,
 #idle-hud .cmd-rail .cmd-settings,
 #idle-hud .cmd-rail .cmd-done,
 #idle-hud .cmd-rail .cmd-asks {
@@ -3443,9 +3454,17 @@ body.command-active .walkthrough-coach { right: 392px; }
 }
 #idle-hud .cmd-rail .cmd-feed[hidden],
 #idle-hud .cmd-rail .cmd-chat[hidden],
+#idle-hud .cmd-rail .cmd-node[hidden],
 #idle-hud .cmd-rail .cmd-settings[hidden],
 #idle-hud .cmd-rail .cmd-done[hidden],
 #idle-hud .cmd-rail .cmd-asks[hidden] { display: none; }
+
+/* The node detail inside the rail: one scroller, top to bottom. The card's own
+   look (padding, border, backdrop) belongs to the rail now, so the panel only
+   owns its scroll. Section heads stick so you always know where you are. */
+#idle-hud .cmd-rail .cmd-node { overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
+#idle-hud .cmd-rail .cmd-node .card-sub { position: sticky; top: 0; z-index: 1; background: var(--cmd-surface); }
+#idle-hud .cmd-rail .cmd-node .assistant-thread { max-height: none; overflow: visible; }
 #idle-hud .cmd-rail .cmd-feed.collapsed,
 #idle-hud .cmd-rail .cmd-chat.collapsed {
   flex: none; width: auto; max-width: none; padding: 0; border: 0; background: transparent;
@@ -3558,7 +3577,7 @@ body.command-active .walkthrough-coach { right: 392px; }
    its card and in the rail console while the assistant is selected */
 #idle-hud .feed-absorbed { flex: none; margin: 8px 0 0; }
 #idle-hud .feed-absorbed > summary { color: var(--gold); font-size: 11px; cursor: pointer; }
-.absorbed-ledger { max-height: 220px; overflow-y: auto; }
+.absorbed-ledger { margin: 0; }
 .absorbed-row[data-ok="false"] { color: var(--bad); }
 
 /* collapse: the head keeps the count and the Clear button, the rest tucks away */
@@ -3710,4 +3729,86 @@ body.command-active .walkthrough-coach { right: 392px; }
   #idle-hud .rail-tab { min-height: 48px; gap: 4px; font-size: 11px; }
   #idle-hud .rail-tab .glyph { width: 15px; height: 15px; }
   #idle-hud .rail-tab .count { top: 4px; right: 5px; }
+}
+
+/* ============================================================
+   21. Command · inspect mode
+   One selection, one surface. While a node is picked the rail takes
+   its detail at full height and every other surface retreats to its
+   own edge. Nothing is removed: each collapsed edge keeps its glyphs
+   and their titles, peeks back on hover or keyboard focus, and Esc
+   walks out one level at a time (idle.js escape()).
+
+   Must stay after the rail block AND its media queries at the end of
+   section 20 — these rules win by source order, not by weight.
+
+   Above 900px only: at 900 and below the rail is display:none, so
+   railVisible() is false and the mode never engages. Guarding here as
+   well keeps a resize mid-selection from leaving a stray gutter.
+   ============================================================ */
+@media (min-width: 901px) {
+
+  /* The rail becomes the reading column. The tab strip is lifted out of
+     the flow and pinned to its right edge, so peeking it later overlays
+     the detail instead of reflowing the canvas. */
+  body.command-focus #idle-hud .cmd-rail {
+    top: 76px; bottom: 22px;
+    width: clamp(320px, 34vw, 576px);
+  }
+  body.command-focus #idle-hud .rail-tabs {
+    position: absolute; top: 0; right: 0; bottom: 0; z-index: 2;
+    flex-direction: column; justify-content: flex-start;
+    width: 56px; margin-bottom: 0;
+    transition: width var(--motion-menu) var(--ease);
+  }
+  body.command-focus #idle-hud .rail-tab { flex: none; }
+  /* The label is only hidden from sight: the tab keeps its accessible
+     name, stays in the tab order and keeps its title tooltip. */
+  body.command-focus #idle-hud .rail-tab-label {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  body.command-focus #idle-hud .rail-body { padding-right: 66px; }
+
+  /* Peek: the strip widens over the detail and brings its labels back. */
+  body.command-focus #idle-hud .rail-tabs:hover,
+  body.command-focus #idle-hud .rail-tabs:focus-within {
+    width: 172px; background: var(--cmd-surface); box-shadow: var(--shadow-2);
+  }
+  body.command-focus #idle-hud .rail-tabs:hover .rail-tab,
+  body.command-focus #idle-hud .rail-tabs:focus-within .rail-tab {
+    flex-direction: row; justify-content: flex-start; gap: 9px; padding-inline: 10px;
+  }
+  body.command-focus #idle-hud .rail-tabs:hover .rail-tab-label,
+  body.command-focus #idle-hud .rail-tabs:focus-within .rail-tab-label {
+    position: static; width: auto; height: auto; margin: 0; clip-path: none;
+  }
+
+  /* The dock folds to its More tools pill; hovering or tabbing into it
+     brings every destination back. */
+  body.command-focus #idle-hud .cmd-dock > .dock-item,
+  body.command-focus #idle-hud .cmd-dock > .dock-sep { display: none; }
+  body.command-focus #idle-hud .cmd-dock:hover > .dock-item,
+  body.command-focus #idle-hud .cmd-dock:focus-within > .dock-item,
+  body.command-focus #idle-hud .cmd-dock:hover > .dock-sep,
+  body.command-focus #idle-hud .cmd-dock:focus-within > .dock-sep { display: revert; }
+
+  /* Legend and Usage keep their glyphs and drop their words. */
+  body.command-focus #idle-hud .cmd-legend .pill .label,
+  body.command-focus #idle-hud .cmd-legend .usage-brief { display: none; }
+  body.command-focus #idle-hud .cmd-legend:hover .pill .label,
+  body.command-focus #idle-hud .cmd-legend:focus-within .pill .label,
+  body.command-focus #idle-hud .cmd-legend:hover .usage-brief,
+  body.command-focus #idle-hud .cmd-legend:focus-within .usage-brief { display: revert; }
+
+  /* The view toolbar goes glyph-only. Every control keeps its title and
+     aria-label, so nothing becomes unreachable or unnameable. */
+  body.command-focus #idle-hud .cmd-tools .label { display: none; }
+  body.command-focus #idle-hud .cmd-tools:hover .label,
+  body.command-focus #idle-hud .cmd-tools:focus-within .label { display: revert; }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.command-focus #idle-hud .rail-tabs { transition: none; }
 }

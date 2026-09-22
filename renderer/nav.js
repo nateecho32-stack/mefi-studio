@@ -238,6 +238,26 @@
       isOpen: () => overlayOpen("ideas-overlay"),
     },
     {
+      id: "brains",
+      commandPrimary: true,
+      label: "Brain maps",
+      short: "Brains",
+      kind: "overlay",
+      layer: "sheet",
+      group: "tools",
+      key: "B",
+      glyph: "g-route",
+      badge: null,
+      desc: "The pipeline as a graph: wire the stages, set what each part may do, and make a map live",
+      searchTerms: "pipeline brain map graph nodes wiring editor engine stages triage decisions permissions model choice jev",
+      showIn: showIn({ tools: true, dock: true, palette: true, help: true }),
+      element: "brains-overlay",
+      focus: "#brains-canvas-wrap",
+      open: (params) => window.MefiBrains?.open?.(params),
+      close: () => window.MefiBrains?.close?.(),
+      isOpen: () => overlayOpen("brains-overlay"),
+    },
+    {
       id: "overhead",
       label: "Overhead",
       short: "Overhead",
@@ -819,7 +839,7 @@
   }
 
   function menuGroup(dest) {
-    if (["workspace", "tasks", "plans", "ideas"].includes(dest.id)) return "Work";
+    if (["workspace", "tasks", "plans", "ideas", "brains"].includes(dest.id)) return "Work";
     if (["command", "eyes", "explorer", "overhead", "analyzer", "profiler"].includes(dest.id)) return "Monitor & inspect";
     if (["booklet", "graph"].includes(dest.id)) return "Models";
     return "Settings & help";
@@ -846,10 +866,11 @@
     const element = target ?? document.getElementById("workspace-tool-links");
     if (!element) return;
     element.textContent = "";
-    // Workspace, Command, Task board and Plans are pinned at the top of the
-    // sidebar and Settings / Music sit in its bottom row, so none repeat here.
+    // Workspace, Command, Task board, Plans and Brain maps are pinned at the
+    // top of the sidebar and Settings / Music sit in its bottom row, so none
+    // repeat here.
     appendGrouped(element, list().filter((dest) =>
-      !["workspace", "command", "tasks", "plans", "studio", "music"].includes(dest.id) &&
+      !["workspace", "command", "tasks", "plans", "brains", "studio", "music"].includes(dest.id) &&
       dest.kind !== "action" && dest.layer !== "transient"), "ghost");
     paintBadges(element);
   }

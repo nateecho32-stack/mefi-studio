@@ -1453,6 +1453,9 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   border-radius: var(--r-md);
   z-index: var(--z-pop);
   display: flex; flex-direction: column; gap: var(--s2);
+  /* Every other popover in the HUD is capped; this one ran off the bottom on
+     short windows, taking its last rows with it. */
+  max-height: calc(100vh - 96px); overflow-y: auto; overscroll-behavior-y: contain;
   animation: pop-in var(--dur-2) var(--ease);
 }
 .pop .eyebrow { margin-top: 2px; }
@@ -1683,7 +1686,7 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .feed-chat .assistant-service { margin: 0; flex: none; }
 .feed-chat-thread { flex: 1; min-height: 0; max-height: none; margin: 0; padding-right: 2px; }
 .feed-chat-thread .assistant-msg { max-width: 100%; font-size: var(--fs-md); }
-.feed-chat-work { flex: none; max-height: 92px; overflow-y: auto; margin: 0; }
+.feed-chat-work { flex: none; margin: 0; }
 .feed-chat-work:empty { display: none; }
 .feed-chat-composer { margin: 0; flex: none; }
 .feed-chat-actions { display: flex; gap: 4px; flex-wrap: wrap; flex: none; }
@@ -2856,6 +2859,11 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .feed-section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
 #idle-hud .feed-section-head h3 { margin: 0; font: 600 12px/1.4 var(--font-ui); color: var(--ivory); }
 #idle-hud .feed-section-head h3 span { display: inline-block; color: var(--muted); margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: var(--cmd-raised); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
+/* The Work panel is one scroller, so its section heads stick as you pass them:
+   the feed reads as a continuous column instead of a stack of little windows.
+   --cmd-surface is the rail's own fill, which the panels are flattened onto. */
+#idle-hud .feed-scroll .feed-section-head { position: sticky; top: 0; z-index: 2; padding-block: 3px; background: var(--cmd-surface); }
+#idle-hud .feed-scroll .feed-technical > summary { position: sticky; top: 0; z-index: 2; background: var(--cmd-surface); }
 #idle-hud .feed-menu { min-height: 26px; color: var(--muted); font-size: 11px; }
 #idle-hud .feed-queue { max-height: none; overflow: visible; gap: 1px; margin: 0; }
 #idle-hud .feed-queue li { align-items: center; gap: 7px; min-height: 46px; padding: 4px 0; border-bottom: 1px solid var(--hairline); }
@@ -2870,7 +2878,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .feed-section summary { display: list-item; cursor: pointer; color: var(--muted); font-size: 12px; padding: 2px 0 6px; }
 #idle-hud .feed-section summary span { float: right; color: var(--dim); font-size: 11px; }
 #idle-hud .feed-agents-section { flex: none; border-top: 0; padding-top: 0; margin-bottom: 12px; }
-#idle-hud .feed-agents { max-height: 168px; margin: 6px 0 0; gap: 6px; overflow-y: auto; }
+#idle-hud .feed-agents { max-height: none; overflow: visible; margin: 6px 0 0; gap: 6px; }
 #idle-hud .feed-agents li { display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 8px 9px; border: 1px solid var(--cmd-edge); border-left: 3px solid var(--gold-dim); border-radius: 8px; background: var(--cmd-raised); font-size: 11px; }
 #idle-hud .feed-agents li.agent-idle { background: transparent; border-color: var(--hairline); }
 #idle-hud .feed-agents li.agent-error { border-color: color-mix(in srgb, var(--bad) 45%, var(--cmd-edge)); }
@@ -2882,7 +2890,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .feed-agents-section .feed-section-head { margin-bottom: 0; }
 #idle-hud .feed-agents-count[data-state="running"] { color: var(--live); }
 #idle-hud .feed-agents-count[data-state="error"] { color: var(--warn); }
-#idle-hud .feed-list { flex: none; max-height: 180px; margin-top: 6px; overflow-y: auto; }
+#idle-hud .feed-list { flex: none; max-height: none; overflow: visible; margin-top: 6px; }
 #idle-hud .feed-row { font-size: 11px; line-height: 1.5; padding: 5px 0; }
 #idle-hud .feed-meta { margin: 0; padding-top: 6px; white-space: normal; font-size: 10px; line-height: 1.6; color: var(--dim); }
 #idle-hud .cmd-chat { top: var(--command-panel-top); bottom: auto; max-height: calc(100vh - var(--command-panel-top) - var(--command-panel-bottom)); right: 24px; width: 300px; padding: 16px; border-color: var(--cmd-edge); border-radius: 16px; background: var(--cmd-surface); box-shadow: var(--cmd-shadow); }
@@ -3410,14 +3418,16 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .cmd-rail.rail-collapsed { bottom: auto; }
 
 /* the tab strip */
+/* Flex, not grid: the Node tab is hidden until something is selected, and a
+   hidden flex item takes no track with it. */
 #idle-hud .rail-tabs {
-  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; flex: none;
+  display: flex; gap: 2px; flex: none;
   padding: 3px; margin-bottom: 10px;
   border: 1px solid var(--cmd-edge); border-radius: 11px; background: var(--cmd-raised);
 }
 #idle-hud .rail-tab {
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-  min-width: 0; min-height: 44px; padding: 5px 3px 4px;
+  flex: 1 1 0; min-width: 0; min-height: 44px; padding: 5px 3px 4px;
   border: 1px solid transparent; border-radius: 8px;
   background: transparent; color: var(--muted);
   font: 500 10.5px/1.2 var(--font-ui); letter-spacing: .01em; box-shadow: none;
@@ -3440,6 +3450,7 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .rail-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 #idle-hud .cmd-rail .cmd-feed,
 #idle-hud .cmd-rail .cmd-chat,
+#idle-hud .cmd-rail .cmd-node,
 #idle-hud .cmd-rail .cmd-settings,
 #idle-hud .cmd-rail .cmd-done,
 #idle-hud .cmd-rail .cmd-asks {
@@ -3450,9 +3461,17 @@ body.command-active .walkthrough-coach { right: 392px; }
 }
 #idle-hud .cmd-rail .cmd-feed[hidden],
 #idle-hud .cmd-rail .cmd-chat[hidden],
+#idle-hud .cmd-rail .cmd-node[hidden],
 #idle-hud .cmd-rail .cmd-settings[hidden],
 #idle-hud .cmd-rail .cmd-done[hidden],
 #idle-hud .cmd-rail .cmd-asks[hidden] { display: none; }
+
+/* The node detail inside the rail: one scroller, top to bottom. The card's own
+   look (padding, border, backdrop) belongs to the rail now, so the panel only
+   owns its scroll. Section heads stick so you always know where you are. */
+#idle-hud .cmd-rail .cmd-node { overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
+#idle-hud .cmd-rail .cmd-node .card-sub { position: sticky; top: 0; z-index: 1; background: var(--cmd-surface); }
+#idle-hud .cmd-rail .cmd-node .assistant-thread { max-height: none; overflow: visible; }
 #idle-hud .cmd-rail .cmd-feed.collapsed,
 #idle-hud .cmd-rail .cmd-chat.collapsed {
   flex: none; width: auto; max-width: none; padding: 0; border: 0; background: transparent;
@@ -3565,7 +3584,7 @@ body.command-active .walkthrough-coach { right: 392px; }
    its card and in the rail console while the assistant is selected */
 #idle-hud .feed-absorbed { flex: none; margin: 8px 0 0; }
 #idle-hud .feed-absorbed > summary { color: var(--gold); font-size: 11px; cursor: pointer; }
-.absorbed-ledger { max-height: 220px; overflow-y: auto; }
+.absorbed-ledger { margin: 0; }
 .absorbed-row[data-ok="false"] { color: var(--bad); }
 
 /* collapse: the head keeps the count and the Clear button, the rest tucks away */
@@ -3717,6 +3736,88 @@ body.command-active .walkthrough-coach { right: 392px; }
   #idle-hud .rail-tab { min-height: 48px; gap: 4px; font-size: 11px; }
   #idle-hud .rail-tab .glyph { width: 15px; height: 15px; }
   #idle-hud .rail-tab .count { top: 4px; right: 5px; }
+}
+
+/* ============================================================
+   21. Command · inspect mode
+   One selection, one surface. While a node is picked the rail takes
+   its detail at full height and every other surface retreats to its
+   own edge. Nothing is removed: each collapsed edge keeps its glyphs
+   and their titles, peeks back on hover or keyboard focus, and Esc
+   walks out one level at a time (idle.js escape()).
+
+   Must stay after the rail block AND its media queries at the end of
+   section 20 — these rules win by source order, not by weight.
+
+   Above 900px only: at 900 and below the rail is display:none, so
+   railVisible() is false and the mode never engages. Guarding here as
+   well keeps a resize mid-selection from leaving a stray gutter.
+   ============================================================ */
+@media (min-width: 901px) {
+
+  /* The rail becomes the reading column. The tab strip is lifted out of
+     the flow and pinned to its right edge, so peeking it later overlays
+     the detail instead of reflowing the canvas. */
+  body.command-focus #idle-hud .cmd-rail {
+    top: 76px; bottom: 22px;
+    width: clamp(320px, 34vw, 576px);
+  }
+  body.command-focus #idle-hud .rail-tabs {
+    position: absolute; top: 0; right: 0; bottom: 0; z-index: 2;
+    flex-direction: column; justify-content: flex-start;
+    width: 56px; margin-bottom: 0;
+    transition: width var(--motion-menu) var(--ease);
+  }
+  body.command-focus #idle-hud .rail-tab { flex: none; }
+  /* The label is only hidden from sight: the tab keeps its accessible
+     name, stays in the tab order and keeps its title tooltip. */
+  body.command-focus #idle-hud .rail-tab-label {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  body.command-focus #idle-hud .rail-body { padding-right: 66px; }
+
+  /* Peek: the strip widens over the detail and brings its labels back. */
+  body.command-focus #idle-hud .rail-tabs:hover,
+  body.command-focus #idle-hud .rail-tabs:focus-within {
+    width: 172px; background: var(--cmd-surface); box-shadow: var(--shadow-2);
+  }
+  body.command-focus #idle-hud .rail-tabs:hover .rail-tab,
+  body.command-focus #idle-hud .rail-tabs:focus-within .rail-tab {
+    flex-direction: row; justify-content: flex-start; gap: 9px; padding-inline: 10px;
+  }
+  body.command-focus #idle-hud .rail-tabs:hover .rail-tab-label,
+  body.command-focus #idle-hud .rail-tabs:focus-within .rail-tab-label {
+    position: static; width: auto; height: auto; margin: 0; clip-path: none;
+  }
+
+  /* The dock folds to its More tools pill; hovering or tabbing into it
+     brings every destination back. */
+  body.command-focus #idle-hud .cmd-dock > .dock-item,
+  body.command-focus #idle-hud .cmd-dock > .dock-sep { display: none; }
+  body.command-focus #idle-hud .cmd-dock:hover > .dock-item,
+  body.command-focus #idle-hud .cmd-dock:focus-within > .dock-item,
+  body.command-focus #idle-hud .cmd-dock:hover > .dock-sep,
+  body.command-focus #idle-hud .cmd-dock:focus-within > .dock-sep { display: revert; }
+
+  /* Legend and Usage keep their glyphs and drop their words. */
+  body.command-focus #idle-hud .cmd-legend .pill .label,
+  body.command-focus #idle-hud .cmd-legend .usage-brief { display: none; }
+  body.command-focus #idle-hud .cmd-legend:hover .pill .label,
+  body.command-focus #idle-hud .cmd-legend:focus-within .pill .label,
+  body.command-focus #idle-hud .cmd-legend:hover .usage-brief,
+  body.command-focus #idle-hud .cmd-legend:focus-within .usage-brief { display: revert; }
+
+  /* The view toolbar goes glyph-only. Every control keeps its title and
+     aria-label, so nothing becomes unreachable or unnameable. */
+  body.command-focus #idle-hud .cmd-tools .label { display: none; }
+  body.command-focus #idle-hud .cmd-tools:hover .label,
+  body.command-focus #idle-hud .cmd-tools:focus-within .label { display: revert; }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.command-focus #idle-hud .rail-tabs { transition: none; }
 }
 
 /* Integrated music room. Shared theme tokens also colour Command and boards. */
@@ -4076,6 +4177,126 @@ body.music-preview-active #idle-hud { display: none !important; }
 .planning-existing .planning-tool-list li[data-scope="plugin"] { border-style: dashed; }
 .planning-existing details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 
+/* Brain maps — the pipeline editor: parts rail, wiring canvas, inspector. */
+.brains-overlay { position: fixed; inset: 0; z-index: var(--z-sheet); padding: 22px; display: grid; place-items: center; background: rgba(0,0,0,.78); backdrop-filter: blur(14px); }
+.brains-overlay[hidden], .brains-overlay [hidden] { display: none !important; }
+.brains-sheet { position: relative; width: min(1520px, 100%); height: min(940px, 100%); display: flex; flex-direction: column; border: 1px solid var(--hairline-strong); border-radius: 24px; background: var(--panel-solid); box-shadow: var(--shadow-3); overflow: hidden; outline: none; }
+.brains-head { display: flex; align-items: center; gap: 14px; flex: none; padding: 18px 22px; border-bottom: 1px solid var(--hairline); flex-wrap: wrap; }
+.brains-head h2 { margin: 3px 0 0; font-size: 23px; }
+.brains-head .sheet-title { min-width: 200px; }
+.brains-live { flex: none; border: 1px solid var(--gold); border-radius: 20px; padding: 3px 10px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-bright); background: var(--tint-gold-2); }
+.brains-dirty { flex: none; font-size: 11px; color: var(--gold-bright); }
+.brains-toolbar { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.brains-toolbar select { max-width: 260px; }
+.brains-body { display: grid; grid-template-columns: 260px minmax(0, 1fr) 340px; min-height: 0; flex: 1; }
+.brains-parts { border-right: 1px solid var(--hairline); padding: 14px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+.brains-parts h3 { margin: 0; font-size: 13px; }
+.brains-parts-note { margin: 0; font-size: 11px; line-height: 1.6; color: var(--muted); }
+.brains-parts-group { display: grid; gap: 6px; margin-bottom: 14px; }
+.brains-parts-group h4 { margin: 8px 0 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-bright); }
+.brains-parts-detail { margin: 0 0 4px; font-size: 10px; line-height: 1.5; color: var(--muted); }
+.brains-part { display: grid; gap: 3px; width: 100%; text-align: left; white-space: normal; padding: 9px 10px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--bg); }
+.brains-part:hover { border-color: var(--gold); background: var(--tint-gold-2); }
+.brains-part b { font-size: 12px; color: var(--ivory); font-weight: 600; }
+.brains-part-runs { font-size: 9px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.brains-part[data-runs="map"] .brains-part-runs { color: var(--gold-bright); }
+.brains-part-summary { font-size: 10px; line-height: 1.5; color: var(--muted); }
+.brains-canvas-wrap { position: relative; overflow: auto; outline: none; background-color: var(--bg); background-image: radial-gradient(var(--hairline) 1px, transparent 1px); background-size: 20px 20px; }
+.brains-canvas-wrap:focus-visible { box-shadow: inset 0 0 0 2px var(--gold); }
+.brains-canvas { position: relative; z-index: 1; min-width: 100%; min-height: 100%; }
+.brains-wires { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+.brains-wire { fill: none; stroke: var(--hairline-strong); stroke-width: 2; pointer-events: stroke; cursor: pointer; }
+.brains-wire:hover { stroke: var(--gold-bright); }
+.brains-wire[data-feedback="true"] { stroke-dasharray: 6 5; }
+.brains-wire[data-problem="error"] { stroke: #f6abab; }
+.brains-wire[data-selected="true"] { stroke: var(--gold); stroke-width: 3; }
+.brains-node { position: absolute; width: 236px; display: flex; flex-direction: column; border: 1px solid var(--hairline-strong); border-radius: 12px; background: var(--panel-solid); box-shadow: var(--shadow-3); overflow: hidden; }
+.brains-node[data-selected="true"] { border-color: var(--gold); box-shadow: 0 0 0 2px var(--tint-gold-1), var(--shadow-3); }
+.brains-node[data-problem="error"] { border-color: #f6abab; }
+.brains-node[data-problem="warn"] { border-color: var(--gold); }
+.brains-node[data-runs="draft"] { opacity: .82; }
+.brains-node-head { flex: none; height: 48px; display: grid; gap: 1px; align-content: center; padding: 0 10px; cursor: grab; background: linear-gradient(180deg, var(--tint-gold-2), transparent); border-bottom: 1px solid var(--hairline); }
+.brains-node-head:active { cursor: grabbing; }
+.brains-node-kind { font-size: 9px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.brains-node-head b { font-size: 12px; font-weight: 600; color: var(--ivory); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brains-node-flag { font-size: 9px; color: #f6abab; }
+.brains-node-ports { display: grid; grid-template-columns: 1fr 1fr; align-items: start; }
+.brains-port-col { display: grid; }
+.brains-port { height: 36px; min-height: 36px; display: flex; align-items: center; justify-content: flex-start; gap: 6px; padding: 0 6px; border: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; }
+.brains-port-col.out .brains-port { justify-content: flex-end; }
+.brains-port i { flex: none; height: 9px; width: 9px; border-radius: 50%; border: 1px solid var(--hairline-strong); background: var(--bg); }
+.brains-port[data-wired="true"] i { background: var(--gold); border-color: var(--gold); }
+.brains-port:hover { color: var(--ivory); background: var(--tint-gold-2); }
+.brains-port[data-armed="true"] { color: var(--gold-bright); background: var(--tint-gold-1); }
+.brains-port[data-armed="true"] i { box-shadow: 0 0 0 3px var(--tint-gold-2); }
+.brains-port[data-target="yes"] i { border-color: var(--gold-bright); box-shadow: 0 0 0 2px var(--tint-gold-2); }
+.brains-port[data-target="no"] { opacity: .35; }
+.brains-node-foot { flex: none; height: 26px; margin: 0; padding: 0 10px; display: flex; align-items: center; font-size: 9px; color: var(--muted); border-top: 1px solid var(--hairline); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brains-inspector { border-left: 1px solid var(--hairline); padding: 16px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+.brains-inspect-head { display: grid; gap: 4px; }
+.brains-inspect-head h3 { margin: 0; font-size: 16px; }
+.brains-title-input { width: 100%; font-size: 15px; font-weight: 600; padding: 6px 8px; }
+.brains-runs { margin: 0; font-size: 11px; line-height: 1.6; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--hairline); color: var(--muted); }
+.brains-runs[data-runs="host"] { border-color: var(--hairline-strong); }
+.brains-runs[data-runs="map"] { border-color: var(--gold); color: var(--gold-bright); background: var(--tint-gold-2); }
+.brains-note { margin: 0; font-size: 11px; line-height: 1.65; color: var(--muted); }
+.brains-note.quiet { opacity: .8; font-size: 10px; }
+.brains-note.warn { color: #f6abab; }
+.brains-note.gate { color: var(--gold-bright); }
+.brains-list { display: grid; gap: 7px; border-top: 1px solid var(--hairline); padding-top: 11px; }
+.brains-list h4 { margin: 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold-bright); }
+.brains-list ul { margin: 0; padding-left: 16px; display: grid; gap: 4px; }
+.brains-can li, .brains-cannot li { font-size: 11px; line-height: 1.55; color: var(--muted); }
+.brains-can li::marker { content: "✓ "; color: #afdfc2; }
+.brains-cannot li::marker { content: "✕ "; color: #f6abab; }
+.brains-permission { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; align-items: start; font-size: 11px; }
+.brains-permission b { display: block; font-weight: 600; color: var(--ivory); }
+.brains-permission small { display: block; font-size: 10px; line-height: 1.5; color: var(--muted); }
+.brains-permission input:disabled + span { opacity: .55; }
+.brains-field { display: grid; gap: 5px; font-size: 11px; }
+.brains-field-label { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.brains-field-help { font-size: 10px; line-height: 1.5; color: var(--muted); }
+.brains-field input[type="text"], .brains-field input[type="number"], .brains-field select, .brains-field textarea { width: 100%; }
+.brains-wire-row { margin: 0; font-size: 10px; line-height: 1.55; color: var(--muted); overflow-wrap: anywhere; }
+.brains-wire-row[data-problem="error"] { color: #f6abab; }
+.brains-gate-row { margin: 0; font-size: 10px; line-height: 1.6; color: var(--muted); }
+.brains-danger { border-top: 1px solid var(--hairline); padding-top: 11px; margin-top: 4px; }
+.brains-empty { margin: 0; font-size: 11px; color: var(--muted); }
+.brains-status-bar { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 320px); gap: 14px; align-items: start; padding: 10px 22px; border-top: 1px solid var(--hairline); }
+.brains-problem-list { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; max-height: 68px; overflow: auto; }
+.brains-problem { margin: 0; font-size: 10px; line-height: 1.5; text-align: left; white-space: normal; border: 1px solid var(--hairline); border-radius: 8px; padding: 5px 8px; background: var(--bg); color: var(--muted); }
+.brains-problem[data-level="error"] { border-color: #f6abab55; color: #f6abab; }
+.brains-problem[data-level="warn"] { border-color: var(--gold); color: var(--gold-bright); }
+.brains-problem.ok { border-color: #afdfc244; color: #afdfc2; }
+.brains-status { margin: 0; font-size: 11px; line-height: 1.5; color: var(--muted); text-align: right; }
+.brains-status[data-tone="warn"] { color: #f6abab; }
+.brains-search { position: absolute; inset: 0; z-index: 2; display: grid; place-items: start center; padding-top: 12vh; background: rgba(0,0,0,.5); backdrop-filter: blur(3px); }
+.brains-search-panel { width: min(520px, 90%); border: 1px solid var(--hairline-strong); border-radius: 16px; background: var(--panel-solid); box-shadow: var(--shadow-3); overflow: hidden; }
+.brains-search-panel input { width: 100%; border: 0; border-bottom: 1px solid var(--hairline); border-radius: 0; padding: 13px 15px; font-size: 14px; background: transparent; }
+.brains-search-list { list-style: none; margin: 0; padding: 6px; max-height: 320px; overflow: auto; display: grid; gap: 3px; }
+.brains-search-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; padding: 8px 10px; border-radius: 9px; cursor: pointer; }
+.brains-search-row[data-active="true"] { background: var(--tint-gold-2); box-shadow: inset 2px 0 0 var(--gold); }
+.brains-search-row b { font-size: 12px; color: var(--ivory); font-weight: 600; }
+.brains-search-group { font-size: 9px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); text-align: right; }
+.brains-search-summary { grid-column: 1 / -1; font-size: 10px; line-height: 1.5; color: var(--muted); }
+.brains-search-hint { margin: 0; padding: 8px 15px; font-size: 10px; color: var(--muted); border-top: 1px solid var(--hairline); }
+@media (max-width: 1180px) {
+  .brains-body { grid-template-columns: 210px minmax(0, 1fr); }
+  .brains-inspector { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--hairline); max-height: 300px; }
+}
+
+/* The decision cards the map feeds: an Ask card raised by an agent carries
+   the task it is about and the evidence behind it. These live here rather
+   than in styles.css because they belong to the same decision lane as the
+   triage and ask parts above. */
+.ask-context { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ask-chip { font-size: 10px; line-height: 1.5; padding: 3px 8px; border: 1px solid var(--hairline); border-radius: 20px; color: var(--muted); background: var(--bg); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-chip.task { color: var(--gold-bright); border-color: var(--gold); }
+button.ask-chip.task:hover { background: var(--tint-gold-2); }
+.ask-chip[data-severity="blocker"] { color: #f6abab; border-color: #f6abab55; }
+.ask-evidence { margin: 8px 0 0; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--bg); color: var(--muted); font-size: 10px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 76px; overflow: auto; }
+.ask-links { display: flex; justify-content: flex-end; margin-top: 8px; }
+
 .profiler-overlay { position: fixed; inset: 0; z-index: var(--z-sheet); padding: 24px; display: grid; place-items: center; background: rgba(0,0,0,.72); }
 .profiler-overlay[hidden], .profiler-overlay [hidden], .profiler-hud[hidden] { display: none !important; }
 .profiler-sheet { width: min(1160px, 100%); height: min(920px, 100%); display: flex; flex-direction: column; background: var(--panel-solid); color: var(--ivory); border: 1px solid var(--hairline-strong); border-radius: 20px; box-shadow: var(--shadow-3); overflow: hidden; }
@@ -4194,6 +4415,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open Command view: the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span class="label">Command view</span><kbd>D</kbd><span class="count warn" data-badge="questions" hidden></span></button>
       <button class="ws-home ws-shortcut" data-nav="tasks" title="Open your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span class="label">Task board</span><kbd>T</kbd><span class="count" data-badge="tasks" hidden></span></button>
       <button class="ws-home ws-shortcut" data-nav="plans" title="Explore an idea and review its plan (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span class="label">Plans</span><kbd>P</kbd></button>
+      <button class="ws-home ws-shortcut" data-nav="brains" title="Brain maps: the pipeline as a graph you can rewire (B)"><svg class="glyph" aria-hidden="true"><use href="#g-route"/></svg><span class="label">Brain maps</span><kbd>B</kbd></button>
     </nav>
     <div class="ws-section-label"><span>PROJECTS</span><button id="workspace-add-project" class="ghost mini" title="Add an existing project folder" aria-label="Add project">+</button></div>
     <div id="workspace-projects" class="ws-projects" aria-label="Choose a project"></div>
@@ -4583,6 +4805,7 @@ body.music-preview-active #idle-hud { display: none !important; }
         </section>
         <section class="settings-group settings-card" id="settings-routing" aria-labelledby="settings-routing-heading">
         <div class="settings-card-head"><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-route"/></svg></span><div><h3 id="settings-routing-heading">Model routing</h3><p class="muted">Who answers the assistant, and how each task's model is chosen. Ready routes list first; the rest stay selectable and can be set up later. Models are saved per provider, so switching never mixes them.</p></div></div>
+        <p class="muted">The stages behind these switches — who checks the ask, who plans it, who briefs it, when Jev is asked and who picks the model — are drawn as a graph in <button class="ghost mini" data-nav="brains" title="Brain maps (B)">Brain maps</button>. Making a map live moves the switches its parts name.</p>
         <div class="settings-columns">
           <div class="settings-column">
             <p class="settings-eyebrow">Who answers</p>
@@ -4801,6 +5024,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
   <aside id="cmd-rail" class="cmd-rail" role="region" aria-label="Work, agents, assistant, done and questions">
     <header class="rail-tabs" role="tablist" aria-label="Panel views">
+      <button id="cmd-rail-tab-node" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-node" tabindex="-1" data-rail-view="node" title="The node you selected" hidden><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-target"/></svg><span class="rail-tab-label">Node</span></button>
       <button id="cmd-rail-tab-work" class="rail-tab" role="tab" aria-selected="true" aria-controls="idle-feed" data-rail-view="work" title="Work · what is running and what is queued"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg><span class="rail-tab-label">Work</span><span id="cmd-rail-work-badge" class="count" hidden></span></button>
       <button id="cmd-rail-tab-settings" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-settings" tabindex="-1" data-rail-view="settings" title="Agents · how the queue runs"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-agents"/></svg><span class="rail-tab-label">Agents</span></button>
       <button id="cmd-rail-tab-assistant" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-chat" tabindex="-1" data-rail-view="assistant" title="Assistant · the conversation and the New work switch"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span class="rail-tab-label">Assistant</span><span id="cmd-rail-assistant-badge" class="count" hidden></span></button>
@@ -4808,6 +5032,10 @@ body.music-preview-active #idle-hud { display: none !important; }
       <button id="cmd-rail-tab-ask" class="rail-tab" role="tab" aria-selected="false" aria-controls="cmd-asks" tabindex="-1" data-rail-view="ask" title="Ask · decisions waiting on you"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg><span class="rail-tab-label">Ask</span><span id="cmd-rail-ask-badge" class="count warn" hidden></span></button>
     </header>
     <div id="cmd-rail-body" class="rail-body">
+  <!-- The selected node's detail. It owns the whole rail while a node is
+       picked, so the reading surface is full height with one scroller; the
+       floating #idle-info card is only the narrow-layout fallback. -->
+  <aside id="cmd-node" class="cmd-node cmd-card" role="tabpanel" aria-labelledby="cmd-rail-tab-node" aria-live="polite" hidden></aside>
   <aside id="cmd-chat" class="cmd-chat" role="tabpanel" aria-label="Assistant chat log" hidden>
     <header class="rail-view-head chat-log-head">
       <i id="cmd-chat-dot" class="feed-dot" aria-hidden="true"></i>
@@ -4843,11 +5071,15 @@ body.music-preview-active #idle-hud { display: none !important; }
     </header>
     <div id="idle-feed-content" class="feed-content">
     <div id="idle-feed-metrics" class="feed-metrics" aria-label="Work readiness"></div>
+    <!-- Readiness stays pinned above; everything below it shares ONE scroller,
+         with each section head sticking as you pass it. The roster used to sit
+         outside this region with a 168px cap of its own, which made the panel
+         three separate wheels. -->
+    <div id="idle-feed-scroll" class="feed-scroll" tabindex="0" role="region" aria-label="Current work and queue">
     <section id="idle-feed-agent-section" class="feed-section feed-agents-section" aria-label="Agents">
       <div class="feed-section-head"><h3>Agents <span id="idle-feed-agents-count" class="feed-agents-count" data-state="idle"></span></h3></div>
       <ul id="idle-feed-agents" class="pin-list assistant-activity assistant-roster feed-agents" aria-label="Agent roster"></ul>
     </section>
-    <div id="idle-feed-scroll" class="feed-scroll" tabindex="0" role="region" aria-label="Current work and queue">
     <section class="feed-current" aria-label="Current work">
       <div class="feed-section-head"><h3>Current work</h3></div>
       <div id="idle-feed-now" class="feed-now" aria-live="polite"></div>
@@ -5143,6 +5375,54 @@ body.music-preview-active #idle-hud { display: none !important; }
         <h3>Active tasks</h3>
         <ul id="overhead-legend" class="pin-list"></ul>
       </aside>
+    </div>
+  </div>
+</div>
+<div class="overlay brains-overlay" id="brains-overlay" hidden>
+  <div class="brains-sheet" role="dialog" aria-modal="true" aria-labelledby="brains-heading" tabindex="-1">
+    <header class="brains-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="brains" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Engine</div>
+        <h2 id="brains-heading">Brain maps</h2>
+      </div>
+      <span class="brains-live" id="brains-live" hidden>Live pipeline</span>
+      <span class="brains-dirty" id="brains-dirty" hidden>Unsaved changes</span>
+      <div class="sheet-links" data-sheet-links="brains" role="group" aria-label="Other tools"></div>
+      <div class="brains-toolbar">
+        <select id="brains-switcher" aria-label="Which brain map"></select>
+        <button id="brains-new" class="ghost mini" type="button" title="Start an empty brain map">New</button>
+        <button id="brains-duplicate" class="ghost mini" type="button" title="Copy this map, wires and all">Duplicate</button>
+        <button id="brains-delete" class="ghost mini" type="button" title="Delete this map">Delete</button>
+        <button id="brains-draft" class="ghost mini" type="button" title="Describe what it should do and the assistant drafts it from the same parts. Nothing is saved until you review it.">Build with AI</button>
+        <button id="brains-save" class="mini" type="button" title="Save this map (Ctrl S)">Save</button>
+        <button id="brains-activate" class="mini" type="button" title="Make this the pipeline the studio follows">Make this live</button>
+        <button id="brains-close" class="ghost sheet-close" type="button" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="brains-body">
+      <aside class="brains-parts" aria-label="Parts">
+        <h3>Parts</h3>
+        <p class="brains-parts-note">Every part says what it can and cannot do, what reach it needs and whether the studio runs it. Click one to add it; press Space on the canvas to search from anywhere.</p>
+        <input id="brains-parts-search" type="search" placeholder="Search parts" aria-label="Search parts">
+        <div id="brains-parts-list"></div>
+      </aside>
+      <div class="brains-canvas-wrap" id="brains-canvas-wrap" tabindex="0" role="application" aria-label="Brain map canvas. Click an output end and then an input end to wire them. Space searches the parts, Delete removes what is selected, Escape cancels a wire.">
+        <svg class="brains-wires" id="brains-wires" aria-hidden="true"></svg>
+        <div class="brains-canvas" id="brains-canvas"></div>
+      </div>
+      <aside class="brains-inspector" id="brains-inspector" aria-label="What the selected part may do"></aside>
+    </div>
+    <div class="brains-status-bar">
+      <div class="brains-problem-list" id="brains-problems" role="status" aria-label="Problems in this map"></div>
+      <p class="brains-status" id="brains-status" role="status">Click an output end, then an input end, to wire two parts together.</p>
+    </div>
+    <div class="brains-search" id="brains-search" hidden>
+      <div class="brains-search-panel">
+        <input id="brains-search-input" type="search" placeholder="Add a part…" aria-label="Search the parts catalog">
+        <ul class="brains-search-list" id="brains-search-list"></ul>
+        <p class="brains-search-hint" id="brains-search-hint"></p>
+      </div>
     </div>
   </div>
 </div>
@@ -9718,6 +9998,26 @@ body.music-preview-active #idle-hud { display: none !important; }
       isOpen: () => overlayOpen("ideas-overlay"),
     },
     {
+      id: "brains",
+      commandPrimary: true,
+      label: "Brain maps",
+      short: "Brains",
+      kind: "overlay",
+      layer: "sheet",
+      group: "tools",
+      key: "B",
+      glyph: "g-route",
+      badge: null,
+      desc: "The pipeline as a graph: wire the stages, set what each part may do, and make a map live",
+      searchTerms: "pipeline brain map graph nodes wiring editor engine stages triage decisions permissions model choice jev",
+      showIn: showIn({ tools: true, dock: true, palette: true, help: true }),
+      element: "brains-overlay",
+      focus: "#brains-canvas-wrap",
+      open: (params) => window.MefiBrains?.open?.(params),
+      close: () => window.MefiBrains?.close?.(),
+      isOpen: () => overlayOpen("brains-overlay"),
+    },
+    {
       id: "overhead",
       label: "Overhead",
       short: "Overhead",
@@ -10299,7 +10599,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   }
 
   function menuGroup(dest) {
-    if (["workspace", "tasks", "plans", "ideas"].includes(dest.id)) return "Work";
+    if (["workspace", "tasks", "plans", "ideas", "brains"].includes(dest.id)) return "Work";
     if (["command", "eyes", "explorer", "overhead", "analyzer", "profiler"].includes(dest.id)) return "Monitor & inspect";
     if (["booklet", "graph"].includes(dest.id)) return "Models";
     return "Settings & help";
@@ -10326,10 +10626,11 @@ body.music-preview-active #idle-hud { display: none !important; }
     const element = target ?? document.getElementById("workspace-tool-links");
     if (!element) return;
     element.textContent = "";
-    // Workspace, Command, Task board and Plans are pinned at the top of the
-    // sidebar and Settings / Music sit in its bottom row, so none repeat here.
+    // Workspace, Command, Task board, Plans and Brain maps are pinned at the
+    // top of the sidebar and Settings / Music sit in its bottom row, so none
+    // repeat here.
     appendGrouped(element, list().filter((dest) =>
-      !["workspace", "command", "tasks", "plans", "studio", "music"].includes(dest.id) &&
+      !["workspace", "command", "tasks", "plans", "brains", "studio", "music"].includes(dest.id) &&
       dest.kind !== "action" && dest.layer !== "transient"), "ghost");
     paintBadges(element);
   }
@@ -15146,6 +15447,12 @@ body.music-preview-active #idle-hud { display: none !important; }
     feedMenuOpen: readStore("mefiStudio.cmdFeedMenu") === "1",
     feedCollapsed: readStore("mefiStudio.cmdFeedCollapsed") === "1",
     railTab: ["work", "settings", "assistant", "done", "ask"].includes(readStore("mefiStudio.cmdRailTab")) ? readStore("mefiStudio.cmdRailTab") : "work",
+    // The tab to come back to when a selection clears. "node" is never stored.
+    railHome: ["work", "settings", "assistant", "done", "ask"].includes(readStore("mefiStudio.cmdRailTab")) ? readStore("mefiStudio.cmdRailTab") : "work",
+    focusMode: false,
+    // Set when Esc takes the menus back by hand. Selecting another node then
+    // leaves the chrome where the owner put it, until the selection clears.
+    focusOptOut: false,
     railCollapsed: false,
     doneEntries: null,
     doneAt: 0,
@@ -16783,7 +17090,10 @@ body.music-preview-active #idle-hud { display: none !important; }
   // docked panel. Each view keeps its own head and collapse control; the rail
   // only decides which view is on screen and whether the panel shrinks to its
   // header.
-  const RAIL_VIEWS = ["work", "settings", "assistant", "done", "ask"];
+  // "node" is the selected node's own detail. It is a view, not a destination:
+  // its tab only exists while something is picked, and it is never written to
+  // the remembered tab, so clearing the selection lands you back where you were.
+  const RAIL_VIEWS = ["node", "work", "settings", "assistant", "done", "ask"];
 
   function applyRailCollapsed() {
     const collapsed = state.railTab === "work" ? state.feedCollapsed
@@ -16795,7 +17105,11 @@ body.music-preview-active #idle-hud { display: none !important; }
   }
 
   function setRailTab(name, { save = true, focus = false } = {}) {
-    const view = RAIL_VIEWS.includes(name) ? name : "work";
+    let view = RAIL_VIEWS.includes(name) ? name : "work";
+    // The node view cannot be entered without a node; a stale one falls back to
+    // whatever the owner last chose for themselves.
+    if (view === "node" && !state.selected) view = state.railHome ?? "work";
+    if (view !== "node") state.railHome = view;
     state.railTab = view;
     for (const button of el.railTabs ?? []) {
       const selected = button.dataset.railView === view;
@@ -16803,13 +17117,16 @@ body.music-preview-active #idle-hud { display: none !important; }
       button.tabIndex = selected ? 0 : -1;
       if (selected && focus) button.focus();
     }
+    if (el.nodePanel) el.nodePanel.hidden = view !== "node";
     if (el.feed) el.feed.hidden = view !== "work";
     if (el.settings) el.settings.hidden = view !== "settings";
     if (el.chatLog) el.chatLog.hidden = view !== "assistant";
     if (el.done) el.done.hidden = view !== "done";
     if (el.asks) el.asks.hidden = view !== "ask";
-    if (save) writeStore("mefiStudio.cmdRailTab", view);
+    // Never remember "node": it belongs to a selection, not to a launch.
+    if (save && view !== "node") writeStore("mefiStudio.cmdRailTab", view);
     applyRailCollapsed();
+    if (view === "node") renderInfo();
     if (view === "settings") renderSettingsPanel();
     if (view === "done") void loadDoneLog();
     if (view === "ask") renderAsks();
@@ -17047,6 +17364,46 @@ body.music-preview-active #idle-hud { display: none !important; }
       detail.textContent = question.detail;
       card.append(detail);
     }
+    // What the decision is ABOUT. A question raised by an agent carries the
+    // task it belongs to and the evidence it saw, so the card can be read
+    // without opening anything else — and opened from here when it cannot.
+    if (question.context) {
+      const context = question.context;
+      const chips = document.createElement("div");
+      chips.className = "ask-context";
+      if (context.severity) {
+        const severity = document.createElement("span");
+        severity.className = "ask-chip";
+        severity.dataset.severity = context.severity;
+        severity.textContent = context.severity === "blocker" ? "Blocked" : context.severity === "decision" ? "Decision" : "Note";
+        chips.append(severity);
+      }
+      if (context.taskTitle) {
+        const task = document.createElement(context.taskId ? "button" : "span");
+        task.className = "ask-chip task";
+        task.textContent = context.taskTitle;
+        if (context.taskId) {
+          task.type = "button";
+          task.title = "Open this task on the board";
+          task.addEventListener("click", () => nav("tasks", { taskId: context.taskId, filter: "all" }));
+        }
+        chips.append(task);
+      }
+      if (context.file || context.check) {
+        const where = document.createElement("span");
+        where.className = "ask-chip";
+        where.textContent = context.check ? `check: ${context.check}` : context.file;
+        chips.append(where);
+      }
+      if (chips.children.length) card.append(chips);
+      if (Array.isArray(context.evidence) && context.evidence.length) {
+        const evidence = document.createElement("pre");
+        evidence.className = "ask-evidence";
+        evidence.textContent = context.evidence.slice(-3).join("\n");
+        evidence.title = "The last lines the agent printed before it asked";
+        card.append(evidence);
+      }
+    }
     if (question.status === "open") {
       const options = document.createElement("div");
       options.className = "ask-options";
@@ -17092,6 +17449,20 @@ body.music-preview-active #idle-hud { display: none !important; }
         if (text) void answerQuestion(question.id, null, text, send);
       });
       card.append(custom);
+      // Whether a decision reaches you at all is a node in the live brain
+      // map, so the card links to the part that decided to ask.
+      if (question.source === "issue") {
+        const links = document.createElement("div");
+        links.className = "ask-links";
+        const rules = document.createElement("button");
+        rules.type = "button";
+        rules.className = "ghost mini";
+        rules.textContent = "Why am I being asked?";
+        rules.title = "Open the brain map at the triage part that decided this needs you";
+        rules.addEventListener("click", () => nav("brains", { nodeType: "issue.triage" }));
+        links.append(rules);
+        card.append(links);
+      }
     } else if (question.answer) {
       const note = document.createElement("p");
       note.className = "ask-answer-note";
@@ -17375,8 +17746,17 @@ body.music-preview-active #idle-hud { display: none !important; }
     return state.selected?.kind === "assistant" && feedVisible();
   }
 
+  // Either rail console counts: the Work tab's inline chat (chatMode) or the
+  // rail's own Assistant tab. Only when neither is on screen does the floating
+  // card draw the assistant.
+  function railOwnsAssistant() {
+    return state.selected?.kind === "assistant" && (feedVisible() || chatLogVisible());
+  }
+
   function composerInput() {
-    return chatMode() ? el.chatInput ?? null : el.info?.querySelector(".assistant-composer input, .assistant-composer textarea") ?? null;
+    if (chatMode()) return el.chatInput ?? null;
+    if (railOwnsAssistant()) return el.chatLogInput ?? null;
+    return infoHost()?.querySelector(".assistant-composer input, .assistant-composer textarea") ?? null;
   }
 
   function focusComposer() {
@@ -17950,6 +18330,38 @@ body.music-preview-active #idle-hud { display: none !important; }
   function feedVisible() {
     // offsetWidth collapses to 0 when the ≤900px media query hides the panel
     return state.active && !state.feedCollapsed && !!el.feed && !el.feed.hidden && el.feed.offsetWidth > 0;
+  }
+
+  // The rail's own Assistant tab, measured the same way: the ≤900px media
+  // query hides the whole rail, and setRailTab hides the panel off-tab.
+  function chatLogVisible() {
+    return state.active && state.chatLogOpen && !!el.chatLog && !el.chatLog.hidden && el.chatLog.offsetWidth > 0;
+  }
+
+  function railVisible() {
+    return state.active && !!el.rail && !el.rail.hidden && el.rail.offsetWidth > 0;
+  }
+
+  // Inspect mode: the detail owns the rail and every other surface retreats to
+  // its edge. Shaped like setAmbientZen — one body class, then let the CSS and
+  // usableArea() do the work — with one deliberate difference: the HUD stays
+  // interactive. Zen means "leave me alone"; this means "let me read one
+  // thing", so every collapsed edge must still take a click.
+  function setFocusMode(active) {
+    const next = Boolean(active);
+    if (next === state.focusMode) return false;
+    state.focusMode = next;
+    document.body.classList.toggle("command-focus", next);
+    state.graphAreaAt = 0;
+    state.hudRectsAt = 0;
+    return true;
+  }
+
+  // Where a selected node's detail is drawn. The rail owns it whenever the rail
+  // is on screen — full height, one scroller. The floating card is the
+  // narrow-layout fallback, for the ≤900px width that hides the rail outright.
+  function infoHost() {
+    return (railVisible() && el.nodePanel) ? el.nodePanel : el.info;
   }
 
   // The projection centre is the middle of the clear rectangle. When a
@@ -20214,14 +20626,10 @@ body.music-preview-active #idle-hud { display: none !important; }
       el.feedChat.hidden = !chatting;
       if (chatting) renderChat();
     }
-    // Selecting the assistant brings its thread forward; picking anything else
-    // leaves the rail where the owner put it. (Guarded: the renderer test
-    // slices run single functions without the rail helpers.)
-    const assistantPicked = state.selected?.kind === "assistant";
-    if (assistantPicked !== state.lastAssistantSelected) {
-      state.lastAssistantSelected = assistantPicked;
-      if (assistantPicked && typeof setRailTab === "function") setRailTab("assistant");
-    }
+    // Bringing a selection forward is the rail's "node" view now — selectNode
+    // owns that, for every kind, so the assistant no longer gets a special flip
+    // of its own that raced the floating card's suppression guard.
+    state.lastAssistantSelected = state.selected?.kind === "assistant";
     if (typeof renderRailBadges === "function") renderRailBadges();
     if (state.railTab === "ask" && typeof renderAsks === "function") renderAsks();
     paintChatLog();
@@ -22635,15 +23043,27 @@ body.music-preview-active #idle-hud { display: none !important; }
       bumpHud();
       return;
     }
-    // Clearing empties the card: focus on one of its buttons (the close button,
-    // Done, or a card whose node just left the graph) would fall to <body>.
-    const focusInCard = !node && Boolean(el.info?.contains(document.activeElement));
+    // Clearing empties the detail: focus on one of its buttons (the close
+    // button, Done, or a card whose node just left the graph) would fall to
+    // <body>. Either surface can hold it, so ask both.
+    const focusInCard = !node && (Boolean(el.info?.contains(document.activeElement)) || Boolean(el.nodePanel?.contains(document.activeElement)));
     state.selected = node ? { id: node.id, kind: node.kind, node, via: options.via ?? "pointer" } : null;
     if (!node) exitFocus(); // letting go of the selection lets go of the focus too
     if (node?.doneHold) ackDoneHold(node.id); // the click is the read
     if (node && !node.readOnly && (node.kind === "session" || node.kind === "todo" || node.kind === "task")) focusAssistant(node);
     if (node) dropPopups();
     computeBranch();
+    // The rail carries the detail: reveal its tab and hand it the rail while a
+    // node is picked, then give the rail back to the tab you were on.
+    if (typeof setRailTab === "function") {
+      if (el.railTabNode) el.railTabNode.hidden = !node || !railVisible();
+      if (node && railVisible()) setRailTab("node", { save: false });
+      else if (state.railTab === "node") setRailTab(state.railHome ?? "work", { save: false });
+    }
+    // Letting go of the selection also forgets that the owner asked for the
+    // menus back, so the next node opens in inspect mode again.
+    if (!node) state.focusOptOut = false;
+    if (typeof setFocusMode === "function") setFocusMode(Boolean(node) && railVisible() && !state.focusOptOut);
     renderInfo();
     // Selecting the assistant swaps the rail into chat mode and back.
     state.feedDirty = true;
@@ -22710,6 +23130,10 @@ body.music-preview-active #idle-hud { display: none !important; }
     }
     if (id === "ideas") {
       window.MefiIdeas?.open?.(params);
+      return true;
+    }
+    if (id === "brains") {
+      window.MefiBrains?.open?.(params);
       return true;
     }
     if (id === "eyes") {
@@ -22994,14 +23418,26 @@ body.music-preview-active #idle-hud { display: none !important; }
   }
 
   function renderInfo({ clearDraft = false } = {}) {
-    if (!el.info) return;
+    const host = infoHost();
+    if (!host) return;
     state.graphAreaAt = 0;
     state.hudRectsAt = 0;
+    // Only one detail surface exists at a time: whichever host is not drawing
+    // is emptied and hidden outright. The rail's own panel takes its
+    // visibility from setRailTab, never from here.
+    const spare = host === el.info ? el.nodePanel : el.info;
+    if (spare) { spare.hidden = true; spare.textContent = ""; }
+    const showHost = (visible) => { if (host !== el.nodePanel) host.hidden = !visible; };
     const selected = state.selected;
-    // The assistant's surface moved into the A-Eyes rail; the floating card is
-    // only the fallback for the narrow layout where the rail is hidden.
-    if (selected?.kind === "assistant" && feedVisible()) {
-      el.info.hidden = true;
+    // The assistant's surface moved into the rail; the floating card is only
+    // the fallback for the narrow layout where the rail is hidden. Ask whether
+    // the RAIL owns the assistant, not whether the Work feed is up: selecting
+    // the assistant flips the rail to its Assistant tab (renderFeed), which
+    // hides #idle-feed — and this guard then un-suppressed the card beside the
+    // console the rail was already showing.
+    if (railOwnsAssistant()) {
+      showHost(false);
+      if (host === el.nodePanel) host.textContent = "";
       state.feedDirty = true;
       renderFeed();
       return;
@@ -23011,22 +23447,22 @@ body.music-preview-active #idle-hud { display: none !important; }
     // heartbeat can never snap the card or the thread back to an end.
     // clearDraft holds the text that was just sent — the draft only drops
     // when it is that text, so a chip send keeps what you were typing.
-    const draftInput = el.info.querySelector(".assistant-composer input, .assistant-composer textarea");
+    const draftInput = host.querySelector(".assistant-composer input, .assistant-composer textarea");
     const draft = draftInput && draftInput.value.trim() !== String(clearDraft ?? "") ? { value: draftInput.value, focused: document.activeElement === draftInput } : null;
-    const oldThread = el.info.querySelector(".assistant-thread");
+    const oldThread = host.querySelector(".assistant-thread");
     const threadTop = oldThread?.scrollTop ?? 0;
     const threadPinned = !oldThread || oldThread.scrollTop + oldThread.clientHeight >= oldThread.scrollHeight - 28;
-    const cardTop = state.cardScrollId === selected?.id ? el.info.scrollTop : 0;
-    el.info.textContent = "";
+    const cardTop = state.cardScrollId === selected?.id ? host.scrollTop : 0;
+    host.textContent = "";
     el.infoParallel = null;
     if (!selected) {
-      el.info.hidden = true;
+      showHost(false);
       state.cardScrollId = null;
       return;
     }
-    el.info.hidden = false;
+    showHost(true);
     const node = selected.node;
-    const info = el.info;
+    const info = host;
     const kinds = { root: "Constellation", session: "Session", todo: "Todo", task: "Task", "task-group": "Task group", assistant: "Assistant", folded: "Finished sessions", agent: "Agent" };
 
     const kicker = document.createElement("div");
@@ -23642,7 +24078,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     }
     if (node.kind === "session" || node.kind === "assistant" || node.kind === "root") appendAbsorbed(info, node);
     info.append(actions);
-    el.info.scrollTop = cardTop;
+    host.scrollTop = cardTop;
     state.cardScrollId = selected.id;
   }
 
@@ -24062,6 +24498,14 @@ body.music-preview-active #idle-hud { display: none !important; }
       clearSearch();
       return true;
     }
+    // The menus come back before the selection goes: one Esc to see the rest
+    // of the app again without losing the node you were reading, a second to
+    // let go of the node itself.
+    if (state.focusMode) {
+      state.focusOptOut = true;
+      setFocusMode(false);
+      return true;
+    }
     if (state.focus || state.selected) {
       releaseNode();
       return true;
@@ -24333,10 +24777,14 @@ body.music-preview-active #idle-hud { display: none !important; }
     state.hoverNode = null;
     state.hoverBubble = null;
     state.branch = null;
-    if (el.info) {
-      el.info.hidden = true;
-      el.info.textContent = "";
+    for (const surface of [el.info, el.nodePanel]) {
+      if (!surface) continue;
+      surface.hidden = true;
+      surface.textContent = "";
     }
+    if (el.railTabNode) el.railTabNode.hidden = true;
+    if (typeof setFocusMode === "function") setFocusMode(false);
+    state.focusOptOut = false;
     state.cardScrollId = null;
     if (el.feedChat) el.feedChat.hidden = true;
     if (el.feedActivity) el.feedActivity.hidden = false;
@@ -24522,6 +24970,8 @@ body.music-preview-active #idle-hud { display: none !important; }
     el.chatLogNewWorkState = document.getElementById("cmd-chat-new-work-state");
     el.rail = document.getElementById("cmd-rail");
     el.railBody = document.getElementById("cmd-rail-body");
+    el.nodePanel = document.getElementById("cmd-node");
+    el.railTabNode = document.getElementById("cmd-rail-tab-node");
     el.railTabs = [...(el.rail?.querySelectorAll(".rail-tab[data-rail-view]") ?? [])];
     el.railWorkBadge = document.getElementById("cmd-rail-work-badge");
     el.railAssistantBadge = document.getElementById("cmd-rail-assistant-badge");
@@ -24781,7 +25231,9 @@ body.music-preview-active #idle-hud { display: none !important; }
     // The rail's tabs: one visible view, roving focus, remembered between runs.
     for (const button of el.railTabs ?? []) button.addEventListener("click", () => setRailTab(button.dataset.railView));
     el.rail?.querySelector(".rail-tabs")?.addEventListener("keydown", (event) => {
-      const tabs = el.railTabs ?? [];
+      // The Node tab is only there while something is selected: walk the tabs
+      // that are actually on screen, so an arrow never lands on nothing.
+      const tabs = (el.railTabs ?? []).filter((button) => !button.hidden);
       const index = tabs.findIndex((button) => button.getAttribute("aria-selected") === "true");
       let next = null;
       if (event.key === "ArrowRight") next = (index + 1) % tabs.length;
@@ -24884,7 +25336,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       const bubbleNode = bubbleAt(x, y);
       if (bubbleNode) {
         selectNode(bubbleNode, { via: "bubble" });
-        const details = el.info?.querySelector("details.card-cps");
+        const details = infoHost()?.querySelector("details.card-cps");
         if (details) {
           details.open = true;
           details.scrollIntoView({ block: "nearest" });
@@ -29535,6 +29987,1315 @@ body.music-preview-active #idle-hud { display: none !important; }
   window.MefiOverhead = { open, close };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
+})();
+
+// Mefi's Studio AI+ — Brain maps: the pipeline editor.
+//
+// A node graph over the same data scripts/brains.cjs validates and compiles.
+// Click an output end, then an input end, and the two are wired; Space opens
+// the parts search wherever the canvas is looking; the inspector on the right
+// says, for whatever is selected, exactly what it may and may not do, which
+// model it uses, and which switch it moves when the map goes live.
+//
+// Nothing here decides anything by itself: every save, activation and draft
+// goes through the host, which validates the map again before it counts.
+(function () {
+  "use strict";
+
+  // Geometry is computed, not measured: ports sit on a fixed grid so a wire
+  // can be drawn before the browser has laid the node out, and a node that is
+  // dragged does not cost a reflow per frame.
+  const NODE_W = 236;
+  const HEAD_H = 48;
+  const PORT_H = 36;
+  const FOOT_H = 26;
+  const GRID = 20;
+  // Where the dot sits inside a port row, and the node border above the
+  // first row: a wire has to land on the dot, not on the box edge.
+  const PORT_INSET = 11;
+  const BORDER = 1;
+
+  const state = {
+    catalog: null,
+    maps: [],
+    activeId: null,
+    map: null,
+    compiled: null,
+    problems: [],
+    selection: null,
+    pending: null,
+    dirty: false,
+    busy: false,
+    partsQuery: "",
+    search: { open: false, query: "", index: 0, at: null },
+    drag: null,
+  };
+  const el = {};
+  let initialized = false;
+
+  const bridge = () => (typeof window === "undefined" ? null : window.mefiStudio ?? null);
+  const typeOf = (type) => state.catalog?.nodes.find((item) => item.type === type) ?? null;
+  const nodeById = (id) => state.map?.nodes.find((node) => node.id === id) ?? null;
+  const groupLabel = (id) => state.catalog?.groups.find((group) => group.id === id)?.label ?? id;
+  const permission = (key) => state.catalog?.permissions.find((item) => item.key === key) ?? { key, label: key, detail: "" };
+  const clean = (value, max) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
+  const RUNS = {
+    host: { label: "Live stage", detail: "The studio already runs this stage. This node holds its settings, and making the map live moves the switch behind it." },
+    map: { label: "Run by the map", detail: "This node's rules are what the studio follows — editing it changes behaviour as soon as the map is saved." },
+    draft: { label: "Drawing only", detail: "Saved and drawn, but nothing executes it." },
+  };
+
+  function nodeHeight(node) {
+    const spec = typeOf(node.type);
+    const rows = Math.max(spec?.inputs.length ?? 0, spec?.outputs.length ?? 0, 1);
+    return HEAD_H + rows * PORT_H + FOOT_H;
+  }
+
+  function portPoint(nodeId, portId, dir) {
+    const node = nodeById(nodeId);
+    const spec = typeOf(node?.type);
+    if (!node || !spec) return null;
+    const list = dir === "in" ? spec.inputs : spec.outputs;
+    const index = list.findIndex((item) => item.id === portId);
+    if (index < 0) return null;
+    return { x: node.x + (dir === "in" ? PORT_INSET : NODE_W - PORT_INSET), y: node.y + BORDER + HEAD_H + index * PORT_H + PORT_H / 2 };
+  }
+
+  // ---- loading ---------------------------------------------------------------
+
+  async function load({ id = null, keepSelection = false } = {}) {
+    const api = bridge();
+    if (!api?.brainsState) {
+      state.map = null;
+      renderAll();
+      return;
+    }
+    try {
+      if (!state.catalog) state.catalog = (await api.brainsCatalog())?.catalog ?? null;
+      const list = await api.brainsState();
+      state.maps = list?.maps ?? [];
+      state.activeId = list?.activeId ?? null;
+      const want = id ?? state.map?.id ?? state.activeId;
+      const read = await api.brainsRead(want);
+      if (read?.ok) {
+        state.map = read.map;
+        state.compiled = read.compiled ?? null;
+        state.problems = read.compiled?.problems ?? [];
+      }
+      state.dirty = false;
+      if (!keepSelection) state.selection = null;
+      state.pending = null;
+    } catch (error) {
+      status(`Could not read the brain maps: ${error.message}`, "warn");
+    }
+    renderAll();
+  }
+
+  // Validation is the host's answer, not the editor's guess: the same module
+  // that refuses a bad map on save is what draws the problems here.
+  let validateTimer = null;
+  function revalidate({ now = false } = {}) {
+    clearTimeout(validateTimer);
+    const run = async () => {
+      const api = bridge();
+      if (!api?.brainsValidate || !state.map) return;
+      try {
+        const result = await api.brainsValidate(state.map);
+        if (!result?.ok) return;
+        state.problems = result.result?.problems ?? [];
+        state.compiled = result.compiled ?? null;
+        renderProblems();
+        renderCanvas();
+      } catch { /* a failed check leaves the last verdict on screen */ }
+    };
+    if (now) void run();
+    else validateTimer = setTimeout(run, 260);
+  }
+
+  // ---- canvas -----------------------------------------------------------------
+
+  function renderCanvas() {
+    if (!el.canvas) return;
+    el.canvas.textContent = "";
+    if (!state.map) return;
+    const errorNodes = new Set(state.problems.filter((item) => item.level === "error" && item.nodeId).map((item) => item.nodeId));
+    const warnNodes = new Set(state.problems.filter((item) => item.level === "warn" && item.nodeId).map((item) => item.nodeId));
+    let right = 0;
+    let bottom = 0;
+    for (const node of state.map.nodes) {
+      const spec = typeOf(node.type);
+      const height = nodeHeight(node);
+      right = Math.max(right, node.x + NODE_W);
+      bottom = Math.max(bottom, node.y + height);
+      const box = document.createElement("div");
+      box.className = "brains-node";
+      box.dataset.node = node.id;
+      box.dataset.group = spec?.group ?? "control";
+      box.dataset.runs = spec?.runs ?? "draft";
+      if (errorNodes.has(node.id)) box.dataset.problem = "error";
+      else if (warnNodes.has(node.id)) box.dataset.problem = "warn";
+      if (state.selection?.kind === "node" && state.selection.id === node.id) box.dataset.selected = "true";
+      box.style.left = `${node.x}px`;
+      box.style.top = `${node.y}px`;
+      box.style.height = `${height}px`;
+
+      const head = document.createElement("div");
+      head.className = "brains-node-head";
+      const kind = document.createElement("span");
+      kind.className = "brains-node-kind";
+      kind.textContent = groupLabel(spec?.group ?? "control");
+      const title = document.createElement("b");
+      title.textContent = node.title;
+      head.append(kind, title);
+      if (!spec) {
+        const unknown = document.createElement("span");
+        unknown.className = "brains-node-flag";
+        unknown.textContent = "unknown part";
+        head.append(unknown);
+      }
+      box.append(head);
+
+      const ports = document.createElement("div");
+      ports.className = "brains-node-ports";
+      ports.append(portColumn(node, spec?.inputs ?? [], "in"), portColumn(node, spec?.outputs ?? [], "out"));
+      box.append(ports);
+
+      const foot = document.createElement("p");
+      foot.className = "brains-node-foot";
+      foot.textContent = footNote(node, spec);
+      box.append(foot);
+      el.canvas.append(box);
+    }
+    const width = Math.max(1200, right + 360);
+    const height = Math.max(700, bottom + 240);
+    el.canvas.style.width = `${width}px`;
+    el.canvas.style.height = `${height}px`;
+    renderWires(width, height);
+  }
+
+  function portColumn(node, ports, dir) {
+    const column = document.createElement("div");
+    column.className = `brains-port-col ${dir}`;
+    for (const port of ports) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "brains-port";
+      button.dataset.node = node.id;
+      button.dataset.port = port.id;
+      button.dataset.dir = dir;
+      const wired = state.map.edges.some((edge) => (dir === "in" ? edge.to.node === node.id && edge.to.port === port.id : edge.from.node === node.id && edge.from.port === port.id));
+      button.dataset.wired = String(wired);
+      if (state.pending && state.pending.node === node.id && state.pending.port === port.id && state.pending.dir === dir) button.dataset.armed = "true";
+      else if (state.pending) button.dataset.target = state.pending.dir === dir ? "no" : (canJoin(state.pending, { node: node.id, port: port.id, dir }) ? "yes" : "no");
+      const dot = document.createElement("i");
+      dot.setAttribute("aria-hidden", "true");
+      const label = document.createElement("span");
+      label.textContent = port.label;
+      button.append(...(dir === "in" ? [dot, label] : [label, dot]));
+      button.title = `${port.label} · carries ${port.kinds.join(", ")}${port.required ? " · required" : ""}. Click to ${state.pending ? "finish" : "start"} a wire.`;
+      button.setAttribute("aria-label", `${dir === "in" ? "Input" : "Output"} ${port.label} on ${node.title}`);
+      column.append(button);
+    }
+    return column;
+  }
+
+  function footNote(node, spec) {
+    if (!spec) return "This build does not have this part.";
+    const bits = [];
+    if (node.model) bits.push(node.model.mode === "pinned" && node.model.model ? `model ${node.model.model}` : `${node.model.role} model`);
+    if (spec.permissions.length) bits.push(`${spec.permissions.length} permission${spec.permissions.length === 1 ? "" : "s"}`);
+    bits.push(RUNS[spec.runs]?.label.toLowerCase() ?? spec.runs);
+    return bits.join(" · ");
+  }
+
+  function renderWires(width, height) {
+    if (!el.wires) return;
+    el.wires.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    el.wires.setAttribute("width", String(width));
+    el.wires.setAttribute("height", String(height));
+    el.wires.textContent = "";
+    const badEdges = new Set(state.problems.filter((item) => item.level === "error" && item.edgeId).map((item) => item.edgeId));
+    for (const edge of state.map.edges) {
+      const from = portPoint(edge.from.node, edge.from.port, "out");
+      const to = portPoint(edge.to.node, edge.to.port, "in");
+      if (!from || !to) continue;
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      const reach = Math.max(60, Math.abs(to.x - from.x) * 0.45);
+      path.setAttribute("d", `M ${from.x} ${from.y} C ${from.x + reach} ${from.y}, ${to.x - reach} ${to.y}, ${to.x} ${to.y}`);
+      path.setAttribute("class", "brains-wire");
+      path.dataset.edge = edge.id;
+      if (edge.feedback) path.dataset.feedback = "true";
+      if (badEdges.has(edge.id)) path.dataset.problem = "error";
+      if (state.selection?.kind === "edge" && state.selection.id === edge.id) path.dataset.selected = "true";
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "title");
+      label.textContent = `${nodeById(edge.from.node)?.title ?? edge.from.node} → ${nodeById(edge.to.node)?.title ?? edge.to.node}${edge.feedback ? " (feedback: it lands on the next pass)" : ""}`;
+      path.append(label);
+      el.wires.append(path);
+    }
+  }
+
+  // ---- wiring ------------------------------------------------------------------
+
+  function canJoin(a, b) {
+    const from = a.dir === "out" ? a : b;
+    const to = a.dir === "out" ? b : a;
+    if (from.dir !== "out" || to.dir !== "in" || from.node === to.node) return false;
+    const fromSpec = typeOf(nodeById(from.node)?.type);
+    const toSpec = typeOf(nodeById(to.node)?.type);
+    const output = fromSpec?.outputs.find((item) => item.id === from.port);
+    const input = toSpec?.inputs.find((item) => item.id === to.port);
+    if (!output || !input) return false;
+    return output.kinds.includes("any") || input.kinds.includes("any") || output.kinds.some((kind) => input.kinds.includes(kind));
+  }
+
+  function clickPort(target) {
+    const end = { node: target.dataset.node, port: target.dataset.port, dir: target.dataset.dir };
+    if (!state.pending) {
+      state.pending = end;
+      status(`Wiring from ${nodeById(end.node)?.title ?? end.node} · ${end.port}. Click the other end, or press Escape.`);
+      renderCanvas();
+      return;
+    }
+    if (state.pending.node === end.node && state.pending.port === end.port && state.pending.dir === end.dir) {
+      state.pending = null;
+      status("Wire cancelled.");
+      renderCanvas();
+      return;
+    }
+    if (!canJoin(state.pending, end)) {
+      const from = state.pending.dir === "out" ? state.pending : end;
+      const to = state.pending.dir === "out" ? end : state.pending;
+      const fromSpec = typeOf(nodeById(from.node)?.type);
+      const toSpec = typeOf(nodeById(to.node)?.type);
+      const output = fromSpec?.outputs.find((item) => item.id === from.port);
+      const input = toSpec?.inputs.find((item) => item.id === to.port);
+      status(output && input
+        ? `${output.label} carries ${output.kinds.join("/")}; ${input.label} takes ${input.kinds.join("/")}. They cannot be joined.`
+        : "Wires run from an output to an input.", "warn");
+      return;
+    }
+    const from = state.pending.dir === "out" ? state.pending : end;
+    const to = state.pending.dir === "out" ? end : state.pending;
+    connect(from, to);
+    state.pending = null;
+  }
+
+  function connect(from, to) {
+    const id = `e_${from.node}_${from.port}_${to.node}_${to.port}`.replace(/[^a-z0-9_-]/gi, "_");
+    // Two ends are already joined or they are not: the store dedupes on the
+    // endpoints, so the canvas must not show a second wire whose only
+    // difference is the id it was generated with.
+    if (state.map.edges.some((edge) => edge.from.node === from.node && edge.from.port === from.port
+      && edge.to.node === to.node && edge.to.port === to.port)) {
+      status("Those two ends are already wired.");
+      renderCanvas();
+      return;
+    }
+    state.map.edges.push({ id, from: { ...from }, to: { ...to } });
+    touch(`Wired ${nodeById(from.node)?.title} → ${nodeById(to.node)?.title}.`);
+    select({ kind: "edge", id });
+  }
+
+  function deleteSelection() {
+    if (!state.selection || !state.map) return;
+    if (state.selection.kind === "edge") {
+      const edge = state.map.edges.find((item) => item.id === state.selection.id);
+      state.map.edges = state.map.edges.filter((item) => item.id !== state.selection.id);
+      state.selection = null;
+      touch(edge ? "Wire removed." : "");
+      return;
+    }
+    const node = nodeById(state.selection.id);
+    if (!node) return;
+    state.map.nodes = state.map.nodes.filter((item) => item.id !== node.id);
+    state.map.edges = state.map.edges.filter((edge) => edge.from.node !== node.id && edge.to.node !== node.id);
+    state.selection = null;
+    touch(`Removed "${node.title}" and its wires.`);
+  }
+
+  function touch(message = "") {
+    state.dirty = true;
+    if (message) status(message);
+    renderCanvas();
+    renderInspector();
+    renderToolbar();
+    revalidate();
+  }
+
+  function select(selection) {
+    state.selection = selection;
+    renderCanvas();
+    renderInspector();
+  }
+
+  // ---- adding parts --------------------------------------------------------------
+
+  function freeId(type) {
+    const base = `n_${type.replace(/[^a-z0-9]+/gi, "_")}`;
+    if (!nodeById(base)) return base;
+    for (let index = 2; index < 200; index += 1) if (!nodeById(`${base}_${index}`)) return `${base}_${index}`;
+    return `${base}_${Date.now()}`;
+  }
+
+  function addNode(type, at = null) {
+    const spec = typeOf(type);
+    if (!spec || !state.map) return null;
+    const view = el.canvasWrap;
+    const spot = at ?? {
+      x: Math.round(((view?.scrollLeft ?? 0) + (view?.clientWidth ?? 900) / 2 - NODE_W / 2) / GRID) * GRID,
+      y: Math.round(((view?.scrollTop ?? 0) + (view?.clientHeight ?? 600) / 2 - 80) / GRID) * GRID,
+    };
+    const node = {
+      id: freeId(type),
+      type,
+      title: spec.label,
+      x: Math.max(0, spot.x),
+      y: Math.max(0, spot.y),
+      config: Object.fromEntries((spec.settings ?? []).map((setting) => [setting.key, Array.isArray(setting.default) ? [...setting.default] : setting.default])),
+      model: spec.model ? { mode: "inherit", role: spec.model.role, model: null } : null,
+    };
+    state.map.nodes.push(node);
+    // Adding a part it needs reach for grants that reach on the map, so the
+    // new node is not born as an error the owner has to chase.
+    for (const key of spec.permissions) if (!state.map.grants.includes(key)) state.map.grants.push(key);
+    // A part added while a wire was armed finishes that wire when it can.
+    if (state.pending) {
+      const end = state.pending.dir === "out"
+        ? (spec.inputs.find((port) => canJoin(state.pending, { node: node.id, port: port.id, dir: "in" })) ?? null)
+        : (spec.outputs.find((port) => canJoin(state.pending, { node: node.id, port: port.id, dir: "out" })) ?? null);
+      if (end) {
+        const other = { node: node.id, port: end.id, dir: state.pending.dir === "out" ? "in" : "out" };
+        const from = state.pending.dir === "out" ? state.pending : other;
+        const to = state.pending.dir === "out" ? other : state.pending;
+        state.pending = null;
+        connect(from, to);
+        touch(`Added "${node.title}" and wired it in.`);
+        select({ kind: "node", id: node.id });
+        return node;
+      }
+      state.pending = null;
+    }
+    touch(`Added "${node.title}".`);
+    select({ kind: "node", id: node.id });
+    return node;
+  }
+
+  // ---- the parts panel -------------------------------------------------------------
+
+  function renderParts() {
+    if (!el.partsList) return;
+    el.partsList.textContent = "";
+    const query = state.partsQuery.trim().toLowerCase();
+    const groups = state.catalog?.groups ?? [];
+    for (const group of groups) {
+      const parts = (state.catalog?.nodes ?? []).filter((node) => node.group === group.id
+        && (!query || `${node.label} ${node.type} ${node.summary} ${node.can.join(" ")}`.toLowerCase().includes(query)));
+      if (!parts.length) continue;
+      const section = document.createElement("section");
+      section.className = "brains-parts-group";
+      const heading = document.createElement("h4");
+      heading.textContent = group.label;
+      const note = document.createElement("p");
+      note.className = "brains-parts-detail";
+      note.textContent = group.detail;
+      section.append(heading, note);
+      for (const part of parts) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "brains-part";
+        button.dataset.type = part.type;
+        button.dataset.runs = part.runs;
+        const name = document.createElement("b");
+        name.textContent = part.label;
+        const runs = document.createElement("span");
+        runs.className = "brains-part-runs";
+        runs.textContent = RUNS[part.runs]?.label ?? part.runs;
+        const summary = document.createElement("span");
+        summary.className = "brains-part-summary";
+        summary.textContent = part.summary;
+        button.append(name, runs, summary);
+        button.title = `${part.summary}\n\n${RUNS[part.runs]?.detail ?? ""}`;
+        button.addEventListener("click", () => addNode(part.type));
+        section.append(button);
+      }
+      el.partsList.append(section);
+    }
+    if (!el.partsList.children.length) {
+      const empty = document.createElement("p");
+      empty.className = "brains-empty";
+      empty.textContent = query ? `No part matches "${state.partsQuery}".` : "The parts catalog is unavailable.";
+      el.partsList.append(empty);
+    }
+  }
+
+  // ---- the Space search ---------------------------------------------------------
+
+  function openSearch(at = null) {
+    if (!state.catalog) return;
+    state.search = { open: true, query: "", index: 0, at };
+    el.search.hidden = false;
+    el.searchInput.value = "";
+    renderSearch();
+    el.searchInput.focus();
+  }
+
+  function closeSearch() {
+    state.search.open = false;
+    el.search.hidden = true;
+    el.canvasWrap?.focus?.();
+  }
+
+  function searchMatches() {
+    const query = state.search.query.trim().toLowerCase();
+    const parts = state.catalog?.nodes ?? [];
+    const scored = parts
+      .map((part) => {
+        const haystack = `${part.label} ${part.type} ${part.summary}`.toLowerCase();
+        if (!query) return { part, score: 0 };
+        if (part.label.toLowerCase().startsWith(query)) return { part, score: 3 };
+        if (part.type.includes(query)) return { part, score: 2 };
+        return { part, score: haystack.includes(query) ? 1 : -1 };
+      })
+      .filter((row) => row.score >= 0);
+    scored.sort((a, b) => b.score - a.score);
+    return scored.map((row) => row.part).slice(0, 12);
+  }
+
+  function renderSearch() {
+    if (!el.searchList) return;
+    const matches = searchMatches();
+    state.search.index = Math.max(0, Math.min(state.search.index, matches.length - 1));
+    el.searchList.textContent = "";
+    for (const [index, part] of matches.entries()) {
+      const row = document.createElement("li");
+      row.className = "brains-search-row";
+      row.dataset.type = part.type;
+      if (index === state.search.index) row.dataset.active = "true";
+      const name = document.createElement("b");
+      name.textContent = part.label;
+      const group = document.createElement("span");
+      group.className = "brains-search-group";
+      group.textContent = groupLabel(part.group);
+      const summary = document.createElement("span");
+      summary.className = "brains-search-summary";
+      summary.textContent = part.summary;
+      row.append(name, group, summary);
+      row.addEventListener("click", () => {
+        addNode(part.type, state.search.at);
+        closeSearch();
+      });
+      el.searchList.append(row);
+    }
+    if (!matches.length) {
+      const empty = document.createElement("li");
+      empty.className = "brains-empty";
+      empty.textContent = `Nothing matches "${state.search.query}".`;
+      el.searchList.append(empty);
+    }
+    if (el.searchHint) {
+      el.searchHint.textContent = state.pending
+        ? "The new part is wired to the end you armed, when its ports allow it."
+        : "Enter adds the highlighted part where the canvas is looking.";
+    }
+  }
+
+  // ---- the inspector ---------------------------------------------------------------
+
+  function renderInspector() {
+    if (!el.inspector) return;
+    el.inspector.textContent = "";
+    if (!state.map) {
+      el.inspector.append(note("Brain maps live in the desktop app."));
+      return;
+    }
+    if (state.selection?.kind === "node") return renderNodeInspector(nodeById(state.selection.id));
+    if (state.selection?.kind === "edge") return renderEdgeInspector(state.map.edges.find((edge) => edge.id === state.selection.id));
+    return renderMapInspector();
+  }
+
+  const note = (text, className = "brains-note") => {
+    const element = document.createElement("p");
+    element.className = className;
+    element.textContent = text;
+    return element;
+  };
+
+  function field(label, control, help = null) {
+    const wrap = document.createElement("label");
+    wrap.className = "brains-field";
+    const name = document.createElement("span");
+    name.className = "brains-field-label";
+    name.textContent = label;
+    wrap.append(name, control);
+    if (help) wrap.append(note(help, "brains-field-help"));
+    return wrap;
+  }
+
+  function list(title, items, className) {
+    const wrap = document.createElement("div");
+    wrap.className = "brains-list";
+    const heading = document.createElement("h4");
+    heading.textContent = title;
+    const ul = document.createElement("ul");
+    ul.className = className;
+    for (const item of items) {
+      const li = document.createElement("li");
+      li.textContent = item;
+      ul.append(li);
+    }
+    wrap.append(heading, ul);
+    return wrap;
+  }
+
+  function renderNodeInspector(node) {
+    if (!node) return;
+    const spec = typeOf(node.type);
+    const head = document.createElement("div");
+    head.className = "brains-inspect-head";
+    const eyebrow = document.createElement("p");
+    eyebrow.className = "eyebrow";
+    eyebrow.textContent = spec ? groupLabel(spec.group) : "Unknown part";
+    const title = document.createElement("input");
+    title.type = "text";
+    title.className = "brains-title-input";
+    title.value = node.title;
+    title.setAttribute("aria-label", "Node name");
+    title.addEventListener("input", () => {
+      node.title = clean(title.value, 60) || (spec?.label ?? node.type);
+      state.dirty = true;
+      renderCanvas();
+      renderToolbar();
+    });
+    head.append(eyebrow, title);
+    el.inspector.append(head);
+
+    if (!spec) {
+      el.inspector.append(note(`This map was saved with a "${node.type}" part this build does not have. Delete it, or open the map in the build that made it.`, "brains-note warn"));
+      el.inspector.append(dangerRow(node));
+      return;
+    }
+
+    const runs = document.createElement("p");
+    runs.className = "brains-runs";
+    runs.dataset.runs = spec.runs;
+    runs.textContent = `${RUNS[spec.runs]?.label ?? spec.runs}: ${RUNS[spec.runs]?.detail ?? ""}`;
+    el.inspector.append(runs, note(spec.summary));
+    if (spec.hostNote) el.inspector.append(note(spec.hostNote, "brains-note quiet"));
+    if (spec.gate && state.catalog?.gates?.[spec.gate]) {
+      const gate = state.catalog.gates[spec.gate];
+      el.inspector.append(note(`Switch it moves: ${gate.label} — ${gate.detail}`, "brains-note gate"));
+    }
+
+    el.inspector.append(list("It can", spec.can, "brains-can"));
+    el.inspector.append(list("It cannot", spec.cannot, "brains-cannot"));
+
+    // Permissions, and whether this map actually grants them.
+    const permissions = document.createElement("div");
+    permissions.className = "brains-list";
+    const permHeading = document.createElement("h4");
+    permHeading.textContent = "Permissions";
+    permissions.append(permHeading);
+    if (!spec.permissions.length) permissions.append(note("This part needs no reach at all.", "brains-field-help"));
+    for (const key of spec.permissions) {
+      const info = permission(key);
+      const row = document.createElement("label");
+      row.className = "brains-permission";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = state.map.grants.includes(key);
+      box.addEventListener("change", () => {
+        state.map.grants = box.checked
+          ? [...new Set([...state.map.grants, key])]
+          : state.map.grants.filter((item) => item !== key);
+        touch(box.checked ? `Granted ${info.label} on this map.` : `Took ${info.label} away from this map.`);
+        renderInspector();
+      });
+      const text = document.createElement("span");
+      const name = document.createElement("b");
+      name.textContent = info.label;
+      const detail = document.createElement("small");
+      detail.textContent = info.detail;
+      text.append(name, detail);
+      row.append(box, text);
+      permissions.append(row);
+    }
+    el.inspector.append(permissions);
+
+    // The model this node uses.
+    if (spec.model) {
+      const modelWrap = document.createElement("div");
+      modelWrap.className = "brains-list";
+      const heading = document.createElement("h4");
+      heading.textContent = "Model";
+      modelWrap.append(heading);
+      const mode = document.createElement("select");
+      for (const [value, label] of [["inherit", "Follow Studio's routing"], ["role", "Pick the role it asks for"], ["pinned", "Always this model"]]) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = label;
+        if (node.model.mode === value) option.selected = true;
+        mode.append(option);
+      }
+      mode.addEventListener("change", () => {
+        node.model.mode = mode.value;
+        if (mode.value !== "pinned") node.model.model = null;
+        touch("Model choice changed.");
+        renderInspector();
+      });
+      modelWrap.append(field("How it is chosen", mode, "Routing normally compares candidates per task. Pinning one takes that decision away from Jev for this node."));
+      const role = document.createElement("select");
+      for (const value of ["routine", "heavy", "judge", "worker"]) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        if (node.model.role === value) option.selected = true;
+        role.append(option);
+      }
+      role.disabled = node.model.mode === "inherit";
+      role.addEventListener("change", () => { node.model.role = role.value; touch("Model role changed."); });
+      modelWrap.append(field("Role", role, "Routine is the cheap pass, heavy is the reasoning one, judge answers classification questions, worker builds."));
+      if (node.model.mode === "pinned") {
+        const pinned = document.createElement("input");
+        pinned.type = "text";
+        pinned.value = node.model.model ?? "";
+        pinned.placeholder = "model id, e.g. glm-5.3";
+        pinned.addEventListener("input", () => { node.model.model = clean(pinned.value, 160) || null; state.dirty = true; renderToolbar(); });
+        modelWrap.append(field("Model", pinned, "The id as the Model catalog lists it. An id your providers do not have falls back to your saved default."));
+      }
+      el.inspector.append(modelWrap);
+    }
+
+    // Its own settings.
+    if (spec.settings?.length) {
+      const settings = document.createElement("div");
+      settings.className = "brains-list";
+      const heading = document.createElement("h4");
+      heading.textContent = "Settings";
+      settings.append(heading);
+      for (const setting of spec.settings) settings.append(settingControl(node, setting));
+      el.inspector.append(settings);
+    }
+
+    // What is wired into it, and out of it.
+    const wires = document.createElement("div");
+    wires.className = "brains-list";
+    const wiresHeading = document.createElement("h4");
+    wiresHeading.textContent = "Wires";
+    wires.append(wiresHeading);
+    for (const port of spec.inputs) wires.append(wireRow(node, port, "in"));
+    for (const port of spec.outputs) wires.append(wireRow(node, port, "out"));
+    el.inspector.append(wires);
+    el.inspector.append(dangerRow(node));
+  }
+
+  function wireRow(node, port, dir) {
+    const row = document.createElement("p");
+    row.className = "brains-wire-row";
+    const edges = state.map.edges.filter((edge) => (dir === "in"
+      ? edge.to.node === node.id && edge.to.port === port.id
+      : edge.from.node === node.id && edge.from.port === port.id));
+    const others = edges.map((edge) => nodeById(dir === "in" ? edge.from.node : edge.to.node)?.title ?? "?").join(", ");
+    row.textContent = `${dir === "in" ? "←" : "→"} ${port.label} (${port.kinds.join("/")}): ${others || (port.required ? "nothing wired — this is an error" : "nothing wired")}`;
+    if (!edges.length && port.required) row.dataset.problem = "error";
+    return row;
+  }
+
+  function settingControl(node, setting) {
+    const value = node.config?.[setting.key];
+    if (setting.type === "boolean") {
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = value !== false;
+      box.addEventListener("change", () => { node.config[setting.key] = box.checked; touch(""); });
+      return field(setting.label, box, setting.help);
+    }
+    if (setting.type === "number") {
+      const input = document.createElement("input");
+      input.type = "number";
+      input.value = String(value ?? setting.default ?? 0);
+      if (setting.min !== undefined) input.min = String(setting.min);
+      if (setting.max !== undefined) input.max = String(setting.max);
+      input.addEventListener("change", () => {
+        const next = Number(input.value);
+        node.config[setting.key] = Number.isFinite(next) ? Math.max(setting.min ?? 0, Math.min(setting.max ?? 1e6, Math.round(next))) : setting.default;
+        input.value = String(node.config[setting.key]);
+        touch("");
+      });
+      return field(setting.label, input, setting.help);
+    }
+    if (setting.type === "enum") {
+      const select = document.createElement("select");
+      for (const option of setting.options) {
+        const item = document.createElement("option");
+        item.value = option;
+        item.textContent = option;
+        if (option === value) item.selected = true;
+        select.append(item);
+      }
+      select.addEventListener("change", () => { node.config[setting.key] = select.value; touch(""); });
+      return field(setting.label, select, setting.help);
+    }
+    if (setting.type === "map") {
+      const select = document.createElement("select");
+      const none = document.createElement("option");
+      none.value = "";
+      none.textContent = "— pick a brain map —";
+      select.append(none);
+      for (const map of state.maps) {
+        if (map.id === state.map.id) continue;
+        const item = document.createElement("option");
+        item.value = map.id;
+        item.textContent = map.name;
+        if (map.id === value) item.selected = true;
+        select.append(item);
+      }
+      select.addEventListener("change", () => { node.config[setting.key] = select.value; touch(""); });
+      const wrap = field(setting.label, select, setting.help);
+      if (value) {
+        const open = document.createElement("button");
+        open.type = "button";
+        open.className = "ghost mini";
+        open.textContent = "Open that map";
+        open.addEventListener("click", () => void load({ id: value }));
+        wrap.append(open);
+      }
+      return wrap;
+    }
+    if (setting.type === "kinds") {
+      const wrap = document.createElement("div");
+      wrap.className = "brains-field";
+      const name = document.createElement("span");
+      name.className = "brains-field-label";
+      name.textContent = setting.label;
+      wrap.append(name, note(setting.help, "brains-field-help"));
+      const chosen = new Set(Array.isArray(value) ? value : []);
+      for (const kind of state.catalog?.issueKinds ?? []) {
+        const row = document.createElement("label");
+        row.className = "brains-permission";
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = chosen.has(kind.kind);
+        box.disabled = kind.alwaysAsk || !kind.autoAnswerable;
+        box.addEventListener("change", () => {
+          const next = new Set(Array.isArray(node.config[setting.key]) ? node.config[setting.key] : []);
+          if (box.checked) next.add(kind.kind); else next.delete(kind.kind);
+          node.config[setting.key] = [...next];
+          touch("");
+        });
+        const text = document.createElement("span");
+        const label = document.createElement("b");
+        label.textContent = kind.label;
+        const detail = document.createElement("small");
+        detail.textContent = kind.alwaysAsk ? "Always yours to answer — this can never be automated."
+          : kind.autoAnswerable ? "The assistant may settle this one inside the retry budget."
+          : "Always asked: there is no safe automatic answer.";
+        text.append(label, detail);
+        row.append(box, text);
+        wrap.append(row);
+      }
+      return wrap;
+    }
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = String(value ?? "");
+    input.addEventListener("input", () => { node.config[setting.key] = clean(input.value, 400); state.dirty = true; renderToolbar(); });
+    return field(setting.label, input, setting.help);
+  }
+
+  function dangerRow(node) {
+    const row = document.createElement("div");
+    row.className = "brains-danger";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "ghost mini";
+    remove.textContent = "Delete this part";
+    remove.addEventListener("click", () => { select({ kind: "node", id: node.id }); deleteSelection(); });
+    row.append(remove);
+    return row;
+  }
+
+  function renderEdgeInspector(edge) {
+    if (!edge) return;
+    const from = nodeById(edge.from.node);
+    const to = nodeById(edge.to.node);
+    const head = document.createElement("div");
+    head.className = "brains-inspect-head";
+    const eyebrow = document.createElement("p");
+    eyebrow.className = "eyebrow";
+    eyebrow.textContent = "Wire";
+    const title = document.createElement("h3");
+    title.textContent = `${from?.title ?? edge.from.node} → ${to?.title ?? edge.to.node}`;
+    head.append(eyebrow, title);
+    el.inspector.append(head, note(`Out of ${edge.from.port}, into ${edge.to.port}.`));
+    const feedback = document.createElement("input");
+    feedback.type = "checkbox";
+    feedback.checked = edge.feedback === true;
+    feedback.addEventListener("change", () => {
+      if (feedback.checked) edge.feedback = true; else delete edge.feedback;
+      touch(feedback.checked ? "This wire now carries into the next pass." : "This wire runs in order again.");
+    });
+    el.inspector.append(field("Feedback wire", feedback, "A feedback wire closes a loop: what it carries lands on the next pass instead of making the map impossible to order."));
+    const row = document.createElement("div");
+    row.className = "brains-danger";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "ghost mini";
+    remove.textContent = "Delete this wire";
+    remove.addEventListener("click", () => deleteSelection());
+    row.append(remove);
+    el.inspector.append(row);
+  }
+
+  function renderMapInspector() {
+    const head = document.createElement("div");
+    head.className = "brains-inspect-head";
+    const eyebrow = document.createElement("p");
+    eyebrow.className = "eyebrow";
+    eyebrow.textContent = state.map.builtIn ? "Shipped pipeline" : "Brain map";
+    const name = document.createElement("input");
+    name.type = "text";
+    name.className = "brains-title-input";
+    name.value = state.map.name;
+    name.setAttribute("aria-label", "Map name");
+    name.addEventListener("input", () => { state.map.name = clean(name.value, 80) || "Untitled brain"; state.dirty = true; renderToolbar(); });
+    head.append(eyebrow, name);
+    el.inspector.append(head);
+
+    const description = document.createElement("textarea");
+    description.rows = 2;
+    description.value = state.map.description ?? "";
+    description.placeholder = "What this brain is for";
+    description.addEventListener("input", () => { state.map.description = clean(description.value, 240) || null; state.dirty = true; renderToolbar(); });
+    el.inspector.append(field("Description", description));
+    el.inspector.append(note("Select a part or a wire to see what it may do. Press Space on the canvas to search the parts."));
+
+    const grants = document.createElement("div");
+    grants.className = "brains-list";
+    const grantsHeading = document.createElement("h4");
+    grantsHeading.textContent = "What this map grants";
+    grants.append(grantsHeading, note("A part that needs reach this map does not grant is an error, not a quiet widening.", "brains-field-help"));
+    for (const item of state.catalog?.permissions ?? []) {
+      const needed = state.map.nodes.some((node) => typeOf(node.type)?.permissions.includes(item.key));
+      const row = document.createElement("label");
+      row.className = "brains-permission";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = state.map.grants.includes(item.key);
+      box.addEventListener("change", () => {
+        state.map.grants = box.checked ? [...new Set([...state.map.grants, item.key])] : state.map.grants.filter((key) => key !== item.key);
+        touch("");
+        renderInspector();
+      });
+      const text = document.createElement("span");
+      const label = document.createElement("b");
+      label.textContent = `${item.label}${needed ? " · needed" : ""}`;
+      const detail = document.createElement("small");
+      detail.textContent = item.detail;
+      text.append(label, detail);
+      row.append(box, text);
+      grants.append(row);
+    }
+    el.inspector.append(grants);
+
+    if (state.compiled?.gates) {
+      const gates = document.createElement("div");
+      gates.className = "brains-list";
+      const heading = document.createElement("h4");
+      heading.textContent = "What going live would move";
+      gates.append(heading);
+      for (const [key, gate] of Object.entries(state.catalog?.gates ?? {})) {
+        const value = state.compiled.gates[key];
+        const row = document.createElement("p");
+        row.className = "brains-gate-row";
+        row.textContent = value === null || value === undefined
+          ? `${gate.label}: this map says nothing, so it is left alone.`
+          : `${gate.label}: ${value === true ? "on" : value === false ? "off" : value}. ${gate.detail}`;
+        gates.append(row);
+      }
+      el.inspector.append(gates);
+    }
+
+    const stats = document.createElement("p");
+    stats.className = "brains-note quiet";
+    stats.textContent = `${state.map.nodes.length} parts · ${state.map.edges.length} wires · ${state.compiled?.feedback?.length ?? 0} feedback`;
+    el.inspector.append(stats);
+
+    if (state.map.builtIn) {
+      const row = document.createElement("div");
+      row.className = "brains-danger";
+      const reset = document.createElement("button");
+      reset.type = "button";
+      reset.className = "ghost mini";
+      reset.textContent = "Reset to the shipped pipeline";
+      reset.addEventListener("click", () => void resetMap());
+      row.append(reset);
+      el.inspector.append(row);
+    }
+  }
+
+  // ---- problems, toolbar, status ------------------------------------------------
+
+  function renderProblems() {
+    if (!el.problems) return;
+    el.problems.textContent = "";
+    const errors = state.problems.filter((item) => item.level === "error");
+    const warnings = state.problems.filter((item) => item.level === "warn");
+    if (!state.problems.length) {
+      el.problems.append(note(state.map ? "No problems. This map can go live." : "", "brains-problem ok"));
+      return;
+    }
+    for (const problem of [...errors, ...warnings].slice(0, 8)) {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "brains-problem";
+      row.dataset.level = problem.level;
+      row.textContent = problem.fix ? `${problem.text} ${problem.fix}` : problem.text;
+      row.addEventListener("click", () => {
+        if (problem.nodeId) select({ kind: "node", id: problem.nodeId });
+        else if (problem.edgeId) select({ kind: "edge", id: problem.edgeId });
+        scrollTo(problem.nodeId);
+      });
+      el.problems.append(row);
+    }
+    if (state.problems.length > 8) el.problems.append(note(`…and ${state.problems.length - 8} more.`, "brains-problem"));
+  }
+
+  function scrollTo(nodeId) {
+    const node = nodeById(nodeId);
+    if (!node || !el.canvasWrap) return;
+    el.canvasWrap.scrollTo({ left: Math.max(0, node.x - 200), top: Math.max(0, node.y - 160), behavior: "smooth" });
+  }
+
+  function renderToolbar() {
+    if (el.switcher) {
+      el.switcher.textContent = "";
+      for (const map of state.maps) {
+        const option = document.createElement("option");
+        option.value = map.id;
+        option.textContent = `${map.name}${map.id === state.activeId ? " · live" : ""}${map.ok ? "" : ` · ${map.errors} problem${map.errors === 1 ? "" : "s"}`}`;
+        if (state.map && map.id === state.map.id) option.selected = true;
+        el.switcher.append(option);
+      }
+    }
+    const live = state.map && state.map.id === state.activeId;
+    if (el.save) el.save.disabled = state.busy || !state.map || !state.dirty;
+    if (el.activate) {
+      el.activate.disabled = state.busy || !state.map || live || state.problems.some((item) => item.level === "error");
+      el.activate.textContent = live ? "This map is live" : "Make this live";
+    }
+    if (el.deleteMap) el.deleteMap.disabled = state.busy || !state.map || state.map.builtIn;
+    if (el.dirty) el.dirty.hidden = !state.dirty;
+    if (el.liveTag) {
+      el.liveTag.hidden = !live;
+      el.liveTag.textContent = live ? "Live pipeline" : "";
+    }
+  }
+
+  function status(text, tone = "") {
+    if (!el.status) return;
+    el.status.textContent = text;
+    el.status.dataset.tone = tone;
+  }
+
+  function renderAll() {
+    renderParts();
+    renderCanvas();
+    renderInspector();
+    renderProblems();
+    renderToolbar();
+  }
+
+  // ---- host actions -------------------------------------------------------------
+
+  async function save() {
+    const api = bridge();
+    if (!api?.brainsSave || !state.map || state.busy) return;
+    state.busy = true;
+    renderToolbar();
+    try {
+      const result = await api.brainsSave(state.map);
+      if (!result?.ok) { status(result?.error ?? "That map could not be saved.", "warn"); return; }
+      state.map = result.map;
+      state.compiled = result.compiled ?? null;
+      state.problems = result.compiled?.problems ?? [];
+      state.dirty = false;
+      const list = await api.brainsState();
+      state.maps = list?.maps ?? state.maps;
+      state.activeId = list?.activeId ?? state.activeId;
+      status(`Saved "${state.map.name}".`);
+    } catch (error) {
+      status(`Could not save: ${error.message}`, "warn");
+    } finally {
+      state.busy = false;
+      renderAll();
+    }
+  }
+
+  // Activating moves real switches, so the owner sees the list first and says
+  // yes to it. Nothing about a map is applied behind their back.
+  async function activate() {
+    const api = bridge();
+    if (!api?.brainsActivate || !state.map || state.busy) return;
+    if (state.dirty) await save();
+    let plan = null;
+    try { plan = await api.brainsGatePlan(state.map.id); } catch { plan = null; }
+    const moves = plan?.moves ?? [];
+    const summary = moves.length
+      ? moves.map((move) => `• ${move.label}: ${describeGate(move.from)} → ${describeGate(move.to)}`).join("\n")
+      : "• nothing — the switches already match this map";
+    const confirmed = window.confirm(`Make "${state.map.name}" the live pipeline?\n\nThis moves:\n${summary}\n\nThe decision rules in it apply to the next issue an agent raises.`);
+    if (!confirmed) { status("Left the live pipeline as it was."); return; }
+    state.busy = true;
+    renderToolbar();
+    try {
+      const result = await api.brainsActivate(state.map.id, { applyGates: true });
+      if (!result?.ok) { status(result?.error ?? "That map could not go live.", "warn"); return; }
+      state.activeId = state.map.id;
+      status(result.moved?.length ? `"${state.map.name}" is live · moved ${result.moved.join(", ")}.` : `"${state.map.name}" is live.`);
+      await load({ id: state.map.id, keepSelection: true });
+    } catch (error) {
+      status(`Could not activate: ${error.message}`, "warn");
+    } finally {
+      state.busy = false;
+      renderToolbar();
+    }
+  }
+
+  const describeGate = (value) => (value === true ? "on" : value === false ? "off" : value === null || value === undefined ? "untouched" : String(value));
+
+  async function newMap({ from = null } = {}) {
+    const api = bridge();
+    if (!api?.brainsSave) return;
+    const name = window.prompt(from ? "Name for the copy" : "Name for the new brain map", from ? `${from.name} copy` : "New brain");
+    if (!name) return;
+    const id = `map_${Date.now().toString(36)}`;
+    const map = from
+      ? { ...structuredClone(from), id, name: clean(name, 80), builtIn: false, active: false }
+      : { schema: 1, id, name: clean(name, 80), description: null, builtIn: false, active: false, grants: [], nodes: [], edges: [] };
+    state.busy = true;
+    try {
+      const result = await api.brainsSave({ ...map, allowEmpty: true });
+      if (!result?.ok) { status(result?.error ?? "That map could not be created.", "warn"); return; }
+      await load({ id: result.map.id });
+      status(from ? `Copied to "${result.map.name}".` : `Created "${result.map.name}". Press Space on the canvas to add its first part.`);
+    } finally {
+      state.busy = false;
+      renderToolbar();
+    }
+  }
+
+  async function removeMap() {
+    const api = bridge();
+    if (!api?.brainsDelete || !state.map || state.map.builtIn) return;
+    if (!window.confirm(`Delete "${state.map.name}"? This cannot be undone.`)) return;
+    const result = await api.brainsDelete(state.map.id);
+    if (!result?.ok) { status(result?.error ?? "That map could not be deleted.", "warn"); return; }
+    await load({ id: null });
+    status("Deleted.");
+  }
+
+  async function resetMap() {
+    const api = bridge();
+    if (!api?.brainsReset || !state.map?.builtIn) return;
+    if (!window.confirm("Reset this map to the shipped pipeline? Your changes to it are lost.")) return;
+    const result = await api.brainsReset(state.map.id);
+    if (!result?.ok) { status(result?.error ?? "That map could not be reset.", "warn"); return; }
+    await load({ id: state.map.id });
+    status("Reset to the shipped pipeline.");
+  }
+
+  async function draft() {
+    const api = bridge();
+    if (!api?.brainsDraft || state.busy) return;
+    const text = window.prompt("What should this brain do?\n\nThe assistant drafts it from the same parts catalog; you review the result before anything is saved.");
+    if (!text) return;
+    state.busy = true;
+    status("Drafting…");
+    renderToolbar();
+    try {
+      const result = await api.brainsDraft(text);
+      if (!result?.ok) { status(result?.error ?? "The draft failed.", "warn"); return; }
+      state.map = result.map;
+      state.compiled = result.compiled ?? null;
+      state.problems = result.compiled?.problems ?? [];
+      state.dirty = true;
+      state.selection = null;
+      status(`Drafted${result.model ? ` by ${result.model}` : ""}. Nothing is saved yet — read it, fix what it got wrong, then Save.`);
+    } catch (error) {
+      status(`Could not draft: ${error.message}`, "warn");
+    } finally {
+      state.busy = false;
+      renderAll();
+    }
+  }
+
+  // ---- open / close -------------------------------------------------------------
+
+  async function open(params = {}) {
+    if (!initialized) init();
+    window.MefiNav?.claim?.("brains");
+    el.overlay.hidden = false;
+    await load({ id: typeof params?.mapId === "string" ? params.mapId : null });
+    if (params?.nodeType) {
+      const node = state.map?.nodes.find((item) => item.type === params.nodeType);
+      if (node) { select({ kind: "node", id: node.id }); scrollTo(node.id); }
+    }
+    el.canvasWrap?.focus?.({ preventScroll: true });
+  }
+
+  function close() {
+    if (!el.overlay || el.overlay.hidden) return;
+    if (state.dirty && !window.confirm("This brain map has unsaved changes. Close anyway?")) return;
+    el.overlay.hidden = true;
+    closeSearch();
+    window.MefiNav?.release?.("brains");
+  }
+
+  // ---- input --------------------------------------------------------------------
+
+  function onCanvasPointerDown(event) {
+    const port = event.target?.closest?.(".brains-port");
+    if (port) return;
+    const head = event.target?.closest?.(".brains-node-head");
+    const box = event.target?.closest?.(".brains-node");
+    if (!box) {
+      if (event.target === el.canvas || event.target === el.canvasWrap) {
+        state.pending = null;
+        select(null);
+      }
+      return;
+    }
+    select({ kind: "node", id: box.dataset.node });
+    if (!head) return;
+    const node = nodeById(box.dataset.node);
+    if (!node) return;
+    state.drag = { id: node.id, dx: event.clientX - box.getBoundingClientRect().left, dy: event.clientY - box.getBoundingClientRect().top };
+    box.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  }
+
+  function onCanvasPointerMove(event) {
+    if (!state.drag) return;
+    const node = nodeById(state.drag.id);
+    if (!node) return;
+    const rect = el.canvas.getBoundingClientRect();
+    node.x = Math.max(0, Math.round((event.clientX - rect.left - state.drag.dx) / GRID) * GRID);
+    node.y = Math.max(0, Math.round((event.clientY - rect.top - state.drag.dy) / GRID) * GRID);
+    state.dirty = true;
+    renderCanvas();
+  }
+
+  function onCanvasPointerUp() {
+    if (!state.drag) return;
+    state.drag = null;
+    renderToolbar();
+  }
+
+  function onCanvasClick(event) {
+    const port = event.target?.closest?.(".brains-port");
+    if (port) { clickPort(port); return; }
+    const wire = event.target?.closest?.(".brains-wire");
+    if (wire) { select({ kind: "edge", id: wire.dataset.edge }); return; }
+  }
+
+  function typing(target) {
+    return Boolean(target?.closest?.("input, textarea, select, [contenteditable]"));
+  }
+
+  function onKey(event) {
+    if (!el.overlay || el.overlay.hidden) return;
+    if (state.search.open) {
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeSearch(); return; }
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        state.search.index += event.key === "ArrowDown" ? 1 : -1;
+        renderSearch();
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const part = searchMatches()[state.search.index];
+        if (part) { addNode(part.type, state.search.at); closeSearch(); }
+        return;
+      }
+      return;
+    }
+    if (typing(event.target)) return;
+    if (event.key === " " || event.code === "Space") {
+      event.preventDefault();
+      event.stopPropagation();
+      openSearch();
+      return;
+    }
+    if (event.key === "Escape" && state.pending) {
+      event.preventDefault();
+      event.stopPropagation();
+      state.pending = null;
+      status("Wire cancelled.");
+      renderCanvas();
+      return;
+    }
+    if ((event.key === "Delete" || event.key === "Backspace") && state.selection) {
+      event.preventDefault();
+      event.stopPropagation();
+      deleteSelection();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+      event.preventDefault();
+      event.stopPropagation();
+      void save();
+    }
+  }
+
+  function init() {
+    if (initialized) return;
+    initialized = true;
+    for (const [key, id] of Object.entries({
+      overlay: "brains-overlay", canvas: "brains-canvas", canvasWrap: "brains-canvas-wrap", wires: "brains-wires",
+      inspector: "brains-inspector", partsList: "brains-parts-list", partsSearch: "brains-parts-search",
+      problems: "brains-problems", status: "brains-status", switcher: "brains-switcher", save: "brains-save",
+      activate: "brains-activate", newMap: "brains-new", duplicate: "brains-duplicate", deleteMap: "brains-delete",
+      draft: "brains-draft", close: "brains-close", search: "brains-search", searchInput: "brains-search-input",
+      searchList: "brains-search-list", searchHint: "brains-search-hint", dirty: "brains-dirty", liveTag: "brains-live",
+    })) el[key] = document.getElementById(id);
+    if (!el.overlay) return;
+    el.close?.addEventListener("click", close);
+    el.overlay.addEventListener("click", (event) => { if (event.target === el.overlay) close(); });
+    el.save?.addEventListener("click", () => void save());
+    el.activate?.addEventListener("click", () => void activate());
+    el.newMap?.addEventListener("click", () => void newMap());
+    el.duplicate?.addEventListener("click", () => void newMap({ from: state.map }));
+    el.deleteMap?.addEventListener("click", () => void removeMap());
+    el.draft?.addEventListener("click", () => void draft());
+    el.switcher?.addEventListener("change", () => void load({ id: el.switcher.value }));
+    el.partsSearch?.addEventListener("input", () => { state.partsQuery = el.partsSearch.value; renderParts(); });
+    el.canvas?.addEventListener("pointerdown", onCanvasPointerDown);
+    el.canvas?.addEventListener("click", onCanvasClick);
+    el.wires?.addEventListener("click", onCanvasClick);
+    window.addEventListener("pointermove", onCanvasPointerMove);
+    window.addEventListener("pointerup", onCanvasPointerUp);
+    el.canvasWrap?.addEventListener("dblclick", (event) => {
+      if (event.target !== el.canvas && event.target !== el.canvasWrap) return;
+      const rect = el.canvas.getBoundingClientRect();
+      openSearch({ x: Math.round((event.clientX - rect.left) / GRID) * GRID, y: Math.round((event.clientY - rect.top) / GRID) * GRID });
+    });
+    el.searchInput?.addEventListener("input", () => { state.search.query = el.searchInput.value; state.search.index = 0; renderSearch(); });
+    el.search?.addEventListener("click", (event) => { if (event.target === el.search) closeSearch(); });
+    document.addEventListener("keydown", onKey, true);
+    bridge()?.onBrains?.((payload) => {
+      if (!payload?.maps) return;
+      state.maps = payload.maps;
+      state.activeId = payload.activeId ?? state.activeId;
+      renderToolbar();
+    });
+  }
+
+  window.MefiBrains = { open, close, isOpen: () => Boolean(el.overlay && !el.overlay.hidden) };
+  if (typeof document !== "undefined") {
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+    else init();
+  }
 })();
 
 // Mefi's Studio AI+ — command palette (Ctrl/Cmd+K).
