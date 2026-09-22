@@ -25,6 +25,38 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Green exit-0 full `npm test` gate for the parent integration-gate chain
+(2026-09-22, 10:27–10:29, run_1790090677908_4 for task_0b1780b06ba74eb0).
+This is the settled-tree rerun the previous attempt (run_1790040270702_1:
+2 deterministic usage-HUD failures, serialized/python stages unreached)
+owed. The usage-HUD work has long since landed; the only in-flight sibling
+session (monitor-loop: main.cjs, tests/executor_lifecycle.test.mjs,
+tests/fixtures/host_executor.mjs, docs/agent-loop.md, CHANGELOG.md, new
+tools/monitor_loop.mjs) was quiet — last source write 10:06, run launched
+10:27:57, the runner's settle preflight passed, and no mid-run source-drift
+diagnosis fired. Preconditions: no sibling suite in flight (only MCP-proxy
+node/python processes, no electron processes at all), CPU ~21%, free RAM
+0.31 GB — a floor prior green gates have passed below. Result: exit 0 —
+node stage 173 suites (9 launching Electron), parallel 1958 tests /
+1955 pass / 0 fail / 3 skipped in 38.0 s (the documented
+environment-conditional skips; the count grew 1937 → 1958 with the
+sibling's in-flight suite additions, all green on this tree); serialized
+eyes_toggle_electron 1/1 in 3.4 s (baseline 2 fetches/298 ms, hidden
+0/1200 ms, one resume snap, fetch gaps 297-1266 ms, 6 fetches total);
+serialized occlusion_probe took its documented capability-gated skip
+(cover shown focused but visibility never flipped within 15 s — the
+expected table row on this desktop, not a regression); Python contracts
+"Ran 246 tests ... OK" in 30.0 s; normalized-path lock "all checks
+passed". `npm run check` exit 0 on the same tree (100 targets, 200 specs,
+all selectors used, syntax ok), and the run left the working tree
+byte-identical: the same six sibling paths in git status before and after,
+nothing staged, nothing clobbered, no source edits by this run. Full log:
+%TEMP%\opencode\gate-0b1780\test-run1.log (386 KB). This row is the
+citable exit-0 gate artifact task_6672802f6623e7bd ("Resolve TESTRUNS and
+booklet collisions", acceptance: npm test passes) needs; the card flip
+itself stays with Studio per the no-store-writes rule, as does the
+still-open child task_0c78fba13bc152a1 (TESTRUNS/test-file side).
+
 Staged-index sweep advice closed for restarts, and the stale landing
 note corrected (2026-09-22, ~14:5x, run_1790087682481_6 for
 task_7247a03061fd07b9 "Feed the staged-sweep warning into the next
