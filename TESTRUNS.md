@@ -29,6 +29,10 @@ only above the anchor (decision recorded 2026-09-22, pinned by
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - TESTRUNS append helper verified, field/JSON input added: contracts 13/13, check green (task_delegate_b4f73d934d18f69906d57de9, run_1790109315655_2)
+
+Verification pass on a7dfa70: the commit touched exactly scripts/append-testruns-row.mjs, tests/append_testruns_row.test.mjs and one row - the verifier snapshot changedFiles: 6 was sibling sessions dirt in the shared tree, not scope creep. Anchor direction re-confirmed against the pinned layout: the live newest-first region sits ABOVE the Read Before Any Tests anchor and the archive below it is blessed (check-testruns.mjs header decision, pinned by tests/check_testruns.test.mjs), so the acceptance wording below-the-anchor is inverted and the helper true-top target is correct. Closed the one real gap against the brief this pass: rows can now arrive as fields - a JSON object via stdin, --file, or one argument, or --date/--daypart/--title/--task/--run/--body flags - formatted into the canonical house row shape and audited by the same check-testruns gate; this very row was inserted through that stdin-JSON path. Checks: node --test tests/append_testruns_row.test.mjs 13/13 (11 prior plus field-flags/JSON and real-stdin contracts), node --test tests/check_testruns.test.mjs 9/9, npm run check green including the testruns gate.
+
 ## 2026-09-22 late evening - TESTRUNS append helper hardened with read-verify-write: a mid-run concurrent edit now aborts non-zero with no write instead of being clobbered; contracts 11/11 (task_delegate_b4f73d934d18f69906d57de9, run_1790108056387_13)
 
 The committed helper (76ee209) already did lock-serialized atomic newest-first

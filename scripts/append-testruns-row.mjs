@@ -9,7 +9,10 @@
 // writer aborts non-zero with no write instead of being clobbered), writes
 // temp-file + rename so readers never see a torn file, and rolls back if the
 // gate audit would fail afterwards. Rows are supplied as one quoted argument,
-// a --file path, or stdin; --dry-run reports the landing spot without writing.
+// a --file path, or stdin - either a full pre-built block or, when the text
+// parses as a JSON object / arrives as --date/--title/... flags, as fields
+// formatted into the canonical row shape the gate audits; --dry-run reports
+// the landing spot without writing.
 import { closeSync, copyFileSync, existsSync, fsyncSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { basename, dirname, join, resolve } from "node:path";
@@ -97,6 +100,52 @@ function atomicReplace(target, buf) {
 }
 
 const chomp = (line) => (line.endsWith("\r") ? line.slice(0, -1) : line);
+
+// Field-based input: the row may arrive as a JSON object (stdin, --file, or a
+// quoted argument) or as individual CLI flags, instead of a pre-built block.
+// Formatting follows the house row shape the check-testruns gate audits:
+// "## YYYY-MM-DD <daypart> - <title> (<task>, <run>)" plus body prose.
+const ROW_FIELDS = ["date", "daypart", "title", "task", "run", "body"];
+
+export function rowFromFields(fields) {
+  if (!fields || typeof fields !== "object" || Array.isArray(fields)) {
+    throw new Error("append-testruns-row: row fields must be a JSON object");
+  }
+  for (const key of Object.keys(fields)) {
+    if (!ROW_FIELDS.includes(key)) {
+      throw new Error(`append-testruns-row: unknown row field "${key}" (allowed: ${ROW_FIELDS.join(", ")})`);
+    }
+  }
+  const date = String(fields.date ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new Error(`append-testruns-row: field "date" must be YYYY-MM-DD, got: ${date || "(missing)"}`);
+  }
+  const title = String(fields.title ?? "").trim();
+  if (!title) throw new Error('append-testruns-row: field "title" is required');
+  const daypart = fields.daypart ? ` ${String(fields.daypart).trim()}` : "";
+  const bits = [];
+  if (fields.task) bits.push(String(fields.task).trim());
+  if (fields.run) bits.push(String(fields.run).trim());
+  const suffix = bits.length > 0 ? ` (${bits.join(", ")})` : "";
+  const body = String(fields.body ?? "").replace(/\r\n/g, "\n").replace(/\s+$/, "");
+  return `## ${date}${daypart} - ${title}${suffix}\n${body ? `\n${body}\n` : ""}`;
+}
+
+// A block must start with "## ", so leading "{" unambiguously means a JSON
+// field spec; anything else is a pre-built block passed through untouched.
+function coerceBlock(text, sourceLabel) {
+  const raw = String(text).replace(/^\uFEFF/, "");
+  if (raw.trimStart().startsWith("{")) {
+    let obj;
+    try {
+      obj = JSON.parse(raw);
+    } catch (err) {
+      throw new Error(`append-testruns-row: ${sourceLabel} looks like JSON but does not parse: ${err.message}`);
+    }
+    return rowFromFields(obj);
+  }
+  return raw;
+}
 
 // Pure planning pass: validate the block, locate the live region, and pick
 // the splice index that keeps it newest-first. Works on raw split lines so a
@@ -218,16 +267,21 @@ export function appendTestrunsRow(packageRoot, blockText, { dryRun = false } = {
 
 const USAGE = `usage: node scripts/append-testruns-row.mjs [options] [row block]
 
-  --file <path|->  read the row block from a file, or "-" for stdin
+  --file <path|->  read the row from a file, or "-" for stdin
   --root <dir>     package root holding TESTRUNS.md (default: this repo)
   --dry-run        report where the row would land without writing
   --help           this help
 
+Row fields as flags (mutually exclusive with a positional block):
+  --date YYYY-MM-DD [--daypart "late evening"] --title "..." [--task id]
+  [--run runId] [--body "..."]       (or the same fields as one JSON object
+  via a positional argument, --file, or stdin)
+
 The block must start with a "## YYYY-MM-DD ..." heading followed by the row
-body. It is inserted so the live region stays newest-first, under a
-cross-process lock, with the snapshot re-verified right before an atomic
-write (temp file + rename): a concurrent mid-run edit aborts with a non-zero
-exit and no write. The result is then verified with the
+body (built for you when fields are given). It is inserted so the live region
+stays newest-first, under a cross-process lock, with the snapshot re-verified
+right before an atomic write (temp file + rename): a concurrent mid-run edit
+aborts with a non-zero exit and no write. The result is then verified with the
 scripts/check-testruns.mjs rules; on any post-write problem the file is
 rolled back byte-for-byte. Refuses to run while the gate already flags the
 file (duplicate headings, conflict copies, malformed tail).`;
@@ -236,6 +290,8 @@ export function main(argv = process.argv.slice(2)) {
   let rootOpt = null;
   let fileOpt = null;
   let dryRun = false;
+  const fieldFlags = {};
+  let sawFieldFlag = false;
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -246,22 +302,41 @@ export function main(argv = process.argv.slice(2)) {
     if (a === "--root") rootOpt = argv[++i];
     else if (a === "--file") fileOpt = argv[++i];
     else if (a === "--dry-run") dryRun = true;
-    else if (a.startsWith("--")) {
+    else if (ROW_FIELDS.includes(a.slice(2))) {
+      fieldFlags[a.slice(2)] = argv[++i];
+      sawFieldFlag = true;
+    } else if (a.startsWith("--")) {
       console.error(`append-testruns-row: unknown option ${a}\n${USAGE}`);
       return 2;
     } else rest.push(a);
   }
-  let block;
-  if (rest.length > 1) {
-    console.error(`append-testruns-row: expected one row block (quote it or use --file), got ${rest.length} arguments`);
+  if (sawFieldFlag && rest.length > 0) {
+    console.error("append-testruns-row: row fields as flags cannot be combined with a positional block");
     return 2;
   }
-  if (rest.length === 1) block = rest[0];
+  let block;
+  if (sawFieldFlag) {
+    try {
+      block = rowFromFields(fieldFlags);
+    } catch (err) {
+      console.error(err.message);
+      return 2;
+    }
+  } else if (rest.length > 1) {
+    console.error(`append-testruns-row: expected one row block (quote it or use --file), got ${rest.length} arguments`);
+    return 2;
+  } else if (rest.length === 1) block = rest[0];
   else if (fileOpt) block = fileOpt === "-" ? readFileSync(0, "utf8") : readFileSync(fileOpt, "utf8");
   else if (process.stdin.isTTY) {
     console.error(USAGE);
     return 2;
   } else block = readFileSync(0, "utf8");
+  try {
+    block = coerceBlock(block, fileOpt === "-" || (!fileOpt && !sawFieldFlag && rest.length === 0) ? "stdin" : fileOpt ? `file ${fileOpt}` : "argument");
+  } catch (err) {
+    console.error(err.message);
+    return 1;
+  }
 
   const packageRoot = rootOpt ? resolve(rootOpt) : resolve(dirname(fileURLToPath(import.meta.url)), "..");
   try {

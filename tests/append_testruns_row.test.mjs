@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { appendTestrunsRow, lockPathFor, main, planInsertion } from "../scripts/append-testruns-row.mjs";
+import { appendTestrunsRow, lockPathFor, main, planInsertion, rowFromFields } from "../scripts/append-testruns-row.mjs";
 import { auditTestruns } from "../scripts/check-testruns.mjs";
 
 const scriptPath = fileURLToPath(new URL("../scripts/append-testruns-row.mjs", import.meta.url));
@@ -223,6 +223,58 @@ test("two concurrent CLI appends both survive under the lock, newest-first", asy
     assert.deepEqual(auditTestruns(root).problems, []);
   } finally {
     cleanup(root, blocks);
+  }
+});
+
+test("field flags and JSON specs both format the canonical house row shape", () => {
+  const root = makeFixture();
+  const blocks = mkdtempSync(join(tmpdir(), "append-testruns-blocks-"));
+  try {
+    // Flags build the same block rowFromFields produces for the JSON object.
+    const fields = { date: "2026-09-22", daypart: "late evening", title: "field-fed run", task: "task_x", run: "run_y", body: "Field body." };
+    const expected = rowFromFields(fields);
+    assert.ok(expected.startsWith("## 2026-09-22 late evening - field-fed run (task_x, run_y)\n\nField body.\n"), `canonical heading shape, got: ${expected.split("\n")[0]}`);
+    assert.equal(main(["--root", root, "--date", "2026-09-22", "--daypart", "late evening", "--title", "field-fed run", "--task", "task_x", "--run", "run_y", "--body", "Field body."]), 0);
+    assert.ok(read(root).includes(expected.trimEnd()), "flag-fed row landed");
+    // The same fields as a JSON object via --file land identically on a second row.
+    writeFileSync(join(blocks, "row.json"), `${JSON.stringify({ ...fields, title: "json-fed run", date: "2026-09-23" })}\n`);
+    assert.equal(main(["--root", root, "--file", join(blocks, "row.json")]), 0);
+    const lines = read(root).split("\n");
+    const jsonIdx = lines.indexOf("## 2026-09-23 late evening - json-fed run (task_x, run_y)");
+    const flagIdx = lines.indexOf("## 2026-09-22 late evening - field-fed run (task_x, run_y)");
+    assert.ok(jsonIdx !== -1 && flagIdx !== -1 && jsonIdx < flagIdx, "json-fed newer row sits above the flag-fed one");
+    assert.deepEqual(auditTestruns(root).problems, []);
+    // Malformed field specs are refused with no write.
+    const pristine = readFileSync(join(root, "TESTRUNS.md"), "utf8");
+    assert.throws(() => rowFromFields({ title: "no date" }), /date.*YYYY-MM-DD/);
+    assert.throws(() => rowFromFields({ date: "2026-09-22" }), /title.*required/);
+    assert.throws(() => rowFromFields({ date: "2026-09-22", title: "x", nope: 1 }), /unknown row field/);
+    writeFileSync(join(blocks, "bad.json"), "{ not json");
+    assert.equal(main(["--root", root, "--file", join(blocks, "bad.json")]), 1);
+    assert.equal(main(["--root", root, "--date", "2026-09-22", "leftover positional"]), 2);
+    assert.equal(readFileSync(join(root, "TESTRUNS.md"), "utf8"), pristine, "refusals left the file byte-identical");
+  } finally {
+    cleanup(root, blocks);
+  }
+});
+
+test("a JSON row spec piped on real stdin inserts through the CLI", async () => {
+  const root = makeFixture();
+  try {
+    const spec = JSON.stringify({ date: "2026-09-22", title: "stdin json run", body: "Piped body." });
+    const { code, out } = await new Promise((res) => {
+      const child = spawn(process.execPath, [scriptPath, "--root", root, "--file", "-"]);
+      let stdout = "";
+      child.stdout.on("data", (d) => (stdout += d));
+      child.stderr.on("data", (d) => (stdout += d));
+      child.on("close", (c) => res({ code: c, out: stdout }));
+      child.stdin.end(spec);
+    });
+    assert.equal(code, 0, out);
+    assert.ok(read(root).includes("## 2026-09-22 - stdin json run"), "stdin JSON spec landed as a canonical row");
+    assert.deepEqual(auditTestruns(root).problems, []);
+  } finally {
+    cleanup(root);
   }
 });
 
