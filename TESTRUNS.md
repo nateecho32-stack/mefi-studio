@@ -25,6 +25,34 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Staged-index sweep advice closed for restarts, and the stale landing
+note corrected (2026-09-22, ~14:5x, run_1790087682481_6 for
+task_7247a03061fd07b9 "Feed the staged-sweep warning into the next
+dispatch", retry on the owner's note). Verified first: the previous
+run's "main.cjs stays uncommitted" claim was already stale — a16b752
+had swept the producer/consumer into the tree 23 s before the test
+commit 1567a16, and d9cfc8c landed the row below, so "land the hunk"
+needed no new commit. The retry's real gap was restart coverage: the
+parked warning map is in-memory, so a Studio restart dropped it.
+Chose the dispatch-time gitPorcelain probe over a file-backed store —
+the index itself is the durable signal, so when no fresh parked entry
+exists the dispatch probe re-derives the same CAUTION advice straight
+from git ("the index currently holds ... BEFORE editing"); the
+production probe is spawnSync, so no await joins the gate path, and
+async git observation (the vm test hosts) rides the same await.
+Updated the two prior cases (a staged index at dispatch now warns;
+the aged-out case heals the porcelain to model a healed repo) and
+added the restart case (map wiped as a restart would, probe still
+advises; the probe reads git, never touches the map). Narrow gate:
+`node --test tests/executor_end_to_end.test.mjs` solo 18/18 pass,
+exit 0. Sliced neighbors green in one invocation (executor_lifecycle +
+executor_parallel + backlog_engine + planning_execution: 53/53).
+`npm run check` green (100 targets, no collisions, syntax ok). The
+main.cjs probe hunk rode the sibling worktree session's path-limited
+landing e3ad851 (its whole-file commit carried the already-in-place
+probe alongside its own wiring); this commit adds the updated cases
+and this row.
+
 Sweep-advice change verified end to end for task_7247a03061fd07b9
 (2026-09-22, ~14:2x, run_1790086311775_18 "Feed the staged-sweep warning
 into the next dispatch"). The finish()-time sweep now parks its

@@ -46,7 +46,7 @@ test("a finish-time staged-index warning rides exactly the next dispatch in that
   // controlled moment: after the sweep arms, after the index heals, etc.
   const h = executorHost({ tasks: [task("first"), task("second", { dependsOn: ["first"], createdAt: 2 }), task("third", { dependsOn: ["first"], createdAt: 3 })], gitStage: "M  src/swept.js\n" });
   h.wake(); await h.pump();
-  assert.ok(!/CAUTION shared git index/.test(h.starts[0].child.prompt), "a clean history carries no sweep advice");
+  assert.match(h.starts[0].child.prompt, /CAUTION shared git index: the index currently holds staged-but-uncommitted file\(s\) \(src\/swept\.js\)/, "the dispatch-time probe warns about a staged index even with no parked warning");
   await h.finish("first"); await h.pump();
   assert.equal(h.autopilot.stagedIndexWarnings?.size, 1, "the finish sweep parks the warning on the dispatcher");
   // The index heals from here on: later runs' finish sweeps must not re-arm.
@@ -64,9 +64,26 @@ test("a staged-index warning older than half an hour is dropped instead of advis
   const h = executorHost({ tasks: [task("first"), task("second", { dependsOn: ["first"], createdAt: 2 })], gitStage: "M  src/swept.js\n" });
   h.wake(); await h.pump();
   await h.finish("first"); await h.pump();
+  // Healed AND aged out: the index no longer holds the staged files and the
+  // parked entry is past its window, so neither path advises.
+  const baseEyes = await h.env.getEyes();
+  h.env.getEyes = async () => ({ ...baseEyes, gitPorcelain: async () => "" });
   h.advance(31 * 60 * 1000); h.wake(); await h.pump();
   assert.ok(!/CAUTION shared git index/.test(h.starts[1].child.prompt), "stale warnings age out");
   assert.equal(h.autopilot.stagedIndexWarnings?.size, 0, "the stale entry is consumed, not left behind");
+});
+
+test("staged-index advice survives a dispatcher restart through the dispatch-time porcelain probe", async () => {
+  const h = executorHost({ tasks: [task("first"), task("second", { dependsOn: ["first"], createdAt: 2 })], gitStage: "M  src/swept.js\n" });
+  h.wake(); await h.pump();
+  await h.finish("first"); await h.pump();
+  assert.equal(h.autopilot.stagedIndexWarnings?.size, 1, "the warning is parked before the restart");
+  // A Studio restart drops the in-memory map; the staged files survive it.
+  h.autopilot.stagedIndexWarnings = new Map();
+  h.advance(31000); h.wake(); await h.pump();
+  assert.match(h.starts[1].child.prompt, /CAUTION shared git index: the index currently holds staged-but-uncommitted file\(s\) \(src\/swept\.js\)/, "the probe re-derives the warning the restart dropped");
+  assert.match(h.starts[1].child.prompt, /BEFORE editing/);
+  assert.equal(h.autopilot.stagedIndexWarnings?.size, 0, "the probe reads git, it does not touch the map");
 });
 
 test("manual Pause remains durable through a completing job, repeated wakes and expired breaker time", async () => {
