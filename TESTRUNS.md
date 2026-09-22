@@ -25,6 +25,26 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - stale auth-split-uncommitted alert re-closed first-hand: 2457a7d re-verified in HEAD, narrow auth gates 14/14 actually run this time, check green (run_1790103952563_8)
+
+Retry of run_1790103450505_24 (row b14140e) after "verification: outstanding
+obligations remain" - that row's gap was that only `npm run check` ran, never
+the auth suite itself. Everything re-checked first-hand, not from reports:
+`git show --stat 2457a7d` still carries the full auth split (8 files -
+scripts/auth-store.cjs +93, tests/auth_split.test.mjs +94, the main.cjs split
+diff, GETTING_STARTED, SECURITY, architecture, first-run-opencode,
+pi-provider-storage) and `git log --oneline -- scripts/auth-store.cjs` resolves
+to it; every auth-split path is tracked and byte-clean in the worktree (the
+modified files still outstanding - main.cjs 34+/20-, executor/task-context
+scripts and tests - are sibling in-flight drift, left untouched, nothing
+staged). The obligation that sank the last run is now discharged with a real
+run: `node --test tests/auth_split.test.mjs tests/env_credentials.test.mjs` ->
+14 tests / 14 pass / 0 fail, exit 0, against HEAD a32c1d5 plus the sibling
+drift (auth split unaffected by it). Fresh `npm run check` -> exit 0 (targets
+101, specs 205, no collisions, all selectors used, syntax 101 files). No
+auth-split file was uncommitted, so nothing code-side to land; this commit
+adds only this row.
+
 ## 2026-09-22 late evening - quiet-tree gate card closes clean: both handoffs settled, 6a9a299 re-verified in HEAD, check green (task_5e0a126238bab8fb, run run_1790103861088_5)
 
 Retry after "unverified - outstanding obligations remain": the two handoffs
