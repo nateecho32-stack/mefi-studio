@@ -25,6 +25,29 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - third split retry honors the twice-recorded split decision; no re-ask, repo side independently green at c2ced15 (task_fece4ffd34e38932, run run_1790103149788_14)
+
+The card cycled twice on owner "split the extra work out" decisions
+(1790101914614, 1790102966700); the split is honored, not re-litigated: the
+extra work lives on the carrier task_261f3a1af9aeda2d, whose own retry row
+(78340ff) landed this same evening, so no child card and no third scope ask
+was raised — the owner-only flip of the landing cards task_7b773505d7c6eb43 /
+task_2dd9dc18291f2625 was already surfaced twice via MEFI_ASK and stays board
+hygiene, not builder work. HEAD moved again since row 009da87 (c4caee1 ->
+adf21a7 -> c2ced15, the latter landing the 42-file session-continuity sibling
+worktree mid-family), so everything was re-run first-hand at c2ced15 on a
+clean tree: the six feature commits c272b58 / 136f866 / e3ad851 / 31f69f0 /
+d1c4d78 / 96d15c6 and the three evidence rows 23bdd5c / a973b73 / 009da87 are
+ancestors (merge-base --is-ancestor, 9/9 true); wiring live
+(`require("./scripts/executor-worktrees.cjs")` main.cjs:59, gate comment at
+9486); opt-in exact (`scripts/executor-worktrees.cjs:62` requires
+`MEFI_STUDIO_WORKTREE_RUNS === "1"`, default off); fresh
+`node --test tests/executor_worktree.test.mjs` -> 11 tests / 11 pass / 0 fail,
+exit 0 (11.6 s); fresh `npm run check` -> exit 0 (101 targets, 205 specs,
+syntax ok); `.mefi/worktrees` absent and `git worktree list` shows only the
+five standing checkouts. Nothing in this card's scope remains owed; task store
+read-only; this commit adds only this row.
+
 ## 2026-09-22 late evening - sixth-gen carrier retry re-verified green on the twice-moved tree, HEAD drifted 9788722 -> c2ced15 and every repo-side obligation still holds (task_261f3a1af9aeda2d, run run_1790103104379_13)
 
 Retry of the split-out card; the prior run's row (4f4dcd9) is context, not
