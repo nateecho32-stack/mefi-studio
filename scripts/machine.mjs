@@ -315,7 +315,46 @@ export function isTestProcess(row) {
   return TEST_MARKERS.some((marker) => commandLine.includes(marker));
 }
 
-export async function processSnapshot({ powershell = "powershell" } = {}) {
+// ps prints cpu time as [[dd-]hh:]mm:ss.
+function parsePsTime(value) {
+  const [days, clock] = String(value).includes("-") ? String(value).split("-") : ["0", String(value)];
+  const parts = clock.split(":").map(Number);
+  while (parts.length < 3) parts.unshift(0);
+  const [hours, minutes, seconds] = parts;
+  return ((Number(days) * 24 + hours) * 3600 + minutes * 60 + seconds) * 1000;
+}
+
+// The same rows the Windows query yields, read from ps. Only LÖVE processes
+// are listed, exactly as the CIM filter does, so classify() sees one shape.
+async function posixProcessSnapshot({ ps, spawnImpl, now }) {
+  return await new Promise((resolve) => {
+    const child = spawnImpl(ps, ["-eo", "pid=,ppid=,etimes=,time=,rss=,comm=,args="]);
+    let output = "";
+    child.stdout?.on("data", (chunk) => (output += chunk));
+    child.on("close", () => {
+      const at = now();
+      const rows = [];
+      for (const line of output.split(/\r?\n/)) {
+        const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\d+)\s+(\S+)\s*(.*)$/.exec(line);
+        if (!match || !/^lovec?(?:\.exe)?$/i.test(match[6])) continue;
+        rows.push({
+          pid: Number(match[1]),
+          parentPid: Number(match[2]),
+          name: match[6],
+          commandLine: match[7].trim(),
+          startedAt: at - Number(match[3]) * 1000,
+          cpuMs: parsePsTime(match[4]),
+          memMB: Math.round(Number(match[5]) / 1024),
+        });
+      }
+      resolve(rows);
+    });
+    child.on("error", () => resolve([]));
+  });
+}
+
+export async function processSnapshot({ powershell = "powershell", ps = "ps", platform = process.platform, spawnImpl = spawn, now = Date.now } = {}) {
+  if (platform !== "win32") return await posixProcessSnapshot({ ps, spawnImpl, now });
   const script =
     "Get-CimInstance Win32_Process -Filter \\\"Name='lovec.exe' OR Name='love.exe'\\\" | " +
     "Select-Object ProcessId,ParentProcessId,Name,CommandLine,CreationDate,KernelModeTime,UserModeTime,WorkingSetSize | ConvertTo-Json -Compress";

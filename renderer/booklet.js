@@ -834,7 +834,7 @@
       const quality = measured?.quality;
       const human = quality?.human?.meanOutOf5;
       const model = quality?.model?.meanOutOf5;
-      const money = (value) => `$${value.toLocaleString(undefined, { maximumFractionDigits: 6 })}`;
+      const money = (value) => `$${value.toLocaleString("en-US", { maximumFractionDigits: 6 })}`;
       const coverage = known(cost) ? ` (${measured.costUsd.samples ?? 0} reported, ${measured.costUsd.unknownRecords ?? 0} unknown)` : "";
       const observed = `Measured (${scope}, ${measured?.samples ?? 0} calls): response ${known(latency) ? `${(latency / 1000).toFixed(2)} s` : "unknown"}; speed ${known(speed) ? `${speed.toFixed(1)} tokens/s` : "unknown"}; errors ${known(measured?.errors) ? measured.errors : "unknown"}; mean reported cost ${known(cost) ? money(cost) : "unknown"}${coverage}; human rating ${known(human) ? `${human.toFixed(1)}/5 (${quality.human.samples ?? 0} rated)` : "unknown"}; model rating ${known(model) ? `${model.toFixed(1)}/5 (${quality.model.samples ?? 0} rated)` : "unknown"}.`;
       const catalog = evidence.catalog;

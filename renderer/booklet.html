@@ -11939,9 +11939,9 @@ body.music-preview-active #idle-hud { display: none !important; }
   const api = () => window.mefiStudio;
   const rows = (value) => Array.isArray(value) ? value : [];
   const finite = (value) => typeof value === "number" && Number.isFinite(value);
-  const number = (value, digits = 0) => finite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: digits }) : "Unknown";
+  const number = (value, digits = 0) => finite(value) ? value.toLocaleString("en-US", { maximumFractionDigits: digits }) : "Unknown";
   const duration = (value) => finite(value) ? value < 1000 ? `${number(value)} ms` : `${number(value / 1000, 1)} s` : "Unmeasured";
-  const money = (value) => finite(value) ? `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: value < 0.01 ? 6 : 4 })}` : "Unknown";
+  const money = (value) => finite(value) ? `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: value < 0.01 ? 6 : 4 })}` : "Unknown";
   const when = (value) => {
     if (value == null || value === "") return "Time unavailable";
     const date = new Date(value);
@@ -12187,8 +12187,8 @@ body.music-preview-active #idle-hud { display: none !important; }
   const api = () => window.mefiStudio;
   const rows = (value) => Array.isArray(value) ? value : [];
   const finite = (value) => typeof value === "number" && Number.isFinite(value);
-  const number = (value, digits = 0) => finite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: digits }) : "Unknown";
-  const money = (value, digits = 2) => finite(value) ? `$${value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: value > 0 && value < 0.01 ? 4 : digits })}` : "Unknown";
+  const number = (value, digits = 0) => finite(value) ? value.toLocaleString("en-US", { maximumFractionDigits: digits }) : "Unknown";
+  const money = (value, digits = 2) => finite(value) ? `$${value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: value > 0 && value < 0.01 ? 4 : digits })}` : "Unknown";
   const percent = (value) => finite(value) ? `${number(value, 1)}%` : "Unknown";
   const compact = (value) => !finite(value) ? "?" : value >= 1e6 ? `${(value / 1e6).toLocaleString(undefined, { maximumFractionDigits: 1 })}M` : value >= 1e4 ? `${Math.round(value / 1e3)}k` : number(value);
   const calls = (value) => `${number(value)} ${value === 1 ? "call" : "calls"}`;
@@ -34665,7 +34665,7 @@ body.music-preview-active #idle-hud { display: none !important; }
       const quality = measured?.quality;
       const human = quality?.human?.meanOutOf5;
       const model = quality?.model?.meanOutOf5;
-      const money = (value) => `$${value.toLocaleString(undefined, { maximumFractionDigits: 6 })}`;
+      const money = (value) => `$${value.toLocaleString("en-US", { maximumFractionDigits: 6 })}`;
       const coverage = known(cost) ? ` (${measured.costUsd.samples ?? 0} reported, ${measured.costUsd.unknownRecords ?? 0} unknown)` : "";
       const observed = `Measured (${scope}, ${measured?.samples ?? 0} calls): response ${known(latency) ? `${(latency / 1000).toFixed(2)} s` : "unknown"}; speed ${known(speed) ? `${speed.toFixed(1)} tokens/s` : "unknown"}; errors ${known(measured?.errors) ? measured.errors : "unknown"}; mean reported cost ${known(cost) ? money(cost) : "unknown"}${coverage}; human rating ${known(human) ? `${human.toFixed(1)}/5 (${quality.human.samples ?? 0} rated)` : "unknown"}; model rating ${known(model) ? `${model.toFixed(1)}/5 (${quality.model.samples ?? 0} rated)` : "unknown"}.`;
       const catalog = evidence.catalog;

@@ -12,8 +12,8 @@
   const api = () => window.mefiStudio;
   const rows = (value) => Array.isArray(value) ? value : [];
   const finite = (value) => typeof value === "number" && Number.isFinite(value);
-  const number = (value, digits = 0) => finite(value) ? value.toLocaleString(undefined, { maximumFractionDigits: digits }) : "Unknown";
-  const money = (value, digits = 2) => finite(value) ? `$${value.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: value > 0 && value < 0.01 ? 4 : digits })}` : "Unknown";
+  const number = (value, digits = 0) => finite(value) ? value.toLocaleString("en-US", { maximumFractionDigits: digits }) : "Unknown";
+  const money = (value, digits = 2) => finite(value) ? `$${value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: value > 0 && value < 0.01 ? 4 : digits })}` : "Unknown";
   const percent = (value) => finite(value) ? `${number(value, 1)}%` : "Unknown";
   const compact = (value) => !finite(value) ? "?" : value >= 1e6 ? `${(value / 1e6).toLocaleString(undefined, { maximumFractionDigits: 1 })}M` : value >= 1e4 ? `${Math.round(value / 1e3)}k` : number(value);
   const calls = (value) => `${number(value)} ${value === 1 ? "call" : "calls"}`;

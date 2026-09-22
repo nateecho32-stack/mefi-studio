@@ -421,7 +421,9 @@ class MefiStudioRoutingTests(unittest.TestCase):
     def test_keyless_cli_and_local_routes_skip_the_encrypted_key_gate(self):
         assistant = _function_body(self.main, "runAssistant")
         self.assertRegex(assistant, r'keyless = provider === "grok".*provider === "claude".*provider === "lmstudio"')
-        self.assertIn("settings.customApiKeyEncrypted", assistant, "a custom key counts as a saved key")
+        self.assertIn('keyAvailable(settings, field)', assistant, "the gate reads keys through one source-aware check")
+        self.assertIn('"customApiKeyEncrypted"', assistant, "a custom key counts as a saved key")
+        self.assertNotIn("safeStorage.isEncryptionAvailable()", assistant, "an environment-supplied key never needs the OS keystore")
         self.assertIn("normalizeAutoProviders(settings.aiAutoProviders)", assistant, "an auto order with a keyless route also skips the key gate")
 
     def test_mefi_zai_provider_config_shape(self):
@@ -546,8 +548,11 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertEqual("https://api.z.ai/api/coding/paas/v4", provider["options"]["baseURL"])
         self.assertEqual("{env:MEFI_ZAI_API_KEY}", provider["options"]["apiKey"])
         env = {**os.environ, "OPENCODE_CONFIG_CONTENT": result.stdout.strip(), "MEFI_ZAI_API_KEY": "fixture-not-a-key"}
+        # The npm install is a .cmd shim on Windows, reached through cmd.exe;
+        # elsewhere the resolved binary runs directly.
+        launch = ["cmd", "/c", "opencode"] if os.name == "nt" else [opencode]
         result = subprocess.run(
-            ["cmd", "/c", "opencode", "models", "mefi-zai", "--pure"],
+            [*launch, "models", "mefi-zai", "--pure"],
             env=env, capture_output=True, text=True, timeout=60,
         )
         self.assertEqual(0, result.returncode, result.stderr + result.stdout)
