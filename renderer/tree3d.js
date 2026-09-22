@@ -32,6 +32,7 @@
   // What the store told us last, for the Command view's empty state.
   let status = window.mefiStudio?.eyesState ? "ok" : "desktop-only";
   let statusText = "no session yet";
+  let storeNote = null;
   // The rail's own line, without the assistant suffix paintStats() appends.
   let statsBase = "no session yet";
   // Set while the rail dispatches its own tree-select, so the listener that
@@ -1912,6 +1913,7 @@
 
   function loadResult(result) {
     if (!result?.ok) {
+      storeNote = null;
       buildGraph([], [], {
         status: "unavailable",
         text: result?.error ? `store unavailable · ${result.error}` : "store unavailable",
@@ -1919,6 +1921,9 @@
       });
       return;
     }
+    // An empty read may carry why: a store file whose session schema is
+    // missing. The empty card shows the note instead of "no recent sessions".
+    storeNote = typeof result.note === "string" && result.note ? result.note : null;
     buildGraph(result.sessions, result.todos);
   }
 
@@ -2135,6 +2140,7 @@
     togglePin,
     status: () => status,
     statusText: () => statusText,
+    note: () => storeNote,
     // Keyboard access, for the tests and the dev tools: focus a node by id,
     // read the focused node and the rail's selected session.
     focusNode: (id) => setKbdFocus(findNodeById(id) ?? null),

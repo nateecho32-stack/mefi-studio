@@ -354,6 +354,7 @@ test("an under-floor dip latches a parallelism cap that outlives the floor and i
   assert.match(capped.reason, /parallelism stays capped at 4/);
   assert.match(capped.reason, /450 MB needed/);
   assert.equal(capped.resources.memoryWarning, null, "the cap must not leak the override warning while holding");
+  assert.match(describe({ capacity: capped, leases: { busy: false }, processes: [] }), /recovering from the severe floor/, "the machine summary carries the cap hold reason for the panel");
   machine.free(449); machine.advance();
   assert.equal((await machine.capacity({ force: true, running: 4 })).canStart, false, "one MB short of the release threshold the cap holds");
   // Release needs consecutive readings too: the host was observed flickering
@@ -408,6 +409,9 @@ test("the severe-memory cap starves nobody: a drained pool may still start its f
   assert.equal(solo.resources.memorySevereCapped, true, "the latch itself stays visible in the resources");
   assert.equal(solo.resources.memoryShortfall, "small");
   assert.match(solo.resources.memoryWarning, /explicit memory override/);
+  // The panel summary must not read as a fully free machine while the latch
+  // holds: admission is clear for this one worker, parallelism is not.
+  assert.match(describe({ capacity: solo, leases: { busy: false }, processes: [] }), /cap still latched/, "the latched cap surfaces in the machine summary even while one worker may start");
 });
 
 test("the cap reads each caller's live worker count from one cached sample", async () => {

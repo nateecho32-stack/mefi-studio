@@ -11,9 +11,11 @@
 // Historical receipts may contain prose-only claims. For LEARNING, only
 // runner-observed evidence counts as a positive label:
 //
-//   trust "trusted"      — the verifier accepted session-attributed edits or
-//                          recorded checks, with no outstanding obligations.
-//                          This does not certify every acceptance criterion.
+//   trust "trusted"      — the verifier accepted session-attributed edits,
+//                          recorded checks, or a runner-observed commit with
+//                          a clean path status, with no outstanding
+//                          obligations. This does not certify every acceptance
+//                          criterion.
 //   trust "self-reported"— the worker's own prose named checks; the runner
 //                          observed nothing. NEVER a positive learning label.
 //   trust null           — failed, unverified, or missing evidence.
@@ -50,9 +52,10 @@ export function acceptanceSpec({ title = "", prompt = "", remaining = [] } = {})
 
 // Derive the evidence kind from what the runner actually observed. The worker
 // believing it ran checks is evidence about the worker, not about the work.
-export function evidenceKind({ state = "", changedFiles = 0, hasSession = false, namedChecks = false, observedChecks = null } = {}) {
+export function evidenceKind({ state = "", changedFiles = 0, hasSession = false, namedChecks = false, observedChecks = null, commit = null } = {}) {
   if (state === "verified" && hasSession && observedChecks?.passed > 0 && !observedChecks.failed && !observedChecks.pending) return "runner-observed-checks";
   if (state === "verified" && hasSession && intOrZero(changedFiles) > 0) return "runner-observed-edits";
+  if (state === "verified" && hasSession && commit?.hash && commit.clean === true) return "runner-observed-commit";
   if (state === "verified" && namedChecks) return "worker-named-checks";
   return "none";
 }
@@ -81,7 +84,8 @@ export function buildReceipt({
   const spec = acceptanceSpec({ title, prompt, remaining });
   const namedChecks = Boolean(verdict.evidence?.namedChecks);
   const observedChecks = verdict.evidence?.observedChecks ?? null;
-  const kind = evidenceKind({ state: verdict.state, changedFiles, hasSession: Boolean(attempt.sessionId), namedChecks, observedChecks });
+  const commit = verdict.evidence?.commit ?? null;
+  const kind = evidenceKind({ state: verdict.state, changedFiles, hasSession: Boolean(attempt.sessionId), namedChecks, observedChecks, commit });
   const receipt = {
     schema: RECEIPT_SCHEMA,
     id: `rcp_${sha256Hex(`${runId}|${verdict.state}|${intOrZero(now)}`).slice(0, 16)}`,
@@ -118,6 +122,7 @@ export function buildReceipt({
       changedFiles: intOrZero(changedFiles),
       sessionId: clipText(attempt.sessionId, 80) || null,
       ...(observedChecks ? { checks: { passed: intOrZero(observedChecks.passed), failed: intOrZero(observedChecks.failed), pending: intOrZero(observedChecks.pending) } } : {}),
+      ...(commit?.claimed || commit?.hash ? { commit: { claimed: clipText(commit.claimed, 40) || null, hash: clipText(commit.hash, 40) || null, clean: commit.clean === true ? true : commit.clean === false ? false : null } } : {}),
       outstandingObligations: spec.remaining.length,
     },
     // The board's settlement verdict, recorded verbatim. Learning labels come
@@ -137,6 +142,7 @@ export function receiptTrust(receipt) {
   if (receipt.result !== "verified") return null;
   if (receipt.evidence?.kind === "runner-observed-checks" && receipt.evidence.checks?.passed > 0 && !receipt.evidence.checks.failed && !receipt.evidence.checks.pending && intOrZero(receipt.evidence.outstandingObligations) === 0) return "trusted";
   if (receipt.evidence?.kind === "runner-observed-edits" && intOrZero(receipt.evidence?.outstandingObligations) === 0) return "trusted";
+  if (receipt.evidence?.kind === "runner-observed-commit" && receipt.evidence.commit?.hash && intOrZero(receipt.evidence.outstandingObligations) === 0) return "trusted";
   if (receipt.evidence?.kind === "worker-named-checks") return "self-reported";
   return null;
 }

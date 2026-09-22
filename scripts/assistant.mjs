@@ -3567,7 +3567,7 @@ const checkReports = (parts) => [parts?.tests, parts?.ran, parts?.verified, part
 const reportedCheckFailure = (parts) => checkReports(parts).some((text) => /\b(?:fail(?:ed|ures?)?|errors?|broken)\b/i.test(
   text.replace(/\b(?:0|zero|no)\s+(?:fail(?:ed|ures?)?|errors?)\b/gi, ""),
 ));
-const noRemainingWork = (text) => /^(?:none|nothing|nil|n\/a|no (?:remaining|outstanding) (?:work|tasks?|items?|obligations?))[.!\s]*$/i.test(text);
+const noRemainingWork = (text) => /^(?:none|nothing|nil|n\/a|no (?:remaining|outstanding) (?:work|tasks?|items?|obligations?))(?:\s+(?:in|within)\s+(?:this\s+)?scope)?[.!\s]*$/i.test(text);
 const namesCheck = (text) => !/^(?:none|nothing|n\/a|not (?:run|tested)|skipped|unavailable|pending|passed|ok|done)[.!\s]*$/i.test(text)
   && !/\b(?:not run|not tested|did not run|didn't run|could not run|couldn't run|unable to run|skipped)\b/i.test(text);
 
@@ -3616,13 +3616,42 @@ export function summarizeObservedChecks(checks = []) {
   return { total: rows.length, passed, failed, pending: rows.length - passed - failed };
 }
 
-export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSession = false, observedChecks = [], resolvedHandoffs = [], remaining = [], resultNote = null, priorAttempts = 0 } = {}) {
+// A commit-only deliverable (work authored in one session, landed as a commit
+// by another) reports the commit it created: "MEFI_RESULT: done: committed
+// 3198c4d". The claim alone proves nothing — verifyCompletion counts it only
+// when the runner observed that hash in the repo AND a clean path status (the
+// `commit` input, gathered by the verification pass's git prefetch on the eyes
+// worker, never by the worker itself). Shape only here; existence and
+// cleanliness are runner facts.
+const COMMIT_HASH_RE = /^[0-9a-f]{7,40}$/i;
+export function claimedCommitHash(parts = {}) {
+  for (const field of [parts?.commit, parts?.commitHash, parts?.committed, parts?.revision, parts?.done]) {
+    const text = str(field).trim();
+    if (!text) continue;
+    if (COMMIT_HASH_RE.test(text)) return text.toLowerCase();
+    if (/\bcommit/i.test(text)) {
+      const inline = /\b[0-9a-f]{7,40}\b/i.exec(text);
+      if (inline) return inline[0].toLowerCase();
+    }
+  }
+  return null;
+}
+
+export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSession = false, observedChecks = [], resolvedHandoffs = [], remaining = [], resultNote = null, commit = null, priorAttempts = 0 } = {}) {
   const parts = (resultNote && isObject(resultNote) ? resultNote.parts : null) ?? {};
   const namedChecks = checkReports(parts).some(namesCheck);
   const remainingText = str(parts.remaining);
   const remainingKey = (value) => str(value).toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   const handedOffAndFinished = remainingKey(remainingText) && asArray(resolvedHandoffs).some((title) => remainingKey(title) === remainingKey(remainingText));
   const outstanding = (remainingText.length > 0 && !noRemainingWork(remainingText) && !handedOffAndFinished) || asArray(remaining).length > 0;
+  // The runner's commit observation resolves the claimed abbreviation to a
+  // real commit and reports the scoped path status. A claim the runner could
+  // not match — unknown hash, git failure, no observation — is not evidence.
+  const commitClaim = claimedCommitHash(parts);
+  const observed = isObject(commit) ? commit : null;
+  const resolvedHash = observed ? str(observed.hash).toLowerCase().replace(/[^0-9a-f]/g, "") : "";
+  const commitMatched = Boolean(commitClaim && COMMIT_HASH_RE.test(resolvedHash) && (resolvedHash === commitClaim || (resolvedHash.length > commitClaim.length && resolvedHash.startsWith(commitClaim))));
+  const commitClean = observed?.clean === true ? true : observed?.clean === false ? false : null;
   const evidence = {
     verdictOk: verdictOk === true,
     changedFiles: Math.max(0, Number(changedFiles) || 0),
@@ -3630,6 +3659,7 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSessi
     namedChecks,
     observedChecks: hasSession === true ? summarizeObservedChecks(observedChecks) : { total: 0, passed: 0, failed: 0, pending: 0 },
     outstanding,
+    commit: { claimed: commitClaim, hash: commitMatched ? resolvedHash : null, clean: commitClean },
   };
   const fail = (reason) => {
     const attemptNo = Math.max(0, Number(priorAttempts) || 0) + 1;
@@ -3645,6 +3675,11 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSessi
     if (evidence.namedChecks && !evidence.observedChecks.passed) return fail("reported checks have no recorded passing execution");
     if (evidence.observedChecks.passed) return pass(`${evidence.observedChecks.passed} recorded check(s) passed in the attempt's session`);
     if (evidence.changedFiles > 0) return pass(`${evidence.changedFiles} changed file(s) in the attempt's session`);
+    if (evidence.commit.claimed) {
+      if (evidence.commit.hash && evidence.commit.clean === true) return pass(`commit ${evidence.commit.hash.slice(0, 12)} observed with a clean path status`);
+      if (evidence.commit.clean === false) return fail("commit claimed but the path still has uncommitted changes");
+      return fail("commit claimed but the runner observed no matching commit");
+    }
     return fail("no attributable edits and no named checks");
   }
   return fail("no session-attributed completion evidence");
@@ -4006,7 +4041,10 @@ const INTENT_RULES = [
   // work verb and the intent stays out of QUERY_INTENTS, so even "pick
   // something to work on" answers with picks instead of queueing itself.
   ["suggest", /\b(suggest\w*|recommend\w*|what should i|what can i|what to (?:work|do|build|tackle|fix)|next (?:task|thing|step)|where to (?:start|begin)|pick (?:a task|something|work)|anything to (?:do|work|build)|something to (?:do|work|build)|what needs (?:doing|work|attention|fixing))\b/],
-  ["tasks", /\b(tasks?|todos?|open work)\b|\b(?:what|show|list|see|did)\b.*\b(?:got done|done|finished|completed|accomplish\w*)\b/],
+  // "Open issues", "tickets" and "bugs" are the board and the repo's own
+  // issue tracker read together; without this they fell through to chat and
+  // answered with the focused node and memory instead of the open work.
+  ["tasks", /\b(tasks?|todos?|open work|open items?)\b|\b(?:open|current|outstanding|known|existing|remaining|any|which|what|list|show)\b[^.?!]*\b(?:issues?|tickets?|bugs?)\b|\b(?:issues?|tickets?|bugs?)\b[^.?!]*\b(?:open|outstanding|remaining|left|tracker)\b|\b(?:what|show|list|see|did)\b.*\b(?:got done|done|finished|completed|accomplish\w*)\b/],
   ["ideas", /\b(ideas?)\b/],
   ["collisions", /\b(collisions?|conflicts?|overlaps?|overlapping)\b/],
   ["machine", /\b(machine|tests?|running|process(?:es)?|leases?)\b/],
@@ -4643,6 +4681,12 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
         const inProgress = todos.filter((todo) => todo.status === "in_progress").length;
         lines.push(`Sessions carry ${plural(pending, "pending todo")} and ${inProgress} in progress.`);
       }
+      // The repo's own issue tracker (wayfinder maps, tickets under
+      // .scratch/, GitHub issues) is open work too; "open issues" asked for
+      // it by name, so the answer names it before the board's top pick.
+      const work = isObject(source.projectWork) ? source.projectWork : null;
+      if (work?.text) lines.push(work.text);
+      else if (/\b(?:issues?|tickets?|bugs?)\b/.test(normalizeText(text))) lines.push(work === null ? "This folder has no issue tracker Studio can read (no docs/agents/issue-tracker.md, no .scratch/ tickets); the open tasks above are the board's open issues." : "The folder's issue tracker is empty: no maps, no tickets.");
       const pick = suggestWork({ ...source, now })[0];
       if (pick) lines.push(`Top pick: "${pick.title}" (${pick.reason}) — say work on it and I queue it.`);
       break;
@@ -4807,7 +4851,7 @@ export function localReply({ text = "", intent, facts = null, state = null, now 
       break;
     }
     case "help": {
-      lines.push("Ask me about: status, tasks, ideas, collisions, machine, agents, the log.");
+      lines.push("Ask me about: status, tasks, open issues and tickets, ideas, collisions, machine, agents, the log.");
       lines.push('Ask "what should I work on" and I pick from the board, the request inbox and quiet sessions.');
       lines.push("I can tidy, fix, organize, pause, resume, and resume the work — and clear the queue when the backlog needs collapsing.");
       lines.push("The overseer sits above me — ask it to review the workflow and it scores my work, tunes prefs and files upgrades.");
@@ -5069,7 +5113,7 @@ function normalizeProjectScan(projectScan) {
 
 // The facts shape localReply reads, from the raw store rows. main.cjs builds
 // the same shape (each source guarded, null when unreadable); the CLI uses it.
-export function buildFacts({ sessions = null, todos = null, collisions = null, presence = null, uncommitted = null, tasks = null, ideas = null, requests = null, executor = null, backlog = null, planning = null, project = null, projectScan = null, machine = null, audit = null, briefing = null, update = null, work = null, resumed = null, focus = null, nodeFolders = null, lessons = null, log = null, mail = null, query = "", now = Date.now() } = {}) {
+export function buildFacts({ sessions = null, todos = null, collisions = null, presence = null, uncommitted = null, tasks = null, ideas = null, requests = null, executor = null, backlog = null, planning = null, project = null, projectScan = null, projectWork = null, machine = null, audit = null, briefing = null, update = null, work = null, resumed = null, focus = null, nodeFolders = null, lessons = null, log = null, mail = null, query = "", now = Date.now() } = {}) {
   const todoRows = asArray(todos).filter((todo) => isObject(todo) && typeof todo.sessionId === "string");
   const focusRow = normalizeFocus(focus);
   const folderKey = focusRow ? nodeKeyOf(focusRow) : null;
@@ -5092,6 +5136,11 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
       : null,
     project: isObject(project) ? { id: str(project.id), name: clip(str(project.name), 100), path: clip(str(project.path), 300) } : null,
     projectScan: normalizeProjectScan(projectScan),
+    // The repo's own tracker and tooling, pre-described by the scanner: one
+    // sentence group the reply can quote, plus counts the AI prompt can use.
+    projectWork: isObject(projectWork) && str(projectWork.text)
+      ? { text: clip(str(projectWork.text), 700), tracker: str(projectWork.tracker) || null, counts: isObject(projectWork.counts) ? projectWork.counts : null, tooling: isObject(projectWork.tooling) ? projectWork.tooling : null }
+      : null,
     memory: compiled.primer.length ? { primer: compiled.primer, flags: compiled.flags, dig: compiled.dig } : null,
     planning: planningSummaryFacts(planning),
     sessions: Array.isArray(sessions)
@@ -5197,6 +5246,7 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
               ["cpuPercent", "availableMemoryMB", "totalMemoryMB", "requiredMemoryMB", "lagMs", "hostLagMs", "rendererLagMs"].map((key) => [key,
                 typeof executor.capacity.resources[key] === "number" && Number.isFinite(executor.capacity.resources[key]) ? executor.capacity.resources[key] : null]),
             ), lagPressure: typeof executor.capacity.resources.lagPressure === "boolean" ? executor.capacity.resources.lagPressure : null,
+              memorySevereCapped: typeof executor.capacity.resources.memorySevereCapped === "boolean" ? executor.capacity.resources.memorySevereCapped : null,
               // The sampler's structured hold classification rides the facts so
               // a reply can tell a memory gate from a responsiveness gate
               // without parsing the reason text: "memory" is a small
@@ -5204,7 +5254,8 @@ export function buildFacts({ sessions = null, todos = null, collisions = null, p
               // the severe floor, "memory-cap" the latched severe-memory
               // parallelism cap in its recovery band, "lag" the latched hold,
               // "unknown" missing readings, null a clear (or overridden)
-              // admission.
+              // admission. memorySevereCapped is the latch flag itself: true
+              // even while a drained pool may still start its one worker.
               holdKind: str(executor.capacity.resources.holdKind) || null,
               memoryShortfall: str(executor.capacity.resources.memoryShortfall) || null,
               memoryWarning: clip(str(executor.capacity.resources.memoryWarning), 180) || null } : null,

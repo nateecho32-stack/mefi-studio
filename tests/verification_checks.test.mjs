@@ -1,8 +1,47 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isVerificationCommand, summarizeObservedChecks, verifyCompletion, scheduleVerificationOnDone, projectBaseCheck, loveHarnessCheckCommand, repoCheckCommand } from "../scripts/assistant.mjs";
+import { isVerificationCommand, summarizeObservedChecks, verifyCompletion, scheduleVerificationOnDone, projectBaseCheck, loveHarnessCheckCommand, repoCheckCommand, claimedCommitHash } from "../scripts/assistant.mjs";
 
 const check = (command = "npm test", extra = {}) => ({ command, status: "completed", exitCode: 0, startedAt: 1000, finishedAt: 2000, passed: true, ...extra });
+
+test("commit evidence settles commit-only deliverables without loosening ordinary rules", () => {
+  // The loop case: a commit task edits nothing itself — changedFiles: 0 after
+  // a real commit is the success shape, not a false negative.
+  const claim = { verdictOk: true, hasSession: true, changedFiles: 0, resultNote: { parts: { done: "committed 3198c4d Add rail accounting test", remaining: "none" } } };
+  assert.equal(claimedCommitHash(claim.resultNote.parts), "3198c4d");
+  assert.equal(claimedCommitHash({ commit: "5caa1360e11d2a7b8c9f0d1e2a3b4c5d6e7f8a9b" }), "5caa1360e11d2a7b8c9f0d1e2a3b4c5d6e7f8a9b");
+  assert.equal(claimedCommitHash({ done: "rail accounting test landed" }), null, "no commit word, no claim");
+  assert.equal(claimedCommitHash({ commit: "not-a-hash" }), null);
+  assert.equal(claimedCommitHash({}), null);
+  assert.equal(verifyCompletion(claim).state, "unverified", "a commit claim alone is not evidence");
+  assert.equal(verifyCompletion({ ...claim, commit: { hash: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", clean: true } }).state, "unverified", "the observed hash must match the claim");
+  assert.equal(verifyCompletion({ ...claim, commit: { hash: "3198c4d", clean: null } }).state, "unverified", "an unreadable path status never accepts");
+  const dirty = verifyCompletion({ ...claim, commit: { hash: "3198c4dab12cd34ef56", clean: false } });
+  assert.equal(dirty.state, "unverified");
+  assert.match(dirty.reason, /uncommitted changes/);
+  const landed = verifyCompletion({ ...claim, commit: { hash: "3198c4dab12cd34ef56", clean: true } });
+  assert.equal(landed.state, "verified");
+  assert.equal(landed.evidence.commit.hash, "3198c4dab12cd34ef56");
+  assert.match(landed.reason, /clean path status/);
+  // The gate stays shut for everything that always failed.
+  assert.equal(verifyCompletion({ ...claim, verdictOk: false, commit: { hash: "3198c4d", clean: true } }).state, "unverified");
+  assert.equal(verifyCompletion({ ...claim, hasSession: false, commit: { hash: "3198c4d", clean: true } }).state, "unverified");
+  assert.equal(verifyCompletion({ ...claim, remaining: ["regression test"], commit: { hash: "3198c4d", clean: true } }).state, "unverified");
+  assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "committed 3198c4d", tests: "npm test failed" } }, commit: { hash: "3198c4d", clean: true } }).state, "unverified");
+  assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 0, hasSession: true }).state, "unverified", "no claim and no observation still fails");
+});
+
+test("scoped-none remaining text is not an outstanding obligation", () => {
+  const claim = { verdictOk: true, hasSession: true, changedFiles: 0, resultNote: { parts: { done: "committed 3198c4d Add rail accounting test", remaining: "none in scope" } } };
+  assert.equal(verifyCompletion(claim).reason, "commit claimed but the runner observed no matching commit", "the prior loop shape no longer trips the outstanding gate");
+  const landed = verifyCompletion({ ...claim, commit: { hash: "3198c4dab12cd34ef56", clean: true } });
+  assert.equal(landed.state, "verified");
+  assert.match(landed.reason, /clean path status/);
+  assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "nothing within this scope." } } }).reason, "no attributable edits and no named checks");
+  assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "no remaining work in scope" } } }).reason, "no attributable edits and no named checks");
+  assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "none of the tests pass" } } }).reason, "outstanding obligations remain");
+  assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "none in the other module" } } }).reason, "outstanding obligations remain");
+});
 
 test("only recognizable direct check commands provide check evidence", () => {
   for (const command of ["npm test", "npm run check", "node --test tests/board.test.mjs", "python -m unittest discover -s tools", "python tools/verify_command.py", 'cd "C:/my project" && npm test', "cargo test"]) {

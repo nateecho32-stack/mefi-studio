@@ -202,3 +202,55 @@ test("stale tags and the folded group keep their own row-label titles", async ()
   ], "expanding the group reveals the folded session with its own label-title pin");
   assert.equal(expanded[6].title, env.labelOf(expanded[6]).text, "the revealed row keeps title and label in sync");
 });
+
+test("the Machine panel surfaces the latched severe-memory cap instead of reading as a free machine", async () => {
+  const machineFeeds = [];
+  const env = environment({ onMachineStatus: (fn) => machineFeeds.push(fn) });
+  await env.open();
+  assert.ok(machineFeeds.length, "the explorer subscribes to machine status passes");
+  const badge = env.element("machine-badge");
+  const lines = env.element("machine-lines");
+  const feed = (status) => machineFeeds.forEach((fn) => fn(status));
+  // Latch set while admission is clear (a drained pool may start its one
+  // worker): the panel must say the cap holds, not "idle".
+  feed({
+    lines: "350 MB RAM available · Severe-memory parallelism cap still latched — new worker starts stay capped until free memory recovers.",
+    wait: false,
+    leases: { exclusive: false, busy: false, holders: [] },
+    running: [],
+    processes: [],
+    actions: [],
+    capacity: { canStart: true, reason: null, resources: { memorySevereCapped: true, holdKind: null } },
+  });
+  assert.equal(badge.text, "memory cap", "a latched cap with clear admission shows on the badge");
+  assert.ok(badge.classes.has("trains"), "the capped badge keeps the busy tone");
+  assert.ok(badge.title.includes("capped"), "the badge explains the cap on hover");
+  assert.equal(lines.style.color, "var(--info)", "the summary stays tinted while capped");
+  // The active hold (holdKind "memory-cap", canStart false) keeps the busy
+  // badge path and the same tint.
+  feed({
+    lines: "Machine memory is recovering from the severe floor (350 MB available; 450 MB needed) — worker parallelism stays capped at 4 until free memory recovers.",
+    wait: true,
+    leases: { exclusive: false, busy: false, holders: [] },
+    running: [{ pid: 12, status: "healthy", ageMinutes: 1, memMB: 512 }],
+    processes: [],
+    actions: [],
+    capacity: { canStart: false, reason: "capped", resources: { memorySevereCapped: true, holdKind: "memory-cap" } },
+  });
+  assert.equal(badge.text, "busy", "the active memory-cap hold reads as busy");
+  assert.ok(badge.classes.has("trains"));
+  // Released latch: the panel returns to the free reading.
+  feed({
+    lines: "8192 MB RAM available",
+    wait: false,
+    leases: { exclusive: false, busy: false, holders: [] },
+    running: [],
+    processes: [],
+    actions: [],
+    capacity: { canStart: true, reason: null, resources: { memorySevereCapped: false, holdKind: null } },
+  });
+  assert.equal(badge.text, "idle", "a released cap returns the idle badge");
+  assert.ok(badge.classes.has("free"));
+  assert.equal(lines.style.color, "", "the tint clears with the cap");
+  assert.equal(badge.title, "", "the cap tooltip clears with the latch");
+});

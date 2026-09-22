@@ -530,11 +530,18 @@
   function renderMachine(status) {
     if (!els.machineLines) return;
     state.machine = status;
+    // The severe-memory cap rides the capacity resources: holdKind
+    // "memory-cap" is the active hold (canStart false), memorySevereCapped
+    // the latch that outlives it — a drained pool may start one worker while
+    // still capped, so the panel must not read as a fully free machine.
+    const resources = status?.capacity?.resources ?? null;
+    const memoryCapped = resources?.memorySevereCapped === true || resources?.holdKind === "memory-cap";
     els.machineLines.textContent = status?.lines ?? "no scan yet";
-    els.machineLines.style.color = status?.leases?.exclusive ? "var(--warn)" : status?.wait ? "var(--info)" : "";
+    els.machineLines.style.color = status?.leases?.exclusive ? "var(--warn)" : status?.wait || memoryCapped ? "var(--info)" : "";
     if (els.machineBadge) {
-      els.machineBadge.textContent = status?.wait ? (status.leases.exclusive ? "exclusive" : "busy") : "idle";
-      els.machineBadge.className = `badge ${status?.wait ? "trains" : "free"}`;
+      els.machineBadge.textContent = status?.wait ? (status.leases.exclusive ? "exclusive" : "busy") : memoryCapped ? "memory cap" : "idle";
+      els.machineBadge.className = `badge ${status?.wait || memoryCapped ? "trains" : "free"}`;
+      els.machineBadge.title = memoryCapped ? "Severe-memory parallelism cap latched — worker starts stay capped until free memory recovers past the release band." : "";
     }
     els.machineList.textContent = "";
     for (const entry of status?.running ?? []) {

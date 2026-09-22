@@ -144,3 +144,25 @@ test("standalone quoted work references retain their full title but added requir
     assert.equal(reply.request, null, "the host must retain the complete user instruction");
   }
 });
+
+// "What are the open issues currently in the project?" used to fall through
+// to chat and answer with the focused node and a memory dump. Issues, tickets
+// and bugs are the board plus the repo's own tracker.
+test("open issues, tickets and bugs read as the tasks lookup and answer from the tracker facts", () => {
+  for (const text of [
+    "What are the open issues currently in the project?", "Any open issues?", "Which tickets are still open",
+    "List the known bugs", "show me the open tickets", "what issues are left in the tracker",
+  ]) assert.equal(classifyIntent(text), "tasks", text);
+  assert.equal(classifyIntent("clear the backlog"), "compact", "queue cleaning keeps its own route");
+  assert.equal(classifyIntent("fix the problems"), "fix", "the fix pass keeps its route");
+  const withTracker = { ...facts, projectWork: { text: 'Issue tracker: local markdown under .scratch/ (docs/agents/issue-tracker.md). .scratch/calmer: map "Calmer" (2 decided, 3 in the fog), 3 open tickets (1 on the frontier), 1 resolved.' } };
+  const reply = localReply({ text: "What are the open issues currently in the project?", facts: withTracker, state });
+  assert.deepEqual(reply.actions, []);
+  assert.match(reply.text, /1 open task: "Add an export button"/);
+  assert.match(reply.text, /Issue tracker: local markdown under \.scratch\//);
+  assert.match(reply.text, /3 open tickets \(1 on the frontier\)/);
+  assert.doesNotMatch(reply.text, /Kept in the thread|Memory:/);
+  const bare = localReply({ text: "What are the open issues currently in the project?", facts, state });
+  assert.match(bare.text, /no issue tracker Studio can read/);
+  assert.match(bare.text, /the board's open issues/);
+});

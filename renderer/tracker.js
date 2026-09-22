@@ -88,10 +88,14 @@
     return node;
   }
   function costText(record) {
-    return record?.knownRecords > 0 ? money(record.known) : "Unknown";
+    // A plan or subscription reports no per-call cost: calls without a price
+    // are "unpriced", and no calls at all are $0, never "Unknown".
+    if (record?.knownRecords > 0) return money(record.known);
+    return record?.unknownRecords > 0 ? "unpriced" : money(0);
   }
   function localCost(record) {
-    return record && record.knownRecords > 0 ? money(record.spentUsd) : "Unknown";
+    if (record && record.knownRecords > 0) return money(record.spentUsd);
+    return record?.unknownRecords > 0 ? "unpriced" : money(0);
   }
   const origins = (record) => `Studio ${number(record?.origins?.studio)} · coding ${number(record?.origins?.["opencode-cli"])}`;
 
@@ -243,6 +247,7 @@
     const store = local.store;
     if (!store) return "";
     if (store.ok === false) return ` Coding sessions: ${store.error || "the OpenCode store could not be read."}`;
+    if (store.note && !store.rows) return ` Coding sessions: none read. ${store.note}`;
     return ` Coding sessions: ${number(store.rows)} turns read from the OpenCode store${store.since ? ` since ${when(store.since)}` : ""}.`;
   }
 
@@ -349,7 +354,8 @@
       const estimate = local.credits;
       if (estimate) list.append(row("Local estimate", `5h ${localCost(estimate.rolling)}/${money(estimate.rolling.limitUsd, 0)} · wk ${localCost(estimate.weekly)}/${money(estimate.weekly.limitUsd, 0)} · mo ${localCost(estimate.monthly)}/${money(estimate.monthly.limitUsd, 0)}`));
       target.append(list);
-      if (local.store?.ok === false) target.append(element("p", "tracker-line tracker-line-warn", "Coding sessions unavailable: the OpenCode store could not be read."));
+      if (local.store?.ok === false) target.append(element("p", "tracker-line tracker-line-warn", `Coding sessions unavailable: ${local.store.error || "the OpenCode store could not be read."}`));
+      else if (local.store?.note && !local.store.rows) target.append(element("p", "tracker-line tracker-line-warn", `Coding sessions: none read. ${local.store.note}`));
     }
   }
 

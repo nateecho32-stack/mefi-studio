@@ -1,5 +1,124 @@
 # Test Runs
 
+Commit-evidence verification loop closed on the remaining-text gate
+(2026-09-21, night, run_1790035904812_8 for task_326aafb524dcb758).
+The prior attempt's feature work (claimedCommitHash + commit branch in
+verifyCompletion, commitEvidence in scripts/eyes.mjs, eyes-worker
+allowlist, main.cjs evidence.commits prefetch, runner-observed-commit
+receipt trust, unit + real-git tests) was re-verified present and green,
+and its deployment was proven, not assumed: sha256 of String(
+verifyCompletion) from this tree equals evaluator.sourceSha256
+e51b386ebc464a928ae896c5b8797252f7658be02c72977f59eca9a1c0644ca4 in
+receipt rcp_ccc78643aae122d6 — the live app was already evaluating with
+the new code when it failed. The loop's true cause was the receipt's
+input outstanding: true: noRemainingWork rejected "none in scope"
+(the attempt's remaining text) and the outstanding gate fires before
+any evidence branch, so commit evidence never got the chance.
+Fix: noRemainingWork (scripts/assistant.mjs) accepts an optional
+"in/within (this) scope" qualifier on its none/nothing/no-remaining
+phrases; guards pinned in tests/verification_checks.test.mjs keep
+"none of the tests pass" and "none in the other module" outstanding.
+Evidence: node --test verification_checks + commit_evidence +
+executor_result_protocol 17/17 pass; npm run check exit 0 (90 targets,
+178 specs); npm run audit 0 findings; end-to-end repro of the exact
+prior receipt shape now returns verified ("1 recorded check(s)
+passed", outstanding false) while an unobserved commit claim still
+fails. Uncommitted-tree commit + dist payload file re-sync remain with
+the commit-owner card; full npm test gate is carded separately.
+
+Cover-window interference verification re-pass (2026-09-21, night,
+run_1790035748558_5 for task_17537ddbe6106840, retry after
+run_1790031638041_10's recorded checks could not be confirmed).
+Re-established ground truth on HEAD 0c9ce23: the coverLost work is
+committed (cb93e79 — occlusion-probe-electron.cjs cover "closed"
+listener with the coverTeardownStarted self-destroy flag plus
+coverLostRecord routing in finish(), occlusion_probe.test.mjs skip
+before any per-phase assert), and this session re-proved every claim
+from scratch rather than trusting the report: `npm run check` clean
+(90 targets, 178 specs, css, syntax); serialized `node --test
+tests/occlusion_probe.test.mjs` passed strict native occlusion
+(document.hidden, occluded rAF growth 0, lag 0 ms, 1 pass / 0 fail);
+and the live interference itself, reproduced via an external Win32
+WM_CLOSE posted to the "occluder" cover mid-occluded-measure —
+fixture-direct exited 0 with the coverLost record (phase=
+occluded-measure, trigger, coverDestroyed=true, measuredRafGrowth=
+null for the never-finished measure) and the same close under the
+node harness yielded 1 skipped / 0 fail / exit 0 with the full
+diagnostic line (occlusion detection, foreground identity, timeline
+tail). The earlier verification failure was session check-recording,
+not the tree: the flagged changed files are the concurrent sessions'
+uncommitted work, untouched here.
+
+Memory-cap telemetry surfaced in the Explorer Machine panel and briefing
+facts (2026-09-21, night, run_1790035560126_2 for task_c87b4bfb6577188c,
+parent task_653bec47a4549e05 "Persistent-memory guard — follow-up e2b151").
+This row also logs run_1790027578783_19, the parent build that authored the
+severe-memory parallelism cap (severeCapSamples hysteresis, holdKind
+"memory-cap", resources.memorySevereCapped in scripts/machine.mjs plus the
+machine_capacity and assistant_readiness_reply coverage) and left the UI
+surfacing as this card's scope; that code landed in 3198c4d (verified via
+git log -S memorySevereCapped) and its full-gate runs are logged below
+(run_1790028566027_42, run_1790035430350_1). This attempt:
+scripts/machine.mjs describe() now pushes "Severe-memory parallelism cap
+still latched — new worker starts stay capped until free memory recovers"
+whenever memorySevereCapped is true without the active memory-cap hold (the
+drained-pool case where admission is clear for one worker but parallelism
+is not — tests/machine_capacity.test.mjs pins both the hold-reason summary
+and the latched-clear summary); renderer/explorer.js renderMachine reads
+status.capacity.resources and shows a "memory cap" badge (trains tone, info
+tint, hover title) while the latch holds, keeps "busy" under the active
+hold, and reverts to idle/free when the latch releases
+(tests/explorer_ui.test.mjs drives the onMachineStatus feed through
+latched-clear, active-hold and released states); scripts/assistant.mjs
+buildFacts adds memorySevereCapped to the executor capacity resources
+allowlist beside holdKind/memoryShortfall/memoryWarning, with the
+latch-clear fixture pinned in tests/assistant_readiness_reply.test.mjs.
+Booklet rebuilt (hash f98dd2322a01, unchanged model set). Verification:
+node --test on machine_capacity + assistant_readiness_reply + explorer_ui
+38/38 pass; npm run check clean (90 targets, 178 specs, css merge-skip and
+unused selectors, syntax). The concurrent commit-evidence session's
+uncommitted work (main.cjs autopilotHousekeeping, the verifyCompletion
+block in scripts/assistant.mjs, scripts/eyes-client.cjs, scripts/eyes.mjs,
+scripts/receipts.mjs, tests/verification_checks.test.mjs, untracked
+tests/commit_evidence.test.mjs) was left untouched — the assistant.mjs
+edit here is the buildFacts allowlist line only. Full npm test not run in
+this attempt; the three touched suites plus the check gate cover the
+change, and the full-gate baseline for this tree is logged in
+run_1790035430350_1 above.
+
+Full npm test re-run green after the severe-memory parallelism cap
+merge landed in commits (2026-09-21, night). Run run_1790035430350_1
+for task_cf5dbf3b66810435 (parent task_1a265efeeb6cbdd3
+"Persistent-memory guard"), the verification retry after the original
+green run could not be confirmed: that run's TESTRUNS row stands (see
+run_1790028566027_42 below) and its only leftover, the then-
+uncommitted cap code, has since landed, so this attempt re-proved the
+gate on the current tree. Pre-run verification: HEAD 0c9ce23 carries
+the cap (3198c4d touches scripts/machine.mjs — the severeCapSamples
+hysteresis — and tests/machine_capacity.test.mjs, confirmed via git
+log) plus the later cb93e79 and 0c9ce23, while the concurrent
+session's uncommitted verifyCompletion/commit-evidence work (main.cjs,
+scripts/assistant.mjs, scripts/eyes-client.cjs, scripts/eyes.mjs,
+scripts/receipts.mjs, tests/verification_checks.test.mjs, untracked
+tests/commit_evidence.test.mjs) sat in the worktree untouched. Full
+`npm test` exited 0 through the whole chain: the main node stage 1719
+tests / 1717 pass / 0 fail / 2 skipped in 41.3 s — the same two known
+environment-conditional skips as before (the live gateway Jev-model
+resolution without credentials, and the in-process vm-modules source
+check needing --experimental-vm-modules); serialized eyes_toggle 1/1
+(3.5 s, fetch gaps 295-1264 ms, 6 fetches); serialized occlusion_probe
+took its documented occlusionUnsupported environment skip this time
+(1 skip / 0 fail, 19.0 s: this desktop never emitted occlusion events
+— cover shown focused but visibility never flipped and rAF never went
+silent within 15 s, 8 focus reassertions — where run_1790028566027_42
+and cb93e79's landing run both saw the strict native pass); python
+contracts 246 OK in 48.5 s; normalized-path lock checks 6/6 "all
+checks passed". The suite grew 1695 → 1719 tests since that run
+(landed sibling work plus the in-flight commit-evidence tests). The
+concurrent session's uncommitted work remains uncommitted for its
+owner; committing it (and this row) is follow-up scope, not test
+scope.
+
 Occlusion-probe cover guard landed, in-flight tree remainder closed
 out (2026-09-21, night, run_1790031887248_14 for
 task_65726c87fbcd7cf9, commit owner for the in-flight tree). The

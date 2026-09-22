@@ -4,7 +4,7 @@
   "use strict";
   const $ = (name) => document.getElementById(`plans-${name}`);
   const api = () => window.mefiStudio;
-  const state = { projectId: null, projectName: "Your project", plans: [], selected: "new", busy: false, pending: null, tasks: null, workError: null, epoch: 0, opened: false, readId: 0, workReadId: 0 };
+  const state = { projectId: null, projectName: "Your project", plans: [], selected: "new", busy: false, pending: null, tasks: null, workError: null, epoch: 0, opened: false, readId: 0, workReadId: 0, existing: null, existingOpen: false };
   let initialized = false;
   let workTimer = null;
   let workFlight = null;
@@ -455,12 +455,104 @@
     }
     if (item.history.length > limit) button("Show older revisions", area, () => { local.historyLimit = limit + 12; render(); const last = $("detail").lastElementChild; if (last) last.open = true; });
   }
+  // What the folder already holds, read by the desktop app when the plans
+  // list is fetched: wayfinder maps and tickets on the repo's issue tracker
+  // (local .scratch/ files or GitHub issues) and the agents, skills and
+  // commands its coding tools can call. Shown while a new idea is being
+  // set up so an existing map is planned from, not planned twice; a saved
+  // plan keeps it folded under a summary line.
+  function existingWork(item) {
+    const work = state.existing;
+    if (!work) return;
+    const area = section("Already in this project", "Maps, tickets and issues Studio found in this folder, and the tooling available to the agents that will work here.");
+    area.id = "plans-existing-section"; area.classList.add("planning-existing");
+    if (work.ok === false) { node("p", "planning-subtle", `The folder could not be scanned: ${work.error || "unknown error"}.`, area); return; }
+    const tracker = work.tracker || {};
+    const efforts = Array.isArray(work.efforts) ? work.efforts : [];
+    const remote = work.remote || null;
+    const tooling = work.tooling || null;
+    const counts = work.counts || {};
+    const trackerName = { github: "GitHub issues", gitlab: "GitLab issues", linear: "Linear", local: "local markdown under .scratch/", other: "a custom tracker" }[tracker.kind] || null;
+    const summary = [
+      trackerName ? `Issue tracker: ${trackerName}` : "No issue tracker configured",
+      `${countLabel(counts.maps || 0, "map")}`,
+      `${countLabel(counts.open || 0, "open ticket")}${counts.frontier ? ` (${counts.frontier} on the frontier)` : ""}`,
+      tooling ? `${countLabel(tooling.counts?.agents || 0, "agent")}, ${countLabel(tooling.counts?.skills || 0, "skill")}, ${countLabel(tooling.counts?.commands || 0, "command")}` : null,
+    ].filter(Boolean).join(" · ");
+    const folded = Boolean(item) && !state.existingOpen;
+    const wrap = node("details", "", undefined, area); wrap.open = !folded; wrap.id = "plans-existing-details";
+    const head = node("summary", "", summary, wrap); head.id = "plans-existing-summary";
+    wrap.addEventListener("toggle", () => { state.existingOpen = Boolean(wrap.open); });
+    const grid = node("div", "planning-existing-grid", undefined, wrap);
+    const card = (title) => { const result = node("article", "planning-card", undefined, grid); node("h4", "", title, result); return result; };
+    // The tracker and its docs.
+    const setup = card(trackerName ? `Tracker: ${trackerName}` : "No issue tracker yet");
+    if (!trackerName) node("p", "planning-subtle", "Nothing under docs/agents/issue-tracker.md and no .scratch/ tickets. Run the engineering skills' setup (setup-matt-pocock-skills) in this folder, or plan here and create tasks on the board.", setup);
+    else {
+      if (tracker.summary) node("p", "planning-subtle", tracker.summary, setup);
+      const docs = node("ul", "", undefined, setup);
+      for (const [label, file] of [["Tracker", tracker.doc], ["Triage labels", tracker.labelsDoc], ["Domain docs", tracker.domainDoc], ["Context", tracker.contextDoc], ["Context map", tracker.contextMap]]) if (file) { const row = node("li", "", `${label}: `, docs); node("code", "", file, row); }
+    }
+    // Local efforts: map, spec, tickets.
+    const planFrom = (title, destination) => { state.selected = "new"; draft().details = { title: String(title || "").slice(0, 180), destination: String(destination || ""), outOfScope: "" }; draft().detailsDirty = true; persist(); render(); note(`Planning from "${title}". The map stays where it is; this plan records your decisions in Studio.`); $("destination")?.focus(); };
+    if (!efforts.length && !(remote?.maps?.length || remote?.tickets?.length)) {
+      const none = card("No maps or tickets found");
+      node("p", "planning-subtle", tracker.kind === "github" ? (remote?.ok === false ? `GitHub issues could not be listed: ${remote.error}.` : "The repository has no open issues right now.") : "A wayfinder map lives at .scratch/<effort>/map.md with tickets under issues/; none exist here yet.", none);
+    }
+    for (const effort of efforts.slice(0, 12)) {
+      const box = card(effort.map ? effort.map.title : effort.spec ? effort.spec.title : effort.slug);
+      const meta = node("p", "planning-subtle", undefined, box);
+      meta.textContent = [effort.dir, effort.map ? "wayfinder map" : null, effort.spec ? "spec" : null, effort.tickets.length ? `${countLabel(effort.counts.open + effort.counts.claimed, "open ticket")} · ${effort.counts.frontier} on the frontier · ${effort.counts.resolved} resolved` : null].filter(Boolean).join(" · ");
+      if (effort.map?.destination) node("p", "", effort.map.destination, box);
+      if (effort.map) node("p", "planning-subtle", `${countLabel(effort.map.decisions, "decision")} so far · ${countLabel(effort.map.fog, "item")} not yet specified · ${countLabel(effort.map.outOfScope, "item")} out of scope`, box);
+      const frontier = effort.tickets.filter((ticket) => ticket.status !== "resolved").slice(0, 6);
+      if (frontier.length) {
+        const list = node("ul", "", undefined, box);
+        for (const ticket of frontier) { const row = node("li", "", `${ticket.number !== null ? `${String(ticket.number).padStart(2, "0")} ` : ""}${ticket.title}`, list); node("small", "", ` · ${ticket.status}${ticket.type ? ` · ${ticket.type}` : ""}${ticket.blockedBy.length && !ticket.unblocked ? ` · blocked by ${ticket.blockedBy.join(", ")}` : ""}`, row); }
+        if (effort.tickets.filter((ticket) => ticket.status !== "resolved").length > frontier.length) node("p", "planning-subtle", `+${effort.tickets.filter((ticket) => ticket.status !== "resolved").length - frontier.length} more open`, box);
+      }
+      if (effort.map && !frozen(item)) { const actions = node("div", "planning-actions", undefined, box); button("Plan from this map", actions, () => planFrom(effort.map.title, effort.map.destination), `plan-from-${effort.slug}`); }
+    }
+    // Remote tracker: GitHub maps and issues.
+    if (remote?.ok) {
+      for (const map of remote.maps.slice(0, 6)) {
+        const box = card(map.title);
+        node("p", "planning-subtle", `GitHub issue #${map.number} · wayfinder map${map.assigned ? " · claimed" : ""}`, box);
+        const actions = node("div", "planning-actions", undefined, box);
+        if (!frozen(item)) button("Plan from this map", actions, () => planFrom(map.title, map.url ? `Reach the destination of the wayfinder map "${map.title}" (${map.url}).` : ""), `plan-from-issue-${map.number}`);
+      }
+      if (remote.tickets.length) {
+        const box = card(`${countLabel(remote.tickets.length, "open GitHub issue")}`);
+        node("p", "planning-subtle", `${remote.counts?.readyForAgent || 0} ready-for-agent · ${remote.counts?.claimed || 0} assigned · ${remote.counts?.wayfinder || 0} wayfinder tickets`, box);
+        const list = node("ul", "", undefined, box);
+        for (const issue of remote.tickets.slice(0, 8)) { const row = node("li", "", `#${issue.number} ${issue.title}`, list); if (issue.labels.length) node("small", "", ` · ${issue.labels.slice(0, 3).join(", ")}`, row); }
+        if (remote.tickets.length > 8) node("p", "planning-subtle", `+${remote.tickets.length - 8} more`, box);
+      }
+    } else if (remote && remote.ok === false && efforts.length) node("p", "planning-subtle", `GitHub issues could not be listed: ${remote.error}.`, wrap);
+    // Tooling: agents, skills, commands by scope.
+    if (tooling) {
+      const box = card("Tooling available here");
+      const docs = [tooling.docs?.claudeMd, tooling.docs?.agentsMd, tooling.docs?.mcp].filter(Boolean);
+      node("p", "planning-subtle", `${countLabel(tooling.counts?.agents || 0, "agent")} · ${countLabel(tooling.counts?.skills || 0, "skill")} · ${countLabel(tooling.counts?.commands || 0, "command")}${tooling.counts?.plugins ? ` · ${countLabel(tooling.counts.plugins, "plugin")}` : ""}${docs.length ? ` · ${docs.join(", ")}` : ""}`, box);
+      const chips = (label, rows) => {
+        if (!rows.length) return;
+        node("p", "planning-subtle", label, box);
+        const list = node("ul", "planning-tool-list", undefined, box);
+        for (const row of rows.slice(0, 40)) { const chip = node("li", "", row.name, list); chip.dataset.scope = row.scope; chip.title = `${row.scope}${row.source ? ` · ${row.source}` : ""}${row.description ? `\n${row.description}` : ""}`; }
+        if (rows.length > 40) node("li", "", `+${rows.length - 40} more`, list);
+      };
+      const byScope = (rows) => [...(rows || [])].sort((a, b) => ({ project: 0, user: 1, plugin: 2 }[a.scope] ?? 3) - ({ project: 0, user: 1, plugin: 2 }[b.scope] ?? 3) || a.name.localeCompare(b.name));
+      chips("Agents", byScope(tooling.agents)); chips("Skills", byScope(tooling.skills)); chips("Commands", byScope(tooling.commands));
+      if (!(tooling.agents?.length || tooling.skills?.length || tooling.commands?.length)) node("p", "planning-subtle", "No project or user agents, skills or commands were found (.claude/, .opencode/, ~/.claude, ~/.config/opencode).", box);
+    }
+  }
   function render() {
     renderList(); $("detail").replaceChildren();
     if (!state.projectId) { node("p", "planning-empty", "Open the desktop app and choose a project to start planning.", $("detail")); controls(); return; }
     const item = plan();
     renderWorkflow(item);
     details(item); if (item) { unknowns(item); questions(item); specification(item); history(item); }
+    existingWork(item);
     controls();
   }
   async function refreshWork() {
@@ -510,7 +602,7 @@
       const projectId = state.projectId; state.projectName = projects.projects.find((item) => item.id === projectId)?.name || "Your project";
       const result = guard(await api().planningList({ projectId }));
       if (epoch !== state.epoch || readId !== state.readId || projectId !== state.projectId || (result.projectId && result.projectId !== projectId)) return;
-      state.plans = result.plans || []; render(); if (refreshTasks) void refreshWork();
+      state.plans = result.plans || []; state.existing = result.existing ?? null; render(); if (refreshTasks) void refreshWork();
     } catch (error) { if (epoch === state.epoch && readId === state.readId) { render(); note(error.message, true); } }
   }
   async function open(options = {}) {

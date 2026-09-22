@@ -66,7 +66,7 @@ test("paused builders and running workers are reported together without claiming
 });
 
 test("builder facts and replies retain machine admission decisions without reporting manual slots", () => {
-  const resources = { cpuPercent: 94, availableMemoryMB: 1900, totalMemoryMB: 16384, requiredMemoryMB: 440, lagMs: 175, hostLagMs: 125, rendererLagMs: 175, lagPressure: true, holdKind: "lag", memoryShortfall: null, memoryWarning: null };
+  const resources = { cpuPercent: 94, availableMemoryMB: 1900, totalMemoryMB: 16384, requiredMemoryMB: 440, lagMs: 175, hostLagMs: 125, rendererLagMs: 175, lagPressure: true, memorySevereCapped: false, holdKind: "lag", memoryShortfall: null, memoryWarning: null };
   const facts = buildFacts({ executor: { enabled: true, parallel: 2, running: Array.from({ length: 5 }, (_, index) => ({ title: `Work ${index}` })), capacity: { canStart: false, reason: "Studio is responding slowly", resources } } });
   assert.equal(facts.executor.adaptiveParallel, true);
   assert.deepEqual(facts.executor.capacity, { canStart: false, reason: "Studio is responding slowly", resources });
@@ -115,12 +115,23 @@ test("a memory hold rides the facts and the reply names finishing or compacting 
   // The latched severe-memory parallelism cap keeps the memory-shaped remedy
   // too: releasing workers frees memory, it is not a responsiveness wait.
   const capped = buildFacts({
-    executor: { enabled: true, parallel: 2, adaptiveParallel: true, running: [{ title: "worldgen triage" }], capacity: { canStart: false, reason: "Machine memory is recovering from the severe floor (350 MB available; 450 MB needed) — worker parallelism stays capped at 4 until free memory recovers.", resources: { availableMemoryMB: 350, requiredMemoryMB: 440, lagMs: 5, hostLagMs: 5, rendererLagMs: null, lagPressure: false, holdKind: "memory-cap", memoryShortfall: "small", memoryWarning: null } } },
+    executor: { enabled: true, parallel: 2, adaptiveParallel: true, running: [{ title: "worldgen triage" }], capacity: { canStart: false, reason: "Machine memory is recovering from the severe floor (350 MB available; 450 MB needed) — worker parallelism stays capped at 4 until free memory recovers.", resources: { availableMemoryMB: 350, requiredMemoryMB: 440, lagMs: 5, hostLagMs: 5, rendererLagMs: null, lagPressure: false, memorySevereCapped: true, holdKind: "memory-cap", memoryShortfall: "small", memoryWarning: null } } },
   });
+  assert.equal(capped.executor.capacity.resources.memorySevereCapped, true, "the latched severe-memory cap rides the facts");
+  assert.equal(capped.executor.capacity.resources.holdKind, "memory-cap");
   const cappedReply = localReply({ text: "builder status", facts: capped });
   assert.match(cappedReply.text, /Dispatch waiting: Machine memory is recovering from the severe floor/);
   assert.match(cappedReply.text, /Finishing or compacting existing work frees memory and resumes new starts/);
   assert.doesNotMatch(cappedReply.text, /resume automatically when machine capacity recovers/);
+
+  // The latch outlives the hold: with no workers running the cap defers to
+  // normal admission while memorySevereCapped stays true on the facts, so a
+  // status reply can still name the capped parallelism.
+  const latchedClear = buildFacts({
+    executor: { enabled: true, parallel: 2, adaptiveParallel: true, running: [], capacity: { canStart: true, reason: null, resources: { availableMemoryMB: 350, requiredMemoryMB: 440, lagMs: 5, hostLagMs: 5, rendererLagMs: null, lagPressure: false, memorySevereCapped: true, holdKind: null, memoryShortfall: "small", memoryWarning: "Machine memory is low (350 MB available; 440 MB needed before another worker) — starting on the explicit memory override." } } },
+  });
+  assert.equal(latchedClear.executor.capacity.resources.memorySevereCapped, true, "the latch stays visible after the hold clears");
+  assert.equal(latchedClear.executor.capacity.resources.holdKind, null);
 
   // An overridden small shortfall admits work: the warning rides the facts
   // while the hold is gone.

@@ -131,3 +131,15 @@
 @media (prefers-reduced-motion: reduce) { .planning-flow-dot { animation: none !important; } }
 .no-motion .planning-flow-dot, .ws-still .planning-flow-dot { animation: none !important; }
 @media print { .planning-overlay { position: static; padding: 0; background: none; } .planning-sheet { height: auto; overflow: visible; } .planning-sidebar, .planning-actions { display: none; } .planning-body { display: block; } .planning-detail { overflow: visible; } }
+
+/* Already in this project: maps, tickets and tooling found in the folder. */
+.planning-existing { display: grid; gap: 12px; }
+.planning-existing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.planning-existing .planning-card { margin: 0; }
+.planning-existing .planning-card h4 { margin-top: 0; }
+.planning-existing ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
+.planning-existing li small { color: var(--muted); }
+.planning-existing .planning-tool-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; padding: 0; list-style: none; }
+.planning-existing .planning-tool-list li { padding: 3px 9px; border: 1px solid var(--hairline); border-radius: 999px; font-size: 12px; background: var(--tint-gold-1); }
+.planning-existing .planning-tool-list li[data-scope="plugin"] { border-style: dashed; }
+.planning-existing details summary { cursor: pointer; font-size: 13px; color: var(--muted); }

@@ -3020,6 +3020,11 @@
     } else if (state.treeStatus === "unavailable") {
       title = "Store unavailable";
       copy = `The OpenCode store could not be read. ${window.MefiTree?.statusText?.() ?? ""}`.trim();
+    } else if (typeof window.MefiTree?.note?.() === "string" && window.MefiTree.note()) {
+      // The store file exists but has no session schema yet: say what is
+      // missing and how to fill it instead of "nothing in the last 14 days".
+      title = "No sessions in the store yet";
+      copy = window.MefiTree.note();
     }
     const wasHidden = el.empty.hidden;
     el.empty.hidden = false;

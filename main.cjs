@@ -21,6 +21,7 @@ const taskDelegation = require("./scripts/task-delegation.cjs");
 const executorResume = require("./scripts/executor-resume.cjs");
 const { createPlanningStore } = require("./scripts/planning.cjs");
 const { createPlanningService } = require("./scripts/planning-service.cjs");
+const projectWork = require("./scripts/project-work.cjs");
 const { applyIdeaAction } = require("./scripts/idea-actions.cjs");
 const { createMusicRecommender } = require("./scripts/music-recommendations.cjs");
 const { attachRendererRecovery } = require("./scripts/renderer-recovery.cjs");
@@ -1440,6 +1441,7 @@ const ASSISTANT_CHAT_SYSTEM = [
   "You receive JSON: message (the user's latest text — always present, even when short), did (what you just did), thread, then facts (the folder that project opened — project — live sessions with todos, file collisions, tasks, the request inbox, ideas, plans saved in Studio, the folder's own scanned plan documents — projectScan — machine, audit, briefing, update, the executor and its in-flight jobs, log — the assistant's own recent activity — suggestions — ranked next-work picks — and memory, a pushed primer of typed cells: dec/obs/bel/rsk/ver).",
   "facts.project is the folder the user opened: its name and path. This project, here, the repo, and the folder's own name all refer to it — never say the user's project or folder is missing while it matches facts.project.",
   "facts.projectScan is Studio's local scan of that folder: the plan documents already in the checkout, their items, and starting points. It is separate from facts.planning, which lists only plans saved in Studio's Plans. When the user asks you to read the plans in this project or in the open folder, answer from projectScan with its plan titles and files. A null projectScan means that folder has not been scanned yet — it never means the folder holds no plans.",
+  "facts.projectWork is the folder's own issue tracker and tooling: which tracker the repo uses (docs/agents/issue-tracker.md), wayfinder maps and tickets under .scratch/<effort>/ or on GitHub, and the agents, skills and commands available to coding tools there (counts in projectWork.tooling). When the user asks about open issues, tickets, maps, or which agents and skills exist, answer from projectWork.text together with the board's tasks. A null projectWork means the folder has none of those conventions.",
   "facts.memory is compiled against this message before you see it — do not search for it. If memory.dig is true, a remembered fact was superseded; address that row before acting.",
   "facts.log is the assistant's own activity tail (ticks omitted). Read it when asked about the log, what just happened, or what you have been doing; do not invent lines that are not there.",
   "facts.planning describes saved decision plans and their next open questions. These are separate from executable tasks: direct the user to Plans or Plan an idea to discuss questions, record decisions, review a specification, and explicitly create its tasks. Never claim a plan is running or has started builders just because it exists or is approved. A null planning section means unavailable, not no plans.",
@@ -1981,7 +1983,14 @@ async function codingSessionUsage(now) {
     const eyes = await getEyes();
     if (typeof eyes.usageLedger !== "function") return { ok: false, rows: [], error: "The store reader has no usage ledger." };
     const result = await eyes.usageLedger({ since: now - USAGE_LEDGER_DAYS * 86400000, now });
-    return { ok: true, rows: Array.isArray(result?.rows) ? result.rows : [], scanned: result?.scanned ?? 0, since: result?.since ?? null, warm: result?.warm === true };
+    const rows = Array.isArray(result?.rows) ? result.rows : [];
+    // An empty ledger from a store without its session schema is not "no
+    // coding turns": the panel says what the store is missing instead.
+    let note = null;
+    if (!rows.length && typeof eyes.storeStatus === "function") {
+      try { const status = await eyes.storeStatus(); if (status && !status.ok) note = status.note; } catch {}
+    }
+    return { ok: true, rows, scanned: result?.scanned ?? 0, since: result?.since ?? null, warm: result?.warm === true, note };
   } catch (error) {
     return { ok: false, rows: [], error: `Coding sessions could not be read: ${String(error?.message ?? error).slice(0, 160)}` };
   }
@@ -4072,6 +4081,14 @@ async function assistantWatcherJob(now, entry) {
   const organized = store ? await assistantOrganize(now, store) : false;
   const problems = [];
   if (!store) problems.push({ kind: "store-unavailable", text: `OpenCode store unavailable: ${assistantCache.storeError}` });
+  else if (!store.sessions.length) {
+    // A store file without its session schema reads as empty; the problem
+    // list names what is missing so the fix pass and the chat can say it.
+    try {
+      const status = await (await getEyes()).storeStatus?.();
+      if (status && !status.ok && status.present) problems.push({ kind: "store-unavailable", text: status.note });
+    } catch {}
+  }
   if (store?.collisions.length) {
     const files = store.collisions.slice(0, 3).map((collision) => path.basename(String(collision.file)));
     problems.push({ kind: "collision", text: `${store.collisions.length} file(s) edited by several sessions: ${files.join(", ")}` });
@@ -5710,6 +5727,12 @@ async function assistantMessageFacts(now, query = "") {
   // store must neither serialize all the other reads nor discard their facts.
   await Promise.allSettled([
     (async () => { raw.planning = await planningService().summary({ projectId: projects.current().id, query }); })(),
+    // The repo's own issue tracker and tooling: "open issues" and "which
+    // skills do we have" answer from this, not from the board alone.
+    (async () => {
+      const work = await projectWork.scanProjectWork(projects.current().path);
+      if (work?.ok) raw.projectWork = { text: projectWork.describeProjectWork(work), counts: work.counts, tracker: work.tracker?.kind ?? null, tooling: work.tooling?.counts ?? null };
+    })(),
     (async () => {
       const store = await assistantReadStore();
       Object.assign(raw, { sessions: store.sessions, todos: store.todos, collisions: store.collisions, presence: store.presence, uncommitted: store.uncommitted });
@@ -6937,6 +6960,10 @@ function planningService() {
       project,
       store: createPlanningStore({ filePath, project }),
       mutateBoard,
+      // The modal's "Already in this project" panel: maps, tickets and
+      // issues on the repo's tracker plus the agents, skills and commands
+      // its coding tools can reach. Read-only, cached a minute per folder.
+      scanWork: ({ root, fresh = false } = {}) => projectWork.scanProjectWork(root, { fresh }),
       onConverted: async (admitted = []) => {
         // Only durable new task rows reach advisory intake. A retry of an
         // already admitted specification must not classify its tasks twice.
@@ -9818,7 +9845,7 @@ async function autopilotHousekeeping() {
     return Number.isFinite(since) && since > 0 && Number.isFinite(until) && until > 0 && until >= since ? { since, until } : null;
   };
   const evidenceKey = (attempt, window) => `${attempt.sessionId}|${window.since}|${window.until}`;
-  const evidence = { changes: new Map(), checks: new Map() };
+  const evidence = { changes: new Map(), checks: new Map(), commits: new Map() };
   // What this pass could not settle yet, and when to look again: a card
   // inside its evidence dwell is due when the dwell expires; a card whose
   // overseer check is still running is settled by that result's own kick;
@@ -9854,7 +9881,11 @@ async function autopilotHousekeeping() {
       await mutateBoard((board) => {
         candidates = [...(Array.isArray(board.tasks) ? board.tasks : []), ...(Array.isArray(board.requests) ? board.requests : [])]
           .filter((row) => row?.lastAttempt?.sessionId && (row.status === "awaiting_verification" || row.status === "verifying"))
-          .map((row) => ({ lastAttempt: { ...row.lastAttempt } }));
+          .map((row) => ({
+            projectPath: typeof row.projectPath === "string" && row.projectPath ? row.projectPath : null,
+            scope: [...(Array.isArray(row.files) ? row.files : []), row.file].filter((value) => typeof value === "string" && value.trim()),
+            lastAttempt: { ...row.lastAttempt },
+          }));
         return {};
       });
     } catch {}
@@ -9878,6 +9909,22 @@ async function autopilotHousekeeping() {
           evidence.checks.set(key, { read: await eyes.listSessionChecks({ sessionId: attempt.sessionId, ...window, limit: 200 }) });
         } catch (error) {
           evidence.checks.set(key, { error: String(error?.message ?? error) });
+        }
+      }
+      // A commit-only deliverable claims its commit in the result note; the
+      // runner observes that claim against the repo (does the hash resolve,
+      // is the scoped path clean) on the eyes worker before the evaluator
+      // may count it. No claim or no project path means nothing to observe.
+      if (!evidence.commits.has(key)) {
+        const claimed = typeof assistantModule?.claimedCommitHash === "function" ? assistantModule.claimedCommitHash(attempt.result?.parts) : null;
+        if (claimed && row.projectPath && typeof eyes.commitEvidence === "function") {
+          try {
+            evidence.commits.set(key, await eyes.commitEvidence({ root: row.projectPath, hash: claimed, paths: row.scope }));
+          } catch (error) {
+            evidence.commits.set(key, { hash: null, clean: null, error: String(error?.message ?? error) });
+          }
+        } else if (claimed) {
+          evidence.commits.set(key, { hash: null, clean: null, error: "no observable project path" });
         }
       }
     }
@@ -9952,6 +9999,15 @@ async function autopilotHousekeeping() {
         return null;
       }
       return Array.isArray(read.checks) ? read.checks : [];
+    };
+    // The runner's git observation for a claimed commit, prefetched above.
+    // Missing (no claim, unread store) is null: the evaluator treats a claim
+    // without an observation as unconfirmed, exactly as before this path.
+    const attemptCommit = (attempt) => {
+      if (!attempt.sessionId) return null;
+      const window = attemptEvidenceWindow(attempt);
+      if (!window) return null;
+      return evidence.commits.get(evidenceKey(attempt, window)) ?? null;
     };
     // The overseer's own verification run (row.verificationRun) is direct
     // evidence: map its per-command outcomes into the observedChecks shape
@@ -10031,6 +10087,7 @@ async function autopilotHousekeeping() {
           resolvedHandoffs: task.handoffState?.resolvedTitles ?? [],
           remaining: Array.isArray(task.remaining) ? task.remaining : [],
           resultNote: attempt.result ?? null,
+          commit: attemptCommit(attempt),
           priorAttempts: Number(task.verifyAttempts) || 0,
         });
         // Policy Lab PR0 — the receipt for this settlement. The board keeps
@@ -10115,6 +10172,7 @@ async function autopilotHousekeeping() {
           resolvedHandoffs: request.handoffState?.resolvedTitles ?? [],
           remaining: Array.isArray(request.remaining) ? request.remaining : [],
           resultNote: attempt.result ?? null,
+          commit: attemptCommit(attempt),
           priorAttempts: Number(request.verifyAttempts) || 0,
         });
         // Policy Lab PR0 — settled inbox rows get receipts too, so directly
@@ -11646,7 +11704,7 @@ function registerIpc() {
         lifetime: state.lifetime,
         retention: state.retention,
         credits: opencodeWindows(merged, { now, limits }),
-        store: { ok: store.ok, error: store.error ?? null, rows: store.rows.length, scanned: store.scanned ?? 0, since: store.since ?? null, warm: store.warm === true },
+        store: { ok: store.ok, error: store.error ?? null, note: store.note ?? null, rows: store.rows.length, scanned: store.scanned ?? 0, since: store.since ?? null, warm: store.warm === true },
         coverage: store.ok
           ? "Totals cover the calls Studio made for this project (assistant HTTP and CLI routes, Jev, speed probes) plus every assistant turn OpenCode's own store holds for coding sessions under this project folder, with the cost each provider reported. A plan or subscription reports no per-call cost, so those calls stay unpriced rather than free."
           : "Totals cover the calls Studio made for this project (assistant HTTP and CLI routes, Jev, speed probes). The OpenCode store could not be read this time, so coding sessions are missing from these numbers until it can.",
@@ -11711,7 +11769,13 @@ function registerIpc() {
         eyes.listTodos(),
         eyes.listPngs({ roots: [path.join(projectRoot(), "tools", "logs")] }),
       ]);
-      return { ok: true, sessions, changes, todos, pngs };
+      // An empty listing from a store file that has no session schema is
+      // explained on the empty card rather than shown as "no recent sessions".
+      let note = null;
+      if (!sessions.length && typeof eyes.storeStatus === "function") {
+        try { const status = await eyes.storeStatus(); if (status && !status.ok) note = status.note; } catch {}
+      }
+      return { ok: true, sessions, changes, todos, pngs, note };
     } catch (error) {
       return { ok: false, error: String(error.message ?? error) };
     }

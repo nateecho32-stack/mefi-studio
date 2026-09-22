@@ -390,6 +390,11 @@ export function describe(status) {
     if (Number.isFinite(resources.availableMemoryMB)) usage.push(`${Math.floor(resources.availableMemoryMB)} MB RAM available`);
     if (usage.length) lines.push(usage.join(", "));
     if (!canStart && reason) lines.push(reason);
+    // The latched severe-memory cap outlives its active hold: with no worker
+    // running (or once the hold reason stops applying) admission may be clear
+    // while the latch still caps parallelism, so the summary must say so
+    // instead of reading as a fully free machine.
+    if (resources.memorySevereCapped === true && resources.holdKind !== "memory-cap") lines.push("Severe-memory parallelism cap still latched — new worker starts stay capped until free memory recovers.");
     if (resources.memoryWarning) lines.push(resources.memoryWarning);
   }
   if (status.leases?.exclusive) lines.push(`EXCLUSIVE lease held by ${status.leases.holders[0]?.label || status.leases.holders[0]?.agent || "?"} — wait for it to finish`);

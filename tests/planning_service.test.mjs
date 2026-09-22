@@ -302,3 +302,23 @@ test("distinct approved tasks sharing titles survive compaction, grouping and an
   assert.equal(new Set(swept.tasks.map((task) => task.id)).size, 4);
   assert.equal(new Set(swept.tasks.map((task) => task.planningId)).size, 2);
 });
+
+test("list carries what the folder already holds, and a failed scan leaves the plans standing", async (t) => {
+  const seen = [];
+  const { service, project } = await fixture(t, { scanWork: async ({ root, fresh }) => { seen.push({ root, fresh }); return { ok: true, root, tracker: { kind: "local" }, efforts: [{ slug: "e", dir: ".scratch/e", map: null, spec: null, tickets: [], counts: { open: 0, claimed: 0, resolved: 0, frontier: 0 } }], remote: null, tooling: { counts: { agents: 1, skills: 2, commands: 0, plugins: 0 } }, counts: { maps: 0, specs: 0, open: 0, frontier: 0, resolved: 0 } }; } });
+  const listed = await service.list({ projectId: project.id });
+  assert.equal(listed.ok, true);
+  assert.ok(Array.isArray(listed.plans), "the plans list stands beside the scan");
+  assert.equal(listed.existing.tracker.kind, "local");
+  assert.equal(listed.existing.efforts.length, 1);
+  assert.deepEqual(seen, [{ root: project.path, fresh: false }]);
+  await service.list({ projectId: project.id, fresh: true });
+  assert.deepEqual(seen.at(-1), { root: project.path, fresh: true });
+  const broken = await fixture(t, { scanWork: async () => { throw new Error("gh exploded"); } });
+  const result = await broken.service.list({ projectId: broken.project.id });
+  assert.equal(result.ok, true);
+  assert.equal(result.existing.ok, false);
+  assert.equal(result.existing.error, "gh exploded");
+  const plain = await fixture(t);
+  assert.equal((await plain.service.list({ projectId: plain.project.id })).existing, null, "no scanner means no panel, not an error");
+});

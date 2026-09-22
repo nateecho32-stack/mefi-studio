@@ -249,3 +249,69 @@ test("a pushed board change repaints a converted plan without a task read", asyn
   assert.equal(reads, 0, "the push carries the board; no read is issued");
   assert.equal(env.calls.length, 0);
 });
+
+// The modal shows what the folder already holds — wayfinder maps, tickets,
+// GitHub issues and the tooling available — so an existing map is planned
+// from instead of planned twice.
+test("the modal lists existing maps, tickets and tooling and plans from a map", async () => {
+  const existing = {
+    ok: true, root: "/repo",
+    tracker: { kind: "local", doc: "docs/agents/issue-tracker.md", labelsDoc: "docs/agents/triage-labels.md", domainDoc: null, contextDoc: "CONTEXT.md", contextMap: null, summary: "Local Markdown" },
+    efforts: [{ slug: "calmer-onboarding", dir: ".scratch/calmer-onboarding", map: { file: ".scratch/calmer-onboarding/map.md", title: "Calmer onboarding", destination: "A first five minutes that never asks for a key.", decisions: 2, fog: 3, outOfScope: 1, notes: null }, spec: null,
+      tickets: [{ number: 2, slug: "free-model", title: "Free model or none", file: "x", status: "claimed", type: "grilling", blockedBy: [1], unblocked: true }, { number: 3, slug: "resume", title: "Resume after a crash", file: "y", status: "open", type: "prototype", blockedBy: [2], unblocked: false }],
+      counts: { open: 1, claimed: 1, resolved: 1, frontier: 0 } }],
+    remote: { ok: true, provider: "github", maps: [{ number: 12, title: "Remote map", url: "https://github.com/o/r/issues/12", labels: ["wayfinder:map"], assigned: false }], tickets: [{ number: 14, title: "Export button", url: null, labels: ["ready-for-agent"], assigned: false }], counts: { open: 1, wayfinder: 0, readyForAgent: 1, claimed: 0 }, error: null },
+    tooling: { agents: [{ name: "reviewer", scope: "project", source: ".claude/agents", description: null }], skills: [{ name: "wayfinder", scope: "plugin", source: "mattpocock-skills", description: "Plan a map." }, { name: "grill-me", scope: "project", source: ".claude/skills", description: null }], commands: [], plugins: [{ name: "mattpocock-skills", skills: 1, agents: 0, commands: 0 }], docs: { agentsMd: "AGENTS.md", claudeMd: null, mcp: null }, counts: { agents: 1, skills: 2, commands: 0, plugins: 1 } },
+    counts: { maps: 2, specs: 0, open: 3, frontier: 0, resolved: 1 },
+  };
+  const env = await environment();
+  env.bridge.planningList = async ({ projectId }) => ({ ok: true, projectId, plans: structuredClone(env.data[projectId]), existing: structuredClone(existing) });
+  await env.ui.open({ planId: env.data["project-a"][0].id }); await flush();
+  const panel = env.el("existing-section");
+  assert.ok(panel, "the panel renders for a saved plan");
+  const summary = env.el("existing-summary");
+  assert.match(summary.textContent, /Issue tracker: local markdown under \.scratch\//);
+  assert.match(summary.textContent, /2 maps · 3 open tickets/);
+  assert.match(summary.textContent, /1 agent, 2 skills, 0 commands/);
+  assert.equal(env.el("existing-details").open, false, "folded under a saved plan");
+  const text = panel.textContent;
+  assert.match(text, /Calmer onboarding/);
+  assert.match(text, /A first five minutes that never asks for a key\./);
+  assert.match(text, /2 decisions so far · 3 items not yet specified/);
+  assert.match(text, /02 Free model or none · claimed · grilling/);
+  assert.match(text, /03 Resume after a crash · open · prototype · blocked by 2/);
+  assert.match(text, /Remote map/);
+  assert.match(text, /GitHub issue #12 · wayfinder map/);
+  assert.match(text, /#14 Export button · ready-for-agent/);
+  assert.match(text, /docs\/agents\/issue-tracker\.md/);
+  assert.match(text, /wayfinder/);
+  assert.match(text, /grill-me/);
+  assert.match(text, /reviewer/);
+  // Planning from the local map fills a new plan's destination without saving.
+  await env.el("plan-from-calmer-onboarding").trigger("click");
+  assert.equal(env.el("title").value, "Calmer onboarding");
+  assert.equal(env.el("destination").value, "A first five minutes that never asks for a key.");
+  assert.equal(env.el("existing-details").open, true, "unfolded while a new idea is set up");
+  assert.equal(env.calls.filter((call) => call.action === "create").length, 0, "nothing is saved until Create plan");
+  // A GitHub map carries its link into the destination.
+  await env.el("plan-from-issue-12").trigger("click");
+  assert.equal(env.el("title").value, "Remote map");
+  assert.match(env.el("destination").value, /https:\/\/github\.com\/o\/r\/issues\/12/);
+});
+
+test("a failed scan and a bare folder explain themselves in the panel", async () => {
+  const env = await environment();
+  env.bridge.planningList = async ({ projectId }) => ({ ok: true, projectId, plans: structuredClone(env.data[projectId]), existing: { ok: false, error: "gh exploded" } });
+  await env.ui.open({ create: true }); await flush();
+  assert.match(env.el("existing-section").textContent, /could not be scanned: gh exploded/);
+  env.bridge.planningList = async ({ projectId }) => ({ ok: true, projectId, plans: structuredClone(env.data[projectId]), existing: { ok: true, tracker: { kind: null }, efforts: [], remote: null, tooling: { agents: [], skills: [], commands: [], plugins: [], docs: {}, counts: { agents: 0, skills: 0, commands: 0, plugins: 0 } }, counts: { maps: 0, specs: 0, open: 0, frontier: 0, resolved: 0 } } });
+  await env.ui.open({ create: true }); await flush();
+  const text = env.el("existing-section").textContent;
+  assert.match(text, /No issue tracker yet/);
+  assert.match(text, /setup-matt-pocock-skills/);
+  assert.match(text, /No maps or tickets found/);
+  assert.match(text, /No project or user agents, skills or commands were found/);
+  const plain = await environment();
+  await plain.ui.open({ create: true }); await flush();
+  assert.equal(plain.el("existing-section"), undefined, "no panel without a scan");
+});

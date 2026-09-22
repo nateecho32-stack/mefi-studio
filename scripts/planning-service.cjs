@@ -58,12 +58,21 @@ function summarizePlanning(plans, query = "") {
   };
 }
 
-function createPlanningService({ project, store, mutateBoard, onConverted = async () => {}, complete, gatherContext = async () => null }) {
+function createPlanningService({ project, store, mutateBoard, onConverted = async () => {}, complete, gatherContext = async () => null, scanWork = null }) {
   let assisting = false;
   const scoped = (payload) => payload?.projectId === project.id;
   const errorResult = (error) => ({ ok: false, projectId: project.id, error: error.message || String(error) });
   const checkProject = (payload) => { if (!scoped(payload)) throw new Error("The selected project changed. Reopen Plans in the intended project."); };
   const snapshot = async (extra = {}) => ({ ok: true, projectId: project.id, plans: await store.list(), ...extra });
+  // What the folder already holds before a new plan is drafted: wayfinder
+  // maps, tickets and issues on the repo's tracker, and the agents, skills
+  // and commands the coding tools there can call. A scan that fails leaves
+  // the plans list standing and says so in `existing.error`.
+  const existing = async (payload) => {
+    if (typeof scanWork !== "function") return null;
+    try { return await scanWork({ root: project.path, fresh: payload?.fresh === true }); }
+    catch (error) { return { ok: false, error: error.message || String(error), tracker: null, efforts: [], remote: null, tooling: null }; }
+  };
   const apply = (plans, payload, actor) => {
     const result = applyPlanningAction(plans, payload, { project, actor, now: Date.now() });
     if (!result.ok) throw new Error(result.error || "The plan could not be updated.");
@@ -115,7 +124,7 @@ function createPlanningService({ project, store, mutateBoard, onConverted = asyn
       return summarizePlanning(await store.list(), payload.query);
     },
     async list(payload) {
-      try { checkProject(payload); return await snapshot(); } catch (error) { return errorResult(error); }
+      try { checkProject(payload); return await snapshot({ existing: await existing(payload) }); } catch (error) { return errorResult(error); }
     },
     async action(payload) {
       try {

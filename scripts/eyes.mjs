@@ -36,8 +36,79 @@ export function openDb(dbPath = DEFAULT_DB) {
 // empty tree instead of gating startup on "store unavailable". Callers that
 // must distinguish (check evidence, direct opens) still see openDb's throw for
 // a store that exists but cannot be read.
+//
+// A store file can also exist without the `session` table: OpenCode creates
+// opencode.db on launch and fills the schema on its first server start, an
+// interrupted install or upgrade leaves the file with only its migration
+// bookkeeping, and an OpenCode older than the SQLite store keeps sessions as
+// JSON under storage/ next to an unrelated db. Every session query would
+// throw "no such table: session" and gate the whole Command view on it, so a
+// store without the table reads as empty here too and storeStatus() says why.
+const SESSION_TABLES = ["session", "message", "part", "todo"];
+const schemaChecks = new Map();
+function storeTables(dbPath) {
+  const cachedCheck = schemaChecks.get(dbPath);
+  if (cachedCheck && Date.now() - cachedCheck.at < 5000) return cachedCheck.tables;
+  let tables;
+  try {
+    tables = openDb(dbPath)
+      .prepare("select name from sqlite_master where type = 'table'")
+      .all()
+      .map((row) => row.name);
+  } catch {
+    // Unreadable stores keep throwing from the read itself, where the
+    // failure surfaces with its own message.
+    tables = null;
+  }
+  schemaChecks.set(dbPath, { at: Date.now(), tables });
+  return tables;
+}
+// Present means the file carries at least one of the session tables: a store
+// with only migration bookkeeping (or a foreign schema) reads as empty, while
+// a partial store (fixtures build only the table under test) reads normally
+// and a read of a table it lacks still throws as before.
 function storePresent(dbPath) {
-  return existsSync(dbPath);
+  if (!existsSync(dbPath)) return false;
+  const tables = storeTables(dbPath);
+  return tables === null || SESSION_TABLES.some((name) => tables.includes(name));
+}
+
+// Why a listing surface came back empty: the store file is missing, or it
+// exists without the session schema. `ok` is true when session reads work.
+// Surfaces that show "no recent sessions" attach `note` so an owner whose
+// OpenCode never finished its first start (or still keeps JSON sessions) is
+// told what to do instead of reading an empty tree as "nothing happened".
+export function storeStatus({ dbPath = DEFAULT_DB } = {}) {
+  const legacyDir = path.join(path.dirname(dbPath), "storage", "session");
+  const legacy = existsSync(legacyDir);
+  if (!existsSync(dbPath)) {
+    return {
+      ok: false, present: false, schema: false, path: dbPath, tables: [], legacy,
+      reason: "missing",
+      note: legacy
+        ? `No opencode.db at ${dbPath}; this OpenCode keeps sessions as JSON under storage/, which Studio does not read. Update OpenCode and run it once so it migrates them.`
+        : `No OpenCode store yet at ${dbPath}. Run OpenCode once in this folder and the sessions appear here.`,
+    };
+  }
+  let tables;
+  try {
+    tables = storeTables(dbPath);
+    if (tables === null) {
+      openDb(dbPath).prepare("select name from sqlite_master where type = 'table'").all();
+      tables = [];
+    }
+  } catch (error) {
+    return { ok: false, present: true, schema: false, path: dbPath, tables: [], legacy, reason: "unreadable", note: `The OpenCode store at ${dbPath} could not be read: ${String(error?.message ?? error)}` };
+  }
+  const missing = SESSION_TABLES.filter((name) => !tables.includes(name));
+  if (missing.includes("session")) {
+    const listed = tables.length ? `it holds ${tables.length} table(s): ${tables.slice(0, 6).join(", ")}${tables.length > 6 ? ", …" : ""}` : "it is empty";
+    return {
+      ok: false, present: true, schema: false, path: dbPath, tables, legacy, reason: "no-session-table",
+      note: `The OpenCode store at ${dbPath} has no session table yet (${listed}). OpenCode fills the schema on its first start: open OpenCode once (\`opencode\` in any folder), let it finish starting, then Retry.${legacy ? " Sessions from an older OpenCode still sit under storage/ as JSON and migrate on that first start." : ""}`,
+    };
+  }
+  return { ok: true, present: true, schema: true, path: dbPath, tables, legacy, reason: null, note: missing.length ? `The OpenCode store is missing ${missing.join(", ")}; some views stay empty until OpenCode updates it.` : null };
 }
 
 // The part table has no index on time_created and its type lives inside the
@@ -1085,6 +1156,34 @@ export function gitPorcelain({ root, run = spawnSync } = {}) {
     return String(result.stdout ?? "");
   } catch {
     return "";
+  }
+}
+
+// Commit evidence for the verification pass: does the claimed hash resolve to
+// a real commit, and is the scoped path clean afterwards? A commit-only
+// deliverable edits nothing after committing, so `changedFiles: 0` is its
+// success shape, not a false negative. Both git spawns wait here on the
+// worker for the same reason gitPorcelain does. A command that fails reports
+// clean: null — unknown, never "clean" — so the evaluator can only accept a
+// positive read; an unscoped check reads the whole repository.
+export function commitEvidence({ root, hash, paths = [], run = spawnSync } = {}) {
+  const claim = String(hash ?? "").trim();
+  if (!root || !/^[0-9a-f]{7,40}$/i.test(claim)) return { hash: null, clean: null, error: "no claimable commit hash" };
+  let resolved = claim.toLowerCase();
+  try {
+    const exists = run("git", ["-C", root, "rev-parse", "--verify", "--quiet", `${claim}^{commit}`], { encoding: "utf8", timeout: 8000, windowsHide: true });
+    if (!exists || exists.status !== 0) return { hash: null, clean: null, error: "commit not found in the repository" };
+    resolved = String(exists.stdout ?? "").trim().toLowerCase() || resolved;
+  } catch (error) {
+    return { hash: null, clean: null, error: String(error?.message ?? error) };
+  }
+  try {
+    const scope = (Array.isArray(paths) ? paths : []).filter((value) => typeof value === "string" && value.trim());
+    const status = run("git", ["-C", root, "status", "--porcelain=v1", ...(scope.length ? ["--", ...scope] : [])], { encoding: "utf8", timeout: 8000, windowsHide: true });
+    if (!status || status.status !== 0) return { hash: resolved, clean: null, error: "path status could not be read" };
+    return { hash: resolved, clean: String(status.stdout ?? "").trim().length === 0 };
+  } catch (error) {
+    return { hash: resolved, clean: null, error: String(error?.message ?? error) };
   }
 }
 
@@ -2374,6 +2473,7 @@ export function usageLedger({ dbPath = DEFAULT_DB, root = null, since = null, no
 // Test/CLI hook: same contract for the read-only store openDb() caches —
 // close it so a temp fixture database is deletable; the next read reopens.
 export function closeReadDb() {
+  schemaChecks.clear();
   if (cached) {
     try { cached.db.close(); } catch {}
     cached = null;
