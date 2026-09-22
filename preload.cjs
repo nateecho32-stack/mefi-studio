@@ -87,7 +87,7 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   brainsCatalog: () => ipcRenderer.invoke("brains:catalog"),
   brainsState: () => ipcRenderer.invoke("brains:state"),
   brainsRead: (id) => ipcRenderer.invoke("brains:read", { id: typeof id === "string" ? id : null }),
-  brainsSave: (map) => ipcRenderer.invoke("brains:save", { map }),
+  brainsSave: (map, options) => ipcRenderer.invoke("brains:save", { map, allowEmpty: options?.allowEmpty === true }),
   brainsDelete: (id) => ipcRenderer.invoke("brains:delete", { id }),
   brainsReset: (id) => ipcRenderer.invoke("brains:reset", { id }),
   brainsGatePlan: (id) => ipcRenderer.invoke("brains:gate-plan", { id: typeof id === "string" ? id : null }),

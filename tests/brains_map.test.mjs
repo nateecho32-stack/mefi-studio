@@ -194,3 +194,25 @@ test("a summary is enough to pick a map from a list", () => {
   assert.ok(summary.live >= 18, "no node in the shipped map is inert");
   assert.equal(summary.errors, 0);
 });
+
+test("a summary judges another-brain parts against the maps it is given", () => {
+  const inner = normalizeMap({ id: "inner", name: "Inner", grants: ["create-task"], nodes: [makeNode("user.request", { id: "n_req" })], edges: [] });
+  const calling = (target) => normalizeMap({
+    id: "caller", name: "Caller", grants: ["create-task"],
+    nodes: [makeNode("user.request", { id: "n_req" }), makeNode("brain.call", { id: "n_call", config: { map: target } })],
+    edges: [{ id: "e_in", from: { node: "n_req", port: "request" }, to: { node: "n_call", port: "in" } }],
+  });
+  const caller = calling("inner");
+  const maps = [inner, caller];
+  const listed = summarize(caller, { maps });
+  assert.equal(listed.ok, true, "a call to a saved map is not a missing map");
+  assert.equal(listed.errors, 0);
+  assert.equal(listed.errors, validateMap(caller, { maps }).errors, "the switcher agrees with the editor");
+  // Without the maps it cannot know, and a map that really is gone still counts.
+  assert.equal(summarize(caller).errors, 1);
+  const errorCodes = (result) => result.problems.filter((problem) => problem.level === "error").map((problem) => problem.code);
+  assert.deepEqual(errorCodes(validateMap(caller)), ["missing-map"]);
+  const orphan = calling("gone");
+  assert.equal(summarize(orphan, { maps: [inner, orphan] }).errors, 1);
+  assert.ok(codes(validateMap(orphan, { maps: [inner, orphan] })).includes("missing-map"));
+});

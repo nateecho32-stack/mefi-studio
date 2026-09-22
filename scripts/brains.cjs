@@ -912,10 +912,13 @@ function issuePolicyFor(map) {
   };
 }
 
-/** One line per map for the switcher and the palette. */
-function summarize(map) {
+/**
+ * One line per map for the switcher and the palette. Pass the store's maps:
+ * without them every configured "Another brain" part counts as a missing map.
+ */
+function summarize(map, { maps = [] } = {}) {
   const graph = normalizeMap(map);
-  const check = validateMap(graph);
+  const check = validateMap(graph, { maps });
   const live = graph.nodes.filter((node) => nodeType(node.type)?.runs !== "draft").length;
   return {
     id: graph.id, name: graph.name, description: graph.description, builtIn: graph.builtIn, active: graph.active,

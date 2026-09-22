@@ -6881,7 +6881,7 @@ async function activeIssuePolicy() {
 
 async function brainsState() {
   const store = await readBrainStore();
-  const maps = store.maps.map((map) => brains.summarize(map));
+  const maps = store.maps.map((map) => brains.summarize(map, { maps: store.maps }));
   return { ok: true, projectId: projects.current().id, activeId: store.activeId, maps };
 }
 
@@ -6895,7 +6895,9 @@ async function brainsRead(id) {
 async function brainsSave(payload = {}) {
   const store = await readBrainStore();
   const map = brains.normalizeMap(payload?.map ?? payload);
-  if (!map.nodes.length && !payload?.allowEmpty) return { ok: false, error: "A brain map needs at least one node." };
+  // An empty map is kept only on request: the editor passes { allowEmpty: true }
+  // as brainsSave's second argument and preload sends it beside the map.
+  if (!map.nodes.length && payload?.allowEmpty !== true) return { ok: false, error: "A brain map needs at least one node." };
   const index = store.maps.findIndex((item) => item.id === map.id);
   if (index < 0 && store.maps.length >= brains.MAX_MAPS) return { ok: false, error: `This project already has ${brains.MAX_MAPS} brain maps. Delete one first.` };
   const previous = index >= 0 ? store.maps[index] : null;

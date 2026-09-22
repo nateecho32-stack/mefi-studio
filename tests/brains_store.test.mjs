@@ -11,6 +11,7 @@ import * as assistant from "../scripts/assistant.mjs";
 import brains from "../scripts/brains.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
+const preloadSource = await readFile(new URL("../preload.cjs", import.meta.url), "utf8");
 const section = (start, end) => {
   const from = source.indexOf(start), to = source.indexOf(end, from + start.length);
   assert.ok(from >= 0 && to > from, `host section exists: ${start}`);
@@ -53,6 +54,22 @@ function storeHost({ file = null, settings = { jevShadow: false, modelSelection:
   });
   vm.runInContext(section("// ---- brain maps ---", "// ---- agent issues"), env);
   return { env, disk, autopilot, saved, state, logs, sent, autopilotCalls, prefCalls, jevWakes };
+}
+
+// The real preload bridge, so a test sees exactly the payload brains:save gets.
+function preloadBridge() {
+  let bridge = null;
+  const calls = [];
+  vm.runInNewContext(preloadSource, {
+    require: (name) => {
+      assert.equal(name, "electron");
+      return {
+        contextBridge: { exposeInMainWorld: (_name, value) => { bridge = value; } },
+        ipcRenderer: { invoke: async (channel, payload) => { calls.push({ channel, payload }); return { ok: true }; }, on: () => {} },
+      };
+    },
+  });
+  return { bridge, calls };
 }
 
 test("a project with no store is seeded with the shipped pipeline, and it is live", async () => {
@@ -99,6 +116,50 @@ test("saving writes the file, keeps builtIn honest and pushes the change", async
   const empty = await h.env.brainsSave({ map: { id: "blank", name: "Blank", nodes: [], edges: [] } });
   assert.equal(empty.ok, false);
   assert.match(empty.error, /at least one node/);
+});
+
+test("an empty map is kept only when the editor asks beside the map, through the real bridge", async () => {
+  const h = storeHost();
+  const { bridge, calls } = preloadBridge();
+  const blank = { id: "blank", name: "Blank", nodes: [], edges: [] };
+  const through = async (...args) => {
+    await bridge.brainsSave(...args);
+    const call = calls.at(-1);
+    assert.equal(call.channel, "brains:save");
+    return h.env.brainsSave(call.payload);
+  };
+  const refused = await through(blank);
+  assert.equal(refused.ok, false);
+  assert.match(refused.error, /at least one node/);
+  // The flag riding on the map was how the old editor asked; it is not a request.
+  assert.equal((await through({ ...blank, allowEmpty: true })).ok, false);
+  assert.equal((await through(blank, { allowEmpty: "yes" })).ok, false, "only a real true asks");
+  assert.equal(h.disk.size, 0, "nothing refused reached the file");
+  const kept = await through(blank, { allowEmpty: true });
+  assert.equal(kept.ok, true);
+  assert.equal(kept.map.nodes.length, 0);
+  assert.equal(kept.map.allowEmpty, undefined, "the request is not stored on the map");
+  const onDisk = JSON.parse(h.disk.get("brain-maps.json"));
+  assert.ok(onDisk.maps.some((map) => map.id === "blank" && map.nodes.length === 0));
+  assert.ok(kept.state.maps.some((map) => map.id === "blank"), "the switcher lists it");
+});
+
+test("the switcher judges a map that calls another brain against the saved maps", async () => {
+  const h = storeHost();
+  const inner = { id: "inner", name: "Inner", grants: ["create-task"], nodes: [brains.makeNode("user.request", { id: "n_req" })], edges: [] };
+  const caller = {
+    id: "caller", name: "Caller", grants: ["create-task"],
+    nodes: [brains.makeNode("user.request", { id: "n_req" }), brains.makeNode("brain.call", { id: "n_call", config: { map: "inner" } })],
+    edges: [{ id: "e_in", from: { node: "n_req", port: "request" }, to: { node: "n_call", port: "in" } }],
+  };
+  assert.equal((await h.env.brainsSave({ map: inner })).ok, true);
+  assert.equal((await h.env.brainsSave({ map: caller })).ok, true);
+  const listed = (await h.env.brainsState()).maps.find((map) => map.id === "caller");
+  assert.equal(listed.errors, 0, "a call to a saved map is not a missing map");
+  assert.equal(listed.ok, true);
+  // The switcher and the editor agree on what is wrong with the map.
+  const read = await h.env.brainsRead("caller");
+  assert.equal(read.compiled.problems.filter((item) => item.level === "error").length, listed.errors);
 });
 
 test("the shipped map can be reset but never deleted, and the last map always stays", async () => {
