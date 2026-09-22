@@ -47,6 +47,29 @@ stages ok (100 targets, 200 specs, no merge in progress, every class
 selector used, 100 files syntax). A sibling session's in-flight
 package-lock.json hunk was left untouched.
 
+Quiet-tree full-gate rerun for the 69ecdf follow-up card, exit 0
+(2026-09-22, ~16:2x, run_1790091792644_41 for task_e2a0db32d964df2f
+"Full-gate rerun on the quiet tree — follow-up 69ecdf", parent
+task_01a24e9b78aaef34 "Follow-up: Per-session worktrees for executor
+runs"). Precondition verified independently before launching: the card's
+gate was the landed worktree module + wiring per task_bf79bd8c1d8fced5
+— e3ad851 (main.cjs wiring, buildable worktree runs) is on HEAD's
+history with follow-ons 31f69f0 and d1c4d78; the "69ecdf" in the title
+is the handoff id suffix (handoff_a15c507ec55352cabf69ecdf), not a
+commit. `npm test` ran solo end-to-end over d1c4d78, exit 0 on every
+stage: parallel node 1959 tests / 1956 pass / 0 fail / 3 skipped in
+37.5 s (1959 counts d1c4d78's new npm-ci kill-switch gating test);
+serialized eyes_toggle_electron 1/1 (3.7 s, baseline 2 fetches/298 ms,
+one resume snap, 6 fetches total); occlusion_probe took the documented
+capability skip (visibility never flipped under a focused cover);
+Python contracts 246/246 OK in 34.5 s; normalized-path lock all ok.
+Settle honest note: HEAD moved d1c4d78 -> cb79b9f mid-run — a
+package-lock.json-only sibling commit landing the 3-line `engines`
+sync that had been floating in the working tree; no test-read source
+moved, no suite reads the lockfile, and the runner raised no
+moved-sources diagnosis; the tree is fully clean after (that hunk is
+now committed by its owner). This commit adds only this row.
+
 Scoped-check rerun un-sticking the two collision-delegate verification
 loops (2026-09-22, ~16:0x, run_1790091633044_35 for
 task_93c9907b18ec3928 "Unstick collision-delegate verification loops",
