@@ -341,3 +341,21 @@ test("the host, bridge and page wire the 20-minute GitHub check", async () => {
   assert.match(nav, /#release-apply/);
   assert.match(nav, /data-release-row/);
 });
+
+test("a first run with no release reads 'no published release yet', not a failure", async () => {
+  const main = await readFile(path.join(STUDIO, "main.cjs"), "utf8");
+  const nav = await readFile(path.join(STUDIO, "renderer", "nav.js"), "utf8");
+
+  // The module's empty-releases message is the app's "none" state, not an error:
+  // the host recognizes exactly that text, clears the error, and never paints a
+  // failure for it, so a repository that has simply not shipped yet reads as normal.
+  assert.ok(main.includes('const unpublished = /no published release found/i.test(result.error ?? "");'), "the host recognizes the module's empty-release message");
+  assert.ok(main.includes('state: unpublished ? "none" : "error"'), "an empty releases page maps to 'none' while a real error stays 'error'");
+  assert.ok(main.includes("error: unpublished ? null : result.error"), "the empty state carries no error text for the panel to render as a failure");
+  assert.ok(main.includes('"[release] no published release yet"'), "the host log names the first-run state instead of a check failure");
+
+  // The panel renders that state as an ordinary line, and keeps 'check failed'
+  // for genuine trouble (network, refusal, bad token) rather than masking it.
+  assert.ok(nav.includes('if (state === "none") return { line: "no published release yet" };'), "the panel shows 'no published release yet' before any release exists");
+  assert.ok(nav.includes('if (state === "error") return { line: `check failed'), "a genuine check error still reads 'check failed'");
+});
