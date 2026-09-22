@@ -452,6 +452,13 @@ test("compactKey: punctuation and case do not make new work", () => {
   assert.equal(compactKey("Fix the auditor."), compactKey("fix the auditor"));
 });
 
+test("compactKey: a Work on it title is the label it points at, not new work", () => {
+  assert.equal(compactKey('Work on "Post-commit quiet-tree gate rerun"'), compactKey("Post-commit quiet-tree gate rerun"));
+  assert.equal(compactKey("work on 'Tidy the board'."), compactKey("Tidy the board"));
+  // A real instruction that merely starts with the phrase stays itself.
+  assert.notEqual(compactKey("Work on the gate rerun carefully"), compactKey("the gate rerun carefully"));
+});
+
 // ---- verdict sentinel: strict, not substring ---------------------------------
 
 test("isDoneMarkerLine: the verdict is the sentinel line, never a quote of it", () => {

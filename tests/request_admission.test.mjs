@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import { baselineCompareWork } from "../scripts/policy.mjs";
 import boardGrowth from "../scripts/board-growth.cjs";
 import chatWork from "../scripts/chat-work.cjs";
+import * as assistant from "../scripts/assistant.mjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 function section(start, end) {
@@ -22,7 +23,7 @@ function host({ requests = [], tasks = [] } = {}) {
     boardGrowth, chatWork,
     Date, crypto: { randomBytes: () => ({ toString: () => String(++serial) }) },
     projects: { current: () => ({ id: "fixture" }), stamp: (row) => row }, projectRoot: () => "/fixture",
-    workTitleKey: (value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim(),
+    workTitleKey: assistant.compactKey,
     compareWork: baselineCompareWork, workPlanTheme: () => null, workFixTheme: () => null, isFixWork: () => false,
     mutateBoard: async (mutate) => ({ ...mutate(board, {}), ...board }),
     jevShadowIntake: (rows) => { if (rows?.length) accepted.push(...rows); },
@@ -68,6 +69,18 @@ test("promotion honors the same explicit pin ranking as dispatch", async () => {
   assert.equal(await context.promoteRequestsToTasks(), 3);
   assert.ok(board.tasks.some((task) => task.title === "User chose this next"));
   assert.ok(!board.tasks.some((task) => task.title === "Third ordinary task"));
+});
+
+test("a Work on it request does not promote a duplicate beside the task it points at", async () => {
+  const { context, board } = host({
+    tasks: [{ id: "gate", title: "Post-commit quiet-tree gate rerun", prompt: "Diff the landed bytes and rerun once", status: "active" }],
+    requests: [{ title: 'Work on "Post-commit quiet-tree gate rerun"',
+      prompt: 'Work on "Post-commit quiet-tree gate rerun". Queued with Work on it — the user pointed at session (id: ses_fixture).',
+      source: "chat", at: 5, target: { kind: "session", id: "ses_fixture" } }],
+  });
+  assert.equal(await context.promoteRequestsToTasks(), 0);
+  assert.equal(board.tasks.length, 1);
+  assert.equal(board.tasks[0].id, "gate");
 });
 
 test("batch dedupe preserves different scopes and title-only requests", async () => {

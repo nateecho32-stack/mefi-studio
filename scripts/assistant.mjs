@@ -1998,12 +1998,19 @@ export const isSelfMaintenance = (item) => SELF_MAINTENANCE_TITLE.test(String(it
 // role." collapse; punctuation and run-on whitespace carry no meaning here.
 // The same title key the executor's spawn guard uses to keep one copy of a
 // job in flight — exported so main never grows a second normaliser.
-export const compactKey = (value) =>
-  String(value ?? "")
+// "Work on it" titles a card with the label it points at ("Work on \"X\"")
+// while the underlying work may already be titled "X". Unwrap that pure
+// display form so both name one piece of work — otherwise promotion stacks a
+// duplicate card beside the live task the button pointed at.
+export const compactKey = (value) => {
+  const raw = String(value ?? "").trim();
+  const wrapped = raw.match(/^work on\s+["'\u2018\u2019\u201c\u201d]([\s\S]+?)["'\u2018\u2019\u201c\u201d][.!?]*$/i);
+  return (wrapped ? wrapped[1] : raw)
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+};
 
 // A request's payload is what it asks, not how it is titled: the prompt,
 // source, area, file set and session pair normalised into one stable hash.
