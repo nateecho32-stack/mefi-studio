@@ -25,6 +25,32 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Fresh full-gate green rerun closing the integration-gate chain
+(2026-09-22, 09:13–09:17, run_1790086242215_15 for task_94b29c15a3479597).
+Purpose: the sibling-edits evidence task_336a62b5d249978f asked for — its
+own green gate (run_1790081870798_93) explicitly required a rerun once
+sibling runs landed further edits, and this run covers that in-flight tree.
+Tree at HEAD a9b4671 with 32+ uncommitted sibling paths present and
+untouched (main.cjs, preload.cjs, renderer/*, scripts/*, tests/* including
+the new brains/provider-breaker/windows-command-line suites); no source
+writes in the 3 minutes before launch, and the only electron group running
+was the Studio app itself (one app's main/gpu/utility/renderer set, up
+since 09:08:57), no test fixtures. `npm run check`: exit 0 (spec-collisions
+198 specs, ALL-SELECTORS-USED across 5 stylesheets, check-syntax 99 files).
+`npm run build-booklet`: exit 0. First `npm test` attempt (09:14, 1.5 min):
+exit 1 on the serialized occlusion_probe suite — cleanest-of-3 lag 435 ms
+against the ~0 expectation, samples [1589, 588, 435] — the known
+environmental cover-window row, not a source regression; solo
+`node --test tests/occlusion_probe.test.mjs` then passed 1/0, exit 0,
+6.1 s. Second `npm test` (09:16–09:17:35): exit 0 in 1.4 min — node stage
+171 suites (9 launching Electron), 1935 tests / 1932 pass / 0 fail /
+3 skipped (capability-gated), serialized display suites each 1/1, Python
+contracts "Ran 246 tests ... OK", normalized-path lock suite green via the
+exit-0 chain. Full logs captured to temp (gate-check.log, gate-booklet.log,
+gate-test.log, gate-test2.log, occ-solo.log). This row is the citable
+gate-green artifact for closing task_336a62b5d249978f and
+task_c1cf337d66009c14 on "sibling edits landed".
+
 performance_render solo re-confirmation on the landed profiler tree
 (2026-09-22, ~09:0x, run_1790085767760_3 for task_9892bbd6444a088e,
 re-running the evening row's requirement on the current clock). No suite
