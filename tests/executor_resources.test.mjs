@@ -336,3 +336,35 @@ for (const pausedDuringRetry of [false, true]) test(`a failed resource rollback 
   assert.ok(h.autopilot.jobs[0].child, "the sole remaining claim belongs to the newly started process");
   assert.equal(h.registry.size, 1);
 });
+
+// The Policy Lab reads a decision only through the attempt it started, so a
+// pick whose claim is released before launch records none; a launched pick
+// writes its decision beside its attempt, stamped at the moment of the pick.
+test("a released claim records no Policy Lab decision and a launched pick records one beside its attempt", async () => {
+  let claimed = false;
+  const h = executorHost({ adaptiveParallel: true, tasks: [task("gated")], workerCapacity: async () => claimed ? pressure("memory") : healthy() });
+  h.env.resolveActivePolicyIdentity = async () => ({ id: "baseline", version: 1, kind: "baseline", hash: "fixture" });
+  // The descriptor and the record counter live outside the sliced dispatcher;
+  // their shapes are not under test.
+  h.env.policyActionDescriptor = (_module, candidate, index) => ({ id: `action_${index}`, title: candidate.title });
+  h.env.policyRecordSeq = 0;
+  const mutate = h.env.mutateBoard;
+  h.env.mutateBoard = async (fn) => {
+    const result = await mutate(fn);
+    if (h.board().tasks[0].runId) claimed = true;
+    return result;
+  };
+  h.wake(); await h.pump();
+  assert.ok(claimed, "the pick crossed the claim before pressure released it");
+  const lab = () => h.records.filter((row) => Array.isArray(row));
+  assert.deepEqual(lab().map(([kind]) => kind), [], "the released pick leaves no decision");
+  claimed = false;
+  h.env.mutateBoard = mutate;
+  h.wake("machine performance recovered"); await h.pump();
+  assert.deepEqual(h.starts.map((row) => row.taskId), ["gated"]);
+  assert.deepEqual(lab().map(([kind]) => kind).slice(0, 2), ["decision", "attempt-start"]);
+  const [[, decision], [, start]] = lab();
+  assert.equal(start.decisionId, decision.decisionId);
+  assert.ok(Number.isFinite(decision.at), "the decision keeps its own pick-time stamp");
+  assert.equal(decision.stopReason, null);
+});

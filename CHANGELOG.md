@@ -90,6 +90,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   when a push arrives. In the loop monitor's steady hour, board transactions
   fell from 134 to 99, log lines from 135 to 87 and host CPU from 257 to
   112 ms, with every card settling exactly as before.
+- **The Policy Lab records a pick only once its worker starts.** Its
+  experience log grew about 3 MB a day, and a third of its decision records
+  were for picks released before any worker started, which the Lab's own
+  analysis never reads. Held and empty passes are still recorded, once per
+  distinct held set.
 
 ### Fixed
 - Automatic answers to a card's own issue no longer erase its retry budget: an

@@ -9323,6 +9323,7 @@ async function spawnNextJob() {
   let selectedRank = -1;
   let entryPolicyDecisionId = null;
   let entryPolicyActions = [];
+  let pendingPolicyDecision = null;
   for (let rank = 0; rank < ranked.length; rank += 1) {
     const candidate = ranked[rank];
     const next = {
@@ -9401,7 +9402,9 @@ async function spawnNextJob() {
   // and what the foreman actually took after the claim gate.
   // Computed after the pick and read by nothing below — recording cannot
   // change what is selected. An all-deferred pass repeats on every wake while
-  // the same holds last, so it is recorded once per distinct held set.
+  // the same holds last, so it is recorded once per distinct held set. A pick
+  // is written beside the attempt it starts (below): a claim released before
+  // launch leaves no decision, since the lab reads one only through its attempt.
   if (ranked.length) {
     const policyIdentityNow = await resolveActivePolicyIdentity().catch(() => null);
     if (policyIdentityNow?.id && policyIdentityNow.hash) {
@@ -9410,7 +9413,8 @@ async function spawnNextJob() {
       const deferKey = job ? null : `${policyActions.map((action) => action.id).join(",")}|${deferred}`;
       if (!deferKey || deferKey !== autopilot.lastDeferredDecisionKey) {
         const decisionId = `dec_${decisionAt}_${(policyRecordSeq += 1)}`;
-        policyRecord("decision", {
+        const decision = {
+          at: decisionAt,
           decisionId,
           policy: { id: policyIdentityNow.id, version: policyIdentityNow.version, kind: policyIdentityNow.kind, hash: policyIdentityNow.hash },
           observation: {
@@ -9421,7 +9425,9 @@ async function spawnNextJob() {
           selected: selectedRank >= 0 && selectedRank < policyActions.length ? policyActions[selectedRank].id : null,
           deferredCount: deferred,
           stopReason: job ? null : deferred ? "deferred" : "empty",
-        });
+        };
+        if (job) pendingPolicyDecision = decision;
+        else policyRecord("decision", decision);
         entryPolicyDecisionId = decisionId;
         entryPolicyActions = policyActions;
       }
@@ -9717,6 +9723,7 @@ async function spawnNextJob() {
   // Policy Lab PR1 — the attempt's identity: handoff lineage, the claim, the
   // route and the acceptance baseline it will be judged against. The prompt
   // is hashed, never stored — chat text stays out of the experiment record.
+  if (pendingPolicyDecision) policyRecord("decision", pendingPolicyDecision);
   policyRecord("attempt-start", {
     attemptId: entry.id,
     decisionId: entryPolicyDecisionId,
