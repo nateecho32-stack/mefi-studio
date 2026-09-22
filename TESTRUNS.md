@@ -2794,3 +2794,45 @@ Not ours, seen on this clock: tests/command_render fails solo with
 "Node tabs polish" session's in-flight renderer/idle.js + styles.css work, not
 the planning change - no planning source is loaded by the Command view, and the
 fast suite (which skips the Electron fixtures) is green.
+
+## 2026-09-22 morning - full node suite attempt invalidated by sibling full-gate contention (task_c3fca713a5ff8b66, run run_1790085745914_2)
+
+`node scripts/run-node-tests.mjs` from the repo root, 09:05-09:06 CDT.
+Desktop quieted for the serialized fixtures the documented-working way:
+packaged Studio (the live orchestrator, pid 35748) minimized after an
+EnumWindows sweep found it the only visible Electron window; the dev
+instance was windowless; no test process existed at launch (09:03). No
+suite was skipped or edited - the runner's settle check passed, so the
+tree was fingerprint-stable when the stage launched.
+
+Parallel stage: 1934 tests / 1930 pass / 1 fail / 3 skipped (28.5 s). The
+one failure was tests/command_render.test.mjs "real Command renderer paints
+finite task nodes, continues frames, and survives exit/reentry" - fixture
+error "Saved obligation context missing" - and at exit the runner's own
+source-fingerprint guard fired: "sources changed while the suite was
+running - vm-section failures in this run may be transient-content reads
+(the rotating ReferenceError signature), not code regressions. Rerun on a
+quiet tree before acting on them." Exit 1; the serialized
+occlusion_probe / eyes_toggle_electron stage never launched. Every other
+suite in the parallel stage was green, including all previously-rotating
+vm/section files.
+
+The board was not in fact quiet around this window: executor-log shows
+run_1790085896825_6 ("Commit scripts/assistant.mjs coverLost-era edit")
+started 09:05:29 and run_1790085934230_7 ("Restart dev app after repair")
+09:05:51, both inside the run; run_1790085983521_8 ("Full npm test gate",
+npm test -> node scripts/run-node-tests.mjs) launched 09:06:42 the moment
+this stage drained; tests/fixtures/command-render-electron.cjs was
+rewritten 09:06:58 and tests/windows_command_line.test.mjs 09:07:54. Per
+the guard's own contract this run is not evidence of a code regression -
+the command_render failure lands on a fixture that was mid-rewrite seconds
+later, the same contention signature this card has been chasing. Killing
+the sibling gate (or running a second suite beside it) would have
+invalidated both, so no rerun was launched into it.
+
+Recorded so the next attempt starts from evidence: do not settle
+task_11085243b2d2452f on this entry. The green exit-0 run still has to
+land on a genuinely quiet board - no concurrent full-gate run, no active
+editor session - and the board is currently double-booking full-suite
+tasks (task_59d7f2b65f49e281 "Full npm test gate" ran concurrently with
+this one). No repo source modified beyond this entry.
