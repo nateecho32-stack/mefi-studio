@@ -10343,6 +10343,20 @@ async function spawnNextJob() {
         samples.push(Date.now() - attemptStartedAt);
         if (samples.length > 8) samples.splice(0, samples.length - 8);
         autopilot.startKills = 0;
+        // Three healthy starts in a row step a narrowed manual pool back up by
+        // one, until it is at the limit the operator chose.
+        if (autopilot.parallelNarrowedFrom) {
+          autopilot.healthyStarts = (autopilot.healthyStarts ?? 0) + 1;
+          if (autopilot.healthyStarts >= 3) {
+            autopilot.healthyStarts = 0;
+            autopilot.parallel = Math.min(autopilot.parallelNarrowedFrom, autopilot.parallel + 1);
+            if (autopilot.parallel >= autopilot.parallelNarrowedFrom) autopilot.parallelNarrowedFrom = null;
+            pushAutopilotHistory("restored", `pool back to ${autopilot.parallel} after healthy starts`);
+            logLine(`[autopilot] pool back to ${autopilot.parallel} after three healthy starts`);
+            emitAutopilot();
+            if (typeof assistantAskForWork === "function") assistantAskForWork("worker pool widened again");
+          }
+        }
       }
       entry.spoke = true;
       if (stdout) entry.spokeOut = true;
@@ -10637,13 +10651,18 @@ async function spawnNextJob() {
         autopilot.capacity = { ...autopilot.capacity, canStart: false, reason: "worker startup stalled; allowing the machine to recover" };
         pushAutopilotHistory("held", "new workers held briefly after a stalled startup; Machine will reassess capacity");
         emitAutopilot();
-      } else if (autopilot.parallel > 1) {
-        const narrowed = Math.max(1, autopilot.parallel - 1);
-        autopilot.parallel = narrowed;
-        pushAutopilotHistory("narrowed", `pool narrowed to ${narrowed} — wedged start under load`);
-        logLine(`[autopilot] pool narrowed to ${narrowed} after a wedged start`);
-        readSettings().then((settings) => writeSettings({ ...settings, ui: { ...(settings.ui ?? {}), autopilot: { ...(settings.ui?.autopilot ?? {}), parallel: narrowed } } })).catch(() => {});
-        emitAutopilot();
+      } else {
+        // Manual mode narrows for this session only: the saved limit stays the
+        // operator's choice, and healthy starts step the pool back up (take()).
+        autopilot.healthyStarts = 0;
+        if (autopilot.parallel > 1) {
+          autopilot.parallelNarrowedFrom ??= autopilot.parallel;
+          const narrowed = Math.max(1, autopilot.parallel - 1);
+          autopilot.parallel = narrowed;
+          pushAutopilotHistory("narrowed", `pool narrowed to ${narrowed} for now — wedged start under load`);
+          logLine(`[autopilot] pool narrowed to ${narrowed} after a wedged start; it steps back to ${autopilot.parallelNarrowedFrom} after healthy starts`);
+          emitAutopilot();
+        }
       }
       stop(`no session and no output for ${startBudgetText} after spawn — killed as a wedged start`, allowFallback);
     }, startBudgetMs);
@@ -11710,6 +11729,13 @@ async function setAutopilot(prefs = {}) {
   }
   if (prefs.minutes !== undefined) autopilot.minutes = Math.max(1, Number(prefs.minutes) || autopilot.minutes);
   if (prefs.adaptiveParallel !== undefined) autopilot.adaptiveParallel = Boolean(prefs.adaptiveParallel);
+  // A pool a wedged start narrowed for the session goes back to the chosen
+  // limit when the operator changes the limit or the scheduling mode.
+  if ((prefs.parallel !== undefined || prefs.adaptiveParallel !== undefined) && autopilot.parallelNarrowedFrom) {
+    autopilot.parallel = autopilot.parallelNarrowedFrom;
+    autopilot.parallelNarrowedFrom = null;
+    autopilot.healthyStarts = 0;
+  }
   if (prefs.parallel !== undefined) autopilot.parallel = Math.min(EXECUTOR_PARALLEL_MAX, Math.max(1, Math.round(Number(prefs.parallel) || autopilot.parallel)));
   // The same bound applies to saved settings and interactive controls.
   autopilot.parallel = Math.min(autopilot.parallel, EXECUTOR_PARALLEL_CAP);
@@ -11718,7 +11744,7 @@ async function setAutopilot(prefs = {}) {
     const autoBuild = buildRevision !== null && buildRevision === setAutopilot.buildRevision ? prefs.autoBuild : autopilot.autoBuild !== false;
     settings.ui = {
       ...(settings.ui ?? {}),
-      autopilot: { enabled: autopilot.enabled, execute: autopilot.execute, autoBuild, minutes: autopilot.minutes, parallel: autopilot.parallel, adaptiveParallel: autopilot.adaptiveParallel === true, mode: autopilot.mode === "cluster" ? "cluster" : "swarm" },
+      autopilot: { enabled: autopilot.enabled, execute: autopilot.execute, autoBuild, minutes: autopilot.minutes, parallel: autopilot.parallelNarrowedFrom ?? autopilot.parallel, adaptiveParallel: autopilot.adaptiveParallel === true, mode: autopilot.mode === "cluster" ? "cluster" : "swarm" },
     };
     await writeSettings(settings);
     if (buildRevision !== null && buildRevision === setAutopilot.buildRevision) autopilot.autoBuild = autoBuild;

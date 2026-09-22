@@ -784,3 +784,43 @@ test("assistant supervision requests a safe stop instead of settling a still-liv
   assert.deepEqual(reaped, [{ code: 1, reason: "spawn never started" }]);
   assert.ok(problems.some((problem) => problem.kind === "executor"));
 });
+
+// Manual mode narrows the pool after a wedged start, but only for the session:
+// the saved limit stays the operator's choice (this host has no settings
+// writer, so a save would throw) and healthy starts step the pool back up.
+test("a wedged start narrows a manual pool for this session without saving it", () => {
+  const h = childHost({ pool: { parallel: 3, healthyStarts: 2 } });
+  h.advance(120001);
+  h.timers.find((timer) => timer.delay === 120000)();
+  assert.equal(h.autopilot.parallel, 2);
+  assert.equal(h.autopilot.parallelNarrowedFrom, 3, "the chosen limit is remembered");
+  assert.equal(h.autopilot.healthyStarts, 0, "a kill restarts the count of healthy starts");
+});
+
+test("three healthy starts step a narrowed manual pool back up by one", () => {
+  const counting = childHost({ pool: { parallel: 1, parallelNarrowedFrom: 3, healthyStarts: 0 } });
+  counting.first.stdout.emit("data", "starting work\n");
+  assert.equal(counting.autopilot.healthyStarts, 1);
+  assert.equal(counting.autopilot.parallel, 1);
+  const stepping = childHost({ pool: { parallel: 1, parallelNarrowedFrom: 3, healthyStarts: 2 } });
+  stepping.first.stdout.emit("data", "starting work\n");
+  assert.equal(stepping.autopilot.parallel, 2);
+  assert.equal(stepping.autopilot.parallelNarrowedFrom, 3, "still below the chosen limit");
+  assert.equal(stepping.autopilot.healthyStarts, 0);
+  const restoring = childHost({ pool: { parallel: 2, parallelNarrowedFrom: 3, healthyStarts: 2 } });
+  restoring.first.stdout.emit("data", "starting work\n");
+  assert.equal(restoring.autopilot.parallel, 3);
+  assert.equal(restoring.autopilot.parallelNarrowedFrom, null, "back at the chosen limit");
+});
+
+test("a narrowed pool saves the chosen limit, and an explicit choice ends the narrowing", async () => {
+  const { env, autopilot, saved } = settingsHost();
+  Object.assign(autopilot, { parallel: 2, parallelNarrowedFrom: 3 });
+  await env.setAutopilot({ minutes: 6 });
+  assert.equal(saved().ui.autopilot.parallel, 3, "the session narrowing is never written as the operator's limit");
+  assert.equal(autopilot.parallel, 2);
+  await env.setAutopilot({ parallel: 1 });
+  assert.equal(autopilot.parallel, 1);
+  assert.equal(autopilot.parallelNarrowedFrom, null);
+  assert.equal(saved().ui.autopilot.parallel, 1);
+});

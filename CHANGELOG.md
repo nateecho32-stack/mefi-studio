@@ -150,6 +150,20 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 - **The worker's collaboration advice is no longer cut mid-sentence.** Its
   file-ownership and live-editor instructions were clipped to 320 characters,
   less than its own parts.
+- **A slow worker start no longer shrinks your manual worker limit for good.**
+  In manual mode each stalled start lowered the pool by one and saved that as
+  your setting, and nothing ever raised it again, so one slow stretch could
+  leave Studio at one worker. The pool is now lowered for the session only,
+  steps back up by one after three normal starts in a row, and your saved
+  limit is never overwritten. Changing the limit or the mode yourself ends the
+  narrowing at once. A limit an earlier version already lowered stays saved;
+  set it back once in Workspace.
+- **A claim released for machine pressure keeps its advice.** A quarter of
+  claims were dropped when memory or responsiveness dipped during the
+  planner/reviewer advice, and the next claim of the same card paid for the
+  same two calls and code search again. The answered advice is now reused for
+  30 minutes until a worker has run on the card; advice where both advisors
+  failed is asked for again.
 
 ### Security
 - **Coding workers no longer inherit Studio's own keys.** A headless or
