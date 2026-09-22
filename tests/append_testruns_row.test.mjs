@@ -7,7 +7,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { closeSync, mkdtempSync, openSync, readFileSync, rmSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, readdirSync, rmSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -147,6 +147,67 @@ test("rejects malformed blocks and duplicate headings without touching the file"
     assert.throws(() => appendTestrunsRow(root, "## 2026-09-22 noon - helper run (run_c)\n\nBody c again.\n"), /duplicate H2/);
     assert.equal(readFileSync(join(root, "TESTRUNS.md"), "utf8"), pristine, "refusals left the file byte-identical");
     assert.deepEqual(auditTestruns(root).problems, []);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("refuses cleanly when TESTRUNS.md is absent and creates nothing", () => {
+  const root = mkdtempSync(join(tmpdir(), "append-testruns-missing-"));
+  try {
+    assert.deepEqual(readdirSync(root), [], "fixture root starts empty");
+    assert.throws(() => appendTestrunsRow(root, "## 2026-09-22 noon - helper run (run_c)\n\nBody c.\n"), /TESTRUNS\.md not found/);
+    assert.equal(main(["--root", root, "## 2026-09-22 noon - helper run (run_c)\n\nBody c.\n"]), 1);
+    assert.equal(existsSync(join(root, "TESTRUNS.md")), false, "neither the function nor the CLI created TESTRUNS.md");
+    assert.deepEqual(readdirSync(root), [], "no staged temp / backup file was left beside where TESTRUNS.md would be");
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("refuses with no live row to anchor insertion, leaving the file untouched", () => {
+  const root = mkdtempSync(join(tmpdir(), "append-testruns-nolive-"));
+  try {
+    const target = join(root, "TESTRUNS.md");
+    // (a) An empty notebook is refused by the pre-append gate audit.
+    writeFileSync(target, "");
+    assert.throws(() => appendTestrunsRow(root, "## 2026-09-22 noon - helper run (run_c)\n\nBody c.\n"), /refusing to append/);
+    assert.equal(readFileSync(target, "utf8"), "", "empty file untouched");
+    // (b) A file that passes the gate but has its only dated rows BELOW the
+    // anchor has no live row to anchor the insertion: planInsertion must refuse
+    // rather than guess the live-region top, and the bytes must survive.
+    const archiveOnly = [
+      "# Test Runs",
+      "",
+      "## How to read this file",
+      "",
+      "preamble",
+      "",
+      "### Known environmental failures",
+      "",
+      "| Suite | Symptom |",
+      "| --- | --- |",
+      "",
+      "## Read Before Any Tests",
+      "",
+      "guide text",
+      "",
+      "## 2026-09-20 evening - archived run (run_a)",
+      "",
+      "Archived body.",
+      "",
+    ].join("\n");
+    writeFileSync(target, archiveOnly);
+    assert.deepEqual(auditTestruns(root).problems, [], "fixture passes the gate audit");
+    const pristine = readFileSync(target, "utf8");
+    assert.throws(
+      () => appendTestrunsRow(root, "## 2026-09-22 noon - helper run (run_c)\n\nBody c.\n"),
+      /no dated run row found above the guide/,
+      "no live row above the anchor is refused, not guessed",
+    );
+    assert.equal(readFileSync(target, "utf8"), pristine, "refusal left the file byte-identical");
+    assert.equal(main(["--root", root, "## 2026-09-22 noon - helper run (run_c)\n\nBody c.\n"]), 1);
+    assert.equal(readFileSync(target, "utf8"), pristine, "CLI refusal also wrote nothing");
   } finally {
     cleanup(root);
   }
