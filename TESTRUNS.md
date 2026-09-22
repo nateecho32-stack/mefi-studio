@@ -25,6 +25,31 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - quiet-tree full gate green: the withheld npm test of the auth split (2457a7d) plus build-booklet, both exit 0 (task_5e0a126238bab8fb, run run_1790102559644_4)
+
+This row supplies the full-suite evidence the split row below withheld under
+the contention protocol. Precondition checked first-hand, not from notes: the
+three sibling runs live at dispatch (reattribution task_214a666a0948a828,
+collision task_c1cf337d66009c14, chain task_94b29c15a3479597) were polled to
+completion via the store's runProgress and their commits — a690fcd, 17ba279 —
+landed with `TESTRUNS.md` clean at 17ba279 before the gate started; last repo
+code edit remained the split's own 13:36 files inside 2457a7d, and the
+long-settled session-continuity worktree (quiet since 13:17) stayed untouched,
+still awaiting its own landing card. On that tree, at HEAD 17ba279 + the
+settled dirty worktree: `npm test` -> exit 0 in 86 s (run-node-tests 178
+suites, 9 launching Electron; node stage 2062 tests / 2059 pass / 0 fail /
+3 skipped — the usual capability-gated Electron records, per the table above;
+two serialized stages 1/1 pass each; `python -m unittest discover` 247 tests
+OK in 34.7 s; normalized-path lock checks all passed; the runner's own
+slow-step waits fired for "work"/"late" startup on a loaded desktop but
+nothing failed and no source moved mid-run). `npm run build-booklet` ->
+exit 0, "built renderer\booklet.html — 39 models, hash f98dd2322a01"; the
+regenerated booklet.html stays in the dirty worktree for the landing card
+(task_bd9f27c9f8258f1d) — this commit adds only this row and touches no
+code, per the gate's evidence-only scope. One caveat for the record: the
+dispatcher re-leased task_ad390ff083105169 (no worker spawned) ~90 s before
+the run; it stayed workerless and file-quiet through both commands.
+
 ## 2026-09-22 late evening - correction: the auth-split row below belongs to task_88a18406f34104ca - it was swept into 0ebf5fe (task_214a666a0948a828, run run_1790102522200_3)
 
 One-line reattribution per the 9788722 pattern: the auth/settings split row
