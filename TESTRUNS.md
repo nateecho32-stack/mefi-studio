@@ -29,6 +29,28 @@ only above the anchor (decision recorded 2026-09-22, pinned by
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - verification-loop closure for the main.cjs refactor card: landed bytes re-confirmed at a93e9aa, check green (task_c5a704c58fcda993, run run_1790107636695_7)
+
+Retry 3 after two "outstanding obligations remain" denials that were the
+known prose-shape pattern: the prior pass's remaining text ("none for this
+card (brains dirt belongs to task_7aae675692432cb7)") carries a
+parenthetical without a handed-on keyword, so the denial reader could not
+see it as a denial owed here; the work itself was already done and gated.
+Independently re-checked this pass rather than trusting the prior reports:
+`git show 89e4dc9 --numstat -- main.cjs` is exactly 34 insertions /
+20 deletions as gated; `2f9d3d4` touches TESTRUNS.md only (27+);
+landed-parity markers re-verified against current HEAD: `consecutiveFailures`
+0 references, `runVerificationJobs()` parameter-less with both call sites
+matching (main.cjs 10236, 10859), `doneClearing` still owned by the clear
+path (declared 7381, reset 7439, trim guard 7549). Fresh gate for this
+attempt: `npm run check` exit 0 (103 targets, testruns gate 61 live rows,
+no conflict copies). The 2064 -> 2091 node-test delta between the two
+earlier rows is the intervening sibling commits (brains editor, testruns
+gate + helper contracts), not masked reds - run 2's stage was 0-fail.
+Note: after 2f9d3d4 the brains sibling landed a93e9aa touching main.cjs
+(brainsState/brainsSave scope) and holds CHANGELOG.md dirt; that work gates
+on its own card (task_7aae675692432cb7). This commit touches only this row.
+
 ## 2026-09-22 late evening - post-commit gate rerun closes the main.cjs refactor card: 89e4dc9 landed the gated 34+/20- bytes, landed-parity re-verified at HEAD, check green (103 files), node 2091/2088/0/3, Python 247 OK, lock green (task_c5a704c58fcda993, run run_1790107034713_1)
 
 The follow-up the 42797b9 row owed. The loop-cleanup sibling's commit landed
