@@ -34,6 +34,10 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - Follow-up: owner/bookkeeping remaining-work denial lane re-verified first-hand; no in-repo implementation remains, only owner-only task-store wording (task_20adaf6b2a814278, run_1790118786107_9) (task_20adaf6b2a814278, run_1790118786107_9)
+
+Scoped this split follow-up from the parent card's decision log, not from prior reports: task_d5268418bac5ed58 decided scope->split and its own result named the split item as the stored delegated acceptance in Studio's task store. Re-verified the parent's owner/bookkeeping lane against the shipped verifier first-hand rather than trusting the report: importing verifyCompletion, the exact parent result prose 'none in repo scope (owner-only: reword the stored delegated acceptance in Studio's task store)', 'none in repo scope (owner/bookkeeping: the stored acceptance lives in Studio's task store)' and 'none in repo scope (owner / bookkeeping: the stale acceptance is the owner's to flip)' all discharge (no 'outstanding obligations remain'), while genuine obligations stay outstanding: 'none in the other module (owner-only)', 'none in repo scope (bookkeeping in the other module)' and 'the owner still has to migrate the store'. Evidence: node --test tests/verification_checks.test.mjs -> 15/15 pass; npm run check was already green on this HEAD in the concurrent sibling run. A git grep confirms no tracked artifact asserts the inverted 'directly below the anchor' wording - the only hits are the helper comment/--help and CONTRIBUTING.md:91 / docs/code-map.md:129 that label that wording frozen. The sole leftover is the stale acceptance on task_delegate_b4f73d934d18f69906d57de9 ('inserts a row directly below "Read Before Any Tests"'), which lives only in Studio's untracked task store; workers may not rewrite it, so it is owner/bookkeeping, not repository work. This row was inserted through the helper itself and is the only artifact committed; sibling staged/dirty files were left byte-for-byte as found.
+
 ## 2026-09-22 late evening - Shared-file handoff resolved: verification_checks.test.mjs + assistant.mjs both sessions' edits landed sequentially in HEAD, no re-edit owed (task_ac89d2d31c38ff34, run_1790118828127_11)
 
 A-Eyes flagged a collision on tests/verification_checks.test.mjs and scripts/assistant.mjs (ses_f349e3a5affezgsXBM6X23GlzM, owner, and ses_f349e6623ffeMS3SQu8LFa653u). Adopted the owner's work rather than re-editing: the two sessions' edits are already committed sequentially on HEAD, not competing — 930a730 (18:10) taught the verifier the owner-only/owner-side hand-off lanes and 78e86dd (18:12) added the owner/bookkeeping lane, and the later commit is purely additive over the earlier one with no assertions dropped (handedElsewhereNote, scripts/assistant.mjs:3900; the owner-side test, tests/verification_checks.test.mjs:72-97). Verified against the tree, not the brief: both files are clean (git status --porcelain empty for them), node --check scripts/assistant.mjs and node --check tests/verification_checks.test.mjs both exit 0, and the narrow contract passes first-hand — node --test tests/verification_checks.test.mjs -> 15 tests / 15 pass / 0 fail. npm run check exit 0 (107 targets, 221 specs, ALL-SELECTORS-USED, check-syntax 107, check-testruns 20 live rows newest-first, no conflict copies). The verifier logic lives only in assistant.mjs (no Python/main.cjs mirror to update). Read as a handoff per TESTRUNS.md "Verifying a session edit-collision handoff", so no file logic changed; this row is the only artifact, committed path-limited, and sibling staged files (serve/community work) were left untouched.
@@ -127,33 +131,6 @@ and no merge-conflict markers, and `npm run check` exit 0 (103 targets, 214
 specs, ALL-SELECTORS-USED, syntax 103 files, check-testruns 77 live rows
 newest-first, no conflict copies). No file logic changed; this commit adds only
 this row, path-limited, and the shared index is left with nothing staged.
-
-## 2026-09-22 late evening - Shared-file handoff re-verified at HEAD c996c56 and the "outstanding obligations" loop diagnosed: append_testruns_row + onboarding owner edits intact and green, the denial was result-prose shape not repo work (run_1790113542877_31)
-
-Retry of the card whose prior attempt (ses_f34f2e32cffesalDTiozv8zTzj) settled
-"outstanding obligations remain" with changedFiles: 1. Diagnosed first-hand, not
-assumed: the prior MEFI_RESULT ended "remaining: owner-only Studio task-store
-acceptance wording fix (task_delegate_b4f73d934d18f69906d57de9)", and
-verifyCompletion's nonempty, scope-unqualified remaining text is exactly what
-turns into the denial. The leftover named there is board bookkeeping the worker
-is forbidden to rewrite, so it must not be reported as this card's remaining
-work. Resolved by finishing the in-scope handoff verification and reporting
-remaining: none; the stored-acceptance inversion still goes out to the owner via
-MEFI_ASK, not as a worker obligation.
-
-Handoff adoption re-checked against the tree, not the reports. Every recorded
-edit by the five sessions was compared to HEAD: all final newStrings are present
-in tests/append_testruns_row.test.mjs and tests/onboarding.test.mjs, so no
-owner's work was clobbered and there is nothing to re-edit - per TESTRUNS.md,
-"Verifying a session edit-collision handoff", a resolved handoff needs none. (An
-early probe looked missing only because ses_f351e5be7ffe4u14MPT9mSELu3's own
-later edit refined its earlier one; the refined text is present.) Fresh gates
-this run: node --test tests/append_testruns_row.test.mjs 18/18,
-node --test tests/onboarding.test.mjs 32/32, npm run check exit 0 (check-targets
-103, spec-collisions 214, ALL-SELECTORS-USED, check-syntax 103, check-testruns 76
-live rows newest-first with no conflict copies). No file logic changed; this
-commit adds only this row, path-limited, and the shared index is left with
-nothing staged.
 
 ## Read Before Any Tests
 
