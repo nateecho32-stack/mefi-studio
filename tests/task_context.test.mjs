@@ -62,6 +62,13 @@ test("a legacy latest snapshot that still carries status/runId gains no catch-up
   assert.equal(entries[0].snapshot.prompt, "Upgraded brief");
   assert.equal(entries[0].snapshot.status, undefined);
   assert.equal(entries[1].snapshot.runId, "old-run", "saved legacy entries are never rewritten");
+  // A card absorbed before the upgrade: the old list never recorded
+  // absorbedInto, so that field alone must not read as a change either.
+  const absorbedSnapshot = { ...snapshotTask(original), status: "absorbed" };
+  const absorbedHash = createHash("sha256").update(JSON.stringify(canonical(absorbedSnapshot))).digest("hex");
+  const absorbed = { ...original, status: "absorbed", absorbedInto: "plan_1", contextHistory: { version: 1, entries: [{ id: `revision_1_${absorbedHash.slice(0, 16)}`, revision: 1, at: 1, kind: "grouped", note: "", hash: absorbedHash, snapshot: absorbedSnapshot }] } };
+  const touched = recordTaskRevision({ ...absorbed, updatedAt: 7 }, { previous: absorbed, kind: "renamed", now: 7 });
+  assert.equal(touched.contextHistory, absorbed.contextHistory, "an absorbed legacy card gains no catch-up revision");
 });
 
 test("interrupted progress is retained in task history while streaming checkpoints do not flood revisions", () => {

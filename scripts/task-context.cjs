@@ -44,8 +44,13 @@ function recordTaskRevision(task, { previous = null, kind = "updated", note = ""
   // status/runId) is compared through the current list, so upgraded boards do
   // not gain a catch-up revision on every row at their first mutation. An
   // entry already on the current list cannot match here, so it is not re-hashed.
-  if (kind !== "restored" && priorLatest?.snapshot && Object.keys(priorLatest.snapshot).some((key) => !FIELDS.includes(key)) && digest(snapshotTask(priorLatest.snapshot)) === hash) {
-    return task.contextHistory === previous.contextHistory ? task : { ...task, contextHistory: previous.contextHistory };
+  // The old list could not record absorbedInto, so an absorbed legacy entry
+  // borrows the live value instead of reading as a change.
+  if (kind !== "restored" && priorLatest?.snapshot && Object.keys(priorLatest.snapshot).some((key) => !FIELDS.includes(key))) {
+    const legacy = priorLatest.snapshot.status === "absorbed" && task.absorbedInto !== undefined && !Object.hasOwn(priorLatest.snapshot, "absorbedInto")
+      ? { ...priorLatest.snapshot, absorbedInto: task.absorbedInto }
+      : priorLatest.snapshot;
+    if (digest(snapshotTask(legacy)) === hash) return task.contextHistory === previous.contextHistory ? task : { ...task, contextHistory: previous.contextHistory };
   }
   // Preserve a revision already appended by restoreTaskRevision when the board
   // gateway records that mutation too. Compare IDs/hashes, never whole saved
