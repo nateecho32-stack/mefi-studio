@@ -90,6 +90,27 @@ re-tested ancestors 5/5 (2457a7d, 6a9a299, c2ced15, 8fcd78b, a32c1d5). Fresh
 the sibling's 16-file loop-cleanup drift, which stays byte-for-byte as found,
 nothing staged; this commit adds only this row.
 
+## 2026-09-22 late evening - full gate green on the content-stable tree at c08f9d9 with the loop-cleanup sibling still uncommitted - node 2064/2061/0/3, serialized pair green, Python 247 OK, lock 6/6 (task_a8602009d0a8749d, run run_1790103883860_6)
+
+The card wanted one quiet-tree pass once the live loop-cleanup sibling
+commits. The sibling never committed inside this window: HEAD drifted
+a32c1d5 -> c08f9d9 via four other sessions' TESTRUNS/docs rows while the
+cleanup's 16 files stayed dirty, with mtimes churning as late as 14:10 but
+SHA-256 content static from a 14:12:52 snapshot through the run and a
+post-run re-hash. So this is a content-stable pass over c2ced15-final plus
+the sibling's uncommitted bytes, not the requested post-commit pass. Run
+conditions: 1.65 GB free (above the ~0.5 GB floor), no other test-runner
+processes live, no "sources moved mid-run" flag in the output. `npm test`
+exit 0: parallel node 2064 tests / 2061 pass / 0 fail / 3 skipped (36.3 s)
+— the parent row 8fcd78b's lone red is gone, the dirty overseerMiss
+assertion in executor_continuation now passes against the dirty main.cjs,
+so the sibling tree is self-consistent; serialized eyes log tail 1/1 and
+occlusion probe 1/1 (ran, not skipped); Python 247 tests OK (32.0 s);
+normalized-path lock 6/6. Caveat for the next pass: this validates the
+working-tree bytes as they sat; if the sibling's eventual commit differs
+from the 14:12:52 hashes, the official post-commit quiet-tree run still
+needs one rerun on those landed bytes.
+
 ## 2026-09-22 late evening - seventh-gen carrier retry re-verifies green at twice-moved HEAD 8fcd78b; both landing cards re-read still open, flip stays owner-only (task_b015afd76934e639, run run_1790103762055_1)
 
 Retry of row 47330f8 after "unverified - outstanding obligations remain".
