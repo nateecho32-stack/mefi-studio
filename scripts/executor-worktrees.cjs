@@ -92,11 +92,33 @@ async function excludeWorktrees(root) {
   }
 }
 
+// Windows hands out 8.3 short paths — os.tmpdir() on a CI runner is
+// C:\Users\RUNNER~1\AppData\Local\Temp — while git always reports the long
+// form, and path.resolve expands neither that nor the on-disk casing. A
+// stale checkout therefore went unrecognised, prepare() skipped removing it
+// and the next `worktree add` died on "already exists". Compare canonical
+// paths, falling back to resolve for a path that is not on disk yet.
+function canonicalPath(value) {
+  const resolved = path.resolve(value);
+  try {
+    return fs.realpathSync.native(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+function samePath(left, right) {
+  const a = canonicalPath(left), b = canonicalPath(right);
+  if (a === b) return true;
+  // Only where the filesystem itself is case-insensitive; realpath already
+  // settles the casing whenever both paths exist.
+  return process.platform === "win32" && a.toLowerCase() === b.toLowerCase();
+}
+
 async function worktreeExists(root, dir) {
   const list = await runGit(root, ["worktree", "list", "--porcelain"]);
   if (list.code !== 0) return false;
-  const wanted = path.resolve(dir);
-  return list.stdout.split(/\r?\n/).some((line) => line.startsWith("worktree ") && path.resolve(line.slice(9).trim()) === wanted);
+  return list.stdout.split(/\r?\n/).some((line) => line.startsWith("worktree ") && samePath(line.slice(9).trim(), dir));
 }
 
 // A fresh checkout carries no dependencies, so `npm test` inside it would die

@@ -172,3 +172,28 @@ test("a lockfile without a shared install reaches for npm ci only when the kill-
   }
   await worktrees.discard(wt);
 });
+
+// A GitHub runner's os.tmpdir() is C:\Users\RUNNER~1\AppData\Local\Temp while
+// git reports the long form, so a stale checkout compared unequal, survived
+// prepare() and broke the next `worktree add`. It passed on developer machines
+// whose temp path has no 8.3 alias, which is how it reached CI twice.
+test("a stale checkout is recognised through a Windows 8.3 short path", async (t) => {
+  if (process.platform !== "win32") return t.skip("8.3 short paths are a Windows filesystem feature");
+  const repo = await makeRepo();
+  t.after(() => rm(repo, { recursive: true, force: true }));
+  // The path travels by environment so no shell quoting can mangle it.
+  const short = (await run(
+    "powershell",
+    ["-NoProfile", "-Command", "(New-Object -ComObject Scripting.FileSystemObject).GetFolder($env:MEFI_WT_LONGPATH).ShortPath"],
+    { env: { ...process.env, MEFI_WT_LONGPATH: repo } },
+  )).stdout.trim();
+  if (!short || short.toLowerCase() === repo.toLowerCase()) return t.skip("this volume hands out no 8.3 alias (8dot3name disabled)");
+
+  const stale = await worktrees.prepare({ root: short, runId: "run_10" });
+  await writeFile(path.join(stale.path, "stranded.txt"), "stranded\n");
+  await commitAll(stale.path, "stranded work");
+  const fresh = await worktrees.prepare({ root: short, runId: "run_10" });
+  assert.equal(fresh.path, stale.path, "the same run slot is reused when the root arrives in short form");
+  assert.equal(existsSync(path.join(fresh.path, "stranded.txt")), false, "the stale checkout was cleared, not left for `worktree add` to trip over");
+  await worktrees.discard(fresh);
+});
