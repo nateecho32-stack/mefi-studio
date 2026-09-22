@@ -154,3 +154,21 @@ test("no shared install and no lockfile leaves the checkout unbuildable but runn
   assert.equal(existsSync(path.join(wt.path, "node_modules")), false);
   await worktrees.discard(wt);
 });
+
+test("a lockfile without a shared install reaches for npm ci only when the kill-switch allows it", async (t) => {
+  const repo = await makeRepo();
+  t.after(() => rm(repo, { recursive: true, force: true }));
+  await writeFile(path.join(repo, "package-lock.json"), `${JSON.stringify({ name: "fixture", lockfileVersion: 3, packages: {} }, null, 2)}\n`);
+  const previous = process.env.MEFI_STUDIO_WORKTREE_NPM_CI;
+  process.env.MEFI_STUDIO_WORKTREE_NPM_CI = "0";
+  let wt;
+  try {
+    wt = await worktrees.prepare({ root: repo, runId: "run_9" });
+    assert.equal(wt.nodeModules, "missing", "the opt-out keeps even a lockfile-carrying checkout from spawning npm ci");
+    assert.equal(existsSync(path.join(wt.path, "node_modules")), false, "neither a junction nor an install appeared");
+  } finally {
+    if (previous === undefined) delete process.env.MEFI_STUDIO_WORKTREE_NPM_CI;
+    else process.env.MEFI_STUDIO_WORKTREE_NPM_CI = previous;
+  }
+  await worktrees.discard(wt);
+});

@@ -3272,3 +3272,41 @@ full suite into a tree with main.cjs mid-edit is stamped non-evidence.
 The end-to-end `npm test` pass stays with the outstanding follow-up card
 (task_e2a0db32d964df2f / task_bf79bd8c1d8fced5) on a quiet tree. No repo
 source modified beyond this entry.
+
+## 2026-09-22 midday - worktree-buildable card verified landed; npm ci kill-switch pinned by a new test (task_1e6cc42234cbf109, run run_1790091608946_34)
+
+Dispatched to make worktree runs buildable. Inspection before edits: the
+junction/npm-ci strategy was already landed and real, not just claimed -
+
+- `e3ad851` "Land worktree wiring in main.cjs and make worktree runs
+  buildable" carries `ensureNodeModules` in scripts/executor-worktrees.cjs:
+  a junction to the shared `node_modules` (verified by resolving the link
+  back, so a OneDrive phantom junction cannot pass silently), an
+  `npm ci --no-audit --no-fund` fallback gated on a lockfile existing in
+  the checkout and on `MEFI_STUDIO_WORKTREE_NPM_CI != 0`, and npm spawned
+  through cmd.exe on Windows (bare spawn of npm.cmd is EINVAL);
+  `dropNodeModulesLink` unlinks the junction as a link before every
+  worktree removal, so cleanup can never recurse into the shared install;
+  the npm ci branch is unreachable while a junction exists, so npm can
+  never delete-through-the-link either. main.cjs logs when a checkout
+  lands with `nodeModules: "missing"`. The opt-in flag
+  (`MEFI_STUDIO_WORKTREE_RUNS=1`) is still default-off, as the card
+  requires before any flip.
+
+The one genuine gap was evidence, not code: nothing pinned the npm ci
+fallback's gating. Added `tests/executor_worktree.test.mjs` "a lockfile
+without a shared install reaches for npm ci only when the kill-switch
+allows it" - a lockfile-carrying fixture repo with no shared install and
+`MEFI_STUDIO_WORKTREE_NPM_CI=0` must come back `missing` with no
+node_modules created, so the opt-out provably suppresses the spawn
+(deterministic; no real npm run in the suite).
+
+Fresh evidence on this checkout: `node --test
+tests/executor_worktree.test.mjs` -> 10/10 pass (9 pre-existing plus the
+new one), `npm run check` -> exit 0 (targets, spec collisions, css merge
+skip, unused selectors, syntax). The full `npm test` gate was withheld
+per this file's contention protocol: a sibling session still holds
+uncommitted package-lock.json drift (an engines>=24 node), and the 09:2x
+entries stamp full suites into a mid-edit tree non-evidence. The shared
+package-lock drift was left untouched and out of this commit. No repo
+source modified beyond the new test and this entry.
