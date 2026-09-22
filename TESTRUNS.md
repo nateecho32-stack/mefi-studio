@@ -25,6 +25,30 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - worktree follow-up group closure pass: both members' scope discharged, remainder is host-side card flips (task_plan_mucx9cxs_0, run run_1790099521742_6)
+
+Group closure for the two folded members (task_4ad72ce6e6f96f58,
+task_8d38294b586a1490, both archived host-side). Their shared scope —
+recovered from parent task_64d0e2f342af618c's split/narrow decision log —
+was the two split cards: landing card task_7b773505d7c6eb43 and full-gate
+card task_7a3b221956f9aa64. Both verified discharged on first-hand evidence
+at HEAD ae5916e: all six feature commits (c272b58 / 136f866 / e3ad851 /
+d1c4d78 / 96d15c6 / 31f69f0) are ancestors of HEAD; wiring present
+(`require` at main.cjs:58, `worktreeManager` at main.cjs:9428); fresh
+`node --test tests/executor_worktree.test.mjs` -> 11/11 pass, exit 0
+(13.1 s); `git worktree list` shows no `.mefi/worktrees` checkouts and the
+directory does not exist — no residue; nothing staged before or after. The
+full-gate card is done+verified in the board (rows 1fec86b / 21f9e33 /
+f8694c6). The split-out follow-up (task_4dc2a045b8d46b20, row above) is
+done and its conclusion is adopted, not duplicated: nothing implementable
+remains in the repo. The only open items are the duplicate landing cards
+task_7b773505d7c6eb43 / task_2dd9dc18291f2625, still `open` in the board
+though their repo-side obligations are verifiably landed — the status flip
+is host-side only, asked again via MEFI_ASK; the task store was not
+modified from this worker. Sibling in-flight files (~34 modified, 2
+untracked) were present and untouched; this commit adds only this row.
+
+
 ## 2026-09-22 evening - split-out follow-up resolved to host-side-only remainder; worktree workstream re-verified at HEAD (task_4dc2a045b8d46b20, run run_1790099398213_3)
 
 Scope decided from the parent plan's decision log, not guessed: the plan card
