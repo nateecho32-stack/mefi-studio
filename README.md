@@ -111,7 +111,7 @@ Every session, task and agent is a node. Agents orbit the assistant, fly to the 
 ### Settings & connections (`4`)
 
 <p align="center">
-  <img src="docs/images/settings.png" width="900" alt="Settings: auto setup, assistant connection, model routing, coding workers">
+  <img src="docs/images/settings.png" width="900" alt="Settings: auto setup and Providers (API keys, local servers, CLI logins), with model routing and coding workers in the side list">
 </p>
 
 ### Also in the box
