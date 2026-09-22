@@ -25,6 +25,26 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Sweep-advice change verified end to end for task_7247a03061fd07b9
+(2026-09-22, ~14:2x, run_1790086311775_18 "Feed the staged-sweep warning
+into the next dispatch"). The finish()-time sweep now parks its
+staged-files warning on the dispatcher keyed by repo root, and the NEXT
+dispatch into that repo carries it as collab advice
+("CAUTION shared git index ... commit or unstage BEFORE editing") naming
+the files; one read consumes it, a run that ignores it re-arms it through
+its own finish sweep, and entries older than 30 minutes age out. Narrow
+gate: `node --test tests/executor_end_to_end.test.mjs` solo 17/17 pass,
+exit 0 (two new cases). Sliced neighbors green in one invocation
+(executor_lifecycle + executor_parallel + backlog_engine +
+planning_execution: 53/53). `npm run check` green (99 targets, no
+collisions, syntax ok). `npm run test:fast`: one fail in eyes_worker —
+the documented load-dependent read-timeout row — solo rerun 8/8 pass,
+exit 0. Python contracts 246 OK; normalized-path lock green;
+`npm run audit` ok, zero findings. The main.cjs side of the change stays
+uncommitted on purpose: the file also carries the sibling agent-issues /
+model-config in-flight hunks, so a path-limited commit now would sweep
+them; it rides the combined in-flight tree landing card.
+
 Full gate backing the combined in-flight tree landing (2026-09-22, ~14:1x,
 run_1790086456428_22 for task_85b21602201d47e7 "Commit the combined in-flight
 tree" — brain maps, agent-issues decision lane, Command inspect mode,
@@ -2938,3 +2958,34 @@ This is the green exit-0 full-suite run the 2026-09-21 entry required
 before settling task_11085243b2d2452f; per repo convention the card
 settles through Studio on this evidence, not through worker edits to the
 task store. No repo source modified beyond this entry.
+
+## 2026-09-22 morning - toggle-card closure audit; fresh rerun withheld from a re-double-booked board (task_c3fca713a5ff8b66, run run_1790087550734_2)
+
+Dispatched to rerun the full suite on a quiet desktop and close
+task_11085243b2d2452f. Audit of what that obligation's state actually is:
+
+- The toggle card is closed in the live store: task_11085243b2d2452f reads
+  status "archived", remaining [], handoffState complete, final log
+  "verified - sentinel seen, 6 changed file(s)" (09:12, the verify pass
+  right after this card's green-run verification). The evidence it settled
+  on is the committed green run above (013c585, 09:11, TESTRUNS.md +32);
+  no worker store write was involved, matching the convention stated in
+  that entry.
+- "Live Studio app closed" is not executable from inside a run it hosts
+  and dispatches (the 2026-09-21 17:35 entry recorded the same constraint);
+  the documented-working quieting - minimize the packaged window - is what
+  the recorded green run used, and its occlusion_probe took the strict
+  assertion path.
+- No fresh suite run was launched: the executor log shows five sibling
+  runs started within ~3 minutes of this dispatch (occlusion-probe fixture
+  hardening, dev-app relaunch spawning Electron, per-run worktrees,
+  staged-sweep advice, dev-app repair retry), several of which edit
+  main.cjs/tests mid-flight. By the runner's own source-fingerprint
+  contract a concurrent full-suite run would be stamped non-evidence - the
+  09:05 contention signature two entries up - and the ~9-minute run plus
+  this record would not fit the dispatch budget beside it. Same protocol
+  as 09:05: no run launched into contention.
+
+The card's obligations - green exit-0 full suite recorded in TESTRUNS.md,
+toggle card closed - are discharged by 013c585 plus the archived store
+record above. No repo source modified beyond this entry.
