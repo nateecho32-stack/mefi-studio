@@ -63,7 +63,9 @@ The loop's heartbeat is `autopilotPass` (main.cjs:11594), scheduled by
 - The pick is recorded as a Policy Lab `decision` (main.cjs:9229); an
   all-deferred pass that repeats with the same held set is recorded once, and
   the recommended order is `observation.actions` itself, with no duplicate
-  `recommended` array (main.cjs:9226).
+  `recommended` array (main.cjs:9226). A selected pick's decision is held
+  and written just before its `attempt-start`, with its pick-time `at`, so a
+  claim released before launch leaves no decision the lab would never read.
 - A run entry is built with id `run_<startedAt>_<seq>` (main.cjs:9269)
   carrying `outputTail`, `sawDone`, `handoffs`, `calls`, `depth`, etc.
 - The claim is ONE transactional `mutateBoard` (main.cjs:9381-9412): the task
