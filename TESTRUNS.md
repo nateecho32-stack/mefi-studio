@@ -35,6 +35,46 @@ written — verified first-hand via `git show 0ebf5fe --stat` (TESTRUNS.md +54/-
 carrying both rows) and `git show 2457a7d --stat` (8 code files, no ledger
 edit); attribution corrected here, nothing removed or rewritten.
 
+## 2026-09-22 late evening - integration-gate chain card closes on first-hand evidence: c6e349c's green row re-verified in-history, one sibling already verified on it, the collision card's flip stays owner-only (task_94b29c15a3479597, run run_1790102501766_2)
+
+Retry 3/3 of the chain-closure card. The two prior denials are understood
+first-hand: retry 1 (run_1790086242215_15) landed the evidence but ended
+with "remaining: host closes ..." prose, which the verifier read as an
+outstanding obligation; retry 2 (run_1790087766670_8) re-reported the same
+evidence with no attributable edit and no named checks. This attempt
+re-verifies the chain first-hand and records it durably instead.
+
+Evidence re-verified this attempt, not assumed: `git merge-base
+--is-ancestor c6e349c HEAD` -> exit 0, and `git show --stat c6e349c` ->
+1 file changed (26 insertions, TESTRUNS.md only): the 2026-09-22
+09:13-09:17 full-gate green rerun row for run_1790086242215_15 (`npm run
+check` + `npm run build-booklet` + `npm test` exit 0; the first npm
+test's occlusion_probe failure solo-confirmed environmental, then green
+on rerun) exists in history, and its closing sentence names
+task_336a62b5d249978f / task_c1cf337d66009c14 as the cards it evidences
+on "sibling edits landed".
+
+Store re-read (never rewritten from a worker): task_336a62b5d249978f is
+done and verified — the sibling-evidence ask of this card's prompt is
+discharged. task_c1cf337d66009c14 ("Resolve collision: booklet.js +5
+more") is still active with "Delegated 2 subtasks; integration waits for
+their verified results"; its delegates' scoped checks are green in
+history (ba72edd, 5bc25d1) and this card's attempt-2 child handoff
+(task_93c9907b18ec3928) resolved complete. That card's integration flip
+is host bookkeeping by the chain's own split decisions (0ebf5fe,
+4f4dcd9) and goes out via MEFI_ASK — it is not this card's remainder.
+
+Named checks this attempt: `git merge-base --is-ancestor c6e349c HEAD`
+-> exit 0; `npm run check` -> exit 0 (check-targets 101 targets, full
+coverage; spec-collisions 205 specs, unique basenames, no orphans;
+ALL-SELECTORS-USED across 5 stylesheets; check-syntax 101 files,
+in-process) on the sibling in-flight tree exactly as found. Full
+`npm test` withheld per this file's contention protocol and the chain's
+flake history: the tree carries 39 uncommitted sibling paths, and the
+c6e349c row already stamps the full gate on a quieter tree. Nothing
+repo-side is still owed on this card; task store untouched; sibling
+in-flight files left exactly as found; this commit adds only this row.
+
 ## 2026-09-22 late evening - sixth-gen carrier (the split-out card) takes its scope from the decision log: extra work is board-side only, repo-side re-verified green at HEAD 9788722 (task_261f3a1af9aeda2d, run run_1790102049200_35)
 
 This card was spawned at the owner's 18:31:54 "split the extra work out"
