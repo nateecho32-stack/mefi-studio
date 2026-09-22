@@ -110,10 +110,15 @@ worker's claim).
 ### Build, checks and release (CLIs)
 
 `build-booklet.mjs` inlines the renderer into `renderer/booklet.html`.
-`check-syntax.mjs`, `check-targets.mjs`, `check-css.mjs` and
-`spec-collisions.mjs` make up `npm run check`; `run-node-tests.mjs` is the
-test runner; `salvage-smoke.mjs` smokes `salvageJson` from the real
-`main.cjs` text. `serve.mjs` serves `npm run start:web`.
+`check-syntax.mjs`, `check-targets.mjs`, `check-css.mjs`,
+`spec-collisions.mjs` and `check-testruns.mjs` make up `npm run check`;
+`run-node-tests.mjs` is the test runner. `append-testruns-row.mjs` is the
+write-side companion to the `check-testruns.mjs` gate: it lands a new row at
+the true top of the live region (the dated rows above the `## Read Before Any
+Tests` anchor — the archive below that anchor is frozen), under a
+cross-process lock with a re-verified atomic write. `salvage-smoke.mjs` smokes
+`salvageJson` from the real `main.cjs` text. `serve.mjs` serves
+`npm run start:web`.
 `package-portable.mjs`, `package-release.mjs` and `make-icon.mjs` build
 releases, while `updater.mjs` (live source updates) and `release-updater.mjs`
 (GitHub releases) keep installed copies current.
