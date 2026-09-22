@@ -4556,8 +4556,12 @@ body.music-preview-active #idle-hud { display: none !important; }
   position: absolute; left: 24px; right: 24px; top: 6px; bottom: 6px;
   display: flex; align-items: center; justify-content: center; text-align: center;
   white-space: normal; font-size: min(38px, calc(11px / var(--zoom, 1))); line-height: 1.08;
-  text-shadow: 0 1px 2px rgba(0,0,0,.6);
+  text-shadow: 0 1px 2px rgba(0,0,0,.6); pointer-events: none;
 }
+/* Far out, only the dot of an end is pressable, drawn larger so it can be
+   hit; a press anywhere else on the part selects or drags the part. */
+.brains-stage[data-lod="far"] .brains-port { pointer-events: none; }
+.brains-stage[data-lod="far"] .brains-port i { pointer-events: auto; transform: scale(min(2.4, calc(0.5 / var(--zoom, 1)))); }
 .brains-stage[data-lod="far"] .brains-node-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
 .brains-stage[data-lod="far"] .brains-node[data-rows="1"] .brains-node-title { -webkit-line-clamp: 2; }
 .brains-stage[data-lod="far"] .brains-node[data-problem] .brains-node-head b { right: 46px; }
@@ -5229,6 +5233,17 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
               <button id="save-key" class="mini">Save</button>
             </div>
           </article>
+          <article class="provider-tile" data-provider="zen">
+            <div class="provider-tile-head">
+              <span class="provider-mark" aria-hidden="true">Zen</span>
+              <div class="provider-title"><span class="provider-name">OpenCode Zen</span><span class="provider-kind">API key · Zen balance</span></div>
+              <span class="provider-pill" id="zen-key-status" data-state="unknown">checking…</span>
+            </div>
+            <div class="provider-tile-body">
+              <input type="password" id="zen-key" placeholder="Paste API key" autocomplete="off" aria-label="OpenCode Zen API key" title="The same key serves Jev's Zen route. With nothing saved, opencode's own OPENCODE_API_KEY is used.">
+              <button id="save-zen-key" class="mini">Save</button>
+            </div>
+          </article>
           <article class="provider-tile" data-provider="lmstudio">
             <div class="provider-tile-head">
               <span class="provider-mark" aria-hidden="true">LM</span>
@@ -5364,10 +5379,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
                 </select>
               </label>
               <label class="field"><span class="field-label">Routine model <span class="field-scope" id="model-scope-note">for this provider</span></span>
-                <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model this provider uses for routine passes (replies, briefs, chat). Saved per provider; empty = the provider's own default.">
+                <input type="text" id="ai-model-routine" placeholder="automatic selection" spellcheck="false" autocomplete="off" title="Model for routine passes (reading the ask, checks, chat), saved for the provider routine answers through; empty = that provider's own default, shown as the placeholder.">
               </label>
-              <label class="field"><span class="field-label">Heavy model</span>
-                <input type="text" id="ai-model-heavy" placeholder="same as routine" spellcheck="false" autocomplete="off" title="Model this provider uses for heavy passes (overseer, improver, analyzer read). Saved per provider; empty = routine's model where the provider has one, otherwise the provider's default.">
+              <label class="field"><span class="field-label">Heavy model <span class="field-scope" id="model-heavy-scope">for this provider</span></span>
+                <input type="text" id="ai-model-heavy" placeholder="same as routine" spellcheck="false" autocomplete="off" title="Model for heavy passes (plans, briefs, reviews, the overseer, the analyzer read), saved for the provider heavy answers through; empty = routine's model where that provider has one, otherwise its default, shown as the placeholder.">
               </label>
             </div>
             <div class="field">
@@ -28526,6 +28541,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   "use strict";
 
   const COLORS = ["#e6c98d", "#9db7ff", "#57ff9a", "#f2a2e8", "#ffb38a", "#86d1d6", "#c9a8ff", "#ffd479"];
+  // Tell the Start here walkthrough that a real board action happened. The
+  // guide's own listener ticks the matching stop; failures never announce.
+  const announce = (name, detail) => {
+    try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent(name, { detail })); } catch {}
+  };
   const FILTERS = ["all", "open", "review", "done"];
   const stageLabel = (stage, task, options) => window.MefiStage?.label?.(stage, task, options) ?? String(stage ?? task?.status ?? "open");
   const READINESS_FILTERS = { all: "All scheduling states", ready: "Ready", running: "Working", review: "Verifying", waiting: "Waiting or retrying", blocked: "Needs attention" };
@@ -29865,6 +29885,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         const message = `Task created · ${state.backlog?.paused ? "queued until you resume" : "added to the project queue"}`;
         status(message, false);
         window.MefiToast?.(message, "good");
+        announce("mefi:task-created", { taskId: result.task.id, projectId: result.task.projectId || projectId || null });
         return result.task;
       } catch (error) {
         if (epoch === projectEpoch) {
@@ -29903,6 +29924,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     renderList();
     renderDetail();
     window.MefiToast?.(`Task created · ${task.title}`, "good");
+    announce("mefi:task-created", { taskId: task.id, projectId: task.projectId || state.projectId || null });
     if (state.prefs.autoReference !== false && state.prefs.useReference !== false) gather();
     return task;
   }
@@ -29915,6 +29937,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     if (typeof params.taskId === "string" && params.taskId) state.selected = params.taskId;
     return load(params)
       .then(() => {
+        const task = params.taskId ? selectedTask() : null;
+        if (task) announce("mefi:task-opened", { taskId: task.id, projectId: task.projectId || state.projectId || null, status: task.status || null });
         revealSelected();
         if (params.gather) gather();
       })
@@ -30093,6 +30117,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       state.selected = id;
       state.readiness = "all";
       const task = selectedTask();
+      if (task) announce("mefi:task-opened", { taskId: task.id, projectId: task.projectId || state.projectId || null, status: task.status || null });
       if (task && state.filter !== "all" && taskStage(task) !== state.filter) state.filter = taskStage(task);
       state.query = "";
       if (els.search) els.search.value = "";
@@ -31305,16 +31330,18 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       wrapLeft = null;
       return;
     }
+    const sheetLeft = el.canvasWrap.closest?.(".brains-sheet")?.getBoundingClientRect?.().left ?? 0;
+    const left = rect.left - sheetLeft;
     const fitted = fittedView && Math.abs(fittedView.x - state.view.x) < 0.5 && Math.abs(fittedView.y - state.view.y) < 0.5 && Math.abs(fittedView.zoom - state.view.zoom) < 0.0005;
     if (fitted && !state.gesture) fit();
     else {
-      if (wrapLeft !== null && rect.left !== wrapLeft && !state.gesture) {
-        state.view.x += wrapLeft - rect.left;
+      if (wrapLeft !== null && left !== wrapLeft && !state.gesture) {
+        state.view.x += wrapLeft - left;
         applyView();
       }
       renderMinimapView();
     }
-    wrapLeft = rect.left;
+    wrapLeft = left;
   }
 
   function centerOn(node, { animate = true, zoom = null } = {}) {
@@ -31606,6 +31633,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     if (!el.wires || !state.map) return;
     const badEdges = new Set(state.problems.filter((item) => item.level === "error" && item.edgeId).map((item) => item.edgeId));
     const lit = lighting();
+    const hits = [];
     for (const edge of state.map.edges) {
       const from = portPoint(edge.from.node, edge.from.port, "out");
       const to = portPoint(edge.to.node, edge.to.port, "in");
@@ -31631,13 +31659,19 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         hit.setAttribute("class", "brains-wire-hit");
         hit.dataset.edge = edge.id;
         hit.append(label);
-        el.wireHits.append(hit);
+        // Backward wires loop under the map, so they count as the longest.
+        hits.push({ hit, span: Math.abs(to.x - from.x) + Math.abs(to.y - from.y) + (to.x < from.x ? 1e6 : 0) });
       } else {
         path.append(label);
       }
       el.wires.append(path);
       wirePaths.set(edge.id, { path, hit });
     }
+    // The wide pick bands overlap where wires run close together; the
+    // shortest wires go on top, so a long wire never hides a short one it
+    // passes over.
+    hits.sort((a, b) => b.span - a.span);
+    for (const { hit } of hits) el.wireHits.append(hit);
   }
 
   function wireTitle(edge) {
@@ -33435,6 +33469,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   function dialogKeys(event) {
+    const behind = dialogState?.panel && typeof dialogState.panel.contains === "function" && event.target && !dialogState.panel.contains(event.target);
+    if (behind && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
@@ -33460,7 +33500,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       if (!focusable.length) {
         event.preventDefault();
         panel.focus();
-      } else if (!panel.contains(active)) {
+      } else if (active === panel || !panel.contains(active)) {
         event.preventDefault();
         (event.shiftKey ? focusable[focusable.length - 1] : focusable[0]).focus();
       } else if (event.shiftKey && active === focusable[0]) {
@@ -33547,7 +33587,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   function togglePanel(which) {
     const toggle = which === "parts" ? el.toggleParts : el.toggleInspector;
     if (toggle && typeof getComputedStyle === "function" && getComputedStyle(toggle).display === "none") {
-      status(`The ${which === "parts" ? "parts rail" : "inspector"} does not fit at this width. Space still searches the parts.`);
+      const notice = `The ${which === "parts" ? "parts rail" : "inspector"} does not fit at this width. Space still searches the parts.`;
+      status(notice);
+      window.MefiToast?.(notice, "info");
       return;
     }
     state.layout[which] = !state.layout[which];
@@ -34299,8 +34341,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     state.gesture = null;
     state.drag = null;
     suppressClick = true;
+    const clear = () => setTimeout(() => { suppressClick = false; }, 0);
+    window.addEventListener?.("pointerup", clear, { once: true, capture: true });
+    window.addEventListener?.("pointercancel", clear, { once: true, capture: true });
     if (el.canvasWrap) delete el.canvasWrap.dataset.gesture;
-    if (gesture.kind === "pan") {
+    if (gesture.kind === "pan" || gesture.kind === "mini") {
       state.view.x = gesture.viewX;
       state.view.y = gesture.viewY;
       applyView();
@@ -34351,6 +34396,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       stop(event);
       closeShortcuts();
       return;
+    }
+    if ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === "a") {
+      event.preventDefault();
+      const body = el.shortcuts.querySelector?.(".brains-shortcuts-body");
+      if (body) window.getSelection?.()?.selectAllChildren?.(body);
     }
     if (event.key === "Tab") {
       const stops = [...(el.shortcuts.querySelectorAll?.("button, [tabindex='0']") ?? [])];
@@ -34584,9 +34634,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     el.minimap?.addEventListener("pointerdown", (event) => {
       event.preventDefault?.();
       event.stopPropagation?.();
+      const viewX = state.view.x;
+      const viewY = state.view.y;
       const point = miniPoint(event);
       if (point) centerAtWorld(point);
-      state.gesture = { kind: "mini", moved: true, startX: event.clientX, startY: event.clientY };
+      state.gesture = { kind: "mini", moved: true, startX: event.clientX, startY: event.clientY, viewX, viewY };
     });
     el.dialog?.addEventListener("pointerdown", (event) => { if (event.target === el.dialog) finishDialog(null); });
     function pressedOnBackdrop(backdrop) { return pressedOn === null || pressedOn === backdrop; }
@@ -35962,6 +36014,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   "use strict";
   const $ = (id) => document.getElementById(`workspace-${id}`);
   const api = () => window.mefiStudio;
+  // Tell the Start here walkthrough that a real board action happened. The
+  // guide's own listener ticks the matching stop; failures never announce.
+  const announce = (name, detail) => {
+    try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent(name, { detail })); } catch {}
+  };
   // Questions that interrupt or destroy (switching away from working agents,
   // removing a project) go through the styled toast confirm and fall back to
   // the OS dialog; when neither exists the answer is no, never a silent yes.
@@ -36609,6 +36666,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         state.filter = "open"; state.query = ""; state.limit = 20; $("work-search").value = "";
         createdTask = result.task?.id ? { id: result.task.id, projectId: id } : null;
         if ($("created-task")) $("created-task").hidden = !createdTask;
+        if (createdTask) announce("mefi:task-created", { taskId: createdTask.id, projectId: id });
       }
       const refreshed = await refresh(true);
       if (mode === "work") {
@@ -37799,6 +37857,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   "use strict";
   const $ = (name) => document.getElementById(`plans-${name}`);
   const api = () => window.mefiStudio;
+  // Tell the Start here walkthrough that a real planning action happened. The
+  // guide's own listener ticks the matching stop; failures never announce.
+  const announce = (name, detail) => {
+    try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent(name, { detail })); } catch {}
+  };
   const state = { projectId: null, projectName: "Your project", plans: [], selected: "new", busy: false, pending: null, tasks: null, workError: null, epoch: 0, opened: false, readId: 0, workReadId: 0, existing: null, existingOpen: false };
   let initialized = false;
   let workTimer = null;
@@ -38071,6 +38134,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       if (epoch !== state.epoch || projectId !== state.projectId || selected !== state.selected) return false;
       accept(result); if (clean) clean(savedDraft); if (action === "create") delete drafts[key]; persist();
       render(); note(result.note || success);
+      if (action === "create") announce("mefi:plan-created", { planId: result.plan?.id || current?.id || null, projectId });
+      if (action === "convert") announce("mefi:task-created", { planId: current?.id || null, projectId });
       if (action === "convert") window.MefiWorkspace?.refresh?.(true);
       return true;
     } catch (error) {
@@ -39101,27 +39166,33 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
   // Safe destinations: navigation and highlighting only. Nothing is submitted,
   // approved or started from a lesson.
+  // Returns the real control it focused, if any, so the coach knows whether it
+  // still needs to hand focus to its own primary button.
   function routeTo(lesson) {
     const route = lesson.route;
+    let focused = null;
     if (["project", "task", "review"].includes(route)) {
       window.MefiNav?.go?.("workspace");
       if (route === "task") {
         document.getElementById("workspace-mode-work")?.click();
-        document.getElementById("workspace-input")?.focus?.();
+        focused = document.getElementById("workspace-input") ?? null;
+        focused?.focus?.();
       } else if (route === "review") {
         const review = document.getElementById("workspace-review");
         review?.click(); review?.focus?.();
+        focused = review ?? null;
       }
     } else window.MefiNav?.go?.(route);
     if (lesson.menu) window.MefiSidebar?.open?.();
     highlight(lesson.target);
-    if (route === "project") document.getElementById("workspace-add-project")?.focus?.();
+    if (route === "project") { focused = document.getElementById("workspace-add-project") ?? null; focused?.focus?.(); }
     const at = state.step;
     later(() => {
       if (state.mode !== "coach" || state.step !== at) return;
       if (lesson.menu) window.MefiSidebar?.open?.();
       highlight(lesson.target);
     });
+    return focused;
   }
   function visit(route) {
     close();
@@ -39152,7 +39223,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     $("overlay").hidden = true;
     releaseLayer();
     renderCoach(); renderInvitation();
-    if (options.navigate !== false) routeTo(lessons[state.step]);
+    // The walk is keyboard-continuable: when the stop has a real control, focus
+    // lands there (routeTo returns it); otherwise focus the coach's own Next so
+    // the tour never strands focus on the hidden sheet behind it.
+    const focused = options.navigate !== false ? routeTo(lessons[state.step]) : null;
+    if (!focused) $("coach-next")?.focus?.();
   }
   function advance() {
     state.done[state.step] = true;
@@ -39175,6 +39250,23 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       void runMap({ automatic: true });
     }
   }
+  // Real user actions tick the matching stop off. The events are emitted only
+  // after the underlying action succeeded, and ticking is idempotent: a repeat
+  // never regresses a stop or duplicates progress.
+  const REVIEW_STATES = ["done", "awaiting_verification", "archived"];
+  function tickStop(index) {
+    if (!lessons[index] || isDone(index)) return;
+    state.done[index] = true;
+    save();
+    if (state.mode === "coach") renderCoach();
+    if (state.mode === "sheet" && $("overlay") && !$("overlay").hidden) render();
+    renderInvitation();
+  }
+  function taskOpened(event) {
+    tickStop(MONITOR);
+    const detail = event?.detail || {};
+    if (detail.review === true || REVIEW_STATES.includes(detail.status)) tickStop(REVIEW);
+  }
   function init() {
     if (initialized || !$("overlay")) return;
     initialized = true;
@@ -39187,6 +39279,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     });
     window.addEventListener("mefi:build-mode", renderBuildMode);
     window.addEventListener("mefi:project-changed", projectChanged);
+    window.addEventListener("mefi:connection-saved", () => tickStop(CONNECT));
+    window.addEventListener("mefi:task-created", () => tickStop(CREATE));
+    window.addEventListener("mefi:plan-created", () => tickStop(CREATE));
+    window.addEventListener("mefi:task-opened", taskOpened);
     window.addEventListener("mefi:nav", () => {
       if (state.mode !== "coach") return;
       const at = state.step;
@@ -39252,6 +39348,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 (function () {
   "use strict";
   const { fmt, privacyLabel } = window.MefiGraph;
+  // Tell the Start here walkthrough that a provider connection was saved. Only
+  // a successful save announces; a failed or cancelled save must not advance it.
+  const noteConnectionSaved = (which) => {
+    try { if (typeof CustomEvent === "function" && typeof window.dispatchEvent === "function") window.dispatchEvent(new CustomEvent("mefi:connection-saved", { detail: { provider: which || null } })); } catch {}
+  };
 
   // Global toasts: quiet confirmations that do not need a panel status line.
   window.MefiToast = (message, kind = "info", options = {}) => {
@@ -39727,10 +39828,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // The provider a role answers through: its own pick when one is set,
     // otherwise whatever Assistant answers via picks.
     function roleProviderOf(role) {
-      const own = (role === "heavy" ? roleHeavy : roleRoutine)?.value;
+      const own = (role === "heavy" ? roleHeavy : roleRoutine).value;
       if (own && providerNames[own]) return own;
       return providerNames[providerSelect.value] ? providerSelect.value : "auto";
     }
+    // The roles saved on a provider of their own, heavy first.
+    const splitRoles = (routing) => ["heavy", "routine"].filter((role) => providerNames[routing?.roleProviders?.[role]]);
     const executorCli = document.getElementById("executor-cli");
     function cliInstalled(id) {
       return Array.isArray(setup.clis) && setup.clis.some((cli) => cli.id === id && cli.installed);
@@ -39814,8 +39917,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       const entryFor = (id, name, availability) => ({ id, state: stateOf(availability), label: `${name} — ${availability.note}` });
       const [auto, ...providers] = providerRegistry.map((entry) => entryFor(entry.id, entry.name, providerAvailability(entry.id)));
       renderPicker(providerSelect, [auto, ...providers.sort(byReadiness)]);
-      // Each role may answer elsewhere; "Same as above" follows the main pick.
-      for (const select of [roleRoutine, roleHeavy]) if (select) renderPicker(select, [{ id: "", state: "ready", label: "Same as above" }, ...providers]);
+      // Each role may answer elsewhere; "Same as above" follows the main pick
+      // and says which one that is.
+      const mainId = providerNames[setup.routing?.provider] ? setup.routing.provider : "";
+      const same = { id: "", state: mainId ? stateOf(providerAvailability(mainId)) : "unknown", label: mainId ? `Same as above — ${providerNames[mainId]}` : "Same as above" };
+      for (const select of [roleRoutine, roleHeavy]) renderPicker(select, [same, ...providers]);
       renderPicker(executorCli, builderIds.map((id) => entryFor(id, builderNames[id], cliAvailability(id))).sort(byReadiness));
       renderAutoOrder();
       renderAutoOrderAdd();
@@ -39855,7 +39961,19 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           : provider === "custom" ? (routing.hasCustom ? "key saved" : "no key saved")
           : provider === "auto" ? (autoFirst ? `will use ${providerNames[autoFirst]}` : "no usable provider in this order yet")
           : keyState(provider);
-        setPill(setupAssistant, stateOf(providerAvailability(provider)), `${providerNames[provider]} · ${detail}`);
+        // A role on its own provider is named, and the pill is only as ready
+        // as the least ready provider actually answering.
+        const split = splitRoles(routing);
+        if (!split.length) setPill(setupAssistant, stateOf(providerAvailability(provider)), `${providerNames[provider]} · ${detail}`);
+        else {
+          const answering = split.map((role) => routing.roleProviders[role]).concat(split.length === 2 ? [] : [provider]);
+          const worst = { ready: 0, unknown: 1, missing: 2 };
+          const state = answering.map((id) => stateOf(providerAvailability(id))).reduce((a, b) => (worst[b] > worst[a] ? b : a), "ready");
+          const roles = split.map((role) => `${role === "heavy" ? "plans" : "reads"} on ${providerNames[routing.roleProviders[role]]}`).join(" · ");
+          setPill(setupAssistant, state, split.length === 2 ? roles : `${providerNames[provider]} · ${detail} · ${roles}`);
+        }
+        // The Zen key lives in its own tile; opencode's OPENCODE_API_KEY counts.
+        setPill(document.getElementById("zen-key-status"), routing.hasZen ? "ready" : "missing", routing.hasZen ? (routing.zenKeySource === "env" ? "key from environment" : "key saved (encrypted)") : "no key saved");
       }
       if (setup.routingError) setPill(setupSelection, "unknown", "status unavailable");
       else if (!routing) setPill(setupSelection, "unknown", "checking…");
@@ -39874,7 +39992,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         const order = autoOrderOf(routing).map((id) => `${providerNames[id] ?? id}${autoProviderUsable(id) ? "" : " (unavailable)"}`);
         readiness.textContent = `auto order: ${order.join(" → ")}`;
       }
-      else if (selected === "zai" || selected === "opencode") readiness.textContent = `${keyState(selected)} — this provider's saved model applies`;
+      else if (selected === "zai" || selected === "opencode" || selected === "zen") readiness.textContent = `${keyState(selected)} — this provider's saved model applies`;
       else if (selected === "custom") readiness.textContent = `${routing.customEndpoint ? "endpoint saved" : "no endpoint saved"}, ${setup.keys.custom ? "key saved" : "no key saved"}`;
       else if (selected === "lmstudio") readiness.textContent = "local server — no key needed; its loaded model is detected automatically";
       else if (setup.cliError) readiness.textContent = "CLI status unavailable";
@@ -39911,16 +40029,29 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     document.getElementById("save-key").addEventListener("click", async () => {
       const value = document.getElementById("api-key").value.trim();
       const result = await window.mefiStudio.setApiKey(value, "opencode");
-      if (result?.ok) { setup.keys.opencode = Boolean(value); setPill(keyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); }
+      if (result?.ok) { setup.keys.opencode = Boolean(value); setPill(keyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("opencode"); }
       else setPill(keyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("api-key").value = "";
+      await loadAiRouting();
+    });
+
+    // One Zen key serves the assistant's Zen route and Jev's, so a save
+    // refreshes both; clearing it falls back to OPENCODE_API_KEY when set.
+    document.getElementById("save-zen-key").addEventListener("click", async () => {
+      const input = document.getElementById("zen-key");
+      const value = input.value.trim();
+      const result = await window.mefiStudio.setApiKey(value, "zen");
+      input.value = "";
+      if (!result?.ok) setPill(document.getElementById("zen-key-status"), "unknown", `save failed: ${result?.error ?? "unknown"}`);
+      else noteConnectionSaved("zen");
+      await refreshJev();
       await loadAiRouting();
     });
 
     document.getElementById("save-zai-key").addEventListener("click", async () => {
       const value = document.getElementById("zai-key").value.trim();
       const result = await window.mefiStudio.setApiKey(value, "zai");
-      if (result?.ok) { setup.keys.zai = Boolean(value); setPill(zaiKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); }
+      if (result?.ok) { setup.keys.zai = Boolean(value); setPill(zaiKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("zai"); }
       else setPill(zaiKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("zai-key").value = "";
       await loadAiRouting();
@@ -39931,7 +40062,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     document.getElementById("save-custom-key").addEventListener("click", async () => {
       const value = document.getElementById("custom-key").value.trim();
       const result = await window.mefiStudio.setApiKey(value, "custom");
-      if (result?.ok) { setup.keys.custom = Boolean(value); setPill(customKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); }
+      if (result?.ok) { setup.keys.custom = Boolean(value); setPill(customKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("custom"); }
       else setPill(customKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("custom-key").value = "";
       await loadAiRouting();
@@ -39971,6 +40102,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         const result = await window.mefiStudio.setApiKey(input.value.trim(), jevRouteFields[jevRouteOf()].key);
         input.value = "";
         if (!result?.ok) { jevStatus.textContent = `Save failed: ${result?.error ?? "unknown"}`; return; }
+        noteConnectionSaved(jevRouteFields[jevRouteOf()].key);
         await refreshJev();
         await loadAiRouting();
       } catch { input.value = ""; jevStatus.textContent = "Could not save Jev key"; }
@@ -40082,6 +40214,20 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           : `${tierNames[tier]} tier: ${cliName} runs ${active.model || "its CLI default"}${tier === "free" ? ", one worker at a time" : ""}.`;
       executorTierStatus.textContent = `${lead} ${["free", "fast", "heavy"].map(describe).join(" · ")}.`;
     }
+    // Each model field names the provider it saves to, and its placeholder is
+    // what that role runs while the field is empty — the host resolves it,
+    // the same way the tier table reads for builders.
+    function renderRoleModels(routing) {
+      for (const [role, input, scopeId] of [["routine", modelRoutine, "model-scope-note"], ["heavy", modelHeavy, "model-heavy-scope"]]) {
+        const entry = routing?.roleModels?.[role];
+        if (!entry) continue;
+        const scope = document.getElementById(scopeId);
+        if (scope) scope.textContent = entry.provider === "auto" ? "for the auto order" : `on ${providerNames[entry.provider] ?? entry.provider}`;
+        input.placeholder = entry.model
+          ? `${entry.model}${entry.source === "default" ? " · default" : ""}`
+          : entry.provider === "auto" ? "automatic selection" : providerKinds[entry.provider] === "cli" ? "CLI default" : "the server's loaded model";
+      }
+    }
     const customEndpoint = document.getElementById("custom-endpoint");
     function evidenceText(evidence, taskType) {
       const workerNote = taskType === "coding" ? " Available measurements describe Studio HTTP requests; CLI worker timing and billing are not measured." : "";
@@ -40134,8 +40280,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           autoOrder = autoOrderOf(routing);
           renderAutoOrder();
           renderAutoOrderAdd();
-          if (roleRoutine) roleRoutine.value = routing.roleProviders?.routine ?? "";
-          if (roleHeavy) roleHeavy.value = routing.roleProviders?.heavy ?? "";
+          roleRoutine.value = routing.roleProviders?.routine ?? "";
+          roleHeavy.value = routing.roleProviders?.heavy ?? "";
           // Models follow the provider each role answers through: the keyed
           // HTTP routes (and "auto") may show the role-wide fallback, CLI and
           // local routes show only what was saved for them.
@@ -40154,6 +40300,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           customEndpoint.value = routing.customEndpoint ?? "";
         }
         renderExecutorTiers(routing);
+        renderRoleModels(routing);
         syncSegmented();
         const selection = routing.modelSelection ?? "jev";
         const cliProvider = routing.provider === "grok" ? "Grok CLI" : routing.provider === "claude" ? "Claude Code CLI" : routing.provider === "codex" ? "Codex CLI" : routing.provider === "antigravity" ? "Antigravity CLI" : null;
@@ -40168,7 +40315,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
                 : routing.jevConfigured
                   ? "Jev model selection ready · task fit, speed and cost. Explicit model overrides take priority."
                   : "Jev model selection is waiting for a Jev key. Save one below for the selected route; usual defaults apply until connected.";
-        const split = ["heavy", "routine"].filter((role) => providerNames[routing.roleProviders?.[role]]);
+        const split = splitRoles(routing);
         if (split.length) routingStatus.textContent += ` ${split.map((role) => `${role === "heavy" ? "Heavy" : "Routine"} passes answer via ${providerNames[routing.roleProviders[role]]}`).join("; ")}.`;
         const decision = routing.routingDecision;
         routingEvidence.hidden = !decision;
@@ -40254,7 +40401,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       if (!autoProviderIds.includes(id) || autoOrder.includes(id)) return;
       return saveAutoOrder([...autoOrder, id], `${providerNames[id] ?? id} added to the auto order`);
     });
-    const routingControls = [providerSelect, roleRoutine, roleHeavy, modelSelection, fallbackToggle, autoOrderAdd, autoOrderAddButton, modelRoutine, modelHeavy, executorCli, executorTier, executorModel, lmStudioEndpoint, customEndpoint].filter(Boolean);
+    const routingControls = [providerSelect, roleRoutine, roleHeavy, modelSelection, fallbackToggle, autoOrderAdd, autoOrderAddButton, modelRoutine, modelHeavy, executorCli, executorTier, executorModel, lmStudioEndpoint, customEndpoint];
     for (const control of routingControls) control.disabled = true;
     renderSetupState();
     syncSegmented();
@@ -40283,7 +40430,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // A role's provider reloads that role's model field from the provider it
     // now answers through.
     for (const [select, role] of [[roleRoutine, "routine"], [roleHeavy, "heavy"]]) {
-      select?.addEventListener("change", () => saveRouting({ roleProviders: { [role]: select.value } }, `${role} passes answer via ${select.value ? providerNames[select.value] ?? select.value : "the main pick"}`, { syncControls: true }));
+      select.addEventListener("change", () => saveRouting({ roleProviders: { [role]: select.value } }, `${role} passes answer via ${select.value ? providerNames[select.value] ?? select.value : "the main pick"}`, { syncControls: true }));
     }
     const saveModel = (which, value) => {
       const provider = roleProviderOf(which);
