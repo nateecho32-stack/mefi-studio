@@ -133,6 +133,26 @@ test("CLI --unused: unused class exits 1 with UNUSED-SELECTOR lines; usage from 
   }
 });
 
+test("CLI --unused: the generated booklet artifact cannot keep a class alive from the usage corpus", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "check-css-booklet-"));
+  try {
+    const sheet = path.join(dir, "sheet.css");
+    await writeFile(sheet, ".used { color: red; }\n.artifact-only { color: blue; }\n");
+    await writeFile(path.join(dir, "page.html"), '<div class="used"></div>');
+    await writeFile(
+      path.join(dir, "booklet.html"),
+      '<style>.artifact-only { color: blue; }</style>\n<div class="used artifact-only"></div>'
+    );
+
+    const res = await execFileP(process.execPath, [CLI, "--unused", "sheet.css"], { cwd: dir }).catch((err) => err);
+    assert.equal(res.code, 1, res.stdout + res.stderr);
+    assert.match(res.stdout, /UNUSED-SELECTOR sheet\.css:2: \.artifact-only \(missing artifact-only\)/);
+    assert.doesNotMatch(res.stdout, /\.used/, "a class used by a real sibling page must stay alive");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("CLI --unused: default mode scans every renderer stylesheet and stays clean on this tree", async () => {
   const res = await execFileP(process.execPath, [CLI, "--unused"], { cwd: STUDIO }).catch((err) => err);
   assert.equal(res.code ?? 0, 0, res.stdout + res.stderr);
