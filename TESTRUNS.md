@@ -111,6 +111,47 @@ node v24.15.0, npm 11.12.1. HEAD did not move during any gate this time; no
 suite reads TESTRUNS.md. The task store was not modified from this worker.
 This commit adds only this section.
 
+Quiet-tree full-gate rerun for the 34d02e follow-up card, exit 0 with one
+documented environmental flake remediated per this file's own table; landing
+card task_2dd9dc18291f2625 verified discharged (2026-09-22, ~11:2x-11:3x,
+run_1790094209046_121 for task_0b98acc8d32d5f67 "Full-gate rerun on the quiet
+tree — follow-up 34d02e", parent task_01a24e9b78aaef34 "Follow-up:
+Per-session worktrees for executor runs"). Precondition verified
+independently, not from the handoff: the sibling start-grace edits landed as
+31f69f0 (start-kill grace in main.cjs — the HEAD graced-kill path at
+main.cjs:9589 — plus 38 lines of tests/executor_lifecycle.test.mjs including
+"start kills past the grace are charged as ordinary failures"), an ancestor
+of HEAD. Quiet tree took an explicit wait: at pickup a sibling session was
+actively rebuilding renderer/booklet.html (a stray `<script src="brains.js">`
+after `</html>` drifted in and was rebuilt away within ~2 min); the only
+young node process left was the long-lived `scripts/serve.mjs` server, and
+the gate launched on a fully clean tree at 56087b2 after two TESTRUNS-only
+sibling commits (21f9e33, 56087b2). Gate: `npm run check` exit 0; `npm test`
+parallel node stage 1959 tests / 1955 pass / 1 fail / 3 skipped (the
+documented environment-conditional skips) in 73.3 s — the one failure was
+performance_render "Profiler JSON download timed out after 6080ms at 1.22x
+observed pace", the first row of this file's known-environmental table;
+remediated exactly as that table prescribes: solo rerun
+`node --test tests/performance_render.test.mjs` -> 2/2 pass, exit 0. The
+`&&` aggregate stopped at the node stage, so every later stage ran solo and
+green: serialized eyes_toggle_electron 1/1 (6.1 s, baseline 2 fetches/295 ms,
+one resume snap, 6 fetches total); occlusion_probe 1/1 exit 0 (the real
+visible-phase pass, not the capability skip — the 379c5b1 foreground-steal
+resampling); Python contracts 247/247 OK in 77.3 s; normalized-path lock all
+ok. `npm run audit` exit 0, 0 findings / 0 warnings. Settle honest note: HEAD
+moved 56087b2 -> 5852541 mid-run via one TESTRUNS.md-only sibling commit; no
+test-read source moved, the runner raised no moved-sources diagnosis, and
+the tree is fully clean after. Landing card task_2dd9dc18291f2625 ("Land the
+worktree tree + TESTRUNS row") verify-and-close: both obligations are
+verifiably in history — the in-flight main.cjs/module/test edits (junction +
+leak fix) landed as c272b58 (lifecycle module, shared-install junction, leak
+fix), 136f866 (main.cjs wiring + shared fake DOM) and e3ad851 (junction
+guards, no-path-strands-a-worktree leak fix, buildable checkouts), with
+follow-on d1c4d78 pinning the npm ci kill-switch; the feature's evidence row
+is the late-morning entry at the bottom of this file. The card is discharged
+on repo evidence; Studio's task store was not modified from this worker, so
+the status flip itself stays host-side. This commit adds only this row.
+
 ## 2026-09-22 afternoon - restart-dev-app re-dispatch loop diagnosed; scoped named check added (task_5494e9f92f34b95a, run run_1790091964934_47)
 
 Card task_cd738240985f9b00 ("Restart dev app after repair — follow-up
