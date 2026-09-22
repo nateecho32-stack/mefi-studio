@@ -86,7 +86,9 @@ Two named sub-gates run inside `npm run check` and work standalone:
 Record each test run in `TESTRUNS.md` by appending through
 `node scripts/append-testruns-row.mjs` (row block as a quoted argument,
 `--file <path|->` or stdin; `--dry-run` previews the landing spot) instead
-of editing the file by hand: it holds a cross-process lock, keeps rows
+of editing the file by hand: it holds a cross-process lock, inserts at the
+true top of the live region (the dated rows above the `## Read Before Any
+Tests` guide - the archive below that anchor is frozen), keeps rows
 newest-first and rolls back if the post-write gate audit fails.
 
 Rebuild the model booklet after editing renderer sources

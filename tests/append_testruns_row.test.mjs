@@ -360,6 +360,21 @@ test("a save landing on top of the append is not destroyed by the rollback path"
   }
 });
 
+test("--help names the live-region direction so the inverted brief wording cannot silently return", () => {
+  const logs = [];
+  const orig = console.log;
+  console.log = (...args) => logs.push(args.join(" "));
+  try {
+    assert.equal(main(["--help"]), 0);
+  } finally {
+    console.log = orig;
+  }
+  const help = logs.join("\n");
+  assert.match(help, /Read Before Any Tests/, "help names the anchor heading");
+  assert.match(help, /above/i, "help states rows land above the anchor (the true top)");
+  assert.match(help, /below that anchor is frozen/i, "help flags the below-anchor wording as inverted/frozen");
+});
+
 test("a save landing while the helper waits for the lock is incorporated, not clobbered", async () => {
   const root = makeFixture();
   const blocks = mkdtempSync(join(tmpdir(), "append-testruns-blocks-"));

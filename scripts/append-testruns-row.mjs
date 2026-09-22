@@ -308,7 +308,11 @@ Row fields as flags (mutually exclusive with a positional block):
   via a positional argument, --file, or stdin)
 
 The block must start with a "## YYYY-MM-DD ..." heading followed by the row
-body (built for you when fields are given). It is inserted so the live region
+body (built for you when fields are given). It lands at the true top of the
+live region: the dated rows ABOVE the "## Read Before Any Tests" guide, whose
+archive below that anchor is frozen. A brief that says "directly below the
+anchor" is inverted against this shipped layout - do not follow it. It is
+inserted so the live region
 stays newest-first, under a cross-process lock, with the snapshot re-verified
 right before an atomic write (temp file + rename): a concurrent mid-run edit
 aborts with a non-zero exit and no write. The result is then verified with the
