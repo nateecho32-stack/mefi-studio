@@ -3794,7 +3794,11 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
   // (overseerChecks) are judged together — latest-wins across both — but
   // summarized apart too, so the verdict's reason names who ran the check.
   const summarize = (checks) => hasSession === true ? summarizeObservedChecks(checks) : { total: 0, passed: 0, failed: 0, pending: 0 };
-  const own = summarize(observedChecks);
+  // Attribution only: a command the overseer also ran is judged by that later
+  // run, so the session's earlier copy is neither blamed nor credited.
+  const commandKey = (check) => str(check?.command).trim().replace(/\s+/g, " ");
+  const theirCommands = new Set(asArray(overseerChecks).map(commandKey));
+  const own = summarize(asArray(observedChecks).filter((check) => !theirCommands.has(commandKey(check))));
   const theirs = summarize(overseerChecks);
   const observedSummary = summarize([...asArray(observedChecks), ...asArray(overseerChecks)]);
   const totalChanges = Math.max(0, Number(changedFiles) || 0);

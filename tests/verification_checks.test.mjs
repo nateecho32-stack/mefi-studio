@@ -128,6 +128,11 @@ test("the verdict reason names who ran the counted check", () => {
   assert.equal(superseded.reason, "1 recorded check(s) passed in the overseer's verification run");
   assert.equal(verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 2, overseerChecks: [check("npm run check", { exitCode: 1, passed: false })] }).reason, "recorded checks failed in the overseer's verification run");
   assert.equal(verifyCompletion({ verdictOk: true, hasSession: true, observedChecks: [check("npm test", { exitCode: 1, passed: false })], overseerChecks: [check("npm run check", { exitCode: 1, passed: false })] }).reason, "recorded checks failed in the attempt's session and the overseer's verification run");
+  // A session failure the overseer's later green run of the same command
+  // superseded is not blamed: the only live failure is the overseer's own.
+  const blamed = verifyCompletion({ verdictOk: true, hasSession: true, observedChecks: [check("npm run check", { exitCode: 1, passed: false, startedAt: 5 })], overseerChecks: [check("npm run check", { startedAt: 3000 }), check("node --test tests/x.test.mjs", { startedAt: 3000, exitCode: 1, passed: false })] });
+  assert.equal(blamed.state, "unverified");
+  assert.equal(blamed.reason, "recorded checks failed in the overseer's verification run");
   assert.equal(verifyCompletion({ verdictOk: true, overseerChecks: [check("npm run check")] }).state, "unverified", "an overseer run needs an attributed session, like the worker's own checks");
 });
 
