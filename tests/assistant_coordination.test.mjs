@@ -179,3 +179,22 @@ test("builder failure reports use the reporting run's error and wake recovery th
   assert.ok(talk.roles.includes("foreman"));
   assert.equal(talk.dispatch, true);
 });
+
+test("a finished builder's report quotes its own summary, never the protocol lines", () => {
+  const logged = [];
+  const env = vm.createContext({
+    assistantTakeMail: () => [], assistantDeliverMail: () => 0, assistantSendMail: () => true,
+    assistantState: assistant.emptyState(1000), assistantModule: assistant,
+    autopilot: { lastError: null }, EXECUTOR_DONE_MARK: "DONE",
+    assistantClip: clip, logLine() {}, logError: (text) => logged.push(text), assistantEmit() {}, assistantLog: (_kind, text) => logged.push(text), assistantAppendReply() {},
+    saveAssistant: async () => {},
+  });
+  vm.runInContext(section("function assistantHearBuilder(", "// A context entry lands"), env);
+  const note = { raw: "done: added the guard; remaining: none", parts: { done: "added the guard", remaining: "none" } };
+  env.assistantHearBuilder({ outputTail: ["**Note for the parent**: edge case", "MEFI_RESULT: done: added the guard; remaining: none", "DONE"], handoffs: [], resultNote: note }, { title: "task B", source: "auto" }, true);
+  assert.match(logged.at(-1), /added the guard/);
+  assert.doesNotMatch(logged.at(-1), /MEFI_RESULT|\*\*|DONE/);
+  env.assistantHearBuilder({ outputTail: ["npm ERR! missing script: check", "MEFI_RESULT: blocked", "DONE"], handoffs: [] }, { title: "task C", source: "auto" }, false);
+  assert.match(logged.at(-1), /missing script: check/);
+  assert.doesNotMatch(logged.at(-1), /MEFI_RESULT/);
+});

@@ -4013,12 +4013,17 @@ function assistantTakeMail(role) {
 // that feeds the digest's builder counters, so each outcome counts once.
 function assistantHearBuilder(entry, job, ok, errorMessage = "", exitCode = null) {
   if (!assistantState) return;
-  const tail = (entry.outputTail ?? []).filter(Boolean).slice(-2).join(" · ");
+  // The worker's own last words, never the protocol echoes (the sentinel, the
+  // raw MEFI_RESULT line) or markdown emphasis; a done report's own summary
+  // speaks for a finished run.
+  const said = (line) => line && !String(line).startsWith(EXECUTOR_DONE_MARK) && !String(line).startsWith("MEFI_RESULT:");
+  const tail = (entry.outputTail ?? []).filter(said).slice(-2).join(" · ").replace(/\*\*/g, "");
   const handed = (entry.handoffs ?? []).length;
   const failure = errorMessage || tail || `no ${EXECUTOR_DONE_MARK}`;
   const jobId = String(entry?.id ?? "");
+  const summary = (ok && entry.resultNote?.parts?.done ? String(entry.resultNote.parts.done) : tail).replace(/\*\*/g, "");
   const finding = ok
-    ? `finished "${assistantClip(job.title, 50)}"${tail ? ` · ${assistantClip(tail, 70)}` : ""}`
+    ? `finished "${assistantClip(job.title, 50)}"${summary ? ` · ${assistantClip(summary, 70)}` : ""}`
     : `failed "${assistantClip(job.title, 50)}" · ${assistantClip(failure, 80)}`;
   let heard = null;
   try {
@@ -10334,7 +10339,10 @@ async function spawnNextJob() {
     const take = (line) => {
       if (entry.finished || entry.child !== owner) return;
       const sawDoneBefore = entry.sawDone, resultBefore = entry.resultNote;
-      logLine(`[${runLabel}] ${line}`);
+      // Terminal-free text for everything a person reads: a bare colour reset
+      // is not a line, in the studio log or in the kept tails below.
+      const plain = line.replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, "").trim();
+      if (plain) logLine(`[${runLabel}] ${plain}`);
       // A runner's first line is how long it took to start — the evidence
       // the start watchdog sets its budget from (see startBudgetMs). A start
       // also ends any run of consecutive start kills.
@@ -10389,9 +10397,8 @@ async function spawnNextJob() {
           entry.issues.push({ ...asked, evidence: entry.outputTail.slice(-2) });
         }
       }
-      // The kept tails are terminal-free text: a bare colour reset is not a
-      // line, and must never become the run's recorded last words.
-      const clean = line.replace(/\u001b\[[0-?]*[ -\/]*[@-~]/g, "").trim().slice(0, 200);
+      // The kept tails must never make a colour reset the run's last words.
+      const clean = plain.slice(0, 200);
       if (clean) {
         entry.outputTail.push(clean);
         if (entry.outputTail.length > 8) entry.outputTail.splice(0, entry.outputTail.length - 8);

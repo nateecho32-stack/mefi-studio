@@ -81,6 +81,16 @@ The loop's heartbeat is `autopilotPass` (main.cjs:11594), scheduled by
   `{ event: "release", reason, heldMs }` row (main.cjs:9331), and the
   advisory roster the claim left on the Command view is cleared
   (main.cjs:9335).
+- The release rows answered why claims were dropped: on 2026-09-22, 31 of
+  113 claims were released, every one at a capacity gate (responsiveness
+  16, memory 13, update hold 2), 15-25 s into the planner/reviewer advisory.
+  The machine sample is only 750 ms old at the claim, so the pressure
+  really does rise during the advisory (siblings ramping up), and an earlier
+  fence would not catch it. So a card's answered advisory is kept
+  (`clusterAdvice` above `prepareClusterJob`): a re-claim within 30 minutes
+  whose brief, mode and last finished run are unchanged reuses it instead of
+  paying for the two calls and the reference search again. Advice where both
+  advisors failed is not kept, so a re-claim asks again.
 
 ## 4. The worker: a headless CLI agent
 
@@ -125,7 +135,10 @@ a run can neither talk itself into being done nor talk the board into new
 work by quoting the protocol, and a CLI that wraps its last line in colour
 still has its verdict counted. The last 8/40 non-empty lines, colour codes
 stripped, feed `outputTail`/`outputLog` (main.cjs:10351-10356), so a bare
-colour reset can no longer become the run's recorded last line.
+colour reset can no longer become the run's recorded last line; the live
+studio-log echo is stripped the same way and skips colour-only lines. The
+overseer's "builder finished" note quotes the worker's own `done:` summary,
+never the sentinel or the raw `MEFI_RESULT:` line (`assistantHearBuilder`).
 Progress checkpoints (todos, fraction) are polled from the session every 10s
 (`EXECUTOR_PROGRESS_POLL_MS`, main.cjs:3269) into `runProgress` — the object
 this task's own JSON shows. A save is a board write and a broadcast, so it is
@@ -157,11 +170,14 @@ paid by runners that genuinely never speak: with two in three wedged, the
 kills cost 58.5 slot-minutes instead of 48. A runner needing more than six
 minutes is still killed — by then silence more likely means wedged than slow.
 
-One edge is deliberately left alone. In a manual pool each start kill also
-narrows `autopilot.parallel` by one **and saves it to settings**, and nothing
-widens it again: after a slow stretch the pool stays at one worker even once
-every start is healthy. With the adaptive budget the nine tasks above still
-finish, but over ~90 minutes at one worker instead of ~30 at three.
+In a manual pool each start kill also narrows `autopilot.parallel` by one,
+but for the session only: `autopilot.parallelNarrowedFrom` remembers the
+limit the operator chose, and that is what the settings save writes. Three
+healthy first lines in a row step the pool back up by one until it is at
+that limit again, and an explicit limit or mode change ends the narrowing.
+It used to be saved to settings and never widened, so one slow stretch left
+the pool at one worker for good (~90 minutes for the nine tasks above
+instead of ~30 at three). Automatic mode holds new starts for 30 s instead.
 
 ## 5. Settlement: finish()
 
