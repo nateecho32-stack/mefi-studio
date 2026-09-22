@@ -50,6 +50,31 @@ task_c1cf337d66009c14 can integrate. No product or test code touched;
 this commit adds only this row, and a sibling session's in-flight
 package-lock.json hunk was left untouched.
 
+First-hand full-gate confirmation after the model-config landing, exit 0
+(2026-09-22, 10:40-10:42, run_1790091443127_27 for task_d9f157833b296be0
+"Run the full npm test gate after the model-config commit", parent idea
+"Per-feature model config with graceful fallbacks"). Precondition verified
+independently before launching: the per-feature model-config chain is
+committed — a16b752 landed the brain maps / agent-issues lane / Command
+inspect tree (scripts/brains.cjs, scripts/agent-issues.cjs,
+renderer/brains.js et al.) and 31f69f0 the last in-flight monitor-loop
+paths — and no test source was dirty. The whole `npm test` aggregate ran
+verbatim: exit 0 on every stage — parallel 1958 tests / 1955 pass /
+0 fail / 3 skipped in 36.0 s; serialized eyes_toggle_electron 1/1
+(3.5 s); occlusion_probe took the documented capability skip;
+Python contracts 246/246 OK in 33.6 s (the card brief's 204 is stale —
+the brain-map contracts lifted the count); normalized-path lock 6/6 ok.
+Settle honest note: HEAD moved e936982 -> 09d8e38 mid-run, a
+TESTRUNS.md-only sibling commit ("per-feature model-config landing
+confirmation"), and the concurrent quiet-tree gate one row below
+(task_bf79bd8c1d8fced5, 10:38-10:42) overlapped this run's Electron
+stages — both gates still exited 0 and the runner raised no
+moved-sources diagnosis; the 3-line package-lock.json `engines` sync
+floating in the working tree matches that row's note and was left
+untouched. The card's report target task_baa66f9ab1ec0f2e is done and
+verified on its own runs (settled-tree row below). This commit adds
+only this row.
+
 Quiet-tree full-gate rerun over the landed worktree module + wiring, exit 0
 (2026-09-22, 10:38-10:42, run_1790091211824_20 for
 task_bf79bd8c1d8fced5 "Full-gate rerun on the quiet tree", parent
