@@ -9,6 +9,7 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
 
 | Term | Meaning |
 | --- | --- |
+| **Rail** | The navigation down the left edge: Home, Work, Live, Models and Settings, plus the palette, walkthrough and shortcuts at its foot. **M+** at its top opens the project panel. |
 | **Workspace** | The home screen (`H`): project header, the "Studio at a glance" strip, the conversation with your companion, and **Your work**. |
 | **Command view** | The 3D node tree (`D`): sessions, tasks and agents as orbs, with a right rail for Work, Agents, Assistant, Done and Ask. |
 | **Booklet** | Historically the single-file model catalog; today `renderer/booklet.html` is the whole app bundled into one file by `npm run build-booklet`. The **Model catalog** tab (`1`) is the part that kept the name. |
@@ -43,14 +44,32 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
 
 ## What's inside
 
+### Getting around
+
+- One **rail** down the left edge is the whole app's navigation: **Home** (the
+  workspace), **Work** (Task board, Plans, Ideas, Brain maps), **Live** (Command
+  view, Activity, Explorer, Overhead, Analyzer, Profiler), **Models** (Model
+  catalog, Model Lab) and **Settings** (Settings & connections, Style & sound),
+  with Key commands, Start here and Shortcuts at its foot. At rest it is five
+  icons with their names; hover it or Tab into it and it opens over the page to
+  list every destination with its key, without moving anything underneath.
+  **Keep open** pins it and the page makes room. The section you are in lights
+  up and the destination you are on is marked.
+- **M+** at the top of the rail opens the project panel beside it. It replaces
+  the grip on the left edge that used to open the same panel.
+- The rail is built from the same registry as the palette (`Ctrl K`), the help
+  sheet and the single-letter keys, so a destination cannot appear in one and
+  be missing from another. It replaced three older menus — the tabs row, the
+  Command dock and the hover sidebar's own rows. **Switch navigation: rail or
+  classic** in `Ctrl K` (or `?shell=classic` on the URL) brings those back for
+  anyone who needs them.
+
 ### Workspace and work
 
 - **Projects** keeps each folder's tasks, conversations, drafts, references and
-  work logs together. The studio menu opens from the grip on the left edge
-  (hover, click or Tab to it): Your workspace, Command view, Task board and
-  Plans at the top, the project list, a tools grid, and Settings, Music and
-  Start here in its bottom row. Running work must finish before a project
-  change.
+  work logs together. **M+** at the top of the left rail opens the project
+  panel beside it: the project list, **+** to add a folder, and your name,
+  accent and motion. Running work must finish before a project change.
 - **Your work** separates open work, attempts needing **Review**, and verified
   or manually confirmed **Done** tasks; archived completions stay visible.
 - **Auto build** stays on by default. Turn it off for **Verify first** so each

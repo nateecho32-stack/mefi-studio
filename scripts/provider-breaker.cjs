@@ -28,10 +28,12 @@
 //    admitted as probes and hammer a service that is still down.
 //
 // What this does NOT do: decide what counts as a failure. That is the caller's
-// judgement, and it matters here — z.ai answers a refused key with HTTP 200
-// carrying `{"code":401}` in the body, so a status-code check alone reports it
-// as a success and the breaker never trips. Classify the body, then call
-// `settle(false)`.
+// judgement; main.cjs counts auth, quota, transport, timeout and CLI failures,
+// and treats a validation failure (the provider answered, the model's reply was
+// unusable) as proof the route is alive. Watch for a provider that reports an
+// error inside a 200: z.ai does that on its quota endpoint (HTTP 200 carrying
+// `{"code":401}` for a refused key) but not on its chat endpoint, which answers
+// a refused key with a real 401 — checked against both on 22 September 2026.
 
 const CLOSED = "closed";
 const OPEN = "open";

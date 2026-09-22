@@ -85,7 +85,14 @@ Output is line-buffered by `wire()` (main.cjs:9457): every line marks
 `isDoneMarkerLine` sets `sawDone` (main.cjs:9469;
 scripts/assistant.mjs:3493 — quoting the sentinel in prose never counts),
 `MEFI_RESULT:` is parsed into `resultNote`, and `MEFI_NEXT:`/`MEFI_CALL:`
-lines become handoffs and role wake-ups (main.cjs:9475). All three marks are
+lines become handoffs and role wake-ups (main.cjs:9475). A run already at
+`EXECUTOR_MAX_DEPTH` is told not to hand off, and a `MEFI_NEXT:` it prints
+anyway is declined, not accepted: no child can be admitted past the limit,
+so accepting it made the line a `remaining` obligation nothing could
+discharge. That card failed verification three times, re-running each time,
+was parked, and left every ancestor waiting forever — one seed that used the
+protocol as written ended as 15 cards, none done after four hours. Declined
+titles are named on the card's "run finished" log line instead. All three marks are
 anchored to the start of the line and read through the same colour strip, so
 a run can neither talk itself into being done nor talk the board into new
 work by quoting the protocol, and a CLI that wraps its last line in colour
@@ -94,7 +101,35 @@ still has its verdict counted. The last 8/200 lines feed
 Progress checkpoints (todos, fraction) are polled from the session every 10s
 (`EXECUTOR_PROGRESS_POLL_MS`, main.cjs:3139) into `runProgress` — the object
 this task's own JSON shows. Two watchdogs back the budget: a wedged-start
-kill (main.cjs:9702) and the hard 25-minute kill (main.cjs:9688).
+kill (main.cjs:10443) and the hard 25-minute kill (main.cjs:10416).
+
+The wedged-start kill fires when a run has neither printed a line nor
+registered a session within its start budget. That budget used to be a fixed
+three minutes (plus 45 s per job over four, which a manual pool capped at
+three never reaches), and it was a cliff: a runner that reliably needs three
+and a half minutes to say anything was killed on every card, forever, and
+nothing completed at all. The budget now moves with evidence:
+
+- every run's first line records how long its runner took to start, and the
+  budget is never less than **twice the slowest of the last eight starts**;
+- after start kills with no start in between it widens **1.5x per kill**, but
+  that blind widening stops at **twice the base**, because a runner that never
+  speaks is exactly what this watchdog exists to stop;
+- any start resets the kill count, and nothing waits longer than **ten
+  minutes**.
+
+Measured with the monitor (§9), nine tasks over two hours: a runner needing
+3.5 or 5 minutes to first output went from 0 of 9 done (19 kills, 57
+slot-minutes burned) to 9 of 9 (3 kills, 9 slot-minutes). The price is
+paid by runners that genuinely never speak: with two in three wedged, the
+kills cost 58.5 slot-minutes instead of 48. A runner needing more than six
+minutes is still killed — by then silence more likely means wedged than slow.
+
+One edge is deliberately left alone. In a manual pool each start kill also
+narrows `autopilot.parallel` by one **and saves it to settings**, and nothing
+widens it again: after a slow stretch the pool stays at one worker even once
+every start is healthy. With the adaptive budget the nine tasks above still
+finish, but over ~90 minutes at one worker instead of ~30 at three.
 
 ## 5. Settlement: finish()
 
@@ -241,21 +276,31 @@ it prints, what evidence its session leaves — because that is the only thing
 the loop cannot know in advance: `steady`, `handoffs` (every run hands two
 follow-ups on), `wedged`, `no-evidence` (reports done, leaves nothing behind)
 and `flaky`. `--first-output` sets how long a worker takes to print its first
-line, which is the number the wedged-start watchdog judges every run by.
+line, which is the number the wedged-start watchdog judges every run by; a
+worker starts up first and then works, so a job's duration runs from that
+line.
 
 Each run reports where the time went per card (queue → claim → report → done),
 what the pass cost (board transactions, store reads by key, timers armed,
-roles woken, host CPU per phase) and a five-minute board census. What it
-measured on 2026-09-22:
+roles woken, host CPU per phase), how much slot time went to runs the host
+killed, and a five-minute board census. `--json` adds every card's status
+transitions and the board as the run left it. What it measured on
+2026-09-22:
 
-| | steady | handoff-heavy |
+| | steady (9 tasks, 1h) | handoff-heavy (2 seeds, 4h) |
 | --- | --- | --- |
-| Cards settled in the hour | 9 of 9 | 0 of 4 seeds; 63 runs, 28 cards left verifying |
-| Queue → claim (p50) | 4.0m | 15.0m |
-| Report → done (p50) | 1.3m | never |
-| Evidence reads | 8 | 2,464 → 22 after the prefetch gates |
+| Cards settled | 9 of 9 | 0 of 30 → **30 of 30** |
+| Runs | 9 | 62 → **30**, one per card |
+| Queue → claim (p50) | 4.5m | 17.5m |
+| Report → done (p50) | 1.3m | never → 3.3m |
+| Evidence reads | 9, one per attempt | 30, one per attempt |
 
-Two things that will not show up in a test but show up here: a worker that
-prints nothing for three minutes is killed however healthy it is, and a run
-that hands work on cannot be verified until its whole subtree finishes, so
-under `handoffs` the verifying pile grows for the entire hour.
+The handoff column is where both of the loop's worst behaviours showed up,
+and neither shows up in a unit test. Every run hands two follow-ups on, so
+one seed grows into a 15-card tree; the leaves sit at `EXECUTOR_MAX_DEPTH`,
+and before the depth fix (§4) their hand-offs poisoned them and, through
+them, the whole tree. The evidence gates (§6) were found the same way: the
+cards waiting on that tree were what the prefetch kept re-reading.
+
+`--first-output` sweeps are how the start budget in §4 was chosen and
+checked.

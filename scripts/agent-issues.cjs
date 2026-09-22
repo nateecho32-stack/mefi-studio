@@ -10,9 +10,10 @@
 // evidence it saw, and options that are real actions on that task, so the
 // question the user answers is about the work rather than about the retry.
 //
-// Pure module: no Electron, no filesystem, no network, no clock reads (time is
-// injected). Everything here is data-in, data-out so the host can run it inside
-// a board transaction and the tests can run it with no host at all.
+// Pure module: no Electron, no filesystem, no network. Time is injectable: a
+// function that stamps a time takes `now`, falling back to the clock only when
+// the caller passes none. Everything here is data-in, data-out so the host can
+// run it inside a board transaction and the tests can run it with no host at all.
 
 "use strict";
 

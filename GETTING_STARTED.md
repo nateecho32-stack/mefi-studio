@@ -2,8 +2,8 @@
 
 The in-app walkthrough opens automatically on your first launch and explains
 the five steps below. You can close it whenever you want; it remembers your
-place and stays closed on later launches. Choose **Start here** in the sidebar
-or open the guide from Help to continue.
+place and stays closed on later launches. Choose **Start here** at the foot of
+the left rail, or open the guide from Help, to continue.
 
 Each lesson has a **Walk me…** button. It keeps a small coach in the corner
 while it opens the matching menu with you and highlights the exact control: the
@@ -70,8 +70,8 @@ sections are required, and nothing starts on its own.
 
 ### Open your first folder
 
-Add a folder in **Projects** with **+**, or choose **Open a folder** in the
-sidebar. The first folder you open becomes the active project, and Studio scans
+Add a folder in **Projects** with **+** — the **M+** at the top of the left
+rail opens it — or choose **Open a folder**. The first folder you open becomes the active project, and Studio scans
 it locally — no AI request — showing old plans and starting points in
 **Analyzer**. Later folders are added alongside; select one to switch, and
 **Remove project** drops a folder from the list without touching its files
@@ -150,7 +150,8 @@ above.
 In **Projects**, choose **+** and select an existing project folder. The first
 folder you open becomes the active project; Studio scans it locally and shows
 what it found in **Analyzer**. Check the name and folder above the conversation.
-Later folders are added to the sidebar — select one to switch. Tasks,
+Later folders are added to **Projects** (the **M+** at the top of the left
+rail) — select one to switch. Tasks,
 conversations, plans and references belong to that project. For your first run,
 use a small project whose changes you can easily inspect.
 
@@ -210,9 +211,8 @@ The strip at the top of the workspace shows the service state, running
 workers, what needs you, what is next, the machine and today's usage; its
 **Pause** button holds all new work until you press **Resume**.
 
-**Your work** gives you All, Queue, Ideas, Review and Done views. **Command
-view** in the sidebar opens
-Command, where **Live work** shows running workers, reported steps and queue
+**Your work** gives you All, Queue, Ideas, Review and Done views. **Live** in
+the left rail opens Command view, where **Live work** shows running workers, reported steps and queue
 readiness, and the **Agents** tab holds Autopilot, Parallel builds, Build mode
 and Agent mode with an at-a-glance strip above them. Open a task to inspect its brief, dependencies, attempts and evidence.
 

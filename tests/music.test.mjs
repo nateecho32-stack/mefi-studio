@@ -23,6 +23,12 @@ function environment({ saved = null, recommend, preview = false, workspaceActive
   let previewRect = { x: 400, y: 80, width: 600, height: 640 };
   let treeView = "3d";
   let audio;
+  const audios = [];
+  const refused = new Set();
+  const timers = new Map();
+  let clock = 0;
+  let timerId = 0;
+  let minInterval = 1;
   let blob = 0;
   let document;
   class Element {
@@ -43,9 +49,10 @@ function environment({ saved = null, recommend, preview = false, workspaceActive
   }
   class Audio extends Element {
     constructor() { super("audio"); this.paused = true; this.ended = false; this.currentTime = 0; this.duration = 120; this.volume = 1; this.src = ""; }
-    async play() { if (!this.src) throw new Error("No source"); this.paused = false; this.ended = false; this.dispatch("play"); }
+    // Like Chromium, a load that fails leaves the element unpaused with an error.
+    async play() { if (!this.src) throw new Error("No source"); this.paused = false; this.ended = false; if (refused.has(this.src)) { this.error = { code: 4 }; throw new Error("Refused by fixture"); } this.dispatch("play"); }
     pause() { this.paused = true; this.dispatch("pause"); }
-    load() { this.currentTime = 0; this.ended = false; this.dispatch("loadedmetadata"); }
+    load() { this.currentTime = 0; this.ended = false; this.error = null; this.dispatch("loadedmetadata"); }
   }
   class RuntimeURL extends URL {
     static createObjectURL() { return `blob:fixture-${++blob}`; }
@@ -53,7 +60,7 @@ function environment({ saved = null, recommend, preview = false, workspaceActive
   }
   document = {
     readyState: "loading", activeElement: null, documentElement: new Element("html"), body: new Element("body"),
-    addEventListener() {}, createElement: (tag) => tag === "audio" ? (audio = new Audio()) : new Element(tag),
+    addEventListener() {}, createElement: (tag) => tag === "audio" ? (audios.push(audio = new Audio()), audio) : new Element(tag),
   };
   const context = vm.createContext({
     URL: RuntimeURL, document,
@@ -62,6 +69,11 @@ function environment({ saved = null, recommend, preview = false, workspaceActive
     window: {
       dispatchEvent: (event) => events.push(event), addEventListener: (type, callback) => listeners.set(type, callback), open: (url) => opened.push(url),
       requestAnimationFrame: (callback) => { frames.set(++frameId, callback); return frameId; }, cancelAnimationFrame: (id) => frames.delete(id),
+      performance: { now: () => clock },
+      setTimeout: (callback, delay = 0) => { timers.set(++timerId, { at: clock + delay, callback }); return timerId; },
+      clearTimeout: (id) => { timers.delete(id); },
+      setInterval: (callback, delay = 0) => { const every = Math.max(minInterval, delay); timers.set(++timerId, { at: clock + every, every, callback }); return timerId; },
+      clearInterval: (id) => { timers.delete(id); },
       MefiNav: { claim: (id) => lifecycle.push(`claim:${id}`), release: (id) => lifecycle.push(`release:${id}`) },
       ...(preview || audioLink ? {
         MefiIdle: {
@@ -78,7 +90,23 @@ function environment({ saved = null, recommend, preview = false, workspaceActive
   vm.runInContext(source, context);
   const music = context.window.MefiMusic;
   music.init();
-  return { music, ids, events, revoked, opened, styles, storage, document, audio, lifecycle,
+  return { music, ids, events, revoked, opened, styles, storage, document, audio, audios, refused, lifecycle,
+    // Intervals created after this tick no faster than `ms`, like a hidden window.
+    throttle: (ms) => { minInterval = ms; },
+    // Runs every timer that falls due, in order, as if `ms` had passed.
+    advance: (ms) => {
+      const end = clock + ms;
+      for (;;) {
+        let next = null;
+        for (const entry of timers) if (entry[1].at <= end && (!next || entry[1].at < next[1].at)) next = entry;
+        if (!next) break;
+        const [id, timer] = next;
+        clock = timer.at;
+        if (timer.every) timer.at += timer.every; else timers.delete(id);
+        timer.callback();
+      }
+      clock = end;
+    },
     frames: () => { const pending = [...frames.values()]; frames.clear(); pending.forEach((callback) => callback()); },
     resize: (rect) => { previewRect = rect; listeners.get("resize")?.(); },
     view: (view) => { treeView = view; listeners.get("mefi-tree-view")?.({ detail: { view } }); },
@@ -100,7 +128,7 @@ test("Saved music preferences are bounded and never contain local files or trans
   const value = helpers.safePreferences({ theme: "untrusted", volume: 8, spotify: [link, link, "blob:private", "https://evil.test"], tracks: ["C:/private.mp3"], selected: "blob:private" });
   assert.equal(value.theme, "aurora"); assert.equal(value.volume, 1);
   assert.deepEqual(Array.from(value.spotify), [link]);
-  assert.deepEqual(Object.keys(value).sort(), ["customColors", "extraGlow", "nodeLayout", "nodeStyle", "orbitTrails", "spotify", "theme", "volume"]);
+  assert.deepEqual(Object.keys(value).sort(), ["customColors", "extraGlow", "nodeLayout", "nodeStyle", "orbitTrails", "spotify", "station", "theme", "volume"]);
   assert.equal(helpers.safePreferences(null).volume, .7);
   assert.equal(helpers.audioFile(file("track.flac", 1, "")), true);
   assert.equal(helpers.audioFile(file("notes.html", 1, "text/html")), false);
@@ -226,7 +254,7 @@ test("Node preferences preserve color, volume, Spotify links and live playback a
   env.music.applyTheme("violet");
   assert.equal(env.events.filter((event) => event.type === "mefi-tree-preferences").length, treeEvents, "color changes cannot trigger a layout event");
   const saved = JSON.parse(env.storage.get("mefiStudio.music.v1"));
-  assert.deepEqual(saved, { theme: "violet", customColors: { ...env.music.customColors() }, volume: .35, spotify: [link], nodeStyle: "minimal", nodeLayout: "tree", orbitTrails: false, extraGlow: false });
+  assert.deepEqual(saved, { theme: "violet", customColors: { ...env.music.customColors() }, volume: .35, spotify: [link], station: null, nodeStyle: "minimal", nodeLayout: "tree", orbitTrails: false, extraGlow: false });
   assert.equal(env.music.status().nodeStyle, "minimal");
   assert.equal(env.music.status().nodeLayout, "tree");
 });
@@ -281,7 +309,7 @@ test("Graph effects update independently, persist and never start playback or re
   assert.equal(env.audio.volume, .35);
   assert.equal(env.music.status().queueLength, 1);
   const saved = JSON.parse(env.storage.get("mefiStudio.music.v1"));
-  assert.deepEqual(saved, { theme: "forest", customColors: { ...env.music.customColors() }, volume: .35, spotify: [link], nodeStyle: "minimal", nodeLayout: "radial", orbitTrails: true, extraGlow: true });
+  assert.deepEqual(saved, { theme: "forest", customColors: { ...env.music.customColors() }, volume: .35, spotify: [link], station: null, nodeStyle: "minimal", nodeLayout: "radial", orbitTrails: true, extraGlow: true });
   const restored = environment({ saved });
   assert.equal(restored.ids.get("music-orbit-trails").checked, true);
   assert.equal(restored.ids.get("music-extra-glow").checked, true);
@@ -596,4 +624,236 @@ test("Audio reactions submit only the changed choice and zero strength leaves pl
   assert.equal(env.audio.currentTime, 17); assert.equal(env.audio.volume, .7);
   assert.equal(calls.some(([type]) => type === "source" || type === "capture"), false);
   assert.equal(requests, 0);
+});
+
+const mirror = (id, host = "ice1") => `https://${host}.somafm.com/${id}-128-mp3`;
+
+test("A saved station is bounded to the built-in list", () => {
+  assert.equal(helpers.safePreferences({ station: "groovesalad" }).station, "groovesalad");
+  for (const bad of ["https://evil.test/stream", "blob:private", "", 7, null, "GROOVESALAD", "__proto__"]) assert.equal(helpers.safePreferences({ station: bad }).station, null, String(bad));
+});
+
+test("A station plays on the shared deck, reports internal playback and persists only its id", async () => {
+  const env = environment();
+  env.music.setSource("radio");
+  assert.equal(env.ids.get("music-radio-panel").hidden, false);
+  assert.equal(env.ids.get("music-local-panel").hidden, true);
+  assert.equal(env.ids.get("music-radio-tab").attrs["aria-selected"], "true");
+  assert.equal(env.ids.get("music-radio-stop").disabled, true, "nothing to stop before a station is chosen");
+  env.ids.get("music-station-groovesalad").click(); await flush();
+  assert.equal(env.audios.length, 1, "the first station needs no second deck");
+  assert.equal(env.audio.src, mirror("groovesalad"));
+  assert.equal(env.audio.crossOrigin, "anonymous", "CORS keeps a captured stream audible and readable");
+  assert.equal(env.music.getAudioElement(), env.audio);
+  const status = env.music.status();
+  assert.equal(status.source, "radio");
+  assert.equal(status.playing, true);
+  assert.equal(status.externalPlayback, false, "radio is Studio's own playback, unlike Spotify");
+  assert.equal(status.stationName, "Groove Salad");
+  assert.equal(status.radioPhase, "playing");
+  assert.equal(env.ids.get("music-radio-state").textContent, "Groove Salad · SomaFM · mirror 1 of 3");
+  assert.equal(env.ids.get("music-station-groovesalad").attrs["aria-pressed"], "true");
+  assert.equal(env.ids.get("music-station-dronezone").attrs["aria-pressed"], "false");
+  assert.equal(env.ids.get("music-radio-stop").disabled, false);
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.music.v1")).station, "groovesalad");
+  assert.ok(![...env.storage.values()].some((value) => value.includes("somafm.com")), "stream addresses are never persisted");
+  env.ids.get("music-station-groovesalad").click(); await flush();
+  assert.equal(env.audios.length, 1, "choosing the playing station again does not reconnect");
+  assert.equal(env.audio.src, mirror("groovesalad"));
+  env.ids.get("music-radio-stop").click();
+  assert.equal(env.audio.paused, true);
+  assert.equal(env.audio.src, "");
+  assert.equal(env.music.status().radioPhase, "idle");
+  assert.equal(env.ids.get("music-radio-stop").disabled, true);
+  assert.equal(env.ids.get("music-radio-state").textContent, "Groove Salad ready");
+});
+
+test("Changing station mid-song crosses over on a second deck, then releases the first", async () => {
+  const env = environment();
+  env.music.tune("groovesalad"); await flush();
+  const deckA = env.audio;
+  env.music.tune("dronezone"); await flush();
+  assert.equal(env.audios.length, 2);
+  const deckB = env.audios[1];
+  assert.equal(deckB.src, mirror("dronezone"));
+  assert.equal(deckB.crossOrigin, "anonymous");
+  assert.equal(env.music.getAudioElement(), deckB, "the analyser follows the deck that carries the station");
+  assert.equal(deckA.paused, false, "the old station keeps sounding under the fade");
+  env.advance(600);
+  assert.ok(deckB.volume > 0 && deckB.volume < .7, "mid-fade both decks sound");
+  assert.ok(deckA.volume > 0 && deckA.volume < .7);
+  env.ids.get("music-radio-volume").value = ".4"; env.ids.get("music-radio-volume").dispatch("input");
+  env.advance(1000);
+  assert.equal(deckB.volume, .4, "a volume change made mid-fade is where the fade lands");
+  assert.equal(deckA.paused, true);
+  assert.equal(deckA.src, "", "the released deck drops its connection");
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.music.v1")).volume, .4);
+  assert.equal(env.music.status().stationName, "Drone Zone");
+  env.music.tune("lush"); await flush();
+  assert.equal(env.audios.length, 2, "decks alternate instead of multiplying");
+  assert.equal(env.music.getAudioElement(), deckA);
+  assert.equal(deckA.src, mirror("lush"));
+});
+
+test("A new choice mid-fade settles the running fade first instead of racing it", async () => {
+  const env = environment();
+  env.music.tune("groovesalad"); await flush();
+  env.music.tune("dronezone"); await flush();
+  const [deckA, deckB] = env.audios;
+  env.advance(400);
+  env.music.tune("lush"); await flush();
+  assert.equal(deckB.paused, false, "the deck that owned the fade keeps playing");
+  assert.equal(deckA.src, mirror("lush"));
+  env.advance(2000);
+  assert.equal(deckA.src, mirror("lush"), "the superseded fade never releases the deck carrying the new station");
+  assert.equal(deckA.paused, false);
+  assert.equal(deckA.volume, .7);
+  assert.equal(deckB.paused, true);
+  assert.equal(deckB.src, "");
+});
+
+test("A stalled mirror hands over to the next on the other deck, and says so once every mirror is spent", async () => {
+  const env = environment();
+  env.music.tune("groovesalad"); await flush();
+  env.audio.dispatch("waiting");
+  assert.equal(env.music.status().radioPhase, "buffering");
+  env.advance(3000);
+  env.audio.dispatch("playing");
+  env.advance(10000);
+  assert.equal(env.audios.length, 1, "a stream that recovers on its own is left alone");
+  assert.equal(env.music.status().radioPhase, "playing");
+  env.audio.dispatch("stalled");
+  env.advance(7000); await flush();
+  assert.equal(env.audios.length, 2);
+  assert.equal(env.audios[1].src, mirror("groovesalad", "ice2"));
+  assert.equal(env.ids.get("music-radio-state").textContent, "Groove Salad · SomaFM · mirror 2 of 3 — The stream stopped sending. Moving to mirror 2.");
+  env.advance(2000);
+  assert.equal(env.audio.src, "", "the stalled mirror is released after the crossover");
+  env.audios[1].dispatch("waiting"); env.advance(7000); await flush();
+  assert.equal(env.audio.src, mirror("groovesalad", "ice4"));
+  env.advance(2000);
+  env.audio.dispatch("waiting"); env.advance(7000); await flush();
+  assert.equal(env.music.status().radioPhase, "error");
+  assert.equal(env.music.status().playing, false);
+  assert.match(env.ids.get("music-radio-state").textContent, /Every mirror for Groove Salad was tried; choose it again to retry\.$/);
+  env.audio.dispatch("playing");
+  assert.equal(env.music.status().radioPhase, "playing", "a mirror that comes back on its own is welcomed back");
+});
+
+test("While a new station connects, the old deck's troubles cannot fail over the new one", async () => {
+  const env = environment();
+  env.music.tune("groovesalad"); await flush();
+  env.refused.add(mirror("dronezone"));
+  env.music.tune("dronezone");
+  env.audio.dispatch("error");
+  env.audio.dispatch("ended");
+  await flush();
+  assert.equal(env.audios[1].src, mirror("dronezone", "ice2"), "only the refusal moved the new station, exactly one mirror");
+  assert.equal(env.music.status().stationName, "Drone Zone");
+  // A real element that reaches its end is paused and ended, per the spec.
+  env.audios[1].paused = true; env.audios[1].ended = true;
+  env.audios[1].dispatch("ended"); await flush();
+  assert.equal(env.music.getAudioElement().src, mirror("dronezone", "ice4"), "a settled stream that ends moves on like one that drops");
+  assert.equal(env.music.status().playing, true);
+});
+
+test("A refused connection falls through to the next mirror, and a slow answer cannot take the speakers back", async () => {
+  const env = environment();
+  env.refused.add(mirror("groovesalad"));
+  env.music.tune("groovesalad"); await flush();
+  assert.equal(env.audios.length, 1);
+  assert.equal(env.audio.src, mirror("groovesalad", "ice2"));
+  assert.equal(env.music.status().radioPhase, "playing");
+  assert.equal(env.ids.get("music-radio-state").textContent, "Groove Salad · SomaFM · mirror 2 of 3 — Groove Salad refused the connection (Refused by fixture). Moving to mirror 2.");
+
+  const quick = environment();
+  quick.music.tune("groovesalad"); quick.music.tune("dronezone"); await flush();
+  assert.equal(quick.music.status().stationName, "Drone Zone");
+  assert.equal(quick.music.getAudioElement().src, mirror("dronezone"));
+  assert.equal(quick.audios.length, 1, "a choice that has not answered yet is redirected, not doubled up");
+  quick.music.tune("lush"); quick.music.stopRadio(); await flush();
+  assert.equal(quick.music.status().radioPhase, "idle", "an answer that lands after Stop is ignored");
+  assert.equal(quick.music.status().playing, false);
+  assert.ok(quick.audios.every((deck) => deck.paused && !deck.src));
+});
+
+test("A connection that never answers is swapped for the next mirror", async () => {
+  const env = environment();
+  env.audio.play = function () { this.paused = false; return new Promise(() => {}); };
+  env.music.tune("rp-main");
+  assert.equal(env.music.status().radioPhase, "connecting");
+  assert.equal(env.music.status().playing, false, "a deck that is still connecting is not music yet");
+  assert.equal(env.ids.get("music-radio-state").textContent, "Connecting to Radio Paradise…");
+  env.advance(6999);
+  assert.equal(env.audios.length, 1);
+  env.advance(1); await flush();
+  assert.equal(env.audios.length, 1, "nothing was sounding, so the same deck takes the next mirror");
+  assert.equal(env.audio.src, "https://stream.radioparadise.com/aac-128");
+  assert.equal(env.ids.get("music-radio-state").textContent, "Connecting to Radio Paradise… — Radio Paradise did not answer. Moving to mirror 2.");
+});
+
+test("Leaving radio stops both decks and hands the selected local track back without playing it", async () => {
+  const env = environment();
+  env.music.addFiles([file("Focus.mp3")]);
+  env.music.tune("groovesalad"); await flush();
+  env.music.tune("dronezone"); await flush();
+  env.music.setSource("local");
+  assert.equal(env.audios[1].paused, true);
+  assert.equal(env.audios[1].src, "", "no deck keeps streaming in the background");
+  assert.equal(env.audio.src, "blob:fixture-1", "the selected track is loaded back on deck A");
+  assert.equal(env.audio.paused, true, "switching sources is not implicit autoplay");
+  assert.equal(env.audio.crossOrigin, null, "local files go back to plain same-origin playback");
+  assert.equal(env.audio.volume, .7);
+  assert.equal(env.music.getAudioElement(), env.audio);
+  assert.equal(env.music.status().source, "local");
+  env.ids.get("music-play").click(); await flush();
+  assert.equal(env.music.status().playing, true);
+});
+
+test("A remembered station is offered on return but never starts by itself", async () => {
+  const env = environment({ saved: { station: "rp-main" } });
+  await flush();
+  assert.equal(env.music.status().source, "local");
+  assert.equal(env.audio.src, "");
+  env.music.setSource("radio");
+  assert.equal(env.ids.get("music-radio-state").textContent, "Radio Paradise ready");
+  assert.equal(env.music.status().playing, false);
+  assert.equal(env.audios.length, 1);
+});
+
+test("Source tabs move in order with the arrow keys and jump with Home and End", () => {
+  const env = environment();
+  const tabs = env.ids.get("music-local-tab").parentElement;
+  const press = (key) => tabs.dispatch("keydown", { key });
+  press("ArrowRight"); assert.equal(env.music.status().source, "radio");
+  press("ArrowRight"); assert.equal(env.music.status().source, "spotify");
+  press("ArrowRight"); assert.equal(env.music.status().source, "local", "the last tab wraps to the first");
+  press("ArrowLeft"); assert.equal(env.music.status().source, "spotify");
+  press("Home"); assert.equal(env.music.status().source, "local");
+  press("End"); assert.equal(env.music.status().source, "spotify");
+  assert.equal(env.document.activeElement, env.ids.get("music-spotify-tab"));
+});
+
+test("A stream that dies mid-play is reloaded on its own deck; there is nothing to fade from", async () => {
+  const env = environment();
+  env.music.tune("groovesalad"); await flush();
+  env.audio.error = { code: 2 };
+  env.audio.dispatch("error"); await flush();
+  assert.equal(env.audios.length, 1);
+  assert.equal(env.audio.src, mirror("groovesalad", "ice2"));
+  assert.equal(env.music.status().radioPhase, "playing");
+  assert.equal(env.audio.volume, .7);
+});
+
+test("A crossfade reads the clock, so a throttled timer lands it late instead of stretching it", async () => {
+  const env = environment();
+  env.music.tune("groovesalad"); await flush();
+  env.throttle(1000); // a hidden window: interval ticks arrive a second apart
+  env.music.tune("dronezone"); await flush();
+  const [deckA, deckB] = env.audios;
+  env.advance(1000);
+  assert.ok(deckB.volume > .5 && deckB.volume < .7, "one late tick jumps to where the clock says the fade is");
+  env.advance(1000);
+  assert.equal(deckB.volume, .7, "the second late tick finishes it");
+  assert.equal(deckA.src, "");
 });

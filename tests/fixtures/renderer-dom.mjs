@@ -251,6 +251,9 @@ export function createDom({ ids = [], fromTemplate = null } = {}) {
     activeElement: null,
     getElementById: (id) => (elements.has(id) ? elements.get(id) : null),
     createElement: (tag) => new Element(tag),
+    // Glyphs are built as <svg><use> in the SVG namespace; the namespace is
+    // irrelevant to a stand-in, the tag is not.
+    createElementNS: (_namespace, tag) => new Element(tag),
     createTextNode: (text) => { const node = new Element("#text"); node.textContent = text; return node; },
     querySelector: (selector) => document.querySelectorAll(selector)[0] ?? null,
     querySelectorAll: (selector) => {

@@ -4,6 +4,7 @@ import { spawn as realSpawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import platform from "../scripts/platform.cjs";
+import credentials from "../scripts/credentials.cjs";
 import { processSnapshot } from "../scripts/machine.mjs";
 
 const { createSpawn } = platform;
@@ -23,7 +24,9 @@ const once = (emitter, event) => new Promise((resolve) => emitter.once(event, re
 
 test("on Windows every call reaches node's spawn untouched", () => {
   const { calls, spawnImpl } = recorder();
-  const spawn = createSpawn({ platform: "win32", spawnImpl });
+  // An inherited environment holding no Studio credentials, whatever the
+  // machine running this suite happens to export.
+  const spawn = createSpawn({ platform: "win32", spawnImpl, env: {} });
   spawn("cmd.exe", shellArgs("opencode run --auto"), { cwd: "C:/repo", windowsHide: true });
   spawn("where.exe", ["claude"], { windowsHide: true });
   spawn("taskkill", killArgs(77), { windowsHide: true, stdio: "ignore" });
@@ -31,6 +34,61 @@ test("on Windows every call reaches node's spawn untouched", () => {
   assert.deepEqual(calls[0].args, shellArgs("opencode run --auto"));
   assert.deepEqual(calls[0].options, { cwd: "C:/repo", windowsHide: true });
   assert.deepEqual(calls[2].args, killArgs(77));
+});
+
+// A headless install hands Studio its keys as MEFI_STUDIO_* variables. Coding
+// workers run repository-driven commands with approvals bypassed, and none of
+// them reads those names, so no child may inherit them.
+test("Studio's own credentials never reach a child, on either platform", () => {
+  for (const host of ["win32", "linux"]) {
+    const { calls, spawnImpl } = recorder();
+    const inherited = {
+      PATH: "C:/bin", GH_TOKEN: "shared-gh", OPENROUTER_API_KEY: "shared-or", MEFI_STUDIO_GAME_ROOT: "C:/game",
+      MEFI_STUDIO_ZAI_KEY: "own-zai", mefi_studio_github_token: "own-gh",
+    };
+    const spawn = createSpawn({ platform: host, spawnImpl, kill: () => {}, env: inherited });
+    spawn("cmd.exe", shellArgs("opencode run --auto"), { cwd: "C:/repo" });
+    assert.deepEqual(calls[0].options.env,
+      { PATH: "C:/bin", GH_TOKEN: "shared-gh", OPENROUTER_API_KEY: "shared-or", MEFI_STUDIO_GAME_ROOT: "C:/game" },
+      `${host}: own names withheld (case-insensitively), shared names and settings kept`);
+    assert.equal(calls[0].options.cwd, "C:/repo");
+    assert.equal(inherited.MEFI_STUDIO_ZAI_KEY, "own-zai", "Studio's own environment is left alone");
+  }
+});
+
+test("an environment the caller passes is filtered the same way, not mutated, and keeps what it hands over", () => {
+  const { calls, spawnImpl } = recorder();
+  const spawn = createSpawn({ platform: "win32", spawnImpl, env: {} });
+  // MEFI_ZAI_API_KEY is the z.ai key deliberately handed to the mefi-zai
+  // provider under its own name; only Studio's own names are withheld.
+  const options = { env: { A: "1", MEFI_STUDIO_JEV_KEY: "own", MEFI_ZAI_API_KEY: "handed-over" }, windowsHide: true };
+  spawn("cmd.exe", shellArgs("opencode run --auto"), options);
+  assert.deepEqual(calls[0].options, { env: { A: "1", MEFI_ZAI_API_KEY: "handed-over" }, windowsHide: true });
+  assert.deepEqual(options, { env: { A: "1", MEFI_STUDIO_JEV_KEY: "own", MEFI_ZAI_API_KEY: "handed-over" }, windowsHide: true });
+});
+
+test("with nothing to withhold, the caller's options object reaches spawn as passed", () => {
+  const { calls, spawnImpl } = recorder();
+  const spawn = createSpawn({ platform: "win32", spawnImpl, env: { PATH: "C:/bin", GH_TOKEN: "x" } });
+  const options = { cwd: "C:/repo", windowsHide: true };
+  spawn("cmd.exe", shellArgs("opencode run --auto"), options);
+  spawn("where.exe", ["claude"]);
+  assert.equal(calls[0].options, options, "the same object, not a copy");
+  assert.equal(calls[1].options, undefined);
+});
+
+test("the withheld names are exactly credentials.cjs's own names", () => {
+  // platform.cjs matches a pattern so it never depends on the optional
+  // credentials helper; this pins the pattern to that helper's list.
+  const own = Object.values(credentials.OWN_KEYS);
+  const shared = Object.values(credentials.SHARED_KEYS).flat();
+  const settings = ["MEFI_STUDIO_REPO", "MEFI_STUDIO_GAME_ROOT", "MEFI_STUDIO_BOARD_DB", "MEFI_STUDIO_PORT", "MEFI_STUDIO_UPDATE_REPO",
+    "MEFI_STUDIO_NO_LIVE_UPDATE", "MEFI_STUDIO_WORKTREE_RUNS", "MEFI_STUDIO_WORKTREE_NPM_CI", "MEFI_STUDIO_MEMORY_WARN_OVERRIDE"];
+  assert.equal(own.length, 8, "a new own credential needs this list and the pattern checked");
+  const { calls, spawnImpl } = recorder();
+  const inherited = Object.fromEntries([...own, ...shared, ...settings].map((name) => [name, "value"]));
+  createSpawn({ platform: "win32", spawnImpl, env: inherited })("cmd.exe", shellArgs("x"), {});
+  assert.deepEqual(Object.keys(calls[0].options.env).sort(), [...shared, ...settings].sort());
 });
 
 test("on Linux a cmd.exe command runs through /bin/sh in its own process group with the same options", () => {

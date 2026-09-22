@@ -534,9 +534,13 @@
     useReactiveInput();
   }
 
+  // Radio runs on Studio's own decks, so it reaches the analyser the same way a
+  // local file does; Spotify stays external. A tuned station has no queue, and
+  // the src test below is the real "something is loaded" check either way.
   function localMusicElement() {
     const player = window.MefiMusic?.status?.();
-    if (player?.source !== "local" || !(player.queueLength > 0)) return null;
+    if (player?.source !== "local" && player?.source !== "radio") return null;
+    if (player.source === "local" && !(player.queueLength > 0)) return null;
     const element = window.MefiMusic?.getAudioElement?.();
     return element && (element.getAttribute?.("src") || element.src || element.currentSrc) ? element : null;
   }
@@ -941,7 +945,7 @@
     const title = String(player.title || "Music player");
     return {
       music: player,
-      label: player.source === "spotify" ? "Spotify · open player" : player.playing ? `Playing · ${title}` : player.queueLength ? `Music · ${title}` : "Music · add tracks",
+      label: player.source === "spotify" ? "Spotify · open player" : player.playing ? `Playing · ${title}` : player.source === "radio" ? `Radio · ${title}` : player.queueLength ? `Music · ${title}` : "Music · add tracks",
       state: player.playing ? "active" : "music",
     };
   }
@@ -3320,6 +3324,10 @@
     const chat = visibleBox(el.chatLog);
     if (header) top = Math.max(top, header.bottom + 20);
     if (dock) bottom = Math.min(bottom, dock.top - 24);
+    // The app's navigation rail floats over the canvas's left edge, the way the
+    // work rail floats over its right; fit the graph beside it, not under it.
+    const appRail = visibleBox(el.appRail);
+    if (appRail) left = Math.max(left, appRail.right + 28);
     // The merged rail owns the right gutter; when it is collapsed its short
     // header still blocks the top strip.
     if (rail) {
@@ -3336,7 +3344,7 @@
     // At compact widths CSS can put the feed above the map. Only reserve a
     // side panel if it leaves enough room for an actual interactive graph.
     if (right - left < 220) {
-      left = 24;
+      left = appRail ? appRail.right + 12 : 24;
       right = el.width - 24;
       if (feed && feed.height < el.height * 0.48) top = Math.max(top, feed.bottom + 20);
     }
@@ -7571,6 +7579,7 @@
     push(el.feed);
     push(el.chatLog);
     push(el.legend);
+    push(el.appRail);
     push(el.empty);
     push(el.pop);
     state.hudRects = rects;
@@ -9819,6 +9828,7 @@
     el.chatLogNewWork = document.getElementById("cmd-chat-new-work");
     el.chatLogNewWorkState = document.getElementById("cmd-chat-new-work-state");
     el.rail = document.getElementById("cmd-rail");
+    el.appRail = document.getElementById("app-rail");
     el.railBody = document.getElementById("cmd-rail-body");
     el.nodePanel = document.getElementById("cmd-node");
     el.railTabNode = document.getElementById("cmd-rail-tab-node");

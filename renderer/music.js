@@ -1,5 +1,6 @@
-// Studio's own local-file player. Streaming stays inside Spotify's official
-// embed; its cross-origin playback state is deliberately not guessed.
+// Studio's own local-file player and its ad-free radio decks. Streaming stays
+// inside Spotify's official embed; its cross-origin playback state is
+// deliberately not guessed.
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.music.v1";
@@ -34,6 +35,43 @@
     percussion: { title: "Drum accents", detail: "Add sharper ripples on drum hits.", enabled: false },
     background: { title: "Background glow", detail: "Let the space behind the tree pulse.", enabled: false },
   };
+  // Listener-funded and Creative Commons stations that carry no advertising at
+  // all, so there is never a break to skip, mute or talk over. Every mirror here
+  // was reached directly and answers with CORS open, which is what lets the
+  // analyser read the stream and the node tree react to it.
+  const STATIONS = [
+    { id: "groovesalad", name: "Groove Salad", detail: "Chilled ambient beats", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/groovesalad-128-mp3", "https://ice2.somafm.com/groovesalad-128-mp3", "https://ice4.somafm.com/groovesalad-128-mp3"] },
+    { id: "dronezone", name: "Drone Zone", detail: "Atmospheric textures", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/dronezone-128-mp3", "https://ice2.somafm.com/dronezone-128-mp3", "https://ice4.somafm.com/dronezone-128-mp3"] },
+    { id: "deepspaceone", name: "Deep Space One", detail: "Deep ambient and experimental", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/deepspaceone-128-mp3", "https://ice2.somafm.com/deepspaceone-128-mp3", "https://ice4.somafm.com/deepspaceone-128-mp3"] },
+    { id: "spacestation", name: "Space Station", detail: "Spaced-out electronica", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/spacestation-128-mp3", "https://ice2.somafm.com/spacestation-128-mp3", "https://ice4.somafm.com/spacestation-128-mp3"] },
+    { id: "lush", name: "Lush", detail: "Vocal electronica", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/lush-128-mp3", "https://ice2.somafm.com/lush-128-mp3", "https://ice4.somafm.com/lush-128-mp3"] },
+    { id: "fluid", name: "Fluid", detail: "Instrumental hip hop and future soul", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/fluid-128-mp3", "https://ice2.somafm.com/fluid-128-mp3", "https://ice4.somafm.com/fluid-128-mp3"] },
+    { id: "defcon", name: "DEF CON Radio", detail: "Music for hacking", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/defcon-128-mp3", "https://ice2.somafm.com/defcon-128-mp3", "https://ice4.somafm.com/defcon-128-mp3"] },
+    { id: "bootliquor", name: "Boot Liquor", detail: "Americana roots", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/bootliquor-128-mp3", "https://ice2.somafm.com/bootliquor-128-mp3", "https://ice4.somafm.com/bootliquor-128-mp3"] },
+    { id: "rp-main", name: "Radio Paradise", detail: "Eclectic hand-picked rock", origin: "Radio Paradise",
+      mirrors: ["https://stream.radioparadise.com/mp3-128", "https://stream.radioparadise.com/aac-128", "https://stream.radioparadise.com/mp3-192"] },
+    { id: "rp-mellow", name: "RP Mellow Mix", detail: "Quieter, slower company", origin: "Radio Paradise",
+      mirrors: ["https://stream.radioparadise.com/mellow-128"] },
+    { id: "rp-rock", name: "RP Rock Mix", detail: "Guitars to the front", origin: "Radio Paradise",
+      mirrors: ["https://stream.radioparadise.com/rock-128"] },
+    { id: "rp-global", name: "RP Global Mix", detail: "World and crossover", origin: "Radio Paradise",
+      mirrors: ["https://stream.radioparadise.com/global-128"] },
+  ];
+  const STATION_IDS = new Set(STATIONS.map((station) => station.id));
+  const station = (id) => STATIONS.find((item) => item.id === id) || null;
+  // A crossfade long enough to hide a rebuffer, short enough to feel deliberate.
+  const FADE_MS = 1200;
+  const FADE_STEP_MS = 40;
+  // A live stream that has gone quiet this long is not coming back on its own.
+  const STALL_MS = 7000;
   const CUSTOM_DEFAULTS = Object.freeze({ accent: "#C9A86A", background: "#050507", surface: "#0D0E12", text: "#ECE5D8" });
   const hexColor = (value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim().toUpperCase() : null;
   const safeCustomColors = (value) => Object.fromEntries(Object.entries(CUSTOM_DEFAULTS).map(([key, fallback]) => [key, hexColor(value?.[key]) || fallback]));
@@ -84,6 +122,7 @@
     return { theme: raw.theme === "custom" || Object.hasOwn(THEMES, raw.theme) ? raw.theme : DEFAULT_THEME, customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, spotify,
       nodeStyle: Object.hasOwn(NODE_STYLES, raw.nodeStyle) ? raw.nodeStyle : "orbs",
       nodeLayout: Object.hasOwn(NODE_LAYOUTS, raw.nodeLayout) ? raw.nodeLayout : "constellation",
+      station: STATION_IDS.has(raw.station) ? raw.station : null,
       orbitTrails: raw.orbitTrails === true, extraGlow: raw.extraGlow === true };
   }
   function audioFile(file) { return Boolean(file && (String(file.type || "").startsWith("audio/") || /\.(mp3|m4a|aac|flac|wav|ogg|opus|webm)$/i.test(file.name || ""))); }
@@ -100,7 +139,8 @@
   let stored;
   try { stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch {}
   const prefs = safePreferences(stored);
-  const state = { source: "local", tracks: [], selected: -1, spotify: null, opened: false, sending: false, notice: "", error: false };
+  const state = { source: "local", tracks: [], selected: -1, spotify: null, opened: false, sending: false, notice: "", error: false,
+    station: null, mirror: 0, deck: "a", radioPhase: "idle", radioNote: "" };
   const els = {};
   let audio = null;
   let initialized = false;
@@ -108,13 +148,27 @@
   let priorFocus = null;
   let previewFrame = 0;
   let restoreWorkspace = false;
+  let deckB = null;
+  let pendingDeck = null;
+  let fadeOut = null;
+  let fadeTimer = 0;
+  let stallTimer = 0;
+  let tuneGeneration = 0;
 
   const persist = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(safePreferences(prefs))); } catch {} };
   const event = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
   function status() {
     const track = state.tracks[state.selected];
-    const title = state.source === "spotify" ? state.spotify ? `Spotify ${state.spotify.type}` : "Choose Spotify music" : track?.title || "Choose your music";
-    return { source: state.source, playing: state.source === "local" && Boolean(audio?.src) && !audio.paused && !audio.ended, title, track: title, theme: prefs.theme, ...graphPreferences(), queueLength: state.tracks.length, externalPlayback: state.source === "spotify", supported: true };
+    const tuned = station(state.station);
+    const title = state.source === "spotify" ? state.spotify ? `Spotify ${state.spotify.type}` : "Choose Spotify music"
+      : state.source === "radio" ? tuned ? tuned.name : "Choose a station"
+      : track?.title || "Choose your music";
+    const deck = activeDeck();
+    const playing = state.source === "radio" ? (state.radioPhase === "playing" || state.radioPhase === "buffering") && Boolean(deck?.src) && !deck.paused
+      : state.source === "local" && Boolean(audio?.src) && !audio.paused && !audio.ended;
+    return { source: state.source, playing, title, track: title, theme: prefs.theme, ...graphPreferences(),
+      queueLength: state.tracks.length, externalPlayback: state.source === "spotify", supported: true,
+      station: state.station, stationName: tuned?.name || null, radioPhase: state.source === "radio" ? state.radioPhase : "idle" };
   }
   const announce = () => event("mefi-music-change", status());
   function note(text, error = false) {
@@ -209,11 +263,194 @@
     }
     return group;
   }
+  // Deck A is the element local files always use and the one the analyser
+  // binds to first. Deck B exists only once a station has to cross over a
+  // station that is already playing, so an untouched radio tab still runs on a
+  // single element.
+  function activeDeck() { return state.deck === "b" ? deckB : audio; }
+  function idleDeck() { return state.deck === "b" ? audio : ensureDeckB(); }
+  function ensureDeckB() {
+    if (deckB) return deckB;
+    deckB = document.createElement("audio");
+    deckB.preload = "none";
+    // Both station hosts answer with Access-Control-Allow-Origin, so an opted-in
+    // CORS fetch keeps the analyser readable. Without it a captured element is
+    // tainted, and the Web Audio graph would play it back as silence.
+    deckB.crossOrigin = "anonymous";
+    deckB.volume = 0;
+    bindDeck(deckB);
+    return deckB;
+  }
+  // Only the deck carrying the current station speaks for the stream. While a
+  // new station connects on the other deck the old one's troubles are moot,
+  // and a stopped deck's late events must not restart anything.
+  function radioLive(deck) {
+    return state.source === "radio" && state.radioPhase !== "idle" && deck === activeDeck() && (!pendingDeck || pendingDeck === deck);
+  }
+  function bindDeck(deck) {
+    deck.addEventListener("playing", () => { if (radioLive(deck)) { clearStall(); state.radioPhase = "playing"; renderRadio(); announce(); } });
+    deck.addEventListener("waiting", () => { if (radioLive(deck)) armStall(); });
+    deck.addEventListener("stalled", () => { if (radioLive(deck)) armStall(); });
+    deck.addEventListener("ended", () => { if (radioLive(deck)) nextMirror("The stream ended"); });
+    deck.addEventListener("error", () => { if (radioLive(deck)) nextMirror("The stream dropped"); });
+  }
+  function clearStall() { if (stallTimer) { window.clearTimeout(stallTimer); stallTimer = 0; } }
+  function armStall() {
+    if (stallTimer || state.source !== "radio") return;
+    // A first connection keeps saying so; only an established stream buffers.
+    if (state.radioPhase !== "connecting") { state.radioPhase = "buffering"; renderRadio(); }
+    stallTimer = window.setTimeout(() => {
+      stallTimer = 0;
+      if (state.source !== "radio" || state.radioPhase === "idle") return;
+      nextMirror(state.radioPhase === "connecting" ? `${station(state.station)?.name || "The station"} did not answer` : "The stream stopped sending");
+    }, STALL_MS);
+  }
+  // The swap the watchdog asks for: bring the next mirror up on the idle deck
+  // and cross to it, so a dropped connection costs a fade and not the music.
+  function nextMirror(reason) {
+    const tuned = station(state.station);
+    if (!tuned) return;
+    const next = state.mirror + 1;
+    if (next >= tuned.mirrors.length) {
+      clearStall();
+      pendingDeck = null;
+      state.radioPhase = "error";
+      state.radioNote = `${reason}. Every mirror for ${tuned.name} was tried; choose it again to retry.`;
+      renderRadio(); announce();
+      return;
+    }
+    state.radioNote = `${reason}. Moving to mirror ${next + 1}.`;
+    tune(state.station, next, true);
+  }
+  // Snap a running crossfade to its end, so a new choice starts from one
+  // settled deck instead of racing a fade that is still releasing the other.
+  function finishFade() {
+    if (!fadeTimer) return;
+    window.clearInterval(fadeTimer); fadeTimer = 0;
+    activeDeck().volume = prefs.volume;
+    if (fadeOut && fadeOut !== activeDeck()) stopDeck(fadeOut);
+    fadeOut = null;
+  }
+  function fadeTo(incoming, outgoing) {
+    finishFade();
+    if (!outgoing || outgoing === incoming || !outgoing.src || outgoing.paused) {
+      incoming.volume = prefs.volume;
+      if (outgoing && outgoing !== incoming) stopDeck(outgoing);
+      return;
+    }
+    fadeOut = outgoing;
+    // Progress is read from the clock, not counted in ticks, so a hidden
+    // window's throttled timer lands the fade late instead of stretching it.
+    const started = window.performance.now();
+    fadeTimer = window.setInterval(() => {
+      const ratio = Math.min(1, (window.performance.now() - started) / FADE_MS);
+      // The master is read every step, so moving the volume mid-fade sticks.
+      incoming.volume = prefs.volume * ratio;
+      outgoing.volume = prefs.volume * (1 - ratio);
+      if (ratio < 1) return;
+      window.clearInterval(fadeTimer); fadeTimer = 0; fadeOut = null;
+      stopDeck(outgoing);
+    }, FADE_STEP_MS);
+  }
+  function stopDeck(deck) {
+    if (!deck) return;
+    deck.pause();
+    deck.removeAttribute("src");
+    try { deck.load(); } catch {}
+    deck.volume = 0;
+  }
+  function tune(id, mirrorIndex = 0, viaFailover = false) {
+    init();
+    const tuned = station(id);
+    if (!tuned) { note("That station is not on the list.", true); return false; }
+    const url = tuned.mirrors[mirrorIndex];
+    if (!url) return false;
+    // Choosing the station that is already sounding is not a reason to reconnect.
+    if (!viaFailover && state.source === "radio" && state.station === id && state.radioPhase === "playing" && !activeDeck().paused) return true;
+    // Every tune supersedes the last: a slow answer that arrives after a newer
+    // choice, or after Stop, must not take the speakers back.
+    const generation = ++tuneGeneration;
+    clearStall();
+    finishFade();
+    const wasRadio = state.source === "radio";
+    const current = activeDeck();
+    // Only a deck that is sounding needs the other one. A connection still in
+    // flight on this deck is redirected rather than doubled up, and a failed
+    // load leaves the element unpaused with an error, so neither is sounding.
+    const live = wasRadio && pendingDeck !== current && Boolean(current.src) && !current.paused && !current.error;
+    const target = live ? idleDeck() : current;
+    const outgoing = live ? current : null;
+    if (!wasRadio) audio?.pause();
+    state.source = "radio";
+    state.station = id;
+    state.mirror = mirrorIndex;
+    state.radioPhase = "connecting";
+    pendingDeck = target;
+    if (!viaFailover) state.radioNote = "";
+    prefs.station = id; persist();
+    if (els.embed) { els.embed.remove(); els.embed = null; }
+    target.crossOrigin = "anonymous";
+    target.volume = live ? 0 : prefs.volume;
+    target.src = url;
+    try { target.load(); } catch {}
+    const settle = () => {
+      if (generation !== tuneGeneration) return;
+      clearStall();
+      pendingDeck = null;
+      state.deck = target === deckB ? "b" : "a";
+      state.radioPhase = "playing";
+      fadeTo(target, outgoing); renderRadio(); announce();
+    };
+    const refused = (error) => {
+      if (generation !== tuneGeneration) return;
+      nextMirror(`${tuned.name} refused the connection (${error?.message || "unavailable"})`);
+    };
+    // A connection that never answers gets the same watchdog as a stall.
+    armStall();
+    render(); announce();
+    let started;
+    try { started = target.play(); } catch (error) { refused(error); return true; }
+    if (started && typeof started.then === "function") started.then(settle, refused);
+    else settle();
+    return true;
+  }
+  function stopRadio() {
+    tuneGeneration += 1;
+    clearStall();
+    if (fadeTimer) { window.clearInterval(fadeTimer); fadeTimer = 0; }
+    fadeOut = null;
+    pendingDeck = null;
+    stopDeck(deckB);
+    if (state.source === "radio") stopDeck(audio);
+    // Local blob URLs never needed CORS; deck A goes back to plain playback.
+    audio.crossOrigin = null;
+    state.deck = "a";
+    state.radioPhase = "idle";
+    audio.volume = prefs.volume;
+  }
+  function setVolume(value) {
+    const level = Number(value);
+    if (Number.isFinite(level)) prefs.volume = Math.max(0, Math.min(1, level));
+    // A running fade picks the new master up on its next step.
+    if (!fadeTimer) activeDeck().volume = prefs.volume;
+    if (state.source !== "radio") audio.volume = prefs.volume;
+    persist();
+    if (els.volume) els.volume.value = String(prefs.volume);
+    if (els.radioVolume) els.radioVolume.value = String(prefs.volume);
+  }
   function setSource(source) {
-    const next = source === "spotify" ? "spotify" : "local";
-    if (next !== state.source) audio?.pause();
+    const next = source === "spotify" ? "spotify" : source === "radio" ? "radio" : "local";
+    const previous = state.source;
+    if (next !== previous) {
+      if (previous === "radio") stopRadio();
+      audio?.pause();
+    }
     state.source = next;
-    if (next === "local" && els.embed) { els.embed.remove(); els.embed = null; }
+    // Radio borrows deck A, so coming back hands the selected track back to
+    // it: loaded, not playing.
+    const track = state.tracks[state.selected];
+    if (next === "local" && previous !== "local" && track && audio.src !== track.url) { audio.src = track.url; audio.load(); }
+    if (next !== "spotify" && els.embed) { els.embed.remove(); els.embed = null; }
     if (next === "spotify" && state.spotify) mountSpotify();
     render(); announce();
   }
@@ -331,10 +568,12 @@
   function render() {
     if (!initialized) return;
     const local = state.source === "local";
-    els.local.hidden = !local; els.spotify.hidden = local;
+    const radio = state.source === "radio";
+    els.local.hidden = !local; els.radio.hidden = !radio; els.spotify.hidden = !(state.source === "spotify");
     els.localTab.setAttribute("aria-selected", String(local));
-    els.spotifyTab.setAttribute("aria-selected", String(!local));
-    renderTransport(); renderQueue(); renderAudioLink();
+    els.radioTab.setAttribute("aria-selected", String(radio));
+    els.spotifyTab.setAttribute("aria-selected", String(state.source === "spotify"));
+    renderTransport(); renderQueue(); renderRadio(); renderAudioLink();
     els.recent.textContent = "";
     for (const url of prefs.spotify) {
       const item = spotifyLink(url);
@@ -344,6 +583,26 @@
     els.recommend.disabled = state.sending || !(recommender || window.mefiStudio?.musicRecommend);
     els.recommend.textContent = state.sending ? "Finding a direction…" : "Ask for recommendations";
     els.aiHint.textContent = recommender || window.mefiStudio?.musicRecommend ? "Uses Studio’s configured assistant. Recommendations appear here." : "Music recommendations need Studio’s assistant connection.";
+  }
+  function renderRadio() {
+    if (!els.radioState) return;
+    const tuned = station(state.station);
+    const phase = state.source === "radio" ? state.radioPhase : "idle";
+    const label = !tuned ? "No station tuned"
+      : phase === "connecting" ? `Connecting to ${tuned.name}…`
+      : phase === "buffering" ? `${tuned.name} paused for buffer — holding the sound`
+      : phase === "playing" ? `${tuned.name}${tuned.origin === tuned.name ? "" : ` · ${tuned.origin}`} · mirror ${state.mirror + 1} of ${tuned.mirrors.length}`
+      : phase === "error" ? `${tuned.name} could not be reached`
+      : `${tuned.name} ready`;
+    els.radioState.textContent = state.radioNote ? `${label} — ${state.radioNote}` : label;
+    els.radioState.dataset.phase = phase;
+    if (els.radioStop) els.radioStop.disabled = !(state.source === "radio" && phase !== "idle");
+    if (els.radioVolume && document.activeElement !== els.radioVolume) els.radioVolume.value = String(prefs.volume);
+    for (const [id, node] of Object.entries(els.stationButtons || {})) {
+      const current = state.source === "radio" && id === state.station;
+      node.setAttribute("aria-pressed", String(current));
+      node.dataset.state = current ? phase : "off";
+    }
   }
   function renderAudioLink(status = window.MefiIdle?.audioStatus?.()) {
     if (!els.audioToggle) return;
@@ -456,13 +715,18 @@
     const main = element("main", "music-main", null, body);
     const tabs = element("div", "music-tabs", null, main); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Music source");
     els.localTab = button("Local music", "music-tab", tabs, () => setSource("local"), "music-local-tab");
+    els.radioTab = button("Ad-free radio", "music-tab", tabs, () => setSource("radio"), "music-radio-tab");
     els.spotifyTab = button("Spotify", "music-tab", tabs, () => setSource("spotify"), "music-spotify-tab");
-    for (const [tab, panelId] of [[els.localTab, "music-local-panel"], [els.spotifyTab, "music-spotify-panel"]]) { tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", panelId); }
+    const tabFor = (source) => source === "local" ? els.localTab : source === "radio" ? els.radioTab : els.spotifyTab;
+    for (const [tab, panelId] of [[els.localTab, "music-local-panel"], [els.radioTab, "music-radio-panel"], [els.spotifyTab, "music-spotify-panel"]]) { tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", panelId); }
     tabs.addEventListener("keydown", (event) => {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
       event.preventDefault();
-      const source = event.key === "Home" ? "local" : event.key === "End" ? "spotify" : state.source === "local" ? "spotify" : "local";
-      setSource(source); (source === "local" ? els.localTab : els.spotifyTab).focus();
+      const order = ["local", "radio", "spotify"];
+      const index = Math.max(0, order.indexOf(state.source));
+      const source = event.key === "Home" ? order[0] : event.key === "End" ? order[order.length - 1]
+        : order[(index + (event.key === "ArrowRight" ? 1 : -1) + order.length) % order.length];
+      setSource(source); tabFor(source).focus();
     });
     els.local = element("section", "music-local", null, main); els.local.id = "music-local-panel"; els.local.setAttribute("role", "tabpanel"); els.local.setAttribute("aria-labelledby", "music-local-tab");
     const player = element("div", "music-player", null, els.local);
@@ -486,7 +750,7 @@
     els.files.addEventListener("change", () => { addFiles(els.files.files); els.files.value = ""; });
     const volumeLabel = element("label", "music-volume", "Volume", utilities);
     els.volume = element("input", null, null, volumeLabel); els.volume.type = "range"; els.volume.min = "0"; els.volume.max = "1"; els.volume.step = ".01"; els.volume.setAttribute("aria-label", "Music volume");
-    els.volume.addEventListener("input", () => { audio.volume = Number(els.volume.value); prefs.volume = audio.volume; persist(); });
+    els.volume.addEventListener("input", () => setVolume(els.volume.value));
     const queueHead = element("div", "music-queue-heading", null, els.local);
     element("h3", null, "Your queue", queueHead); els.queueCount = element("span", "music-count", "0", queueHead);
     els.queue = element("ol", "music-queue", null, els.local); els.queue.id = "music-queue";
@@ -494,6 +758,31 @@
     els.local.addEventListener("dragover", (event) => { event.preventDefault(); els.local.classList.add("drag-over"); });
     els.local.addEventListener("dragleave", () => els.local.classList.remove("drag-over"));
     els.local.addEventListener("drop", (event) => { event.preventDefault(); els.local.classList.remove("drag-over"); addFiles(event.dataTransfer?.files); });
+    els.radio = element("section", "music-radio", null, main); els.radio.id = "music-radio-panel"; els.radio.setAttribute("role", "tabpanel"); els.radio.setAttribute("aria-labelledby", "music-radio-tab");
+    element("h3", null, "Ad-free radio", els.radio);
+    element("p", "music-subtitle", "Listener-funded stations that carry no advertising, so there is nothing to skip. These play through Studio’s own player, which means the node tree reacts to them.", els.radio);
+    els.radioState = element("p", "music-radio-state", "No station tuned", els.radio);
+    els.radioState.id = "music-radio-state"; els.radioState.setAttribute("role", "status");
+    const stationList = element("div", "music-stations", null, els.radio);
+    stationList.setAttribute("role", "group"); stationList.setAttribute("aria-label", "Stations");
+    els.stationButtons = {};
+    for (const item of STATIONS) {
+      const card = button("", "music-station", stationList, () => tune(item.id), `music-station-${item.id}`);
+      const copy = element("span", "music-station-copy", null, card);
+      element("strong", null, item.name, copy);
+      element("small", null, `${item.detail} · ${item.origin}`, copy);
+      card.setAttribute("aria-pressed", "false");
+      card.title = `${item.name} — ${item.mirrors.length} mirror${item.mirrors.length === 1 ? "" : "s"}`;
+      els.stationButtons[item.id] = card;
+    }
+    const radioControls = element("div", "music-radio-controls", null, els.radio);
+    els.radioStop = button("Stop radio", "ghost", radioControls, () => { stopRadio(); render(); announce(); }, "music-radio-stop");
+    els.radioStop.disabled = true;
+    const radioVolumeLabel = element("label", "music-volume", "Volume", radioControls);
+    els.radioVolume = element("input", null, null, radioVolumeLabel); els.radioVolume.id = "music-radio-volume"; els.radioVolume.type = "range"; els.radioVolume.min = "0"; els.radioVolume.max = "1"; els.radioVolume.step = ".01"; els.radioVolume.setAttribute("aria-label", "Radio volume");
+    els.radioVolume.value = String(prefs.volume);
+    els.radioVolume.addEventListener("input", () => setVolume(els.radioVolume.value));
+    element("p", "music-fineprint", "Each station lists several mirrors. If one stops sending, Studio brings the next one up on a second deck and crosses over, so the music keeps playing through the handover.", els.radio);
     els.spotify = element("section", "music-spotify", null, main); els.spotify.id = "music-spotify-panel"; els.spotify.setAttribute("role", "tabpanel"); els.spotify.setAttribute("aria-labelledby", "music-spotify-tab");
     element("h3", null, "Bring a Spotify playlist", els.spotify);
     element("p", "music-subtitle", "Paste a playlist, album or song link. Spotify’s controls stay right here.", els.spotify);
@@ -617,9 +906,17 @@
     audio = document.createElement("audio"); audio.preload = "metadata"; audio.volume = prefs.volume;
     audio.addEventListener("play", () => { renderTransport(); announce(); });
     audio.addEventListener("pause", () => { renderTransport(); announce(); });
-    audio.addEventListener("ended", () => move(1, false));
+    audio.addEventListener("ended", () => { if (state.source === "local") move(1, false); });
     audio.addEventListener("timeupdate", renderTransport); audio.addEventListener("loadedmetadata", renderTransport); audio.addEventListener("durationchange", renderTransport);
-    audio.addEventListener("error", () => { if (audio.src) note("This audio file could not be played. Try another format.", true); renderTransport(); announce(); });
+    audio.addEventListener("error", () => {
+      // A dead stream is a mirror problem, not a file-format problem; the
+      // deck's radio listener already handed it to the mirror watchdog.
+      if (state.source === "radio") return;
+      if (audio.src) note("This audio file could not be played. Try another format.", true);
+      renderTransport(); announce();
+    });
+    bindDeck(audio);
+    state.station = prefs.station;
     build(); applyTheme(prefs.theme, false); syncTreePreferences(false); render();
     window.addEventListener("resize", schedulePreview);
     window.addEventListener("mefi-tree-view", (event) => syncTreeView(event.detail?.view));
@@ -652,7 +949,8 @@
     window.MefiNav?.release?.("music");
     if (!window.MefiNav?.release) priorFocus?.focus?.();
   }
-  window.MefiMusic = { init, open, close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return audio; }, setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, loadSpotify, setSource, applyTheme, applyCustomColors,
+  window.MefiMusic = { init, open, close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
+    stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })), setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, loadSpotify, setSource, applyTheme, applyCustomColors,
     customColors: () => ({ ...prefs.customColors }), themePalette: () => ({ theme: prefs.theme, ...resolvePalette(prefs.theme, prefs.customColors) }) };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();

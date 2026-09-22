@@ -7,6 +7,42 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- **One navigation rail replaces three menus.** A rail down the left edge now
+  holds every destination in the app, grouped **Home**, **Work**, **Live**,
+  **Models** and **Settings**, with Key commands, Start here and Shortcuts at
+  its foot. It replaces the tabs row, the Command dock and the hover sidebar's
+  navigation rows, which each listed the same places their own way. At rest it
+  is five named icons; hover or Tab into it and it opens over the page to show
+  every destination and its key, without moving anything. **Keep open** pins it.
+  The rail's **M+** opens the project panel, which used to hide behind a
+  transparent 6px strip at the window's edge. **Switch navigation: rail or
+  classic** in `Ctrl K` brings the old menus back.
+- The Work rail lists **Current work** first again, ahead of the agent roster,
+  so what is running stays on screen however many agents are listed.
+
+### Fixed
+- **Hand-off chains finish instead of stalling forever.** A run at the
+  chain's depth limit is told not to hand off; when it printed `MEFI_NEXT`
+  anyway, the line still became an obligation on its card that nothing
+  could ever discharge, since no child is admitted past the limit. The
+  card failed verification three times, re-running its worker each time,
+  and was parked, while every card above it waited on it for good. One
+  task that used the hand-off protocol as written grew into a 15-card tree
+  with none of it done after four hours. Such lines are now declined and
+  named on the card's log. The same tree now finishes: 15 runs, all 15
+  cards done, where before it took 31 runs and finished none.
+- **A slow worker CLI no longer means nothing ever completes.** The
+  wedged-start watchdog killed any run that was silent for three minutes,
+  so a runner that reliably needs three and a half minutes to print
+  anything was killed on every card, forever. The start budget now learns
+  from the runs that do start — never less than twice the slowest of the
+  last eight — and widens 1.5x after each kill, up to twice the base, with
+  a ten-minute ceiling. With first output at 3.5 to 5 minutes, nine tasks
+  went from none done in two hours (19 kills, 57 slot-minutes burned) to
+  all nine (3 kills, 9 slot-minutes). Runs that genuinely never speak now
+  cost about a fifth more slot time before they are killed.
+
 ## [0.2.0] - 2026-09-22
 
 First public release: a portable Windows build published to GitHub Releases,

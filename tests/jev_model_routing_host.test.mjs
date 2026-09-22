@@ -5,6 +5,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import { executorHost } from "./fixtures/host_executor.mjs";
+import providerBreakers from "../scripts/provider-breaker.cjs";
 
 // Execute the real host selection, cache, transport wiring and worker claim
 // boundary. The classifier and all filesystem/process boundaries are fixtures;
@@ -52,6 +53,8 @@ function routingHost({ initialSettings = {}, credential = "fixture-jev-key", can
   };
   const context = vm.createContext({
     crypto, path, Date: class extends Date { static now() { return now; } },
+    // The real breaker, one per host: httpAssistantCall gates every call on it.
+    createBreaker: providerBreakers.createBreaker, AUTO_PROVIDER_NAMES: {},
     STUDIO_ROOT: path.resolve("fixture-studio"), SMOKE: false, CAPTURE: false, CLI_MODE: false,
     ZAI_MODEL_ROUTINE: "glm-5.3-flash", ZAI_MODEL_HEAVY: "glm-5.3",
     projects: { current: () => ({ id: currentProject }), active: () => ({ id: currentProject }) },

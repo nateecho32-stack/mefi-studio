@@ -5,6 +5,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { normalizeObservation } from "../scripts/model-performance.cjs";
+import providerBreakers from "../scripts/provider-breaker.cjs";
 
 // Run the real planning host callback through route selection, HTTP shaping,
 // fallback and observation with fake settings/transport. No keys or live stores.
@@ -20,6 +21,8 @@ function host(settings, responses = [okReply()], { clis = [] } = {}) {
   const installed = new Set(clis);
   const context = vm.createContext({
     path, crypto, AbortController, setTimeout, clearTimeout,
+    // The real breaker, one per host: httpAssistantCall gates every call on it.
+    createBreaker: providerBreakers.createBreaker, logLine: () => {},
     STUDIO_ROOT: "/studio", projects: { current: () => project, active: () => project }, projectDataPath: (value) => value,
     createPlanningStore: () => ({}), createPlanningService: (options) => options,
     jevShadowIntake: (tasks) => { admitted.push(structuredClone(tasks)); return new Promise(() => {}); },

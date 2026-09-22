@@ -75,6 +75,8 @@ const { limitsFromPlan, aggregateUsage, mergeLedgers, rollupUsage, formatUsage, 
 const { createPerformanceProfiler } = require("./scripts/performance-profiler.cjs");
 const { buildContext } = require("./scripts/context-manager.cjs");
 const { scrubOutbound } = require("./scripts/redaction.cjs");
+const { createBreaker } = require("./scripts/provider-breaker.cjs");
+const { buildWindowsCmdArgs } = require("./scripts/windows-command-line.cjs");
 const electron = require("electron");
 
 if (typeof electron === "string" || !electron.app) {
@@ -2874,18 +2876,28 @@ async function assistantFetch(system, user, maxTokens = 6000, { role = "routine"
   // a missing binary, a timeout or an empty reply falls back once to the
   // keyed HTTP routes — the rest of the auto order, never back to a CLI.
   if (route.cli === true || route.provider === "grok" || route.provider === "claude" || route.provider === "codex" || route.provider === "antigravity") {
-    const startedAt = Date.now();
-    const cli = route.provider === "grok" ? await grokCompletion(system, user, route.model)
-      : route.provider === "claude" ? await claudeCompletion(system, user, route.model)
-        : route.provider === "codex" ? await codexCompletion(system, user, route.model)
-          : await antigravityCompletion(system, user, route.model);
-    const observationId = crypto.randomUUID();
-    await recordModelCall({ id: observationId, model: cli.model || route.model || `${route.provider}-default`, provider: route.provider, taskType, source: "request",
-      at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : "error", errorKind: cli.ok ? null : "cli", tokenUsage: cli.tokenUsage ?? {}, costUsd: cli.costUsd ?? null });
-    cli.observationId = observationId;
-    if (cli.ok) {
-      if (assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = cli.model;
-      return cli;
+    // A paused CLI is not spawned at all — its failures tend to run to the
+    // full 180 s timeout — so the turn goes straight to the fallback below.
+    const gate = providerBreaker.enter(route.provider);
+    let cli = gate.allowed ? null : providerSkipped(route.provider, gate);
+    if (gate.allowed) {
+      const startedAt = Date.now();
+      try {
+        cli = route.provider === "grok" ? await grokCompletion(system, user, route.model)
+          : route.provider === "claude" ? await claudeCompletion(system, user, route.model)
+            : route.provider === "codex" ? await codexCompletion(system, user, route.model)
+              : await antigravityCompletion(system, user, route.model);
+      } finally {
+        settleProvider(route.provider, gate, cli);
+      }
+      const observationId = crypto.randomUUID();
+      await recordModelCall({ id: observationId, model: cli.model || route.model || `${route.provider}-default`, provider: route.provider, taskType, source: "request",
+        at: startedAt, elapsedMs: Date.now() - startedAt, status: cli.ok ? "ok" : "error", errorKind: cli.ok ? null : "cli", tokenUsage: cli.tokenUsage ?? {}, costUsd: cli.costUsd ?? null });
+      cli.observationId = observationId;
+      if (cli.ok) {
+        if (assistantState?.ai && projects.current().id === projects.active().id) assistantState.ai.model = cli.model;
+        return cli;
+      }
     }
     const http = await resolveAiRoute(role, { allowCli: false });
     if (!http.ok) return cli;
@@ -2923,10 +2935,23 @@ async function httpAssistantCall(route, system, user, maxTokens, { taskType = "r
     }
     return body;
   };
-  const call = async (candidate) => chatCompletion(candidate.endpoint, candidate.apiKey, candidate.model, requestBody(candidate), {
-    sessionHeader: candidate.provider === "opencode" ? await assistantSessionId() : null,
-    provider: candidate.provider, taskType, source,
-  });
+  // Every call passes its provider's breaker first, so a route that keeps
+  // failing is skipped for a while instead of being re-dialled — and, when it
+  // times out, waited on for chatCompletion's full 120 s — by every turn.
+  const call = async (candidate) => {
+    const gate = providerBreaker.enter(candidate.provider);
+    if (!gate.allowed) return providerSkipped(candidate.provider, gate);
+    let result;
+    try {
+      result = await chatCompletion(candidate.endpoint, candidate.apiKey, candidate.model, requestBody(candidate), {
+        sessionHeader: candidate.provider === "opencode" ? await assistantSessionId() : null,
+        provider: candidate.provider, taskType, source,
+      });
+    } finally {
+      settleProvider(candidate.provider, gate, result);
+    }
+    return result;
+  };
   const primary = await call(route);
   if (primary.ok) {
     // The status panel shows the route that actually answered, not a static label.
@@ -2945,6 +2970,49 @@ async function httpAssistantCall(route, system, user, maxTokens, { taskType = "r
     last = retried;
   }
   return last;
+}
+
+// Circuit breakers for the host's own model calls, one per provider id
+// (scripts/provider-breaker.cjs). Three failures in a row pause a route for
+// thirty seconds; then a single probe call is let through, and a route that
+// keeps failing its probes is paused again. A failure means the route itself
+// did not work: a refused key, an exhausted quota, a transport error, a
+// timeout, or a CLI that did not answer. A validation failure is the opposite
+// — the provider answered and the model's reply was unusable — so it counts as
+// proof the route is alive. Saving a key or changing the routing resets every
+// breaker (settings:set-key, settings:set-ai-routing, autoSetup), so a
+// corrected key is tried at once rather than after the pause runs out.
+const PROVIDER_PAUSE_AFTER = 3;
+const PROVIDER_PAUSE_MS = 30_000;
+const providerBreaker = createBreaker({ failureThreshold: PROVIDER_PAUSE_AFTER, resetTimeoutMs: PROVIDER_PAUSE_MS, now: () => Date.now() });
+const providerLastFailure = new Map();
+const providerName = (provider) => AUTO_PROVIDER_NAMES[provider] ?? provider;
+
+function settleProvider(provider, gate, result) {
+  const failed = !result || (!result.ok && result.errorKind !== "validation");
+  const before = providerBreaker.state(provider);
+  if (failed) providerLastFailure.set(provider, String(result?.error ?? "the call threw").slice(0, 160));
+  gate.settle(!failed);
+  const after = providerBreaker.state(provider);
+  const pause = `${PROVIDER_PAUSE_MS / 1000}s`;
+  if (after === "open" && before === "closed") {
+    logLine(`[assistant] ${providerName(provider)} paused for ${pause} after ${PROVIDER_PAUSE_AFTER} failures in a row: ${providerLastFailure.get(provider)}`);
+  } else if (after === "open" && before === "half-open") {
+    logLine(`[assistant] ${providerName(provider)} still failing, paused for another ${pause}: ${providerLastFailure.get(provider)}`);
+  } else if (after === "closed" && before === "half-open") {
+    logLine(`[assistant] ${providerName(provider)} answering again`);
+  }
+}
+
+// What a paused route returns in place of a reply: an ordinary failure, so
+// the fallback walk moves straight on, carrying why the route is paused.
+function providerSkipped(provider, gate) {
+  const last = providerLastFailure.get(provider);
+  const why = last ? ` (last failure: ${last})` : "";
+  const error = gate.reason === "probe-in-flight"
+    ? `${providerName(provider)} is being retried by another request${why}`
+    : `${providerName(provider)} paused after repeated failures, retrying in ${Math.max(1, Math.ceil(gate.retryInMs / 1000))}s${why}`;
+  return { ok: false, skipped: true, errorKind: "paused", provider, error };
 }
 
 function normalizeBriefing(result) {
@@ -9875,7 +9943,12 @@ async function spawnNextJob() {
         // obligations is never marked verified.
         if (entry.handoffs.length) task.remaining = entry.handoffs.slice(0, EXECUTOR_MAX_HANDOFFS).map((item) => item.title);
         else delete task.remaining;
-        task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "status", text: `run finished (${attempt.sawDone ? "sentinel seen" : "exit 0"}) — awaiting verification${Array.isArray(task.remaining) ? ` · ${task.remaining.length} follow-up(s) handed on` : ""}` }].slice(-40);
+        // Hand-offs a run at the depth limit printed anyway are named here and
+        // nowhere else: they block nothing, and a person can still file one.
+        const declined = Array.isArray(entry.declinedHandoffs) && entry.declinedHandoffs.length
+          ? ` · ${entry.declinedHandoffs.length} hand-off(s) declined at the depth limit, not queued: ${entry.declinedHandoffs.map((title) => `"${assistantClip(title, 50)}"`).join(", ")}`
+          : "";
+        task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "status", text: `run finished (${attempt.sawDone ? "sentinel seen" : "exit 0"}) — awaiting verification${Array.isArray(task.remaining) ? ` · ${task.remaining.length} follow-up(s) handed on` : ""}${declined}` }].slice(-40);
         // The worker's own account of the attempt, kept out of the
         // bookkeeping line so the Done digest shows what was actually done.
         if (entry.resultNote?.raw) {
@@ -10160,6 +10233,15 @@ async function spawnNextJob() {
     const take = (line) => {
       if (entry.finished || entry.child !== owner) return;
       logLine(`[${runLabel}] ${line}`);
+      // A runner's first line is how long it took to start — the evidence
+      // the start watchdog sets its budget from (see startBudgetMs). A start
+      // also ends any run of consecutive start kills.
+      if (!entry.spoke) {
+        const samples = (autopilot.startSamples ??= []);
+        samples.push(Date.now() - attemptStartedAt);
+        if (samples.length > 8) samples.splice(0, samples.length - 8);
+        autopilot.startKills = 0;
+      }
       entry.spoke = true;
       if (stdout) entry.spokeOut = true;
       // Strict verdict match: the line must BE the sentinel (a short trailing
@@ -10172,7 +10254,15 @@ async function spawnNextJob() {
         if (resultLine) entry.resultNote = resultLine;
       }
       const handoff = parseExecutorHandoff(line);
-      if (handoff?.kind === "next" && entry.handoffs.length < EXECUTOR_MAX_HANDOFFS) entry.handoffs.push(handoff);
+      // A run at the chain's depth limit is told not to hand off (the prompt
+      // tail says so), and no child is ever admitted past EXECUTOR_MAX_DEPTH.
+      // Accepting its MEFI_NEXT anyway turned the line into a `remaining`
+      // obligation nothing could discharge: the card failed verification
+      // three times and was parked, and every ancestor waited on it forever.
+      // Declined titles are kept for the card's log, not as obligations.
+      if (handoff?.kind === "next" && Number(entry.depth) >= EXECUTOR_MAX_DEPTH) {
+        if ((entry.declinedHandoffs ??= []).length < EXECUTOR_MAX_HANDOFFS) entry.declinedHandoffs.push(handoff.title);
+      } else if (handoff?.kind === "next" && entry.handoffs.length < EXECUTOR_MAX_HANDOFFS) entry.handoffs.push(handoff);
       if (handoff?.kind === "call") entry.calls.add(handoff.role);
       // A decision the run cannot make for itself. Read on the same colour
       // strip and anchored the same way as the verdict, so a run can neither
@@ -10404,8 +10494,19 @@ async function spawnNextJob() {
     // The budget scales with how many siblings are already running: a full
     // pool of CLI agents starting against one shared OpenCode store takes
     // minutes to first output, and killing a slow-but-healthy start just
-    // feeds the retry loop and the failure feed.
-    const startBudgetMs = EXECUTOR_START_BUDGET_MS + Math.max(0, autopilot.jobs.length - 4) * 45000;
+    // feeds the retry loop and the failure feed. It also moves with
+    // evidence. A fixed three minutes was a cliff: a runner that reliably
+    // needs three and a half was killed on every card, forever, and nothing
+    // completed at all. So the budget is never less than twice the slowest
+    // of the last eight starts that did speak, and after kills with no start
+    // in between it widens 1.5x per kill — but blind widening stops at twice
+    // the base, because a runner that never speaks is exactly what this
+    // watchdog exists to stop. Nothing waits longer than ten minutes.
+    const crowded = EXECUTOR_START_BUDGET_MS + Math.max(0, autopilot.jobs.length - 4) * 45000;
+    const escalated = Math.min(2 * EXECUTOR_START_BUDGET_MS, crowded * 1.5 ** (autopilot.startKills ?? 0));
+    const learned = 2 * Math.max(0, ...(autopilot.startSamples ?? []));
+    const startBudgetMs = Math.round(Math.min(10 * 60000, Math.max(crowded, escalated, learned)));
+    const startBudgetText = `${Math.round(startBudgetMs / 6000) / 10}m`;
     attemptStartedAt = Date.now();
     startWatchdog = setTimeout(() => {
       if (entry.finished || entry.child !== nextChild) return;
@@ -10414,7 +10515,8 @@ async function spawnNextJob() {
         : !entry.spoke && !entry.sessionId;
       if (!wedged) return;
       entry.startKilled = true;
-      logLine(`[autopilot] ${runLabel} run wedged (no session, no output in ${Math.round(startBudgetMs / 60000)}m) — killing: ${job.title}`);
+      autopilot.startKills = (autopilot.startKills ?? 0) + 1;
+      logLine(`[autopilot] ${runLabel} run wedged (no session, no output in ${startBudgetText}) — killing: ${job.title}`);
       // The kill may leave git locks in the shared snapshot worktree; aged-out
       // ones are swept so they cannot poison later runs.
       sweepSnapshotLocks().catch(() => {});
@@ -10434,7 +10536,7 @@ async function spawnNextJob() {
         readSettings().then((settings) => writeSettings({ ...settings, ui: { ...(settings.ui ?? {}), autopilot: { ...(settings.ui?.autopilot ?? {}), parallel: narrowed } } })).catch(() => {});
         emitAutopilot();
       }
-      stop(`no session and no output for ${Math.round(startBudgetMs / 60000)}m after spawn — killed as a wedged start`, allowFallback);
+      stop(`no session and no output for ${startBudgetText} after spawn — killed as a wedged start`, allowFallback);
     }, startBudgetMs);
     startWatchdog.unref?.();
     child.on("close", (code) => {
@@ -11698,17 +11800,26 @@ function runLove(label, args) {
   return { ok: true };
 }
 
-function runCmd(label, command) {
-  const child = spawn("cmd.exe", ["/d", "/s", "/c", command], { cwd: GAME_ROOT, windowsHide: false });
+// A game script's path always carries spaces — "Run Game (LOVE2D).cmd", and
+// the default checkout is "2d Trippy Hell" — so its cmd.exe line is built by
+// scripts/windows-command-line.cjs and handed over verbatim. Wrapping the path
+// in quotes by hand and letting Node escape the argument turned those quotes
+// into \" , which cmd cannot read: both launchers failed with
+// '\"...\Run Game (LOVE2D).cmd\"' is not recognized.
+function runCmd(label, command, args = []) {
+  let line;
+  try { line = buildWindowsCmdArgs(command, args); }
+  catch (error) { return { ok: false, error: `cannot launch ${path.basename(command)}: ${error.message}` }; }
+  const child = spawn("cmd.exe", line, { cwd: GAME_ROOT, windowsHide: false, windowsVerbatimArguments: true });
   streamChild(child, label);
   return { ok: true };
 }
 
-function runGameScript(label, name, args = "") {
+function runGameScript(label, name, args = []) {
   if (!GAME_ROOT) return { ok: false, error: "Set MEFI_STUDIO_GAME_ROOT to a Ruins Runner checkout to use the game launcher." };
   const script = path.join(GAME_ROOT, name);
   if (!existsSync(script)) return { ok: false, error: `game launcher missing at ${script}` };
-  return runCmd(label, `"${script}"${args ? ` ${args}` : ""}`);
+  return runCmd(label, script, args);
 }
 
 async function runSpeedProbe(modelId) {
@@ -12402,7 +12513,7 @@ function registerIpc() {
     return runLove("studio", [DEV_PROJECT]);
   });
 
-  ipcMain.handle("studio:smoke", () => runGameScript("smoke", "Run Dev Tool (LOVE2D).cmd", "--smoke"));
+  ipcMain.handle("studio:smoke", () => runGameScript("smoke", "Run Dev Tool (LOVE2D).cmd", ["--smoke"]));
 
   // ---- Coding CLIs ---------------------------------------------------------
   // OpenCode, Grok, Codex, Claude Code and Antigravity are the owner's
@@ -12523,6 +12634,7 @@ function registerIpc() {
     else if (safeStorage.isEncryptionAvailable()) settings[field] = safeStorage.encryptString(apiKey).toString("base64");
     else return { ok: false, error: "OS encryption unavailable" };
     await writeSettings(settings);
+    providerBreaker.reset(); // a new key deserves a try now, not after a pause
     if (["gateway", "jev", "zen", "openrouter"].includes(which)) (await getJevQueue()).wake();
     return { ok: true };
   });
@@ -12710,6 +12822,7 @@ function registerIpc() {
       else delete settings[key];
     }
     await writeSettings(settings);
+    providerBreaker.reset(); // new routes, models or endpoints start unpaused
     return { ok: true };
   });
 
@@ -12793,6 +12906,7 @@ function registerIpc() {
     if (plan.changes.executorCli !== undefined) next.executorCli = plan.changes.executorCli;
     if (plan.changes.autoFallback === false) next.aiAutoFallback = false;
     await writeSettings(next);
+    providerBreaker.reset(); // the routes it just chose start unpaused
     logLine(`[setup] auto setup: ${summary}`);
     return { ...plan, applied: true, summary };
   }

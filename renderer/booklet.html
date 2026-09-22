@@ -2,7 +2,9 @@
 <html lang="en" data-starting>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'self' file:; frame-src https://open.spotify.com;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' 'unsafe-inline'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' file: data: blob:; connect-src 'self' file:; media-src 'self' file: data: blob: https://ice1.somafm.com https://ice2.somafm.com https://ice4.somafm.com https://stream.radioparadise.com; frame-src https://open.spotify.com;">
+<!-- SomaFM refuses stream requests that carry a Referer, and <audio> has no referrerpolicy attribute. -->
+<meta name="referrer" content="no-referrer">
 <title>Mefi's Studio AI+ · Your workspace</title>
 <script id="startup-mode">if (['capture', 'smoke'].some(key => new URLSearchParams(location.search).get(key) === '1')) document.documentElement.removeAttribute('data-starting');</script>
 <style id="booklet-styles">/* Mefi's Studio AI+ — Club Blackout theme.
@@ -92,6 +94,11 @@
   --z-tabs: 30; --z-rail: 40; --z-tip: 60;
   --z-command: 70; --z-hud: 71; --z-pop: 72;
   --z-sheet: 80; --z-transient: 90; --z-toast: 95;
+  /* the workspace layer and the project panel used to be bare 65 and 85,
+     straddling the sheet layer outside the scale; the rail sits between. */
+  --z-workspace: 65; --z-shell: 82; --z-sidebar: 85;
+  /* 0 unless html[data-shell="rail"] turns the navigation rail on */
+  --shell-rail-w: 0px;
 
   /* literal on purpose: one bad token would invalidate the shorthand and drop the app to Times */
   font: 15px/1.55 system-ui, "Segoe UI", sans-serif;
@@ -2279,7 +2286,7 @@ body.no-motion .boot-spinner { animation: none; }
 
 /* Workspace: a quiet, useful home above the diagnostic surfaces. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-.workspace { --ws-accent: #e2c58d; --ws-accent-rgb: 226,197,141; position: fixed; inset: 0; z-index: 65; display: grid; grid-template-columns: 244px minmax(0,1fr); background: #121313; color: #e7e5de; font-size: 14px; }
+.workspace { --ws-accent: #e2c58d; --ws-accent-rgb: 226,197,141; position: fixed; inset: 0; z-index: var(--z-workspace); display: grid; grid-template-columns: 244px minmax(0,1fr); background: #121313; color: #e7e5de; font-size: 14px; }
 .workspace[hidden] { display: none; }
 .workspace[data-accent="sage"] { --ws-accent: #b9cfae; --ws-accent-rgb: 185,207,174; }
 .workspace[data-accent="violet"] { --ws-accent: #c5b7e8; --ws-accent-rgb: 197,183,232; }
@@ -2579,7 +2586,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #workspace-layer { grid-template-columns: minmax(0, 1fr); }
 #workspace-sidebar {
   --sidebar-width: min(312px, calc(100vw - 44px));
-  position: fixed; inset: 0; z-index: 85; display: block; overflow: hidden;
+  position: fixed; inset: 0; z-index: var(--z-sidebar); display: block; overflow: hidden;
   background: transparent; pointer-events: none;
 }
 #workspace-sidebar-panel {
@@ -3820,6 +3827,145 @@ body.command-active .walkthrough-coach { right: 392px; }
   body.command-focus #idle-hud .rail-tabs { transition: none; }
 }
 
+/* ============================================================
+   22. The one shell · navigation rail
+   docs/ux-audit.md, Phase 3. One rail down the left edge for the
+   whole app — Home, Work, Live, Models, Settings — built from
+   nav.js's registry by MefiNav.renderRail(). Everything here keys
+   off html[data-shell="rail"]; without it the classic tabs row, dock
+   and hover sidebar are exactly as they were.
+
+   Every full-window layer respects --shell-rail-w instead of owning
+   the left edge. At rest the rail is 64px of icons with a small label
+   under each section; hover or keyboard focus widens it OVER the page
+   (no reflow). Pinned, it widens the variable itself and the page
+   makes room.
+   ============================================================ */
+html[data-shell="rail"] { --shell-rail-w: 64px; --shell-rail-open: 232px; }
+html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-open); }
+
+#app-rail {
+  position: fixed; top: 0; bottom: 0; left: 0; z-index: var(--z-shell);
+  width: var(--shell-rail-w); box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 4px; padding: 10px 8px;
+  background: var(--glass-hard); border-right: 1px solid var(--hairline);
+  backdrop-filter: var(--blur);
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+  transition: width var(--motion-menu) var(--ease), box-shadow var(--motion-menu) var(--ease);
+}
+#app-rail[hidden] { display: none; }
+#app-rail:hover, #app-rail:focus-within { width: var(--shell-rail-open); box-shadow: var(--shadow-2); }
+
+/* One button look for everything in the rail, overriding the global button
+   (its border, fill, centred content and hover lift). */
+#app-rail .app-rail-brand,
+#app-rail .app-rail-head,
+#app-rail .app-rail-item,
+#app-rail .app-rail-pin {
+  position: relative; display: flex; align-items: center; justify-content: flex-start; gap: 10px;
+  width: 100%; min-width: 0; min-height: 40px; box-sizing: border-box; margin: 0; padding: 0 15px;
+  border: 1px solid transparent; border-radius: var(--r-sm);
+  background: transparent; color: var(--muted); box-shadow: none;
+  font: 500 var(--fs-sm)/1.2 var(--font-ui); text-align: left; white-space: nowrap;
+}
+#app-rail .app-rail-brand:hover,
+#app-rail .app-rail-head:hover,
+#app-rail .app-rail-item:hover,
+#app-rail .app-rail-pin:hover { color: var(--ivory); background: var(--tint-gold-1); border-color: transparent; box-shadow: none; transform: none; }
+#app-rail :is(.app-rail-brand, .app-rail-head, .app-rail-item, .app-rail-pin):focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+#app-rail .glyph { flex: none; width: 16px; height: 16px; }
+#app-rail .app-rail-text,
+#app-rail .app-rail-item .label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* The brand is the door to the project panel. */
+#app-rail .app-rail-brand { min-height: 46px; padding-left: 9px; margin-bottom: 6px; color: var(--ivory); }
+#app-rail .app-rail-brand .monogram { flex: none; }
+#app-rail .app-rail-brand[aria-expanded="true"] { background: var(--tint-gold-2); }
+
+/* Sections: at rest an icon with its word beneath, so five destinations read
+   without a hover; open, a row with its members listed under it. */
+#app-rail .app-rail-sections { display: flex; flex-direction: column; gap: 2px; }
+#app-rail .app-rail-head {
+  flex-direction: column; justify-content: center; gap: 3px;
+  min-height: 52px; padding: 6px 2px; font-size: 10.5px; text-align: center;
+}
+#app-rail .app-rail-head .app-rail-text { flex: none; max-width: 100%; }
+#app-rail .app-rail-head .count { position: absolute; top: 3px; right: 5px; min-width: 15px; height: 15px; padding: 0 4px; font-size: 9.5px; }
+#app-rail .app-rail-children { display: none; flex-direction: column; gap: 1px; padding: 2px 0 8px 14px; }
+#app-rail .app-rail-item { min-height: 32px; padding: 0 10px; font-size: var(--fs-xs); }
+#app-rail .app-rail-item .key { margin-left: auto; opacity: .62; font-size: 10px; }
+#app-rail .app-rail-item .count { margin-left: 4px; }
+
+#app-rail:hover .app-rail-head,
+#app-rail:focus-within .app-rail-head,
+html[data-rail-pinned] #app-rail .app-rail-head {
+  flex-direction: row; justify-content: flex-start; gap: 10px;
+  min-height: 40px; padding: 0 15px; font-size: var(--fs-sm); text-align: left;
+}
+#app-rail:hover .app-rail-head .count,
+#app-rail:focus-within .app-rail-head .count,
+html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margin-left: auto; }
+#app-rail:hover .app-rail-children,
+#app-rail:focus-within .app-rail-children,
+html[data-rail-pinned] #app-rail .app-rail-children { display: flex; }
+
+/* Where you are: the section lights up, the destination carries the mark. */
+#app-rail .app-rail-section.current > .app-rail-head { color: var(--gold-bright); }
+#app-rail .app-rail-section.current > .app-rail-head .glyph { color: var(--gold); }
+#app-rail [aria-current="page"] { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--hairline-strong); }
+
+/* At rest the one-line buttons (brand, foot, pin) are icon only: their words,
+   keycaps and counts wait for the rail to open instead of peeking out clipped. */
+html:not([data-rail-pinned]) #app-rail:not(:hover):not(:focus-within) :is(.app-rail-brand, .app-rail-foot-item, .app-rail-pin) :is(.label, .key, .app-rail-text, .count) { display: none; }
+#app-rail .app-rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 1px; padding-top: 8px; border-top: 1px solid var(--hairline); }
+#app-rail .app-rail-foot .app-rail-item { min-height: 36px; padding: 0 15px; }
+#app-rail .app-rail-pin { min-height: 34px; margin-top: 2px; }
+#app-rail .app-rail-pin[aria-pressed="true"] { color: var(--gold-bright); }
+
+/* Every full-window layer makes room for the rail. The Command canvas stays
+   full-bleed on purpose — it is the backdrop — and usableArea() fits the
+   graph beside the rail instead. */
+/* The rail's width is added to the Booklet's own gutter, not swapped for it. */
+html[data-shell="rail"] body { padding-left: calc(var(--shell-rail-w) + var(--gutter)); }
+@media (max-width: 900px) { html[data-shell="rail"] body { padding-left: calc(var(--shell-rail-w) + var(--s4)); } }
+html[data-shell="rail"] #workspace-layer,
+html[data-shell="rail"] #idle-hud,
+html[data-shell="rail"] .overlay { left: var(--shell-rail-w); }
+/* The project panel slides out of the rail's edge, not the window's. */
+html[data-shell="rail"] #workspace-sidebar-panel { left: var(--shell-rail-w); }
+/* Three sheets size themselves in vw, and vw does not know the overlay moved
+   over for the rail: at 600px the Task board ran 13px off the right edge. Take
+   the rail back out of the width they measure against. (Music, Plans, Brain
+   maps and the profiler size in % of the overlay and need nothing.) */
+html[data-shell="rail"] .overlay .sheet { width: min(620px, calc(92vw - var(--shell-rail-w))); }
+html[data-shell="rail"] .explorer-sheet { width: min(1460px, calc(97vw - var(--shell-rail-w))); }
+html[data-shell="rail"] .overlay .walkthrough-sheet { width: min(740px, calc(94vw - var(--shell-rail-w))); }
+
+/* One navigation: with the rail on, the older chromes that only navigated
+   step aside. Phase E deletes them; until then the flag brings them back. */
+html[data-shell="rail"] #tabs,
+html[data-shell="rail"] body > footer,
+html[data-shell="rail"] #workspace-sidebar-toggle,
+html[data-shell="rail"] #workspace-sidebar-panel .ws-nav,
+html[data-shell="rail"] #workspace-sidebar-panel .ws-quick,
+html[data-shell="rail"] #workspace-tools,
+html[data-shell="rail"] [data-sheet-links],
+html[data-shell="rail"] #idle-hud .cmd-dock { display: none; }
+
+/* The rail carries the brand; Command's heading keeps its words, not a second mark. */
+html[data-shell="rail"] #idle-hud .cmd-brand .monogram { display: none; }
+
+/* Zen fades the rail with the rest of the HUD. */
+body.command-zen #app-rail { opacity: 0; pointer-events: none; transition: opacity var(--dur-hud) var(--ease); }
+
+@media (prefers-reduced-motion: reduce) {
+  #app-rail { transition: none; }
+}
+@media print {
+  #app-rail { display: none; }
+  html[data-shell="rail"] body { padding-left: 0; }
+}
+
 /* Integrated music room. Shared theme tokens also colour Command and boards. */
 :root[data-studio-theme] .primary { background: linear-gradient(180deg, var(--gold-bright), var(--gold)); }
 :root[data-studio-theme] .primary { color: var(--ink); }
@@ -3932,6 +4078,21 @@ body.command-active .walkthrough-coach { right: 392px; }
 .music-effect-orbitTrails .music-effect-sample::before { content: ""; position: absolute; inset: 5px 0; border: 1px solid #81bbfa; border-radius: 50%; transform: rotate(-30deg); }
 .music-effect-orbitTrails .music-effect-sample::after { content: ""; position: absolute; top: 3px; right: 2px; width: 5px; height: 5px; border-radius: 50%; background: #b5d9ff; box-shadow: 0 0 7px #6aafff; }
 .music-effect-extraGlow .music-effect-sample::before { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: var(--gold-bright); box-shadow: 0 0 8px var(--gold), 0 0 15px var(--gold-dim); }
+.music-radio-state { margin: 0 0 16px; padding: 9px 12px; border: 1px solid var(--hairline); border-radius: 9px; background: var(--bg-deep); color: var(--muted); font: 12px/1.45 var(--font-ui); }
+.music-radio-state[data-phase="playing"] { color: var(--gold-bright); border-color: var(--hairline-strong); background: var(--tint-gold-1); }
+.music-radio-state[data-phase="connecting"], .music-radio-state[data-phase="buffering"] { color: var(--ivory); }
+.music-radio-state[data-phase="error"] { color: var(--bad); border-color: var(--bad); }
+.music-stations { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 9px; margin-bottom: 18px; }
+.music-station { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 9px; background: var(--bg-deep); cursor: pointer; text-align: left; }
+.music-station:hover { background: var(--tint-gold-1); border-color: var(--hairline-strong); }
+.music-station[aria-pressed="true"] { background: var(--tint-gold-2); border-color: var(--gold-dim); }
+.music-station-copy { display: flex; flex: 1; flex-direction: column; min-width: 0; gap: 3px; }
+.music-station-copy strong { color: var(--ivory); font: 600 12px/1.4 var(--font-ui); }
+.music-station-copy small { color: var(--muted); font: 11px/1.4 var(--font-ui); }
+.music-station[aria-pressed="true"] .music-station-copy strong { color: var(--gold-bright); }
+.music-station[data-state="playing"] .music-station-copy strong::after { content: " ♪"; color: var(--gold); }
+.music-radio-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 18px; }
+.music-radio-controls button { font-size: 12px; }
 .music-node-preview { position: relative; display: block; height: 41px; margin: 0 0 4px; color: var(--gold-bright); }
 .music-node-preview i { position: absolute; display: block; width: 10px; height: 10px; top: 16px; left: calc(50% - 5px); border: 1px solid currentColor; border-radius: 50%; background: var(--panel-solid); }
 .music-node-preview i:nth-child(2) { width: 7px; height: 7px; top: 6px; left: calc(50% - 30px); opacity: .6; }
@@ -4405,7 +4566,19 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   <symbol id="g-wrench" viewBox="0 0 24 24"><path stroke-width="2.25" d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
   <symbol id="g-plug" viewBox="0 0 16 16"><path d="M5 2.5v3.5M11 2.5v3.5"/><path d="M3.5 6h9v1.5a4.5 4.5 0 0 1-9 0z"/><path d="M8 12v2"/></symbol>
   <symbol id="g-spark" viewBox="0 0 16 16"><path d="M8 2.5 9.4 6.6 13.5 8l-4.1 1.4L8 13.5 6.6 9.4 2.5 8l4.1-1.4z"/></symbol>
+  <symbol id="g-home" viewBox="0 0 16 16"><path d="M2.5 7.4 8 2.8l5.5 4.6"/><path d="M4 6.3v7h3v-3.8h2v3.8h3v-7"/></symbol>
 </svg>
+<!-- The one navigation rail (docs/ux-audit.md, Phase 3). Every destination in
+     nav.js's registry, grouped Home / Work / Live / Models / Settings, built by
+     MefiNav.renderRail() so it cannot drift from the palette or the help sheet.
+     Hidden until html[data-shell="rail"] turns it on. The brand opens the
+     project panel that used to hide behind an invisible 6px strip. -->
+<nav id="app-rail" class="app-rail" aria-label="Studio" hidden>
+  <button id="app-rail-brand" class="app-rail-brand" type="button" title="Projects" aria-controls="workspace-sidebar-panel" aria-expanded="false"><span class="monogram small" aria-hidden="true">M+</span><span class="app-rail-text">Projects</span></button>
+  <div id="app-rail-sections" class="app-rail-sections"></div>
+  <div id="app-rail-foot" class="app-rail-foot" role="group" aria-label="Help and commands"></div>
+  <button id="app-rail-pin" class="app-rail-pin" type="button" aria-pressed="false" title="Keep the rail open"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-pin"/></svg><span class="app-rail-text">Keep open</span></button>
+</nav>
 <div id="workspace-sidebar" class="workspace studio-sidebar" data-open="false">
   <button id="workspace-sidebar-toggle" class="sidebar-edge" type="button" aria-label="Open studio menu" aria-controls="workspace-sidebar-panel" aria-expanded="false" title="Studio menu: projects, tools and settings"><span class="sidebar-grip" aria-hidden="true"><i></i><i></i><i></i></span></button>
   <aside id="workspace-sidebar-panel" class="ws-sidebar" aria-label="Projects and tools" aria-hidden="true" inert>
@@ -5076,13 +5249,15 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
          outside this region with a 168px cap of its own, which made the panel
          three separate wheels. -->
     <div id="idle-feed-scroll" class="feed-scroll" tabindex="0" role="region" aria-label="Current work and queue">
-    <section id="idle-feed-agent-section" class="feed-section feed-agents-section" aria-label="Agents">
-      <div class="feed-section-head"><h3>Agents <span id="idle-feed-agents-count" class="feed-agents-count" data-state="idle"></span></h3></div>
-      <ul id="idle-feed-agents" class="pin-list assistant-activity assistant-roster feed-agents" aria-label="Agent roster"></ul>
-    </section>
+    <!-- Current work leads: what is happening now must be on screen without a
+         scroll, however many agents the roster below it lists. -->
     <section class="feed-current" aria-label="Current work">
       <div class="feed-section-head"><h3>Current work</h3></div>
       <div id="idle-feed-now" class="feed-now" aria-live="polite"></div>
+    </section>
+    <section id="idle-feed-agent-section" class="feed-section feed-agents-section" aria-label="Agents">
+      <div class="feed-section-head"><h3>Agents <span id="idle-feed-agents-count" class="feed-agents-count" data-state="idle"></span></h3></div>
+      <ul id="idle-feed-agents" class="pin-list assistant-activity assistant-roster feed-agents" aria-label="Agent roster"></ul>
     </section>
     <div id="idle-feed-activity" class="feed-activity">
       <section id="idle-feed-attention" class="feed-attention" aria-label="Needs attention and retries" hidden></section>
@@ -10654,6 +10829,195 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     paintBadges(element);
   }
 
+  // ---- the one rail --------------------------------------------------------
+  // docs/ux-audit.md, Phase 3: one navigation surface for the whole app instead
+  // of a tabs row, a dock and a hover sidebar that each render the registry
+  // their own way. It is built from the same registry as the palette, the dock
+  // and the help sheet, so a destination added there turns up here with its
+  // glyph, key and badge. The rail keeps no list of its own beyond which
+  // section a destination belongs to — and even that follows menuGroup(), the
+  // grouping the "More tools" menus already taught people.
+  //
+  // It is the default. html[data-shell="rail"] (applyShell) is what turns it
+  // on, and "classic" — ?shell=classic, or the palette's switch, remembered —
+  // brings back the tabs row, the Command dock and the hover sidebar for anyone
+  // who needs them while the rail beds in.
+  const SHELL_KEY = "mefiStudio.shell";
+  const RAIL_PIN_KEY = "mefiStudio.railPinned";
+  const RAIL_SECTIONS = [
+    { id: "home", label: "Home", glyph: "g-home", target: "workspace" },
+    { id: "work", label: "Work", glyph: "g-tasks", target: "tasks" },
+    { id: "live", label: "Live", glyph: "g-orbit", target: "command" },
+    { id: "models", label: "Models", glyph: "g-booklet", target: "booklet" },
+    { id: "settings", label: "Settings", glyph: "g-sliders", target: "studio" },
+  ];
+
+  // Which rail section a destination lives in: Home is the workspace alone,
+  // the palette, shortcuts and walkthrough sit at the foot, and actions stay
+  // in the palette where they have always been.
+  function railSection(dest) {
+    if (!dest || dest.kind === "action" || dest.group === "command" || dest.group === "assistant") return null;
+    if (dest.id === "workspace") return "home";
+    if (dest.layer === "transient") return "foot";
+    const groups = { "Work": "work", "Monitor & inspect": "live", "Models": "models", "Settings & help": "settings" };
+    return groups[menuGroup(dest)] ?? "settings";
+  }
+
+  function renderRail() {
+    const sections = document.getElementById("app-rail-sections");
+    const foot = document.getElementById("app-rail-foot");
+    if (!sections || !foot) return;
+    sections.textContent = "";
+    foot.textContent = "";
+    const members = new Map(RAIL_SECTIONS.map((section) => [section.id, []]));
+    for (const dest of registry) {
+      const home = railSection(dest);
+      if (home === "foot") foot.append(navButton(dest, "app-rail-item app-rail-foot-item"));
+      else if (home) members.get(home)?.push(dest);
+    }
+    for (const section of RAIL_SECTIONS) {
+      const target = get(section.target);
+      if (!target) continue;
+      const group = document.createElement("div");
+      group.className = "app-rail-section";
+      group.dataset.section = section.id;
+      group.setAttribute("role", "group");
+      group.setAttribute("aria-label", section.label);
+      // The section button goes straight to its main destination, so even the
+      // collapsed rail is five working buttons rather than five labels.
+      const head = document.createElement("button");
+      head.type = "button";
+      head.className = "app-rail-head";
+      head.dataset.nav = target.id;
+      head.dataset.section = section.id;
+      head.title = target.key ? `${section.label} · ${target.label} (${target.key})` : `${section.label} · ${target.label}`;
+      head.append(glyphNode(section.glyph));
+      const label = document.createElement("span");
+      label.className = "app-rail-text";
+      label.textContent = section.label;
+      head.append(label);
+      for (const badge of badgeNodes(target)) head.append(badge);
+      group.append(head);
+      const items = members.get(section.id) ?? [];
+      // A section whose only member is its own head (Home) lists nothing twice.
+      if (!(items.length === 1 && items[0].id === target.id)) {
+        const children = document.createElement("div");
+        children.className = "app-rail-children";
+        for (const dest of items) children.append(navButton(dest, "app-rail-item"));
+        group.append(children);
+      }
+      sections.append(group);
+    }
+    paintBadges(document.getElementById("app-rail"));
+    paintRail();
+  }
+
+  // One aria-current in the rail: on the destination you are in, or on its
+  // section head when that section lists nothing beneath it.
+  function paintRail() {
+    const rail = document.getElementById("app-rail");
+    if (!rail || rail.hidden) return;
+    const id = current();
+    const section = railSection(get(id));
+    for (const group of rail.querySelectorAll(".app-rail-section")) group.classList.toggle("current", group.dataset.section === section);
+    let marked = false;
+    for (const button of rail.querySelectorAll(".app-rail-item[data-nav]")) {
+      if (button.dataset.nav === id && !marked) { button.setAttribute("aria-current", "page"); marked = true; }
+      else button.removeAttribute("aria-current");
+    }
+    for (const head of rail.querySelectorAll(".app-rail-head")) {
+      if (!marked && head.dataset.nav === id) { head.setAttribute("aria-current", "page"); marked = true; }
+      else head.removeAttribute("aria-current");
+    }
+  }
+
+  function shellOn() {
+    try {
+      const param = new URLSearchParams(location.search).get("shell");
+      if (param) return param !== "classic";
+      return localStorage.getItem(SHELL_KEY) !== "classic";
+    } catch {
+      return true;
+    }
+  }
+
+  function setRailPinned(pinned, { save = true } = {}) {
+    const root = document.documentElement;
+    if (pinned) root.dataset.railPinned = "";
+    else delete root.dataset.railPinned;
+    document.getElementById("app-rail-pin")?.setAttribute("aria-pressed", String(Boolean(pinned)));
+    if (save) {
+      try { localStorage.setItem(RAIL_PIN_KEY, pinned ? "1" : "0"); } catch { /* the pin is a convenience */ }
+    }
+    // Every layer is offset by the rail's width; a pinned rail is wider, so let
+    // anything that measures the window (Command's graph) measure again.
+    window.dispatchEvent(new Event("resize"));
+  }
+
+  function applyShell(on = shellOn()) {
+    const rail = document.getElementById("app-rail");
+    if (!rail) return false;
+    const root = document.documentElement;
+    if (on) root.dataset.shell = "rail";
+    else delete root.dataset.shell;
+    rail.hidden = !on;
+    let pinned = false;
+    try { pinned = localStorage.getItem(RAIL_PIN_KEY) === "1"; } catch { /* unpinned */ }
+    setRailPinned(on && pinned, { save: false });
+    if (on) renderRail();
+    window.dispatchEvent(new CustomEvent("mefi:shell", { detail: { rail: on } }));
+    return on;
+  }
+
+  function setShell(on) {
+    try { localStorage.setItem(SHELL_KEY, on ? "rail" : "classic"); } catch { /* this launch only */ }
+    return applyShell(Boolean(on));
+  }
+
+  function wireRail() {
+    const rail = document.getElementById("app-rail");
+    if (!rail || rail.dataset.wired) return;
+    rail.dataset.wired = "1";
+    const brand = document.getElementById("app-rail-brand");
+    // The project list used to open only from a transparent 6px strip; the
+    // brand is now its visible door.
+    brand?.addEventListener("click", () => {
+      const sidebar = window.MefiSidebar;
+      if (!sidebar) return;
+      if (sidebar.isOpen?.()) sidebar.close({ restoreFocus: true });
+      else sidebar.open({ focus: true });
+    });
+    document.getElementById("app-rail-pin")?.addEventListener("click", () => setRailPinned(!("railPinned" in document.documentElement.dataset)));
+    // Repaint when you come to look at it, and whenever the view underneath
+    // changes by a route that does not announce itself on mefi:nav.
+    rail.addEventListener("pointerenter", paintRail);
+    rail.addEventListener("focusin", paintRail);
+    const sidebar = document.getElementById("workspace-sidebar");
+    if (typeof MutationObserver === "function") {
+      new MutationObserver(() => {
+        paintRail();
+        brand?.setAttribute("aria-expanded", String(sidebar?.dataset.open === "true"));
+      }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+      if (sidebar) new MutationObserver(() => brand?.setAttribute("aria-expanded", String(sidebar.dataset.open === "true"))).observe(sidebar, { attributes: true, attributeFilter: ["data-open"] });
+    }
+  }
+
+  register({
+    id: "shellRail",
+    label: "Switch navigation: rail or classic",
+    short: "Navigation",
+    kind: "action",
+    layer: null,
+    group: "system",
+    key: null,
+    glyph: "g-pin",
+    badge: null,
+    desc: "Swap the navigation rail for the classic tabs row, Command dock and hover sidebar, or back",
+    searchTerms: ["shell", "sidebar", "navigation", "menu", "layout"],
+    showIn: showIn({ palette: true }),
+    run: () => setShell(document.documentElement.dataset.shell !== "rail"),
+  });
+
   function renderTools(target) {
     const element = target ?? document.getElementById("nav-tools");
     if (!element) return;
@@ -10956,6 +11320,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       if (button.dataset.nav === id) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     }
+    paintRail();
   }
 
   window.addEventListener("mefi:nav", paintCurrent);
@@ -11585,6 +11950,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   function init() {
     renderTools();
     renderDock();
+    applyShell();
+    wireRail();
     renderSheetLinks();
     paintCurrent();
     renderFooter();
@@ -11672,6 +12039,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     renderDock,
     renderTools,
     renderWorkspaceTools,
+    renderRail,
+    paintRail,
+    railSection,
+    applyShell,
+    setShell,
+    setRailPinned,
     paintCurrent,
     current,
     renderSheetLinks,
@@ -15684,9 +16057,13 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     useReactiveInput();
   }
 
+  // Radio runs on Studio's own decks, so it reaches the analyser the same way a
+  // local file does; Spotify stays external. A tuned station has no queue, and
+  // the src test below is the real "something is loaded" check either way.
   function localMusicElement() {
     const player = window.MefiMusic?.status?.();
-    if (player?.source !== "local" || !(player.queueLength > 0)) return null;
+    if (player?.source !== "local" && player?.source !== "radio") return null;
+    if (player.source === "local" && !(player.queueLength > 0)) return null;
     const element = window.MefiMusic?.getAudioElement?.();
     return element && (element.getAttribute?.("src") || element.src || element.currentSrc) ? element : null;
   }
@@ -16091,7 +16468,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const title = String(player.title || "Music player");
     return {
       music: player,
-      label: player.source === "spotify" ? "Spotify · open player" : player.playing ? `Playing · ${title}` : player.queueLength ? `Music · ${title}` : "Music · add tracks",
+      label: player.source === "spotify" ? "Spotify · open player" : player.playing ? `Playing · ${title}` : player.source === "radio" ? `Radio · ${title}` : player.queueLength ? `Music · ${title}` : "Music · add tracks",
       state: player.playing ? "active" : "music",
     };
   }
@@ -18470,6 +18847,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const chat = visibleBox(el.chatLog);
     if (header) top = Math.max(top, header.bottom + 20);
     if (dock) bottom = Math.min(bottom, dock.top - 24);
+    // The app's navigation rail floats over the canvas's left edge, the way the
+    // work rail floats over its right; fit the graph beside it, not under it.
+    const appRail = visibleBox(el.appRail);
+    if (appRail) left = Math.max(left, appRail.right + 28);
     // The merged rail owns the right gutter; when it is collapsed its short
     // header still blocks the top strip.
     if (rail) {
@@ -18486,7 +18867,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // At compact widths CSS can put the feed above the map. Only reserve a
     // side panel if it leaves enough room for an actual interactive graph.
     if (right - left < 220) {
-      left = 24;
+      left = appRail ? appRail.right + 12 : 24;
       right = el.width - 24;
       if (feed && feed.height < el.height * 0.48) top = Math.max(top, feed.bottom + 20);
     }
@@ -22721,6 +23102,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     push(el.feed);
     push(el.chatLog);
     push(el.legend);
+    push(el.appRail);
     push(el.empty);
     push(el.pop);
     state.hudRects = rects;
@@ -24969,6 +25351,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     el.chatLogNewWork = document.getElementById("cmd-chat-new-work");
     el.chatLogNewWorkState = document.getElementById("cmd-chat-new-work-state");
     el.rail = document.getElementById("cmd-rail");
+    el.appRail = document.getElementById("app-rail");
     el.railBody = document.getElementById("cmd-rail-body");
     el.nodePanel = document.getElementById("cmd-node");
     el.railTabNode = document.getElementById("cmd-rail-tab-node");
@@ -33506,8 +33889,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   init();
 })();
 
-// Studio's own local-file player. Streaming stays inside Spotify's official
-// embed; its cross-origin playback state is deliberately not guessed.
+// Studio's own local-file player and its ad-free radio decks. Streaming stays
+// inside Spotify's official embed; its cross-origin playback state is
+// deliberately not guessed.
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.music.v1";
@@ -33542,6 +33926,43 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     percussion: { title: "Drum accents", detail: "Add sharper ripples on drum hits.", enabled: false },
     background: { title: "Background glow", detail: "Let the space behind the tree pulse.", enabled: false },
   };
+  // Listener-funded and Creative Commons stations that carry no advertising at
+  // all, so there is never a break to skip, mute or talk over. Every mirror here
+  // was reached directly and answers with CORS open, which is what lets the
+  // analyser read the stream and the node tree react to it.
+  const STATIONS = [
+    { id: "groovesalad", name: "Groove Salad", detail: "Chilled ambient beats", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/groovesalad-128-mp3", "https://ice2.somafm.com/groovesalad-128-mp3", "https://ice4.somafm.com/groovesalad-128-mp3"] },
+    { id: "dronezone", name: "Drone Zone", detail: "Atmospheric textures", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/dronezone-128-mp3", "https://ice2.somafm.com/dronezone-128-mp3", "https://ice4.somafm.com/dronezone-128-mp3"] },
+    { id: "deepspaceone", name: "Deep Space One", detail: "Deep ambient and experimental", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/deepspaceone-128-mp3", "https://ice2.somafm.com/deepspaceone-128-mp3", "https://ice4.somafm.com/deepspaceone-128-mp3"] },
+    { id: "spacestation", name: "Space Station", detail: "Spaced-out electronica", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/spacestation-128-mp3", "https://ice2.somafm.com/spacestation-128-mp3", "https://ice4.somafm.com/spacestation-128-mp3"] },
+    { id: "lush", name: "Lush", detail: "Vocal electronica", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/lush-128-mp3", "https://ice2.somafm.com/lush-128-mp3", "https://ice4.somafm.com/lush-128-mp3"] },
+    { id: "fluid", name: "Fluid", detail: "Instrumental hip hop and future soul", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/fluid-128-mp3", "https://ice2.somafm.com/fluid-128-mp3", "https://ice4.somafm.com/fluid-128-mp3"] },
+    { id: "defcon", name: "DEF CON Radio", detail: "Music for hacking", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/defcon-128-mp3", "https://ice2.somafm.com/defcon-128-mp3", "https://ice4.somafm.com/defcon-128-mp3"] },
+    { id: "bootliquor", name: "Boot Liquor", detail: "Americana roots", origin: "SomaFM",
+      mirrors: ["https://ice1.somafm.com/bootliquor-128-mp3", "https://ice2.somafm.com/bootliquor-128-mp3", "https://ice4.somafm.com/bootliquor-128-mp3"] },
+    { id: "rp-main", name: "Radio Paradise", detail: "Eclectic hand-picked rock", origin: "Radio Paradise",
+      mirrors: ["https://stream.radioparadise.com/mp3-128", "https://stream.radioparadise.com/aac-128", "https://stream.radioparadise.com/mp3-192"] },
+    { id: "rp-mellow", name: "RP Mellow Mix", detail: "Quieter, slower company", origin: "Radio Paradise",
+      mirrors: ["https://stream.radioparadise.com/mellow-128"] },
+    { id: "rp-rock", name: "RP Rock Mix", detail: "Guitars to the front", origin: "Radio Paradise",
+      mirrors: ["https://stream.radioparadise.com/rock-128"] },
+    { id: "rp-global", name: "RP Global Mix", detail: "World and crossover", origin: "Radio Paradise",
+      mirrors: ["https://stream.radioparadise.com/global-128"] },
+  ];
+  const STATION_IDS = new Set(STATIONS.map((station) => station.id));
+  const station = (id) => STATIONS.find((item) => item.id === id) || null;
+  // A crossfade long enough to hide a rebuffer, short enough to feel deliberate.
+  const FADE_MS = 1200;
+  const FADE_STEP_MS = 40;
+  // A live stream that has gone quiet this long is not coming back on its own.
+  const STALL_MS = 7000;
   const CUSTOM_DEFAULTS = Object.freeze({ accent: "#C9A86A", background: "#050507", surface: "#0D0E12", text: "#ECE5D8" });
   const hexColor = (value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value.trim()) ? value.trim().toUpperCase() : null;
   const safeCustomColors = (value) => Object.fromEntries(Object.entries(CUSTOM_DEFAULTS).map(([key, fallback]) => [key, hexColor(value?.[key]) || fallback]));
@@ -33592,6 +34013,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return { theme: raw.theme === "custom" || Object.hasOwn(THEMES, raw.theme) ? raw.theme : DEFAULT_THEME, customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, spotify,
       nodeStyle: Object.hasOwn(NODE_STYLES, raw.nodeStyle) ? raw.nodeStyle : "orbs",
       nodeLayout: Object.hasOwn(NODE_LAYOUTS, raw.nodeLayout) ? raw.nodeLayout : "constellation",
+      station: STATION_IDS.has(raw.station) ? raw.station : null,
       orbitTrails: raw.orbitTrails === true, extraGlow: raw.extraGlow === true };
   }
   function audioFile(file) { return Boolean(file && (String(file.type || "").startsWith("audio/") || /\.(mp3|m4a|aac|flac|wav|ogg|opus|webm)$/i.test(file.name || ""))); }
@@ -33608,7 +34030,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   let stored;
   try { stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch {}
   const prefs = safePreferences(stored);
-  const state = { source: "local", tracks: [], selected: -1, spotify: null, opened: false, sending: false, notice: "", error: false };
+  const state = { source: "local", tracks: [], selected: -1, spotify: null, opened: false, sending: false, notice: "", error: false,
+    station: null, mirror: 0, deck: "a", radioPhase: "idle", radioNote: "" };
   const els = {};
   let audio = null;
   let initialized = false;
@@ -33616,13 +34039,27 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   let priorFocus = null;
   let previewFrame = 0;
   let restoreWorkspace = false;
+  let deckB = null;
+  let pendingDeck = null;
+  let fadeOut = null;
+  let fadeTimer = 0;
+  let stallTimer = 0;
+  let tuneGeneration = 0;
 
   const persist = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(safePreferences(prefs))); } catch {} };
   const event = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
   function status() {
     const track = state.tracks[state.selected];
-    const title = state.source === "spotify" ? state.spotify ? `Spotify ${state.spotify.type}` : "Choose Spotify music" : track?.title || "Choose your music";
-    return { source: state.source, playing: state.source === "local" && Boolean(audio?.src) && !audio.paused && !audio.ended, title, track: title, theme: prefs.theme, ...graphPreferences(), queueLength: state.tracks.length, externalPlayback: state.source === "spotify", supported: true };
+    const tuned = station(state.station);
+    const title = state.source === "spotify" ? state.spotify ? `Spotify ${state.spotify.type}` : "Choose Spotify music"
+      : state.source === "radio" ? tuned ? tuned.name : "Choose a station"
+      : track?.title || "Choose your music";
+    const deck = activeDeck();
+    const playing = state.source === "radio" ? (state.radioPhase === "playing" || state.radioPhase === "buffering") && Boolean(deck?.src) && !deck.paused
+      : state.source === "local" && Boolean(audio?.src) && !audio.paused && !audio.ended;
+    return { source: state.source, playing, title, track: title, theme: prefs.theme, ...graphPreferences(),
+      queueLength: state.tracks.length, externalPlayback: state.source === "spotify", supported: true,
+      station: state.station, stationName: tuned?.name || null, radioPhase: state.source === "radio" ? state.radioPhase : "idle" };
   }
   const announce = () => event("mefi-music-change", status());
   function note(text, error = false) {
@@ -33717,11 +34154,194 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
     return group;
   }
+  // Deck A is the element local files always use and the one the analyser
+  // binds to first. Deck B exists only once a station has to cross over a
+  // station that is already playing, so an untouched radio tab still runs on a
+  // single element.
+  function activeDeck() { return state.deck === "b" ? deckB : audio; }
+  function idleDeck() { return state.deck === "b" ? audio : ensureDeckB(); }
+  function ensureDeckB() {
+    if (deckB) return deckB;
+    deckB = document.createElement("audio");
+    deckB.preload = "none";
+    // Both station hosts answer with Access-Control-Allow-Origin, so an opted-in
+    // CORS fetch keeps the analyser readable. Without it a captured element is
+    // tainted, and the Web Audio graph would play it back as silence.
+    deckB.crossOrigin = "anonymous";
+    deckB.volume = 0;
+    bindDeck(deckB);
+    return deckB;
+  }
+  // Only the deck carrying the current station speaks for the stream. While a
+  // new station connects on the other deck the old one's troubles are moot,
+  // and a stopped deck's late events must not restart anything.
+  function radioLive(deck) {
+    return state.source === "radio" && state.radioPhase !== "idle" && deck === activeDeck() && (!pendingDeck || pendingDeck === deck);
+  }
+  function bindDeck(deck) {
+    deck.addEventListener("playing", () => { if (radioLive(deck)) { clearStall(); state.radioPhase = "playing"; renderRadio(); announce(); } });
+    deck.addEventListener("waiting", () => { if (radioLive(deck)) armStall(); });
+    deck.addEventListener("stalled", () => { if (radioLive(deck)) armStall(); });
+    deck.addEventListener("ended", () => { if (radioLive(deck)) nextMirror("The stream ended"); });
+    deck.addEventListener("error", () => { if (radioLive(deck)) nextMirror("The stream dropped"); });
+  }
+  function clearStall() { if (stallTimer) { window.clearTimeout(stallTimer); stallTimer = 0; } }
+  function armStall() {
+    if (stallTimer || state.source !== "radio") return;
+    // A first connection keeps saying so; only an established stream buffers.
+    if (state.radioPhase !== "connecting") { state.radioPhase = "buffering"; renderRadio(); }
+    stallTimer = window.setTimeout(() => {
+      stallTimer = 0;
+      if (state.source !== "radio" || state.radioPhase === "idle") return;
+      nextMirror(state.radioPhase === "connecting" ? `${station(state.station)?.name || "The station"} did not answer` : "The stream stopped sending");
+    }, STALL_MS);
+  }
+  // The swap the watchdog asks for: bring the next mirror up on the idle deck
+  // and cross to it, so a dropped connection costs a fade and not the music.
+  function nextMirror(reason) {
+    const tuned = station(state.station);
+    if (!tuned) return;
+    const next = state.mirror + 1;
+    if (next >= tuned.mirrors.length) {
+      clearStall();
+      pendingDeck = null;
+      state.radioPhase = "error";
+      state.radioNote = `${reason}. Every mirror for ${tuned.name} was tried; choose it again to retry.`;
+      renderRadio(); announce();
+      return;
+    }
+    state.radioNote = `${reason}. Moving to mirror ${next + 1}.`;
+    tune(state.station, next, true);
+  }
+  // Snap a running crossfade to its end, so a new choice starts from one
+  // settled deck instead of racing a fade that is still releasing the other.
+  function finishFade() {
+    if (!fadeTimer) return;
+    window.clearInterval(fadeTimer); fadeTimer = 0;
+    activeDeck().volume = prefs.volume;
+    if (fadeOut && fadeOut !== activeDeck()) stopDeck(fadeOut);
+    fadeOut = null;
+  }
+  function fadeTo(incoming, outgoing) {
+    finishFade();
+    if (!outgoing || outgoing === incoming || !outgoing.src || outgoing.paused) {
+      incoming.volume = prefs.volume;
+      if (outgoing && outgoing !== incoming) stopDeck(outgoing);
+      return;
+    }
+    fadeOut = outgoing;
+    // Progress is read from the clock, not counted in ticks, so a hidden
+    // window's throttled timer lands the fade late instead of stretching it.
+    const started = window.performance.now();
+    fadeTimer = window.setInterval(() => {
+      const ratio = Math.min(1, (window.performance.now() - started) / FADE_MS);
+      // The master is read every step, so moving the volume mid-fade sticks.
+      incoming.volume = prefs.volume * ratio;
+      outgoing.volume = prefs.volume * (1 - ratio);
+      if (ratio < 1) return;
+      window.clearInterval(fadeTimer); fadeTimer = 0; fadeOut = null;
+      stopDeck(outgoing);
+    }, FADE_STEP_MS);
+  }
+  function stopDeck(deck) {
+    if (!deck) return;
+    deck.pause();
+    deck.removeAttribute("src");
+    try { deck.load(); } catch {}
+    deck.volume = 0;
+  }
+  function tune(id, mirrorIndex = 0, viaFailover = false) {
+    init();
+    const tuned = station(id);
+    if (!tuned) { note("That station is not on the list.", true); return false; }
+    const url = tuned.mirrors[mirrorIndex];
+    if (!url) return false;
+    // Choosing the station that is already sounding is not a reason to reconnect.
+    if (!viaFailover && state.source === "radio" && state.station === id && state.radioPhase === "playing" && !activeDeck().paused) return true;
+    // Every tune supersedes the last: a slow answer that arrives after a newer
+    // choice, or after Stop, must not take the speakers back.
+    const generation = ++tuneGeneration;
+    clearStall();
+    finishFade();
+    const wasRadio = state.source === "radio";
+    const current = activeDeck();
+    // Only a deck that is sounding needs the other one. A connection still in
+    // flight on this deck is redirected rather than doubled up, and a failed
+    // load leaves the element unpaused with an error, so neither is sounding.
+    const live = wasRadio && pendingDeck !== current && Boolean(current.src) && !current.paused && !current.error;
+    const target = live ? idleDeck() : current;
+    const outgoing = live ? current : null;
+    if (!wasRadio) audio?.pause();
+    state.source = "radio";
+    state.station = id;
+    state.mirror = mirrorIndex;
+    state.radioPhase = "connecting";
+    pendingDeck = target;
+    if (!viaFailover) state.radioNote = "";
+    prefs.station = id; persist();
+    if (els.embed) { els.embed.remove(); els.embed = null; }
+    target.crossOrigin = "anonymous";
+    target.volume = live ? 0 : prefs.volume;
+    target.src = url;
+    try { target.load(); } catch {}
+    const settle = () => {
+      if (generation !== tuneGeneration) return;
+      clearStall();
+      pendingDeck = null;
+      state.deck = target === deckB ? "b" : "a";
+      state.radioPhase = "playing";
+      fadeTo(target, outgoing); renderRadio(); announce();
+    };
+    const refused = (error) => {
+      if (generation !== tuneGeneration) return;
+      nextMirror(`${tuned.name} refused the connection (${error?.message || "unavailable"})`);
+    };
+    // A connection that never answers gets the same watchdog as a stall.
+    armStall();
+    render(); announce();
+    let started;
+    try { started = target.play(); } catch (error) { refused(error); return true; }
+    if (started && typeof started.then === "function") started.then(settle, refused);
+    else settle();
+    return true;
+  }
+  function stopRadio() {
+    tuneGeneration += 1;
+    clearStall();
+    if (fadeTimer) { window.clearInterval(fadeTimer); fadeTimer = 0; }
+    fadeOut = null;
+    pendingDeck = null;
+    stopDeck(deckB);
+    if (state.source === "radio") stopDeck(audio);
+    // Local blob URLs never needed CORS; deck A goes back to plain playback.
+    audio.crossOrigin = null;
+    state.deck = "a";
+    state.radioPhase = "idle";
+    audio.volume = prefs.volume;
+  }
+  function setVolume(value) {
+    const level = Number(value);
+    if (Number.isFinite(level)) prefs.volume = Math.max(0, Math.min(1, level));
+    // A running fade picks the new master up on its next step.
+    if (!fadeTimer) activeDeck().volume = prefs.volume;
+    if (state.source !== "radio") audio.volume = prefs.volume;
+    persist();
+    if (els.volume) els.volume.value = String(prefs.volume);
+    if (els.radioVolume) els.radioVolume.value = String(prefs.volume);
+  }
   function setSource(source) {
-    const next = source === "spotify" ? "spotify" : "local";
-    if (next !== state.source) audio?.pause();
+    const next = source === "spotify" ? "spotify" : source === "radio" ? "radio" : "local";
+    const previous = state.source;
+    if (next !== previous) {
+      if (previous === "radio") stopRadio();
+      audio?.pause();
+    }
     state.source = next;
-    if (next === "local" && els.embed) { els.embed.remove(); els.embed = null; }
+    // Radio borrows deck A, so coming back hands the selected track back to
+    // it: loaded, not playing.
+    const track = state.tracks[state.selected];
+    if (next === "local" && previous !== "local" && track && audio.src !== track.url) { audio.src = track.url; audio.load(); }
+    if (next !== "spotify" && els.embed) { els.embed.remove(); els.embed = null; }
     if (next === "spotify" && state.spotify) mountSpotify();
     render(); announce();
   }
@@ -33839,10 +34459,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   function render() {
     if (!initialized) return;
     const local = state.source === "local";
-    els.local.hidden = !local; els.spotify.hidden = local;
+    const radio = state.source === "radio";
+    els.local.hidden = !local; els.radio.hidden = !radio; els.spotify.hidden = !(state.source === "spotify");
     els.localTab.setAttribute("aria-selected", String(local));
-    els.spotifyTab.setAttribute("aria-selected", String(!local));
-    renderTransport(); renderQueue(); renderAudioLink();
+    els.radioTab.setAttribute("aria-selected", String(radio));
+    els.spotifyTab.setAttribute("aria-selected", String(state.source === "spotify"));
+    renderTransport(); renderQueue(); renderRadio(); renderAudioLink();
     els.recent.textContent = "";
     for (const url of prefs.spotify) {
       const item = spotifyLink(url);
@@ -33852,6 +34474,26 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     els.recommend.disabled = state.sending || !(recommender || window.mefiStudio?.musicRecommend);
     els.recommend.textContent = state.sending ? "Finding a direction…" : "Ask for recommendations";
     els.aiHint.textContent = recommender || window.mefiStudio?.musicRecommend ? "Uses Studio’s configured assistant. Recommendations appear here." : "Music recommendations need Studio’s assistant connection.";
+  }
+  function renderRadio() {
+    if (!els.radioState) return;
+    const tuned = station(state.station);
+    const phase = state.source === "radio" ? state.radioPhase : "idle";
+    const label = !tuned ? "No station tuned"
+      : phase === "connecting" ? `Connecting to ${tuned.name}…`
+      : phase === "buffering" ? `${tuned.name} paused for buffer — holding the sound`
+      : phase === "playing" ? `${tuned.name}${tuned.origin === tuned.name ? "" : ` · ${tuned.origin}`} · mirror ${state.mirror + 1} of ${tuned.mirrors.length}`
+      : phase === "error" ? `${tuned.name} could not be reached`
+      : `${tuned.name} ready`;
+    els.radioState.textContent = state.radioNote ? `${label} — ${state.radioNote}` : label;
+    els.radioState.dataset.phase = phase;
+    if (els.radioStop) els.radioStop.disabled = !(state.source === "radio" && phase !== "idle");
+    if (els.radioVolume && document.activeElement !== els.radioVolume) els.radioVolume.value = String(prefs.volume);
+    for (const [id, node] of Object.entries(els.stationButtons || {})) {
+      const current = state.source === "radio" && id === state.station;
+      node.setAttribute("aria-pressed", String(current));
+      node.dataset.state = current ? phase : "off";
+    }
   }
   function renderAudioLink(status = window.MefiIdle?.audioStatus?.()) {
     if (!els.audioToggle) return;
@@ -33964,13 +34606,18 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const main = element("main", "music-main", null, body);
     const tabs = element("div", "music-tabs", null, main); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Music source");
     els.localTab = button("Local music", "music-tab", tabs, () => setSource("local"), "music-local-tab");
+    els.radioTab = button("Ad-free radio", "music-tab", tabs, () => setSource("radio"), "music-radio-tab");
     els.spotifyTab = button("Spotify", "music-tab", tabs, () => setSource("spotify"), "music-spotify-tab");
-    for (const [tab, panelId] of [[els.localTab, "music-local-panel"], [els.spotifyTab, "music-spotify-panel"]]) { tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", panelId); }
+    const tabFor = (source) => source === "local" ? els.localTab : source === "radio" ? els.radioTab : els.spotifyTab;
+    for (const [tab, panelId] of [[els.localTab, "music-local-panel"], [els.radioTab, "music-radio-panel"], [els.spotifyTab, "music-spotify-panel"]]) { tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", panelId); }
     tabs.addEventListener("keydown", (event) => {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
       event.preventDefault();
-      const source = event.key === "Home" ? "local" : event.key === "End" ? "spotify" : state.source === "local" ? "spotify" : "local";
-      setSource(source); (source === "local" ? els.localTab : els.spotifyTab).focus();
+      const order = ["local", "radio", "spotify"];
+      const index = Math.max(0, order.indexOf(state.source));
+      const source = event.key === "Home" ? order[0] : event.key === "End" ? order[order.length - 1]
+        : order[(index + (event.key === "ArrowRight" ? 1 : -1) + order.length) % order.length];
+      setSource(source); tabFor(source).focus();
     });
     els.local = element("section", "music-local", null, main); els.local.id = "music-local-panel"; els.local.setAttribute("role", "tabpanel"); els.local.setAttribute("aria-labelledby", "music-local-tab");
     const player = element("div", "music-player", null, els.local);
@@ -33994,7 +34641,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     els.files.addEventListener("change", () => { addFiles(els.files.files); els.files.value = ""; });
     const volumeLabel = element("label", "music-volume", "Volume", utilities);
     els.volume = element("input", null, null, volumeLabel); els.volume.type = "range"; els.volume.min = "0"; els.volume.max = "1"; els.volume.step = ".01"; els.volume.setAttribute("aria-label", "Music volume");
-    els.volume.addEventListener("input", () => { audio.volume = Number(els.volume.value); prefs.volume = audio.volume; persist(); });
+    els.volume.addEventListener("input", () => setVolume(els.volume.value));
     const queueHead = element("div", "music-queue-heading", null, els.local);
     element("h3", null, "Your queue", queueHead); els.queueCount = element("span", "music-count", "0", queueHead);
     els.queue = element("ol", "music-queue", null, els.local); els.queue.id = "music-queue";
@@ -34002,6 +34649,31 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     els.local.addEventListener("dragover", (event) => { event.preventDefault(); els.local.classList.add("drag-over"); });
     els.local.addEventListener("dragleave", () => els.local.classList.remove("drag-over"));
     els.local.addEventListener("drop", (event) => { event.preventDefault(); els.local.classList.remove("drag-over"); addFiles(event.dataTransfer?.files); });
+    els.radio = element("section", "music-radio", null, main); els.radio.id = "music-radio-panel"; els.radio.setAttribute("role", "tabpanel"); els.radio.setAttribute("aria-labelledby", "music-radio-tab");
+    element("h3", null, "Ad-free radio", els.radio);
+    element("p", "music-subtitle", "Listener-funded stations that carry no advertising, so there is nothing to skip. These play through Studio’s own player, which means the node tree reacts to them.", els.radio);
+    els.radioState = element("p", "music-radio-state", "No station tuned", els.radio);
+    els.radioState.id = "music-radio-state"; els.radioState.setAttribute("role", "status");
+    const stationList = element("div", "music-stations", null, els.radio);
+    stationList.setAttribute("role", "group"); stationList.setAttribute("aria-label", "Stations");
+    els.stationButtons = {};
+    for (const item of STATIONS) {
+      const card = button("", "music-station", stationList, () => tune(item.id), `music-station-${item.id}`);
+      const copy = element("span", "music-station-copy", null, card);
+      element("strong", null, item.name, copy);
+      element("small", null, `${item.detail} · ${item.origin}`, copy);
+      card.setAttribute("aria-pressed", "false");
+      card.title = `${item.name} — ${item.mirrors.length} mirror${item.mirrors.length === 1 ? "" : "s"}`;
+      els.stationButtons[item.id] = card;
+    }
+    const radioControls = element("div", "music-radio-controls", null, els.radio);
+    els.radioStop = button("Stop radio", "ghost", radioControls, () => { stopRadio(); render(); announce(); }, "music-radio-stop");
+    els.radioStop.disabled = true;
+    const radioVolumeLabel = element("label", "music-volume", "Volume", radioControls);
+    els.radioVolume = element("input", null, null, radioVolumeLabel); els.radioVolume.id = "music-radio-volume"; els.radioVolume.type = "range"; els.radioVolume.min = "0"; els.radioVolume.max = "1"; els.radioVolume.step = ".01"; els.radioVolume.setAttribute("aria-label", "Radio volume");
+    els.radioVolume.value = String(prefs.volume);
+    els.radioVolume.addEventListener("input", () => setVolume(els.radioVolume.value));
+    element("p", "music-fineprint", "Each station lists several mirrors. If one stops sending, Studio brings the next one up on a second deck and crosses over, so the music keeps playing through the handover.", els.radio);
     els.spotify = element("section", "music-spotify", null, main); els.spotify.id = "music-spotify-panel"; els.spotify.setAttribute("role", "tabpanel"); els.spotify.setAttribute("aria-labelledby", "music-spotify-tab");
     element("h3", null, "Bring a Spotify playlist", els.spotify);
     element("p", "music-subtitle", "Paste a playlist, album or song link. Spotify’s controls stay right here.", els.spotify);
@@ -34125,9 +34797,17 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     audio = document.createElement("audio"); audio.preload = "metadata"; audio.volume = prefs.volume;
     audio.addEventListener("play", () => { renderTransport(); announce(); });
     audio.addEventListener("pause", () => { renderTransport(); announce(); });
-    audio.addEventListener("ended", () => move(1, false));
+    audio.addEventListener("ended", () => { if (state.source === "local") move(1, false); });
     audio.addEventListener("timeupdate", renderTransport); audio.addEventListener("loadedmetadata", renderTransport); audio.addEventListener("durationchange", renderTransport);
-    audio.addEventListener("error", () => { if (audio.src) note("This audio file could not be played. Try another format.", true); renderTransport(); announce(); });
+    audio.addEventListener("error", () => {
+      // A dead stream is a mirror problem, not a file-format problem; the
+      // deck's radio listener already handed it to the mirror watchdog.
+      if (state.source === "radio") return;
+      if (audio.src) note("This audio file could not be played. Try another format.", true);
+      renderTransport(); announce();
+    });
+    bindDeck(audio);
+    state.station = prefs.station;
     build(); applyTheme(prefs.theme, false); syncTreePreferences(false); render();
     window.addEventListener("resize", schedulePreview);
     window.addEventListener("mefi-tree-view", (event) => syncTreeView(event.detail?.view));
@@ -34160,7 +34840,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     window.MefiNav?.release?.("music");
     if (!window.MefiNav?.release) priorFocus?.focus?.();
   }
-  window.MefiMusic = { init, open, close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return audio; }, setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, loadSpotify, setSource, applyTheme, applyCustomColors,
+  window.MefiMusic = { init, open, close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
+    stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })), setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, loadSpotify, setSource, applyTheme, applyCustomColors,
     customColors: () => ({ ...prefs.customColors }), themePalette: () => ({ theme: prefs.theme, ...resolvePalette(prefs.theme, prefs.customColors) }) };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
@@ -34965,7 +35646,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     {
       title: "Welcome to Mefi's Studio", short: "Your workspace", glyph: "g-explorer",
       copy: "Turn an idea into a checked result: talk it through, create a task or plan, follow the work, then review what changed. This guide shows you where to do each step, and can walk the menus with you.",
-      points: ["Start with Projects in the sidebar. Use + to add an existing folder, then select it. Check the project name above the conversation before adding work.", "Choose how builds start below. Auto build is on by default. Turn it off for Verify first: inspect each task, then approve the ones you want built.", "Each project keeps its own tasks, plans, conversation and results. Your project files stay in their folder; Studio keeps its history separately."],
+      points: ["Start with Projects: the M+ at the top of the left rail. Use + to add an existing folder, then select it. Check the project name above the conversation before adding work.", "Choose how builds start below. Auto build is on by default. Turn it off for Verify first: inspect each task, then approve the ones you want built.", "Each project keeps its own tasks, plans, conversation and results. Your project files stay in their folder; Studio keeps its history separately."],
       action: "Walk me to my projects", route: "project",
       station: "I opened the project menu with you and highlighted +. Add an existing folder, then select it. I tick this off the moment you are in a project.",
       note: "This opens the workspace and the project menu with you. It does not change your selected project. With a setup saved, selecting a folder here starts its map.",
@@ -35011,7 +35692,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       points: ["Open Review in Your work to read the result, evidence and next actions. Inspect the project changes and run any remaining acceptance checks.", "If work needs attention, read its reason first. Correct the connection, brief or prerequisite, then use its retry control when you are ready.", "Keep failed work available for diagnosis. Task history can recover an earlier brief; it does not roll back your project files."],
       action: "Walk me to Review", route: "review",
       station: "This is Review in Your work. Open a finished task to read the result and evidence, then run any remaining acceptance checks. Tasks that need attention keep their reason and retry controls here.",
-      note: "You can reopen this guide from Start here in the sidebar, Settings or Shortcuts. Completing the guide does not mark any task done.",
+      note: "You can reopen this guide from Start here at the foot of the left rail, or from Settings or Shortcuts. Completing the guide does not mark any task done.",
       target: "#workspace-review", done: "Review found",
     },
   ];

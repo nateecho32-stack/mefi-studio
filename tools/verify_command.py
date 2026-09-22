@@ -45,19 +45,21 @@ VERIFY_METHOD = r'''
         centerId:center?.id,centerTag:center?.tagName, nodes:window.MefiIdle.debugNodes(),graph:window.MefiIdle.status(),
         header:rect('.cmd-top'),feed:rect('#idle-feed'),chat:rect('#cmd-chat'),selected:rect('#idle-info'),
         dock:rect('#cmd-dock'),search:rect('.cmd-search'),composer:rect('.cmd-composer'),tools:rect('.cmd-tools'),music:rect('#idle-music-toggle'),canvas:rect('#idle-layer'),
+        // Where you navigate from: the rail on the rail shell, the dock on the classic one.
+        nav:document.documentElement.dataset.shell==='rail'?rect('#app-rail'):rect('#cmd-dock'),
         follow:rect('#idle-follow-status'),legend:rect('#cmd-legend'),ambience:rect('#idle-ambience-pop')};
     `);
     report.layouts ||= {};
     report.layouts[name] = layout;
     if (!strict || config.baseline) return layout;
     assert(layout.scroll <= layout.width + 2, `${name}: no horizontal page overflow`);
-    for (const key of ['header','feed','dock','search','composer','tools']) {
+    for (const key of ['header','feed','nav','search','composer','tools']) {
       const box = layout[key];
       assert(box && box.width > 10 && box.height > 10, `${name}: ${key} remains visible`);
       assert(box.x >= -2 && box.right <= layout.width + 2 && box.y >= -2 && box.bottom <= layout.height + 2, `${name}: ${key} fits viewport`);
     }
     const overlap = (a,b) => a && b && Math.min(a.right,b.right) - Math.max(a.x,b.x) > 2 && Math.min(a.bottom,b.bottom) - Math.max(a.y,b.y) > 2;
-    for (const [a,b] of [['search','composer'],['search','tools'],['composer','tools'],['header','feed'],['feed','dock'],['chat','dock'],['feed','chat']]) {
+    for (const [a,b] of [['search','composer'],['search','tools'],['composer','tools'],['header','feed'],['feed','nav'],['chat','nav'],['header','nav'],['feed','chat']]) {
       assert(!overlap(layout[a],layout[b]), `${name}: ${a} and ${b} do not overlap`);
     }
     assert(layout.viewport.w >= 200 && layout.viewport.h >= 180, `${name}: graph has usable clear area`);
@@ -107,7 +109,7 @@ VERIFY_METHOD = r'''
         assert(visible.length<=budget,`${name}: ${visible.length} drawn labels/cards respect the ${budget}-item Auto budget`);
         assert(visible.some(node=>activeTaskIds.has(node.id)),`${name}: Auto names actual running work`);
         const painted=visible.flatMap(node=>['labelRect','cardRect'].filter(key=>node[key]).map(key=>({id:node.id,kind:node.kind,type:key,rect:node[key]})));
-        const controls=['header','feed','chat','selected','dock','search','composer','tools','follow','legend','ambience'].filter(key=>layout[key]).map(key=>({id:key,rect:{x:layout[key].x,y:layout[key].y,w:layout[key].width,h:layout[key].height}}));
+        const controls=['header','feed','chat','selected','dock','nav','search','composer','tools','follow','legend','ambience'].filter(key=>layout[key]).map(key=>({id:key,rect:{x:layout[key].x,y:layout[key].y,w:layout[key].width,h:layout[key].height}}));
         for (const [index,item] of painted.entries()) {
           const box=item.rect;
           assert([box.x,box.y,box.w,box.h].every(Number.isFinite) && box.w>0 && box.h>0,`${name}: ${item.type} for ${item.id} has finite drawn bounds`);
@@ -175,7 +177,7 @@ VERIFY_METHOD = r'''
             return separation<0?[{a:node.id,b:other.id,separation}]:[];
           }));
           for(const pair of orbOverlaps)requireReadable(pair.separation>=-1,`${name}: ${pair.a} and ${pair.b} orb rings overlap by ${(-pair.separation).toFixed(1)}px`);
-          const controls=['header','feed','chat','selected','dock','search','composer','tools','follow','legend','ambience'].filter(key=>layout[key]).map(key=>({id:key,rect:{x:layout[key].x,y:layout[key].y,w:layout[key].width,h:layout[key].height}}));
+          const controls=['header','feed','chat','selected','dock','nav','search','composer','tools','follow','legend','ambience'].filter(key=>layout[key]).map(key=>({id:key,rect:{x:layout[key].x,y:layout[key].y,w:layout[key].width,h:layout[key].height}}));
           requireReadable(layout.graph.labels==='auto' && layout.graph.orbit==='paused',`${name}: Auto labels and paused orbit remain selected`);
           if(dx) {
             requireReadable(Math.abs(extra.geometry.angle-beforeRotation.geometry.angle)>=.3,`${name}: actual right-drag changes the 3D viewing angle`);
@@ -551,7 +553,7 @@ VERIFY_METHOD = r'''
     await this.run("window.__musicCaptureAttempts=0; navigator.mediaDevices.getDisplayMedia=async()=>{window.__musicCaptureAttempts++;throw new Error('Desktop capture is disabled in this fixture');};");
     assert.equal(await this.run("return Boolean(window.MefiMusic?.status && window.MefiMusic?.getAudioElement);"), true, "built-in player API is bundled");
     assert.equal(report.musicRequests || 0, 0, "loading Studio does not request recommendations");
-    await this.click('#cmd-dock [data-nav="music"]');
+    await this.openFromNav('music');
     await this.until("!document.getElementById('music-overlay').hidden && document.body.dataset.sheet === 'music'", "music opens as the current Studio sheet");
     assert.equal(await this.run("return window.MefiMusic.status().playing;"), false);
     await this.click('.music-theme[data-theme="violet"]');
@@ -600,7 +602,7 @@ VERIFY_METHOD = r'''
     await this.capture('13-local-reactive');
     await this.click('#idle-music-toggle');
     assert.equal(await this.run("return window.MefiMusic.status().playing;"), true, "disabling reactivity keeps the player's audio running");
-    await this.click('#cmd-dock [data-nav="music"]');
+    await this.openFromNav('music');
     await this.click('#music-play');
     assert.equal(await this.run("return window.MefiMusic.status().playing;"), false);
     this.check("Real WAV playback, next, seeking and pause work; Command analyses the local player without capture");
@@ -608,7 +610,7 @@ VERIFY_METHOD = r'''
     await this.click('#music-close');
     await this.click('#idle-music-toggle');
     await this.until("window.MefiIdle.audioStatus().energy > .01", "local reactivity reconnects from its existing audio source");
-    await this.click('#cmd-dock [data-nav="music"]');
+    await this.openFromNav('music');
     await this.click('#music-spotify-tab');
     assert.equal(await this.run("const status=window.MefiIdle.audioStatus();return !status.listening&&!status.pending&&status.energy===0&&window.__musicCaptureAttempts===0;"), true, "source switching releases local reactivity without arming desktop capture");
     await this.run("document.getElementById('music-spotify-url').value='https://open.spotify.com/playlist/37i9dQZF1DX7zqr9q1MPG7';");
@@ -667,7 +669,7 @@ VERIFY_METHOD = r'''
       return current;
     };
     const openMusic=async()=>{
-      if (await this.run("return document.getElementById('music-overlay').hidden;")) await this.click('#cmd-dock [data-nav="music"]');
+      if (await this.run("return document.getElementById('music-overlay').hidden;")) await this.openFromNav('music');
     };
     const setPreference=async(kind,value,keyboard=false)=>{
       await openMusic();
@@ -751,7 +753,7 @@ VERIFY_METHOD = r'''
     await this.run("window.MefiNav.go('command');");
     await this.until("window.MefiIdle.isActive() && window.MefiIdle.status().nodeStyle==='glass' && window.MefiIdle.status().nodeLayout==='radial' && window.MefiIdle.debugNodes().some(node=>Number.isFinite(node.x))",'reloaded canvas applies saved appearance and layout');
     this.setContentSize(900,900);await sleep(250);
-    await this.click('#cmd-dock [data-nav="music"]');
+    await this.openFromNav('music');
     await this.click('#music-node-style-minimal');
     await this.click('#music-node-layout-tree');
     assert.deepEqual(await this.run("const {nodeStyle,nodeLayout}=window.MefiMusic.graphPreferences();return {nodeStyle,nodeLayout};"),{nodeStyle:'minimal',nodeLayout:'tree'},'both controls work through real clicks in a narrow sheet');
@@ -790,7 +792,7 @@ VERIFY_METHOD = r'''
     const light={accent:'#365FC0',background:'#F1F4FC',surface:'#FFFFFF',text:'#172638'};
     const before=await this.run("return {preferences:window.MefiMusic.graphPreferences(),audio:window.MefiMusic.status()};");
     const requestsBefore=report.musicRequests||0;
-    await this.click('#cmd-dock [data-nav="music"]');
+    await this.openFromNav('music');
     await this.click('.music-theme[data-theme="custom"]');
     const colors=async(value)=>{
       for(const [key,color] of Object.entries(value)) {
@@ -835,7 +837,7 @@ VERIFY_METHOD = r'''
     await this.run("window.MefiNav.go('command');");
     await this.until("window.MefiIdle.isActive()",'Command opens after custom palette reload');
     this.setContentSize(650,760);await sleep(200);
-    await this.click('#cmd-dock [data-nav="music"]');
+    await this.openFromNav('music');
     await this.run("document.getElementById('music-custom-palette').scrollIntoView({block:'center'});");
     await sleep(200);
     const compact=await sample();
@@ -977,7 +979,7 @@ VERIFY_METHOD = r'''
     report.appearanceMatrix={cases:[],rotations:[],expectedDarkCases:50,expectedLightCases:10};
     const requestsBefore=report.musicRequests||0;
     await this.run("window.MefiIdle.clearSearch();window.MefiIdle.setLabels('auto');window.MefiIdle.setOrbit(false);window.MefiIdle.fitAll();");
-    await this.click('#cmd-dock [data-nav="music"]');await sleep(260);
+    await this.openFromNav('music');await sleep(260);
     await this.run("window.__matrixViewToasts=[];const host=document.getElementById('toast-host');window.__matrixToastObserver=new MutationObserver(records=>{for(const record of records)for(const node of record.addedNodes)if(/2D map view|3D orbit view/.test(node.textContent||''))window.__matrixViewToasts.push(node.textContent);});if(host)window.__matrixToastObserver.observe(host,{childList:true,subtree:true});");
     await this.run("document.querySelector('.music-theme[data-theme=\"gold\"]').scrollIntoView({block:'center'});");
     await this.click('.music-theme[data-theme="gold"]');
@@ -1038,7 +1040,7 @@ VERIFY_METHOD = r'''
     assert.equal(await this.run("return window.MefiIdle.status().view;"),'3d','latest view survives reload');
     await this.run("window.MefiNav.go('command');");
     await this.until("window.MefiIdle.isActive()",'matrix Command returns after reload');
-    await this.click('#cmd-dock [data-nav="music"]');await sleep(200);
+    await this.openFromNav('music');await sleep(200);
     const reloaded=await snapshot();validate(reloaded,'crystal','layers','3d','reloaded latest combination');
     report.appearanceMatrix.reloaded=reloaded;
     await this.capture('matrix-reloaded-crystal-layers-3d-light');
@@ -1147,7 +1149,7 @@ VERIFY_METHOD = r'''
       const required=current.width>=1200?3:area.w>=600&&area.h>=450&&budget>=6?2:1;
       assert(named.length>=required,`${name}: actual running work keeps ${required} readable task names`);
       assert([...activeIds].every(id=>current.nodes.some(node=>node.id===id)),`${name}: all three running work nodes remain present`);
-      const controls=['header','feed','chat','selected','dock','search','composer','tools','follow','legend','ambience'].filter(key=>current[key]).map(key=>({id:key,rect:{x:current[key].x,y:current[key].y,w:current[key].width,h:current[key].height}}));
+      const controls=['header','feed','chat','selected','dock','nav','search','composer','tools','follow','legend','ambience'].filter(key=>current[key]).map(key=>({id:key,rect:{x:current[key].x,y:current[key].y,w:current[key].width,h:current[key].height}}));
       const paint=labels.map(node=>({id:node.id,type:'label',rect:node.labelRect}));
       const badges=current.nodes.filter(node=>node.bubbleRect).map(node=>({id:node.id,type:'checkpoint',rect:node.bubbleRect}));
       assert(badges.length>0,`${name}: the screenshot exercises actual checkpoint badges`);
@@ -1235,7 +1237,7 @@ VERIFY_METHOD = r'''
     await sleep(400);
     report.liveWorkCollapse={expanded,collapsed};
     this.check("Live work collapses into a dropdown, frees graph space, remembers its state across reload, and opens again");
-    await this.click('#cmd-dock [data-nav="music"]');
+    await this.openFromNav('music');
     await sleep(300);
     assert.equal(await this.run("return window.MefiIdle.ambientZenStatus().eligible;"),false,'Music settings block automatic Zen');
     if (!await this.run("return document.getElementById('music-orbit-trails').checked;")) {
@@ -1324,15 +1326,21 @@ VERIFY_METHOD = r'''
     assert.equal((await this.run("return (await window.mefiStudio.tasksList()).tasks;")).length, 66);
     assert.equal((await this.run("return (await window.mefiStudio.ideasList()).ideas;")).length, 105);
     if (!config.baseline) {
-      const shortcut=await this.run("const button=document.getElementById('workspace-node-tree');const box=button?.getBoundingClientRect();return {text:button?.textContent,route:button?.dataset.nav,width:box?.width,height:box?.height,insideClosedDetails:Boolean(button?.closest('details:not([open])'))};");
+      // The way into Command must be on screen from the workspace without
+      // opening anything: the rail's Live section on the rail shell, the
+      // drawer's Command view row on the classic one.
+      const railShell=await this.run("return document.documentElement.dataset.shell==='rail';");
+      const entry=railShell?"#app-rail .app-rail-head[data-section='live']":"#workspace-node-tree";
+      const shortcut=await this.run(`const button=document.querySelector(${JSON.stringify(entry)});const box=button?.getBoundingClientRect();return {text:(button?.textContent||'')+' '+(button?.title||''),route:button?.dataset.nav,width:box?.width,height:box?.height,insideClosedDetails:Boolean(button?.closest('details:not([open])'))};`);
       assert.equal(shortcut.route,'command');
-      assert(/node tree/i.test(shortcut.text),'Workspace names the destination plainly');
-      assert(shortcut.width>40 && shortcut.height>20 && !shortcut.insideClosedDetails,'Node tree is directly visible outside collapsed tools');
-      await this.capture('00-workspace-node-tree');
+      // The naming pass made it "Command view" everywhere; this used to look for "node tree".
+      assert(/command view/i.test(shortcut.text),'Workspace names the destination plainly');
+      assert(shortcut.width>40 && shortcut.height>20 && !shortcut.insideClosedDetails,'Command is directly visible outside collapsed tools');
+      await this.capture('00-workspace-command-entry');
       this.setContentSize(900,900); await sleep(180);
-      await this.capture('00b-workspace-node-tree-narrow');
-      await this.click('#workspace-node-tree');
-      this.check("Workspace exposes a directly visible Node tree button that remains clickable in a narrow window");
+      await this.capture('00b-workspace-command-entry-narrow');
+      await this.click(entry);
+      this.check("Workspace exposes a directly visible way into Command view that remains clickable in a narrow window");
     } else await this.run("window.MefiNav.go('command');");
     await this.until("window.MefiIdle?.isActive?.() && window.MefiIdle.status().nodes > 15", "Command dense graph ready");
     if (!config.baseline) assert.equal(await this.run("return window.MefiIdle.status().orbit;"),'paused','fresh Node tree opens with a stationary camera');
@@ -1409,7 +1417,10 @@ VERIFY_METHOD = r'''
         await this.click('#idle-feed-log-section > summary');
         await this.capture('06-agent-roster');
         this.check("Named current work and actual stage stay primary while the readable roster stays visible and the technical log is a disclosure");
-      if (await this.run("return Boolean(document.getElementById('cmd-more-tools'));")) {
+      // The dock's More tools menu only exists to a person on the classic shell;
+      // the rail hides the dock, and the rail's own keyboard path is covered by
+      // tests/app_rail.test.mjs.
+      if (await this.run("const more=document.getElementById('cmd-more-tools');return Boolean(more) && getComputedStyle(document.getElementById('cmd-dock')).display !== 'none';")) {
         this.webContents.focus();
         await this.run("window.__commandKeys = []; for (const type of ['keydown','keypress','keyup']) window.addEventListener(type,event=>window.__commandKeys.push({type,key:event.key,target:event.target.tagName,prevented:event.defaultPrevented})); document.querySelector('#cmd-more-tools > summary').focus();");
         this.webContents.sendInputEvent({type:'keyDown',keyCode:'Enter'});

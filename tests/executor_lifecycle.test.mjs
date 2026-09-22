@@ -556,7 +556,7 @@ test("editing an open task during dispatch forces a fresh selection and file cla
   assert.deepEqual(host.askedPaths, [path.resolve(host.root, "src/a.js"), path.resolve(host.root, "src/b.js")]);
 });
 
-function childHost({ throwFallback = false, throwKill = false } = {}) {
+function childHost({ throwFallback = false, throwKill = false, pool = {} } = {}) {
   const makeChild = (pid) => {
     const child = new EventEmitter();
     Object.assign(child, { pid, stdout: new EventEmitter(), stderr: new EventEmitter(), stdin: Object.assign(new EventEmitter(), { write() {}, end() {} }) });
@@ -569,7 +569,7 @@ function childHost({ throwFallback = false, throwKill = false } = {}) {
   const entry = { id: "run_100_1", finished: false, spoke: false, handoffs: [], calls: new Set(), issues: [], outputTail: [], outputLog: [], child: null };
   const env = vm.createContext({
     Date: Clock, entry, runRoute: { grok: true, cli: "grok", opencode: { env: {}, modelArgs: "" } }, runRoot: "C:/fixture", prompt: "fixture brief", startedAt: 1,
-    process: { env: {} }, assistantModule: assistant, autopilot: { parallel: 1, jobs: [entry] }, eyes: {}, queueExecutorCheckpoint() {},
+    process: { env: {} }, assistantModule: assistant, autopilot: { parallel: 1, jobs: [entry], ...pool }, eyes: {}, queueExecutorCheckpoint() {},
     job: { kind: "task", ref: { id: "task" }, title: "Fixture work" },
     EXECUTOR_DONE_MARK: "DONE", EXECUTOR_MAX_HANDOFFS: 3, EXECUTOR_KILL_MS: 600000, EXECUTOR_START_BUDGET_MS: 120000,
     parseExecutorHandoff: () => null, agentIssues, logLine() {}, pushAutopilotHistory() {}, executorLog: async () => {}, emitAutopilot() {},
@@ -592,7 +592,7 @@ function childHost({ throwFallback = false, throwKill = false } = {}) {
   vm.runInContext(`function fixtureChildController() { let timeout = null, startWatchdog = null; ${body}\nreturn { attach, fallbackToOpencode }; }`, env);
   const controller = env.fixtureChildController();
   controller.attach(first, "grok", env.runRoute, true);
-  return { first, fallback, entry, finishes, timers, spawns, watches, killers, advance: (ms) => { now += ms; } };
+  return { first, fallback, entry, finishes, timers, spawns, watches, killers, autopilot: env.autopilot, advance: (ms) => { now += ms; } };
 }
 
 test("late output, close, errors and timers from Grok cannot settle or kill its OpenCode replacement", () => {
@@ -657,6 +657,43 @@ test("a broken worker prompt pipe waits for child exit and settles without an un
   assert.deepEqual(host.finishes, [{ code: 0, error: "write EPIPE" }]);
   host.fallback.emit("close", 1);
   assert.equal(host.finishes.length, 1);
+});
+
+// attach() arms the hard budget timer (the fixture's EXECUTOR_KILL_MS, 600 s)
+// and then the start watchdog, whose delay is the start budget. The base
+// budget here is the fixture's 120 s EXECUTOR_START_BUDGET_MS.
+const startWatchdogDelay = (h) => h.timers[h.timers.findIndex((timer) => timer.delay === 600000) + 1]?.delay;
+
+test("the start budget widens after start kills, but blind widening stops at twice the base", () => {
+  assert.equal(startWatchdogDelay(childHost()), 120000, "no evidence: the base budget");
+  assert.equal(startWatchdogDelay(childHost({ pool: { startKills: 1 } })), 180000, "one kill with no start since: 1.5x");
+  assert.equal(startWatchdogDelay(childHost({ pool: { startKills: 5 } })), 240000, "a runner that never speaks is what the watchdog stops: capped at 2x");
+});
+
+test("the start budget learns from runners that did speak, up to ten minutes", () => {
+  assert.equal(startWatchdogDelay(childHost({ pool: { startSamples: [20000, 100000, 40000] } })), 200000, "twice the slowest recent start");
+  assert.equal(startWatchdogDelay(childHost({ pool: { startSamples: [20000] } })), 120000, "fast starts never shrink it below the base");
+  assert.equal(startWatchdogDelay(childHost({ pool: { startSamples: [500000], startKills: 3 } })), 600000, "nothing waits longer than ten minutes");
+});
+
+test("a runner's first line records its start time and ends the run of start kills", () => {
+  const h = childHost({ pool: { startKills: 2, startSamples: Array.from({ length: 8 }, () => 10000) } });
+  h.advance(30000);
+  h.first.stdout.emit("data", "starting work\n");
+  assert.equal(h.autopilot.startKills, 0);
+  assert.equal(h.autopilot.startSamples.length, 8, "only the last eight starts are kept");
+  assert.equal(h.autopilot.startSamples.at(-1), 30000);
+  h.advance(5000);
+  h.first.stdout.emit("data", "still working\n");
+  assert.equal(h.autopilot.startSamples.at(-1), 30000, "only the first line of a run is a start");
+});
+
+test("a start kill is counted and names the budget it actually had", () => {
+  const h = childHost({ pool: { startKills: 1 } });
+  h.advance(180001);
+  h.timers.find((timer) => timer.delay === 180000)();
+  assert.equal(h.autopilot.startKills, 2);
+  assert.match(h.entry.stopping.reason, /no output for 3m after spawn/, "1.5 x the 120 s fixture base, said as the budget it was");
 });
 
 test("a wedged startup retains its writer and file claim until tree termination succeeds before fallback", () => {

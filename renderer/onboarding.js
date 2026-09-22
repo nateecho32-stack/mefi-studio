@@ -33,7 +33,7 @@
     {
       title: "Welcome to Mefi's Studio", short: "Your workspace", glyph: "g-explorer",
       copy: "Turn an idea into a checked result: talk it through, create a task or plan, follow the work, then review what changed. This guide shows you where to do each step, and can walk the menus with you.",
-      points: ["Start with Projects in the sidebar. Use + to add an existing folder, then select it. Check the project name above the conversation before adding work.", "Choose how builds start below. Auto build is on by default. Turn it off for Verify first: inspect each task, then approve the ones you want built.", "Each project keeps its own tasks, plans, conversation and results. Your project files stay in their folder; Studio keeps its history separately."],
+      points: ["Start with Projects: the M+ at the top of the left rail. Use + to add an existing folder, then select it. Check the project name above the conversation before adding work.", "Choose how builds start below. Auto build is on by default. Turn it off for Verify first: inspect each task, then approve the ones you want built.", "Each project keeps its own tasks, plans, conversation and results. Your project files stay in their folder; Studio keeps its history separately."],
       action: "Walk me to my projects", route: "project",
       station: "I opened the project menu with you and highlighted +. Add an existing folder, then select it. I tick this off the moment you are in a project.",
       note: "This opens the workspace and the project menu with you. It does not change your selected project. With a setup saved, selecting a folder here starts its map.",
@@ -79,7 +79,7 @@
       points: ["Open Review in Your work to read the result, evidence and next actions. Inspect the project changes and run any remaining acceptance checks.", "If work needs attention, read its reason first. Correct the connection, brief or prerequisite, then use its retry control when you are ready.", "Keep failed work available for diagnosis. Task history can recover an earlier brief; it does not roll back your project files."],
       action: "Walk me to Review", route: "review",
       station: "This is Review in Your work. Open a finished task to read the result and evidence, then run any remaining acceptance checks. Tasks that need attention keep their reason and retry controls here.",
-      note: "You can reopen this guide from Start here in the sidebar, Settings or Shortcuts. Completing the guide does not mark any task done.",
+      note: "You can reopen this guide from Start here at the foot of the left rail, or from Settings or Shortcuts. Completing the guide does not mark any task done.",
       target: "#workspace-review", done: "Review found",
     },
   ];

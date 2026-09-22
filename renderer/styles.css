@@ -85,6 +85,11 @@
   --z-tabs: 30; --z-rail: 40; --z-tip: 60;
   --z-command: 70; --z-hud: 71; --z-pop: 72;
   --z-sheet: 80; --z-transient: 90; --z-toast: 95;
+  /* the workspace layer and the project panel used to be bare 65 and 85,
+     straddling the sheet layer outside the scale; the rail sits between. */
+  --z-workspace: 65; --z-shell: 82; --z-sidebar: 85;
+  /* 0 unless html[data-shell="rail"] turns the navigation rail on */
+  --shell-rail-w: 0px;
 
   /* literal on purpose: one bad token would invalidate the shorthand and drop the app to Times */
   font: 15px/1.55 system-ui, "Segoe UI", sans-serif;
@@ -2272,7 +2277,7 @@ body.no-motion .boot-spinner { animation: none; }
 
 /* Workspace: a quiet, useful home above the diagnostic surfaces. */
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-.workspace { --ws-accent: #e2c58d; --ws-accent-rgb: 226,197,141; position: fixed; inset: 0; z-index: 65; display: grid; grid-template-columns: 244px minmax(0,1fr); background: #121313; color: #e7e5de; font-size: 14px; }
+.workspace { --ws-accent: #e2c58d; --ws-accent-rgb: 226,197,141; position: fixed; inset: 0; z-index: var(--z-workspace); display: grid; grid-template-columns: 244px minmax(0,1fr); background: #121313; color: #e7e5de; font-size: 14px; }
 .workspace[hidden] { display: none; }
 .workspace[data-accent="sage"] { --ws-accent: #b9cfae; --ws-accent-rgb: 185,207,174; }
 .workspace[data-accent="violet"] { --ws-accent: #c5b7e8; --ws-accent-rgb: 197,183,232; }
@@ -2572,7 +2577,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #workspace-layer { grid-template-columns: minmax(0, 1fr); }
 #workspace-sidebar {
   --sidebar-width: min(312px, calc(100vw - 44px));
-  position: fixed; inset: 0; z-index: 85; display: block; overflow: hidden;
+  position: fixed; inset: 0; z-index: var(--z-sidebar); display: block; overflow: hidden;
   background: transparent; pointer-events: none;
 }
 #workspace-sidebar-panel {
@@ -3811,4 +3816,143 @@ body.command-active .walkthrough-coach { right: 392px; }
 
 @media (prefers-reduced-motion: reduce) {
   body.command-focus #idle-hud .rail-tabs { transition: none; }
+}
+
+/* ============================================================
+   22. The one shell · navigation rail
+   docs/ux-audit.md, Phase 3. One rail down the left edge for the
+   whole app — Home, Work, Live, Models, Settings — built from
+   nav.js's registry by MefiNav.renderRail(). Everything here keys
+   off html[data-shell="rail"]; without it the classic tabs row, dock
+   and hover sidebar are exactly as they were.
+
+   Every full-window layer respects --shell-rail-w instead of owning
+   the left edge. At rest the rail is 64px of icons with a small label
+   under each section; hover or keyboard focus widens it OVER the page
+   (no reflow). Pinned, it widens the variable itself and the page
+   makes room.
+   ============================================================ */
+html[data-shell="rail"] { --shell-rail-w: 64px; --shell-rail-open: 232px; }
+html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-open); }
+
+#app-rail {
+  position: fixed; top: 0; bottom: 0; left: 0; z-index: var(--z-shell);
+  width: var(--shell-rail-w); box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 4px; padding: 10px 8px;
+  background: var(--glass-hard); border-right: 1px solid var(--hairline);
+  backdrop-filter: var(--blur);
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+  transition: width var(--motion-menu) var(--ease), box-shadow var(--motion-menu) var(--ease);
+}
+#app-rail[hidden] { display: none; }
+#app-rail:hover, #app-rail:focus-within { width: var(--shell-rail-open); box-shadow: var(--shadow-2); }
+
+/* One button look for everything in the rail, overriding the global button
+   (its border, fill, centred content and hover lift). */
+#app-rail .app-rail-brand,
+#app-rail .app-rail-head,
+#app-rail .app-rail-item,
+#app-rail .app-rail-pin {
+  position: relative; display: flex; align-items: center; justify-content: flex-start; gap: 10px;
+  width: 100%; min-width: 0; min-height: 40px; box-sizing: border-box; margin: 0; padding: 0 15px;
+  border: 1px solid transparent; border-radius: var(--r-sm);
+  background: transparent; color: var(--muted); box-shadow: none;
+  font: 500 var(--fs-sm)/1.2 var(--font-ui); text-align: left; white-space: nowrap;
+}
+#app-rail .app-rail-brand:hover,
+#app-rail .app-rail-head:hover,
+#app-rail .app-rail-item:hover,
+#app-rail .app-rail-pin:hover { color: var(--ivory); background: var(--tint-gold-1); border-color: transparent; box-shadow: none; transform: none; }
+#app-rail :is(.app-rail-brand, .app-rail-head, .app-rail-item, .app-rail-pin):focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+#app-rail .glyph { flex: none; width: 16px; height: 16px; }
+#app-rail .app-rail-text,
+#app-rail .app-rail-item .label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* The brand is the door to the project panel. */
+#app-rail .app-rail-brand { min-height: 46px; padding-left: 9px; margin-bottom: 6px; color: var(--ivory); }
+#app-rail .app-rail-brand .monogram { flex: none; }
+#app-rail .app-rail-brand[aria-expanded="true"] { background: var(--tint-gold-2); }
+
+/* Sections: at rest an icon with its word beneath, so five destinations read
+   without a hover; open, a row with its members listed under it. */
+#app-rail .app-rail-sections { display: flex; flex-direction: column; gap: 2px; }
+#app-rail .app-rail-head {
+  flex-direction: column; justify-content: center; gap: 3px;
+  min-height: 52px; padding: 6px 2px; font-size: 10.5px; text-align: center;
+}
+#app-rail .app-rail-head .app-rail-text { flex: none; max-width: 100%; }
+#app-rail .app-rail-head .count { position: absolute; top: 3px; right: 5px; min-width: 15px; height: 15px; padding: 0 4px; font-size: 9.5px; }
+#app-rail .app-rail-children { display: none; flex-direction: column; gap: 1px; padding: 2px 0 8px 14px; }
+#app-rail .app-rail-item { min-height: 32px; padding: 0 10px; font-size: var(--fs-xs); }
+#app-rail .app-rail-item .key { margin-left: auto; opacity: .62; font-size: 10px; }
+#app-rail .app-rail-item .count { margin-left: 4px; }
+
+#app-rail:hover .app-rail-head,
+#app-rail:focus-within .app-rail-head,
+html[data-rail-pinned] #app-rail .app-rail-head {
+  flex-direction: row; justify-content: flex-start; gap: 10px;
+  min-height: 40px; padding: 0 15px; font-size: var(--fs-sm); text-align: left;
+}
+#app-rail:hover .app-rail-head .count,
+#app-rail:focus-within .app-rail-head .count,
+html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margin-left: auto; }
+#app-rail:hover .app-rail-children,
+#app-rail:focus-within .app-rail-children,
+html[data-rail-pinned] #app-rail .app-rail-children { display: flex; }
+
+/* Where you are: the section lights up, the destination carries the mark. */
+#app-rail .app-rail-section.current > .app-rail-head { color: var(--gold-bright); }
+#app-rail .app-rail-section.current > .app-rail-head .glyph { color: var(--gold); }
+#app-rail [aria-current="page"] { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--hairline-strong); }
+
+/* At rest the one-line buttons (brand, foot, pin) are icon only: their words,
+   keycaps and counts wait for the rail to open instead of peeking out clipped. */
+html:not([data-rail-pinned]) #app-rail:not(:hover):not(:focus-within) :is(.app-rail-brand, .app-rail-foot-item, .app-rail-pin) :is(.label, .key, .app-rail-text, .count) { display: none; }
+#app-rail .app-rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 1px; padding-top: 8px; border-top: 1px solid var(--hairline); }
+#app-rail .app-rail-foot .app-rail-item { min-height: 36px; padding: 0 15px; }
+#app-rail .app-rail-pin { min-height: 34px; margin-top: 2px; }
+#app-rail .app-rail-pin[aria-pressed="true"] { color: var(--gold-bright); }
+
+/* Every full-window layer makes room for the rail. The Command canvas stays
+   full-bleed on purpose — it is the backdrop — and usableArea() fits the
+   graph beside the rail instead. */
+/* The rail's width is added to the Booklet's own gutter, not swapped for it. */
+html[data-shell="rail"] body { padding-left: calc(var(--shell-rail-w) + var(--gutter)); }
+@media (max-width: 900px) { html[data-shell="rail"] body { padding-left: calc(var(--shell-rail-w) + var(--s4)); } }
+html[data-shell="rail"] #workspace-layer,
+html[data-shell="rail"] #idle-hud,
+html[data-shell="rail"] .overlay { left: var(--shell-rail-w); }
+/* The project panel slides out of the rail's edge, not the window's. */
+html[data-shell="rail"] #workspace-sidebar-panel { left: var(--shell-rail-w); }
+/* Three sheets size themselves in vw, and vw does not know the overlay moved
+   over for the rail: at 600px the Task board ran 13px off the right edge. Take
+   the rail back out of the width they measure against. (Music, Plans, Brain
+   maps and the profiler size in % of the overlay and need nothing.) */
+html[data-shell="rail"] .overlay .sheet { width: min(620px, calc(92vw - var(--shell-rail-w))); }
+html[data-shell="rail"] .explorer-sheet { width: min(1460px, calc(97vw - var(--shell-rail-w))); }
+html[data-shell="rail"] .overlay .walkthrough-sheet { width: min(740px, calc(94vw - var(--shell-rail-w))); }
+
+/* One navigation: with the rail on, the older chromes that only navigated
+   step aside. Phase E deletes them; until then the flag brings them back. */
+html[data-shell="rail"] #tabs,
+html[data-shell="rail"] body > footer,
+html[data-shell="rail"] #workspace-sidebar-toggle,
+html[data-shell="rail"] #workspace-sidebar-panel .ws-nav,
+html[data-shell="rail"] #workspace-sidebar-panel .ws-quick,
+html[data-shell="rail"] #workspace-tools,
+html[data-shell="rail"] [data-sheet-links],
+html[data-shell="rail"] #idle-hud .cmd-dock { display: none; }
+
+/* The rail carries the brand; Command's heading keeps its words, not a second mark. */
+html[data-shell="rail"] #idle-hud .cmd-brand .monogram { display: none; }
+
+/* Zen fades the rail with the rest of the HUD. */
+body.command-zen #app-rail { opacity: 0; pointer-events: none; transition: opacity var(--dur-hud) var(--ease); }
+
+@media (prefers-reduced-motion: reduce) {
+  #app-rail { transition: none; }
+}
+@media print {
+  #app-rail { display: none; }
+  html[data-shell="rail"] body { padding-left: 0; }
 }

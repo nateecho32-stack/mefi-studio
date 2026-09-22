@@ -123,12 +123,32 @@ class VerifiedWindow extends NativeWindow {
     const targetInSidebar = await this.run(`return Boolean(document.querySelector(${JSON.stringify(selector)})?.closest('#workspace-sidebar-panel'));`);
     const sidebarOpen = await this.run("return Boolean(window.MefiSidebar?.isOpen());");
     if (targetInSidebar && !sidebarOpen) {
-      await this.click("#workspace-sidebar-toggle");
+      // The navigation rail's M+ brand is the project panel's door; the classic
+      // shell still opens it from the invisible edge strip.
+      const railShell = await this.run("return document.documentElement.dataset.shell === 'rail';");
+      await this.click(railShell ? "#app-rail-brand" : "#workspace-sidebar-toggle");
       await sleep(220);
-    } else if (!targetInSidebar && sidebarOpen && selector !== "#workspace-sidebar-toggle") {
+    } else if (!targetInSidebar && sidebarOpen && selector !== "#workspace-sidebar-toggle" && selector !== "#app-rail-brand") {
       await this.click("#workspace-sidebar-close");
       await sleep(220);
     }
+    return this.clickVisible(selector);
+  }
+  // One door to every destination, through the real control a person would use:
+  // the rail on the rail shell — held open for the click so its member rows are
+  // visible, hittable controls — or the Command dock on the classic shell.
+  async openFromNav(id) {
+    const railShell = await this.run("return document.documentElement.dataset.shell === 'rail';");
+    if (!railShell) return this.click(`#cmd-dock [data-nav="${id}"]`);
+    await this.run("document.documentElement.dataset.railPinned = '';");
+    await sleep(80);
+    try {
+      return await this.click(`#app-rail [data-nav="${id}"]`);
+    } finally {
+      await this.run("delete document.documentElement.dataset.railPinned; window.dispatchEvent(new Event('resize'));");
+    }
+  }
+  async clickVisible(selector) {
     return this.run(`const selector = ${JSON.stringify(selector)}; const el = document.querySelector(selector); if (!el) throw new Error('Missing control: ' + selector); if (el.disabled) throw new Error('Disabled control: ' + selector); el.scrollIntoView({block:'nearest'}); const rect = el.getBoundingClientRect(); if (!rect.width || !rect.height || getComputedStyle(el).visibility === 'hidden') throw new Error('Hidden control: ' + selector); const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2); if (!hit || !el.contains(hit)) throw new Error('Obscured control: ' + selector + ' (hit: ' + (hit ? hit.tagName.toLowerCase() + (hit.id ? '#' + hit.id : '') + (typeof hit.className === 'string' && hit.className.trim() ? '.' + hit.className.trim().split(' ').filter(Boolean).join('.') : '') : 'nothing') + ')'); el.click();`);
   }
   async capture(name) {
@@ -247,6 +267,27 @@ class VerifiedWindow extends NativeWindow {
 
     assert.equal(await this.run("return Boolean(document.querySelector('#workspace-layer > .ws-sidebar'));"), false, "the hover drawer replaces the fixed workspace sidebar");
     assert.equal(await this.run("return document.getElementById('workspace-sidebar-panel').inert;"), true, "closed menu is not keyboard accessible");
+    const railShell = await this.run("return document.documentElement.dataset.shell === 'rail';");
+    if (railShell) {
+      // The navigation rail replaced the invisible 6px edge strip: the M+ brand
+      // at the top of the rail is the visible, labelled door to the same panel.
+      const door = await this.run("const brand=document.getElementById('app-rail-brand'),rail=document.getElementById('app-rail'),strip=document.getElementById('workspace-sidebar-toggle');return {brand:brand.getBoundingClientRect().toJSON(),railRight:rail.getBoundingClientRect().right,label:brand.getAttribute('title')||brand.textContent.trim(),stripShown:getComputedStyle(strip).display!=='none'};");
+      assert(door.brand.width > 0 && door.brand.height > 0, "the rail's brand is on screen");
+      assert(door.label, "the brand carries a name");
+      assert.equal(door.stripShown, false, "the invisible edge strip steps aside for the rail");
+      await this.capture("01c-rail-closed");
+      await this.click("#app-rail-brand");
+      await this.until("window.MefiSidebar.isOpen()", "the brand opens the project panel");
+      await sleep(230);
+      const drawer = await this.run("return document.getElementById('workspace-sidebar-panel').getBoundingClientRect().toJSON();");
+      assert(Math.abs(drawer.left - door.railRight) <= 1 && drawer.width > 0, "the panel opens against the rail's edge");
+      assert.equal(await this.run("return document.getElementById('app-rail-brand').getAttribute('aria-expanded');"), "true", "the brand reports the panel open");
+      await this.capture("01d-rail-project-panel");
+      await this.click("#workspace-sidebar-close");
+      await this.until("!window.MefiSidebar.isOpen()", "the panel closes again");
+      assert.equal(await this.run("return document.getElementById('workspace-sidebar-panel').inert;"), true);
+      this.check("The rail's M+ brand is a visible door to the project panel, which opens against the rail's edge and closes again");
+    } else {
     const edge = await this.run("const el=document.getElementById('workspace-sidebar-toggle');const style=getComputedStyle(el);return {rect:el.getBoundingClientRect().toJSON(),height:innerHeight,text:el.textContent.trim(),children:el.children.length,label:el.getAttribute('aria-label'),background:style.backgroundColor,image:style.backgroundImage,shadow:style.boxShadow,borders:[style.borderTopWidth,style.borderRightWidth,style.borderBottomWidth,style.borderLeftWidth],before:getComputedStyle(el,'::before').content,after:getComputedStyle(el,'::after').content};");
     assert(Math.abs(edge.rect.left) <= 1 && Math.abs(edge.rect.top) <= 1 && Math.abs(edge.rect.bottom - edge.height) <= 1, "the hover area spans the full left edge");
     assert(edge.rect.width > 0 && edge.rect.width <= 8, "the invisible edge stays narrow enough to leave workspace controls usable");
@@ -285,6 +326,7 @@ class VerifiedWindow extends NativeWindow {
     await this.run("document.querySelector('.ws-personal').open=false;document.getElementById('workspace-sidebar-panel').scrollTop=0;");
     await this.run("window.MefiMusic.applyTheme('gold', false);");
     this.check("An invisible full-height left edge reveals the themed menu, preserves pointer travel and closes on leaving even with focused controls");
+    }
 
     await this.run("document.querySelector('.ws-top-actions [data-nav=palette]').focus();");
     await this.click('.ws-top-actions [data-nav="palette"]');
@@ -583,10 +625,14 @@ class VerifiedWindow extends NativeWindow {
 
     this.setContentSize(600, 760);
     await sleep(250);
-    await this.click("#workspace-sidebar-toggle");
+    const smallRail = await this.run("return document.documentElement.dataset.shell === 'rail';");
+    await this.click(smallRail ? "#app-rail-brand" : "#workspace-sidebar-toggle");
     await sleep(230);
-    const mobileMenu = await this.run("const panel=document.getElementById('workspace-sidebar-panel');const r=panel.getBoundingClientRect(); return {left:r.left,right:r.right,width:panel.clientWidth,scroll:panel.scrollWidth,screen:innerWidth,links:[...panel.querySelectorAll('.ws-home')].every(el=>getComputedStyle(el).display!=='none'),addVisible:getComputedStyle(document.getElementById('workspace-add-project')).visibility!=='hidden'};");
-    assert(Math.abs(mobileMenu.left) <= 1, "small-window drawer remains anchored to the left edge");
+    // Navigation lives in the rail on the rail shell and in the drawer's rows on
+    // the classic one; either way it has to be on screen. (A row's own computed
+    // display ignores a hidden parent, so ask for a real box.)
+    const mobileMenu = await this.run("const panel=document.getElementById('workspace-sidebar-panel'),rail=document.getElementById('app-rail'),railOn=document.documentElement.dataset.shell==='rail';const r=panel.getBoundingClientRect();const shown=el=>{const b=el.getBoundingClientRect();return b.width>0&&b.height>0;};return {left:r.left,right:r.right,edge:railOn?rail.getBoundingClientRect().right:0,width:panel.clientWidth,scroll:panel.scrollWidth,screen:innerWidth,links:railOn?[...rail.querySelectorAll('.app-rail-head')].length===5&&[...rail.querySelectorAll('.app-rail-head')].every(shown):[...panel.querySelectorAll('.ws-home')].every(shown),addVisible:getComputedStyle(document.getElementById('workspace-add-project')).visibility!=='hidden'};");
+    assert(Math.abs(mobileMenu.left - mobileMenu.edge) <= 1, "small-window drawer stays anchored to its edge: the rail's, or the window's");
     assert(mobileMenu.left >= 0 && mobileMenu.right <= mobileMenu.screen + 1 && mobileMenu.scroll <= mobileMenu.width + 1, "small-window drawer fits without horizontal scrolling");
     assert(mobileMenu.links && mobileMenu.addVisible, "navigation and Add project remain available in a small window");
     await this.capture("07a-small-window-sidebar");

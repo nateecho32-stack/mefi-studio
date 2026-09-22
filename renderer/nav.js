@@ -894,6 +894,195 @@
     paintBadges(element);
   }
 
+  // ---- the one rail --------------------------------------------------------
+  // docs/ux-audit.md, Phase 3: one navigation surface for the whole app instead
+  // of a tabs row, a dock and a hover sidebar that each render the registry
+  // their own way. It is built from the same registry as the palette, the dock
+  // and the help sheet, so a destination added there turns up here with its
+  // glyph, key and badge. The rail keeps no list of its own beyond which
+  // section a destination belongs to — and even that follows menuGroup(), the
+  // grouping the "More tools" menus already taught people.
+  //
+  // It is the default. html[data-shell="rail"] (applyShell) is what turns it
+  // on, and "classic" — ?shell=classic, or the palette's switch, remembered —
+  // brings back the tabs row, the Command dock and the hover sidebar for anyone
+  // who needs them while the rail beds in.
+  const SHELL_KEY = "mefiStudio.shell";
+  const RAIL_PIN_KEY = "mefiStudio.railPinned";
+  const RAIL_SECTIONS = [
+    { id: "home", label: "Home", glyph: "g-home", target: "workspace" },
+    { id: "work", label: "Work", glyph: "g-tasks", target: "tasks" },
+    { id: "live", label: "Live", glyph: "g-orbit", target: "command" },
+    { id: "models", label: "Models", glyph: "g-booklet", target: "booklet" },
+    { id: "settings", label: "Settings", glyph: "g-sliders", target: "studio" },
+  ];
+
+  // Which rail section a destination lives in: Home is the workspace alone,
+  // the palette, shortcuts and walkthrough sit at the foot, and actions stay
+  // in the palette where they have always been.
+  function railSection(dest) {
+    if (!dest || dest.kind === "action" || dest.group === "command" || dest.group === "assistant") return null;
+    if (dest.id === "workspace") return "home";
+    if (dest.layer === "transient") return "foot";
+    const groups = { "Work": "work", "Monitor & inspect": "live", "Models": "models", "Settings & help": "settings" };
+    return groups[menuGroup(dest)] ?? "settings";
+  }
+
+  function renderRail() {
+    const sections = document.getElementById("app-rail-sections");
+    const foot = document.getElementById("app-rail-foot");
+    if (!sections || !foot) return;
+    sections.textContent = "";
+    foot.textContent = "";
+    const members = new Map(RAIL_SECTIONS.map((section) => [section.id, []]));
+    for (const dest of registry) {
+      const home = railSection(dest);
+      if (home === "foot") foot.append(navButton(dest, "app-rail-item app-rail-foot-item"));
+      else if (home) members.get(home)?.push(dest);
+    }
+    for (const section of RAIL_SECTIONS) {
+      const target = get(section.target);
+      if (!target) continue;
+      const group = document.createElement("div");
+      group.className = "app-rail-section";
+      group.dataset.section = section.id;
+      group.setAttribute("role", "group");
+      group.setAttribute("aria-label", section.label);
+      // The section button goes straight to its main destination, so even the
+      // collapsed rail is five working buttons rather than five labels.
+      const head = document.createElement("button");
+      head.type = "button";
+      head.className = "app-rail-head";
+      head.dataset.nav = target.id;
+      head.dataset.section = section.id;
+      head.title = target.key ? `${section.label} · ${target.label} (${target.key})` : `${section.label} · ${target.label}`;
+      head.append(glyphNode(section.glyph));
+      const label = document.createElement("span");
+      label.className = "app-rail-text";
+      label.textContent = section.label;
+      head.append(label);
+      for (const badge of badgeNodes(target)) head.append(badge);
+      group.append(head);
+      const items = members.get(section.id) ?? [];
+      // A section whose only member is its own head (Home) lists nothing twice.
+      if (!(items.length === 1 && items[0].id === target.id)) {
+        const children = document.createElement("div");
+        children.className = "app-rail-children";
+        for (const dest of items) children.append(navButton(dest, "app-rail-item"));
+        group.append(children);
+      }
+      sections.append(group);
+    }
+    paintBadges(document.getElementById("app-rail"));
+    paintRail();
+  }
+
+  // One aria-current in the rail: on the destination you are in, or on its
+  // section head when that section lists nothing beneath it.
+  function paintRail() {
+    const rail = document.getElementById("app-rail");
+    if (!rail || rail.hidden) return;
+    const id = current();
+    const section = railSection(get(id));
+    for (const group of rail.querySelectorAll(".app-rail-section")) group.classList.toggle("current", group.dataset.section === section);
+    let marked = false;
+    for (const button of rail.querySelectorAll(".app-rail-item[data-nav]")) {
+      if (button.dataset.nav === id && !marked) { button.setAttribute("aria-current", "page"); marked = true; }
+      else button.removeAttribute("aria-current");
+    }
+    for (const head of rail.querySelectorAll(".app-rail-head")) {
+      if (!marked && head.dataset.nav === id) { head.setAttribute("aria-current", "page"); marked = true; }
+      else head.removeAttribute("aria-current");
+    }
+  }
+
+  function shellOn() {
+    try {
+      const param = new URLSearchParams(location.search).get("shell");
+      if (param) return param !== "classic";
+      return localStorage.getItem(SHELL_KEY) !== "classic";
+    } catch {
+      return true;
+    }
+  }
+
+  function setRailPinned(pinned, { save = true } = {}) {
+    const root = document.documentElement;
+    if (pinned) root.dataset.railPinned = "";
+    else delete root.dataset.railPinned;
+    document.getElementById("app-rail-pin")?.setAttribute("aria-pressed", String(Boolean(pinned)));
+    if (save) {
+      try { localStorage.setItem(RAIL_PIN_KEY, pinned ? "1" : "0"); } catch { /* the pin is a convenience */ }
+    }
+    // Every layer is offset by the rail's width; a pinned rail is wider, so let
+    // anything that measures the window (Command's graph) measure again.
+    window.dispatchEvent(new Event("resize"));
+  }
+
+  function applyShell(on = shellOn()) {
+    const rail = document.getElementById("app-rail");
+    if (!rail) return false;
+    const root = document.documentElement;
+    if (on) root.dataset.shell = "rail";
+    else delete root.dataset.shell;
+    rail.hidden = !on;
+    let pinned = false;
+    try { pinned = localStorage.getItem(RAIL_PIN_KEY) === "1"; } catch { /* unpinned */ }
+    setRailPinned(on && pinned, { save: false });
+    if (on) renderRail();
+    window.dispatchEvent(new CustomEvent("mefi:shell", { detail: { rail: on } }));
+    return on;
+  }
+
+  function setShell(on) {
+    try { localStorage.setItem(SHELL_KEY, on ? "rail" : "classic"); } catch { /* this launch only */ }
+    return applyShell(Boolean(on));
+  }
+
+  function wireRail() {
+    const rail = document.getElementById("app-rail");
+    if (!rail || rail.dataset.wired) return;
+    rail.dataset.wired = "1";
+    const brand = document.getElementById("app-rail-brand");
+    // The project list used to open only from a transparent 6px strip; the
+    // brand is now its visible door.
+    brand?.addEventListener("click", () => {
+      const sidebar = window.MefiSidebar;
+      if (!sidebar) return;
+      if (sidebar.isOpen?.()) sidebar.close({ restoreFocus: true });
+      else sidebar.open({ focus: true });
+    });
+    document.getElementById("app-rail-pin")?.addEventListener("click", () => setRailPinned(!("railPinned" in document.documentElement.dataset)));
+    // Repaint when you come to look at it, and whenever the view underneath
+    // changes by a route that does not announce itself on mefi:nav.
+    rail.addEventListener("pointerenter", paintRail);
+    rail.addEventListener("focusin", paintRail);
+    const sidebar = document.getElementById("workspace-sidebar");
+    if (typeof MutationObserver === "function") {
+      new MutationObserver(() => {
+        paintRail();
+        brand?.setAttribute("aria-expanded", String(sidebar?.dataset.open === "true"));
+      }).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+      if (sidebar) new MutationObserver(() => brand?.setAttribute("aria-expanded", String(sidebar.dataset.open === "true"))).observe(sidebar, { attributes: true, attributeFilter: ["data-open"] });
+    }
+  }
+
+  register({
+    id: "shellRail",
+    label: "Switch navigation: rail or classic",
+    short: "Navigation",
+    kind: "action",
+    layer: null,
+    group: "system",
+    key: null,
+    glyph: "g-pin",
+    badge: null,
+    desc: "Swap the navigation rail for the classic tabs row, Command dock and hover sidebar, or back",
+    searchTerms: ["shell", "sidebar", "navigation", "menu", "layout"],
+    showIn: showIn({ palette: true }),
+    run: () => setShell(document.documentElement.dataset.shell !== "rail"),
+  });
+
   function renderTools(target) {
     const element = target ?? document.getElementById("nav-tools");
     if (!element) return;
@@ -1196,6 +1385,7 @@
       if (button.dataset.nav === id) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     }
+    paintRail();
   }
 
   window.addEventListener("mefi:nav", paintCurrent);
@@ -1825,6 +2015,8 @@
   function init() {
     renderTools();
     renderDock();
+    applyShell();
+    wireRail();
     renderSheetLinks();
     paintCurrent();
     renderFooter();
@@ -1912,6 +2104,12 @@
     renderDock,
     renderTools,
     renderWorkspaceTools,
+    renderRail,
+    paintRail,
+    railSection,
+    applyShell,
+    setShell,
+    setRailPinned,
     paintCurrent,
     current,
     renderSheetLinks,

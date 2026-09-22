@@ -148,3 +148,20 @@ test("choosing a source while the link is off saves it without requesting audio"
   assert.equal(f.env.audioStatus().phase, "off");
   f.env.setMusicReactive(true); assert.equal(f.requests[0].kind, "mic");
 });
+
+test("a tuned radio deck feeds the analyser like a loaded track, while Spotify never does", () => {
+  const f = fixture({ selection: "local", loaded: false });
+  f.env.setMusicReactive(true);
+  assert.equal(f.state.localAudio, null);
+  Object.assign(f.player, { source: "radio", queueLength: 0, playing: true });
+  f.element.src = "https://ice1.somafm.com/groovesalad-128-mp3"; f.element.paused = false;
+  f.env.syncMusicNode();
+  assert.equal(f.state.localAudio?.element, f.element, "a station links without a queue");
+  assert.equal(f.requests.length, 0, "Studio's own radio never asks for desktop capture");
+  assert.equal(f.env.musicNodeDetails().label, "Playing · Test track");
+  f.player.playing = false;
+  assert.equal(f.env.musicNodeDetails().label, "Radio · Test track");
+  f.player.source = "spotify";
+  f.env.syncMusicNode();
+  assert.equal(f.state.localAudio, null, "Spotify's isolated frame is never treated as Studio playback");
+});

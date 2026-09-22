@@ -294,3 +294,27 @@ test("failed termination preserves file ownership while independent work continu
   assert.deepEqual(h.starts.map((start) => start.taskId), ["stuck", "independent", "overlap"]);
   assert.equal(h.registry.size, 1, "only the next worker owns the shared file after termination");
 });
+
+test("a run at the depth limit that hands off anyway settles on its own evidence instead of stalling its chain", async () => {
+  const h = executorHost({ tasks: [task("leaf", { depth: 3 })] });
+  h.wake(); await h.pump();
+  assert.match(h.starts[0].child.prompt, /Do not hand off any further work/, "the limit is stated in the brief");
+  await h.finish("leaf", { lines: ["MEFI_NEXT: One more piece :: do the next part", "MEFI_RESULT: done: the change; remaining: none", "MEFI_JOB_DONE"] });
+  await h.pump();
+  const reported = h.board().tasks.find((row) => row.id === "leaf");
+  assert.equal(reported.remaining, undefined, "a hand-off past the limit is not an obligation the card could ever discharge");
+  assert.ok(reported.logs.some((row) => /1 hand-off\(s\) declined at the depth limit, not queued: "One more piece"/.test(row.text)), "the declined title stays visible on the card");
+  assert.equal(h.board().requests.length, 0, "nothing is queued past the chain's limit");
+  h.advance(31000); h.wake(); await h.pump();
+  assert.equal(h.board().tasks.find((row) => row.id === "leaf").status, "done");
+  assert.equal(h.starts.length, 1, "the leaf runs once instead of being reopened three times and parked");
+});
+
+test("below the depth limit a hand-off still becomes a child the parent waits for", async () => {
+  const h = executorHost({ tasks: [task("middle", { depth: 2 })] });
+  h.wake(); await h.pump();
+  await h.finish("middle", { lines: ["MEFI_NEXT: One more piece :: do the next part", "MEFI_RESULT: done: the change; remaining: none", "MEFI_JOB_DONE"] });
+  await h.pump();
+  assert.deepEqual(h.board().tasks.find((row) => row.id === "middle").remaining, ["One more piece"]);
+  assert.ok(!h.board().tasks.find((row) => row.id === "middle").logs.some((row) => /declined/.test(row.text)));
+});

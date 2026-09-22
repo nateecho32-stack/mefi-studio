@@ -1,12 +1,44 @@
 // Every child process Studio starts goes through this spawn. On Windows the
-// calls reach node:child_process untouched: a shell command runs through
-// cmd.exe, a CLI is located with where.exe and a process tree is removed with
-// taskkill. Those three are the only host-specific spawns in the app, so on
-// Linux and macOS this wrapper translates exactly those and passes everything
-// else (grok, agy, gh, electron, LÖVE) straight through. The call sites keep
-// their Windows shape, which is also what the executor fixtures assert.
+// calls reach node:child_process untouched apart from the environment rule
+// below: a shell command runs through cmd.exe, a CLI is located with where.exe
+// and a process tree is removed with taskkill. Those three are the only
+// host-specific spawns in the app, so on Linux and macOS this wrapper
+// translates exactly those and passes everything else (grok, agy, gh,
+// electron, LÖVE) straight through. The call sites keep their Windows shape,
+// which is also what the executor fixtures assert.
+//
+// The one thing no child receives is Studio's own credentials. A headless or
+// container install hands Studio its keys as MEFI_STUDIO_*_KEY / _TOKEN
+// variables, and nothing else sets those names (scripts/credentials.cjs); a
+// child that needs a key is given it under its own name — MEFI_ZAI_API_KEY for
+// the mefi-zai provider, ZAI_API_KEY for the speed probe. Yet every coding
+// worker used to inherit all of them while running repository-driven commands
+// with its approvals bypassed, so they are withheld from every child. Names
+// another tool also reads (GH_TOKEN, OPENROUTER_API_KEY) are kept, because a
+// worker may legitimately use them, and the rest of the environment passes
+// through: an allowlist, which BetterC0de's childEnvironment.ts uses, would
+// strip variables the builder CLIs rely on. With nothing to withhold, the
+// caller's options object reaches node's spawn as it was passed.
 const child_process = require("node:child_process");
 const { EventEmitter } = require("node:events");
+
+// A pattern rather than an import from credentials.cjs, which main.cjs loads
+// as an optional helper: a missing credentials.cjs must not stop every spawn.
+// tests/platform_spawn.test.mjs pins it to that module's list instead.
+const STUDIO_CREDENTIAL = /^MEFI_STUDIO_[A-Z0-9_]*(KEY|TOKEN)$/;
+
+// The caller's options with Studio's credentials removed from the child's
+// environment: from the env it passed, or else from the one the child would
+// inherit. Windows variable names are case-insensitive, so the match is too.
+function withholdCredentials(options, inherited) {
+  const source = options?.env ?? inherited ?? {};
+  const names = Object.keys(source);
+  const withheld = (name) => STUDIO_CREDENTIAL.test(name.toUpperCase());
+  if (!names.some(withheld)) return options;
+  const env = {};
+  for (const name of names) if (!withheld(name)) env[name] = source[name];
+  return { ...(options ?? {}), env };
+}
 
 const SHELL = "cmd.exe";
 const LOCATE = "where.exe";
@@ -97,9 +129,10 @@ function killTree(pid, kill) {
   return code;
 }
 
-function createSpawn({ platform = process.platform, spawnImpl = child_process.spawn, kill = process.kill.bind(process) } = {}) {
-  if (platform === "win32") return spawnImpl;
+function createSpawn({ platform = process.platform, spawnImpl = child_process.spawn, kill = process.kill.bind(process), env = process.env } = {}) {
+  if (platform === "win32") return (command, args, options) => spawnImpl(command, args, withholdCredentials(options, env));
   return function spawn(command, args, options) {
+    options = withholdCredentials(options, env);
     if (isShellCall(command, args)) {
       // `start "title" cmd /k <cli>` opens a console window; there is no host
       // window to open one in, so the caller gets the same failure a missing

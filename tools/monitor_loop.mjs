@@ -215,11 +215,14 @@ async function watch(options) {
         runId: job.id, taskId: job.taskId, title: job.title, startedAt: h.now(),
         behavior: behavior.outcome ?? "done", promptChars: job.child?.prompt?.length ?? null,
       };
+      // A runner starts up, then works: the job's duration runs from its
+      // first line, so no run can finish before it has spoken.
       const wedged = behavior.outcome === "wedged";
+      const firstOutput = behavior.firstOutputMs ?? options.firstOutputMs;
       live.set(job.id, {
         job, behavior, row,
-        chatterAt: wedged ? Infinity : h.now() + (behavior.firstOutputMs ?? options.firstOutputMs),
-        finishAt: wedged ? Infinity : h.now() + (behavior.durationMs ?? 3 * MINUTE),
+        chatterAt: wedged ? Infinity : h.now() + firstOutput,
+        finishAt: wedged ? Infinity : h.now() + firstOutput + (behavior.durationMs ?? 3 * MINUTE),
       });
       runs.push(row);
       if (!seenTask.has(job.taskId ?? job.id)) seenTask.set(job.taskId ?? job.id, h.now());
@@ -228,7 +231,14 @@ async function watch(options) {
   };
   const reapDue = async () => {
     for (const [runId, entry] of [...live]) {
-      if (entry.job.finished) { live.delete(runId); continue; }
+      // Finished without the monitor reaping it: the host killed it (the
+      // start watchdog or the budget). The slot time it held is the cost.
+      if (entry.job.finished) {
+        live.delete(runId);
+        entry.row.killedAt = h.now();
+        entry.row.ranMs = h.now() - entry.row.startedAt;
+        continue;
+      }
       // A working run talks: one line clears the wedged-start watchdog.
       if (h.now() >= entry.chatterAt && !entry.spoke) {
         entry.spoke = true;
@@ -343,7 +353,9 @@ async function watch(options) {
       total: runs.length,
       finished: runs.filter((row) => row.finishedAt).length,
       wedged: runs.filter((row) => row.behavior === "wedged").length,
-      meanRunMs: runs.filter((row) => row.ranMs).reduce((sum, row) => sum + row.ranMs, 0) / Math.max(1, runs.filter((row) => row.ranMs).length),
+      killed: runs.filter((row) => row.killedAt).length,
+      killedSlotMs: runs.filter((row) => row.killedAt).reduce((sum, row) => sum + row.ranMs, 0),
+      meanRunMs: runs.filter((row) => row.ranMs && !row.killedAt).reduce((sum, row) => sum + row.ranMs, 0) / Math.max(1, runs.filter((row) => row.ranMs && !row.killedAt).length),
       promptChars: runs.map((row) => row.promptChars).filter(Boolean),
     },
     latency: {
@@ -362,6 +374,15 @@ async function watch(options) {
     },
     status: statusAt,
     spans, transitions,
+    // The board as the hour left it, one line of state per card: enough to
+    // see why a card is where it is without replaying the run.
+    finalBoard: board.tasks.map((task) => ({
+      id: task.id, title: task.title, status: task.status,
+      handoffId: task.handoffId ?? null, fromRun: task.fromRun ?? null, depth: task.depth ?? null,
+      remaining: task.remaining ?? [], handoffState: task.handoffState ?? null,
+      verifyAttempts: task.verifyAttempts ?? 0, verification: task.verification ? { state: task.verification.state, reason: task.verification.reason } : null,
+      runFailures: task.runFailures ?? 0, startFailures: task.startFailures ?? 0, nextRunAt: task.nextRunAt ?? null,
+    })),
     events,
     logs: h.logs,
     handoffs: board.requests.map((row) => row.prompt ?? row.title).slice(0, 12),
@@ -380,9 +401,9 @@ function report(result, { trace = false } = {}) {
   lines.push(`# ${result.scenario} · ${result.minutes}m of loop time · parallel=${result.parallel}${result.adaptiveParallel ? " (adaptive)" : ""} · tick=${result.tickMinutes}m · ${result.tasksSeeded} tasks`);
   lines.push(`board: ${Object.entries(result.board.status).map(([k, v]) => `${k}=${v}`).join(" ")} · requests=${result.board.requests} · verifyAttempts=${result.board.verifyAttempts} · runFailures=${result.board.runFailures}`);
   lines.push(`workers: first output at ${ms(result.firstOutputMs)} (wedged-start budget is 3m)`);
-  lines.push(`runs: ${result.runs.total} started, ${result.runs.finished} finished, ${result.runs.wedged} wedged · mean run ${ms(result.runs.meanRunMs)} · prompt ${Math.round(Math.max(0, ...result.runs.promptChars))} chars max`);
+  lines.push(`runs: ${result.runs.total} started, ${result.runs.finished} finished, ${result.runs.killed} killed (${ms(result.runs.killedSlotMs)} of slot time) · mean run ${ms(result.runs.meanRunMs)} · prompt ${Math.round(Math.max(0, ...result.runs.promptChars))} chars max`);
   lines.push(`latency: queue→claim p50 ${ms(result.latency.queueP50)} p90 ${ms(result.latency.queueP90)} · claim→report p50 ${ms(result.latency.runP50)} · report→done p50 ${ms(result.latency.verifyP50)} p90 ${ms(result.latency.verifyP90)}`);
-  lines.push(`          start→done p50 ${ms(result.latency.leadP50)} max ${ms(result.latency.leadMax)} (${result.latency.doneCount} of ${result.tasksSeeded} settled)`);
+  lines.push(`          start→done p50 ${ms(result.latency.leadP50)} max ${ms(result.latency.leadMax)} (${result.latency.doneCount} of ${result.board.total} cards settled)`);
   lines.push(`overseer: ${result.cost.checkRuns} verification command run(s) at ${ms(result.checkMs)} each`);
   lines.push(`cost: ${result.cost.boardWrites} board transactions · ${Object.values(result.cost.storeReads).reduce((a, b) => a + b, 0)} store reads · ${result.cost.timersArmed} timers · ${result.cost.logLines} log lines · host cpu ${result.cost.wallMs.toFixed(0)}ms`);
   lines.push(`reads: ${Object.entries(result.cost.storeReads).slice(0, 6).map(([k, v]) => `${k}×${v}`).join(" ")}`);
