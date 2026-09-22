@@ -7,6 +7,15 @@
 // second, serialized `node --test` invocation once the rest of the suite has
 // drained. Exit codes chain like `&&`.
 //
+// Flags: `--fast` leaves out every suite that launches the real Electron
+// binary (render captures, the occlusion probe, the packaging privacy check:
+// the slow, desktop-bound, load-sensitive ones) so a contributor gets a
+// sub-minute signal; `npm run test:fast` is that plus no Python stage.
+// `--list` prints the suites a run would select and exits. Without `--fast`
+// the runner first checks that `python` on PATH is Python 3, because
+// `npm test` chains the tools/ contracts after this stage and a missing
+// interpreter otherwise fails forty seconds in with a bare "not found".
+//
 // Before any of that: the vm/section() suites eval slices of the real sources
 // (main.cjs, renderer/idle.js, ...) in sandboxes stubbed for the current
 // content, and a run launched while another session has those files mid-edit
@@ -31,8 +40,44 @@ for (const entry of await readdir(testsRoot, { recursive: true })) {
   if (entry.endsWith(".test.mjs")) all.push(path.join(testsRoot, entry));
 }
 all.sort();
-const parallel = all.filter((file) => !serialized.has(path.basename(file)));
-const exclusive = all.filter((file) => serialized.has(path.basename(file)));
+
+const args = new Set(process.argv.slice(2));
+const fast = args.has("--fast");
+const listOnly = args.has("--list");
+const skipPythonCheck = fast || listOnly || args.has("--skip-python-check");
+
+// A suite is "heavy" when its source reaches for the Electron binary or one of
+// the *-electron.cjs fixtures: those need a desktop and a minute or more each.
+const launchesElectron = /-electron\.cjs|electron[\\/]dist|require\("electron"\)/;
+const heavy = new Set();
+for (const file of all) {
+  if (launchesElectron.test(await readFile(file, "utf8"))) heavy.add(file);
+}
+const selected = fast ? all.filter((file) => !heavy.has(file)) : all;
+const parallel = selected.filter((file) => !serialized.has(path.basename(file)));
+const exclusive = selected.filter((file) => serialized.has(path.basename(file)));
+
+if (listOnly) {
+  for (const file of selected) console.log(path.relative(studio, file).split(path.sep).join("/"));
+  process.exit(0);
+}
+
+function pythonPreflight() {
+  const probe = spawnSync("python", ["--version"], { encoding: "utf8" });
+  const version = `${probe.stdout || ""}${probe.stderr || ""}`.trim();
+  if (!probe.error && probe.status === 0 && /^Python 3\./.test(version)) return;
+  const found = probe.error ? probe.error.code : version || `exit ${probe.status}`;
+  console.error(
+    `run-node-tests: npm test needs Python 3 on PATH as \`python\` for the contracts in tools/ (found: ${found}). ` +
+      "Install it, or run `npm run test:fast` for the Node suites alone.",
+  );
+  process.exit(1);
+}
+if (!skipPythonCheck) pythonPreflight();
+console.log(
+  `run-node-tests: ${selected.length} suites` +
+    (fast ? ` (--fast: ${heavy.size} Electron suites skipped, Python stage not part of this script)` : ` (${heavy.size} launch Electron)`),
+);
 
 // What the section()/vm suites read off disk. Everything except the two
 // curated data files under data/ is tree state; data/ itself also holds the

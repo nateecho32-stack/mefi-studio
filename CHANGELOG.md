@@ -33,6 +33,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   that verifies the published SHA-256.
 - Repository docs: `docs/` folder, `CHANGELOG.md`, `SECURITY.md`,
   `.env.example`, issue and pull-request templates, screenshots in the README.
+- Contributor loop: `npm run test:fast` (Node suites without the nine
+  Electron fixtures, under half a minute), `npm run lint` (check-only eslint,
+  also in CI), a Python preflight with a clear message in `npm test`,
+  `.editorconfig`, a repository map and module rule in `CONTRIBUTING.md`, and a
+  known-environmental-failures table at the top of `TESTRUNS.md`.
 
 ### Changed
 - OpenCode store reads moved to a worker thread; sessions are scoped by folder.

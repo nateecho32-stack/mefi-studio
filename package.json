@@ -32,6 +32,8 @@
     "audit": "node scripts/auditor.mjs",
     "icon": "node scripts/make-icon.mjs",
     "test": "node scripts/run-node-tests.mjs && python -m unittest discover -s tools -p \"test_mefi_studio_*.py\" && node tools/test_normalized_path_lock.mjs",
+    "test:fast": "node scripts/run-node-tests.mjs --fast",
+    "lint": "npx --yes eslint@9 --no-config-lookup -c eslint.config.js .",
     "package": "node scripts/package-portable.mjs",
     "package:release": "npm run build-booklet && node scripts/package-portable.mjs --release"
   },

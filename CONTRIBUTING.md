@@ -4,6 +4,52 @@ This is a standalone Electron application. Application sources live at the
 repository root (`main.cjs`, `preload.cjs`, `scripts/`, `renderer/`,
 `assets/`, `tools/`, `tests/`); run all npm commands from this directory.
 
+## Repository map
+
+| Path | What lives there |
+| --- | --- |
+| `main.cjs` | The Electron main process: windows, tray, IPC handlers, the service loop host, dispatch. One file, by design; sections are marked with banner comments. |
+| `preload.cjs` | The `window.mefiStudio` bridge. Every renderer call to the host goes through here. |
+| `scripts/` | Host-side logic outside the main process: the assistant and agent roles (`assistant.mjs`), the OpenCode store reader (`eyes.mjs`), machine capacity, policy, packaging, the check gates and the booklet build. |
+| `renderer/` | The UI. `booklet.template.html` plus one classic-script `.js` per surface (`workspace.js`, `idle.js` for Command view, `nav.js` for the destination registry, `tasks.js`, `onboarding.js`, ...) and the stylesheets. `booklet.html` is generated from all of it and committed. |
+| `tests/` | Node suites (`*.test.mjs`) and `tests/fixtures/` (Electron fixtures, fake bridges, replay data). |
+| `tools/` | Python contracts (`test_mefi_studio_*.py`), the Electron verifiers (`verify_*.py`) and profiling helpers. |
+| `data/` | Only `curated.json` and `models.json` are tracked; everything else here is your local state. |
+| `docs/` | Longer docs; `docs/archive/` for superseded ones; `docs/images/` for README screenshots. |
+| `.github/` | CI (`ci.yml`), the release workflow, issue and PR templates. |
+
+## `.cjs`, `.mjs` or `.js`?
+
+`package.json` says `"type": "module"`, so the rule is by consumer:
+
+- **`.cjs`** for anything `main.cjs` or `preload.cjs` `require()`s (Electron's
+  main process is CommonJS). Examples: `scripts/projects.cjs`, `scripts/planning.cjs`.
+- **`.mjs`** for anything imported by tests or other scripts, and for every
+  CLI script under `scripts/`. Examples: `scripts/assistant.mjs`, `scripts/eyes.mjs`.
+- **`.js`** under `renderer/` only: classic scripts inlined into the booklet,
+  sharing `window.Mefi*` namespaces, no imports.
+
+`scripts/check-syntax.mjs` compiles each kind the right way, and
+`scripts/check-targets.mjs` fails if a new `scripts/*.mjs` or `renderer/*.js`
+is not reachable by the check chain, so a misplaced file is caught at
+`npm run check`.
+
+## Changing one control, end to end
+
+1. Edit the markup in `renderer/booklet.template.html` and the behaviour in
+   the matching `renderer/*.js` (each surface owns its file; `nav.js` owns
+   keys and destinations; `idle.js` owns the Command canvas and its rail).
+2. `npm run build-booklet` to regenerate `renderer/booklet.html`. CI diffs the
+   committed bundle, so commit it with the source change.
+3. `npm run check`, then `npm run test:fast` while iterating (Node suites
+   without the Electron fixtures, under a minute), then the full `npm test`
+   and `npm run audit` before the pull request.
+4. To see it: `npm start`, or `npm run start:web` for a browser preview of the
+   renderer with no host.
+5. If the control is user-visible, update `docs/architecture.md` and add a
+   line under *Unreleased* in `CHANGELOG.md`.
+
+
 ## Checks
 
 Every application change must pass the three gates:
@@ -13,6 +59,19 @@ npm run check     # syntax + target coverage + spec-collision audit
 npm test          # node --test tests/**/*.test.mjs  +  python unittest discover
 npm run audit     # scripts/auditor.mjs (renderer/template contracts)
 ```
+
+While iterating:
+
+```
+npm run test:fast   # Node suites only, minus the nine that launch Electron
+npm run lint        # eslint, check-only: undefined identifiers fail, unused ones warn
+```
+
+`npm test` needs Python 3 on PATH as `python` (the runner checks first and
+says so) and a real desktop: the Electron fixtures drive real windows and are
+timing-sensitive under load. `npm run lint` fetches eslint through `npx` so the
+app keeps zero runtime dependencies; CI runs it too. `.editorconfig` sets
+two-space indentation, LF line endings and UTF-8.
 
 Two named sub-gates run inside `npm run check` and work standalone:
 
@@ -106,6 +165,30 @@ Workers may run in parallel against this repository. Before editing:
   `tools/test_assistant_write_lock.py`,
   `tools/test_mefi_studio_normalized_path_lock.py`, and
   `tools/test_normalized_path_lock.mjs` (run directly with `node`).
+
+## Pull requests
+
+- One change per pull request, described in the template: what it changes,
+  how to see it, and the three gates ticked.
+- Rebuild and commit `renderer/booklet.html` with any renderer change.
+- Commit messages: a short imperative subject and, when the why is not
+  obvious, a body that says it.
+- Nothing from `data/`, no keys, no screenshots with private paths.
+- Expect a maintainer to run the full gate on Windows before merging; a red
+  Electron fixture is checked against the known-failure table at the top of
+  `TESTRUNS.md` before it counts as a regression.
+
+## Tools you may not know about
+
+| Command | What it does |
+| --- | --- |
+| `node tools/profile_studio.mjs --help` | Reproducible renderer workloads for profiling (see `docs/performance.md`). |
+| `python tools/verify_workspace.py --output tools/logs/workspace-ui` | Drives the real Electron workspace through the walkthrough and screenshots each step. `verify_command.py`, `verify_planning.py` and `verify_model_lab.py` do the same for their surfaces. |
+| `python tools/benchmark_startup.py` | Startup timing. |
+| `npm run capture` | Screenshot tour of the tabs into `tools/logs/mefi_studio_captures/` (uses your live data; README images come from seeded previews instead). |
+| `node scripts/reconcile-board.mjs` | Offline backlog repair; `reconcile-store-fork.mjs --dry-run` previews a sync with the portable build's store. |
+| `npm run policy-lab` | Replays recorded dispatch episodes under `data/policy-lab/` against candidate policies. |
+| `npm run check:css -- a.css b.css` | Proves two stylesheets keep the same cascade winners. |
 
 ## Documentation
 

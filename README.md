@@ -107,8 +107,10 @@ The full feature walkthrough, in Studio's own vocabulary with a glossary, is in 
 ## Tests and checks
 
 ```powershell
+npm run test:fast        # Node suites without the Electron fixtures (about 20 s)
 npm run check            # targets, spec collisions, CSS cascade gates, syntax
-npm test                 # Node behavioural tests + Python contracts
+npm run lint             # eslint, check-only
+npm test                 # the gate: Node suites + Electron fixtures + Python contracts
 npm run audit            # renderer/template contract audit
 ```
 

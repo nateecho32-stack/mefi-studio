@@ -32,6 +32,8 @@ jobs:
         run: node --test tests/spec_collisions.test.mjs
       - name: Full check gate (targets + syntax)
         run: npm run check
+      - name: Lint (undefined and unused identifiers)
+        run: npm run lint
       - name: Behavioral and isolated desktop checks
         run: npm test
       - name: Application audit

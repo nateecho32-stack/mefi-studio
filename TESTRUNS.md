@@ -1,5 +1,73 @@
 # Test Runs
 
+## How to read this file
+
+This is the maintainers' lab notebook, not a guide: one entry per validation
+run or flake triage, newest first, written by whichever session ran it. The
+test guide proper is the section **Read Before Any Tests** further down
+(search for it); `CONTRIBUTING.md` has the short version. Before treating a
+red run as a regression, check it against the table below.
+
+### Known environmental failures
+
+| Suite | Symptom | Cause | What to do |
+| --- | --- | --- | --- |
+| `performance_render` | "Profiler JSON download timed out" against its 5 s budget; a 10 s run takes 80 s | Electron render capture starved by sibling suites or another session's build | Rerun solo: `node --test tests/performance_render.test.mjs`. Passes on a quiet machine. |
+| `occlusion_probe` | Skips with a capability-gated record, or fails on a destroyed cover window | Needs an attended, unlocked desktop; runs serialized after the parallel stage | A skip on a locked desktop is expected. Fails only when the cover window is lost mid-probe: rerun. |
+| `eyes_toggle_electron` | Timer drift over the worker channel | Wall-clock measurement under CPU load; serialized for that reason | Rerun solo on a quiet machine. |
+| `command_render`, `task_overview_render`, `startup_render`, `renderer_recovery`, `node_paint_cache` | Painted-position or capture assertions off by a frame | GPU-contended Electron captures in the parallel stage | Rerun the one file solo. |
+| `eyes_worker` | "read past the timeout" | Load-dependent worker read budget | Rerun solo. |
+| `expand_finished_guard` | One-off failure in the parallel stage, passes solo | Parallel-load timing | Rerun. |
+| Any `section()` / vm suite | Rotating `ReferenceError: X is not defined`, a different file each run, every file green solo | Another session edited `main.cjs` or `renderer/idle.js` while the run read them | The runner now waits for the tree to settle and says when sources moved mid-run; rerun on a quiet tree. |
+| `tools/test_mefi_studio_assistant.py` | One-shot duplicate-declaration failure in `main.cjs` | Racing a sibling session's in-flight edit | Re-runs after a short settle; capture the traceback to a file, never through `Select-Object -Last N`. |
+| `npm test` stops before the Node stage | "needs Python 3 on PATH as `python`" | The Python contracts are part of the gate | Install Python 3, or `npm run test:fast` for the Node suites alone. |
+
+`npm run test:fast` leaves out every suite that launches Electron (the first
+five rows) and is the loop to use while editing; `npm test` is the gate.
+
+Rotating in-suite vm ReferenceErrors root-caused to source drift, runner
+gained a settle preflight (2026-09-21, night, run_1790038455313_19 for
+task_b98d5abec0a9f2cc "Root-cause rotating in-suite vm ReferenceErrors").
+Forensics on the two captured failing runs (node-tests-full.log /
+node-tests-full2.log, 17:35/17:38): every reported failure is a
+section()/vm-eval test throwing "ReferenceError: X is not defined" where X
+(ASSISTANT_MAIL_RULE, assistantTakeMail, pickerHeld) is either stubbed in
+the current test sandboxes or declared at the markers the current
+main.cjs/renderer/idle.js answer — i.e. the eval'd slices came from bytes
+that were not the settled tree. The reads themselves succeeded (no EBUSY,
+no missing-section asserts), so the children read transient or stale
+content while sibling sessions had those exact files mid-edit that evening
+(the agent-mail session edited main.cjs/scripts/assistant.mjs, the callout
+session edited renderer/idle.js; OneDrive sync lengthens the unstable
+window). Which file is mid-edit rotates per run, which is why the failing
+set rotated (executor_modes+expand_finished_guard vs
+boot_poll_visibility+command_graph+command_visuals) while every file
+passes solo against settled bytes. Discriminating evidence on the quiet
+current tree: two full `node scripts/run-node-tests.mjs` runs (1738
+tests) produced zero vm/section failures — run 1 failed only
+performance_render (Profiler JSON download timeout) and run 2 only
+command_render (initial painted task frames timeout, 73 s under the
+active sibling session), both the separately tracked live-Electron
+load flakes, not vm evals. Fix landed in scripts/run-node-tests.mjs:
+before the parallel stage the runner fingerprints main.cjs, preload.cjs,
+scripts/, renderer/, tests/ and data/models.json (content hash over
+paths+bytes; data/'s live stores deliberately excluded or it would never
+settle), re-checks after 1.5 s, waits up to 10 attempts for the tree to
+hold still, and exits 1 with a named diagnosis instead of launching into
+a mid-edit window; if the parallel stage fails and the fingerprint moved
+meanwhile, it prints that the vm failures may be transient-content reads
+before propagating the exit code. Algorithm self-test (stable pass,
+content-change detect, second-change detect, unwatched-extension ignore,
+re-stable) 5/5 in %TEMP%\opencode\preflight-selftest.mjs; `node --check`
+clean; both full runs above exercised the real runner end to end
+(preflight settled instantly on the quiet tree, no false-positive drift
+diagnostics). Sibling concurrent suite runs: checked at task start, none
+running (only MCP proxies and one other agent CLI). Not claimed here: a
+green exit-0 full-suite run (the two verification runs each hit one known
+Electron-under-load flake while the sibling session was active) — that
+remains the toggle card's own gate; and the mid-edit window cannot be
+closed for edits that start after launch, only diagnosed.
+
 performance_render residual flake CAPTURED under real suite contention —
 fixture-internal, uncovered by the kill contract (2026-09-21, night,
 run_1790036825250_4 for task_3d33701ba75b4e48 "Capture residual flake
