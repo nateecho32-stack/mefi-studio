@@ -6,7 +6,11 @@ This is the maintainers' lab notebook, not a guide: one entry per validation
 run or flake triage, newest first, written by whichever session ran it. The
 test guide proper is the section **Read Before Any Tests** further down
 (search for it); `CONTRIBUTING.md` has the short version. Before treating a
-red run as a regression, check it against the table below.
+red run as a regression, check it against the table below. Everything below
+the **Read Before Any Tests** anchor is a frozen archive that keeps its own
+chronological order on purpose - the newest-first rule and its gate apply
+only above the anchor (decision recorded 2026-09-22, pinned by
+`tests/check_testruns.test.mjs`; do not normalize the archive).
 
 ### Known environmental failures
 
@@ -24,6 +28,30 @@ red run as a regression, check it against the table below.
 
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
+
+## 2026-09-22 late evening - archive below "Read Before Any Tests" blessed as-is: newest-first gate stays live-region-only, exemption documented and pinned by tests, missing anchor now fails loudly (task_87f7dbf510f14bef, run run_1790106278990_28)
+
+Decision on the a-eyes card: bless, do not normalize. Evidence gathered
+first-hand rather than adopted: the archive region holds 11 H2s - three
+undated reference sections ("Python contracts", "App commands and captures",
+"Agent loop, Jev and startup regressions") interleaved with eight dated rows
+whose tail block runs oldest-first as a chronological narrative, including
+the attempt/retry pair sharing run_1790085745914_2 that ad5bba2 already
+verified as deliberately authored. Enforcing newest-first there would flag
+the doc sections as non-rows or churn ~1,200 frozen verified lines to
+prevent nothing: stale-anchor appends, duplicate rows and conflict copies
+only ever land in the live region where new rows are inserted. Changes:
+scripts/check-testruns.mjs header comment now records the decision and
+rationale; a missing "## Read Before Any Tests" anchor is an explicit check
+failure (previously a missing anchor silently enforced the whole file with
+confusing non-row errors - the exemption boundary is loud now); new
+tests/check_testruns.test.mjs (9 tests) pins live-region enforcement AND
+the archive exemption so a future session cannot quietly "fix" the skip
+back; the "How to read this file" preamble states the archive rule. Checks:
+node scripts/check-testruns.mjs ok (58 live rows), node --test
+tests/check_testruns.test.mjs 9/9, full npm run check green. Nothing else
+touched; this commit is only scripts/check-testruns.mjs,
+tests/check_testruns.test.mjs and this row.
 
 ## 2026-09-22 late evening - TESTRUNS concurrent-editor alert triaged as unverifiable, prior collision verified intact first-hand, structural gate scripts/check-testruns.mjs added to "check" so future append collisions fail the gate (run_1790105837299_25)
 

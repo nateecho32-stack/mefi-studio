@@ -3,10 +3,21 @@
 // showed the failure modes: duplicate row headings from a clobbered append,
 // rows inserted at a stale anchor below newer rows, and the risk of OneDrive
 // conflict-copy siblings. This pass makes each of those a check failure
-// instead of something a repair session has to discover by hand. It is
-// deliberately conservative: the frozen archive below the guide sections
-// keeps its historical (blessed) order, and only the live region above
-// `## Read Before Any Tests` must be newest-first.
+// instead of something a repair session has to discover by hand.
+//
+// Scope decision (2026-09-22, run_1790106278990_28): only the live region
+// above `## Read Before Any Tests` must be newest-first. The archive below
+// that anchor is BLESSED, not an oversight: it interleaves undated reference
+// sections ("Python contracts", "App commands and captures", "Agent loop,
+// Jev and startup regressions") with dated rows, and its tail runs
+// oldest-first as a chronological narrative whose attempt/retry pair sharing
+// run_1790085745914_2 was verified deliberate in ad5bba2. The failure modes
+// this gate exists for (stale-anchor appends, duplicate rows, conflict
+// copies) only ever land in the live region where new rows are inserted, so
+// enforcing order on the frozen archive would churn verified history for
+// nothing. Do not "fix" the skip back; tests/check_testruns.test.mjs pins
+// it. The exemption is boundary-locked: a missing anchor heading fails the
+// check loudly instead of silently enforcing or exempting the wrong region.
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -65,6 +76,13 @@ export function auditTestruns(packageRoot) {
 
   const firstDated = headings.findIndex((h) => ROW_RE.test(h.text));
   const guideIdx = headings.findIndex((h) => h.text === "Read Before Any Tests");
+  if (guideIdx === -1) {
+    // The archive exemption is scoped by this anchor. Without it the split
+    // between the enforced live region and the blessed archive is undefined,
+    // so fail loudly instead of silently enforcing the whole file (the old
+    // fallback) or exempting everything.
+    problems.push(`${rel}: "## Read Before Any Tests" anchor heading is missing - live/archive boundary undefined`);
+  }
   const liveEnd = guideIdx === -1 ? headings.length : guideIdx;
   if (firstDated === -1) {
     problems.push(`${rel}: no dated run rows found`);
