@@ -11215,10 +11215,18 @@ async function autopilotHousekeeping() {
         // A retry of a card that already verified done once is
         // verification-only: its faithful scoped-check rerun changes 0
         // files, and the verifier counts its fresh green recorded checks as
-        // the evidence. The durable stamp covers retries after this change;
-        // the log scan recovers cards that verified before it existed.
+        // the evidence. The named alternative evidence is a TESTRUNS row —
+        // ledger-only edits discharge the same way. The durable stamp covers
+        // retries after this change; the log scan recovers cards that
+        // verified before it existed.
         const priorVerified = task.verifiedOnce === true
           || (Array.isArray(task.logs) && task.logs.some((row) => row?.kind === "status" && /^verified\b/u.test(String(row.text))));
+        // Ledger rows are documentation of the rerun, not landed code: count
+        // them separately so the verifier can treat "only TESTRUNS.md
+        // changed" as the 0-file retry it documents.
+        const ledgerChanges = (rows) => Array.isArray(rows)
+          ? rows.reduce((count, row) => count + (row?.files?.length ? row.files : [row?.file]).filter((file) => /(?:^|[\\/])testruns\.md$/i.test(String(file ?? ""))).length, 0)
+          : 0;
         const files = attemptChanges(attempt, task.title);
         if (files === null) { waitForEvidence(task); continue; }
         const observedChecks = attemptChecks(attempt, task.title);
@@ -11227,6 +11235,7 @@ async function autopilotHousekeeping() {
         const verdict = verify({
           verdictOk: attempt.sawDone === true || attempt.code === 0,
           changedFiles: Array.isArray(files) ? files.length : 0,
+          ledgerChanges: ledgerChanges(files),
           hasSession: Boolean(attempt.sessionId),
           observedChecks: overseerChecks.length ? [...observedChecks, ...overseerChecks] : observedChecks,
           resolvedHandoffs: task.handoffState?.resolvedTitles ?? [],

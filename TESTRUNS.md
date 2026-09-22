@@ -47,6 +47,31 @@ host-side only and is asked via MEFI_ASK — the task store was not modified
 from this worker. Sibling in-flight files (~30 modified, 2 untracked) were
 present and untouched; this commit adds only this row.
 
+
+## 2026-09-22 evening - the ledger-row verifier wiring landed quietly (task_8cc401d711b549ba, run run_1790099374977_2)
+
+The row below landed `verifyCompletion`'s `ledgerChanges` input and its
+tests (1e61b58) but left main.cjs unwired: the two call-site hunks sat in
+a working tree whose main.cjs also carried an unrelated session's
+in-flight edits, so no path-limited commit could be made without
+sweeping them, and the false "outstanding obligations" loop this card
+documents kept retrying. This commit lands exactly those two hunks -
+the ledger-row counter with its comment, and the
+`ledgerChanges: ledgerChanges(files)` argument on the task settle call -
+by rebuilding main.cjs from HEAD plus the wiring alone (`git show
+HEAD:main.cjs`, two edits, the diff verified to be only those hunks),
+committing `main.cjs` and this row in one atomic path-limited commit,
+then restoring the sibling session's uncommitted edits byte-for-byte
+from a pre-flight snapshot. The request settle call stays unwired:
+requests pass no `priorVerified`, so the discharge path cannot fire
+there. Scoped evidence on the committed variant: 
+ode --check main.cjs`
+ok; 
+ode --test tests/verification_checks.test.mjs
+tests/executor_result_protocol.test.mjs` 20/20 pass, exit 0 - including
+the seeded done+verified retry whose only session change is TESTRUNS.md
+settling to done and its src-file negative twin.
+
 ## 2026-09-22 evening - ledger-row evidence added to the done+verified discharge (task_8cc401d711b549ba, run run_1790097856627_4)
 
 The requirement's second clause, left unimplemented by the 1f00796 row two
