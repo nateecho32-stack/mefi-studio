@@ -25,6 +25,29 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - collision-delegate scoped checks re-verified green at HEAD 6acf79f, retry 1 of the false "outstanding obligations" loop (task_93c9907b18ec3928, run run_1790100988544_5)
+
+Retry of the 16:0x rerun row below after its verification receipt
+(rcp_2474eaa83c45b800) still said "outstanding obligations remain" despite
+all four checks green and a TESTRUNS evidence row committed (789001b) —
+the loop the child card task_8cc401d711b549ba has since fixed verifier-side
+(1e61b58 TESTRUNS-row discharge + ae5916e settle wiring, both ancestors of
+this HEAD). Re-ran every recorded scoped check first-hand from the project
+root at HEAD 6acf79f, all exit 0 with counts matching the delegates' own:
+`node --test tests/model_auto_setup.test.mjs` — 16 tests / 16 pass / 0 fail
+(155 ms); `python -m unittest discover -s tools -p
+test_mefi_studio_routing.py` — Ran 23 tests, OK (4.0 s);
+`node --test tests/jev_routing_ui.test.mjs` — 19 tests / 19 pass / 0 fail
+(415 ms); shared `npm run check` prefix — targets ok (100/100),
+spec-collisions ok (204 specs, unique, no orphans), css merge skip, all
+selectors used, syntax ok (100 files). Per-delegate verdicts: delegate
+task_delegate_d9f299382ce7faa99dfc1f15's list (model_auto_setup) green;
+delegate task_delegate_f86594532fe0532c3d541359's list
+(mefi_studio_routing + jev_routing_ui) green — no host-side remainder, so
+both can verify and task_c1cf337d66009c14 can integrate. No product or
+test code touched; ~45 sibling in-flight modified files plus 2 untracked
+left exactly as found; this commit adds only this row.
+
 ## 2026-09-22 afternoon - retry after the second "split" decision: repo-side half re-verified at HEAD, host-side flip carried by the new card (task_4dc2a045b8d46b20, run run_1790100903971_2)
 
 The owner answered this card's b300702 scope question with "split the extra
