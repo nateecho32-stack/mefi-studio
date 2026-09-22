@@ -25,6 +25,24 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - quiet-tree gate card closes clean: both handoffs settled, 6a9a299 re-verified in HEAD, check green (task_5e0a126238bab8fb, run run_1790103861088_5)
+
+Retry after "unverified - outstanding obligations remain": the two handoffs
+the verdict counted are now settled, re-read first-hand from the store
+(read-only) and the executor log, not from reports. Handoff 1, landing the
+session-continuity worktree: c2ced15 carries it and is an ancestor of HEAD
+(merge-base true), exactly as the handoff prompted. Handoff 2, the workerless
+re-lease of task_ad390ff083105169: child task_4ea1c3e61338e81d finished ok
+(executor-log: "verified done+lease-free ... remaining: none"), and this
+card's handoffState in the store reads complete / pending 0 / blocked 0. The
+gate's own evidence is intact at drifted HEAD a32c1d5: 6a9a299 still carries
+the full-suite row (npm test exit 0, 178 suites, node 2062/2059/0/3, python
+247 OK, build-booklet exit 0, booklet hash f98dd2322a01), and the chain
+re-tested ancestors 5/5 (2457a7d, 6a9a299, c2ced15, 8fcd78b, a32c1d5). Fresh
+`npm run check` -> exit 0 (targets 101, specs 205, selectors, syntax) racing
+the sibling's 16-file loop-cleanup drift, which stays byte-for-byte as found,
+nothing staged; this commit adds only this row.
+
 ## 2026-09-22 late evening - seventh-gen carrier retry re-verifies green at twice-moved HEAD 8fcd78b; both landing cards re-read still open, flip stays owner-only (task_b015afd76934e639, run run_1790103762055_1)
 
 Retry of row 47330f8 after "unverified - outstanding obligations remain".
