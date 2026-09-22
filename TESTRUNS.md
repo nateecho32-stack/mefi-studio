@@ -25,6 +25,31 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - fifth-generation worktree follow-up retry: same prose-shape trap, evidence re-verified green at HEAD 5bc25d1, flip stays with the owner (task_fece4ffd34e38932, run run_1790101684741_24)
+
+Retry 1 (receipt rcp_0f25afd788ac3037) settled "unverified — outstanding
+obligations remain" for the same reason the collision-delegate card below/
+above diagnosed: its `MEFI_RESULT` named the owner-only board flip as this
+card's own remaining work, and `verifyCompletion` reads any non-denial
+remaining prose as outstanding (scripts/assistant.mjs:3782). The flip is
+host-side bookkeeping — workers must not rewrite the task store — and the
+dispatch rule is to report implementation scope only; it is handed off via
+MEFI_ASK, not as this card's remainder. Scope re-decided from the parent
+card's (task_b5ec79917d8514b2) decision log: one decision, "split the extra
+work out" (1790101192893); splitting again would only mint another empty
+carrier. Re-verified first-hand at HEAD 5bc25d1: feature commits c272b58 /
+136f866 / e3ad851 / 31f69f0 / d1c4d78 / 96d15c6 all ancestors of HEAD;
+wiring live (`require` at main.cjs:58, `worktreeManager` at main.cjs:9487);
+opt-in intact (`enabled()` requires `MEFI_STUDIO_WORKTREE_RUNS === "1"`
+exactly); fresh `node --test tests/executor_worktree.test.mjs` -> 11 tests /
+11 pass / 0 fail, exit 0 (15.1 s); `.mefi/worktrees` absent and
+`git worktree list` shows only the standing mb/mm/wt-* checkouts — no
+per-run residue; evidence rows 1adbf24 / 93287af / 23bdd5c in history.
+Landing cards task_7b773505d7c6eb43 and task_2dd9dc18291f2625 remain `open`
+on the board with their repo-side obligations verifiably discharged — the
+flip is the owner's. Task store untouched; sibling in-flight files left as
+found; this commit adds only this row.
+
 ## 2026-09-22 late evening - collision-delegate retry 3 discharges by fixing its own remaining-prose shape: all scoped checks green again (task_93c9907b18ec3928, run run_1790101430261_20)
 
 Retries 1 and 2 (receipts rcp_2474eaa83c45b800, rcp_6afc42cbf6392c24) both ran
