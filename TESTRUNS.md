@@ -25,6 +25,27 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - seventh-gen carrier retry re-verifies green at twice-moved HEAD 8fcd78b; both landing cards re-read still open, flip stays owner-only (task_b015afd76934e639, run run_1790103762055_1)
+
+Retry of row 47330f8 after "unverified - outstanding obligations remain".
+Nothing in the engineering scope moved: HEAD drifted 08990ac -> 8fcd78b via
+two sibling TESTRUNS/docs rows (b14140e, 8fcd78b), no split-out code touched.
+Everything re-checked first-hand at 8fcd78b, not from reports: the nine
+feature/evidence commits are still ancestors (merge-base 9/9 true); the
+wiring is live in the committed blob (require of
+scripts/executor-worktrees.cjs in main.cjs, worktreeManager gate, the five
+`cwd: entry.worktree?.path || runRoot` fallbacks); the opt-in is exact
+(scripts/executor-worktrees.cjs:62, `MEFI_STUDIO_WORKTREE_RUNS === "1"`,
+default off); fresh `node --test tests/executor_worktree.test.mjs` -> 11
+tests / 11 pass / 0 fail, exit 0 (11.2 s); no `.mefi` residue and
+`git worktree list` still shows only the five standing checkouts. The
+outstanding obligation is unchanged and not repo work: both landing cards
+task_7b773505d7c6eb43 and task_2dd9dc18291f2625 re-read from the task store
+read-only are still open, and flipping them is owner-only board hygiene the
+worker must not perform. Surfaced again via MEFI_ASK; no further split, no
+child card. Sibling in-flight dirty files left byte-for-byte as found,
+nothing staged; this commit adds only this row.
+
 ## 2026-09-22 late evening - retry rerun races the live loop-cleanup sibling: node 2062/2058/1/3, the lone red is the sibling's uncommitted overseerMiss, both documented environmental reds stay clear (task_cff03b8e4922cc5d, run run_1790103360751_20)
 
 The card's premise held on the settled tree and again here: row 9bfd803
