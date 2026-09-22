@@ -25,6 +25,26 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - quiet-tree full-gate rerun green end-to-end: midday booklet race gone, one documented perf flake on the first attempt (task_cff03b8e4922cc5d, run run_1790100967469_4)
+
+The sibling landed its last wave at 13:17:55-56 — renderer/brains.js and
+brains.css edited together, booklet.html rebuilt two seconds later — so for the
+first time today the inlined copy matched the working tree. The gate launched
+13:24:23 with ~6.5 min of quiescence and no sibling suite in flight (only the
+standing serve.mjs watchers and MCP servers). First attempt exit 1 in 89.6 s:
+node stage 2054 tests / 2050 pass / 1 fail / 3 skipped, the single failure
+`performance_render` "Profiler JSON download timed out after 5320ms" — the
+documented Electron-capture flake (first row of the table above) — which also
+stopped the chain before the Python stage. Immediate full rerun with no tree
+changes in between: exit 0 in 132.3 s. Node 177 suites (9 Electron), 2054
+tests / 2051 pass / 0 fail / 3 skipped in 72.2 s, serialized
+`eyes_toggle_electron` 1/1 and `occlusion_probe` 1/1, no sources-moved flag.
+Python contracts 247 tests in 39.3 s, OK —
+`test_brains_assets_are_inlined_exactly_once` passes against the 13:17:56
+booklet, closing the midday race. The normalized-path lock stage was reached
+this time and all checks passed. Sibling dirty files and the task store
+untouched; this commit adds only this row.
+
 ## 2026-09-22 evening - fourth-generation carrier: remainder confirmed owner-only, repo re-verified at HEAD 06dc84d (task_fece4ffd34e38932, run run_1790101296453_15)
 
 Scope decided from the parent card's (task_b5ec79917d8514b2) decision log,
