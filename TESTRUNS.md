@@ -96,34 +96,6 @@ The card's obligation — its own gate run on the settled edit — is
 discharged; committing main.cjs stays with the refactor's own session.
 Task store untouched; this commit adds only this row.
 
-## 2026-09-22 late evening - parent integration gate re-verified green on the moved tree, retry-1 denial traced to its remaining-prose shape (task_b63e296b2ca2b7e7, run run_1790101737630_26)
-
-Retry 1 settled "unverified — outstanding obligations remain" for the shape
-row 5bc25d1 names: its report ended "remaining: host-side close of
-task_c1cf337d66009c14", which `noRemainingWork` does not accept, while the
-verifier's own re-run had only re-run `npm run check`. The tree also moved
-five commits past the af88c20 evidence (through 5bc25d1), so this retry
-re-ran all three gate commands first-hand at HEAD 5bc25d1 on the whole
-in-flight tree (main.cjs and renderer work included) and recorded every exit
-code. `npm run check` exit 0 (targets 100/100, 204 specs unique, all
-selectors used, syntax ok 100 files). First `npm test` exit 1 on exactly one
-test — performance_render's EBUSY rmdir of its own Electron temp dir, the
-documented environmental row ("Rerun solo"); this dispatch was itself held
-three times for low memory/responsiveness, so the machine was contended.
-Solo rerun `node --test tests/performance_render.test.mjs` — 2/2, exit 0.
-Full `npm test` rerun exit 0 — node 2054 tests / 2051 pass / 0 fail /
-3 skipped (the documented environment-conditional skips), serialized
-eyes_toggle 1/1, occlusion probe green (worker drift 165 ms), Python
-contracts `Ran 247 tests in 36.0s` OK, normalized-path lock stage passed.
-`npm run build-booklet` exit 0 — 39 models, hash f98dd2322a01, and the
-rebuilt booklet is byte-identical to the working tree (git hash-object
-72c66122feec… before == after): nothing stale for the landing sequence.
-Retry 1's "changedFiles: 1" was commit af88c20 itself (TESTRUNS.md +24, the
-evidence row) — an intended path-limited write, not an unexplained one. Task
-store untouched; sibling in-flight files left exactly as found; this commit
-adds only this row. The card flip for task_c1cf337d66009c14 stays
-owner-side.
-
 ## 2026-09-22 late evening - fifth-generation worktree follow-up retry: same prose-shape trap, evidence re-verified green at HEAD 5bc25d1, flip stays with the owner (task_fece4ffd34e38932, run run_1790101684741_24)
 
 Retry 1 (receipt rcp_0f25afd788ac3037) settled "unverified — outstanding
