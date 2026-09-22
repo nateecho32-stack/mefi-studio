@@ -25,6 +25,29 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+performance_render solo re-confirmation on the landed profiler tree
+(2026-09-22, ~09:0x, run_1790085767760_3 for task_9892bbd6444a088e,
+re-running the evening row's requirement on the current clock). No suite
+load and zero electron processes at launch (the two concurrent-session
+mefi-command-render fixture groups sighted at 09:00:09/09:04:10 had
+exited, verified via Win32_Process). `node --test
+tests/performance_render.test.mjs` solo: 2/0 pass, exit 0, wall 32.9 s
+(fixtures 26.2 s/5.9 s - slower than the evening's 14.4 s with only
+~0.03 GB free RAM reported by os.freemem() and ~17% CPU on 16 logical
+cores, still far under the 40 s kill contract and 50 s test timeout).
+Serialized display stage exactly as scripts/run-node-tests.mjs runs it,
+one invocation per fixture: occlusion_probe 1/0, exit 0, 5.9 s (lag 0 ms,
+worker drift 166 ms); eyes_toggle_electron 1/0, exit 0, 3.5 s. All three
+runs left zero electron processes of their own (the only electrons after
+were the concurrent session's 09:07:04 mefi-command-render group). Tree
+at HEAD 18c1025, which includes the committed kill-contract hardening
+and the load-tolerant downloadCapture budget
+(tests/fixtures/performance-render-electron.cjs:133); concurrent
+sessions' uncommitted work untouched. Confirms on the landed tree what
+the evening row found in-flight: the timeout is environmental, not the
+profiler change, and the classification follow-up is already closed by
+the row below.
+
 performance_render historical full-`npm test` contention signature verified
 and closed (2026-09-22, ~08:4x, run_1790084276208_9 for
 task_37a437c156658816 "classify historical full-npm-test contention
