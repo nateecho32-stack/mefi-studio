@@ -25,6 +25,28 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - A-Eyes "uncommitted work" warn re-checked first-hand: alert stale, both commits in HEAD, named checks green; prior failure was the remaining-prose trap (task per run_1790101891091_31)
+
+The A-Eyes warn said the booklet contract test and `tools/verify_dev_app.mjs`
+changes from sessions ses_f3631f870ffeoCbC3Gou37bEpI /
+ses_f3633e551ffeOKdK97uhc8hb7M existed only uncommitted. Re-checked at HEAD
+c4caee1: `git merge-base --is-ancestor` confirms e3cd322 ("Booklet contract:
+brains assets inlined exactly once, no src leftovers") and b8f1a7a ("Add the
+dev-app module-graph named check") are both ancestors of HEAD, and
+`git status --porcelain` for `tools/test_mefi_studio_booklet.py`,
+`tests/booklet_build.test.mjs` and `tools/verify_dev_app.mjs` is clean — the
+alert fired from a stale snapshot; a fresh scan finds nothing. The previous
+attempt's "verification: outstanding obligations remain" was the prose-shape
+trap the rows below document: its report carried non-denial remaining prose,
+which `verifyCompletion` counts as this card's own obligation
+(scripts/assistant.mjs:3782). Nothing in this card's scope remains owed.
+Fresh named checks at HEAD c4caee1: `node --test
+tests/booklet_build.test.mjs` -> 3 tests / 3 pass / 0 fail;
+`python tools/test_mefi_studio_booklet.py` -> 10 tests OK, exit 0; `node
+tools/verify_dev_app.mjs` -> 74 files scanned, 0 resolution failures, serve
+probe HTTP 200, exit 0. Sibling in-flight edits (main.cjs, renderer, docs)
+left exactly as found; this commit adds only this row.
+
 ## 2026-09-22 late evening - sibling main.cjs refactor verification retry: independent full-gate rerun green on the settled uncommitted 427+/302- tree (task_d770727341b466b7, run run_1790101761830_27)
 
 Retry 1 settled "unverified — outstanding obligations remain" for the same
@@ -104,6 +126,41 @@ and `.mefi/worktrees` does not exist. This report therefore carries the
 flip as a handed-elsewhere parenthetical — "none (owner-side flip handed
 off)" — plus an owner MEFI_ASK card; no product or test code touched;
 sibling in-flight files preserved; this commit adds only this row.
+
+## 2026-09-22 late evening - parent integration gate re-verified green on the moved tree, retry-1 denial traced to its remaining-prose shape (task_b63e296b2ca2b7e7, run run_1790101737630_26)
+
+Retry 1 settled "unverified — outstanding obligations remain" for the shape
+row 5bc25d1 names: its report ended "remaining: host-side close of
+task_c1cf337d66009c14", which 
+oRemainingWork does not accept, while the
+verifier's own re-run had only re-run 
+pm run check. The tree also moved
+five commits past the af88c20 evidence (through 5bc25d1), so this retry
+re-ran all three gate commands first-hand at HEAD 5bc25d1 on the whole
+in-flight tree (main.cjs and renderer work included) and recorded every exit
+code. 
+pm run check exit 0 (targets 100/100, 204 specs unique, all
+selectors used, syntax ok 100 files). First 
+pm test exit 1 on exactly one
+test — performance_render's EBUSY rmdir of its own Electron temp dir, the
+documented environmental row ("Rerun solo"); this dispatch was itself held
+three times for low memory/responsiveness, so the machine was contended.
+Solo rerun 
+ode --test tests/performance_render.test.mjs — 2/2, exit 0.
+Full 
+pm test rerun exit 0 — node 2054 tests / 2051 pass / 0 fail /
+3 skipped (the documented environment-conditional skips), serialized
+eyes_toggle 1/1, occlusion probe green (worker drift 165 ms), Python
+contracts `Ran 247 tests in 36.0s` OK, normalized-path lock stage passed.
+
+pm run build-booklet exit 0 — 39 models, hash f98dd2322a01, and the
+rebuilt booklet is byte-identical to the working tree (git hash-object
+72c66122feec… before == after): nothing stale for the landing sequence.
+Retry 1's "changedFiles: 1" was commit af88c20 itself (TESTRUNS.md +24, the
+evidence row) — an intended path-limited write, not an unexplained one. Task
+store untouched; sibling in-flight files left exactly as found; this commit
+adds only this row. The card flip for task_c1cf337d66009c14 stays
+owner-side.
 
 ## 2026-09-22 late evening - collision-delegate retry 3 discharges by fixing its own remaining-prose shape: all scoped checks green again (task_93c9907b18ec3928, run run_1790101430261_20)
 
