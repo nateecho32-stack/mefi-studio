@@ -25,6 +25,24 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - post-replan confirmation pass for the visible-phase foreground card (task_03ad46c09bd30216, run run_1790097316663_2)
+
+The card had already reached a trusted "verified" receipt
+(rcp_0ff6e145d5fb395f, run run_1790094834453_140) when the owner re-planned
+it; this pass re-derived the evidence rather than trusting any report. No
+code changed: `git diff HEAD -- tests/fixtures/occlusion-probe-electron.cjs`
+is empty, so the committed 379c5b1 fix — `app.focus({ steal: true })` at
+raise and re-raise (fixture lines 389/430), the bounded `acceptable`
+resampling (line 454: frames-answer AND <100ms lag), and the
+frames-preferring `bestSample` — is what runs. Fresh `node --test
+tests/occlusion_probe.test.mjs` four times back-to-back: 4/4 exit 0, no
+"must answer via frames" failure in any run, and the final run engaged real
+native occlusion (document.hidden flip, occluded rAF growth 0, worker drift
+163ms, MessageChannel 1ms) rather than the capability skip. The card's own
+obligations — fixture commit 379c5b1 and rows 56087b2 / 7bbe03a — are all
+on main; the many dirty files in the shared tree belong to sibling sessions
+and are untouched here. This row is the only change.
+
 ## 2026-09-22 evening - fourth full-gate rerun for 6c5e94: why the card stuck unverified, and a quiet-HEAD gate in a throwaway worktree (task_7a3b221956f9aa64, run run_1790095876536_5)
 
 Why the card stayed unverified through three green rows (`1fec86b`,
