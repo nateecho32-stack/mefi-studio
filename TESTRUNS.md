@@ -3017,3 +3017,35 @@ task_11085243b2d2452f. Audit of what that obligation's state actually is:
 The card's obligations - green exit-0 full suite recorded in TESTRUNS.md,
 toggle card closed - are discharged by 013c585 plus the archived store
 record above. No repo source modified beyond this entry.
+
+## 2026-09-22 late morning - per-session executor worktrees evidence row; module suite green on a contended tree (task_01a24e9b78aaef34, run run_1790090633416_2)
+
+The landing half of this card's handed-off work was found already in
+history when this run picked the task up; what was missing was its
+evidence row. Landed chain, verified by `git log`/`git show`:
+
+- c272b58 `scripts/executor-worktrees.cjs` (opt-in per-run checkout,
+  serialized merge-back, junction to the shared node_modules);
+- 136f866 wiring in main.cjs plus one shared fake DOM for renderer suites;
+- e3ad851 the junction + guard landing: settle/discard calls guarded with
+  `typeof` so vm test hosts without the prologue stay loadable, stale-run
+  and prompt-build failure paths both settle or discard their checkout
+  (the leak fix - no path strands a worktree), and checkouts without a
+  shared install stay buildable;
+- 7cf07f5 architecture walkthrough for the opt-in flow.
+
+Fresh evidence on this checkout: `node --test
+tests/executor_worktree.test.mjs` -> 9/9 pass, including "a checkout
+shares the root install through a junction and cleanup never deletes the
+shared node_modules", "a crashed attempt's stale checkout goes and its
+branch is kept aside", "concurrent settles from one process both land in
+the shared tree", and the dirty-shared-tree merge-back guard. The suite
+exercises the module against throwaway git repos and never evals main.cjs
+slices, so it stays valid evidence even though a sibling session held
+uncommitted main.cjs/tests edits (executor start-failure grace) during
+the run - which is also why the full-gate rerun was not launched here:
+per this file's own contention protocol (the 09:05 and 09:2x entries), a
+full suite into a tree with main.cjs mid-edit is stamped non-evidence.
+The end-to-end `npm test` pass stays with the outstanding follow-up card
+(task_e2a0db32d964df2f / task_bf79bd8c1d8fced5) on a quiet tree. No repo
+source modified beyond this entry.
