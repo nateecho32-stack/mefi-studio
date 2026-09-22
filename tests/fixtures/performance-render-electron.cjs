@@ -123,8 +123,20 @@ app.whenReady().then(async () => {
     }
   };
   const downloadCapture = async () => {
+    // A saturated host (captured exit-1 under 100% CPU in
+    // tools/logs/performance-render-flake-loop/run-20260921-193144) can starve
+    // the will-download event past a fixed 5s budget. Probe this process's own
+    // timer pace and scale the deadline with it, like the compositor retry above.
+    const paceProbe = Date.now();
+    await sleep(250);
+    const paceFactor = (Date.now() - paceProbe) / 250;
+    const downloadBudgetMs = Math.min(30000, Math.max(5000, Math.round(5000 * paceFactor)));
+    report.downloadBudget = { paceFactor: Math.round(paceFactor * 100) / 100, budgetMs: downloadBudgetMs };
     const download = new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("Profiler JSON download timed out")), 5000);
+      const timeout = setTimeout(
+        () => reject(new Error(`Profiler JSON download timed out after ${downloadBudgetMs}ms at ${paceFactor.toFixed(2)}x observed pace`)),
+        downloadBudgetMs
+      );
       session.defaultSession.once("will-download", (_event, item) => {
         item.setSavePath(path.join(root, "capture.json"));
         item.once("done", (_downloadEvent, state) => {

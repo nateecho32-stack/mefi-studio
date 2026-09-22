@@ -4,7 +4,8 @@
 // selects the project on the host; the agents stay held (autopilot.held in
 // main.cjs) until "Open and start agents" here, or the workspace's Start
 // agents control, releases them. Diagnostic launches, a renderer reload after
-// the choice, and any bridge without the startup contract skip the screen.
+// the choice, a launch that resumed a session still in progress, and any
+// bridge without the startup contract skip the screen.
 (function () {
   "use strict";
   const $ = (id) => document.getElementById("boot-" + id);
@@ -71,7 +72,17 @@
     if (!available() || !$("choose")) return null;
     let info = null;
     try { info = await api().startupState(); } catch (error) { console.warn("Startup state unavailable", error); return null; }
-    if (!isCurrent() || !info?.ok || info.interactive === false || info.chosen === true) return null;
+    if (!isCurrent() || !info?.ok || info.interactive === false) return null;
+    // Session continuity (main.cjs): the host already reopened the folder that
+    // was still being worked on, so there is no question left to ask. Name it
+    // for the gate instead. Nothing is started from here — the host restored
+    // the agents itself if they were running, and left them held if not.
+    if (info.resumed) {
+      state.projects = Array.isArray(info.projects) ? info.projects : [];
+      state.selectedId = info.resumed.projectId ?? info.activeId ?? null;
+      return { projectId: state.selectedId, startAgents: false, changed: false, resumed: info.resumed };
+    }
+    if (info.chosen === true) return null;
     adopt({ projects: info.projects, activeId: info.activeId });
     render();
     note("");

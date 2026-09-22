@@ -27,6 +27,20 @@ test("real host loop dispatches, records streamed completion, verifies and start
   assert.equal(h.autopilot.jobs.length, 0); assert.equal(h.registry.size, 0);
 });
 
+test("dispatch enforces shared-index commit hygiene and surfaces leftover staged files after a run", async () => {
+  const h = executorHost({ tasks: [task("first")], gitStage: "M  src/swept.js\n?? fresh.txt\n M src/unstaged.js\n" });
+  h.wake(); await h.pump();
+  assert.match(h.starts[0].child.prompt, /git commit -m <msg> -- <your files>/);
+  assert.match(h.starts[0].child.prompt, /leave nothing staged/);
+  await h.finish("first"); await h.pump();
+  assert.ok(h.logs.some((line) => /shared git index still holds 1 staged file\(s\).*src\/swept\.js/.test(line)), "the sweep precondition is named, not silent");
+  assert.ok(h.autopilot.history.some((row) => row.kind === "warning" && /src\/swept\.js/.test(row.text)));
+  const clean = executorHost({ tasks: [task("solo")] });
+  clean.wake(); await clean.pump();
+  await clean.finish("solo"); await clean.pump();
+  assert.ok(!clean.logs.some((line) => /shared git index/.test(line)), "a clean index stays quiet");
+});
+
 test("manual Pause remains durable through a completing job, repeated wakes and expired breaker time", async () => {
   const h = executorHost({ tasks: [task("first"), task("second", { createdAt: 2 })] });
   h.wake(); await h.pump();

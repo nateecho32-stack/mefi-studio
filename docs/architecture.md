@@ -172,8 +172,8 @@ revision history stay in the project's ignored local `planning.json`.
   **Clear** wipes it. The absorb is the tree's: a finished node collapses
   into its host and its brief stays readable on that card under
   **Absorbed work**.
-- **Music & themes** plays your local files or Spotify links and recolours
-  Studio; **Audio link** wires bass, mids and treble to the live tree
+- **Style & sound** recolours Studio and plays your local files or Spotify
+  links; **Audio link** wires bass, mids and treble to the live tree
   (including desktop audio and microphone sources) only when you enable it.
 
 ### Model Lab and routing

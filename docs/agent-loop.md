@@ -172,6 +172,8 @@ app (`executorResume.recover`, main.cjs:10243).
 
 - `renderer/booklet.js:1312` — the boot sequence; `startAgents` choice
   releases the launch hold so the loop may dispatch ("Open and start agents").
+  A launch that resumed an interrupted session (main.cjs `startupResume`) never
+  holds in the first place, so the agents that were running come back with it.
 - `renderer/explorer.js:1382` — proactive toggle (service preference);
   `:1391-1403` subscribes to checkpoint/briefing/request pushes.
 - `renderer/eyes.js:5` — the change-feed view state (sessions, changes,

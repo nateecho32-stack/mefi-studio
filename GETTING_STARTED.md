@@ -25,6 +25,18 @@ releases them whenever you are ready. Nothing is built, briefed or spent
 before that. A pause you saved earlier still stands and asks for **Resume** as
 before, and a renderer reload never shows the screen twice in one launch.
 
+One launch skips the question: the one that follows work you did not finish.
+If Studio went away while work was going — a crash, a taskkill, a reboot, or
+its own restart after an update — and that work was under ten minutes old, the
+next launch reopens the same folder and says *Picking up where you left off*
+instead of asking. Agents that were running at the time come back with it;
+agents that were held stay held. Closing the studio yourself is the opposite
+signal: Alt+F4, the window's close button, or **Quit** in the tray all end the
+sitting, so the next launch asks which folder to open, however recent the work
+was. (With background mode on, closing the window parks Studio in the tray and
+its agents work on — the question still returns on the next launch, and
+reopening the window from the tray starts a new sitting.)
+
 ## New machine checklist
 
 A newly installed Studio opens with no project at all: nothing is read or built

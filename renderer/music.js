@@ -408,8 +408,8 @@
     els.sheet = sheet;
     const header = element("header", "music-header", null, sheet);
     const heading = element("div", null, null, header);
-    element("span", "eyebrow", "Your sound. Your space.", heading);
-    const title = element("h2", null, "Music & themes", heading); title.id = "music-heading";
+    element("span", "eyebrow", "Your look. Your sound.", heading);
+    const title = element("h2", null, "Style & sound", heading); title.id = "music-heading";
     button("Close", "ghost", header, close, "music-close");
     const body = element("div", "music-body", null, sheet);
     const settings = element("div", "music-settings", null, body);

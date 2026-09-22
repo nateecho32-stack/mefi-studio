@@ -10,6 +10,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 ### Added
 - Project chooser on every launch with **Open studio** (agents off) and
   **Open and start agents**.
+- Session continuity: a launch that follows work interrupted less than ten
+  minutes ago — a crash, a reboot, an update relaunch — reopens that folder
+  without asking and restores the agents that were running. Closing the studio
+  yourself (Alt+F4, the close button, the tray's **Quit**) ends the sitting, so
+  the next launch asks for a folder again.
 - Seven-stop **Start here** walkthrough with a **Walk with me** coach that opens
   the real menus and highlights the control; progress is saved per device.
 - **Studio at a glance** strip on the workspace: service state with a single

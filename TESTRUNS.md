@@ -25,6 +25,77 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Full `npm test` gate green on the combined tree at HEAD 7dbd66f (2026-09-22,
+~10:0x, run_1790082653725_120 for task_3762737ae0251810 "Full npm test gate —
+follow-up ef8e2f"). The commits the earlier full-gate card waited on had
+landed (Clear-confirm fixture 2415c29/45fa832, TESTRUNS UTF-8 repair 77bcc69,
+a272 entry correction 7dbd66f), so the whole gate re-ran end-to-end over the
+tree as it stands, sibling uncommitted work (main.cjs, renderer sources,
+scripts/auditor.mjs, executor/performance-render test edits, auditor_catalogs
++ startup_resume suites) adopted intact and nothing clobbered; this run made
+no source edits. Result: exit 0 — runner settle preflight passed, node stage
+163 suites (9 launch Electron), parallel aggregate 1836 pass / 0 fail /
+3 skipped; serialized eyes_toggle_electron 1/1 in ~3.3 s (baseline 2
+fetches/300 ms, hidden 0/1200 ms, one resume snap, 6 fetches total);
+occlusion_probe took its documented capability skip this time — Discord held
+the win32 foreground, visibility never flipped within 15 s and rAF stayed
+loud — the expected row of the table above, not a regression; Python
+contracts 246 tests OK in 35 s; normalized-path lock all checks passed.
+Full log: %TEMP%\opencode\npm-test-gate-ef8e2f.log. This is the exit-0
+full-gate evidence task_3762737ae0251810 was carded for; it also supersedes
+the 06:2x full-gate row below by covering the landed follow-up commits.
+
+Green exit-0 full `node scripts/run-node-tests.mjs` re-landed on the current
+tree after API-drop retries (2026-09-22, ~08:01, run_1790081829114_82 for
+task_a272d75c6e9c5bf5 "Land green exit-0 full-suite run and close toggle
+card"). The two attempts after the 06:26 green run (below) died before doing
+any work — the autopilot worker lost its model API ("Cannot connect to API /
+fetch failed", exit 1, planner+reviewer support) — a tooling outage, not a
+repo problem, so no fix was needed beyond rerunning; this row supplies the
+first exit-0 evidence against the tree as it stands now, with the sibling
+session's uncommitted work adopted intact (main.cjs, renderer/boot.js +
+startup.js + booklet.html, scripts/auditor.mjs, executor_resume test,
+performance-render fixture, new auditor_catalogs + startup_resume suites)
+and nothing clobbered. Preconditions checked at launch: desktop minimized
+(Studio included), no sibling suite in flight (only Studio/MCP node+electron
+processes), runner settle preflight passed. Result: exit 0 in 46 s —
+parallel stage 163 suites (9 launch Electron), 1839 tests / 1836 pass /
+0 fail / 3 skipped (the documented environment-conditional skips; the count
+grew 1819 → 1839 from the sibling's two new suites, all green); serialized
+eyes_toggle_electron 1/1 in ~3.2 s (baseline 2 fetches/294 ms, hidden
+0/1200 ms, one resume snap, fetch gaps 294-1257 ms, 6 fetches total);
+serialized occlusion_probe 1/1 strict native occlusion (document.hidden
+signal, occluded rAF growth 0, lag 0 ms, worker drift 155 ms,
+MessageChannel 1 ms, 0 console errors). `npm run check` exit 0 and
+`npm run audit` 0 warnings on the same tree. Full log:
+%TEMP%\opencode\node-tests-full-a272-rerun.log. Flipping
+task_11085243b2d2452f to settled stays with Studio per the no-child-task
+rule; this row is the evidence it needs.
+
+performance_render downloadCapture made load-tolerant (2026-09-22, ~09:5x,
+run_1790076573386_24 for task_2c6ba2f8206d1e61 "Make downloadCapture budget
+load-tolerant"). Acting on the captured exit-1 in
+tools/logs/performance-render-flake-loop/run-20260921-193144 (100% CPU, 45 MB
+free RAM before the iteration; signature "download-timeout + :127 stack
+frame", fixture report elapsedMs 10522 with every pre-export stage green
+through hostFrozen): tests/fixtures/performance-render-electron.cjs
+downloadCapture now probes its own main-process timer pace (250 ms sleep)
+before the export click and scales the will-download deadline
+5000·paceFactor, floored at the old 5 s and capped at 30 s to match the
+capturePage tolerance; the "Profiler JSON download timed out" message prefix
+is preserved so the flake-loop classifier still matches, and the fixture
+report now records downloadBudget {paceFactor, budgetMs} for triage.
+Fixture-only: no renderer/main/runner changes; sibling uncommitted work
+(main.cjs, command-render-electron.cjs TESTRUNS row above) untouched.
+Validation: solo `node --test tests/performance_render.test.mjs` 2/2 green
+in 9.5 s (quiet host, factor 1.0 → 5 s floor, behavior unchanged); desktop
+variant under synthetic load (12 busy node spinners on 16 cores) green with
+the budget verifiably engaged at paceFactor 1.06 → 5300 ms, elapsedMs 4015;
+`npm run check` all-green; eslint clean on the file. Honest limit: the full
+saturation profile of the captured failure (memory-exhausted host) was not
+re-created on this shared machine; tolerance beyond the probe rests on the
+captured evidence plus the scaled headroom.
+
 Full npm test gate green after fixing the command-render Clear confirm
 regression (2026-09-22, ~06:29, run_1790076061072_1 for
 task_416bb7bda070b8d0 "Rerun full npm test gate, land fixture changes",

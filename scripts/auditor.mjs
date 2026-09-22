@@ -134,13 +134,42 @@ export async function audit({ root = STUDIO } = {}) {
   }
   for (const marker of markers.slice(0, 12)) add("info", "markers", `${marker.file}: ${marker.text}`);
 
-  // 7. data files must parse
+  // 7. data files must parse — and the two shipped catalogs must agree. Only
+  //    curated.json and models.json ship, and routing resolves curated model
+  //    ids and endpointMap routes against models.json, so drift between the
+  //    committed files breaks model routing silently. models.json may carry
+  //    roster-only ids curated.json does not list; the reverse is drift.
+  const dataFiles = {};
   for (const dataFile of ["curated.json", "models.json"]) {
-    const text = await readIfExists(path.join(root, "data", dataFile));
+    dataFiles[dataFile] = await readIfExists(path.join(root, "data", dataFile));
     try {
-      JSON.parse(text ?? "null");
+      JSON.parse(dataFiles[dataFile] ?? "null");
     } catch {
       add("error", "data", `data/${dataFile} does not parse`);
+    }
+  }
+  let curatedData = null;
+  let modelsData = null;
+  try {
+    curatedData = JSON.parse(dataFiles["curated.json"] ?? "null");
+    modelsData = JSON.parse(dataFiles["models.json"] ?? "null");
+  } catch {
+    // Unparseable files were reported above; skip the cross-check.
+  }
+  if (curatedData && modelsData) {
+    const validId = (id) => typeof id === "string" && id.trim().length > 0;
+    const catalogIds = new Set(Array.isArray(modelsData.models) ? modelsData.models.map((model) => model?.id) : []);
+    if (!Array.isArray(modelsData.models) || modelsData.models.some((model) => !validId(model?.id))) {
+      add("error", "data", "data/models.json has no valid models array");
+    }
+    for (const id of Object.keys(curatedData.models ?? {})) {
+      if (!catalogIds.has(id)) add("error", "data", `data/curated.json lists ${id} but data/models.json does not carry it`);
+    }
+    for (const [kind, ids] of Object.entries(curatedData.endpointMap ?? {})) {
+      if (!curatedData.endpoints?.[kind]) add("error", "data", `data/curated.json endpointMap routes ${kind} but data/curated.json has no ${kind} endpoint`);
+      for (const id of ids ?? []) {
+        if (!catalogIds.has(id)) add("error", "data", `data/curated.json endpointMap ${kind} routes ${id} but data/models.json does not carry it`);
+      }
     }
   }
 

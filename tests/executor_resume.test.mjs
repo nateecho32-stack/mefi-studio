@@ -242,6 +242,9 @@ test("normal quit awaits one final checkpoint for each unfinished worker before 
     app: { on: (name, fn) => { assert.equal(name, "before-quit"); beforeQuit = fn; }, quit: () => { quits++; events.push("quit"); } },
     performanceProfiler: { stop: () => events.push("profiler-stopped") }, jevProjectQueues: new Map(),
     stopAssistant: () => events.push("helpers-saved"),
+    // Session continuity: a quit the user asked for is recorded before the
+    // wind-down, so the next launch asks for a folder instead of resuming.
+    endSession: (exit) => events.push(`session:${exit}`),
     queueExecutorCheckpoint: (entry, options) => {
       assert.equal(options.force, true); saved.push(entry.id);
       return new Promise((resolve) => releases.push(() => { events.push(`saved:${entry.id}`); resolve(); }));
@@ -252,6 +255,7 @@ test("normal quit awaits one final checkpoint for each unfinished worker before 
   const event = { preventDefault: () => { prevented++; } };
   beforeQuit(event); beforeQuit(event);
   assert.equal(env.executorClosing, true); assert.equal(env.app.isQuitting, true);
+  assert.equal(events[0], "session:quit", "the user's own quit is recorded before anything winds down, so the next launch asks for a folder");
   assert.equal(prevented, 2); assert.equal(quits, 0); assert.deepEqual(saved, ["first", "second"]);
   releases[0](); await new Promise(setImmediate);
   assert.equal(quits, 0, "all running workers must reach the checkpoint boundary");
@@ -273,7 +277,7 @@ for (const duringQuit of [false, true]) test(`${duringQuit ? "quit's final" : "a
     let beforeQuit, resolveQuit, prevented = false;
     const quit = new Promise((resolve) => { resolveQuit = resolve; });
     Object.assign(h.env, {
-      executorClosing: false, performanceProfiler: { stop() {} }, jevProjectQueues: new Map(), stopAssistant() {},
+      executorClosing: false, performanceProfiler: { stop() {} }, jevProjectQueues: new Map(), stopAssistant() {}, endSession() {},
       app: { on: (_name, fn) => { beforeQuit = fn; }, quit: () => resolveQuit() },
     });
     vm.runInContext(section("let quitCheckpointSaved = false;", 'process.on("exit",'), h.env);

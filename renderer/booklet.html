@@ -1856,7 +1856,7 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 #idle-hud:focus-within .cmd-dock { opacity: 1; }
 
 /* ============================================================
-   14. Command palette
+   14. Key commands (palette sheet)
    ============================================================ */
 #palette-overlay { align-items: flex-start; padding-top: 12vh; }
 .palette-sheet {
@@ -4142,7 +4142,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   </section>
 </div>
 <svg id="nav-glyphs" class="glyph-sprite" aria-hidden="true" focusable="false" width="0" height="0">
-  <symbol id="g-music" viewBox="0 0 16 16"><path d="M6 12V4l7-2v8M6 6l7-2"/><ellipse cx="3.7" cy="12.7" rx="2.3" ry="1.7"/><ellipse cx="10.7" cy="10.7" rx="2.3" ry="1.7"/></symbol>
+  <symbol id="g-style" viewBox="0 0 16 16"><path d="M8 2.2c3.3 0 5.8 2.3 5.8 5.1 0 1.7-1.3 2.6-2.6 2.6h-1c-.8 0-1.4.6-1.4 1.3 0 .3.1.6.3.9.2.3.3.6.3.9 0 .5-.4.8-1.1.8-3.3 0-6.1-2.6-6.1-5.9S4.7 2.2 8 2.2Z"/><circle cx="5.9" cy="6" r=".9" fill="currentColor" stroke="none"/><circle cx="9.1" cy="5.2" r=".9" fill="currentColor" stroke="none"/><circle cx="11.4" cy="7.2" r=".9" fill="currentColor" stroke="none"/></symbol>
   <symbol id="g-command" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.2"/><path d="M6.3 6.5 3.9 4.6M9.9 6.9l2.3-1.8M9.3 9.8l1.6 2.3"/><circle cx="3.2" cy="4" r="1" fill="currentColor" stroke="none"/><circle cx="12.9" cy="4.5" r="1" fill="currentColor" stroke="none"/><circle cx="11.4" cy="12.9" r="1" fill="currentColor" stroke="none"/></symbol>
   <symbol id="g-booklet" viewBox="0 0 16 16"><path d="M4 2.5h8.5v11H4.75A1.75 1.75 0 0 1 3 11.75V3.5a1 1 0 0 1 1-1z"/><path d="M3 11.75A1.75 1.75 0 0 1 4.75 10h7.75"/><path d="M6 5.5h4"/></symbol>
   <symbol id="g-graph" viewBox="0 0 16 16"><path d="M2.5 2.5v11h11"/><circle cx="6" cy="9.5" r="1.2"/><circle cx="9.6" cy="5.9" r="1.6"/><circle cx="12.2" cy="10.2" r="0.9" fill="currentColor" stroke="none"/></symbol>
@@ -4202,7 +4202,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     <div class="ws-sidebar-bottom">
       <div class="ws-quick" role="group" aria-label="Studio">
         <button class="ghost ws-settings" data-nav="studio" title="Settings & connections (4)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span class="label">Settings</span></button>
-        <button class="ghost ws-settings" data-nav="music" title="Music & themes (U)"><svg class="glyph" aria-hidden="true"><use href="#g-music"/></svg><span class="label">Music</span></button>
+        <button class="ghost ws-settings" data-nav="music" title="Style &amp; sound (U)"><svg class="glyph" aria-hidden="true"><use href="#g-style"/></svg><span class="label">Style</span></button>
         <button class="ghost ws-settings" data-nav="onboarding" title="Start here: the walkthrough"><svg class="glyph" aria-hidden="true"><use href="#g-help"/></svg><span class="label">Start here</span></button>
       </div>
       <details class="ws-personal"><summary><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Make yourself at home</span><svg class="glyph ws-chev" aria-hidden="true"><use href="#g-chev"/></svg></summary><div class="ws-personal-fields"><label>Your name<input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?"></label><label>Companion name<input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi"></label><label>Studio theme<select id="workspace-accent"><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option></select></label><label class="ws-check"><input id="workspace-motion" type="checkbox" checked>Let your companion move</label></div></details>
@@ -4607,9 +4607,9 @@ body.music-preview-active #idle-hud { display: none !important; }
                 <select id="auto-order-add" aria-label="Provider to add to the auto order"></select>
                 <button class="ghost mini" id="auto-order-add-button" type="button">Add</button>
               </div>
-              <span class="field-hint">The first ready provider answers. With fallback on, a failed HTTP route retries down the list.</span>
+              <span class="field-hint">The first ready provider answers. With fallback on, a failed or keyless HTTP route retries down the list.</span>
             </div>
-            <label class="switch" title="Off by default: when an HTTP route fails, retry on the next ready HTTP provider in the auto order (this can bill that provider)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>Fall back to the next provider on failure</span></label>
+            <label class="switch" title="Off by default: when an HTTP route fails or its key is missing, retry on the next ready HTTP provider in the auto order (this can bill that provider)."><input type="checkbox" id="ai-fallback"><span class="track"></span><span>Fall back to the next provider on failure</span></label>
           </div>
           <div class="settings-column">
             <p class="settings-eyebrow">Models & selection</p>
@@ -4793,7 +4793,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     <label class="pop-row" title="What the nodes listen to"><span class="grow">Listen to</span><select id="idle-source"><option value="auto">Auto · local or desktop</option><option value="local">Local player</option><option value="desktop">Desktop audio / Spotify</option><option value="mic">Microphone</option></select></label>
     <hr class="pop-sep">
     <div class="eyebrow">Look</div>
-    <label class="pop-row" title="The sky behind the node tree. Follow theme picks the scene that belongs to your colour theme in Music &amp; themes."><span class="grow">Backdrop</span><select id="idle-backdrop"></select></label>
+    <label class="pop-row" title="The sky behind the node tree. Follow theme picks the scene that belongs to your colour theme in Style &amp; sound."><span class="grow">Backdrop</span><select id="idle-backdrop"></select></label>
     <label class="switch pop-row" title="Agents say what they are doing beside their orb: hops, findings going home, replies and thoughts."><span class="grow">Speech bubbles</span><input type="checkbox" id="idle-bubbles"><span class="track"></span></label>
     <label class="pop-row" title="How the thought bubble under a card is drawn. Auto keeps them outlined and fills the one you hover, select or that has a worker running."><span class="grow">Card style</span><select id="idle-card-style"><option value="auto">Auto</option><option value="outline">Outline</option><option value="filled">Filled</option></select></label>
   </div>
@@ -5013,8 +5013,8 @@ body.music-preview-active #idle-hud { display: none !important; }
   </div>
 </div>
 <div class="overlay" id="palette-overlay" hidden>
-  <div class="palette-sheet" role="dialog" aria-modal="true" aria-label="Command palette">
-    <div class="palette-search-row"><input id="palette-input" type="text" placeholder="Find a tool, task, or setting…" aria-label="Command palette" aria-controls="palette-list" aria-describedby="palette-status palette-hint" autocomplete="off" spellcheck="false"><button id="palette-close" class="ghost mini" type="button">Close <kbd>Esc</kbd></button></div>
+  <div class="palette-sheet" role="dialog" aria-modal="true" aria-label="Key commands">
+    <div class="palette-search-row"><input id="palette-input" type="text" placeholder="Find a tool, task, or setting…" aria-label="Key commands" aria-controls="palette-list" aria-describedby="palette-status palette-hint" autocomplete="off" spellcheck="false"><button id="palette-close" class="ghost mini" type="button">Close <kbd>Esc</kbd></button></div>
     <ul id="palette-list" role="listbox" aria-label="Results"></ul>
     <div class="palette-footer"><p id="palette-status" role="status" aria-live="polite"></p><p id="palette-hint">↑ ↓ to choose · Enter to open · Esc to close</p></div>
   </div>
@@ -9766,8 +9766,8 @@ body.music-preview-active #idle-hud { display: none !important; }
     {
       id: "palette",
       commandPrimary: true,
-      label: "Command palette",
-      short: "Palette",
+      label: "Key commands",
+      short: "Key Cmd's",
       kind: "overlay",
       layer: "transient",
       group: "system",
@@ -9784,10 +9784,10 @@ body.music-preview-active #idle-hud { display: none !important; }
       isOpen: () => overlayOpen("palette-overlay"),
     },
     {
-      id: "music", label: "Music & themes", short: "Music", kind: "overlay", layer: "sheet",
-      group: "tools", key: "U", glyph: "g-music", badge: null, commandPrimary: true,
-      desc: "Local music, Spotify links, AI suggestions, and Studio themes",
-      searchTerms: "color colour appearance accent theme sound audio background",
+      id: "music", label: "Style & sound", short: "Style", kind: "overlay", layer: "sheet",
+      group: "tools", key: "U", glyph: "g-style", badge: null, commandPrimary: true,
+      desc: "Studio themes, colours and backdrop, plus local music, Spotify links and AI suggestions",
+      searchTerms: "style theme themes colour color appearance accent skin look backdrop music sound audio spotify",
       showIn: showIn({ dock: true, palette: true, help: true }),
       element: "music-overlay", focus: "#music-close",
       open: (params) => window.MefiMusic?.open?.(params), close: () => window.MefiMusic?.close?.(),
@@ -14997,7 +14997,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     { count: 18, seed: 47.7, spin: 0.03, tempo: 2500, size: 1, alpha: 0.28 },
   ];
   // Backdrop scenes: the sky behind the constellation. "follow" picks the scene
-  // that belongs to the active colour theme (Music & themes); any other key is
+  // that belongs to the active colour theme (Style & sound); any other key is
   // an explicit override, remembered per machine. Every scene is tinted from
   // the live palette, so a custom theme still gets its own sky.
   const BACKDROPS = {
@@ -15222,7 +15222,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     newWorkBusy: false,
     // Backdrop scene and speech bubbles (Ambience pop), remembered per machine.
     backdrop: BACKDROP_ORDER.includes(readStore("mefiStudio.cmdBackdrop")) ? readStore("mefiStudio.cmdBackdrop") : "follow",
-    themeKey: null, // the Music & themes key the canvas last synced to
+    themeKey: null, // the Style & sound key the canvas last synced to
     bubbles: readStore("mefiStudio.cmdBubbles") !== "0",
     speech: new Map(), // node id → the bubble it is showing
     speechRects: [], // bubble surfaces drawn this frame; labels step around them
@@ -15484,7 +15484,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (el.musicToggle) {
       el.musicToggle.setAttribute("aria-pressed", String(Boolean(enabled)));
       el.musicToggle.dataset.state = state.inputError ? "error" : listening ? "listening" : state.inputPending ? "pending" : "off";
-      el.musicToggle.title = `${status.description} ${enabled ? "Click to stop linking." : "Click to connect."} Change source in Music & themes.`;
+      el.musicToggle.title = `${status.description} ${enabled ? "Click to stop linking." : "Click to connect."} Change source in Style & sound.`;
       el.musicToggle.setAttribute("aria-label", status.text);
     }
     if (el.musicLevel) {
@@ -30498,7 +30498,7 @@ body.music-preview-active #idle-hud { display: none !important; }
   const STEP_SLOW_MS = 15000;
   const STEP_DEAD_MS = 60000;
   const FADE_MS = 180;
-  const boot = { active: false, phase: "idle", epoch: 0, steps: [], promise: Promise.resolve(true), resolve: null, onReady: null, choose: null, choice: null };
+  const boot = { active: false, phase: "idle", epoch: 0, steps: [], promise: Promise.resolve(true), resolve: null, onReady: null, choose: null, choice: null, resumed: null };
   const el = {};
   const locked = new Map();
   let startedAt = 0;
@@ -30522,12 +30522,17 @@ body.music-preview-active #idle-hud { display: none !important; }
     const failed = boot.steps.filter((step) => step.status === "error");
     const loading = boot.steps.find((step) => step.status === "loading" || step.status === "pending");
     const choosing = boot.phase === "choose";
-    if (el.title) el.title.textContent = choosing ? "Choose a project" : boot.phase === "error" ? "A little more setup is needed" : boot.phase === "ready" ? "Your studio is ready" : "Opening your studio";
+    // A resumed launch skipped the question: say why, so a studio that opened
+    // itself never looks like one that forgot to ask.
+    if (el.title) el.title.textContent = choosing ? "Choose a project" : boot.phase === "error" ? "A little more setup is needed" : boot.phase === "ready" ? "Your studio is ready" : boot.resumed ? "Picking up where you left off" : "Opening your studio";
+    const opening = boot.resumed
+      ? boot.resumed + (loading ? " · " + loading.label + "…" : "")
+      : loading ? loading.label + "…" : "Preparing your workspace…";
     if (el.detail) el.detail.textContent = choosing
       ? "Pick the folder to open. Nothing runs until you say so."
       : boot.phase === "error"
         ? "Couldn't finish " + failed.map((step) => step.label.toLowerCase()).join(", ") + ". Retry, or open with what's available."
-        : boot.phase === "ready" ? "Everything is in place." : loading ? loading.label + "…" : "Preparing your workspace…";
+        : boot.phase === "ready" ? "Everything is in place." : opening;
     if (el.actions) el.actions.hidden = boot.phase !== "error";
     // The launch choice stands in for the progress readout until it is made.
     if (el.choose) el.choose.hidden = !choosing;
@@ -30654,6 +30659,10 @@ body.music-preview-active #idle-hud { display: none !important; }
       try { boot.choice = await boot.choose({ isCurrent }); }
       catch (error) { boot.choice = null; console.warn("Startup choice failed", error); }
       boot.choose = null; // Retry reloads data; it never asks again.
+      // Nothing was asked because the host resumed the last session: the gate
+      // says which folder it came back to while the steps load it.
+      const resumed = boot.choice?.resumed;
+      boot.resumed = resumed ? (resumed.name ? "Reopened " + resumed.name : "Reopened your last project") : null;
       if (!isCurrent()) return;
     }
     void attempt();
@@ -30666,6 +30675,7 @@ body.music-preview-active #idle-hud { display: none !important; }
     boot.onReady = onReady;
     boot.choose = typeof options?.choose === "function" ? options.choose : null;
     boot.choice = null;
+    boot.resumed = null;
     boot.active = true;
     boot.phase = "loading";
     startedAt = performance.now();
@@ -30746,7 +30756,8 @@ body.music-preview-active #idle-hud { display: none !important; }
 // selects the project on the host; the agents stay held (autopilot.held in
 // main.cjs) until "Open and start agents" here, or the workspace's Start
 // agents control, releases them. Diagnostic launches, a renderer reload after
-// the choice, and any bridge without the startup contract skip the screen.
+// the choice, a launch that resumed a session still in progress, and any
+// bridge without the startup contract skip the screen.
 (function () {
   "use strict";
   const $ = (id) => document.getElementById("boot-" + id);
@@ -30813,7 +30824,17 @@ body.music-preview-active #idle-hud { display: none !important; }
     if (!available() || !$("choose")) return null;
     let info = null;
     try { info = await api().startupState(); } catch (error) { console.warn("Startup state unavailable", error); return null; }
-    if (!isCurrent() || !info?.ok || info.interactive === false || info.chosen === true) return null;
+    if (!isCurrent() || !info?.ok || info.interactive === false) return null;
+    // Session continuity (main.cjs): the host already reopened the folder that
+    // was still being worked on, so there is no question left to ask. Name it
+    // for the gate instead. Nothing is started from here — the host restored
+    // the agents itself if they were running, and left them held if not.
+    if (info.resumed) {
+      state.projects = Array.isArray(info.projects) ? info.projects : [];
+      state.selectedId = info.resumed.projectId ?? info.activeId ?? null;
+      return { projectId: state.selectedId, startAgents: false, changed: false, resumed: info.resumed };
+    }
+    if (info.chosen === true) return null;
     adopt({ projects: info.projects, activeId: info.activeId });
     render();
     note("");
@@ -32134,8 +32155,8 @@ body.music-preview-active #idle-hud { display: none !important; }
     els.sheet = sheet;
     const header = element("header", "music-header", null, sheet);
     const heading = element("div", null, null, header);
-    element("span", "eyebrow", "Your sound. Your space.", heading);
-    const title = element("h2", null, "Music & themes", heading); title.id = "music-heading";
+    element("span", "eyebrow", "Your look. Your sound.", heading);
+    const title = element("h2", null, "Style & sound", heading); title.id = "music-heading";
     button("Close", "ghost", header, close, "music-close");
     const body = element("div", "music-body", null, sheet);
     const settings = element("div", "music-settings", null, body);

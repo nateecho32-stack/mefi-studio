@@ -58,7 +58,7 @@ npm start
 
 ## First launch
 
-1. **Choose a project** on the launch screen, then **Open studio** (agents stay off) or **Open and start agents**. Nothing runs before you choose.
+1. **Choose a project** on the launch screen, then **Open studio** (agents stay off) or **Open and start agents**. Nothing runs before you choose. If a crash or a restart interrupted work in the last ten minutes, Studio skips the question, reopens that folder and restarts the agents that were running; closing the studio yourself always brings the question back.
 2. **Follow the walkthrough.** *Start here* opens on the first launch with seven short stops: scan, workspace, first map, connections, create, monitor, review. Each stop's **Walk with me** opens the real menu and highlights the control. It remembers your place.
 3. **Check the connection.** A fresh install runs **auto setup** by itself on the first launch, from the keys, CLIs and local servers already on the machine, and **Settings & connections** says what it chose. Press **Run auto setup** again after adding a key or CLI, or pick a route yourself. No key yet? The catalog, manual planning and saved work all work without one.
 4. **Give one clear task** and watch it move from *Ready* to *Working* to *Review*.
@@ -93,7 +93,7 @@ Every session, task and agent is a node. Agents orbit the assistant, fly to the 
 
 ### Also in the box
 
-**Task board** (`T`) with briefs, prerequisites, attempts and evidence · **Plans** (`P`) that turn an unclear idea into a specification and tasks · **Ideas** (`I`) inbox · **Model catalog** (`1`) and **Model Lab** (`2`) with measured latency, cost and usage · **Activity & evidence** (`3`), a read-only view of the coding sessions · **Session explorer** (`E`), **Analyzer** (`A`), **Overhead** (`O`), **Music & themes** (`U`) · `Ctrl K` finds any tool, task or setting · `?` lists every shortcut.
+**Task board** (`T`) with briefs, prerequisites, attempts and evidence · **Plans** (`P`) that turn an unclear idea into a specification and tasks · **Ideas** (`I`) inbox · **Model catalog** (`1`) and **Model Lab** (`2`) with measured latency, cost and usage · **Activity & evidence** (`3`), a read-only view of the coding sessions · **Session explorer** (`E`), **Analyzer** (`A`), **Overhead** (`O`), **Style & sound** (`U`) · `Ctrl K` (Key Cmd's) finds any tool, task or setting · `?` lists every shortcut.
 
 The full feature walkthrough, in Studio's own vocabulary with a glossary, is in [docs/architecture.md](docs/architecture.md).
 

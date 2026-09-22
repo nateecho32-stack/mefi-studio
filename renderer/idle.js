@@ -148,7 +148,7 @@
     { count: 18, seed: 47.7, spin: 0.03, tempo: 2500, size: 1, alpha: 0.28 },
   ];
   // Backdrop scenes: the sky behind the constellation. "follow" picks the scene
-  // that belongs to the active colour theme (Music & themes); any other key is
+  // that belongs to the active colour theme (Style & sound); any other key is
   // an explicit override, remembered per machine. Every scene is tinted from
   // the live palette, so a custom theme still gets its own sky.
   const BACKDROPS = {
@@ -373,7 +373,7 @@
     newWorkBusy: false,
     // Backdrop scene and speech bubbles (Ambience pop), remembered per machine.
     backdrop: BACKDROP_ORDER.includes(readStore("mefiStudio.cmdBackdrop")) ? readStore("mefiStudio.cmdBackdrop") : "follow",
-    themeKey: null, // the Music & themes key the canvas last synced to
+    themeKey: null, // the Style & sound key the canvas last synced to
     bubbles: readStore("mefiStudio.cmdBubbles") !== "0",
     speech: new Map(), // node id → the bubble it is showing
     speechRects: [], // bubble surfaces drawn this frame; labels step around them
@@ -635,7 +635,7 @@
     if (el.musicToggle) {
       el.musicToggle.setAttribute("aria-pressed", String(Boolean(enabled)));
       el.musicToggle.dataset.state = state.inputError ? "error" : listening ? "listening" : state.inputPending ? "pending" : "off";
-      el.musicToggle.title = `${status.description} ${enabled ? "Click to stop linking." : "Click to connect."} Change source in Music & themes.`;
+      el.musicToggle.title = `${status.description} ${enabled ? "Click to stop linking." : "Click to connect."} Change source in Style & sound.`;
       el.musicToggle.setAttribute("aria-label", status.text);
     }
     if (el.musicLevel) {

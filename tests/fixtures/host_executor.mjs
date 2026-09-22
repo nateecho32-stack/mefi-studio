@@ -10,6 +10,7 @@ import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
 import * as assistant from "../../scripts/assistant.mjs";
 import * as history from "../../scripts/task-history.mjs";
+import * as eyesModule from "../../scripts/eyes.mjs";
 import backlog from "../../scripts/backlog.cjs";
 import taskContext from "../../scripts/task-context.cjs";
 import taskHandoffs from "../../scripts/task-handoffs.cjs";
@@ -25,7 +26,7 @@ const section = (start, end) => {
 };
 const copy = (value) => structuredClone(value);
 
-export function executorHost({ tasks = [], requests = [], parallel = 1, adaptiveParallel = false, workerCapacity = null, paused = false, execute = true, autoBuild = true, mode = "swarm", savedSettings = null, realPool = false, poolParallel = 2, aiParallel = 2, pid = 101, livePids = [999], unknownPids = [], realWatches = false } = {}) {
+export function executorHost({ tasks = [], requests = [], parallel = 1, adaptiveParallel = false, workerCapacity = null, paused = false, execute = true, autoBuild = true, mode = "swarm", savedSettings = null, realPool = false, poolParallel = 2, aiParallel = 2, pid = 101, livePids = [999], unknownPids = [], realWatches = false, gitStage = null } = {}) {
   let now = 1_000_000, pendingForeman = false, pendingWriteFailures = 0;
   let board = { tasks: copy(tasks), requests: copy(requests), ideas: [] };
   const logs = [], starts = [], roleRequests = [], records = [], timers = [], terminations = [], capacityCalls = [], supportCalls = [], supportJobs = [], contextCalls = [], routeCalls = [];
@@ -53,6 +54,10 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
       if (checks.get(sessionId) instanceof Error) throw checks.get(sessionId);
       return { available: true, truncated: false, checks: copy(checks.get(sessionId) ?? []) };
     },
+    // The shared-index sweep guard reads these when the host provides a
+    // porcelain fixture; without one both keys stay absent, matching a host
+    // that has no git observation at all.
+    ...(gitStage != null ? { gitPorcelain: async () => gitStage, parsePorcelain: eyesModule.parsePorcelain } : {}),
   };
   const stream = () => Object.assign(new EventEmitter(), { setEncoding() {} });
   const env = vm.createContext({

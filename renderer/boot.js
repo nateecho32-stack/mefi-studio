@@ -10,7 +10,7 @@
   const STEP_SLOW_MS = 15000;
   const STEP_DEAD_MS = 60000;
   const FADE_MS = 180;
-  const boot = { active: false, phase: "idle", epoch: 0, steps: [], promise: Promise.resolve(true), resolve: null, onReady: null, choose: null, choice: null };
+  const boot = { active: false, phase: "idle", epoch: 0, steps: [], promise: Promise.resolve(true), resolve: null, onReady: null, choose: null, choice: null, resumed: null };
   const el = {};
   const locked = new Map();
   let startedAt = 0;
@@ -34,12 +34,17 @@
     const failed = boot.steps.filter((step) => step.status === "error");
     const loading = boot.steps.find((step) => step.status === "loading" || step.status === "pending");
     const choosing = boot.phase === "choose";
-    if (el.title) el.title.textContent = choosing ? "Choose a project" : boot.phase === "error" ? "A little more setup is needed" : boot.phase === "ready" ? "Your studio is ready" : "Opening your studio";
+    // A resumed launch skipped the question: say why, so a studio that opened
+    // itself never looks like one that forgot to ask.
+    if (el.title) el.title.textContent = choosing ? "Choose a project" : boot.phase === "error" ? "A little more setup is needed" : boot.phase === "ready" ? "Your studio is ready" : boot.resumed ? "Picking up where you left off" : "Opening your studio";
+    const opening = boot.resumed
+      ? boot.resumed + (loading ? " · " + loading.label + "…" : "")
+      : loading ? loading.label + "…" : "Preparing your workspace…";
     if (el.detail) el.detail.textContent = choosing
       ? "Pick the folder to open. Nothing runs until you say so."
       : boot.phase === "error"
         ? "Couldn't finish " + failed.map((step) => step.label.toLowerCase()).join(", ") + ". Retry, or open with what's available."
-        : boot.phase === "ready" ? "Everything is in place." : loading ? loading.label + "…" : "Preparing your workspace…";
+        : boot.phase === "ready" ? "Everything is in place." : opening;
     if (el.actions) el.actions.hidden = boot.phase !== "error";
     // The launch choice stands in for the progress readout until it is made.
     if (el.choose) el.choose.hidden = !choosing;
@@ -166,6 +171,10 @@
       try { boot.choice = await boot.choose({ isCurrent }); }
       catch (error) { boot.choice = null; console.warn("Startup choice failed", error); }
       boot.choose = null; // Retry reloads data; it never asks again.
+      // Nothing was asked because the host resumed the last session: the gate
+      // says which folder it came back to while the steps load it.
+      const resumed = boot.choice?.resumed;
+      boot.resumed = resumed ? (resumed.name ? "Reopened " + resumed.name : "Reopened your last project") : null;
       if (!isCurrent()) return;
     }
     void attempt();
@@ -178,6 +187,7 @@
     boot.onReady = onReady;
     boot.choose = typeof options?.choose === "function" ? options.choose : null;
     boot.choice = null;
+    boot.resumed = null;
     boot.active = true;
     boot.phase = "loading";
     startedAt = performance.now();

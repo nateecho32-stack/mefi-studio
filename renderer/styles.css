@@ -1849,7 +1849,7 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 #idle-hud:focus-within .cmd-dock { opacity: 1; }
 
 /* ============================================================
-   14. Command palette
+   14. Key commands (palette sheet)
    ============================================================ */
 #palette-overlay { align-items: flex-start; padding-top: 12vh; }
 .palette-sheet {

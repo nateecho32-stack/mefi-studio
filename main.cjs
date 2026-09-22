@@ -27,7 +27,7 @@ const { spawn } = optionalHelper(
   () => require("./scripts/platform.cjs"),
   { spawn: require("node:child_process").spawn },
 );
-const { existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } = require("node:fs");
+const { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } = require("node:fs");
 const { appendFile, copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } = require("node:fs/promises");
 const os = require("node:os");
 const crypto = require("node:crypto");
@@ -1977,11 +1977,53 @@ async function resolveAutoRoute(role, settings, { allowCli, zaiKey, goKey }) {
   return { ok: true, ...primary, fallback: fallbacks[0] ?? null, fallbacks };
 }
 
+// The armed rescue walk for an explicit pick that cannot answer. A key that
+// is gone, an endpoint that reports nothing — with the fallback off the pick
+// stays absolute and fails honestly; with it on, the owner already consented
+// to a walk down the saved order, and the keyed HTTP entries answer the same
+// way a failed call's retry list does. The local and custom endpoints join
+// only when a saved model spares this pass a probe: once the fallback is
+// armed this walk runs on every call, and a 5 s endpoint probe per request
+// would be its own outage. The failed provider is never its own fallback.
+function armedFallbackRoutes(settings, { skip = "", role = "routine", zaiKey, goKey } = {}) {
+  const routes = [];
+  for (const id of normalizeAutoProviders(settings.aiAutoProviders)) {
+    if (id === skip) continue;
+    if (id === "zai" && zaiKey) routes.push({ provider: id, endpoint: ZAI_ENDPOINT, model: assistantModelOverride(settings, role, "zai") || (role === "heavy" ? ZAI_MODEL_HEAVY : ZAI_MODEL_ROUTINE), apiKey: zaiKey });
+    else if (id === "opencode" && goKey) routes.push({ provider: id, endpoint: ASSISTANT_ENDPOINT, model: assistantModelOverride(settings, role, "opencode") || ASSISTANT_MODEL, apiKey: goKey });
+    else if (id === "custom") {
+      const endpoint = normalizeCompatEndpoint(settings.customEndpoint);
+      const key = endpoint ? decryptKey(settings, "customApiKeyEncrypted") : null;
+      const model = key ? assistantModelOverride(settings, role, "custom") : "";
+      if (key && model) routes.push({ provider: id, endpoint, model, apiKey: key });
+    } else if (id === "lmstudio") {
+      const model = assistantModelOverride(settings, role, "lmstudio");
+      if (model) routes.push({ provider: id, endpoint: normalizeLmStudioEndpoint(settings.lmStudioEndpoint), model, apiKey: "lm-studio" });
+    }
+  }
+  return routes;
+}
+
 async function resolveAiRoute(role = "routine", { allowCli = true } = {}) {
   const settings = await readSettings();
   const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
   const zaiKey = decryptKey(settings, "zaiApiKeyEncrypted");
   const goKey = decryptKey(settings, "apiKeyEncrypted");
+  // Armed, an explicit route carries the same retry list an auto route does,
+  // so a call that fails mid-flight (a lapsed subscription answering 401)
+  // degrades the same way; unarmed it stays absolute, exactly as before.
+  const withFallbacks = (route) => {
+    const rest = autoFallbackEnabled(settings) ? armedFallbackRoutes(settings, { skip: route.provider, role, zaiKey, goKey }) : [];
+    return { ...route, fallback: rest[0] ?? null, fallbacks: rest };
+  };
+  // A provider that cannot answer at all degrades only down the armed walk;
+  // when nothing can rescue it the original honest error stands.
+  const degrade = (id, error) => {
+    const rest = autoFallbackEnabled(settings) ? armedFallbackRoutes(settings, { skip: id, role, zaiKey, goKey }) : [];
+    if (!rest.length) return { ok: false, error };
+    logLine(`[assistant] ${AUTO_PROVIDER_NAMES[id] ?? id} cannot answer (${error}) — answering via ${AUTO_PROVIDER_NAMES[rest[0].provider] ?? rest[0].provider}`);
+    return { ok: true, ...rest[0], fallback: rest[1] ?? null, fallbacks: rest.slice(1) };
+  };
   if (provider === "grok" || provider === "claude" || provider === "codex" || provider === "antigravity") {
     if (allowCli) return { ok: true, provider, model: assistantModelOverride(settings, role, provider), endpoint: null, apiKey: null, cli: true, fallback: null };
     return resolveAutoRoute(role, settings, { allowCli: false, zaiKey, goKey });
@@ -1989,25 +2031,25 @@ async function resolveAiRoute(role = "routine", { allowCli = true } = {}) {
   if (provider === "lmstudio") {
     const endpoint = normalizeLmStudioEndpoint(settings.lmStudioEndpoint);
     const model = assistantModelOverride(settings, role, "lmstudio") || (await compatEndpointModel(endpoint));
-    if (!model) return { ok: false, error: "LM Studio reported no loaded model - load one there or save a model override in the Studio tab" };
-    return { ok: true, provider: "lmstudio", endpoint, model, apiKey: "lm-studio", fallback: null };
+    if (!model) return degrade("lmstudio", "LM Studio reported no loaded model - load one there or save a model override in the Studio tab");
+    return withFallbacks({ ok: true, provider: "lmstudio", endpoint, model, apiKey: "lm-studio" });
   }
   if (provider === "custom") {
     const endpoint = normalizeCompatEndpoint(settings.customEndpoint);
-    if (!endpoint) return { ok: false, error: "no custom endpoint saved - add its chat-completions URL in the Studio tab" };
+    if (!endpoint) return degrade("custom", "no custom endpoint saved - add its chat-completions URL in the Studio tab");
     const customKey = decryptKey(settings, "customApiKeyEncrypted");
-    if (!customKey) return { ok: false, error: "no custom API key saved - add one in the Studio tab" };
+    if (!customKey) return degrade("custom", "no custom API key saved - add one in the Studio tab");
     const model = assistantModelOverride(settings, role, "custom") || (await compatEndpointModel(endpoint));
-    if (!model) return { ok: false, error: "the custom endpoint reported no model - save a model override in the Studio tab" };
-    return { ok: true, provider: "custom", endpoint, model, apiKey: customKey, fallback: null };
+    if (!model) return degrade("custom", "the custom endpoint reported no model - save a model override in the Studio tab");
+    return withFallbacks({ ok: true, provider: "custom", endpoint, model, apiKey: customKey });
   }
   if (provider === "opencode") {
-    if (!goKey) return { ok: false, error: "no API key saved - add a z.ai or OpenCode Go key in the Studio tab" };
-    return { ok: true, provider: "opencode", endpoint: ASSISTANT_ENDPOINT, model: assistantModelOverride(settings, role, "opencode") || ASSISTANT_MODEL, apiKey: goKey, fallback: null };
+    if (!goKey) return degrade("opencode", "no API key saved - add a z.ai or OpenCode Go key in the Studio tab");
+    return withFallbacks({ ok: true, provider: "opencode", endpoint: ASSISTANT_ENDPOINT, model: assistantModelOverride(settings, role, "opencode") || ASSISTANT_MODEL, apiKey: goKey });
   }
   if (provider === "zai") {
-    if (!zaiKey) return { ok: false, error: "no z.ai key saved - add one in the Studio tab" };
-    return { ok: true, provider: "zai", endpoint: ZAI_ENDPOINT, model: assistantModelOverride(settings, role, "zai") || (role === "heavy" ? ZAI_MODEL_HEAVY : ZAI_MODEL_ROUTINE), apiKey: zaiKey, fallback: null };
+    if (!zaiKey) return degrade("zai", "no z.ai key saved - add one in the Studio tab");
+    return withFallbacks({ ok: true, provider: "zai", endpoint: ZAI_ENDPOINT, model: assistantModelOverride(settings, role, "zai") || (role === "heavy" ? ZAI_MODEL_HEAVY : ZAI_MODEL_ROUTINE), apiKey: zaiKey });
   }
   return resolveAutoRoute(role, settings, { allowCli, zaiKey, goKey });
 }
@@ -5778,15 +5820,161 @@ async function assistantTick(reason = "timer") {
   return assistantTickInFlight;
 }
 
+// ---- session continuity ---------------------------------------------------
+// Coming back to what you were doing. A small record beside settings.json
+// names the folder that was open, the last moment work actually happened in
+// it, and whether the agents were running. The next launch reads it:
+//
+//   * closing on purpose — Alt+F4, the window's close button, the tray's
+//     Quit — writes an exit marker. That is the user saying they are done, so
+//     the next launch asks which folder to open, exactly as it always did.
+//     Background mode parks the app in the tray instead of quitting, and the
+//     marker is written there too: closing the window ends the sitting either
+//     way, and the recording only starts again when the window comes back.
+//   * a crash, a taskkill, a reboot or a live-update relaunch leaves no such
+//     marker (app.exit and a killed process never reach before-quit), so a
+//     launch within SESSION_RESUME_MS of the last work reopens that folder
+//     without asking, and leaves the agents unheld if they were running.
+//
+// Only real work counts as activity — a queued or running agent, a live build
+// job, a roster journal entry, an executor history row, something the user
+// said to the assistant. An app that sat open and idle for an hour is not
+// "what you were working on", so it is not resumed.
+const SESSION_RESUME_MS = 600000; // 10 minutes of work counts as "still going"
+const SESSION_BEAT_MS = 30000;
+let sessionFile = "";
+let sessionBeatTimer = null;
+let sessionEnded = false; // the user closed the window; nothing re-records until it returns
+let sessionWritten = ""; // the record this process last wrote, to skip idle rewrites
+let startupResumed = null; // what this launch resumed, reported by startup:state
+
+// Beside settings.json in the user's own data folder, resolved on first use:
+// nothing here runs at load time.
+function sessionPath() {
+  if (!sessionFile) sessionFile = path.join(app.getPath("userData"), "session.json");
+  return sessionFile;
+}
+
+function readSessionRecord() {
+  try {
+    const raw = JSON.parse(readFileSync(sessionPath(), "utf8"));
+    return raw && typeof raw === "object" ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+// The most recent moment this process can point at and say work was happening.
+// Live queues and unfinished jobs are "now"; everything else carries its own
+// timestamp, so work that ended between two beats still counts for its age.
+function sessionWorkAt(now = Date.now()) {
+  let at = 0;
+  const mark = (value) => { const stamp = Number(value) || 0; if (stamp > at && stamp <= now) at = stamp; };
+  if (pool.running.size > 0 || pool.queue.length > 0) mark(now);
+  if ((autopilot.jobs ?? []).some((job) => !job.finished)) mark(now);
+  // Starting the agents is itself the moment work began, and the roster can be
+  // between ticks with an empty pool. Only while this process runs the loop:
+  // a saved startedAt from a previous session is not this session's work.
+  if (assistantLoop) mark(assistantState?.startedAt);
+  for (const job of autopilot.jobs ?? []) mark(job.finishedAt ?? job.startedAt);
+  for (const row of autopilot.history ?? []) mark(row?.at);
+  for (const job of assistantState?.work ?? []) mark(job?.finishedAt ?? job?.startedAt);
+  for (const message of assistantState?.messages ?? []) if (message?.role === "user") mark(message.at);
+  mark(assistantState?.resumed?.at);
+  return at;
+}
+
+function sessionRecord(now = Date.now(), { exit = null } = {}) {
+  const open = projects.open();
+  return {
+    at: now,
+    projectId: open?.id ?? null,
+    projectPath: open?.path ?? null,
+    projectName: open?.name ?? null,
+    activityAt: sessionWorkAt(now),
+    agents: assistantLoop === true && autopilot.held !== true,
+    ...(exit ? { exit, exitAt: now } : {}),
+  };
+}
+
+// Written like every other durable file here: temp file, then rename, so a
+// crash mid-write cannot leave a torn record behind. Synchronous throughout —
+// the quit path runs inside before-quit, where a promise would never settle.
+function writeSessionRecord(record, { force = false } = {}) {
+  const key = `${record.projectId}|${record.activityAt}|${record.agents}|${record.exit ?? ""}`;
+  if (!force && key === sessionWritten) return false;
+  const target = sessionPath();
+  const tmp = `${target}.tmp-${process.pid}`;
+  try {
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(tmp, JSON.stringify(record, null, 2));
+    renameSync(tmp, target);
+    sessionWritten = key;
+    return true;
+  } catch (error) {
+    try { rmSync(tmp, { force: true }); } catch {}
+    logLine(`[session] could not record the open project: ${error.message}`);
+    return false;
+  }
+}
+
+// One beat while work is going; an idle studio writes nothing at all. A record
+// with no project or no work yet is not worth keeping: there is nothing to
+// come back to, and writing it would only clear an exit marker early. Neither
+// does a session the user already closed — background agents work on, but the
+// sitting is over until the window comes back.
+function sessionBeat(now = Date.now()) {
+  if (SMOKE || CAPTURE || CLI_MODE || sessionEnded) return false;
+  const record = sessionRecord(now);
+  if (!record.projectId || !record.activityAt) return false;
+  return writeSessionRecord(record);
+}
+
+// Starting the beat is also how a closed session is reopened: the window is
+// back, so this sitting counts again.
+function startSessionBeat() {
+  sessionEnded = false;
+  if (SMOKE || CAPTURE || CLI_MODE || sessionBeatTimer) return;
+  sessionBeatTimer = setInterval(() => sessionBeat(), SESSION_BEAT_MS);
+  sessionBeatTimer.unref?.();
+}
+
+// The user closing the studio: "quit" when the app is going away, "closed"
+// when background mode parks it in the tray. Forced, so the marker lands even
+// when the beat already wrote this same work — the marker is the whole point.
+function endSession(exit = "quit") {
+  if (SMOKE || CAPTURE || CLI_MODE) return false;
+  sessionEnded = true;
+  if (sessionBeatTimer) clearInterval(sessionBeatTimer);
+  sessionBeatTimer = null;
+  return writeSessionRecord(sessionRecord(Date.now(), { exit }), { force: true });
+}
+
+// The launch decision, made once before the window opens. The folder must be
+// the one still active (the project store resolved it from saved settings),
+// so a resume never quietly opens somewhere the last session did not end.
+function startupResume(now = Date.now()) {
+  if (SMOKE || CAPTURE || CLI_MODE) return null;
+  const saved = readSessionRecord();
+  if (!saved || saved.exit) return null; // closed on purpose: ask which folder
+  const at = Number(saved.activityAt) || 0;
+  if (!at || at > now || now - at > SESSION_RESUME_MS) return null;
+  const open = projects.open();
+  if (!open || saved.projectId !== open.id) return null;
+  return { projectId: open.id, name: open.name, path: open.path, activityAt: at, agents: saved.agents === true };
+}
+
 // ---- launch hold ----------------------------------------------------------
 // An interactive launch does not start agents on its own. The renderer's
 // launch screen (renderer/startup.js) picks the project (startup:choose) and
 // either releases the agents at once ("Open and start agents") or leaves them
 // held until the workspace's Start agents control, the tray, or a Resume /
 // Work-through-backlog action releases them. Smoke, capture and CLI launches
-// never hold. The flag is `autopilot.held` so every dispatch funnel — the
-// service loop, the executor fill, the proactive pass, the foreman ask —
-// reads one value; nothing is persisted, so a saved pause stays the operator's.
+// never hold, and neither does a launch that resumes a session whose agents
+// were running (see session continuity above). The flag is `autopilot.held` so
+// every dispatch funnel — the service loop, the executor fill, the proactive
+// pass, the foreman ask — reads one value; the hold itself is never persisted,
+// so a saved pause stays the operator's.
 let startupChosen = false;
 async function releaseStartupHold() {
   if (!autopilot.held) return { ok: true, released: false, running: assistantLoop && assistantState?.status === "running" };
@@ -5895,6 +6083,8 @@ function showWindow() {
   rendererRecovery?.retry();
   window.show();
   window.focus();
+  // The window is back, so this is a sitting again: record work from here on.
+  startSessionBeat();
 }
 
 // No tray on a headless box is fine: the window then closes for real.
@@ -8922,7 +9112,7 @@ async function spawnNextJob() {
   let prompt = "";
   try {
     const titleBit = `${job.title}. `.replace(/["\r\n]+/g, " ");
-    const instructions = " Work in the repository at the current directory. Make the edits, do not just describe them. When done, run the narrowest relevant test.".replace(/["\r\n]+/g, " ");
+    const instructions = " Work in the repository at the current directory. Make the edits, do not just describe them. When done, run the narrowest relevant test. Other Studio sessions share this repository's git index: commit with one atomic path-limited command (`git commit -m <msg> -- <your files>`), never `git add` followed by a plain `git commit`, `git commit -a`, or `git add -A`, and leave nothing staged when you finish — a bare commit sweeps whatever another session staged into your commit.".replace(/["\r\n]+/g, " ");
     const failFlat = failBit.replace(/["\r\n]+/g, " ").slice(0, 240);
     const memoryFlat = memoryBit.replace(/["\r\n]+/g, " ").slice(0, 480);
     const collabFlat = collabBit.replace(/["\r\n]+/g, " ").slice(0, 320);
@@ -9001,6 +9191,22 @@ async function spawnNextJob() {
       seconds: Math.round((Date.now() - entry.startedAt) / 1000),
       tail: (entry.outputLog ?? []).slice(-40),
     }).catch(() => {});
+    // Shared-index sweep guard: concurrent runs in one repo share .git/index,
+    // so a staged-but-uncommitted file left by one session is exactly what a
+    // peer's next plain `git commit` sweeps into its own commit. Observation
+    // only — the dispatcher's instructions already demand atomic path-limited
+    // commits; this names any leftover staging so the damage is visible
+    // instead of surfacing later as an "encoding repair".
+    Promise.resolve()
+      .then(() => (typeof eyes.gitPorcelain === "function" && typeof eyes.parsePorcelain === "function" ? eyes.gitPorcelain({ root: runRoot }) : ""))
+      .then((porcelain) => {
+        const staged = (typeof porcelain === "string" && typeof eyes.parsePorcelain === "function" ? eyes.parsePorcelain(porcelain) : []).filter((row) => row.staged && !row.untracked);
+        if (staged.length) {
+          logLine(`[autopilot] shared git index still holds ${staged.length} staged file(s) after "${assistantClip(job.title, 50)}": ${staged.slice(0, 4).map((row) => row.path).join(", ")} — a peer session's plain commit could sweep them`);
+          pushAutopilotHistory("warning", `staged files left in the shared index: ${staged.slice(0, 3).map((row) => row.path).join(", ")}`);
+        }
+      })
+      .catch(() => {});
     // A build that failed twice becomes a question instead of another silent
     // retry. Guarded for the vm test slices that do not carry the question host.
     if (!ok && !userStop && job.kind === "task" && job.ref?.id && typeof assistantBuildFailureQuestion === "function") {
@@ -11614,8 +11820,10 @@ function registerIpc() {
   });
   // The launch screen (renderer/startup.js): which project to open, and
   // whether the agents may start. `chosen` lets a renderer reload skip the
-  // screen; `held` is what the Start agents controls key on.
-  ipcMain.handle("startup:state", () => ({ ...projects.list(), interactive: !SMOKE && !CAPTURE && !CLI_MODE, chosen: startupChosen, held: autopilot.held === true, started: assistantLoop }));
+  // screen; `held` is what the Start agents controls key on; `resumed` names
+  // the folder this launch reopened on its own, so the gate can say so
+  // instead of asking a question it has already answered.
+  ipcMain.handle("startup:state", () => ({ ...projects.list(), interactive: !SMOKE && !CAPTURE && !CLI_MODE, chosen: startupChosen, resumed: startupResumed, held: autopilot.held === true, started: assistantLoop }));
   ipcMain.handle("startup:choose", async (_event, payload) => {
     const id = typeof payload?.id === "string" && payload.id ? payload.id : null;
     let result = projects.list();
@@ -12624,6 +12832,10 @@ function createWindow() {
   // keeps ticking; Quit lives in the tray menu.
   window.on("close", (event) => {
     if (app.isQuitting || !tray || !assistantState?.prefs?.background) return;
+    // Parking in the tray is still the user closing the studio, so the sitting
+    // ends here the same way a quit does: the next launch asks which folder to
+    // open. Opening the window again (tray click, Open Studio) starts a new one.
+    endSession("closed");
     event.preventDefault();
     window.hide();
   });
@@ -13036,7 +13248,18 @@ app.whenReady().then(() => {
   // An interactive launch waits for the user: the launch screen picks the
   // project and releases the agents (startup:begin / Start agents). Smoke,
   // capture and CLI launches keep their automatic start.
-  autopilot.held = !SMOKE && !CAPTURE && !CLI_MODE;
+  //
+  // Unless the last session was still working: a crash, a reboot or an update
+  // relaunch within the resume window reopens that folder without the
+  // question, and agents that were running come back with it. A deliberate
+  // quit left a marker, so it lands on the launch screen as before.
+  startupResumed = startupResume();
+  if (startupResumed) {
+    startupChosen = true;
+    logLine(`[startup] resuming ${startupResumed.name} · work ${Math.round((Date.now() - startupResumed.activityAt) / 1000)}s ago${startupResumed.agents ? " · agents were running" : " · agents stay held"}`);
+  }
+  autopilot.held = !SMOKE && !CAPTURE && !CLI_MODE && startupResumed?.agents !== true;
+  if (!SMOKE && !CAPTURE && !CLI_MODE) startSessionBeat();
   createWindow();
   // Watchers start after the window is up so first paint is never delayed.
   setTimeout(() => startMachineWatch(), 2500);
@@ -13113,6 +13336,12 @@ app.on("window-all-closed", () => {
 let quitCheckpointSaved = false;
 app.on("before-quit", (event) => {
   app.isQuitting = true;
+  // Reaching here is the user's own doing — Alt+F4, the close button, the
+  // tray's Quit. Record it before anything winds down, so the next launch
+  // asks which folder to open instead of resuming this one. An update
+  // relaunch calls app.exit and never reaches this listener, so it keeps its
+  // place; so does a crash, which never gets to write anything at all.
+  endSession("quit");
   executorClosing = true;
   performanceProfiler.stop();
   for (const pending of jevProjectQueues.values()) pending.then((queue) => queue.stop()).catch(() => {});
