@@ -25,7 +25,60 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
-## 2026-09-22 late evening - split decision honored: fifth-gen card already carries the extra work, repo-side obligations re-verified green at HEAD c4caee1, flip stays owner-only (task_fece4ffd34e38932, run run_1790102013188_33)
+## 2026-09-22 late evening - follow-up to the parent integration gate: the split item is the owner-only card flip, chain re-verified first-hand (task_ad390ff083105169, run run_1790102031369_34)
+
+Scope recovered from the parent card's decision log, not guessed: the parent
+(task_b63e296b2ca2b7e7, "parent integration gate — follow-up 80df69") carries
+one decision — "split the extra work out" (1790101895000, kind scope) —
+answering its own MEFI_ASK of whether to close task_c1cf337d66009c14 now that
+its gate is green. The item being split out is board bookkeeping inside
+Studio, host-side by rule (workers must not rewrite the task store; the rows
+below hit the same wall and hand flips to the owner). Re-verified the
+repo-side chain before handing it back, all first-hand this run: evidence
+rows af88c20 and 51e2c21 in history (`git log -- TESTRUNS.md`), the retry's
+full gate set green at 5bc25d1 (npm test 2054/2051/0/3 + Python 247 OK,
+build-booklet byte-identical 72c66122feec…); task_c1cf337d66009c14 still
+`open` in the store (read-only check at this dispatch); fresh `npm run check`
+exit 0 on the current in-flight tree (101 targets, 204 specs unique, all
+selectors used, syntax ok 101 files). No repo-side work exists to split
+further — minting another carrier would be an empty card. Task store
+untouched; sibling in-flight files left exactly as found; this commit adds
+only this row.
+
+## 2026-09-22 late evening - auth/settings split: ciphertext moved to auth.json, scoped gates green (task_88a18406f34104ca, run run_1790101780278_28)
+
+Adopted the pi study's settings/auth split (docs/pi-provider-storage.md
+takeaway). New `scripts/auth-store.cjs` owns the split: credential fields (the
+`credentials.ENV_KEYS` set, DPAPI ciphertext) persist to
+`userData/auth.json`, never to `settings.json`; `main.cjs` `readSettings()`
+returns one merged view (preferences + auth fields) and migrates legacy
+settings.json ciphertext once — auth.json is written before the preferences
+file is stripped, so no crash window holds the blobs nowhere. `writeSettings()`
+persists the merged view's auth slice as the whole store, so the existing
+`delete settings[field]` clear flow empties auth.json too. A missing/unreadable
+auth file reads as "no keys" (fresh installs write no auth file). No IPC,
+keystore or env-precedence contract changed: `settings:get-key`/`set-key`,
+`savedKey`, `decryptKey`, the `--set-*-key` CLI handlers and the
+`via: "settings"` label are untouched — every caller keeps reading
+`settings[field]`.
+
+Evidence on this tree: `node --test tests/auth_split.test.mjs
+tests/env_credentials.test.mjs` -> 14/14 pass (8 new auth_split tests: field
+set parity with ENV_KEYS, split/merge round-trip, missing/torn auth file reads
+as no keys, store replacement leaves no tmp residue, main.cjs wiring and
+migration-order assertions, keystore/precedence contracts unchanged);
+`python -m unittest tools.test_mefi_studio_routing` -> 23 tests OK;
+`npm run check` -> exit 0 (101 targets/files through the syntax pass, includes
+the new module). Full `npm test` withheld per the contention protocol: the
+shared worktree still carries a sibling session's uncommitted in-flight tree,
+and this commit's main.cjs necessarily lands that sibling's already-gated
+427+/302- refactor (green in the 6173a10 entry) alongside the split. Docs
+updated where the old location was named: GETTING_STARTED (key storage, what
+not to copy), SECURITY (key at rest, local-state bullet),
+docs/architecture.md, docs/first-run-opencode.md, and the pi study's takeaway
+now records the adoption.
+
+
 
 The owner's scope decision on this card (1790101914614, "split the extra work
 out") is already executed board-side: the store shows the fifth-generation
