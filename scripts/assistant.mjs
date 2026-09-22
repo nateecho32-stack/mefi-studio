@@ -3768,7 +3768,7 @@ export function claimedCommitHash(parts = {}) {
   return null;
 }
 
-export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSession = false, observedChecks = [], resolvedHandoffs = [], remaining = [], resultNote = null, commit = null, priorAttempts = 0, priorVerified = false } = {}) {
+export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerChanges = 0, hasSession = false, observedChecks = [], resolvedHandoffs = [], remaining = [], resultNote = null, commit = null, priorAttempts = 0, priorVerified = false } = {}) {
   const parts = (resultNote && isObject(resultNote) ? resultNote.parts : null) ?? {};
   const namedChecks = checkReports(parts).some(namesCheck);
   const remainingText = str(parts.remaining);
@@ -3778,12 +3778,18 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSessi
   // A done+verified retry re-checks work that already verified once: a
   // faithful scoped-check rerun changes 0 files by design, so the attempt's
   // own fresh green recorded checks discharge the changed-file obligation.
-  // The rerun must be this attempt's recorded checks (red or pending results
-  // fail above), the card must carry no handed-on follow-up list, and only
-  // the remaining PROSE may be unfamiliar. Ordinary cards, red reruns, and
-  // real remaining lists fail exactly as before.
+  // The named alternative evidence is a TESTRUNS row: a retry whose only
+  // edits are ledger rows (the rerun's own documentation) still discharges —
+  // the row IS the changed-file. The rerun must be this attempt's recorded
+  // checks (red or pending results fail above), the card must carry no
+  // handed-on follow-up list, and only the remaining PROSE may be
+  // unfamiliar. Ordinary cards, red reruns, real non-ledger file changes,
+  // and real remaining lists fail exactly as before.
   const observedSummary = hasSession === true ? summarizeObservedChecks(observedChecks) : { total: 0, passed: 0, failed: 0, pending: 0 };
-  const rerunDischarges = priorVerified === true && outstanding && Math.max(0, Number(changedFiles) || 0) === 0 && observedSummary.passed > 0 && asArray(remaining).length === 0;
+  const totalChanges = Math.max(0, Number(changedFiles) || 0);
+  const ledgerOwed = Math.max(0, Number(ledgerChanges) || 0);
+  const ledger = Math.min(ledgerOwed, totalChanges);
+  const rerunDischarges = priorVerified === true && outstanding && (totalChanges === 0 || (ledgerOwed > 0 && ledgerOwed === totalChanges)) && observedSummary.passed > 0 && asArray(remaining).length === 0;
   // The runner's commit observation resolves the claimed abbreviation to a
   // real commit and reports the scoped path status. A claim the runner could
   // not match — unknown hash, git failure, no observation — is not evidence.
@@ -3795,6 +3801,7 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSessi
   const evidence = {
     verdictOk: verdictOk === true,
     changedFiles: Math.max(0, Number(changedFiles) || 0),
+    ledgerChanges: ledger,
     hasSession: hasSession === true,
     namedChecks,
     observedChecks: observedSummary,
@@ -3816,7 +3823,7 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, hasSessi
   if (evidence.hasSession) {
     if (evidence.namedChecks && !evidence.observedChecks.passed) return fail("reported checks have no recorded passing execution");
     if (evidence.observedChecks.passed) return pass(evidence.rerunDischarges
-      ? `${evidence.observedChecks.passed} recorded check(s) passed — fresh green scoped-check rerun discharges the done+verified retry with 0 changed files`
+      ? `${evidence.observedChecks.passed} recorded check(s) passed — fresh green scoped-check rerun discharges the done+verified retry with ${ledger > 0 ? "only the ledger row changed" : "0 changed files"}`
       : `${evidence.observedChecks.passed} recorded check(s) passed in the attempt's session`);
     if (evidence.changedFiles > 0) return pass(`${evidence.changedFiles} changed file(s) in the attempt's session`);
     if (evidence.commit.claimed) {

@@ -68,6 +68,20 @@ test("done+verified retries with 0 changed files discharge on a green scoped-che
   assert.equal(verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 0, priorVerified: true, observedChecks: [check("npm test", { exitCode: 1, passed: false })], resultNote: { parts: { done: "x", remaining: "odd phrasing" } } }).reason, "recorded checks failed in the attempt's session");
   assert.equal(verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 0, priorVerified: true, observedChecks: [check()], remaining: ["a follow-up"], resultNote: { parts: { done: "x", remaining: "odd phrasing" } } }).reason, "outstanding obligations remain");
   assert.equal(verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 0, priorVerified: true, resultNote: { parts: { done: "no rerun recorded", remaining: "odd phrasing" } } }).reason, "outstanding obligations remain");
+  // The named alternative evidence: a TESTRUNS row is the retry's own
+  // documentation of the rerun, so ledger-only edits discharge like 0 files.
+  // A code file changed, a ledger claim that does not cover every file, and
+  // an ordinary (never-verified) card with only a ledger row all stay
+  // outstanding.
+  const ledgerRetried = verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 1, ledgerChanges: 1, priorVerified: true, observedChecks: [check()], resultNote: { parts: { done: "TESTRUNS row documents the green rerun", remaining: "the odd handoff phrasing the denial reader cannot know" } } });
+  assert.equal(ledgerRetried.state, "verified");
+  assert.match(ledgerRetried.reason, /only the ledger row changed/);
+  assert.equal(ledgerRetried.evidence.rerunDischarges, true);
+  assert.equal(ledgerRetried.evidence.ledgerChanges, 1);
+  assert.equal(verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 1, ledgerChanges: 0, priorVerified: true, observedChecks: [check()], resultNote: { parts: { done: "x", remaining: "odd phrasing" } } }).reason, "outstanding obligations remain");
+  assert.equal(verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 2, ledgerChanges: 1, priorVerified: true, observedChecks: [check()], resultNote: { parts: { done: "x", remaining: "odd phrasing" } } }).reason, "outstanding obligations remain");
+  assert.equal(verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 1, ledgerChanges: 1, observedChecks: [check()], resultNote: { parts: { done: "x", remaining: "odd phrasing" } } }).reason, "outstanding obligations remain");
+  assert.equal(verifyCompletion({ verdictOk: true, hasSession: true, changedFiles: 1, ledgerChanges: 5, priorVerified: true, observedChecks: [check()], resultNote: { parts: { done: "x", remaining: "odd phrasing" } } }).reason, "outstanding obligations remain", "a claim larger than the file count never over-discharges");
 });
 
 test("only recognizable direct check commands provide check evidence", () => {

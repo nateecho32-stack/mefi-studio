@@ -96,3 +96,31 @@ test("a done+verified retry with 0 changed files discharges on its green scoped 
   assert.equal(saved.verifyAttempts, undefined);
   assert.equal(h.starts.length, 1, "a discharged retry does not loop into another build");
 });
+
+// The requirement's named alternative evidence: the retry's only edit is the
+// TESTRUNS row documenting its green rerun. The ledger row is documentation,
+// not landed code, so it discharges exactly like the 0-file retry — while a
+// retry that also touches a code file stays an outstanding obligation.
+test("a done+verified retry whose only change is a TESTRUNS row discharges on its green scoped rerun", async () => {
+  const h = executorHost({ tasks: [{ id: "ledger-fixture", title: "Re-verify landed work", prompt: "Re-verify the landed work", status: "open", createdAt: 1, logs: [{ at: 1, kind: "status", text: "verified — sentinel seen, 3 changed file(s)" }] }] });
+  h.wake(); await h.pump();
+  await h.finish("ledger-fixture", { lines: [
+    "MEFI_RESULT: done: TESTRUNS row records the green scoped rerun; remaining: the odd handoff phrasing the denial reader cannot know",
+    "MEFI_JOB_DONE",
+  ], files: [{ file: "TESTRUNS.md", status: "completed" }], observedChecks: [{ command: "npm run check", status: "completed", exitCode: 0, startedAt: 900000, finishedAt: 950000, passed: true }] });
+  h.advance(31000); await h.pump();
+  let saved = h.board().tasks[0];
+  assert.equal(saved.status, "done", "the ledger row is the changed-file the retry verifier accepts");
+  assert.match(saved.verification.reason, /only the ledger row changed/);
+  assert.equal(h.starts.length, 1, "no re-run loop for a ledger-only retry");
+  const code = executorHost({ tasks: [{ id: "code-fixture", title: "Re-verify landed work", prompt: "Re-verify the landed work", status: "open", createdAt: 1, logs: [{ at: 1, kind: "status", text: "verified — sentinel seen, 3 changed file(s)" }] }] });
+  code.wake(); await code.pump();
+  await code.finish("code-fixture", { lines: [
+    "MEFI_RESULT: done: touched the code again; remaining: the odd handoff phrasing the denial reader cannot know",
+    "MEFI_JOB_DONE",
+  ], files: [{ file: "src/feature.js", status: "completed" }, { file: "TESTRUNS.md", status: "completed" }], observedChecks: [{ command: "npm run check", status: "completed", exitCode: 0, startedAt: 900000, finishedAt: 950000, passed: true }] });
+  code.advance(31000); await code.pump();
+  saved = code.board().tasks[0];
+  assert.equal(saved.status, "open", "a non-ledger file change keeps the obligation outstanding");
+  assert.equal(saved.verification.reason, "outstanding obligations remain");
+});
