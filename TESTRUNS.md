@@ -25,6 +25,30 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - parent integration gate green on the whole in-flight tree: check / test / build-booklet all exit 0, midday booklet race resolved (task_b63e296b2ca2b7e7, run run_1790101049993_6)
+
+The gate task_c1cf337d66009c14 needs before closing: all three commands over
+the in-flight tree (main.cjs carrying a 427+/302− uncommitted refactor,
+renderer/startup.js + renderer/boot.js tracked and wired, ~41 sibling-modified
+files + 2 untracked), run from the project root at HEAD 1adbf24. `npm run
+check` exit 0 — targets ok (100/100 through the syntax pass, full coverage),
+spec-collisions ok (204 specs, unique, no orphans), css merge skip, all
+selectors used (5 stylesheets), check-syntax ok (100 files, in-process).
+`npm test` exit 0 — node stage 177 suites (9 launch Electron), 2054 tests /
+2051 pass / 0 fail / 3 skipped (the documented environment-conditional
+skips), serialized eyes_toggle_electron 1/1, occlusion probe ran (worker
+drift 164 ms, no failure), no sources-moved-mid-run flag; Python contracts
+`Ran 247 tests in 42.1s` OK — including the
+`test_brains_assets_are_inlined_exactly_once` case that failed in the midday
+run below, so the sibling's booklet rebuild has since caught up; the
+normalized-path lock stage green. `npm run build-booklet` exit 0 — built
+renderer\booklet.html, 39 models, hash f98dd2322a01, and a repeat build is
+byte-identical (git hash-object 72c66122feec… before == after): the
+working-tree booklet is exactly the deterministic build of the current
+renderer sources, nothing stale left for the landing sequence. Task store
+untouched; sibling in-flight files left exactly as found; this commit adds
+only this row.
+
 ## 2026-09-22 evening - third-generation follow-up re-verified at HEAD 6acf79f: landing-card obligations discharged, flip stays host-side (task_b5ec79917d8514b2, run run_1790100921654_3)
 
 Scope recovered from the parent card's decision log, not guessed: the parent
