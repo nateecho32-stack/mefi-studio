@@ -292,7 +292,7 @@ test("autopilot intervals cannot overlap an unfinished paid pass or run while di
   pass.resolve({ added: 2 });
   await Promise.all([first, second]);
   assert.equal(asks, 1);
-  assert.equal(housekeeping, 1);
+  assert.equal(housekeeping, 0, "the foreman the pass asks settles; the pass does not repeat it");
   autopilot.enabled = false;
   await env.autopilotPass();
   assert.equal(calls, 1, "a delayed boot pass honors the disabled switch");

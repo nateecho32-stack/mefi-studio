@@ -22,6 +22,13 @@
   function focusToggle() {
     syncBlocked();
     if (blocked()) return;
+    // With the navigation rail on, its M+ is the panel's door and this edge
+    // strip is not on screen, so focus would fall silently to <body>.
+    const brand = document.documentElement?.dataset?.shell === "rail" ? document.getElementById("app-rail-brand") : null;
+    if (brand) {
+      brand.focus({ preventScroll: true });
+      return;
+    }
     suppressFocusOpen = true;
     toggle.focus({ preventScroll: true });
     suppressFocusOpen = false;

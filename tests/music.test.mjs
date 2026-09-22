@@ -857,3 +857,14 @@ test("A crossfade reads the clock, so a throttled timer lands it late instead of
   assert.equal(deckB.volume, .7, "the second late tick finishes it");
   assert.equal(deckA.src, "");
 });
+
+test("A mirror that fails while connecting says so, instead of claiming a stream dropped", async () => {
+  const env = environment();
+  env.audio.play = function () { this.paused = false; return new Promise(() => {}); };
+  env.music.tune("groovesalad");
+  env.audio.error = { code: 4 };
+  env.audio.dispatch("error"); await flush();
+  assert.equal(env.audios.length, 1);
+  assert.equal(env.audio.src, mirror("groovesalad", "ice2"));
+  assert.equal(env.ids.get("music-radio-state").textContent, "Connecting to Groove Salad… — Groove Salad could not connect. Moving to mirror 2.");
+});

@@ -4823,8 +4823,8 @@
 
   // Newest first, capped at 40. `id` dedupes: the enter() seeding replays the
   // same eyes rows the live activity push already delivered. A repeat of the
-  // same kind/tool/file/session folds into the newest row as a ×N count
-  // instead of flooding the list.
+  // same kind/tool/file/session/text folds into the newest row as a ×N count
+  // instead of flooding the list; different log lines keep their own rows.
   function pushFeed(item) {
     const { id, ...rest } = item;
     if (id && state.feed.some((entry) => entry.id === id)) return;
@@ -4835,7 +4835,8 @@
       newest.kind === rest.kind &&
       (newest.tool ?? null) === (rest.tool ?? null) &&
       (newest.file ?? null) === (rest.file ?? null) &&
-      (newest.sessionId ?? null) === (rest.sessionId ?? null)
+      (newest.sessionId ?? null) === (rest.sessionId ?? null) &&
+      (newest.text ?? null) === (rest.text ?? null)
     ) {
       newest.count = (newest.count ?? 1) + 1;
       newest.at = Date.now();
@@ -5109,6 +5110,17 @@
     }
   }
 
+  // A status push replaces the autopilot status, but the graph rebuild merges
+  // its tree summary into this same slot under its own names (refreshGraphImpl);
+  // only those survive, so a push that drops a list (clusterAgents) drops it.
+  const GRAPH_SUMMARY_KEYS = ["status", "tone", "sublabel", "unread", "rosterAgents", "rosterRunning", "rosterQueued"];
+  function adoptAssistantStatus(next) {
+    if (!next) { state.assistant = null; return; }
+    const kept = {};
+    for (const key of GRAPH_SUMMARY_KEYS) if (state.assistant && key in state.assistant) kept[key] = state.assistant[key];
+    state.assistant = { ...kept, ...next };
+  }
+
   function commandAgentRoster(assistant, full) {
     const helpers = (Array.isArray(assistant?.clusterAgents) ? assistant.clusterAgents : []).map((agent) => ({
       ...agent,
@@ -5261,17 +5273,21 @@
       dot = "running";
       text = "task preparation";
     } else if (!assistant) text = "…";
-    else if (assistant.waiting) {
-      dot = "warm";
-      text = `waiting · ${assistant.waiting}`;
-    } else if (!assistant.execute) {
+    else if (!assistant.execute || full?.status === "paused") {
+      // A pause (New work off, Stop all, or the assistant service paused)
+      // outranks the last waiting reason, which is stale while paused.
       dot = "bad";
       // The breaker only trips on infra failures; it re-arms itself when the
       // park cooldown passes, so say when that is rather than looking dead.
       const retryMin = assistant.parkedUntil ? Math.max(1, Math.ceil((assistant.parkedUntil - Date.now()) / 60000)) : 0;
       text = (assistant.infraFailures ?? 0) >= 3
-        ? `paused · opencode not starting${retryMin ? ` · retry ~${retryMin}m` : ""}`
+        ? `paused · worker CLI not starting${retryMin ? ` · retry ~${retryMin}m` : ""}`
         : "paused";
+    } else if (assistant.waiting) {
+      dot = "warm";
+      // Main's reasons often open with "waiting for/on …"; drop it so the
+      // header does not read "waiting · waiting for …".
+      text = `waiting · ${String(assistant.waiting).replace(/^waiting (?:for|on) /i, "")}`;
     } else if (!enabled) text = "off";
     else {
       // Idle is the assistant's call, not an absence of one: say what the
@@ -9579,7 +9595,7 @@
       if (state.active) renderFeed();
     }).catch(() => {});
     read("assistantStatus").then((result) => {
-      state.assistant = result?.status ?? result ?? null;
+      adoptAssistantStatus(result?.status ?? result ?? null);
       state.feedDirty = true;
       if (state.active) renderFeed();
     }).catch(() => {});
@@ -10325,9 +10341,10 @@
       if (state.active) renderFeed();
     });
     // The push carries the bare status object; assistantStatus() wraps it in
-    // {ok, status} — accept either shape here.
+    // {ok, status} — accept either shape here. The roster counts the graph
+    // rebuild put in this slot survive the push (adoptAssistantStatus).
     window.mefiStudio?.onAssistantStatus?.((status) => {
-      state.assistant = status?.status ?? status ?? null;
+      adoptAssistantStatus(status?.status ?? status ?? null);
       renderNewWorkControl();
       // Autopilot history (started/done/failed/paused) becomes gold "a-eyes"
       // feed rows. feedSeen + a stable id dedupe across status pushes; noFold

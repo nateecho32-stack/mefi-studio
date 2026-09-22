@@ -1070,44 +1070,138 @@
         <div class="eyebrow">Engine</div>
         <h2 id="brains-heading">Brain maps</h2>
       </div>
-      <span class="brains-live" id="brains-live" hidden>Live pipeline</span>
-      <span class="brains-dirty" id="brains-dirty" hidden>Unsaved changes</span>
+      <div class="brains-mapbar">
+        <label class="brains-map-pick" title="Which brain map you are editing">
+          <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-route"/></svg>
+          <select id="brains-switcher" aria-label="Which brain map"></select>
+        </label>
+        <span class="brains-live" id="brains-live" hidden>Live pipeline</span>
+      </div>
       <div class="sheet-links" data-sheet-links="brains" role="group" aria-label="Other tools"></div>
       <div class="brains-toolbar">
-        <select id="brains-switcher" aria-label="Which brain map"></select>
-        <button id="brains-new" class="ghost mini" type="button" title="Start an empty brain map">New</button>
-        <button id="brains-duplicate" class="ghost mini" type="button" title="Copy this map, wires and all">Duplicate</button>
-        <button id="brains-delete" class="ghost mini" type="button" title="Delete this map">Delete</button>
-        <button id="brains-draft" class="ghost mini" type="button" title="Describe what it should do and the assistant drafts it from the same parts. Nothing is saved until you review it.">Build with AI</button>
+        <div class="brains-history" role="group" aria-label="History">
+          <button id="brains-undo" class="ghost mini icon" type="button" title="Undo (Ctrl Z)" aria-label="Undo" disabled><svg class="glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M5.5 3.5 2.5 6.5l3 3"/><path d="M2.5 6.5h7a4 4 0 0 1 0 8H7"/></svg></button>
+          <button id="brains-redo" class="ghost mini icon" type="button" title="Redo (Ctrl Shift Z)" aria-label="Redo" disabled><svg class="glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="m10.5 3.5 3 3-3 3"/><path d="M13.5 6.5h-7a4 4 0 0 0 0 8H9"/></svg></button>
+        </div>
+        <button id="brains-draft" class="ghost mini" type="button" title="Describe what it should do and the assistant drafts it from the same parts. Nothing is saved until you review it."><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span class="label">Build with AI</span></button>
+        <div class="brains-more">
+          <button id="brains-more" class="ghost mini" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="brains-more-menu" title="New, duplicate, reset or delete a map"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-more"/></svg><span class="label">Map</span><svg class="glyph chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></button>
+          <div class="brains-menu" id="brains-more-menu" role="menu" aria-label="Map actions" hidden>
+            <button id="brains-new" type="button" role="menuitem" title="Start an empty brain map"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-add"/></svg><span class="label">New empty map</span></button>
+            <button id="brains-duplicate" type="button" role="menuitem" title="Copy this map, wires and all"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plans"/></svg><span class="label">Duplicate this map</span></button>
+            <button id="brains-discard" type="button" role="menuitem" title="Go back to how this map was last saved" disabled><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Discard unsaved changes</span></button>
+            <button id="brains-reset" type="button" role="menuitem" title="Put the shipped pipeline back the way it came" hidden><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-refresh"/></svg><span class="label">Reset to the shipped pipeline</span></button>
+            <button id="brains-delete" class="danger" type="button" role="menuitem" title="Delete this map"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Delete this map</span></button>
+          </div>
+        </div>
+        <span class="brains-divider" aria-hidden="true"></span>
+        <span class="brains-dirty" id="brains-dirty" hidden>Unsaved changes</span>
         <button id="brains-save" class="mini" type="button" title="Save this map (Ctrl S)">Save</button>
-        <button id="brains-activate" class="mini" type="button" title="Make this the pipeline the studio follows">Make this live</button>
+        <button id="brains-activate" class="mini primary" type="button" title="Make this the pipeline the studio follows">Make this live</button>
         <button id="brains-close" class="ghost sheet-close" type="button" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
       </div>
     </header>
-    <div class="brains-body">
+    <div class="brains-body" id="brains-body" data-parts="shown" data-inspector="shown">
       <aside class="brains-parts" aria-label="Parts">
-        <h3>Parts</h3>
-        <p class="brains-parts-note">Every part says what it can and cannot do, what reach it needs and whether the studio runs it. Click one to add it; press Space on the canvas to search from anywhere.</p>
-        <input id="brains-parts-search" type="search" placeholder="Search parts" aria-label="Search parts">
-        <div id="brains-parts-list"></div>
+        <div class="brains-parts-head">
+          <h3>Parts</h3>
+          <p class="brains-parts-note">Click a part to add it, or drag it onto the canvas. Space searches from anywhere.</p>
+          <input id="brains-parts-search" type="search" placeholder="Search parts" aria-label="Search parts">
+        </div>
+        <div id="brains-parts-list" class="brains-parts-list"></div>
       </aside>
-      <div class="brains-canvas-wrap" id="brains-canvas-wrap" tabindex="0" role="application" aria-label="Brain map canvas. Click an output end and then an input end to wire them. Space searches the parts, Delete removes what is selected, Escape cancels a wire.">
-        <svg class="brains-wires" id="brains-wires" aria-hidden="true"></svg>
-        <div class="brains-canvas" id="brains-canvas"></div>
+      <div class="brains-canvas-wrap" id="brains-canvas-wrap" tabindex="0" role="application" aria-label="Brain map canvas. Drag from an output end to an input end, or click one and then the other, to wire them. Scroll pans, Ctrl and scroll zooms, F fits the map. Space searches the parts, Delete removes what is selected, arrow keys move it, Escape cancels a wire. Question mark lists every shortcut.">
+        <div class="brains-stage" id="brains-stage">
+          <svg class="brains-wires" id="brains-wires" aria-hidden="true"></svg>
+          <svg class="brains-wire-hits" id="brains-wire-hits" aria-hidden="true"></svg>
+          <svg class="brains-ghost" id="brains-ghost" aria-hidden="true" data-on="false" width="1" height="1"><path id="brains-ghost-path" d="M 0 0"/></svg>
+          <div class="brains-canvas" id="brains-canvas"></div>
+        </div>
+        <button id="brains-toggle-parts" class="brains-rail-toggle left ghost mini icon" type="button" aria-controls="brains-body" aria-expanded="true" title="Hide the parts ([)"><svg class="glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6.5 3v10"/></svg></button>
+        <button id="brains-toggle-inspector" class="brains-rail-toggle right ghost mini icon" type="button" aria-controls="brains-body" aria-expanded="true" title="Hide the inspector (])"><svg class="glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M9.5 3v10"/></svg></button>
+        <div class="brains-banner" id="brains-banner" role="status" hidden>
+          <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg>
+          <span id="brains-banner-text">Drafted. Nothing is saved yet.</span>
+          <button id="brains-banner-discard" class="ghost mini" type="button">Discard draft</button>
+          <button id="brains-banner-save" class="mini primary" type="button">Save as a new map</button>
+        </div>
+        <div class="brains-empty-state" id="brains-empty-state" hidden>
+          <p class="eyebrow">Empty map</p>
+          <h3>Nothing is wired yet</h3>
+          <p>Add a first part — an intake is where work comes from — or describe the whole thing and let the assistant draft it.</p>
+          <div class="brains-empty-actions">
+            <button id="brains-empty-add" class="mini" type="button"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-add"/></svg><span class="label">Add a part</span><kbd class="key">Space</kbd></button>
+            <button id="brains-empty-draft" class="ghost mini" type="button"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-spark"/></svg><span class="label">Build with AI</span></button>
+          </div>
+        </div>
+        <div class="brains-viewbar" role="toolbar" aria-label="View">
+          <button id="brains-zoom-out" class="ghost mini icon" type="button" title="Zoom out (-)" aria-label="Zoom out"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-zoom-out"/></svg></button>
+          <button id="brains-zoom-level" class="ghost mini brains-zoom-level" type="button" title="Back to 100% (0)" aria-label="Zoom level, press for 100%">100%</button>
+          <button id="brains-zoom-in" class="ghost mini icon" type="button" title="Zoom in (+)" aria-label="Zoom in"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-zoom-in"/></svg></button>
+          <span class="brains-divider" aria-hidden="true"></span>
+          <button id="brains-fit" class="ghost mini" type="button" title="Fit the whole map in view (F)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-fit"/></svg><span class="label">Fit</span></button>
+          <button id="brains-tidy" class="ghost mini" type="button" title="Line the parts up in pipeline order. Ctrl Z puts them back."><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-sliders"/></svg><span class="label">Tidy</span></button>
+          <button id="brains-help" class="ghost mini icon" type="button" title="What the marks mean, and every shortcut (?)" aria-label="Legend and shortcuts"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg></button>
+        </div>
+        <div class="brains-minimap" id="brains-minimap" aria-hidden="true" title="Overview: drag to move the view" hidden><svg id="brains-minimap-svg" preserveAspectRatio="xMidYMid meet"></svg></div>
       </div>
       <aside class="brains-inspector" id="brains-inspector" aria-label="What the selected part may do"></aside>
     </div>
     <div class="brains-status-bar">
-      <div class="brains-problem-list" id="brains-problems" role="status" aria-label="Problems in this map"></div>
-      <p class="brains-status" id="brains-status" role="status">Click an output end, then an input end, to wire two parts together.</p>
+      <div class="brains-problem-list" id="brains-problems" role="group" aria-label="Problems in this map"></div>
+      <p class="brains-status" id="brains-status" role="status">Drag from an output end to an input end — or click one, then the other — to wire two parts.</p>
     </div>
     <div class="brains-search" id="brains-search" hidden>
       <div class="brains-search-panel">
-        <input id="brains-search-input" type="search" placeholder="Add a part…" aria-label="Search the parts catalog">
-        <ul class="brains-search-list" id="brains-search-list"></ul>
+        <input id="brains-search-input" type="search" placeholder="Add a part, or find one on this map…" aria-label="Search the parts catalog and this map" role="combobox" aria-expanded="true" aria-controls="brains-search-list" aria-autocomplete="list">
+        <ul class="brains-search-list" id="brains-search-list" role="listbox" aria-label="Parts"></ul>
         <p class="brains-search-hint" id="brains-search-hint"></p>
       </div>
     </div>
+    <div class="brains-shortcuts" id="brains-shortcuts" hidden>
+      <div class="brains-shortcuts-panel" role="dialog" aria-modal="true" aria-labelledby="brains-shortcuts-title">
+        <div class="brains-shortcuts-head">
+          <h3 id="brains-shortcuts-title">Reading and driving the map</h3>
+          <button class="ghost mini icon" type="button" data-close="shortcuts" title="Close (Esc)" aria-label="Close shortcuts"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg></button>
+        </div>
+        <div class="brains-shortcut-cols">
+          <dl>
+            <dt>Wire two parts</dt><dd>Drag from an end to an end, or click both</dd>
+            <dt>Wire into something new</dt><dd>Let go of a wire on empty canvas</dd>
+            <dt><kbd class="key">Space</kbd></dt><dd>Search the parts</dd>
+            <dt>Double-click</dt><dd>Search, and add the part there</dd>
+            <dt><kbd class="key">Delete</kbd></dt><dd>Remove what is selected</dd>
+            <dt>Shift + click</dt><dd>Pick several parts; Shift + drag on empty canvas picks a region</dd>
+            <dt><kbd class="key">Ctrl</kbd> <kbd class="key">A</kbd></dt><dd>Pick every part</dd>
+            <dt><kbd class="key">Ctrl</kbd> <kbd class="key">D</kbd></dt><dd>Duplicate what is picked, with the wires between</dd>
+            <dt><kbd class="key">←</kbd> <kbd class="key">→</kbd> <kbd class="key">↑</kbd> <kbd class="key">↓</kbd></dt><dd>Move what is picked (Shift: further)</dd>
+            <dt><kbd class="key">Esc</kbd></dt><dd>Cancel a wire, clear the selection, then close</dd>
+          </dl>
+          <dl>
+            <dt>Drag empty canvas</dt><dd>Pan (the middle button works anywhere)</dd>
+            <dt>Scroll</dt><dd>Pan; Shift scrolls sideways</dd>
+            <dt><kbd class="key">Ctrl</kbd> + scroll</dt><dd>Zoom around the pointer</dd>
+            <dt><kbd class="key">F</kbd></dt><dd>Fit the whole map</dd>
+            <dt><kbd class="key">0</kbd> <kbd class="key">+</kbd> <kbd class="key">-</kbd></dt><dd>100%, zoom in, zoom out</dd>
+            <dt><kbd class="key">[</kbd> <kbd class="key">]</kbd></dt><dd>Hide or show the parts and the inspector</dd>
+            <dt><kbd class="key">Ctrl</kbd> <kbd class="key">F</kbd></dt><dd>Find a part already on the map</dd>
+            <dt><kbd class="key">F8</kbd></dt><dd>Go to the next problem (Shift: the one before)</dd>
+            <dt><kbd class="key">Ctrl</kbd> <kbd class="key">Z</kbd></dt><dd>Undo; with Shift, redo</dd>
+            <dt><kbd class="key">Ctrl</kbd> <kbd class="key">S</kbd></dt><dd>Save, even from inside a field</dd>
+          </dl>
+        </div>
+        <h4 class="brains-legend-title">What the marks mean</h4>
+        <ul class="brains-legend">
+          <li><span class="brains-legend-swatch groups" aria-hidden="true"><i data-group="intake"></i><i data-group="check"></i><i data-group="plan"></i><i data-group="assistant"></i><i data-group="routing"></i><i data-group="build"></i><i data-group="decide"></i></span><span>Colour is the stage a part belongs to: intake, checks, planning, assistant, routing, build, decisions. A wire takes the colour of the part it leaves.</span></li>
+          <li><span class="brains-node-badge" data-runs="map">Map rules</span><span>The map itself decides here. Editing it changes behaviour as soon as the map is saved.</span></li>
+          <li><span class="brains-node-badge" data-runs="draft">Note</span><span>A drawing only: saved and shown, but nothing runs it.</span></li>
+          <li><span class="brains-node-switch" aria-hidden="true"><svg class="glyph" focusable="false"><use href="#g-sliders"/></svg></span><span>Moves a real switch when the map goes live. Every other part holds settings for a stage the studio already runs.</span></li>
+          <li><span class="brains-legend-swatch wire feedback" aria-hidden="true"></span><span>A dashed wire is a feedback wire: what it carries lands on the next pass.</span></li>
+          <li><span class="brains-legend-swatch dot" aria-hidden="true"></span><span>A red ring is a required end with nothing wired, and a red part or wire is a problem to fix before the map can go live.</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="brains-dialog" id="brains-dialog" hidden></div>
   </div>
 </div>
 <button id="profiler-hud" class="profiler-hud" hidden title="Open the running performance capture">Recording performance</button>

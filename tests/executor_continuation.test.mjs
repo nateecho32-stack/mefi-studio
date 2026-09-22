@@ -27,8 +27,9 @@ function verificationHost({ tasks = [], requests = [], unavailable = [], changes
   const notes = [];
   const env = vm.createContext({
     Date: clock, crypto, backlog, taskHandoffs, taskDelegation, executorResume, executorProcessAlive: () => false, process: { pid: 1 }, EXECUTOR_PARALLEL_CAP: 3, autopilot: { jobs: [] }, assistantState: { prefs: {} }, assistantModule: assistant,
+    TASKS_PATH: "tasks", REQUESTS_PATH: "requests",
     getAssistant: async () => assistant, loadModule: async () => history,
-    getEyes: async () => ({ listChanges: ({ sessionId }) => {
+    getEyes: async () => ({ readJson: async (key) => copy(board[key] ?? []), listChanges: ({ sessionId }) => {
       if (unavailable.includes(sessionId)) throw new Error("fixture evidence store unavailable");
       return changes ?? [{ file: "fixture.js", status: "completed" }];
     } }),
@@ -172,6 +173,7 @@ test("an overseer verification run's results are the completed task's observed c
   assert.equal(task.status, "done");
   assert.equal(task.verification.state, "verified");
   assert.deepEqual(task.verification.checks, { total: 1, passed: 1, failed: 0, pending: 0 });
+  assert.equal(task.verification.reason, "1 recorded check(s) passed in the overseer's verification run", "the reason names who ran the check");
 });
 
 test("the overseer's fresh run result supersedes the worker's stale failing run of the same command", async () => {
@@ -181,6 +183,7 @@ test("the overseer's fresh run result supersedes the worker's stale failing run 
     verificationRun: { key: "verification:rerun:run_1", state: "passed", at: NOW - 100, results: [{ command: "npm test", exitCode: 0, tail: "ok" }] },
   }] });
   Object.assign(env, { getEyes: async () => ({
+    readJson: async (key) => copy(board()[key] ?? []),
     listChanges: () => [{ file: "fixture.js", status: "completed" }],
     listSessionChecks: () => ({ available: true, checks: [{ command: "npm test", startedAt: 5, status: "completed", exitCode: 1, passed: false }] }),
   }) });
@@ -206,6 +209,52 @@ test("a done card whose overseer run later failed reopens on the failing evidenc
   assert.equal(task.verification.changedFiles, null);
   assert.equal(task.nextRunAt, NOW + 60000);
   assert.match(notes.join("\n"), /reopened "Settled before its run finished" — recorded checks failed/);
+  assert.match(task.logs.at(-1).text, /^reopened — overseer check failed — recorded checks failed in the overseer's verification run · retry 1\/3$/);
+});
+
+test("a user's manual Done is not reopened by an overseer run that failed before it", async () => {
+  const { env, board, notes } = verificationHost({ tasks: [{
+    id: "manual", title: "Confirmed by hand", status: "done", doneAt: NOW - 50,
+    verification: { state: "manual", at: NOW - 50 },
+    lastAttempt: { startedAt: 1, at: 2, code: 0, sessionId: "manual-session" },
+    verificationRun: { key: "verification:manual:run_1", state: "failed", at: NOW - 100, results: [{ command: "npm run check", exitCode: 1, tail: "ENOENT" }] },
+  }] });
+  await env.autopilotHousekeeping();
+  const task = board().tasks[0];
+  assert.equal(task.status, "done");
+  assert.equal(task.verification.state, "manual");
+  assert.equal(task.verifyAttempts, undefined, "no verify budget is spent");
+  assert.doesNotMatch(notes.join("\n"), /reopened/);
+});
+
+// verificationRun is never cleared: a retry that queued no check of its own
+// still carries the previous attempt's run, which is not evidence for it.
+test("an earlier attempt's passing overseer run does not verify a later attempt", async () => {
+  const { env, board } = verificationHost({ tasks: [{
+    id: "t", title: "Retry with nothing to show", status: "awaiting_verification",
+    lastAttempt: { runId: "run_new", startedAt: 1, at: 2, sessionId: "s", code: 0 },
+    verificationRun: { key: "verification:t:run_old", state: "passed", at: NOW - 100, results: [{ command: "npm run check", exitCode: 0 }] },
+  }], changes: [] });
+  await env.autopilotHousekeeping();
+  const task = board().tasks[0];
+  assert.equal(task.status, "open");
+  assert.equal(task.verification.state, "unverified");
+  assert.match(task.verification.reason, /no attributable edits and no named checks/);
+  assert.match(task.logs.at(-1).text, /^unverified — no attributable edits and no named checks · retry 1\/3$/);
+});
+
+test("an earlier attempt's failing overseer run does not fail a later attempt", async () => {
+  const { env, board } = verificationHost({ tasks: [{
+    id: "t", title: "Retry that landed edits", status: "awaiting_verification",
+    lastAttempt: { runId: "run_new", startedAt: 1, at: 2, sessionId: "s", code: 0 },
+    verificationRun: { key: "verification:t:run_old", state: "failed", at: NOW - 100, results: [{ command: "npm run check", exitCode: 1, tail: "stale failure" }] },
+  }] });
+  await env.autopilotHousekeeping();
+  const task = board().tasks[0];
+  assert.equal(task.status, "done");
+  assert.equal(task.verification.state, "verified");
+  assert.equal(task.verification.reason, "1 changed file(s) in the attempt's session");
+  assert.equal(task.logs.at(-1).text, "verified — 1 changed file(s) in the attempt's session");
 });
 
 test("a queued verification run is not yet evidence", async () => {

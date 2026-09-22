@@ -42,7 +42,6 @@ try {
         current.runId = runId;
         current.updatedAt = startedAt;
         current.lease = { pid: process.pid, at: startedAt };
-        current.logs = [...(current.logs ?? []), { at: startedAt, kind: "status", text: "autopilot picked up task" }].slice(-40);
         claimedId = current.id; // synchronous mutator: the capture is safe
         return {};
       });

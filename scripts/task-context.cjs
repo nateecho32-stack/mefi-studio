@@ -1,6 +1,8 @@
 // Durable task revisions and resumable briefs. Pure: callers persist the
 // returned task under the project board lock. History is append-only; only
 // reads and model-facing summaries are bounded, never the saved source text.
+// Run-claim state (status, runId, leases, progress) is not brief context and
+// is not snapshotted.
 const { createHash } = require("node:crypto");
 const { dependencyIds } = require("./backlog.cjs");
 
@@ -8,7 +10,7 @@ const object = (value) => value && typeof value === "object" && !Array.isArray(v
 const rows = (value) => Array.isArray(value) ? value : [];
 const text = (value) => typeof value === "string" ? value : "";
 const copy = (value) => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
-const FIELDS = ["id", "projectId", "projectPath", "projectName", "title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "ideas", "dependsOn", "delegation", "delegatedFrom", "parentTaskId", "members", "interruptedAttempt", "lastAttempt", "verification", "verificationReceiptId", "remaining", "blockers", "lastRunError", "runFailures", "verifyAttempts", "status", "doneAt", "completionFromTaskId", "planningId", "planningSpecId", "planningTaskId", "acceptance", "logs", "source", "parent", "parentRunId", "depth", "createdAt", "runId"];
+const FIELDS = ["id", "projectId", "projectPath", "projectName", "title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "ideas", "dependsOn", "delegation", "delegatedFrom", "parentTaskId", "members", "absorbedInto", "interruptedAttempt", "lastAttempt", "verification", "verificationReceiptId", "remaining", "blockers", "lastRunError", "runFailures", "verifyAttempts", "doneAt", "completionFromTaskId", "planningId", "planningSpecId", "planningTaskId", "acceptance", "logs", "source", "parent", "parentRunId", "depth", "createdAt"];
 const RESTORABLE = ["title", "prompt", "description", "details", "note", "notes", "context", "handoff", "ideaDetail", "refs", "files", "file", "dependsOn"];
 
 function snapshotTask(task) {
@@ -36,6 +38,13 @@ function recordTaskRevision(task, { previous = null, kind = "updated", note = ""
   // The trusted current store is enough for a no-op. Do not serialize, copy,
   // or walk years of old snapshots just because a heartbeat refreshed a lease.
   if (kind !== "restored" && priorLatest?.hash === hash) {
+    return task.contextHistory === previous.contextHistory ? task : { ...task, contextHistory: previous.contextHistory };
+  }
+  // A latest entry hashed under an older FIELDS list (one that still carried
+  // status/runId) is compared through the current list, so upgraded boards do
+  // not gain a catch-up revision on every row at their first mutation. An
+  // entry already on the current list cannot match here, so it is not re-hashed.
+  if (kind !== "restored" && priorLatest?.snapshot && Object.keys(priorLatest.snapshot).some((key) => !FIELDS.includes(key)) && digest(snapshotTask(priorLatest.snapshot)) === hash) {
     return task.contextHistory === previous.contextHistory ? task : { ...task, contextHistory: previous.contextHistory };
   }
   // Preserve a revision already appended by restoreTaskRevision when the board

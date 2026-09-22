@@ -2564,6 +2564,24 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
   .ws-activity summary { padding: 9px 0; }
   .ws-welcome { padding: 20px 12px; }
   .ws-work-summary { -webkit-line-clamp: 1; }
+  /* The glance strip gives its detail line to the work list at these heights:
+     each tile keeps its kicker and value, the Service tile keeps its Pause, and
+     the explanation waits for a taller window. At 1280x720 the list was pinned
+     to its 90px floor and pushed off the bottom of the window. */
+  .ws-dashboard { gap: 8px; margin-bottom: 10px; }
+  .ws-dash-tile { min-height: 0; gap: 2px; padding: 7px 10px; }
+  .ws-dash-value { -webkit-line-clamp: 1; }
+  .ws-dash-note { display: none; }
+  .ws-dash-actions { padding-top: 4px; }
+  /* The backlog's two controls keep their names and state and drop their
+     one-line explanations here; both controls point aria-describedby at those
+     notes, and a described-by reference is read out even when hidden. */
+  #workspace-build-mode-note, #workspace-agent-mode-note { display: none; }
+  /* The greeting and the work heading tighten too; the project name is in the
+     top bar, so the headline can be one compact line here. */
+  .ws-heading { padding: 6px 0 6px; }
+  .ws-heading h1 { font-size: 24px; }
+  .ws-work-heading { padding: 2px 0 4px; }
 }
 @media (min-width: 1750px) { .ws-main { padding: 0 max(45px,calc((100vw - 1580px)/2)); }.ws-columns { gap: 40px; }.ws-work { padding-left: 35px; }.ws-heading { padding: 28px 0 20px; } }
 @media (max-width: 1150px) { .workspace { grid-template-columns: 200px minmax(0,1fr); }.ws-sidebar { padding-inline: 12px; }.ws-main { padding-inline: 23px; }.ws-columns { gap: 18px; grid-template-columns: minmax(0,1fr) 265px; }.ws-work { padding-left: 18px; }.ws-companion-track { width: 96px; }.ws-track-dot.middle { left: 46px; }[data-station="make"] .ws-buddy { transform: translateX(26px); }[data-station="review"] .ws-buddy { transform: translateX(52px); }.ws-track-labels { padding: 0; font-size: 7px; }.ws-companion-bar { gap: 8px; }.ws-connection { font-size: 9px; }.ws-heading h1 { font-size: 32px; }.ws-compose-bottom > span { max-width: 140px; } }
@@ -3921,7 +3939,12 @@ html[data-shell="rail"] body { padding-left: calc(var(--shell-rail-w) + var(--gu
 @media (max-width: 900px) { html[data-shell="rail"] body { padding-left: calc(var(--shell-rail-w) + var(--s4)); } }
 html[data-shell="rail"] #workspace-layer,
 html[data-shell="rail"] #idle-hud,
-html[data-shell="rail"] .overlay { left: var(--shell-rail-w); }
+html[data-shell="rail"] .overlay,
+/* Three sheets are full-window layers without the shared .overlay class, and
+   the rail sat over their left edge — Style & sound's play button included. */
+html[data-shell="rail"] .planning-overlay,
+html[data-shell="rail"] .profiler-overlay,
+html[data-shell="rail"] .music-overlay { left: var(--shell-rail-w); }
 /* The project panel slides out of the rail's edge, not the window's. */
 html[data-shell="rail"] #workspace-sidebar-panel { left: var(--shell-rail-w); }
 /* Three sheets size themselves in vw, and vw does not know the overlay moved

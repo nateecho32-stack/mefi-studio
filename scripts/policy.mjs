@@ -10,7 +10,7 @@
 // the maximum the runtime supplied.
 //
 // The BASELINE policy is a line-for-line port of the ordering that used to
-// live inline in main.cjs (taskPriority / workPriority / compareWork), so the
+// live inline in main.cjs (workPriority / compareWork), so the
 // live ranking is frozen behind an interface with zero behavior change until
 // controlled activation ships. tests/policy.test.mjs pins the parity.
 //

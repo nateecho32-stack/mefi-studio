@@ -143,7 +143,7 @@ test("overseer still reviews and repairs a large board while speculative upgrade
   assert.equal(added.length, 0);
 });
 
-test("timer still settles and dispatches backlog but does not run duplicate expansion", async () => {
+test("timer asks the foreman to settle and dispatch but does not run duplicate expansion", async () => {
   const effects = [];
   const env = vm.createContext({
     Date, projectSwitching: false, SMOKE: false, CAPTURE: false, CLI_MODE: false,
@@ -158,5 +158,24 @@ test("timer still settles and dispatches backlog but does not run duplicate expa
   });
   vm.runInContext(`let autopilotTicks = 11;\n${section("let autopilotPassInFlight = null;", "async function setAutopilot(")}`, env);
   await env.autopilotPass();
-  assert.deepEqual(effects, ["settle", "promote", "dispatch"]);
+  assert.deepEqual(effects, ["dispatch"], "the foreman it asks settles and promotes; the timer does not repeat it");
+});
+
+test("with a key the timer leaves briefing and growth to the roster", async () => {
+  const effects = [];
+  const env = vm.createContext({
+    Date, projectSwitching: false, SMOKE: false, CAPTURE: false, CLI_MODE: false,
+    assistantState: { status: "running", prefs: {}, ai: { keyPresent: true } }, autopilot: { enabled: true, execute: true }, TASKS_PATH: "tasks",
+    projects: { open: () => ({ id: "fixture" }) },
+    getEyes: async () => ({ readJson: async () => [] }),
+    autopilotProactivePass: () => assert.fail("the briefer owns the brief when a key is saved"),
+    growthBoardFacts: () => assert.fail("the grower and improver own expansion when a key is saved"),
+    runAssistant: () => assert.fail("no paid call from the timer when a key is saved"),
+    classifyPendingWork: async () => ({ ok: true }),
+    refreshAutopilotQueue: async () => {}, pushAutopilotHistory: () => assert.fail("nothing queued, no history row"), emitAutopilot() {},
+    assistantAskForWork: () => effects.push("dispatch"), logLine: (line) => assert.fail(line),
+  });
+  vm.runInContext(`let autopilotTicks = 11;\n${section("let autopilotPassInFlight = null;", "async function setAutopilot(")}`, env);
+  await env.autopilotPass();
+  assert.deepEqual(effects, ["dispatch"]);
 });

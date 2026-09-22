@@ -26,6 +26,20 @@ test("standalone result lines retain plain and terminal-colored CLI compatibilit
   }
 });
 
+// A long report used to be dropped whole, and with it the card's result, its
+// named checks and the overseer's verification run.
+test("a start-anchored result line over 300 characters is clipped, not dropped", () => {
+  const line = `MEFI_RESULT: done: ${"verified every poll owner on disk ".repeat(12)}; remaining: none; ran: npm run check`;
+  assert.ok(line.length > 300);
+  const parsed = parseExecutorResult(line);
+  assert.ok(parsed, "a long line still parses");
+  assert.ok(parsed.raw.length <= 300);
+  assert.equal(parsed.parts.done.length, 200);
+  assert.equal(parsed.parts.remaining, "none");
+  assert.equal(parsed.parts.ran, "npm run check");
+  assert.equal(parseExecutorResult(`> ${line}`), null, "the start anchor still rejects a quoted echo");
+});
+
 // The result line stripped colour; the verdict sentinel did not. A CLI that
 // wraps its last line then exits non-zero had its report thrown away and the
 // card charged a failure with a retry backoff.

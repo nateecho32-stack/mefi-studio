@@ -292,7 +292,7 @@
     deck.addEventListener("waiting", () => { if (radioLive(deck)) armStall(); });
     deck.addEventListener("stalled", () => { if (radioLive(deck)) armStall(); });
     deck.addEventListener("ended", () => { if (radioLive(deck)) nextMirror("The stream ended"); });
-    deck.addEventListener("error", () => { if (radioLive(deck)) nextMirror("The stream dropped"); });
+    deck.addEventListener("error", () => { if (radioLive(deck)) nextMirror(state.radioPhase === "connecting" ? `${station(state.station)?.name || "The station"} could not connect` : "The stream dropped"); });
   }
   function clearStall() { if (stallTimer) { window.clearTimeout(stallTimer); stallTimer = 0; } }
   function armStall() {

@@ -274,6 +274,37 @@ Still open from the plan: the Explorer's 5 s × 7-IPC poll, the "Pause backlog"
 label on the backlog button (same action as the Service tile's Pause), and
 Phases 2–4.
 
+## Phase 3 status — one navigation rail (September 22, 2026)
+
+Built in the shared tree on `main`, in five steps. `npm run check`,
+`npm run audit` and the full node suite (2001 tests including every Electron
+fixture) pass with the rail as the default.
+
+| Step | Change |
+|---|---|
+| **Inspect mode** | Selecting a node gives its detail the whole Command rail at full height (`#cmd-node`, a sixth rail view) and folds every other surface to its edge; Esc returns the menus first, then the node. Fixed the guard that drew a second assistant console beside the rail's. |
+| **One scroller** | The Work rail scrolls as one column with sticky section heads; five fixed `max-height` wells are gone. Current work leads, the roster follows. |
+| **Shared fake DOM** | `tests/fixtures/renderer-dom.mjs` — one `Element` stand-in with a real selector matcher and template-read ids. Three suites moved onto it; its header records why the rest (private fakes that bake in falsehoods such as `closest()` returning `this`) need per-file work. |
+| **The rail** | `#app-rail`, built by `MefiNav.renderRail()` from the registry: **Home · Work · Live · Models · Settings** plus palette, walkthrough and shortcuts at the foot. §8's five destinations, grouped by the `menuGroup()` buckets people already knew. Peek on hover or focus without reflow; **Keep open** pins. **M+** opens the project panel, replacing the transparent 6px strip (§2.2). Every full-window layer respects one variable, `--shell-rail-w`; `usableArea()` fits Command's graph beside it. |
+| **Default** | The rail is the default; the tabs row, Command dock, sidebar nav rows, tools drawer and sheet link strips step aside under it. **Switch navigation: rail or classic** (`Ctrl K`) or `?shell=classic` brings them back. The stray `z-index: 65` and `85` joined the token scale. |
+
+Deliberately not done, and why:
+
+- **The old chromes are hidden, not deleted.** Their markup, CSS and renderers
+  stay as the classic fallback while the rail beds in after the 0.2.0 release.
+  Deleting them is a follow-up once nobody needs the switch.
+- **§8's merged views** (one Work list with Queue / Review / Done / Ideas /
+  Plans tabs, one Settings page) are view redesigns, not navigation, and were
+  out of scope. The rail groups the existing views instead.
+- **The assistant drawer** (one composer in every view) is still open; the
+  Command rail keeps its Assistant tab.
+- **One hide mechanism** was not attempted: converting `body.workspace-active`'s
+  `visibility: hidden` and the per-module `hidden` toggles is a cross-module
+  refactor with no visible payoff.
+- **The canvas-key gate** (`body.dataset.sheet`) was kept. The plan assumed
+  sheets would become routes beside a live canvas; they are still modal
+  overlays, so canvas keys correctly stay dead while one is open.
+
 ## Verification notes
 
 - The "Open Workspace on launch" preference *is* persisted (idle.js:8097 →

@@ -39,7 +39,10 @@ test("offline grouping previews without writes and applies with exact backups, p
   const original = rows.find((row) => row.id === "one");
   assert.equal(original.status, "absorbed");
   assert.equal(original.absorbedInto, plan.id);
-  assert.equal(original.contextHistory.entries[0].snapshot.status, "open");
+  assert.equal(original.contextHistory.entries[0].snapshot.prompt, input.tasks[0].prompt);
+  // Run-claim status is not snapshotted; absorbedInto keeps the grouped revision.
+  assert.equal(original.contextHistory.entries.at(-1).kind, "grouped");
+  assert.equal(original.contextHistory.entries.at(-1).snapshot.absorbedInto, plan.id);
   assert.deepEqual(rows.find((row) => row.id === "busy"), input.tasks[2]);
   const ideas = JSON.parse(await readFile(path.join(input.dataDir, "eyes-feature-ideas.json"), "utf8"));
   assert.equal(ideas[0].taskId, plan.id);

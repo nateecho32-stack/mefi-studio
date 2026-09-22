@@ -3,6 +3,14 @@
 const backlog = require("./backlog.cjs");
 const rows = (value) => Array.isArray(value) ? value : [];
 const text = (value, limit) => String(value ?? "").slice(0, limit);
+const LOG_LIMIT = 40;
+
+// One bounded card-log append. Reassigns row.logs (never pushes into a shared
+// array) and keeps the text as given.
+function appendLog(row, line, { at = Date.now(), kind = "status" } = {}) {
+  row.logs = [...rows(row.logs), { at, kind, text: String(line) }].slice(-LOG_LIMIT);
+  return row;
+}
 
 function checkpoint(entry, now = Date.now()) {
   const prior = entry.resumeCheckpoint;
@@ -37,8 +45,8 @@ function recover(row, { liveRuns, pid, now = Date.now(), isAlive }) {
     projectId: row.projectId, projectPath: row.projectPath, scope: backlog.buildScope(row),
   };
   const progress = { ...saved, pending: true, interruptedAt: now };
-  const next = { ...row, runProgress: progress, interruptedAttempt: progress, updatedAt: now,
-    logs: [...rows(row.logs), { at: now, kind: "status", text: "Studio resumed interrupted work from its saved progress" }].slice(-40) };
+  const next = appendLog({ ...row, runProgress: progress, interruptedAttempt: progress, updatedAt: now },
+    "Studio resumed interrupted work from its saved progress", { at: now });
   if (row.status === "active") next.status = "open";
   else delete next.status;
   delete next.runId;
@@ -71,4 +79,4 @@ function brief(row, maxChars = 2200) {
   return details.join("\n").slice(0, maxChars);
 }
 
-module.exports = { checkpoint, held, recover, compare, brief };
+module.exports = { checkpoint, held, recover, compare, brief, appendLog };

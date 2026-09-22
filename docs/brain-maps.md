@@ -116,20 +116,51 @@ follow these* ahead of the previous attempt's report).
 
 ## Editing
 
-- **Wire**: click an output end, then an input end. Compatible ends light up,
-  incompatible ones dim, and a refused wire says why (`Values carries values;
-  Analysis takes analysis/request`). Escape cancels.
+The canvas is a view onto the map, not the map itself: scroll pans, Ctrl +
+scroll (or a pinch) zooms around the pointer, dragging empty canvas pans, and
+**F** fits the whole map. Zoomed far out, a part shows only its title and the
+wires, so an 18-part pipeline reads at a glance; the minimap appears once part
+of the map is off screen. Coordinates are stored unscaled, so zooming never
+changes what is saved. Each map remembers where you last looked at it.
+
+- **Wire**: drag from an output end to an input end, or click one and then the
+  other. Ends that can take the wire light up, the rest dim, and a refused wire
+  says why (`Values carries values; Analysis takes analysis/request`). Let go on
+  a part and the wire lands on its first end that fits; let go on empty canvas
+  and the parts search opens with the parts that fit listed first, so the new
+  part arrives already wired. Escape cancels.
 - **Space** opens the parts search wherever the canvas is looking; double-click
-  the canvas to search at that spot. If a wire is armed, the new part is wired
-  in on arrival when its ports allow it.
-- **Delete** removes the selected part (and its wires) or the selected wire.
+  the canvas to search at that spot. Once you type, parts already on the map are
+  listed too, and **Ctrl F** searches only those.
+- **Select several** with Shift or Ctrl click, a Shift drag on empty canvas, or
+  **Ctrl A**. Dragging one moves them all, arrow keys nudge them, **Ctrl D**
+  copies them with the wires that run between them, **Delete** removes them.
+- **Ctrl Z** undoes any edit (wiring, moving, deleting, settings, grants) and
+  **Ctrl Shift Z** redoes it. Undoing back to the saved map clears "Unsaved
+  changes".
+- **F8** walks the problems part by part; the problems bar lists every one.
+- **Tidy** lines the parts up in pipeline order (feedback wires ignored); a
+  drafted map whose parts landed on top of each other is tidied on arrival.
 - **Feedback wires** close a loop deliberately: what they carry lands on the
-  next pass, so the map stays orderable. The answer → check wire in the shipped
-  map is one.
+  next pass, so the map stays orderable. They are drawn dashed and routed
+  under the parts they span. The answer → check wire in the shipped map is one.
 - **Nested brains**: `brain.call` hands a branch to another saved map, up to
   four deep. A map cannot call itself, and a ring is refused.
 - **Build with AI** drafts a map from a sentence, using this same catalog. It is
   validated like any other map and saved only after you look at it.
+- **New map** starts empty and unsaved: the host does not keep a map with no
+  parts, so it is saved once it has its first part.
+- **Closing the editor never asks and never discards.** Unsaved edits stay and
+  are back on the canvas the next time Brain maps opens in the same project;
+  the Map menu's *Discard unsaved changes* throws them away. Switching maps
+  with edits on the canvas asks whether to save them first.
+- **?** opens the legend (stage colours, *Map rules* and *Note* badges, the
+  switch marker, dashed feedback wires, red problem marks) and every shortcut.
+  **[** and **]** hide or show the parts rail and the inspector.
+
+Every question the editor asks — naming a map, drafting one, deleting,
+resetting, the list of switches going live would move — is a panel inside the
+sheet, because `window.prompt` does not exist in Electron.
 
 ## Where it lives
 

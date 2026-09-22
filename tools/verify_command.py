@@ -440,7 +440,9 @@ VERIFY_METHOD = r'''
     await this.capture('07c-parallel-builds');
     const later = await this.run("const worklist=document.getElementById('idle-feed-scroll'),title=document.querySelector('#idle-feed-now .feed-current-card:last-child .feed-current-title');worklist.scrollTop+=title.getBoundingClientRect().top-worklist.getBoundingClientRect().top;const box=worklist.getBoundingClientRect(),target=title.getBoundingClientRect();return {visible:target.top>=box.top-1&&target.bottom<=box.bottom+1,scrollTop:worklist.scrollTop,metrics:document.getElementById('idle-feed-metrics').getBoundingClientRect().toJSON()};");
     assert(later.scrollTop>0 && later.visible, "scrolling the shared work list reaches the last builder's title");
-    assert.equal(later.metrics.top,cards.metrics.top,"readiness metrics stay fixed while work scrolls");
+    // Layout coordinates are floats and sub-pixel rounding wobbles run to run
+    // (0.01px one run, 0.08px the next): "fixed" means within a pixel.
+    assert(Math.abs(later.metrics.top-cards.metrics.top)<=1,`readiness metrics stay fixed while work scrolls (${cards.metrics.top} -> ${later.metrics.top})`);
     await this.capture('07d-parallel-builds-scrolled');
     const queue = await this.run("const worklist=document.getElementById('idle-feed-scroll'),queue=document.querySelector('.feed-upnext');worklist.scrollTop+=queue.getBoundingClientRect().top-worklist.getBoundingClientRect().top;const box=worklist.getBoundingClientRect(),target=queue.getBoundingClientRect();return {visible:target.top<box.bottom&&target.bottom>box.top,scrollTop:worklist.scrollTop};");
     assert(queue.visible && queue.scrollTop>0,"the same scroll area reaches queued work after all builders");
@@ -477,7 +479,7 @@ VERIFY_METHOD = r'''
       assert(bounds.metrics.bottom<=bounds.worklist.top,'readiness stays above the work list');
       const attentionControls=await this.run("const worklist=document.getElementById('idle-feed-scroll'),attention=document.getElementById('idle-feed-attention'),heading=[...attention.querySelectorAll('h3')].find(el=>el.textContent.includes('Needs attention')),review=[...attention.querySelectorAll('button')].find(el=>el.textContent.includes('Review all'));worklist.scrollTop+=attention.getBoundingClientRect().top-worklist.getBoundingClientRect().top;const box=worklist.getBoundingClientRect(),head=heading.getBoundingClientRect(),action=review.getBoundingClientRect();return {headingVisible:head.top>=box.top-1&&head.bottom<=box.bottom+1,reviewVisible:action.top>=box.top-1&&action.bottom<=box.bottom+1,metrics:document.getElementById('idle-feed-metrics').getBoundingClientRect().toJSON()};");
       assert(attentionControls.headingVisible && attentionControls.reviewVisible,'attention heading and top review action are reachable together');
-      assert.equal(attentionControls.metrics.top,bounds.metrics.top,'readiness stays fixed when reviewing attention details');
+      assert(Math.abs(attentionControls.metrics.top-bounds.metrics.top)<=1,'readiness stays fixed when reviewing attention details');
       await this.capture(`${name}-review`);
       const queueVisible=await this.run("const worklist=document.getElementById('idle-feed-scroll'),queue=document.querySelector('.feed-upnext');worklist.scrollTop+=queue.getBoundingClientRect().top-worklist.getBoundingClientRect().top;const box=worklist.getBoundingClientRect(),target=queue.getBoundingClientRect();return target.top<box.bottom&&target.bottom>box.top;");
       assert(queueVisible,'the shared work list reaches queued work below attention details');
@@ -1586,7 +1588,9 @@ def fixture(project, now, node_readability=False):
     messages = [{"id": "fixture_user", "at": now - 90000, "role": "user", "text": "Make the project switcher easier to use.", "via": "local"}, {"id": "fixture_reply", "at": now - 80000, "role": "assistant", "text": "I’m checking keyboard navigation on the project switcher. The task board keeps its saved requirements and earlier findings.", "via": "fixture"}]
     logs = [{"at": now - i * 2000, "kind": "tool" if i % 2 else "tick", "text": f"Fixture progress {i + 1}: checking saved work and keyboard behavior"} for i in range(12)]
     assistant = {"status": "running", "agents": agents, "messages": messages, "log": logs, "prefs": {"proactive": False, "keepAwake": False, "background": False, "backlogMode": True}, "heartbeatAt": now, "action": {"kind": "working", "text": "Checking keyboard navigation", "since": now - 30000}, "work": [], "unread": 1}
-    status = {"enabled": True, "execute": True, "parallel": 1, "running": [{"title": titles[0], "taskId": "command_task_00", "sessionId": "command_session_0", "projectId": project["id"], "startedAt": now - 95000, "source": "chat", "progress": .4}], "queueDepth": 51, "waiting": None, "history": [{"at": now - 20000, "kind": "run", "text": "Working on keyboard navigation"}], "foreman": {"status": "done", "text": "Handed current work to the builder", "lastRunAt": now - 20000}}
+    # "mode" is what the Agents view's note names; without it the note says
+    # "Loading agent mode…" for the whole run and its check can never pass.
+    status = {"enabled": True, "execute": True, "mode": "swarm", "parallel": 1, "running": [{"title": titles[0], "taskId": "command_task_00", "sessionId": "command_session_0", "projectId": project["id"], "startedAt": now - 95000, "source": "chat", "progress": .4}], "queueDepth": 51, "waiting": None, "history": [{"at": now - 20000, "kind": "run", "text": "Working on keyboard navigation"}], "foreman": {"status": "done", "text": "Handed current work to the builder", "lastRunAt": now - 20000}}
     store = {"sessions": sessions, "todos": todos, "changes": [{"id": f"change_{i}", "sessionId": "command_session_0", "time": now - i * 10000, "tool": "edit", "file": f"renderer/component_{i}.js", "additions": i + 2, "deletions": 1} for i in range(7)], "pngs": []}
     if node_readability:
         running_titles = [

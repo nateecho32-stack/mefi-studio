@@ -98,7 +98,7 @@ test("commands stay sequential inside a job and a failed check stamps the card",
   assert.equal(task.verificationRun.state, "failed");
   assert.equal(task.verificationRun.results.length, 1);
   assert.match(task.verificationRun.results[0].tail, /1 failing test/);
-  assert.match(task.logs.at(-1).text, /verification run failed/);
+  assert.equal(task.logs, undefined, "the stamp alone records the result: a task log line would cost a whole-task revision");
 });
 
 test("request rows are stamped by request identity, not by a task id", async () => {
@@ -109,6 +109,7 @@ test("request rows are stamped by request identity, not by a task id", async () 
   host.spawns[0].close(0);
   await drain;
   assert.equal(host.board().requests[0].verificationRun.state, "passed");
+  assert.equal(host.board().requests[0].logs.at(-1).text, "verification run passed — npm run check: 1 check(s) passed", "a request row, with no detail view, keeps the line and names what ran");
 });
 
 test("a landed result kicks one coalesced housekeeping pass instead of waiting for the next autopilot tick", async () => {
@@ -164,6 +165,19 @@ test("a project's own wrapper check keeps the project root even without package.
   assert.equal(host.spawns[0].cwd, "C:/game checkout", "the relative wrapper resolves against the project, so it stays the cwd");
   assert.equal(host.logs.some((line) => line.includes("has no package.json")), false, "no move was logged");
   assert.equal(host.board().tasks[0].verificationRun.state, "passed", "the check itself still settles the card");
+});
+
+// The job carries its own card's project; a job without one (a request row
+// with no project path) runs in the active root, whatever started the drain.
+test("each job runs in its own project, and a pathless job in the active root", async () => {
+  const host = drainHost();
+  host.queue({ key: "k-own", taskId: "t-own", projectPath: "C:/game checkout", commands: ['powershell -NoProfile -File "test\\run-check.ps1"'] });
+  host.queue({ key: "k-bare", taskId: "t-bare", projectPath: null, commands: ["npm run check"] });
+  const drain = host.env.runVerificationJobs();
+  host.spawns[0].close(0);
+  host.spawns[1].close(0);
+  await drain;
+  assert.deepEqual(host.spawns.map((child) => child.cwd), ["C:/game checkout", "C:/fixture-root"]);
 });
 
 test("a payload install with no npm checkout falls back to the app payload root", async () => {

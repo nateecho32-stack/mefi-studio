@@ -2,7 +2,8 @@
 
 This is the standalone Electron application repository. Read `README.md` for
 the overview, `docs/architecture.md` for the feature walkthrough and glossary,
-`CONTRIBUTING.md` for the gates, and `TESTRUNS.md` before running tests.
+`docs/code-map.md` for which file does what, `CONTRIBUTING.md` for the gates,
+and `TESTRUNS.md` before running tests.
 Longer-form docs live under `docs/`; superseded ones under `docs/archive/`.
 
 - Application sources live at the root: `main.cjs`, `preload.cjs`, `scripts/`,

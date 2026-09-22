@@ -120,6 +120,9 @@ class VerifiedWindow extends NativeWindow {
     throw new Error(`Timed out: ${label}`);
   }
   async click(selector) {
+    // The project panel's opener is the rail's M+ on the rail shell; the edge
+    // strip it replaced is not on screen there.
+    if (selector === "#workspace-sidebar-toggle" && await this.run("return document.documentElement.dataset.shell === 'rail';")) selector = "#app-rail-brand";
     const targetInSidebar = await this.run(`return Boolean(document.querySelector(${JSON.stringify(selector)})?.closest('#workspace-sidebar-panel'));`);
     const sidebarOpen = await this.run("return Boolean(window.MefiSidebar?.isOpen());");
     if (targetInSidebar && !sidebarOpen) {
@@ -137,15 +140,18 @@ class VerifiedWindow extends NativeWindow {
   // One door to every destination, through the real control a person would use:
   // the rail on the rail shell — held open for the click so its member rows are
   // visible, hittable controls — or the Command dock on the classic shell.
-  async openFromNav(id) {
+  async openFromNav(id, classic = `#cmd-dock [data-nav="${id}"]`) {
     const railShell = await this.run("return document.documentElement.dataset.shell === 'rail';");
-    if (!railShell) return this.click(`#cmd-dock [data-nav="${id}"]`);
-    await this.run("document.documentElement.dataset.railPinned = '';");
+    if (!railShell) return this.click(classic);
+    // Pin and unpin without the width transition: the next step clicks at once,
+    // and an offscreen window can leave a transition stuck at its start value,
+    // so an animated collapse would still be covering the sheet it just opened.
+    await this.run("const rail=document.getElementById('app-rail');rail.style.transition='none';document.documentElement.dataset.railPinned='';void rail.offsetWidth;");
     await sleep(80);
     try {
       return await this.click(`#app-rail [data-nav="${id}"]`);
     } finally {
-      await this.run("delete document.documentElement.dataset.railPinned; window.dispatchEvent(new Event('resize'));");
+      await this.run("const rail=document.getElementById('app-rail');delete document.documentElement.dataset.railPinned;void rail.offsetWidth;rail.style.transition='';window.dispatchEvent(new Event('resize'));");
     }
   }
   async clickVisible(selector) {
@@ -332,7 +338,7 @@ class VerifiedWindow extends NativeWindow {
     await this.click('.ws-top-actions [data-nav="palette"]');
     assert.equal(await this.run("return document.getElementById('workspace-sidebar-toggle').hidden;"), true, "transient dialogs keep the edge trigger out of their focus scope");
     await this.until("!document.getElementById('palette-status').textContent.includes('Loading project tasks')", "palette loads tasks without opening the board");
-    for (const [query, expected] of [["node tree", "Command view"], ["api key", "Settings & connections"], ["color", "Music & themes"], ["season archive", "Improve season archive"]]) {
+    for (const [query, expected] of [["node tree", "Command view"], ["api key", "Settings & connections"], ["color", "Style & sound"], ["season archive", "Improve season archive"]]) {
       await this.run(`const input = document.getElementById('palette-input'); input.value = ${JSON.stringify(query)}; input.dispatchEvent(new Event('input', {bubbles:true}));`);
       assert((await this.run("return document.getElementById('palette-list').textContent;")).includes(expected), `palette finds ${query}`);
     }
@@ -344,10 +350,10 @@ class VerifiedWindow extends NativeWindow {
     await this.click("#palette-close");
     assert.equal(await this.run("return document.getElementById('palette-overlay').hidden;"), true);
     assert.equal(await this.run("return document.activeElement.dataset.nav;"), "palette", "closing search restores its opener");
-    await this.click('.ws-sidebar .ws-shortcut[data-nav="plans"]');
+    await this.openFromNav("plans", '.ws-sidebar .ws-shortcut[data-nav="plans"]');
     await this.until("!document.getElementById('plans-overlay').hidden", "sidebar opens Plans directly");
     await this.run("window.MefiNav.go('workspace');");
-    await this.click('.ws-sidebar .ws-shortcut[data-nav="tasks"]');
+    await this.openFromNav("tasks", '.ws-sidebar .ws-shortcut[data-nav="tasks"]');
     await this.until("!document.getElementById('tasks-overlay').hidden", "sidebar opens the task board directly");
     await this.run("window.MefiNav.go('workspace');");
     this.check("Search finds familiar names and current-project tasks, traps keyboard focus, and common sidebar shortcuts open directly");
@@ -468,9 +474,15 @@ class VerifiedWindow extends NativeWindow {
     // that stays clickable in the bottom-left corner for nine seconds, so it is
     // answered here instead of being left over the sidebar's lower controls.
     await this.until("(async () => (await window.mefiStudio.assistantState()).state.questions.some(question => question.status === 'open' && question.title === 'Pick the next piece of work'))()", "an offered next step becomes an open decision");
-    await this.until("document.querySelector('#toast-host .toast.has-action.show')?.textContent?.includes('Decision needed: Pick the next piece of work')", "a new decision is announced with an actionable toast");
-    assert.equal(await this.run("return document.querySelectorAll('#toast-host .toast.show').length;"), 1, "one decision raises one toast");
-    await this.click("#toast-host .toast.has-action .toast-action");
+    // Find the decision toast by what it says. A fresh profile also raises the
+    // one-time key tip ("Show keys", 12 s) — another actionable toast that can
+    // be showing, or fading, beside it — so "the first actionable toast" can be
+    // the tip, and its button opens Shortcuts instead of answering.
+    const decisionToast = "[...document.querySelectorAll('#toast-host .toast.has-action.show')].find(toast => toast.textContent.includes('Decision needed: Pick the next piece of work'))";
+    await this.until(`Boolean(${decisionToast})`, "a new decision is announced with an actionable toast");
+    assert.equal(await this.run("return [...document.querySelectorAll('#toast-host .toast.show')].filter(toast => toast.textContent.includes('Decision needed')).length;"), 1, "one decision raises one toast");
+    await this.run(`${decisionToast}.dataset.harness = 'decision';`);
+    await this.click("#toast-host .toast[data-harness='decision'] .toast-action");
     await this.until("window.MefiIdle?.isActive?.() && !window.MefiWorkspace.isActive() && !document.getElementById('cmd-asks').hidden", "the toast's Answer control opens Command on the Ask rail");
     await this.until("document.querySelector('#cmd-ask-list .ask-card[data-status=open] .ask-title')?.textContent === 'Pick the next piece of work'", "the Ask rail shows the waiting decision");
     assert.equal(await this.run("return document.querySelector('#cmd-rail .rail-tab[data-rail-view=ask]').getAttribute('aria-selected');"), "true");
@@ -587,7 +599,7 @@ class VerifiedWindow extends NativeWindow {
     await this.run("document.getElementById('workspace-tools').open = true;");
     await this.until("document.querySelector('#workspace-tool-links [data-nav=explorer]') && document.querySelector('#workspace-tool-links [role=group]')", "advanced tools are discoverable in groups");
     await this.capture("06-tools-menu");
-    await this.click('#workspace-node-tree');
+    await this.openFromNav("command", "#workspace-node-tree");
     await this.until("window.MefiIdle?.isActive?.() && !window.MefiWorkspace.isActive()", "constellation opens from its primary sidebar control");
     await this.click("#workspace-sidebar-toggle");
     await sleep(230);
@@ -595,7 +607,9 @@ class VerifiedWindow extends NativeWindow {
     await this.run("document.getElementById('workspace-sidebar-close').focus(); window.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape',bubbles:true,cancelable:true}));");
     assert.equal(await this.run("return window.MefiSidebar.isOpen();"), false, "Escape dismisses the drawer");
     assert.equal(await this.run("return window.MefiIdle.isActive();"), true, "Escape leaves the underlying constellation open");
-    assert.equal(await this.run("return document.activeElement.id;"), "workspace-sidebar-toggle", "Escape leaves usable keyboard focus");
+    // Focus goes back to the panel's door: the rail's M+, or the edge strip on the classic shell.
+    const door = (await this.run("return document.documentElement.dataset.shell === 'rail';")) ? "app-rail-brand" : "workspace-sidebar-toggle";
+    assert.equal(await this.run("return document.activeElement.id;"), door, "Escape leaves usable keyboard focus");
     await this.run("window.MefiNav.go('workspace');");
     await this.until("window.MefiWorkspace.isActive() && !window.MefiIdle.isActive()", "workspace returns from constellation");
     this.check("Grouped tools navigate out and back without overlapping views");

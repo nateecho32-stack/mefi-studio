@@ -115,14 +115,16 @@
     const parts = [];
     const result = task?.lastAttempt?.result?.parts ?? task?.lastAttempt?.result;
     const completed = Array.isArray(result?.done) ? result.done : typeof result?.done === "string" ? [result.done] : [];
-    if (completed.length) parts.push(completed.map((item) => clipText(item, 140)).filter(Boolean).join("; "));
+    const claimed = completed.map((item) => clipText(item, 140)).filter(Boolean).join("; ");
+    if (claimed) parts.push(claimed);
     if (task.verification?.reason) parts.push(clipText(task.verification.reason, 180));
     const took = span(doneStamp(task) - (task.createdAt ?? 0));
     if (took) parts.push(`took ${took}`);
     // Status churn (created / marked done / archived / reopened) is bookkeeping,
     // not "what was done" — the kind tag hides it, the regex catches old rows.
+    // The worker's result line repeats the claim above once that printed.
     const logs = (task.logs ?? [])
-      .filter((log) => log?.kind !== "status")
+      .filter((log) => log?.kind !== "status" && !(claimed && log?.kind === "result"))
       .map((log) => clipText(log?.text, 60))
       .filter((text) => text && !/^(task created|marked done|archived by the assistant)$/.test(text));
     if (logs.length) parts.push(`log: ${logs.slice(-3).map((text) => `"${text}"`).join("; ")}`);
@@ -1107,7 +1109,7 @@
       for (const item of items) ul.append(render(item));
       els.detail.append(ul);
     };
-    if (task.lastAttempt || task.verification) {
+    if (task.lastAttempt || task.verification || task.verificationRun) {
       section("Result & completion checks");
       const attempt = task.lastAttempt ?? {};
       const evidence = task.verification;
@@ -1123,6 +1125,17 @@
         files.className = "who";
         files.textContent = `${evidence.changedFiles} changed file${evidence.changedFiles === 1 ? "" : "s"} observed${attempt.sessionId ? " in the worker's session" : ""}.`;
         els.detail.append(files);
+      }
+      // The overseer's own check run: the card's only record of it (the log
+      // no longer carries "verification scheduled/passed/failed" lines).
+      const run = task.verificationRun;
+      if (run?.state) {
+        const commands = Array.isArray(run.commands) ? run.commands.filter(Boolean).map(String) : [];
+        const failed = Array.isArray(run.results) ? run.results.find((row) => row && !row.ok) : null;
+        const check = document.createElement("p");
+        check.className = "who";
+        check.textContent = `Overseer check${commands.length ? ` (${commands.join(" && ")})` : ""}: ${run.state}${Number.isFinite(run.at) ? ` ${relTime(run.at)}` : ""}${failed?.tail ? ` — ${clipText(failed.tail, 200)}` : ""}`;
+        els.detail.append(check);
       }
       if (Array.isArray(task.remaining) && task.remaining.length) {
         section("Follow-up work");

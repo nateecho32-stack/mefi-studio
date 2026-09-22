@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 const require = createRequire(import.meta.url);
 const { snapshotTask, recordTaskRevision, taskHistory, restoreTaskRevision, buildTaskHandoff, resolveStaleFileScope } = require("../scripts/task-context.cjs");
 
@@ -28,6 +29,39 @@ test("heartbeat-only changes do not flood history and stale clients cannot remov
   const stale = recordTaskRevision({ ...original, prompt: "Edited in another panel" }, { previous: newer, now: 4 });
   assert.equal(taskHistory(stale).entries.length, 3);
   assert.equal(taskHistory(stale).entries[1].snapshot.prompt, "New brief");
+});
+
+test("run claims and releases record no revision while a brief change still does", () => {
+  const saved = recordTaskRevision(original, { now: 1 });
+  const claimed = recordTaskRevision({ ...saved, status: "active", runId: "run-1" }, { previous: saved, now: 2 });
+  assert.equal(claimed.contextHistory, saved.contextHistory, "a claim is not a brief change");
+  const { runId: _claim, ...unclaimed } = claimed;
+  const released = recordTaskRevision({ ...unclaimed, status: "open" }, { previous: claimed, now: 3 });
+  assert.equal(released.contextHistory, saved.contextHistory, "a release is not a brief change");
+  assert.equal(snapshotTask(claimed).status, undefined);
+  assert.equal(snapshotTask(claimed).runId, undefined);
+  const edited = recordTaskRevision({ ...released, prompt: "Brief changed after the release" }, { previous: released, now: 4 });
+  assert.equal(taskHistory(edited).entries.length, 2);
+  assert.equal(taskHistory(edited).entries[0].snapshot.prompt, "Brief changed after the release");
+});
+
+test("a legacy latest snapshot that still carries status/runId gains no catch-up revision", () => {
+  // Hashed the way the older FIELDS list did: status and runId were snapshotted.
+  const canonical = (value) => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object"
+    ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])])) : value;
+  const legacySnapshot = { ...snapshotTask(original), status: "active", runId: "old-run" };
+  const hash = createHash("sha256").update(JSON.stringify(canonical(legacySnapshot))).digest("hex");
+  const legacy = { ...original, status: "active", runId: "old-run", contextHistory: { version: 1, entries: [{ id: `revision_1_${hash.slice(0, 16)}`, revision: 1, at: 1, kind: "updated", note: "", hash, snapshot: legacySnapshot }] } };
+  // An unrelated no-op mutation on the upgraded board: the claim is released.
+  const { runId: _run, ...unclaimed } = legacy;
+  const released = recordTaskRevision({ ...unclaimed, status: "open", updatedAt: 5 }, { previous: legacy, now: 5 });
+  assert.equal(released.contextHistory, legacy.contextHistory, "no catch-up revision on the first mutation after the upgrade");
+  const edited = recordTaskRevision({ ...released, prompt: "Upgraded brief" }, { previous: released, now: 6 });
+  const { entries } = taskHistory(edited);
+  assert.equal(entries.length, 2);
+  assert.equal(entries[0].snapshot.prompt, "Upgraded brief");
+  assert.equal(entries[0].snapshot.status, undefined);
+  assert.equal(entries[1].snapshot.runId, "old-run", "saved legacy entries are never rewritten");
 });
 
 test("interrupted progress is retained in task history while streaming checkpoints do not flood revisions", () => {

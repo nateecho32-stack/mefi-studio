@@ -517,9 +517,9 @@ class MefiStudioAssistantTests(unittest.TestCase):
 
     def test_duplicate_declarations_are_scanned_before_a_merge(self):
         # Parallel-executor patches colliding in main.cjs show up as two copies
-        # of the same top-level function/const. The watcher and the proactive
-        # pass scan the host files (and whatever collisions/presence name) and
-        # queue a fix instead of writing a second copy.
+        # of the same top-level function/const. The watcher scans the host
+        # files (and whatever collisions/presence name) and queues a fix
+        # instead of writing a second copy.
         self.assertIn("function executorScanFiles", self.main)
         self.assertIn("async function duplicateDeclarationRequests", self.main)
         self.assertIn("scanDuplicateDeclarations", self.main)
@@ -531,13 +531,6 @@ class MefiStudioAssistantTests(unittest.TestCase):
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn("adoptAdvice", spawn, "a peer session that already implemented the feature is named in the prompt")
         self.assertIn("requestsFromCollisions", watcher)
-        # `_function_body` stops at the default-param `{ useAi = true }`.
-        # requestBaseline sits *before* this pass, so slicing backward to it
-        # is empty; the next sibling is requestsFromExpand.
-        start = self.main.index("async function autopilotProactivePass")
-        end = self.main.index("function requestsFromExpand", start)
-        proactive = self.main[start:end]
-        self.assertIn("duplicateDeclarationRequests", proactive, "the proactive pass queues merge-corruption fixes with collisions")
         if not NODE:
             self.skipTest("Node unavailable; static contracts still ran")
         script = (
@@ -925,7 +918,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         # The pick is now one ranking across the inbox and the board
         # (compareWork / workPriority), so a chat task never waits behind
         # auto-filed requests whatever either is worth.
-        self.assertIn("function taskPriority", self.main)
+        self.assertIn("function workPriority", self.main)
         self.assertNotIn('runnable.find((item) => item.source === "a-eyes")', self.main, "the old pick order starved real work")
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn("compareWork(a.ref, b.ref)", spawn, "one ranking across the inbox and the board, worth first")

@@ -157,6 +157,26 @@ test("todo wording updates are saved even when the percentage stays the same", a
   assert.equal(h.board().tasks[0].runProgress.todos[1].content, "Verify the newly found empty-input case");
 });
 
+test("plain output asks for a lazy checkpoint while a session bind still saves within a second", async () => {
+  const h = executorHost({ tasks: [task("lazy-output")] });
+  h.wake(); await h.pump();
+  const entry = h.autopilot.jobs[0];
+  entry.child.stdout.emit("data", "\u001b[0m\nStill editing the serializer\n");
+  const lazy = h.timers.filter((timer) => timer.delay === 30000 && !timer.cancelled);
+  assert.equal(lazy.length, 1, "an ordinary output line arms one 30 s save");
+  assert.equal(h.timers.some((timer) => timer.delay === 1000 && !timer.cancelled), false);
+  assert.deepEqual(Array.from(entry.outputTail), ["Still editing the serializer"], "a bare colour reset is not kept as output");
+  h.session(entry.id, "lazy-session");
+  assert.equal(await h.env.attributeRunSession(await h.env.getEyes(), entry), true);
+  assert.equal(lazy[0].cancelled, true, "a sooner request replaces the lazy timer");
+  const save = h.timers.find((timer) => timer.delay === 1000 && !timer.cancelled);
+  assert.ok(save, "the session bind keeps its 1 s save");
+  entry.child.stdout.emit("data", "More output\n");
+  assert.equal(h.timers.filter((timer) => !timer.cancelled && timer.delay === 30000).length, 0, "later output never pushes the sooner save back");
+  await save.fn();
+  assert.equal(h.board().tasks[0].runProgress.sessionId, "lazy-session");
+});
+
 for (const controls of [{ paused: true }, { execute: false }]) test(`restart respects saved ${controls.paused ? "assistant Pause" : "executor Pause"} while preserving progress`, async () => {
   const h = executorHost({ tasks: [savedTask()], ...controls });
   h.wake(); await h.pump();

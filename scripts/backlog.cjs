@@ -33,6 +33,8 @@ function completedTask(task) {
 }
 
 function dependencyState(item, tasks = []) {
+  // Most rows have no prerequisites; skip building the whole-board map for them.
+  if (!dependencyIds(item).length) return { dependencies: [] };
   const projectId = item?.projectId ?? item?.delegation?.projectId;
   const projectPath = item?.projectPath ?? item?.delegation?.projectPath;
   const normalizedPath = (value) => String(value).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();

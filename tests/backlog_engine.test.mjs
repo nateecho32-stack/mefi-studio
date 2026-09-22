@@ -181,7 +181,7 @@ test("promoting a request preserves its retry budget, pin, evidence and remainin
   assert.deepEqual(copy(promoted.lastAttempt), request.lastAttempt);
 });
 
-test("the real drain pass performs local settlement without calling paid work generation", async () => {
+test("the real drain pass leaves settlement to the foreman and never calls paid work generation", async () => {
   const effects = [];
   const env = vm.createContext({
     Date, projectSwitching: false, SMOKE: false, CAPTURE: false, CLI_MODE: false,
@@ -199,6 +199,22 @@ test("the real drain pass performs local settlement without calling paid work ge
   });
   vm.runInContext(`let autopilotTicks = 11;\n${section("let autopilotPassInFlight = null;", "async function setAutopilot(")}`, env);
   await env.autopilotPass();
+  assert.deepEqual(effects, ["dispatch"], "the pass only asks; the foreman below settles, promotes and admits");
+});
+
+test("the foreman a drain pass wakes settles, promotes and admits ideas before dispatch", async () => {
+  const effects = [];
+  const env = vm.createContext({
+    assistantState: { status: "running", prefs: { backlogMode: true }, agents: [] },
+    autopilot: { execute: true, jobs: [], parallel: 1, waiting: null },
+    autopilotHousekeeping: async () => effects.push("verify"),
+    promoteRequestsToTasks: async () => effects.push("promote requests"),
+    admitBacklogIdeas: async () => effects.push("admit ideas"),
+    executeNextRequest: async () => effects.push("dispatch"),
+    assistantEnqueueRole: () => {}, ASSISTANT_PRIORITY: { demand: 5 }, MINUTE_MS: 60000, assistantCache: {},
+  });
+  vm.runInContext(section("async function assistantForemanJob(", "// The thinker: the assistant itself."), env);
+  await env.assistantForemanJob(Date.now(), {});
   assert.deepEqual(effects, ["verify", "promote requests", "admit ideas", "dispatch"]);
 });
 

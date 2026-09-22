@@ -8,7 +8,7 @@ const [source, navSource] = await Promise.all([
   readFile(new URL("../renderer/nav.js", import.meta.url), "utf8"),
 ]);
 
-function environment() {
+function environment({ rail = false } = {}) {
   const timers = new Set();
   let document;
   class Target {
@@ -62,8 +62,12 @@ function environment() {
   const input = new Element("workspace-person-name", "input");
   const outside = new Element("workspace-input", "textarea");
   const body = new Element("body"); body.append(root, outside); root.append(toggle, panel); panel.append(dismiss, link, input);
-  const elements = new Map([body, root, panel, toggle, dismiss, link, input, outside].map((element) => [element.id, element]));
+  // The navigation rail's M+ is the panel's door when the rail shell is on.
+  const brand = new Element("app-rail-brand", "button");
+  if (rail) body.append(brand);
+  const elements = new Map([body, root, panel, toggle, dismiss, link, input, outside, ...(rail ? [brand] : [])].map((element) => [element.id, element]));
   document = Object.assign(new Target(), { body, activeElement: outside, readyState: "loading", getElementById: (id) => elements.get(id), querySelector: () => null });
+  if (rail) document.documentElement = { dataset: { shell: "rail" } };
   const window = new Target();
   const context = vm.createContext({
     window, document, console,
@@ -75,7 +79,7 @@ function environment() {
   const flush = () => { const pending = [...timers]; timers.clear(); for (const fn of pending) fn(); };
   const hover = (element) => element.emit("pointerenter", { pointerType: "mouse" });
   const leave = (element) => element.emit("pointerleave", { pointerType: "mouse" });
-  return { sidebar: window.MefiSidebar, nav: window.MefiNav, window, document, root, panel, toggle, dismiss, link, input, outside, hover, leave, flush };
+  return { sidebar: window.MefiSidebar, nav: window.MefiNav, window, document, root, panel, toggle, dismiss, link, input, outside, brand, hover, leave, flush };
 }
 
 test("hover reveals the menu without moving focus and crossing into it cancels delayed closure", () => {
@@ -194,4 +198,16 @@ test("outside presses, project switches and window blur dismiss the menu", () =>
   env.sidebar.open({ focus: true }); env.window.emit("blur");
   assert.equal(env.document.activeElement, env.toggle, "native dialogs cannot leave focus in the inert panel");
   assert.equal(env.sidebar.isOpen(), false);
+});
+
+test("closing the panel returns focus to its door: the rail's M+ on the rail shell, the edge strip otherwise", () => {
+  const railed = environment({ rail: true });
+  railed.sidebar.open({ focus: true });
+  assert.equal(railed.sidebar.isOpen(), true);
+  railed.sidebar.close({ restoreFocus: true });
+  assert.equal(railed.document.activeElement, railed.brand, "the edge strip is not on screen under the rail, so focus must not fall to it");
+  const classic = environment();
+  classic.sidebar.open({ focus: true });
+  classic.sidebar.close({ restoreFocus: true });
+  assert.equal(classic.document.activeElement, classic.toggle);
 });

@@ -3525,13 +3525,15 @@ export function isDoneMarkerLine(line, mark = EXECUTOR_DONE_MARK_TEXT) {
 // The marker must start its own line. Reading a saved task can echo an older
 // result inside JSON or prose before the worker reports its current result.
 // Fields remain lenient — this is attached context, never the verdict itself.
+// A long line is clipped, not dropped: a rejected report cost the card its
+// result, its named checks and the overseer's verification run.
 export function parseExecutorResult(line, mark = "MEFI_RESULT:") {
   const flat = stripAnsi(line).trim();
   if (!flat.startsWith(mark)) return null;
   const body = flat.slice(mark.length).trim();
-  if (!body || body.length > 300) return null;
+  if (!body) return null;
   const parts = {};
-  for (const chunk of body.split(/;+/)) {
+  for (const chunk of body.slice(0, 1200).split(/;+/)) {
     const [key, ...rest] = chunk.split(/:+/);
     const name = String(key ?? "").trim().toLowerCase();
     const value = rest.join(":").trim();
@@ -3643,6 +3645,9 @@ export function scheduleVerificationOnDone({ resultNote = null, task = null, att
     attemptKey: str(attemptKey).trim() || null,
     title: `Verify: ${str(isObject(task) ? task.title : "").trim().slice(0, 80) || taskId || "attempt"}`,
     commands: [str(baseCheck).trim() || "npm run check", ...tests],
+    // The run's cwd: the card's own project, not whichever job started the
+    // drain. A row without one runs against the active project root.
+    projectPath: str(isObject(task) ? task.projectPath : "").trim() || null,
     createdAt: Number(now) || Date.now(),
   };
   if (Array.isArray(queue)) queue.push(job);
@@ -3768,7 +3773,7 @@ export function claimedCommitHash(parts = {}) {
   return null;
 }
 
-export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerChanges = 0, hasSession = false, observedChecks = [], resolvedHandoffs = [], remaining = [], resultNote = null, commit = null, priorAttempts = 0, priorVerified = false } = {}) {
+export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerChanges = 0, hasSession = false, observedChecks = [], overseerChecks = [], resolvedHandoffs = [], remaining = [], resultNote = null, commit = null, priorAttempts = 0, priorVerified = false } = {}) {
   const parts = (resultNote && isObject(resultNote) ? resultNote.parts : null) ?? {};
   const namedChecks = checkReports(parts).some(namesCheck);
   const remainingText = str(parts.remaining);
@@ -3785,7 +3790,13 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
   // handed-on follow-up list, and only the remaining PROSE may be
   // unfamiliar. Ordinary cards, red reruns, real non-ledger file changes,
   // and real remaining lists fail exactly as before.
-  const observedSummary = hasSession === true ? summarizeObservedChecks(observedChecks) : { total: 0, passed: 0, failed: 0, pending: 0 };
+  // The worker session's own recorded checks and the overseer's queued run
+  // (overseerChecks) are judged together — latest-wins across both — but
+  // summarized apart too, so the verdict's reason names who ran the check.
+  const summarize = (checks) => hasSession === true ? summarizeObservedChecks(checks) : { total: 0, passed: 0, failed: 0, pending: 0 };
+  const own = summarize(observedChecks);
+  const theirs = summarize(overseerChecks);
+  const observedSummary = summarize([...asArray(observedChecks), ...asArray(overseerChecks)]);
   const totalChanges = Math.max(0, Number(changedFiles) || 0);
   const ledgerOwed = Math.max(0, Number(ledgerChanges) || 0);
   const ledger = Math.min(ledgerOwed, totalChanges);
@@ -3805,6 +3816,7 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
     hasSession: hasSession === true,
     namedChecks,
     observedChecks: observedSummary,
+    overseerChecks: theirs,
     outstanding,
     priorVerified: priorVerified === true,
     rerunDischarges,
@@ -3816,7 +3828,11 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
   };
   const pass = (reason) => ({ state: "verified", reason, evidence });
   if (reportedCheckFailure(parts)) return fail("the attempt reported failing checks");
-  if (evidence.observedChecks.failed) return fail("recorded checks failed in the attempt's session");
+  if (evidence.observedChecks.failed) {
+    return fail(own.failed && theirs.failed ? "recorded checks failed in the attempt's session and the overseer's verification run"
+      : own.failed ? "recorded checks failed in the attempt's session"
+      : "recorded checks failed in the overseer's verification run");
+  }
   if (evidence.observedChecks.pending) return fail("recorded checks have no completed exit result");
   if (!evidence.verdictOk) return fail("the run did not report success");
   if (outstanding && !rerunDischarges) return fail("outstanding obligations remain");
@@ -3824,7 +3840,7 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
     if (evidence.namedChecks && !evidence.observedChecks.passed) return fail("reported checks have no recorded passing execution");
     if (evidence.observedChecks.passed) return pass(evidence.rerunDischarges
       ? `${evidence.observedChecks.passed} recorded check(s) passed — fresh green scoped-check rerun discharges the done+verified retry with ${ledger > 0 ? "only the ledger row changed" : "0 changed files"}`
-      : `${evidence.observedChecks.passed} recorded check(s) passed in the attempt's session`);
+      : `${evidence.observedChecks.passed} recorded check(s) passed ${own.passed === 0 ? "in the overseer's verification run" : own.passed < evidence.observedChecks.passed ? "in the attempt's session and the overseer's run" : "in the attempt's session"}`);
     if (evidence.changedFiles > 0) return pass(`${evidence.changedFiles} changed file(s) in the attempt's session`);
     if (evidence.commit.claimed) {
       if (evidence.commit.hash && evidence.commit.clean === true) return pass(`commit ${evidence.commit.hash.slice(0, 12)} observed with a clean path status`);

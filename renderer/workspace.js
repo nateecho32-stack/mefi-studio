@@ -425,7 +425,20 @@
   function scheduleBacklogRead() {
     revisions.backlog += 1;
     if (backlogTimer || !active() || document.hidden) return;
-    backlogTimer = setTimeout(() => { backlogTimer = null; if (active() && !document.hidden) refresh(); }, 300);
+    backlogTimer = setTimeout(() => { backlogTimer = null; if (active() && !document.hidden) void readBacklog(); }, 300);
+  }
+  // A push already carried its own slice; only the backlog snapshot is derived.
+  // The 15 s backstop / visibility refresh still re-reads every panel.
+  let backlogFlight = null;
+  function readBacklog() {
+    if (!api()?.backlogStatus || !state.activeId || backlogFlight) return backlogFlight;
+    const epoch = state.epoch, revision = revisions.backlog;
+    backlogFlight = readWithDeadline(() => api().backlogStatus()).then((result) => {
+      if (epoch !== state.epoch || revision !== revisions.backlog || !result?.ok || (result.projectId && result.projectId !== state.activeId)) return;
+      state.backlog = result; state.backlogUnavailable = false;
+      renderWork(); renderCompanion(); renderBacklog();
+    }, () => {}).finally(() => { backlogFlight = null; if (revision !== revisions.backlog) scheduleBacklogRead(); });
+    return backlogFlight;
   }
   // The brake: stop every running agent now, save each run's progress, and
   // park new dispatch until the operator resumes.

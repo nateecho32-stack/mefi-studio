@@ -67,6 +67,8 @@ npm start
 
 ## A short tour
 
+Everything below is one click away in the **rail** down the left edge — **Home**, **Work**, **Live**, **Models** and **Settings** — which opens over the page to list every destination with its key. **M+** at its top switches projects, and `Ctrl K` finds anything by name.
+
 ### Your workspace (`H`)
 
 The home screen. **Studio at a glance** shows the service state with a single Pause / Resume, running workers, what needs you, what is up next, the machine gauge and today's usage. Below it: the conversation with your companion and **Your work** (Queue, Ideas, Review, Done).
@@ -122,6 +124,7 @@ npm run audit            # renderer/template contract audit
 | --- | --- |
 | [GETTING_STARTED.md](GETTING_STARTED.md) | First launch, new-machine checklist, your first task, what each state means |
 | [docs/architecture.md](docs/architecture.md) | Glossary and the detailed feature walkthrough |
+| [docs/code-map.md](docs/code-map.md) | Which file does what, folder by folder, and where to look first |
 | [docs/agent-loop.md](docs/agent-loop.md) | How a chat message becomes a verified task, with file references |
 | [docs/performance.md](docs/performance.md) | Measurements and how to reproduce them |
 | [docs/ux-audit.md](docs/ux-audit.md) | The UX audit and its phased plan |

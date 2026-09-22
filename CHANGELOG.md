@@ -7,6 +7,18 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Ad-free radio in Style & sound.** A new source tab plays twelve
+  listener-funded stations from SomaFM and Radio Paradise, stations that
+  carry no advertising at all, through Studio's own player, so the node tree
+  reacts to them like a local file. Every station lists verified mirrors:
+  when one stalls, drops, ends or never answers, the next comes up on a
+  second deck and is crossfaded in, so a lost connection costs a fade instead
+  of the music. The last station is remembered but never starts by itself.
+  The booklet's CSP gains `media-src` for exactly the four stream hosts, plus
+  a `no-referrer` policy, because SomaFM refuses stream requests that carry a
+  Referer and `<audio>` has no `referrerpolicy` attribute.
+
 ### Changed
 - **One navigation rail replaces three menus.** A rail down the left edge now
   holds every destination in the app, grouped **Home**, **Work**, **Live**,
@@ -20,8 +32,50 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   classic** in `Ctrl K` brings the old menus back.
 - The Work rail lists **Current work** first again, ahead of the agent roster,
   so what is running stays on screen however many agents are listed.
+- **Brain maps is a proper node editor.** The canvas pans and zooms (scroll,
+  Ctrl + scroll, drag empty canvas, **F** to fit) and opens on the whole
+  pipeline, with titles drawn large when zoomed out and a minimap once part of
+  the map is off screen. Wires are drawn by dragging from end to end, and a
+  wire let go on empty canvas opens the parts search with the parts that fit
+  first. Parts, the parts rail and the wires that leave them carry their stage
+  colour and icon; parts that move a real switch are marked, map-run parts are
+  badged and notes show their text. Every edit can be undone with Ctrl Z,
+  several parts can be picked, moved, copied and deleted together, F8 walks
+  the problems, Ctrl F finds a part on the map and Tidy lines a map up in
+  pipeline order. The header is one row with one primary action and a Map
+  menu; the inspector leads with what going live would move and keeps its
+  place while you edit. Closing the editor keeps unsaved edits for the next
+  time it opens instead of asking. `?` shows the legend and every shortcut.
+- **A model route that keeps failing is paused instead of retried every
+  turn.** Three failures in a row from one provider — a refused key, an
+  exhausted quota, a transport error, a timeout, or a CLI that did not
+  answer — now pause it for 30 seconds. While it is paused the next route in
+  the auto order answers straight away, a paused CLI is not started at all,
+  and the connection log names the route and its last error. After the pause
+  one probe call is let through; saving a key, changing the routing or
+  running auto setup lifts every pause at once. An unusable reply does not
+  count, because the route did answer. Until now a route that timed out cost
+  every assistant turn up to 120 s (180 s for a CLI) before the fallback was
+  tried.
 
 ### Fixed
+- **Brain maps: New, Duplicate and Build with AI work in the app.** All three
+  asked their question with `window.prompt`, which Electron does not
+  implement, so they silently did nothing; they now ask in a panel inside the
+  editor, and a new map is kept locally until it has a part, since the host
+  refuses to save an empty one. Dragging a part no longer throws it to the top
+  corner (the grabbed element was rebuilt before it was measured), and wires
+  can be clicked, hovered and deleted again (the parts layer covered them).
+  Switching maps no longer throws away unsaved edits without asking, and
+  Make this live no longer carries on when the save before it failed.
+- **Run smoke and Launch Ruins Runner start the game again.** Both handed
+  cmd.exe a hand-quoted script path, and Node re-escaped those quotes into
+  `\"`, which cmd cannot read, so every launch failed with
+  `'\"…\Run Game (LOVE2D).cmd\"' is not recognized` — whichever folder the
+  game lived in, since both script names contain spaces. The line is now
+  built by `scripts/windows-command-line.cjs` (ported from BetterC0de; see
+  `THIRD_PARTY_NOTICES.md`) and passed verbatim, and a game folder whose path
+  cmd cannot carry is refused with a message instead of launched mangled.
 - **Hand-off chains finish instead of stalling forever.** A run at the
   chain's depth limit is told not to hand off; when it printed `MEFI_NEXT`
   anyway, the line still became an obligation on its card that nothing
@@ -42,6 +96,18 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   went from none done in two hours (19 kills, 57 slot-minutes burned) to
   all nine (3 kills, 9 slot-minutes). Runs that genuinely never speak now
   cost about a fifth more slot time before they are killed.
+
+### Security
+- **Coding workers no longer inherit Studio's own keys.** A headless or
+  container install hands Studio its keys as `MEFI_STUDIO_*_KEY` and
+  `MEFI_STUDIO_GITHUB_TOKEN` variables, and every child process inherited all
+  of them — including the coding workers, which run repository-driven
+  commands with their approvals bypassed — although no child reads them.
+  `scripts/platform.cjs`, the spawn every child goes through, now withholds
+  them. Names other tools share (`GH_TOKEN`, `OPENROUTER_API_KEY`) and
+  Studio's settings variables (`MEFI_STUDIO_REPO`, `MEFI_STUDIO_PORT`, …)
+  still pass through, and a key a child needs is still handed to it under its
+  own name.
 
 ## [0.2.0] - 2026-09-22
 

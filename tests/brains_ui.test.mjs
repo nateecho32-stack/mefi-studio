@@ -88,14 +88,17 @@ const IDS = [
   "brains-dirty", "brains-live",
 ];
 
-async function editor({ map = brains.defaultMap(), saves = [] } = {}) {
-  const elements = new Map(IDS.map((id) => [id, new Element(id.includes("input") || id.includes("search") ? "input" : "div")]));
+// extraIds adds elements the default page leaves out (brains.js guards every
+// optional one), bridge overrides host calls, and activeId makes another map
+// the live one.
+async function editor({ map = brains.defaultMap(), saves = [], extraIds = [], bridge: overrides = {}, activeId = null } = {}) {
+  const elements = new Map([...IDS, ...extraIds].map((id) => [id, new Element(id.includes("input") || id.includes("search") ? "input" : "div")]));
   const documentKeys = [];
   const catalog = brains.catalog();
   let current = brains.normalizeMap(map);
   const bridge = {
     brainsCatalog: async () => ({ ok: true, catalog }),
-    brainsState: async () => ({ ok: true, activeId: current.id, maps: [brains.summarize(current)] }),
+    brainsState: async () => ({ ok: true, activeId: activeId ?? current.id, maps: [brains.summarize(current)] }),
     brainsRead: async () => ({ ok: true, map: current, compiled: brains.compileMap(current), active: true }),
     brainsValidate: async (candidate) => {
       const normalized = brains.normalizeMap(candidate);
@@ -107,6 +110,7 @@ async function editor({ map = brains.defaultMap(), saves = [] } = {}) {
       return { ok: true, map: current, compiled: brains.compileMap(current) };
     },
     onBrains: () => {},
+    ...overrides,
   };
   const context = {
     console,
@@ -264,4 +268,251 @@ test("an empty map reads as empty rather than as the pipeline", async () => {
   assert.equal(ui.wires().length, 0);
   assert.match(ui.problems(), /no nodes yet/);
   assert.equal(ui.elements.get("brains-activate").disabled, true, "an empty map cannot go live");
+});
+
+// ---- the upgraded editor --------------------------------------------------
+
+const head = (ui, id) => ui.nodes().find((node) => node.dataset.node === id).querySelector(".brains-node-head");
+const pick = (ui, id, extra = {}) => head(ui, id).fire("pointerdown", { clientX: 10, clientY: 10, pointerId: 1, ...extra });
+const wireOne = async (ui) => {
+  await ui.port("n_verify_evidence", "issues", "out").fire("click");
+  await ui.port("n_issue_triage", "issue", "in").fire("click");
+};
+const part = (ui, type) => ui.elements.get("brains-parts-list").querySelectorAll(".brains-part").find((item) => item.dataset.type === type);
+
+test("a map stored left of the origin draws where it is stored", async () => {
+  const map = {
+    id: "west", name: "West", grants: ["read-project", "write-files", "run-commands", "spawn-worker", "spend-model", "create-work"],
+    nodes: [{ id: "a", type: "note", title: "Far left", x: -200, y: 40, config: { text: "" } }],
+    edges: [],
+  };
+  const ui = await editor({ map });
+  assert.equal(ui.nodes()[0].style.left, "-200px");
+});
+
+test("arrow keys nudge the selected part, past the left edge too, and one undo puts it back", async () => {
+  const ui = await editor();
+  await pick(ui, "n_idea_planner");
+  for (let step = 0; step < 3; step += 1) await ui.key({ key: "ArrowLeft" });
+  const moved = ui.nodes().find((node) => node.dataset.node === "n_idea_planner");
+  assert.equal(moved.style.left, "-20px");
+  assert.equal(ui.elements.get("brains-save").disabled, false);
+  await ui.key({ key: "z", ctrlKey: true });
+  assert.equal(ui.nodes().find((node) => node.dataset.node === "n_idea_planner").style.left, "40px", "a run of nudges is one undo step");
+  assert.equal(ui.elements.get("brains-save").disabled, true, "back at the saved map, nothing is left to save");
+});
+
+test("pressing a part without moving it leaves the map clean", async () => {
+  const ui = await editor();
+  await pick(ui, "n_plan_build");
+  assert.equal(ui.elements.get("brains-save").disabled, true);
+  assert.equal(ui.elements.get("brains-dirty").hidden, true);
+});
+
+test("a wire that runs backwards dips under the parts it passes instead of across them", async () => {
+  const ui = await editor();
+  const map = brains.defaultMap();
+  const loop = map.edges.find((edge) => edge.feedback);
+  const path = ui.wires().find((item) => item.dataset.edge === loop.id);
+  const [, , , c1x, c1y, c2x, c2y] = path.attrs.d.match(/^M ([\d.-]+) ([\d.-]+) C ([\d.-]+) ([\d.-]+), ([\d.-]+) ([\d.-]+), [\d.-]+ [\d.-]+$/).map(Number);
+  const from = map.nodes.find((node) => node.id === loop.from.node);
+  const to = map.nodes.find((node) => node.id === loop.to.node);
+  const lowest = Math.max(...map.nodes.filter((node) => node.x < from.x && node.x + 236 > to.x).map((node) => node.y + 48 + 36 * 2 + 26));
+  assert.ok(c1y > lowest && c2y > lowest, `both handles sit below the lowest part it passes (${c1y}, ${c2y} > ${lowest})`);
+  assert.ok(c1x > from.x && c2x < to.x + 236, "it leaves to the right and comes back in from the left");
+});
+
+test("a wire takes the colour of the part it leaves", async () => {
+  const ui = await editor();
+  const edge = brains.defaultMap().edges.find((item) => item.from.node === "n_jev_classify");
+  const path = ui.wires().find((item) => item.dataset.edge === edge.id);
+  assert.equal(path.dataset.group, brains.nodeType("jev.classify").group);
+});
+
+test("closing keeps unsaved edits, and the next open has them back", async () => {
+  const ui = await editor();
+  const before = ui.wires().length;
+  await wireOne(ui);
+  ui.context.window.MefiBrains.close();
+  assert.equal(ui.elements.get("brains-overlay").hidden, true, "closing does not ask");
+  assert.equal(ui.saves.length, 0, "and saves nothing behind the owner's back");
+  await ui.context.window.MefiBrains.open();
+  await flush();
+  assert.equal(ui.wires().length, before + 1);
+  assert.equal(ui.elements.get("brains-dirty").hidden, false);
+  assert.match(ui.status(), /still here/);
+});
+
+test("New starts a local map and saves nothing until it has a part", async () => {
+  const ui = await editor();
+  await ui.elements.get("brains-new").fire("click");
+  await flush();
+  assert.equal(ui.saves.length, 0, "an empty map is never sent to the host, which refuses it");
+  assert.equal(ui.nodes().length, 0);
+  assert.equal(ui.elements.get("brains-save").disabled, true, "nothing to keep yet");
+  assert.match(ui.status(), /Created "Prompted name"/);
+  await ui.key({ key: " ", code: "Space" });
+  const input = ui.elements.get("brains-search-input");
+  input.value = "you ask";
+  await input.fire("input");
+  await ui.key({ key: "Enter" });
+  assert.equal(ui.nodes().length, 1);
+  assert.equal(ui.elements.get("brains-save").disabled, false, "with a part it can be saved");
+  await ui.elements.get("brains-save").fire("click");
+  await flush();
+  assert.equal(ui.saves.length, 1);
+  assert.equal(ui.saves[0].name, "Prompted name");
+});
+
+test("Make this live stops when the save before it fails", async () => {
+  const calls = [];
+  const ui = await editor({
+    activeId: "some-other-map",
+    bridge: {
+      brainsSave: async () => ({ ok: false, error: "Disk is full." }),
+      brainsGatePlan: async () => { calls.push("plan"); return { ok: true, moves: [] }; },
+      brainsActivate: async () => { calls.push("activate"); return { ok: true }; },
+    },
+  });
+  await wireOne(ui);
+  await ui.elements.get("brains-activate").fire("click");
+  await flush();
+  assert.deepEqual(calls, [], "nothing moves while the screen and the saved map disagree");
+  assert.match(ui.status(), /Disk is full/);
+});
+
+test("Space on a focused button presses the button instead of opening the search", async () => {
+  const ui = await editor();
+  ui.elements.get("brains-search").hidden = true; // as the template ships it
+  await ui.key({ key: " ", code: "Space", target: part(ui, "note") });
+  assert.equal(ui.elements.get("brains-search").hidden, true);
+});
+
+test("Delete only deletes while the canvas has the keyboard", async () => {
+  const ui = await editor();
+  await pick(ui, "n_jev_classify");
+  await ui.key({ key: "Delete", target: part(ui, "note") });
+  assert.equal(ui.nodes().length, 18, "focus in the parts rail leaves the map alone");
+  await ui.key({ key: "Delete" });
+  assert.equal(ui.nodes().length, 17);
+});
+
+test("Ctrl S saves from inside a field", async () => {
+  const ui = await editor();
+  await wireOne(ui);
+  await ui.key({ key: "s", ctrlKey: true, target: ui.elements.get("brains-parts-search") });
+  await flush();
+  assert.equal(ui.saves.length, 1);
+});
+
+test("a note shows its text on the canvas", async () => {
+  const map = { id: "notes", name: "Notes", grants: [], edges: [], nodes: [{ id: "n_note", type: "note", title: "Note", x: 40, y: 40, config: { text: "Check the budget first" } }] };
+  const ui = await editor({ map });
+  assert.ok(ui.nodes()[0].textContent.includes("Check the budget first"));
+});
+
+test("a stage says which switch it moves, and no part repeats 'live stage'", async () => {
+  const ui = await editor();
+  const dispatch = ui.nodes().find((node) => node.dataset.node === "n_work_dispatch");
+  assert.ok(dispatch.textContent.includes(`moves ${brains.GATES.dispatch.label}`));
+  for (const node of ui.nodes()) {
+    const foot = node.querySelector(".brains-node-foot");
+    assert.ok(!foot.textContent.includes("live stage"), `${node.dataset.node} footer: ${foot.textContent}`);
+  }
+});
+
+test("the problems list can show every problem, not just the first eight", async () => {
+  const map = { id: "six", name: "Six", grants: [], edges: [], nodes: Array.from({ length: 6 }, (_, index) => ({ id: `p${index}`, type: "plan.build", title: `Plan ${index}`, x: 40 + index * 300, y: 40 })) };
+  const ui = await editor({ map });
+  const problems = brains.validateMap(brains.normalizeMap(map)).problems;
+  assert.ok(problems.length > 8);
+  const more = ui.elements.get("brains-problems").querySelectorAll(".brains-problem-more")[0];
+  await more.fire("click");
+  for (const problem of problems) assert.ok(ui.problems().includes(problem.text), problem.text);
+});
+
+test("F8 walks to the first problem that belongs to a part", async () => {
+  const map = { id: "six", name: "Six", grants: [], edges: [], nodes: Array.from({ length: 3 }, (_, index) => ({ id: `p${index}`, type: "plan.build", title: `Plan ${index}`, x: 40 + index * 300, y: 40 })) };
+  const ui = await editor({ map });
+  const first = brains.validateMap(brains.normalizeMap(map)).problems.filter((item) => item.level === "error").find((item) => item.nodeId);
+  await ui.key({ key: "F8" });
+  const expected = brains.normalizeMap(map).nodes.find((node) => node.id === first.nodeId).title;
+  assert.equal(ui.inspector().querySelector(".brains-title-input").value, expected);
+  assert.match(ui.status(), /^Problem 1 of /);
+});
+
+test("with nothing selected, the inspector leads with what going live means", async () => {
+  const ui = await editor();
+  const text = ui.inspector().textContent;
+  const live = text.indexOf("What this map holds");
+  assert.ok(live >= 0, "the live map says what it holds");
+  assert.ok(live < text.indexOf("What this map grants"));
+});
+
+test("an empty search lists every part", async () => {
+  const ui = await editor();
+  await ui.key({ key: " ", code: "Space" });
+  assert.equal(ui.elements.get("brains-search-list").querySelectorAll(".brains-search-row").length, brains.NODE_TYPES.length);
+});
+
+test("Ctrl F finds a part already on the map", async () => {
+  const ui = await editor();
+  await ui.key({ key: "f", ctrlKey: true });
+  assert.equal(ui.elements.get("brains-search").hidden, false);
+  const input = ui.elements.get("brains-search-input");
+  input.value = "jev";
+  await input.fire("input");
+  const rows = ui.elements.get("brains-search-list").querySelectorAll(".brains-search-row");
+  assert.equal(rows[0].dataset.type, "jev.classify");
+  const nodes = ui.nodes().length;
+  await ui.key({ key: "Enter" });
+  assert.equal(ui.nodes().length, nodes, "finding adds nothing");
+  assert.equal(ui.elements.get("brains-search").hidden, true);
+  assert.equal(ui.inspector().querySelector(".brains-title-input").value, "Jev");
+});
+
+test("two parts added in a row do not stack", async () => {
+  const ui = await editor({ map: { id: "blank", name: "Blank", nodes: [], edges: [], grants: [] } });
+  await part(ui, "note").fire("click");
+  await part(ui, "note").fire("click");
+  const [a, b] = ui.nodes();
+  assert.notDeepEqual([a.style.left, a.style.top], [b.style.left, b.style.top]);
+});
+
+test("Shift picks several parts, and Delete removes them all", async () => {
+  const ui = await editor();
+  await pick(ui, "n_jev_classify");
+  await pick(ui, "n_model_pick", { shiftKey: true });
+  assert.match(ui.inspector().textContent, /2 parts picked/);
+  await ui.key({ key: "Delete" });
+  assert.equal(ui.nodes().length, 16);
+  assert.match(ui.status(), /Removed 2 parts/);
+});
+
+test("Ctrl D copies the picked parts and the wire between them", async () => {
+  const ui = await editor();
+  await pick(ui, "n_jev_classify");
+  await pick(ui, "n_model_pick", { shiftKey: true });
+  const wires = ui.wires().length;
+  await ui.key({ key: "d", ctrlKey: true });
+  assert.equal(ui.nodes().length, 20);
+  assert.equal(ui.wires().length, wires + 1, "the Jev → model wire is copied; wires to outside parts are not");
+});
+
+test("Escape clears the selection before anything closes", async () => {
+  const ui = await editor();
+  await pick(ui, "n_jev_classify");
+  await ui.key({ key: "Escape" });
+  assert.match(ui.status(), /Selection cleared/);
+  assert.equal(ui.inspector().querySelector(".brains-title-input").attrs["aria-label"], "Map name");
+});
+
+test("Tidy lines the parts up, and Ctrl Z puts them back", async () => {
+  const ui = await editor({ extraIds: ["brains-tidy"] });
+  const where = () => ui.nodes().map((node) => `${node.dataset.node}@${node.style.left},${node.style.top}`).join(" ");
+  const before = where();
+  await ui.elements.get("brains-tidy").fire("click");
+  assert.notEqual(where(), before);
+  await ui.key({ key: "z", ctrlKey: true });
+  assert.equal(where(), before);
 });

@@ -23,7 +23,6 @@ function host({ requests = [], tasks = [] } = {}) {
     Date, crypto: { randomBytes: () => ({ toString: () => String(++serial) }) },
     projects: { current: () => ({ id: "fixture" }), stamp: (row) => row }, projectRoot: () => "/fixture",
     workTitleKey: (value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim(),
-    taskPriority: (row) => row.source === "chat" ? 4 : 1,
     compareWork: baselineCompareWork, workPlanTheme: () => null, workFixTheme: () => null, isFixWork: () => false,
     mutateBoard: async (mutate) => ({ ...mutate(board, {}), ...board }),
     jevShadowIntake: (rows) => { if (rows?.length) accepted.push(...rows); },
