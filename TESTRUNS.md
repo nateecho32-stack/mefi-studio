@@ -45,6 +45,19 @@ board artifact remains for the owner to sweep, not work: task_0ced1d7f880a818a,
 a recursive "Follow-up: Follow-up: ..." echo of this card whose substance the
 verified child already landed.
 
+## 2026-09-22 late evening - landing card closed: the gated 427+/302- main.cjs refactor already landed inside 2457a7d (task_7e5824cf51975676, run run_1790102912783_7)
+
+This card asked for the sibling session's settled 427+/302− main.cjs edit to
+be committed path-limited. Verified first-hand that the landing already
+happened and cannot be replayed as its own commit: `git status --porcelain`
+shows main.cjs clean at HEAD 17ba279 (no edit left to land), and 2457a7d
+(13:39:21) carries main.cjs 456+/317− — the 427+/302− refactor plus the auth
+split's own 29+/15− on the same file, so the shared-file path-limit folded
+them; that commit's message itself states it "necessarily also lands the
+sibling session's already-gated uncommitted 427+/302− worktree refactor
+(TESTRUNS 6173a10)", and the auth-split row below records the same fold.
+Content re-checked at HEAD this run, not from reports: `refreshAutopilotQueue(eyes = null, rows = null)` (main.cjs:8107), `autopilotProactivePass()` (8141), `queueExecutorCheckpoint(entry, { force, delay })` (8404), parameter-less `runVerificationJob(s)` (10756/10852), and `git grep` finds zero references to the deleted `taskPriority`/`setProactive` in main.cjs — exactly the 6173a10 fallout scan. Gate evidence for this content already in history: 6173a10 (check/test/audit exit 0 on the settled worktree), c4caee1 (independent full-gate rerun green), and the quiet-tree full gate above (npm test exit 0, node 2062/2059/0/3, Python 247 OK) which ran with 2457a7d's landed content in the tree. Fresh `npm run check` exit 0 this run (101 targets, 205 specs, syntax ok — the narrowest check for a ledger-only commit); nothing was staged before or after. The card flip for this task stays owner-side; task store untouched; sibling in-flight files left exactly as found; this commit adds only this row.
+
 ## 2026-09-22 late evening - quiet-tree full gate green: the withheld npm test of the auth split (2457a7d) plus build-booklet, both exit 0 (task_5e0a126238bab8fb, run run_1790102559644_4)
 
 This row supplies the full-suite evidence the split row below withheld under
