@@ -71,6 +71,21 @@ card's obligations are met without re-triggering. This commit adds only
 this row; a sibling session's in-flight package-lock.json hunk was left
 untouched.
 
+Audit-verify that the A-Eyes dead-selector warn on `.brains-sheet` is
+already resolved (2026-09-22, 10:39-10:41, run_1790091495454_29 for
+task_fd3fcbcfff3656e4 "Audit: css"). The warn was raised at 08:42 against
+the pre-landing tree; a16b752 (09:24) then landed brain maps complete, so
+`brains-sheet` now appears in renderer/booklet.template.html:1050 and the
+built renderer/booklet.html. No edit made — deleting the selector would
+strip the live dialog's layout. Evidence: `node scripts/auditor.mjs`
+audit() reports zero css findings at both the repo root and
+dist/Mefi Studio AI+/resources/app; `node scripts/check-css.mjs --unused
+renderer/brains.css` prints ALL-SELECTORS-USED; the requested gate
+`python -m unittest discover -s tools -p "test_mefi_studio_*.py"` ran
+246 tests OK in 33.0 s, exit 0, output captured to a file. HEAD 7f9cbe5
+throughout; the only dirty path, package-lock.json, is another session's
+and was left untouched. This commit adds only this row.
+
 Settled-tree full-gate rerun, exit 0 (2026-09-22, 10:36-10:38,
 run_1790091305943_21 for task_baa66f9ab1ec0f2e "Full-gate rerun after
 in-flight work settles", parent idea "Per-feature model config with
