@@ -2836,3 +2836,35 @@ land on a genuinely quiet board - no concurrent full-gate run, no active
 editor session - and the board is currently double-booking full-suite
 tasks (task_59d7f2b65f49e281 "Full npm test gate" ran concurrently with
 this one). No repo source modified beyond this entry.
+
+## 2026-09-22 morning - green exit-0 full node suite lands on the quiet board (task_c3fca713a5ff8b66, run run_1790085745914_2)
+
+Waited for the sibling full-gate (run_1790085983521_8) to drain, confirmed
+no test processes and no tree writes since 09:08:07, re-swept windows
+(Studio still the only visible Electron window; minimized again), then
+`node scripts/run-node-tests.mjs` from the repo root. All three stages
+green, exit 0 at 09:10:21 CDT:
+
+- parallel stage: 1935 tests / 1932 pass / 0 fail / 3 skipped (38.5 s).
+  Every previously-rotating vm/section suite green, command_render green
+  (the 09:05 "Saved obligation context missing" failure did not reproduce,
+  consistent with the fingerprint guard's transient mid-rewrite verdict),
+  and the peer's freshly added windows-command-line test is in the count.
+  No source-fingerprint warning fired, so by the runner's own contract the
+  tree held still for the whole run - this is the quiet-tree proof.
+- serialized eyes_toggle_electron: 1/1 (3.3 s) - "one hide/show visibility
+  toggle: the eyes log tail pauses hidden, snaps one fetch on show, resumes
+  without duplicates" (baseline 2 fetches/297ms; hidden 0/1200ms; one
+  resume snap; resumed 3/594ms; 6 fetches total). The stabilized eyes
+  toggle timing fixture this card's parent (task_11085243b2d2452f) was
+  about, passing in-suite.
+- serialized occlusion_probe: 1/1 strict pass (5.8 s) - occlusion via
+  document.hidden, occluded rAF growth 0, probe lag 0ms of 1 sample,
+  MessageChannel 0ms, console errors 0. The strict assertion path ran
+  (no occlusionUnsupported/windowLost/coverLost skip), with Studio
+  minimized - matching the 2026-09-21 17:05-17:15 precedent.
+
+This is the green exit-0 full-suite run the 2026-09-21 entry required
+before settling task_11085243b2d2452f; per repo convention the card
+settles through Studio on this evidence, not through worker edits to the
+task store. No repo source modified beyond this entry.
