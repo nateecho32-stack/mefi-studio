@@ -29,6 +29,33 @@ only above the anchor (decision recorded 2026-09-22, pinned by
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - Shared-file handoff re-verified at HEAD c996c56 and the "outstanding obligations" loop diagnosed: append_testruns_row + onboarding owner edits intact and green, the denial was result-prose shape not repo work (run_1790113542877_31)
+
+Retry of the card whose prior attempt (ses_f34f2e32cffesalDTiozv8zTzj) settled
+"outstanding obligations remain" with changedFiles: 1. Diagnosed first-hand, not
+assumed: the prior MEFI_RESULT ended "remaining: owner-only Studio task-store
+acceptance wording fix (task_delegate_b4f73d934d18f69906d57de9)", and
+verifyCompletion's nonempty, scope-unqualified remaining text is exactly what
+turns into the denial. The leftover named there is board bookkeeping the worker
+is forbidden to rewrite, so it must not be reported as this card's remaining
+work. Resolved by finishing the in-scope handoff verification and reporting
+remaining: none; the stored-acceptance inversion still goes out to the owner via
+MEFI_ASK, not as a worker obligation.
+
+Handoff adoption re-checked against the tree, not the reports. Every recorded
+edit by the five sessions was compared to HEAD: all final newStrings are present
+in tests/append_testruns_row.test.mjs and tests/onboarding.test.mjs, so no
+owner's work was clobbered and there is nothing to re-edit - per TESTRUNS.md,
+"Verifying a session edit-collision handoff", a resolved handoff needs none. (An
+early probe looked missing only because ses_f351e5be7ffe4u14MPT9mSELu3's own
+later edit refined its earlier one; the refined text is present.) Fresh gates
+this run: node --test tests/append_testruns_row.test.mjs 18/18,
+node --test tests/onboarding.test.mjs 32/32, npm run check exit 0 (check-targets
+103, spec-collisions 214, ALL-SELECTORS-USED, check-syntax 103, check-testruns 76
+live rows newest-first with no conflict copies). No file logic changed; this
+commit adds only this row, path-limited, and the shared index is left with
+nothing staged.
+
 ## 2026-09-22 late evening - Per-role provider selection + OpenCode Zen route re-verified at clean HEAD 94ba3d1: landed work intact, feature-isolation and Zen/DATA_ONLY contracts green; the retry loop was verification prose-shape (task_ed28a7a9019d3329, run_1790113305115_29)
 
 Independently re-verified the landed work at clean HEAD 94ba3d1 rather than trusting prior reports. Confirmed the commit is path-limited to this feature (main.cjs roleProvider/aiRoleProviders, the Zen route with its gpt-* Responses shim, DATA_ONLY_CLIS for Claude Code, renderer, tests, docs) and the working tree has no uncommitted changes. Fresh evidence this pass: node --test on role_provider_isolation plus the planning, analyzer, executor, jev, explicit-fallback and executor-mode suites 105/105 (role_provider_isolation 5/5), python -m unittest tools/test_mefi_studio_routing.py 23/23, npm run check exit 0 (check-syntax 103 files, check-testruns 75 live rows newest-first with no conflict copies), and npm run build-booklet a no-op (renderer/booklet.html already rebuilt by b1ab157). Coverage is real: planning_routing pins heavy-on-Claude/routine-on-Zen with the Responses-vs-chat split, analyzer_host pins DATA_ONLY_CLIS, and role_provider_isolation drives the real settings:set-ai-routing merge to prove changing one feature leaves the others alone. No repository work remains; the recurring unverified verdict comes from the verification reader treating remaining prose that scopes work away from this card as an obligation, which is task-store bookkeeping the worker must not rewrite. This row is the retry documentation.
