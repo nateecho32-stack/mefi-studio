@@ -25,6 +25,32 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - split decision honored: fifth-gen card already carries the extra work, repo-side obligations re-verified green at HEAD c4caee1, flip stays owner-only (task_fece4ffd34e38932, run run_1790102013188_33)
+
+The owner's scope decision on this card (1790101914614, "split the extra work
+out") is already executed board-side: the store shows the fifth-generation
+carrier task_261f3a1af9aeda2d spawned ~50 ms after the decision and active,
+so the extra work has its own card — minting another would only re-duplicate
+the chain, and the dispatch rule forbids child cards for bookkeeping. This
+card therefore keeps exactly its repo-side verification scope, re-verified
+first-hand at HEAD c4caee1 (tree moved past 5bc25d1/1a9664a on sibling
+TESTRUNS-only commits): feature commits c272b58 / 136f866 / e3ad851 /
+31f69f0 / d1c4d78 / 96d15c6 plus evidence rows 23bdd5c / a973b73 all
+ancestors of HEAD (`git merge-base --is-ancestor`, 8/8 true); wiring live
+(`require("./scripts/executor-worktrees.cjs")` at main.cjs:58, the
+`worktreeManager` gate at main.cjs:9487); opt-in intact
+(`scripts/executor-worktrees.cjs:62` requires
+`MEFI_STUDIO_WORKTREE_RUNS === "1"` exactly, default off); fresh
+`node --test tests/executor_worktree.test.mjs` -> 11 tests / 11 pass /
+0 fail, exit 0 (36.0 s); `.mefi` absent and `git worktree list` shows only
+the standing main/mb/mm/wt-command-visuals/wt-ux-phase0 checkouts — no
+per-run residue. Landing cards task_7b773505d7c6eb43 and
+task_2dd9dc18291f2625 re-read from the store: both still open; their flip
+stays host-side and is handed off via MEFI_ASK, not as this card's
+remainder. Nothing in this card's own scope remains owed; task store
+untouched; sibling in-flight files left exactly as found; this commit adds
+only this row.
+
 ## 2026-09-22 late evening - A-Eyes "uncommitted work" warn re-checked first-hand: alert stale, both commits in HEAD, named checks green; prior failure was the remaining-prose trap (task per run_1790101891091_31)
 
 The A-Eyes warn said the booklet contract test and `tools/verify_dev_app.mjs`
