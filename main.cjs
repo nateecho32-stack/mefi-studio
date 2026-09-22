@@ -1244,6 +1244,11 @@ async function jevStatus() {
 // this is ever read (executorRunEnv returns early, and only the Auto branch
 // sets modelProvider "zai"), so a shape can only bias the Auto case.
 //
+// The shape reaches routing as `weight`, not as a role: a dispatched job's role
+// is always "worker", which is what earns the tool-call filter in
+// buildRoutingCandidates. Sending the shape as a role meant applyModelRouting
+// overwrote it and the answer we paid for changed nothing.
+//
 // Held in memory, never written to the board. A classifier answer is a
 // routing hint for this session, not task data — the same rule the shadow
 // intake follows, and the same shape as applyModelRouting's own result cache.
@@ -1256,7 +1261,13 @@ async function jevStatus() {
 const WORK_SHAPE_PER_PASS = 3;
 const WORK_SHAPE_TTL_MS = 30 * 60 * 1000;
 const WORK_SHAPE_CACHE_MAX = 200;
+// A refusal is remembered too, for long enough to outlast a few ticks. Not
+// caching it at all meant the same unanswerable card was re-asked — and
+// re-charged — on every pass, forever, while the cards behind it were never
+// reached.
+const WORK_SHAPE_MISS_TTL_MS = 20 * 60 * 1000;
 const workShapeCache = new Map();
+const workShapeMisses = new Map();
 
 function workShapeFor(taskId, now = Date.now()) {
   const held = workShapeCache.get(taskId);
@@ -1270,11 +1281,34 @@ function workShapeFor(taskId, now = Date.now()) {
 
 function rememberWorkShape(taskId, shape, now = Date.now()) {
   workShapeCache.set(taskId, { shape, at: now });
+  workShapeMisses.delete(taskId);
   // Oldest out first; a long-lived session must not grow this without bound.
   while (workShapeCache.size > WORK_SHAPE_CACHE_MAX) {
     const oldest = workShapeCache.keys().next();
     if (oldest.done) break;
     workShapeCache.delete(oldest.value);
+  }
+}
+
+// A card the classifier could not answer backs off instead of being re-asked
+// every tick. The shape is still absent, so the dispatch routes exactly as an
+// unclassified one does — only the spending stops.
+function workShapeMissed(taskId, now = Date.now()) {
+  const held = workShapeMisses.get(taskId);
+  if (!held) return false;
+  if (now - held > WORK_SHAPE_MISS_TTL_MS) {
+    workShapeMisses.delete(taskId);
+    return false;
+  }
+  return true;
+}
+
+function rememberWorkShapeMiss(taskId, now = Date.now()) {
+  workShapeMisses.set(taskId, now);
+  while (workShapeMisses.size > WORK_SHAPE_CACHE_MAX) {
+    const oldest = workShapeMisses.keys().next();
+    if (oldest.done) break;
+    workShapeMisses.delete(oldest.value);
   }
 }
 
@@ -1286,8 +1320,20 @@ async function classifyPendingWork() {
   ]);
   const now = Date.now();
   const tasks = await eyes.readJson(TASKS_PATH, []);
+  // The same readiness the dispatcher applies, in the same order. The board is
+  // stored newest-first and spawnNextJob picks oldest-first, so slicing the
+  // board's head paid to shape the cards furthest from running while the ones
+  // about to be picked up stayed unshaped — and with a 30-minute answer and
+  // three per pass, the head expired and was re-bought before the tail was
+  // ever reached.
   const pending = tasks
-    .filter((task) => task?.id && task.title && !task.runId && !workShapeFor(task.id, now) && (!task.status || ["open", "pending", "queued"].includes(task.status)))
+    .filter((task) => task?.id && task.title && !task.runId
+      && !workShapeFor(task.id, now) && !workShapeMissed(task.id, now)
+      && (!task.status || ["open", "pending", "queued"].includes(task.status))
+      && (task.runFailures ?? 0) < 5
+      && !(task.nextRunAt && task.nextRunAt > now)
+      && backlog.workState(task, now, { tasks, autoBuild: autopilot.autoBuild }).stage === "ready")
+    .sort((a, b) => (a.createdAt ?? a.updatedAt ?? 0) - (b.createdAt ?? b.updatedAt ?? 0))
     .slice(0, WORK_SHAPE_PER_PASS);
   if (!pending.length) return { ok: true, attempted: false, shaped: 0 };
 
@@ -1307,14 +1353,19 @@ async function classifyPendingWork() {
       ? await standIn.classify({ questions, state: stateContext, config: { timeoutMs: standIn.timeoutMs } })
       : await client.classify({ questions, state: stateContext, apiKey: resolved.key, config: client.gatewayConfig({ route }) });
     if (!standIn) await chargeJevCall(result, "jev-work-shape", route);
-    // A refused or malformed answer leaves the task unshaped so a later pass
-    // may try again; it never caches the fallback as if it were an answer.
+    // A refused or malformed answer leaves the task unshaped; the fallback is
+    // never cached as if it were an answer. The refusal itself is remembered,
+    // briefly, so the card backs off instead of being re-bought every tick.
     if (!result.ok) {
+      rememberWorkShapeMiss(task.id, Date.now());
       logLine(`[jev] work shape unavailable: ${assistantClip(result.error, 160)}`);
       continue;
     }
     const shape = classification.interpretWorkShape(result.answers);
-    if (!shape.intent) continue;
+    if (!shape.intent) {
+      rememberWorkShapeMiss(task.id, Date.now());
+      continue;
+    }
     rememberWorkShape(task.id, shape, Date.now());
     shaped += 1;
     policyRecord("jev-work-shape", {
@@ -2013,7 +2064,7 @@ async function standInJudge(settings, purpose = "routing") {
     classify: (args) => judge.judgeClassify({ ...args, transport, config: { ...(args?.config ?? {}), timeoutMs: 90000, model: saved.model } }) };
 }
 
-async function applyModelRouting(route, { role = "routine", taskType = role, task = "", worker = false } = {}) {
+async function applyModelRouting(route, { role = "routine", taskType = role, weight = null, task = "", worker = false } = {}) {
   if (!route.ok || !["zai", "opencode"].includes(route.provider)) return route;
   const projectId = projects.current().id;
   const settings = await readSettings();
@@ -2046,16 +2097,20 @@ async function applyModelRouting(route, { role = "routine", taskType = role, tas
       readFile(path.join(STUDIO_ROOT, "data", "models.json"), "utf8").then(JSON.parse),
       modelPerformanceStore().snapshot(),
     ]);
+    // A dispatched job is always the "worker" role — that is what gates the
+    // tool-call filter below. How heavy the work looks travels separately, in
+    // `weight`, because collapsing it into the role would drop the shortlist's
+    // tool-call requirement on the way to the judge.
     const routingRole = worker ? "worker" : role;
     const candidates = router.buildRoutingCandidates({ catalog, performance, provider: route.provider,
       defaults: [route.model], taskType, role: routingRole });
     if (candidates.length < 2) return finish("default", "Too few compatible models to compare; using the usual model.");
-    const key = `${scope}:${crypto.createHash("sha256").update(JSON.stringify([role, taskType, String(task).slice(0, 2400), candidates])).digest("hex")}`;
+    const key = `${scope}:${crypto.createHash("sha256").update(JSON.stringify([routingRole, taskType, weight, String(task).slice(0, 2400), candidates])).digest("hex")}`;
     let selected = modelRoutingCache.get(key);
     if (!selected || selected.expiresAt <= Date.now()) {
       let pending = modelRoutingPending.get(key);
       if (!pending) {
-        pending = router.selectTaskModel({ candidates, taskType, role: routingRole, task, apiKey: credential?.key ?? "", config,
+        pending = router.selectTaskModel({ candidates, taskType, role: routingRole, weight, task, apiKey: credential?.key ?? "", config,
           ...(standIn ? { classifyFn: standIn.classify, judge: { model: standIn.model } } : {}),
           onUsage: standIn ? null : (_usage, result) => chargeJevCall(result, "jev-model-routing", jevRoute) });
         modelRoutingPending.set(key, pending);
@@ -3118,19 +3173,23 @@ function findBasenameUnderRoot(root, base, { maxEntries = 20000, maxDepth = 6 } 
 }
 
 // Pull the handoffs out of one line of a run's output.
+//
+// Anchored to the start of the line, exactly like the verdict sentinel: a run
+// that quotes the protocol back ("I'll add a MEFI_NEXT: line for the rest")
+// used to file that sentence as real board work, and the prompt tail this run
+// was handed names both marks, so any CLI that echoes its prompt filed one on
+// every run.
 function parseExecutorHandoff(line) {
-  const text = String(line ?? "").replace(/\[[0-9;]*m/g, "").trim();
-  const next = text.indexOf(EXECUTOR_NEXT_MARK);
-  if (next >= 0) {
-    const body = text.slice(next + EXECUTOR_NEXT_MARK.length).trim();
+  const text = String(line ?? "").replace(/\u001b\[[0-9;]*m/g, "").trim();
+  if (text.startsWith(EXECUTOR_NEXT_MARK)) {
+    const body = text.slice(EXECUTOR_NEXT_MARK.length).trim();
     const [title, ...rest] = body.split("::");
     const label = String(title ?? "").trim().slice(0, 90);
     if (!label) return null;
     return { kind: "next", title: label, prompt: (rest.join("::").trim() || label).slice(0, 600) };
   }
-  const call = text.indexOf(EXECUTOR_CALL_MARK);
-  if (call >= 0) {
-    const role = text.slice(call + EXECUTOR_CALL_MARK.length).trim().split(/[\s,.]/)[0]?.toLowerCase();
+  if (text.startsWith(EXECUTOR_CALL_MARK)) {
+    const role = text.slice(EXECUTOR_CALL_MARK.length).trim().split(/[\s,.]/)[0]?.toLowerCase();
     return role && EXECUTOR_CALLABLE.has(role) ? { kind: "call", role } : null;
   }
   return null;
@@ -8531,7 +8590,7 @@ async function spawnNextJob() {
   // changes. CLI-owned accounts retain their configured/default models.
   if (runRoute.modelProvider === "zai") {
     const selected = await applyModelRouting({ ok: true, provider: "zai", model: runRoute.model },
-      { worker: true, taskType: "coding", role: workShapeFor(job.ref?.id)?.role === "heavy" ? "heavy" : "routine", task: `${job.title}\n${job.prompt}` });
+      { worker: true, taskType: "coding", weight: workShapeFor(job.ref?.id)?.weight ?? null, task: `${job.title}\n${job.prompt}` });
     // Only the advertised managed provider models may enter a shell command.
     if ([ZAI_MODEL_ROUTINE, ZAI_MODEL_HEAVY].includes(selected.model)) {
       runRoute.model = selected.model;
@@ -8568,6 +8627,10 @@ async function spawnNextJob() {
     sawDone: false, // the run printed EXECUTOR_DONE_MARK — this, not the exit code, is the verdict
     resultNote: null, // MEFI_RESULT line, when the worker gives one: its own account of done/remaining
     spoke: false, // it wrote something at all; a silent run really is broken infrastructure
+    // Answered on stdout, which is where a working run reports. A CLI that
+    // writes one deprecation notice to stderr and dies has still said nothing
+    // about the job, and must be allowed to fall back to opencode.
+    spokeOut: false,
     handoffs: [], // MEFI_NEXT work this run passed to the next agent
     calls: new Set(), // MEFI_CALL roster roles it asked to follow up
     depth: Number(job.ref?.depth) || 0, // how far down a handoff chain this run sits
@@ -8674,6 +8737,13 @@ async function spawnNextJob() {
     discardEntry();
     return "lost";
   }
+  // From here the claim is durable (runId + lease on the row) but no child
+  // exists yet, so `stop` is not the way out of it. Stop and the ghost sweeper
+  // both reclaim a job through `reap`; without one assigned now, a claim that
+  // never reaches the spawn is invisible to both — housekeeping keeps its lease
+  // fresh because the entry is still in autopilot.jobs, so nothing requeues the
+  // row and the slot stays spent. finish() takes the role over at the launch.
+  entry.reap = cancelClaim;
   let clusterBrief = "";
   if (modeUnchanged()) {
     if (dispatchMode === "cluster" && !autopilot.clusterFocus) autopilot.clusterFocus = agentModes.focusFor(job.kind, job.ref, runProject.id);
@@ -8845,29 +8915,40 @@ async function spawnNextJob() {
   // trimmed LAST. The old single slice kept the decorations and silently cut
   // the later obligations, so the run could declare success on a job it had
   // only partly read.
-  const titleBit = `${job.title}. `.replace(/["\r\n]+/g, " ");
-  const instructions = " Work in the repository at the current directory. Make the edits, do not just describe them. When done, run the narrowest relevant test.".replace(/["\r\n]+/g, " ");
-  const failFlat = failBit.replace(/["\r\n]+/g, " ").slice(0, 240);
-  const memoryFlat = memoryBit.replace(/["\r\n]+/g, " ").slice(0, 480);
-  const collabFlat = collabBit.replace(/["\r\n]+/g, " ").slice(0, 320);
-  const pathsFlat = pathsBit.replace(/["\r\n]+/g, " ").slice(0, 240);
-  const clusterFlat = clusterBrief ? ` ${clusterBrief.replace(/[\r\n]+/g, " ").slice(0, 2400)} ` : "";
-  const resumeBrief = executorResume.brief({ ...job.ref, runProgress: entry.resumeCheckpoint });
-  const resumeFlat = resumeBrief ? ` ${resumeBrief}\n\n` : "";
-  const tailFlat = tail.replace(/["\r\n]+/g, " ");
-  const promptBudget = Math.max(
-    240,
-    EXECUTOR_PROMPT_MAX - tailFlat.length - instructions.length - titleBit.length - failFlat.length - memoryFlat.length - pathsFlat.length - collabFlat.length - clusterFlat.length - resumeFlat.length - 8,
-  );
-  // The durable brief carries prior findings and successful prerequisite
-  // outputs into the next worker instead of restarting from a short title.
-  if (job.kind === "task" || job.ref?.delegation) {
-    const recovery = job.kind === "task" ? `Full saved task context: read ${JSON.stringify(projectDataPath(TASKS_PATH))}, find task id ${JSON.stringify(job.ref.id)}. Read that record and its members whenever the brief is excerpted or grouped; contextHistory contains earlier requirements and attempts. Do not rewrite Studio's task store from the worker.\n\n` : "";
-    job.prompt = recovery + taskContext.buildTaskHandoff(job.ref, { tasks, maxChars: Math.max(1000, promptBudget - recovery.length) });
+  // Assembly reads the saved record (buildTaskHandoff, the resume brief); a
+  // malformed one must release the claim, not escape into the fill loop, which
+  // only logs and breaks. Dispatching on a half-built prompt would be worse:
+  // the worker would declare success on a job it never saw.
+  let prompt = "";
+  try {
+    const titleBit = `${job.title}. `.replace(/["\r\n]+/g, " ");
+    const instructions = " Work in the repository at the current directory. Make the edits, do not just describe them. When done, run the narrowest relevant test.".replace(/["\r\n]+/g, " ");
+    const failFlat = failBit.replace(/["\r\n]+/g, " ").slice(0, 240);
+    const memoryFlat = memoryBit.replace(/["\r\n]+/g, " ").slice(0, 480);
+    const collabFlat = collabBit.replace(/["\r\n]+/g, " ").slice(0, 320);
+    const pathsFlat = pathsBit.replace(/["\r\n]+/g, " ").slice(0, 240);
+    const clusterFlat = clusterBrief ? ` ${clusterBrief.replace(/[\r\n]+/g, " ").slice(0, 2400)} ` : "";
+    const resumeBrief = executorResume.brief({ ...job.ref, runProgress: entry.resumeCheckpoint });
+    const resumeFlat = resumeBrief ? ` ${resumeBrief}\n\n` : "";
+    const tailFlat = tail.replace(/["\r\n]+/g, " ");
+    const promptBudget = Math.max(
+      240,
+      EXECUTOR_PROMPT_MAX - tailFlat.length - instructions.length - titleBit.length - failFlat.length - memoryFlat.length - pathsFlat.length - collabFlat.length - clusterFlat.length - resumeFlat.length - 8,
+    );
+    // The durable brief carries prior findings and successful prerequisite
+    // outputs into the next worker instead of restarting from a short title.
+    if (job.kind === "task" || job.ref?.delegation) {
+      const recovery = job.kind === "task" ? `Full saved task context: read ${JSON.stringify(projectDataPath(TASKS_PATH))}, find task id ${JSON.stringify(job.ref.id)}. Read that record and its members whenever the brief is excerpted or grouped; contextHistory contains earlier requirements and attempts. Do not rewrite Studio's task store from the worker.\n\n` : "";
+      job.prompt = recovery + taskContext.buildTaskHandoff(job.ref, { tasks, maxChars: Math.max(1000, promptBudget - recovery.length) });
+    }
+    const body = String(job.prompt ?? "").slice(0, promptBudget);
+    const head = `${titleBit}${resumeFlat}${body}${failFlat}${memoryFlat}${pathsFlat}${collabFlat}${clusterFlat}${instructions}`;
+    prompt = `${head}${tailFlat}`;
+  } catch (error) {
+    logLine(`[autopilot] could not build the worker prompt for "${assistantClip(job.title, 60)}": ${String(error?.message ?? error).slice(0, 160)}`);
+    await cancelClaim();
+    return "lost";
   }
-  const body = String(job.prompt ?? "").slice(0, promptBudget);
-  const head = `${titleBit}${resumeFlat}${body}${failFlat}${memoryFlat}${pathsFlat}${collabFlat}${clusterFlat}${instructions}`;
-  const prompt = `${head}${tailFlat}`;
   // finish() sits above the spawn so a synchronous spawn failure (argument
   // rejects, resource exhaustion — 'error' is the normal channel) still
   // unclaims through the same path a dead process would take.
@@ -9373,7 +9454,7 @@ async function spawnNextJob() {
   // Same line-buffering as streamChild, but the autopilot children are tracked
   // separately: activeChild belongs to the Love2D studio launcher. Shared by
   // every attach() below — the first attempt and any CLI fallback alike.
-  const wire = (stream, owner) => {
+  const wire = (stream, owner, stdout = false) => {
     if (!stream) return;
     stream.setEncoding("utf8");
     let buffer = "";
@@ -9381,6 +9462,7 @@ async function spawnNextJob() {
       if (entry.finished || entry.child !== owner) return;
       logLine(`[${runLabel}] ${line}`);
       entry.spoke = true;
+      if (stdout) entry.spokeOut = true;
       // Strict verdict match: the line must BE the sentinel (a short trailing
       // note allowed). A run that quotes the protocol back in prose must not
       // flip its own job to done.
@@ -9538,7 +9620,10 @@ async function spawnNextJob() {
       if (stopReason && stopForFallback && fallbackToOpencode(stopReason)) return;
       // A silent nonzero grok exit is the CLI failing, not the job: fall back
       // once before calling it a failure, after the original process exits.
-      if (!stopReason && allowFallback && code !== 0 && !entry.spoke && fallbackToOpencode(`silent exit ${code ?? "?"}`)) return;
+      // Silence is measured on stdout: one deprecation notice on stderr is not
+      // the CLI reporting on the work, and used to cost the task a charged
+      // failure with no fallback attempted.
+      if (!stopReason && allowFallback && code !== 0 && !entry.spokeOut && fallbackToOpencode(`silent exit ${code ?? "?"}`)) return;
       finish(code, stopReason ?? error).catch((failure) => logLine(`[autopilot] finish failed: ${failure.message}`));
     };
     const stop = (reason, useFallback = false) => {
@@ -9587,7 +9672,7 @@ async function spawnNextJob() {
       } catch (error) { retry(error); }
     };
     entry.stop = stop;
-    wire(child.stdout, nextChild);
+    wire(child.stdout, nextChild, true);
     wire(child.stderr, nextChild);
     // An early CLI exit can break the piped prompt before the child emits
     // close. Handle the stream's own error event, keep the claim until exit,

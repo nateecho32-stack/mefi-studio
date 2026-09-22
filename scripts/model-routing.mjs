@@ -6,6 +6,10 @@ import { classify, gatewayConfig, isJevModel } from "./decision-client.mjs";
 export const MAX_ROUTING_CANDIDATES = 16;
 export const ROUTING_TIMEOUT_MS = 4000;
 const ZAI_MODELS = ["glm-5.3-flash", "glm-5.3"];
+// The work-shape vocabulary from work-classification.mjs, repeated rather than
+// imported so this module keeps its single dependency; the classifier's own
+// test pins the two lists together.
+const WORK_WEIGHTS = ["light", "balanced", "deep"];
 const OPEN_CODE_CHAT = "https://opencode.ai/zen/go/v1/chat/completions";
 const MODEL_ID = /^[a-z0-9][a-z0-9._:/-]{0,159}$/i;
 const MODALITIES = ["text", "image", "audio", "video", "pdf"];
@@ -94,7 +98,7 @@ function taskDescription(task) {
 }
 
 /** Return an allowed model or a closed failure; the host retains its default. */
-export async function selectTaskModel({ candidates, taskType, role, task, apiKey, config = null, classifyFn = classify, onUsage, judge = null } = {}) {
+export async function selectTaskModel({ candidates, taskType, role, weight = null, task, apiKey, config = null, classifyFn = classify, onUsage, judge = null } = {}) {
   const failure = (reason, detail = {}) => ({ ok: false, reason, ...detail });
   if (!Array.isArray(candidates) || !candidates.length) return failure("no-compatible-models");
   const options = candidates.slice(0, MAX_ROUTING_CANDIDATES);
@@ -113,7 +117,14 @@ export async function selectTaskModel({ candidates, taskType, role, task, apiKey
   else if (!isJevModel(cfg.model)) return failure("jev-only");
   cfg.timeoutMs = Math.max(1, Math.min(ROUTING_TIMEOUT_MS, number(cfg.timeoutMs) ?? ROUTING_TIMEOUT_MS));
   cfg.maxStateChars = Math.max(200, Math.min(60000, number(cfg.maxStateChars) ?? 8000));
-  const state = { now: Date.now(), taskType: taskSlug(taskType), role: clip(role, 48) || "routine", untrustedTask: taskDescription(task), candidates: options };
+  // `role` says who is asking (worker, builder, a chat role); `weight` says how
+  // heavy the work itself looks. A dispatcher's role is always "worker", so
+  // without a separate field the judge could not tell a one-file doc edit from
+  // a cross-cutting refactor — the exact distinction the prompt above asks it
+  // to price. Omitted entirely when unknown, so an unclassified job reads to
+  // the judge the way it always has.
+  const shape = WORK_WEIGHTS.includes(weight) ? { weight } : {};
+  const state = { now: Date.now(), taskType: taskSlug(taskType), role: clip(role, 48) || "routine", ...shape, untrustedTask: taskDescription(task), candidates: options };
   // Keep complete records: the classifier client's generic text clipping must
   // never hide half a candidate or remove an option's supporting evidence.
   while (JSON.stringify(state).length > cfg.maxStateChars && options.length > 2) options.pop();

@@ -26,6 +26,22 @@ test("standalone result lines retain plain and terminal-colored CLI compatibilit
   }
 });
 
+// The result line stripped colour; the verdict sentinel did not. A CLI that
+// wraps its last line then exits non-zero had its report thrown away and the
+// card charged a failure with a retry backoff.
+test("a colour-wrapped verdict sentinel is still the run's verdict", async () => {
+  const h = executorHost({ tasks: [{ id: "ansi-fixture", title: "Implement fixture", prompt: "Implement the fixture", status: "open", createdAt: 1 }] });
+  h.wake(); await h.pump();
+  await h.finish("ansi-fixture", { code: 1, lines: [
+    "MEFI_RESULT: done: current implementation; remaining: none",
+    "[32mMEFI_JOB_DONE[0m",
+  ] });
+  const saved = h.board().tasks[0];
+  assert.equal(saved.status, "awaiting_verification", "the CLI's colour is not the worker's answer");
+  assert.equal(saved.lastAttempt.sawDone, true);
+  assert.equal(saved.runFailures, undefined, "a reported success is never also a charged failure");
+});
+
 test("the host ignores an echoed saved result before recording the current completion", async () => {
   const h = executorHost({ tasks: [{ id: "result-fixture", title: "Implement fixture", prompt: "Implement the fixture", status: "open", createdAt: 1 }] });
   h.wake(); await h.pump();

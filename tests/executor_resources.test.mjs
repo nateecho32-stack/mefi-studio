@@ -87,6 +87,38 @@ test("pressure arriving during the durable claim releases that claim before crea
   assert.match(h.autopilot.waiting, /memory pressure/);
 });
 
+// Between the durable claim and the spawn the job owns a row, a slot and its
+// file claims, but has no child — so `stop` is not how it is released. Stop and
+// the ghost sweeper both reclaim through `reap`, and until one is assigned
+// neither can: housekeeping keeps refreshing the lease of anything still in
+// autopilot.jobs, so nothing requeues the row either.
+test("a claimed job carries a reaper before its worker exists", async () => {
+  const h = executorHost({ adaptiveParallel: true, tasks: [task("pre-spawn")] });
+  const context = h.env.taskContext;
+  let observed = null;
+  h.env.taskContext = { ...context, buildTaskHandoff: (...args) => {
+    const entry = h.autopilot.jobs.at(-1);
+    observed = { reap: typeof entry?.reap, child: entry?.child, claimed: h.board().tasks[0].runId === entry?.id };
+    return context.buildTaskHandoff(...args);
+  } };
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 1);
+  assert.ok(observed, "the fixture must reach the window between the claim and the spawn");
+  assert.equal(observed.claimed, true, "the row is already claimed here");
+  assert.equal(observed.child, null, "no child exists yet, so stop() cannot release it");
+  assert.equal(observed.reap, "function");
+});
+
+test("a throw after the durable claim releases it instead of stranding the slot", async () => {
+  const h = executorHost({ adaptiveParallel: true, tasks: [task("unreadable-brief")] });
+  h.env.taskContext = { ...h.env.taskContext, buildTaskHandoff: () => { throw new Error("fixture brief is unreadable"); } };
+  h.wake(); await h.pump();
+  assert.equal(h.starts.length, 0, "a half-built prompt must never reach a worker");
+  assert.equal(h.autopilot.jobs.length, 0, "the slot returns to the pool");
+  assert.equal(h.registry.size, 0, "the file claims are dropped with it");
+  assertUnclaimed(h, "unreadable-brief");
+});
+
 test("the post-claim admission counts existing workers without counting its own pending start twice", async () => {
   const h = executorHost({ adaptiveParallel: true, tasks: [task("last-available")], workerCapacity: async ({ running }) => running < 1 ? healthy() : pressure("memory") });
   h.wake(); await h.pump();

@@ -146,6 +146,37 @@ for (const restart of [false, true]) test(`automatic worker calls wait for Resum
   assert.equal(h.started.length, 3, "repeated Resume must not repeat completed follow-ups");
 });
 
+// The verdict sentinel has always been anchored so a run cannot talk itself
+// into being done. The handoff marks were matched anywhere in the line, so a
+// run could talk the board into new work the same way — and the prompt every
+// worker is handed names both marks, so a CLI that echoes its prompt filed one
+// on every run.
+test("quoting a handoff mark in prose files no work", () => {
+  const h = host();
+  for (const line of [
+    "I'll add a MEFI_NEXT: line for the leftover migration work.",
+    'Print "MEFI_NEXT: <title> :: <brief>" when you hand work on.',
+    "  > MEFI_NEXT: quoted from the transcript above",
+    '    "text": "MEFI_NEXT: Verify keyboard flow :: Run the focus regression.",',
+    "The protocol also allows MEFI_CALL: auditor for a review.",
+  ]) assert.equal(h.env.parseExecutorHandoff(line), null, line);
+});
+
+test("a real handoff line still parses, colour and indentation included", () => {
+  const h = host();
+  for (const line of [
+    "MEFI_NEXT: Verify keyboard flow :: Run the focus regression.",
+    "   MEFI_NEXT: Verify keyboard flow :: Run the focus regression.",
+    "[36mMEFI_NEXT: Verify keyboard flow :: Run the focus regression.[0m",
+  ]) {
+    const parsed = h.env.parseExecutorHandoff(line);
+    assert.equal(parsed?.kind, "next", line);
+    assert.equal(parsed.title, "Verify keyboard flow");
+    assert.equal(parsed.prompt, "Run the focus regression.");
+  }
+  assert.equal(h.env.parseExecutorHandoff("[36mMEFI_CALL: auditor[0m")?.role, "auditor");
+});
+
 test("a worker's reference call runs a journaled gather for its saved task brief", async () => {
   const h = host();
   const parsed = h.env.parseExecutorHandoff("MEFI_CALL: reference");

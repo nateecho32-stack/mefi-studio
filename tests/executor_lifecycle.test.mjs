@@ -578,6 +578,27 @@ test("late output, close, errors and timers from Grok cannot settle or kill its 
   assert.deepEqual(host.finishes, [{ code: 0, error: null }]);
 });
 
+// "Silent" is what decides whether a non-zero exit was the CLI failing or the
+// job failing. It used to count stderr, so one deprecation notice from the CLI
+// made a broken route look like a failed task: no fallback, and the card
+// charged a failure with a retry backoff.
+test("a CLI that only writes to stderr and dies is a broken route, not a failed job", () => {
+  const host = childHost();
+  host.first.stderr.emit("data", "warning: --always-approve is deprecated\n");
+  assert.equal(host.entry.spoke, true, "the wedged-start watchdog still counts any output as a sign of life");
+  host.first.emit("close", 1);
+  assert.equal(host.entry.child, host.fallback, "one stderr notice must not cancel the fallback");
+  assert.equal(host.finishes.length, 0, "the job is not charged a failure before the replacement has run");
+});
+
+test("a CLI that reported on stdout and then failed is the job failing, not the route", () => {
+  const host = childHost();
+  host.first.stdout.emit("data", "Editing renderer/idle.js\n");
+  host.first.emit("close", 1);
+  assert.equal(host.entry.child, host.first, "a run that did work must not be silently restarted");
+  assert.deepEqual(host.finishes, [{ code: 1, error: null }]);
+});
+
 test("a synchronous replacement spawn failure settles once instead of escaping the process event callback", () => {
   const host = childHost({ throwFallback: true });
   assert.doesNotThrow(() => host.first.emit("error", new Error("fixture Grok unavailable")));

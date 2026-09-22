@@ -266,20 +266,47 @@ test("managed z.ai worker selection sees the selected task before claiming and c
   assert.equal(selections.length, 1);
   assert.equal(selections[0].options.worker, true);
   assert.equal(selections[0].options.taskType, "coding");
-  assert.equal(selections[0].options.role, "routine", "an unshaped task keeps today's shortlist");
+  assert.equal(selections[0].options.weight, null, "an unshaped task is routed the way it always has been");
   assert.match(selections[0].options.task, /Fix parser[\s\S]*Preserve escaped strings/);
   assert.equal(host.commands[0].args.at(-1), "opencode run --auto --model mefi-zai/glm-5.3");
   assert.equal(host.board().tasks[0].status, "active");
 });
 
-test("a deep work shape reaches for the capable shortlist, and the owner's tier still wins", async () => {
+test("a deep work shape reaches the dispatcher's selection call", async () => {
   const host = managedWorker(), selections = [];
   // What classifyPendingWork cached for this task on an earlier tick.
   host.env.workShapeFor = (taskId) => (taskId === "task-a" ? { intent: "implement", complexity: "systemic", weight: "deep", role: "heavy" } : null);
   host.env.applyModelRouting = async (route, options) => { selections.push(copy(options)); return { ...route, model: "glm-5.3" }; };
   assert.equal(await host.env.spawnNextJob(), "spawned");
-  assert.equal(selections[0].role, "heavy", "systemic implementation must not be shortlisted as routine work");
-  assert.equal(selections[0].taskType, "coding", "the shape biases the role, never the ledger's label");
+  assert.equal(selections[0].weight, "deep", "systemic implementation must not be priced as routine work");
+  assert.equal(selections[0].taskType, "coding", "the shape carries the weight, never the ledger's label");
+});
+
+// The half the stub above cannot prove: the real selection has to carry that
+// weight to the judge. It used to be passed as a `role`, and applyModelRouting
+// overwrites the role with "worker" for every dispatch — so the classification
+// was bought and then dropped, and this suite could not see it because it
+// stubbed the function that did the dropping.
+test("worker selection carries the work weight to the judge and still asks for a tool-capable shortlist", async () => {
+  const shaped = routingHost();
+  await shaped.route({ worker: true, taskType: "coding", weight: "deep", task: "Rework the board contract" });
+  assert.equal(shaped.candidateRequests[0].role, "worker", "the shortlist still filters on tool-calling");
+  assert.equal(shaped.attempts[0].role, "worker");
+  assert.equal(shaped.attempts[0].weight, "deep", "the judge is told how heavy the work is");
+
+  const unshaped = routingHost();
+  await unshaped.route({ worker: true, taskType: "coding", task: "Rework the board contract" });
+  assert.equal(unshaped.attempts[0].weight ?? null, null, "an unclassified job reads to the judge as it always did");
+});
+
+test("the work weight does not split the routing cache when nothing changed", async () => {
+  const host = routingHost();
+  const options = { worker: true, taskType: "coding", weight: "deep", task: "Rework the board contract" };
+  await host.route({ ...options });
+  await host.route({ ...options });
+  assert.equal(host.attempts.length, 1, "the same shaped task must not be re-judged");
+  await host.route({ ...options, weight: "light" });
+  assert.equal(host.attempts.length, 2, "a genuinely different weight is a different question");
 });
 
 // An explicit Free/Fast/Heavy tier pins the model in executorRunEnv and never

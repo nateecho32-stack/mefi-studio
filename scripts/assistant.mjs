@@ -3483,9 +3483,15 @@ export function promoteIdeaBacklog({ tasks = [], ideas = [], now = Date.now(), l
 // MEFI_JOB_DONE until…") or mentions it in prose used to flip the whole job to
 // done. A short trailing note is allowed ("MEFI_JOB_DONE — catalog rewritten");
 // anything before the mark, or a long sentence after it, is not a verdict.
+// Colour codes are the CLI's, not the worker's. Every sentinel below is
+// anchored to the start of the line, so a wrapped line must be unwrapped
+// before it is matched or the mark never lands at index 0.
+export function stripAnsi(value) {
+  return String(value ?? "").replace(/\u001b\[[0-9;]*m/g, "");
+}
 export const EXECUTOR_DONE_MARK_TEXT = "MEFI_JOB_DONE";
 export function isDoneMarkerLine(line, mark = EXECUTOR_DONE_MARK_TEXT) {
-  const flat = String(line ?? "").trim();
+  const flat = stripAnsi(line).trim();
   if (!flat.startsWith(mark)) return false;
   const rest = flat.slice(mark.length);
   return rest.trim().length <= 48;
@@ -3499,7 +3505,7 @@ export function isDoneMarkerLine(line, mark = EXECUTOR_DONE_MARK_TEXT) {
 // result inside JSON or prose before the worker reports its current result.
 // Fields remain lenient — this is attached context, never the verdict itself.
 export function parseExecutorResult(line, mark = "MEFI_RESULT:") {
-  const flat = String(line ?? "").replace(/\u001b\[[0-9;]*m/g, "").trim();
+  const flat = stripAnsi(line).trim();
   if (!flat.startsWith(mark)) return null;
   const body = flat.slice(mark.length).trim();
   if (!body || body.length > 300) return null;
