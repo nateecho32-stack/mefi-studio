@@ -7,6 +7,37 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- **A worker that never starts no longer costs the task one of its five
+  tries.** The wedged-start watchdog kills a run that has registered no
+  OpenCode session and printed no line within three minutes. That is the
+  runner failing, not the brief, but the kill was still filed as a task
+  failure: five slow CLI starts in a row parked a perfectly good card as
+  "gave up after 5 tries" without a word of its brief having been read. The
+  studio's own executor log for 2026-09-18 has 91 of 160 runs killed that way
+  and not one task reaching done. Start kills now count on their own budget
+  (`startFailures`), requeue the card on a 1m/2m/4m…30m cooldown, and are
+  charged as ordinary failures only past five in a row, so a task that really
+  does wedge its runner still reaches review. Any run that does start clears
+  the streak, and the executor breaker still parks dispatch after three
+  infrastructure failures.
+
+### Changed
+- **Verification only reads evidence for cards it can actually settle.** The
+  housekeeping prefetch fetched each `awaiting_verification` card's session
+  changes and checks before the pass decided whether to judge it, so cards
+  waiting on an in-flight overseer check or on handed-off children paid two
+  OpenCode store round trips per card per pass, discarded every time. Both
+  skips now run before the prefetch, the handoff one against the same
+  reconciliation the settling mutator computes. A monitored handoff-heavy
+  hour went from 2,464 store reads to 22 with an identical board outcome.
+
+### Added
+- **`tools/monitor_loop.mjs`** runs the real agent loop against a virtual
+  clock — an hour of loop time in about a second — and reports where each
+  card's time went, what each pass cost and how the board moved, across five
+  worker-behaviour scenarios. See [docs/agent-loop.md](docs/agent-loop.md) §9.
+
 ## [0.2.0] - 2026-09-22
 
 First public release: a portable Windows build published to GitHub Releases,

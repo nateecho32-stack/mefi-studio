@@ -95,7 +95,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     loadModule: async (name) => { assert.equal(name, "scripts/task-history.mjs"); return history; },
     executorRunEnv: async () => ({ via: "fixture", modelArgs: "", env: {} }),
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", IDEAS_PATH: "ideas", ASSISTANT_HISTORY_PATH: "history", CHECKPOINTS_PATH: "checkpoints",
-    EXECUTOR_MAX_DEPTH: 3, EXECUTOR_MAX_HANDOFFS: 3, EXECUTOR_PROMPT_MAX: 24000,
+    EXECUTOR_MAX_DEPTH: 3, EXECUTOR_MAX_HANDOFFS: 3, EXECUTOR_PROMPT_MAX: 24000, EXECUTOR_START_FAILURE_GRACE: 5,
     EXECUTOR_DONE_MARK: "MEFI_JOB_DONE", EXECUTOR_NEXT_MARK: "MEFI_NEXT:", EXECUTOR_CALL_MARK: "MEFI_CALL:",
     EXECUTOR_CALLABLE: new Set(["auditor", "reference"]), EXECUTOR_BUDGET_MINUTES: 15,
     EXECUTOR_KILL_MS: 1500000, EXECUTOR_START_BUDGET_MS: 180000, EXECUTOR_STAGGER_MS: 3000, EXECUTOR_PROGRESS_POLL_MS: 12000,

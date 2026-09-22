@@ -40,7 +40,10 @@ The loop's heartbeat is `autopilotPass` (main.cjs:10588), scheduled by
 - Candidates are `open` tasks not live anywhere, sorted oldest-first, filtered
   by backlog readiness (`backlog.workState`), failure backoff (`nextRunAt`,
   max 5 `runFailures`) and title-key collisions with live work
-  (main.cjs:8447-8448). Requests rank ahead of tasks (main.cjs:8476).
+  (main.cjs:8999-9003). Requests and tasks are then ranked together, not
+  inbox-first: `executorResume.compare` puts resumable work ahead, then
+  `compareWork` orders by pin and age (main.cjs:9004-9008). The queue used to
+  shadow the whole board, so a chat task waited behind every filed request.
 - Each candidate passes a collaboration gate (`assistantModule.claimWork`,
   main.cjs:8506): a file claimed by a sibling job, a finished-but-
   uncommitted session, or a live editor defers the pick.
@@ -114,9 +117,20 @@ When the child closes, `finish()` (main.cjs:8957) runs:
   - **user stop** → checkpoint saved, task returns to `open` with no failure
     charged (main.cjs:9232).
   - **failure** → `runFailures += 1`, backoff 1 min then 10m/20m/40m… cap 2h,
-    after 5 tries parked for manual reopen (main.cjs:9254). Infra
+    after 5 tries parked for manual reopen (main.cjs:9941). Infra
     failures (spawn error or a silent death <15s) trip an executor breaker
-    that parks all dispatch (main.cjs:9402).
+    that parks all dispatch (main.cjs:10105).
+  - **start kill** → the wedged-start watchdog killed a run that never
+    registered a session and never printed a line. The runner failed, not the
+    work, so the card goes back to `open` on its own cooldown (1m, 2m, 4m…
+    capped at 30m) with `startFailures += 1` and **no attempt charged**
+    (main.cjs:9919). Past `EXECUTOR_START_FAILURE_GRACE` (5) consecutive start
+    kills the card is charged as an ordinary failure after all, so a task that
+    really does wedge its runner still reaches review; any run that does start
+    clears the streak. Before this, a stretch of slow CLI starts spent every
+    card's five tries without a single brief being read — the studio's own
+    executor log for 2026-09-18 shows 91 of 160 runs killed that way and not
+    one task reaching `done`.
 - Chat-sourced work gets a thread reply ("Finished (verifying)") at
   main.cjs:9419, and the freed slot is refilled (main.cjs:9428).
 
@@ -140,6 +154,19 @@ plus the overseer run's command results (main.cjs:10320), and calls
 Edits without an attributable session, or zero changed files with no executed
 named checks, are exactly the "no attributable edits and no named checks"
 reopen this task experienced on its first attempt.
+
+Evidence is fetched only for cards the pass can actually judge. The prefetch
+above runs outside the board lock, so it used to read `listChanges` and
+`listSessionChecks` for **every** `awaiting_verification` card — including the
+ones the mutator then skips because their overseer check is still in flight
+(`overseerRunPending`) or because they are still waiting on handed-off children
+(`waitingTaskIds`). Those reads are eyes-worker round trips into the OpenCode
+store, they were discarded, and they repeated on every pass for as long as the
+card waited. Both gates now run before the prefetch, the handoff one against
+the same `reconcileTaskHandoffs` result the mutator will compute (exact, not
+the one-pass-stale saved `handoffState`), and only on boards that have
+outstanding obligations at all. In a monitored handoff-heavy hour that took
+2,464 store reads down to 22 with an identical board outcome.
 
 The pass no longer waits for the next tick to look again (2026-09-21):
 
@@ -193,3 +220,42 @@ re-dispatched as run_1790029946688_4 with a fresh lease and `runProgress`
 (todos, outputTail, workerPid). The loop is this cycle: intake → tick → claim
 → CLI worker with sentinel protocol → evidence-fenced settlement →
 verification → retry or done.
+
+## 9. Watching it run
+
+`tools/monitor_loop.mjs` runs this loop — the real dispatch, claim, stream
+parsing, settlement, verification and foreman code, lifted out of `main.cjs`
+by `tests/fixtures/host_executor.mjs` — against a virtual clock, so an hour of
+loop time passes in about a second. Only the boundaries are doubles: the
+clock, the child processes, the stores. No Electron, no worker CLI, no
+network, no credentials, and nothing on disk is touched except `--json`
+output.
+
+```powershell
+node tools/monitor_loop.mjs --scenario all --minutes 60 --tasks 9
+node tools/monitor_loop.mjs --scenario handoffs --minutes 40 --tasks 4 --trace --json tools/logs/loop-handoffs.json
+```
+
+Scenarios differ only in how the fake worker behaves — how long it takes, what
+it prints, what evidence its session leaves — because that is the only thing
+the loop cannot know in advance: `steady`, `handoffs` (every run hands two
+follow-ups on), `wedged`, `no-evidence` (reports done, leaves nothing behind)
+and `flaky`. `--first-output` sets how long a worker takes to print its first
+line, which is the number the wedged-start watchdog judges every run by.
+
+Each run reports where the time went per card (queue → claim → report → done),
+what the pass cost (board transactions, store reads by key, timers armed,
+roles woken, host CPU per phase) and a five-minute board census. What it
+measured on 2026-09-22:
+
+| | steady | handoff-heavy |
+| --- | --- | --- |
+| Cards settled in the hour | 9 of 9 | 0 of 4 seeds; 63 runs, 28 cards left verifying |
+| Queue → claim (p50) | 4.0m | 15.0m |
+| Report → done (p50) | 1.3m | never |
+| Evidence reads | 8 | 2,464 → 22 after the prefetch gates |
+
+Two things that will not show up in a test but show up here: a worker that
+prints nothing for three minutes is killed however healthy it is, and a run
+that hands work on cannot be verified until its whole subtree finishes, so
+under `handoffs` the verifying pile grows for the entire hour.

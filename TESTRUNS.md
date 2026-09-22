@@ -25,6 +25,23 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+Landing verification for the combined in-flight tree (2026-09-22, 10:35,
+run_1790091189066_19 for task_2fe0bffe3a85cde1 "Land the sweep-advice
+main.cjs hunk", parent "Feed the staged-sweep warning into the next
+dispatch"). The six in-flight paths the two full-gate rows below already
+certified green on the identical tree (HEAD 17d35a3's six monitor-loop
+paths: CHANGELOG.md, docs/agent-loop.md, main.cjs,
+tests/executor_lifecycle.test.mjs, tests/fixtures/host_executor.mjs,
+tools/monitor_loop.mjs — untouched since, the three commits in between being
+TESTRUNS.md-only) landed as one commit with this row. Before committing,
+`node --test tests/executor_end_to_end.test.mjs
+tests/executor_lifecycle.test.mjs`: 52 tests / 52 pass / 0 fail /
+0 skipped in 0.25 s, exit 0 — covering the committed 1567a16 sweep-advice
+suite (finish-time staged-index warning rides exactly the next dispatch as
+collab advice; stale warnings age out) and the new start-kill grace (a
+start kill spends none of the card's five tries below five start kills,
+past grace it is charged, and a run that does start clears the streak).
+
 Independent full-gate rerun, concurrent with the row below, same green
 result (2026-09-22, 10:28-10:29, run_1790090737796_6 for
 task_baa66f9ab1ec0f2e "Full-gate rerun after in-flight work settles",

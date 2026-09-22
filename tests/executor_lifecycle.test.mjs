@@ -151,7 +151,7 @@ function finishHost({ kind = "task", owner = "run_100_1", missing = false, failW
     eyes: { findRunSession: () => ({ id: "own-session" }), readJson: async (key) => key === "history" ? [] : {}, writeJson: async (key, value) => records.push([key, structuredClone(value)]) },
     releaseFiles: () => effects.push("release"), discardEntry: () => { autopilot.jobs = autopilot.jobs.filter((item) => item !== entry); effects.push("release"); },
     executorLog: async () => effects.push("exit-fact"), policyRecord: () => effects.push("policy-fact"), workTitleKey: (text) => String(text),
-    EXECUTOR_MAX_DEPTH: 3, EXECUTOR_MAX_HANDOFFS: 3, EXECUTOR_DONE_MARK: "DONE", AUTOPILOT_PARK_MS: 600000, ASSISTANT_PRIORITY: { demand: 1 },
+    EXECUTOR_MAX_DEPTH: 3, EXECUTOR_MAX_HANDOFFS: 3, EXECUTOR_START_FAILURE_GRACE: 5, EXECUTOR_DONE_MARK: "DONE", AUTOPILOT_PARK_MS: 600000, ASSISTANT_PRIORITY: { demand: 1 },
     TASKS_PATH: "tasks", REQUESTS_PATH: "requests", ASSISTANT_HISTORY_PATH: "history", CHECKPOINTS_PATH: "checkpoints",
     mutateBoard: async (mutate) => {
       mutations += 1;
@@ -274,6 +274,43 @@ test("an operator stop saves progress and returns the card to the queue without 
     assert.equal(host.logs.filter((line) => /stopped on request/.test(line)).length, 1);
     assert.equal(host.mutations(), 1);
   }
+});
+
+test("a start kill returns the card to the queue on a cooldown without spending one of its five tries", async () => {
+  for (const kind of ["task", "request"]) {
+    const host = finishHost({ kind });
+    host.entry.startKilled = true;
+    host.entry.spoke = false;
+    await host.finish(1, "no session and no output for 3m after spawn — killed as a wedged start");
+    const row = host.board()[kind === "task" ? "tasks" : "requests"][0];
+    assert.equal(row.runFailures, 4, "the runner never started, so the work is not charged for it");
+    assert.equal(row.startFailures, 1, "start kills are counted on their own budget");
+    assert.equal(row.nextRunAt - Date.now() > 30000, true, "the card comes back on a cooldown rather than immediately");
+    assert.equal(row.runId, undefined);
+    assert.equal(row.lease, undefined);
+    assert.equal(host.autopilot.infraFailures, 1, "the executor breaker still sees the infrastructure failure");
+    if (kind === "task") assert.match(row.logs.at(-1).text, /worker never started .* no attempt charged \(start 1\/5\)/);
+  }
+});
+
+test("start kills past the grace are charged as ordinary failures so a card that wedges its runner still reaches review", async () => {
+  const host = finishHost();
+  host.board().tasks[0].startFailures = 5;
+  host.entry.startKilled = true;
+  host.entry.spoke = false;
+  await host.finish(1, "no session and no output for 3m after spawn — killed as a wedged start");
+  const row = host.board().tasks[0];
+  assert.equal(row.startFailures, 5, "the start budget is spent, not extended");
+  assert.equal(row.runFailures, 5, "the card is the suspect once its runner has failed to start five times");
+  assert.equal(row.nextRunAt, undefined, "a fifth charged failure parks the card for a manual reopen");
+});
+
+test("a run that does start clears the card's start-failure streak", async () => {
+  const host = finishHost();
+  host.board().tasks[0].startFailures = 3;
+  await host.finish(0);
+  assert.equal(host.board().tasks[0].status, "awaiting_verification");
+  assert.equal(host.board().tasks[0].startFailures, undefined, "the streak is about consecutive failures to start, not a permanent mark");
 });
 
 test("a failed outcome write holds its slot and retries storage without rerunning or reporting the worker", async () => {

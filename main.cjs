@@ -3175,6 +3175,18 @@ const EXECUTOR_KILL_MS = 25 * 60 * 1000;
 // silent for the whole kill budget, stalling the pool cycle after cycle.
 // Killed as infrastructure failure so the executor names the cause and parks.
 const EXECUTOR_START_BUDGET_MS = 3 * 60 * 1000;
+// How many start kills one card absorbs before they are charged as ordinary
+// failures. A run killed by that watchdog never registered a session and
+// never printed: nothing about the work was attempted, so spending one of
+// the card's five tries on it files a verdict about the machine onto the
+// work — and a bad CLI stretch parks healthy tasks as "gave up after 5
+// tries" without a single line of their briefs ever being read. Past this
+// many the card is treated as the suspect after all, so a task that really
+// does wedge its runner still reaches review.
+// The cooldown that replaces the charge is 1m, 2m, 4m… capped at half an
+// hour; the executor breaker (infraFailures, three in a row) is what holds
+// dispatch back while the infrastructure itself is unhealthy.
+const EXECUTOR_START_FAILURE_GRACE = 5;
 // Process starts are staggered so a full pool never stampedes the shared
 // OpenCode store (SQLite) and its snapshot repo at the same instant.
 const EXECUTOR_STAGGER_MS = 3000;
@@ -6553,6 +6565,7 @@ async function assistantWorkOn(raw) {
         delete task.buildApproval;
         delete task.doneAt;
         delete task.runFailures;
+        delete task.startFailures;
         delete task.nextRunAt;
         delete task.lastRunError;
         delete task.verification;
@@ -9573,6 +9586,10 @@ async function spawnNextJob() {
     // pause, not a failure: progress is checkpointed and the card returns to
     // the queue without spending an attempt.
     const userStop = entry.stopUser === true;
+    // A run the start watchdog killed, on a card that still has start grace
+    // left: the runner never spoke, so the attempt is requeued rather than
+    // charged (EXECUTOR_START_FAILURE_GRACE).
+    const startKilled = (row) => entry.startKilled === true && !userStop && (Number(row?.startFailures) || 0) < EXECUTOR_START_FAILURE_GRACE;
     // Fast workers may end before the first polling interval. Bind only the
     // exact dispatch identity before freezing the attempt's evidence.
     await attributeRunSession(eyes, entry);
@@ -9791,14 +9808,23 @@ async function spawnNextJob() {
           // next attempt now.
           board.requests = board.requests.map((item) => {
             if (item !== owned) return item;
-            const failures = (item.runFailures ?? 0) + 1;
             const next = { ...item };
             delete next.status;
             delete next.runId;
             delete next.runningAt;
             delete next.lease;
-            next.runFailures = failures;
             next.lastAttempt = attempt;
+            // A start kill is the runner failing to start, not the request
+            // failing: it keeps its tries and comes back on its own
+            // cooldown, exactly as a task does.
+            if (startKilled(item)) {
+              next.startFailures = (item.startFailures ?? 0) + 1;
+              next.lastRunError = String(errorMessage ?? "the worker never started").slice(0, 160);
+              next.nextRunAt = Date.now() + Math.min(30 * 60000, 60000 * 2 ** (next.startFailures - 1));
+              return next;
+            }
+            const failures = (item.runFailures ?? 0) + 1;
+            next.runFailures = failures;
             next.lastRunError = (entry.outputTail ?? []).slice(-1)[0] || `exit ${code ?? "?"}`;
             if (failures < 5) next.nextRunAt = Date.now() + (failures <= 1 ? 60 * 1000 : Math.min(2 * 3600 * 1000, (2 ** failures) * 5 * 60000));
             else delete next.nextRunAt;
@@ -9839,6 +9865,7 @@ async function spawnNextJob() {
         task.status = "awaiting_verification";
         delete task.lastRunError;
         delete task.runFailures;
+        delete task.startFailures; // the runner did start this time
         delete task.nextRunAt;
         delete task.verification;
         // Follow-ups this run handed on are remaining obligations, kept
@@ -9891,6 +9918,25 @@ async function spawnNextJob() {
         task.runProgress = progress;
         task.interruptedAttempt = progress;
         task.logs = [...(task.logs ?? []), { at: Date.now(), kind: "status", text: `stopped on request (${entry.sawDone ? "run had reported done" : "unfinished"}) — progress saved; ready to resume` }].slice(-40);
+      } else if (startKilled(task)) {
+        // The worker never started — no session, no output, killed by the
+        // start watchdog. That is the runner, not the brief, so the card
+        // goes back to the queue on its own cooldown with no attempt
+        // charged. Start kills are counted separately so a card that keeps
+        // wedging its runner still runs out of grace (see above).
+        task.status = "open";
+        delete task.runId;
+        delete task.lease;
+        delete task.doneAt;
+        task.startFailures = (task.startFailures ?? 0) + 1;
+        const startCooldown = Math.min(30 * 60000, 60000 * 2 ** (task.startFailures - 1));
+        task.nextRunAt = Date.now() + startCooldown;
+        task.lastRunError = String(errorMessage ?? "the worker never started").slice(0, 160);
+        task.logs = [...(task.logs ?? []), {
+          at: Date.now(),
+          kind: "status",
+          text: `worker never started — ${task.lastRunError} · requeued in ${Math.round(startCooldown / 60000)}m, no attempt charged (start ${task.startFailures}/${EXECUTOR_START_FAILURE_GRACE})`,
+        }].slice(-40);
       } else {
         // Failure isolation: the task cools down on its own backoff
         // (10m, 20m, 40m… capped at 2h) while the pool keeps running —
@@ -10830,12 +10876,28 @@ async function autopilotHousekeeping() {
     let candidates = [];
     try {
       await mutateBoard((board) => {
-        candidates = [...(Array.isArray(board.tasks) ? board.tasks : []), ...(Array.isArray(board.requests) ? board.requests : [])]
-          .filter((row) => row?.lastAttempt?.sessionId && (row.status === "awaiting_verification" || row.status === "verifying"))
+        const rows = [...(Array.isArray(board.tasks) ? board.tasks : []), ...(Array.isArray(board.requests) ? board.requests : [])]
+          .filter((row) => row?.lastAttempt?.sessionId && (row.status === "awaiting_verification" || row.status === "verifying"));
+        // Which parents are still waiting on handed-off children — the same
+        // reconciliation the settling mutator runs, on the same read: pure,
+        // no writes, and exact. Reading the saved handoffState instead would
+        // be one pass stale, which delays a parent whose last child just
+        // finished. A board with no outstanding obligations skips it: the
+        // waiting set is empty by definition there, which is the ordinary
+        // case and must not pay for the handoff-heavy one.
+        const waits = rows.some((row) => (Array.isArray(row.remaining) && row.remaining.length > 0) || Number(row.handoffState?.pending) > 0)
+          ? taskHandoffs.reconcileTaskHandoffs({ requests: board.requests ?? [], tasks: board.tasks ?? [], now })
+          : null;
+        candidates = rows
           .map((row) => ({
             projectPath: typeof row.projectPath === "string" && row.projectPath ? row.projectPath : null,
             scope: [...(Array.isArray(row.files) ? row.files : []), row.file].filter((value) => typeof value === "string" && value.trim()),
             lastAttempt: { ...row.lastAttempt },
+            // Carried so the prefetch below can tell, before it spends a
+            // store round trip, whether the mutator is going to skip this
+            // card anyway: its overseer run, and its outstanding children.
+            verificationRun: row.verificationRun ? { ...row.verificationRun } : null,
+            waitingOnHandoffs: !waits ? false : row.id ? waits.waitingTaskIds.has(row.id) : waits.waitingRequestRuns.has(row.lastAttempt?.runId),
           }));
         return {};
       });
@@ -10844,6 +10906,17 @@ async function autopilotHousekeeping() {
       const attempt = row.lastAttempt ?? {};
       if (!attempt.sessionId) continue;
       if (dwelling(attempt)) continue;
+      // Nothing read here can settle a card the mutator is going to skip:
+      // one whose overseer check is queued or in flight in this process, or
+      // one still waiting on the handoff children its last reconciliation
+      // counted. Their evidence used to be fetched anyway — two store round
+      // trips per card, on every pass, for as long as the card waited, and
+      // discarded every time. Under handoff-heavy load that was the bulk of
+      // the pass. A card whose children finished between passes finds no
+      // prefetched evidence and is settled by the short evidence retry
+      // instead, one pass later.
+      if (overseerRunPending(row)) continue;
+      if (row.waitingOnHandoffs) continue;
       const window = attemptEvidenceWindow(attempt);
       if (!window) continue;
       const key = evidenceKey(attempt, window);
