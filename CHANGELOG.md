@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-22
+
+First public release: a portable Windows build published to GitHub Releases,
+which installed copies pick up through the in-app updater.
+
 ### Added
 - **Brain maps.** The agent pipeline as an editable graph (**B**, sidebar,
   Command dock or palette): typed parts, typed ports and wires between them.
@@ -64,6 +69,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   also in CI), a Python preflight with a clear message in `npm test`,
   `.editorconfig`, a repository map and module rule in `CONTRIBUTING.md`, and a
   known-environmental-failures table at the top of `TESTRUNS.md`.
+- One shared fake DOM for the renderer UI suites,
+  `tests/fixtures/renderer-dom.mjs`, with a general selector matcher and ids
+  read from the real template instead of a copied list. Three suites moved onto
+  it; the header records why the rest need per-file work first.
 
 ### Changed
 - **The Work rail is one scroller.** The agent roster moved inside the work
@@ -105,4 +114,5 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   locked or the cover window is destroyed.
 - Project switch drains background work instead of refusing it.
 
-[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/commits/main
+[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.2.0...main
+[0.2.0]: https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.2.0
