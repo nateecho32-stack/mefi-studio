@@ -43,6 +43,32 @@ test("scoped-none remaining text is not an outstanding obligation", () => {
   assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "none in the other module" } } }).reason, "outstanding obligations remain");
 });
 
+test("honest denials naming a repo/code/implementation scope are not outstanding obligations", () => {
+  const claim = { verdictOk: true, hasSession: true, changedFiles: 0, resultNote: { parts: { done: "work landed", remaining: "none in repo scope" } } };
+  for (const remaining of [
+    "none in repo scope",
+    "none in the repository",
+    "none in repository scope",
+    "none in code scope",
+    "none in the code",
+    "none within the implementation",
+    "nothing in this implementation's scope",
+    "none in this repository's scope.",
+    "None In Repo Scope",
+  ]) {
+    assert.notEqual(
+      verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining } } }).reason,
+      "outstanding obligations remain",
+      remaining,
+    );
+  }
+  // The relaxation stays scoped: an unrelated qualifier still owes work, and
+  // a denial with a trailing clause is not swallowed by a bare scope word.
+  assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "none in the other module" } } }).reason, "outstanding obligations remain");
+  assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "none in the repo's other module" } } }).reason, "outstanding obligations remain");
+  assert.equal(verifyCompletion({ ...claim, resultNote: { parts: { done: "work landed", remaining: "none in the implementation backlog" } } }).reason, "outstanding obligations remain");
+});
+
 test("done+verified retries with 0 changed files discharge on a green scoped-check rerun", () => {
   // The documented collision-delegate loop shapes: verification-only
   // attempts whose scoped checks re-ran green over already-landed work, with
