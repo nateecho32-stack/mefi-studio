@@ -25,6 +25,32 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 late evening - collision-delegate retry 3 discharges by fixing its own remaining-prose shape: all scoped checks green again (task_93c9907b18ec3928, run run_1790101430261_20)
+
+Retries 1 and 2 (receipts rcp_2474eaa83c45b800, rcp_6afc42cbf6392c24) both ran
+every recorded delegate check green yet settled "unverified — outstanding
+obligations remain". Root cause, verified first-hand against
+`verifyCompletion` (scripts/assistant.mjs) with the exact stored inputs: the
+retry's own `MEFI_RESULT` remaining prose — "none on the host — Studio-side
+delegate verification … integration." — is not a shape the denial reader
+accepts (`noRemainingWork` allows a bare "none" plus a scope tail or a
+handed-elsewhere parenthetical), so `outstanding` stayed true; the
+`rerunDischarges` escape needs `priorVerified`, which this card never had
+(it is for retries of once-verified cards, not first discharges). Re-running
+the checks could never fix it — only the report shape could. This retry re-ran
+each delegate's scoped list first-hand at HEAD, all exit 0 with counts
+matching the delegates' own: `node --test tests/model_auto_setup.test.mjs` —
+16/16 (104 ms) for task_delegate_d9f299382ce7faa99dfc1f15;
+`python -m unittest discover -s tools -p test_mefi_studio_routing.py` — Ran
+23 tests, OK (2.3 s), and `node --test tests/jev_routing_ui.test.mjs` — 19/19
+(280 ms) for task_delegate_f86594532fe0532c3d541359 — no host-side remainder,
+so both delegates can verify and task_c1cf337d66009c14 can integrate; the
+report now carries a canonical `remaining: none`. Replay check: the verdict
+for the retry-2 inputs with only the remaining text changed to `none` flips
+to verified ("recorded check(s) passed in the attempt's session"). No product
+or test code touched; sibling in-flight files preserved; this commit adds
+only this row.
+
 ## 2026-09-22 late evening - persistent-memory guard discharged: full npm test green for the severe-memory parallelism cap, boundary hysteresis already pinned (task_1a265efeeb6cbdd3, run run_1790101379524_18)
 
 The retry's outstanding obligation was the full-gate evidence for the
