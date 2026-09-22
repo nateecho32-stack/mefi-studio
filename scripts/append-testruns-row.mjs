@@ -14,17 +14,24 @@
 // a --file path, or stdin - either a full pre-built block or, when the text
 // parses as a JSON object / arrives as --date/--title/... flags, as fields
 // formatted into the canonical row shape the gate audits; --dry-run reports
-// the landing spot without writing.
+// the landing spot without writing. After a green append, still under the
+// lock, rows beyond the newest ROTATE_KEEP rotate verbatim into
+// docs/archive/testruns-YYYY-MM.md (scripts/rotate-testruns.mjs); a rotation
+// failure is reported and never fails or rolls back the append. A heading
+// that already rotated into its month's archive counts as a duplicate too:
+// re-appending it would leave two copies and stall every later rotation.
 import { closeSync, copyFileSync, existsSync, fsyncSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { auditTestruns } from "./check-testruns.mjs";
+import { DEFAULT_KEEP, archivePathFor, rotateTestruns } from "./rotate-testruns.mjs";
 
 const ROW_RE = /^(\d{4}-\d{2}-\d{2}) /; // same shape as check-testruns.mjs
 const LOCK_TIMEOUT_MS = 10000;
 const LOCK_STALE_MS = 30000;
+const ROTATE_KEEP = DEFAULT_KEEP; // 20 live rows; older ones rotate into docs/archive/
 
 function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -69,7 +76,23 @@ function acquireLock(target) {
   }
 }
 
-function atomicReplace(target, buf, { expectCurrent = null, beforeRename = null, rename = renameSync } = {}) {
+// The same lock appendTestrunsRow holds, for the other TESTRUNS.md writers
+// (scripts/rotate-testruns.mjs, tools/restructure_testruns_once.mjs). `fn`
+// runs synchronously while the lock is held.
+export function withTestrunsLock(target, fn) {
+  const lockPath = acquireLock(target);
+  try {
+    return fn();
+  } finally {
+    try {
+      unlinkSync(lockPath);
+    } catch {
+      // another stale-breaker already removed it
+    }
+  }
+}
+
+export function atomicReplace(target, buf, { expectCurrent = null, beforeRename = null, rename = renameSync } = {}) {
   const tmp = join(dirname(target), `.${basename(target)}.new-${process.pid}-${Math.random().toString(36).slice(2, 8)}`);
   const fh = openSync(tmp, "w");
   try {
@@ -265,6 +288,16 @@ export function appendTestrunsRow(packageRoot, blockText, { dryRun = false, hook
     const text = raw.toString("utf8");
     const eol = text.includes("\r\n") ? "\r\n" : "\n";
     const plan = planInsertion(text, blockText);
+    // planInsertion only sees TESTRUNS.md; a row that rotated out lives in its
+    // month's archive. Accepting that heading again (a resumed run redoing its
+    // final append) would make every later rotation refuse the conflicting
+    // copy while the append path still exits 0, so the live region would
+    // grow without bound again - refuse it the same way.
+    const archived = archivePathFor(packageRoot, plan.newDate.slice(0, 7));
+    if (existsSync(archived) && readFileSync(archived, "utf8").split("\n").some((line) => chomp(line) === plan.heading)) {
+      const where = relative(packageRoot, archived).split("\\").join("/");
+      throw new Error(`append-testruns-row: duplicate H2 already present: ${plan.heading.slice(3, 90)} (rotated into ${where})`);
+    }
     if (dryRun) {
       return { dryRun: true, heading: plan.heading, date: plan.newDate, insertLine: plan.insertAt + 1, before: plan.before };
     }
@@ -291,7 +324,17 @@ export function appendTestrunsRow(packageRoot, blockText, { dryRun = false, hook
       const list = post.problems.map((p) => `  - ${p}`).join("\n");
       throw new Error(`append-testruns-row: post-append gate check failed, not rolled back onto a concurrent edit:\n${list}`);
     }
-    return { heading: plan.heading, date: plan.newDate, insertLine: plan.insertAt + 1, before: plan.before, write: how, rows: post.rows };
+    // Self-compaction, still under this lock: the row has landed and the gate
+    // is green, so a rotation failure is reported and the append stands.
+    let rotation;
+    try {
+      rotation = rotateTestruns(packageRoot, { keep: ROTATE_KEEP, locked: true, replace: atomicReplace });
+    } catch (err) {
+      const message = err && err.message ? err.message : String(err);
+      console.error(`append-testruns-row: row appended; rotating older rows into docs/archive/ failed and was skipped: ${message}`);
+      rotation = { rotated: 0, kept: post.rows, archives: [], error: message };
+    }
+    return { heading: plan.heading, date: plan.newDate, insertLine: plan.insertAt + 1, before: plan.before, write: how, rows: post.rows, rotation };
   } finally {
     try {
       unlinkSync(lockPath);
@@ -324,7 +367,9 @@ right before an atomic write (temp file + rename): a concurrent mid-run edit
 aborts with a non-zero exit and no write. The result is then verified with the
 scripts/check-testruns.mjs rules; on any post-write problem the file is
 rolled back byte-for-byte. Refuses to run while the gate already flags the
-file (duplicate headings, conflict copies, malformed tail).`;
+file (duplicate headings, conflict copies, malformed tail).
+Rows beyond the newest 20 then rotate into docs/archive/testruns-YYYY-MM.md;
+a heading already there is refused as a duplicate, like one in TESTRUNS.md.`;
 
 export function main(argv = process.argv.slice(2)) {
   let rootOpt = null;
@@ -388,6 +433,10 @@ export function main(argv = process.argv.slice(2)) {
     }
     console.log(`append-testruns-row: inserted at line ${result.insertLine} (before ${where}): ${result.heading.slice(3, 70)}`);
     console.log(`append-testruns-row: gate ok (${result.rows} live rows, write: ${result.write})`);
+    if (result.rotation && result.rotation.rotated > 0) {
+      const where = result.rotation.archives.map((p) => relative(packageRoot, p).split("\\").join("/")).join(", ") || "archives that already held them";
+      console.log(`append-testruns-row: rotated ${result.rotation.rotated} older row(s) into ${where} (${result.rotation.kept} live rows kept)`);
+    }
     return 0;
   } catch (err) {
     console.error(err && err.message ? err.message : err);

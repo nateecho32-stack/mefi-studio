@@ -89,7 +89,12 @@ Record each test run in `TESTRUNS.md` by appending through
 of editing the file by hand: it holds a cross-process lock, inserts at the
 true top of the live region (the dated rows above the `## Read Before Any
 Tests` guide - the archive below that anchor is frozen), keeps rows
-newest-first and rolls back if the post-write gate audit fails.
+newest-first and rolls back if the post-write gate audit fails. Once the live
+region passes 20 rows it rotates the oldest ones, whole and verbatim, into
+`docs/archive/testruns-YYYY-MM.md` (newest first; preview with
+`node scripts/rotate-testruns.mjs --dry-run`), so never trim rows by hand.
+A heading that already rotated out is refused as a duplicate, exactly like
+one still in `TESTRUNS.md`: give a follow-up row its own heading.
 
 Rebuild the model booklet after editing renderer sources
 (`npm run build-booklet`; the generated `renderer/booklet.html` is committed).
