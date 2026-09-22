@@ -25,6 +25,26 @@ red run as a regression, check it against the table below.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - third-generation follow-up re-verified at HEAD 6acf79f: landing-card obligations discharged, flip stays host-side (task_b5ec79917d8514b2, run run_1790100921654_3)
+
+Scope recovered from the parent card's decision log, not guessed: the parent
+(task_4dc2a045b8d46b20) carries one decision — "split the extra work out" —
+and its uncovered work was the same item every generation of this chain found:
+flipping landing cards task_7b773505d7c6eb43 and task_2dd9dc18291f2625 to
+done host-side. Re-derived every prior claim first-hand at HEAD 6acf79f:
+feature commits c272b58 / 136f866 / e3ad851 / 31f69f0 / d1c4d78 / 96d15c6
+all exist and are ancestors of HEAD; wiring is live (require at main.cjs:58,
+worktreeManager instantiated at main.cjs:9487); the opt-in default is intact
+(scripts/executor-worktrees.cjs:62 `enabled()` is
+`MEFI_STUDIO_WORKTREE_RUNS === "1"` exactly); fresh `node --test
+tests/executor_worktree.test.mjs` -> 11/11 pass / 0 fail, exit 0 (16.1 s);
+`git worktree list` shows no `.mefi/worktrees` checkouts — no residue.
+Both landing cards remain `open` in the board (untouched since
+1790090960999 / 1790088174591), so the only remaining work is the host-side
+status flip, which stays with the owner per the no-worker-rewrite rule.
+Nothing staged before or after; ~41 sibling in-flight modified files plus 2
+untracked left exactly as found; this commit adds only this row.
+
 ## 2026-09-22 evening - collision-delegate scoped checks re-verified green at HEAD 6acf79f, retry 1 of the false "outstanding obligations" loop (task_93c9907b18ec3928, run run_1790100988544_5)
 
 Retry of the 16:0x rerun row below after its verification receipt
