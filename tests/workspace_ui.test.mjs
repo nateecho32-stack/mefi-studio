@@ -88,6 +88,31 @@ test("startup readiness waits for projects and populated panels without duplicat
   assert.equal(taskCalls, 2, "later visits still refresh current data");
 });
 
+test("Home reveals the newest conversation loaded while hidden and preserves manual reading", async () => {
+  const assistant = deferred();
+  const messages = Array.from({ length: 40 }, (_, index) => ({
+    role: "assistant", id: `reply-${index}`, text: `Update ${index}`, at: index + 1,
+  }));
+  const env = await environment({ autoEnter: false, bridgeOverrides: { assistantState: () => assistant.promise } });
+  const thread = env.el("thread");
+  env.el("layer").hidden = true;
+  thread.clientHeight = 0;
+  thread.scrollHeight = 0;
+  assistant.resolve({ ok: true, state: { projectId: "project-a", messages } });
+  await flush();
+  assert.match(thread.textContent, /Update 39/);
+  assert.equal(thread.scrollTop, 0, "the hidden conversation has no usable scroll position");
+
+  thread.clientHeight = 300;
+  thread.scrollHeight = 2200;
+  await env.workspace.enter();
+  assert.ok(thread.scrollTop + thread.clientHeight >= thread.scrollHeight - 60, "the first visible Home view starts at the latest update");
+
+  thread.scrollTop = 180;
+  env.events.assistant({ state: { projectId: "project-a", messages: [...messages, { role: "assistant", id: "new", text: "New update", at: 41 }] } });
+  assert.equal(thread.scrollTop, 180, "new messages do not pull a reader away from older updates");
+});
+
 test("startup reports project and panel failures and an explicit retry recovers", async () => {
   let projectCalls = 0;
   const env = await environment({ autoEnter: false, bridgeOverrides: {

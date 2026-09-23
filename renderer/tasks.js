@@ -490,7 +490,7 @@
     const rank = { running: 0, blocked: 1, review: 2, planning: 3, waiting: 4, done: 5 };
     models.sort((a, b) => rank[a.stage] - rank[b.stage] || (b.group.plan?.updatedAt || b.group.task?.updatedAt || 0) - (a.group.plan?.updatedAt || a.group.task?.updatedAt || 0));
     const heading = node("li", "task-overview-summary");
-    heading.append(node("strong", "", `${models.length} ${models.length === 1 ? "plan or task" : "plans & tasks"}`), node("span", "", "Follow the goal, the current step and the work still to confirm."));
+    heading.append(node("strong", "", `${models.length} ${models.length === 1 ? "card" : "cards"} in this view`), node("span", "", "Filters count saved tasks; related tasks share a card, and completed cards may be folded below."));
     els.list.append(heading);
     if (state.plansError) els.list.append(node("li", "task-overview-note", "Saved plans could not be refreshed. Task progress is still available."));
     const finished = models.filter((model) => model.stage === "done");

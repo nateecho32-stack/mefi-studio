@@ -80,12 +80,15 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
   questions and work to review), what is up next, the machine gauge and
   today's usage. Each tile opens the view that owns it, and a new agent
   question raises a toast with an **Answer** button from any view.
+- The first visible project conversation starts at its newest message. If you
+  scroll back to read older messages, new updates leave your place alone.
 - **Work through backlog** works the project's existing tasks and ideas first,
   keeping a small runnable buffer; **Pause** holds every kind of new work (the
   same hold as Command's **New work** switch) while current workers finish.
 - The **task board** opens as plan cards with progress and a current step, and
-  holds prerequisites, handoff context and task history. Missing prerequisites
-  and dependency cycles are surfaced for correction.
+  holds prerequisites, handoff context and task history. Filter counts measure
+  saved tasks; related tasks may share one card in the overview. Missing
+  prerequisites and dependency cycles are surfaced for correction.
 - **Ctrl K** finds tools and tasks by familiar terms; **Make yourself at home**
   sets your name, companion name, accent and movement preference.
 

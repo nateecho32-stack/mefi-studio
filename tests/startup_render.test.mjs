@@ -60,6 +60,8 @@ test("cold startup gates access on actual readiness, shows progress, and recover
     assert.ok(report.catalogProgress > report.loading.progress && report.catalogProgress < 100);
     assert.ok(report.cannotSkip && report.ready.result && report.ready.populated && report.ready.onboarding);
     assert.equal(report.ready.progress, 100);
+    assert.equal(report.conversation.messages, 40);
+    assert.ok(report.conversation.scrollTop + report.conversation.clientHeight >= report.conversation.scrollHeight - 60);
     assert.ok(report.failed.gated && report.failed.reducedMotion && report.failed.fits && report.retried);
     assert.ok(report.lightTheme.applied && report.lightTheme.lightSurfaces && report.lightTheme.darkText && report.lightTheme.spinnerStopped);
     assert.equal(report.continued.result, false);

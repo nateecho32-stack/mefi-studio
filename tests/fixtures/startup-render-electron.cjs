@@ -68,8 +68,20 @@ app.whenReady().then(async () => {
   };
   async function launch(mode, width = 1280) {
     const preload = path.join(root, `startup-${mode}-preload.cjs`);
+    const fixtureResponses = mode === "delayed" ? {
+      ...responses,
+      assistantState: {
+        ...responses.assistantState,
+        state: {
+          ...responses.assistantState.state,
+          messages: Array.from({ length: 40 }, (_, index) => ({
+            id: `synthetic-${index}`, role: "assistant", text: `Synthetic project update ${index}`, at: now + index,
+          })),
+        },
+      },
+    } : responses;
     fs.writeFileSync(preload, `const {contextBridge}=require('electron');
-      const responses=${JSON.stringify(responses)};
+      const responses=${JSON.stringify(fixtureResponses)};
       let released=${mode !== "delayed"}, catalogReleased=${mode !== "delayed"}, failing=${mode !== "delayed"}, projectReads=0, release, releaseCatalog;
       const pending=new Promise(resolve=>{release=resolve}),catalogPending=new Promise(resolve=>{releaseCatalog=resolve});
       contextBridge.exposeInMainWorld('mefiStudio',Object.fromEntries(Object.keys(responses).map(key=>[key,async()=>{
@@ -165,6 +177,16 @@ app.whenReady().then(async () => {
   `);
   assert.ok(report.ready.populated && report.ready.onboarding && !report.ready.gated && !report.ready.inert);
   await first.run("window.MefiOnboarding.close();");
+  report.conversation = await first.run(`
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const thread = document.getElementById('workspace-thread');
+    return { messages: thread.children.length, scrollTop: thread.scrollTop,
+      clientHeight: thread.clientHeight, scrollHeight: thread.scrollHeight };
+  `);
+  assert.equal(report.conversation.messages, 40);
+  assert.ok(report.conversation.scrollHeight > report.conversation.clientHeight + 100, "synthetic conversation must overflow");
+  assert.ok(report.conversation.scrollTop + report.conversation.clientHeight >= report.conversation.scrollHeight - 60,
+    `Home should reveal the newest synthetic message: ${JSON.stringify(report.conversation)}`);
   await first.capture("startup-ready.png");
   await closeWindow(first.window);
 

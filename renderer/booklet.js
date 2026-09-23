@@ -1397,6 +1397,7 @@
       if (restored?.restored) restored.finish?.();
       else if (window.MefiWorkspace?.isActive?.()) document.getElementById("workspace-layer")?.focus({ preventScroll: true });
       else document.getElementById("search")?.focus({ preventScroll: true });
+      window.MefiWorkspace?.revealConversation?.();
       window.MefiOnboarding?.startup?.({ automatic: true });
       // "Open and start agents": the studio is up, so the agents may start now.
       // Every other choice leaves them held for the workspace's Start agents.

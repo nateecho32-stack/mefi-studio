@@ -7,6 +7,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Home first displays an existing project conversation at its newest message,
+  including when the conversation loaded before Home was visible; scrolling
+  back to read older messages remains undisturbed by new updates.
+- The Task board labels its grouped overview as cards and explains why its
+  card total differs from task filter counts.
+
 ## [0.3.0] - 2026-09-22
 
 One navigation rail, Brain maps as a real node editor, ad-free radio, model

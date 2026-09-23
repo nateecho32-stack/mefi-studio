@@ -29067,7 +29067,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const rank = { running: 0, blocked: 1, review: 2, planning: 3, waiting: 4, done: 5 };
     models.sort((a, b) => rank[a.stage] - rank[b.stage] || (b.group.plan?.updatedAt || b.group.task?.updatedAt || 0) - (a.group.plan?.updatedAt || a.group.task?.updatedAt || 0));
     const heading = node("li", "task-overview-summary");
-    heading.append(node("strong", "", `${models.length} ${models.length === 1 ? "plan or task" : "plans & tasks"}`), node("span", "", "Follow the goal, the current step and the work still to confirm."));
+    heading.append(node("strong", "", `${models.length} ${models.length === 1 ? "card" : "cards"} in this view`), node("span", "", "Filters count saved tasks; related tasks share a card, and completed cards may be folded below."));
     els.list.append(heading);
     if (state.plansError) els.list.append(node("li", "task-overview-note", "Saved plans could not be refreshed. Task progress is still available."));
     const finished = models.filter((model) => model.stage === "done");
@@ -36072,6 +36072,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   let startupPending = false;
   let startupSequence = 0;
   let threadSignature = "";
+  let threadNeedsLatest = true;
   let workSignature = "";
   const signatures = new Map();
   const revisions = { tasks: 0, ideas: 0, backlog: 0, assistant: 0, status: 0 };
@@ -36192,7 +36193,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       renderMode();
       createdTask = null;
       if ($("created-task")) $("created-task").hidden = true;
-      threadSignature = ""; workSignature = "";
+      threadSignature = ""; threadNeedsLatest = true; workSignature = "";
       renderThread(); renderWork(); renderCompanion(); renderBacklog();
       window.dispatchEvent(new CustomEvent("mefi:project-changed", { detail: { projectId: state.activeId } }));
     }
@@ -36224,14 +36225,32 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     } catch (error) { feedback(error.message, true, "sidebar"); }
     finally { state.switching = false; controls(); }
   }
+  function settleThreadLatest(list) {
+    if (typeof requestAnimationFrame !== "function") return;
+    const projectId = state.activeId;
+    let lastAutoTop = list.scrollTop;
+    const repin = () => {
+      // Font/layout settling may make the last message taller. A reader who
+      // has already scrolled away keeps their position.
+      if (!active() || state.activeId !== projectId || Math.abs(list.scrollTop - lastAutoTop) > 2) return;
+      list.scrollTop = list.scrollHeight;
+      lastAutoTop = list.scrollTop;
+    };
+    requestAnimationFrame(() => requestAnimationFrame(repin));
+    if (document.fonts?.ready) Promise.resolve(document.fonts.ready).then(() => requestAnimationFrame(repin)).catch(() => {});
+  }
   function renderThread() {
     const messages = (state.assistant.messages || []).filter((message) => ["user", "assistant"].includes(message.role) && (!message.projectId || message.projectId === state.activeId)).slice(-80);
     const hasBacklog = state.tasks.some((task) => !done(task)) || state.ideas.some((idea) => idea.status !== "done");
     const signature = JSON.stringify([messages, state.activeId, companion(), person(), !messages.length && hasBacklog]);
-    if (signature === threadSignature) return;
-    threadSignature = signature;
     const list = $("thread");
-    const pinned = list.scrollTop + list.clientHeight >= list.scrollHeight - 60;
+    const showLatest = threadNeedsLatest && active() && !document.documentElement?.hasAttribute?.("data-starting") && messages.length > 0;
+    if (signature === threadSignature) {
+      if (showLatest) { list.scrollTop = list.scrollHeight; threadNeedsLatest = false; settleThreadLatest(list); }
+      return;
+    }
+    threadSignature = signature;
+    const pinned = showLatest || list.scrollTop + list.clientHeight >= list.scrollHeight - 60;
     const oldTop = list.scrollTop;
     list.replaceChildren();
     if (!messages.length) {
@@ -36255,6 +36274,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
     // The welcome reads top-down; only a real conversation pins to its newest line.
     list.scrollTop = !messages.length ? 0 : pinned ? list.scrollHeight : oldTop;
+    if (showLatest) { threadNeedsLatest = false; settleThreadLatest(list); }
   }
   const scoped = (rows) => rows.filter((row) => !row.projectId || row.projectId === state.activeId);
   const workLabels = { all: "All work", open: "Queue", ideas: "Ideas", review: "Review", done: "Done" };
@@ -36783,6 +36803,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   function enter() {
     init(); window.MefiIdle?.exit?.(); $("layer").hidden = false;
     document.body.classList.add("workspace-active");
+    renderThread();
     renderMachineTile(); renderUsageTile();
     // Usage has no push; one read on entry (cached 5 min by the tracker).
     if (api()) window.MefiUsageTracker?.refresh?.()?.catch?.(() => {});
@@ -36791,6 +36812,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // the loading layer joins that work instead of issuing a second batch.
     return startupPending || window.MefiBoot?.isActive?.() ? ready() : refresh(true);
   }
+  function revealConversation() { if (active()) renderThread(); }
   function exit() { if (!$("layer")) return; $("layer").hidden = true; document.body.classList.remove("workspace-active"); saveDraft(); }
   function init() {
     if (initialized || !$("layer")) return; initialized = true;
@@ -36927,7 +36949,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     window.MefiBoot?.pollStart?.("workspace.refresh", () => { if (!document.hidden && active()) refresh(); }, 15000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden && active()) refresh(); });
   }
-  window.MefiWorkspace = { enter, exit, refresh, ready, isActive: active, buildMode, setAutoBuild, agentMode, setAgentMode };
+  window.MefiWorkspace = { enter, exit, refresh, ready, revealConversation, isActive: active, buildMode, setAutoBuild, agentMode, setAgentMode };
   init();
 })();
 
@@ -40782,6 +40804,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       if (restored?.restored) restored.finish?.();
       else if (window.MefiWorkspace?.isActive?.()) document.getElementById("workspace-layer")?.focus({ preventScroll: true });
       else document.getElementById("search")?.focus({ preventScroll: true });
+      window.MefiWorkspace?.revealConversation?.();
       window.MefiOnboarding?.startup?.({ automatic: true });
       // "Open and start agents": the studio is up, so the agents may start now.
       // Every other choice leaves them held for the workspace's Start agents.
