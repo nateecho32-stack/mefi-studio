@@ -20,6 +20,11 @@
 // brain rather than a diagram: the inner map's triage and ask rules apply to
 // whatever is routed into it.
 //
+// A setting marked `wired: true` is one the host really reads. The rest are
+// held on the map and drawn, and the editor says so beside each of them. The
+// same goes for a part's model block: nothing reads it yet, so no catalog
+// entry marks its `model` wired.
+//
 // Pure module: no Electron, no filesystem, no network, no clock reads.
 
 "use strict";
@@ -31,6 +36,9 @@ const MAX_NODES = 120;
 const MAX_EDGES = 240;
 const MAX_MAPS = 24;
 const MAX_NEST = 4;
+// The build worker limit the studio enforces (main.cjs EXECUTOR_PARALLEL_CAP):
+// a map may ask for fewer workers, never more.
+const MAX_PARALLEL = 3;
 const ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 const CONTROL = /[\u0000-\u001f\u007f]/g;
 
@@ -103,6 +111,8 @@ const GATES = {
     detail: "Auto compares candidates per task; Fixed keeps your saved defaults." },
   dispatch: { label: "Dispatch", setting: "autopilot.execute", node: "work.dispatch",
     detail: "Whether ready work is handed to workers at all." },
+  parallel: { label: "Workers at once", setting: "autopilot.parallel", node: "work.dispatch",
+    detail: `How many builds may run together — the build worker limit, at most ${MAX_PARALLEL}.` },
 };
 
 // ---- the catalog -------------------------------------------------------------
@@ -125,7 +135,7 @@ const NODE_TYPES = [
       { key: "perPass", type: "number", label: "Ideas per pass", default: 3, min: 1, max: 10,
         help: "Caps how many new ideas one scan may add." },
     ],
-    hostNote: "The ideas roster role already does this; the node is where its settings live.",
+    hostNote: "The ideas roster role already does this; it keeps its own cadence, not these settings yet.",
   },
   {
     type: "user.request", label: "You ask for it", group: "intake", runs: "host", glyph: "g-command",
@@ -141,7 +151,7 @@ const NODE_TYPES = [
         help: "Your own asks sort ahead of work the loop found by itself." },
     ],
     singleton: true,
-    hostNote: "assistantCreateTask already does this. The node cannot be removed from a runnable map.",
+    hostNote: "assistantCreateTask already does this. Removing the part turns nothing off: your own asks always reach the board.",
   },
   {
     type: "inbox.request", label: "Request inbox", group: "intake", runs: "host", glyph: "g-explorer",
@@ -187,7 +197,7 @@ const NODE_TYPES = [
       { key: "strictness", type: "enum", label: "Strictness", options: ["light", "normal", "strict"], default: "normal",
         help: "How much an ask must say before it counts as plannable." },
     ],
-    hostNote: "The work classifier already scores admissions; strictness is the dial it reads.",
+    hostNote: "The work classifier already scores admissions with its own bar; the strictness here is not read yet.",
   },
   {
     type: "analyze.scope", label: "Analyse the ask", group: "plan", runs: "host", glyph: "g-analyzer",
@@ -202,7 +212,7 @@ const NODE_TYPES = [
       { key: "threshold", type: "enum", label: "Plan when", options: ["always", "multi-file", "never"], default: "multi-file",
         help: "Always plans everything; multi-file plans work that spans more than one file." },
     ],
-    hostNote: "The work-shape classifier supplies the size this reads.",
+    hostNote: "The work-shape classifier already sizes the work; the threshold here is not read yet.",
   },
   {
     type: "plan.build", label: "Make the plan", group: "plan", runs: "host", glyph: "g-plans",
@@ -254,7 +264,7 @@ const NODE_TYPES = [
       { key: "notes", type: "boolean", label: "Keep the notes", default: true,
         help: "Review notes are written onto the task so the next worker reads them." },
     ],
-    hostNote: "The overseer review already runs on finished work; this node holds its dial.",
+    hostNote: "The overseer review already runs on finished work, with its own strictness; these dials are not read yet.",
   },
   {
     type: "assistant.setup", label: "Set up for Jev", group: "assistant", runs: "host", glyph: "g-sliders",
@@ -271,7 +281,7 @@ const NODE_TYPES = [
       { key: "requireTools", type: "boolean", label: "Tool-callers only", default: true,
         help: "Build work only shortlists models that can call tools." },
     ],
-    hostNote: "buildRoutingCandidates does exactly this today.",
+    hostNote: "buildRoutingCandidates already does this with its own shortlist; these settings are not read yet.",
   },
   {
     type: "jev.classify", label: "Jev", group: "routing", runs: "host", glyph: "g-orbit",
@@ -301,7 +311,7 @@ const NODE_TYPES = [
     inputs: [port("values", "Values", ["values"]), port("brief", "Brief", ["brief"])],
     outputs: [port("route", "Route", ["route"])],
     settings: [
-      { key: "mode", type: "enum", label: "Selection", options: ["auto", "fixed"], default: "auto",
+      { key: "mode", type: "enum", label: "Selection", options: ["auto", "fixed"], default: "auto", wired: true,
         help: "Auto compares candidates per task; Fixed always uses your saved defaults." },
     ],
     gate: "modelChoice",
@@ -317,13 +327,15 @@ const NODE_TYPES = [
     inputs: [port("route", "Route", ["route"], { required: true }), port("brief", "Brief", ["brief"])],
     outputs: [port("run", "Run", ["run"]), port("issues", "Issues", ["issue"])],
     settings: [
-      { key: "parallel", type: "number", label: "Workers at once", default: 4, min: 1, max: 12,
-        help: "How many builds may run together." },
+      // The build worker limit (autopilot.parallel), not the assistant's
+      // roster: going live sets it, bounded by the studio's own cap.
+      { key: "parallel", type: "number", label: "Workers at once", default: MAX_PARALLEL, min: 1, max: MAX_PARALLEL, wired: true,
+        help: `How many builds may run together. The studio never runs more than ${MAX_PARALLEL}.` },
       { key: "maxFailures", type: "number", label: "Tries before parking", default: 5, min: 1, max: 5,
         help: "After this many failed runs a task waits for you instead of retrying." },
     ],
     gate: "dispatch",
-    hostNote: "Present, ready work is dispatched (autopilot.execute). Removed, the board fills but nothing starts.",
+    hostNote: "Present, ready work is dispatched (autopilot.execute) with Workers at once as the build worker limit. Removed, the board fills but nothing starts.",
   },
   {
     type: "verify.evidence", label: "Verify the evidence", group: "build", runs: "host", glyph: "g-eyes",
@@ -340,7 +352,7 @@ const NODE_TYPES = [
       { key: "dwellMs", type: "number", label: "Evidence dwell (ms)", default: 30000, min: 5000, max: 120000,
         help: "How long evidence is allowed to land before the card is judged." },
     ],
-    hostNote: "autopilotHousekeeping + verifyCompletion; the dials are this node's settings.",
+    hostNote: "autopilotHousekeeping and verifyCompletion already do this with the studio's own limits; these dials are not read yet.",
   },
   {
     type: "issue.intake", label: "Agent issues", group: "decide", runs: "map", glyph: "g-explorer",
@@ -352,12 +364,12 @@ const NODE_TYPES = [
     inputs: [port("run", "Run", ["run", "any"])],
     outputs: [port("issue", "Issue", ["issue"])],
     settings: [
-      { key: "perRun", type: "number", label: "Issues per run", default: 3, min: 1, max: 3,
+      { key: "perRun", type: "number", label: "Issues per run", default: 3, min: 1, max: 3, wired: true,
         help: "Caps how many decisions one run may raise." },
-      { key: "fromFailures", type: "boolean", label: "Include stopped runs", default: true,
+      { key: "fromFailures", type: "boolean", label: "Include stopped runs", default: true, wired: true,
         help: "A run that ends without the done line becomes an issue with its last output." },
     ],
-    hostNote: "Live: main.cjs reads this node's caps when a run prints an issue or ends without the verdict.",
+    hostNote: "Live: the host reads both settings when a run prints an issue or ends without the verdict.",
   },
   {
     type: "issue.triage", label: "Triage", group: "decide", runs: "map", glyph: "g-sliders",
@@ -369,12 +381,14 @@ const NODE_TYPES = [
     inputs: [port("issue", "Issue", ["issue"], { required: true })],
     outputs: [port("ask", "Escalate", ["ask"]), port("answered", "Settled", ["answer"])],
     settings: [
-      { key: "auto", type: "kinds", label: "Settle by itself", default: ["blocked", "check-failed", "verify", "run-failed"],
+      { key: "auto", type: "kinds", label: "Settle by itself", default: ["blocked", "check-failed", "verify", "run-failed"], wired: true,
         help: "Kinds the assistant may answer without you. Permission and risk can never be added — they are always yours." },
-      { key: "autoRetryLimit", type: "number", label: "Auto retries", default: 2, min: 0, max: 5,
+      { key: "autoRetryLimit", type: "number", label: "Auto retries", default: 2, min: 0, max: 5, wired: true,
         help: "After this many automatic retries on one task, the next one asks you instead." },
+      { key: "repeatAsks", type: "enum", label: "Repeat questions", options: ["fold", "ask"], default: "fold", wired: true,
+        help: "Fold: a question already asked on another card in the last day is not asked again — the earlier answer is recorded on the new card. Ask: every card asks." },
     ],
-    hostNote: "Live: triageIssue reads this node on every issue.",
+    hostNote: "Live: triageIssue reads this node on every issue, and a repeat question folds by its setting.",
   },
   {
     type: "ask.user", label: "Ask you", group: "decide", runs: "map", glyph: "g-help",
@@ -388,10 +402,10 @@ const NODE_TYPES = [
     settings: [
       { key: "maxOpenAsks", type: "number", label: "Open cards at once", default: 6, min: 1, max: 20,
         help: "Past this, new decisions queue behind the ones already waiting." },
-      { key: "expireHours", type: "number", label: "Expire after (hours)", default: 48, min: 1, max: 168,
+      { key: "expireHours", type: "number", label: "Expire after (hours)", default: 48, min: 1, max: 168, wired: true,
         help: "A decision nobody made is history, not a prompt." },
     ],
-    hostNote: "Live: the Ask rail reads this node's caps.",
+    hostNote: "Live: without this part no card opens, and a card expires after its hours. Open cards at once is not enforced yet.",
   },
   {
     type: "answer.apply", label: "Apply the answer", group: "decide", runs: "map", glyph: "g-tasks",
@@ -403,10 +417,12 @@ const NODE_TYPES = [
     inputs: [port("answer", "Answer", ["answer"], { required: true })],
     outputs: [port("request", "Re-armed work", ["request"])],
     settings: [
-      { key: "announce", type: "boolean", label: "Say what changed", default: true,
+      { key: "announce", type: "boolean", label: "Say what changed", default: true, wired: true,
         help: "The assistant replies in the thread with what your answer did." },
+      { key: "splitDepth", type: "number", label: "Follow-ups per chain", default: 3, min: 0, max: 5, wired: true,
+        help: "How deep Split may go: a follow-up split from a follow-up is one deeper. 0 turns Split off." },
     ],
-    hostNote: "Live: the issue action behind every Ask option.",
+    hostNote: "Live: the issue action behind every Ask option. Split is not offered on a card at the follow-up limit.",
   },
   {
     type: "brain.call", label: "Another brain", group: "control", runs: "map", glyph: "g-orbit",
@@ -418,10 +434,10 @@ const NODE_TYPES = [
     inputs: [port("in", "In", ["any"], { required: true })],
     outputs: [port("out", "Out", ["any"])],
     settings: [
-      { key: "map", type: "map", label: "Map to call", default: "",
+      { key: "map", type: "map", label: "Map to call", default: "", wired: true,
         help: "Which saved brain map handles this branch." },
     ],
-    hostNote: "Live for the decision rules the inner map defines.",
+    hostNote: "Live when Agent issues feeds it: the inner map's triage, ask and apply parts decide those issues. Anything else inside it is drawn only.",
   },
   {
     type: "route.switch", label: "Branch", group: "control", runs: "map", glyph: "g-plane",
@@ -436,7 +452,7 @@ const NODE_TYPES = [
       { key: "field", type: "text", label: "Field", default: "severity", help: "The field read from what arrives." },
       { key: "equals", type: "text", label: "Matches", default: "blocker", help: "Sent down Matches when the field equals this." },
     ],
-    hostNote: "Live inside decision routing; advisory elsewhere.",
+    hostNote: "Drawn and validated. Nothing routes through it yet, so its field and match are not read.",
   },
   {
     type: "note", label: "Note", group: "control", runs: "draft", glyph: "g-booklet",
@@ -598,6 +614,7 @@ function normalizeMap(raw = {}) {
   const nodeIds = new Set(nodes.map((node) => node.id));
   const edges = [];
   const edgeKeys = new Set();
+  const edgeIds = new Set();
   for (const item of Array.isArray(raw.edges) ? raw.edges : []) {
     if (edges.length >= MAX_EDGES) break;
     const from = { node: clean(item?.from?.node, 64), port: clean(item?.from?.port, 40) };
@@ -606,8 +623,17 @@ function normalizeMap(raw = {}) {
     const key = `${from.node}:${from.port}>${to.node}:${to.port}`;
     if (edgeKeys.has(key)) continue;
     edgeKeys.add(key);
+    // A missing or repeated id takes the next free e_N: selection, problems
+    // and the feedback list all name a wire by its id, so two may not share one.
+    let id = ID_RE.test(clean(item?.id, 64)) ? clean(item.id, 64) : "";
+    if (!id || edgeIds.has(id)) {
+      let next = edges.length + 1;
+      while (edgeIds.has(`e_${next}`)) next += 1;
+      id = `e_${next}`;
+    }
+    edgeIds.add(id);
     edges.push({
-      id: ID_RE.test(clean(item?.id, 64)) ? clean(item.id, 64) : `e_${edges.length + 1}`,
+      id,
       from, to,
       ...(item?.feedback === true ? { feedback: true } : {}),
     });
@@ -636,15 +662,20 @@ function hash(text) {
 function normalizeSetting(setting, value) {
   if (setting.type === "boolean") return typeof value === "boolean" ? value : setting.default;
   if (setting.type === "number") {
-    const number = Number(value);
+    // Blank is "not set", not zero: a cleared Follow-ups field must not turn
+    // Split off by accident.
+    const number = value === null || value === "" ? NaN : Number(value);
     if (!Number.isFinite(number)) return setting.default;
     return Math.max(setting.min ?? 0, Math.min(setting.max ?? 1e6, Math.round(number)));
   }
   if (setting.type === "enum") return setting.options.includes(value) ? value : setting.default;
   if (setting.type === "kinds") {
-    const list = (Array.isArray(value) ? value : setting.default).filter((kind) => issues.ISSUE_KIND_IDS.includes(kind));
-    // Never let a saved map automate a grant or a risk back into silence.
-    return list.filter((kind) => !issues.ALWAYS_ASK.has(kind));
+    // Only a kind the assistant has an answer for can be settled by it. That
+    // keeps a grant or a risk from being automated back into silence, and any
+    // kind without a safe automatic answer — a new one included — stays yours.
+    const list = (Array.isArray(value) ? value : setting.default)
+      .filter((kind) => issues.AUTO_ANSWERABLE.has(kind) && !issues.ALWAYS_ASK.has(kind));
+    return [...new Set(list)];
   }
   if (setting.type === "map") return clean(value, 64);
   return clean(value, 400);
@@ -736,6 +767,17 @@ function validateMap(map, { maps = [], depth = 0 } = {}) {
     const count = graph.nodes.filter((node) => node.type === spec.type).length;
     if (count > 1) problems.push(problem("error", "duplicate", `A map may only have one "${spec.label}".`, { fix: `Delete the extra ${spec.label} nodes.` }));
   }
+  // A map that starts workers needs somewhere for their questions to go.
+  // Without triage and an Ask part the host only logs an issue, and a
+  // permission or a risk is a question only the owner may answer.
+  const dispatch = graph.nodes.find((node) => node.type === "work.dispatch");
+  if (dispatch) {
+    const lane = issuePolicyFor(graph, { maps });
+    if (!lane.triage || !lane.asks) {
+      const missing = !lane.triage && !lane.asks ? "Triage or Ask you part" : !lane.triage ? "Triage part" : "Ask you part";
+      problems.push(problem("warn", "no-decision-lane", `"${dispatch.title}" starts workers, but this map has no ${missing} for their questions — on the map or in a brain Agent issues feeds. Permission and risk questions would only be logged and would never reach you.`, { nodeId: dispatch.id, fix: "Wire Agent issues → Triage → Ask you, or into another brain that holds them." }));
+    }
+  }
   return {
     ok: !problems.some((item) => item.level === "error"),
     problems,
@@ -807,6 +849,33 @@ function findCycles(graph) {
   return cycles.map((item) => item.ring);
 }
 
+/**
+ * The wires a depth-first walk meets pointing back at a part still on its
+ * path: each closes a ring, and taking just those out leaves an order.
+ * Declared feedback wires are already out.
+ */
+function closingEdges(graph) {
+  const out = new Map();
+  for (const edge of graph.edges) {
+    if (edge.feedback) continue;
+    if (!out.has(edge.from.node)) out.set(edge.from.node, []);
+    out.get(edge.from.node).push(edge);
+  }
+  const colour = new Map();
+  const closing = new Set();
+  const walk = (id) => {
+    colour.set(id, 1);
+    for (const edge of out.get(id) ?? []) {
+      const seen = colour.get(edge.to.node);
+      if (seen === 1) closing.add(edge.id);
+      else if (!seen) walk(edge.to.node);
+    }
+    colour.set(id, 2);
+  };
+  for (const node of graph.nodes) if (!colour.has(node.id)) walk(node.id);
+  return closing;
+}
+
 // ---- compiling ----------------------------------------------------------------
 
 /**
@@ -819,11 +888,12 @@ function compileMap(map, { maps = [] } = {}) {
   const incoming = new Map(graph.nodes.map((node) => [node.id, 0]));
   const out = new Map(graph.nodes.map((node) => [node.id, []]));
   const feedback = [];
-  const cycles = findCycles(graph).map((ring) => new Set(ring));
+  const closing = closingEdges(graph);
   for (const edge of graph.edges) {
-    // A wire that closes a ring is scheduled as feedback: it carries a result
-    // into the NEXT pass rather than making this one impossible to order.
-    const loops = edge.feedback || cycles.some((ring) => ring.has(edge.from.node) && ring.has(edge.to.node));
+    // The wire that closes a ring is scheduled as feedback: it carries a
+    // result into the NEXT pass rather than making this one impossible to
+    // order. Only that wire — the rest of the ring keeps its place in order.
+    const loops = edge.feedback || closing.has(edge.id);
     if (loops) { feedback.push(edge); continue; }
     out.get(edge.from.node).push(edge.to.node);
     incoming.set(edge.to.node, (incoming.get(edge.to.node) ?? 0) + 1);
@@ -865,7 +935,7 @@ function compileMap(map, { maps = [] } = {}) {
     feedback: feedback.map((edge) => edge.id),
     unordered: graph.nodes.filter((node) => !order.includes(node.id)).map((node) => node.id),
     gates: gatesFor(graph),
-    issuePolicy: issuePolicyFor(graph),
+    issuePolicy: issuePolicyFor(graph, { maps }),
     problems: check.problems,
   };
 }
@@ -889,12 +959,69 @@ function gatesFor(map) {
   };
 }
 
-/** The live decision rules: what the assistant settles, and what reaches you. */
-function issuePolicyFor(map) {
+const DECISION_TYPES = ["issue.intake", "issue.triage", "ask.user", "answer.apply"];
+
+// The "Another brain" parts an issue reaches from the given parts, nearest
+// first. Feedback wires carry an answer into the next pass, not an issue
+// onward, so they are not followed.
+function callsDownstream(graph, entries) {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const seen = new Set(entries.map((node) => node.id));
+  const queue = [...seen];
+  const calls = [];
+  while (queue.length) {
+    const id = queue.shift();
+    if (byId.get(id)?.type === "brain.call") calls.push(byId.get(id));
+    for (const edge of graph.edges) {
+      if (edge.feedback || edge.from.node !== id || seen.has(edge.to.node)) continue;
+      seen.add(edge.to.node);
+      queue.push(edge.to.node);
+    }
+  }
+  return calls;
+}
+
+/**
+ * The decision parts a map's issues actually meet: its own first, and for any
+ * it lacks, the ones held in another brain that Agent issues feeds — the
+ * nearest call first, as deep as nesting may go, each map visited once.
+ */
+function decisionParts(map, { maps = [] } = {}) {
+  const found = Object.fromEntries(DECISION_TYPES.map((type) => [type, null]));
+  const complete = () => DECISION_TYPES.every((type) => found[type]);
+  const seen = new Set();
+  const visit = (graph, depth, entries) => {
+    seen.add(graph.id);
+    for (const type of DECISION_TYPES) found[type] ??= graph.nodes.find((node) => node.type === type) ?? null;
+    if (complete() || depth >= MAX_NEST) return;
+    for (const call of callsDownstream(graph, entries)) {
+      const target = maps.find((item) => item?.id === clean(call.config?.map, 64));
+      if (!target) continue;
+      const inner = normalizeMap(target);
+      if (seen.has(inner.id)) continue;
+      // Whatever reaches a called map is its input as a whole, unless the
+      // map has its own Agent issues part to take it in.
+      const intakes = inner.nodes.filter((node) => node.type === "issue.intake");
+      visit(inner, depth + 1, intakes.length ? intakes : inner.nodes);
+      if (complete()) return;
+    }
+  };
   const graph = normalizeMap(map);
-  const triage = graph.nodes.find((node) => node.type === "issue.triage");
-  const ask = graph.nodes.find((node) => node.type === "ask.user");
-  const intake = graph.nodes.find((node) => node.type === "issue.intake");
+  visit(graph, 0, graph.nodes.filter((node) => node.type === "issue.intake"));
+  return found;
+}
+
+/**
+ * The live decision rules: what the assistant settles, and what reaches you.
+ * Pass the store's maps so a lane held in an "Another brain" part is found.
+ */
+function issuePolicyFor(map, { maps = [] } = {}) {
+  const parts = decisionParts(map, { maps });
+  const intake = parts["issue.intake"];
+  const triage = parts["issue.triage"];
+  const ask = parts["ask.user"];
+  const apply = parts["answer.apply"];
+  const splitDepth = Number(apply?.config?.splitDepth);
   return {
     ...issues.normalizePolicy({
       auto: triage?.config?.auto,
@@ -909,6 +1036,149 @@ function issuePolicyFor(map) {
     perRun: Math.max(1, Math.min(issues.ISSUE_MAX_PER_RUN, Number(intake?.config?.perRun) || issues.ISSUE_MAX_PER_RUN)),
     fromFailures: intake ? intake.config?.fromFailures !== false : true,
     expireHours: Math.max(1, Math.min(168, Number(ask?.config?.expireHours) || 48)),
+    // How deep Split may take a follow-up chain; 0 turns Split off.
+    splitDepth: apply && Number.isInteger(splitDepth) ? Math.max(0, Math.min(5, splitDepth)) : 3,
+    repeatAsks: triage?.config?.repeatAsks === "ask" ? "ask" : "fold",
+    // Nothing is announced by a map with no apply part to say it.
+    announce: apply ? apply.config?.announce !== false : false,
+  };
+}
+
+// ---- live activity --------------------------------------------------------------
+// What the decision lane, dispatch and verification actually did lately, per
+// part type, so a map shows its traffic and not only its wiring. It is read
+// from what the host already keeps — the Ask cards, the decisions written on
+// tasks, the task log's verdict rows and the executor ledger — and `now` is
+// passed in: nothing here reads the clock.
+
+const ACTIVITY_WINDOW_MS = 24 * 60 * 60 * 1000;
+// The host's own wording, so these follow main.cjs if it changes.
+const SETTLED_TEXT = /^the assistant settled this\b/i;
+const FOLDED_TEXT = /already answered on another card/i;
+const VERDICT_TEXT = /^(un)?verified\s+—/i;
+
+const tally = (counts, key) => { counts[key] = (counts[key] ?? 0) + 1; };
+const ranked = (counts) => Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+// A release reason carries live numbers ("111 MB available"); the brackets
+// are dropped so one cause counts as one reason.
+const reasonKey = (text) => clean(String(text ?? "").replace(/\s*\([^)]*\)/g, ""), 120) || "no reason given";
+
+/**
+ * Counts per part type for the last `windowMs` before `now`: what Agent issues
+ * raised, what Triage settled or asked, what Ask you opened and how it was
+ * answered, what the answers did, and what dispatch and verification saw.
+ * Each part carries a headline for its badge and the lines its inspector lists.
+ * `expireHours` is the live map's Ask expiry, which dates an expired card.
+ */
+function partActivity({ questions = [], tasks = [], executorRows = [], now, windowMs = ACTIVITY_WINDOW_MS, expireHours = 48 } = {}) {
+  const end = Number(now);
+  const span = Number(windowMs) > 0 ? Number(windowMs) : ACTIVITY_WINDOW_MS;
+  if (!Number.isFinite(end)) return { windowMs: span, since: null, parts: {} };
+  const since = end - span;
+  const recent = (at) => Number.isFinite(Number(at)) && Number(at) >= since && Number(at) <= end;
+  // An expired card carries no answer time. It ran out expireHours after it
+  // was asked, so it counts in the window that moment falls in, not the one
+  // it was asked in (which, at 48 hours, a day's window never holds).
+  const expireMs = (Number(expireHours) > 0 ? Number(expireHours) : 48) * 60 * 60 * 1000;
+  const closedAt = (question, answer) => answer?.at
+    || question.expiredAt
+    || (question.status === "expired" && Number.isFinite(Number(question.at)) ? Math.min(end, Number(question.at) + expireMs) : question.at);
+
+  const raised = {};
+  let settled = 0;
+  let folded = 0;
+  const statuses = {};
+  let asked = 0;
+  let open = 0;
+  let offered = 0;
+  let taken = 0;
+  const verbs = {};
+  let notApplied = 0;
+  for (const question of Array.isArray(questions) ? questions : []) {
+    if (question?.source !== "issue") continue;
+    // Open is how things stand now, whenever the card was opened.
+    if (question.status === "open") open += 1;
+    if (recent(question.at)) {
+      asked += 1;
+      tally(raised, question.context?.issueKind || "conflict");
+    }
+    const answer = question.answer && typeof question.answer === "object" ? question.answer : null;
+    if (question.status === "open" || !recent(closedAt(question, answer))) continue;
+    tally(statuses, question.status);
+    if (!answer?.optionId) continue;
+    const options = Array.isArray(question.options) ? question.options : [];
+    const recommended = options.find((option) => option?.recommended);
+    if (recommended) {
+      offered += 1;
+      if (recommended.id === answer.optionId) taken += 1;
+    }
+    const chosen = options.find((option) => option?.id === answer.optionId);
+    tally(verbs, clean(chosen?.action?.action || answer.optionId, 40));
+    if (answer.error) notApplied += 1;
+  }
+
+  let verified = 0;
+  let unverified = 0;
+  for (const task of Array.isArray(tasks) ? tasks : []) {
+    for (const decision of Array.isArray(task?.decisions) ? task.decisions : []) {
+      if (!recent(decision?.at)) continue;
+      const text = String(decision.text ?? "");
+      // An owner's answer arrives through its card and is counted there; a
+      // decision only the assistant wrote is an issue no card ever showed.
+      if (SETTLED_TEXT.test(text)) { settled += 1; tally(raised, decision.kind || "conflict"); }
+      else if (FOLDED_TEXT.test(text)) { folded += 1; tally(raised, decision.kind || "conflict"); }
+    }
+    for (const row of Array.isArray(task?.logs) ? task.logs : []) {
+      if (!recent(row?.at)) continue;
+      const verdict = VERDICT_TEXT.exec(String(row.text ?? ""));
+      if (verdict) { if (verdict[1]) unverified += 1; else verified += 1; }
+    }
+  }
+
+  let starts = 0;
+  let finishes = 0;
+  let failed = 0;
+  let releases = 0;
+  const reasons = {};
+  for (const row of Array.isArray(executorRows) ? executorRows : []) {
+    if (!recent(row?.at)) continue;
+    if (row.event === "start") starts += 1;
+    else if (row.event === "finish") { finishes += 1; if (row.ok !== true) failed += 1; }
+    else if (row.event === "release") { releases += 1; tally(reasons, reasonKey(row.reason)); }
+  }
+
+  const raisedTotal = Object.values(raised).reduce((sum, count) => sum + count, 0);
+  const answered = statuses.answered ?? 0;
+  const [topVerb, topVerbCount] = ranked(verbs)[0] ?? ["applied", 0];
+  const [topReason, topReasonCount] = ranked(reasons)[0] ?? [null, 0];
+  const part = (headline, lines, counts) => ({ headline: { label: headline[0], count: headline[1] }, lines, ...counts });
+  return {
+    windowMs: span,
+    since,
+    parts: {
+      "issue.intake": part(["raised", raisedTotal],
+        [`${raisedTotal} raised`, ...ranked(raised).map(([kind, count]) => `${count} ${kind}`)],
+        { raised: raisedTotal, byKind: raised }),
+      "issue.triage": part(["settled", settled],
+        [`${settled} settled by the assistant`, `${asked} asked you`, `${folded} folded into an earlier answer`],
+        { settled, asked, folded }),
+      "ask.user": part(["asked", asked],
+        [`${asked} asked`, `${open} open now`, `${answered} answered`, `${statuses.dismissed ?? 0} dismissed`, `${statuses.expired ?? 0} expired`,
+          ...(statuses.superseded ? [`${statuses.superseded} superseded`] : []),
+          `Recommended option taken ${taken} of ${offered}`],
+        { asked, open, answered, dismissed: statuses.dismissed ?? 0, expired: statuses.expired ?? 0, superseded: statuses.superseded ?? 0,
+          recommendedTaken: taken, recommendedOffered: offered }),
+      "answer.apply": part([topVerb, topVerbCount],
+        [...ranked(verbs).map(([verb, count]) => `${count} ${verb}`), `${notApplied} not applied`],
+        { byVerb: verbs, notApplied }),
+      "work.dispatch": part(["started", starts],
+        [`${starts} started`, `${finishes} finished${failed ? ` (${failed} failed)` : ""}`,
+          `${releases} released${topReason ? ` — most often: ${topReason} (${topReasonCount})` : ""}`],
+        { starts, finishes, failed, releases, topRelease: topReason ? { reason: topReason, count: topReasonCount } : null }),
+      "verify.evidence": part(["verified", verified],
+        [`${verified} verified`, `${unverified} unverified`],
+        { verified, unverified }),
+    },
   };
 }
 
@@ -928,8 +1198,8 @@ function summarize(map, { maps = [] } = {}) {
 }
 
 module.exports = {
-  SCHEMA, MAX_NODES, MAX_EDGES, MAX_MAPS, MAX_NEST,
+  SCHEMA, MAX_NODES, MAX_EDGES, MAX_MAPS, MAX_NEST, MAX_PARALLEL, ACTIVITY_WINDOW_MS,
   PERMISSIONS, PERMISSION_KEYS, PORT_KINDS, PORT_KIND_IDS, GROUPS, GATES, NODE_TYPES,
   nodeType, catalog, makeNode, defaultMap, normalizeMap, requiredGrants,
-  validateMap, compileMap, gatesFor, issuePolicyFor, summarize,
+  validateMap, compileMap, gatesFor, issuePolicyFor, partActivity, summarize,
 };

@@ -6,9 +6,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import path from "node:path";
-import { readFile } from "node:fs/promises";
+import os from "node:os";
+import { createRequire } from "node:module";
+import { mkdtemp, readFile, rm, writeFile as writeDisk } from "node:fs/promises";
 import * as assistant from "../scripts/assistant.mjs";
 import brains from "../scripts/brains.cjs";
+import agentIssues from "../scripts/agent-issues.cjs";
 
 const source = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
 const preloadSource = await readFile(new URL("../preload.cjs", import.meta.url), "utf8");
@@ -19,27 +22,45 @@ const section = (start, end) => {
 };
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-function storeHost({ file = null, settings = { jevShadow: false, modelSelection: "auto" } } = {}) {
+// raw is the store's exact text, for a file that does not parse; env
+// overrides any host collaborator for one test.
+function storeHost({ file = null, raw = null, settings = { jevShadow: false, modelSelection: "auto" }, autopilot: pilot = {}, env: extra = {} } = {}) {
   const state = assistant.emptyState(1000);
   state.prefs = { ...state.prefs, proactive: true, parallel: 8 };
-  const disk = new Map(file ? [["brain-maps.json", JSON.stringify(file)]] : []);
-  const autopilot = { autoBuild: true, execute: false };
+  const disk = new Map(file || raw !== null ? [["brain-maps.json", raw ?? JSON.stringify(file)]] : []);
+  const autopilot = { autoBuild: true, execute: false, parallel: 3, ...pilot };
   const saved = { ...settings };
-  const logs = [], sent = [], autopilotCalls = [], prefCalls = [], jevWakes = [];
+  const logs = [], sent = [], autopilotCalls = [], prefCalls = [], jevWakes = [], plainWrites = [], atomicWrites = [];
+  // read.error makes every read of the store fail with that code.
+  const read = { error: null };
   const env = vm.createContext({
-    console, path, brains,
+    console, path, brains, agentIssues, Buffer,
+    require: createRequire(import.meta.url),
     STUDIO_ROOT: "",
+    EXECUTOR_PARALLEL_CAP: 3,
+    TASKS_PATH: "eyes-tasks.json",
+    EXECUTOR_LOG_PATH: "executor-log.jsonl",
     assistantState: state,
     autopilot,
     crypto: { randomBytes: () => ({ toString: () => "abcd" }) },
     projects: { current: () => ({ id: "project-a" }) },
     projectDataPath: (file) => path.basename(file),
     readFile: async (name) => {
+      if (read.error) throw Object.assign(new Error(`${read.error}: resource busy`), { code: read.error });
       const held = disk.get(path.basename(name));
       if (held === undefined) throw Object.assign(new Error("missing"), { code: "ENOENT" });
       return held;
     },
-    writeFile: async (name, text) => { disk.set(path.basename(name), text); },
+    // The store is never written in place: a crash mid-write would tear it.
+    writeFile: async (name, text) => { plainWrites.push(path.basename(name)); disk.set(path.basename(name), text); },
+    copyFile: async (from, to) => {
+      const held = disk.get(path.basename(from));
+      if (held === undefined) throw Object.assign(new Error("missing"), { code: "ENOENT" });
+      disk.set(path.basename(to), held);
+    },
+    authStore: {
+      atomicWriteJson: async (name, value) => { atomicWrites.push(path.basename(name)); disk.set(path.basename(name), JSON.stringify(value, null, 2)); },
+    },
     mkdir: async () => {},
     send: (channel, payload) => sent.push({ channel, payload }),
     assistantLog: (kind, text) => { logs.push({ kind, text }); },
@@ -52,9 +73,11 @@ function storeHost({ file = null, settings = { jevShadow: false, modelSelection:
     getJevQueue: () => ({ wake: () => jevWakes.push(Date.now()) }),
     resolveAiRoute: async () => ({ ok: false }),
     httpAssistantCall: async () => ({ ok: false }),
+    getEyes: async () => ({ readJson: async () => [] }),
+    ...extra,
   });
   vm.runInContext(section("// ---- brain maps ---", "// ---- agent issues") + section("function updateSettings(", "function send(channel, payload)"), env);
-  return { env, disk, autopilot, saved, state, logs, sent, autopilotCalls, prefCalls, jevWakes };
+  return { env, disk, autopilot, saved, state, logs, sent, autopilotCalls, prefCalls, jevWakes, plainWrites, atomicWrites, read };
 }
 
 // The real preload bridge, so a test sees exactly the payload brains:save gets.
@@ -208,7 +231,7 @@ test("the gate plan says what would move before anything moves", async () => {
 });
 
 test("activating moves exactly the switches the map names", async () => {
-  const h = storeHost();
+  const h = storeHost({ autopilot: { parallel: 2 } });
   const read = await h.env.brainsRead(null);
   const result = await h.env.brainsActivate(read.map.id, { applyGates: true });
   assert.equal(result.ok, true);
@@ -217,10 +240,53 @@ test("activating moves exactly the switches the map names", async () => {
   assert.equal(h.saved.jevShadow, true);
   assert.equal(h.saved.modelSelection, "auto");
   assert.equal(h.state.prefs.proactive, true);
-  assert.equal(h.state.prefs.parallel, 4, "the dispatch part's worker count is applied");
+  // Workers at once is the build worker limit, not the assistant's roster.
+  assert.equal(h.autopilot.parallel, 3, "the dispatch part's worker count is the build worker limit");
+  assert.equal(h.state.prefs.parallel, 8, "the assistant's roster width is left alone");
+  assert.ok(h.prefCalls.every((patch) => !("parallel" in patch)));
+  assert.ok(result.moved.includes("Workers at once"));
   assert.equal(h.jevWakes.length, 1);
   assert.ok(result.moved.includes("Jev routing"));
   assert.ok(h.sent.some((event) => event.channel === "brains:active"));
+});
+
+test("Workers at once shows in the plan as its own row, and never passes the executor's cap", async () => {
+  const h = storeHost({ autopilot: { parallel: 1 } });
+  const plan = await h.env.brainsGatePlan(null);
+  const row = plan.changes.find((change) => change.key === "parallel");
+  assert.equal(row.label, "Workers at once");
+  assert.equal(row.setting, "autopilot.parallel");
+  assert.equal(row.from, 1, "from is the build worker limit in force now");
+  assert.equal(row.to, 3);
+  assert.equal(row.moves, true);
+  assert.ok(plan.moves.some((move) => move.key === "parallel"), "the owner sees it before activation");
+  // A map saved by an older build asked for more workers than the studio runs.
+  const read = await h.env.brainsRead(null);
+  const wide = plain(read.map);
+  wide.nodes.find((node) => node.type === "work.dispatch").config.parallel = 12;
+  await h.env.brainsSave({ map: wide });
+  assert.equal((await h.env.brainsGatePlan(null)).gates.parallel, 3);
+  await h.env.brainsActivate(read.map.id, { applyGates: true });
+  assert.equal(h.autopilot.parallel, 3);
+  assert.deepEqual(plain(h.autopilotCalls.filter((call) => "parallel" in call)), [{ parallel: 3 }]);
+  // The host's own cap wins over the map's even if the two ever drift apart.
+  const capped = storeHost({ autopilot: { parallel: 1 }, env: { EXECUTOR_PARALLEL_CAP: 2 } });
+  assert.equal((await capped.env.brainsGatePlan(null)).gates.parallel, 2);
+});
+
+test("a session narrowing is not undone by a map that asks for the chosen limit", async () => {
+  // A wedged start narrowed 3 to 2 for the session; setAutopilot restores the
+  // chosen limit whenever one is sent, so the map must not send one.
+  const h = storeHost({ autopilot: { parallel: 2, parallelNarrowedFrom: 3, adaptiveParallel: true } });
+  const plan = await h.env.brainsGatePlan(null);
+  const row = plan.changes.find((change) => change.key === "parallel");
+  assert.equal(row.from, 2, "the plan shows the limit in force");
+  assert.equal(row.moves, false, "the chosen limit already matches");
+  assert.match(row.detail, /Machine agent is managing workers now/, "and says the limit waits behind the Machine agent");
+  const read = await h.env.brainsRead(null);
+  await h.env.brainsActivate(read.map.id, { applyGates: true });
+  assert.ok(h.autopilotCalls.every((call) => !("parallel" in call)));
+  assert.equal(h.autopilot.parallel, 2);
 });
 
 test("a map without a part leaves that stage off, and an empty map moves nothing", async () => {
@@ -270,4 +336,119 @@ test("the live map's decision rules are what triage reads", async () => {
   const after = await h.env.activeIssuePolicy();
   assert.deepEqual(plain(after.auto), [], "an edit to the live map reaches the next issue");
   assert.equal(after.autoRetryLimit, 0);
+});
+
+test("the live policy carries the new decision settings, and a lane in another brain is found", async () => {
+  const h = storeHost();
+  const policy = await h.env.activeIssuePolicy();
+  assert.equal(policy.splitDepth, 3);
+  assert.equal(policy.repeatAsks, "fold");
+  assert.equal(policy.announce, true);
+  // A live map whose Agent issues feed a brain holding the whole lane.
+  const lane = {
+    id: "lane", name: "Lane", grants: ["read-project", "message-user", "create-task", "close-task"],
+    nodes: [
+      brains.makeNode("issue.triage", { id: "t", config: { repeatAsks: "ask" } }), brains.makeNode("ask.user", { id: "a" }),
+      brains.makeNode("answer.apply", { id: "p", config: { splitDepth: 1, announce: false } }),
+    ],
+    edges: [
+      { id: "e1", from: { node: "t", port: "ask" }, to: { node: "a", port: "ask" } },
+      { id: "e2", from: { node: "a", port: "answer" }, to: { node: "p", port: "answer" } },
+    ],
+  };
+  const outer = {
+    id: "outer", name: "Outer", grants: ["read-project"],
+    nodes: [brains.makeNode("issue.intake", { id: "i" }), brains.makeNode("brain.call", { id: "c", config: { map: "lane" } })],
+    edges: [{ id: "e1", from: { node: "i", port: "issue" }, to: { node: "c", port: "in" } }],
+  };
+  assert.equal((await h.env.brainsSave({ map: lane })).ok, true);
+  assert.equal((await h.env.brainsSave({ map: outer })).ok, true);
+  assert.equal((await h.env.brainsActivate("outer", { applyGates: false })).ok, true);
+  const nested = await h.env.activeIssuePolicy();
+  assert.equal(nested.triage, true, "the store's maps reach issuePolicyFor");
+  assert.equal(nested.asks, true, "so permission and risk questions still reach the owner");
+  assert.equal(nested.splitDepth, 1);
+  assert.equal(nested.repeatAsks, "ask");
+  assert.equal(nested.announce, false);
+});
+
+test("a store that does not parse is copied aside and said out loud, never quietly replaced", async () => {
+  const torn = '{"schema":1,"activeId":"mine","maps":[{"id":"mine","name":"Mi';
+  const h = storeHost({ raw: torn });
+  const state = await h.env.brainsState();
+  assert.equal(state.ok, true, "the editor still opens, on the shipped pipeline");
+  const aside = [...h.disk.keys()].filter((name) => /^brain-maps\.broken-\d+\.json$/.test(name));
+  assert.equal(aside.length, 1, "the unreadable store is kept beside it");
+  assert.equal(h.disk.get(aside[0]), torn, "byte for byte");
+  assert.ok(h.logs.some((row) => row.kind === "error" && row.text.includes(aside[0])), "the error log names the copy");
+  assert.ok(h.logs.some((row) => row.kind === "brains" && row.text.includes(aside[0])), "and so does the activity log");
+  // The next save writes a whole new store, atomically, and the copy survives it.
+  const read = await h.env.brainsRead(null);
+  assert.equal((await h.env.brainsSave({ map: { ...plain(read.map), name: "After" } })).ok, true);
+  assert.equal(h.disk.get(aside[0]), torn);
+  assert.deepEqual(h.atomicWrites, ["brain-maps.json"]);
+  assert.deepEqual(h.plainWrites, [], "never a plain in-place write");
+  assert.equal(JSON.parse(h.disk.get("brain-maps.json")).maps[0].name, "After");
+});
+
+test("a store that cannot be read right now is not seeded over", async () => {
+  const mine = { ...brains.normalizeMap({ id: "mine", name: "Mine", grants: ["create-task"], nodes: [brains.makeNode("user.request", { id: "n" })], edges: [] }), builtIn: false };
+  const h = storeHost({ file: { schema: 1, activeId: "mine", maps: [mine] } });
+  h.read.error = "EBUSY";
+  await assert.rejects(h.env.brainsState(), /could not be read \(EBUSY\); nothing was changed/);
+  await assert.rejects(h.env.brainsSave({ map: { id: "other", name: "Other", nodes: [brains.makeNode("user.request", { id: "n" })], edges: [] } }), /could not be read/);
+  // The live policy falls back to the defaults rather than to "only log it".
+  const policy = await h.env.activeIssuePolicy();
+  assert.equal(policy.triage, true);
+  assert.equal(policy.asks, true);
+  assert.deepEqual(h.atomicWrites, [], "nothing was written over the owner's maps");
+  assert.deepEqual([...h.disk.keys()], ["brain-maps.json"]);
+  // Once the file can be read again, the owner's maps are exactly where they were.
+  h.read.error = null;
+  const state = await h.env.brainsState();
+  assert.equal(state.activeId, "mine");
+  assert.ok(state.maps.some((map) => map.id === "mine"));
+});
+
+test("the activity read gives the map's parts their last day, from a bounded ledger tail", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "brains-activity-"));
+  try {
+    const ledger = path.join(dir, "executor-log.jsonl");
+    const now = Date.now();
+    const rows = [
+      { at: now - 3 * 86400000, event: "start", runId: "old" },
+      { at: now - 60000, event: "start", runId: "r1" },
+      { at: now - 50000, event: "release", runId: "r1", reason: "Machine busy (111 MB available)" },
+      { at: now - 40000, event: "start", runId: "r2" },
+      { at: now - 30000, event: "finish", runId: "r2", ok: true },
+    ];
+    await writeDisk(ledger, `${rows.map((row) => JSON.stringify(row)).join("\n")}\nnot json\n`);
+    const tasks = [{ id: "task_a", decisions: [{ at: now - 1000, kind: "verify", choice: "retry", text: "the assistant settled this: verify on attempt 1 of 2" }],
+      logs: [{ at: now - 2000, kind: "status", text: "verified — 2 recorded check(s) passed" }] }];
+    const h = storeHost({
+      env: {
+        projectDataPath: (file) => (path.basename(file) === "executor-log.jsonl" ? ledger : path.basename(file)),
+        getEyes: async () => ({ readJson: async (file) => (path.basename(file) === "eyes-tasks.json" ? tasks : []) }),
+      },
+    });
+    h.state.questions = [{ id: "q1", at: now - 5000, source: "issue", status: "open", context: { issueKind: "scope" }, options: [] }];
+    const activity = await h.env.brainsActivity();
+    assert.equal(activity.ok, true);
+    assert.ok(activity.now >= now);
+    assert.equal(activity.windowMs, 86400000);
+    const parts = plain(activity.parts);
+    assert.equal(parts["work.dispatch"].starts, 2, "a start from three days ago is outside the day");
+    assert.equal(parts["work.dispatch"].finishes, 1);
+    assert.deepEqual(parts["work.dispatch"].topRelease, { reason: "Machine busy", count: 1 });
+    assert.equal(parts["issue.triage"].settled, 1);
+    assert.equal(parts["ask.user"].open, 1);
+    assert.equal(parts["verify.evidence"].verified, 1);
+    // The tail reads only the end of the ledger, and never half a row.
+    const tail = plain(await h.env.brainLedgerTail(ledger, 120));
+    assert.ok(tail.length >= 1 && tail.length < rows.length);
+    assert.deepEqual(tail.at(-1), rows.at(-1));
+    assert.deepEqual(plain(await h.env.brainLedgerTail(path.join(dir, "missing.jsonl"))), [], "no ledger reads as no rows");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

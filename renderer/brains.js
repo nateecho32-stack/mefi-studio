@@ -68,6 +68,7 @@
     problemCursor: -1,
     problemsExpanded: false,
     projectId: null,
+    activity: null,
   };
   const history = { past: [], future: [], tag: null };
   const el = {};
@@ -279,6 +280,60 @@
     }
     renderAll();
     if (state.map && state.map.id !== previousId) restoreView();
+  }
+
+  // ---- live activity ---------------------------------------------------------
+  // What the decision lane, dispatch and verification did in the last day:
+  // read from the host when the editor opens, when a map changes and every
+  // half minute while the sheet is open. A bridge without it (the browser
+  // preview, the test harness) simply draws no counts.
+  const ACTIVITY_EVERY_MS = 30000;
+  let activityTimer = null;
+  let activityAsked = 0;
+
+  async function refreshActivity() {
+    const api = bridge();
+    if (typeof api?.brainsActivity !== "function" || !el.overlay || el.overlay.hidden) return;
+    const asked = ++activityAsked;
+    let result = null;
+    try { result = await api.brainsActivity(); } catch { result = null; }
+    // A slow answer to an older request never replaces a newer one.
+    if (asked !== activityAsked || !result?.ok || !result.parts || typeof result.parts !== "object") return;
+    const before = JSON.stringify(state.activity?.parts ?? null);
+    state.activity = { parts: result.parts, windowMs: Number(result.windowMs) || null };
+    if (JSON.stringify(result.parts) === before) return;
+    // Counts ride on the part heads, so the canvas is redrawn, but never
+    // under a drag; the inspector is never rebuilt under a field being typed in.
+    if (!state.gesture) renderCanvas();
+    if (state.selection?.kind === "node" && inspectorIdle()) renderInspector();
+  }
+
+  function startActivity() {
+    void refreshActivity();
+    if (activityTimer || typeof setInterval !== "function" || typeof bridge()?.brainsActivity !== "function") return;
+    activityTimer = setInterval(() => void refreshActivity(), ACTIVITY_EVERY_MS);
+  }
+
+  function stopActivity() {
+    if (activityTimer && typeof clearInterval === "function") clearInterval(activityTimer);
+    activityTimer = null;
+  }
+
+  function inspectorIdle() {
+    const active = typeof document !== "undefined" ? document.activeElement : null;
+    return !active || !el.inspector?.contains?.(active);
+  }
+
+  // A part's headline count for the last day, as HTML on its head: the wire
+  // layer is SVG and only ever holds wires.
+  function activityBadge(type) {
+    const part = state.activity?.parts?.[type];
+    if (!part?.headline) return null;
+    const badge = document.createElement("span");
+    badge.className = "brains-node-activity";
+    badge.textContent = `${part.headline.label} ${part.headline.count}`;
+    badge.title = `Last 24 hours: ${(Array.isArray(part.lines) ? part.lines : []).join(" · ")}`;
+    return badge;
   }
 
   // Validation is the host's answer, not the editor's guess: the same module
@@ -640,6 +695,9 @@
         badge.title = RUNS[spec.runs]?.detail ?? "";
         top.append(badge);
       }
+      // The decision lane, dispatch and verification say what they did lately.
+      const lately = activityBadge(node.type);
+      if (lately) top.append(lately);
       const title = document.createElement("b");
       const titleText = document.createElement("span");
       titleText.className = "brains-node-title";
@@ -1810,10 +1868,30 @@
       el.inspector.append(note(`Switch it moves: ${gate.label} — ${gate.detail}`, "brains-note gate"));
     }
 
-    // Its own settings.
+    // What it did in the last day, when the host can say.
+    const lately = state.activity?.parts?.[node.type];
+    if (lately?.headline) {
+      const recent = section("activity", "Last 24 hours", { count: `${lately.headline.label} ${lately.headline.count}` });
+      const listing = document.createElement("ul");
+      listing.className = "brains-activity";
+      for (const line of Array.isArray(lately.lines) ? lately.lines : []) {
+        const li = document.createElement("li");
+        li.textContent = line;
+        listing.append(li);
+      }
+      recent.body.append(listing);
+      el.inspector.append(recent.wrap);
+    }
+
+    // Its own settings. One the studio does not read yet says so, rather
+    // than looking like a dial that changes something.
     if (spec.settings?.length) {
       const settings = section("settings", "Settings", { count: spec.settings.length });
-      for (const setting of spec.settings) settings.body.append(settingControl(node, setting));
+      for (const setting of spec.settings) {
+        const control = settingControl(node, setting);
+        if (setting.wired !== true && spec.runs !== "draft") control.append(note("Not read by the studio yet.", "brains-field-help brains-unwired"));
+        settings.body.append(control);
+      }
       el.inspector.append(settings.wrap);
     }
 
@@ -1857,6 +1935,7 @@
         pinned.addEventListener("input", () => { checkpoint(`model:${node.id}`); node.model.model = clean(pinned.value, 160) || null; touchQuiet(); });
         model.body.append(field("Model", pinned, "The id as the Model catalog lists it. An id your providers do not have falls back to your saved default."));
       }
+      if (spec.model.wired !== true) model.body.append(note("Not read by the studio yet: Studio's own routing still picks this part's model.", "brains-field-help brains-unwired"));
       el.inspector.append(model.wrap);
     }
 
@@ -2868,6 +2947,7 @@
       return;
     }
     await load({ id });
+    void refreshActivity();
   }
 
   async function newMap({ from = null } = {}) {
@@ -3095,6 +3175,7 @@
       const node = state.map?.nodes.find((item) => item.type === params.nodeType);
       if (node) { select({ kind: "node", id: node.id }); scrollTo(node.id); }
     }
+    startActivity();
     el.canvasWrap?.focus?.({ preventScroll: true });
   }
 
@@ -3111,6 +3192,7 @@
     el.marquee?.remove?.();
     if (el.canvasWrap) delete el.canvasWrap.dataset.gesture;
     el.overlay.hidden = true;
+    stopActivity();
     setMenu(false);
     if (el.shortcuts) el.shortcuts.hidden = true;
     shortcutsReturn = null;
@@ -3812,6 +3894,17 @@
       state.maps = payload.maps;
       state.activeId = payload.activeId ?? state.activeId;
       renderToolbar();
+      void refreshActivity();
+    });
+    // Another surface can make a map live (the palette, a second window) or
+    // edit the live one: the Live badge and the counts follow it here.
+    bridge()?.onBrainsActive?.((payload) => {
+      const id = payload?.map?.id;
+      if (typeof id !== "string" || !id) return;
+      state.activeId = id;
+      renderToolbar();
+      if (!state.selection && state.map && el.overlay && !el.overlay.hidden && inspectorIdle()) renderInspector();
+      void refreshActivity();
     });
   }
 

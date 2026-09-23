@@ -105,6 +105,7 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   brainsReset: (id) => ipcRenderer.invoke("brains:reset", { id }),
   brainsGatePlan: (id) => ipcRenderer.invoke("brains:gate-plan", { id: typeof id === "string" ? id : null }),
   brainsActivate: (id, options) => ipcRenderer.invoke("brains:activate", { id, applyGates: options?.applyGates !== false }),
+  brainsActivity: () => ipcRenderer.invoke("brains:activity"),
   brainsValidate: (map) => ipcRenderer.invoke("brains:validate", { map }),
   brainsDraft: (text) => ipcRenderer.invoke("brains:draft", { text }),
   onBrains: (callback) => ipcRenderer.on("brains:changed", (_event, payload) => callback(payload)),

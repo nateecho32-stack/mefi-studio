@@ -377,8 +377,8 @@ test("with announce on, the thread says what your answer did", async () => {
   await h.env.assistantIssueAction({ action: "retry", payload: { taskId: "task_1", issueKind: "run-failed" } }, "settled", { origin: "assistant" });
   assert.equal(h.replies.length, 2);
   assert.deepEqual(h.messages, []);
-  // A map without announce stays quiet.
-  const quiet = issueHost();
+  // A map with "Say what changed" off stays quiet (the default map has it on).
+  const quiet = issueHost({ policy: { ...brains.issuePolicyFor(brains.defaultMap()), announce: false } });
   await quiet.env.assistantIssueAction({ action: "acknowledge", payload: { taskId: "task_1", issueKind: "owner" } });
   assert.deepEqual(quiet.replies, []);
 });

@@ -8042,8 +8042,33 @@ function brainStoreSeed() {
 async function readBrainStore() {
   const projectId = projects.current().id;
   if (brainCache?.projectId === projectId) return brainCache.store;
+  const file = brainMapsPath();
+  let text = null;
+  try {
+    text = await readFile(file, "utf8");
+  } catch (error) {
+    // No file is a project that never saved a map. A file that is there but
+    // cannot be read (locked, refused) is not "no maps": seeding here would
+    // let the next save write the shipped map over the owner's.
+    if (error?.code !== "ENOENT") throw new Error(`The brain maps file could not be read (${error?.code ?? error?.message ?? "unknown error"}); nothing was changed.`);
+  }
   let raw = null;
-  try { raw = JSON.parse(await readFile(brainMapsPath(), "utf8")); } catch { raw = null; }
+  if (text !== null) {
+    try {
+      raw = JSON.parse(text);
+    } catch (error) {
+      // A torn or hand-broken store is copied aside before the seed stands in
+      // for it, so the next save cannot quietly replace the owner's maps.
+      const aside = file.replace(/\.json$/i, `.broken-${Date.now()}.json`);
+      try {
+        await copyFile(file, aside);
+      } catch (copyError) {
+        throw new Error(`The brain maps file does not parse and could not be copied aside (${copyError?.message ?? copyError}); nothing was changed.`);
+      }
+      logError(`brain maps: ${path.basename(file)} did not parse (${error?.message ?? error}) · kept it as ${path.basename(aside)}`);
+      assistantLog("brains", `the brain maps file did not parse · kept it as ${path.basename(aside)} and started from the shipped pipeline`);
+    }
+  }
   const maps = (Array.isArray(raw?.maps) ? raw.maps : []).slice(0, brains.MAX_MAPS).map((map) => brains.normalizeMap(map));
   // A store without the shipped map is a store that cannot describe the loop:
   // seed it rather than leaving the editor with nothing to show.
@@ -8056,11 +8081,14 @@ async function readBrainStore() {
   return store;
 }
 
+// Written through a temp file and a rename, so a crash mid-write leaves the
+// old store rather than a torn one. authStore's writer, not eyes.writeJson:
+// that one sweeps `.broken-*` siblings, and the copy a bad read set aside is
+// exactly what must survive the next save.
 async function writeBrainStore(store) {
   const projectId = projects.current().id;
   const target = brainMapsPath();
-  await mkdir(path.dirname(target), { recursive: true }).catch(() => {});
-  await writeFile(target, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  await authStore.atomicWriteJson(target, store);
   brainCache = { projectId, store };
   send("brains:changed", await brainsState());
   return store;
@@ -8074,9 +8102,16 @@ async function activeBrainMap() {
 }
 
 // The live decision rules, read fresh so an edit applies to the next issue.
+// The store's maps come along: a lane held in an "Another brain" part that
+// Agent issues feeds is the lane the issue meets.
 async function activeIssuePolicy() {
-  try { return brains.issuePolicyFor(await activeBrainMap()); }
-  catch { return { ...agentIssues.DEFAULT_POLICY, triage: true, asks: true, perRun: agentIssues.ISSUE_MAX_PER_RUN, fromFailures: true, expireHours: 48 }; }
+  try {
+    const store = await readBrainStore();
+    return brains.issuePolicyFor(await activeBrainMap(), { maps: store.maps });
+  } catch {
+    return { ...agentIssues.DEFAULT_POLICY, triage: true, asks: true, perRun: agentIssues.ISSUE_MAX_PER_RUN, fromFailures: true, expireHours: 48,
+      splitDepth: 3, repeatAsks: "fold", announce: true };
+  }
 }
 
 async function brainsState() {
@@ -8139,6 +8174,18 @@ async function brainsReset(id) {
   return { ok: true, map: fresh, compiled: brains.compileMap(fresh, { maps: store.maps }), state: await brainsState() };
 }
 
+// The switches a map moves, with Workers at once bounded by the executor's
+// cap: it is the build worker limit, not the assistant's roster width.
+function brainGates(map) {
+  const gates = brains.gatesFor(map);
+  return { ...gates, parallel: gates.parallel ? Math.min(EXECUTOR_PARALLEL_CAP, gates.parallel) : null };
+}
+
+// The worker limit the owner chose. A pool a wedged start narrowed for the
+// session is not a choice, and setAutopilot undoes that narrowing whenever
+// a limit is sent — so the map sends one only when it differs from this.
+const chosenParallel = () => autopilot.parallelNarrowedFrom ?? autopilot.parallel ?? null;
+
 // What activating a map would move, before it moves anything. The editor shows
 // this list and the owner confirms it: a map with no dispatch node stops all
 // new work, which is a real choice and must never be a surprise.
@@ -8146,7 +8193,7 @@ async function brainsGatePlan(id) {
   const store = await readBrainStore();
   const map = brainMapById(store, id ?? store.activeId);
   if (!map) return { ok: false, error: "That brain map is no longer saved here." };
-  const gates = brains.gatesFor(map);
+  const gates = brainGates(map);
   const settings = await readSettings();
   const current = {
     approveBeforeBuild: autopilot.autoBuild === false,
@@ -8154,12 +8201,18 @@ async function brainsGatePlan(id) {
     jev: settings.jevShadow === true,
     modelChoice: settings.modelSelection === "fixed" ? "fixed" : "auto",
     dispatch: autopilot.execute === true,
-    parallel: assistantState?.prefs?.parallel ?? null,
+    // The build worker limit in force now, a session narrowing included.
+    parallel: autopilot.parallel ?? null,
   };
+  const settled = { ...current, parallel: chosenParallel() };
+  // With the Machine agent admitting workers the limit waits in the wings;
+  // the owner should know that before moving it.
+  const adaptive = autopilot.adaptiveParallel === true
+    ? " The Machine agent is managing workers now, so this is the manual limit it falls back to." : "";
   const changes = Object.entries(brains.GATES).map(([key, gate]) => ({
-    key, label: gate.label, detail: gate.detail, node: gate.node, setting: gate.setting,
+    key, label: gate.label, detail: key === "parallel" ? `${gate.detail}${adaptive}` : gate.detail, node: gate.node, setting: gate.setting,
     from: current[key] ?? null, to: gates[key],
-    moves: gates[key] !== null && gates[key] !== undefined && gates[key] !== current[key],
+    moves: gates[key] !== null && gates[key] !== undefined && gates[key] !== settled[key],
   }));
   return { ok: true, mapId: map.id, name: map.name, gates, current, changes, moves: changes.filter((change) => change.moves) };
 }
@@ -8176,14 +8229,12 @@ async function brainsActivate(id, { applyGates = true } = {}) {
   await writeBrainStore(store);
   const moved = [];
   if (applyGates) {
-    const gates = brains.gatesFor(map);
+    const gates = brainGates(map);
     try {
       if (gates.approveBeforeBuild !== null) { await setAutopilot({ autoBuild: !gates.approveBeforeBuild }); moved.push(brains.GATES.approveBeforeBuild.label); }
       if (gates.dispatch !== null) { await setAutopilot({ execute: gates.dispatch }); moved.push(brains.GATES.dispatch.label); }
-      if (gates.briefing !== null || gates.parallel) {
-        await assistantSetPrefs({ ...(gates.briefing !== null ? { proactive: gates.briefing } : {}), ...(gates.parallel ? { parallel: gates.parallel } : {}) });
-        if (gates.briefing !== null) moved.push(brains.GATES.briefing.label);
-      }
+      if (gates.parallel && gates.parallel !== chosenParallel()) { await setAutopilot({ parallel: gates.parallel }); moved.push(brains.GATES.parallel.label); }
+      if (gates.briefing !== null) { await assistantSetPrefs({ proactive: gates.briefing }); moved.push(brains.GATES.briefing.label); }
       if (gates.jev !== null || gates.modelChoice !== null) {
         await updateSettings((settings) => {
           if (gates.jev !== null) { settings.jevShadow = gates.jev === true; moved.push(brains.GATES.jev.label); }
@@ -8198,6 +8249,54 @@ async function brainsActivate(id, { applyGates = true } = {}) {
   assistantLog("brains", `"${map.name}" is the live pipeline${moved.length ? ` · moved ${moved.join(", ")}` : ""}`);
   send("brains:active", { ok: true, map, compiled: brains.compileMap(map, { maps: store.maps }) });
   return { ok: true, map, moved, plan: plan.moves ?? [], state: await brainsState() };
+}
+
+// The last rows of a JSONL ledger, reading at most `bytes` from its end: the
+// executor ledger may hold megabytes and the map only wants the last day.
+async function brainLedgerTail(file, bytes = 1024 * 1024) {
+  const { open } = require("node:fs/promises");
+  let handle = null;
+  try {
+    handle = await open(file, "r");
+    const { size } = await handle.stat();
+    const length = Math.min(size, bytes);
+    const buffer = Buffer.alloc(length);
+    let used = 0;
+    while (used < length) {
+      const { bytesRead } = await handle.read(buffer, used, length - used, size - length + used);
+      if (!bytesRead) break;
+      used += bytesRead;
+    }
+    const lines = buffer.subarray(0, used).toString("utf8").split("\n");
+    // A read that starts inside the file starts inside a row.
+    if (length < size) lines.shift();
+    const rows = [];
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try { rows.push(JSON.parse(line)); } catch { /* a torn or foreign row is skipped */ }
+    }
+    return rows;
+  } catch {
+    return [];
+  } finally {
+    await handle?.close().catch(() => {});
+  }
+}
+
+// What the decision lane, dispatch and verification did in the last day, for
+// the badges on the map. Read-only: the cards in memory, the board as last
+// written, and the tail of the executor ledger.
+async function brainsActivity() {
+  const now = Date.now();
+  let tasks = [];
+  try { tasks = await (await getEyes()).readJson(TASKS_PATH, []); } catch { tasks = []; }
+  const executorRows = await brainLedgerTail(projectDataPath(EXECUTOR_LOG_PATH));
+  // An expired card is dated by when it ran out, which the live map decides.
+  const { expireHours } = await activeIssuePolicy();
+  const activity = brains.partActivity({
+    questions: assistantState?.questions ?? [], tasks: Array.isArray(tasks) ? tasks : [], executorRows, now, expireHours,
+  });
+  return { ok: true, now, windowMs: activity.windowMs, parts: activity.parts };
 }
 
 // Build-with-AI: the assistant drafts a map from a sentence. The reply is data
@@ -15203,6 +15302,7 @@ function registerIpc() {
   ipcMain.handle("brains:reset", (_event, payload) => brainsReset(payload?.id ?? null));
   ipcMain.handle("brains:gate-plan", (_event, payload) => brainsGatePlan(payload?.id ?? null));
   ipcMain.handle("brains:activate", (_event, payload) => brainsActivate(payload?.id ?? null, { applyGates: payload?.applyGates !== false }));
+  ipcMain.handle("brains:activity", () => brainsActivity());
   ipcMain.handle("brains:validate", async (_event, payload) => {
     const store = await readBrainStore();
     const map = brains.normalizeMap(payload?.map ?? {});

@@ -101,11 +101,11 @@
 .brains-part-summary { font-size: 11px; line-height: 1.45; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
 /* ---- canvas ---------------------------------------------------------------- */
-.brains-canvas-wrap { container: brains-canvas / inline-size; position: relative; overflow: clip; outline: none; touch-action: none; background-color: var(--bg); background-image: radial-gradient(circle, rgba(113, 203, 183, 0.2) 1px, transparent 1.5px); background-size: 20px 20px; }
+.brains-canvas-wrap { container: brains-canvas / inline-size; position: relative; overflow: clip; outline: none; touch-action: none; background-color: var(--bg); background-image: radial-gradient(circle, color-mix(in srgb, var(--gold) 20%, transparent) 1px, transparent 1.5px); background-size: 20px 20px; }
 .brains-canvas-wrap:focus-visible { box-shadow: inset 0 0 0 1px var(--gold-dim); }
 .brains-canvas-wrap[data-gesture="pan"], .brains-canvas-wrap[data-gesture="node"] { cursor: grabbing; }
 .brains-canvas-wrap[data-gesture="wire"], .brains-canvas-wrap[data-gesture="marquee"] { cursor: crosshair; }
-.brains-marquee { position: absolute; z-index: 5; pointer-events: none; border: 1px dashed var(--gold-bright); border-radius: 4px; background: rgba(167, 243, 218, .07); }
+.brains-marquee { position: absolute; z-index: 5; pointer-events: none; border: 1px dashed var(--gold-bright); border-radius: 4px; background: color-mix(in srgb, var(--gold-bright) 7%, transparent); }
 .brains-canvas-wrap.drop-ready { box-shadow: inset 0 0 0 2px var(--gold-dim); }
 .brains-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
 .brains-stage.animating { transition: transform var(--dur-3) var(--ease); }
@@ -113,7 +113,7 @@
 .brains-wires, .brains-wire-hits, .brains-ghost { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; }
 .brains-ghost { z-index: 2; }
 .brains-ghost[data-on="false"] { display: none; }
-.brains-ghost path { fill: none; stroke: var(--gold-bright); stroke-width: calc(2px / var(--zoom, 1)); stroke-dasharray: calc(7px / var(--zoom, 1)) calc(6px / var(--zoom, 1)); filter: drop-shadow(0 0 4px rgba(167, 243, 218, 0.5)); }
+.brains-ghost path { fill: none; stroke: var(--gold-bright); stroke-width: calc(2px / var(--zoom, 1)); stroke-dasharray: calc(7px / var(--zoom, 1)) calc(6px / var(--zoom, 1)); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--gold-bright) 50%, transparent)); }
 
 /* wires: every width is on-screen pixels divided by the zoom, because the
    stage is scaled by a CSS transform that vector-effect does not undo */
@@ -123,7 +123,7 @@
 .brains-wire[data-dim="true"] { stroke-opacity: .14; }
 .brains-wire[data-feedback="true"] { stroke-dasharray: calc(6px / var(--zoom, 1)) calc(5px / var(--zoom, 1)); }
 .brains-wire[data-problem="error"] { stroke: var(--bad); stroke-opacity: .95; }
-.brains-wire[data-selected="true"] { stroke: var(--gold-bright); stroke-opacity: 1; stroke-width: calc(3.5px / var(--zoom, 1)); filter: drop-shadow(0 0 5px rgba(167, 243, 218, 0.55)); }
+.brains-wire[data-selected="true"] { stroke: var(--gold-bright); stroke-opacity: 1; stroke-width: calc(3.5px / var(--zoom, 1)); filter: drop-shadow(0 0 5px color-mix(in srgb, var(--gold-bright) 55%, transparent)); }
 .brains-wire-hit { fill: none; stroke: transparent; stroke-width: calc(14px / var(--zoom, 1)); pointer-events: stroke; cursor: pointer; }
 @keyframes brains-flow { to { stroke-dashoffset: calc(-17px / var(--zoom, 1)); } }
 
@@ -143,7 +143,7 @@
 .brains-node[data-lit="true"] { border-color: color-mix(in srgb, var(--accent) 70%, var(--hairline-strong)); }
 .brains-node[data-problem="error"] { border-color: var(--bad); }
 /* Selection is one colour whatever the stage, and wins over a problem border. */
-.brains-node[data-selected="true"] { border-color: var(--gold-bright); box-shadow: 0 0 0 2px rgba(167, 243, 218, .35), 0 0 22px rgba(167, 243, 218, .18), 0 16px 36px rgba(0,0,0,.55); }
+.brains-node[data-selected="true"] { border-color: var(--gold-bright); box-shadow: 0 0 0 2px color-mix(in srgb, var(--gold-bright) 35%, transparent), 0 0 22px color-mix(in srgb, var(--gold-bright) 18%, transparent), 0 16px 36px rgba(0,0,0,.55); }
 .brains-node[data-selected="true"][data-problem="error"] { box-shadow: 0 0 0 2px rgba(255, 156, 156, .45), 0 16px 36px rgba(0,0,0,.55); }
 .brains-node[data-runs="draft"] { border-style: dashed; }
 .brains-node:focus-visible { outline: calc(2px / var(--zoom, 1)) solid var(--gold-bright); outline-offset: calc(3px / var(--zoom, 1)); }
@@ -156,6 +156,8 @@
 .brains-node-badge { flex: none; padding: 1px 6px; border: 1px solid var(--hairline); border-radius: 999px; font-size: 8.5px; line-height: 1.35; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
 .brains-node-badge[data-runs="map"] { color: var(--gold-bright); border-color: var(--gold-dim); background: var(--tint-gold-2); }
 .brains-node-badge[data-runs="draft"] { border-style: dashed; }
+/* What the part did in the last day (brainsActivity): a count, not a status. */
+.brains-node-activity { flex: none; padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--hairline)); border-radius: 999px; font-size: 8.5px; line-height: 1.35; letter-spacing: .03em; color: var(--ivory); background: color-mix(in srgb, var(--accent) 12%, transparent); font-variant-numeric: tabular-nums; white-space: nowrap; cursor: help; }
 .brains-node-switch { flex: none; display: grid; place-items: center; width: 16px; height: 15px; border-radius: 5px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); cursor: help; }
 .brains-node-switch .glyph { width: 11px; height: 11px; }
 .brains-node-alert { flex: none; width: 14px; height: 14px; display: grid; place-items: center; border-radius: 50%; font-size: 9px; font-weight: 800; color: #120606; background: var(--bad); cursor: help; }
@@ -175,7 +177,7 @@
 .brains-port[data-armed="true"] { color: var(--gold-bright); background: var(--tint-gold-3); }
 .brains-port[data-armed="true"] i { border-color: var(--gold-bright); box-shadow: 0 0 0 4px var(--tint-gold-3); }
 .brains-port[data-target="yes"] { color: var(--ivory); }
-.brains-port[data-target="yes"] i { border-color: var(--gold-bright); box-shadow: 0 0 0 3px rgba(167, 243, 218, .25); animation: brains-pulse 1.1s ease-in-out infinite; }
+.brains-port[data-target="yes"] i { border-color: var(--gold-bright); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold-bright) 25%, transparent); animation: brains-pulse 1.1s ease-in-out infinite; }
 .brains-port[data-target="no"] { opacity: .3; }
 .brains-node-note { grid-column: 1 / -1; height: 36px; margin: 0; padding: 4px 10px 0 12px; font-size: 11px; line-height: 1.4; color: var(--muted); font-style: italic; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .brains-node-foot { flex: none; height: 26px; margin: 0; padding: 0 10px 0 12px; display: block; line-height: 25px; font-size: 9.5px; color: var(--dim); border-top: 1px solid var(--hairline); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -184,6 +186,7 @@
 .brains-stage[data-lod="far"] .brains-port span,
 .brains-stage[data-lod="far"] .brains-node-foot,
 .brains-stage[data-lod="far"] .brains-node-badge,
+.brains-stage[data-lod="far"] .brains-node-activity,
 .brains-stage[data-lod="far"] .brains-node-kind { visibility: hidden; }
 .brains-stage[data-lod="far"] .brains-node-head { border-bottom-color: transparent; }
 .brains-stage[data-lod="far"] .brains-node-glyph,
@@ -216,7 +219,7 @@
 .brains-mini-node { fill: var(--accent); fill-opacity: .55; }
 .brains-mini-node[data-selected="true"] { fill-opacity: 1; stroke: var(--ivory); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .brains-mini-wire { stroke: var(--hairline-strong); stroke-width: 1; vector-effect: non-scaling-stroke; }
-.brains-mini-view { fill: rgba(167, 243, 218, .07); stroke: var(--gold-bright); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.brains-mini-view { fill: color-mix(in srgb, var(--gold-bright) 7%, transparent); stroke: var(--gold-bright); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .brains-rail-toggle { position: absolute; top: 10px; z-index: 3; background: var(--glass-hard); border-color: var(--hairline); }
 .brains-rail-toggle.left { left: 10px; }
 .brains-rail-toggle.right { right: 10px; }
@@ -283,6 +286,8 @@
 .brains-field { display: grid; gap: 5px; font-size: 11px; }
 .brains-field-label { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .brains-field-help { margin: 0; font-size: 10.5px; line-height: 1.5; color: var(--dim); }
+.brains-field-help.brains-unwired { font-style: italic; }
+.brains-activity { margin: 0; padding-left: 16px; display: grid; gap: 3px; font-size: 11px; line-height: 1.5; color: var(--muted); font-variant-numeric: tabular-nums; }
 .brains-field input[type="text"], .brains-field input[type="number"], .brains-field select, .brains-field textarea { width: 100%; }
 .brains-field input[type="number"] { font: inherit; font-size: var(--fs-md); min-height: var(--ctl-h); padding: 8px 11px; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: rgba(8, 8, 11, 0.85); color: var(--ivory); }
 .brains-field input[type="checkbox"] { justify-self: start; accent-color: var(--gold); width: 16px; height: 16px; }
@@ -379,7 +384,7 @@ textarea.brains-dialog-input { min-height: 104px; resize: vertical; }
 .brains-banner { animation-name: brains-banner-in; }
 @keyframes brains-banner-in { from { opacity: 0; transform: translate(-50%, -6px); } }
 @keyframes brains-node-in { from { opacity: 0; } }
-@keyframes brains-pulse { 50% { box-shadow: 0 0 0 5px rgba(167, 243, 218, .12); } }
+@keyframes brains-pulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold-bright) 12%, transparent); } }
 @keyframes brains-spin { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {

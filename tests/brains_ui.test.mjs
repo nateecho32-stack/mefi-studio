@@ -97,9 +97,9 @@ const IDS = [
 ];
 
 // extraIds adds elements the default page leaves out (brains.js guards every
-// optional one), bridge overrides host calls, and activeId makes another map
-// the live one.
-async function editor({ map = brains.defaultMap(), saves = [], extraIds = [], bridge: overrides = {}, activeId = null } = {}) {
+// optional one), bridge overrides host calls, activeId makes another map the
+// live one, and globals adds page globals the default harness leaves out.
+async function editor({ map = brains.defaultMap(), saves = [], extraIds = [], bridge: overrides = {}, activeId = null, globals = {} } = {}) {
   const elements = new Map([...IDS, ...extraIds].map((id) => [id, new Element(id.includes("input") || id.includes("search") ? "input" : "div")]));
   const documentKeys = [];
   const catalog = brains.catalog();
@@ -139,6 +139,7 @@ async function editor({ map = brains.defaultMap(), saves = [], extraIds = [], br
       confirm: () => true,
       prompt: () => "Prompted name",
     },
+    ...globals,
   };
   context.window.window = context.window;
   vm.createContext(context);
@@ -623,4 +624,104 @@ test("undoing the edits made during a save reads as saved again", async () => {
   assert.equal(ui.elements.get("brains-save").disabled, false, "the edit made during the save is unsaved");
   await ui.key({ key: "z", ctrlKey: true });
   assert.equal(ui.elements.get("brains-save").disabled, true, "undoing it lands exactly on what was saved");
+});
+
+// ---- live activity and honest settings ------------------------------------------
+
+const NOW = 1_800_000_000_000;
+const splitCard = (index) => ({
+  id: `q${index}`, at: NOW - 3600000, source: "issue", status: "answered", context: { issueKind: "scope" },
+  options: [{ id: "narrow", recommended: true, action: { kind: "issue", action: "narrow" } }, { id: "split", action: { kind: "issue", action: "split" } }],
+  answer: { at: NOW - 1800000, optionId: "split" },
+});
+const activityParts = () => brains.partActivity({ now: NOW, questions: [splitCard(1), splitCard(2)] }).parts;
+const activityOf = (ui, id) => ui.nodes().find((node) => node.dataset.node === id).querySelector(".brains-node-activity");
+
+test("the decision parts carry their last day on the canvas, and the inspector lists it", async () => {
+  const timers = [];
+  const cleared = [];
+  let reads = 0;
+  const ui = await editor({
+    bridge: { brainsActivity: async () => { reads += 1; return { ok: true, now: NOW, windowMs: 86400000, parts: activityParts() }; } },
+    globals: {
+      setInterval: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
+      clearInterval: (id) => { cleared.push(id); },
+    },
+  });
+  await flush();
+  assert.equal(reads, 1, "read once when the editor opens");
+  assert.equal(activityOf(ui, "n_answer_apply").textContent, "split 2");
+  assert.equal(activityOf(ui, "n_ask_user").textContent, "asked 2");
+  assert.equal(activityOf(ui, "n_work_dispatch").textContent, "started 0");
+  assert.equal(activityOf(ui, "n_answer_apply").tagName, "SPAN", "an HTML badge on the part's head");
+  assert.ok(activityOf(ui, "n_answer_apply").parentElement.classes.includes("brains-node-top"));
+  assert.match(activityOf(ui, "n_answer_apply").title, /Last 24 hours: 2 split/);
+  assert.equal(activityOf(ui, "n_jev_classify"), null, "a stage the lane does not count carries none");
+  assert.equal(ui.wires().length, 23, "the wire layer only ever holds wires");
+
+  await pick(ui, "n_answer_apply");
+  const text = ui.inspector().textContent;
+  assert.ok(text.includes("Last 24 hours"));
+  assert.ok(text.includes("2 split"));
+  assert.ok(text.includes("0 not applied"));
+
+  // Refreshed every half minute while open, and not after it closes.
+  assert.deepEqual(timers.map((timer) => timer.ms), [30000]);
+  await timers[0].fn();
+  await flush();
+  assert.equal(reads, 2);
+  ui.context.window.MefiBrains.close();
+  assert.deepEqual(cleared, [1]);
+  await ui.context.window.MefiBrains.open();
+  await flush();
+  assert.equal(timers.length, 2, "opening again starts it again");
+});
+
+test("without an activity bridge the editor draws no counts and starts no timer", async () => {
+  const timers = [];
+  const ui = await editor({ globals: { setInterval: (fn, ms) => { timers.push(ms); return 1; }, clearInterval: () => {} } });
+  assert.equal(ui.canvas.querySelectorAll(".brains-node-activity").length, 0);
+  assert.deepEqual(timers, []);
+  await pick(ui, "n_answer_apply");
+  assert.ok(!ui.inspector().textContent.includes("Last 24 hours"));
+});
+
+test("a map made live elsewhere shows as live here, and the counts are read again", async () => {
+  let onActive = null;
+  let reads = 0;
+  const ui = await editor({
+    activeId: "some-other-map",
+    bridge: {
+      onBrainsActive: (callback) => { onActive = callback; },
+      brainsActivity: async () => { reads += 1; return { ok: true, parts: activityParts() }; },
+    },
+  });
+  await flush();
+  const liveChip = () => ui.inspector().querySelectorAll(".brains-chip").find((chip) => chip.dataset.tone === "live") ?? null;
+  assert.equal(ui.elements.get("brains-live").hidden, true);
+  assert.equal(liveChip(), null);
+  assert.equal(typeof onActive, "function", "the editor listens for brains:active");
+  const before = reads;
+  onActive({ ok: true, map: { id: brains.defaultMap().id } });
+  await flush();
+  assert.equal(ui.elements.get("brains-live").hidden, false);
+  assert.match(ui.elements.get("brains-live").textContent, /Live pipeline/);
+  assert.equal(liveChip()?.textContent, "Live", "the map inspector's chip follows");
+  assert.equal(reads, before + 1);
+  onActive(null);
+  onActive({ ok: true });
+  assert.equal(ui.elements.get("brains-live").hidden, false, "a payload without a map changes nothing");
+});
+
+test("a setting the studio does not read yet says so; one it reads does not", async () => {
+  const ui = await editor();
+  await pick(ui, "n_verify_evidence");
+  const verify = ui.inspector().textContent;
+  assert.equal(verify.split("Not read by the studio yet.").length - 1, 2, "both verify dials are drawn only");
+  assert.ok(verify.includes("Not read by the studio yet: Studio's own routing"), "and so is its model block");
+  await pick(ui, "n_issue_intake");
+  assert.ok(!ui.inspector().textContent.includes("Not read by the studio yet"), "both intake settings are read");
+  await pick(ui, "n_work_dispatch");
+  const dispatch = ui.inspector().textContent;
+  assert.equal(dispatch.split("Not read by the studio yet.").length - 1, 1, "Workers at once is read; Tries before parking is not");
 });
