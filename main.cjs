@@ -290,6 +290,11 @@ function machineMemoryWarnOverride(settings = null) {
 }
 let machineTimer = null;
 let machinePreviousCpu = new Map();
+// Bounded oldest-first tick ring persisted into machine-status.json so the
+// literal first post-restart sample survives later polls (see machine.mjs).
+// Resets to empty on boot, which is exactly what marks the first post-restart
+// tick; `machine` (the loaded module) provides the append helper.
+let machineStatusHistory = [];
 const machineEvents = [];
 let machineReadInFlight = null;
 let machineReadCache = null;
@@ -376,6 +381,13 @@ async function resourcePass({ kill = true, reason = "poll", withProcesses = true
     wait: leases.exclusive || !capacity.canStart,
     lines: machine.describe({ leases, processes: verdicts, actions, capacity }),
   };
+  if (typeof machine.appendMachineStatusHistory === "function") {
+    machineStatusHistory = machine.appendMachineStatusHistory(
+      typeof machineStatusHistory === "undefined" ? [] : machineStatusHistory,
+      status,
+    );
+    status.history = machineStatusHistory;
+  }
   await eyes.writeJson(MACHINE_STATUS_PATH, status);
   await eyes.writeJson(RESOURCE_LOG_PATH, { updatedAt: status.updatedAt, events: machineEvents.slice(0, 60) });
   send("machine:status", status);
