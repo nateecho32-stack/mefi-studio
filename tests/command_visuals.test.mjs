@@ -232,6 +232,92 @@ test("the real rail paints each node once a frame through MefiNodeStyles and rea
   assert.equal(painted[first].motion, painted[0].motion, "and its motion record survives the frame");
 });
 
+test("the rail's edges, tethers and pulses wear the style through one scratch each: wire, surge, then land over the tail", async () => {
+  const draw = section(tree, "  function draw(", "  let lastDraw = -Infinity;");
+  const edges = section(draw, "    // edges, far to near", "    // pulses");
+  const pulses = section(draw, "    // pulses", "    // tethers");
+  const tethers = section(draw, "    // tethers", "    // wakes");
+  assert.ok(edges.includes("if (styles.wire(ctx, nodeStyle, a, b, railWire)) continue;"), "every edge is offered to the style first");
+  assert.ok(tethers.includes("if (styles.wire(ctx, nodeStyle, a, b, railWire)) continue;"), "and every agent tether");
+  assert.ok(pulses.includes("if (styles.surge(ctx, nodeStyle, a, b, t, pulse, railPulse)) continue;"), "a travelling pulse is the style's");
+  assert.ok(pulses.includes("if (!styles.land(ctx, nodeStyle, b, railPulse.rTo, pulse._rgb, u, railPulse)) pulse._landed = true;"), "an arrived pulse lands in the style, or goes");
+  assert.ok(pulses.includes("pulse.duration + (pulse._landed ? 0 : landTail)"), "with the module a pulse outlives its travel by its landing");
+  for (const scratch of ["railWire", "railPulse"]) {
+    const literal = section(tree, `  const ${scratch} = {`, "};");
+    assert.ok(literal.includes("detail: 2") && literal.includes("rail: true"), `${scratch} carries the rail's tier cap and rail: true`);
+  }
+  for (const allocation of ["Array.from", ".map(", "{ kind:", "new Map"]) assert.ok(!edges.slice(edges.indexOf("for (const edge")).includes(allocation) && !tethers.includes(allocation), `no ${allocation} per edge or tether`);
+
+  const nodeStyles = await readFile(new URL("../renderer/node-styles.js", import.meta.url), "utf8");
+  const frames = new Map(), offers = { wire: [], surge: [], land: [] };
+  let nextFrame = 0, now = 0, bodyObserver;
+  const element = () => ({ style: {}, clientWidth: 420, clientHeight: 600, append() {}, addEventListener() {}, setAttribute() {}, removeAttribute() {}, querySelector: () => null, classList: { contains: () => false, toggle() {} } });
+  const ctx = new Proxy({}, {
+    get: (target, key) => key in target ? target[key] : key === "measureText" ? (text) => ({ width: String(text).length * 7 }) : key === "getLineDash" ? () => [] : () => ({ addColorStop() {} }),
+    set: (target, key, value) => { target[key] = value; return true; },
+  });
+  const canvas = element(), rail = element();
+  canvas.getContext = () => ctx;
+  const elements = { "tree-canvas": canvas, "tree-rail": rail, "tree-stats": element() };
+  const bodyClasses = new Set(["workspace-active"]);
+  const document = { hidden: false, body: { classList: { contains: (name) => bodyClasses.has(name) } }, getElementById: (id) => elements[id] ?? null, createElement: element, addEventListener() {} };
+  const window = {
+    devicePixelRatio: 1, matchMedia: () => ({ matches: false }), addEventListener() {},
+    MefiMusic: {
+      graphPreferences: () => ({ nodeStyle: "halo", nodeLayout: "constellation", orbitTrails: false, extraGlow: false }),
+      themePalette: () => ({ canvas: { background: "#050507", text: "#ece5d8", accent2: "#36d1ff", bright: "#e6c98d" } }),
+    },
+    mefiStudio: {
+      eyesState: async () => ({ ok: true, sessions: [{ id: "s1", title: "Current session", timeUpdated: Date.now() }, { id: "s2", title: "Earlier session", timeUpdated: Date.now() - 60000 }], todos: [] }),
+      assistantState: async () => ({ ok: true, state: { status: "idle", agents: [] } }),
+      eyesCheckpointsRead: async () => ({ checkpoints: {} }),
+      onEyesActivity() {}, onAssistant() {}, onCheckpoints() {},
+    },
+  };
+  const context = vm.createContext({
+    window, document, console, performance: { now: () => now },
+    localStorage: { getItem: () => null, setItem() {} },
+    requestAnimationFrame: (callback) => { const id = ++nextFrame; frames.set(id, callback); return id; },
+    cancelAnimationFrame: (id) => frames.delete(id),
+    MutationObserver: class { constructor(callback) { bodyObserver = callback; } observe() {} },
+    ResizeObserver: class { observe() {} },
+  });
+  vm.runInContext(nodeStyles, context);
+  const real = window.MefiNodeStyles;
+  const spy = (name) => (...args) => {
+    const o = args[name === "wire" ? 4 : name === "surge" ? 6 : 6];
+    offers[name].push({ o, copy: { ...o }, target: args[0], style: args[1], t: name === "surge" ? args[4] : undefined, u: name === "land" ? args[5] : undefined, tint: name === "land" ? args[4] : undefined });
+    return real[name](...args);
+  };
+  window.MefiNodeStyles = { ...real, wire: spy("wire"), surge: spy("surge"), land: spy("land") };
+  vm.runInContext(tree, context);
+  await window.MefiTree.init();
+  const frame = (time) => { now = time; const pending = [...frames.values()]; frames.clear(); for (const callback of pending) callback(time); };
+  bodyClasses.delete("workspace-active"); bodyObserver();
+  frame(1);
+  assert.ok(offers.wire.length >= 1, `the rail offered its edges (${offers.wire.length})`);
+  assert.ok(offers.wire.every(({ o, copy, target, style }) => o === offers.wire[0].o && target === ctx && style === "halo" && copy.rail === true && copy.detail === 2 && Array.isArray(copy.tint) && copy.theme && copy.far === false), "one scratch, on the rail's canvas, in the chosen style, rail: true at T2");
+  assert.ok(offers.wire.every(({ copy }) => copy.alpha > 0 && copy.alpha <= 1 && copy.width === 1 && ["session", "todo", "folded", "hub", "agent", "tether"].includes(copy.kind)), "a known kind and the rail's own alpha");
+  // Work the assistant did travels root → assistant as a dot pulse.
+  now = 100;
+  await window.MefiTree.applyAssistant({ event: { at: 1, kind: "tick", text: "a tick" } });
+  frame(400);
+  assert.ok(offers.surge.length >= 1, "the travelling pulse is offered to the style");
+  const travel = offers.surge.at(-1);
+  assert.ok(travel.copy.rail === true && travel.copy.detail === 2 && travel.copy.kind === "dot" && travel.t > 0 && travel.t < 1, `travelling at t ${travel.t}`);
+  assert.equal(offers.land.length, 0, "nothing lands before it arrives");
+  frame(100 + 900 + 95);
+  assert.equal(offers.land.length, 1, "the arrived pulse lands in the style");
+  const landing = offers.land[0];
+  assert.ok(Math.abs(landing.u - 95 / 380) < 1e-9 && landing.copy.rail === true && landing.copy.pulse && plain(landing.tint).length === 3, "u runs over the 380 ms tail, with the pulse and its colour as a triple");
+  const surges = offers.surge.length;
+  frame(100 + 900 + 300);
+  assert.equal(offers.land.length, 2, "the landing plays out its tail");
+  assert.equal(offers.surge.length, surges, "an arrived pulse no longer travels");
+  frame(100 + 900 + 420);
+  assert.equal(offers.land.length, 2, "and then it is gone");
+});
+
 test("speech bubbles: one per node, repeats refresh, a cap, expiry, and the pointer holds one up", () => {
   const { env, state, tick, now } = speechFixture();
   const agent = { id: "__agent__:watcher", kind: "agent", role: "watcher" };
