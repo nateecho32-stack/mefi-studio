@@ -4621,7 +4621,7 @@
     const motion = state.nodeMotion?.get(pulse.to?.id) ?? null;
     const arrived = !pulse._kicked;
     if (arrived) { pulse._kicked = true; if (motion && !still) motion.kick = 1; }
-    look.kind = pulse.wave ? "wave" : "dot"; look.rTo = pulse.to?._pr ?? 0; look.detail = pulse.to?._detail ?? 3; look.pulse = pulse; look.motion = motion;
+    look.kind = pulse.wave ? "wave" : "dot"; look.rTo = pulse.to?._pr ?? 0; look.detail = pulse.to?._detail ?? 3; look.pulse = pulse; look.motion = motion; look.cp = null;
     pulse._rgb ??= hexToRgb(pulse.color ?? "#a9ffcd");
     const u = still ? 1 : Math.min(1, Math.max(0, since) / LAND_TAIL_MS);
     if (!styles.land(ctx, state.nodeStyle, point, look.rTo, pulse._rgb, u, look)) pulse._landed = true;
@@ -6402,14 +6402,23 @@
   // reading either end: root→session plain, session→todo faint and tinted by
   // the todo's state, a task's anchor dotted, the hub link doubled, the
   // finished cluster stippled. The active path (a running worker's node) is
-  // the bright one and its dots march while the work runs.
-  function edgeStyleFor(edge, a, b, { active = false, inspected = false, primary = false } = {}) {
+  // the bright one and its dots march while the work runs. The dash patterns
+  // are shared frozen arrays (setLineDash copies what it is given), and the
+  // frame loop fills one look scratch (EDGE_LOOK) through edgeStyleInto, so
+  // no edge allocates a dash or a look a frame.
+  const NO_DASH = Object.freeze([]);
+  const TASK_DASH = Object.freeze([2, 4]);
+  const FOLDED_DASH = Object.freeze([1, 5]);
+  const EDGE_LOOK = { kind: "session", dash: NO_DASH, width: 1, alpha: 0, march: false, double: false };
+  function edgeStyleInto(out, edge, a, b, active, inspected, primary) {
     const hub = Boolean(edge.assistant) || (a.node.kind === "root" && b.node.kind === "assistant") || (a.node.kind === "assistant" && b.node.kind === "root");
-    if (hub) return { kind: "hub", dash: [], width: 1, alpha: 0.34, double: true };
-    if (edge.task || b.node.kind === "task" || b.node.kind === "task-group") return { kind: "task", dash: [2, 4], width: active || inspected ? 1.4 : 1, alpha: inspected ? 0.7 : active ? 0.55 : primary ? 0.32 : 0.12, march: active };
-    if (b.node.kind === "todo") return { kind: "todo", dash: [], width: active ? 1.2 : 0.8, alpha: b.node.state === "done" ? 0.3 : inspected ? 0.6 : active ? 0.5 : 0.14 };
-    if (b.node.kind === "folded") return { kind: "folded", dash: [1, 5], width: 0.9, alpha: 0.22 };
-    return { kind: "session", dash: [], width: inspected ? 1.3 : 0.9, alpha: inspected ? 0.65 : active ? 0.5 : primary ? 0.3 : 0.16 };
+    out.march = false; out.double = false;
+    if (hub) { out.kind = "hub"; out.dash = NO_DASH; out.width = 1; out.alpha = 0.34; out.double = true; }
+    else if (edge.task || b.node.kind === "task" || b.node.kind === "task-group") { out.kind = "task"; out.dash = TASK_DASH; out.width = active || inspected ? 1.4 : 1; out.alpha = inspected ? 0.7 : active ? 0.55 : primary ? 0.32 : 0.12; out.march = Boolean(active); }
+    else if (b.node.kind === "todo") { out.kind = "todo"; out.dash = NO_DASH; out.width = active ? 1.2 : 0.8; out.alpha = b.node.state === "done" ? 0.3 : inspected ? 0.6 : active ? 0.5 : 0.14; }
+    else if (b.node.kind === "folded") { out.kind = "folded"; out.dash = FOLDED_DASH; out.width = 0.9; out.alpha = 0.22; }
+    else { out.kind = "session"; out.dash = NO_DASH; out.width = inspected ? 1.3 : 0.9; out.alpha = inspected ? 0.65 : active ? 0.5 : primary ? 0.3 : 0.16; }
+    return out;
   }
 
   function drawGraphConnectionsImpl(ctx, projected, runningIds, audioLinked, time, layers = null) {
@@ -6420,12 +6429,20 @@
     const focusIds = layers?.focusIds ?? null;
     const penFor = (a, b) => (focusIds && far !== ctx && !(focusIds.has(a.node.id) && focusIds.has(b.node.id)) ? far : ctx);
     const marching = typeof noMotion === "function" ? !noMotion() : false;
+    // Round caps on every line (a dash reads as a pill, a stipple as dots);
+    // both pens go back to the canvas default for the nodes after them.
+    ctx.lineCap = "round";
+    if (far !== ctx) far.lineCap = "round";
     // A style may draw its own wires (renderer/node-styles.js); one without
     // them, or a bare harness, keeps the lines below. One scratch per frame.
     const nodeStyles = globalThis.window?.MefiNodeStyles ?? null;
     // `detail` is the lower of the two ends' tiers from the frame before (the
     // node loop sets node._detail after the wires are drawn, as it sets _pr).
-    const wire = nodeStyles ? { kind: "session", tint: null, alpha: 1, width: 1, dash: null, march: false, double: false, active: false, inspected: false, curved: false, cp: null, far: false, time, still: !marching, seed: 0, rA: 0, rB: 0, detail: 3, lifetime: 1 } : null;
+    // `flow` says the wire carries work: a busy task's anchor (its dashes
+    // march with motion on), a working agent's tether, and the session and
+    // todo hops on the way to busy work. Reduced motion still offers it, so
+    // a style can hold its flow in a still pose.
+    const wire = nodeStyles ? { kind: "session", tint: null, alpha: 1, width: 1, dash: null, march: false, flow: false, double: false, active: false, inspected: false, curved: false, cp: null, far: false, time, still: !marching, seed: 0, rA: 0, rB: 0, detail: 3, lifetime: 1, theme: state.nodeTheme ?? null } : null;
     const bend = nodeStyles ? { x1: 0, y1: 0, x2: 0, y2: 0 } : null;
     // Keep the work tether underneath each waveform so its endpoints and
     // assignment remain readable as the sound bends the connection.
@@ -6440,7 +6457,7 @@
       const branches = state.nodeLayout === "tree" || state.nodeLayout === "layers";
       const primary = state.branchParents?.get(b.node.id) === a.node.id;
       const tint = active || inspected ? colorOf(b.node) : b.node.kind === "todo" && b.node.state === "done" ? NODE_RGB.done ?? NODE_RGB.task : NODE_RGB.task;
-      const style = edgeStyleFor(edge, a, b, { active, inspected, primary });
+      const style = edgeStyleInto(EDGE_LOOK, edge, a, b, active, inspected, primary);
       const response = audioLinked && state.audioEffects?.splitBands === false ? b.node._audioResponse : null;
       const light = response ? response.level * 0.24 + response.beat * 0.12 : 0;
       const pen = penFor(a, b);
@@ -6448,7 +6465,7 @@
         const curved = Boolean(primary && branches) && !style.double;
         if (curved) { const middle = (a.p.y + b.p.y) / 2; bend.x1 = a.p.x; bend.y1 = middle; bend.x2 = b.p.x; bend.y2 = middle; }
         wire.kind = style.kind; wire.tint = tint; wire.alpha = lifetime * Math.min(0.95, style.alpha + light); wire.width = style.width + light * 1.8;
-        wire.dash = style.dash; wire.march = Boolean(style.march && marching); wire.double = Boolean(style.double);
+        wire.dash = style.dash; wire.march = style.march && marching; wire.flow = style.march || (active && (style.kind === "session" || style.kind === "todo")); wire.double = style.double;
         wire.active = active; wire.inspected = Boolean(inspected); wire.curved = curved; wire.cp = curved ? bend : null; wire.far = pen !== ctx;
         wire.seed = b.node._m?.seed ?? 0; wire.rA = a.node._pr ?? 0; wire.rB = b.node._pr ?? 0; wire.detail = Math.min(a.node._detail ?? 3, b.node._detail ?? 3); wire.lifetime = lifetime;
         if (nodeStyles.wire(pen, state.nodeStyle, a.p, b.p, wire)) {
@@ -6475,7 +6492,7 @@
         } else pen.lineTo(b.p.x, b.p.y);
         pen.stroke();
       }
-      pen.setLineDash?.([]);
+      pen.setLineDash?.(NO_DASH);
       pen.lineDashOffset = 0;
       if (audioLinked) drawAudioConnection(pen, a, b, tint, lifetime, time, Boolean(primary && branches));
     }
@@ -6498,7 +6515,7 @@
       if (wire) {
         const working = node.status === "running" || Boolean(node.builder);
         wire.kind = "tether"; wire.tint = agentRgb(node.role); wire.alpha = lifetime * ((state.nodeLayout === "tree" ? 0.18 : 0.38) + light); wire.width = 1 + light * 1.8;
-        wire.dash = TETHER_DASH; wire.march = marching && working; wire.double = false;
+        wire.dash = TETHER_DASH; wire.march = marching && working; wire.flow = working; wire.double = false;
         wire.active = working; wire.inspected = false; wire.curved = false; wire.cp = null; wire.far = pen !== ctx;
         wire.seed = node._m?.seed ?? 0; wire.rA = node._pr ?? 0; wire.rB = target.node._pr ?? 0; wire.detail = Math.min(node._detail ?? 3, target.node._detail ?? 3); wire.lifetime = lifetime;
         if (nodeStyles.wire(pen, state.nodeStyle, p, target.p, wire)) {
@@ -6508,10 +6525,10 @@
       }
       pen.strokeStyle = rgba(agentRgb(node.role), lifetime * ((state.nodeLayout === "tree" ? 0.18 : 0.38) + light));
       pen.lineWidth = 1 + light * 1.8;
-      pen.setLineDash?.([6, 4]);
+      pen.setLineDash?.(TETHER_DASH);
       pen.lineDashOffset = marching && (node.status === "running" || node.builder) ? -((time / 40) % 10) : 0;
       pen.beginPath(); pen.moveTo(p.x, p.y); pen.lineTo(target.p.x, target.p.y); pen.stroke();
-      pen.setLineDash?.([]);
+      pen.setLineDash?.(NO_DASH);
       pen.lineDashOffset = 0;
       if (audioLinked) drawAudioConnection(pen, { node, p }, target, agentRgb(node.role), lifetime, time);
     }
@@ -6522,6 +6539,8 @@
     if (music && hub && !music.node._absorbed && !hub.node._absorbed) {
       drawAudioConnection(ctx, music, hub, NODE_RGB.warm, Math.min(music.node._fade ?? 1, hub.node._fade ?? 1), time, false, true);
     }
+    ctx.lineCap = "butt";
+    if (far !== ctx) far.lineCap = "butt";
   }
 
   // ---------- backdrop scenes ----------
@@ -7563,8 +7582,12 @@
     state.pulses = state.pulses.filter((pulse) => now - pulse.start < pulse.duration + (pulse._landed ? 0 : landTail));
     // A style may draw the travelling pulse (surge) and its landing (land)
     // itself; one options scratch serves every pulse this frame. Its detail
-    // is the target's tier from the frame before.
-    const pulseLook = nodeStyles ? { kind: "dot", time, still, rTo: 0, detail: 3, pulse: null, motion: null } : null;
+    // is the target's tier from the frame before. A pulse along a tree
+    // branch carries that branch's S-curve controls (cp), so it rides the
+    // wire as drawn (the hub link is always straight).
+    const pulseLook = nodeStyles ? { kind: "dot", time, still, rTo: 0, detail: 3, pulse: null, motion: null, cp: null, theme: state.nodeTheme ?? null } : null;
+    const pulseBend = nodeStyles ? { x1: 0, y1: 0, x2: 0, y2: 0 } : null;
+    const pulseBranches = state.nodeLayout === "tree" || state.nodeLayout === "layers";
     for (const pulse of state.pulses) {
       // An arrived pulse's head is done: the landing pass below has it now.
       if (!still && now - pulse.start >= pulse.duration) continue;
@@ -7576,6 +7599,10 @@
       if (pulseLook) {
         pulseLook.kind = pulse.wave ? "wave" : "dot"; pulseLook.rTo = pulse.to?._pr ?? 0; pulseLook.detail = pulse.to?._detail ?? 3;
         pulseLook.pulse = pulse; pulseLook.motion = state.nodeMotion?.get(pulse.to?.id) ?? null;
+        const hubLink = (pulse.from?.kind === "root" && pulse.to?.kind === "assistant") || (pulse.from?.kind === "assistant" && pulse.to?.kind === "root");
+        const branch = pulseBranches && !hubLink && (state.branchParents?.get(pulse.to?.id) === pulse.from?.id || state.branchParents?.get(pulse.from?.id) === pulse.to?.id);
+        if (branch) { const middle = (from.y + to.y) / 2; pulseBend.x1 = from.x; pulseBend.y1 = middle; pulseBend.x2 = to.x; pulseBend.y2 = middle; }
+        pulseLook.cp = branch ? pulseBend : null;
         if (nodeStyles.surge(ctx, state.nodeStyle, from, to, t, pulse, pulseLook)) continue;
       }
       if (pulse.wave) {

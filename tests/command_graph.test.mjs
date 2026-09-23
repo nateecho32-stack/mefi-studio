@@ -724,23 +724,106 @@ test("graph connections offer each wire to the style and keep the plain line whe
   const offered = [];
   let answer = false;
   const spy = { wire: (_pen, style, a, b, o) => { offered.push({ style, a, b, o: { ...o, cp: o.cp && { ...o.cp }, dash: o.dash && [...o.dash], tint: o.tint && [...o.tint] } }); return answer; } };
-  const state = { nodeStyle: "sigil", nodeLayout: "tree", edges: [{ a: 0, b: 1 }, { a: 0, b: 2 }, { a: 1, b: 2 }], branchParents: new Map([["task", "assistant"]]), agentLayout: new Map([["agent", { hostId: "task" }]]) };
+  const theme = { key: "theme" };
+  const state = { nodeStyle: "sigil", nodeLayout: "tree", nodeTheme: theme, edges: [{ a: 0, b: 1 }, { a: 0, b: 2 }, { a: 1, b: 2 }], branchParents: new Map([["task", "assistant"]]), agentLayout: new Map([["agent", { hostId: "task" }]]) };
   const env = vm.createContext({ state, Math, Map, NODE_RGB: { task: [1, 2, 3] }, rgba: () => "color", agentRgb: () => [4, 5, 6], colorOf: () => [7, 8, 9], isBusyNode: () => false, window: { MefiNodeStyles: spy } });
   vm.runInContext(section("function drawGraphConnections(", "function drawFrame("), env);
   let paths = [], path;
-  const ctx = { beginPath() { path = []; }, moveTo(x, y) { path.push([x, y]); }, lineTo(x, y) { path.push([x, y]); }, bezierCurveTo(...points) { path.push(points.slice(-2)); }, stroke() { paths.push(path); } };
-  const render = () => { paths = []; offered.length = 0; env.drawGraphConnections(ctx, [assistant, task, agent], new Set(), false, 500); return paths; };
+  const dashes = [], caps = [];
+  const ctx = { lineCap: "butt", beginPath() { path = []; }, moveTo(x, y) { path.push([x, y]); }, lineTo(x, y) { path.push([x, y]); }, bezierCurveTo(...points) { path.push(points.slice(-2)); }, stroke() { paths.push(path); caps.push(this.lineCap); }, setLineDash(dash) { dashes.push(dash); } };
+  const render = () => { paths = []; offered.length = 0; dashes.length = 0; caps.length = 0; env.drawGraphConnections(ctx, [assistant, task, agent], new Set(), false, 500); return paths; };
   assert.deepEqual(render(), [[[50, 80], [850, 480]], [[890, 480], [850, 480]]], "a declined wire keeps the plain branch and tether");
+  assert.ok(caps.every((cap) => cap === "round") && ctx.lineCap === "butt", "every line has round caps, and the nodes after them get the canvas default back");
+  assert.ok(dashes.every((dash) => Object.isFrozen(dash)), "the plain lines share frozen dash patterns: no edge allocates one a frame");
+  const first = [...dashes];
+  render();
+  assert.ok(dashes.every((dash, index) => dash === first[index]), "the same dash arrays, frame after frame");
   assert.equal(offered.length, 2);
   const [edge, tether] = offered;
   assert.ok(edge.a === assistant.p && edge.b === task.p && tether.a === agent.p && tether.b === task.p, "the painted points pass through");
-  assert.deepEqual({ ...edge.o }, { kind: "task", tint: [1, 2, 3], alpha: 0.32, width: 1, dash: [2, 4], march: false, double: false, active: false, inspected: false, curved: true, cp: { x1: 50, y1: 280, x2: 850, y2: 280 }, far: false, time: 500, still: true, seed: 0.75, rA: 15, rB: 12, detail: 2, lifetime: 1 }, "the branch arrives with its look, its S-curve controls, both radii and the lower end's tier");
-  assert.deepEqual({ ...tether.o, alpha: Math.round(tether.o.alpha * 100) / 100 }, { kind: "tether", tint: [4, 5, 6], alpha: 0.18, width: 1, dash: [6, 4], march: false, double: false, active: true, inspected: false, curved: false, cp: null, far: false, time: 500, still: true, seed: 0, rA: 0, rB: 12, detail: 1, lifetime: 1 }, "the tether is a wire of its own kind");
+  assert.equal(edge.o.theme, theme, "the wire carries the node theme");
+  assert.deepEqual({ ...edge.o, theme: null }, { kind: "task", tint: [1, 2, 3], alpha: 0.32, width: 1, dash: [2, 4], march: false, flow: false, double: false, active: false, inspected: false, curved: true, cp: { x1: 50, y1: 280, x2: 850, y2: 280 }, far: false, time: 500, still: true, seed: 0.75, rA: 15, rB: 12, detail: 2, lifetime: 1, theme: null }, "the branch arrives with its look, its S-curve controls, both radii and the lower end's tier");
+  assert.deepEqual({ ...tether.o, alpha: Math.round(tether.o.alpha * 100) / 100, theme: null }, { kind: "tether", tint: [4, 5, 6], alpha: 0.18, width: 1, dash: [6, 4], march: false, flow: true, double: false, active: true, inspected: false, curved: false, cp: null, far: false, time: 500, still: true, seed: 0, rA: 0, rB: 12, detail: 1, lifetime: 1, theme: null }, "the tether is a wire of its own kind; a working one carries work (flow) even with motion off");
   task.node._detail = undefined; agent.node._detail = undefined; render();
   assert.deepEqual(offered.map(({ o }) => o.detail), [3, 3], "ends not tiered yet: full detail");
   assert.ok(offered.every(({ style }) => style === "sigil"));
+  // A busy task's branch carries work: it flows, and marches while motion is on.
+  env.isBusyNode = (node) => node.id === "task";
+  env.noMotion = () => false;
+  render();
+  assert.deepEqual([offered[0].o.active, offered[0].o.march, offered[0].o.flow, offered[0].o.still], [true, true, true, false]);
+  env.noMotion = () => true;
+  render();
+  assert.deepEqual([offered[0].o.march, offered[0].o.flow, offered[0].o.still], [false, true, true], "reduced motion: no march, the flow is still offered (held)");
+  delete env.noMotion; env.isBusyNode = () => false;
   answer = true;
   assert.deepEqual(render(), [], "a style that draws the wire replaces the plain line");
+  assert.equal(ctx.lineCap, "butt");
+});
+
+test("the session and todo hops on the way to busy work carry work too, and the edge loop allocates no look", () => {
+  const root = { node: { id: "root", kind: "root" }, p: { x: 0, y: 0 } };
+  const session = { node: { id: "s1", kind: "session" }, p: { x: 100, y: 100 } };
+  const todo = { node: { id: "s1:0", kind: "todo", sessionId: "s1", state: "active" }, p: { x: 200, y: 200 } };
+  const offered = [];
+  const spy = { wire: (_pen, _style, _a, _b, o) => { offered.push({ kind: o.kind, active: o.active, march: o.march, flow: o.flow, dash: o.dash }); return true; } };
+  const state = { nodeStyle: "orbs", nodeLayout: "constellation", edges: [{ a: 0, b: 1 }, { a: 1, b: 2 }] };
+  let busy = new Set();
+  const env = vm.createContext({ state, Math, Map, NODE_RGB: { task: [1, 2, 3] }, rgba: () => "color", agentRgb: () => [4, 5, 6], colorOf: () => [7, 8, 9], isBusyNode: (node) => busy.has(node.id), window: { MefiNodeStyles: spy } });
+  vm.runInContext(section("function drawGraphConnections(", "function drawFrame("), env);
+  const ctx = { beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, setLineDash() {} };
+  const render = () => { offered.length = 0; env.drawGraphConnections(ctx, [root, session, todo], new Set(), false, 500); return offered.map(({ kind, flow }) => `${kind}:${flow}`); };
+  assert.deepEqual(render(), ["session:false", "todo:false"], "quiet hops carry nothing");
+  busy = new Set(["s1", "s1:0"]);
+  env.noMotion = () => false;
+  assert.deepEqual(render(), ["session:true", "todo:true"], "the hops toward busy work flow (the style runs them calmer than the task's own wire)");
+  assert.ok(offered.every(({ active, march }) => active === true && march === false), "active, with no dashes to march");
+  env.noMotion = () => true;
+  assert.deepEqual(render(), ["session:true", "todo:true"], "reduced motion still offers them, held");
+  delete env.noMotion;
+  const loop = section("function drawGraphConnectionsImpl(", "// ---------- backdrop scenes");
+  assert.ok(loop.includes("const style = edgeStyleInto(EDGE_LOOK, edge, a, b, active, inspected, primary);"), "the edge loop fills one look scratch");
+  assert.ok(!loop.includes("{ active, inspected, primary }"), "and builds no option literal per edge");
+});
+
+// A pulse along a tree branch rides the branch's S-curve; the hub link and
+// the constellation stay straight.
+test("a travelling pulse carries its branch's S-curve controls and the node theme to surge", () => {
+  // drawFrame's pulse pass, run on its own with a spy surge.
+  const frame = section("function drawFrame(", "function measure(");
+  const start = frame.indexOf("    // pulses: bright travelling dots"), end = frame.indexOf("    // particles: vaporized external work");
+  assert.ok(start > 0 && end > start, "the pulse pass");
+  const surges = [], lands = [];
+  const spy = { surge: (_ctx, style, _from, _to, _t, pulse, o) => { surges.push({ id: pulse.id, style, cp: o.cp && { ...o.cp }, theme: o.theme, kind: o.kind }); return true; } };
+  const theme = { key: "theme" };
+  const root = { id: "root", kind: "root", x: 0, y: 0 }, hub = { id: "assistant", kind: "assistant", x: 100, y: 0 };
+  const session = { id: "s1", kind: "session", x: 40, y: 100 }, task = { id: "t1", kind: "task", x: 200, y: 300 };
+  const state = { nodeStyle: "orbs", nodeLayout: "tree", nodeTheme: theme, nodeMotion: new Map(), pulses: [], branchParents: new Map([["s1", "root"], ["t1", "s1"], ["assistant", "root"]]) };
+  const env = vm.createContext({
+    state, Math, Map, Date: { now: () => 1000 }, LAND_TAIL_MS: 380, musicBands: { bass: 0 }, hexToRgb: () => [1, 2, 3],
+    project: (node) => ({ x: node.x, y: node.y }), surgeLine() { throw new Error("the style drew it"); }, landPulse: (...args) => lands.push(args),
+  });
+  vm.runInContext(`function pulsePass(ctx, nodeStyles, time, still, screenPoints) {\n${frame.slice(start, end)}\n}`, env);
+  const screen = new Map([root, hub, session, task].map((node) => [node.id, { x: node.x, y: node.y }]));
+  const run = () => {
+    surges.length = 0;
+    const pulse = (id, from, to, extra = {}) => ({ id, from, to, start: 500, duration: 900, color: "#ffffff", ...extra });
+    state.pulses = [pulse("down", session, task), pulse("up", task, session, { wave: true }), pulse("hub", root, hub), pulse("back", hub, root), pulse("across", hub, task)];
+    env.pulsePass({}, spy, 1000, false, screen);
+    return Object.fromEntries(surges.map(({ id, cp }) => [id, cp]));
+  };
+  const tree = run();
+  assert.deepEqual(tree.down, { x1: 40, y1: 200, x2: 200, y2: 200 }, "parent → child rides the branch's S-curve");
+  assert.deepEqual(tree.up, { x1: 200, y1: 200, x2: 40, y2: 200 }, "child → parent too, the same curve walked the other way");
+  assert.deepEqual([tree.hub, tree.back, tree.across], [null, null, null], "the hub link (either way) and a pulse off any branch stay straight");
+  assert.ok(surges.every(({ theme: seen, style }) => seen === theme && style === "orbs"), "every pulse carries the node theme");
+  assert.deepEqual(surges.map(({ kind }) => kind), ["dot", "wave", "dot", "dot", "dot"]);
+  assert.equal(lands.length, 0, "nothing has landed yet");
+  state.nodeLayout = "layers";
+  assert.deepEqual(run().down, { x1: 40, y1: 200, x2: 200, y2: 200 }, "Layers draws the same S-curves");
+  state.nodeLayout = "constellation";
+  assert.ok(Object.values(run()).every((cp) => cp === null), "the constellation's straight wires carry straight pulses");
+  assert.ok(section("function landPulse(", "function surgeLine(").includes("look.cp = null;"), "a landing never sees a travelling pulse's curve");
 });
 
 test("Branches follows real parent edges, Rings uses separate concentric slots, and layouts retain surviving points", () => {

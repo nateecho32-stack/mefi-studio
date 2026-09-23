@@ -1331,6 +1331,20 @@
   // detail is the node's own tier, as its paint has.
   const railRing = { status: null, builder: false, ring: 0, time: 0, still: false, detail: 2, motion: null, theme: null };
   const railOrbit = { running: true, phase: 0, ring: 0, time: 0, still: false, detail: 2, motion: null, theme: null };
+  // Edges, agent tethers and pulses wear the style too (the module's wire,
+  // surge and land), through one scratch each; `rail: true` tells a hook it
+  // draws on the rail (small nodes, tier T2 at most). The rail's two edge
+  // tones are its COLORS read once as a triple and an alpha. With the module
+  // a pulse outlives its travel by its landing, as in the Command view.
+  function railTone(color) {
+    const parts = String(color).match(/[\d.]+/g) ?? [];
+    return Object.freeze({ tint: Object.freeze([Number(parts[0]) || 0, Number(parts[1]) || 0, Number(parts[2]) || 0]), alpha: parts.length > 3 ? Number(parts[3]) : 1 });
+  }
+  const RAIL_EDGE = railTone(COLORS.edge), RAIL_EDGE_ACTIVE = railTone(COLORS.edgeActive);
+  const RAIL_NO_DASH = Object.freeze([]);
+  const RAIL_LAND_MS = 380;
+  const railWire = { kind: "session", tint: null, alpha: 1, width: 1, dash: RAIL_NO_DASH, march: false, flow: false, double: false, active: false, inspected: false, curved: false, cp: null, far: false, time: 0, still: false, seed: 0, rA: 0, rB: 0, lifetime: 1, detail: 2, theme: null, rail: true };
+  const railPulse = { kind: "dot", time: 0, still: false, rTo: 0, pulse: null, motion: null, cp: null, detail: 2, theme: null, rail: true };
   let railFrameAt = null;
   let railFrame = 0;
 
@@ -1356,14 +1370,28 @@
     pruneRailMotion();
     railStep.style = nodeStyle; railStep.time = time; railStep.frame = railFrame;
 
-    // edges, far to near
+    // edges, far to near; the active session's are the bright ones
     const orderedEdges = [...edges].sort((a, b) => projected.get(b.a).depth - projected.get(a.a).depth);
+    if (styles) { railWire.time = time; railWire.still = still; railWire.theme = theme; }
     for (const edge of orderedEdges) {
       const a = projected.get(edge.a);
       const b = projected.get(edge.b);
       if (a.depth < 60 || b.depth < 60) continue;
-      ctx.globalAlpha = edge.agent ? edge.b.opacity ?? 1 : 1;
-      ctx.strokeStyle = edge.sessionId && edge.sessionId === activeSessionId ? COLORS.edgeActive : COLORS.edge;
+      const active = Boolean(edge.sessionId) && edge.sessionId === activeSessionId;
+      const visibility = edge.agent ? edge.b.opacity ?? 1 : 1;
+      if (styles) {
+        const tone = active ? RAIL_EDGE_ACTIVE : RAIL_EDGE;
+        railWire.kind = edge.assistant ? "hub" : edge.agent ? "agent" : edge.b.kind === "todo" ? "todo" : edge.b.kind === "folded" ? "folded" : "session";
+        railWire.tint = tone.tint; railWire.alpha = visibility * tone.alpha; railWire.lifetime = visibility;
+        railWire.dash = RAIL_NO_DASH; railWire.march = false; railWire.flow = false; railWire.active = active;
+        railWire.seed = railMotion.get(edge.b.id)?.seed ?? 0; railWire.rA = edge.a._pr ?? 0; railWire.rB = edge.b._pr ?? 0;
+        // (railWire.alpha carries the visibility; a plain line the style
+        // left to the rail below must not dim the next edge's style twice)
+        ctx.globalAlpha = 1;
+        if (styles.wire(ctx, nodeStyle, a, b, railWire)) continue;
+      }
+      ctx.globalAlpha = visibility;
+      ctx.strokeStyle = active ? COLORS.edgeActive : COLORS.edge;
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
@@ -1373,16 +1401,34 @@
     ctx.globalAlpha = 1;
 
     // pulses — a line that ends at an agent carries the signal itself
-    // (wave, see surgeLine); the rest stay travelling dots. One that reached
-    // its node kicks the node's motion as it goes (the arrival flash a look
-    // may read).
-    if (styles && !still) for (const pulse of pulses) if (time - pulse.start >= pulse.duration) { const record = railMotion.get(pulse.to?.id); if (record) record.kick = 1; }
-    pulses = pulses.filter((pulse) => time - pulse.start < pulse.duration);
+    // (wave, see surgeLine); the rest stay travelling dots. With the node
+    // styles a pulse that reached its node kicks the node's motion on its
+    // first landed frame (the arrival flash a look may read), then the style
+    // lands it for RAIL_LAND_MS; a style with no landing lets it go.
+    const landTail = styles ? RAIL_LAND_MS : 0;
+    pulses = pulses.filter((pulse) => time - pulse.start < pulse.duration + (pulse._landed ? 0 : landTail));
+    if (styles) { railPulse.time = time; railPulse.still = still; railPulse.theme = theme; }
     for (const pulse of pulses) {
       const a = projected.get(pulse.from);
       const b = projected.get(pulse.to);
       if (!a || !b) continue;
       const t = Math.min(1, (time - pulse.start) / pulse.duration);
+      // A hop queued for later has not left yet.
+      if (t < 0) continue;
+      if (styles) {
+        railPulse.kind = pulse.wave ? "wave" : "dot"; railPulse.rTo = pulse.to?._pr ?? 0; railPulse.pulse = pulse;
+        const record = railMotion.get(pulse.to?.id) ?? null;
+        railPulse.motion = record;
+        pulse._rgb ??= railTint(pulse.color ?? "#a9ffcd");
+        const since = time - pulse.start - pulse.duration;
+        if (since >= 0) {
+          if (!pulse._kicked) { pulse._kicked = true; if (record && !still) record.kick = 1; }
+          const u = still ? 1 : Math.min(1, since / RAIL_LAND_MS);
+          if (!styles.land(ctx, nodeStyle, b, railPulse.rTo, pulse._rgb, u, railPulse)) pulse._landed = true;
+          continue;
+        }
+        if (styles.surge(ctx, nodeStyle, a, b, t, pulse, railPulse)) continue;
+      }
       if (pulse.wave) {
         surgeLine(a, b, t, pulse, still);
         continue;
@@ -1407,6 +1453,16 @@
       const a = projected.get(node);
       const b = target ? projected.get(target) : null;
       if (!a || !b || a.depth < 60 || b.depth < 60) continue;
+      if (styles) {
+        // A tether is working by definition: the style may glow it and run
+        // its flow (flow: true) toward the node the agent works on. Its line
+        // is solid, so there is nothing to march.
+        const visibility = node.opacity ?? 1;
+        railWire.kind = "tether"; railWire.tint = railTint(agentColor(node.role)); railWire.alpha = visibility * 0.38; railWire.lifetime = visibility;
+        railWire.dash = RAIL_NO_DASH; railWire.march = false; railWire.flow = true; railWire.active = true;
+        railWire.seed = railMotion.get(node.id)?.seed ?? 0; railWire.rA = node._pr ?? 0; railWire.rB = target._pr ?? 0;
+        if (styles.wire(ctx, nodeStyle, a, b, railWire)) continue;
+      }
       const tint = hexRgb(agentColor(node.role));
       ctx.save();
       ctx.globalAlpha = node.opacity ?? 1;
