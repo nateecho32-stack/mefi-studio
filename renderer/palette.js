@@ -1,5 +1,6 @@
-// Mefi's Studio AI+ — command palette (Ctrl/Cmd+K).
-// Fuzzy jumps to tabs, overlays, actions, tasks, ideas and models.
+// Mefi's Studio AI+ — Search Studio, the command palette (Ctrl/Cmd+K).
+// Fuzzy jumps to pages, sheets, settings, actions, tasks, nodes and models,
+// grouped by the same sections as the navigation rail.
 (function () {
   "use strict";
 
@@ -58,6 +59,9 @@
 
   // Every destination, key hint and label comes from the registry, so the palette
   // cannot drift from the dock, the tools cluster, the help sheet or the footer.
+  // Each result is filed under its rail section (Home, Work, Live, Models,
+  // Settings, Help, Community, Assistant), and the browse list keeps the rail's
+  // top-to-bottom order.
   function destinations() {
     const nav = window.MefiNav;
     if (!nav?.list) return [];
@@ -65,11 +69,13 @@
     const openSheet = nav.state?.sheet ?? null;
     // The assistant's commands say what the service is doing instead of a key.
     const serviceLine = () => window.MefiTree?.assistantSummary?.()?.sublabel ?? "";
+    const rank = (dest) => nav.sectionRank?.(dest) ?? 0;
     return nav
       .list({ showIn: "palette" })
       .filter((dest) => !(dest.id === "command" && commandActive) && dest.id !== openSheet)
+      .sort((a, b) => rank(a) - rank(b))
       .map((dest) => ({
-        kind: dest.group, // surfaces | tools | system | command | assistant
+        kind: nav.sectionLabel?.(dest) ?? dest.group,
         label: dest.label,
         description: dest.desc || "",
         searchTerms: dest.searchTerms || "",
@@ -112,7 +118,7 @@
       }
     };
     const showIn = { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false };
-    const base = { kind: "action", layer: null, group: "assistant", key: null, glyph: null, badge: null, showIn };
+    const base = { kind: "action", layer: null, section: "assistant", group: "assistant", key: null, glyph: null, badge: null, showIn };
     nav.register({
       ...base,
       id: "assistantMessage",
@@ -134,7 +140,7 @@
         return paused() ? "Resume" : "Pause";
       },
       desc: "Pause or resume the assistant service",
-      run: () => control(paused() ? "resume" : "pause", "control"),
+      run: () => control(paused() ? "start-work" : "pause", "control"),
     });
   }
 
@@ -253,7 +259,7 @@
     if (!items.length) {
       const li = document.createElement("li");
       li.className = "muted";
-      li.textContent = state.taskStatus === "loading" ? "No tool matches yet. Loading project tasks…" : "No matches. Try a task title, settings, node tree or themes.";
+      li.textContent = state.taskStatus === "loading" ? "No tool matches yet. Loading project tasks…" : "No matches. Try a page or tool, a setting such as Providers or Updates, a task title or a model name.";
       el.list.append(li);
       setActiveOption();
       return;
@@ -268,6 +274,9 @@
       li.setAttribute("aria-posinset", String(index + 1));
       li.setAttribute("aria-setsize", String(state.filtered.length));
       if (index === state.index) li.classList.add("active");
+      // Rows arrive grouped by section; the first row of each group carries
+      // the marker the stylesheet draws the section divider from.
+      if (index === 0 || items[index - 1].kind !== item.kind) li.classList.add("palette-group-start");
       const kind = document.createElement("span");
       kind.className = "kind";
       kind.textContent = item.kind;
@@ -303,27 +312,50 @@
         }
         li.append(hint);
       }
-      li.addEventListener("mouseenter", () => {
-        state.index = index;
-        render();
-      });
+      li.addEventListener("mouseenter", () => highlight(index, li));
       li.addEventListener("click", () => run(index));
       el.list.append(li);
     });
     setActiveOption();
   }
 
+  // The pointer moves the highlight in place. Rebuilding every row on each
+  // mouseenter was the palette's hover cost; only the two rows that change are
+  // touched, and the activedescendant follows.
+  function highlight(index, row) {
+    if (index === state.index) return;
+    const previous = el.list.querySelector("li.active");
+    previous?.classList.remove("active");
+    previous?.setAttribute("aria-selected", "false");
+    state.index = index;
+    row.classList.add("active");
+    row.setAttribute("aria-selected", "true");
+    setActiveOption();
+  }
+
+  // Results stay in their sections: groups come in the order of their best
+  // match (on the browse list, the rail's own order) and rows keep their rank
+  // inside a group, so the first row is always the best match.
+  function grouped(items) {
+    const groups = new Map();
+    for (const item of items) {
+      if (!groups.has(item.kind)) groups.set(item.kind, []);
+      groups.get(item.kind).push(item);
+    }
+    return [...groups.values()].flat();
+  }
+
   function filter(preserveSelection = false) {
     const selected = preserveSelection ? state.filtered[state.index] : null;
     const query = el.input.value.trim();
     if (!query) {
-      state.filtered = state.items;
+      state.filtered = grouped(state.items);
     } else {
-      state.filtered = state.items
+      state.filtered = grouped(state.items
         .map((item) => ({ item, score: matchScore(query, item) }))
         .filter((entry) => entry.score > 0)
         .sort((a, b) => b.score - a.score)
-        .map((entry) => entry.item);
+        .map((entry) => entry.item));
     }
     const retained = selected ? state.filtered.findIndex((item) => item.kind === selected.kind && item.label === selected.label) : -1;
     state.index = retained >= 0 && retained < 40 ? retained : 0;

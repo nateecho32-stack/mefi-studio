@@ -33,6 +33,7 @@
   --live-dim: rgba(87, 255, 154, 0.18);
   --warn: #ffd479;
   --bad: #ff9c9c;
+  --good: #afdfc2;   /* done and verified; --live stays for live activity */
   --info: #9db7ff;
 
   /* ---- new surfaces ---- */
@@ -75,11 +76,34 @@
   --glow-gold: 0 0 14px rgba(113, 203, 183, 0.3);
   --glow-live: 0 0 6px rgba(87, 255, 154, 0.6);
   --blur: blur(14px) saturate(1.05);
+  --scrim: rgba(3, 4, 6, 0.74);           /* behind every modal sheet */
+  --scrim-blur: blur(12px);
   --blur-hard: blur(18px) saturate(1.1);
 
-  /* ---- motion ---- */
-  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
-  --dur-1: 120ms; --dur-2: 180ms; --dur-3: 280ms; --dur-hud: 600ms;
+  /* ---- motion: one feel for CSS, WAAPI (MefiNav.motion) and the canvases ----
+     Animate opacity and the individual translate/scale properties; exits run
+     shorter on --ease-in, entries rise on --ease-spring. html[data-motion=off]
+     (the Motion setting or the OS reduced-motion preference) zeroes them all. */
+  --motion-instant: 90ms;   /* tips, press feedback */
+  --motion-fast: 140ms;     /* control colour, small exits */
+  --motion-base: 200ms;     /* popovers, rail panels, scrims, surface cross-fades */
+  --motion-slow: 280ms;     /* sheets, side panels, HUD morphs */
+  --motion-spring: 480ms;   /* anything on --ease-spring: its settle needs room */
+  --motion-ambient: 600ms;  /* HUD dim, Zen */
+  --motion-exit: calc(var(--motion-base) * .7);
+  --ease-out: cubic-bezier(.22, .61, .36, 1);
+  --ease-emphasized: cubic-bezier(.2, 0, 0, 1);
+  --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  /* a damped spring (zeta .75, omega 8 per unit time): 2.8% overshoot at 60%,
+     within .5% by 90%. tests/motion_tokens.test.mjs re-derives every stop. */
+  --spring-zeta: .75; --spring-omega: 8;
+  --ease-spring: linear(0, .018 2.5%, .065 5%, .133 7.5%, .212 10%, .386 15%, .555 20%, .7 25%,
+    .815 30%, .901 35%, .959 40%, .996 45%, 1.017 50%, 1.028 60%, 1.022 70%, 1.012 80%, 1.005 90%, 1);
+  /* the older names, kept as aliases while rules move onto the set above */
+  --ease: var(--ease-out); --ease-enter: var(--ease-emphasized);
+  --dur-1: var(--motion-fast); --dur-2: var(--motion-base); --dur-3: var(--motion-slow); --dur-hud: var(--motion-ambient);
+  --motion-press: var(--motion-fast); --motion-content: 160ms; --motion-menu: var(--motion-base); --motion-panel: var(--motion-slow);
 
   /* ---- layers ---- */
   --z-tabs: 30; --z-rail: 40; --z-tip: 60;
@@ -308,6 +332,8 @@ textarea { min-height: 0; line-height: 1.5; }
 .switch.mini .track { width: 26px; height: 14px; }
 .switch.mini .track::after { width: 9px; height: 9px; top: 1.5px; left: 2px; }
 .switch.mini input:checked + .track::after { transform: translateX(12px); }
+/* the input is invisible, so its keyboard focus shows on the track */
+.switch input:focus-visible + .track { outline: 2px solid var(--gold-bright); outline-offset: 3px; }
 .new-work-toggle input:focus-visible + .track { outline: 2px solid var(--gold); outline-offset: 3px; }
 .new-work-toggle input:disabled + .track { opacity: 0.5; }
 
@@ -418,6 +444,19 @@ header {
 .head-actions .ghost { color: var(--muted); border-color: var(--hairline); }
 .head-actions .ghost:hover { color: var(--ivory); }
 .head-actions .ghost .glyph { color: var(--gold); }
+/* The tab pages' header names the page you are on (#page-title) and, when
+   Command sent you here, offers the way back (#page-return); nav.js paints both. */
+.page-heading { min-width: 0; }
+.page-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s1) var(--s3); }
+#page-return { gap: var(--s2); color: var(--gold); border-color: var(--hairline); background: var(--tint-gold-1); }
+#page-return:hover { color: var(--gold-bright); border-color: var(--hairline-strong); background: var(--tint-gold-2); }
+/* The rail shell's menu carries the brand, Shortcuts and the update badge, so
+   on screen the header keeps only the page's name and the way back. */
+@media screen {
+  html[data-shell="rail"] header.page-head { padding-top: var(--s5); }
+  html[data-shell="rail"] header.page-head :is(.monogram, .eyebrow, .head-actions) { display: none; }
+}
+@media print { #page-return { display: none !important; } }
 
 /* live-update state light; (C) writes data-state, never the pill's textContent */
 .update-pill { gap: 7px; }
@@ -430,6 +469,17 @@ header {
 .update-pill[data-state="pending"] .dot { background: var(--warn); box-shadow: 0 0 6px rgba(255, 212, 121, 0.5); }
 .update-pill[data-state="held"] { color: var(--bad); border-color: rgba(255, 156, 156, 0.34); }
 .update-pill[data-state="held"] .dot { background: var(--bad); box-shadow: 0 0 6px rgba(255, 156, 156, 0.5); }
+/* At the menu's foot the pill is a row like its neighbours: the dot sits where
+   their glyphs do, and its words show once the menu opens. */
+#app-rail-foot .update-pill {
+  width: 100%; min-height: 32px; justify-content: flex-start; gap: 10px;
+  padding: 0 15px; border-color: transparent; border-radius: var(--r-sm); background: transparent;
+}
+#app-rail-foot .update-pill:hover { background: var(--tint-gold-1); border-color: transparent; }
+#app-rail-foot .update-pill:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+#app-rail-foot .update-pill .dot { margin-inline: 4.5px; }
+#app-rail-foot .update-pill .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+html:not([data-rail-pinned]) #app-rail:not(:hover):not(:has(:focus-visible)) #app-rail-foot .update-pill .label { display: none; }
 @keyframes pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.82); } }
 
 /* ============================================================
@@ -799,6 +849,9 @@ table#table tr:hover td { background: rgba(201, 168, 106, 0.04); }
 .viewer { min-height: 420px; }
 .png-wrap { position: relative; display: inline-block; max-width: 100%; }
 .png-wrap img { display: block; max-width: 100%; border-radius: var(--r-sm); border: 1px solid var(--hairline); }
+/* the pins draw over the screenshot, and clicks fall through to the image */
+.png-wrap #eyes-pins-layer { position: absolute; inset: 0; pointer-events: none; }
+#eyes-png { cursor: crosshair; }
 .diff-view {
   background: #050608;
   border: 1px solid var(--hairline);
@@ -1200,7 +1253,7 @@ input.drag-over { border-color: var(--live); box-shadow: 0 0 0 3px rgba(87, 255,
   transition: width var(--dur-3) var(--ease), box-shadow var(--dur-3) var(--ease);
   overflow: hidden;
 }
-#tree-rail:hover, #tree-rail.pinned { width: var(--rail-w-open); box-shadow: -24px 0 60px rgba(0, 0, 0, 0.6); }
+#tree-rail:hover, #tree-rail:has(:focus-visible), #tree-rail.pinned { width: var(--rail-w-open); box-shadow: -24px 0 60px rgba(0, 0, 0, 0.6); }
 
 /* collapsed label + its live dot; .rail-label is the dot's containing block, so
    the dot sits below the vertical word in every writing mode */
@@ -1212,7 +1265,7 @@ input.drag-over { border-color: var(--live); box-shadow: 0 0 0 3px rgba(87, 255,
   opacity: 1; pointer-events: none;
   transition: opacity var(--dur-2) var(--ease);
 }
-#tree-rail:hover .rail-label, #tree-rail.pinned .rail-label { opacity: 0; }
+#tree-rail:hover .rail-label, #tree-rail:has(:focus-visible) .rail-label, #tree-rail.pinned .rail-label { opacity: 0; }
 .rail-dot { position: absolute; left: 1px; top: calc(100% + 10px); margin: 0; }
 
 /* expanded head — wraps rather than clipping: title + three labelled buttons ≈ 340px in a 372px rail */
@@ -1223,7 +1276,7 @@ input.drag-over { border-color: var(--live); box-shadow: 0 0 0 3px rgba(87, 255,
   opacity: 0; pointer-events: none;
   transition: opacity var(--dur-2) var(--ease) 60ms;
 }
-#tree-rail:hover .rail-head, #tree-rail.pinned .rail-head { opacity: 1; pointer-events: auto; }
+#tree-rail:hover .rail-head, #tree-rail:has(:focus-visible) .rail-head, #tree-rail.pinned .rail-head { opacity: 1; pointer-events: auto; }
 .rail-title { font: 600 13px var(--font-display); color: var(--gold-bright); letter-spacing: 0.06em; }
 .rail-actions { display: flex; gap: 6px; margin-left: auto; }
 .rail-actions .mini { padding: 0 var(--s2); }
@@ -1236,7 +1289,7 @@ input.drag-over { border-color: var(--live); box-shadow: 0 0 0 3px rgba(87, 255,
   font-size: var(--fs-xs); color: var(--muted);
   opacity: 0; transition: opacity var(--dur-2) var(--ease) 60ms;
 }
-#tree-rail:hover .rail-stats, #tree-rail.pinned .rail-stats { opacity: 1; }
+#tree-rail:hover .rail-stats, #tree-rail:has(:focus-visible) .rail-stats, #tree-rail.pinned .rail-stats { opacity: 1; }
 #tree-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
                                                                                
                                                                     
@@ -1255,7 +1308,7 @@ input.drag-over { border-color: var(--live); box-shadow: 0 0 0 3px rgba(87, 255,
   z-index: 5;
 }
 /* a 58px strip cannot hold a tooltip: it only belongs to the open rail */
-#tree-rail:not(:hover):not(.pinned) .tree-tip { display: none; }
+#tree-rail:not(:hover):not(:has(:focus-visible)):not(.pinned) .tree-tip { display: none; }
 body { padding-right: var(--rail-gap); }
 /* pinned open, the rail is a dock rather than an overlay: the page flow (the
    tabs strip above all) reserves its width, or the last tabs are sliced at the
@@ -1308,7 +1361,7 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 .sheet-title h2 { margin: 0; font: 600 var(--fs-lg)/1.25 var(--font-display); color: var(--gold-bright); }
 
 .sheet-back { display: none; }                                /* default: no back affordance */
-.overlay.from-command .sheet-back { display: inline-flex; }   /* nav sets from-command in claim() */
+:is(.overlay, .planning-overlay, .brains-overlay).from-command .sheet-back { display: inline-flex; }   /* nav sets from-command in claim() */
 .sheet-back .glyph { color: var(--gold); }
 
 .sheet-links {
@@ -1348,7 +1401,6 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   display: block;
   background: var(--cmd-bg);
   pointer-events: none;
-  transition: filter 260ms var(--ease);
 }
 #idle-layer-far.soft { filter: blur(1.6px); }
 #idle-layer-far.focused { filter: blur(3px); }
@@ -1483,13 +1535,11 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   scrollbar-width: thin; scrollbar-gutter: stable;
   padding: var(--s4);
   border-radius: var(--r-lg);
-  animation: card-in var(--dur-3) var(--ease);
 }
 .cmd-card::-webkit-scrollbar { width: 6px; }
 .cmd-card::-webkit-scrollbar-track { background: transparent; }
 .cmd-card::-webkit-scrollbar-thumb { border: 0; background: #2a261d; }
 .cmd-card::-webkit-scrollbar-button { display: none; height: 0; }
-@keyframes card-in { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
 
 .card-kicker { display: flex; align-items: center; gap: var(--s2); margin-bottom: 6px; }
 .card-kicker .badge { padding: 2px 7px; }
@@ -1867,7 +1917,6 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   width: min(640px, 92vw);
   border-radius: var(--r-lg);
   overflow: hidden;
-  animation: overlay-in var(--dur-2) var(--ease);
 }
 .palette-sheet input {
   width: 100%; border: none; border-radius: 0; background: transparent;
@@ -1905,6 +1954,13 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
    ring from section 4 so the palette reads as focused while it is open. */
 #palette-list li:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: -2px; }
 .palette-sheet:focus-within { box-shadow: var(--shadow-3), var(--inset-hi), inset 0 0 0 1px var(--gold-dim); }
+/* Results run in section order (palette.js marks where each new section
+   starts): a hairline between sections, never above the first result. */
+#palette-list li.palette-group-start:not(:first-child) { position: relative; margin-top: 9px; }
+#palette-list li.palette-group-start:not(:first-child)::before {
+  content: ""; position: absolute; left: var(--s3); right: var(--s3); top: -5px;
+  height: 1px; background: var(--hairline); pointer-events: none;
+}
 
 /* ============================================================
    15. Help grid (rows come from MefiNav.renderHelp)
@@ -1927,6 +1983,16 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   color: var(--gold);
 }
 .help-group:first-child { margin-top: 0; }
+/* One small key grid per section, set in two newspaper columns when the
+   sheet has room for them; a section never breaks across the columns. */
+#help-overlay .sheet { width: min(860px, calc(92vw - var(--shell-rail-w))); }
+#help-grid { display: block; columns: 2 20rem; column-gap: var(--s7); }
+.help-section {
+  break-inside: avoid;
+  display: grid; grid-template-columns: 112px minmax(0, 1fr);
+  gap: 7px var(--s4); align-items: baseline;
+  margin: 0 0 var(--s5);
+}
 
 /* ============================================================
    16. Utilities and generated-markup helpers
@@ -1985,25 +2051,33 @@ body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host {
 #toast-host {
   position: fixed; left: 22px; bottom: 22px;
   z-index: var(--z-toast);
-  display: flex; flex-direction: column; gap: var(--s2);
+  display: flex; flex-direction: column;
   pointer-events: none;
   transition: bottom var(--dur-2) var(--ease);
 }
+/* A toast opens its own room and gives it back: height, padding and the gap
+   above it ease with the fade (interpolate-size is on at :root), so the rest
+   of the stack glides instead of jumping when one arrives or leaves. */
 .toast {
   border-left: 3px solid var(--gold);
   border-radius: var(--r-sm);
-  padding: 10px var(--s3);
+  padding: 0 var(--s3);
   font-size: var(--fs-sm);
 
   max-width: 380px;
-  opacity: 0; transform: translateY(8px);
+  height: 0; overflow: clip;
+  opacity: 0; translate: 0 8px;
   box-shadow: var(--shadow-2);
-  transition: opacity var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
+  transition: opacity var(--motion-base) var(--ease-out), translate var(--motion-spring) var(--ease-spring),
+    height var(--motion-base) var(--ease-out), padding-block var(--motion-base) var(--ease-out), margin-top var(--motion-base) var(--ease-out);
 }
-.toast.show { opacity: 1; transform: none; }
+.toast.show { opacity: 1; translate: none; height: auto; padding-block: 10px; }
+.toast.show:not(:first-child) { margin-top: var(--s2); }
 .toast.good { border-left-color: var(--live); }
 .toast.bad  { border-left-color: var(--bad); }
 .toast.info { border-left-color: var(--info); }
+.toast.warn { border-left-color: var(--warn); }
+.toast:has(.toast-dismiss) { display: flex; align-items: center; gap: 10px; }
 
 footer {
   color: var(--dim); font-size: var(--fs-sm);
@@ -2013,7 +2087,7 @@ footer {
 }
 #footer-keys { color: var(--muted); }
 
-/* Studio → App updates */
+/* Settings › Updates: the live update and published-build rows */
 .update-block { margin-top: var(--s5); padding-top: var(--s4); border-top: 1px solid var(--hairline); }
 .update-block h3 { color: var(--ivory); }
 .update-row { align-items: center; gap: var(--s3); }
@@ -2023,8 +2097,6 @@ footer {
 /* ============================================================
    18. Motion
    ============================================================ */
-.overlay .sheet, .explorer-sheet { animation: overlay-in var(--dur-2) var(--ease); }
-@keyframes overlay-in { from { opacity: 0; transform: translateY(8px) scale(0.99); } to { opacity: 1; transform: none; } }
 
 /* killing transitions alone still lets a hover transform jump, so both blocks reset it */
 .no-motion *, .no-motion *::before, .no-motion *::after {
@@ -2124,8 +2196,7 @@ footer {
   body.command-active:has(#idle-legend-toggle[aria-expanded="true"]) #toast-host { bottom: 64px; }
   .cmd-bottom { padding: 0 var(--s3); }
   .cmd-dock { max-width: calc(100vw - 24px); }     /* wraps to two rows; row-gap is already 4px */
-  .settings-layout { grid-template-columns: minmax(0, 1fr); }
-  .settings-nav { position: static; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  /* Settings answers to its own width, not the window's: see its container queries */
 }
 
 @media (max-width: 719px) {
@@ -2316,8 +2387,8 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-empty-project p { margin: 0; }
 .ws-empty-project button { width: 100%; }
 .ws-sidebar-bottom { margin-top: auto; padding-top: 16px; }
-.ws-tools > summary, .ws-personal > summary { display: flex; align-items: center; gap: 9px; list-style: none; cursor: pointer; color: #c3cab8; font-size: 12px; }
-.ws-tools > summary::marker, .ws-personal > summary::marker, .ws-tools > summary::-webkit-details-marker, .ws-personal > summary::-webkit-details-marker { content: ""; display: none; }
+.ws-tools > summary { display: flex; align-items: center; gap: 9px; list-style: none; cursor: pointer; color: #c3cab8; font-size: 12px; }
+.ws-tools > summary::marker, .ws-tools > summary::-webkit-details-marker { content: ""; display: none; }
 .ws-local-note { display: block; font-size: 9.5px; line-height: 1.7; color: #7e8874; padding: 12px 8px 0; }
 .ws-local-note i { display: inline-block; height: 5px; width: 5px; border-radius: 50%; background: #91a77d; margin-right: 4px; }
 .ws-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 0 38px; background: radial-gradient(ellipse at 65% 0, #24241b66, transparent 54%), #121313; }
@@ -2337,7 +2408,11 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 /* Studio at a glance: the landing strip that answers "is anything waiting on
    me, is anything running, is the machine holding work" before the
    conversation. Every tile deep-links to the view that owns its signal. */
-.ws-dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 10px; margin: 0 0 16px; }
+/* Six tiles make one row or two even rows of three, never five and an orphan:
+   the strip follows the width Home really has (a pinned rail takes some). */
+.ws-main { container: ws-main / inline-size; }
+.ws-dashboard { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 16px; }
+@container ws-main (min-width: 1060px) { .ws-dashboard { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
 .ws-dash-tile { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px; min-height: 80px; padding: 10px 12px; text-align: left; white-space: normal; background: #1b2018; border: 1px solid #333a2c; border-radius: 12px; color: inherit; font: inherit; line-height: 1.3; cursor: pointer; box-shadow: none; transition: border-color var(--dur-2) var(--ease), background var(--dur-2) var(--ease); }
 .ws-dash-tile:hover, .ws-dash-tile:focus-visible { border-color: #576149; background: #21261d; transform: none; box-shadow: none; }
 .ws-dash-service { cursor: default; }
@@ -2354,6 +2429,9 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #workspace-sidebar .ws-home .count { margin-left: auto; }
 .toast.has-action { pointer-events: auto; display: flex; align-items: center; gap: 10px; }
 .toast-action { flex-shrink: 0; padding: 4px 9px; font-size: var(--fs-sm); border-radius: var(--r-sm); border: 1px solid var(--hairline-strong); background: transparent; color: var(--gold-bright); cursor: pointer; }
+.toast-action.secondary { color: var(--muted); border-color: var(--hairline); }
+.toast-dismiss { flex-shrink: 0; margin-left: auto; width: 24px; min-height: 24px; padding: 0; border: 0; border-radius: var(--r-xs); background: transparent; color: var(--dim); font-size: 16px; line-height: 1; cursor: pointer; }
+.toast-dismiss:hover, .toast-dismiss:focus-visible { color: var(--ivory); background: var(--tint-gold-1); transform: none; box-shadow: none; }
 .ws-columns { display: grid; grid-template-columns: minmax(0,1fr) minmax(310px,34%); gap: 27px; flex: 1; min-height: 0; padding-bottom: 18px; }
 .ws-conversation { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .ws-companion-bar { display: flex; align-items: center; gap: 17px; padding: 6px 0 12px; flex-shrink: 0; border-bottom: 1px solid #30332a; min-height: 90px; }
@@ -2503,6 +2581,10 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 .ws-activity ol { margin: 0; padding: 0; list-style: none; max-height: 170px; overflow-y: auto; }
 .ws-activity li { display: grid; gap: 4px; margin-bottom: 13px; font-size: 11px; color: #b2bfa1; line-height: 1.6; overflow-wrap: anywhere; }
 .ws-activity li time { font-size: 10px; color: #96a782; }
+/* The assistant's own log sits with the companion that keeps it, under the
+   narration, rather than taking a row from the work list. */
+.ws-conversation > .ws-activity { margin: 0 0 6px; border-top: 0; border-bottom: 1px solid var(--hairline); }
+.ws-conversation > .ws-activity summary { padding: 7px 0; }
 .ws-jeV { font-size: 10px; color: #a6b392; padding: 9px 0 3px; }
 /* "More tools": one menu face everywhere it appears (tabs row, sheet headers, the
    Command dock). The summary is a quiet capsule with a glyph and a chevron that
@@ -2521,7 +2603,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 @keyframes ws-float { 0%,100% { transform: translateY(1px) rotate(-3deg); } 50% { transform: translateY(-3px) rotate(3deg); } }
 @keyframes ws-blink { 0%,42%,46%,100% { transform: scaleY(1); } 44% { transform: scaleY(.1); } }
 @keyframes ws-spark { 50% { opacity: .3; transform: rotate(60deg); } }
-.ws-still * { animation: none !important; transition: none !important; }
+.ws-still * { animation: none !important; }   /* the companion holds still; its moves still ease */
 @media (prefers-reduced-motion: reduce) { .workspace * { animation: none !important; transition: none !important; } }
 /* Mid-height desktops (a 1440x900 window): trim the chrome above the columns
    so the conversation and the work list keep their room; the 800px tier
@@ -2548,8 +2630,17 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
   .ws-work-search { min-height: 32px; }
   .ws-work-summary-line { margin-bottom: 6px; }
   .ws-jeV { display: none; }
+  /* Service keeps its Pause beside its value, and the backlog's sentence waits
+     for a taller window: the work list is the part that keeps its room. */
+  .ws-dash-service { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 8px; }
+  .ws-dash-service > .ws-dash-kicker, .ws-dash-service > .ws-dash-value, .ws-dash-service > .ws-dash-note { grid-column: 1; }
+  .ws-dash-service > .ws-dash-actions { grid-column: 2; grid-row: 1 / span 3; margin: 0; padding: 0; }
+  #workspace-backlog-summary { display: none; }
+  .ws-work-list { min-height: 140px; }
 }
-@media (max-height: 800px) and (min-width: 961px) {
+/* 840, not 800: a 1280x800 display leaves a window a few pixels either side of
+   800 tall, and the short layout must not flip off for one rounding pixel. */
+@media (max-height: 840px) and (min-width: 961px) {
   .ws-topbar { height: 48px; }
   .ws-heading { padding: 13px 0 12px; }
   .ws-heading h1 { font-size: 32px; margin-bottom: 0; }
@@ -2560,7 +2651,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
   .ws-work-heading .ws-kicker, .ws-backlog-heading { display: none; }
   .ws-work-tabs { padding-bottom: 6px; margin-bottom: 6px; }
   .ws-backlog { padding: 10px 12px; margin-bottom: 10px; }
-  .ws-backlog .build-mode-control { gap: 4px 10px; padding-bottom: 7px; margin-bottom: 7px; }
+  .ws-backlog > .build-mode-control { gap: 4px 10px; padding-bottom: 7px; margin-bottom: 7px; }
   #workspace-backlog-metrics { margin: 7px 0; }
   #workspace-backlog-next { margin: 5px 0; -webkit-line-clamp: 1; }
   .ws-activity { margin-top: 8px; }
@@ -2576,6 +2667,15 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
   .ws-dash-value { -webkit-line-clamp: 1; }
   .ws-dash-note { display: none; }
   .ws-dash-actions { padding-top: 4px; }
+  /* Service keeps its Pause, beside its value instead of under it, so every
+     tile in the row stays one kicker and one value tall. */
+  .ws-dash-service { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 8px; }
+  .ws-dash-service > .ws-dash-kicker, .ws-dash-service > .ws-dash-value { grid-column: 1; }
+  .ws-dash-service > .ws-dash-actions { grid-column: 2; grid-row: 1 / span 2; margin: 0; padding: 0; }
+  /* The backlog keeps its controls, counts and Run; its sentence waits for a
+     taller window, and the work list is the part that keeps its room. */
+  #workspace-backlog-summary { display: none; }
+  .ws-work-list { min-height: 120px; }
   /* The backlog's two controls keep their names and state and drop their
      one-line explanations here; both controls point aria-describedby at those
      notes, and a described-by reference is read out even when hidden. */
@@ -2589,7 +2689,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 @media (min-width: 1750px) { .ws-main { padding: 0 max(45px,calc((100vw - 1580px)/2)); }.ws-columns { gap: 40px; }.ws-work { padding-left: 35px; }.ws-heading { padding: 28px 0 20px; } }
 @media (max-width: 1150px) { .workspace { grid-template-columns: 200px minmax(0,1fr); }.ws-sidebar { padding-inline: 12px; }.ws-main { padding-inline: 23px; }.ws-columns { gap: 18px; grid-template-columns: minmax(0,1fr) 265px; }.ws-work { padding-left: 18px; }.ws-companion-track { width: 96px; }.ws-track-dot.middle { left: 46px; }[data-station="make"] .ws-buddy { transform: translateX(26px); }[data-station="review"] .ws-buddy { transform: translateX(52px); }.ws-track-labels { padding: 0; font-size: 7px; }.ws-companion-bar { gap: 8px; }.ws-connection { font-size: 9px; }.ws-heading h1 { font-size: 32px; }.ws-compose-bottom > span { max-width: 140px; } }
 @media (max-width: 960px) { .workspace { grid-template-columns: 176px minmax(0,1fr); }.ws-brand { font-size: 14px; gap: 7px; margin-inline: 0; }.ws-brand small { font-size: 6px; letter-spacing: 1px; }.ws-main { overflow-y: auto; }.ws-columns { display: flex; flex-direction: column; flex: none; }.ws-conversation { min-height: 550px; height: calc(100vh - 220px); }.ws-work { padding: 18px 0 8px; border-left: 0; border-top: 1px solid #343b2c; min-height: 300px; flex-shrink: 0; }.ws-work-list { max-height: 400px; }.ws-top-actions button:first-child { display: none; }.ws-topbar .ws-kicker { display: none; }.ws-heading { align-items: flex-start; }.ws-connection { max-width: 132px; white-space: normal; text-align: center; }.ws-companion-track { width: 150px; }.ws-track-dot.middle { left: 73px; }[data-station="make"] .ws-buddy { transform: translateX(53px); }[data-station="review"] .ws-buddy { transform: translateX(106px); }.ws-track-labels { padding: 0 10px; font-size: 8px; }.ws-companion-bar { gap: 15px; }.ws-local-note { line-height: 1.8; } }
-@media (max-width: 650px) { .workspace { grid-template-columns: 1fr; overflow-y: auto; }.ws-sidebar { padding: 14px; border-right: 0; overflow: visible; }.ws-brand { margin-bottom: 14px; }.ws-home,.ws-sidebar-note,.ws-local-note,.ws-section-label { display: none; }.ws-projects { display: flex; overflow-x: auto; }.ws-project { flex: 0 0 auto; width: auto; max-width: 200px; }.ws-sidebar-bottom { padding-top: 8px; display: flex; align-items: flex-start; gap: 10px; }.ws-tools,.ws-personal { flex: 1; position: relative; margin: 0; border: none; }.ws-personal[open] { min-width: 150px; }.workspace .ws-settings { width: auto; max-width: 110px; }.ws-main { overflow: visible; padding-inline: 18px; }.ws-topbar { height: 48px; }.ws-heading { padding-top: 23px; }.ws-heading h1 { font-size: 29px; }.ws-project-path { max-width: 65vw; }.ws-connection { display: none; }.ws-conversation { height: 580px; }.ws-companion-track { width: 96px; }.ws-track-dot.middle { left: 46px; }[data-station="make"] .ws-buddy { transform: translateX(26px); }[data-station="review"] .ws-buddy { transform: translateX(52px); }.ws-track-labels { padding: 0; font-size: 7px; }.ws-companion-bar { gap: 9px; }.ws-compose-bottom > span { max-width: 140px; }.ws-work { min-height: 350px; } }
+@media (max-width: 650px) { .workspace { grid-template-columns: 1fr; overflow-y: auto; }.ws-sidebar { padding: 14px; border-right: 0; overflow: visible; }.ws-brand { margin-bottom: 14px; }.ws-home,.ws-sidebar-note,.ws-local-note,.ws-section-label { display: none; }.ws-projects { display: flex; overflow-x: auto; }.ws-project { flex: 0 0 auto; width: auto; max-width: 200px; }.ws-sidebar-bottom { padding-top: 8px; display: flex; align-items: flex-start; gap: 10px; }.ws-tools { flex: 1; position: relative; margin: 0; border: none; }.workspace .ws-settings { width: auto; max-width: 110px; }.ws-main { overflow: visible; padding-inline: 18px; }.ws-topbar { height: 48px; }.ws-heading { padding-top: 23px; }.ws-heading h1 { font-size: 29px; }.ws-project-path { max-width: 65vw; }.ws-connection { display: none; }.ws-conversation { height: 580px; }.ws-companion-track { width: 96px; }.ws-track-dot.middle { left: 46px; }[data-station="make"] .ws-buddy { transform: translateX(26px); }[data-station="review"] .ws-buddy { transform: translateX(52px); }.ws-track-labels { padding: 0; font-size: 7px; }.ws-companion-bar { gap: 9px; }.ws-compose-bottom > span { max-width: 140px; }.ws-work { min-height: 350px; } }
 @media print { .workspace { display: none !important; } body.workspace-active > main,body.workspace-active > header { visibility: visible; } }
 
 /* One shared menu, revealed from the left edge on every Studio surface: a grip on
@@ -2675,20 +2775,11 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #workspace-tool-links .nav-menu-group .tone-dot { position: absolute; bottom: -2px; right: -2px; box-shadow: 0 0 0 2px var(--panel-solid); }
 /* bottom row */
 #workspace-sidebar .ws-sidebar-bottom { display: block; padding-top: 14px; }
-#workspace-sidebar .ws-quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+#workspace-sidebar .ws-quick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 #workspace-sidebar .ws-settings { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; width: 100%; max-width: none; min-height: 54px; padding: 8px 4px; font-size: 11px; border: 1px solid rgba(var(--ws-accent-rgb), 0.12); border-radius: 10px; background: rgba(var(--ws-accent-rgb), 0.05); color: #cdd2c5; }
 #workspace-sidebar .ws-settings .glyph { width: 17px; height: 17px; color: var(--ws-accent); }
 #workspace-sidebar .ws-settings .label { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #workspace-sidebar .ws-settings:hover { background: rgba(var(--ws-accent-rgb), 0.14); border-color: rgba(var(--ws-accent-rgb), 0.32); color: var(--ivory); transform: none; box-shadow: none; }
-#workspace-sidebar .ws-personal { flex: none; margin-top: 10px; border-top: 1px solid rgba(var(--ws-accent-rgb), 0.14); }
-#workspace-sidebar .ws-personal > summary { padding: 11px 8px 8px; }
-#workspace-sidebar .ws-personal > summary > span { flex: 1; }
-#workspace-sidebar .ws-personal > summary > .glyph:first-child { color: var(--ws-accent); }
-#workspace-sidebar .ws-personal-fields { display: grid; padding-bottom: 6px; }
-#workspace-sidebar .ws-personal label { display: flex; flex-direction: column; gap: 4px; margin: 6px 8px; font-size: 11px; color: #adb4a4; }
-#workspace-sidebar .ws-personal input, #workspace-sidebar .ws-personal select { width: 100%; min-width: 0; min-height: 32px; font-size: 12px; padding: 6px 8px; border-radius: 8px; background: #131710; border-color: #383f30; }
-#workspace-sidebar .ws-personal .ws-check { flex-direction: row; align-items: center; gap: 8px; }
-#workspace-sidebar .ws-personal .ws-check input { width: auto; min-height: 0; }
 #workspace-sidebar[hidden], #workspace-sidebar .sidebar-edge[hidden] { display: none; }
 @media (max-height: 800px) {
   #workspace-sidebar-panel { padding-top: 10px; padding-bottom: 12px; }
@@ -2835,7 +2926,6 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #idle-hud .cmd-feed.collapsed .feed-toggle { width: auto; min-height: 28px; gap: 8px; }
 #idle-hud .cmd-feed.collapsed .feed-state { margin: 0 2px 0 4px; font-size: 10px; font-weight: 500; }
 #idle-hud .cmd-feed.collapsed .feed-toggle .glyph { margin-left: 4px; }
-#idle-hud { transition: opacity 500ms var(--ease); }
 body.command-zen #idle-hud { opacity: 0; pointer-events: none; }
 body.command-zen #idle-hud * { pointer-events: none !important; }
 body:not(.command-zen) #idle-hud .feed-content:not([hidden]),
@@ -3037,6 +3127,42 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
   #idle-hud .cmd-more-links .glyph { display: inline; }
 }
 @media (prefers-reduced-motion: reduce) { #idle-hud .cmd-music-level i { transition: none; } }
+/* --- Command toolbar clusters (menu regroup) ---------------------------------
+   Four labelled groups and Leave: Agents | Camera (Fit · Overview/Follow ·
+   Spin) | View ▾ | Sound (Music · Ambience) | Leave. 2D/3D, labels and zoom
+   fold into the View menu. Both popovers hang from their buttons: idle.js
+   placePop writes their top/right inline over the fixed .pop offsets, so a
+   two- or three-row top bar never sits under them. */
+#idle-hud .cmd-tools-group { display: flex; align-items: center; flex: none; gap: 2px; }
+/* Overview and Follow are one switch: a shared hairline, squared inner edges */
+#idle-hud .cmd-seg { display: flex; flex: none; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--hairline); }
+#idle-hud .cmd-seg > button:first-child { border-start-end-radius: 0; border-end-end-radius: 0; }
+#idle-hud .cmd-seg > button:last-child { border-start-start-radius: 0; border-end-start-radius: 0; }
+#idle-hud #idle-view-menu .chev { width: 12px; height: 12px; margin-inline-start: -2px; opacity: .7; transition: rotate var(--motion-fast) var(--ease-out); }
+/* View ▾ and Ambience stay lit while their popover is open */
+#idle-hud .cmd-tools [aria-expanded="true"] { color: var(--ivory); background: var(--cmd-hover); }
+#idle-hud #idle-view-menu[aria-expanded="true"] .chev { rotate: 180deg; }
+/* View ▾: a short menu under its button, each row name · value · key */
+#idle-hud .cmd-view-pop { width: auto; min-width: 212px; padding: 6px; gap: 2px; border-radius: 12px; background: var(--cmd-surface); border-color: var(--cmd-edge); box-shadow: var(--cmd-shadow); backdrop-filter: none; }
+#idle-hud .cmd-view-pop > button, #idle-hud .cmd-view-zoom { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 0 8px 0 10px; border: 1px solid transparent; border-radius: 7px; font-size: 12.5px; color: var(--ivory); }
+#idle-hud .cmd-view-pop > button { justify-content: flex-start; background: transparent; }
+#idle-hud .cmd-view-pop button:hover { background: var(--cmd-hover); border-color: transparent; transform: none; box-shadow: none; }
+#idle-hud .cmd-view-pop .glyph { color: var(--gold); }
+#idle-hud .cmd-view-name { flex: 1; min-width: 0; text-align: start; }
+#idle-hud .cmd-view-pop .key { margin-inline-start: 4px; }
+#idle-hud .cmd-view-pop #idle-view[data-view="2d"] { box-shadow: none; }
+#idle-hud .cmd-view-zoom { color: var(--muted); padding-inline-end: 4px; }
+#idle-hud .cmd-view-zoom .cmd-view-name { padding-inline-start: 26px; }
+#idle-hud .cmd-view-zoom button { width: 30px; min-width: 30px; min-height: 28px; padding: 0; border-color: transparent; border-radius: 6px; background: transparent; }
+/* Ambience reads Look → Sound → Calm, then a way on to Style & sound */
+#idle-hud .pop-group { display: flex; flex-direction: column; gap: var(--s2); }
+#idle-hud .pop-link { justify-content: flex-start; width: 100%; min-height: var(--ctl-h-sm); padding: 0 var(--s2); border-color: transparent; color: var(--muted); font-size: var(--fs-sm); white-space: normal; text-align: start; }
+#idle-hud .pop-link:hover { color: var(--ivory); background: var(--cmd-hover); border-color: transparent; transform: none; box-shadow: none; }
+/* opened from the keyboard the dialog holds focus: an inset hairline, as the sheets do */
+#idle-hud .pop:focus-visible { outline: none; box-shadow: var(--shadow-3), var(--inset-hi), inset 0 0 0 1px var(--gold-dim); }
+@media (max-width: 1100px) { #idle-hud .cmd-tools #idle-view-menu .label { display: none; } }
+/* the strip wraps below 760px: whole groups wrap and the separators go */
+@media (max-width: 760px) { #idle-hud .cmd-tools .tools-sep { display: none; } }
 
                                                                                 
 .model-lab { border: 1px solid var(--hairline); border-radius: 20px; padding: 28px; background: var(--panel, #111310); margin-bottom: 22px; }
@@ -3101,32 +3227,124 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 
                                                                            
                                                                                
-:root {
-  --motion-press: 140ms;
-  --motion-content: 160ms;
-  --motion-menu: 180ms;
-  --motion-panel: 220ms;
-  --ease-enter: cubic-bezier(.2, .75, .25, 1);
+/* The motion tokens live with the others in section 1. */
+:root { interpolate-size: allow-keywords; }
+html[data-motion="off"] {
+  --motion-instant: 0ms; --motion-fast: 0ms; --motion-base: 0ms; --motion-slow: 0ms;
+  --motion-spring: 0ms; --motion-ambient: 0ms; --motion-content: 0ms;
 }
-.overlay:not([hidden]) > :is(.sheet, .explorer-sheet, .palette-sheet),
-.planning-overlay:not([hidden]) > .sheet {
-  animation: studio-panel-enter var(--motion-panel) var(--ease-enter);
+/* ---- presence: sheets and their scrims --------------------------------
+   JS keeps writing el.hidden synchronously, which every test and harness
+   reads; CSS owns the way in and out. `display ... allow-discrete` keeps a
+   closing layer rendered until its fade ends (a transition outranks the
+   global [hidden] !important), @starting-style gives an opening one somewhere
+   to come from, and a closing layer never takes the pointer. */
+:is(.overlay, .planning-overlay, .brains-overlay, .profiler-overlay, .music-overlay) {
+  transition: opacity var(--motion-base) var(--ease-out), display var(--motion-base) allow-discrete;
 }
-.music-overlay:not([hidden]) > .music-sheet {
-  animation: studio-settings-enter var(--motion-panel) var(--ease-enter);
+:is(.overlay, .planning-overlay, .brains-overlay, .profiler-overlay, .music-overlay)[hidden] {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-exit) var(--ease-in), display var(--motion-exit) allow-discrete;
 }
+@starting-style {
+  :is(.overlay, .planning-overlay, .brains-overlay, .profiler-overlay, .music-overlay):not([hidden]) { opacity: 0; }
+}
+/* One scrim for every modal sheet (the Style side panel has none), so going
+   from one sheet to another never changes the room behind it. The Blur menu
+   preference (.no-blur) keeps its own opaque, unblurred backdrop. */
+:is(.overlay, .planning-overlay, .brains-overlay, .profiler-overlay):not(.music-overlay):not(.no-blur) {
+  background: var(--scrim); backdrop-filter: var(--scrim-blur);
+}
+html[data-no-blur] :is(.overlay, .planning-overlay, .brains-overlay, .profiler-overlay):not(.music-overlay) {
+  background: rgba(3, 3, 4, 0.94); backdrop-filter: none;
+}
+/* a sheet-to-sheet swap keeps one continuous scrim: nav marks both roots, the
+   old one vanishes, the new one is simply there, and only its panel rises */
+:is(.overlay, .planning-overlay, .brains-overlay, .profiler-overlay, .music-overlay)[data-swap] { transition: none; }
+:is(.overlay, .planning-overlay, .brains-overlay, .profiler-overlay, .music-overlay) > :is(.sheet, .explorer-sheet, .palette-sheet, .brains-sheet, .profiler-sheet, .music-sheet) {
+  transition: opacity var(--motion-base) var(--ease-out), translate var(--motion-spring) var(--ease-spring),
+    scale var(--motion-spring) var(--ease-spring);
+}
+:is(.overlay, .planning-overlay, .brains-overlay, .profiler-overlay, .music-overlay)[hidden] > :is(.sheet, .explorer-sheet, .palette-sheet, .brains-sheet, .profiler-sheet, .music-sheet) {
+  opacity: 0; translate: var(--presence-from, 0 6px); scale: .985;
+  transition: opacity var(--motion-exit) var(--ease-in), translate var(--motion-exit) var(--ease-in), scale var(--motion-exit) var(--ease-in);
+}
+@starting-style {
+  :is(.overlay, .planning-overlay, .brains-overlay, .profiler-overlay, .music-overlay):not([hidden]) > :is(.sheet, .explorer-sheet, .palette-sheet, .brains-sheet, .profiler-sheet, .music-sheet) { opacity: 0; translate: var(--presence-from, 0 10px); scale: .98; }
+}
+/* Style & sound is a side panel beside the live tree: it slides in from its edge */
+.music-overlay { --presence-from: -14px 0; }
+/* ---- presence: Command HUD popovers, the floating card, the coach, tips ----
+   Same contract as the sheets: .hidden stays synchronous, CSS plays both ways.
+   Out-of-flow boxes only; the rail's tab panels are siblings in flow and are
+   not faded here (an exit would push the next panel down, then jump). */
+#idle-hud .pop, #idle-hud .legend-list, #idle-info, .walkthrough-coach {
+  transition: opacity var(--motion-base) var(--ease-out), translate var(--motion-spring) var(--ease-spring),
+    scale var(--motion-spring) var(--ease-spring), display var(--motion-base) allow-discrete;
+}
+#idle-hud .pop[hidden], #idle-hud .legend-list[hidden], #idle-hud #idle-info[hidden], .walkthrough-coach[hidden] {   /* the id pair out-ranks #idle-hud.dim .cmd-card */
+  opacity: 0; translate: var(--presence-from, 0 6px); scale: .985; pointer-events: none;
+  transition: opacity var(--motion-exit) var(--ease-in), translate var(--motion-exit) var(--ease-in),
+    scale var(--motion-exit) var(--ease-in), display var(--motion-exit) allow-discrete;
+}
+@starting-style {
+  #idle-hud .pop:not([hidden]), #idle-hud .legend-list:not([hidden]), #idle-info:not([hidden]), .walkthrough-coach:not([hidden]) {
+    opacity: 0; translate: var(--presence-from, 0 6px); scale: .985;
+  }
+}
+#idle-hud .pop { --presence-from: 0 -6px; transform-origin: top right; }     /* drops from the toolbar */
+#idle-hud .legend-list { transform-origin: bottom left; }                      /* rises from its pill */
+#idle-info { --presence-from: 8px 0; }                                         /* slides in from the rail side */
+/* the tip follows the pointer through its transform, so it only fades */
+#idle-hud .cmd-tip { transition: opacity var(--motion-instant) var(--ease-out), display var(--motion-instant) allow-discrete; }
+#idle-hud .cmd-tip[hidden] { opacity: 0; }
+@starting-style { #idle-hud .cmd-tip:not([hidden]) { opacity: 0; } }
+/* "Show more" opens its extra rows in place instead of snapping the list down */
+#idle-hud .feed-drop {
+  overflow: clip;
+  transition: height var(--motion-base) var(--ease-out), opacity var(--motion-fast) var(--ease-out), display var(--motion-base) allow-discrete;
+}
+#idle-hud .feed-drop[hidden] { height: 0; opacity: 0; transition-duration: var(--motion-exit); }
+@starting-style { #idle-hud .feed-drop:not([hidden]) { height: 0; opacity: 0; } }
+/* ---- presence: whole surfaces ---------------------------------------------
+   The Workspace and Command are fixed full-window layers, so switching
+   between them cross-fades: the one leaving fades on its exit curve while the
+   one arriving fades in above or below it. State still flips synchronously
+   (MefiWorkspace.enter/exit, MefiIdle.enter/exit); only the pixels ease.
+   In-flow tab sections cannot overlap, so they fade in (studio-content-enter). */
+.workspace { transition: opacity var(--motion-base) var(--ease-out), display var(--motion-base) allow-discrete; }
+.workspace[hidden] { opacity: 0; pointer-events: none; transition-duration: var(--motion-exit); transition-timing-function: var(--ease-in); }
+@starting-style { .workspace:not([hidden]) { opacity: 0; } }
+#idle-layer { transition: opacity var(--motion-base) var(--ease-out), display var(--motion-base) allow-discrete; }
+#idle-layer-far { transition: filter 260ms var(--ease-out), opacity var(--motion-base) var(--ease-out), display var(--motion-base) allow-discrete; }
+#idle-layer[hidden], #idle-layer-far[hidden] { opacity: 0; pointer-events: none; transition-duration: var(--motion-exit); transition-timing-function: var(--ease-in); }
+@starting-style { #idle-layer:not([hidden]), #idle-layer-far:not([hidden]) { opacity: 0; } }
+/* the HUD arrives a beat slower than the tree and fades to Zen on the ambient curve */
+#idle-hud { transition: opacity var(--motion-slow) var(--ease-out), display var(--motion-slow) allow-discrete; }
+#idle-hud[hidden] { opacity: 0; transition-duration: var(--motion-exit); transition-timing-function: var(--ease-in); }
+@starting-style { #idle-hud:not([hidden]) { opacity: 0; } }
+body.command-zen #idle-hud { transition-duration: var(--motion-ambient); }
+/* ---- presence: disclosures ------------------------------------------------
+   A fold opens and closes in place: its content box eases its block size
+   (interpolate-size is on at :root) and content-visibility flips at the end
+   of a close. The pop-out menus (.studio-more, .ws-tools) are not folds and
+   are left out, since clipping would cut their menus off. */
+:is(.settings-optional, .settings-help, .feed-help, .feed-section, .lab-catalog, .lab-disclosure, .lab-context-source, .task-reference-drawer, .ws-activity, .card-cps, .feed-absorbed)::details-content {
+  block-size: 0; overflow: clip;
+  transition: block-size var(--motion-base) var(--ease-out), content-visibility var(--motion-base) allow-discrete;
+}
+:is(.settings-optional, .settings-help, .feed-help, .feed-section, .lab-catalog, .lab-disclosure, .lab-context-source, .task-reference-drawer, .ws-activity, .card-cps, .feed-absorbed)[open]::details-content { block-size: auto; }
 body > main > section:not([hidden]),
-.workspace:not([hidden]) > .ws-main,
 .model-lab > [role="tabpanel"]:not([hidden]) {
   animation: studio-content-enter var(--motion-content) var(--ease-enter);
 }
 .studio-more[open] > .tools-cluster,
 .ws-tools[open] > #workspace-tool-links,
-.cmd-more-tools[open] > .cmd-more-links,
-#idle-hud .pop:not([hidden]) {
+.cmd-more-tools[open] > .cmd-more-links {
   animation: studio-menu-enter var(--motion-menu) var(--ease-enter);
 }
-:is(.ws-personal, .ws-activity, .feed-section, .lab-disclosure, .lab-context-source, .lab-catalog, .task-reference-drawer)[open] > :not(summary) {
+:is(.ws-activity, .feed-section, .lab-disclosure, .lab-context-source, .lab-catalog, .task-reference-drawer)[open] > :not(summary) {
   animation: studio-content-enter var(--motion-content) var(--ease-enter);
 }
                                                                              
@@ -3138,40 +3356,44 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 :is(button, .button):not(:disabled):active {
   transform: translateY(0) scale(.985);
 }
-:is(.studio-more, .ws-tools, .ws-personal, .ws-activity, .cmd-more-tools, .feed-section, .lab-disclosure, .lab-context-source, .lab-catalog, .task-reference-drawer) > summary {
+:is(.studio-more, .ws-tools, .ws-activity, .cmd-more-tools, .feed-section, .lab-disclosure, .lab-context-source, .lab-catalog, .task-reference-drawer) > summary {
   transition: color var(--motion-press) var(--ease), background-color var(--motion-press) var(--ease),
     border-color var(--motion-press) var(--ease);
-}
-@keyframes studio-panel-enter {
-  from { opacity: .35; transform: translateY(6px) scale(.995); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes studio-settings-enter {
-  from { opacity: .35; transform: translateX(-8px); }
-  to { opacity: 1; transform: none; }
 }
 @keyframes studio-menu-enter {
   from { opacity: .3; transform: translateY(-4px); }
   to { opacity: 1; transform: none; }
 }
 @keyframes studio-content-enter {
-  from { opacity: .6; }
-  to { opacity: 1; }
+  from { opacity: 0; translate: 0 4px; }
+  to { opacity: 1; translate: none; }
 }
                                                                            
 @media (max-width: 600px) {
-  .music-overlay:not([hidden]) > .music-sheet { animation-name: studio-panel-enter; }
+  .music-overlay { --presence-from: 0 10px; }   /* stacked under the tree on a narrow window */
 }
-.no-motion *, .no-motion *::before, .no-motion *::after,
-.ws-still, .ws-still *, .ws-still *::before, .ws-still *::after {
+html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after,
+.no-motion *, .no-motion *::before, .no-motion *::after {
   animation: none !important;
   transition: none !important;
 }
+/* Calm: the interface still eases (short, functional transitions: sheets,
+   menus, toasts), while decorative loops stop (pulses, spinners, the
+   companion's float). The live tree keeps its own motion. */
+html[data-motion="calm"] *, html[data-motion="calm"] *::before, html[data-motion="calm"] *::after,
+.ws-still, .ws-still *, .ws-still *::before, .ws-still *::after {
+  animation: none !important;
+}
+/* the blanket above cannot reach a view transition's pseudo-elements */
+html[data-motion="off"]::view-transition-group(*),
+html[data-motion="off"]::view-transition-old(*),
+html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 .no-motion :is(button, .button):active,
 .ws-still :is(button, .button):active { transform: none !important; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   :is(button, .button):active { transform: none !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
 
                                                     
@@ -3190,6 +3412,111 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 .walkthrough-invitation p { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .walkthrough-invite-actions { display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; gap: 6px; }
 .walkthrough-invite-actions button { font-size: 11px; white-space: nowrap; }
+/* The weekly Void Engine card reuses the invitation above; community.js adds
+   community-enter only while motion is allowed. Settings › Community shares
+   the note line, initials avatar (no remote images under the CSP) and perks. */
+/* Both carry the Void collection's two hues (Void's violet and cyan), or the
+   member theme's own pair while one is on. Frames are a gradient hairline over
+   an opaque fill, so the border gradient never shows through. */
+.community-invitation, #settings-community { --void-a: 124, 108, 255; --void-b: 54, 209, 255; }
+:root[data-studio-theme-tier="premium"] :is(.community-invitation, #settings-community) { --void-a: var(--studio-accent-rgb); --void-b: var(--accent-2-rgb); }
+.community-invitation.community-enter { animation: pop-in var(--dur-3) var(--ease); }
+.walkthrough-invitation.community-invitation { justify-content: flex-start; gap: var(--s4); border-color: transparent; background: radial-gradient(90% 160% at 0 0, rgba(var(--void-a), 0.1), transparent 55%) padding-box, linear-gradient(color-mix(in srgb, var(--gold) 5%, var(--panel-solid)), color-mix(in srgb, var(--gold) 5%, var(--panel-solid))) padding-box, linear-gradient(115deg, rgba(var(--void-a), 0.6), rgba(var(--void-b), 0.35) 40%, var(--hairline-strong) 75%) border-box; }
+/* The emblem: the four themes' two-tone swatches (music.css .void-swatch). */
+.community-emblem { flex: none; display: grid; grid-template-columns: repeat(2, 13px); gap: 6px; place-content: center; width: 46px; height: 46px; border: 1px solid rgba(var(--void-a), 0.45); border-radius: var(--r-sm); background: radial-gradient(circle at 30% 25%, rgba(var(--void-a), 0.24), transparent 70%), rgba(8, 8, 11, 0.55); box-shadow: var(--inset-hi); }
+.community-invite-copy { flex: 1 1 auto; min-width: 0; }
+/* Title, then the pitch a step brighter than the fork fine print, which stays
+   small and quiet but keeps --muted's contrast (--dim can fall to 3:1). */
+.walkthrough-invitation .community-invite-copy > strong { font-size: var(--fs-md); }
+.community-invitation .community-pitch { color: color-mix(in srgb, var(--ivory) 80%, var(--muted)); }
+.walkthrough-invitation .community-note { color: var(--gold-bright); font-weight: 600; }
+.walkthrough-invitation .community-fine { margin-top: var(--s1); font-size: var(--fs-2xs); }
+.community-invite-actions { justify-content: flex-end; }
+/* Not now and Don't show again: quiet text buttons set apart by space, which
+   still reads right when they wrap under the main two. */
+.community-invite-dismiss { display: inline-flex; align-items: center; gap: 2px; margin-left: var(--s2); }
+.community-invitation .community-quiet { border-color: transparent; background: none; color: var(--muted); }
+.community-invitation .community-quiet:hover { color: var(--ivory); background: var(--tint-gold-2); border-color: transparent; transform: none; box-shadow: none; }
+/* Short windows fold the invitation's paragraphs away; the pitch, the fork
+   path and a locked item's note stay (the honest-lock guard-rail keeps them in
+   view, and "unlock these" needs the pitch before it). */
+@media (max-height: 1000px) and (min-width: 961px) {
+  .community-invitation > div > :is(.community-pitch, .community-fine, .community-note) { display: block; }
+}
+@media (max-width: 650px) {
+  .community-emblem { display: none; }
+  .community-invite-actions { justify-content: flex-start; }
+}
+/* Settings › Community: a showcase strip, then the link state, the quiet fork
+   path and the privacy note. */
+.community-showcase { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3) var(--s5); margin: 2px 0 var(--s3); padding: var(--s3) var(--s4); border: 1px solid transparent; border-radius: var(--r-sm); background: radial-gradient(110% 150% at 0 0, rgba(var(--void-a), 0.13), transparent 55%) padding-box, radial-gradient(80% 140% at 100% 100%, rgba(var(--void-b), 0.08), transparent 60%) padding-box, linear-gradient(var(--panel-solid), var(--panel-solid)) padding-box, linear-gradient(115deg, rgba(var(--void-a), 0.6), rgba(var(--void-b), 0.32) 42%, var(--hairline) 78%) border-box; }
+/* The copy column: kicker, title, the unlock state and, for a member, the way in. */
+.community-showcase-copy { flex: 1 1 200px; min-width: 0; display: grid; justify-items: start; gap: 2px; }
+.community-showcase-kicker { color: var(--gold); font-size: var(--fs-2xs); font-weight: 650; letter-spacing: var(--track-eyebrow); text-transform: uppercase; }
+.community-showcase-copy > strong { color: var(--ivory); font: 600 var(--fs-lg)/1.35 var(--font-display); }
+.community-showcase-state { display: inline-flex; align-items: center; gap: 7px; margin-top: 2px; color: var(--muted); font-size: var(--fs-xs); }
+.community-showcase-state::before { content: ""; flex: none; width: 10px; height: 10px; background: currentColor; -webkit-mask: var(--glyph-lock) center / contain no-repeat; mask: var(--glyph-lock) center / contain no-repeat; }
+.community-showcase-state[data-unlocked="true"] { color: var(--ivory); }
+.community-showcase-state[data-unlocked="true"]::before { width: 12px; height: 12px; background: var(--gold-bright); -webkit-mask-image: var(--glyph-check); mask-image: var(--glyph-check); }
+.community-showcase-items { display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--s2) var(--s3); }
+.community-showcase-items:empty { display: none; }
+.community-showcase-group { display: flex; gap: 2px; }
+.community-showcase-group + .community-showcase-group { padding-left: var(--s3); border-left: 1px solid var(--hairline); }
+.community-showcase-item { display: grid; justify-items: center; gap: 2px; width: 66px; padding: var(--s1) 1px 6px; border-radius: var(--r-xs); }
+.community-showcase-item[data-current="true"] { background: rgba(var(--void-a), 0.12); box-shadow: inset 0 0 0 1px rgba(var(--void-a), 0.6); }
+.community-showcase-item[data-current="true"] .community-showcase-name { color: var(--ivory); }
+.community-showcase-art { display: grid; place-items: center; width: 100%; height: 41px; }
+.community-showcase-art > .music-node-preview { width: 100%; margin: 0; }
+.community-showcase .void-swatch { width: 24px; height: 24px; }
+.community-showcase-name { color: var(--muted); font-size: var(--fs-2xs); line-height: 1.3; white-space: nowrap; }
+.community-choose { margin-top: var(--s2); }
+#settings-community .community-note { margin: 0 0 var(--s3); padding: 9px var(--s3) 9px 13px; border-left: 2px solid var(--gold-bright); border-radius: 0 var(--r-xs) var(--r-xs) 0; background: var(--tint-gold-2); color: var(--ivory); font-size: var(--fs-sm); line-height: 1.55; }
+#community-settings-body > p { margin: 0 0 var(--s2); max-width: 78ch; line-height: 1.6; }
+.community-who { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); margin: 2px 0 var(--s3); font-size: var(--fs-sm); }
+.community-avatar { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; border: 1px solid rgba(var(--void-a), 0.55); background: radial-gradient(circle at 30% 25%, rgba(var(--void-a), 0.3), transparent 70%), color-mix(in srgb, var(--gold) 10%, var(--panel-solid)); color: var(--gold-bright); font-size: var(--fs-sm); font-weight: 700; letter-spacing: var(--track-ui); }
+.community-names { min-width: 0; line-height: 1.4; }
+.community-names > strong { color: var(--ivory); font-size: var(--fs-md); }
+.community-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+/* Link trouble (offline, relink, not a member) spans the card like the note above. */
+#community-settings-body > .community-callout { max-width: none; margin: 0 0 10px; padding: var(--s2) var(--s3); border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--hairline)); border-radius: var(--r-xs); background: color-mix(in srgb, var(--warn) 6%, transparent); color: var(--ivory); font-size: var(--fs-sm); }
+#community-settings-body > .community-aside { font-size: var(--fs-xs); }
+.community-perks { margin: 0; padding: 0; list-style: none; border-bottom: 1px solid var(--hairline); }
+.community-perks li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: var(--s2) 0; border-top: 1px solid var(--hairline); color: var(--ivory); font-size: var(--fs-sm); }
+/* Side by side, not stacked, so each swatch keeps both of its hues in view. */
+.community-perk-swatches { display: inline-flex; gap: 5px; margin-left: auto; }
+.community-perk-swatches > .void-swatch { box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16); }
+#community-settings-body > .community-checked { margin: var(--s2) 0 2px; font-size: var(--fs-xs); }
+/* Check now and Unlink are ghost mini; Unlink is the quiet one until pointed at. */
+#community-settings-body .community-unlink { color: var(--muted); border-color: transparent; }
+#community-settings-body .community-unlink:not([aria-disabled="true"]):hover { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); background: color-mix(in srgb, var(--bad) 7%, transparent); }
+.community-waiting { display: flex; align-items: center; gap: 10px; }
+.community-waiting::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--gold-bright); box-shadow: 0 0 0 3px var(--tint-gold-3); }
+@media (prefers-reduced-motion: no-preference) {
+  .community-waiting::before { animation: community-waiting 1.6s ease-in-out infinite; }
+}
+@keyframes community-waiting { 50% { opacity: 0.3; } }
+.community-fork { margin: var(--s3) 0 0; padding: var(--s3) 14px; border: 1px solid var(--hairline); border-radius: var(--r-sm); background: rgba(8, 8, 11, 0.28); container-type: inline-size; }
+.community-fork-title { display: block; margin: 0 0 var(--s1); color: var(--ivory); font-size: var(--fs-xs); font-weight: 600; }
+.community-fork-copy { margin: 0 0 var(--s2); max-width: 78ch; color: var(--muted); font-size: var(--fs-xs); line-height: 1.6; }
+/* Copy agent prompt, and beside it the disclosure that shows what it copies. */
+.community-fork-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s2) var(--s3); }
+.community-prompt { flex: 1 1 260px; min-width: 0; }
+.community-prompt > summary { display: inline-flex; align-items: center; gap: 7px; min-height: var(--ctl-h-sm); color: var(--muted); font-size: var(--fs-xs); cursor: pointer; list-style: none; }
+.community-prompt > summary::-webkit-details-marker { display: none; }
+.community-prompt > summary::before { content: ""; width: 0; height: 0; border-left: 5px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform var(--dur-2) var(--ease); }
+.community-prompt[open] > summary::before { transform: rotate(90deg); }
+.community-prompt > summary:hover { color: var(--ivory); }
+.community-prompt-code { margin: var(--s1) 0 0; padding: var(--s2) var(--s3); border: 1px solid var(--hairline); border-radius: var(--r-xs); background: rgba(0, 0, 0, 0.35); color: var(--ivory); font: var(--fs-xs)/1.6 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
+.community-prompt-code > code { padding: 0; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; }
+/* A narrow card gives the disclosure its own row, so the prompt opens full width. */
+@container (max-width: 640px) {
+  .community-prompt { flex-basis: 100%; }
+}
+/* The privacy note: smaller, muted, in a readable measure. */
+#community-privacy { max-width: 70ch; margin: var(--s3) 0 0; color: var(--muted); font-size: var(--fs-xs); line-height: 1.6; }
+/* Busy Settings › Community buttons stay focusable (aria-disabled, not
+   disabled) so a rebuild keeps keyboard focus; they look like button:disabled. */
+#community-settings-body button[aria-disabled="true"] { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
 .overlay .walkthrough-sheet { display: flex; flex-direction: column; width: min(740px, 94vw); max-height: min(90vh, 810px); padding: 26px; overflow: hidden; }
 .walkthrough-sheet > .sheet-head, .walkthrough-steps, .walkthrough-footer { flex-shrink: 0; }
 .walkthrough-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 6px; }
@@ -3218,7 +3545,7 @@ button, .button, .workspace button, .music-overlay button, .model-lab button {
 .walkthrough-panel-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
 .walkthrough-panel-option { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
 .walkthrough-panel .muted { margin: 10px 0 0; font-size: 12px; line-height: 1.6; }
-.walkthrough-panel .muted.error { color: var(--danger, #e07a6a); }
+.walkthrough-panel .muted.error { color: var(--bad); }
 .walkthrough-notes:empty, .walkthrough-facts:empty { display: none; }
 .walkthrough-textTail { margin: 8px 0 0; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 8px; color: var(--muted); font-size: 11px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; max-height: 120px; overflow: auto; }
 .walkthrough-facts, .walkthrough-notes { margin: 10px 0 0; padding-left: 18px; font-size: 12px; line-height: 1.6; }
@@ -3250,31 +3577,60 @@ body.command-active .walkthrough-coach { right: 392px; }
   50% { outline-color: transparent; }
 }
 .help-start { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
-/* Settings & connections: one page of cards with a sticky section nav beside it */
-.settings-panel { padding: var(--s3) 0 var(--s6); }
+/* Settings: one page of cards in three blocks (Connections, Personal, System)
+   with a sticky list beside it that finds a setting, jumps to a card and
+   follows the scroll (booklet.js). The panel is a size container, so the page
+   answers to the room it has beside the menu, pinned or not, not to the window. */
+.settings-panel { container: settings / inline-size; padding: var(--s4) var(--s5) var(--s6); }
 .settings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: var(--s4); }
 .settings-heading h2 { margin-bottom: 6px; }
-.settings-heading .eyebrow { margin-bottom: 4px; }
+/* The page header already names Settings, so the panel's own heading is for
+   screen readers only; .panel h2 would otherwise pin it in place, underline and all. */
+.settings-heading h2.sr-only { position: absolute; margin: -1px; padding: 0; }
+.settings-heading h2.sr-only::after { display: none; }
 .settings-heading > div > p { margin: 0; max-width: 72ch; }
 .settings-heading > button { flex-shrink: 0; }
-.settings-layout { display: grid; grid-template-columns: 208px minmax(0, 1fr); gap: var(--s5); align-items: start; }
-.settings-nav { position: sticky; top: 68px; display: grid; gap: 2px; padding: 6px; border: 1px solid var(--hairline); border-radius: 12px; background: rgba(8, 8, 11, 0.35); }
+.settings-layout { display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: var(--s5); align-items: start; }
+/* Sticks under the classic tabs row (the rail shell's offset sits with the
+   rail, below) and scrolls inside itself on a short window. */
+.settings-nav { position: sticky; top: 68px; max-height: calc(100vh - 84px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; display: grid; align-content: start; gap: var(--s2); padding: var(--s2); border: 1px solid var(--hairline); border-radius: 12px; background: rgba(8, 8, 11, 0.35); }
+.settings-find { display: flex; align-items: center; gap: var(--s2); min-width: 0; padding: 0 var(--s2); border: 1px solid var(--hairline); border-radius: var(--r-sm); background: rgba(8, 8, 11, 0.5); color: var(--muted); }
+.settings-find:focus-within { border-color: var(--gold-dim); box-shadow: var(--ring); }
+.settings-find .glyph { width: 14px; height: 14px; }
+.settings-find input { flex: 1; min-width: 0; min-height: var(--ctl-h-sm); padding: 4px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: var(--fs-sm); }
+.settings-find input:focus, .settings-find input:focus-visible { border: 0; outline: none; box-shadow: none; }
+.settings-find-empty { margin: 0 var(--s2) var(--s1); color: var(--muted); font-size: var(--fs-xs); line-height: 1.6; }
+.settings-nav-list { display: grid; gap: var(--s2); min-width: 0; }
+.settings-nav-group { display: grid; gap: 2px; min-width: 0; }
+.settings-nav-heading { padding: 4px 10px 2px; color: var(--dim); font: 600 var(--fs-2xs)/1.4 var(--font-ui); letter-spacing: var(--track-eyebrow); text-transform: uppercase; }
 .settings-nav-item { display: flex; align-items: center; justify-content: flex-start; gap: 9px; min-height: 34px; padding: 0 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font-size: var(--fs-sm); text-align: left; }
 .settings-nav-item .glyph { color: var(--gold); opacity: .8; }
 .settings-nav-item .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .settings-nav-item:hover { color: var(--ivory); background: var(--tint-gold-2); border-color: var(--hairline); transform: none; box-shadow: none; }
 .settings-nav-item[aria-current="true"] { color: var(--gold-bright); background: var(--tint-gold-3); border-color: var(--gold-dim); box-shadow: inset 3px 0 0 var(--gold-bright); }
 .settings-nav-item[hidden] { display: none; }
-.settings-sections { display: grid; gap: var(--s3); min-width: 0; }
+/* ↗ rows leave the page for another view, so they read a step quieter. */
+.settings-nav-link { color: var(--dim); }
+.settings-nav-arrow { margin-left: auto; padding-left: var(--s1); color: var(--dim); font-size: var(--fs-xs); }
+.settings-nav-link:hover .settings-nav-arrow { color: var(--gold-bright); }
+.settings-sections { display: grid; gap: var(--s6); min-width: 0; }
+.settings-block { display: grid; gap: var(--s3); min-width: 0; }
+.settings-block-title { display: flex; align-items: center; gap: var(--s3); margin: 0; color: var(--gold); font: 600 var(--fs-2xs)/1.4 var(--font-ui); letter-spacing: var(--track-eyebrow); text-transform: uppercase; }
+.settings-block-title::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--hairline-strong), transparent); }
 #studio-desktop { display: grid; gap: var(--s3); }
 #studio-desktop[hidden] { display: none; }
+/* The browser build hides the connection cards; their block says why. */
+.settings-desktop-note { display: none; margin: 0; padding: var(--s3) var(--s4); border: 1px dashed var(--hairline); border-radius: var(--r-md); color: var(--muted); font-size: var(--fs-sm); line-height: 1.6; }
+#studio-desktop[hidden] + .settings-desktop-note { display: block; }
 .settings-card { padding: 18px 20px; border: 1px solid var(--hairline); border-radius: 14px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 40%), var(--glass); box-shadow: var(--inset-hi); scroll-margin-top: 76px; }
 .settings-card-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 8px; }
 .settings-card-head > div { flex: 1; min-width: 0; }
 .settings-card-head > div > p { margin: 0; }
 .settings-card-glyph { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--hairline-strong); background: radial-gradient(circle at 30% 25%, var(--tint-gold-3), transparent 60%), rgba(8, 8, 11, 0.5); color: var(--gold-bright); box-shadow: var(--inset-hi); }
 .settings-card-glyph .glyph { width: 17px; height: 17px; }
-.settings-group { padding: 0; border-top: 0; }
+/* The four open cards are .settings-group and .settings-card at once; the
+   card owns their padding (a padding: 0 here used to win and flatten them). */
+.settings-group { border-top: 0; }
 .settings-group h3 { margin: 0 0 4px; color: var(--ivory); font-size: var(--fs-lg); }
 .settings-group > p { margin-top: 0; }
 .settings-group .row, .settings-optional .row { flex-wrap: wrap; margin-top: 10px; }
@@ -3314,7 +3670,7 @@ body.command-active .walkthrough-coach { right: 392px; }
 .segmented-source { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: -1px; opacity: 0; pointer-events: none; }
 
 /* Providers: a grid of connection tiles — mark, name, kind and readiness pill, then the tile's own control. */
-.provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px; }
+.provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; }
 .provider-tile { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 12px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 55%), rgba(8, 8, 11, 0.4); box-shadow: var(--inset-hi); min-width: 0; }
 .provider-tile:has(.provider-pill[data-state="ready"]) { border-color: color-mix(in srgb, var(--live) 28%, var(--hairline)); }
 .provider-tile[data-provider="custom"] { grid-column: 1 / -1; }
@@ -3345,7 +3701,9 @@ body.command-active .walkthrough-coach { right: 392px; }
 .tier-model[data-state="missing"] { color: var(--warn); font-family: var(--font-ui); }
 .tier-model[data-state="unknown"] { color: var(--muted); font-family: var(--font-ui); }
 .tier-source { color: var(--dim); font-size: var(--fs-2xs); white-space: nowrap; }
-@media (max-width: 1180px) {
+/* Two columns only while the panel itself is wide enough (a pinned menu at
+   1280 leaves the cards about 720px), whatever the window measures. */
+@container settings (max-width: 1100px) {
   .settings-columns { grid-template-columns: minmax(0, 1fr); }
 }
 .auto-order { display: grid; gap: 8px; }
@@ -3383,6 +3741,51 @@ body.command-active .walkthrough-coach { right: 392px; }
 .setup-state-item > span:last-child[data-state="ready"]::before { background: var(--live); opacity: 1; box-shadow: 0 0 6px var(--live-dim); }
 .setup-state-item > span:last-child[data-state="missing"]::before { background: var(--warn); opacity: 1; }
 #auto-setup-status { font-size: 12px; line-height: 1.7; }
+/* Your Studio: who you are, how Studio looks and moves, and where it opens. */
+.settings-you-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--s3) var(--s4); }
+.settings-you-fields > .settings-you-theme { grid-column: 1 / -1; }
+.settings-you-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+.settings-you-row > select { flex: 1 1 200px; min-width: 0; max-width: 340px; }
+.settings-you-motion { margin-top: var(--s4); }
+.settings-you-motion > .segmented { max-width: 540px; }
+.settings-you-switches { display: flex; flex-wrap: wrap; gap: var(--s3) var(--s6); margin-top: var(--s4); }
+.settings-you-switches > .switch:has(input:disabled) { opacity: .55; }
+/* Updates is the update block alone now, so the block drops its divider. */
+#settings-updates .update-block { margin-top: 0; padding-top: 0; border-top: 0; }
+#settings-updates .update-block > .settings-eyebrow:first-child { margin-top: 2px; }
+.settings-diagnostics-tools { gap: var(--s2); }
+/* A jump opens a folded card at full height at once (booklet.js marks it for
+   that one frame), so the scroll lands on the card as it will be. */
+.settings-card[data-settings-opening]::details-content { transition: none; }
+/* The rail shell has no tabs row above the page: the list sticks near the
+   top, and a jump lands a card just under the window's edge. */
+html[data-shell="rail"] .settings-nav { top: var(--s4); max-height: calc(100vh - 2 * var(--s4)); }
+html[data-shell="rail"] .settings-card { scroll-margin-top: var(--s4); }
+/* Narrow panel: one column, and the list turns into a strip over the cards —
+   Find first, then every section as a chip in one row that scrolls sideways. */
+@container settings (max-width: 820px) {
+  .settings-heading, .setup-head { flex-wrap: wrap; }
+  .settings-layout { grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
+  .settings-nav { position: static; max-height: none; overflow: visible; gap: 6px; }
+  .settings-nav-list { display: flex; gap: var(--s1); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; padding-bottom: 2px; }
+  .settings-nav-group { display: flex; flex: none; gap: var(--s1); }
+  .settings-nav-group + .settings-nav-group { padding-left: var(--s1); border-left: 1px solid var(--hairline); }
+  .settings-nav-heading { display: none; }
+  .settings-nav-item { flex: none; min-height: 30px; border-color: var(--hairline); border-radius: var(--r-pill); }
+  .settings-nav-item[aria-current="true"] { box-shadow: none; }
+  .settings-card { padding: 14px 16px; }
+  .settings-optional { padding: 12px 16px; }
+  /* The rail shell has no tabs row above the page, so the strip can stick. */
+  /* Stuck, it reaches a little past the cards, so its rounded corners sit over
+     the panel's empty padding rather than over a card's edge. */
+  html[data-shell="rail"] .settings-nav { position: sticky; top: 0; z-index: 2; max-height: none; margin-inline: calc(-1 * var(--s2)); padding-inline: var(--s4); border-radius: 0 0 12px 12px; background: var(--panel-solid); box-shadow: var(--shadow-1); }
+  html[data-shell="rail"] .settings-card { scroll-margin-top: 112px; }
+}
+/* The classic tabs row wraps at 1250px and grows past the list's 68px offset. */
+@media (max-width: 1250px) {
+  html:not([data-shell="rail"]) .settings-nav { position: static; max-height: none; overflow: visible; }
+  html:not([data-shell="rail"]) .settings-card { scroll-margin-top: 120px; }
+}
 .ws-compose-bottom { flex-wrap: wrap; }
 .ws-compose-bottom > span { flex: 1 1 120px; }
 .ws-feedback-row { flex-wrap: wrap; }
@@ -3408,8 +3811,6 @@ body.command-active .walkthrough-coach { right: 392px; }
   .overlay .walkthrough-sheet { padding: 18px; max-height: 94vh; }
   .walkthrough-footer { align-items: flex-start; flex-direction: column; }
   .walkthrough-footer > div { width: 100%; justify-content: flex-end; }
-  .settings-heading { flex-wrap: wrap; }
-  .setup-head { flex-wrap: wrap; }
   .segmented { grid-auto-flow: row; grid-auto-columns: auto; }
 }
 @media (prefers-reduced-motion: reduce) { #idle-hud .cmd-music-level i { transition: none; } }
@@ -3466,7 +3867,19 @@ body.command-active .walkthrough-coach { right: 392px; }
   background: var(--cmd-surface); color: var(--ivory); box-shadow: none;
 }
 #idle-hud .rail-tab .count.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--cmd-edge)); background: color-mix(in srgb, var(--warn) 12%, var(--cmd-surface)); }
-#idle-hud .rail-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* The rail's views share one grid cell, so switching tabs cross-fades them
+   in place: the outgoing view keeps its spot while it fades (and takes no
+   pointer), instead of snapping out and pushing the incoming one around. */
+#idle-hud .rail-body { display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); flex: 1; min-height: 0; }
+#idle-hud .rail-body > * { grid-area: 1 / 1; }
+#idle-hud .rail-body > [role="tabpanel"] {
+  transition: opacity var(--motion-base) var(--ease-out), translate var(--motion-base) var(--ease-out), display var(--motion-fast) allow-discrete;
+}
+#idle-hud .rail-body > [role="tabpanel"][hidden] {
+  opacity: 0; pointer-events: none;
+  transition-duration: var(--motion-fast); transition-timing-function: var(--ease-in);
+}
+@starting-style { #idle-hud .rail-body > [role="tabpanel"]:not([hidden]) { opacity: 0; translate: 0 4px; } }
 #idle-hud .cmd-rail .cmd-feed,
 #idle-hud .cmd-rail .cmd-chat,
 #idle-hud .cmd-rail .cmd-node,
@@ -3708,7 +4121,7 @@ body.command-active .walkthrough-coach { right: 392px; }
 @media (max-width: 680px) { .tracker-windows { grid-template-columns: 1fr; } }
 
 /* the Command corner's Usage breakdown: opens upward from the Usage pill at the bottom-left */
-#idle-hud .usage-pop { display: flex; flex-direction: column; gap: 8px; width: 300px; max-width: calc(100vw - 48px); max-height: min(60vh, 520px); overflow: auto; padding: 10px 12px 12px; border: 1px solid var(--cmd-edge); border-radius: 12px; background: var(--cmd-surface); box-shadow: var(--cmd-shadow); pointer-events: auto; }
+#idle-hud .usage-pop { display: flex; flex-direction: column; gap: 8px; width: 320px; max-width: calc(100vw - 48px); max-height: min(66vh, 580px); overflow: auto; padding: 10px 12px 12px; border: 1px solid var(--cmd-edge); border-radius: 12px; background: var(--cmd-surface); box-shadow: var(--cmd-shadow); pointer-events: auto; scrollbar-width: thin; }
 #idle-hud .usage-pop[hidden] { display: none; }
 #idle-hud .cmd-usage-head { display: flex; align-items: center; gap: 5px; }
 #idle-hud .cmd-usage-title { flex: 1; min-width: 0; margin: 0; font: 600 12px/1.3 var(--font-ui); color: var(--ivory); }
@@ -3716,24 +4129,35 @@ body.command-active .walkthrough-coach { right: 392px; }
 #idle-hud .cmd-usage-state { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
 #idle-hud .cmd-usage-body { display: flex; flex-direction: column; gap: 6px; }
 #idle-hud .cmd-usage-body[hidden] { display: none; }
-#idle-hud .usage-pop .tracker-windows { grid-template-columns: 1fr; gap: 5px; }
-#idle-hud .usage-pop .tracker-window { grid-template-columns: 22px 1fr 38px; gap: 6px; font-size: 10px; }
-#idle-hud .usage-pop .tracker-window-label { font-size: 10px; }
+/* one card per plan: its name and freshness, then a bar per window with the reset beside it */
+#idle-hud .usage-pop .tracker-plans { display: grid; gap: 6px; }
+#idle-hud .usage-pop .tracker-plan { display: grid; gap: 5px; padding: 7px 9px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
+#idle-hud .usage-pop .tracker-plan[data-tone="warn"] { border-color: color-mix(in srgb, var(--warn) 40%, var(--hairline)); }
+#idle-hud .usage-pop .tracker-plan[data-tone="idle"] { border-style: dashed; background: transparent; }
+#idle-hud .usage-pop .tracker-plan-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; min-width: 0; }
+#idle-hud .usage-pop .tracker-plan-name { flex: none; color: var(--ivory); font-size: 11px; font-weight: 600; }
+#idle-hud .usage-pop .tracker-plan-meta { min-width: 0; overflow: hidden; color: var(--muted); font-size: 9.5px; text-overflow: ellipsis; white-space: nowrap; }
+#idle-hud .usage-pop .tracker-windows { grid-template-columns: 1fr; gap: 4px; }
+#idle-hud .usage-pop .tracker-window { grid-template-columns: 34px minmax(0, 1fr) 36px 50px; gap: 6px; font-size: 10px; }
+#idle-hud .usage-pop .tracker-window-label { overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 #idle-hud .usage-pop .tracker-window-value { font-size: 10px; min-width: 0; }
+#idle-hud .usage-pop .tracker-window-reset { color: var(--muted); font-size: 9.5px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 #idle-hud .usage-pop .tracker-bar { height: 5px; border-radius: 3px; }
-#idle-hud .usage-pop .tracker-lead { display: grid; gap: 5px; padding: 7px 8px; border: 1px solid var(--hairline); border-radius: 8px; background: color-mix(in srgb, var(--ivory) 3%, transparent); }
-#idle-hud .usage-pop .tracker-lead-name { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; color: var(--ivory); font-size: 10.5px; }
-#idle-hud .usage-pop .tracker-lead-name small { color: var(--muted); font-size: 9.5px; white-space: nowrap; }
 #idle-hud .usage-pop .tracker-kicker { margin: 5px 0 0; color: var(--muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
 #idle-hud .usage-pop .tracker-rows { display: grid; gap: 3px; margin: 0; padding: 0; list-style: none; }
-#idle-hud .usage-pop .tracker-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; font-size: 10px; line-height: 1.45; }
-#idle-hud .usage-pop .tracker-row-label { color: var(--ivory); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#idle-hud .usage-pop .tracker-row-value { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
-/* a failed read carries its whole reason: the row stacks and the text wraps instead of starving the label */
-#idle-hud .usage-pop .tracker-row[data-tone="warn"] { grid-template-columns: 1fr; gap: 1px; }
-#idle-hud .usage-pop .tracker-row[data-tone="warn"] .tracker-row-value { color: var(--warn); text-align: left; white-space: normal; overflow-wrap: anywhere; }
+/* the label keeps its width; a long value wraps under itself instead of squeezing the name */
+#idle-hud .usage-pop .tracker-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 10px; align-items: baseline; font-size: 10px; line-height: 1.45; }
+#idle-hud .usage-pop .tracker-row-label { color: var(--ivory); white-space: nowrap; }
+#idle-hud .usage-pop .tracker-row-value { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+#idle-hud .usage-pop .tracker-row-bar { grid-column: 1 / -1; height: 3px; }
+#idle-hud .usage-pop .tracker-row[data-tone="warn"] .tracker-row-value { color: var(--warn); }
+#idle-hud .usage-pop .tracker-row[data-tone="idle"] .tracker-row-value { opacity: .75; }
+/* a failed read carries its whole reason: the row stacks and the text wraps under the name */
+#idle-hud .usage-pop .tracker-row[data-tone="error"] { grid-template-columns: 1fr; gap: 1px; }
+#idle-hud .usage-pop .tracker-row[data-tone="error"] .tracker-row-value { color: var(--warn); text-align: left; }
 #idle-hud .usage-pop .tracker-line { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
 #idle-hud .usage-pop .tracker-line-warn { color: var(--warn); overflow-wrap: anywhere; }
+#idle-hud .usage-pop .tracker-line-idle { opacity: .8; }
 
 /* ============================================================
    Command floor at desktop widths: the dock has moved left, so the
@@ -3861,11 +4285,15 @@ html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-ope
   display: flex; flex-direction: column; gap: 4px; padding: 10px 8px;
   background: var(--glass-hard); border-right: 1px solid var(--hairline);
   backdrop-filter: var(--blur);
-  overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
-  transition: width var(--motion-menu) var(--ease), box-shadow var(--motion-menu) var(--ease);
+  /* Only the section list scrolls (below); the brand, the foot and the pin
+     stay on screen however tall the open rail grows. */
+  overflow: hidden;
+  transition: width var(--motion-menu) var(--ease), box-shadow var(--motion-menu) var(--ease), opacity var(--dur-hud) var(--ease);
 }
 #app-rail[hidden] { display: none; }
-#app-rail:hover, #app-rail:focus-within { width: var(--shell-rail-open); box-shadow: var(--shadow-2); }
+/* Keyboard focus opens the rail; a mouse click on an item must not hold it
+   open over the page afterwards, so this is :focus-visible, not :focus-within. */
+#app-rail:hover, #app-rail:has(:focus-visible) { width: var(--shell-rail-open); box-shadow: var(--shadow-2); }
 
 /* One button look for everything in the rail, overriding the global button
    (its border, fill, centred content and hover lift). */
@@ -3895,7 +4323,14 @@ html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-ope
 
 /* Sections: at rest an icon with its word beneath, so five destinations read
    without a hover; open, a row with its members listed under it. */
-#app-rail .app-rail-sections { display: flex; flex-direction: column; gap: 2px; }
+#app-rail .app-rail-sections {
+  display: flex; flex-direction: column; gap: 2px;
+  flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-width: thin; scrollbar-color: var(--hairline-strong) transparent;
+}
+#app-rail .app-rail-brand,
+#app-rail .app-rail-foot,
+#app-rail .app-rail-pin { flex: none; }
 #app-rail .app-rail-head {
   flex-direction: column; justify-content: center; gap: 3px;
   min-height: 52px; padding: 6px 2px; font-size: 10.5px; text-align: center;
@@ -3908,16 +4343,16 @@ html[data-shell="rail"][data-rail-pinned] { --shell-rail-w: var(--shell-rail-ope
 #app-rail .app-rail-item .count { margin-left: 4px; }
 
 #app-rail:hover .app-rail-head,
-#app-rail:focus-within .app-rail-head,
+#app-rail:has(:focus-visible) .app-rail-head,
 html[data-rail-pinned] #app-rail .app-rail-head {
   flex-direction: row; justify-content: flex-start; gap: 10px;
   min-height: 40px; padding: 0 15px; font-size: var(--fs-sm); text-align: left;
 }
 #app-rail:hover .app-rail-head .count,
-#app-rail:focus-within .app-rail-head .count,
+#app-rail:has(:focus-visible) .app-rail-head .count,
 html[data-rail-pinned] #app-rail .app-rail-head .count { position: static; margin-left: auto; }
 #app-rail:hover .app-rail-children,
-#app-rail:focus-within .app-rail-children,
+#app-rail:has(:focus-visible) .app-rail-children,
 html[data-rail-pinned] #app-rail .app-rail-children { display: flex; }
 
 /* Where you are: the section lights up, the destination carries the mark. */
@@ -3927,11 +4362,26 @@ html[data-rail-pinned] #app-rail .app-rail-children { display: flex; }
 
 /* At rest the one-line buttons (brand, foot, pin) are icon only: their words,
    keycaps and counts wait for the rail to open instead of peeking out clipped. */
-html:not([data-rail-pinned]) #app-rail:not(:hover):not(:focus-within) :is(.app-rail-brand, .app-rail-foot-item, .app-rail-pin) :is(.label, .key, .app-rail-text, .count) { display: none; }
-#app-rail .app-rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 1px; padding-top: 8px; border-top: 1px solid var(--hairline); }
+html:not([data-rail-pinned]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-brand, .app-rail-foot-item, .app-rail-pin) :is(.label, .key, .app-rail-text, .count) { display: none; }
+#app-rail .app-rail-foot { display: flex; flex-direction: column; gap: 1px; padding-top: 8px; border-top: 1px solid var(--hairline); }
 #app-rail .app-rail-foot .app-rail-item { min-height: 36px; padding: 0 15px; }
 #app-rail .app-rail-pin { min-height: 34px; margin-top: 2px; }
 #app-rail .app-rail-pin[aria-pressed="true"] { color: var(--gold-bright); }
+/* Short windows: the open rail lists every destination, so its rows tighten
+   (about 110px back at 720px tall); at rest the section tiles shrink too. */
+@media (max-height: 820px) {
+  #app-rail .app-rail-brand { min-height: 40px; margin-bottom: 4px; }
+  #app-rail:hover .app-rail-head,
+  #app-rail:has(:focus-visible) .app-rail-head,
+  html[data-rail-pinned] #app-rail .app-rail-head { min-height: 34px; }
+  #app-rail .app-rail-item { min-height: 28px; }
+  #app-rail .app-rail-foot .app-rail-item { min-height: 32px; }
+  #app-rail .app-rail-pin { min-height: 30px; }
+}
+@media (max-height: 640px) {
+  #app-rail .app-rail-head { min-height: 44px; }
+  #app-rail .app-rail-head .app-rail-text { font-size: 9.5px; }
+}
 
 /* Every full-window layer makes room for the rail. The Command canvas stays
    full-bleed on purpose — it is the backdrop — and usableArea() fits the
@@ -3954,6 +4404,9 @@ html[data-shell="rail"] #workspace-sidebar-panel { left: var(--shell-rail-w); }
    the rail back out of the width they measure against. (Music, Plans, Brain
    maps and the profiler size in % of the overlay and need nothing.) */
 html[data-shell="rail"] .overlay .sheet { width: min(620px, calc(92vw - var(--shell-rail-w))); }
+html[data-shell="rail"] .palette-sheet { width: min(640px, calc(92vw - var(--shell-rail-w))); }
+/* toasts clear the rail (Settings' sticky list sits with the Settings rules) */
+html[data-shell="rail"] #toast-host { left: calc(var(--shell-rail-w) + 22px); }
 html[data-shell="rail"] .explorer-sheet { width: min(1460px, calc(97vw - var(--shell-rail-w))); }
 html[data-shell="rail"] .overlay .walkthrough-sheet { width: min(740px, calc(94vw - var(--shell-rail-w))); }
 
@@ -3972,7 +4425,7 @@ html[data-shell="rail"] #idle-hud .cmd-dock { display: none; }
 html[data-shell="rail"] #idle-hud .cmd-brand .monogram { display: none; }
 
 /* Zen fades the rail with the rest of the HUD. */
-body.command-zen #app-rail { opacity: 0; pointer-events: none; transition: opacity var(--dur-hud) var(--ease); }
+body.command-zen #app-rail { opacity: 0; pointer-events: none; }   /* fades both ways: opacity is in the base transition */
 
 @media (prefers-reduced-motion: reduce) {
   #app-rail { transition: none; }

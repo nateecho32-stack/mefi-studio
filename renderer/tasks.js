@@ -45,7 +45,6 @@
   const taskKey = (task) => `${task?.projectId || state.backlog?.projectId || ""}/${task?.id || ""}`;
   const node = (tag, className, text) => Object.assign(document.createElement(tag), { className, textContent: text ?? "" });
 
-  const base = (file) => (file ? file.split(/[\\/]/).pop() : "(unknown)");
   const status = (text, isError) => {
     if (!els.status) return;
     els.status.textContent = text;
@@ -598,6 +597,16 @@
     for (const overlay of document.querySelectorAll("#tasks-overlay, #ideas-overlay, #overhead-overlay, #analyzer-overlay, #explorer-overlay")) {
       overlay.classList.toggle("no-blur", !state.prefs.blurMenu);
     }
+    applyBlur(state.prefs.blurMenu !== false);
+  }
+
+  // The Blur menu preference is Studio-wide: html[data-no-blur] gives every
+  // sheet its opaque, unblurred backdrop (styles.css), from boot, wherever the
+  // #pref-blur checkbox lives.
+  function applyBlur(on) {
+    document.documentElement?.toggleAttribute?.("data-no-blur", !on);
+    const box = document.getElementById("pref-blur");
+    if (box && box.checked !== on) box.checked = on;
   }
 
   function setPref(key, value) {
@@ -1455,6 +1464,9 @@
   function init() {
     if (initialized) return;
     initialized = true;
+    Promise.resolve(window.mefiStudio?.prefsGet?.()).then((result) => {
+      if (result?.ok && typeof result.prefs?.blurMenu === "boolean") applyBlur(result.prefs.blurMenu);
+    }).catch(() => {});
     for (const [key, id] of Object.entries({
       overlay: "tasks-overlay",
       list: "task-list",
@@ -1608,7 +1620,6 @@
     open,
     close,
     addTask,
-    gather,
     state,
     describe,
     summary,

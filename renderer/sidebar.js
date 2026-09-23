@@ -9,6 +9,9 @@
   if (!root || !panel || !toggle || !dismiss) return;
 
   const hovering = new Set();
+  // How the panel was opened: a hover peek closes when the pointer leaves, a
+  // click, a key or a caller keeps it until it is dismissed on purpose.
+  let openedBy = null;
   let closeTimer = null;
   let suppressFocusOpen = false;
   const isOpen = () => root.dataset.open === "true";
@@ -33,10 +36,11 @@
     toggle.focus({ preventScroll: true });
     suppressFocusOpen = false;
   }
-  function open({ focus = false } = {}) {
+  function open({ focus = false, by = "sticky" } = {}) {
     syncBlocked();
     if (blocked()) return false;
     cancelClose();
+    if (!(by === "hover" && isOpen() && openedBy === "sticky")) openedBy = by;
     window.MefiNav?.paintCurrent?.();
     root.dataset.open = "true";
     panel.inert = false;
@@ -53,6 +57,7 @@
     const wasOpen = isOpen();
     cancelClose();
     hovering.clear();
+    openedBy = null;
     root.dataset.open = "false";
     panel.inert = true;
     panel.setAttribute("aria-hidden", "true");
@@ -72,22 +77,24 @@
     zone.addEventListener("pointerenter", (event) => {
       if (event.pointerType !== "mouse" && event.pointerType !== "pen") return;
       hovering.add(zone);
-      open();
+      open({ by: "hover" });
     });
     zone.addEventListener("pointerleave", () => {
       hovering.delete(zone);
-      scheduleClose({ pointerExit: true });
+      if (openedBy === "hover") scheduleClose({ pointerExit: true });
     });
   }
-  toggle.addEventListener("focus", () => { if (!suppressFocusOpen) open(); });
+  toggle.addEventListener("focus", () => { if (!suppressFocusOpen) open({ by: "hover" }); });
   toggle.addEventListener("click", () => open({ focus: true }));
   dismiss.addEventListener("click", () => close({ restoreFocus: true }));
   root.addEventListener("focusin", cancelClose);
   root.addEventListener("focusout", (event) => {
     if (!root.contains(event.relatedTarget)) scheduleClose();
   });
+  // The rail's M+ is the panel's door: its own click toggles the panel, so a
+  // press on it must not close first (the click would then re-open it).
   document.addEventListener("pointerdown", (event) => {
-    if (isOpen() && !root.contains(event.target)) close();
+    if (isOpen() && !root.contains(event.target) && !event.target?.closest?.("#app-rail-brand")) close();
   });
   window.addEventListener("mefi:nav", (event) => {
     syncBlocked();

@@ -13,7 +13,7 @@ const SCAN = 0, WORKSPACE = 1, MAP = 2, CONNECT = 3, CREATE = 4, MONITOR = 5, RE
 const allDone = (...indexes) => Array.from({ length: STOPS }, (_, index) => indexes.includes(index));
 
 function environment(storage = new Map(), { storageDenied = false, host = null } = {}) {
-  const elements = new Map(); const routes = []; const claims = []; const releases = []; const listeners = new Map();
+  const elements = new Map(); const routes = []; const routeParams = []; const claims = []; const releases = []; const listeners = new Map();
   let document;
   class Element {
     constructor(tag = "div") { this.tag = tag; this.children = []; this.listeners = {}; this.attrs = {}; this.dataset = {}; this.hidden = false; this.disabled = false; this.clicks = 0; const classes = new Set(); this.classList = { add: (...names) => names.forEach((name) => classes.add(name)), remove: (...names) => names.forEach((name) => classes.delete(name)), contains: (name) => classes.has(name), toggle() {} }; }
@@ -47,7 +47,8 @@ function environment(storage = new Map(), { storageDenied = false, host = null }
   el("sheet").append(el("steps"), el("action"), el("secondary"), el("back"), el("next"));
   el("overlay").append(el("sheet"));
   const window = {
-    MefiNav: { go: (id) => routes.push(id), claim: (id) => claims.push(id), release: (id) => releases.push(id) },
+    // routeParams stays index-aligned with routes: the params each go() carried.
+    MefiNav: { go: (id, params) => { routes.push(id); routeParams.push(params ?? null); }, claim: (id) => claims.push(id), release: (id) => releases.push(id) },
     // The guide may never invoke a provider, project writer or task API by
     // reading or navigating; only the scan and map buttons reach the host,
     // and they do so through an explicitly supplied bridge.
@@ -66,7 +67,7 @@ function environment(storage = new Map(), { storageDenied = false, host = null }
     for (const fn of [...(listeners.get(type) || [])]) fn({ type, target: null, preventDefault() {}, stopPropagation() {}, ...event });
   }
   const settle = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
-  return { guide: window.MefiOnboarding, el, get, query, routes, claims, releases, storage, document, context, emit, settle };
+  return { guide: window.MefiOnboarding, el, get, query, routes, routeParams, claims, releases, storage, document, context, emit, settle };
 }
 
 test("first launch opens the guide once, at the scan stop, and closing it keeps the saved guide available", () => {
@@ -168,6 +169,9 @@ test("each menu stop's action reaches the intended control without performing th
     env.el("action").click();
   }
   assert.deepEqual(env.routes, ["workspace", "studio", "workspace", "command", "workspace"]);
+  // Connections deep-links Settings at its Providers card; no other stop carries params.
+  assert.deepEqual({ ...env.routeParams[1] }, { section: "settings-assistant" }); // copied out of the vm realm
+  for (const at of [0, 2, 3, 4]) assert.equal(env.routeParams[at], null, `${env.routes[at]} opens without a deep link`);
   assert.equal(env.get("workspace-add-project").clicks, 0);
   assert.equal(env.get("workspace-review").clicks, 1);
   assert.equal(env.get("workspace-send").clicks, 0);
@@ -660,10 +664,15 @@ test("workspace tool menu groups destinations and excludes duplicated sidebar li
   const env = environment(); vm.runInContext(navSource, env.context);
   const target = env.get("workspace-tool-links");
   env.context.window.MefiNav.renderWorkspaceTools(target);
-  assert.deepEqual(target.children.map((group) => group.attrs["aria-label"]), ["Work", "Monitor & inspect", "Models"]);
+  // The same sections as the rail: Analyzer sits with the Work tools and the
+  // Profiler with Settings, its diagnostics.
+  assert.deepEqual(target.children.map((group) => group.attrs["aria-label"]), ["Work", "Live", "Models", "Settings"]);
   const buttons = target.querySelectorAll("button");
   const destinations = buttons.map((button) => button.dataset.nav);
-  for (const id of ["ideas", "explorer", "eyes", "overhead", "analyzer", "booklet", "graph"]) assert.ok(destinations.includes(id));
+  for (const id of ["ideas", "explorer", "eyes", "overhead", "analyzer", "profiler", "booklet", "graph"]) assert.ok(destinations.includes(id));
+  const groupOf = (id) => target.children.find((group) => group.querySelectorAll("button").some((button) => button.dataset.nav === id))?.attrs["aria-label"];
+  assert.equal(groupOf("analyzer"), "Work");
+  assert.equal(groupOf("profiler"), "Settings");
   // pinned at the top of the sidebar or in its bottom row, so never repeated in the grid
   for (const id of ["workspace", "command", "tasks", "plans", "brains", "studio", "music", "onboarding"]) assert.ok(!destinations.includes(id));
   assert.equal(new Set(destinations).size, destinations.length);

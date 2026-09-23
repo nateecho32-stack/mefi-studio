@@ -305,7 +305,10 @@
       }
       ctx.fillStyle = "rgba(236,229,216,0.72)";
       ctx.font = "10px system-ui";
-      ctx.fillText(String(idea.title ?? idea.detail ?? "").slice(0, 22), point.x + 8, point.y + 3);
+      // Shortened at a word where one is near, and marked as shortened.
+      const name = String(idea.title ?? idea.detail ?? "");
+      const cut = name.length > 22 ? `${(name.slice(0, 21).replace(/\s+\S*$/, "") || name.slice(0, 21)).trimEnd()}…` : name;
+      ctx.fillText(cut, point.x + 8, point.y + 3);
     }
     el.canvas.onclick = (event) => {
       const rect = el.canvas.getBoundingClientRect();
@@ -418,7 +421,7 @@
     });
   }
 
-  window.MefiIdeas = { init, open, close, scan, select };
+  window.MefiIdeas = { open, close, scan };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();

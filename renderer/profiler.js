@@ -125,7 +125,7 @@
     if (rows.length) {
       ctx.strokeStyle = ink; ctx.lineWidth = 1.5; ctx.beginPath();
       rows.forEach((row, index) => { const x = index * width / Math.max(1, rows.length - 1); if (!index) ctx.moveTo(x, y(row.durationMs)); else ctx.lineTo(x, y(row.durationMs)); }); ctx.stroke();
-    } else ctx.fillText("Frame history appears while recording in a visible window.", 12, 65);
+    } else ctx.fillText("Frame history appears while recording in a visible window.", 12, Math.min(112, y(data.budgetMs) + 22));
   }
   function paint() {
     const active = core.isRecording();

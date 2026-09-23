@@ -31,5 +31,5 @@
     }
     return LABELS[key] ?? key.replace(/_/g, " ");
   }
-  window.MefiStage = Object.freeze({ LABELS: Object.freeze({ ...LABELS }), label });
+  window.MefiStage = Object.freeze({ label });
 })();

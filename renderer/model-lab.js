@@ -248,5 +248,5 @@
     });
   }
   function open() { init(); if (state.initialized && Date.now() - state.at > 5000) refresh(); }
-  window.MefiModelLab = { open, refresh, show, previewContext };
+  window.MefiModelLab = { open, refresh, show };
 })();

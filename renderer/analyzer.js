@@ -519,7 +519,11 @@
       event.preventDefault();
       els.drop.classList.remove("drag-over");
       const file = event.dataTransfer?.files?.[0];
-      if (file?.path) runFile(file.path);
+      if (!file) return;
+      // File.path left Electron in v32; the preload asks webUtils instead.
+      const filePath = window.mefiStudio?.pathForFile?.(file) ?? file.path ?? null;
+      if (filePath) runFile(filePath);
+      else status("Drop a file saved on this computer, or use Open file…", true);
     });
     window.addEventListener("mefi:project-changed", projectChanged);
     controls();

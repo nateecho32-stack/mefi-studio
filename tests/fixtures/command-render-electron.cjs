@@ -119,6 +119,18 @@ app.whenReady().then(async () => {
   `);
   const window = new BrowserWindow({ show: false, width: 1280, height: 800, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });
   const contents = window.webContents;
+  // The motion section asserts that agents glide from frame to frame, and
+  // reduced motion deliberately snaps them to their targets (tree3d flyTo).
+  // A host with system animations off reports prefers-reduced-motion: reduce,
+  // and under it this fixture fails "Retargeting snapped reference" 11 s in,
+  // exactly as the v0.3.0 release runner did while desktops passed. Pin the
+  // preference so every machine tests the same path; the reduced path has its
+  // own coverage (command_motion, startup-render). The command queues until
+  // the renderer starts, so it is sent now (boot reads see it) and awaited
+  // only once the page has loaded; awaiting it here would wait forever.
+  contents.debugger.attach("1.3");
+  const pinMotion = () => contents.debugger.sendCommand("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "no-preference" }] });
+  pinMotion().catch(() => {});
   contents.setAudioMuted(true);
   contents.setFrameRate(30);
   contents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -152,6 +164,8 @@ app.whenReady().then(async () => {
     throw new Error(`Timed out: ${label}`);
   };
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
+  await pinMotion();
+  assert.equal(await run("return matchMedia('(prefers-reduced-motion: reduce)').matches;"), false, "the fixture pins full motion");
   await run(`
     window.__commandPaintFrames=0;
     window.__railPaintFrames=0;

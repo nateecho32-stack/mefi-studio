@@ -23,7 +23,7 @@
 .planning-flow-head p { margin: 0; max-width: 470px; }
 .planning-flow-badge { flex: none; max-width: 145px; border: 1px solid var(--hairline); border-radius: 20px; padding: 6px 10px; font-size: 10px; line-height: 1.5; color: var(--muted); }
 .planning-flow-badge[data-state="complete"] { color: #afdfc2; }
-.planning-flow-rail { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.planning-flow-rail { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
 .planning-flow-rail li { position: relative; min-width: 0; }
 .planning-flow-rail li:not(:last-child)::after { position: absolute; content: ""; top: 23px; height: 1px; width: 9px; right: -9px; background: var(--hairline-strong); }
 .planning-flow-stage { display: flex; align-items: flex-start; flex-direction: column; gap: 8px; width: 100%; min-height: 115px; padding: 10px 8px; border: 1px solid transparent; border-radius: 10px; background: var(--bg); color: var(--muted); text-align: left; white-space: normal; }

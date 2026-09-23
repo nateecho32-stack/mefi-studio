@@ -61,10 +61,16 @@
 
   function metricNorms(models) {
     const costs = models.map((m) => m.typicalCostUSD ?? 0);
-    const speeds = models.map((m) => {
+    // Request headroom is compared on a log10 scale. An unlimited model sits
+    // one decade above the roomiest finite model: a raw 1e9 became the whole
+    // range and flattened every finite model's speed norm to ~0.
+    const finiteLogs = models.map(reqH5).filter((r) => r !== Infinity).map((r) => Math.log10(Math.max(r, 1)));
+    const unlimitedLog = (finiteLogs.length ? Math.max(...finiteLogs) : 0) + 1;
+    const speedLog = (m) => {
       const r = reqH5(m);
-      return r === Infinity ? 1e9 : Math.log10(Math.max(r, 1));
-    });
+      return r === Infinity ? unlimitedLog : Math.log10(Math.max(r, 1));
+    };
+    const speeds = models.map(speedLog);
     const costMin = Math.min(...costs);
     const costMax = Math.max(...costs);
     const speedMin = Math.min(...speeds);
@@ -76,8 +82,7 @@
         return 1 - (v - costMin) / (costMax - costMin);
       },
       speed: (m) => {
-        const r = reqH5(m);
-        const v = r === Infinity ? 1e9 : Math.log10(Math.max(r, 1));
+        const v = speedLog(m);
         if (speedMax === speedMin) return 1;
         return (v - speedMin) / (speedMax - speedMin);
       },

@@ -3394,11 +3394,49 @@
     cancelWire();
   }
 
+  // Pick bands are wide, so where two wires pass close together their bands
+  // overlap. The wire whose line runs nearest the pointer wins, not whichever
+  // band happens to be drawn on top.
+  function nearestEdge(event, fallback) {
+    if (typeof document.elementsFromPoint !== "function" || typeof DOMPoint !== "function") return fallback;
+    const candidates = document.elementsFromPoint(event.clientX, event.clientY)
+      .filter((item) => item.dataset?.edge && item.classList?.contains("brains-wire-hit"));
+    if (candidates.length < 2) return fallback;
+    let best = fallback;
+    let bestDistance = Infinity;
+    for (const hit of candidates) {
+      const matrix = hit.getScreenCTM?.();
+      if (!matrix || typeof hit.getTotalLength !== "function") continue;
+      const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse());
+      const length = hit.getTotalLength();
+      const distance = (at) => {
+        const on = hit.getPointAtLength(Math.max(0, Math.min(length, at)));
+        return (on.x - point.x) ** 2 + (on.y - point.y) ** 2;
+      };
+      // A coarse walk along the wire, then halving steps around the closest.
+      const steps = 48;
+      let at = 0;
+      let nearest = Infinity;
+      for (let index = 0; index <= steps; index += 1) {
+        const here = distance((length * index) / steps);
+        if (here < nearest) { nearest = here; at = (length * index) / steps; }
+      }
+      for (let span = length / steps; span > 0.5; span /= 2) {
+        for (const next of [at - span, at + span]) {
+          const here = distance(next);
+          if (here < nearest) { nearest = here; at = next; }
+        }
+      }
+      if (nearest < bestDistance) { bestDistance = nearest; best = hit.dataset.edge; }
+    }
+    return best;
+  }
+
   function onCanvasClick(event) {
     if (suppressClick) { suppressClick = false; return; }
     const port = event.target?.closest?.(".brains-port");
     if (port) { clickPort(port); return; }
-    const edge = event.target?.dataset?.edge;
+    const edge = event.target?.dataset?.edge ? nearestEdge(event, event.target.dataset.edge) : null;
     if (edge) {
       select({ kind: "edge", id: edge });
       // Keep the keyboard on the canvas so Delete reaches the wire.
@@ -3706,13 +3744,22 @@
     el.canvas?.addEventListener("click", onCanvasClick);
     el.wires?.addEventListener("click", onCanvasClick);
     el.wireHits?.addEventListener("click", onCanvasClick);
-    el.wireHits?.addEventListener("pointerover", (event) => {
-      const pair = wirePaths.get(event.target?.dataset?.edge);
+    // Hover follows the same rule as a click: the nearest wire lights up.
+    let hovered = null;
+    const setHover = (id) => {
+      if (id === hovered) return;
+      const old = wirePaths.get(hovered);
+      if (old) delete old.path.dataset.hover;
+      hovered = id;
+      const pair = wirePaths.get(id);
       if (pair) pair.path.dataset.hover = "true";
+    };
+    el.wireHits?.addEventListener("pointermove", (event) => {
+      const own = event.target?.dataset?.edge;
+      if (own) setHover(nearestEdge(event, own));
     });
     el.wireHits?.addEventListener("pointerout", (event) => {
-      const pair = wirePaths.get(event.target?.dataset?.edge);
-      if (pair) delete pair.path.dataset.hover;
+      if (!event.relatedTarget?.dataset?.edge) setHover(null);
     });
     el.canvasWrap?.addEventListener("wheel", onWheel, { passive: false });
     el.canvasWrap?.addEventListener("dragover", onDragOver);

@@ -239,7 +239,8 @@ test("command palette: arrows wrap at both ends, Escape and Enter restore the op
   assert.equal(globalThis.document.activeElement, secondOpener, "Enter restores the opener's focus");
 });
 
-function environment({ destinations = [], api = {}, projectId = "alpha" } = {}) {
+// `nav` adds to the MefiNav stand-in, e.g. the sectionLabel/sectionRank pair.
+function environment({ destinations = [], api = {}, projectId = "alpha", nav = {} } = {}) {
   const document = { readyState: "complete", activeElement: null, addEventListener() {} };
   const make = (id) => element(id, () => document);
   const ids = Object.fromEntries(["palette-overlay", "palette-input", "palette-list", "palette-close", "palette-status"].map((id) => [id, make(id)]));
@@ -249,7 +250,7 @@ function environment({ destinations = [], api = {}, projectId = "alpha" } = {}) 
   Object.assign(document, { body: make("body"), getElementById: (id) => ids[id] || null, createElement: () => make(null) });
   const handlers = {}, routes = [], projectHandlers = [], taskHandlers = [];
   const window = {
-    MefiNav: { state: {}, list: () => destinations, go: (id, params) => routes.push({ id, params }), claim() {}, release() {} },
+    MefiNav: { state: {}, list: () => destinations, go: (id, params) => routes.push({ id, params }), claim() {}, release() {}, ...nav },
     MefiTasks: { state: { projectId, tasks: [] } },
     mefiStudio: { ...api, onProjects: (fn) => projectHandlers.push(fn), onTasks: (fn) => taskHandlers.push(fn) },
     addEventListener(type, fn) { (handlers[type] ??= []).push(fn); },
@@ -370,4 +371,49 @@ test("palette rejects foreign task responses and requires a known project before
   env.palette.open(); await settle();
   assert.deepEqual(env.labels(), ["Current task"]);
   env.palette.close();
+});
+
+test("palette files each result under its rail section, keeps sections together, and hover moves the highlight in place", () => {
+  // nav.sectionLabel / nav.sectionRank, as renderer/nav.js exports them.
+  const sections = { workspace: ["Home", 0], tasks: ["Work", 1], plans: ["Work", 1], command: ["Live", 2], studio: ["Settings", 4], music: ["Settings", 4], help: ["Help", 5] };
+  const env = environment({
+    destinations: [
+      { id: "command", label: "Command view", group: "surfaces", desc: "Live plans and workers" },
+      { id: "studio", label: "Settings", group: "surfaces" },
+      { id: "tasks", label: "Pitch lanes", group: "tools" },
+      { id: "music", label: "Style & sound", group: "tools" },
+      { id: "help", label: "Shortcuts", group: "system", key: "?" },
+      { id: "plans", label: "Plans", group: "tools" },
+      { id: "workspace", label: "Your workspace", group: "surfaces", key: "H" },
+    ],
+    nav: { sectionLabel: (dest) => sections[dest.id]?.[0] ?? null, sectionRank: (dest) => sections[dest.id]?.[1] ?? 9 },
+  });
+  const kinds = () => env.list.children.map((row) => row.children.find((child) => child.className === "kind")?.textContent);
+  const starts = () => env.list.children.map((row) => row.classList.contains("palette-group-start"));
+  env.palette.open();
+  assert.deepEqual(kinds(), ["Home", "Work", "Work", "Live", "Settings", "Settings", "Help"], "the kind is the section, and the browse list follows the rail top to bottom");
+  assert.deepEqual(env.labels(), ["Your workspace", "Pitch lanes", "Plans", "Command view", "Settings", "Style & sound", "Shortcuts"]);
+  assert.deepEqual(starts(), [true, true, false, true, true, false, true], "the first row of each section carries the divider marker");
+
+  // A query ranks rows, then keeps each section together: Plans (an exact
+  // title) leads, and the Work row that only matched loosely follows it
+  // ahead of the Live row that outscored it.
+  env.type("plans");
+  assert.deepEqual(env.labels(), ["Plans", "Pitch lanes", "Command view"]);
+  assert.deepEqual(kinds(), ["Work", "Work", "Live"]);
+  assert.deepEqual(starts(), [true, false, true]);
+
+  // Hover moves the highlight without rebuilding a single row.
+  const rows = env.list.children.slice();
+  for (const fn of rows[2].listeners.mouseenter) fn();
+  assert.ok(env.list.children.every((row, at) => row === rows[at]), "the rows are the same elements");
+  assert.equal(rows[0].classList.contains("active"), false);
+  assert.equal(rows[0].attrs["aria-selected"], "false");
+  assert.equal(rows[2].classList.contains("active"), true);
+  assert.equal(rows[2].attrs["aria-selected"], "true");
+  assert.equal(env.input.attrs["aria-activedescendant"], rows[2].id, "the combobox names the hovered option");
+  assert.equal(env.list.attrs["aria-activedescendant"], rows[2].id);
+  // The keys pick up from the hovered row.
+  env.key("ArrowUp");
+  assert.equal(env.input.attrs["aria-activedescendant"], "palette-option-1");
 });

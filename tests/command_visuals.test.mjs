@@ -89,6 +89,66 @@ test("the backdrop follows the colour theme unless an override is saved", () => 
   assert.deepEqual(plain(read(env, "BACKDROP_ORDER")).sort(), Object.keys(backdrops).sort(), "the picker lists every scene once");
 });
 
+test("the Void collection's themes each follow their own sky, and the rail draws its node styles without per-frame paints", () => {
+  const { env, state } = speechFixture();
+  const backdrops = plain(read(env, "BACKDROPS"));
+  for (const [theme, scene] of Object.entries({ void: "deepspace", eclipse: "dust", abyss: "fireflies", dusk: "grid" })) {
+    assert.equal(plain(read(env, "THEME_BACKDROP"))[theme], scene);
+    assert.ok(backdrops[scene], `${theme} maps to a real backdrop`);
+    state.themeKey = theme;
+    assert.equal(env.activeBackdrop(), scene);
+  }
+  const branches = section(tree, 'nodeStyle === "singularity"', 'nodeStyle === "glass"');
+  for (const style of ["singularity", "prism", "sigil"]) assert.ok(branches.includes(`nodeStyle === "${style}"`), `the tree rail draws ${style}`);
+  for (const allocation of ["createRadialGradient", "createLinearGradient", "Array.from", ".filter(", ".map("]) assert.ok(!branches.includes(allocation), `the rail's premium branches avoid ${allocation} per node`);
+});
+
+// The rail's Void branches, evaluated with the helpers they close over. Each
+// call paints one node the way tree3d.js's frame loop does.
+function railPainter() {
+  const pieces = section(tree, "  // The Void collection's node styles (gated in music.js)", "  function colorOf(node) {");
+  const chain = section(tree, '      } else if (nodeStyle === "singularity") {', '      } else if (nodeStyle === "glass") {');
+  const window = { MefiMusic: { themePalette: () => ({ canvas: { accent2: "#36d1ff" } }) } };
+  return new Function("window", "COLORS", `
+    let ctx = null;
+    ${pieces}
+    return {
+      shapes: VOID_SHAPES,
+      paint(target, nodeStyle, { p = { x: 50, y: 50 }, radius = 8, color = "#b9b0ff", working = false, selected = false, isAgent = false, time = 1000 } = {}) {
+        ctx = target; const visibility = 1;
+        if (false) {
+        ${chain}
+        }
+      },
+    };
+  `)(window, { active: "#c9a86a" });
+}
+
+test("the rail's Void styles reuse their paints frame to frame and cut the Command view's shapes", () => {
+  const rail = railPainter();
+  assert.ok(tree.includes("voidShapes: VOID_SHAPES"), "the tree hands its Void shapes to the Command view");
+  for (const copy of ["const PRISM_RIM", "const SIGIL_MARKS", "function tracePoints(", "function tracePolygon("]) {
+    assert.ok(!idle.includes(copy) && !tree.includes(copy), `no second copy of ${copy} survives`);
+  }
+  assert.ok(Object.isFrozen(rail.shapes), "the shared shapes cannot be edited by either painter");
+  for (const style of ["singularity", "prism", "sigil"]) {
+    const counts = { gradients: 0, lineTo: 0 };
+    const target = new Proxy({}, {
+      get(_target, name) {
+        if (name === "createRadialGradient" || name === "createConicGradient" || name === "createLinearGradient") return () => { counts.gradients += 1; return { addColorStop() {} }; };
+        if (name === "lineTo") return () => { counts.lineTo += 1; };
+        return typeof name === "string" ? () => {} : undefined;
+      },
+      set() { return true; },
+    });
+    for (const [time, working] of [[1000, true], [1016, true], [1032, false], [1048, false]]) rail.paint(target, style, { radius: 12, working, time });
+    const settled = counts.gradients;
+    for (const [time, working] of [[1064, true], [1080, false], [1096, true]]) rail.paint(target, style, { radius: 12, working, time, p: { x: 90, y: 20 } });
+    assert.equal(counts.gradients, settled, `${style} builds its paints once and reuses them on later frames`);
+    if (style !== "singularity") assert.ok(counts.lineTo > 0, `${style} traces the shared shapes`);
+  }
+});
+
 test("speech bubbles: one per node, repeats refresh, a cap, expiry, and the pointer holds one up", () => {
   const { env, state, tick, now } = speechFixture();
   const agent = { id: "__agent__:watcher", kind: "agent", role: "watcher" };
@@ -517,7 +577,7 @@ test("the far layer, the card style control and the focus API are wired", () => 
   assert.ok(template.includes('id="idle-card-style"'));
   for (const selector of ["#idle-layer-far.focused", "#idle-layer-far.soft", '.sw[data-sw="callout"]']) assert.ok(styles.includes(selector), `styles have ${selector}`);
   assert.match(styles, /#idle-layer \{[^}]*background: transparent/, "the near canvas is transparent so the far one shows through");
-  for (const marker of ["enterFocus:", "exitFocus,", "setCardStyle,", "focusStatus:", "calloutStatus:", "drawCallouts(projected, { near: ctx, far, focusIds })", "drawBackdrop(far, time, still, energy, musicBands, musicBeat)", "const hit = nodeAt(x, y) ?? calloutAt(x, y);", "if (node) enterFocus(node);"]) assert.ok(idle.includes(marker), `idle.js carries ${marker}`);
+  for (const marker of ["enterFocus:", "exitFocus,", "setCardStyle,", "focusStatus:", "calloutStatus:", "drawCallouts(projected, { near: ctx, far, focusIds, dt })", "drawBackdrop(far, time, still, energy, musicBands, musicBeat)", "const hit = nodeAt(x, y) ?? calloutAt(x, y);", "if (node) enterFocus(node);"]) assert.ok(idle.includes(marker), `idle.js carries ${marker}`);
   assert.ok(tree.includes("assistant: edge.assistant === true"), "the rail's snapshot says which edge is the hub link");
 });
 
@@ -542,10 +602,11 @@ test("a click glides the zoom with the camera instead of snapping it", () => {
   for (const marker of [
     "glideZoom(FOCUS_ZOOM[node.kind] ?? 1.9)",
     "if (zoom) glideZoom(Math.max(state.zoomTarget ?? state.zoom, zoom))",
-    "else state.zoom += (state.zoomTarget - state.zoom) * CAMERA_EASE;",
+    "state.zoom = Math.exp(smoothDamp(Math.log(state.zoom), Math.log(state.zoomTarget), camVel, \"zoom\", CAMERA_SMOOTH, dt));",
+    "const cameraEase = perSec(CAMERA_EASE, dt);",
     "state.cameraMoving = !still && (flightPx > 8 || centerFlight > 8 || (state.zoomTarget != null",
     "const frame = state.graphFrame ?? area;",
-    "const centerFlight = stepCenter(graphArea, still);",
+    "const centerFlight = stepCenter(graphArea, still, cameraEase);",
   ]) assert.ok(idle.includes(marker), "idle.js carries " + marker);
 });
 
@@ -579,6 +640,24 @@ test("the frame gate tolerates vsync jitter so a two-tick frame is never skipped
   vm.runInContext(section(idle, "  // Animation state belongs", "  function drawFrame("), env);
   env.frame(100); env.frame(116.7); env.frame(132.9); env.frame(149.6); env.frame(166.3);
   assert.deepEqual(drawn, [100, 132.9, 166.3], "a 32.9 ms tick (33.3 with jitter) draws instead of costing a 50 ms hitch");
+});
+
+test("the gate draws at the display's rate while the camera moves, and only while frames stay cheap", () => {
+  const drawn = [];
+  const state = { active: true, motionHot: true, frameCost: 4 };
+  const env = vm.createContext({ state, document: { hidden: false, body: { dataset: {} } }, pickerHeld: () => false, drawFrame: (time) => drawn.push(time), requestAnimationFrame: () => 1, console });
+  vm.runInContext(section(idle, "  // Animation state belongs", "  function drawFrame("), env);
+  for (const time of [100, 116.7, 133.4, 150.1]) env.frame(time);
+  assert.deepEqual(drawn, [100, 116.7, 133.4, 150.1], "a glide draws every 60 Hz tick");
+  drawn.length = 0;
+  state.frameCost = 12;
+  for (const time of [166.8, 183.5, 200.2]) env.frame(time);
+  assert.deepEqual(drawn, [183.5], "frames that cost too much fall back to 30 fps even mid-glide");
+  drawn.length = 0;
+  state.frameCost = 4;
+  state.motionHot = false;
+  for (const time of [216.9, 233.6, 250.3]) env.frame(time);
+  assert.deepEqual(drawn, [216.9, 250.3], "at rest the tree draws at 30 fps");
 });
 
 test("a floating panel carves the clear rectangle without re-seeding the tree, and the projection centre glides after it", () => {
@@ -639,4 +718,44 @@ test("verifying cards rank behind live sessions for the card budget; running wor
   assert.ok(rank(running) < rank(session) && rank(next) < rank(session), "live and up-next work outranks sessions");
   assert.ok(rank(verifying) > rank(session), "a verifying card yields to the sessions being read");
   assert.ok(rank(verifying) < rank(plain), "but still ranks ahead of an idle task");
+});
+
+test("the Orbit switch and the camera mode the owner picks survive a restart; focus, wheel and drag steps do not", () => {
+  const stores = new Map(), toasts = [];
+  const state = { orbit: "paused", focusRestore: null, camMode: "orbit", camera: { x: 0, y: 0, z: 0, tx: 0, ty: 0, tz: 0 }, follow: null, followReadAt: 0, followZoomTarget: null, orbitVel: 0, zoom: 1 };
+  const env = vm.createContext({
+    state, CAM_MODES: ["orbit", "follow", "free"],
+    writeStore: (key, value) => stores.set(key, value),
+    syncViewControls() {}, renderHint() {}, applyCamMode() {}, setZoom: (value) => { state.zoom = value; },
+    window: { MefiToast: (text) => toasts.push(text) },
+  });
+  vm.runInContext(section(idle, "  function setOrbit(", "  // Camera autopilot."), env);
+  vm.runInContext(section(idle, "  function setCamMode(", "  function setLabels("), env);
+  const source = idle.replace(/\r\n/g, "\n");
+  assert.ok(source.includes('orbit: readStore("mefiStudio.cmdOrbit") === "auto" ? "auto" : "paused",'), "a launch starts from the saved Orbit switch");
+  assert.ok(source.includes('camMode: CAM_MODES.includes(readStore("mefiStudio.cmdCam"))'), "and from the saved camera mode");
+
+  env.setOrbit();
+  assert.equal(state.orbit, "auto");
+  assert.equal(stores.get("mefiStudio.cmdOrbit"), "auto", "Space or the Spin button is saved");
+  assert.deepEqual(toasts, ["spin resumed"], "the toolbar calls it Spin; Overview is the camera mode");
+  // Focus borrows the orbit quietly; that loan is never saved.
+  env.setOrbit(false, { quiet: true });
+  assert.equal(stores.get("mefiStudio.cmdOrbit"), "auto");
+  state.orbit = "auto"; state.focusRestore = { orbit: "auto" };
+  env.setOrbit();
+  assert.equal(stores.get("mefiStudio.cmdOrbit"), "paused", "a pause pressed while focused is the owner's choice");
+  assert.equal(state.focusRestore.orbit, "paused", "and leaving the focused node keeps it");
+
+  env.setCamMode("follow");
+  assert.equal(stores.get("mefiStudio.cmdCam"), "follow");
+  env.userZoom(1.3);
+  assert.equal(state.camMode, "free", "a wheel zoom still hands the camera to the owner for this visit");
+  assert.equal(state.zoom, 1.3);
+  assert.equal(stores.get("mefiStudio.cmdCam"), "follow", "but the next launch starts from the mode they picked");
+  env.setCamMode("orbit", { quiet: true });
+  assert.equal(stores.get("mefiStudio.cmdCam"), "orbit", "Fit is an explicit choice of the orbit camera");
+  env.setCamMode("free");
+  assert.equal(stores.get("mefiStudio.cmdCam"), "free", "an explicit free camera is saved like any other pick");
+  assert.ok(!source.includes('setCamMode("free", { quiet: true })'), "every incidental step into free is marked transient");
 });

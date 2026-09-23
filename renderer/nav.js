@@ -17,7 +17,7 @@
   const TYPING_SELECTOR = "input:not([type]), input[type=text], input[type=search], input[type=url], input[type=password], input[type=email], input[type=number], textarea, [contenteditable]";
 
   // Layer bookkeeping. Other modules read it; only claim/release write it.
-  const state = { sheet: null, transient: null, returnTo: null, focusReturn: { sheet: null, transient: null } };
+  const state = { sheet: null, transient: null, returnTo: null, commandFrom: null, focusReturn: { sheet: null, transient: null } };
   // assistant holds the service tone (ok | busy | warn | offline | paused), painted
   // as a dot on the Explorer's dock item and tool button.
   const badges = { sessions: 0, progress: 0, tasks: 0, ideas: 0, machine: null, assistant: null, questions: 0 };
@@ -33,6 +33,9 @@
     !event.metaKey &&
     event.key.length === 1 &&
     event.key.toLowerCase() === key.toLowerCase();
+
+  // Settings' chord: Ctrl+, or Cmd+, (AltGr reports Ctrl+Alt, so Alt is out).
+  const settingsChord = (event) => Boolean(event?.ctrlKey || event?.metaKey) && !event.altKey && event.key === ",";
 
   const showIn = (parts) => ({ tabs: false, tools: false, dock: false, palette: false, help: false, footer: false, ...parts });
   const idleActive = () => Boolean(window.MefiIdle?.isActive?.());
@@ -67,13 +70,57 @@
     }
   }
 
+  // ---- sections ----------------------------------------------------------
+  // One taxonomy behind every menu. Each record names its section, and the
+  // rail, the More tools menus, the shortcut sheet and the palette's result
+  // kinds all read that one field instead of keeping lists of their own.
+  const SECTIONS = new Map([
+    ["home", "Home"],
+    ["work", "Work"],
+    ["live", "Live"],
+    ["models", "Models"],
+    ["settings", "Settings"],
+    ["help", "Help"],
+    ["community", "Community"],
+    ["assistant", "Assistant"],
+    ["command", "Command view"],
+  ]);
+  // A rail place for a record whose kind alone would keep it out of the rail:
+  // community.js registers "community" as a palette action at DOMContentLoaded,
+  // and the foot (Help & community) is its home.
+  const RAIL_SLOTS = Object.freeze({ community: "foot" });
+  // Sections for records other modules register without one. The assistant's
+  // commands and Command view's key rows name theirs in `group`.
+  const ACTION_SECTIONS = Object.freeze({ community: "community" });
+  const ownKey = (map, key) => typeof key === "string" && Object.hasOwn(map, key);
+
+  function sectionOf(dest) {
+    if (!dest) return null;
+    if (SECTIONS.has(dest.section)) return dest.section;
+    if (ownKey(ACTION_SECTIONS, dest.id)) return ACTION_SECTIONS[dest.id];
+    if (SECTIONS.has(dest.group)) return dest.group;
+    return dest.layer === "transient" ? "help" : "settings";
+  }
+
+  // What every menu calls a destination's home: "Live" for the Command view,
+  // "Community" for community, "Assistant" for the assistant's commands.
+  function sectionLabel(dest) {
+    return dest ? SECTIONS.get(sectionOf(dest)) ?? null : null;
+  }
+
+  // The rail's top-to-bottom order, for lists that sort by section.
+  function sectionRank(dest) {
+    const at = [...SECTIONS.keys()].indexOf(sectionOf(dest));
+    return at < 0 ? SECTIONS.size : at;
+  }
+
   // ---- registry ----------------------------------------------------------
 
   const registry = [
     {
       id: "workspace", label: "Your workspace", short: "Workspace", kind: "view", layer: null,
-      commandPrimary: true,
-      group: "surfaces", key: "H", glyph: "g-command", badge: null,
+      commandPrimary: true, section: "home",
+      group: "surfaces", key: "H", glyph: "g-home", badge: null,
       desc: "Projects, your companion, and work from idea to done",
       searchTerms: "home project folder conversation chat give task review done",
       showIn: showIn({ dock: true, palette: true, help: true, footer: true }),
@@ -86,16 +133,17 @@
       short: "Command",
       kind: "view",
       layer: null,
+      section: "live",
       group: "surfaces",
       key: "D",
-      glyph: "g-command",
+      glyph: "g-orbit",
       badge: "progress",
       alert: "questions",
-      desc: "The node tree / constellation — sessions, agents, todos and tasks",
-      searchTerms: "node tree live work monitor progress workers",
+      desc: "Live work as a node tree: sessions, agents, todos and tasks",
+      searchTerms: "node tree constellation live work monitor progress workers agents",
       showIn: showIn({ palette: true, help: true, footer: true }),
       open: (params) => window.MefiIdle?.enter?.(true, params),
-      close: () => window.MefiIdle?.exit?.(),
+      close: () => leaveCommand(),
       isOpen: () => idleActive(),
     },
     {
@@ -104,11 +152,13 @@
       short: "Model catalog",
       kind: "tab",
       layer: null,
+      section: "models",
       group: "surfaces",
       key: "1",
       glyph: "g-booklet",
       badge: null,
-      desc: "The model booklet, filters and search",
+      desc: "Every model with its prices and limits, filters and search",
+      searchTerms: "models catalog booklet prices limits compare",
       showIn: showIn({ dock: true, palette: true, help: true }),
       open: () => window.MefiBooklet?.showTab?.("booklet"),
       isOpen: () => tabOpen("booklet"),
@@ -119,6 +169,7 @@
       short: "Model Lab",
       kind: "tab",
       layer: null,
+      section: "models",
       group: "surfaces",
       key: "2",
       glyph: "g-graph",
@@ -134,29 +185,36 @@
       short: "Activity",
       kind: "tab",
       layer: null,
+      section: "live",
       group: "surfaces",
       key: "3",
       glyph: "g-eyes",
       badge: "progress",
-      desc: "A-Eyes: live agent activity, diffs, evidence PNGs and pins",
+      desc: "Live agent activity, diffs, evidence PNGs and pins",
       showIn: showIn({ dock: true, palette: true, help: true }),
       open: () => window.MefiBooklet?.showTab?.("eyes"),
       isOpen: () => tabOpen("eyes"),
     },
     {
       id: "studio",
-      label: "Settings & connections",
+      label: "Settings",
       short: "Settings",
       kind: "tab",
       layer: null,
+      section: "settings",
       group: "surfaces",
       key: "4",
-      glyph: "g-studio",
+      // Ctrl+, (Cmd+, on a Mac) opens Settings too, as in most desktop apps;
+      // handleKey takes the chord before its field check, so it works anywhere.
+      chord: "Ctrl ,",
+      keyMatch: (event) => settingsChord(event) || defaultKeyMatch("4")(event),
+      glyph: "g-sliders",
       badge: null,
-      desc: "Assistant and coding providers, API keys, optional integrations and app updates",
-      searchTerms: "settings connections api key login setup provider workers",
+      desc: "Providers, routing and coding workers; your Studio, updates and diagnostics",
+      searchTerms: "settings connections api key login setup provider workers preferences you theme motion animations launch updates diagnostics",
       showIn: showIn({ dock: true, palette: true, help: true }),
-      open: () => window.MefiBooklet?.showTab?.("studio"),
+      // A section param opens one card: go("studio", { section: "settings-updates" }).
+      open: (params) => window.MefiBooklet?.showTab?.("studio", params),
       isOpen: () => tabOpen("studio"),
     },
     {
@@ -166,6 +224,7 @@
       short: "Explorer",
       kind: "overlay",
       layer: "sheet",
+      section: "live",
       group: "tools",
       key: "E",
       glyph: "g-explorer",
@@ -186,6 +245,7 @@
       short: "Task board",
       kind: "overlay",
       layer: "sheet",
+      section: "work",
       group: "tools",
       key: "T",
       glyph: "g-tasks",
@@ -205,6 +265,7 @@
       short: "Plans",
       kind: "overlay",
       layer: "sheet",
+      section: "work",
       group: "tools",
       key: "P",
       glyph: "g-plans",
@@ -225,6 +286,7 @@
       short: "Ideas",
       kind: "overlay",
       layer: "sheet",
+      section: "work",
       group: "tools",
       key: "I",
       glyph: "g-ideas",
@@ -244,6 +306,7 @@
       short: "Brains",
       kind: "overlay",
       layer: "sheet",
+      section: "work",
       group: "tools",
       key: "B",
       glyph: "g-route",
@@ -263,6 +326,7 @@
       short: "Overhead",
       kind: "overlay",
       layer: "sheet",
+      section: "live",
       group: "tools",
       key: "O",
       glyph: "g-overhead",
@@ -276,21 +340,12 @@
       isOpen: () => overlayOpen("overhead-overlay"),
     },
     {
-      id: "profiler", label: "Performance profiler", short: "Profiler", kind: "overlay", layer: "sheet", group: "tools",
-      key: null, glyph: "g-graph", badge: null,
-      desc: "Record frame timings, rendering hotspots, host requests, CPU and memory",
-      searchTerms: "debug diagnostics lag slow fps hitch performance profiler cpu memory",
-      showIn: showIn({ tools: true, palette: true, help: true }),
-      element: "profiler-overlay", focus: "#profiler-start",
-      open: () => window.MefiProfiler?.open?.(), close: () => window.MefiProfiler?.close?.(),
-      isOpen: () => overlayOpen("profiler-overlay"),
-    },
-    {
       id: "analyzer",
       label: "Analyzer",
       short: "Analyzer",
       kind: "overlay",
       layer: "sheet",
+      section: "work",
       group: "tools",
       key: "A",
       glyph: "g-analyzer",
@@ -306,16 +361,18 @@
     {
       id: "palette",
       commandPrimary: true,
-      label: "Key commands",
-      short: "Key Cmd's",
+      label: "Search Studio",
+      short: "Search",
       kind: "overlay",
       layer: "transient",
+      section: "help",
       group: "system",
       key: "Ctrl K",
       keyMatch: (event) => (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k",
       glyph: "g-palette",
       badge: null,
-      desc: "Jump to a surface, tool, action, task, node or model",
+      desc: "Find any page, tool, setting, action, task, node or model",
+      searchTerms: "search find jump go to key commands palette",
       showIn: showIn({ tools: true, dock: true, help: true, footer: true }),
       element: "palette-overlay",
       focus: "#palette-input",
@@ -324,20 +381,31 @@
       isOpen: () => overlayOpen("palette-overlay"),
     },
     {
-      id: "music", label: "Style & sound", short: "Style", kind: "overlay", layer: "sheet",
+      id: "music", label: "Style & sound", short: "Style", kind: "overlay", layer: "sheet", section: "settings",
       group: "tools", key: "U", glyph: "g-style", badge: null, commandPrimary: true,
-      desc: "Studio themes, colours and backdrop, plus local music, Spotify links and AI suggestions",
-      searchTerms: "style theme themes colour color appearance accent skin look backdrop music sound audio spotify",
+      desc: "Studio themes and colours, the node tree's look, plus local music, radio, Spotify links and AI suggestions",
+      searchTerms: "style theme themes colour color appearance accent skin look node styles music sound audio radio spotify",
       showIn: showIn({ dock: true, palette: true, help: true }),
       element: "music-overlay", focus: "#music-close",
       open: (params) => window.MefiMusic?.open?.(params), close: () => window.MefiMusic?.close?.(),
       isOpen: () => overlayOpen("music-overlay"),
     },
     {
-      id: "onboarding", label: "Start here · walkthrough", short: "Start here", kind: "overlay", layer: "transient",
-      group: "system", key: null, glyph: "g-help", badge: null,
-      desc: "Get started: project, connections, task or plan, monitoring and review",
-      searchTerms: "getting started guide tutorial help welcome onboarding",
+      // Settings' diagnostics: listed after Style & sound in the Settings section.
+      id: "profiler", label: "Performance profiler", short: "Profiler", kind: "overlay", layer: "sheet", section: "settings", group: "tools",
+      key: null, glyph: "g-gauge", badge: null,
+      desc: "Diagnostics: record frame timings, rendering hotspots, host requests, CPU and memory",
+      searchTerms: "debug diagnostics lag slow fps hitch performance profiler cpu memory",
+      showIn: showIn({ tools: true, palette: true, help: true }),
+      element: "profiler-overlay", focus: "#profiler-start",
+      open: () => window.MefiProfiler?.open?.(), close: () => window.MefiProfiler?.close?.(),
+      isOpen: () => overlayOpen("profiler-overlay"),
+    },
+    {
+      id: "onboarding", label: "Start here", short: "Start here", kind: "overlay", layer: "transient", section: "help",
+      group: "system", key: null, glyph: "g-flag", badge: null,
+      desc: "The guided walkthrough: link an AI, add a project, connect providers, then create, follow and review work",
+      searchTerms: "start here walkthrough tour getting started guide tutorial help welcome onboarding",
       showIn: showIn({ dock: true, tools: true, palette: true }),
       element: "walkthrough-overlay", focus: "#walkthrough-title",
       open: () => window.MefiOnboarding?.open?.(), close: () => window.MefiOnboarding?.close?.(),
@@ -349,6 +417,7 @@
       short: "Shortcuts",
       kind: "overlay",
       layer: "transient",
+      section: "help",
       group: "system",
       key: "?",
       keyMatch: (event) => event.key === "?",
@@ -365,14 +434,15 @@
     {
       id: "search",
       label: "Model search",
-      short: "Search",
+      short: "Find model",
       kind: "action",
       layer: null,
+      section: "models",
       group: "system",
       key: "/",
       glyph: "g-search",
       badge: null,
-      desc: "Show the Booklet and focus its search field",
+      desc: "Show the Model catalog and focus its search field",
       showIn: showIn({ palette: true, help: true }),
       run: () => {
         go("booklet");
@@ -385,6 +455,7 @@
       short: "Refresh",
       kind: "action",
       layer: null,
+      section: "models",
       group: "system",
       key: "R",
       glyph: "g-refresh",
@@ -395,29 +466,31 @@
     },
     {
       id: "pinRail",
-      label: "Pin the node tree",
-      short: "Pin rail",
+      label: "Pin the node-tree preview",
+      short: "Pin preview",
       kind: "action",
       layer: null,
+      section: "live",
       group: "system",
       key: "G",
       glyph: "g-pin",
       badge: null,
-      desc: "Keep the node-tree rail open",
+      desc: "Keep the node-tree preview open beside the tab pages",
       showIn: showIn({ palette: true, help: true }),
       run: () => window.MefiTree?.togglePin?.(),
     },
     {
       id: "print",
-      label: "Print / PDF booklet",
+      label: "Print / PDF model catalog",
       short: "Print",
       kind: "action",
       layer: null,
+      section: "models",
       group: "system",
       key: null,
       glyph: "g-print",
       badge: null,
-      desc: "Print the booklet on a light background",
+      desc: "Print the model catalog on a light background",
       showIn: showIn({ palette: true }),
       run: () => window.print(),
     },
@@ -427,6 +500,7 @@
       short: "Auditor",
       kind: "action",
       layer: null,
+      section: "live",
       group: "system",
       key: null,
       glyph: null,
@@ -444,6 +518,7 @@
       short: "Machine",
       kind: "action",
       layer: null,
+      section: "live",
       group: "system",
       key: null,
       glyph: null,
@@ -458,6 +533,7 @@
       short: "Scan ideas",
       kind: "action",
       layer: null,
+      section: "work",
       group: "system",
       key: null,
       glyph: null,
@@ -468,15 +544,17 @@
     },
     {
       id: "motion",
-      label: "Toggle motion",
-      short: "Motion",
+      label: "Toggle animations",
+      short: "Animations",
       kind: "action",
       layer: null,
+      section: "settings",
       group: "system",
       key: null,
       glyph: null,
       badge: null,
       desc: "Pause or resume every animation",
+      searchTerms: "motion animation animations reduce reduced movement",
       showIn: showIn({ palette: true }),
       run: () => document.getElementById("motion-toggle")?.click(),
     },
@@ -491,7 +569,32 @@
     const index = registry.findIndex((item) => item.id === dest.id);
     if (index >= 0) registry[index] = dest;
     else registry.push(dest);
+    // community.js registers at DOMContentLoaded, after init() drew the rail:
+    // a late arrival with a place in the rail redraws it.
+    if (document.documentElement?.dataset?.shell === "rail" && railSection(dest)) queueRailRender();
     return dest;
+  }
+
+  // Coalesced on a microtask, so a burst of registrations redraws the rail
+  // once; keyboard focus inside it comes back to the same destination.
+  let railRenderQueued = false;
+  function queueRailRender() {
+    if (railRenderQueued) return;
+    railRenderQueued = true;
+    Promise.resolve().then(() => {
+      railRenderQueued = false;
+      const rail = document.getElementById("app-rail");
+      const active = document.activeElement;
+      const held = rail?.contains?.(active) && active?.dataset?.nav
+        ? { nav: active.dataset.nav, head: Boolean(active.classList?.contains?.("app-rail-head")) }
+        : null;
+      renderRail();
+      if (!held || (active.isConnected && document.activeElement === active)) return;
+      const again = active.isConnected
+        ? active
+        : Array.from(rail.querySelectorAll(held.head ? ".app-rail-head" : ".app-rail-item")).find((button) => button.dataset?.nav === held.nav);
+      if (again) focusRailButton(again);
+    });
   }
 
   function list(filter) {
@@ -509,7 +612,23 @@
   // The focusable dialog root inside a destination's overlay, if it has one.
   function dialogRoot(dest) {
     const root = dest?.element ? document.getElementById(dest.element) : null;
-    return root?.querySelector(".explorer-sheet, .sheet, .palette-sheet") ?? null;
+    return root?.querySelector(".explorer-sheet, .sheet, .palette-sheet, .brains-sheet") ?? null;
+  }
+
+  function layerRoot(dest) {
+    return dest?.element ? document.getElementById(dest.element) : null;
+  }
+
+  // A sheet replacing a sheet keeps one continuous scrim (styles.css,
+  // "presence"): both roots skip their fade for this one swap, so two
+  // half-faded scrims never stack and pump; only the new panel rises.
+  function markSwap(...roots) {
+    const marked = roots.filter((root) => typeof root?.setAttribute === "function");
+    if (!marked.length) return;
+    for (const root of marked) root.setAttribute("data-swap", "");
+    const clear = () => marked.forEach((root) => root.removeAttribute?.("data-swap"));
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(clear));
+    else if (typeof setTimeout === "function") setTimeout(clear, 50);
   }
 
   function claim(id) {
@@ -517,11 +636,17 @@
     if (!dest?.layer) return;
     if (dest.layer === "sheet") {
       // Sheets are mutually exclusive; the transient layer above them is untouched.
-      if (state.sheet && state.sheet !== id) get(state.sheet)?.close?.();
+      if (state.sheet && state.sheet !== id) {
+        markSwap(layerRoot(get(state.sheet)), layerRoot(dest));
+        get(state.sheet)?.close?.();
+      }
       state.sheet = id;
       document.body.dataset.sheet = id;
     } else {
-      if (state.transient && state.transient !== id) get(state.transient)?.close?.();
+      if (state.transient && state.transient !== id) {
+        markSwap(layerRoot(get(state.transient)), layerRoot(dest));
+        get(state.transient)?.close?.();
+      }
       state.transient = id;
     }
     if (!state.focusReturn[dest.layer]) state.focusReturn[dest.layer] = document.activeElement;
@@ -621,6 +746,8 @@
       return;
     }
     if (dest.kind === "view") {
+      // Remember what Command was entered from, so leaving it goes back there.
+      if (id === "command" && !idleActive()) state.commandFrom = underlyingView();
       closeAll();
       if (id !== "workspace") window.MefiWorkspace?.exit?.();
       if (id !== "command" && idleActive()) window.MefiIdle?.exit?.();
@@ -655,6 +782,23 @@
     // Overlays claim their layer from inside open(), so exclusivity holds no
     // matter who opened them — dock, key, palette, card, tour or module.
     return dest.open?.(params);
+  }
+
+  // The surface under any sheet: the workspace, or the active tab.
+  function underlyingView() {
+    if (window.MefiWorkspace?.isActive?.()) return "workspace";
+    return document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
+  }
+
+  // Leaving Command (Esc, the exit button, D) returns to where it was entered
+  // from, the workspace by default. MefiIdle.exit() alone only hides the
+  // canvas, and go("command") had already left the workspace, so whatever tab
+  // sat underneath (the Model catalog) used to show through.
+  function leaveCommand() {
+    const back = state.commandFrom && state.commandFrom !== "command" ? state.commandFrom : "workspace";
+    state.commandFrom = null;
+    window.MefiIdle?.exit?.();
+    if (get(back)) go(back);
   }
 
   function toggle(id) {
@@ -838,15 +982,20 @@
     return element;
   }
 
+  // The More tools menus group by the same sections as the rail. Home rides
+  // with Work, the foot's Community with Help, and anything else unfiled
+  // lands in Settings.
+  const MENU_GROUPS = ["Work", "Live", "Models", "Settings", "Help"];
   function menuGroup(dest) {
-    if (["workspace", "tasks", "plans", "ideas", "brains"].includes(dest.id)) return "Work";
-    if (["command", "eyes", "explorer", "overhead", "analyzer", "profiler"].includes(dest.id)) return "Monitor & inspect";
-    if (["booklet", "graph"].includes(dest.id)) return "Models";
-    return "Settings & help";
+    const section = sectionOf(dest);
+    if (section === "home") return "Work";
+    if (section === "community") return "Help";
+    const label = SECTIONS.get(section);
+    return MENU_GROUPS.includes(label) ? label : "Settings";
   }
 
   function appendGrouped(target, destinations, buttonClass) {
-    for (const label of ["Work", "Monitor & inspect", "Models", "Settings & help"]) {
+    for (const label of MENU_GROUPS) {
       const items = destinations.filter((dest) => menuGroup(dest) === label);
       if (!items.length) continue;
       const group = document.createElement("div");
@@ -899,9 +1048,10 @@
   // of a tabs row, a dock and a hover sidebar that each render the registry
   // their own way. It is built from the same registry as the palette, the dock
   // and the help sheet, so a destination added there turns up here with its
-  // glyph, key and badge. The rail keeps no list of its own beyond which
-  // section a destination belongs to — and even that follows menuGroup(), the
-  // grouping the "More tools" menus already taught people.
+  // glyph, key and badge. The rail keeps no list of its own: each record's
+  // section says where it goes (the same sections the "More tools" menus,
+  // the shortcut sheet and the palette use), and RAIL_SLOTS places the late
+  // arrivals whose kind would otherwise keep them out (Community).
   //
   // It is the default. html[data-shell="rail"] (applyShell) is what turns it
   // on, and "classic" — ?shell=classic, or the palette's switch, remembered —
@@ -909,29 +1059,36 @@
   // who needs them while the rail beds in.
   const SHELL_KEY = "mefiStudio.shell";
   const RAIL_PIN_KEY = "mefiStudio.railPinned";
+  // Each head is its target's own button and draws the target's glyph, so a
+  // section and its main destination never show two different icons.
   const RAIL_SECTIONS = [
-    { id: "home", label: "Home", glyph: "g-home", target: "workspace" },
-    { id: "work", label: "Work", glyph: "g-tasks", target: "tasks" },
-    { id: "live", label: "Live", glyph: "g-orbit", target: "command" },
-    { id: "models", label: "Models", glyph: "g-booklet", target: "booklet" },
-    { id: "settings", label: "Settings", glyph: "g-sliders", target: "studio" },
+    { id: "home", label: "Home", target: "workspace" },
+    { id: "work", label: "Work", target: "tasks" },
+    { id: "live", label: "Live", target: "command" },
+    { id: "models", label: "Models", target: "booklet" },
+    { id: "settings", label: "Settings", target: "studio" },
   ];
 
-  // Which rail section a destination lives in: Home is the workspace alone,
-  // the palette, shortcuts and walkthrough sit at the foot, and actions stay
-  // in the palette where they have always been.
+  // Which rail section a destination lives in: its own section, with Home the
+  // workspace alone; the foot for Help (Search, Start here, Shortcuts) and for
+  // whatever RAIL_SLOTS sends there; and nowhere for the other actions, which
+  // stay in the palette where they have always been.
   function railSection(dest) {
-    if (!dest || dest.kind === "action" || dest.group === "command" || dest.group === "assistant") return null;
-    if (dest.id === "workspace") return "home";
-    if (dest.layer === "transient") return "foot";
-    const groups = { "Work": "work", "Monitor & inspect": "live", "Models": "models", "Settings & help": "settings" };
-    return groups[menuGroup(dest)] ?? "settings";
+    if (!dest) return null;
+    if (ownKey(RAIL_SLOTS, dest.id)) return RAIL_SLOTS[dest.id];
+    if (dest.kind === "action") return null;
+    const section = sectionOf(dest);
+    if (section === "help") return "foot";
+    return RAIL_SECTIONS.some((item) => item.id === section) ? section : null;
   }
 
   function renderRail() {
     const sections = document.getElementById("app-rail-sections");
     const foot = document.getElementById("app-rail-foot");
     if (!sections || !foot) return;
+    // Markup the template keeps in the foot (the update pill's badge) is not
+    // the registry's to redraw: it survives, after the foot's own buttons.
+    const kept = Array.from(foot.children ?? []).filter((child) => !child.classList?.contains?.("app-rail-foot-item"));
     sections.textContent = "";
     foot.textContent = "";
     const members = new Map(RAIL_SECTIONS.map((section) => [section.id, []]));
@@ -940,6 +1097,7 @@
       if (home === "foot") foot.append(navButton(dest, "app-rail-item app-rail-foot-item"));
       else if (home) members.get(home)?.push(dest);
     }
+    if (kept.length) foot.append(...kept);
     for (const section of RAIL_SECTIONS) {
       const target = get(section.target);
       if (!target) continue;
@@ -955,8 +1113,9 @@
       head.className = "app-rail-head";
       head.dataset.nav = target.id;
       head.dataset.section = section.id;
-      head.title = target.key ? `${section.label} · ${target.label} (${target.key})` : `${section.label} · ${target.label}`;
-      head.append(glyphNode(section.glyph));
+      const name = section.label === target.label ? target.label : `${section.label} · ${target.label}`;
+      head.title = target.key ? `${name} (${target.key})` : name;
+      if (target.glyph) head.append(glyphNode(target.glyph));
       const label = document.createElement("span");
       label.className = "app-rail-text";
       label.textContent = section.label;
@@ -994,6 +1153,44 @@
       if (!marked && head.dataset.nav === id) { head.setAttribute("aria-current", "page"); marked = true; }
       else head.removeAttribute("aria-current");
     }
+    if (!rail.contains?.(document.activeElement)) setRailStop(rail, restingStop(rail));
+  }
+
+  // The rail is one tab stop, like the old tabs row: the roving tabindex rests
+  // where you are while focus is elsewhere, and follows the arrows once inside.
+  // At rest it must sit on a button the collapsed rail still shows, so an
+  // item folded under its section hands the stop to that section's head.
+  function restingStop(rail) {
+    const here = rail.querySelector('[aria-current="page"]');
+    if (here && !here.closest?.(".app-rail-children")) return here;
+    return rail.querySelector(".app-rail-section.current .app-rail-head") ?? rail.querySelector(".app-rail-head") ?? rail.querySelector("button");
+  }
+
+  // paintRail runs on every body class change, so only changed stops are written.
+  function setRailStop(rail, stop) {
+    if (!stop) return;
+    for (const button of rail.querySelectorAll("button")) {
+      const index = button === stop ? 0 : -1;
+      if (button.tabIndex !== index) button.tabIndex = index;
+    }
+  }
+
+  // What the arrows walk: every button the rail is showing, top to bottom.
+  function railButtons(rail) {
+    return Array.from(rail.querySelectorAll("button")).filter((button) =>
+      !button.hidden && !button.disabled && !button.closest?.("[hidden]") && (button.getClientRects?.().length ?? 1) > 0);
+  }
+
+  // The collapsed rail hides its lists (display: none) and opens while one of
+  // its buttons has keyboard focus (:has(:focus-visible)). Moving focus passes
+  // through a moment with nothing focused, when Chromium checks the target
+  // again with the rail shut and a listed button can no longer take focus, so
+  // the target's list is held open for the move.
+  function focusRailButton(button) {
+    const list = button?.closest?.(".app-rail-children");
+    if (list?.style) list.style.display = "flex";
+    button?.focus?.({ preventScroll: false });
+    if (list?.style) list.style.display = "";
   }
 
   function shellOn() {
@@ -1006,17 +1203,32 @@
     }
   }
 
+  // A pinned rail takes its open width from the page. Below this window width
+  // it yields and behaves unpinned, opening over the page on hover or focus;
+  // the saved choice stays, and the pin comes back when the window widens.
+  const RAIL_PIN_MIN_WIDTH = 1100;
+  let railPinWanted = false;
+  const railPinFits = () => !(Number.isFinite(window.innerWidth) && window.innerWidth < RAIL_PIN_MIN_WIDTH);
+
   function setRailPinned(pinned, { save = true } = {}) {
-    const root = document.documentElement;
-    if (pinned) root.dataset.railPinned = "";
-    else delete root.dataset.railPinned;
-    document.getElementById("app-rail-pin")?.setAttribute("aria-pressed", String(Boolean(pinned)));
+    railPinWanted = Boolean(pinned);
+    document.getElementById("app-rail-pin")?.setAttribute("aria-pressed", String(railPinWanted));
     if (save) {
       try { localStorage.setItem(RAIL_PIN_KEY, pinned ? "1" : "0"); } catch { /* the pin is a convenience */ }
     }
-    // Every layer is offset by the rail's width; a pinned rail is wider, so let
-    // anything that measures the window (Command's graph) measure again.
-    window.dispatchEvent(new Event("resize"));
+    applyRailPin({ force: true });
+  }
+
+  // Pins the rail while it is wanted and fits the window. Every layer is offset
+  // by the rail's width, and a pinned rail is wider, so a change (or an explicit
+  // toggle) lets anything that measures the window (Command's graph) measure again.
+  function applyRailPin({ force = false } = {}) {
+    const root = document.documentElement;
+    const pinned = railPinWanted && railPinFits();
+    const changed = pinned !== ("railPinned" in root.dataset);
+    if (pinned) root.dataset.railPinned = "";
+    else delete root.dataset.railPinned;
+    if (changed || force) window.dispatchEvent(new Event("resize"));
   }
 
   function applyShell(on = shellOn()) {
@@ -1052,11 +1264,44 @@
       if (sidebar.isOpen?.()) sidebar.close({ restoreFocus: true });
       else sidebar.open({ focus: true });
     });
-    document.getElementById("app-rail-pin")?.addEventListener("click", () => setRailPinned(!("railPinned" in document.documentElement.dataset)));
+    document.getElementById("app-rail-pin")?.addEventListener("click", () => {
+      setRailPinned(!railPinWanted);
+      if (railPinWanted && !railPinFits()) {
+        window.MefiToast?.(`The menu stays open in windows ${RAIL_PIN_MIN_WIDTH}px wide or more; narrower, it opens over the page.`, "info");
+      }
+    });
+    window.addEventListener("resize", () => applyRailPin());
     // Repaint when you come to look at it, and whenever the view underneath
     // changes by a route that does not announce itself on mefi:nav.
     rail.addEventListener("pointerenter", paintRail);
-    rail.addEventListener("focusin", paintRail);
+    rail.addEventListener("focusin", (event) => {
+      paintRail();
+      const button = event.target?.closest?.("button");
+      if (button && rail.contains(button)) setRailStop(rail, button);
+    });
+    // Leaving hands the stop back to where you are: the button last focused
+    // may be folded away once the rail collapses.
+    rail.addEventListener("focusout", (event) => {
+      if (!rail.contains(event.relatedTarget)) setRailStop(rail, restingStop(rail));
+    });
+    // Up/Down walk the buttons top to bottom and wrap; Home/End jump to the
+    // ends. The keys stop here, because Command's canvas pans and selects
+    // with the same arrows from its own document and window listeners.
+    rail.addEventListener("keydown", (event) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      const buttons = railButtons(rail);
+      if (!buttons.length) return;
+      const at = buttons.indexOf(event.target?.closest?.("button"));
+      const last = buttons.length - 1;
+      let next = event.key === "Home" ? 0 : last;
+      if (event.key === "ArrowDown") next = at < 0 || at === last ? 0 : at + 1;
+      else if (event.key === "ArrowUp") next = at <= 0 ? last : at - 1;
+      event.preventDefault();
+      event.stopPropagation();
+      setRailStop(rail, buttons[next]);
+      focusRailButton(buttons[next]);
+    });
     const sidebar = document.getElementById("workspace-sidebar");
     if (typeof MutationObserver === "function") {
       new MutationObserver(() => {
@@ -1073,6 +1318,7 @@
     short: "Navigation",
     kind: "action",
     layer: null,
+    section: "settings",
     group: "system",
     key: null,
     glyph: "g-pin",
@@ -1149,27 +1395,43 @@
     return fragment;
   }
 
+  // The shortcut sheet speaks the rail's sections, then Command view's own
+  // keys: one small key grid per section, which the stylesheet sets in two
+  // columns. Escape has no destination, so it is the one hard-coded row,
+  // under Help.
+  const HELP_SECTIONS = [
+    ["Home & Work", ["home", "work"]],
+    ["Live", ["live"]],
+    ["Models", ["models"]],
+    ["Settings", ["settings"]],
+    ["Help", ["help", "community"]],
+    ["Command view", ["command"]],
+  ];
+
   function renderHelp(target) {
     const element = target ?? document.getElementById("help-grid");
     if (!element) return;
     element.textContent = "";
-    const rows = list({ showIn: "help" });
-    const groups = [
-      ["Surfaces", rows.filter((dest) => dest.group === "surfaces")],
-      ["Tools", rows.filter((dest) => dest.group === "tools")],
-      ["Command view", rows.filter((dest) => dest.group === "command")],
-      ["System", rows.filter((dest) => dest.group === "system" && dest.key)],
-    ];
-    for (const [title, items] of groups) {
-      if (!items.length && title !== "System") continue;
+    const rows = list({ showIn: "help" }).filter((dest) => dest.key);
+    HELP_SECTIONS.forEach(([title, sections], index) => {
+      const items = rows.filter((dest) => sections.includes(sectionOf(dest)));
+      if (!items.length && title !== "Help") return;
+      const group = document.createElement("div");
+      group.className = "help-section";
+      group.setAttribute("role", "group");
       const heading = document.createElement("h4");
       heading.className = "help-group";
+      heading.id = `help-section-${index}`;
       heading.textContent = title;
-      element.append(heading);
-      for (const dest of items) if (dest.key) element.append(helpRow(dest.key, dest.label));
-      // Escape has no destination, so it is the one hard-coded row.
-      if (title === "System") element.append(helpRow("Esc", ESC_HELP));
-    }
+      group.setAttribute("aria-labelledby", heading.id);
+      group.append(heading);
+      for (const dest of items) {
+        group.append(helpRow(dest.key, dest.label));
+        if (dest.chord) group.append(helpRow(dest.chord, dest.label));
+      }
+      if (title === "Help") group.append(helpRow("Esc", ESC_HELP));
+      element.append(group);
+    });
   }
 
   function hintLine() {
@@ -1193,8 +1455,37 @@
     element.textContent = hintLine();
   }
 
+  // ---- motion switch -----------------------------------------------------
+  // One answer for CSS and JS: body.no-motion (the Motion setting) or the OS
+  // reduced-motion preference. It is cached, because the Command canvas asks
+  // many times a frame, and mirrored to html[data-motion] so the stylesheet,
+  // the view-transition pseudo-elements and WAAPI all read the same switch.
+  let motionOff = null;
+  let motionCalm = false;
+  let reduceQuery;
+  function syncMotion() {
+    if (reduceQuery === undefined) {
+      try {
+        reduceQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)") ?? null;
+      } catch {
+        reduceQuery = null;
+      }
+    }
+    motionOff = Boolean(document.body?.classList?.contains?.("no-motion") || reduceQuery?.matches);
+    // Calm (body.ws-still): the interface still eases, decorative loops stop.
+    motionCalm = !motionOff && Boolean(document.body?.classList?.contains?.("ws-still"));
+    if (document.documentElement?.dataset) document.documentElement.dataset.motion = motionOff ? "off" : motionCalm ? "calm" : "on";
+    return motionOff;
+  }
   function noMotion() {
-    return document.body.classList.contains("no-motion") || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    return motionOff ?? syncMotion();
+  }
+  function watchMotion() {
+    syncMotion();
+    reduceQuery?.addEventListener?.("change", syncMotion);
+    if (typeof MutationObserver === "function" && document.body) {
+      new MutationObserver(syncMotion).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    }
   }
 
   // ---- tab rail roving focus ---------------------------------------------
@@ -1313,7 +1604,9 @@
       window.MefiSidebar.close({ restoreFocus: true });
       return;
     }
-    const more = document.activeElement?.closest?.(".studio-more[open], .cmd-more-tools[open]") ?? document.getElementById("cmd-more-tools");
+    // Command's own More tools menu is the fallback only while Command is on
+    // top; a sheet above it must not have Esc (and focus) pulled out from under it.
+    const more = document.activeElement?.closest?.(".studio-more[open], .cmd-more-tools[open]") ?? (top() === "command" ? document.getElementById("cmd-more-tools") : null);
     if (event.key === "Escape" && more?.open) {
       event.preventDefault();
       more.open = false;
@@ -1325,6 +1618,13 @@
     if ((event.ctrlKey || event.metaKey) && event.key?.toLowerCase?.() === "k") {
       event.preventDefault();
       toggle("palette");
+      return;
+    }
+    // 2. Ctrl+, opens Settings from anywhere too. The chord lives in the
+    //    studio record's keyMatch; a plain 4 still goes through the loop below.
+    if ((event.ctrlKey || event.metaKey) && get("studio")?.keyMatch?.(event)) {
+      event.preventDefault();
+      go("studio");
       return;
     }
     const field = event.target?.closest?.("input, textarea, select, [contenteditable]") ?? null;
@@ -1389,6 +1689,27 @@
   }
 
   window.addEventListener("mefi:nav", paintCurrent);
+
+  // ---- page header -------------------------------------------------------
+  // The tab pages share one header. It names the page you are on and, when
+  // Command sent you there, offers the way back: the classic tabs row keeps
+  // that marker on #nav-command, which the rail shell hides. Painted from
+  // go()'s own announcement, so every route that opens a page is covered.
+  let pageFromCommand = false;
+  function paintPage(detail) {
+    const dest = detail?.action === "open" ? get(detail.id) : null;
+    if (dest?.kind === "tab") {
+      pageFromCommand = state.returnTo === "command";
+      const title = document.getElementById("page-title");
+      if (title) title.textContent = dest.label;
+    } else if (dest?.kind === "view") {
+      pageFromCommand = false;
+    }
+    const back = document.getElementById("page-return");
+    if (back) back.hidden = !pageFromCommand;
+  }
+
+  window.addEventListener("mefi:nav", (event) => paintPage(event?.detail));
 
   // ---- live update -------------------------------------------------------
 
@@ -1523,6 +1844,12 @@
   let liveUpdateStatus = null;
   let releaseUpdateState = null;
 
+  // Where the updater's controls live. The pill and every update toast that
+  // sends you there name it and open it at that card.
+  const UPDATES_PLACE = "Settings › Updates";
+  const UPDATES_SECTION = "settings-updates";
+  const openUpdates = () => ({ label: "Open", run: () => go("studio", { section: UPDATES_SECTION }) });
+
   function paintPill() {
     const pill = document.querySelector("#update-pill");
     if (!pill) return;
@@ -1539,7 +1866,7 @@
       pill.dataset.state = release.state === "available" ? "pending" : "working";
       pill.title =
         release.state === "available"
-          ? `New build on GitHub: ${version} · open Studio → App updates`
+          ? `New build on GitHub: ${version} · open ${UPDATES_PLACE}`
           : release.state === "downloading"
             ? `Downloading ${version}…`
             : `Installing ${version} · the app restarts`;
@@ -1550,7 +1877,7 @@
     delete pill.dataset.release;
     pill.hidden = view.hidden;
     pill.dataset.state = view.state;
-    pill.title = view.title;
+    pill.title = `${view.title} · open ${UPDATES_PLACE}`;
     const label = pill.querySelector(".label");
     if (label) label.textContent = view.label;
   }
@@ -1586,7 +1913,7 @@
         "info"
       );
     } else if (phase === "pending") {
-      window.MefiToast?.("Update pending · apply it from Studio", "info");
+      window.MefiToast?.(`Update pending · apply it from ${UPDATES_PLACE}`, "info", { action: openUpdates() });
     } else if (phase === "waiting") {
       window.MefiToast?.(payload.kind === "restart" ? "Update ready · restarts at the next pause" : "Update ready · reloads at the next pause", "info");
     } else if (phase === "styled") {
@@ -1596,9 +1923,9 @@
       window.MefiToast?.(`Updated in place · ${plural(modules, "module")}`, "good");
     } else if (phase === "held") {
       if (payload.reason === "incomplete source files") return;
-      window.MefiToast?.(`Update held · ${payload.reason ?? "unknown"}`, "bad");
+      window.MefiToast?.(`Update held · ${payload.reason ?? "unknown"}`, "bad", { action: openUpdates() });
     } else if (phase === "error") {
-      window.MefiToast?.(`Update failed · ${payload.error ?? payload.reason ?? "unknown"}`, "bad");
+      window.MefiToast?.(`Update failed · ${payload.error ?? payload.reason ?? "unknown"}`, "bad", { action: openUpdates() });
     } else if (phase === "reloaded" || phase === "restarted") {
       window.MefiToast?.(count ? `Updated · ${plural(count, "file")}` : "Updated", "good");
     }
@@ -1682,6 +2009,7 @@
       short: "Auto-update",
       kind: "action",
       layer: null,
+      section: "settings",
       group: "system",
       key: null,
       glyph: "g-update",
@@ -1696,6 +2024,7 @@
       short: "Apply update",
       kind: "action",
       layer: null,
+      section: "settings",
       group: "system",
       key: null,
       glyph: "g-update",
@@ -1707,13 +2036,19 @@
     const auto = document.querySelector("#update-auto");
     auto?.addEventListener("change", () => setUpdateAuto(auto.checked));
     document.querySelector("#update-apply")?.addEventListener("click", () => applyUpdate());
-    // The pill opens Studio; while an update waits for a pause, clicking it
-    // also applies now (the host skips its gate for a manual apply). A release
-    // pill only navigates: installing a published build is the button's job.
-    document.querySelector("#update-pill")?.addEventListener("click", () => {
-      const pill = document.querySelector("#update-pill");
-      if (pill?.dataset.release === "1") return;
-      if (pill?.dataset.state === "pending") applyUpdate();
+    // The pill opens Settings › Updates; while an update waits for a pause,
+    // clicking it also applies now (the host skips its gate for a manual
+    // apply). A release pill only navigates: installing a published build is
+    // the button's job. The pill's markup may move (the rail foot shows it as
+    // a badge), so its deep link is set here, by id.
+    const pill = document.querySelector("#update-pill");
+    if (pill) {
+      pill.dataset.nav ||= "studio";
+      pill.dataset.navParams ||= JSON.stringify({ section: UPDATES_SECTION });
+    }
+    pill?.addEventListener("click", () => {
+      if (pill.dataset.release === "1") return;
+      if (pill.dataset.state === "pending") applyUpdate();
     });
     window.mefiStudio.onUpdateEvent?.(onUpdateEvent);
     window.mefiStudio
@@ -1765,7 +2100,7 @@
 
   function releaseToast(payload) {
     if (payload?.state === "available") {
-      window.MefiToast?.(`Update available · v${payload.latest?.version} · Studio → App updates`, "info");
+      window.MefiToast?.(`Update available · v${payload.latest?.version} · ${UPDATES_PLACE}`, "info", { action: openUpdates() });
     } else if (payload?.state === "installed") {
       window.MefiToast?.(`Updated to v${payload.installed?.version}`, "good");
     } else if (payload?.state === "error" && payload?.error) {
@@ -2013,6 +2348,7 @@
   // ---- boot --------------------------------------------------------------
 
   function init() {
+    watchMotion();
     renderTools();
     renderDock();
     applyShell();
@@ -2036,6 +2372,10 @@
       const counts = treeCounts();
       if (Object.keys(counts).length) setBadge(counts);
     });
+    // The activity push feeds these badges and the Activity tab alike, so it
+    // starts with the app rather than on the tab's first visit.
+    window.mefiStudio?.eyesWatch?.(true);
+    window.mefiStudio?.onEyesActivity?.((data) => window.dispatchEvent(new CustomEvent("mefi:eyes-activity", { detail: data })));
     window.addEventListener("mefi:command", (event) => {
       if (!event.detail?.active) return;
       state.returnTo = null;
@@ -2092,6 +2432,7 @@
     go,
     toggle,
     close,
+    leaveCommand,
     claim,
     release,
     top,
@@ -2107,6 +2448,9 @@
     renderRail,
     paintRail,
     railSection,
+    sectionLabel,
+    sectionRank,
+    RAIL_SLOTS,
     applyShell,
     setShell,
     setRailPinned,
@@ -2118,6 +2462,7 @@
     hintLine,
     handleKey,
     noMotion,
+    syncMotion,
     state,
     init,
     saveResume,

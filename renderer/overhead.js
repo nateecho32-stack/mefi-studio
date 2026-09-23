@@ -4,6 +4,9 @@
   "use strict";
 
   const state = { nodes: [], edges: [], tasks: [], angle: 0.4, overview: false, cycleIndex: 0, lastCycle: 0, hover: null };
+  // Hit boxes from the last frame, taskId → rect. They live outside the task
+  // objects so the poll's unchanged-data signature never sees draw output.
+  const boxes = new Map();
   const el = {};
   let initialized = false;
   let raf = null;
@@ -123,6 +126,7 @@
     const clampLeft = (left) => Math.min(el.width - BOX_WIDTH - 12, Math.max(12, left));
     const clampTop = (top) => Math.min(el.height - BOX_HEIGHT - 12, Math.max(12, top));
 
+    boxes.clear();
     active.forEach((task, index) => {
       const anchor = anchorFor(task);
       const fallbackAngle = (index / Math.max(1, active.length)) * Math.PI * 2;
@@ -187,7 +191,7 @@
       ctx.lineTo(position.x, position.y);
       ctx.stroke();
       ctx.globalAlpha = 1;
-      task._box = { x: left, y: top, w: BOX_WIDTH, h: BOX_HEIGHT };
+      boxes.set(task.id, { x: left, y: top, w: BOX_WIDTH, h: BOX_HEIGHT });
     });
 
     if (!window.MefiNav?.noMotion?.()) state.angle += 0.0009;
@@ -303,10 +307,9 @@
       const x = event.clientX - rect.left;
       const y = event.clientY - rect.top;
       state.hover = null;
-      for (const task of state.tasks) {
-        const box = task._box;
-        if (box && x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h) {
-          state.hover = task.id;
+      for (const [taskId, box] of boxes) {
+        if (x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h) {
+          state.hover = taskId;
           el.canvas.style.cursor = "pointer";
           return;
         }

@@ -33,6 +33,7 @@ function environment({ rail = false } = {}) {
         if (part === "[inert]") return this.inert;
         if (part === "#workspace-sidebar-panel[inert]") return this.id === "workspace-sidebar-panel" && this.inert;
         if (part === "[data-nav]") return Boolean(this.dataset.nav);
+        if (part.startsWith("#")) return this.id === part.slice(1);
         if (["button", "input", "textarea", "select", "summary"].includes(part)) return this.tag === part;
         return false;
       });
@@ -198,6 +199,29 @@ test("outside presses, project switches and window blur dismiss the menu", () =>
   env.sidebar.open({ focus: true }); env.window.emit("blur");
   assert.equal(env.document.activeElement, env.toggle, "native dialogs cannot leave focus in the inert panel");
   assert.equal(env.sidebar.isOpen(), false);
+});
+
+test("the rail's M+ toggles the panel: pressing it is not an outside press, so a second click can close", () => {
+  const env = environment({ rail: true });
+  env.sidebar.open({ focus: true });
+  env.document.emit("pointerdown", { target: env.brand });
+  assert.equal(env.sidebar.isOpen(), true, "the door's own press leaves the toggle to its click");
+  env.document.emit("pointerdown", { target: env.outside });
+  assert.equal(env.sidebar.isOpen(), false, "a press anywhere else still dismisses");
+});
+
+test("a panel opened on purpose stays when the pointer leaves; a hover peek closes", () => {
+  const env = environment();
+  env.hover(env.toggle);
+  env.toggle.emit("click");
+  env.leave(env.toggle);
+  env.flush();
+  assert.equal(env.sidebar.isOpen(), true, "a click turns the peek into an open panel");
+  env.sidebar.close();
+  env.hover(env.toggle);
+  env.leave(env.toggle);
+  env.flush();
+  assert.equal(env.sidebar.isOpen(), false, "a hover peek still closes on leave");
 });
 
 test("closing the panel returns focus to its door: the rail's M+ on the rail shell, the edge strip otherwise", () => {

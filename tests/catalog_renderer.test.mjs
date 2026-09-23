@@ -63,6 +63,18 @@ test("startup defers connection and CLI checks until Settings opens, then initia
   assert.equal(env.get("save-key").listeners.click.length, 1);
 });
 
+test("a Settings deep link is safe in a bare DOM and the facade exposes the jump", async () => {
+  const env = environment(); await flush();
+  assert.equal(typeof env.window.MefiBooklet.jumpToSettings, "function");
+  // This fake has no Settings markup to query; the section param must not throw.
+  env.window.MefiBooklet.showTab("studio", { section: "providers" }); await flush();
+  assert.equal(env.get("tab-studio").hidden, false);
+  assert.equal(env.get("page-title").textContent, "Settings", "the header names the page");
+  assert.equal(env.get("status").hidden, true, "the catalog's status line waits for the catalog");
+  env.window.MefiBooklet.showTab("booklet");
+  assert.equal(env.get("status").hidden, false);
+});
+
 test("normal startup gates five local readiness stages and defers first-launch onboarding until release", async () => {
   let gate, workspaceActive = false;
   const loads = [], onboarding = [];

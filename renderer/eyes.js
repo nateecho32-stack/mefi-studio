@@ -35,16 +35,20 @@
     els.status.style.color = isError ? "var(--bad)" : "";
   }
 
+  // Session titles, agent names and file names come from the store: they go in
+  // as text, never as markup.
+  function fillSelect(select, options) {
+    select.replaceChildren(...options.map(([value, label]) => new Option(label, value)));
+  }
+
   function renderSessions() {
-    const options = ['<option value="">All sessions</option>'];
-    for (const session of state.sessions) {
-      const label = `${session.title || session.id} · ${session.agent ?? "?"} · ${session.model.id ?? "?"}`;
-      options.push(`<option value="${session.id}">${label.replace(/</g, "&lt;")}</option>`);
-    }
-    els.session.innerHTML = options.join("");
+    fillSelect(els.session, [
+      ["", "All sessions"],
+      ...state.sessions.map((session) => [session.id, `${session.title || session.id} · ${session.agent ?? "?"} · ${session.model?.id ?? "?"}`]),
+    ]);
     els.session.value = state.sessionId ?? "";
     const agents = [...new Set(state.sessions.map((session) => session.agent).filter(Boolean))].sort();
-    els.agent.innerHTML = ['<option value="">all agents</option>', ...agents.map((agent) => `<option value="${agent}">${agent}</option>`)].join("");
+    fillSelect(els.agent, [["", "all agents"], ...agents.map((agent) => [agent, agent])]);
     els.agent.value = state.agent ?? "";
   }
 
@@ -184,11 +188,7 @@
   }
 
   function renderPngSelect() {
-    const options = ['<option value="">newest evidence…</option>'];
-    for (const png of state.pngs) {
-      options.push(`<option value="${png.path.replace(/"/g, "&quot;")}">${png.name} · ${ago(png.mtime)} ago</option>`);
-    }
-    els.pngSelect.innerHTML = options.join("");
+    fillSelect(els.pngSelect, [["", "newest evidence…"], ...state.pngs.map((png) => [png.path, `${png.name} · ${ago(png.mtime)} ago`])]);
     if (state.png) els.pngSelect.value = state.png;
   }
 
@@ -335,12 +335,18 @@
     els.log.scrollTop = els.log.scrollHeight;
   }
 
+  // eyesState is scoped to the session asked for, so a newer read (a session
+  // switch landing mid-fetch) must win over an older one.
+  let refreshSeq = 0;
   async function refresh({ keepSelection = true } = {}) {
     if (!window.mefiStudio?.eyesState) {
       status("Desktop mode only — run npm start inside mefi-studio to read live sessions.", true);
       return;
     }
+    const seq = ++refreshSeq;
+    state.dirty = false;
     const result = await window.mefiStudio.eyesState(state.sessionId);
+    if (seq !== refreshSeq) return;
     if (!result.ok) {
       status(`OpenCode store unavailable: ${result.error}`, true);
       return;
@@ -362,7 +368,7 @@
     renderPngSelect();
     if (!state.png && state.pngs.length) loadPng(state.pngs[0].path);
     const edits = visibleChanges().length;
-    status(`${state.sessions.length} sessions · ${edits} changes shown · live poll 1.5s`);
+    status(`${state.sessions.length} sessions · ${edits} changes shown · live`);
   }
 
   function wire() {
@@ -372,6 +378,8 @@
       renderFeed();
       renderDiff();
       renderInspector();
+      // The change list on hand is scoped to the previous session: read again.
+      void refresh({ keepSelection: false });
     });
     els.agent.addEventListener("change", () => {
       state.agent = els.agent.value || null;
@@ -403,7 +411,11 @@
     pngPane.addEventListener("drop", (event) => {
       event.preventDefault();
       const file = event.dataTransfer?.files?.[0];
-      if (file?.path) loadPng(file.path);
+      if (!file) return;
+      // File.path left Electron in v32; the preload asks webUtils instead.
+      const filePath = window.mefiStudio?.pathForFile?.(file) ?? file.path ?? null;
+      if (filePath) loadPng(filePath);
+      else status("Drop a PNG saved on this computer, or use Open…", true);
     });
     document.querySelectorAll(".mode-row .chip").forEach((chip) => chip.addEventListener("click", () => setMode(chip.dataset.mode)));
     // The 5s log tail pauses while the window is hidden (refreshLog bails) or
@@ -440,11 +452,17 @@
       renderInspector();
       renderDiff();
       if (els.feed) els.feed.scrollTop = 0;
+      if (els.tab?.hidden) state.dirty = true;
+      else void refresh({ keepSelection: false });
     });
   }
 
   async function init() {
-    if (initialized) return;
+    if (initialized) {
+      // Activity that landed while another view was in front.
+      if (state.dirty) void refresh({ keepSelection: true });
+      return;
+    }
     initialized = true;
     for (const [key, id] of Object.entries({
       tab: "tab-eyes",
@@ -479,14 +497,16 @@
     }
     renderPinList();
     await refresh({ keepSelection: false });
-    window.mefiStudio?.eyesWatch?.(true);
-    window.mefiStudio?.onEyesActivity?.((data) => {
-      const touched = (data.activity ?? []).some((item) => ["edit", "write", "patch"].includes(item.tool));
-      if (touched) refresh({ keepSelection: true });
-      window.dispatchEvent(new CustomEvent("mefi:eyes-activity", { detail: data }));
+    // nav.js starts the watch at boot and re-broadcasts each push, so the rail
+    // badges and Command hear activity before this tab is ever opened.
+    window.addEventListener("mefi:eyes-activity", (event) => {
+      const touched = (event.detail?.activity ?? []).some((item) => ["edit", "write", "patch"].includes(item.tool));
+      if (!touched) return;
+      if (els.tab?.hidden) state.dirty = true;
+      else refresh({ keepSelection: true });
     });
     window.mefiStudio?.onEyesError?.((message) => status(`poll error: ${message}`, true));
   }
 
-  window.MefiEyes = { init, refresh, state };
+  window.MefiEyes = { init, state };
 })();

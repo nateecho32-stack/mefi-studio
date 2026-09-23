@@ -1,11 +1,17 @@
 """Verify Command against a dense, isolated Electron fixture, without workers.
 
-python tools/verify_command.py [--baseline] [--node-readability] [--output tools/logs/command-ui]
+python tools/verify_command.py [--baseline] [--node-readability] [--menu-layouts] [--output tools/logs/command-ui]
 
 Uses the Workspace harness's offscreen window, logging and network guard. All
 board files, projects and Electron settings live in a temporary directory. A
 read-only IPC fixture supplies four sessions (eight for node readability) and synthetic worker/roster status;
 it never launches those workers. Baseline screenshots are retained separately.
+
+The full tour ends with the menu regroup's layout sweep (shared with
+verify_workspace.py): Command view's grouped toolbar, Ambience and Style & sound
+over the dense board at 1440x900, 1280x720 pinned, 1024x640, 900x700 and
+600x760. Controls folded into a toolbar menu (View: 2D/3D, labels, zoom) are
+reached through that menu, found by role. --menu-layouts runs only the sweep.
 """
 import argparse
 import json
@@ -662,12 +668,12 @@ VERIFY_METHOD = r'''
       (report.previewSamples ||= []).push({label,...current});
       assert(current.open&&current.active,`${label}: the real tree stays active beside the open menu`);
       assert(current.preview.width>=160 && current.area.w>=160 && current.area.h>=150,`${label}: the visible live tree has usable space`);
-      assert(current.pane.right<=current.preview.x+2,`${label}: settings remain to the left of the live tree`);
-      assert(current.area.x>=current.preview.x-2 && current.area.x+current.area.w<=current.preview.right+2,`${label}: actual drawn bounds match the visible right pane`);
+      assert(current.pane.right<=current.preview.x+2||current.pane.y>=current.preview.bottom-2||current.pane.bottom<=current.preview.y+2,`${label}: settings sit beside the live tree, or below it in a narrow window, never over it`);
+      assert(current.area.x>=current.preview.x-2 && current.area.x+current.area.w<=current.preview.right+2,`${label}: actual drawn bounds match the visible preview pane`);
       for (const node of current.nodes.filter(node=>node.kind!=='agent')) assert(node.x-node.radius>=current.area.x-2 && node.y-node.radius>=current.area.y-2 && node.x+node.radius<=current.area.x+current.area.w+2 && node.y+node.radius<=current.area.y+current.area.h+2,`${label}: the complete ${node.id} orb fits the preview, including quiet nodes`);
       const unobscured=current.nodes.filter(node=>node.hit==='idle-layer');
       assert(unobscured.length>=10,`${label}: populated real canvas nodes are visible and interactive through the menu overlay`);
-      for (const job of config.fixture.autopilot.running) assert(unobscured.some(node=>node.id===`task:${job.taskId}`),`${label}: active task ${job.taskId} remains visible on the right`);
+      for (const job of config.fixture.autopilot.running) assert(unobscured.some(node=>node.id===`task:${job.taskId}`),`${label}: active task ${job.taskId} remains visible in the preview`);
       return current;
     };
     const openMusic=async()=>{
@@ -932,7 +938,7 @@ VERIFY_METHOD = r'''
       assert.equal(sample.prefs.nodeStyle,style);assert.equal(sample.prefs.nodeLayout,layout);assert.equal(sample.status.view,view);
       assert.equal(sample.geometry.view,view);assert.equal(sample.playing,false,'appearance controls never play audio');
       const area=sample.area;
-      assert(area.w>=160&&area.h>=150&&sample.pane.right<=area.x+2,`${label}: settings leave a usable clear canvas`);
+      assert(area.w>=160&&area.h>=150&&(sample.pane.right<=area.x+2||sample.pane.y>=area.y+area.h-2||sample.pane.bottom<=area.y+2),`${label}: settings leave a usable clear canvas beside or above them`);
       const fixed=sample.nodes.filter(node=>node.kind!=='agent');
       assert(fixed.length>20&&sample.nodes.every(node=>node.visualStyle===style),`${label}: every drawn node uses the requested style`);
       for(const node of fixed)assert(node.radius>0&&node.x-node.radius>=area.x-2&&node.y-node.radius>=area.y-2&&node.x+node.radius<=area.x+area.w+2&&node.y+node.radius<=area.y+area.h+2,`${label}: full ${node.id} node stays within preview bounds`);
@@ -1109,7 +1115,7 @@ VERIFY_METHOD = r'''
     this.setContentSize(650,760);await sleep(180);
     await this.click('#music-tree-fit');await sleep(120);
     const compact=await this.run("const pane=document.querySelector('.music-sheet').getBoundingClientRect(),header=document.querySelector('.music-preview-header').getBoundingClientRect();return {width:innerWidth,height:innerHeight,pane:pane.toJSON(),header:header.toJSON(),controls:['music-tree-view-2d','music-tree-view-3d','music-tree-fit'].map(id=>{const el=document.getElementById(id),rect=el.getBoundingClientRect();return {id,rect:rect.toJSON(),label:el.getAttribute('aria-label'),hit:document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2)?.id};})};");
-    for(const control of compact.controls)assert(control.label&&control.hit===control.id&&control.rect.x>=compact.pane.right&&control.rect.right<=compact.width&&control.rect.top>=0&&control.rect.bottom<=compact.height,`${control.id} is named, visible and clickable in the compact preview header`);
+    for(const control of compact.controls)assert(control.label&&control.hit===control.id&&(control.rect.x>=compact.pane.right-1||control.rect.right<=compact.pane.x+1||control.rect.y>=compact.pane.bottom-1||control.rect.bottom<=compact.pane.y+1)&&control.rect.right<=compact.width&&control.rect.top>=0&&control.rect.bottom<=compact.height,`${control.id} is named, visible and clickable in the compact preview header, clear of the settings`);
     const compactTree=await snapshot();
     assert(compactTree.nodes.some(node=>node.labelRect&&config.fixture.autopilot.running.some(job=>node.id===`task:${job.taskId}`)),'650px preview names at least one running task');
     compact.tree=compactTree;
@@ -1246,8 +1252,8 @@ VERIFY_METHOD = r'''
       await this.run("document.getElementById('music-orbit-trails').scrollIntoView({block:'center'});");
       await this.click('#music-orbit-trails');
     }
-    const normalMotion=await this.run("const sheet=getComputedStyle(document.querySelector('.music-sheet'));return {name:sheet.animationName,duration:sheet.animationDuration};");
-    assert(normalMotion.name.includes('studio-settings-enter'),'settings have the expected entry animation');
+    const normalMotion=await this.run("const sheet=getComputedStyle(document.querySelector('.music-sheet'));return {property:sheet.transitionProperty,duration:sheet.transitionDuration};");
+    assert(normalMotion.property.includes('translate')&&normalMotion.duration.split(',').some(value=>parseFloat(value)>0),'settings slide in and out with the shared presence transition');
     this.webContents.debugger.attach('1.3');
     try {
       await this.webContents.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-reduced-motion',value:'reduce'}]});
@@ -1364,6 +1370,16 @@ VERIFY_METHOD = r'''
     await sleep(450);
     this.check("Dense real board fixture loads with read-only synthetic session and worker status");
 
+    if (config.menuLayouts) {
+      // The menu regroup's sweep alone: Command view and Style & sound over the
+      // dense board at every size (the shared helper in verify_workspace.py).
+      await this.menuLayouts('29-menu', ['command', 'music']);
+      assert.equal(report.networkAttempts.length,0,"fixture never attempts external requests");
+      assert.equal(report.workerAttempts.length,0,"synthetic workers never start a process");
+      assert.equal(report.consoleErrors.length,0,`Renderer errors: ${report.consoleErrors.join('; ')}`);
+      return;
+    }
+
     if (config.appearanceMatrix) {
       await this.verifyParallelBuilds();
       await this.verifyAppearanceMatrix();
@@ -1439,11 +1455,14 @@ VERIFY_METHOD = r'''
       assert.equal(await this.run("return document.getElementById('idle-music-toggle').getAttribute('aria-pressed');"), 'false', "audio capture starts off");
       await this.click('#idle-ambience');
       await this.until("!document.getElementById('idle-ambience-pop').hidden", "Ambience opens");
+      // The Audio link row left Ambience in the menu regroup. Its ids stay in
+      // the page, so the audio defaults are read by id wherever they now live.
       assert.equal(await this.run("return document.getElementById('idle-source').value;"), 'auto', "audio defaults to automatic Studio-track linking");
       assert.equal(await this.run("return document.getElementById('idle-reactive').checked;"), false, "opening settings does not enable capture");
-      await this.capture('07b-music-settings');
+      assert.equal(await this.run(`${PAGE_PROBE} const pop=document.getElementById('idle-ambience-pop'),link=document.getElementById('idle-reactive');return Boolean(link&&pop.contains(link)&&window.__harnessProbe.shown(link.closest('label')||link));`), false, "the Audio link row has left Ambience");
+      await this.capture('07b-ambience');
       await this.click('#idle-ambience');
-      this.check("Music control and source settings are visible without requesting audio capture");
+      this.check("Ambience opens without the Audio link row, and the audio source and link stay off until asked for");
       await this.verifyParallelBuilds();
       await this.verifyAutoOverview();
       await this.verifyStableNodes();
@@ -1453,6 +1472,9 @@ VERIFY_METHOD = r'''
       await this.verifySpatialView();
       await this.verifyCustomPalette();
       await this.verifyQuietControls();
+      // The menu regroup's sweep: toolbar, Ambience and Style & sound over the
+      // dense board at 1440x900, 1280x720 pinned, 1024x640, 900x700 and 600x760.
+      await this.menuLayouts('29-menu', ['command', 'music']);
     }
 
     await this.run("const input = document.getElementById('idle-search'); input.value = 'Refine the project switcher'; input.dispatchEvent(new Event('input',{bubbles:true}));");
@@ -1481,7 +1503,8 @@ VERIFY_METHOD = r'''
 }
 global.__MefiVerifiedWindow = VerifiedWindow;
 require('./main.cjs');
-if (!config.interactive) setTimeout(()=>finish(new Error('Command verification exceeded 180 seconds')),180000).unref();
+// The menu regroup's five-size sweep added about half a minute to the full tour.
+if (!config.interactive) setTimeout(()=>finish(new Error('Command verification exceeded 300 seconds')),300000).unref();
 '''
 
 
@@ -1515,7 +1538,9 @@ const fixtureAssistantPromise = import('./scripts/assistant.mjs').then(module =>
     spawn_guard_marker = "let failNextMessage = false;"
     if prefix.count(spawn_guard_marker) != 1:
         raise RuntimeError("Workspace process guard changed; update the isolated Command fixture before running.")
-    prefix = prefix.replace(spawn_guard_marker, "childProcess.spawn = (...args) => { report.workerAttempts.push(String(args[0])); throw new Error('Process launching is disabled by the isolated Command fixture'); };\n" + spawn_guard_marker, 1)
+    # CLI detection (where.exe, from the Usage pill's usage:accounts refresh) is a
+    # read-only lookup, not a worker: answer it "not installed" without a process.
+    prefix = prefix.replace(spawn_guard_marker, "childProcess.spawn = (...args) => { if (/^where(\\.exe)?$/i.test(String(args[0]))) { (report.probeAttempts ||= []).push(String(args[1]?.[0] ?? '')); const probe = new (require('node:events'))(); probe.kill = () => {}; setImmediate(() => probe.emit('close', 1)); return probe; } report.workerAttempts.push(String(args[0])); throw new Error('Process launching is disabled by the isolated Command fixture'); };\n" + spawn_guard_marker, 1)
     marker = '  if (channel === "assistant:message" && failNextMessage) {'
     fixture_reads = r'''
   if (channel === 'eyes:state') return {ok:true,...config.fixture.store};
@@ -1622,7 +1647,7 @@ def fixture(project, now, node_readability=False):
     return tasks, ideas, {"assistant": assistant, "autopilot": status, "store": store}
 
 
-def verify(source, output, baseline=False, interactive=False, palette_only=False, appearance_matrix=False, collapsed_polish=False, node_readability=False, fit_layout=False):
+def verify(source, output, baseline=False, interactive=False, palette_only=False, appearance_matrix=False, collapsed_polish=False, node_readability=False, fit_layout=False, menu_layouts=False):
     electron = ROOT / "node_modules/electron/dist/electron.exe"
     if not electron.is_file():
         raise RuntimeError("Install Electron with npm ci before verifying Command.")
@@ -1661,7 +1686,7 @@ def verify(source, output, baseline=False, interactive=False, palette_only=False
         package = json.loads((source / "package.json").read_text(encoding="utf-8-sig"))
         package["main"] = "command-verify-entry.cjs"
         write_json(app_root / "package.json", package)
-        config = {"profile": str(profile), "appRoot": str(app_root), "output": str(destination), "alpha": project_info, "baseline": baseline, "fixture": data, "interactive": interactive, "paletteOnly": palette_only, "appearanceMatrix": appearance_matrix, "collapsedPolish": collapsed_polish, "nodeReadability": node_readability, "fitLayout": fit_layout}
+        config = {"profile": str(profile), "appRoot": str(app_root), "output": str(destination), "alpha": project_info, "baseline": baseline, "fixture": data, "interactive": interactive, "paletteOnly": palette_only, "appearanceMatrix": appearance_matrix, "collapsedPolish": collapsed_polish, "nodeReadability": node_readability, "fitLayout": fit_layout, "menuLayouts": menu_layouts}
         (app_root / package["main"]).write_text(bootstrap(config), encoding="utf-8")
         main = app_root / "main.cjs"
         instrumented = main.read_text(encoding="utf-8")
@@ -1679,7 +1704,7 @@ def verify(source, output, baseline=False, interactive=False, palette_only=False
         with (destination / "electron.log").open("w", encoding="utf-8") as log:
             process = subprocess.Popen([str(electron), ".", "--smoke"], cwd=app_root, env=env, stdout=log, stderr=log)
             try:
-                process.wait(timeout=3600 if interactive else 190)
+                process.wait(timeout=3600 if interactive else 320)
             except subprocess.TimeoutExpired:
                 subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, timeout=10)
                 process.wait(timeout=10)
@@ -1704,6 +1729,7 @@ if __name__ == "__main__":
     parser.add_argument("--collapsed-polish", action="store_true", help="Capture both collapsed panels with three builders, checkpoint badges, orb effects, 3D/2D and light colors; skip the Zen wait")
     parser.add_argument("--node-readability", action="store_true", help="Check six long running-task names with eight sessions, collapsed Live work and expanded Assistant in default/rotated 3D and 2D at wide and desktop sizes")
     parser.add_argument("--fit-layout", action="store_true", help="Check toolbar Fit and F restore broad node spacing after an edge-on 3D rotation and a panned/zoomed 2D map")
+    parser.add_argument("--menu-layouts", action="store_true", help="Sweep the regrouped menu, Command toolbar, Ambience and Style & sound over the dense board at 1440x900, 1280x720 pinned, 1024x640, 900x700 and 600x760, without the other tours")
     args = parser.parse_args()
-    result = verify(args.source.resolve(), args.output.resolve(), args.baseline, args.interactive, args.palette_only, args.appearance_matrix, args.collapsed_polish, args.node_readability, args.fit_layout)
+    result = verify(args.source.resolve(), args.output.resolve(), args.baseline, args.interactive, args.palette_only, args.appearance_matrix, args.collapsed_polish, args.node_readability, args.fit_layout, args.menu_layouts)
     print(f"Command UI verified: {len(result['checks'])} checks, {len(result['screenshots'])} screenshots in {args.output.resolve()}")

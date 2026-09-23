@@ -1,10 +1,19 @@
 """Exercise the real Workspace UI in an isolated offscreen Electron app.
 
-python tools/verify_workspace.py [--output tools/logs/workspace-ui]
+python tools/verify_workspace.py [--menus-only] [--output tools/logs/workspace-ui]
 
 Copies application sources and catalog data only. All projects, credentials,
 board files, Electron profile, and HOME are disposable. No paid/model/network
 requests or executor processes are allowed. PNGs and a JSON report are retained.
+
+The regrouped menus are checked by id, data attribute and role: the rail's five
+sections and its foot (Search, Start here, Shortcuts, Community), Settings'
+Connections, Personal and System groups with Find a setting, deep links and
+Your Studio, the page header's way back to Command view, Ctrl+, and Search's
+section kinds. A layout sweep captures Workspace, Settings, Style & sound and
+Command view at 1440x900, 1280x720 with the rail pinned through Keep menu open
+(saved as mefiStudio.railPinned), 1024x640 where that pin must yield, 900x700
+and 600x760. --menus-only runs just the menu checks and the sweep.
 """
 import argparse
 import hashlib
@@ -42,6 +51,45 @@ const config = __CONFIG__;
 const started = performance.now();
 const report = { checks: [], screenshots: [], networkAttempts: [], workerAttempts: [], consoleErrors: [] };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Page-side helpers for the menu checks, installed on demand because a reload
+// drops them: whether an element is drawn, its box, whether a click at its
+// centre reaches it, its accessible name, and the visible control that unfolds
+// it (a closed <details>' summary, or an aria-controls button that carries
+// aria-expanded or aria-haspopup). Menus are found by role, never by position.
+const PAGE_PROBE = `window.__harnessProbe ||= (() => {
+  const shown = (el) => {
+    if (!el) return false;
+    const style = getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    const box = el.getBoundingClientRect();
+    return box.width > 0 && box.height > 0;
+  };
+  const rect = (el) => (el ? el.getBoundingClientRect().toJSON() : null);
+  const hits = (el) => {
+    if (!shown(el)) return false;
+    const box = el.getBoundingClientRect();
+    const x = box.left + box.width / 2, y = box.top + box.height / 2;
+    if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return false;
+    const at = document.elementFromPoint(x, y);
+    return Boolean(at && (at === el || el.contains(at)));
+  };
+  const name = (el) => (el ? (el.getAttribute('aria-label') || el.title || el.innerText || '').trim() : '');
+  const unfold = (el) => {
+    if (!el || shown(el) || el.closest('#workspace-sidebar-panel')) return null;
+    const details = el.closest('details:not([open])');
+    const summary = details ? [...details.children].find((child) => child.tagName === 'SUMMARY') : null;
+    if (summary && shown(summary)) return { button: summary, container: details };
+    for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
+      if (!node.id) continue;
+      const button = [...document.querySelectorAll('[aria-controls]')].find((candidate) =>
+        candidate.getAttribute('aria-controls').split(' ').includes(node.id) && candidate.getAttribute('role') !== 'tab' &&
+        (candidate.hasAttribute('aria-expanded') || candidate.hasAttribute('aria-haspopup')) && shown(candidate));
+      if (button) return { button, container: node };
+    }
+    return null;
+  };
+  return { shown, rect, hits, name, unfold };
+})();`;
 // Keep an independent boundary around paid workers even if a future change
 // accidentally bypasses the app's --smoke dispatch guard.
 const originalSpawn = childProcess.spawn;
@@ -96,6 +144,8 @@ class VerifiedWindow extends NativeWindow {
   constructor(options) {
     super({ ...options, width: 1460, height: 940, show: false,
       webPreferences: { ...options.webPreferences, offscreen: true, backgroundThrottling: false } });
+    // What main.cjs asks for; the menu checks hold it to the regroup's 600×560.
+    report.windowMinimum = { width: options.minWidth ?? null, height: options.minHeight ?? null };
     this.webContents.setFrameRate(30);
     this.webContents.on("console-message", (...args) => {
       const detail = typeof args[1] === "object" ? args[1] : { level: args[1], message: args[2] };
@@ -135,7 +185,41 @@ class VerifiedWindow extends NativeWindow {
       await this.click("#workspace-sidebar-close");
       await sleep(220);
     }
-    return this.clickVisible(selector);
+    // A control folded into a menu (Command's View ▾ holds 2D/3D, labels and
+    // zoom) is reached the way a person reaches it: open the menu, click, and
+    // close the menu again if the click left it open.
+    const menu = await this.openMenuFor(selector);
+    try {
+      return await this.clickVisible(selector);
+    } finally {
+      if (menu) await this.closeMenu(menu);
+    }
+  }
+  // Opens the menu that folds a hidden control away, found by role (see
+  // PAGE_PROBE's unfold). Returns what closeMenu needs, or null when the
+  // control is already on screen or no menu holds it.
+  async openMenuFor(selector) {
+    const menu = await this.run(`${PAGE_PROBE}
+      const found = window.__harnessProbe.unfold(document.querySelector(${JSON.stringify(selector)}));
+      if (!found) return null;
+      found.button.dataset.harnessOpener = '';
+      found.container.dataset.harnessMenu = '';
+      return { opener: found.button.id ? '#' + CSS.escape(found.button.id) : '[data-harness-opener]', container: '[data-harness-menu]' };`);
+    if (!menu) return null;
+    await this.clickVisible(menu.opener);
+    await this.until(`window.__harnessProbe?.shown(document.querySelector(${JSON.stringify(selector)}))`, `its menu shows ${selector}`, 3000);
+    return menu;
+  }
+  async closeMenu(menu) {
+    try {
+      const open = await this.run(`${PAGE_PROBE}
+        const probe = window.__harnessProbe, container = document.querySelector(${JSON.stringify(menu.container)}), opener = document.querySelector(${JSON.stringify(menu.opener)});
+        if (!container || !probe.shown(opener)) return false;
+        return container.tagName === 'DETAILS' ? container.open : probe.shown(container);`);
+      if (open) await this.clickVisible(menu.opener);
+    } finally {
+      await this.run("for (const node of document.querySelectorAll('[data-harness-opener], [data-harness-menu]')) { delete node.dataset.harnessOpener; delete node.dataset.harnessMenu; }");
+    }
   }
   // One door to every destination, through the real control a person would use:
   // the rail on the rail shell — held open for the click so its member rows are
@@ -143,16 +227,39 @@ class VerifiedWindow extends NativeWindow {
   async openFromNav(id, classic = `#cmd-dock [data-nav="${id}"]`) {
     const railShell = await this.run("return document.documentElement.dataset.shell === 'rail';");
     if (!railShell) return this.click(classic);
+    const target = `#app-rail [data-nav="${id}"]`;
+    const visible = `(() => { const box = document.querySelector(${JSON.stringify(target)})?.getBoundingClientRect(); return Boolean(box && box.width && box.height); })()`;
     // Pin and unpin without the width transition: the next step clicks at once,
     // and an offscreen window can leave a transition stuck at its start value,
     // so an animated collapse would still be covering the sheet it just opened.
-    await this.run("const rail=document.getElementById('app-rail');rail.style.transition='none';document.documentElement.dataset.railPinned='';void rail.offsetWidth;");
+    // A pin the run set on purpose (Keep menu open) outlives the click.
+    const wasPinned = await this.run("const rail=document.getElementById('app-rail');rail.style.transition='none';const pinned='railPinned' in document.documentElement.dataset;document.documentElement.dataset.railPinned='';void rail.offsetWidth;return pinned;");
     await sleep(80);
+    let pointed = false;
     try {
-      return await this.click(`#app-rail [data-nav="${id}"]`);
+      // A pinned rail yields below 1100px, where a person opens the menu by
+      // pointing at it; so does the harness when the pin does not hold it open.
+      if (!await this.run(`return ${visible};`)) {
+        const point = await this.run("const box=document.getElementById('app-rail').getBoundingClientRect();return {x:Math.round(box.left+Math.min(24,box.width/2)),y:Math.round(box.top+box.height/2)};");
+        this.webContents.sendInputEvent({ type: "mouseMove", ...point });
+        pointed = true;
+        await this.until(visible, `pointing at the menu shows ${id}`, 3000);
+      }
+      return await this.click(target);
     } finally {
-      await this.run("const rail=document.getElementById('app-rail');delete document.documentElement.dataset.railPinned;void rail.offsetWidth;rail.style.transition='';window.dispatchEvent(new Event('resize'));");
+      if (pointed) {
+        await this.parkPointer();
+        await this.until("!document.getElementById('app-rail').matches(':hover')", "the menu lets go once the pointer leaves it", 3000);
+      }
+      await this.run(`const rail=document.getElementById('app-rail');if(!${wasPinned})delete document.documentElement.dataset.railPinned;void rail.offsetWidth;rail.style.transition='';window.dispatchEvent(new Event('resize'));`);
     }
+  }
+  // Parks the pointer in the window's top-right corner: off the rail, so a
+  // hover cannot hold the menu open, and away from the graph's nodes.
+  async parkPointer() {
+    const point = await this.run("return {x:Math.max(1,innerWidth-2),y:2};");
+    this.webContents.sendInputEvent({ type: "mouseMove", ...point });
+    await sleep(60);
   }
   async clickVisible(selector) {
     return this.run(`const selector = ${JSON.stringify(selector)}; const el = document.querySelector(selector); if (!el) throw new Error('Missing control: ' + selector); if (el.disabled) throw new Error('Disabled control: ' + selector); el.scrollIntoView({block:'nearest'}); const rect = el.getBoundingClientRect(); if (!rect.width || !rect.height || getComputedStyle(el).visibility === 'hidden') throw new Error('Hidden control: ' + selector); const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2); if (!hit || !el.contains(hit)) throw new Error('Obscured control: ' + selector + ' (hit: ' + (hit ? hit.tagName.toLowerCase() + (hit.id ? '#' + hit.id : '') + (typeof hit.className === 'string' && hit.className.trim() ? '.' + hit.className.trim().split(' ').filter(Boolean).join('.') : '') : 'nothing') + ')'); el.click();`);
@@ -169,6 +276,229 @@ class VerifiedWindow extends NativeWindow {
     report.screenshots.push({ name, file: output, ...image.getSize() });
   }
   check(name) { report.checks.push(name); console.log(`[workspace-check] ${name}`); }
+  // ---- menu regroup: shared with verify_command.py, which takes this class
+  // up to verify() ----
+  // "Keep menu open" through its real control. It saves nav.js's RAIL_PIN_KEY,
+  // mefiStudio.railPinned, which applyShell() reads back at launch. (The
+  // registry's "pinRail" action is the node-tree preview's G pin, not this.)
+  async setRailPin(pinned) {
+    const wanted = await this.run("return document.documentElement.dataset.shell === 'rail' ? document.getElementById('app-rail-pin')?.getAttribute('aria-pressed') === 'true' : null;");
+    if (wanted === null || wanted === pinned) return;
+    await this.click("#app-rail-pin");
+    await this.until(`document.getElementById('app-rail-pin').getAttribute('aria-pressed') === ${JSON.stringify(String(pinned))}`, pinned ? "Keep menu open pins the menu" : "Keep menu open lets the menu go");
+    assert.equal(await this.run("try { return localStorage.getItem('mefiStudio.railPinned'); } catch { return null; }"), pinned ? "1" : "0", "the pin is saved under mefiStudio.railPinned");
+    await sleep(150);
+  }
+  async openSurface(surface) {
+    if (surface === "music") {
+      if (await this.run("return document.getElementById('music-overlay')?.hidden !== false;")) await this.run("window.MefiNav.go('music');");
+      await this.until("document.getElementById('music-overlay')?.hidden === false && document.body.dataset.sheet === 'music'", "Style & sound opens for the layout sweep");
+      await sleep(350);
+      return;
+    }
+    const ready = {
+      workspace: "window.MefiWorkspace?.isActive?.() && !window.MefiIdle?.isActive?.()",
+      studio: "document.getElementById('tab-studio')?.hidden === false && !window.MefiWorkspace?.isActive?.() && !window.MefiIdle?.isActive?.()",
+      command: "window.MefiIdle?.isActive?.() && !document.body.dataset.sheet",
+    }[surface];
+    await this.run(`window.MefiNav.go(${JSON.stringify(surface)});`);
+    await this.until(ready, `${surface} opens for the layout sweep`);
+    if (surface === "studio") await this.run("window.scrollTo(0, 0);");
+    if (surface === "command") {
+      await this.run("window.MefiIdle.fitAll?.();");
+      await sleep(350);
+    } else await sleep(150);
+  }
+  // One read of everything the sweep asserts, all of it found by id, data
+  // attribute or role: the rail's heads by data-section, its foot by data-nav.
+  async readMenuLayout(surface) {
+    return this.run(`${PAGE_PROBE}
+      const { shown, rect, hits, name, unfold } = window.__harnessProbe;
+      const entry = (el) => (el ? { id: el.id || null, nav: el.dataset.nav ?? null, name: name(el), box: rect(el), shown: shown(el), hit: hits(el) } : null);
+      const root = document.documentElement;
+      let saved = null;
+      try { saved = localStorage.getItem('mefiStudio.railPinned'); } catch {}
+      const surface = ${JSON.stringify(surface)};
+      const layout = {
+        width: innerWidth, height: innerHeight, scroll: root.scrollWidth,
+        shell: root.dataset.shell === 'rail', pinned: 'railPinned' in root.dataset, saved,
+        rail: rect(document.getElementById('app-rail')),
+        heads: [...document.querySelectorAll('#app-rail .app-rail-head[data-section]')].map((head) => ({ section: head.dataset.section, ...entry(head) })),
+        foot: [...document.querySelectorAll('#app-rail-foot .app-rail-foot-item[data-nav]')].map(entry),
+        pin: entry(document.getElementById('app-rail-pin')),
+      };
+      if (surface === 'workspace') {
+        layout.surface = rect(document.getElementById('workspace-layer'));
+        layout.input = rect(document.getElementById('workspace-input'));
+        layout.search = entry(document.querySelector('.ws-top-actions [data-nav="palette"]'));
+        layout.invitations = [...document.querySelectorAll('#workspace-layer .walkthrough-invitation')].filter(shown).map((card) => ({ id: card.id, box: rect(card), scroll: card.scrollWidth, client: card.clientWidth }));
+      } else if (surface === 'studio') {
+        layout.surface = rect(document.getElementById('tab-studio'));
+        const title = document.getElementById('page-title');
+        layout.title = title ? { text: title.textContent.trim(), ...entry(title) } : null;
+        layout.find = entry(document.getElementById('settings-find'));
+        layout.nav = rect(document.getElementById('settings-nav'));
+        layout.sections = rect(document.getElementById('settings-sections'));
+        layout.groups = [...document.querySelectorAll('#settings-nav [role="group"]')].map((group) => (group.getAttribute('aria-label') || (group.getAttribute('aria-labelledby') || '').split(' ').map((id) => document.getElementById(id)?.textContent || '').join(' ')).trim());
+      } else if (surface === 'command') {
+        const tools = document.querySelector('.cmd-tools');
+        layout.surface = rect(document.getElementById('idle-hud'));
+        layout.top = rect(document.querySelector('.cmd-top'));
+        layout.tools = rect(tools);
+        layout.toolbar = tools ? tools.getAttribute('aria-label') : null;
+        // Switch inputs are drawn by their labels; the buttons and selects are the controls.
+        layout.controls = tools ? [...tools.querySelectorAll('button, select, input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])')].filter(shown).map(entry) : [];
+        layout.groups = tools ? [...tools.querySelectorAll('.cmd-tools-group')].map((group) => ({ role: group.getAttribute('role'), label: (group.getAttribute('aria-label') || '').trim() })) : [];
+        layout.kept = Object.fromEntries(['idle-feed-agent-mode', 'idle-fit', 'idle-cam-orbit', 'idle-cam-follow', 'idle-orbit', 'idle-music-toggle', 'idle-ambience', 'idle-exit'].map((id) => {
+          const el = document.getElementById(id);
+          return [id, el ? { inTools: Boolean(tools && tools.contains(el)), inFeed: Boolean(el.closest('#idle-feed')), shown: shown(el), hit: hits(el) } : null];
+        }));
+        layout.folded = Object.fromEntries(['idle-view', 'idle-labels', 'idle-zoom-in', 'idle-zoom-out'].map((id) => {
+          const el = document.getElementById(id);
+          const menu = el ? unfold(el) : null;
+          return [id, el ? { shown: shown(el), hit: hits(el), opener: menu ? menu.button.id || name(menu.button) || menu.button.tagName.toLowerCase() : null } : null];
+        }));
+        layout.viewport = window.MefiIdle?.graphViewport?.() ?? null;
+      } else if (surface === 'music') {
+        layout.surface = rect(document.querySelector('#music-overlay .music-sheet'));
+        layout.close = entry(document.getElementById('music-close'));
+        const preview = document.getElementById('music-tree-preview');
+        layout.preview = shown(preview) ? rect(preview) : null;
+      }
+      return layout;`);
+  }
+  assertMenuLayout(name, size, surface, layout) {
+    const inside = (box) => Boolean(box) && box.left >= -1 && box.top >= -1 && box.right <= layout.width + 1 && box.bottom <= layout.height + 1;
+    const apart = (a, b) => a.right <= b.left + 2 || b.right <= a.left + 2 || a.bottom <= b.top + 2 || b.bottom <= a.top + 2;
+    const edge = layout.shell && layout.rail ? layout.rail.right : 0;
+    assert(layout.scroll <= layout.width + 2, `${name}: no horizontal page overflow`);
+    if (layout.shell) {
+      assert.deepEqual(layout.heads.map((head) => head.section).sort(), ["home", "live", "models", "settings", "work"], `${name}: the menu keeps its five heads`);
+      if (size.pin && layout.width >= 1100) {
+        assert(layout.pinned && layout.rail.width >= 180, `${name}: Keep menu open holds the menu open at ${layout.width}px`);
+      } else {
+        assert(layout.rail.width <= 96, `${name}: the menu rests as icons${size.pin ? ": a pin yields below 1100px" : ""}`);
+        for (const head of layout.heads) assert(inside(head.box) && head.hit, `${name}: the ${head.section} head is on screen and clickable`);
+      }
+      if (size.pin) assert.equal(layout.saved, "1", `${name}: the saved pin survives the window size`);
+      for (const nav of ["palette", "onboarding", "help", "community"]) {
+        const item = layout.foot.find((entry) => entry.nav === nav);
+        assert(item, `${name}: the menu foot offers ${nav}`);
+        assert(inside(item.box) && item.hit, `${name}: the foot's ${nav} item stays on screen and clickable`);
+      }
+      assert(layout.pin && inside(layout.pin.box) && layout.pin.hit, `${name}: Keep menu open stays on screen and clickable`);
+      assert(layout.surface && layout.surface.left >= edge - 1, `${name}: ${surface} starts at the menu's edge`);
+      // These layers sit exactly at --shell-rail-w, so a pin that yields must take the room back.
+      if (surface === "workspace" || surface === "command") assert(Math.abs(layout.surface.left - edge) <= 2, `${name}: ${surface} makes room for the menu's width and no more`);
+    }
+    if (surface === "workspace") {
+      assert(layout.input && layout.input.width > 180 && layout.input.right <= layout.width + 2, `${name}: the composer stays usable`);
+      if (layout.search) assert(inside(layout.search.box) && layout.search.hit, `${name}: the workspace's Search stays on screen and clickable`);
+      for (const card of layout.invitations) assert(card.box.right <= layout.width + 2 && card.scroll <= card.client + 2, `${name}: the ${card.id} card wraps instead of clipping`);
+    } else if (surface === "studio") {
+      assert(layout.title && layout.title.text === "Settings" && layout.title.shown && layout.title.box.right <= layout.width + 2, `${name}: the page header names Settings`);
+      assert(layout.find && layout.find.box && layout.find.box.left >= edge - 1 && layout.find.box.right <= layout.width + 2 && layout.find.hit, `${name}: Find a setting stays on screen and usable`);
+      assert.deepEqual(layout.groups.map((group) => group.toLowerCase()).sort(), ["connections", "personal", "system"], `${name}: Settings groups its list as Connections, Personal and System`);
+      assert(layout.nav && layout.nav.right <= layout.width + 2 && layout.sections && layout.sections.right <= layout.width + 2, `${name}: the Settings list and cards fit`);
+    } else if (surface === "command") {
+      assert(inside(layout.tools), `${name}: the Command toolbar fits the window`);
+      assert(layout.top && layout.top.right <= layout.width + 2, `${name}: the Command header fits`);
+      assert(layout.controls.length <= 10, `${name}: the toolbar shows about eight controls, not ${layout.controls.length}`);
+      for (const control of layout.controls) {
+        const label = control.id ? `#${control.id}` : control.name || "a toolbar control";
+        assert(inside(control.box) && control.hit, `${name}: ${label} fits the window and takes the pointer`);
+        assert(control.name, `${name}: ${label} has an accessible name`);
+      }
+      for (const [index, control] of layout.controls.entries()) for (const other of layout.controls.slice(index + 1)) {
+        assert(apart(control.box, other.box), `${name}: ${control.id || control.name} and ${other.id || other.name} do not overlap`);
+      }
+      for (const [id, kept] of Object.entries(layout.kept)) {
+        assert(kept, `${name}: #${id} is kept`);
+        assert(kept.inTools && !kept.inFeed, `${name}: #${id} stays in the Command toolbar`);
+        assert(kept.shown && kept.hit, `${name}: #${id} is on the toolbar and clickable`);
+      }
+      for (const [id, folded] of Object.entries(layout.folded)) {
+        assert(folded, `${name}: #${id} is kept`);
+        assert(folded.hit || folded.opener, `${name}: #${id} is on the toolbar or one menu away`);
+      }
+      assert(layout.groups.length >= 2 && layout.groups.every((group) => group.role === "group" && group.label), `${name}: the toolbar's controls sit in labelled groups`);
+    } else if (surface === "music") {
+      assert(layout.surface && layout.surface.left >= edge - 1 && layout.surface.right <= layout.width + 2 && layout.surface.top >= -1 && layout.surface.bottom <= layout.height + 2, `${name}: Style & sound fits the window`);
+      assert(layout.close && inside(layout.close.box) && layout.close.hit, `${name}: Style & sound's Close stays on screen and clickable`);
+      if (layout.preview) {
+        assert(apart(layout.surface, layout.preview), `${name}: the live tree sits beside or above the settings, never under them`);
+        assert(layout.preview.left >= edge - 1 && layout.preview.right <= layout.width + 2, `${name}: the live tree fits`);
+      }
+    }
+  }
+  // Ambience opens under its own button, inside the window and clear of the
+  // menu, without the Audio link row that moved out of it.
+  async checkAmbience(name, layout) {
+    await this.click("#idle-ambience");
+    await this.until("document.getElementById('idle-ambience-pop')?.hidden === false", `${name}: Ambience opens`);
+    const found = await this.run(`${PAGE_PROBE}
+      const { shown, rect, hits } = window.__harnessProbe;
+      const pop = document.getElementById('idle-ambience-pop'), button = document.getElementById('idle-ambience'), link = document.getElementById('idle-reactive');
+      return { pop: rect(pop), button: rect(button), expanded: button.getAttribute('aria-expanded'), buttonHit: hits(button), audioLink: Boolean(link && pop.contains(link) && shown(link.closest('label') || link)) };`);
+    report.menuLayouts.at(-1).ambience = found;
+    await this.capture(`${name}-ambience`);
+    const edge = layout.shell && layout.rail ? layout.rail.right : 0;
+    assert(found.pop.left >= edge - 1 && found.pop.top >= -1 && found.pop.right <= layout.width + 1 && found.pop.bottom <= layout.height + 1, `${name}: Ambience fits the window beside the menu`);
+    assert(found.pop.top >= found.button.bottom - 2, `${name}: Ambience opens under its button`);
+    assert.equal(found.expanded, "true", `${name}: the Ambience button reports its popover open`);
+    assert(found.buttonHit, `${name}: the Ambience button stays clickable to close it`);
+    assert.equal(found.audioLink, false, `${name}: the Audio link row has left Ambience`);
+    await this.click("#idle-ambience");
+    await this.until("document.getElementById('idle-ambience-pop')?.hidden === true", `${name}: Ambience closes`);
+  }
+  // The regroup's layout sweep: each named surface at five sizes. 1280×720 runs
+  // with the rail pinned through Keep menu open, and 1024×640 keeps that pin,
+  // which must yield there (below 1100px). Surfaces open through MefiNav, so a
+  // broken menu surfaces as a layout failure. Transitions are held still for
+  // the sweep: an offscreen window can leave one at its start value, and the
+  // sweep measures end states. Each screenshot is taken before its asserts.
+  async menuLayouts(prefix, surfaces) {
+    const order = ["workspace", "studio", "command", "music"].filter((surface) => surfaces.includes(surface));
+    const sizes = [
+      { width: 1440, height: 900, pin: false, name: "1440x900" },
+      { width: 1280, height: 720, pin: true, name: "1280x720-pinned" },
+      { width: 1024, height: 640, pin: true, name: "1024x640-pin-yields" },
+      { width: 900, height: 700, pin: false, name: "900x700" },
+      { width: 600, height: 760, pin: false, name: "600x760" },
+    ];
+    const [width, height] = this.getContentSize();
+    report.menuLayouts ||= [];
+    await this.run("if (!document.getElementById('harness-still')) { const style = document.createElement('style'); style.id = 'harness-still'; style.textContent = '*, *::before, *::after { transition: none !important; }'; document.head.append(style); }");
+    try {
+      for (const size of sizes) {
+        await this.setRailPin(size.pin);
+        this.setContentSize(size.width, size.height);
+        await sleep(300);
+        await this.parkPointer();
+        for (const surface of order) {
+          const name = `${prefix}-${size.name}-${surface}`;
+          await this.openSurface(surface);
+          const layout = await this.readMenuLayout(surface);
+          report.menuLayouts.push({ name, size, surface, layout });
+          // verify_command.py records its graph geometry beside the menu's.
+          if (surface === "command" && typeof this.layout === "function") await this.layout(name, false);
+          await this.capture(name);
+          this.assertMenuLayout(name, size, surface, layout);
+          if (surface === "command") await this.checkAmbience(name, layout);
+          if (surface === "music") {
+            await this.click("#music-close");
+            await this.until("!document.body.dataset.sheet", `${name}: Style & sound closes`);
+          }
+        }
+      }
+      await this.setRailPin(false);
+      this.setContentSize(width, height);
+      await sleep(300);
+    } finally {
+      await this.run("document.getElementById('harness-still')?.remove();");
+    }
+    this.check(`Menus and ${order.join(", ")} fit 1440×900, 1280×720 pinned, 1024×640 (the pin yields), 900×700 and 600×760`);
+  }
   async verify() {
     await this.until("window.MefiWorkspace?.isActive?.() && document.getElementById('boot-layer')?.hidden", "workspace is the default home");
     await this.until("document.querySelectorAll('#workspace-projects button').length >= 2", "saved projects appear");
@@ -176,6 +506,19 @@ class VerifiedWindow extends NativeWindow {
     assert.equal(await this.run("return (await window.mefiStudio.projectsList()).activeId;"), config.alpha.id);
     assert.equal((await this.run("return (await window.mefiStudio.tasksList()).tasks;")).length, 30, "all thirty fixture tasks survive loading");
     await this.until("window.MefiOnboarding && !document.getElementById('walkthrough-overlay').hidden", "walkthrough opens automatically on first launch");
+    if (config.menusOnly) {
+      // The menu regroup alone: close the first-run guide through its public
+      // control, then check the menus and sweep every surface's layout.
+      await this.click('[data-nav-close="onboarding"]');
+      await this.until("document.getElementById('walkthrough-overlay').hidden", "Save & close dismisses the first-run walkthrough");
+      await this.verifyMenus();
+      await this.menuLayouts("20-layout", ["workspace", "studio", "command", "music"]);
+      assert.equal(report.networkAttempts.length, 0, "menu checks never reach the network");
+      assert.equal(report.workerAttempts.length, 0, "menu checks never start a coding worker");
+      const serious = report.consoleErrors.filter(line => !/ERR_FILE_NOT_FOUND/.test(line));
+      assert.equal(serious.length, 0, `Renderer errors: ${serious.join('; ')}`);
+      return;
+    }
     assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent;"), "Step 1 of 7", "new users start at the first lesson without clicking an invitation");
     assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /scan this computer/i, "the guide opens on the scan stop");
     // The scan stop starts its read-only scan by itself. This launch runs with
@@ -266,6 +609,7 @@ class VerifiedWindow extends NativeWindow {
       assert.equal(report.consoleErrors.length, 0);
       return;
     }
+    await this.verifyMenus();
     await this.run("window.MefiNav.go('workspace');");
     this.check("Settings put assistant and worker connections first with optional integrations collapsed");
     this.check("Workspace opens as home with saved projects");
@@ -307,7 +651,9 @@ class VerifiedWindow extends NativeWindow {
     assert([edge.before, edge.after].every(value => value === "none" || value === "normal"), "pseudo-elements do not paint a tab");
     await this.capture("01c-left-edge-closed");
     const outsideMenu = await this.run("return {x:innerWidth - 40,y:Math.round(innerHeight / 2)};");
-    for (const [height, focusTarget] of [[0.1, "workspace-sidebar-close"], [0.85, "workspace-agent-name"]]) {
+    // The panel is projects-only now (the personal fields moved to Settings ›
+    // Your Studio), so its own Add project control holds focus lower down.
+    for (const [height, focusTarget] of [[0.1, "workspace-sidebar-close"], [0.85, "workspace-add-project"]]) {
       this.webContents.sendInputEvent({ type: "mouseMove", ...outsideMenu });
       this.webContents.sendInputEvent({ type: "mouseMove", x: 1, y: Math.round(edge.height * height) });
       await this.until("window.MefiSidebar.isOpen()", `hover opens the sidebar at ${height * 100}% of the left edge`);
@@ -329,7 +675,7 @@ class VerifiedWindow extends NativeWindow {
       assert.equal(await this.run("return document.getElementById('workspace-sidebar-panel').contains(document.activeElement);"), false, "closing removes keyboard focus from the hidden menu");
       assert.equal(await this.run("return document.getElementById('workspace-sidebar-panel').inert;"), true);
     }
-    await this.run("document.querySelector('.ws-personal').open=false;document.getElementById('workspace-sidebar-panel').scrollTop=0;");
+    await this.run("document.getElementById('workspace-sidebar-panel').scrollTop=0;");
     await this.run("window.MefiMusic.applyTheme('gold', false);");
     this.check("An invisible full-height left edge reveals the themed menu, preserves pointer travel and closes on leaving even with focused controls");
     }
@@ -338,7 +684,8 @@ class VerifiedWindow extends NativeWindow {
     await this.click('.ws-top-actions [data-nav="palette"]');
     assert.equal(await this.run("return document.getElementById('workspace-sidebar-toggle').hidden;"), true, "transient dialogs keep the edge trigger out of their focus scope");
     await this.until("!document.getElementById('palette-status').textContent.includes('Loading project tasks')", "palette loads tasks without opening the board");
-    for (const [query, expected] of [["node tree", "Command view"], ["api key", "Settings & connections"], ["color", "Style & sound"], ["season archive", "Improve season archive"]]) {
+    // Settings registers each card with Search, so a key question lands on its card.
+    for (const [query, expected] of [["node tree", "Command view"], ["api key", "Settings › Providers"], ["color", "Style & sound"], ["season archive", "Improve season archive"]]) {
       await this.run(`const input = document.getElementById('palette-input'); input.value = ${JSON.stringify(query)}; input.dispatchEvent(new Event('input', {bubbles:true}));`);
       assert((await this.run("return document.getElementById('palette-list').textContent;")).includes(expected), `palette finds ${query}`);
     }
@@ -624,9 +971,15 @@ class VerifiedWindow extends NativeWindow {
     this.check("A failed chat request preserves the draft and offers a usable retry");
     await this.run("const input = document.getElementById('workspace-input'); input.value = 'A draft just for Garden Notes'; input.dispatchEvent(new Event('input', {bubbles:true}));");
 
-    await this.click(".ws-personal > summary");
+    // Make yourself at home left the project panel for Settings › Your Studio.
+    // The deep link opens that card itself, so its summary is left alone.
+    await this.run("window.MefiNav.go('studio', { section: 'settings-studio' });");
+    await this.until("(() => { const card = document.getElementById('settings-studio'), box = document.getElementById('workspace-agent-name')?.getBoundingClientRect(); return document.getElementById('tab-studio')?.hidden === false && !window.MefiWorkspace.isActive() && Boolean(card) && (card.tagName !== 'DETAILS' || card.open) && Boolean(box && box.width && box.height); })()", "MefiNav.go('studio', {section: 'settings-studio'}) opens Your Studio");
+    await this.capture("06b-settings-your-studio");
     await this.run("const name = document.getElementById('workspace-agent-name'); name.focus(); name.value = 'Pip'; name.dispatchEvent(new Event('input', {bubbles:true}));");
-    assert((await this.run("return document.getElementById('workspace-companion-name').textContent;")).includes("Pip"), "personal companion name is displayed");
+    assert((await this.run("return document.getElementById('workspace-companion-name').textContent;")).includes("Pip"), "the companion name set in Your Studio reaches the workspace");
+    await this.run("window.MefiNav.go('workspace');");
+    await this.until("window.MefiWorkspace?.isActive?.() && !window.MefiIdle?.isActive?.()", "the workspace returns from Your Studio");
     await new Promise((resolve) => { this.webContents.once("did-finish-load", resolve); this.webContents.reload(); });
     await this.until("window.MefiWorkspace?.isActive?.() && document.getElementById('boot-layer')?.hidden && document.querySelectorAll('#workspace-projects button').length >= 2", "workspace returns after reload");
     assert.equal(await this.run("return document.getElementById('walkthrough-overlay').hidden;"), true, "a dismissed guide does not automatically reopen after reload");
@@ -634,8 +987,15 @@ class VerifiedWindow extends NativeWindow {
     assert.equal(await this.run("return (await window.mefiStudio.projectsList()).activeId;"), config.alpha.id);
     assert((await this.run("return (await window.mefiStudio.tasksList()).tasks;")).some(task => task.id === created.id), "task survives renderer reload");
     assert((await this.run("return document.getElementById('workspace-companion-name').textContent;")).includes("Pip"), "personal companion name survives reload");
+    assert.equal(await this.run("return document.getElementById('workspace-agent-name').value;"), "Pip", "Your Studio shows the saved companion name after reload");
     assert.equal(await this.run("return document.getElementById('workspace-input').value;"), "A draft just for Garden Notes", "project draft survives reload");
-    this.check("Personalization, drafts and durable project work survive reload");
+    this.check("Personalization set in Settings › Your Studio, drafts and durable project work survive reload");
+
+    // The regroup's layout sweep, ahead of the narrow and short-desktop gates
+    // below so its screenshots land even while one of those fails.
+    await this.menuLayouts("20-layout", ["workspace", "studio", "command", "music"]);
+    await this.run("window.MefiNav.go('workspace');");
+    await this.until("window.MefiWorkspace?.isActive?.() && !window.MefiIdle?.isActive?.()", "the workspace returns after the layout sweep");
 
     this.setContentSize(600, 760);
     await sleep(250);
@@ -645,7 +1005,8 @@ class VerifiedWindow extends NativeWindow {
     // Navigation lives in the rail on the rail shell and in the drawer's rows on
     // the classic one; either way it has to be on screen. (A row's own computed
     // display ignores a hidden parent, so ask for a real box.)
-    const mobileMenu = await this.run("const panel=document.getElementById('workspace-sidebar-panel'),rail=document.getElementById('app-rail'),railOn=document.documentElement.dataset.shell==='rail';const r=panel.getBoundingClientRect();const shown=el=>{const b=el.getBoundingClientRect();return b.width>0&&b.height>0;};return {left:r.left,right:r.right,edge:railOn?rail.getBoundingClientRect().right:0,width:panel.clientWidth,scroll:panel.scrollWidth,screen:innerWidth,links:railOn?[...rail.querySelectorAll('.app-rail-head')].length===5&&[...rail.querySelectorAll('.app-rail-head')].every(shown):[...panel.querySelectorAll('.ws-home')].every(shown),addVisible:getComputedStyle(document.getElementById('workspace-add-project')).visibility!=='hidden'};");
+    const mobileMenu = await this.run("const panel=document.getElementById('workspace-sidebar-panel'),rail=document.getElementById('app-rail'),railOn=document.documentElement.dataset.shell==='rail';const r=panel.getBoundingClientRect();const shown=el=>{const b=el.getBoundingClientRect();return b.width>0&&b.height>0;};return {left:r.left,right:r.right,edge:railOn?rail.getBoundingClientRect().right:0,width:panel.clientWidth,scroll:panel.scrollWidth,screen:innerWidth,links:railOn?[...rail.querySelectorAll('.app-rail-head')].length===5&&[...rail.querySelectorAll('.app-rail-head')].every(shown):[...panel.querySelectorAll('.ws-home')].every(shown),addVisible:getComputedStyle(document.getElementById('workspace-add-project')).visibility!=='hidden',personal:Boolean(panel.querySelector('#workspace-person-name,#workspace-agent-name,#workspace-accent,#workspace-motion'))};");
+    assert.equal(mobileMenu.personal, false, "the project panel holds projects only: name, theme and motion live in Settings › Your Studio");
     assert(Math.abs(mobileMenu.left - mobileMenu.edge) <= 1, "small-window drawer stays anchored to its edge: the rail's, or the window's");
     assert(mobileMenu.left >= 0 && mobileMenu.right <= mobileMenu.screen + 1 && mobileMenu.scroll <= mobileMenu.width + 1, "small-window drawer fits without horizontal scrolling");
     assert(mobileMenu.links && mobileMenu.addVisible, "navigation and Add project remain available in a small window");
@@ -701,14 +1062,189 @@ class VerifiedWindow extends NativeWindow {
     const serious = report.consoleErrors.filter(line => !/ERR_FILE_NOT_FOUND/.test(line));
     assert.equal(serious.length, 0, `Renderer errors: ${serious.join('; ')}`);
   }
+  // The menu regroup, checked by id, data attribute and role: the rail's
+  // sections and foot, Settings' groups, Your Studio, the deep link, Find a
+  // setting, the page header's way back, Ctrl+, and Search's section kinds.
+  async verifyMenus() {
+    assert.deepEqual(report.windowMinimum, { width: 600, height: 560 }, "main.cjs keeps the window at least 600×560");
+    await this.run("window.MefiNav.go('workspace');");
+    await this.until("window.MefiWorkspace?.isActive?.() && !window.MefiIdle?.isActive?.()", "the workspace opens for the menu checks");
+    const menu = await this.run(`
+      const sections = {};
+      for (const section of document.querySelectorAll('#app-rail .app-rail-section[data-section]')) {
+        sections[section.dataset.section] = { head: section.querySelector('.app-rail-head')?.dataset.nav ?? null, items: [...section.querySelectorAll('.app-rail-children [data-nav]')].map((item) => item.dataset.nav).sort() };
+      }
+      const foot = [...document.querySelectorAll('#app-rail-foot .app-rail-foot-item[data-nav]')].map((item) => {
+        const glyph = item.querySelector('svg use')?.getAttribute('href') ?? null;
+        return { nav: item.dataset.nav, glyph, drawn: Boolean(glyph && document.getElementById(glyph.slice(1))) };
+      });
+      return { shell: document.documentElement.dataset.shell === 'rail', sections, foot };`);
+    report.menu = menu;
+    if (menu.shell) {
+      assert.deepEqual(Object.keys(menu.sections).sort(), ["home", "live", "models", "settings", "work"], "the menu has five heads: Home, Work, Live, Models and Settings");
+      const members = {
+        home: ["workspace", []],
+        work: ["tasks", ["analyzer", "brains", "ideas", "plans", "tasks"]],
+        live: ["command", ["command", "explorer", "eyes", "overhead"]],
+        models: ["booklet", ["booklet", "graph"]],
+        settings: ["studio", ["music", "profiler", "studio"]],
+      };
+      for (const [section, [head, items]] of Object.entries(members)) {
+        assert.equal(menu.sections[section].head, head, `the ${section} head opens ${head}`);
+        assert.deepEqual(menu.sections[section].items, items, `the ${section} section lists ${items.join(", ") || "nothing under its head"}`);
+      }
+      const foot = { palette: "#g-palette", onboarding: "#g-flag", help: "#g-help", community: "#g-community" };
+      for (const [nav, glyph] of Object.entries(foot)) {
+        const item = menu.foot.find((entry) => entry.nav === nav);
+        assert(item, `the menu foot offers ${nav}`);
+        assert.equal(item.glyph, glyph, `the foot's ${nav} item draws ${glyph}`);
+        assert(item.drawn, `${glyph} is in the icon sprite`);
+      }
+      // Community lives in the foot, always visible: one click opens its card.
+      await this.click('#app-rail-foot [data-nav="community"]');
+      await this.until("document.getElementById('tab-studio')?.hidden === false && !window.MefiWorkspace.isActive() && document.getElementById('settings-community')?.open === true", "the menu's Community opens Settings › Community");
+      await this.capture("00e-community-from-menu");
+      await this.run("document.getElementById('settings-community').open = false;");
+    }
+
+    await this.run("window.MefiNav.go('studio');");
+    await this.until("document.getElementById('tab-studio')?.hidden === false && !window.MefiWorkspace.isActive() && !window.MefiIdle?.isActive?.()", "Settings opens for the menu checks");
+    await this.run("window.scrollTo(0, 0);");
+    const settings = await this.run(`${PAGE_PROBE}
+      const { shown } = window.__harnessProbe;
+      const find = document.getElementById('settings-find');
+      const groups = [...document.querySelectorAll('#settings-nav [role="group"]')].map((group) => ({
+        name: (group.getAttribute('aria-label') || (group.getAttribute('aria-labelledby') || '').split(' ').map((id) => document.getElementById(id)?.textContent || '').join(' ')).trim().toLowerCase(),
+        jumps: [...group.querySelectorAll('[data-settings-jump]')].map((button) => button.dataset.settingsJump),
+      }));
+      const blocks = {};
+      for (const id of ['settings-setup', 'settings-assistant', 'settings-routing', 'settings-workers', 'settings-jev', 'settings-studio', 'settings-community', 'settings-updates', 'settings-diagnostics', 'settings-integrations', 'settings-log']) {
+        blocks[id] = document.getElementById(id)?.closest('[data-settings-group]')?.dataset.settingsGroup ?? null;
+      }
+      const studio = document.getElementById('settings-studio');
+      const holds = (id) => Boolean(studio && document.getElementById(id) && studio.contains(document.getElementById(id)));
+      // Full, Calm and Off: a select's options, or the choices of the radio group #motion-toggle names.
+      const motion = document.getElementById('motion-toggle');
+      const choices = !motion ? '' : motion.tagName === 'SELECT' ? [...motion.options].map((option) => option.textContent).join(' ') : (motion.closest('[role="radiogroup"], fieldset') || motion).textContent;
+      const diagnostics = document.getElementById('settings-diagnostics');
+      const title = document.getElementById('page-title');
+      return {
+        find: find ? { type: find.type, placeholder: find.placeholder, shown: shown(find), status: Boolean(document.getElementById('settings-find-status')) } : null,
+        groups, blocks,
+        studio: {
+          holds: Object.fromEntries(['workspace-person-name', 'workspace-agent-name', 'workspace-accent', 'motion-toggle', 'idle-home'].map((id) => [id, holds(id)])),
+          companionMotion: !document.getElementById('workspace-motion') || holds('workspace-motion'),
+          voidThemes: Boolean(studio?.querySelector('#workspace-accent optgroup[label="Void collection · Discord members"]')),
+          choices,
+        },
+        probe: Boolean(diagnostics && ['speed-model', 'speed-go'].every((id) => diagnostics.contains(document.getElementById(id)))),
+        title: title ? title.textContent.trim() : null,
+      };`);
+    report.settingsMenu = settings;
+    assert(settings.find && settings.find.type === "search" && settings.find.placeholder.startsWith("Find a setting") && settings.find.shown && settings.find.status, "Settings opens with a Find a setting… field");
+    assert.deepEqual(settings.groups.map((group) => group.name).sort(), ["connections", "personal", "system"], "Settings groups its list as Connections, Personal and System");
+    const cards = {
+      connections: ["settings-setup", "settings-assistant", "settings-routing", "settings-workers", "settings-jev"],
+      personal: ["settings-studio", "settings-community"],
+      system: ["settings-updates", "settings-diagnostics", "settings-integrations", "settings-log"],
+    };
+    for (const [group, ids] of Object.entries(cards)) {
+      const jumps = settings.groups.find((entry) => entry.name === group)?.jumps ?? [];
+      for (const id of ids) {
+        assert(jumps.includes(id), `Settings' ${group} list jumps to #${id}`);
+        assert.equal(settings.blocks[id], group, `#${id} sits in the ${group} block`);
+      }
+    }
+    for (const [id, held] of Object.entries(settings.studio.holds)) assert(held, `Your Studio holds #${id}`);
+    assert(settings.studio.companionMotion, "companion motion left the project panel with the rest of Make yourself at home");
+    assert(settings.studio.voidThemes, "Your Studio's theme picker keeps its Void collection group");
+    assert(["Full", "Calm", "Off"].every((choice) => settings.studio.choices.includes(choice)), "Your Studio's motion control offers Full, Calm and Off");
+    assert(settings.probe, "the speed probe lives in Diagnostics under its old ids");
+    assert.equal(settings.title, "Settings", "the page header names Settings");
+
+    // A deep link opens one card, in view.
+    await this.run("window.MefiNav.go('workspace');");
+    await this.until("window.MefiWorkspace?.isActive?.()", "the workspace opens before the deep link");
+    await this.run("window.MefiNav.go('studio', { section: 'settings-updates' });");
+    await this.until("(() => { const card = document.getElementById('settings-updates'); if (!card || document.getElementById('tab-studio').hidden || window.MefiWorkspace.isActive()) return false; const box = card.getBoundingClientRect(); return (card.tagName !== 'DETAILS' || card.open) && box.top >= -2 && box.top <= innerHeight - 40; })()", "MefiNav.go('studio', {section: 'settings-updates'}) opens Settings › Updates in view");
+    await this.capture("00f-settings-updates-deep-link");
+    await this.run("for (const card of document.querySelectorAll('#tab-studio details.settings-optional')) card.open = false; window.scrollTo(0, 0);");
+
+    // Find a setting narrows the list, Enter opens the first match, Esc clears it.
+    const jumps = "[...document.querySelectorAll('#settings-nav [data-settings-jump]')].filter((button) => { const box = button.getBoundingClientRect(); return box.width > 0 && box.height > 0; }).map((button) => button.dataset.settingsJump)";
+    const every = await this.run(`return ${jumps};`);
+    await this.run("const input = document.getElementById('settings-find'); input.focus(); input.value = 'updates'; input.dispatchEvent(new Event('input', { bubbles: true }));");
+    await this.until(`(() => { const found = ${jumps}; return found.includes('settings-updates') && found.length < ${every.length} && document.getElementById('settings-find-status').textContent.trim() !== ''; })()`, "Find a setting narrows the list and says what it found");
+    const matches = await this.run(`return ${jumps};`);
+    await this.capture("00g-settings-find");
+    this.webContents.sendInputEvent({ type: "keyDown", keyCode: "Enter" });
+    this.webContents.sendInputEvent({ type: "keyUp", keyCode: "Enter" });
+    await this.until(`(() => { const card = document.getElementById(${JSON.stringify(matches[0])}); return Boolean(card) && (card.tagName !== 'DETAILS' || card.open); })()`, "Enter in Find a setting opens the first match");
+    await this.run("document.getElementById('settings-find').focus();");
+    this.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+    this.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+    await this.until(`document.getElementById('settings-find').value === '' && ${jumps}.length === ${every.length}`, "Escape clears Find a setting and brings every section back");
+    await this.run("for (const card of document.querySelectorAll('#tab-studio details.settings-optional')) card.open = false; window.scrollTo(0, 0);");
+
+    // The page header's way back: shown only when Settings came from Command.
+    await this.run("window.MefiNav.go('command');");
+    await this.until("window.MefiIdle?.isActive?.()", "Command opens before the way-back check");
+    if (menu.shell) await this.click("#app-rail .app-rail-head[data-section='settings']");
+    else await this.openFromNav("studio");
+    await this.until("document.getElementById('tab-studio')?.hidden === false && !window.MefiIdle.isActive()", "the menu's Settings opens Settings from Command");
+    await this.run("window.scrollTo(0, 0);");
+    const header = await this.run(`${PAGE_PROBE}
+      const { shown, hits } = window.__harnessProbe;
+      const title = document.getElementById('page-title'), back = document.getElementById('page-return');
+      return { title: title ? title.textContent.trim() : null, back: back ? { hidden: back.hidden, shown: shown(back), hit: hits(back), nav: back.dataset.nav ?? null, text: back.textContent.trim() } : null };`);
+    report.pageReturn = header;
+    assert.equal(header.title, "Settings", "the page header names the page it shows");
+    assert(header.back && !header.back.hidden && header.back.shown && header.back.hit, "Settings opened from Command offers a visible way back");
+    assert.equal(header.back.nav, "command", "the way back goes to Command view");
+    assert(header.back.text.includes("Command view"), "the way back reads ← Command view");
+    await this.capture("00h-settings-way-back");
+    await this.click("#page-return");
+    // Command is a layer over the page, so the tab underneath may stay unhidden.
+    await this.until("window.MefiIdle?.isActive?.() && window.MefiNav.current?.() === 'command'", "← Command view returns to Command view");
+    await this.run("window.MefiNav.go('workspace');");
+    await this.until("window.MefiWorkspace?.isActive?.()", "the workspace opens before Settings");
+    await this.run("window.MefiNav.go('studio');");
+    await this.until("document.getElementById('tab-studio')?.hidden === false && !window.MefiWorkspace.isActive()", "Settings opens from the workspace");
+    assert.equal(await this.run(`${PAGE_PROBE} const back = document.getElementById('page-return'); return Boolean(back) && !window.__harnessProbe.shown(back);`), true, "Settings opened from the workspace offers no way back to Command");
+
+    // Ctrl+, opens Settings from anywhere; sent the way the capture tour sends Ctrl K.
+    await this.run("window.MefiNav.go('workspace');");
+    await this.until("window.MefiWorkspace?.isActive?.() && !window.MefiIdle?.isActive?.()", "the workspace opens before Ctrl+,");
+    await this.run("document.activeElement?.blur?.(); window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', code: 'Comma', ctrlKey: true, bubbles: true, cancelable: true }));");
+    await this.until("document.getElementById('tab-studio')?.hidden === false && !window.MefiWorkspace.isActive()", "Ctrl+, opens Settings");
+
+    // Search, from the menu's foot: named Search Studio, with section names as kinds.
+    if (menu.shell) await this.click('#app-rail-foot [data-nav="palette"]');
+    else await this.run("window.MefiNav.go('palette');");
+    await this.until("document.getElementById('palette-overlay')?.hidden === false", "Search opens");
+    await this.until("!document.getElementById('palette-status').textContent.includes('Loading project tasks')", "Search finishes loading project tasks");
+    assert.equal(await this.run("return document.querySelector('#palette-overlay [role=dialog]')?.getAttribute('aria-label') ?? null;"), "Search Studio", "the palette is called Search Studio");
+    for (const [query, label, kind] of [["node tree", "Command view", "Live"], ["api key", "Settings › Providers", "Settings"], ["color", "Style & sound", "Settings"]]) {
+      await this.run(`const input = document.getElementById('palette-input'); input.value = ${JSON.stringify(query)}; input.dispatchEvent(new Event('input', { bubbles: true }));`);
+      const rows = await this.run("return [...document.querySelectorAll('#palette-list [role=option]')].map((row) => ({ label: row.querySelector('.label')?.textContent.trim() ?? '', kind: row.querySelector('.kind')?.textContent.trim() ?? '' }));");
+      const row = rows.find((entry) => entry.label === label);
+      assert(row, `Search finds ${label} for "${query}"`);
+      assert.equal(row.kind.toLowerCase(), kind.toLowerCase(), `Search names ${label}'s section, ${kind}, as its kind`);
+    }
+    await this.capture("00i-search-sections");
+    await this.click("#palette-close");
+    await this.until("document.getElementById('palette-overlay').hidden", "Search closes");
+    this.check("The menu has Home, Work, Live, Models and Settings over a foot of Search, Start here, Shortcuts and Community; Settings groups, finds and deep-links its sections and holds Your Studio; ← Command view, Ctrl+, and Search's section kinds work; the window keeps a 600×560 minimum");
+  }
 }
 global.__MefiVerifiedWindow = VerifiedWindow;
 require("./main.cjs");
-setTimeout(() => finish(new Error("Workspace UI verification exceeded 70 seconds")), 70000).unref();
+// The menu regroup's five-size layout sweep roughly doubled the tour's length.
+setTimeout(() => finish(new Error("Workspace UI verification exceeded 180 seconds")), 180000).unref();
 '''
 
 
-def verify(source, output, routing_only=False):
+def verify(source, output, routing_only=False, menus_only=False):
     electron = ROOT / "node_modules/electron/dist/electron.exe"
     if not electron.is_file():
         raise RuntimeError("Install the pinned Electron dependency with npm ci before verifying Workspace.")
@@ -779,7 +1315,7 @@ def verify(source, output, routing_only=False):
         package = json.loads((source / "package.json").read_text(encoding="utf-8-sig"))
         package["main"] = "workspace-verify-entry.cjs"
         write_json(app_root / "package.json", package)
-        config = {"profile": str(profile), "appRoot": str(app_root), "output": str(output), "alpha": alpha_info, "beta": beta_info, "routingOnly": routing_only}
+        config = {"profile": str(profile), "appRoot": str(app_root), "output": str(output), "alpha": alpha_info, "beta": beta_info, "routingOnly": routing_only, "menusOnly": menus_only}
         (app_root / package["main"]).write_text(BOOTSTRAP.replace("__CONFIG__", json.dumps(config)), encoding="utf-8")
         main = app_root / "main.cjs"
         instrumented = main.read_text(encoding="utf-8")
@@ -805,7 +1341,7 @@ def verify(source, output, routing_only=False):
         with (output / "electron.log").open("w", encoding="utf-8") as log:
             process = subprocess.Popen([str(electron), ".", "--smoke"], cwd=app_root, env=env, stdout=log, stderr=log)
             try:
-                process.wait(timeout=80)
+                process.wait(timeout=200)
             except subprocess.TimeoutExpired:
                 subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True, timeout=10)
                 process.wait(timeout=10)
@@ -822,6 +1358,7 @@ if __name__ == "__main__":
     parser.add_argument("--source", type=Path, default=ROOT)
     parser.add_argument("--output", type=Path, default=ROOT / "tools/logs/workspace-ui")
     parser.add_argument("--routing-only", action="store_true", help="Verify model routing settings and narrow layout without the broader task workflow")
+    parser.add_argument("--menus-only", action="store_true", help="Check the regrouped menus, Settings and header, then sweep Workspace, Settings, Style & sound and Command view at 1440x900, 1280x720 pinned, 1024x640, 900x700 and 600x760, without the broader task workflow")
     args = parser.parse_args()
-    report = verify(args.source.resolve(), args.output.resolve(), routing_only=args.routing_only)
+    report = verify(args.source.resolve(), args.output.resolve(), routing_only=args.routing_only, menus_only=args.menus_only)
     print(f"Workspace UI verified: {len(report['checks'])} checks, {len(report['screenshots'])} screenshots in {args.output.resolve()}")
