@@ -3782,44 +3782,61 @@
     ctx.restore();
   }
 
-  // The done-hold badge: a finished task's "!" waiting to be read. It beats
-  // (1.6 s, up to a tenth bigger) and sends a faint echo out on every beat,
-  // and every 4.8 s it wiggles for half a second, so unread work catches the
-  // eye without shouting. Its label exclusion is one fixed box that never
-  // scales or moves, so labels never dance with it. Reduced motion: a still
-  // badge. Theme wells and ink (the legacy greens without the node styles).
+  // The done-hold badge: a finished task's "!" waiting to be read. It pops
+  // in with a little overshoot as the hold starts, beats (1.6 s: a quick
+  // swell to 1.16 and back) with a faint echo leaving it at every beat's
+  // peak, and every 4.8 s it wiggles for half a second, so unread work
+  // catches the eye without shouting; once read it shrinks away. Its label
+  // exclusion is one fixed box that never scales or moves, so labels never
+  // dance with it. `gain` dims it with its node (search, Follow). Reduced
+  // motion: a still badge. Theme wells and ink (the legacy greens without
+  // the node styles); on a light theme its green marks take the darker ink.
   const DONE_BADGE_WELL = [23, 48, 37], DONE_BADGE_INK = [167, 229, 192];
-  function drawDoneBadge(ctx, node, p, radius, time, still) {
+  const DONE_BADGE_POP_MS = 320, DONE_BADGE_OUT_MS = 200;
+  function drawDoneBadge(ctx, node, p, radius, time, still, hold = null, now = NaN, gain = 1) {
     const bx = p.x + radius + 6, by = p.y - radius - 5;
     const excl = node._doneExcl ??= { x: 0, y: 0, r: 9 };
     excl.x = bx; excl.y = by; node._excl = excl;
+    // How far it has come in (back-out, peaking near 1.1) or gone out.
+    let grow = 1;
+    if (hold && Number.isFinite(now)) {
+      if (hold.ackedAt) grow = still ? 0 : (1 - Math.min(1, Math.max(0, (now - hold.ackedAt) / DONE_BADGE_OUT_MS))) ** 2;
+      else if (!still) {
+        const u = Math.min(1, Math.max(0, (now - hold.since) / DONE_BADGE_POP_MS));
+        grow = u >= 1 ? 1 : 1 + 2.70158 * (u - 1) ** 3 + 1.70158 * (u - 1) ** 2;
+      }
+    }
+    if (grow <= 0.02) return;
     const theme = state.nodeTheme ?? null;
     const done = theme?.done ?? NODE_RGB.done;
+    const mark = theme?.light ? theme.doneInk : done;
     const offset = node._m?.seed ?? 0;
     const beatAt = still ? 0 : (time / 1600 + offset) % 1;
-    const beat = still ? 0 : Math.max(0, Math.sin(Math.PI * 2 * beatAt));
+    const beat = !still && beatAt < 0.4 ? Math.sin(Math.PI * beatAt / 0.4) : 0;
     const wiggleAt = still ? 1 : ((time + offset * 4800) % 4800) / 520;
     const angle = wiggleAt < 1 ? 0.2 * Math.sin(3 * Math.PI * wiggleAt) * (1 - wiggleAt) : 0;
-    const scale = 1 + 0.1 * beat;
+    const scale = (1 + 0.16 * beat) * grow;
     ctx.save();
-    const echo = !still && beatAt < 0.6 ? beatAt / 0.6 : -1;
+    ctx.globalAlpha *= gain;
+    // The echoes wait for the pop: from each beat's peak (.2) over 60% of it.
+    const echo = !still && grow === 1 && beatAt >= 0.2 && beatAt < 0.8 ? (beatAt - 0.2) / 0.6 : -1;
     if (echo >= 0) {
       // The node pulses green on the same beat: a ring off its rim.
       ctx.beginPath(); ctx.arc(p.x, p.y, radius + 2 + 4 * echo, 0, Math.PI * 2);
-      ctx.strokeStyle = rgba(done, Math.round(0.4 * (1 - echo) * 32) / 32); ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.strokeStyle = rgba(mark, Math.round(0.4 * (1 - echo) * 32) / 32); ctx.lineWidth = 1.2; ctx.stroke();
     }
     ctx.translate(bx, by);
     if (echo >= 0) {
-      // The echo leaves the badge's edge as the beat starts: 3 px out,
+      // The echo leaves the badge's edge at the beat's peak: 3 px out,
       // fading from .45 to nothing.
       const u = echo;
-      ctx.beginPath(); ctx.roundRect(-6 - 3 * u, -6 - 3 * u, 12 + 6 * u, 12 + 6 * u, 3 + 2 * u);
-      ctx.strokeStyle = rgba(done, Math.round(0.45 * (1 - u) * 32) / 32); ctx.lineWidth = 1; ctx.stroke();
+      ctx.beginPath(); ctx.roundRect(-7 - 3 * u, -7 - 3 * u, 14 + 6 * u, 14 + 6 * u, 3.5 + 1.5 * u);
+      ctx.strokeStyle = rgba(mark, Math.round(0.45 * (1 - u) * 32) / 32); ctx.lineWidth = 1; ctx.stroke();
     }
     ctx.rotate(angle); ctx.scale(scale, scale);
     ctx.beginPath(); ctx.roundRect(-6, -6, 12, 12, 3);
     ctx.fillStyle = rgba(theme?.doneWell ?? DONE_BADGE_WELL, 1); ctx.fill();
-    ctx.strokeStyle = rgba(done, 0.8); ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = rgba(mark, 0.8); ctx.lineWidth = 1; ctx.stroke();
     ctx.fillStyle = rgba(theme?.doneInk ?? DONE_BADGE_INK, 1); ctx.font = '600 9px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("!", 0, 0);
     ctx.restore();
   }
@@ -3828,9 +3845,9 @@
   // A slim rounded bar under the node on the theme's track. It eases toward
   // each new fraction (the motion record's progress), fades in and out with
   // the node's work or selection, and while the node works a light glint
-  // runs along the part that is done.
+  // runs along the part that is done. `gain` dims it with its node.
   const METER_TRACK = [48, 57, 71];
-  function drawProgressMeter(ctx, node, p, radius, tint, active, selected, time, still) {
+  function drawProgressMeter(ctx, node, p, radius, tint, active, selected, time, still, gain = 1) {
     if (typeof node.progress !== "number" || !Number.isFinite(node.progress)) return;
     const motion = node._m ?? null;
     const shown = motion && !still ? Math.max(motion.work, motion.sel) : active || selected ? 1 : 0;
@@ -3839,7 +3856,7 @@
     const width = Math.max(14, Math.min(22, radius * 1.6)), x = p.x - width / 2, y = p.y + radius + 5;
     const theme = state.nodeTheme ?? null;
     ctx.save();
-    ctx.globalAlpha *= (node._fade ?? 1) * shown;
+    ctx.globalAlpha *= (node._fade ?? 1) * shown * gain;
     ctx.beginPath(); ctx.roundRect(x, y, width, 2, 1);
     ctx.fillStyle = rgba(theme?.track ?? METER_TRACK, 0.9); ctx.fill();
     const filled = width * fraction;
@@ -7669,21 +7686,28 @@
       drawFiledWork(ctx, node, p, radius, runningIds, time, still);
       drawAgentDress(ctx, node, p, radius, tint, time, still);
       drawHubDress(ctx, node, p, radius, tint, time, still);
+      // The node's own marks below dim with it (search, Follow), to the
+      // surface's floor.
+      const dim = Math.max(0.35, factor);
       // Work-left meter (drawProgressMeter): a known worker fraction, eased.
-      drawProgressMeter(ctx, node, p, radius, tint, active, Boolean(selected), time, still);
+      drawProgressMeter(ctx, node, p, radius, tint, active, Boolean(selected), time, still, dim);
       drawNodeAudio(ctx, node, p, radius, tint, node._audioResponse, audioNodes ? visualMusic : null, time / 1.8);
       // Collision boost: a thin amber rim, same restraint as the music beat —
       // the clash color marks the session while the fight is still live. It
       // pulses (0.9 s, in the node's own phase); at rest it holds its middle.
       if (colliding && (active || selected)) {
         const beat = still ? 0.5 : 0.5 + 0.5 * Math.sin(Math.PI * 2 * (time / 900 + (motion?.seed ?? 0)));
+        ctx.save();
+        ctx.globalAlpha *= dim;
         traceNodeSurface(ctx, visual.shape, p.x, p.y, radius + 2 + beat);
         ctx.strokeStyle = still ? rgba(NODE_RGB.collision, 0.55) : rgba(NODE_RGB.collision, Math.round((0.4 + 0.3 * beat) * 32) / 32);
         ctx.lineWidth = 1 + 0.4 * beat;
         ctx.stroke();
+        ctx.restore();
       }
       node._excl = null;
-      if (hold && !hold.ackedAt) drawDoneBadge(ctx, node, p, radius, time, still);
+      // The badge pops in as the hold starts and shrinks away once read.
+      if (hold && (!hold.ackedAt || !still && growNow - hold.ackedAt < DONE_BADGE_OUT_MS)) drawDoneBadge(ctx, node, p, radius, time, still, hold, growNow, dim);
     }
     } finally { profiler?.end(nodesSpan); }
 
@@ -7951,9 +7975,10 @@
     for (const { node, p } of projected) {
       if (node.dying || node._absorbed) continue;
       if ((node._fade ?? 1) <= 0.02) { ghosts.push({ node, cx: p.x, cy: p.y, reach: (node._pr ?? 4) + 5 }); continue; }
-      // A style that draws past the body (node._styleReach) blocks as far.
+      // A style that draws past the body (node._styleReach) blocks labels
+      // and callout leaders as far.
       const radius = Math.max(5, node._orbitTrail?.radius ?? node._pr ?? 4, node._styleReach ?? 0) + 3;
-      const rect = { node, x: p.x - radius, y: p.y - radius, w: radius * 2, h: radius * 2, cx: p.x, cy: p.y, reach: (node._pr ?? 4) + 5 };
+      const rect = { node, x: p.x - radius, y: p.y - radius, w: radius * 2, h: radius * 2, cx: p.x, cy: p.y, reach: Math.max(node._pr ?? 4, node._styleReach ?? 0) + 5 };
       rects.push(rect);
       const left = Math.floor(rect.x / cellSize), right = Math.floor((rect.x + rect.w) / cellSize);
       const top = Math.floor(rect.y / cellSize), bottom = Math.floor((rect.y + rect.h) / cellSize);

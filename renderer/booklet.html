@@ -16010,6 +16010,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const RING_COMET = Object.freeze([0, 0.45, 0.9, 1.3]);
   const RING_COMET_ALPHA = Object.freeze([0.24, 0.52, 0.9]);
   const RING_COMET_WIDTH = Object.freeze([1, 1.15, 1.35]);
+  const RING_HEAD = 0.9, RING_HEAD_WIDTH = 1.3; // the plain arc, and the head segment's alpha
 
   // The state colours as marks on the theme: the done green and the amber
   // themselves on a dark theme; on a light one they sink toward the
@@ -16044,6 +16045,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return record.ink;
   }
 
+  // Reduced motion: the caller says so, or the node's record was stepped
+  // under it. A bare caller without a record is still only when it says so
+  // (the still pose then only fills in its levels; its phases run on o.time).
+  const overlayStill = (o, m) => o.still === true || o.motion != null && m.still === true;
+
   // How far a status change has come in, 0 → 1 over STATUS_POP_MS (1 when
   // still, without a record, or for the status a node was first seen with).
   function overlayPop(o, m, still) {
@@ -16077,67 +16083,86 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   // The agent status ring in the node's own hue. Running: a comet sweeps at
-  // the legacy speed (time/380), brightening toward a bright head bead, its
-  // strength eased by the work level, so a run fades in and out instead of
-  // blinking. Queued: a dashed ring whose dashes march. Error: an amber ring
-  // that pulses (1.3 s) with an "!" badge. Done: a tick badge. A new status
-  // pops its badge in, fades its ring in, and a finish or failure sends one
-  // soft ring out. Reduced motion: every mark at rest, full strength.
+  // the legacy speed (time/380) in the node's own phase, brightening toward
+  // a bright head bead, its strength eased by the work level, so a run fades
+  // in and out instead of blinking. Queued: a dashed ring whose dashes
+  // march. Error: an amber ring that pulses (1.3 s) with an "!" badge. Done:
+  // a tick badge. A new status pops its badge in, fades its ring in, and a
+  // finish or failure sends one soft ring out. Every eased level is a
+  // globalAlpha gain over literal (or 32nds) colour alphas. Reduced motion:
+  // every mark at rest, full strength.
   function overlayRing(ctx, p, radius, tint, o) {
     const m = motionOf(o);
-    const still = o.still === true || m.still === true;
+    const still = overlayStill(o, m);
     const status = o.status ?? null;
     const running = status === "running" || o.builder === true;
     const ring = Number.isFinite(o.ring) ? o.ring : radius + 3.5;
     const detail = Number.isFinite(o.detail) ? o.detail : 3;
     const time = Number.isFinite(o.time) ? o.time : 0;
     const currentTheme = o.theme ?? INK_DEFAULTS;
+    // Each node's marks run in its own phase, so a crew never moves in step.
+    const offset = o.motion ? m.seed || 0 : 0;
     // The arc's strength follows the eased work level; the flags decide it
     // when there is no record or nothing may ease.
     const level = o.motion && !still ? m.work : running ? 1 : 0;
     const pop = overlayPop(o, m, still);
     ctx.save();
+    const base = ctx.globalAlpha;
     if (level > 0.01) {
       // A comet 1.3π long sweeping at the legacy speed: three segments that
-      // brighten toward a bright head bead (one plain arc on the smallest
-      // tier, where the extras would only smudge).
-      const phase = still ? 0 : time / 380;
-      const strength = qa(level), extra = detail >= 1 ? qa(level * tierIn(radius, 1)) : 0;
+      // brighten toward a bright head bead. On the smallest tier one plain
+      // arc (the extras would only smudge); the taper and the bead come in
+      // with the tier's fade-in, so a zoom never snaps them.
+      const phase = still ? 0 : time / 380 + offset * TAU;
       const hue = overlayTintInk(tint, currentTheme);
-      if (extra > 0.02) {
+      ctx.globalAlpha = base * level;
+      if (detail >= 1) {
+        const taper = tierIn(radius, 1);
         for (let segment = 0; segment < 3; segment += 1) {
           ctx.beginPath(); ctx.arc(p.x, p.y, ring, phase + RING_COMET[segment] * Math.PI, phase + RING_COMET[segment + 1] * Math.PI);
-          ctx.strokeStyle = rgba(hue, RING_COMET_ALPHA[segment] * strength); ctx.lineWidth = RING_COMET_WIDTH[segment]; ctx.stroke();
+          // Its alpha from the plain arc's to its own (in 32nds between).
+          const alpha = RING_COMET_ALPHA[segment];
+          ctx.strokeStyle = rgba(hue, alpha === RING_HEAD || taper >= 1 ? alpha : taper <= 0 ? RING_HEAD : qa(RING_HEAD + (alpha - RING_HEAD) * taper));
+          ctx.lineWidth = RING_HEAD_WIDTH + (RING_COMET_WIDTH[segment] - RING_HEAD_WIDTH) * taper; ctx.stroke();
         }
-        const head = phase + Math.PI * 1.3;
-        ctx.beginPath(); ctx.arc(p.x + Math.cos(head) * ring, p.y + Math.sin(head) * ring, 1.45, 0, TAU);
-        ctx.fillStyle = rgba(inkOf(tint, currentTheme).hot, 0.95 * extra); ctx.fill();
+        const extra = level * taper;
+        if (extra > 0.02) {
+          const head = phase + Math.PI * 1.3;
+          ctx.globalAlpha = base * extra;
+          ctx.beginPath(); ctx.arc(p.x + Math.cos(head) * ring, p.y + Math.sin(head) * ring, 1.45, 0, TAU);
+          ctx.fillStyle = rgba(inkOf(tint, currentTheme).hot, 0.95); ctx.fill();
+        }
       } else {
         ctx.beginPath(); ctx.arc(p.x, p.y, ring, phase, phase + Math.PI * 1.3);
-        ctx.strokeStyle = rgba(hue, 0.9 * strength); ctx.lineWidth = 1.3; ctx.stroke();
+        ctx.strokeStyle = rgba(hue, RING_HEAD); ctx.lineWidth = RING_HEAD_WIDTH; ctx.stroke();
       }
+      ctx.globalAlpha = base;
     }
     if (status === "queued") {
-      if (ctx.setLineDash) { ctx.setLineDash(QUEUED_DASH); ctx.lineDashOffset = still ? 0 : -((time / 120) % 5); }
+      if (ctx.setLineDash) { ctx.setLineDash(QUEUED_DASH); ctx.lineDashOffset = still ? 0 : -((time / 120 + offset * 5) % 5); }
+      ctx.globalAlpha = base * pop;
       ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, TAU);
-      ctx.strokeStyle = rgba(overlayTintInk(tint, currentTheme), 0.5 * qa(pop)); ctx.lineWidth = 1; ctx.stroke();
+      ctx.strokeStyle = rgba(overlayTintInk(tint, currentTheme), 0.5); ctx.lineWidth = 1; ctx.stroke();
       if (ctx.setLineDash) { ctx.setLineDash(OVERLAY_NO_DASH); ctx.lineDashOffset = 0; }
     } else if (status === "error" || status === "done") {
       const done = status === "done";
       const hue = overlayStateInk(currentTheme, done);
       if (!done) {
-        // At rest the pulse sits near the legacy .85.
-        const beat = swell(m, 1.3, 0.71);
+        // At rest the pulse sits near the legacy .85 (a bare caller pulses on o.time).
+        const beat = still ? 0.71 : o.motion ? swell(m, 1.3, 0.71) : 0.5 + 0.5 * Math.sin(TAU * time / 1300);
+        ctx.globalAlpha = base * pop;
         ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, TAU);
-        ctx.strokeStyle = rgba(hue, qa(0.6 + 0.35 * beat) * qa(pop)); ctx.lineWidth = 1.4; ctx.stroke();
+        ctx.strokeStyle = rgba(hue, qa(0.6 + 0.35 * beat)); ctx.lineWidth = 1.4; ctx.stroke();
       }
       // The news: one soft ring out from the status ring as the status turns.
       const since = o.motion && !still ? time - m.statusAt : Infinity;
       if (since >= 0 && since < STATUS_FLASH_MS && detail >= 1) {
         const u = since / STATUS_FLASH_MS;
+        ctx.globalAlpha = base * (1 - u);
         ctx.beginPath(); ctx.arc(p.x, p.y, ring + 7 * easeOut(u), 0, TAU);
-        ctx.strokeStyle = rgba(hue, qa(0.55 * (1 - u))); ctx.lineWidth = 1.2; ctx.stroke();
+        ctx.strokeStyle = rgba(hue, 0.55); ctx.lineWidth = 1.2; ctx.stroke();
       }
+      ctx.globalAlpha = base;
       overlayBadge(ctx, p, radius, pop, currentTheme, done);
     }
     ctx.restore();
@@ -16148,14 +16173,16 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   // out, the faint dashed ring the crew rests on, drifting slowly round.
   function overlayHubDress(ctx, p, radius, tint, o) {
     const m = motionOf(o);
-    const still = o.still === true || m.still === true;
-    const breathe = still ? 0.5 : swell(m, 6);
+    const still = overlayStill(o, m);
+    // Without a record, the caller's own breath and clock.
+    const breathe = still ? 0.5 : o.motion ? swell(m, 6) : Number.isFinite(o.breathe) ? o.breathe : 0.5;
+    const clock = o.motion ? m.clock : (Number.isFinite(o.time) ? o.time : 0) / 1000;
     const hue = overlayTintInk(tint, o.theme ?? INK_DEFAULTS);
     ctx.save();
     ctx.beginPath(); ctx.arc(p.x, p.y, radius + 5 + breathe * 2.5, 0, TAU);
     ctx.strokeStyle = rgba(hue, qa(0.18 + breathe * 0.14)); ctx.lineWidth = 1 + breathe * 0.3; ctx.stroke();
     if (o.crew === true) {
-      if (ctx.setLineDash) { ctx.setLineDash(CREW_DASH); ctx.lineDashOffset = still ? 0 : -((m.clock * 2.2) % 7); }
+      if (ctx.setLineDash) { ctx.setLineDash(CREW_DASH); ctx.lineDashOffset = still ? 0 : -((clock * 2.2) % 7); }
       ctx.beginPath(); ctx.arc(p.x, p.y, radius * 3.1, 0, TAU);
       ctx.strokeStyle = rgba(hue, 0.1); ctx.lineWidth = 0.8; ctx.stroke();
       if (ctx.setLineDash) { ctx.setLineDash(OVERLAY_NO_DASH); ctx.lineDashOffset = 0; }
@@ -16167,15 +16194,18 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   // of three segments in the theme's orbit hue (its second hue, or a blue
   // that reads on its background), running on the record's integrated
   // phase so a node that starts or stops working never jumps. Four arcs,
-  // three segments, at o.ring (r + 9).
+  // three segments, at o.ring (r + 9). A Running orbit comes in with the
+  // eased work level (from .3, so it never hides); a Next one waits at .65.
   function overlayOrbit(ctx, p, radius, _tint, o) {
     const m = motionOf(o);
-    const still = o.still === true || m.still === true;
+    const still = overlayStill(o, m);
     const legacy = Number.isFinite(o.phase) ? o.phase : Math.PI / 3;
     const phase = still ? legacy : o.motion && Number.isFinite(m.orbit) ? m.orbit : legacy;
     const ring = Number.isFinite(o.ring) ? o.ring : radius + 9;
     const hue = (o.theme ?? INK_DEFAULTS).orbit;
     ctx.save();
+    if (o.running !== true) ctx.globalAlpha *= 0.65;
+    else if (!still && o.motion) ctx.globalAlpha *= 0.3 + 0.7 * clamp01(m.work);
     ctx.lineCap = "round";
     ctx.strokeStyle = rgba(hue, 0.22); ctx.lineWidth = 0.8;
     ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, TAU); ctx.stroke();
@@ -16187,24 +16217,25 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   // A node growing in (t01 0 → 1 over its grow): a bright ring leaves its rim
-  // like a shock front, a full radius out, thinning and fading as it goes,
-  // with a fainter echo in the node's hue a beat behind. The node itself
-  // overshoots as it grows, so the rings stay inside 2.25 of its radius.
-  // Reduced motion: the node simply appears.
+  // like a shock front, a full radius out on an ease-out, thinning and
+  // fading on the clock (not on its eased position, so it stays in sight
+  // for the whole grow), with a fainter echo in the node's hue a beat
+  // behind. The node itself overshoots as it grows, so the rings stay inside
+  // 2.25 of its radius. Reduced motion: the node simply appears.
   function overlayArrival(ctx, p, radius, tint, t01, o) {
     const m = motionOf(o);
-    if (o.still === true || m.still === true || !(t01 < 1)) return true;
+    if (overlayStill(o, m) || !(t01 < 1)) return true;
     const base = Number.isFinite(o.alpha) ? o.alpha : 1;
     const e = easeOut(t01);
     ctx.save();
     ctx.strokeStyle = rgba(inkOf(tint, o.theme ?? INK_DEFAULTS).hot, 1);
-    ctx.globalAlpha = base * 0.7 * (1 - e); ctx.lineWidth = 1.6 - 0.8 * e;
+    ctx.globalAlpha = base * 0.7 * (1 - t01) ** 1.4; ctx.lineWidth = 1.6 - 0.8 * t01;
     ctx.beginPath(); ctx.arc(p.x, p.y, radius * (1 + e), 0, TAU); ctx.stroke();
     const echo = (t01 - 0.22) / 0.78;
     if (echo > 0 && (Number.isFinite(o.detail) ? o.detail : 3) >= 1) {
       const e2 = easeOut(echo);
       ctx.strokeStyle = rgba(tint, 1);
-      ctx.globalAlpha = base * 0.4 * (1 - e2); ctx.lineWidth = 1;
+      ctx.globalAlpha = base * 0.4 * (1 - echo) ** 1.4; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(p.x, p.y, radius * (1 + 0.6 * e2), 0, TAU); ctx.stroke();
     }
     ctx.restore();
@@ -22348,44 +22379,61 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     ctx.restore();
   }
 
-  // The done-hold badge: a finished task's "!" waiting to be read. It beats
-  // (1.6 s, up to a tenth bigger) and sends a faint echo out on every beat,
-  // and every 4.8 s it wiggles for half a second, so unread work catches the
-  // eye without shouting. Its label exclusion is one fixed box that never
-  // scales or moves, so labels never dance with it. Reduced motion: a still
-  // badge. Theme wells and ink (the legacy greens without the node styles).
+  // The done-hold badge: a finished task's "!" waiting to be read. It pops
+  // in with a little overshoot as the hold starts, beats (1.6 s: a quick
+  // swell to 1.16 and back) with a faint echo leaving it at every beat's
+  // peak, and every 4.8 s it wiggles for half a second, so unread work
+  // catches the eye without shouting; once read it shrinks away. Its label
+  // exclusion is one fixed box that never scales or moves, so labels never
+  // dance with it. `gain` dims it with its node (search, Follow). Reduced
+  // motion: a still badge. Theme wells and ink (the legacy greens without
+  // the node styles); on a light theme its green marks take the darker ink.
   const DONE_BADGE_WELL = [23, 48, 37], DONE_BADGE_INK = [167, 229, 192];
-  function drawDoneBadge(ctx, node, p, radius, time, still) {
+  const DONE_BADGE_POP_MS = 320, DONE_BADGE_OUT_MS = 200;
+  function drawDoneBadge(ctx, node, p, radius, time, still, hold = null, now = NaN, gain = 1) {
     const bx = p.x + radius + 6, by = p.y - radius - 5;
     const excl = node._doneExcl ??= { x: 0, y: 0, r: 9 };
     excl.x = bx; excl.y = by; node._excl = excl;
+    // How far it has come in (back-out, peaking near 1.1) or gone out.
+    let grow = 1;
+    if (hold && Number.isFinite(now)) {
+      if (hold.ackedAt) grow = still ? 0 : (1 - Math.min(1, Math.max(0, (now - hold.ackedAt) / DONE_BADGE_OUT_MS))) ** 2;
+      else if (!still) {
+        const u = Math.min(1, Math.max(0, (now - hold.since) / DONE_BADGE_POP_MS));
+        grow = u >= 1 ? 1 : 1 + 2.70158 * (u - 1) ** 3 + 1.70158 * (u - 1) ** 2;
+      }
+    }
+    if (grow <= 0.02) return;
     const theme = state.nodeTheme ?? null;
     const done = theme?.done ?? NODE_RGB.done;
+    const mark = theme?.light ? theme.doneInk : done;
     const offset = node._m?.seed ?? 0;
     const beatAt = still ? 0 : (time / 1600 + offset) % 1;
-    const beat = still ? 0 : Math.max(0, Math.sin(Math.PI * 2 * beatAt));
+    const beat = !still && beatAt < 0.4 ? Math.sin(Math.PI * beatAt / 0.4) : 0;
     const wiggleAt = still ? 1 : ((time + offset * 4800) % 4800) / 520;
     const angle = wiggleAt < 1 ? 0.2 * Math.sin(3 * Math.PI * wiggleAt) * (1 - wiggleAt) : 0;
-    const scale = 1 + 0.1 * beat;
+    const scale = (1 + 0.16 * beat) * grow;
     ctx.save();
-    const echo = !still && beatAt < 0.6 ? beatAt / 0.6 : -1;
+    ctx.globalAlpha *= gain;
+    // The echoes wait for the pop: from each beat's peak (.2) over 60% of it.
+    const echo = !still && grow === 1 && beatAt >= 0.2 && beatAt < 0.8 ? (beatAt - 0.2) / 0.6 : -1;
     if (echo >= 0) {
       // The node pulses green on the same beat: a ring off its rim.
       ctx.beginPath(); ctx.arc(p.x, p.y, radius + 2 + 4 * echo, 0, Math.PI * 2);
-      ctx.strokeStyle = rgba(done, Math.round(0.4 * (1 - echo) * 32) / 32); ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.strokeStyle = rgba(mark, Math.round(0.4 * (1 - echo) * 32) / 32); ctx.lineWidth = 1.2; ctx.stroke();
     }
     ctx.translate(bx, by);
     if (echo >= 0) {
-      // The echo leaves the badge's edge as the beat starts: 3 px out,
+      // The echo leaves the badge's edge at the beat's peak: 3 px out,
       // fading from .45 to nothing.
       const u = echo;
-      ctx.beginPath(); ctx.roundRect(-6 - 3 * u, -6 - 3 * u, 12 + 6 * u, 12 + 6 * u, 3 + 2 * u);
-      ctx.strokeStyle = rgba(done, Math.round(0.45 * (1 - u) * 32) / 32); ctx.lineWidth = 1; ctx.stroke();
+      ctx.beginPath(); ctx.roundRect(-7 - 3 * u, -7 - 3 * u, 14 + 6 * u, 14 + 6 * u, 3.5 + 1.5 * u);
+      ctx.strokeStyle = rgba(mark, Math.round(0.45 * (1 - u) * 32) / 32); ctx.lineWidth = 1; ctx.stroke();
     }
     ctx.rotate(angle); ctx.scale(scale, scale);
     ctx.beginPath(); ctx.roundRect(-6, -6, 12, 12, 3);
     ctx.fillStyle = rgba(theme?.doneWell ?? DONE_BADGE_WELL, 1); ctx.fill();
-    ctx.strokeStyle = rgba(done, 0.8); ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = rgba(mark, 0.8); ctx.lineWidth = 1; ctx.stroke();
     ctx.fillStyle = rgba(theme?.doneInk ?? DONE_BADGE_INK, 1); ctx.font = '600 9px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("!", 0, 0);
     ctx.restore();
   }
@@ -22394,9 +22442,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   // A slim rounded bar under the node on the theme's track. It eases toward
   // each new fraction (the motion record's progress), fades in and out with
   // the node's work or selection, and while the node works a light glint
-  // runs along the part that is done.
+  // runs along the part that is done. `gain` dims it with its node.
   const METER_TRACK = [48, 57, 71];
-  function drawProgressMeter(ctx, node, p, radius, tint, active, selected, time, still) {
+  function drawProgressMeter(ctx, node, p, radius, tint, active, selected, time, still, gain = 1) {
     if (typeof node.progress !== "number" || !Number.isFinite(node.progress)) return;
     const motion = node._m ?? null;
     const shown = motion && !still ? Math.max(motion.work, motion.sel) : active || selected ? 1 : 0;
@@ -22405,7 +22453,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const width = Math.max(14, Math.min(22, radius * 1.6)), x = p.x - width / 2, y = p.y + radius + 5;
     const theme = state.nodeTheme ?? null;
     ctx.save();
-    ctx.globalAlpha *= (node._fade ?? 1) * shown;
+    ctx.globalAlpha *= (node._fade ?? 1) * shown * gain;
     ctx.beginPath(); ctx.roundRect(x, y, width, 2, 1);
     ctx.fillStyle = rgba(theme?.track ?? METER_TRACK, 0.9); ctx.fill();
     const filled = width * fraction;
@@ -26235,21 +26283,28 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       drawFiledWork(ctx, node, p, radius, runningIds, time, still);
       drawAgentDress(ctx, node, p, radius, tint, time, still);
       drawHubDress(ctx, node, p, radius, tint, time, still);
+      // The node's own marks below dim with it (search, Follow), to the
+      // surface's floor.
+      const dim = Math.max(0.35, factor);
       // Work-left meter (drawProgressMeter): a known worker fraction, eased.
-      drawProgressMeter(ctx, node, p, radius, tint, active, Boolean(selected), time, still);
+      drawProgressMeter(ctx, node, p, radius, tint, active, Boolean(selected), time, still, dim);
       drawNodeAudio(ctx, node, p, radius, tint, node._audioResponse, audioNodes ? visualMusic : null, time / 1.8);
       // Collision boost: a thin amber rim, same restraint as the music beat —
       // the clash color marks the session while the fight is still live. It
       // pulses (0.9 s, in the node's own phase); at rest it holds its middle.
       if (colliding && (active || selected)) {
         const beat = still ? 0.5 : 0.5 + 0.5 * Math.sin(Math.PI * 2 * (time / 900 + (motion?.seed ?? 0)));
+        ctx.save();
+        ctx.globalAlpha *= dim;
         traceNodeSurface(ctx, visual.shape, p.x, p.y, radius + 2 + beat);
         ctx.strokeStyle = still ? rgba(NODE_RGB.collision, 0.55) : rgba(NODE_RGB.collision, Math.round((0.4 + 0.3 * beat) * 32) / 32);
         ctx.lineWidth = 1 + 0.4 * beat;
         ctx.stroke();
+        ctx.restore();
       }
       node._excl = null;
-      if (hold && !hold.ackedAt) drawDoneBadge(ctx, node, p, radius, time, still);
+      // The badge pops in as the hold starts and shrinks away once read.
+      if (hold && (!hold.ackedAt || !still && growNow - hold.ackedAt < DONE_BADGE_OUT_MS)) drawDoneBadge(ctx, node, p, radius, time, still, hold, growNow, dim);
     }
     } finally { profiler?.end(nodesSpan); }
 
@@ -26517,9 +26572,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     for (const { node, p } of projected) {
       if (node.dying || node._absorbed) continue;
       if ((node._fade ?? 1) <= 0.02) { ghosts.push({ node, cx: p.x, cy: p.y, reach: (node._pr ?? 4) + 5 }); continue; }
-      // A style that draws past the body (node._styleReach) blocks as far.
+      // A style that draws past the body (node._styleReach) blocks labels
+      // and callout leaders as far.
       const radius = Math.max(5, node._orbitTrail?.radius ?? node._pr ?? 4, node._styleReach ?? 0) + 3;
-      const rect = { node, x: p.x - radius, y: p.y - radius, w: radius * 2, h: radius * 2, cx: p.x, cy: p.y, reach: (node._pr ?? 4) + 5 };
+      const rect = { node, x: p.x - radius, y: p.y - radius, w: radius * 2, h: radius * 2, cx: p.x, cy: p.y, reach: Math.max(node._pr ?? 4, node._styleReach ?? 0) + 5 };
       rects.push(rect);
       const left = Math.floor(rect.x / cellSize), right = Math.floor((rect.x + rect.w) / cellSize);
       const top = Math.floor(rect.y / cellSize), bottom = Math.floor((rect.y + rect.h) / cellSize);
