@@ -1497,12 +1497,13 @@
         ctx.strokeStyle = color; ctx.globalAlpha = (selected ? 0.95 : working ? 0.8 : 0.45) * visibility; ctx.lineWidth = selected ? 1.6 : 1; ctx.stroke();
         ctx.globalAlpha = visibility;
       }
-      if (isAgent && nodeStyle !== "minimal" && radius >= 4.5) {
+      if (isAgent && radius >= 4.5) {
         // The role glyph and the status ring: what this satellite is, and
         // whether it is working (a spinning arc), waiting its turn (dashed)
         // or stuck (amber). The Command view draws the same through MefiTree.
         // The style dresses the glyph (the Void collection's light ink, inside
-        // its dark bodies) and may draw the status ring its own way.
+        // its dark bodies) and may draw the status ring its own way; every
+        // style dresses its agents, Minimal included.
         const look = styles ? styles.glyph(nodeStyle, tint, theme) : null;
         const glyphScale = look ? look.scale : 0.7, lookInk = look?.ink ?? null, ringGap = look ? look.ringGap : 3.5;
         agentGlyph(ctx, node.role, p.x, p.y, radius * glyphScale, lookInk ?? glyphInk(color));
@@ -1534,7 +1535,9 @@
         } else trails.delete(node.role);
       }
       if (appearance.orbitTrails === true && !isAgent && working) {
-        const phase = noMotion() ? Math.PI / 3 : time / 1100 * Math.PI * 2;
+        // The motion record integrates the orbit (1.1 s a turn), so it never
+        // jumps as the node starts or stops working; without one, the clock.
+        const phase = still ? Math.PI / 3 : Number.isFinite(record?.orbit) ? record.orbit : time / 1100 * Math.PI * 2;
         // A style may draw the orbit in its own language; otherwise the blue arcs.
         let orbitDrawn = false;
         if (styles) {
