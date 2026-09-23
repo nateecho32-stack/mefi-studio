@@ -22775,10 +22775,6 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return String(item.text ?? "");
   }
 
-  function requestTag(source) {
-    return { fix: "FIX", collision: "COLLIDE", duplicate: "DUP", improver: "IMPROVE", grow: "GROW", expand: "EXPAND", audit: "AUDIT" }[source] ?? "REQ";
-  }
-
   // Readiness comes from the same scheduler snapshot as the board. Reading it
   // is observational: opening Command never starts or reprioritizes a job.
   async function refreshCommandBacklog(force = false) {
@@ -28908,6 +28904,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       }
       paintTreeAndDetail();
       renderAssistant();
+      if (requestsKey() !== paintedRequests) renderRequests();
       // A failed store read must not read as "nothing here": name the failure
       // in the tree too, and let the next poll tick retry.
       if (!stateResult?.ok && !state.sessions.length) {
@@ -29985,7 +29982,15 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
   }
 
+  // The poll re-reads the inbox every tick, but only a push or an edit used to
+  // paint it, so an open with no push since boot showed a blank list. load()
+  // repaints when the rows changed; the key keeps an unchanged inbox from
+  // being rebuilt under the pointer every 5 s.
+  let paintedRequests = null;
+  const requestsKey = () => JSON.stringify(state.requests.map((request) => [request.at, request.title, request.prompt, request.source, request.runId]));
+
   function renderRequests() {
+    paintedRequests = requestsKey();
     els.requests.textContent = "";
     if (!state.requests.length) {
       const li = document.createElement("li");
@@ -29999,7 +30004,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       const text = document.createElement("span");
       const tag = document.createElement("span");
       tag.className = `src-tag ${request.source ?? "manual"}`;
-      tag.textContent = request.source === "fix" ? "FIX" : request.source === "collision" ? "COLLIDE" : request.source === "duplicate" ? "DUP" : request.source === "improver" ? "IMPROVE" : request.source === "grow" ? "GROW" : "REQ";
+      // Expand and audit requests read as themselves; they used to show "REQ".
+      tag.textContent = { fix: "FIX", collision: "COLLIDE", duplicate: "DUP", improver: "IMPROVE", grow: "GROW", expand: "EXPAND", audit: "AUDIT" }[request.source] ?? "REQ";
       const label = document.createElement("span");
       label.textContent = request.title ? ` ${request.title} — ${request.prompt ?? ""}` : ` ${request.prompt ?? ""}`;
       text.append(tag, label);
@@ -33083,6 +33089,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   // Hit boxes from the last frame, taskId → rect. They live outside the task
   // objects so the poll's unchanged-data signature never sees draw output.
   const boxes = new Map();
+  // Box titles fitted to their drawn width, per font and title (draw's fitTitle).
+  const titleFits = new Map();
   const el = {};
   let initialized = false;
   let raf = null;
@@ -33199,6 +33207,25 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         (rect) =>
           left - 6 < rect.x + rect.w && left + BOX_WIDTH + 6 > rect.x && top - 6 < rect.y + rect.h && top + BOX_HEIGHT + 6 > rect.y
       );
+    // A title is fitted to the box by its drawn width and marked when shortened;
+    // a fixed 30 characters overran the box with wide letters and cut others
+    // with no sign. A canvas that measures nothing keeps the old cut.
+    const width = (text) => ctx.measureText?.(text)?.width;
+    const fitTitle = (text) => {
+      const title = String(text ?? "");
+      if (!Number.isFinite(width(title))) return title.slice(0, 30);
+      const key = `${ctx.font}|${title}`;
+      if (titleFits.has(key)) return titleFits.get(key);
+      const room = BOX_WIDTH - 20;
+      let cut = title;
+      if (width(title) > room) {
+        while (cut.length > 1 && width(`${cut.trimEnd()}…`) > room) cut = cut.slice(0, -1);
+        cut = `${cut.trimEnd()}…`;
+      }
+      titleFits.set(key, cut);
+      if (titleFits.size > 400) titleFits.delete(titleFits.keys().next().value);
+      return cut;
+    };
     const clampLeft = (left) => Math.min(el.width - BOX_WIDTH - 12, Math.max(12, left));
     const clampTop = (top) => Math.min(el.height - BOX_HEIGHT - 12, Math.max(12, top));
 
@@ -33256,7 +33283,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       ctx.font = "600 10.5px system-ui";
       ctx.fillText(`${task.status.toUpperCase()}`, left + 10, top + 15);
       ctx.fillStyle = "#ece5d8";
-      ctx.fillText(task.title.slice(0, 30), left + 10, top + 31);
+      ctx.fillText(fitTitle(task.title), left + 10, top + 31);
       ctx.strokeStyle = `${task.color ?? "#e6c98d"}66`;
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -39361,7 +39388,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
     const cost = Number(today?.usage?.costUsd);
     const who = lead ? `${lead.label} · ` : "";
-    $("dash-usage-note").textContent = today ? `${who}Today · ${today.calls ?? 0} calls${Number.isFinite(cost) ? ` · $${cost.toFixed(2)}` : ""}` : lead ? who.slice(0, -3) : report.credits?.error || "";
+    // Sub-cent days read as themselves ($0.004), not as $0.00.
+    const spent = Number.isFinite(cost) ? `$${cost.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: cost > 0 && cost < 0.01 ? 4 : 2 })}` : "";
+    $("dash-usage-note").textContent = today ? `${who}Today · ${today.calls ?? 0} calls${spent ? ` · ${spent}` : ""}` : lead ? who.slice(0, -3) : report.credits?.error || "";
   }
   function renderJev(value) {
     const status = value?.status || value;

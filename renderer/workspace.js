@@ -605,7 +605,9 @@
     }
     const cost = Number(today?.usage?.costUsd);
     const who = lead ? `${lead.label} · ` : "";
-    $("dash-usage-note").textContent = today ? `${who}Today · ${today.calls ?? 0} calls${Number.isFinite(cost) ? ` · $${cost.toFixed(2)}` : ""}` : lead ? who.slice(0, -3) : report.credits?.error || "";
+    // Sub-cent days read as themselves ($0.004), not as $0.00.
+    const spent = Number.isFinite(cost) ? `$${cost.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: cost > 0 && cost < 0.01 ? 4 : 2 })}` : "";
+    $("dash-usage-note").textContent = today ? `${who}Today · ${today.calls ?? 0} calls${spent ? ` · ${spent}` : ""}` : lead ? who.slice(0, -3) : report.credits?.error || "";
   }
   function renderJev(value) {
     const status = value?.status || value;

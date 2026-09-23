@@ -214,7 +214,7 @@ test("the bridge, the IPC handlers and the bundle all carry the tracker", () => 
   assert.match(preloadSource, /opencodeCredits: \(\) => ipcRenderer\.invoke\("opencode:credits"/);
   assert.match(preloadSource, /usageAccounts: \(options = \{\}\) => ipcRenderer\.invoke\("usage:accounts", \{ probe: options\?\.probe === true \}\)/, "the renderer says when someone is looking, and nothing else crosses");
   assert.match(mainSource, /usageAccounts\(\{ probe: options\?\.probe === true \}\)/);
-  assert.match(mainSource, /const APP_WIDE_CHANNELS = new Set\(\["usage:accounts", "opencode:credits"\]\)/, "account readings never hold up a project switch");
+  assert.match(mainSource, /const APP_WIDE_CHANNELS = new Set\(\["usage:accounts", "opencode:credits"/, "account readings never hold up a project switch");
   assert.match(mainSource, /require\("\.\/scripts\/usage-tracker\.cjs"\)/);
   assert.match(mainSource, /ipcMain\.handle\("usage:tracker"/);
   assert.match(mainSource, /ipcMain\.handle\("opencode:credits"/);

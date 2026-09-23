@@ -5161,10 +5161,6 @@
     return String(item.text ?? "");
   }
 
-  function requestTag(source) {
-    return { fix: "FIX", collision: "COLLIDE", duplicate: "DUP", improver: "IMPROVE", grow: "GROW", expand: "EXPAND", audit: "AUDIT" }[source] ?? "REQ";
-  }
-
   // Readiness comes from the same scheduler snapshot as the board. Reading it
   // is observational: opening Command never starts or reprioritizes a job.
   async function refreshCommandBacklog(force = false) {

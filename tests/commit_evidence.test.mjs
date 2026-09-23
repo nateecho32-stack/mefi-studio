@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,6 +8,10 @@ import { promisify } from "node:util";
 import { commitEvidence } from "../scripts/eyes.mjs";
 import { verifyCompletion } from "../scripts/assistant.mjs";
 import { buildReceipt, evidenceKind, receiptTrust } from "../scripts/receipts.mjs";
+
+// Real git on a loaded desktop can outlast the product's 8 s probe budget; the
+// tests are about what the evidence says, so their git gets a minute.
+const patientGit = (command, args, options) => spawnSync(command, args, { ...options, timeout: 60000 });
 
 const execFileP = promisify(execFile);
 
@@ -27,32 +31,32 @@ test("commitEvidence observes a real commit and the clean path status", async (t
   const hash = (await git("repo", ["rev-parse", "HEAD"])).stdout.trim();
   const short = hash.slice(0, 10);
 
-  const observed = commitEvidence({ root: path.join(dir, "repo"), hash: short });
+  const observed = commitEvidence({ run: patientGit, root: path.join(dir, "repo"), hash: short });
   assert.equal(observed.hash, hash, "an abbreviated claim resolves to the full commit");
   assert.equal(observed.clean, true, "an untouched repo path is clean");
   assert.equal(observed.error ?? null, null);
 
   await mkdir(path.join(dir, "repo", "src"), { recursive: true });
   await writeFile(path.join(dir, "repo", "src", "rail.js"), "export const accounting = 1;\n");
-  const untrackedScope = commitEvidence({ root: path.join(dir, "repo"), hash, paths: ["src/rail.js"] });
+  const untrackedScope = commitEvidence({ run: patientGit, root: path.join(dir, "repo"), hash, paths: ["src/rail.js"] });
   assert.equal(untrackedScope.clean, false, "the task's scoped path is dirty before the commit");
 
   await git("repo", ["add", "src/rail.js"]);
   await git("repo", ["commit", "-q", "-m", "rail accounting test"]);
-  const landed = commitEvidence({ root: path.join(dir, "repo"), hash: short, paths: ["src/rail.js"] });
+  const landed = commitEvidence({ run: patientGit, root: path.join(dir, "repo"), hash: short, paths: ["src/rail.js"] });
   assert.equal(landed.hash, hash);
   assert.equal(landed.clean, true, "the scoped path is clean after the commit");
 
   await writeFile(path.join(dir, "repo", "src", "rail.js"), "export const accounting = 2;\n");
   await writeFile(path.join(dir, "repo", "unrelated.txt"), "other session's work\n");
-  const scoped = commitEvidence({ root: path.join(dir, "repo"), hash: short, paths: ["src/rail.js"] });
+  const scoped = commitEvidence({ run: patientGit, root: path.join(dir, "repo"), hash: short, paths: ["src/rail.js"] });
   assert.equal(scoped.clean, false, "a modified scoped file is not clean");
-  const whole = commitEvidence({ root: path.join(dir, "repo"), hash: short });
+  const whole = commitEvidence({ run: patientGit, root: path.join(dir, "repo"), hash: short });
   assert.equal(whole.clean, false, "an unscoped check sees the whole tree");
 
-  assert.equal(commitEvidence({ root: path.join(dir, "repo"), hash: "beefbeef" }).hash, null, "a hash that resolves to nothing is no evidence");
-  assert.equal(commitEvidence({ root: path.join(dir, "repo"), hash: "not-a-hash" }).hash, null);
-  assert.equal(commitEvidence({ root: null, hash: short }).hash, null);
+  assert.equal(commitEvidence({ run: patientGit, root: path.join(dir, "repo"), hash: "beefbeef" }).hash, null, "a hash that resolves to nothing is no evidence");
+  assert.equal(commitEvidence({ run: patientGit, root: path.join(dir, "repo"), hash: "not-a-hash" }).hash, null);
+  assert.equal(commitEvidence({ run: patientGit, root: null, hash: short }).hash, null);
   const failedStatus = commitEvidence({ root: path.join(dir, "repo"), hash: short, run: (command, args) => (args.includes("status") ? { status: 128, stdout: "" } : { status: 0, stdout: `${hash}\n` }) });
   assert.equal(failedStatus.clean, null, "a failed status read is unknown, never clean");
 });
@@ -67,7 +71,7 @@ test("the evaluator accepts a runner-observed commit and receipts trust it", asy
 
   const claim = { verdictOk: true, hasSession: true, changedFiles: 0, resultNote: { parts: { done: `committed ${hash.slice(0, 9)} rail accounting test`, remaining: "none" } } };
   assert.equal(verifyCompletion(claim).state, "unverified", "the claim alone still fails");
-  const verdict = verifyCompletion({ ...claim, commit: commitEvidence({ root: dir, hash: hash.slice(0, 9) }) });
+  const verdict = verifyCompletion({ ...claim, commit: commitEvidence({ run: patientGit, root: dir, hash: hash.slice(0, 9) }) });
   assert.equal(verdict.state, "verified");
   assert.equal(verdict.evidence.commit.hash, hash);
 
@@ -88,7 +92,7 @@ test("the evaluator accepts a runner-observed commit and receipts trust it", asy
   assert.equal(receipt.evidence.commit.hash, hash);
 
   await writeFile(path.join(dir, "leftover.txt"), "partial commit\n");
-  const dirty = verifyCompletion({ ...claim, commit: commitEvidence({ root: dir, hash: hash.slice(0, 9) }) });
+  const dirty = verifyCompletion({ ...claim, commit: commitEvidence({ run: patientGit, root: dir, hash: hash.slice(0, 9) }) });
   assert.equal(dirty.state, "unverified");
   assert.match(dirty.reason, /uncommitted changes/);
   const dirtyReceipt = buildReceipt({

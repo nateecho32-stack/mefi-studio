@@ -93,7 +93,10 @@ test("a read past the timeout rejects and restarts the worker instead of queuein
   try {
     await assert.rejects(client.call("listTodos"), /timed out after 150 ms/);
     assert.equal(client.status().restarts, 1);
-    assert.equal((await client.call("listSessions", { limit: 1 })).length, 1);
+    // The read after the respawn pays for a fresh worker thread and its module
+    // load; 150 ms is the hang budget under test, not a startup budget, and a
+    // loaded desktop blew it (the "read past the timeout" flake).
+    assert.equal((await client.call("listSessions", { limit: 1 }, { timeoutMs: 15000 })).length, 1);
     assert.equal(client.status().spawns, 2);
   } finally {
     await client.close();

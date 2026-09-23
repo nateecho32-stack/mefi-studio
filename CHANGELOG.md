@@ -22,6 +22,40 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   without saving the view, selection and typed text. Studio's own menu saves
   them first, the way an update's reload does, and keeps the edit, zoom and
   full-screen shortcuts.
+- **Explorer's request inbox shows up when you open it.** It was drawn only
+  after a push or an edit, so a fresh open showed an empty list; expand and
+  audit requests are labelled as such instead of "REQ".
+- A worker's result line keeps a ";" inside brackets in one field, so
+  "remaining: none (owner-only: a; b)" no longer reads as outstanding work,
+  and a clipped field keeps its closing bracket.
+- A card split out of another now starts with that card's requirement,
+  decisions and last result as context.
+- The keyless brief backs off after a failure (5, 10, 20, 40, then 60
+  minutes) and waits out the shared AI backoff, instead of asking a failing
+  route again every few minutes.
+- Settings readings (key sources, update and release status, the model
+  catalog, speed readings, shell helpers) answer during a project switch
+  instead of "Switching projects"; applying an update and restarting still
+  wait for the switch.
+- Overhead's task boxes fit a long title with "…" instead of running past
+  the box, and Home's usage note shows a sub-cent day as $0.004, not $0.00.
+- The Machine scan starts PowerShell only when a LÖVE process is running,
+  which roughly halves the cost of a scan.
+
+### Changed
+- **`npm test` runs every leg and every stage**, even after one fails, and
+  ends with a pass/FAIL line per leg; one red suite used to hide whether the
+  Electron lane, the Python contracts and the path lock passed.
+- Four timing-sensitive tests no longer fail on a loaded machine: the eyes
+  worker's read after a restart, commit evidence's git probes, the Electron
+  fixtures' temp-folder cleanup (which also hid the real error), and the
+  model-performance ctime check on filesystems that do not advance ctime.
+- The TESTRUNS append helper no longer doubles a "(task, run)" suffix the
+  title already carries.
+
+### Security
+- The Analyzer's GitHub issue read runs `gh` without a shell and without
+  Studio's `MEFI_STUDIO_*_KEY` / `_TOKEN`, like every other child process.
 
 ## [0.3.3] - 2026-09-23
 

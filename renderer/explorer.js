@@ -104,6 +104,7 @@
       }
       paintTreeAndDetail();
       renderAssistant();
+      if (requestsKey() !== paintedRequests) renderRequests();
       // A failed store read must not read as "nothing here": name the failure
       // in the tree too, and let the next poll tick retry.
       if (!stateResult?.ok && !state.sessions.length) {
@@ -1181,7 +1182,15 @@
     }
   }
 
+  // The poll re-reads the inbox every tick, but only a push or an edit used to
+  // paint it, so an open with no push since boot showed a blank list. load()
+  // repaints when the rows changed; the key keeps an unchanged inbox from
+  // being rebuilt under the pointer every 5 s.
+  let paintedRequests = null;
+  const requestsKey = () => JSON.stringify(state.requests.map((request) => [request.at, request.title, request.prompt, request.source, request.runId]));
+
   function renderRequests() {
+    paintedRequests = requestsKey();
     els.requests.textContent = "";
     if (!state.requests.length) {
       const li = document.createElement("li");
@@ -1195,7 +1204,8 @@
       const text = document.createElement("span");
       const tag = document.createElement("span");
       tag.className = `src-tag ${request.source ?? "manual"}`;
-      tag.textContent = request.source === "fix" ? "FIX" : request.source === "collision" ? "COLLIDE" : request.source === "duplicate" ? "DUP" : request.source === "improver" ? "IMPROVE" : request.source === "grow" ? "GROW" : "REQ";
+      // Expand and audit requests read as themselves; they used to show "REQ".
+      tag.textContent = { fix: "FIX", collision: "COLLIDE", duplicate: "DUP", improver: "IMPROVE", grow: "GROW", expand: "EXPAND", audit: "AUDIT" }[request.source] ?? "REQ";
       const label = document.createElement("span");
       label.textContent = request.title ? ` ${request.title} — ${request.prompt ?? ""}` : ` ${request.prompt ?? ""}`;
       text.append(tag, label);

@@ -232,6 +232,18 @@ function buildTaskHandoff(task, { tasks = [], maxChars = 24000, contextPath = nu
     const parent = byId.get(task.parentTaskId || task.delegatedFrom.parentTaskId);
     add("Shared objective and constraints — context only, implement your assigned subtask", parent?.prompt || task.delegatedFrom.parentPrompt, Math.floor(cap * .1));
   }
+  // A split card's brief is the ask it was split out for; the card it came
+  // from holds the requirement that ask belongs to. Its worker used to start
+  // with none of that. Context only: the split card builds its own brief.
+  if (task?.splitFrom) {
+    const parent = byId.get(task.splitFrom);
+    add(`Split from ${parent ? `"${text(parent.title)}" (${text(parent.id)})` : text(task.splitFrom)} — context only, build this card's brief`, parent ? {
+      requirement: text(parent.prompt || parent.description || parent.ideaDetail).slice(0, 1500),
+      ...(rows(parent.decisions).length ? { decisions: rows(parent.decisions).slice(-6) } : {}),
+      ...(parent.remaining ? { remaining: parent.remaining } : {}),
+      ...(parent.lastAttempt?.result ? { lastResult: parent.lastAttempt.result } : {}),
+    } : "The card this was split from is no longer on the board; do not assume its scope.", Math.floor(cap * .1));
+  }
   const dependencies = dependencyIds(task).map((id) => {
     const source = byId.get(id);
     return source ? { id, title: source.title, status: source.status, result: source.lastAttempt?.result ?? null, verification: source.verification ?? null, remaining: source.remaining ?? [], refs: source.refs ?? [] } : { id, status: "missing", warning: "Required task is unavailable; do not assume it is complete." };

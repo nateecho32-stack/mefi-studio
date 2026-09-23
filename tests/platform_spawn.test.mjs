@@ -251,3 +251,36 @@ test("a host without ps yields an empty snapshot instead of an error", async () 
   };
   assert.deepEqual(await processSnapshot({ platform: "linux", spawnImpl }), []);
 });
+
+test("on Windows the CIM query runs only when tasklist shows a LÖVE process", async () => {
+  const fake = (outputs) => {
+    const spawned = [];
+    const spawnImpl = (command, args) => {
+      spawned.push(command);
+      const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter() });
+      const out = outputs[command];
+      process.nextTick(() => {
+        if (out === undefined) { child.emit("error", new Error("ENOENT")); return; }
+        child.stdout.emit("data", out);
+        child.emit("close", 0);
+      });
+      return child;
+    };
+    return { spawnImpl, spawned };
+  };
+  const idle = fake({ tasklist: '"System Idle Process","0","Services","0","8 K"\r\n"node.exe","400","Console","1","90,112 K"\r\n' });
+  assert.deepEqual(await processSnapshot({ platform: "win32", spawnImpl: idle.spawnImpl }), []);
+  assert.deepEqual(idle.spawned, ["tasklist"], "no PowerShell when nothing LÖVE is running");
+  const running = fake({
+    tasklist: '"lovec.exe","311","Console","1","4,096 K"\r\n',
+    powershell: JSON.stringify({ ProcessId: 311, ParentProcessId: 1, Name: "lovec.exe", CommandLine: "lovec --smoke", CreationDate: "2026-09-23T10:00:00Z", KernelModeTime: 10000, UserModeTime: 20000, WorkingSetSize: 4194304 }),
+  });
+  const rows = await processSnapshot({ platform: "win32", spawnImpl: running.spawnImpl });
+  assert.deepEqual(running.spawned, ["tasklist", "powershell"]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].pid, 311);
+  assert.equal(rows[0].cpuMs, 3);
+  const unknown = fake({ powershell: "[]" });
+  assert.deepEqual(await processSnapshot({ platform: "win32", spawnImpl: unknown.spawnImpl }), []);
+  assert.deepEqual(unknown.spawned, ["tasklist", "powershell"], "a tasklist that cannot answer falls back to the CIM query");
+});

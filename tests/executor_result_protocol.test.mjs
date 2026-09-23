@@ -207,6 +207,19 @@ test("remaining: none beside an owner: part is not outstanding; the same leftove
   assert.equal(owed.reason, "outstanding obligations remain");
 });
 
+test("a ';' inside brackets stays in its field, and a clipped field keeps its closing bracket", () => {
+  const resultNote = parseExecutorResult("MEFI_RESULT: done: the helper; remaining: none (owner-only: flip task_a; reword task_b); ran: npm run check [a; b]");
+  assert.deepEqual(resultNote.parts, { done: "the helper", remaining: "none (owner-only: flip task_a; reword task_b)", ran: "npm run check [a; b]" });
+  const verdict = verifyCompletion({ verdictOk: true, changedFiles: 1, hasSession: true, resultNote });
+  assert.equal(verdict.evidence.outstanding, false, "the aside's second clause is not a second remaining item");
+  const long = parseExecutorResult(`MEFI_RESULT: done: x; remaining: none (owner-only: ${"reword the stored acceptance ".repeat(10)})`);
+  assert.equal(long.parts.remaining.length, 200);
+  assert.ok(long.parts.remaining.endsWith(")"), "the clip closes the aside it cut");
+  assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 1, hasSession: true, resultNote: long }).evidence.outstanding, false);
+  // Unbalanced text is not repaired or re-split beyond the brackets it opened.
+  assert.deepEqual(parseExecutorResult("MEFI_RESULT: done: a) b; remaining: none").parts, { done: "a) b", remaining: "none" });
+});
+
 test("a run the owner or the host stopped raises none of its asks", async () => {
   const { h, raised } = raisingHost({ tasks: [ownerTask("task_stopped_fixture")] });
   h.wake(); await h.pump();

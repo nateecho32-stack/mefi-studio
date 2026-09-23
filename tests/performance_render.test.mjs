@@ -74,7 +74,11 @@ async function runFixture(t, desktopHost = false, resumeSheet = "") {
   } finally {
     // mkdtemp fixes the cleanup target to this invocation's disposable folder.
     assert.ok(path.dirname(fixture) === path.resolve(tmpdir()) && path.basename(fixture).startsWith("mefi-performance-render-"));
-    await rm(fixture, { recursive: true, force: true, maxRetries: 6, retryDelay: 150 });
+    // Electron can still hold the folder for a moment after it exits. A locked
+    // leftover in the temp dir is reported, not failed: throwing here also
+    // replaced the test's real assertion error with EBUSY.
+    await rm(fixture, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 })
+      .catch((error) => t.diagnostic(`fixture folder left behind (${error.code ?? error.message}): ${fixture}`));
   }
 }
 

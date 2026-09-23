@@ -174,3 +174,16 @@ test("stale file scope re-anchors to an existing basename while unresolvable ent
   assert.deepEqual(trusted.files, moved.files);
   assert.equal(resolveStaleFileScope({ ...original }).changed, false, "a task with no file scope is untouched");
 });
+
+test("a split card's handoff carries the card it was split from, as context only", () => {
+  const parent = { id: "task_parent01", title: "Add the retry banner", prompt: "Show a retry banner when a run fails, with the error and a Try again button.", decisions: [{ at: 1, kind: "scope", choice: "split", text: "the store is its own card" }], remaining: ["the store writer"], lastAttempt: { result: "banner done; store not written" } };
+  const split = { id: "task_split01", title: "Follow-up: Add the retry banner", prompt: "the store has to be written too", splitFrom: "task_parent01", splitDepth: 1 };
+  const handoff = buildTaskHandoff(split, { tasks: [parent, split] });
+  assert.match(handoff, /Split from "Add the retry banner" \(task_parent01\) — context only, build this card's brief/);
+  assert.match(handoff, /Show a retry banner when a run fails/);
+  assert.match(handoff, /the store is its own card/);
+  assert.match(handoff, /banner done; store not written/);
+  assert.ok(handoff.indexOf("the store has to be written too") < handoff.indexOf("Split from"), "the card's own brief comes first");
+  assert.match(buildTaskHandoff(split, { tasks: [split] }), /no longer on the board; do not assume its scope/);
+  assert.doesNotMatch(buildTaskHandoff({ ...split, splitFrom: undefined }, { tasks: [parent] }), /Split from/);
+});

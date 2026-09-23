@@ -168,11 +168,17 @@ async function readEfforts(root) {
 
 // ---- remote tracker: GitHub issues through gh -------------------------------
 
+// gh runs without a shell (execFile finds gh.exe on PATH itself, and nothing
+// here needs cmd.exe's parsing) and without Studio's MEFI_STUDIO_*_KEY /
+// _TOKEN, like every other child. A missing platform.cjs leaves the env as is.
+let withholdCredentials = (options) => options;
+try { ({ withholdCredentials } = require("./platform.cjs")); } catch {}
+
 function run(command, args, { cwd, timeoutMs = LIMITS.remoteMs } = {}) {
   return new Promise((resolve) => {
     let child = null;
     try {
-      child = execFile(command, args, { cwd, timeout: timeoutMs, windowsHide: true, maxBuffer: 4 * 1024 * 1024, shell: process.platform === "win32" }, (error, stdout, stderr) => {
+      child = execFile(command, args, withholdCredentials({ cwd, timeout: timeoutMs, windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, process.env), (error, stdout, stderr) => {
         resolve({ ok: !error, stdout: String(stdout ?? ""), stderr: String(stderr ?? ""), error: error ? (error.killed ? `${command} timed out after ${timeoutMs} ms` : String(stderr || error.message).trim().split(/\r?\n/)[0]) : null });
       });
     } catch (error) {

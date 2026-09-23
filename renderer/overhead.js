@@ -7,6 +7,8 @@
   // Hit boxes from the last frame, taskId → rect. They live outside the task
   // objects so the poll's unchanged-data signature never sees draw output.
   const boxes = new Map();
+  // Box titles fitted to their drawn width, per font and title (draw's fitTitle).
+  const titleFits = new Map();
   const el = {};
   let initialized = false;
   let raf = null;
@@ -123,6 +125,25 @@
         (rect) =>
           left - 6 < rect.x + rect.w && left + BOX_WIDTH + 6 > rect.x && top - 6 < rect.y + rect.h && top + BOX_HEIGHT + 6 > rect.y
       );
+    // A title is fitted to the box by its drawn width and marked when shortened;
+    // a fixed 30 characters overran the box with wide letters and cut others
+    // with no sign. A canvas that measures nothing keeps the old cut.
+    const width = (text) => ctx.measureText?.(text)?.width;
+    const fitTitle = (text) => {
+      const title = String(text ?? "");
+      if (!Number.isFinite(width(title))) return title.slice(0, 30);
+      const key = `${ctx.font}|${title}`;
+      if (titleFits.has(key)) return titleFits.get(key);
+      const room = BOX_WIDTH - 20;
+      let cut = title;
+      if (width(title) > room) {
+        while (cut.length > 1 && width(`${cut.trimEnd()}…`) > room) cut = cut.slice(0, -1);
+        cut = `${cut.trimEnd()}…`;
+      }
+      titleFits.set(key, cut);
+      if (titleFits.size > 400) titleFits.delete(titleFits.keys().next().value);
+      return cut;
+    };
     const clampLeft = (left) => Math.min(el.width - BOX_WIDTH - 12, Math.max(12, left));
     const clampTop = (top) => Math.min(el.height - BOX_HEIGHT - 12, Math.max(12, top));
 
@@ -180,7 +201,7 @@
       ctx.font = "600 10.5px system-ui";
       ctx.fillText(`${task.status.toUpperCase()}`, left + 10, top + 15);
       ctx.fillStyle = "#ece5d8";
-      ctx.fillText(task.title.slice(0, 30), left + 10, top + 31);
+      ctx.fillText(fitTitle(task.title), left + 10, top + 31);
       ctx.strokeStyle = `${task.color ?? "#e6c98d"}66`;
       ctx.lineWidth = 1;
       ctx.beginPath();

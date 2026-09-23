@@ -50,6 +50,10 @@ test("task overview and delegated details show confirmed progress, navigate subt
     assert.equal(Number(report.sharedOverview.max), 3, "the parent integration step remains part of the shared goal");
   } finally {
     assert.ok(path.dirname(fixture) === path.resolve(tmpdir()) && path.basename(fixture).startsWith("mefi-task-overview-render-"));
-    await rm(fixture, { recursive: true, force: true, maxRetries: 6, retryDelay: 150 });
+    // Electron can still hold the folder for a moment after it exits. A locked
+    // leftover in the temp dir is reported, not failed: throwing here also
+    // replaced the test's real assertion error with EBUSY.
+    await rm(fixture, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 })
+      .catch((error) => t.diagnostic(`fixture folder left behind (${error.code ?? error.message}): ${fixture}`));
   }
 });

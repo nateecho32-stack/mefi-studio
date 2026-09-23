@@ -174,3 +174,13 @@ test("scans are cached per folder for a minute unless asked fresh", async (t) =>
   const expired = await scanProjectWork(root, { remote: false, home, now: 2000 + 61_000 });
   assert.equal(expired.efforts[0].tickets.length, 5);
 });
+
+test("gh runs without a shell and without Studio's credentials", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("../scripts/project-work.cjs", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /shell:/, "gh needs no cmd.exe, and a shell would parse its arguments");
+  assert.match(source, /execFile\(command, args, withholdCredentials\(\{ cwd,/);
+  const { default: platform } = await import("../scripts/platform.cjs");
+  const options = platform.withholdCredentials({ cwd: "x" }, { PATH: "p", MEFI_STUDIO_ZAI_KEY: "k", mefi_studio_github_token: "t", GH_TOKEN: "g" });
+  assert.deepEqual(options, { cwd: "x", env: { PATH: "p", GH_TOKEN: "g" } }, "gh keeps its own token and loses Studio's");
+});

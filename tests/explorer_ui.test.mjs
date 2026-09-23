@@ -396,6 +396,15 @@ test("a late Open task lookup repaints without losing a half-typed checkpoint", 
   assert.equal(detail.querySelector("input.grow").value, "half a note", "the repaint keeps the draft");
 });
 
+test("opening Explorer paints the inbox it read, and expand and audit requests carry their own tags instead of REQ", async () => {
+  const env = environment({
+    eyesRequestsRead: async () => ({ ok: true, requests: ["expand", "audit", "fix", "manual"].map((source, at) => ({ at, prompt: `${source} work`, source })) }),
+  });
+  await env.open(); await flush();
+  const tags = env.element("request-list").children.map((li) => li.children[0].children[0].textContent);
+  assert.deepEqual(tags, ["EXPAND", "AUDIT", "FIX", "REQ"]);
+});
+
 test("the request inbox adds and removes through targeted actions and reports a refusal", async () => {
   const calls = [];
   let reply = (payload) => ({ ok: true, requests: payload.action === "add" ? [{ at: 9, prompt: "Fix the export", source: "manual" }, { at: 1, prompt: "Older", runId: "run_1" }] : [] });

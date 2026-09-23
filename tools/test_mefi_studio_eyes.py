@@ -1306,7 +1306,7 @@ console.log(JSON.stringify({
         self.assertIn("No live editors or file collisions.", self.explorer)
         self.assertIn("state.presence = collisions?.presence ?? []", self.explorer)
         self.assertIn("collisions still paint when the brief column is empty", self.explorer)
-        self.assertIn('request.source === "duplicate" ? "DUP"', self.explorer)
+        self.assertIn('duplicate: "DUP"', self.explorer)
         self.assertIn(" → ${shortId(row.owner)}", self.explorer, "tooltip maps per-file owners")
         self.assertIn("confirm handoff", self.explorer, "an idle owner is flagged instead of silently stolen")
         self.assertIn("collision.overlap", self.explorer, "the group's overlap window feeds the row's time range")

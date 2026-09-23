@@ -3751,17 +3751,51 @@ export function isDoneMarkerLine(line, mark = EXECUTOR_DONE_MARK_TEXT) {
 // Fields remain lenient — this is attached context, never the verdict itself.
 // A long line is clipped, not dropped: a rejected report cost the card its
 // result, its named checks and the overseer's verification run.
+// Fields split on ";" only outside brackets: "remaining: none (owner-only: a;
+// b)" is one field, where a plain split read "b)" as a second one and the
+// remaining text as outstanding work. A clipped field closes the brackets it
+// cut, so the verifier's parenthetical reading still sees a whole aside.
+const RESULT_CLOSERS = { "(": ")", "[": "]" };
+
+function resultChunks(text) {
+  const chunks = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    if (char === "(" || char === "[") depth += 1;
+    else if ((char === ")" || char === "]") && depth > 0) depth -= 1;
+    else if (char === ";" && depth === 0) {
+      chunks.push(text.slice(start, index));
+      start = index + 1;
+    }
+  }
+  chunks.push(text.slice(start));
+  return chunks;
+}
+
+function clipResultValue(value, limit = 200) {
+  if (value.length <= limit) return value;
+  const open = [];
+  for (const char of value.slice(0, limit)) {
+    if (RESULT_CLOSERS[char]) open.push(RESULT_CLOSERS[char]);
+    else if ((char === ")" || char === "]") && open.at(-1) === char) open.pop();
+  }
+  const closers = open.reverse().join("");
+  return value.slice(0, limit - closers.length) + closers;
+}
+
 export function parseExecutorResult(line, mark = "MEFI_RESULT:") {
   const flat = stripAnsi(line).trim();
   if (!flat.startsWith(mark)) return null;
   const body = flat.slice(mark.length).trim();
   if (!body) return null;
   const parts = {};
-  for (const chunk of body.slice(0, 1200).split(/;+/)) {
+  for (const chunk of resultChunks(body.slice(0, 1200))) {
     const [key, ...rest] = chunk.split(/:+/);
     const name = String(key ?? "").trim().toLowerCase();
     const value = rest.join(":").trim();
-    if (name && value) parts[name] = value.slice(0, 200);
+    if (name && value) parts[name] = clipResultValue(value);
   }
   return { raw: body.slice(0, 300), parts };
 }

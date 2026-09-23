@@ -134,7 +134,8 @@ function createEyesClient({
     failAll(`worker restarted (${reason})`);
     Promise.resolve(instance.terminate()).catch(() => {});
   }
-  function call(method, args = {}) {
+  // `options.timeoutMs` overrides the client's budget for this one read.
+  function call(method, args = {}, { timeoutMs: readTimeoutMs = timeoutMs } = {}) {
     if (!EYES_WORKER_METHODS.includes(method)) return Promise.reject(new TypeError(`eyes worker: ${String(method)} is not a store read`));
     return new Promise((resolve, reject) => {
       let instance;
@@ -146,10 +147,10 @@ function createEyesClient({
         if (!entry) return;
         pending.delete(id);
         stats.failures += 1;
-        entry.reject(new Error(`${method}: store read timed out after ${timeoutMs} ms`));
-        note(`${method} timed out after ${timeoutMs} ms; restarting the worker`);
+        entry.reject(new Error(`${method}: store read timed out after ${readTimeoutMs} ms`));
+        note(`${method} timed out after ${readTimeoutMs} ms; restarting the worker`);
         restart("timeout");
-      }, timeoutMs);
+      }, readTimeoutMs);
       timer.unref?.();
       pending.set(id, { resolve, reject, timer, method });
       instance.ref();

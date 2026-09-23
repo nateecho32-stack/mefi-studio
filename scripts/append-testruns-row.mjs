@@ -168,9 +168,13 @@ export function rowFromFields(fields) {
   const title = String(fields.title ?? "").trim();
   if (!title) throw new Error('append-testruns-row: field "title" is required');
   const daypart = fields.daypart ? ` ${String(fields.daypart).trim()}` : "";
+  // A worker that already wrote "(task_…, run_…)" into its title and also
+  // passed --task/--run doubled the suffix; an id the title carries is not
+  // added again.
   const bits = [];
-  if (fields.task) bits.push(String(fields.task).trim());
-  if (fields.run) bits.push(String(fields.run).trim());
+  for (const id of [fields.task, fields.run].map((value) => String(value ?? "").trim())) {
+    if (id && !title.includes(id)) bits.push(id);
+  }
   const suffix = bits.length > 0 ? ` (${bits.join(", ")})` : "";
   const body = String(fields.body ?? "").replace(/\r\n/g, "\n").replace(/\s+$/, "");
   return `## ${date}${daypart} - ${title}${suffix}\n${body ? `\n${body}\n` : ""}`;

@@ -251,7 +251,12 @@ test("external same-length edits, replacements, corruption and removal invalidat
   const edited = await stat(filePath, { bigint: true });
   assert.equal(edited.size, metadata.size);
   assert.equal(edited.mtimeNs, metadata.mtimeNs);
-  assert.equal((await store.snapshot()).models[0].model, "model-b", "ctime detects edits even when size and mtime are restored");
+  // The store's change key includes ctime, which is the only signal left once
+  // size and mtime are restored. Some filesystems (GitHub's Windows runners)
+  // do not advance it within one write, and then there is nothing to detect.
+  const snapshot = await store.snapshot();
+  if (edited.ctimeNs !== metadata.ctimeNs) assert.equal(snapshot.models[0].model, "model-b", "ctime detects edits even when size and mtime are restored");
+  else t.diagnostic("ctime did not advance within the edit on this filesystem; the same-size, same-mtime case is not observable here");
   const replacement = `${filePath}.replacement`;
   await writeFile(replacement, original.replace('"model-a"', '"model-c"'));
   await rename(replacement, filePath);

@@ -368,6 +368,11 @@ test("field flags and JSON specs both format the canonical house row shape", () 
     assert.deepEqual(auditTestruns(root).problems, []);
     // Malformed field specs are refused with no write.
     const pristine = readFileSync(join(root, "TESTRUNS.md"), "utf8");
+    // A title that already carries its ids does not get them twice.
+    assert.equal(rowFromFields({ date: "2026-09-22", title: "follow-up (task_ab12cd34ef56, run_1790118772186_8)", task: "task_ab12cd34ef56", run: "run_1790118772186_8" }),
+      "## 2026-09-22 - follow-up (task_ab12cd34ef56, run_1790118772186_8)\n");
+    assert.equal(rowFromFields({ date: "2026-09-22", title: "follow-up (task_ab12cd34ef56)", task: "task_ab12cd34ef56", run: "run_9" }),
+      "## 2026-09-22 - follow-up (task_ab12cd34ef56) (run_9)\n");
     assert.throws(() => rowFromFields({ title: "no date" }), /date.*YYYY-MM-DD/);
     assert.throws(() => rowFromFields({ date: "2026-09-22" }), /title.*required/);
     assert.throws(() => rowFromFields({ date: "2026-09-22", title: "x", nope: 1 }), /unknown row field/);

@@ -147,11 +147,15 @@ const runGroup = (files, concurrency = 0) => {
 // The CPU-only suites run first at the runner's default width; a failure is
 // only trustworthy evidence about the code when the sources it read are the
 // ones that launched it, so both stages re-check the fingerprint before
-// reporting.
+// reporting. Every stage runs even after one fails: stopping at the first red
+// stage hid whether the Electron lane and the exclusive fixtures passed, so a
+// fix needed a second full run just to learn that. The exit reports them all.
+const failures = [];
 const runStage = async (files, concurrency, label) => {
   if (!files.length) return;
   const outcome = runGroup(files, concurrency);
   if (!outcome.failed) return;
+  failures.push({ label, status: outcome.status ?? 1 });
   if ((await sourceFingerprint()) !== settledAtLaunch) {
     console.error(
       `run-node-tests: sources changed while the ${label} stage was running - vm-section failures in this run ` +
@@ -159,7 +163,6 @@ const runStage = async (files, concurrency, label) => {
         "Rerun on a quiet tree before acting on them.",
     );
   }
-  process.exit(outcome.status ?? 1);
 };
 
 const settledAtLaunch = await waitForSettledSources();
@@ -172,7 +175,8 @@ await runStage(heavyLane, 2, "Electron fixture");
 // `node --test a b` call still runs the two files concurrently, and two
 // live windows fighting over occlusion and visibility is exactly what this
 // stage exists to prevent.
-for (const file of exclusive) {
-  const outcome = runGroup([file]);
-  if (outcome.failed) process.exit(outcome.status ?? 1);
+for (const file of exclusive) await runStage([file], 0, `exclusive ${path.basename(file)}`);
+if (failures.length) {
+  console.error(`run-node-tests: ${failures.length} stage(s) failed: ${failures.map((failure) => failure.label).join(", ")}`);
+  process.exit(failures[0].status || 1);
 }

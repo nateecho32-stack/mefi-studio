@@ -167,7 +167,7 @@ let projectAgentJobs = 0;
 const originalIpcHandle = ipcMain.handle.bind(ipcMain);
 
 function handleProjectIpc(channel, handler) {
-  if (channel.startsWith("projects:") || channel.startsWith("performance:") || channel.startsWith("startup:") || channel.startsWith("community:") || channel.startsWith("styler:") || APP_WIDE_CHANNELS.has(channel)) return originalIpcHandle(channel, handler);
+  if (APP_WIDE_PREFIXES.some((prefix) => channel.startsWith(prefix)) || APP_WIDE_CHANNELS.has(channel)) return originalIpcHandle(channel, handler);
   originalIpcHandle(channel, (_event, ...args) => {
     if (projectSwitching) return { ok: false, error: "Switching projects. Try again in a moment." };
     const project = projects.active();
@@ -175,12 +175,16 @@ function handleProjectIpc(channel, handler) {
     return projects.run(project, () => Promise.resolve().then(() => handler(_event, ...args)).finally(() => { projectOperations -= 1; }));
   });
 }
-// The Server Styler controls (the styler: prefix above) drive a separate
-// project on this machine, so like community:* they answer through a switch.
-// The account readings belong to the owner, not to a project: they run
-// through a project switch and never hold one up. (Declared beside the
+// Channels that belong to the owner or the app, not to the open project: they
+// answer through a project switch and never hold one up. The Server Styler
+// (styler:) drives a separate project on this machine; the model catalog,
+// speed readings and shell helpers are the same for every project; the
+// release and update readings, the updater's switch and a key's source are
+// the app's. update:apply, release:apply and app:restart stay gated, so a
+// restart never lands in the middle of a switch. (Declared beside the
 // wrapper so the tests that load it from here up to app.setName see it.)
-const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits"]);
+const APP_WIDE_PREFIXES = ["projects:", "performance:", "startup:", "community:", "styler:", "catalog:", "speed:", "shell:"];
+const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key"]);
 ipcMain.handle = handleProjectIpc;
 
 app.setName("Mefi's Studio AI+");
@@ -9696,15 +9700,28 @@ async function requestBaseline(eyes) {
 // changed error.
 let autopilotTickBriefAt = null;
 let autopilotLastBriefError = null;
+// A failing route used to be asked again on every cadence tick. The brief now
+// waits out the shared AI backoff and backs off on its own failures on the
+// same curve (5, 10, 20, 40, then 60 minutes); a good brief resets it.
+let autopilotBriefFailures = 0;
+let autopilotBriefRetryAt = 0;
 async function autopilotProactivePass() {
   if (autopilotTickBriefAt !== null && Date.now() - autopilotTickBriefAt < 0.9 * 5 * 60000) return { ok: true, added: 0, skipped: "brief cadence" };
+  if (Date.now() < Math.max(autopilotBriefRetryAt, assistantState?.ai?.backoffUntil ?? 0)) return { ok: true, added: 0, skipped: "ai backoff" };
   autopilotTickBriefAt = Date.now();
   const eyes = await getEyes();
   let briefing = null;
   let aiError = null;
   const result = await runAssistant("brief", null);
-  if (result.ok) briefing = result.briefing;
-  else aiError = result.error ?? null;
+  if (result.ok) {
+    briefing = result.briefing;
+    autopilotBriefFailures = 0;
+    autopilotBriefRetryAt = 0;
+  } else {
+    aiError = result.error ?? null;
+    autopilotBriefFailures += 1;
+    autopilotBriefRetryAt = Date.now() + (assistantModule?.nextBackoffMs?.(autopilotBriefFailures) ?? Math.min(60, 5 * 2 ** (autopilotBriefFailures - 1)) * 60000);
+  }
   const queued = await queueRequests(briefing ? eyes.requestsFromBriefing(briefing, await requestBaseline(eyes)) : []);
   if (queued || aiError !== autopilotLastBriefError) {
     logLine(`[assistant] proactive: ${queued} new request(s)` + (aiError ? ` (AI unavailable: ${aiError})` : ""));

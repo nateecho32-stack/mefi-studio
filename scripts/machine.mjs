@@ -411,13 +411,36 @@ async function posixProcessSnapshot({ ps, spawnImpl, now }) {
   });
 }
 
-export async function processSnapshot({ powershell = "powershell", ps = "ps", platform = process.platform, spawnImpl = spawn, now = Date.now } = {}) {
+// Whether tasklist lists a LÖVE process: true, false, or null when tasklist
+// itself could not answer (the CIM query then runs as before).
+function windowsLoveRunning({ tasklist = "tasklist", spawnImpl = spawn } = {}) {
+  return new Promise((resolve) => {
+    let output = "";
+    let child;
+    try {
+      child = spawnImpl(tasklist, ["/FI", "IMAGENAME eq love*", "/FO", "CSV", "/NH"], { windowsHide: true, stdio: ["ignore", "pipe", "ignore"] });
+    } catch {
+      resolve(null);
+      return;
+    }
+    child.stdout?.on("data", (chunk) => (output += chunk));
+    child.on("error", () => resolve(null));
+    child.on("close", (code) => resolve(code === 0 && output.trim() ? /^"lovec?\.exe",/im.test(output) : null));
+  });
+}
+
+export async function processSnapshot({ powershell = "powershell", ps = "ps", tasklist = "tasklist", platform = process.platform, spawnImpl = spawn, now = Date.now } = {}) {
   if (platform !== "win32") return await posixProcessSnapshot({ ps, spawnImpl, now });
+  // Starting PowerShell for the CIM query took 0.7-0.8 s on every Machine
+  // scan, and most scans find no LÖVE process at all. tasklist filtered to
+  // love* answers in about half that (measured 2026-09-23 on the 16 GB
+  // laptop), so the CIM query only runs when there is something to read.
+  if (await windowsLoveRunning({ tasklist, spawnImpl }) === false) return [];
   const script =
     "Get-CimInstance Win32_Process -Filter \\\"Name='lovec.exe' OR Name='love.exe'\\\" | " +
     "Select-Object ProcessId,ParentProcessId,Name,CommandLine,CreationDate,KernelModeTime,UserModeTime,WorkingSetSize | ConvertTo-Json -Compress";
   return await new Promise((resolve) => {
-    const child = spawn(powershell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], { windowsHide: true });
+    const child = spawnImpl(powershell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], { windowsHide: true });
     let output = "";
     child.stdout.on("data", (chunk) => (output += chunk));
     child.on("close", () => {

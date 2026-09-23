@@ -56,7 +56,7 @@ Every application change must pass the three gates:
 
 ```
 npm run check     # targets, spec collisions, CSS merge + unused, syntax, TESTRUNS
-npm test          # node --test tests/**/*.test.mjs  +  python unittest discover
+npm test          # node --test tests/**/*.test.mjs  +  python unittest discover  +  path lock
 npm run audit     # scripts/auditor.mjs (renderer/template contracts)
 ```
 
@@ -69,7 +69,9 @@ npm run lint        # eslint, check-only: undefined identifiers fail, unused one
 
 `npm test` needs Python 3 on PATH as `python` (the runner checks first and
 says so) and a real desktop: the Electron fixtures drive real windows and are
-timing-sensitive under load. `npm run lint` fetches eslint through `npx` so the
+timing-sensitive under load. Every leg and every Node stage runs even after
+one fails, and the run ends with a pass/FAIL line per leg, so one red suite
+no longer hides the rest. `npm run lint` fetches eslint through `npx` so the
 app keeps zero runtime dependencies; CI runs it too. `.editorconfig` sets
 two-space indentation, LF line endings and UTF-8.
 

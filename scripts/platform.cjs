@@ -146,4 +146,4 @@ function createSpawn({ platform = process.platform, spawnImpl = child_process.sp
   };
 }
 
-module.exports = { spawn: createSpawn(), createSpawn, IS_WINDOWS: process.platform === "win32" };
+module.exports = { spawn: createSpawn(), createSpawn, withholdCredentials, IS_WINDOWS: process.platform === "win32" };
