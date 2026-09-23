@@ -55,7 +55,7 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
   list every destination with its key, without moving anything underneath.
   **Keep open** pins it and the page makes room. The section you are in lights
   up and the destination you are on is marked.
-- **M+** at the top of the rail opens the project panel beside it. It replaces
+- **M+** at the top of the rail toggles the project panel beside it. It replaces
   the grip on the left edge that used to open the same panel.
 - The rail is built from the same registry as the palette (`Ctrl K`), the help
   sheet and the single-letter keys, so a destination cannot appear in one and

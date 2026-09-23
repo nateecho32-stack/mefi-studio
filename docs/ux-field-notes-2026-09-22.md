@@ -13,3 +13,13 @@ The first two findings have renderer changes, focused unit checks and a
 disposable Electron startup check with a synthetic overflowing conversation.
 The navigation delay happened while multiple coding jobs were active, so it
 is not yet evidence of a route failure.
+
+## Follow-up menu review
+
+Code inspection found a separate Projects menu interaction issue: a mouse
+press on M+ closed an open panel through the outside-press listener, then the
+M+ click reopened it. The rail door now waits for its click to toggle the panel,
+including when the pointer pauses over M+ or a held press moves focus out of
+the panel. Keyboard focus leaving both surfaces still closes the panel. This
+was checked with event-order unit coverage and a disposable Electron click
+sequence; the running portable app was unavailable for a second hands-on pass.

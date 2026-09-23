@@ -200,6 +200,30 @@ test("outside presses, project switches and window blur dismiss the menu", () =>
   assert.equal(env.sidebar.isOpen(), false);
 });
 
+test("rail Projects press and focus transfer leave an open panel for the brand click to toggle", () => {
+  const env = environment({ rail: true });
+  env.sidebar.open({ focus: true });
+  env.hover(env.panel);
+  env.leave(env.panel);
+  env.hover(env.brand);
+  env.flush();
+  assert.equal(env.sidebar.isOpen(), true, "crossing to M+ must cancel the panel's hover-close timer");
+  env.document.emit("pointerdown", { target: env.brand });
+  env.brand.focus();
+  env.flush();
+  assert.equal(env.sidebar.isOpen(), true, "the outside-press listener must not close before the Projects click");
+  env.leave(env.brand);
+  env.flush();
+  assert.equal(env.sidebar.isOpen(), false, "leaving both the panel and M+ by pointer should close it");
+
+  const keyboard = environment({ rail: true });
+  keyboard.sidebar.open({ focus: true });
+  keyboard.brand.focus();
+  keyboard.outside.focus();
+  keyboard.flush();
+  assert.equal(keyboard.sidebar.isOpen(), false, "keyboard focus moving beyond M+ should close the panel");
+});
+
 test("closing the panel returns focus to its door: the rail's M+ on the rail shell, the edge strip otherwise", () => {
   const railed = environment({ rail: true });
   railed.sidebar.open({ focus: true });

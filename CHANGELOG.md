@@ -13,6 +13,7 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   back to read older messages remains undisturbed by new updates.
 - The Task board labels its grouped overview as cards and explains why its
   card total differs from task filter counts.
+- Clicking M+ again closes the Projects panel when the navigation rail is on.
 
 ## [0.3.0] - 2026-09-22
 

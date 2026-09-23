@@ -12538,6 +12538,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const panel = document.getElementById("workspace-sidebar-panel");
   const toggle = document.getElementById("workspace-sidebar-toggle");
   const dismiss = document.getElementById("workspace-sidebar-close");
+  const railBrand = document.getElementById("app-rail-brand");
   if (!root || !panel || !toggle || !dismiss) return;
 
   const hovering = new Set();
@@ -12611,15 +12612,34 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       scheduleClose({ pointerExit: true });
     });
   }
+  // The rail's M+ is a separate DOM sibling of the panel. Crossing to it
+  // should not dismiss the panel before a deliberate click can toggle it.
+  railBrand?.addEventListener("pointerenter", (event) => {
+    if (!isOpen() || (event.pointerType !== "mouse" && event.pointerType !== "pen")) return;
+    hovering.add(railBrand);
+    cancelClose();
+  });
+  railBrand?.addEventListener("pointerleave", () => {
+    hovering.delete(railBrand);
+    if (isOpen()) scheduleClose({ pointerExit: true });
+  });
+  railBrand?.addEventListener("focusout", (event) => {
+    if (isOpen() && !root.contains(event.relatedTarget)) scheduleClose();
+  });
   toggle.addEventListener("focus", () => { if (!suppressFocusOpen) open(); });
   toggle.addEventListener("click", () => open({ focus: true }));
   dismiss.addEventListener("click", () => close({ restoreFocus: true }));
   root.addEventListener("focusin", cancelClose);
   root.addEventListener("focusout", (event) => {
+    if (railBrand?.contains(event.relatedTarget)) { cancelClose(); return; }
     if (!root.contains(event.relatedTarget)) scheduleClose();
   });
   document.addEventListener("pointerdown", (event) => {
-    if (isOpen() && !root.contains(event.target)) close();
+    // M+ owns its click toggle. Closing here first would make that click reopen
+    // an already open panel, so treat the rail door as part of the menu.
+    if (!isOpen()) return;
+    if (railBrand?.contains(event.target)) { cancelClose(); return; }
+    if (!root.contains(event.target)) close();
   });
   window.addEventListener("mefi:nav", (event) => {
     syncBlocked();

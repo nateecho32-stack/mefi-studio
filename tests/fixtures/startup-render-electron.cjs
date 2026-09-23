@@ -187,6 +187,29 @@ app.whenReady().then(async () => {
   assert.ok(report.conversation.scrollHeight > report.conversation.clientHeight + 100, "synthetic conversation must overflow");
   assert.ok(report.conversation.scrollTop + report.conversation.clientHeight >= report.conversation.scrollHeight - 60,
     `Home should reveal the newest synthetic message: ${JSON.stringify(report.conversation)}`);
+  report.projectsToggle = await first.run(`
+    const brand = document.getElementById('app-rail-brand');
+    const sidebar = window.MefiSidebar;
+    const before = sidebar.isOpen();
+    const pressProjects = () => {
+      brand.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }));
+    };
+    pressProjects();
+    brand.click();
+    const opened = sidebar.isOpen();
+    document.getElementById('workspace-sidebar-panel').dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+    brand.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }));
+    await new Promise((resolve) => setTimeout(resolve, 160));
+    const hoveredOpen = sidebar.isOpen();
+    pressProjects();
+    brand.focus();
+    await new Promise((resolve) => setTimeout(resolve, 160));
+    const heldOpen = sidebar.isOpen();
+    brand.click();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    return { before, opened, hoveredOpen, heldOpen, closed: !sidebar.isOpen(), expanded: brand.getAttribute('aria-expanded') };
+  `);
+  assert.deepEqual(report.projectsToggle, { before: false, opened: true, hoveredOpen: true, heldOpen: true, closed: true, expanded: "false" });
   await first.capture("startup-ready.png");
   await closeWindow(first.window);
 
