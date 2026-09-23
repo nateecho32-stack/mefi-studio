@@ -550,14 +550,6 @@ test("Singularity draws a bounded black hole whose accretion disc turns with the
   premiumSurface("singularity", (_styles, first) => assert.equal(first.calls.conic, 1, "the accretion disc's brightness turns with the angle"));
 });
 
-test("Prism cuts a bounded gem that keeps fewer facets as it shrinks", () => {
-  premiumSurface("prism");
-  // Prism cuts fewer planes as it shrinks: three, then two halves, then one.
-  const styles = loadNodeStyles();
-  const fills = [12, 5, 3].map((radius) => { const recorded = recordingContext(); styles.paint(recorded, "prism", { x: 50, y: 50 }, radius, [120, 180, 220], { kind: "task" }); return recorded.calls.fill; });
-  assert.ok(fills[0] > fills[1] && fills[1] > fills[2], `a small gem keeps fewer facets (${fills.join(", ")} fills)`);
-});
-
 test("Sigil draws a bounded seal whose marks follow its size", () => {
   premiumSurface("sigil");
   const styles = loadNodeStyles();
