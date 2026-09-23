@@ -254,3 +254,22 @@ test("the Machine panel surfaces the latched severe-memory cap instead of readin
   assert.equal(lines.style.color, "", "the tint clears with the cap");
   assert.equal(badge.title, "", "the cap tooltip clears with the latch");
 });
+
+test("a builder session links back to the task it served, and other sessions offer no task link", async () => {
+  const asked = [], went = [];
+  const env = environment({
+    tasksAttempts: async (payload) => { asked.push(payload); return payload.sessionId === "ses-root" ? { ok: true, projectId: "project-a", taskId: "task-fix", attempts: [] } : { ok: true, taskId: null, attempts: [] }; },
+  });
+  env.window.MefiNav = { go: (...args) => went.push(args) };
+  await env.open();
+  env.rows()[0].click(); await flush();
+  const buttons = () => { const found = []; const walk = (node) => { for (const child of node.children || []) { if (child.tagName === "button") found.push(child); walk(child); } }; walk(env.element("explorer-detail")); return found; };
+  const open = buttons().find((button) => button.textContent === "Open task");
+  assert.ok(open, "the resolved task shows an Open task link");
+  open.click();
+  assert.deepEqual(JSON.parse(JSON.stringify(went)), [["tasks", { taskId: "task-fix", projectId: "project-a", filter: "all" }]]);
+  env.rows()[2].click(); await flush();
+  assert.ok(!buttons().some((button) => button.textContent === "Open task"), "a session with no ledger row has no task link");
+  env.rows()[0].click(); await flush();
+  assert.equal(asked.filter((payload) => payload.sessionId === "ses-root").length, 1, "a resolved session is not asked again");
+});

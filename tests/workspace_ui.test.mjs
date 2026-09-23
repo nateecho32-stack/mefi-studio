@@ -612,3 +612,19 @@ test("one pause control holds all new work and resumes through start-work", asyn
   assert.equal(env.el("pause").textContent, "Pause");
   assert.equal(env.el("dash-service-value").textContent, "Ready");
 });
+
+test("the Needs you tile names which decision each waiting task needs", async () => {
+  const env = await environment({ bridgeOverrides: {
+    tasksList: async () => ({ ok: true, projectId: "project-a", tasks: [
+      { id: "scope", projectId: "project-a", title: "Scope to approve", status: "open" },
+      { id: "stuck", projectId: "project-a", title: "Parked task", status: "open" },
+      { id: "check", projectId: "project-a", title: "Finished worker", status: "awaiting_verification" },
+      { id: "plain", projectId: "project-a", title: "Ready task", status: "open" },
+    ] }),
+    backlogStatus: async () => ({ ok: true, projectId: "project-a", counts: { approval: 1, blocked: 1, ready: 1 }, taskStates: [{ id: "scope", stage: "approval" }, { id: "stuck", stage: "blocked", reason: "Verification limit reached" }, { id: "plain", stage: "ready" }], next: [], paused: false, draining: false }),
+  } });
+  await env.workspace.refresh(true); await flush();
+  assert.equal(env.el("dash-attention-value").textContent, "3 waiting");
+  assert.equal(env.el("dash-attention-note").textContent, "1 awaiting approval · 1 blocked · 1 to review");
+  assert.equal(env.el("dash-attention").dataset.target, "review");
+});

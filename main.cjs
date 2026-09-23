@@ -54,6 +54,7 @@ const backlog = require("./scripts/backlog.cjs");
 const boardGrowth = require("./scripts/board-growth.cjs");
 const boardGrouping = require("./scripts/board-grouping.cjs");
 const taskContext = require("./scripts/task-context.cjs");
+const taskAttempts = require("./scripts/task-attempts.cjs");
 const chatWork = require("./scripts/chat-work.cjs");
 const taskHandoffs = require("./scripts/task-handoffs.cjs");
 const executorWorktrees = require("./scripts/executor-worktrees.cjs");
@@ -8173,6 +8174,19 @@ async function readTaskContext({ taskId, projectId, before = null } = {}, kind =
   });
 }
 
+// Attempt history for the task detail: the executor ledger grouped by runId.
+// Read-only and lock-free — the ledger is append-only and a torn last line is
+// skipped. A sessionId (Explorer, A-Eyes) resolves the task its run served.
+async function readTaskAttempts({ taskId, sessionId, projectId, limit } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  let ledger = "";
+  try { ledger = await readFile(projectDataPath(EXECUTOR_LOG_PATH), "utf8"); } catch (failure) {
+    if (failure?.code !== "ENOENT") return { ok: false, error: "The run history could not be read." };
+  }
+  return { ok: true, projectId: projects.current().id, ...taskAttempts.attemptsFromLedger(ledger, { taskId, sessionId, limit }) };
+}
+
 async function restoreTaskContext({ taskId, revisionId, projectId } = {}) {
   const error = taskProjectError(projectId);
   if (error) return { ok: false, error };
@@ -13862,6 +13876,7 @@ function registerIpc() {
   ipcMain.handle("tasks:dependencies", (_event, payload) => setTaskDependencies(payload ?? {}));
   ipcMain.handle("tasks:history", (_event, payload) => readTaskContext(payload ?? {}, "history"));
   ipcMain.handle("tasks:handoff", (_event, payload) => readTaskContext(payload ?? {}, "handoff"));
+  ipcMain.handle("tasks:attempts", (_event, payload) => readTaskAttempts(payload ?? {}));
   ipcMain.handle("tasks:restore", (_event, payload) => restoreTaskContext(payload ?? {}));
   ipcMain.handle("tasks:delete", (_event, payload) => deleteTask(payload ?? {}));
   ipcMain.handle("tasks:action", (_event, payload) => taskAction(payload ?? {}));

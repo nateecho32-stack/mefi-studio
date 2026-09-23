@@ -109,6 +109,7 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   tasksDependencies: (payload) => ipcRenderer.invoke("tasks:dependencies", payload ?? {}),
   tasksHistory: (payload) => ipcRenderer.invoke("tasks:history", payload ?? {}),
   tasksHandoff: (payload) => ipcRenderer.invoke("tasks:handoff", payload ?? {}),
+  tasksAttempts: (payload) => ipcRenderer.invoke("tasks:attempts", payload ?? {}),
   tasksRestore: (payload) => ipcRenderer.invoke("tasks:restore", payload ?? {}),
   tasksDelete: (payload) => ipcRenderer.invoke("tasks:delete", payload ?? {}),
   tasksAction: (payload) => ipcRenderer.invoke("tasks:action", payload ?? {}),

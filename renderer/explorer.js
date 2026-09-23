@@ -417,6 +417,26 @@
     revealSelected();
   }
 
+  // The task a builder session served, from the executor ledger. Misses are
+  // re-asked after a minute: a running session gains its ledger row at finish.
+  const sessionTasks = new Map();
+  function sessionTask(sessionId) {
+    const known = sessionTasks.get(sessionId);
+    if (known && (known.taskId || known.pending || Date.now() - known.at < 60000)) return known;
+    if (!window.mefiStudio?.tasksAttempts) return null;
+    const record = { pending: true, taskId: null, projectId: null, at: Date.now() };
+    sessionTasks.set(sessionId, record);
+    Promise.resolve(window.mefiStudio.tasksAttempts({ sessionId, limit: 1 }))
+      .then((result) => { if (result?.ok && result.taskId) Object.assign(record, { taskId: result.taskId, projectId: result.projectId || null }); })
+      .catch(() => {})
+      .finally(() => {
+        record.pending = false;
+        record.at = Date.now();
+        if (record.taskId && state.selected === sessionId) renderDetail();
+      });
+    return record;
+  }
+
   function renderDetail() {
     const session = state.sessions.find((item) => item.id === state.selected);
     els.detail.textContent = "";
@@ -472,6 +492,12 @@
     link("Open in Command", "Select this session in the Command view (D)", () =>
       window.MefiNav?.go?.("command", { sessionId: session.id })
     );
+    const owner = sessionTask(session.id);
+    if (owner?.taskId) {
+      link("Open task", "Open the task this session worked on, with its attempts and completion checks", () =>
+        window.MefiNav?.go?.("tasks", { taskId: owner.taskId, projectId: owner.projectId || undefined, filter: "all" })
+      );
+    }
     els.detail.append(links);
     const todos = sessionTodos(session.id);
     if (todos.length) {

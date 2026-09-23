@@ -545,7 +545,13 @@
     $("dash-attention").dataset.tone = questions.length ? "warn" : review.length ? "busy" : "idle";
     $("dash-attention").dataset.target = questions.length ? "ask" : "review";
     $("dash-attention-value").textContent = waiting ? `${waiting} waiting` : "Nothing waiting";
-    $("dash-attention-note").textContent = [questions.length ? `${questions.length} question${questions.length === 1 ? "" : "s"} to answer` : "", review.length ? `${review.length} to review` : ""].filter(Boolean).join(" · ");
+    // Review holds three different decisions: a build awaiting approval, a
+    // blocker only you can clear, and finished work to check. Name each.
+    const reviewStages = review.map((task) => taskView(task).stage);
+    const approvals = reviewStages.filter((stage) => stage === "approval").length;
+    const blocked = reviewStages.filter((stage) => stage === "blocked").length;
+    const checks = review.length - approvals - blocked;
+    $("dash-attention-note").textContent = [questions.length ? `${questions.length} question${questions.length === 1 ? "" : "s"} to answer` : "", approvals ? `${approvals} awaiting approval` : "", blocked ? `${blocked} blocked` : "", checks ? `${checks} to review` : ""].filter(Boolean).join(" · ");
     const next = (state.backlog?.next || [])[0];
     const nextTask = next ? scoped(state.tasks).find((task) => task.id === next.id) : null;
     const ready = state.backlog?.counts?.ready || 0;

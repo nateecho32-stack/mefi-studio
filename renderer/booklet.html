@@ -17684,31 +17684,15 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     } catch {}
   }
 
-  // tasks:save overwrites the whole store: rewrite one task only from a list that
-  // was read and still holds it, never from an empty or failed read.
-  async function patchTask(id, patch) {
+  // Confirm a task done through the host's targeted status action, the same
+  // one the task board uses. tasks:save never takes status from a form, so a
+  // whole-list save here only ever appended a "marked done" log line.
+  async function confirmTaskDone(task) {
     try {
-      const all = (await window.mefiStudio?.tasksList?.())?.tasks;
-      if (!Array.isArray(all) || !all.some((entry) => entry.id === id)) return false;
-      const now = Date.now();
-      await window.mefiStudio.tasksSave(
-        all.map((entry) => {
-          if (entry.id !== id) return entry;
-          const next = { ...entry, ...patch, updatedAt: now };
-          // A finish from the constellation stamps doneAt like the board does,
-          // so the task lands under the Done mark with a real finish time.
-          if (patch.status === "done" && entry.status !== "done" && entry.status !== "archived") {
-            next.doneAt = now;
-            next.logs = [...(entry.logs ?? []), { at: now, kind: "status", text: "marked done" }].slice(-40);
-          } else if (patch.status === "open" || patch.status === "active") {
-            delete next.doneAt;
-          }
-          return next;
-        })
-      );
-      return true;
-    } catch {
-      return false;
+      const result = await window.mefiStudio?.tasksAction?.({ action: "status", status: "done", taskId: task.id, projectId: task.projectId || undefined });
+      return result?.ok ? { ok: true } : { ok: false, error: result?.error || "the task store is unavailable" };
+    } catch (error) {
+      return { ok: false, error: error?.message || "the task store is unavailable" };
     }
   }
 
@@ -24845,22 +24829,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       action("Work on it", () => workOnNode(node), {
         title: "Prioritize this task. Machine managed starts eligible work while Studio remains responsive; prerequisites, approval, file claims and any selected manual build limit still apply.",
       });
-      if (task.status === "open") {
-        action("Activate", async () => {
-          if (!(await patchTask(task.id, { status: "active" }))) {
-            window.MefiToast?.(`${task.title} · not saved, the task store could not be read`, "bad");
-            return;
-          }
-          await refreshTasks();
-          renderInfo();
-          window.MefiToast?.(`${task.title} → active`, "good");
-        });
-      }
       action(
         "Done",
         async () => {
-          if (!(await patchTask(task.id, { status: "done" }))) {
-            window.MefiToast?.(`${task.title} · not saved, the task store could not be read`, "bad");
+          const result = await confirmTaskDone(task);
+          if (!result.ok) {
+            window.MefiToast?.(`${task.title} · not marked done: ${result.error}`, "bad");
             return;
           }
           await refreshTasks();
@@ -27032,6 +27006,26 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     revealSelected();
   }
 
+  // The task a builder session served, from the executor ledger. Misses are
+  // re-asked after a minute: a running session gains its ledger row at finish.
+  const sessionTasks = new Map();
+  function sessionTask(sessionId) {
+    const known = sessionTasks.get(sessionId);
+    if (known && (known.taskId || known.pending || Date.now() - known.at < 60000)) return known;
+    if (!window.mefiStudio?.tasksAttempts) return null;
+    const record = { pending: true, taskId: null, projectId: null, at: Date.now() };
+    sessionTasks.set(sessionId, record);
+    Promise.resolve(window.mefiStudio.tasksAttempts({ sessionId, limit: 1 }))
+      .then((result) => { if (result?.ok && result.taskId) Object.assign(record, { taskId: result.taskId, projectId: result.projectId || null }); })
+      .catch(() => {})
+      .finally(() => {
+        record.pending = false;
+        record.at = Date.now();
+        if (record.taskId && state.selected === sessionId) renderDetail();
+      });
+    return record;
+  }
+
   function renderDetail() {
     const session = state.sessions.find((item) => item.id === state.selected);
     els.detail.textContent = "";
@@ -27087,6 +27081,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     link("Open in Command", "Select this session in the Command view (D)", () =>
       window.MefiNav?.go?.("command", { sessionId: session.id })
     );
+    const owner = sessionTask(session.id);
+    if (owner?.taskId) {
+      link("Open task", "Open the task this session worked on, with its attempts and completion checks", () =>
+        window.MefiNav?.go?.("tasks", { taskId: owner.taskId, projectId: owner.projectId || undefined, filter: "all" })
+      );
+    }
     els.detail.append(links);
     const todos = sessionTodos(session.id);
     if (todos.length) {
@@ -28608,6 +28608,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   let taskRevision = 0;
   const dependencyDrafts = new Map();
   const contextReads = new Map();
+  const attemptReads = new Map();
   const detailExpanded = new Map();
   const detailMessages = new Map();
   const entryDrafts = new Map();
@@ -29565,6 +29566,87 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     els.detail.append(history);
   }
 
+  // Attempt history: every run of this task from the executor ledger, so a
+  // retry, a fallback or a wedged start is visible here instead of only in
+  // the done log. Read-only; completion is still decided by the checks.
+  const ATTEMPT_OUTCOMES = { "finished-ok": "Reported done", failed: "Failed", stopped: "Stopped", released: "Released", unrecorded: "No end recorded" };
+  function requestTaskAttempts(task) {
+    const api = window.mefiStudio;
+    if (!api?.tasksAttempts) return null;
+    const key = taskKey(task);
+    const signature = JSON.stringify([task.runId, task.status, task.lastAttempt?.at, task.lastAttempt?.runId, task.updatedAt, taskRevision]);
+    const prior = attemptReads.get(key);
+    if (prior?.signature === signature) return prior;
+    const record = { signature, loading: !prior, attempts: prior?.attempts || [], error: "" };
+    attemptReads.set(key, record);
+    const epoch = projectEpoch;
+    Promise.resolve(api.tasksAttempts({ taskId: task.id, projectId: task.projectId || state.backlog?.projectId }))
+      .then((result) => {
+        if (!result?.ok) throw new Error(result?.error || "The run history could not be loaded.");
+        return result;
+      })
+      .then((result) => { record.attempts = Array.isArray(result.attempts) ? result.attempts : []; record.error = ""; })
+      .catch((error) => { record.error = error.message || "The run history could not be loaded."; })
+      .finally(() => {
+        if (attemptReads.get(key) !== record || epoch !== projectEpoch) return;
+        record.loading = false;
+        if (!els.overlay.hidden && taskKey(selectedTask()) === key) renderDetail();
+      });
+    return record;
+  }
+
+  function renderTaskAttempts(task) {
+    const read = requestTaskAttempts(task);
+    if (!read) return;
+    const key = taskKey(task);
+    const fold = detailFold(task, "attempts", `Attempts${read.attempts.length ? ` · ${read.attempts.length}` : ""}`);
+    fold.append(node("p", "task-context-hint", "Each run of this task: the route that ran it, how it ended, and what it said last. Completion is still decided by the checks above."));
+    for (const attempt of read.attempts) {
+      const live = Boolean(task.runId) && task.runId === attempt.runId && attempt.outcome === "unrecorded";
+      const progress = live && task.runProgress?.runId === attempt.runId ? task.runProgress : null;
+      const row = node("article", "task-history-entry", "");
+      row.dataset.runId = attempt.runId;
+      row.dataset.attemptOutcome = live ? "running" : attempt.outcome;
+      const took = Number.isFinite(attempt.seconds) && attempt.seconds > 0 ? `${attempt.seconds < 60 ? `${attempt.seconds}s` : `${Math.round(attempt.seconds / 60)}m`}` : "";
+      const route = attempt.via ? `${attempt.via}${attempt.fallbacks?.length ? " → retried on opencode" : ""}` : "";
+      const percent = Number.isFinite(progress?.progress) ? ` ${Math.round(progress.progress * 100)}%` : "";
+      row.append(node("strong", "", [live ? `Working now${percent}` : ATTEMPT_OUTCOMES[attempt.outcome] || "No end recorded", Number.isFinite(attempt.startedAt) ? relTime(attempt.startedAt) : "", route, took].filter(Boolean).join(" · ")));
+      // The task's stage speaks for its last run only while no newer run is live.
+      if (task.lastAttempt?.runId === attempt.runId && (!task.runId || task.runId === attempt.runId) && (task.verification?.state || needsReview(task) || isDone(task))) row.append(node("p", "task-context-hint", `Completion check for this run: ${describe(task).label}`));
+      const why = attempt.error || (attempt.release ? `Released: ${attempt.release.reason || "the claim was dropped"}` : "") || (attempt.outcome === "unrecorded" && !live ? "The ledger has no finish for this run; it may have been cleared from the done log." : "");
+      if (why) row.append(node("p", "task-context-hint", why));
+      if (attempt.result) row.append(node("p", "task-history-preview", clipText(attempt.result, 400)));
+      const tail = live ? (Array.isArray(progress?.outputTail) ? progress.outputTail : []) : attempt.tail || [];
+      if (tail.length) {
+        const said = node("details", "", "");
+        const saidKey = `${key}/attempt/${attempt.runId}`;
+        said.open = detailExpanded.get(saidKey) === true;
+        said.addEventListener("toggle", () => detailExpanded.set(saidKey, said.open));
+        said.append(node("summary", "", live ? "Latest output" : "What it said"), node("pre", "task-handoff-text", tail.join("\n")));
+        row.append(said);
+      }
+      const sessionId = attempt.sessionId || progress?.sessionId;
+      if (sessionId) {
+        const open = node("button", "ghost mini", "Open session");
+        open.type = "button";
+        open.dataset.taskAction = "attempt-session";
+        open.addEventListener("click", () => window.MefiNav?.go?.("explorer", { sessionId }));
+        row.append(open);
+        if (live) {
+          const watch = node("button", "ghost mini", "Watch");
+          watch.type = "button";
+          watch.dataset.taskAction = "attempt-watch";
+          watch.addEventListener("click", () => window.MefiNav?.go?.("eyes", { sessionId }));
+          row.append(watch);
+        }
+      }
+      fold.append(row);
+    }
+    if (!read.attempts.length) fold.append(node("p", "task-context-hint", read.loading ? "Loading run history…" : read.error || "No runs of this task are recorded yet."));
+    else if (read.error) fold.append(node("p", "task-context-hint", read.error));
+    els.detail.append(fold);
+  }
+
   async function appendTaskEntry(task, field, input) {
     const text = input.value.trim(), key = taskKey(task), draftKey = `${key}/${field}`;
     if (!text || entryPending.has(key)) return;
@@ -29724,6 +29806,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         entryList(task.remaining, (line) => Object.assign(document.createElement("li"), { textContent: String(line) }));
       }
     }
+    renderTaskAttempts(task);
     section(`Log (${(task.logs ?? []).length})`);
     entryList(task.logs ?? [], (log) => Object.assign(document.createElement("li"), { textContent: `[${new Date(log.at).toLocaleTimeString()}] ${log.text}` }));
     const logRow = document.createElement("div");
@@ -29973,9 +30056,16 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const params = optionsOf(options);
     els.overlay.hidden = false;
     // Set the selection before load() so the first render already shows it.
-    if (typeof params.taskId === "string" && params.taskId) state.selected = params.taskId;
+    // A link that names another project never selects a same-id task here.
+    const elsewhere = typeof params.projectId === "string" && params.projectId && state.projectId && params.projectId !== state.projectId;
+    if (typeof params.taskId === "string" && params.taskId && !elsewhere) state.selected = params.taskId;
     return load(params)
       .then(() => {
+        if (typeof params.projectId === "string" && params.projectId && state.projectId && params.projectId !== state.projectId) {
+          if (!elsewhere && state.selected === params.taskId) { state.selected = null; renderList(); renderDetail(); }
+          status("That task belongs to another project. Switch projects to open it.", true);
+          return;
+        }
         const task = params.taskId ? selectedTask() : null;
         if (task) announce("mefi:task-opened", { taskId: task.id, projectId: task.projectId || state.projectId || null, status: task.status || null });
         revealSelected();
@@ -35315,6 +35405,26 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
   }
 
+  // The task a builder session served, from the executor ledger, so a change
+  // in the feed leads back to its task. Misses are re-asked after a minute.
+  const sessionTasks = new Map();
+  function sessionTask(sessionId) {
+    const known = sessionTasks.get(sessionId);
+    if (!sessionId || (known && (known.taskId || known.pending || Date.now() - known.at < 60000))) return known ?? null;
+    if (!window.mefiStudio?.tasksAttempts) return null;
+    const record = { pending: true, taskId: null, projectId: null, at: Date.now() };
+    sessionTasks.set(sessionId, record);
+    Promise.resolve(window.mefiStudio.tasksAttempts({ sessionId, limit: 1 }))
+      .then((result) => { if (result?.ok && result.taskId) Object.assign(record, { taskId: result.taskId, projectId: result.projectId || null }); })
+      .catch(() => {})
+      .finally(() => {
+        record.pending = false;
+        record.at = Date.now();
+        if (record.taskId && findChange(state.changeId)?.sessionId === sessionId) renderInspector();
+      });
+    return record;
+  }
+
   function renderInspector() {
     const change = findChange(state.changeId);
     els.inspector.textContent = "";
@@ -35342,6 +35452,18 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       const v = document.createElement("span");
       v.textContent = value;
       els.inspector.append(k, v);
+    }
+    const owner = sessionTask(change.sessionId);
+    if (owner?.taskId) {
+      const k = document.createElement("span");
+      k.className = "k";
+      k.textContent = "task";
+      const open = document.createElement("button");
+      open.className = "ghost mini";
+      open.textContent = "Open task";
+      open.title = "Open the task this session worked on, with its attempts and completion checks";
+      open.addEventListener("click", () => window.MefiNav?.go?.("tasks", { taskId: owner.taskId, projectId: owner.projectId || undefined, filter: "all" }));
+      els.inspector.append(k, open);
     }
   }
 
@@ -36594,7 +36716,13 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     $("dash-attention").dataset.tone = questions.length ? "warn" : review.length ? "busy" : "idle";
     $("dash-attention").dataset.target = questions.length ? "ask" : "review";
     $("dash-attention-value").textContent = waiting ? `${waiting} waiting` : "Nothing waiting";
-    $("dash-attention-note").textContent = [questions.length ? `${questions.length} question${questions.length === 1 ? "" : "s"} to answer` : "", review.length ? `${review.length} to review` : ""].filter(Boolean).join(" · ");
+    // Review holds three different decisions: a build awaiting approval, a
+    // blocker only you can clear, and finished work to check. Name each.
+    const reviewStages = review.map((task) => taskView(task).stage);
+    const approvals = reviewStages.filter((stage) => stage === "approval").length;
+    const blocked = reviewStages.filter((stage) => stage === "blocked").length;
+    const checks = review.length - approvals - blocked;
+    $("dash-attention-note").textContent = [questions.length ? `${questions.length} question${questions.length === 1 ? "" : "s"} to answer` : "", approvals ? `${approvals} awaiting approval` : "", blocked ? `${blocked} blocked` : "", checks ? `${checks} to review` : ""].filter(Boolean).join(" · ");
     const next = (state.backlog?.next || [])[0];
     const nextTask = next ? scoped(state.tasks).find((task) => task.id === next.id) : null;
     const ready = state.backlog?.counts?.ready || 0;

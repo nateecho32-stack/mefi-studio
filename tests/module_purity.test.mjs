@@ -19,6 +19,7 @@ const PROMISES = [
   { file: "scripts/work-classification.mjs", says: "(no network)", keeps: ["network"] },
   { file: "scripts/context-manager.cjs", says: "This module neither reads/writes saved state", keeps: ["filesystem"] },
   { file: "scripts/task-context.cjs", says: "Pure: callers persist the", keeps: ["filesystem"] },
+  { file: "scripts/task-attempts.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "clock"] },
   { file: "scripts/task-delegation.cjs", says: "This pure module runs inside the board mutation gateway", keeps: ["electron", "filesystem", "network", "processes"] },
   { file: "scripts/provider-breaker.cjs", says: "no module-level singleton", keeps: ["filesystem", "network", "processes", "timers"] },
 ];

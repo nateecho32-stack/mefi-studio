@@ -31,6 +31,7 @@
   let taskRevision = 0;
   const dependencyDrafts = new Map();
   const contextReads = new Map();
+  const attemptReads = new Map();
   const detailExpanded = new Map();
   const detailMessages = new Map();
   const entryDrafts = new Map();
@@ -988,6 +989,87 @@
     els.detail.append(history);
   }
 
+  // Attempt history: every run of this task from the executor ledger, so a
+  // retry, a fallback or a wedged start is visible here instead of only in
+  // the done log. Read-only; completion is still decided by the checks.
+  const ATTEMPT_OUTCOMES = { "finished-ok": "Reported done", failed: "Failed", stopped: "Stopped", released: "Released", unrecorded: "No end recorded" };
+  function requestTaskAttempts(task) {
+    const api = window.mefiStudio;
+    if (!api?.tasksAttempts) return null;
+    const key = taskKey(task);
+    const signature = JSON.stringify([task.runId, task.status, task.lastAttempt?.at, task.lastAttempt?.runId, task.updatedAt, taskRevision]);
+    const prior = attemptReads.get(key);
+    if (prior?.signature === signature) return prior;
+    const record = { signature, loading: !prior, attempts: prior?.attempts || [], error: "" };
+    attemptReads.set(key, record);
+    const epoch = projectEpoch;
+    Promise.resolve(api.tasksAttempts({ taskId: task.id, projectId: task.projectId || state.backlog?.projectId }))
+      .then((result) => {
+        if (!result?.ok) throw new Error(result?.error || "The run history could not be loaded.");
+        return result;
+      })
+      .then((result) => { record.attempts = Array.isArray(result.attempts) ? result.attempts : []; record.error = ""; })
+      .catch((error) => { record.error = error.message || "The run history could not be loaded."; })
+      .finally(() => {
+        if (attemptReads.get(key) !== record || epoch !== projectEpoch) return;
+        record.loading = false;
+        if (!els.overlay.hidden && taskKey(selectedTask()) === key) renderDetail();
+      });
+    return record;
+  }
+
+  function renderTaskAttempts(task) {
+    const read = requestTaskAttempts(task);
+    if (!read) return;
+    const key = taskKey(task);
+    const fold = detailFold(task, "attempts", `Attempts${read.attempts.length ? ` · ${read.attempts.length}` : ""}`);
+    fold.append(node("p", "task-context-hint", "Each run of this task: the route that ran it, how it ended, and what it said last. Completion is still decided by the checks above."));
+    for (const attempt of read.attempts) {
+      const live = Boolean(task.runId) && task.runId === attempt.runId && attempt.outcome === "unrecorded";
+      const progress = live && task.runProgress?.runId === attempt.runId ? task.runProgress : null;
+      const row = node("article", "task-history-entry", "");
+      row.dataset.runId = attempt.runId;
+      row.dataset.attemptOutcome = live ? "running" : attempt.outcome;
+      const took = Number.isFinite(attempt.seconds) && attempt.seconds > 0 ? `${attempt.seconds < 60 ? `${attempt.seconds}s` : `${Math.round(attempt.seconds / 60)}m`}` : "";
+      const route = attempt.via ? `${attempt.via}${attempt.fallbacks?.length ? " → retried on opencode" : ""}` : "";
+      const percent = Number.isFinite(progress?.progress) ? ` ${Math.round(progress.progress * 100)}%` : "";
+      row.append(node("strong", "", [live ? `Working now${percent}` : ATTEMPT_OUTCOMES[attempt.outcome] || "No end recorded", Number.isFinite(attempt.startedAt) ? relTime(attempt.startedAt) : "", route, took].filter(Boolean).join(" · ")));
+      // The task's stage speaks for its last run only while no newer run is live.
+      if (task.lastAttempt?.runId === attempt.runId && (!task.runId || task.runId === attempt.runId) && (task.verification?.state || needsReview(task) || isDone(task))) row.append(node("p", "task-context-hint", `Completion check for this run: ${describe(task).label}`));
+      const why = attempt.error || (attempt.release ? `Released: ${attempt.release.reason || "the claim was dropped"}` : "") || (attempt.outcome === "unrecorded" && !live ? "The ledger has no finish for this run; it may have been cleared from the done log." : "");
+      if (why) row.append(node("p", "task-context-hint", why));
+      if (attempt.result) row.append(node("p", "task-history-preview", clipText(attempt.result, 400)));
+      const tail = live ? (Array.isArray(progress?.outputTail) ? progress.outputTail : []) : attempt.tail || [];
+      if (tail.length) {
+        const said = node("details", "", "");
+        const saidKey = `${key}/attempt/${attempt.runId}`;
+        said.open = detailExpanded.get(saidKey) === true;
+        said.addEventListener("toggle", () => detailExpanded.set(saidKey, said.open));
+        said.append(node("summary", "", live ? "Latest output" : "What it said"), node("pre", "task-handoff-text", tail.join("\n")));
+        row.append(said);
+      }
+      const sessionId = attempt.sessionId || progress?.sessionId;
+      if (sessionId) {
+        const open = node("button", "ghost mini", "Open session");
+        open.type = "button";
+        open.dataset.taskAction = "attempt-session";
+        open.addEventListener("click", () => window.MefiNav?.go?.("explorer", { sessionId }));
+        row.append(open);
+        if (live) {
+          const watch = node("button", "ghost mini", "Watch");
+          watch.type = "button";
+          watch.dataset.taskAction = "attempt-watch";
+          watch.addEventListener("click", () => window.MefiNav?.go?.("eyes", { sessionId }));
+          row.append(watch);
+        }
+      }
+      fold.append(row);
+    }
+    if (!read.attempts.length) fold.append(node("p", "task-context-hint", read.loading ? "Loading run history…" : read.error || "No runs of this task are recorded yet."));
+    else if (read.error) fold.append(node("p", "task-context-hint", read.error));
+    els.detail.append(fold);
+  }
+
   async function appendTaskEntry(task, field, input) {
     const text = input.value.trim(), key = taskKey(task), draftKey = `${key}/${field}`;
     if (!text || entryPending.has(key)) return;
@@ -1147,6 +1229,7 @@
         entryList(task.remaining, (line) => Object.assign(document.createElement("li"), { textContent: String(line) }));
       }
     }
+    renderTaskAttempts(task);
     section(`Log (${(task.logs ?? []).length})`);
     entryList(task.logs ?? [], (log) => Object.assign(document.createElement("li"), { textContent: `[${new Date(log.at).toLocaleTimeString()}] ${log.text}` }));
     const logRow = document.createElement("div");
@@ -1396,9 +1479,16 @@
     const params = optionsOf(options);
     els.overlay.hidden = false;
     // Set the selection before load() so the first render already shows it.
-    if (typeof params.taskId === "string" && params.taskId) state.selected = params.taskId;
+    // A link that names another project never selects a same-id task here.
+    const elsewhere = typeof params.projectId === "string" && params.projectId && state.projectId && params.projectId !== state.projectId;
+    if (typeof params.taskId === "string" && params.taskId && !elsewhere) state.selected = params.taskId;
     return load(params)
       .then(() => {
+        if (typeof params.projectId === "string" && params.projectId && state.projectId && params.projectId !== state.projectId) {
+          if (!elsewhere && state.selected === params.taskId) { state.selected = null; renderList(); renderDetail(); }
+          status("That task belongs to another project. Switch projects to open it.", true);
+          return;
+        }
         const task = params.taskId ? selectedTask() : null;
         if (task) announce("mefi:task-opened", { taskId: task.id, projectId: task.projectId || state.projectId || null, status: task.status || null });
         revealSelected();

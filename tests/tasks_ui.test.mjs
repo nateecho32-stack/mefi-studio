@@ -64,7 +64,7 @@ function environment({ tasks = [], filter = "all", saveOk = true, prefsWait = nu
   if (overview) vm.runInContext(groupsSource, context);
   vm.runInContext(source, context);
   const api = context.window.MefiTasks; api.init();
-  return { api, get, saved, notifications, events, broadcast: (rows) => onTasks(rows), project: (activeId) => onProjects({ activeId }) };
+  return { api, get, window: context.window, saved, notifications, events, broadcast: (rows) => onTasks(rows), project: (activeId) => onProjects({ activeId }) };
 }
 
 const rows = [
@@ -628,4 +628,73 @@ test("a creation response from another project cannot leak its task or clear the
   assert.equal(env.api.state.tasks.length, 0);
   assert.equal(env.get("task-new").value, "Second project draft");
   assert(!env.notifications.some((message) => /^Task created/.test(message)));
+});
+
+test("task detail lists each run from the ledger and links its session without implying completion", async () => {
+  const task = { id: "fix", projectId: "p", title: "Fix save", status: "open", runId: "run_3", runProgress: { runId: "run_3", sessionId: "ses_live", progress: 0.4, outputTail: ["editing save.js"] }, lastAttempt: { runId: "run_2", at: 290 }, verification: { state: "failed", reason: "No completion evidence" } };
+  const calls = [], went = [];
+  const env = environment({ tasks: [task], bridge: {
+    tasksAttempts: async (payload) => { calls.push(payload); return { ok: true, taskId: "fix", attempts: [
+      { runId: "run_3", outcome: "unrecorded", via: "opencode/glm", startedAt: Date.now() - 120000, fallbacks: [], tail: [] },
+      { runId: "run_2", outcome: "failed", via: "claude", startedAt: 200, seconds: 90, fallbacks: [{ at: 205, reason: "exited silently" }], error: "tests failed", sessionId: "ses_two", tail: ["npm test", "1 failing"] },
+      { runId: "run_1", outcome: "unrecorded", via: "grok", startedAt: 100, fallbacks: [], tail: [] },
+    ] }; },
+  } });
+  await env.api.open({ taskId: "fix" }); await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), { taskId: "fix", projectId: "p" });
+  const detail = env.get("task-detail");
+  const runs = descendants(detail).filter((element) => element.dataset.runId);
+  assert.deepEqual(runs.map((element) => element.dataset.attemptOutcome), ["running", "failed", "unrecorded"]);
+  const text = detail.textContent;
+  assert.match(text, /Attempts · 3/);
+  assert.match(text, /Working now 40%/);
+  assert.match(text, /editing save\.js/, "the live run shows its checkpointed output");
+  assert.match(text, /claude → retried on opencode/);
+  assert.match(text, /tests failed/);
+  assert.doesNotMatch(text, /Completion check for this run/, "a live newer run means the task stage no longer describes the older run");
+  assert.match(text, /no finish for this run/, "an attempt with no recorded end is never shown as passed or running");
+  assert.doesNotMatch(text, /Reported done/);
+  env.window.MefiNav.go = (...args) => went.push(args);
+  descendants(detail).find((element) => element.dataset.taskAction === "attempt-watch").click();
+  descendants(detail).filter((element) => element.dataset.taskAction === "attempt-session")[1].click();
+  assert.deepEqual(JSON.parse(JSON.stringify(went)), [["eyes", { sessionId: "ses_live" }], ["explorer", { sessionId: "ses_two" }]]);
+});
+
+test("a late attempts read never lands on the newly selected task, and a missing bridge hides the fold", async () => {
+  let resolveOld;
+  const oldRead = new Promise((resolve) => { resolveOld = resolve; });
+  const env = environment({ tasks: [{ id: "old", title: "Old task", status: "open" }, { id: "new", title: "New task", status: "open" }], bridge: {
+    tasksAttempts: async ({ taskId }) => taskId === "old" ? oldRead : { ok: true, taskId: "new", attempts: [] },
+  } });
+  await env.api.open({ taskId: "old" });
+  await env.api.open({ taskId: "new" }); await settle();
+  resolveOld({ ok: true, taskId: "old", attempts: [{ runId: "run_old", outcome: "failed", via: "grok", error: "Old run should stay out", fallbacks: [], tail: [] }] }); await settle();
+  assert.match(env.get("task-detail").textContent, /No runs of this task are recorded yet/);
+  assert.doesNotMatch(env.get("task-detail").textContent, /Old run should stay out/);
+  const bare = environment({ tasks: [{ id: "only", title: "Only task", status: "open" }] });
+  await bare.api.open({ taskId: "only" }); await settle();
+  assert.doesNotMatch(bare.get("task-detail").textContent, /Attempts/);
+});
+
+test("a task link naming another project does not select a same-id task here", async () => {
+  const env = environment({ bridge: {
+    tasksList: async () => ({ ok: true, projectId: "p", tasks: [{ id: "shared-id", projectId: "p", title: "This project's task", status: "open" }] }),
+  } });
+  await env.api.open();
+  await env.api.open({ taskId: "shared-id", projectId: "q" }); await settle();
+  assert.equal(env.api.state.selected, null);
+  assert.doesNotMatch(env.get("task-detail").textContent, /This project's task/);
+  await env.api.open({ taskId: "shared-id", projectId: "p" }); await settle();
+  assert.equal(env.api.state.selected, "shared-id");
+});
+
+test("the run a completion check belongs to carries that check's result", async () => {
+  const task = { id: "checked", projectId: "p", title: "Checked task", status: "done", doneAt: 300, lastAttempt: { runId: "run_9", at: 300 }, verification: { state: "verified", reason: "checks passed" } };
+  const env = environment({ tasks: [task], bridge: {
+    tasksAttempts: async () => ({ ok: true, taskId: "checked", attempts: [{ runId: "run_9", outcome: "finished-ok", via: "opencode", startedAt: 200, seconds: 100, fallbacks: [], tail: [] }, { runId: "run_8", outcome: "failed", via: "opencode", startedAt: 100, fallbacks: [], error: "exit 1", tail: [] }] }),
+  } });
+  await env.api.open({ taskId: "checked" }); await settle();
+  const rows = descendants(env.get("task-detail")).filter((element) => element.dataset.runId);
+  assert.match(rows[0].textContent, /Reported done[\s\S]*Completion check for this run: /);
+  assert.doesNotMatch(rows[1].textContent, /Completion check/);
 });

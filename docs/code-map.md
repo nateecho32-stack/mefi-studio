@@ -36,6 +36,7 @@ the weight is, not to be exact.
 | --- | ---: | --- |
 | `assistant.mjs` | 6,486 | The always-on assistant's logic — every role, state normalisation, tree organisation, housekeeping and `verifyCompletion` — as functions of their inputs and an explicit `now`. |
 | `task-context.cjs` | 192 | Durable task revisions (`contextHistory`) and resumable briefs. Pure; callers persist the result under the board lock. |
+| `task-attempts.cjs` | 86 | A task's attempt history (start, fallback, finish, release) grouped by `runId` from `data/executor-log.jsonl`, for the task detail's Attempts fold and the Explorer/A-Eyes "Open task" links. Pure; read-only. |
 | `task-delegation.cjs` | 173 | Splits an owned task into durable slices. Pure, and runs inside the board gateway. |
 | `task-handoffs.cjs` | 129 | Durable work handed on by a finished attempt; transforms board records and never runs a worker. |
 | `task-history.mjs` | 54 | Keeps a verified inbox request on the board after the inbox releases it. |
