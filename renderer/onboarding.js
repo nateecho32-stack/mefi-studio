@@ -26,14 +26,14 @@
     {
       title: "Link an AI and scan this computer", short: "Scan", glyph: "g-ambience", panel: "scan",
       copy: "Before anything is read or built, find out what this computer already has: the OpenCode command line, the providers linked in it, the free models it can reach, and the keys saved in Studio. The AI chosen here helps with the rest of this setup.",
-      points: ["The scan asks OpenCode for its version, its linked provider names, its model list and its agents. It never opens the credential store, never sends a prompt and never changes OpenCode's own configuration.", "Free models cost nothing and are used first for exploring; paid plans you have linked are kept for building. Free-tier models may use prompts to improve the model, so keep confidential work on a paid model.", "Nothing is saved until you choose Use this setup and continue. From there the guide maps your selected folder and asks the linked AI to plan the remaining stops. You can run the scan again from Settings & connections after linking a provider."],
+      points: ["The scan asks OpenCode for its version, its linked provider names, its model list and its agents. It never opens the credential store, never sends a prompt and never changes OpenCode's own configuration.", "Free models cost nothing and are used first for exploring; paid plans you have linked are kept for building. Free-tier models may use prompts to improve the model, so keep confidential work on a paid model.", "Nothing is saved until you choose Use this setup and continue. From there the guide maps your selected folder and asks the linked AI to plan the remaining stops. You can run this scan again from Start here, or Auto setup from Settings, after linking a provider."],
       action: null, note: "Run the first scan reads OpenCode's own answers. Use this setup and continue saves the choices shown (no key), maps the selected folder, and asks the linked AI what to do next.",
       done: "Setup saved",
     },
     {
       title: "Welcome to Mefi's Studio", short: "Your workspace", glyph: "g-explorer",
       copy: "Turn an idea into a checked result: talk it through, create a task or plan, follow the work, then review what changed. This guide shows you where to do each step, and can walk the menus with you.",
-      points: ["Start with Projects: the M+ at the top of the left rail. Use + to add an existing folder, then select it. Check the project name above the conversation before adding work.", "Choose how builds start below. Auto build is on by default. Turn it off for Verify first: inspect each task, then approve the ones you want built.", "Each project keeps its own tasks, plans, conversation and results. Your project files stay in their folder; Studio keeps its history separately."],
+      points: ["Start with Projects: the M+ at the top of the menu on the left. Use + to add an existing folder, then select it. Check the project name above the conversation before adding work.", "Choose how builds start below. Auto build is on by default. Turn it off for Verify first: inspect each task, then approve the ones you want built.", "Each project keeps its own tasks, plans, conversation and results. Your project files stay in their folder; Studio keeps its history separately."],
       action: "Walk me to my projects", route: "project",
       station: "I opened the project menu with you and highlighted +. Add an existing folder, then select it. I tick this off the moment you are in a project.",
       note: "This opens the workspace and the project menu with you. It does not change your selected project. With a setup saved, selecting a folder here starts its map.",
@@ -49,9 +49,9 @@
     {
       title: "Connect the assistant and coding workers", short: "Connections", glyph: "g-ambience",
       copy: "The assistant helps you think and organize. Coding workers carry out tasks in your project. Their provider settings are separate, and the scan's choices are shown at the top of Settings.",
-      points: ["In Settings & connections, save the key for the assistant provider you want, choose Grok, Claude Code, Codex or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Coding workers run through OpenCode by default: on your linked plan, or on the free model the scan found. The coding tier decides what each build may cost — Free, Fast or Heavy — while Auto lets Studio pick per task. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; without it the assistant's own model, or a free model, stands in for the small routing decisions."],
-      action: "Walk me to connections", route: "studio",
-      station: "We are in Settings & connections together, at the assistant group. Save the key you want, then scroll to the coding worker group, confirm its CLI is signed in and pick a coding tier. Nothing is sent until you choose to test it.",
+      points: ["In Settings › Providers, save the key for the assistant provider you want, choose Grok, Claude Code, Codex or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Coding workers run through OpenCode by default: on your linked plan, or on the free model the scan found. The coding tier decides what each build may cost — Free, Fast or Heavy — while Auto lets Studio pick per task. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; without it the assistant's own model, or a free model, stands in for the small routing decisions."],
+      action: "Walk me to connections", route: "studio", params: { section: "settings-assistant" },
+      station: "We are in Settings together, at Providers. Save the key you want, then go on to Coding workers, confirm its CLI is signed in and pick a coding tier. Nothing is sent until you choose to test it.",
       note: "Connection tests and AI requests may use your provider allowance when you explicitly run them.",
       target: "#settings-assistant-heading", done: "Connections checked",
     },
@@ -67,7 +67,7 @@
     {
       title: "Follow the queue and current work", short: "Monitor", glyph: "g-command",
       copy: "Your work is the everyday queue. Command's node tree shows live workers, their current step and what is waiting to run.",
-      points: ["Your work separates the queue, saved ideas, Review and Done. Open any task for its brief, prerequisites, history and result.", "In Node tree, Live work shows running workers and their reported steps. Click Ready, Waiting or Needs attention to see the matching tasks and their reasons.", "Work through backlog starts existing work and admits saved ideas gradually. Pause stops new scheduling while current workers finish; let them finish before switching projects.", "Free workers run one at a time and take longer than a paid model. A prerequisite must finish before dependent work starts. Read connection, retry and file-conflict messages before adding more work."],
+      points: ["Your work separates the queue, saved ideas, Review and Done. Open any task for its brief, prerequisites, history and result.", "In Command view, Live work shows running workers and their reported steps. Click Ready, Waiting or Needs attention to see the matching tasks and their reasons.", "Work through backlog starts existing work and admits saved ideas gradually. Pause stops new scheduling while current workers finish; let them finish before switching projects.", "Free workers run one at a time and take longer than a paid model. A prerequisite must finish before dependent work starts. Read connection, retry and file-conflict messages before adding more work."],
       action: "Walk me to Live work", route: "command", secondary: "Open task board", secondaryRoute: "tasks",
       station: "We are in Command. Live work on the right follows running workers and their reported steps; the node tree behind it follows your selection. Open a reason like Ready, Waiting or Needs attention to see the matching tasks.",
       note: "Follow in Command tracks active work. You can pan or select a task to take control of the view.",
@@ -79,7 +79,7 @@
       points: ["Open Review in Your work to read the result, evidence and next actions. Inspect the project changes and run any remaining acceptance checks.", "If work needs attention, read its reason first. Correct the connection, brief or prerequisite, then use its retry control when you are ready.", "Keep failed work available for diagnosis. Task history can recover an earlier brief; it does not roll back your project files."],
       action: "Walk me to Review", route: "review",
       station: "This is Review in Your work. Open a finished task to read the result and evidence, then run any remaining acceptance checks. Tasks that need attention keep their reason and retry controls here.",
-      note: "You can reopen this guide from Start here at the foot of the left rail, or from Settings or Shortcuts. Completing the guide does not mark any task done.",
+      note: "You can reopen this guide from Start here at the foot of the menu, or from Settings or Shortcuts. Completing the guide does not mark any task done.",
       target: "#workspace-review", done: "Review found",
     },
   ];
@@ -192,7 +192,7 @@
     const active = state.status === "reading";
     card.hidden = state.status === "dismissed" || state.status === "complete";
     $("invite-title").textContent = active ? "Your place is saved. Pick the setup back up any time." : "Set up your first project together.";
-    $("invite-open").textContent = active ? `Open the guide · ${doneCount()} of ${lessons.length} done` : "Start walkthrough";
+    $("invite-open").textContent = active ? `Open the guide · ${doneCount()} of ${lessons.length} done` : "Start here";
     const walk = $("invite-walk");
     if (walk) walk.textContent = active ? `Walk with me · ${lessons[state.step].short}` : "Walk me through it";
     const trail = $("invite-steps");
@@ -559,7 +559,7 @@
         review?.click(); review?.focus?.();
         focused = review ?? null;
       }
-    } else window.MefiNav?.go?.(route);
+    } else window.MefiNav?.go?.(route, lesson.params);
     if (lesson.menu) window.MefiSidebar?.open?.();
     highlight(lesson.target);
     if (route === "project") { focused = document.getElementById("workspace-add-project") ?? null; focused?.focus?.(); }
@@ -718,5 +718,7 @@
     if (!scanStarted && hostApi("firstScan")) void runScan({ automatic: true });
     return true;
   }
-  window.MefiOnboarding = { init, startup, open, close, coach, lessons: () => lessons.map((lesson) => ({ title: lesson.title, short: lesson.short, panel: lesson.panel || null })) };
+  // status() lets other quiet prompts (the weekly community card) stay out of
+  // the way while the guide is new or still being read.
+  window.MefiOnboarding = { init, startup, open, close, coach, status: () => state.status, lessons: () => lessons.map((lesson) => ({ title: lesson.title, short: lesson.short, panel: lesson.panel || null })) };
 })();

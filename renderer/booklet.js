@@ -40,12 +40,42 @@
       button.addEventListener("click", () => { action.run(); dismiss(); });
       toast.classList.add("has-action");
       toast.append(button);
+      const secondary = options?.secondary;
+      if (secondary?.label) {
+        const second = document.createElement("button");
+        second.type = "button";
+        second.className = "toast-action secondary";
+        second.textContent = secondary.label;
+        second.addEventListener("click", () => { secondary.run?.(); dismiss(); });
+        toast.append(second);
+      }
     }
-    if (kind === "bad") toast.style.pointerEvents = "auto";
-    const life = Number(options?.duration) || (action ? 9000 : kind === "bad" ? 7000 : 2600);
+    const lasting = kind === "bad" || kind === "warn";
+    if (lasting) toast.style.pointerEvents = "auto";
+    // An interactive or lasting toast can be closed on purpose: a × for the
+    // pointer, Esc for the keyboard, and focus inside it holds it like a hover.
+    if (toast.classList.contains?.("has-action") || lasting) {
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "toast-dismiss";
+      close.textContent = "×";
+      close.title = "Dismiss (Esc)";
+      close.setAttribute?.("aria-label", "Dismiss");
+      close.addEventListener("click", dismiss);
+      toast.append(close);
+    }
+    const life = Number(options?.duration) || (action ? 9000 : lasting ? 7000 : 2600);
     const arm = (ms) => { clearTimeout(timer); timer = setTimeout(dismiss, ms); };
     toast.addEventListener("mouseenter", () => clearTimeout(timer));
     toast.addEventListener("mouseleave", () => arm(Math.max(1500, life / 3)));
+    toast.addEventListener("focusin", () => clearTimeout(timer));
+    toast.addEventListener("focusout", () => arm(Math.max(1500, life / 3)));
+    toast.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault?.();
+      event.stopPropagation?.();
+      dismiss();
+    });
     host.append(toast);
     requestAnimationFrame(() => toast.classList.add("show"));
     arm(life);
@@ -60,11 +90,19 @@
     let settled = false;
     const settle = (value) => { if (!settled) { settled = true; resolve(value); } };
     if (typeof window.MefiToast !== "function") { settle(false); return; }
-    window.MefiToast(message, options.kind || "info", {
+    // Keyboard reach: the committing button takes focus once the toast shows,
+    // Cancel (or Esc) answers no, and focus goes back where it came from.
+    const opener = document.activeElement ?? null;
+    const restore = () => {
+      if (opener && opener !== document.body && opener.isConnected !== false) opener.focus?.({ preventScroll: true });
+    };
+    const handle = window.MefiToast(message, options.kind || "info", {
       duration: Number(options.duration) || 12000,
-      action: { label: options.label || "Confirm", run: () => settle(true) },
+      action: { label: options.label || "Confirm", run: () => { settle(true); restore(); } },
+      secondary: { label: options.cancelLabel || "Cancel", run: () => { settle(false); restore(); } },
       onDismiss: () => settle(false),
     });
+    requestAnimationFrame(() => handle?.element?.querySelector?.(".toast-action")?.focus?.({ preventScroll: true }));
   });
 
   // Every store access is guarded, exactly as nav.js and idle.js guard theirs: a
@@ -354,12 +392,19 @@
   }
 
   // ---- tabs ----
-  function showTab(name) {
+  // The page header names the tab on show; nav.js repaints it on mefi:nav, and
+  // this covers the launch, which restores a tab without announcing it.
+  const PAGE_TITLES = { booklet: "Model catalog", graph: "Model Lab", eyes: "Activity & evidence", studio: "Settings" };
+  function showTab(name, params = {}) {
     document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === name));
     document.getElementById("tab-booklet").hidden = name !== "booklet";
     document.getElementById("tab-graph").hidden = name !== "graph";
     document.getElementById("tab-eyes").hidden = name !== "eyes";
     document.getElementById("tab-studio").hidden = name !== "studio";
+    const title = document.getElementById("page-title");
+    if (title) title.textContent = window.MefiNav?.get?.(name)?.label ?? PAGE_TITLES[name] ?? title.textContent;
+    // The catalog's status line (models, data source, hash) is the catalog's.
+    if (els.status) els.status.hidden = name !== "booklet";
     if (name === "graph") {
       if (!state.graph) state.graph = window.MefiGraph.mount(state.doc, { speeds: state.speeds });
       window.MefiModelLab?.open?.();
@@ -368,50 +413,316 @@
     if (name === "eyes") window.MefiEyes?.init();
     if (name === "studio") {
       initStudio();
+      paintSettingsRows();
       syncSettingsNav();
+      syncBlurBox();
       if (studioLogStale) paintStudioLog();
+      // go("studio", { section: "settings-updates" }) lands on that card.
+      if (params?.section) jumpToSettings(params.section);
     }
     writeStore("mefiStudio.tab", name);
   }
 
   // ---- settings section nav ----
-  // The Settings tab is one page of cards; the sticky nav beside it jumps to a
-  // card, opens it when it is folded, and follows the scroll position. Cards
-  // hidden with their #studio-desktop wrapper (browser build) drop out of the nav.
+  // The Settings tab is one page of cards in three blocks (Connections,
+  // Personal, System). The sticky list beside it finds a setting, jumps to a
+  // card (opening it when it is folded) and follows the scroll position.
+  // Desktop-only cards — the #studio-desktop wrapper, and anything marked
+  // data-desktop-only — drop out of the list in the browser build.
   function settingsSections() {
     return Array.from(document.querySelectorAll("#settings-nav [data-settings-jump]")).map((button) => ({ button, section: document.getElementById(button.dataset.settingsJump) }));
+  }
+
+  // initStudio hides #studio-desktop when there is no desktop bridge.
+  const settingsBrowserBuild = () => Boolean(document.getElementById("studio-desktop")?.hidden);
+  function settingsAvailable(node) {
+    if (!node) return false;
+    if (node.closest?.("#studio-desktop[hidden]")) return false;
+    return !(settingsBrowserBuild() && node.closest?.("[data-desktop-only]"));
+  }
+
+  // Writes only what changed, so a keystroke in Find touches only the rows it moves.
+  const setShown = (node, shown) => { if (node && node.hidden === shown) node.hidden = !shown; };
+
+  // A deep link may name a card by its old id or by what it is called now.
+  const SETTINGS_ALIASES = { providers: "settings-assistant", appearance: "settings-studio", you: "settings-studio" };
+  function settingsTarget(section) {
+    const key = String(section ?? "").trim();
+    if (!key) return null;
+    const bare = key.replace(/^settings-/, "");
+    const id = SETTINGS_ALIASES[key] ?? SETTINGS_ALIASES[bare] ?? `settings-${bare}`;
+    return document.getElementById(id) ? id : null;
   }
 
   function syncSettingsNav(currentId) {
     const items = settingsSections();
     if (!items.length) return;
     let current = currentId ?? items.find(({ button }) => button.getAttribute("aria-current") === "true")?.button.dataset.settingsJump ?? null;
-    for (const { button, section } of items) {
-      const unavailable = !section || Boolean(section.closest("#studio-desktop[hidden]"));
-      button.hidden = unavailable;
-      if (unavailable && current === button.dataset.settingsJump) current = null;
-    }
+    if (current && items.find(({ button }) => button.dataset.settingsJump === current)?.button.hidden !== false) current = null;
     if (!current) current = items.find(({ button }) => !button.hidden)?.button.dataset.settingsJump ?? null;
+    const was = items.find(({ button }) => button.getAttribute("aria-current") === "true")?.button.dataset.settingsJump ?? null;
+    if (current === was) return;
+    // The scroll-spy calls this every frame of a scroll; only a change writes.
     for (const { button } of items) button.setAttribute("aria-current", String(button.dataset.settingsJump === current));
+    revealSettingsChip(items.find(({ button }) => button.dataset.settingsJump === current)?.button);
+  }
+
+  // A narrow panel lays the list out as one row of chips that scrolls sideways
+  // (styles.css): keep the current chip inside that row, moving only the row.
+  function revealSettingsChip(button) {
+    const list = document.getElementById("settings-nav-list");
+    if (!button || !list || !(list.scrollWidth > list.clientWidth + 1)) return;
+    const box = button.getBoundingClientRect?.();
+    const view = list.getBoundingClientRect?.();
+    if (!box || !view) return;
+    if (box.left < view.left) list.scrollLeft -= view.left - box.left + 12;
+    else if (box.right > view.right) list.scrollLeft += box.right - view.right + 12;
+  }
+
+  // ---- Find a setting ----
+  // Each row matches on its label, its data-settings-terms and its card's title
+  // and summary. Rows and cards that do not match step aside, a group or block
+  // left empty goes with them, and the count is announced.
+  const settingsQuery = () => String(document.getElementById("settings-find")?.value ?? "").trim().toLowerCase();
+  function settingsHaystack(row, card) {
+    // A <section> card can hold a <details> of its own (How Jev chooses), so
+    // only a folding card reads its summary.
+    const head = card?.querySelector?.(card.tagName === "DETAILS" ? "summary" : ".settings-card-head") ?? null;
+    return `${row.textContent ?? ""} ${row.dataset?.settingsTerms ?? ""} ${head?.textContent ?? ""}`.toLowerCase();
+  }
+  function paintSettingsRows() {
+    const nav = document.getElementById("settings-nav");
+    if (!nav?.querySelectorAll) return 0;
+    const query = settingsQuery();
+    const words = query.split(/\s+/).filter(Boolean);
+    let shown = 0;
+    for (const row of nav.querySelectorAll(".settings-nav-item")) {
+      const jump = row.dataset?.settingsJump;
+      const card = jump ? document.getElementById(jump) : null;
+      const available = jump ? settingsAvailable(card) : settingsAvailable(row);
+      const match = available && words.every((word) => settingsHaystack(row, card).includes(word));
+      setShown(row, match);
+      if (card) setShown(card, match);
+      if (match) shown += 1;
+    }
+    for (const group of nav.querySelectorAll(".settings-nav-group")) {
+      setShown(group, Array.from(group.querySelectorAll?.(".settings-nav-item") ?? []).some((row) => !row.hidden));
+    }
+    // An unfiltered block always shows: the browser build's Connections block
+    // carries only its desktop note.
+    for (const block of document.querySelectorAll("#settings-sections .settings-block")) {
+      setShown(block, !words.length || Array.from(block.querySelectorAll?.(".settings-card") ?? []).some((card) => !card.hidden && settingsAvailable(card)));
+    }
+    const empty = document.getElementById("settings-find-empty");
+    if (empty) empty.hidden = !words.length || shown > 0;
+    const status = document.getElementById("settings-find-status");
+    if (status) status.textContent = !words.length ? "" : shown ? `${shown} setting${shown === 1 ? "" : "s"}` : "No settings match";
+    return shown;
+  }
+  function clearSettingsFind() {
+    const find = document.getElementById("settings-find");
+    if (find) find.value = "";
+    settingsPinned = null;
+    paintSettingsRows();
+    syncSettingsNav();
+  }
+
+  // The walkthrough coach keeps keyboard focus on its own Next while it points
+  // into Settings, so a jump under it scrolls without moving focus.
+  const coachShowing = () => { const coach = document.getElementById("walkthrough-coach"); return Boolean(coach && !coach.hidden); };
+  function focusSettingsCard(card) {
+    const target = card.tagName === "DETAILS" ? card.querySelector?.("summary") : card.querySelector?.("h3");
+    if (!target) return;
+    if (card.tagName !== "DETAILS" && !target.hasAttribute?.("tabindex")) target.setAttribute?.("tabindex", "-1");
+    target.focus?.({ preventScroll: true });
+  }
+
+  // One jump for the list, Find's Enter and deep links: open the card, bring it
+  // in (smoothly unless motion is off), mark it current, and hold the
+  // scroll-spy while the scroll runs so the cards it passes do not flicker.
+  // The card a jump lands on then stays current until the reader scrolls on.
+  let settingsSpyHold = 0;
+  let settingsPinned = null;
+  function holdSettingsSpy() {
+    settingsSpyHold = Date.now() + 700;
+    // A long smooth scroll outlasts 700 ms, and its last frames would light
+    // whatever card they pass (the last one, at the page's end). Where
+    // scrollend exists, hold until the scroll settles and one frame more.
+    if (typeof window.onscrollend === "undefined" || typeof window.addEventListener !== "function") return;
+    settingsSpyHold = Date.now() + 1200;
+    window.addEventListener("scrollend", () => { settingsSpyHold = Math.min(settingsSpyHold, Date.now() + 120); }, { once: true });
+  }
+  function jumpToSettings(section, { focus = true } = {}) {
+    const id = settingsTarget(section);
+    let card = id ? document.getElementById(id) : null;
+    if (!card) return false;
+    if (card.hidden && settingsQuery() && settingsAvailable(card)) clearSettingsFind();
+    // A desktop-only card in the browser build: its block says why it is missing.
+    const available = settingsAvailable(card);
+    if (!available) card = card.closest?.(".settings-block") ?? card;
+    // A folded card opens at its full height at once (styles.css stills its
+    // open animation for this), so the scroll measures the card it lands on;
+    // near the page's end a card still growing would land low.
+    const unfold = available && card.tagName === "DETAILS" && !card.open;
+    if (unfold) {
+      card.setAttribute?.("data-settings-opening", "");
+      card.open = true;
+    }
+    holdSettingsSpy();
+    try {
+      card.scrollIntoView?.({ behavior: window.MefiNav?.noMotion?.() ? "auto" : "smooth", block: "start" });
+    } catch {
+      card.scrollIntoView?.();
+    }
+    if (unfold) card.removeAttribute?.("data-settings-opening");
+    if (!available) return false;
+    settingsPinned = id;
+    syncSettingsNav(id);
+    if (focus && !coachShowing()) focusSettingsCard(card);
+    return true;
+  }
+
+  // ---- scroll-spy ----
+  // The current card is the last one whose top has passed a line 30% down the
+  // window, and at the very end of the page the last card (the page cannot
+  // scroll far enough to bring the final cards to any line). It is read from
+  // every card's position, never from the observer's entries, which name only
+  // the cards that just crossed an edge: a sliver of the card above a deep
+  // link's target could win that way.
+  function atSettingsEnd() {
+    const root = document.scrollingElement ?? document.documentElement;
+    const top = Number(window.scrollY ?? root?.scrollTop ?? 0);
+    const height = Number(window.innerHeight ?? 0);
+    return Boolean(root?.scrollHeight) && height > 0 && top > 0 && top + height >= root.scrollHeight - 2;
+  }
+  function spySettings() {
+    if (Date.now() < settingsSpyHold || document.getElementById("tab-studio")?.hidden !== false) return;
+    const items = settingsSections().filter(({ button, section }) => !button.hidden && section && !section.hidden);
+    if (!items.length) return;
+    const height = Number(window.innerHeight ?? 0);
+    if (settingsPinned) {
+      const box = items.find(({ section }) => section.id === settingsPinned)?.section.getBoundingClientRect?.();
+      if (box && box.bottom > 0 && box.top < height) {
+        syncSettingsNav(settingsPinned);
+        return;
+      }
+      settingsPinned = null;
+    }
+    if (atSettingsEnd()) {
+      syncSettingsNav(items.at(-1).button.dataset.settingsJump);
+      return;
+    }
+    let current = items[0];
+    for (const item of items) {
+      if ((item.section.getBoundingClientRect?.().top ?? 0) > height * 0.3) break;
+      current = item;
+    }
+    syncSettingsNav(current.button.dataset.settingsJump);
+  }
+  let settingsScrollFrame = 0;
+  function onSettingsScroll() {
+    if (document.getElementById("tab-studio")?.hidden !== false) return;
+    // A scroll that is not a jump's own is the reader moving on.
+    if (Date.now() >= settingsSpyHold) settingsPinned = null;
+    if (settingsScrollFrame || typeof requestAnimationFrame !== "function") return;
+    settingsScrollFrame = requestAnimationFrame(() => {
+      settingsScrollFrame = 0;
+      spySettings();
+    });
+  }
+
+  function openFirstSetting() {
+    const first = Array.from(document.querySelectorAll("#settings-nav .settings-nav-item")).find((row) => !row.hidden);
+    if (!first) return;
+    if (first.dataset.settingsJump) jumpToSettings(first.dataset.settingsJump);
+    else first.click?.();
   }
 
   function wireSettingsNav() {
     const nav = document.getElementById("settings-nav");
     if (!nav) return;
     nav.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-settings-jump]");
-      const section = button ? document.getElementById(button.dataset.settingsJump) : null;
-      if (!section) return;
-      if (section.tagName === "DETAILS") section.open = true;
-      section.scrollIntoView({ behavior: document.body.classList.contains("no-motion") ? "auto" : "smooth", block: "start" });
-      syncSettingsNav(button.dataset.settingsJump);
+      const button = event.target?.closest?.("[data-settings-jump]");
+      if (button) jumpToSettings(button.dataset.settingsJump, { focus: false });
     });
+    const find = document.getElementById("settings-find");
+    find?.addEventListener?.("input", () => {
+      paintSettingsRows();
+      // The first match leads, and is what Enter opens, until the reader scrolls.
+      const first = settingsSections().find(({ button }) => !button.hidden)?.button.dataset.settingsJump;
+      settingsPinned = settingsQuery() ? first ?? null : null;
+      syncSettingsNav(first);
+    });
+    find?.addEventListener?.("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault?.();
+        openFirstSetting();
+      } else if (event.key === "Escape" && find.value) {
+        // The first Esc clears the search and keeps focus; an empty field lets
+        // Esc through to nav, which leaves the field as usual.
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        clearSettingsFind();
+      }
+    });
+    // Buttons in a card that open another view. nav.js's [data-nav] delegate
+    // folds the <details> around the button (it is written for menus), and a
+    // card has to stay open, so these name their destination here instead.
+    document.getElementById("settings-sections")?.addEventListener?.("click", (event) => {
+      const button = event.target?.closest?.("[data-settings-nav]");
+      if (!button || button.disabled) return;
+      event.preventDefault?.();
+      window.MefiNav?.go?.(button.dataset.settingsNav);
+    });
+    window.addEventListener?.("scroll", onSettingsScroll, { passive: true });
+    // The observer only says when to look again: a card crossed the band
+    // without a scroll (one opened or closed, Find filtered the page).
     if (typeof IntersectionObserver !== "function") return;
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-      if (visible[0]) syncSettingsNav(visible[0].target.id);
-    }, { rootMargin: "-15% 0px -65% 0px" });
+    const observer = new IntersectionObserver(() => spySettings(), { rootMargin: "-15% 0px -65% 0px" });
     for (const { section } of settingsSections()) if (section) observer.observe(section);
+  }
+
+  // Search Studio finds every Settings card: "Settings › Providers" opens it.
+  function registerSettingsSearch() {
+    if (typeof window.MefiNav?.register !== "function") return;
+    const desktop = Boolean(window.mefiStudio?.launchStudio);
+    for (const button of document.querySelectorAll("#settings-nav [data-settings-jump]")) {
+      const jump = button.dataset.settingsJump;
+      const card = document.getElementById(jump);
+      if (!card || (!desktop && (card.closest?.("#studio-desktop") || card.closest?.("[data-desktop-only]")))) continue;
+      const label = String(button.querySelector?.(".label")?.textContent ?? button.textContent ?? "").trim();
+      const summary = card.querySelector?.(".settings-summary-text span, .settings-card-head p");
+      try {
+        window.MefiNav.register({
+          id: `settings:${jump}`,
+          label: `Settings › ${label}`,
+          short: label,
+          kind: "action",
+          layer: null,
+          section: "settings",
+          group: "system",
+          key: null,
+          glyph: button.querySelector?.("use")?.getAttribute?.("href")?.replace(/^#/, "") ?? null,
+          badge: null,
+          desc: String(summary?.textContent ?? "").trim(),
+          searchTerms: button.dataset.settingsTerms ?? "",
+          showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
+          run: () => window.MefiNav?.go?.("studio", { section: jump }),
+        });
+      } catch {
+        /* a registry that refuses one entry leaves Search as it was */
+      }
+    }
+  }
+
+  // #pref-blur sits in Settings › Your Studio. tasks.js owns the preference:
+  // it binds the box by id and paints html[data-no-blur] from boot, but ticks
+  // the box only when the Task board opens, so the box mirrors the attribute.
+  function syncBlurBox() {
+    const box = document.getElementById("pref-blur");
+    const root = document.documentElement;
+    if (!box || typeof root?.hasAttribute !== "function") return;
+    box.checked = !root.hasAttribute("data-no-blur");
   }
 
   // ---- studio ----
@@ -465,6 +776,8 @@
       hint.textContent = "Open the desktop app to connect providers or use the optional game launcher.";
       actions.querySelectorAll("button").forEach((b) => (b.disabled = true));
       document.getElementById("studio-desktop").hidden = true;
+      // Updates, the speed probe, the auditor and Agents & queue need the host too.
+      document.querySelectorAll("[data-desktop-only]").forEach((node) => { node.hidden = true; });
       return;
     }
     hint.textContent = "Uses the separate game project's cached LÖVE runtime and documented smoke-test script when available.";
@@ -694,12 +1007,74 @@
       .then((key) => { setup.keys.custom = Boolean(key?.saved); showKeyState("custom", setup.keys.custom); renderSetupState(); })
       .catch(() => setPill(customKeyStatus, "unknown", "key status unavailable"));
 
+    // A Save on an empty field used to clear the saved key without a word. Save
+    // now waits for a value (Enter in the field saves too), and removing a key
+    // is its own two-step Remove beside Save, shown only while a key is saved;
+    // it runs the same save handler with the field deliberately empty.
+    const keySaveSyncs = [];
+    const resyncKeySaves = () => keySaveSyncs.forEach((sync) => sync());
+    const clearingKey = (input) => input?.dataset?.clearing === "1";
+    function guardKeySave(inputId, saveId, pill, removeTitle) {
+      const input = document.getElementById(inputId);
+      const save = document.getElementById(saveId);
+      if (!input || !save) return;
+      const sync = () => { save.disabled = !String(input.value ?? "").trim(); };
+      keySaveSyncs.push(sync);
+      input.addEventListener("input", sync);
+      input.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || save.disabled) return;
+        event.preventDefault?.();
+        save.click?.();
+      });
+      sync();
+      const parent = save.parentElement;
+      if (!pill || typeof parent?.insertBefore !== "function" || typeof MutationObserver !== "function") return;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "ghost mini key-remove";
+      remove.textContent = "Remove";
+      remove.title = removeTitle;
+      parent.insertBefore(remove, save.nextSibling ?? null);
+      let armed = null;
+      const disarm = () => {
+        clearTimeout(armed);
+        armed = null;
+        remove.textContent = "Remove";
+        remove.classList.remove("danger-armed");
+      };
+      remove.addEventListener("click", () => {
+        if (!armed) {
+          remove.textContent = "Remove key?";
+          remove.classList.add("danger-armed");
+          armed = setTimeout(disarm, 3000);
+          return;
+        }
+        disarm();
+        input.value = "";
+        input.dataset.clearing = "1";
+        save.disabled = false;
+        save.click();
+      });
+      const showRemove = () => { remove.hidden = pill.getAttribute("data-state") !== "ready"; };
+      new MutationObserver(showRemove).observe(pill, { attributes: true, attributeFilter: ["data-state"] });
+      showRemove();
+    }
+    guardKeySave("api-key", "save-key", keyStatus, "Remove the saved OpenCode Go key");
+    guardKeySave("zai-key", "save-zai-key", zaiKeyStatus, "Remove the saved z.ai key");
+    guardKeySave("zen-key", "save-zen-key", document.getElementById("zen-key-status"), "Remove the saved Zen key (Jev's Zen route uses it too; OPENCODE_API_KEY still applies when set)");
+    guardKeySave("custom-key", "save-custom-key", customKeyStatus, "Remove the saved custom-endpoint key");
+    guardKeySave("jev-key", "save-jev-key", null, "");
+
     document.getElementById("save-key").addEventListener("click", async () => {
-      const value = document.getElementById("api-key").value.trim();
+      const input = document.getElementById("api-key");
+      const value = input.value.trim();
+      if (!value && !clearingKey(input)) return;
+      delete input.dataset.clearing;
       const result = await window.mefiStudio.setApiKey(value, "opencode");
       if (result?.ok) { setup.keys.opencode = Boolean(value); setPill(keyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("opencode"); }
       else setPill(keyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("api-key").value = "";
+      resyncKeySaves();
       await loadAiRouting();
     });
 
@@ -708,8 +1083,11 @@
     document.getElementById("save-zen-key").addEventListener("click", async () => {
       const input = document.getElementById("zen-key");
       const value = input.value.trim();
+      if (!value && !clearingKey(input)) return;
+      delete input.dataset.clearing;
       const result = await window.mefiStudio.setApiKey(value, "zen");
       input.value = "";
+      resyncKeySaves();
       if (!result?.ok) setPill(document.getElementById("zen-key-status"), "unknown", `save failed: ${result?.error ?? "unknown"}`);
       else noteConnectionSaved("zen");
       await refreshJev();
@@ -717,22 +1095,30 @@
     });
 
     document.getElementById("save-zai-key").addEventListener("click", async () => {
-      const value = document.getElementById("zai-key").value.trim();
+      const input = document.getElementById("zai-key");
+      const value = input.value.trim();
+      if (!value && !clearingKey(input)) return;
+      delete input.dataset.clearing;
       const result = await window.mefiStudio.setApiKey(value, "zai");
       if (result?.ok) { setup.keys.zai = Boolean(value); setPill(zaiKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("zai"); }
       else setPill(zaiKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("zai-key").value = "";
+      resyncKeySaves();
       await loadAiRouting();
     });
 
     // The custom endpoint's URL is saved like any routing preference; its key
     // rides the same encrypted setApiKey path as every other credential.
     document.getElementById("save-custom-key").addEventListener("click", async () => {
-      const value = document.getElementById("custom-key").value.trim();
+      const input = document.getElementById("custom-key");
+      const value = input.value.trim();
+      if (!value && !clearingKey(input)) return;
+      delete input.dataset.clearing;
       const result = await window.mefiStudio.setApiKey(value, "custom");
       if (result?.ok) { setup.keys.custom = Boolean(value); setPill(customKeyStatus, value ? "ready" : "missing", value ? "key saved (encrypted)" : "key cleared"); noteConnectionSaved("custom"); }
       else setPill(customKeyStatus, "unknown", `save failed: ${result?.error ?? "unknown"}`);
       document.getElementById("custom-key").value = "";
+      resyncKeySaves();
       await loadAiRouting();
     });
 
@@ -766,9 +1152,11 @@
     }
     document.getElementById("save-jev-key").addEventListener("click", async () => {
       const input = jevKey;
+      if (!input.value.trim()) return;
       try {
         const result = await window.mefiStudio.setApiKey(input.value.trim(), jevRouteFields[jevRouteOf()].key);
         input.value = "";
+        resyncKeySaves();
         if (!result?.ok) { jevStatus.textContent = `Save failed: ${result?.error ?? "unknown"}`; return; }
         noteConnectionSaved(jevRouteFields[jevRouteOf()].key);
         await refreshJev();
@@ -1187,6 +1575,14 @@
         void loadAiRouting({ syncControls: true }).then(() => refreshCliStatus()).catch(() => {});
       });
     }
+    // Making a brain map live, or the walkthrough's Use this setup, rewrites
+    // routing behind an open Settings page: re-read what it shows.
+    const rereadSettings = () => {
+      void loadAiRouting({ syncControls: true }).then(() => refreshCliStatus()).catch(() => {});
+      void refreshJev();
+    };
+    window.mefiStudio?.onBrainsActive?.(rereadSettings);
+    window.mefiStudio?.onSettingsChanged?.(rereadSettings);
 
     // Coding CLIs: launch the owner's installed tools in their own terminal.
     // Grok, Codex, Claude Code and Antigravity use their own accounts;
@@ -1283,16 +1679,53 @@
     else showTab(tab.dataset.tab);
   });
   wireSettingsNav();
+  registerSettingsSearch();
   document.getElementById("refresh-btn").addEventListener("click", () => refresh("manual"));
   document.getElementById("print-btn").addEventListener("click", () => window.print());
+
+  // Motion: Full, Calm or Off, in Settings › Your Studio. #motion-toggle is the
+  // select the segmented buttons mirror. Off is body.no-motion, which MefiNav,
+  // the canvases and every stylesheet read. Calm puts .ws-still on the body
+  // alone: looping CSS animations stop (the companion too); transitions still
+  // ease, and the live node tree keeps moving. Stored as before, "1" Full and "0"
+  // Off, with "calm" beside them.
+  const MOTION_LEVELS = ["full", "calm", "off"];
   const motionToggle = document.getElementById("motion-toggle");
-  const applyMotion = (enabled) => {
-    document.body.classList.toggle("no-motion", !enabled);
-    writeStore("mefiStudio.motion", enabled ? "1" : "0");
+  const savedMotion = readStore("mefiStudio.motion");
+  let motionLevel = savedMotion === "0" ? "off" : savedMotion === "calm" ? "calm" : "full";
+  let motionOnLevel = motionLevel === "off" ? "full" : motionLevel;
+  const paintMotion = () => {
+    for (const button of document.querySelectorAll('[data-segmented-for="motion-toggle"] button[data-value]')) button.setAttribute("aria-pressed", String(button.dataset.value === motionLevel));
+    // Calm and Off already keep the companion still; its own switch waits for Full.
+    const companion = document.getElementById("workspace-motion");
+    if (companion) companion.disabled = motionLevel !== "full";
   };
-  motionToggle.checked = readStore("mefiStudio.motion") !== "0";
-  applyMotion(motionToggle.checked);
-  motionToggle.addEventListener("change", () => applyMotion(motionToggle.checked));
+  const applyMotion = (level) => {
+    motionLevel = MOTION_LEVELS.includes(level) ? level : "full";
+    if (motionLevel !== "off") motionOnLevel = motionLevel;
+    document.body.classList.toggle("no-motion", motionLevel === "off");
+    document.body.classList.toggle("ws-still", motionLevel === "calm");
+    window.MefiNav?.syncMotion?.();
+    writeStore("mefiStudio.motion", motionLevel === "off" ? "0" : motionLevel === "calm" ? "calm" : "1");
+    if (motionToggle) motionToggle.value = motionLevel;
+    paintMotion();
+  };
+  applyMotion(motionLevel);
+  motionToggle?.addEventListener("change", () => applyMotion(motionToggle.value));
+  // The select is hidden from the pointer and the keyboard, so a click on it
+  // is the palette's "Toggle animations": Off, and back to the level before.
+  motionToggle?.addEventListener("click", () => applyMotion(motionLevel === "off" ? motionOnLevel : "off"));
+  for (const group of document.querySelectorAll('[data-segmented-for="motion-toggle"]')) {
+    group.addEventListener("click", (event) => {
+      const button = event.target?.closest?.("button[data-value]");
+      if (button) applyMotion(button.dataset.value);
+    });
+  }
+
+  // tasks.js repaints html[data-no-blur] when the preference changes anywhere.
+  if (typeof MutationObserver === "function" && document.documentElement) {
+    new MutationObserver(syncBlurBox).observe(document.documentElement, { attributes: true, attributeFilter: ["data-no-blur"] });
+  }
 
   // The help sheet is nav's transient layer: claim/release only on a real state
   // change, so a second toggleHelp(true) cannot re-save the focus opener.
@@ -1327,8 +1760,9 @@
     resizeTimer = setTimeout(() => state.graph.redraw(), 180);
   });
 
-  // The one facade nav.js drives: tabs, catalog refresh and the shortcut sheet.
-  window.MefiBooklet = { showTab, refresh, toggleHelp };
+  // The one facade nav.js drives: tabs (with a Settings card to land on),
+  // catalog refresh, the shortcut sheet, and the Settings jump itself.
+  window.MefiBooklet = { showTab, refresh, toggleHelp, jumpToSettings };
 
   const headless = new URLSearchParams(window.location.search);
   const capture = headless.get("capture") === "1";
@@ -1398,6 +1832,9 @@
       else if (window.MefiWorkspace?.isActive?.()) document.getElementById("workspace-layer")?.focus({ preventScroll: true });
       else document.getElementById("search")?.focus({ preventScroll: true });
       window.MefiOnboarding?.startup?.({ automatic: true });
+      // Community status, the member-perk boot hint and the weekly Discord
+      // card's quiet schedule (renderer/community.js). Diagnostic launches skip it.
+      window.MefiCommunity?.startup?.();
       // "Open and start agents": the studio is up, so the agents may start now.
       // Every other choice leaves them held for the workspace's Start agents.
       if ((choice ?? launch)?.startAgents) void window.MefiStartup?.begin?.();

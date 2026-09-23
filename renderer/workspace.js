@@ -254,6 +254,9 @@
     $("clear-search").hidden = !state.query;
     const summary = `${workLabels[state.filter]} · ${visible.length > page.length ? `${page.length} of ` : ""}${visible.length} ${state.query ? visible.length === 1 ? "match" : "matches" : visible.length === 1 ? "item" : "items"}`;
     if ($("work-summary").textContent !== summary) $("work-summary").textContent = summary;
+    // The tabs already carry the counts; the line earns its row only while it
+    // says more (a search is narrowing the list, or it is paged).
+    $("work-summary").hidden = !state.query && visible.length <= page.length;
     $("show-more").hidden = visible.length <= state.limit;
     $("show-more").textContent = `Show ${Math.min(20, Math.max(0, visible.length - state.limit))} more · ${Math.max(0, visible.length - state.limit)} remaining`;
     if (signature === workSignature) return;
@@ -842,7 +845,9 @@
       $(id).value = storage.get(key, fallback);
       $(id).addEventListener("input", () => {
         storage.set(key, $(id).value);
-        if (id === "accent") window.MefiMusic?.applyTheme?.($(id).value === "sage" ? "forest" : $(id).value);
+        // A locked Void collection theme is explained in place: the select
+        // fires on every arrow key, so it must never change the view.
+        if (id === "accent") window.MefiMusic?.applyTheme?.($(id).value === "sage" ? "forest" : $(id).value, true, { navigate: false });
         personalize();
       });
     }
