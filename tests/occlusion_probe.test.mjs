@@ -174,3 +174,33 @@ test("an occluded booklet window's worker/MessageChannel channel answers while r
     }
   }
 });
+
+// Display-free half of the same decision. The live test above skips whenever
+// canRun is false, so a headless CI never reaches its proxy assertions and
+// could silently accept a default-on flip. Pin the fixture source itself:
+// hide()/show() stays an opt-in diagnostic proxy — never default-on, never a
+// sanctioned occlusion signal — and the default path must decline explicitly
+// with the owner-sign-off gate named, so no silent substitution can land
+// without the owner approving the "hide is not coverage" contract change.
+test("the fixture keeps hide()/show() opt-in and never claims it as occlusion", async () => {
+  const fixtureSource = await readFile(path.join(studio, "tests", "fixtures", "occlusion-probe-electron.cjs"), "utf8");
+  assert.equal(
+    (fixtureSource.match(/runVisibilityProxy\(\)/g) || []).length,
+    2,
+    "runVisibilityProxy must be defined once and invoked from exactly one gated site",
+  );
+  assert.match(
+    fixtureSource,
+    /if \(process\.env\.MEFI_OCCLUSION_PROXY === "visibility"\) \{\s*report\.occlusionProxy = await runVisibilityProxy\(\);/,
+    "the visibility proxy must be gated behind MEFI_OCCLUSION_PROXY=visibility, never default-on",
+  );
+  assert.match(
+    fixtureSource,
+    /report\.occlusionProxyDeclined = "[\s\S]*?owner sign-off\)"/,
+    "the default path must record an explicit decline naming the owner sign-off gate",
+  );
+  const proxyStart = fixtureSource.indexOf("async function runVisibilityProxy()");
+  assert.notEqual(proxyStart, -1, "the visibility proxy implementation must exist");
+  const proxyBody = fixtureSource.slice(proxyStart, fixtureSource.indexOf("\n  }", proxyStart));
+  assert.doesNotMatch(proxyBody, /report\.occluded\b/, "the visibility proxy must never populate the native-occlusion record");
+});

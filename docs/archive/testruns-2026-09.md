@@ -6,6 +6,235 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-09-23 - Studio Snake computer-use trial integration attempt
+
+Created the separate Studio Snake Trial folder and selected it through Studio's project UI. The trial exposed a Save & switch settlement race, repeated update notifications, and missing live worker activity. Added focused fixes; visibility suites passed 158/158 and project/update suites passed 56/56. Rebuilt renderer/booklet.html; npm run check passed (110 targets, 246 specs), npm run audit passed with zero findings. Full npm test exited 1 while concurrent Studio source edits were in progress; the runner explicitly reported sources changed during the parallel stage, with settings_nav assertions among the failures. This is not a clean full-gate result and must be rerun on a settled tree. Complete output: tools/logs/studio-snake-trial-npm-test.log. UI trial is incomplete: Windows locked before the Snake task could be submitted; no game source was authored outside Studio. No project state was edited directly.
+
+## 2026-09-23 - Project switching waits for worker settlement; repeated update notices are quiet
+
+Focused host/renderer checks for the UI-observed Save & switch failure. `executorIdle()` and live restart now retain a finished worker until its entry is removed after checkpoint, board and history saves; a live restart also defers across project adoption, including a switch begun during asynchronous restart preparation. Update toast signatures suppress unchanged detected/waiting/pending retries while preserving changed reasons and the next update's notices. No user task state, settings or portable data was edited.
+
+`node --test tests/project_switch_settlement.test.mjs tests/update_continuity.test.mjs tests/update_notifications.test.mjs` passed 12/12. The new synthetic-clock integration exercises a 15-second normal save after process exit (the old path refused after its 10-second project wait), plus an unsaved worker that correctly prevents adoption. The update host tests cover normal settlement without a retry flag and both early and late project-switch interlocks.
+
+`node --test tests/projects.test.mjs tests/app_rail.test.mjs tests/updater_deferred.test.mjs` passed 44/44. No Electron fixtures, paid workers, booklet builds, packaging or restarts were launched by these checks. The parent computer-use trial owns the renderer rebuild and full integration gates after the live GUI is stable; source files were held steady during this focused validation.
+
+## 2026-09-23 - Live worker activity, honest phases and project event context
+
+During the Studio computer-use trial, added bounded live worker activity for Home and Command: sanitized output, route, current checklist step and last-update age; preparation and finishing stay distinct from building. Stream bursts share a 500 ms status push and renamed todos publish even when their completed fraction is unchanged. Home refreshes a quiet worker's age in place. Assistant board facts now read the current project's taskEventTails rather than an unwritten state property.
+
+Focused non-Electron command: node --test tests/executor_activity.test.mjs tests/executor_resume.test.mjs tests/executor_continuation.test.mjs tests/executor_lifecycle.test.mjs tests/workspace_ui.test.mjs tests/command_activity.test.mjs. First grouped run 157/157 pass; after the quiet-clock regression 158/158 pass, exit 0. The helper's initial isolated test found OSC hyperlink text removal and an unmasked fine-grained GitHub token pattern; both are fixed and covered. main.cjs, renderer/workspace.js, renderer/idle.js and scripts/executor-activity.cjs passed node --check before the final renderer age patch, which the focused renderer suite evaluates. No Electron tests, full gates, booklet rebuild, package, app restart, paid worker or project-file edits were performed by this validation. Full gates and rendered UI verification remain with the parent trial after the live updater is stable; pre-existing dirty work was preserved.
+
+## 2026-09-23 - Navigation cleanup focused checks
+
+Removed duplicate primary destinations from the rail, named its primary buttons by destination, and made wide-window labels visible by default while preserving an explicit collapsed preference. Keyboard return now follows visible current destinations and can restore focus to a row in the collapsed menu; reopening Search preserves the current query, selection and original opener. `node --test tests/app_rail.test.mjs tests/nav_startup.test.mjs tests/palette_keyboard.test.mjs` passed 37/37. An initial added focus test failed because its fake opener omitted isConnected; after supplying the real-browser property the check passes. The parent cleanup task owns booklet rebuild, computer-use verification and full gates.
+
+## 2026-09-23 - Merged origin/main after preserving local changes
+
+Fetched origin/main b9f680c, committed the existing quoted Work on it fix separately (abfe417) and the validated Server Styler integration (83d72a1), then resolved the README, host and renderer overlaps in merge b30fa7b. Rebuilt renderer/booklet.html. npm run check and npm run audit exited 0. The first npm test attempt was run before the merge commit and its check_css_merge test expected no merge in progress; its CSS merge audit itself passed. After committing the merge, npm test exited 0: parallel Node 2500 tests (2497 pass, 3 skip), Electron lane 27 (26 pass, 1 opt-in skip), eyes toggle 1 pass, occlusion probe capability skip after its window was externally destroyed, Python 248 OK, normalized-path lock passed. The branch contains origin/main and the original local edits are committed; no project state or secrets were added.
+
+## 2026-09-23 - Integrated upstream Server Styler controls and sibling game path
+
+Compared main with origin/main at b9f680c and carried the standalone Styler host, preload, Settings controls, path resolver, and contract tests into the newer local branch without resetting the pre-existing quoted Work on it changes. Rebuilt renderer/booklet.html. Focused path and Settings tests passed 28/28; the Styler Python wiring test passed. npm run check and npm run audit exited 0. npm test exited 0: parallel Node 2500 tests (2497 pass, 3 skip); Electron lane 27 (26 pass, 1 opt-in skip); eyes toggle 1 pass; occlusion capability skip 1 on this desktop; Python 248 OK; normalized-path lock passed. The optional Server Styler checkout is absent here, so no bot was started.
+
+## 2026-09-23 morning - quoted Work on it labels reuse existing chat work
+
+Inspected the uncommitted queue, assistant chat admission, agent-mode and renderer feature set without resetting it. A read-only rebuild matched renderer/booklet.html byte for byte. Baseline npm run check, npm run audit and npm test all exited 0. Focused review found a missed duplicate: a host-generated Work on it wrapper with an inner quote in its label was not unwrapped by scripts/chat-work.cjs, so a later matching chat instruction created a second task. Added pure wrapper and host-admission tests, observed 2 focused failures before the fix, then made the wrapper capture retain inner quotes; the focused run passed 26/26.
+
+After the fix, npm run check exited 0 (107 targets, 237 specs, syntax and TESTRUNS clean), npm run audit exited 0 with no findings, and npm test exited 0: parallel Node 2496/2493 pass/3 skipped; Electron lane 27/26 pass/1 opt-in skip; eyes toggle 1/1; occlusion capability skip 1 on this desktop; Python 247 OK; normalized-path lock all checks passed. No renderer source was edited, so no booklet rebuild was needed.
+
+## 2026-09-23 late night - Attended occlusion live-probe stamp: benign input nudge flips the inert unattended tracker to a strict native pass (task_d34d8d0a636519dc, run_1790142719564_30)
+
+Ran the task's exact command, `node --test tests/occlusion_probe.test.mjs`, from the Studio checkout root (HEAD ea70948, `main`). First run skipped at the documented capability gate in ~33.8 s: console desktop session 1, WTSConnectState Active, input desktop Default and `inputDesktopLocked=false` (unlocked, not RDP), but `idleMs=6490625` (~108 min) — the attended-desktop condition the gate needs was absent, so the cover was shown focused with 8 focus reassertions, NULL Win32 foreground (`hwnd 0x0`), page `hasFocus()` false, and rAF stayed loud at ~60 fps behind the cover (`occlusionUnsupported`, tests 1 / pass 0 / fail 0 / skipped 1, exit 0). Per the reviewer's rule this skip is not a pass and is not claimed as one.
+
+Applied the documented benign input nudge (relative SendInput mouse move, +3/+3 then -3/-3, no click or keys) to reset the idle clock to 547 ms, then re-ran the same command. Strict native-occlusion pass in ~28.5 s: detection signal `document.hidden` (native tracker engaged — not the visibility proxy, which stayed off with `MEFI_OCCLUSION_PROXY` unset), occluded rAF growth 0, every probe sample answered via the unthrottled worker channel (workerDriftMs 164 → lag 0 ms of 1 sample), blob worker still constructed (drift 161 ms), MessageChannel 0 ms, rAF resumed after the cover was removed, 0 console errors. Harness outcome tests 1 / pass 1 / fail 0 / skipped 0, exit 0. No code changes — this row is the stamp only.
+
+## 2026-09-22 late evening - Task detail Attempts fold, session-to-task links, Needs you breakdown, Command Done fix
+
+Worktree mefi-t3-code-comparison-588d25 on HEAD 21f1697 plus uncommitted Stage 1 task-workspace changes. npm run build-booklet ok; npm run check ok (105 targets); npm run audit ok (0 findings). Touched suites: task_attempts, tasks_ui (39), workspace_ui (32), explorer_ui, command_task_done, module_purity, booklet_build - 97/97 pass. Full npm test node stage: 2233 tests, 2230 pass, 0 fail, 3 skipped; Electron lane 15/17 with performance_render and renderer_recovery timing out under load, both pass solo (2/2, 10/10). Python stage run separately: 247 tests, 1 failure test_restart_loop_guard ('held' != 'pending'), passes 2/2 solo; untouched updater code, known load-sensitive live-subprocess test. normalized path lock ok. Parser also checked read-only against the real data/executor-log.jsonl (10 rows for one task grouped into 5 attempts). Visual check in the browser pane with a standalone fake-bridge Tasks overlay: live, failed-with-fallback and wedged-start attempts render with output and session links.
+
+## 2026-09-22 night - Sessionless CLI builder runs park for the owner instead of retrying verification
+
+Worktree mefi-t3-code-comparison-588d25 on f4cf450 plus the sessionless-route change. New tests/executor_sessionless_route.test.mjs drives the real dispatch/settle host sections: a claude-routed run that reports done parks as failed on its first check (no nextRunAt, verifyAttempts 1); an OpenCode run without a session keeps the bounded retry. A/B: with sessionlessRoute forced to null the claude case fails, restored after (sentinel count 0). board, jev_routing_ui, verification_checks, commit_evidence, executor_*, verification_drain, backlog_engine, policy_experience, assistant_loop: 362/362. Python tools.test_mefi_studio_assistant + routing: 89 OK. npm run test:fast: 2236 tests, 2233 pass, 0 fail, 3 skipped. build-booklet, check and audit ok. Live board note: the portable app's executor ledgers show only opencode-go runs (171 finishes, all with sessions), so no existing task was affected.
+
+## 2026-09-22 late night - Request inbox adds and removes through a targeted eyes:requests-action
+
+Worktree mefi-t3-code-comparison-588d25 on e63ab80 plus the inbox change. idea_actions (new applyRequestAction cases: sanitized adds, identity remove, claimed/vanished refusals), explorer_ui (targeted add/remove, refusal keeps the row and shows the reason, whole-list write never called), build_approval: 24/24. npm run test:fast: 2239 tests, 2236 pass, 0 fail, 3 skipped. Python tools.test_mefi_studio_tasks + eyes OK. build-booklet, check and audit ok. The legacy eyes:requests-write and ideas:save handlers stay for bridges without the actions (ideas.js already used ideas:action on desktop).
+
+## 2026-09-22 night - Resume-key deep link lands on the explorer in the real Electron fixture, opt-in and unchanged by default (task_253fb240d7082220, run_1790138797485_83)
+
+Added `MEFI_PERFORMANCE_RESUME_SHEET` to `tests/fixtures/performance-render-electron.cjs`: the preload seeds `localStorage["mefiStudio.resume"] = { at, sheet }` before any page script, and when set the fixture drives `window.MefiNav.resumeReady({ isCurrent })` and requires the sheet overlay to open with the key consumed, then writes `report.resumeRestored`. `tests/performance_render.test.mjs` passes the flag through and adds a third test that is skipped unless the flag is set, so the default two-test capture lane is unchanged. Evidence: `MEFI_PERFORMANCE_RESUME_SHEET=explorer node --test --test-name-pattern="resume key" tests/performance_render.test.mjs` -> pass 1 / fail 0 (8.2 s); default `node --test tests/performance_render.test.mjs` -> pass 2 / skip 1 / fail 0 (36.2 s). Malformed/absent resume handling remains covered by `tests/nav_startup.test.mjs`. The Electron fixture lives in this Studio checkout, not the game repo.
+
+## 2026-09-22 night - Full npm test re-attempt on the settled af778d0 tree - sibling suites now green solo, one eyes_worker load flake stops the chain before the width-2 Electron lane (task_6eaa6023eab1a057, run_1790136302111_8)
+
+One `npm test` from the Studio root at HEAD af778d0 (>= bf028ae); the runner's settle loop passed (no 'sources still changing' line). Parallel stage: tests 2476 / pass 2472 / fail 1 / cancelled 0 / skipped 3 in 95.0 s. The width-2 Electron lane did NOT run: run-node-tests.mjs exits on the first failing parallel suite, so `runStage(heavyLane, 2, ...)` never launched and no Electron fixture produced output. The lone failure is the documented eyes_worker 'read past the timeout' load flake (scripts/eyes-client.cjs:149, store read timed out after 150 ms); tests/eyes_worker.test.mjs passes 8/8 solo on the same HEAD. The named sibling suites (community_*, discord_oauth, music, command_graph) pass 232/232 solo, exit 0, so the prior 6-failure parallel blocker is functionally cleared - but they remain uncommitted. Net: npm test cannot exercise the width-2 lane while any parallel suite flakes under load; the lane needs a direct quiet-host run.
+
+## 2026-09-22 night - Raw control-byte escapes and the check-targets raw-control gate (4ae4eb8), gated as that exact commit in a detached worktree: check and audit green, Node 2287/2282/2 load flakes/3 skipped (both green solo), Python 247 OK, normalized-path lock ok
+
+Commit 4ae4eb8 escapes raw NUL/BS/VT/US/ESC bytes in usage-tracker.cjs (line 23 only), first-map.mjs, first-scan.mjs, setup-assist.mjs and two executor tests. Git now stores all four scripts as text (`i/lf`). check-targets also now fails on raw C0 controls (other than tab/LF/CR), DEL and bidi controls in tracked text files. The shared tree was not a valid place to gate it: a peer had 19 files staged, first-scan.mjs and usage-tracker.cjs carried peer hunks, and `npm run audit` failed there on a peer's uncommitted `#music-premium-themes`. So the commit was built in a private `GIT_INDEX_FILE` from HEAD b73b378 and gated in `git worktree add --detach C:/Users/echor/mgr` with node_modules junctioned. The host was saturated throughout (70-100 % CPU, a dozen peer sessions).
+
+- `npm run check` exit 0: check-targets 104 targets, spec-collisions 219, CSS merge skip + all selectors used, check-syntax 104 files, check-testruns ok. Before usage-tracker.cjs line 23 went into the commit, the gate correctly failed HEAD on `scripts/usage-tracker.cjs:23:66 U+0000` and `23:68 U+001F`.
+- `npm run audit` exit 0, 0 errors / 0 warnings.
+- `npm test` exit 1 at the Node stage: `run-node-tests: 192 suites (9 launch Electron)`, tests 2287 / pass 2282 / fail 2 / cancelled 0 / skipped 3, 293 s. The two failures touch no file in the commit, and both passed solo on the same commit (10/10): `commit_evidence` ("the evaluator accepts a runner-observed commit", 12.6 s; git reads starved, and the solo run still took 9.5 s) and `eyes_worker` ("a read past the timeout", the documented load flake). Because the Node stage failed, the Electron lane never launched; the commit touches no renderer or Electron fixture source.
+- The rest of the chain, run directly on the same commit: `python -m unittest discover -s tools -p "test_mefi_studio_*.py"` ran 247, OK (skipped=1); `node tools/test_normalized_path_lock.mjs` all checks passed.
+
+Landed with `git update-ref refs/heads/main 4ae4eb8 b73b378` (compare-and-swap), then `git reset -q 4ae4eb8 -- <the 8 paths>` so the shared index holds no stale blobs for them; peers' staged work was untouched. The worktree was torn down junction-first. scripts/community.cjs (untracked) had literal bidi controls, which its owning session escaped before this run.
+
+## 2026-09-22 late evening - Quiet single-writer `npm test` re-attempt on an unqualified tree: precondition still unmet (community/music/command_graph uncommitted), the Node stage ran 2336/2327/6/0 and the width-2 Electron lane never launched under the chain (task_6eaa6023eab1a057, run_1790128483257_95)
+
+Re-attempt of this card. Pre-condition check first, from the package root at HEAD 6695582 (contains `bf028ae`): the sibling work is still **not committed** (`git status`: `tests/music.test.mjs` and `tests/command_graph.test.mjs` modified; `tests/community_bridge|community_host|community_rules|community_ui|discord_oauth.test.mjs` untracked), and the host was not quiet (942 MB free of 14,102 MB, 17 `node` processes, 0 `electron`). So this is explicitly **not** the quiet single-writer run the card asks for and is reported as such.
+
+One `npm test` from the package root, exit **1**. `run-node-tests: 195 suites (9 launch Electron)`. The parallel stage printed `tests 2336 / pass 2327 / fail 6 / cancelled 0 / skipped 3 / duration_ms 66253.5893`; no "Electron fixture" stage appeared and no source-settle abort fired. The 6 failures are the same sibling uncommitted suites the `bf028ae`/`a2516e56` rows name: `command_graph` ("prism keeps its facets and runes on the node"), `community_host` + `projects.test.mjs` (`ReferenceError: APP_WIDE_CHANNELS is not defined` in `handleProjectIpc`), `community_ui` x2 (offer() copy) and `music` ("without MefiCommunity the actions say Desktop app only"). `runStage()` calls `process.exit` on the first failing stage, so the width-2 Electron lane never launched under the chain - a runner property, not a lane defect - and the Python and normalized-path stages of the `npm test` chain were not reached either.
+
+Net: the card's precondition (sibling sessions commit/stash `community`/`music`/`command_graph`) is still unmet, so the literal single-writer full `npm test` that would exercise the width-2 lane inside the real chain remains blocked. The lane's own operability evidence stands (`df9ce80`/`6d468ca` direct lane 17/17, `bf028ae` 16/17 with 0 cancellations). Output tee'd to `%TEMP%\opencode\npmtest-task_6eaa6023-20260922-2056.log`. No source file was modified beyond this entry; the shared index was left with nothing staged.
+
+## 2026-09-22 late evening - Full single-writer `npm test` re-attempt on an unsettled tree: the precondition is still unmet (sibling work uncommitted, host saturated), the Node stage ran 2331/2322/6/0 and the width-2 Electron lane still never launched under the chain (task_a2516e562f8fb21b, run_1790124735129_54)
+
+Re-attempt of this card on the current tree. Pre-condition check first: the sibling work is still uncommitted (`git status`: `main.cjs` + `renderer/music.js` modified, `renderer/community.js` untracked) and the host was not quiet (225 MB free of 14,102 MB; ~20 live `node` processes, several started 19:54:20). So this is explicitly **not** a quiet single-writer run and is reported as such.
+
+Full gate: one `npm test` from the package root, exit **1** after **104.8 s**. `run-node-tests: 194 suites (9 launch Electron)`. The parallel stage printed `tests 2331 / pass 2322 / fail 6 / cancelled 0 / skipped 3 / duration_ms 88312`; the 6 failures are the same sibling in-progress/untracked suites the `bf028ae` row names and all reproduce solo (`node --test tests/command_graph.test.mjs tests/community_ui.test.mjs tests/music.test.mjs tests/usage_tracker_host.test.mjs` fails 5): `command_graph` ("prism keeps its facets and runes on the node"), `community_host` + `projects.test.mjs` (`ReferenceError: APP_WIDE_CHANNELS is not defined` in `handleProjectIpc`), `community_ui` x2 (offer() copy) and `music` ("without MefiCommunity the actions say Desktop app only"). `runStage()` calls `process.exit` on the first failing stage, so the width-2 Electron lane never launched under the chain - a runner property, not a lane defect.
+
+Net: the card's precondition (sibling sessions commit/stash `main.cjs` + `renderer/music.js` + `community_ui`, then a quiet host) is still unmet, so the literal single-writer full `npm test` that would exercise the width-2 lane inside the real chain remains blocked. **0 `node:test` cancellations** in the parallel stage, and the lane's own operability evidence stands (`df9ce80` / `6d468ca` direct lane 17/17, `bf028ae` 16/17 with 0 cancellations). Output tee'd to `%TEMP%\opencode\npmtest-task_a2516e56-20260922-1955.log`. No source file was modified beyond this entry; the shared index was left with nothing staged.
+
+## 2026-09-22 late evening - Electron lane re-run under a saturated shared host: the literal single-writer `npm test` still bails at the parallel stage on sibling in-progress suites and never reaches the width-2 lane; the direct width-2 lane ran 16/17 with 0 cancellations (startup_render fixture starved - documented load flake), and the prior clean lane passes stand (task_94b1f81cf95f9ff6, run_1790123281248_7)
+
+Retry of this card after the owner split the blocked extra work out; its prompt is a quiet single-writer `npm test` to exercise the new runner's width-2 Electron lane + kill+60 s margins. Both halves were re-run first-hand on HEAD 0279c89, and the pre-condition could not be met: the host was **not** quiet. Pre-flight found a concurrent `npm test` (pid 26884), a full `node --test` over the sibling clone `C:/Users/echor/.claude/worktrees/mefi-t3-code-comparison-588d25/tests` (pid 24288), a sibling `npm run check` (pid 33956), 4-8 live Electron processes and only 313-442 MB free of 14,102 MB. So this is explicitly not a quiet single-writer run and is reported as such.
+
+Full gate: one `npm test` from the package root, exit **1** after **64,885 ms**. `run-node-tests: 194 suites (9 launch Electron)`. The parallel stage printed `tests 2327 / pass 2318 / fail 6 / cancelled 0 / skipped 3 / duration_ms 58838`, and the 6 failures are all sibling in-progress or untracked work, not this card: `command_graph` ("prism keeps its facets and runes on the node"), `community_host` and `projects.test.mjs` (`ReferenceError: APP_WIDE_CHANNELS is not defined` in `handleProjectIpc`, a VM slice of the uncommitted +817-line `main.cjs`), `community_ui` x2 (offer() copy) and `music` ("without MefiCommunity the actions say Desktop app only"). `runStage()` calls `process.exit` on the first failing stage, so the Electron lane never launched under the chain - a runner property, not a lane defect.
+
+Direct lane, exactly what the runner runs (`node --test --test-concurrency=2` over the 7 non-serialized heavy files command_render, node_paint_cache, package_privacy, performance_render, renderer_recovery, startup_render, task_overview_render): exit **1**, `tests 17 / pass 16 / fail 1 / cancelled 0 / skipped 0`, **144,455 ms** (vs 42.1 s and 34.3 s on the two prior quiet runs). The one failure is `startup_render` "cold startup gates access..." - "Startup fixture timed out: PID 13672" at 69.4 s - with command_render at 92.0 s and task_overview_render at 50.3 s, i.e. every capture starved by the >10x host load. **Zero `node:test` cancellations**: the kill+60 s budgets classified the fixture's own timeout as an assertion rather than a cancellation, which is exactly what those margins exist to do. Starved GPU-contended captures are the documented environmental-failure class (TESTRUNS "Known environmental failures": startup_render, rerun solo), so this is host-load flake, not a runner or lane regression. The prior clean evidence is not superseded: df9ce80 direct lane 17/17 @42.1 s and the independent 6d468ca 17/17 @34.3 s both remain the lane-operability evidence.
+
+No source file was modified beyond this entry; the shared index was left with nothing staged. Remaining: a literally quiet single-writer full `npm test` cannot reach the lane while the sibling's uncommitted community/music/command_graph/projects suites fail the parallel stage - a blocker split out of this card and not reproducible-fixable on this saturated shared host.
+
+## 2026-09-22 late evening - performance_render solo rerun re-verified on the current tree under load: 2/2 pass in 18.7 s, exit 0, no pak-load or profiler-JSON timeout; corroborates the 0279c89 flake-vs-regression split (task_686c8477802f55a0, run_1790123192292_2)
+
+Independent re-verification of this card's deliverable on the current tree (HEAD 0279c89), requested by the interrupted-work retry. Exact command, single writer, from the package root: `node --test tests/performance_render.test.mjs` -> tests 2 / pass 2 / fail 0 / cancelled 0 / skipped 0, **exit 0**, duration 18,705 ms (renderer leg 11,190 ms; desktop host 7,259 ms). Neither reported symptom appeared: no `chrome_100_percent.pak` line and no "Profiler JSON download timed out". Host at launch was NOT quiesced - CPU 72 %, free RAM 436 MB, 12 `node` helpers, 0 `electron.exe` - so this is the loaded-but-healthy point between the 12.3 s quiesced run (0279c89) and the ~58 s loaded run (6bc2e63), and it still sits well inside the 140 s `node:test` budget (80 s fixture kill + 60 s prelude landed in 21f1697). This corroborates the committed verdict: the pak-load / 18 s-JSON-timeout signature is host-load flake, not a fixture regression. Output tee'd to `%TEMP%\opencode\perf_render_verify_20260922-192819.log`. No fixture or test source modified by this run; the two split-out follow-ups (stray-pak-line capture, timeout/width policy) remain with their delegated cards.
+
+## 2026-09-22 late evening - performance_render quiesced solo rerun passes 2/2 in 12.3 s; the same fixture on the same HEAD runs 12 s quiet vs ~58 s loaded vs cancelled saturated, so the pak-load/18 s-JSON-timeout signature is machine-load flake, not a fixture regression (task_686c8477802f55a0, run_1790122820379_61)
+
+Third rerun of this question, and the first genuinely quiesced one - the prior
+card's run was owner-present/loaded. Pre-flight found no competing
+`node --test`/`npm test` chain and 0 `electron.exe`: a sibling game-repo
+`run-tests:quick` lease (pid 39028) had just released, so the only live `node`
+processes were IDE/MCP helpers. Host at launch: CPU 60 %, free RAM 1,444 MB,
+electron 0, node 11; after: CPU 3 %, electron 0.
+
+Command, exactly one writer, from the package root: `node --test
+tests/performance_render.test.mjs` -> **tests 2 / pass 2 / fail 0 / cancelled 0
+/ skipped 0, duration 12,347 ms, exit 0** (renderer 6,957 ms; desktop host
+5,246 ms). Output tee'd to `%TEMP%\opencode\perf_render_solo_retry.log`.
+Neither reported symptom recurred: no `chrome_100_percent.pak` line and no
+"Profiler JSON download timed out".
+
+The renderer leg took 6.9 s here, versus 57.9 s on the loaded desktop (this
+card's prior run) and ~18.5 s inside the saturated flake-loop, and sits well
+inside the current 140 s `node:test` budget (80 s fixture kill + 60 s prelude
+landed in 21f1697). The same fixture on the same HEAD passing in 12 s, passing
+in ~58 s, and cancelling only under saturation is a host-load gradient, so the
+pak-load + 18 s JSON-timeout signature is **machine-load flake**, not a fixture
+regression. The stray pak-load line itself remains unreproduced on a quiesced
+host. No fixture/test source modified beyond this entry.
+
+## 2026-09-22 late evening - Electron lane end-to-end re-verified independently: width-2 heavy lane 17/17 pass / 0 cancelled / 34.3 s; a full single-writer `npm test` still stops in the parallel stage on sibling in-progress suites and never reaches the Electron lane (task_46383da5c648ff0f, run_1790122808207_60)
+
+Re-ran the split-out end-to-end validation first-hand rather than adopting the sibling card's report, on the same shared, actively-edited tree. Runner settings re-confirmed on disk on HEAD (after the sibling row landed, HEAD df9ce80): `scripts/run-node-tests.mjs:170` runs the heavy lane with `runStage(heavyLane, 2, "Electron fixture")`; `--list` -> 194 suites (9 launch Electron). Direct exercise of exactly what the runner runs, `node --test --test-concurrency=2` over the 7 non-serialized heavy files (command_render, node_paint_cache, package_privacy, performance_render, renderer_recovery, startup_render, task_overview_render): exit **0**, `tests 17 / pass 17 / fail 0 / cancelled 0 / skipped 0`, **34.3 s wall** - matching the sibling's df9ce80 claim (42.1 s) and confirming the width-2 lane is operational end-to-end. No fixture kill fired and no `node:test` cancellation, so the kill+60 s margins were headroom, not exercised under saturation. Full gate: one foreground `npm test` (single writer; pre-flight found no competing `node --test`/`electron.exe`) logged to `%TEMP%\opencode\npmtest-task_46383da5-20260922-e2e.log`, exit 1 after 35.7 s. The parallel stage printed `tests 2314 / pass 2306 / fail 5 / cancelled 0`, and the runner bailed on that first failing stage (its `runStage` calls `process.exit`), so the Electron lane never launched under the chain - a runner property, not a lane defect. Critically: **zero Electron cancellations and zero fixture-kill signatures**; the 5 failures are non-Electron assertions in sibling in-progress suites (command_graph, community_ui x2, music, usage_tracker_host) that `main.cjs` +433 / `renderer/music.js` +307 have uncommitted. They reproduce **solo** on the current dirty tree (`node --test` those four: 176 tests / fail 5 / exit 1), so they are real failures in the sibling sessions' uncommitted work, not parallel-load transients and not anything the lane change caused. No "sources changed while the ... stage was running" warning fired. Net: the width-2 lane + 60 s margins are validated as far as a shared tree allows; the literal clean single-writer full `npm test` stays blocked until the sibling community/music/command_graph work lands and the tree is quiet. No repo source modified by this run beyond this row.
+
+## 2026-09-22 late evening - Electron lane end-to-end: width-2 lane verified directly (7 fixtures, --test-concurrency=2, 17/17 pass, 0 cancelled, 42 s); the literal single-writer full `npm test` cannot reach the lane because a sibling session's in-progress suites fail the parallel stage and the runner bails before the heavy lane (task_94b1f81cf95f9ff6, run_1790122600413_55) (task_94b1f81cf95f9ff6, run_1790122600413_55)
+
+Validated the new runner's width-2 Electron lane + kill+60 s margins (task_46383da5c648ff0f change, HEAD 21f1697) as far as a shared, actively-edited tree allows. Effective runner settings re-confirmed on disk: scripts/run-node-tests.mjs:170 `runStage(heavyLane, 2, "Electron fixture")`; `--list` reports 194 suites / 9 launch Electron; heavyLane is the 7 non-serialized Electron suites (command_render, node_paint_cache, package_privacy, performance_render, renderer_recovery, startup_render, task_overview_render) and the 2 serialized probes (occlusion_probe, eyes_toggle_electron) stay one-at-a-time. Margins are the enclosing node:test budgets = fixture-kill + 60 s (performance_render/command_render 140 s @ 80 s kill, startup_render 115 @ 55, task_overview_render 95 @ 35, node_paint_cache 90 @ 30, renderer_recovery 105 @ 45, occlusion_probe/eyes_toggle_electron 140 @ 80). Single-writer pre-flight: no other `node --test`/Electron writer was live (only scripts/serve.mjs web servers and the game repo's separate python unittest, left untouched). Full `npm test` run #1, one foreground quiet process, output logged: exit 1 after 54.3 s; the runner printed `sources changed while the parallel stage was running` and the parallel stage failed exactly 4 tests - tests/command_graph.test.mjs "Singularity, Prism and Sigil draw distinct bounded surfaces...", tests/music.test.mjs "A member's premium choices return at launch...", and two tests/community_ui.test.mjs offer() cases. All four are in a sibling session's modified (command_graph, music) or untracked (community_ui) files, and a sibling commit moved HEAD 21f1697 -> e1f10d0 (TESTRUNS.md only) mid-run - so the tree was not quiet. Because runStage() calls process.exit on the first failing stage, the Electron lane never launched under `npm test`; this is a runner property, not a lane defect. Direct lane exercise, exactly what the runner runs (`node --test --test-concurrency=2 <7 heavy files>`): exit 0, `tests 17 / pass 17 / fail 0 / cancelled 0 / skipped 0`, 42.1 s wall; command_render 36.6 s, performance_render 7.3 s + 14.9 s, package_privacy 2.2 s; no fixture kill fired and no node:test cancellation, so the 60 s margins were headroom, not exercised (they remain unproven under saturation). Net: the width-2 lane is confirmed operational end-to-end when the heavy stage runs. Remaining: a literally clean single-writer full `npm test` is blocked until the sibling's in-progress community/music/command_graph suites land and the tree is quiet; re-run then to observe the lane inside the real chain (no repo fix is owed by this card).
+
+## 2026-09-22 evening - performance_render cold-OneDrive re-run: host is NOT cold (OneDrive idle, paks pinned), stray pak-load line still unreproduced; captured the JSON-download timeout instead (task_7ab75baffb687694, run_1790122547783_52)
+
+This card asked for a rerun of `node --test tests/performance_render.test.mjs` on a
+genuinely cold OneDrive host - OneDrive actively syncing and `chrome_100_percent.pak`
+dehydrated/starved - to capture the stray pak-load line verbatim. Precondition check
+made before the run, on this host:
+
+- **OneDrive is not syncing.** `Get-Process OneDrive` returns 0 processes (also 0
+  FileSyncHelper/SyncEngine); the `HKCU\Software\Microsoft\OneDrive\Accounts` entry has
+  an empty `UserFolder`/`DisplayName`. The required "actively syncing" state could not
+  be established.
+- **The paks are hydrated, not dehydrated.** `node_modules/electron/dist/` holds
+  `chrome_100_percent.pak` (719,654 B), `chrome_200_percent.pak` (1,269,017 B),
+  `resources.pak` (12,435,445 B) and `electron.exe` (246,324,736 B), all with Windows
+  attributes `524320` (0x80020 = ARCHIVE | PINNED, i.e. available offline). A recursive
+  sweep of `electron/dist` found zero files carrying Offline (0x1000), RecallOnDataAccess
+  (0x400000) or ReparsePoint, so no cloud-only placeholder exists to starve the read.
+
+So this is explicitly **not a cold-host capture**: the requested precondition is
+unfulfilled and is reported as a limitation rather than presented as the requested run.
+It was still one writer - 0 `electron.exe` and no competing `node --test`/`npm test`
+chain (live `node` processes were five `scripts/serve.mjs` web servers plus PixelLab MCP
+proxies). Host at launch: CPU 100 %, free RAM 359 MB, OneDrive proc 0, electron 0;
+after: CPU 47 %, free RAM 713 MB, OneDrive proc 0, electron 0.
+
+Command, exactly as specified, from the package root, combined stdout+stderr captured at
+the OS level (cmd `> log 2>&1`, preserving order) - exit **1**:
+
+```text
+✖ real performance profiler catches blocking work, freezes captures and fits a narrow window (27253.745ms)
+✔ desktop performance capture measures real Electron processes and IPC without exporting payloads (9029.4255ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 1
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 36802.6363
+
+✖ failing tests:
+
+test at tests\performance_render.test.mjs:80:1
+✖ real performance profiler catches blocking work, freezes captures and fits a narrow window (27253.745ms)
+  AssertionError [ERR_ASSERTION]:
+  Error: Profiler JSON download timed out after 5180ms at 1.04x observed pace
+      at Timeout._onTimeout (C:\Users\echor\OneDrive\Desktop\Coding Projects\Mefi's Studio AI+\tests\fixtures\performance-render-electron.cjs:137:22)
+      at listOnTimeout (node:internal/timers:685:17)
+      at process.processTimers (node:internal/timers:618:7)
+
+  Error: Profiler JSON download timed out after 5180ms at 1.04x observed pace
+      at Timeout._onTimeout (C:\Users\echor\OneDrive\Desktop\Coding Projects\Mefi's Studio AI+\tests\fixtures\performance-render-electron.cjs:137:22)
+      at listOnTimeout (node:internal/timers:685:17)
+      at process.processTimers (node:internal/timers:618:7)
+
+  1 !== 0
+
+      at runFixture (file:///C:/Users/echor/OneDrive/Desktop/Coding%20Projects/Mefi's%20Studio%20AI+/tests/performance_render.test.mjs:68:12)
+      at async TestContext.<anonymous> (file:///C:/Users/echor/OneDrive/Desktop/Coding%20Projects/Mefi's%20Studio%20AI+/tests/performance_render.test.mjs:81:18)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+```
+
+Raw combined log preserved at `%TEMP%\opencode\pak_capture_20260922-1.log`; host samples
+at `%TEMP%\opencode\pak_capture_20260922-1.host.txt`. The failure is the fixture's own
+pace-scaled download budget (5,180 ms at 1.04x observed timer pace), not the pak-load
+line: the string `chrome_100_percent.pak` appears nowhere in the output, so the stray
+pak-load line remains unreproduced. The parent card's result claimed a repo-relative
+handoff doc `docs/handoffs/mefi-studio-perf-render-pak-load-capture.md` at `d57cd410`;
+neither the doc nor that revision exists on this checkout (`git show d57cd410` ->
+unknown revision; no `docs/handoffs/` directory), so that record could not be
+corroborated. Remaining: a genuine cold-OneDrive capture still needs a host where
+OneDrive is actively syncing and the Electron pak is dehydrated/starved - this host can
+provide neither, so the card cannot be closed from here. No test/fixture source was
+modified beyond this ledger entry.
+
+## 2026-09-22 late evening - Electron fixture timeouts under load: bound the capture lane to width 2 and set every enclosing node:test budget to fixture-kill + 60 s (task_46383da5c648ff0f, run_1790121939578_40)
+
+Implemented the owner call's two levers together, conservatively, in the Studio checkout (the game repo holds no Electron fixture). (1) scripts/run-node-tests.mjs now splits the selected suites into three lanes instead of two: the CPU-only suites keep the runner's default file concurrency, the remaining Electron fixtures (the render captures plus package_privacy) run after them at a fixed `--test-concurrency=2`, and the two existing exclusive probes stay one-at-a-time. That bounds concurrent Chromium windows to two instead of up to the default 16, without slowing unrelated behavioural suites. (2) Every Electron fixture's enclosing `node:test` timeout is now its own kill deadline plus 60 s, so the fixture's kill gets to tear down the process tree, write report.json and let the test report its own classification instead of being cancelled first: performance_render 100 -> 140 s and command_render 100 -> 140 s (80 s kill preserved), startup_render 65 -> 115 s (55 s kill), task_overview_render 45 -> 95 s (35 s kill), node_paint_cache 50 -> 90 s (30 s kill), renderer_recovery 60 -> 105 s (45 s kill), occlusion_probe and eyes_toggle_electron 90 -> 140 s (80 s kill). The 60 s margin covers the mkdtemp + copy + booklet-build prelude and the report/teardown tail, which the 100 s cancellation proved can exceed 20 s on a saturated host; no kill deadline was raised, so a genuine hang still dies at its fixture bound rather than being masked.
+
+Evidence, first-hand on HEAD 6bc2e63: `node --check scripts/run-node-tests.mjs` exit 0; `node --test tests/performance_render.test.mjs` (the fixture the card names) 2/2 pass, 0 cancelled, exit 0, 37.8 s wall (renderer 30.6 s, desktop host 6.9 s); the runner's own guard `node --test tests/run_node_tests_fast.test.mjs` 1/1 pass; `--test-concurrency=2` accepted by the Node 24 test runner; `scripts/run-node-tests.mjs --list` reports 194 suites full vs 185 `--fast` (the 9 Electron suites still excluded from fast). Not run here: a full `npm test` (a loaded, 290 s+ single-writer sweep is the only way to exercise the new lane end-to-end) - the per-fixture solo run is the narrow verification owed to this card. No fixture kill deadline changed, and no non-Electron suite's timeout or concurrency was touched. The exact 60 s margin and the width-2 lane are a policy choice the owner may want to ratify or tune, since the card framed it as an owner call.
+
+## 2026-09-22 late evening - Full `npm test` re-capture after the env-drift fix: single-writer sweep on HEAD 7f1b715, end-of-suite summary captured, exit 1 with five Electron render-capture timeouts (task_cb3fe2a4b6e6dc61, run_1790120651815_11)
+
+Re-ran the whole `npm test` chain once as the sole writer on Studio HEAD 7f1b715 (game repo `2d Trippy Hell` has no package.json test script, so this is the Studio checkout). Pre-flight found no live `node --test` chain to kill: only `scripts/serve.mjs` web servers, `mcp-remote` PixelLab proxies, a scratchpad `serve.mjs` and an unrelated `npm run check` from a sibling session (pid 40132) - none are node-test writers, so they were left running. Commands: one foreground `npm test 2>&1 | Tee-Object` to `%TEMP%\opencode\npmtest-task_cb3fe2a4-20260922-184653.log` (455 KB), wall duration 303.9 s, exit code 1. The Node parallel stage printed its end-of-suite summary - `tests 2331 / pass 2323 / fail 0 / cancelled 5 / skipped 3`, duration 291.3 s - but the runner exited 1 because five Electron render-capture suites hit their per-test timeouts (all `test timed out`, i.e. cancelled, not assertion failures): `command_render` (100.2 s / 100 s budget), `performance_render` (two tests, 100.2 s and 100.0 s), `startup_render` (65.1 s / 65 s budget) and `task_overview_render` (45.1 s / 45 s budget). This is materially different from the card's expected "≤1 failure (performance_render)": the tree is now ~2331 tests (the earlier capture was 1652) and the sibling Discord/community + renderer-recovery work plus a very busy machine widened the timeout set to the five render-capture rows already listed in the Known environmental failures table above. Because the chain is `&&`, the failing Node stage short-circuited the remaining legs; they were run directly to complete the triage: `python -m unittest discover -s tools -p "test_mefi_studio_*.py"` - 247 tests OK, exit 0; `node tools/test_normalized_path_lock.mjs` - all checks passed, exit 0. Tree held still across the run: HEAD 7f1b715 before and after (PRE/POST equal), 42 dirty entries unchanged, no repo source edited by this run beyond this entry. Remaining: the five render-capture timeouts need an owner-present, machine-idle rerun to separate load flake from a real regression (each is documented "rerun solo / passes on a quiet machine"); the env-drift fixture hunks still need their commit owner (task_4634be5bc0a9ddd2).
+
 ## 2026-09-22 late evening - Owner-gated occlusion-probe re-run: requested scoped commit already landed as a9464fd (+9f6ef07, e913fff); fresh strict native-occlusion pass, no pending occlusion diff; sole leftover is the owner-only projectPath/bookkeeping mismatch (task_e650d4d5946e92ca, run_1790120218492_2)
 
 Inspected the tree before acting: this card's requested scoped commit is already in Studio history, not pending - a9464fd carries main.cjs + tests/fixtures/occlusion-probe-electron.cjs + tests/worker_responsiveness.test.mjs + TESTRUNS.md, 9f6ef07 and e913fff logged the prior re-runs, and the thread continued through 2334b00/66895cd/ce3e6ec/cb93e79/379c5b1 plus the strict-phase decision 2036b65, all ancestors of HEAD (git merge-base --is-ancestor a9464fd HEAD true). No occlusion file is dirty: tests/occlusion_probe.test.mjs, tests/fixtures/occlusion-probe-electron.cjs, tests/worker_responsiveness.test.mjs and TESTRUNS.md all match HEAD; the only dirty main.cjs belongs to the sibling Discord/community thread and was left byte-for-byte untouched and never staged. Ran the probe once more per the owner request: invocations 1 and 2 were externally destroyed cover windows (a foreground Discord process pid 10744 kept closing the probe window during the cover-wait and occluded-measure phases - the documented windowLost rerun case), invocation 3 passed strict native occlusion in 41.5 s - occlusion via document.hidden, occluded rAF growth 0, occluded probe answered workerDriftMs 160 ms / lag 96 ms of 1 sample under the <100 ms assertion, MessageChannel 1 ms, console errors 0, no occlusionUnsupported/windowLost/coverLost skip. Nothing occlusion-related is pending to commit; this row is the only artifact. Owner-only leftover unchanged: this card and its lineage are filed with projectPath 2d Trippy Hell, which has no main.cjs or occlusion fixture; the work lives in the Mefi's Studio AI+ repo, so verification against the game repo reports changedFiles 0.
