@@ -115,6 +115,9 @@ class MefiStudioLauncherTests(unittest.TestCase):
             self.assertIn(f'data-styler-action="{action}"', template)
         self.assertIn("serverStylerStatus()", self.booklet_js)
         self.assertIn("/api/bootstrap", self.main)
+        # A separate project on this machine: its status poll answers through a project switch.
+        self.assertIn('channel.startsWith("styler:")', self.main)
+        self.assertIn("MEFI_STYLER_ROOT", (STUDIO / ".env.example").read_text(encoding="utf-8"))
 
     def test_electron_smoke_boots_when_installed(self):
         if not ELECTRON.is_file():

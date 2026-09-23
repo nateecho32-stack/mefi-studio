@@ -167,7 +167,7 @@ let projectAgentJobs = 0;
 const originalIpcHandle = ipcMain.handle.bind(ipcMain);
 
 function handleProjectIpc(channel, handler) {
-  if (channel.startsWith("projects:") || channel.startsWith("performance:") || channel.startsWith("startup:") || channel.startsWith("community:") || APP_WIDE_CHANNELS.has(channel)) return originalIpcHandle(channel, handler);
+  if (channel.startsWith("projects:") || channel.startsWith("performance:") || channel.startsWith("startup:") || channel.startsWith("community:") || channel.startsWith("styler:") || APP_WIDE_CHANNELS.has(channel)) return originalIpcHandle(channel, handler);
   originalIpcHandle(channel, (_event, ...args) => {
     if (projectSwitching) return { ok: false, error: "Switching projects. Try again in a moment." };
     const project = projects.active();
@@ -175,6 +175,8 @@ function handleProjectIpc(channel, handler) {
     return projects.run(project, () => Promise.resolve().then(() => handler(_event, ...args)).finally(() => { projectOperations -= 1; }));
   });
 }
+// The Server Styler controls (the styler: prefix above) drive a separate
+// project on this machine, so like community:* they answer through a switch.
 // The account readings belong to the owner, not to a project: they run
 // through a project switch and never hold one up. (Declared beside the
 // wrapper so the tests that load it from here up to app.setName see it.)
