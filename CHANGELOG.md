@@ -8,6 +8,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Discord Server Styler controls.** Settings can start the separate bot and
+  local dashboard, open the dashboard or bot folder, show setup and online
+  status, and stop a process Studio started. It finds a sibling
+  `discord-server-styler/` checkout or the path in `MEFI_STYLER_ROOT`.
 - **Void Engine Discord perks.** Members of the Void Engine Discord unlock
   the **Void collection**. It has four themes, **Void**, **Eclipse**,
   **Abyss** and **Neon Dusk**, each with a second accent hue, its own

@@ -33,7 +33,7 @@ const os = require("node:os");
 const crypto = require("node:crypto");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
-const { resolveStudioPaths } = require("./scripts/paths.cjs");
+const { resolveStudioPaths, resolveStylerRoot } = require("./scripts/paths.cjs");
 // Without the map, a key comes from the settings field and the keystore alone,
 // the way it did before the environment was a source at all.
 const credentials = optionalHelper(
@@ -131,6 +131,7 @@ if (!SMOKE && !CAPTURE && !CLI_MODE) {
 const LOVE_DIR = GAME_ROOT && path.join(GAME_ROOT, "build", "cache", "love-11.5-win64");
 const LOVE_EXE = LOVE_DIR && path.join(LOVE_DIR, "love.exe");
 const DEV_PROJECT = GAME_ROOT && path.join(GAME_ROOT, "dev", "dev_tool_love_project");
+const STYLER_ROOT = resolveStylerRoot({ sourceRoot: SOURCE_ROOT, gameRoot: GAME_ROOT });
 const SETTINGS_PATH = path.join(app.getPath("userData"), "settings.json");
 // Credential ciphertext lives apart from preferences (pi's settings/auth
 // split): settings.json stays plain, copyable state, auth.json stays
@@ -184,6 +185,11 @@ app.setName("Mefi's Studio AI+");
 let window = null;
 let rendererRecovery = null;
 let activeChild = null;
+let stylerChild = null;
+let stylerSetupChild = null;
+let stylerStarting = false;
+let stylerStopping = false;
+let stylerLastError = "";
 let eyesTimer = null;
 let eyesWatchGeneration = 0;
 let eyesLastTs = Date.now();
@@ -13530,6 +13536,137 @@ function runGameScript(label, name, args = []) {
   return runCmd(label, script, args);
 }
 
+function stylerDashboardUrl() {
+  let port = 5255;
+  try {
+    const match = readFileSync(path.join(STYLER_ROOT, ".env"), "utf8").match(/^PORT\s*=\s*(\d+)\s*$/m);
+    if (match) {
+      const configured = Number(match[1]);
+      if (Number.isInteger(configured) && configured > 0 && configured < 65536) port = configured;
+    }
+  } catch {}
+  return `http://127.0.0.1:${port}`;
+}
+
+async function stylerBootstrap() {
+  try {
+    const response = await fetch(`${stylerDashboardUrl()}/api/bootstrap`, { signal: AbortSignal.timeout(1500) });
+    if (!response.ok) return null;
+    const body = await response.json();
+    return body && typeof body.bot?.state === "string" && Array.isArray(body.missingConfig) ? body : null;
+  } catch {
+    return null;
+  }
+}
+
+async function serverStylerStatus() {
+  const url = stylerDashboardUrl();
+  if (!existsSync(path.join(STYLER_ROOT, "package.json"))) {
+    return { ok: false, state: "missing", message: `Server Styler project missing at ${STYLER_ROOT}`, url };
+  }
+  const bootstrap = await stylerBootstrap();
+  if (bootstrap) {
+    const bot = bootstrap.bot;
+    let message = bot.state === "online"
+      ? `Bot online as ${bot.asUser}. Dashboard ready.`
+      : bot.state === "error"
+        ? `${bot.message}${bot.hint ? ` ${bot.hint}` : ""}`
+        : bot.state === "connecting"
+          ? "Dashboard is running. Bot is connecting to Discord."
+          : "Dashboard is running. Complete the bot setup there.";
+    if (bootstrap.passwordIsDefault) message += " Set a private DASHBOARD_PASSWORD in the bot project's .env.";
+    return { ok: true, state: bot.state === "online" ? "online" : "setup", message, url };
+  }
+  if (stylerStarting || (stylerChild && stylerChild.exitCode === null)) {
+    return { ok: true, state: "starting", message: "Installing or starting Server Styler. See the connection and tool log.", url };
+  }
+  if (stylerLastError) return { ok: false, state: "error", message: stylerLastError, url };
+  const setupHint = existsSync(path.join(STYLER_ROOT, ".env"))
+    ? "Start it here, then open the dashboard."
+    : "Start it here. Create .env from .env.example and set DASHBOARD_PASSWORD to use the setup wizard.";
+  return { ok: true, state: "stopped", message: `Server Styler is stopped. ${setupHint}`, url };
+}
+
+function wireStylerOutput(child, label) {
+  for (const stream of [child.stdout, child.stderr]) {
+    if (!stream) continue;
+    stream.setEncoding("utf8");
+    let pending = "";
+    stream.on("data", (chunk) => {
+      pending += chunk;
+      const lines = pending.split(/\r?\n/);
+      pending = lines.pop();
+      for (const line of lines) if (line.trim()) logLine(`[Server Styler ${label}] ${line}`);
+    });
+    stream.on("end", () => {
+      if (pending.trim()) logLine(`[Server Styler ${label}] ${pending}`);
+    });
+  }
+}
+
+function stylerCommand(label, command) {
+  const child = spawn("cmd.exe", ["/d", "/s", "/c", command], { cwd: STYLER_ROOT, windowsHide: true });
+  wireStylerOutput(child, label);
+  return child;
+}
+
+function stylerStep(label, command) {
+  return new Promise((resolve, reject) => {
+    const child = stylerCommand(label, command);
+    stylerSetupChild = child;
+    child.once("error", (error) => reject(new Error(`${label} could not start: ${error.message}`)));
+    child.once("close", (code) => {
+      if (stylerSetupChild === child) stylerSetupChild = null;
+      if (code === 0) resolve();
+      else reject(new Error(`${label} failed (exit ${code}). Check the connection and tool log, then retry.`));
+    });
+  });
+}
+
+async function startServerStyler() {
+  if (stylerStarting || (stylerChild && stylerChild.exitCode === null)) return serverStylerStatus();
+  if (!existsSync(path.join(STYLER_ROOT, "package.json"))) return serverStylerStatus();
+  if (await stylerBootstrap()) return serverStylerStatus();
+  stylerStarting = true;
+  stylerStopping = false;
+  stylerLastError = "";
+  void (async () => {
+    try {
+      if (!existsSync(path.join(STYLER_ROOT, "node_modules"))) await stylerStep("install", existsSync(path.join(STYLER_ROOT, "package-lock.json")) ? "npm ci" : "npm install");
+      if (!existsSync(path.join(STYLER_ROOT, "web", "dist", "index.html"))) await stylerStep("build", "npm run build");
+      const child = stylerCommand("server", "npm start");
+      stylerChild = child;
+      child.once("error", (error) => {
+        stylerLastError = `Server Styler could not start: ${error.message}`;
+        logLine(`[Server Styler] ${stylerLastError}`);
+      });
+      child.once("close", (code) => {
+        if (stylerChild === child) stylerChild = null;
+        if (code !== 0 && !stylerStopping && !stylerLastError) stylerLastError = `Server Styler stopped (exit ${code}). Check the connection and tool log, then retry.`;
+        stylerStopping = false;
+        logLine(`[Server Styler] stopped (exit ${code})`);
+      });
+      logLine("[Server Styler] starting dashboard and bot");
+    } catch (error) {
+      stylerLastError = error.message;
+      logLine(`[Server Styler] ${stylerLastError}`);
+    } finally {
+      stylerStarting = false;
+    }
+  })();
+  return { ok: true, state: "starting", message: "Starting Server Styler. See the connection and tool log.", url: stylerDashboardUrl() };
+}
+
+function stopServerStyler() {
+  const child = stylerChild ?? stylerSetupChild;
+  if (!child || child.exitCode !== null) return { ok: true, stopped: false, message: "No Server Styler process started by Mefi is running." };
+  stylerLastError = "";
+  stylerStopping = true;
+  spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
+  logLine("[Server Styler] stop requested");
+  return { ok: true, stopped: true, message: "Stopping Server Styler." };
+}
+
 async function runSpeedProbe(modelId) {
   const settings = await readSettings();
   const env = { ...process.env, ELECTRON_RUN_AS_NODE: "1" };
@@ -14312,6 +14449,24 @@ function registerIpc() {
     logLine("stop requested");
     return { ok: true, stopped: true };
   });
+
+  ipcMain.handle("styler:status", () => serverStylerStatus());
+  ipcMain.handle("styler:start", () => startServerStyler());
+  ipcMain.handle("styler:open", async () => {
+    const status = await serverStylerStatus();
+    if (status.state === "missing") return status;
+    if (status.state === "stopped" || status.state === "starting" || status.state === "error") {
+      return { ...status, ok: false, message: "Start Server Styler and wait for its dashboard before opening it." };
+    }
+    await shell.openExternal(status.url);
+    return { ...status, opened: true };
+  });
+  ipcMain.handle("styler:folder", () => {
+    if (!existsSync(path.join(STYLER_ROOT, "package.json"))) return { ok: false, message: `Server Styler project missing at ${STYLER_ROOT}` };
+    shell.showItemInFolder(path.join(STYLER_ROOT, "package.json"));
+    return { ok: true };
+  });
+  ipcMain.handle("styler:stop", () => stopServerStyler());
 
   // One encrypted field per credential owner. "gateway" is the Vercel AI
   // Gateway key; "jev" is TypeSafe's own Jev API key; "zen" is OpenCode Zen;
@@ -15874,6 +16029,8 @@ app.on("before-quit", (event) => {
 
 process.on("exit", () => {
   if (activeChild) spawn("taskkill", ["/pid", String(activeChild.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
+  if (stylerChild) spawn("taskkill", ["/pid", String(stylerChild.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
+  if (stylerSetupChild) spawn("taskkill", ["/pid", String(stylerSetupChild.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
   saveAssistantSync();
   for (const entry of autopilot.jobs) {
     const pid = entry.pid ?? entry.child?.pid;

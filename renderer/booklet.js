@@ -784,6 +784,50 @@
     window.mefiStudio.onStudioLog((line) => studioLog(line));
     document.getElementById("settings-log")?.addEventListener("toggle", () => { if (studioLogStale) paintStudioLog(); });
 
+    const stylerActions = document.getElementById("server-styler-actions");
+    const stylerStatus = document.getElementById("server-styler-status");
+    function paintStylerStatus(status) {
+      stylerStatus.textContent = status?.message ?? "Server Styler status is unavailable.";
+      stylerStatus.dataset.state = status?.state ?? "error";
+      stylerActions.querySelector('[data-styler-action="start"]').disabled = ["starting", "online", "setup"].includes(status?.state);
+      stylerActions.querySelector('[data-styler-action="open"]').disabled = !["online", "setup"].includes(status?.state);
+      stylerActions.querySelector('[data-styler-action="folder"]').disabled = status?.state === "missing";
+    }
+    async function refreshStylerStatus() {
+      if (typeof window.mefiStudio.serverStylerStatus !== "function") return;
+      try {
+        paintStylerStatus(await window.mefiStudio.serverStylerStatus());
+      } catch (error) {
+        paintStylerStatus({ state: "error", message: `Could not check Server Styler: ${error.message}` });
+      }
+    }
+    void refreshStylerStatus();
+    if (typeof setInterval === "function") setInterval(() => {
+      if (!document.getElementById("tab-studio").hidden) void refreshStylerStatus();
+    }, 5000);
+    stylerActions.addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-styler-action]");
+      if (!button || button.disabled) return;
+      const action = button.dataset.stylerAction;
+      button.disabled = true;
+      try {
+        const method = {
+          start: "serverStylerStart",
+          open: "serverStylerOpen",
+          folder: "serverStylerFolder",
+          stop: "serverStylerStop",
+        }[action];
+        const result = await window.mefiStudio[method]();
+        if (result?.message) studioLog(`[Server Styler] ${result.message}`);
+        if (result?.error) studioLog(`[Server Styler] ${result.error}`);
+        if (result?.state) paintStylerStatus(result);
+      } catch (error) {
+        studioLog(`[Server Styler] ${error.message}`);
+      } finally {
+        await refreshStylerStatus();
+      }
+    });
+
     const speedModel = document.getElementById("speed-model");
     updateSpeedModels();
 

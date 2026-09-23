@@ -53,7 +53,7 @@ function parse(html) {
 const settingsHtml = template.slice(template.indexOf('<section id="tab-studio"'), template.indexOf("</main>"));
 
 const CATALOG = { schemaVersion: 1, hash: "fixture-hash", rosterHash: "fixture-roster", generatedAt: 0, models: [], plan: { name: "Fixture plan", priceUSDMonth: 0, window5hUSD: 0, weekUSD: 0, monthUSD: 0 } };
-const CARDS = ["settings-setup", "settings-assistant", "settings-routing", "settings-workers", "settings-jev", "settings-studio", "settings-community", "settings-updates", "settings-diagnostics", "settings-integrations", "settings-log"];
+const CARDS = ["settings-setup", "settings-assistant", "settings-routing", "settings-workers", "settings-jev", "settings-studio", "settings-community", "settings-updates", "settings-diagnostics", "settings-integrations", "settings-styler", "settings-log"];
 
 // desktop: a bridge with launchStudio (the desktop app); false is the browser
 // build. storage seeds localStorage; coach: whether the walkthrough coach shows.
@@ -264,7 +264,7 @@ test("Find a setting narrows rows, cards, groups and blocks, and announces the c
   const esc = await env.key("Escape");
   assert.equal(esc.stopped, true);
   assert.equal(env.el("settings-find").value, "");
-  assert.equal(env.shownRows().length, 13, "every row comes back");
+  assert.equal(env.shownRows().length, 14, "every row comes back");
   assert.equal(env.shownCards().length, CARDS.length);
   assert.equal(env.el("settings-find-status").textContent, "");
   assert.equal(env.el("settings-find-empty").hidden, true);
@@ -297,6 +297,17 @@ test("a deep link to a card the search is hiding brings every card back first", 
   assert.equal(env.el("settings-find").value, "");
   assert.equal(env.el("settings-studio").hidden, false);
   assert.deepEqual(env.current(), ["settings-studio"]);
+});
+
+test("Server Styler is searchable and its desktop card opens from a deep link", async () => {
+  const env = environment();
+  env.booklet.showTab("studio");
+  await env.type("server styler");
+  assert.deepEqual(env.shownRows(), ["settings-styler"]);
+  assert.deepEqual(env.shownCards(), ["settings-styler"]);
+  env.booklet.showTab("studio", { section: "settings-styler" });
+  assert.equal(env.el("settings-styler").open, true);
+  assert.deepEqual(env.current(), ["settings-styler"]);
 });
 
 test("scrolled to the very end, the last card lights", () => {
@@ -352,6 +363,8 @@ test("the browser build drops desktop-only rows and cards but keeps the Connecti
   assert.equal(env.el("studio-desktop").hidden, true);
   assert.deepEqual(env.shownRows(), ["settings-studio", "settings-community", "link:music", "settings-diagnostics", "settings-integrations", "settings-log"]);
   assert.equal(env.el("settings-updates").hidden, true, "Updates needs the host");
+  assert.equal(env.row("settings-styler").hidden, true, "Server Styler needs the host");
+  assert.equal(env.el("settings-styler").hidden, true, "its card also needs the host");
   assert.equal(env.el("speed-go").closest("[data-desktop-only]").hidden, true, "so does the speed probe");
   const groups = env.el("settings-nav").querySelectorAll(".settings-nav-group");
   assert.deepEqual(groups.map((group) => group.hidden), [true, false, false], "Connections has nothing to list");
@@ -360,7 +373,7 @@ test("the browser build drops desktop-only rows and cards but keeps the Connecti
   assert.deepEqual(env.current(), ["settings-studio"]);
   assert.equal(env.booklet.jumpToSettings("providers"), false, "a desktop-only card cannot be landed on");
   assert.equal(blocks[0].scrolledIntoView, true, "the jump shows its block's note instead");
-  assert.ok(!env.registered.some((dest) => ["settings:settings-assistant", "settings:settings-updates"].includes(dest.id)), "Search skips what the build cannot show");
+  assert.ok(!env.registered.some((dest) => ["settings:settings-assistant", "settings:settings-updates", "settings:settings-styler"].includes(dest.id)), "Search skips what the build cannot show");
   assert.ok(env.registered.some((dest) => dest.id === "settings:settings-studio"));
 });
 

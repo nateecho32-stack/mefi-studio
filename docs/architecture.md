@@ -15,7 +15,7 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
 | **Booklet** | Historically the single-file model catalog; today `renderer/booklet.html` is the whole app bundled into one file by `npm run build-booklet`. The **Model catalog** tab (`1`) is the part that kept the name. |
 | **Model Lab** | Tab `2`: measured latency, throughput, cost and the usage tracker per project. |
 | **Activity & evidence** (A-Eyes) | Tab `3`: a read-only view of the OpenCode session store: change feed, diffs, screenshots with pins, log tail. The "eyes worker" is the thread that reads that store. |
-| **Settings** | Tab `4`, or `Ctrl ,` from anywhere: a **Find a setting** field over three groups of cards. **Connections**: Auto setup, Providers, Model routing, Coding workers and Jev. **Personal**: Your Studio and Community. **System**: Updates, Diagnostics, Integrations and the Connection log. Two rows marked ↗ open another view: **Agents & queue** (Command's Agents panel) and **Style & sound**. `MefiNav.go("studio", { section: "settings-updates" })` opens one card. |
+| **Settings** | Tab `4`, or `Ctrl ,` from anywhere: a **Find a setting** field over three groups of cards. **Connections**: Auto setup, Providers, Model routing, Coding workers and Jev. **Personal**: Your Studio and Community. **System**: Updates, Diagnostics, Integrations, Discord Server Styler and the Connection log. Two rows marked ↗ open another view: **Agents & queue** (Command's Agents panel) and **Style & sound**. `MefiNav.go("studio", { section: "settings-updates" })` opens one card. |
 | **Your Studio** | Settings › Your Studio: your name, the companion's name, a theme quick select, **Motion** (Full · Calm · Off), whether the companion moves, **Blur behind panels** and **Open Workspace on launch**. It took over the project panel's *Make yourself at home*, the page header's Motion switch and the Task board's blur switch. |
 | **Diagnostics** | Settings › Diagnostics: the speed probe, **Open profiler**, **Run auditor** and **Machine**. The auditor's findings and the machine readout open in the Explorer. |
 | **Search Studio** | The palette (`Ctrl K`), once called Key commands. It finds any page, tool, Settings card, action, task, node or model by familiar terms, and groups its results by menu section. |
@@ -34,6 +34,7 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
 | **Awaiting verification** | A finished attempt whose completion is not yet established; housekeeping checks the evidence before it becomes **Done**. |
 | **Orb, callout, absorb** | Command-view vocabulary: an orb is a node, a callout is its floating card, and absorb is a finished node collapsing into its host. |
 | **Ruins Runner** | The author's LÖVE game, an optional external project Studio can launch. A fresh clone works without it. |
+| **Discord Server Styler** | An optional separate bot and local dashboard. Settings can start it, open its dashboard or folder, show its status and stop a process Studio started. |
 | **Void collection** | The members' perk: four themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil) that unlock for members of the Void Engine Discord. They are picked in Style & sound, the themes also in Your Studio's theme select, and Settings › Community shows them all. A locked one explains itself where you clicked it. Everything else stays free. |
 | **Community link** | An optional Discord login (Settings › Community, which **Community** at the menu foot opens) that lets Studio read your membership and roles in the Void Engine server: when you link, then every seven days (after a failed check, in an hour, six hours, then daily) and whenever you press **Check now**. The data is kept in `settings.community`, and the refresh token is encrypted in `community-auth.json`. |
 | **`SELF_UNLOCKED`** | The documented fork switch in `scripts/community.cjs`. Setting it to `true` unlocks every perk without Discord. |
@@ -402,6 +403,10 @@ revision history stay in the project's ignored local `planning.json`.
 - **Settings › Diagnostics** gathers the speed probe, **Open profiler**, **Run
   auditor** and **Machine**. The auditor's findings and the machine readout
   open in the Explorer, where the machine controls stay.
+- **Settings › Discord Server Styler** starts the bot and local dashboard from
+  a sibling `discord-server-styler/` checkout or `MEFI_STYLER_ROOT`, shows
+  whether the bot is online or needs setup, and can open the dashboard or bot
+  folder. Bot credentials stay in that project's ignored `.env`.
 - **Machine coordination** watches test leases and live processes, holds new
   starts when Studio becomes laggy, and auto-kills strays, hangs and over-age
   runs (every kill is logged and queued to the inbox).
