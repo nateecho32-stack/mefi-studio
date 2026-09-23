@@ -573,15 +573,8 @@ test("Prism cuts a bounded gem that keeps fewer facets as it shrinks", () => {
   assert.ok(fills[0] > fills[1] && fills[1] > fills[2], `a small gem keeps fewer facets (${fills.join(", ")} fills)`);
 });
 
-test("Sigil draws a bounded seal whose marks follow its size", () => {
-  premiumSurface("sigil");
-  const styles = loadNodeStyles();
-  const [small, medium, large] = [4, 8, 12].map((radius) => { const recorded = recordingContext(); styles.paint(recorded, "sigil", { x: 50, y: 50 }, radius, [120, 180, 220], { kind: "task" }); return recorded; });
-  assert.equal(small.calls.lineTo, 0, "a tiny sigil skips marks it could not show");
-  // Three marks on a small seal, six on a large one (three lineTo per diamond, plus the seal's three).
-  assert.equal(medium.calls.lineTo, 3 * 3 + 3, "a small sigil carries three marks around its seal");
-  assert.equal(large.calls.lineTo, 6 * 3 + 3, "a large sigil carries six");
-});
+// Sigil's own suite (the hex seal, its cells, rings, wires and pulses):
+// tests/node_styles_sigil.test.mjs.
 
 test("each premium style has its own drawing", () => {
   const styles = loadNodeStyles();
