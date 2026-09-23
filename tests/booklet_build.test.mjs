@@ -30,6 +30,7 @@ const INLINE_SCRIPTS = [
   "graph.js",
   "model-lab.js",
   "tracker.js",
+  "node-styles.js",
   "tree3d.js",
   "idle.js",
   "explorer.js",

@@ -1172,173 +1172,6 @@
     };
   }
 
-  // The Void collection's node styles (gated in music.js): the Command view's
-  // drawings (idle.js) at the rail's smaller sizes. The derived colours and the
-  // unit-space gradients (the conic accretion disc included) are memoized per
-  // colour and theme hue, so drawing them allocates no gradients and no
-  // per-frame arrays. The node's colour stays dominant; the theme's second hue
-  // (accent2) is only a highlight.
-  // Their shapes are built once and shared: idle.js reads them from
-  // window.MefiTree.voidShapes, so the rail and the Command view cut the same
-  // gem and mark the same seal. The helpers only add subpaths (the caller
-  // begins and fills), at a screen position and radius or in unit space.
-  function buildVoidShapes() {
-    // Prism: a kite-cut gem lit from the upper left, as x, y pairs in unit
-    // space. A short crown over the girdle, a long pavilion below it; the
-    // pavilion's two planes meet the girdle at the ridge.
-    const rim = [0, -1.02, 0.86, -0.26, 0, 1.08, -0.86, -0.26]; // top, right, bottom, left
-    const ridge = [-0.12, -0.26];
-    // Sigil: its marks sit evenly between the two rings, the first at the top
-    // ([cos, sin] per mark).
-    const marks = { 3: [], 6: [] };
-    for (const count of [3, 6]) {
-      for (let index = 0; index < count; index += 1) {
-        const angle = -Math.PI / 2 + index * Math.PI * 2 / count;
-        marks[count].push(Math.cos(angle), Math.sin(angle));
-      }
-    }
-    function trace(target, points, x = 0, y = 0, scale = 1) {
-      target.moveTo(x + points[0] * scale, y + points[1] * scale);
-      for (let index = 2; index < points.length; index += 2) target.lineTo(x + points[index] * scale, y + points[index + 1] * scale);
-      target.closePath();
-    }
-    function triangle(target, a, b, c) {
-      target.moveTo(a[0], a[1]); target.lineTo(b[0], b[1]); target.lineTo(c[0], c[1]); target.closePath();
-    }
-    const top = [rim[0], rim[1]], right = [rim[2], rim[3]], bottom = [rim[4], rim[5]], left = [rim[6], rim[7]];
-    const markCount = (radius) => radius >= 11 ? 6 : radius >= 6 ? 3 : 0;
-    return Object.freeze({
-      prismRim: rim,
-      trace,
-      // Three planes on a readable gem (the lit crown, the pavilion's mid left
-      // and its shadowed right), two halves on a small one, one plane on a tiny one.
-      prismFacets: (radius) => radius >= 6 ? 3 : radius >= 3.5 ? 2 : 1,
-      // Plane `index` of a `count`-plane cut, in unit space; its tone is the
-      // index on the three-plane cut (0 light, 1 mid, 2 shadow), light then
-      // mid on two, mid on one.
-      prismFacet(target, count, index) {
-        if (count === 3) {
-          if (index === 0) triangle(target, top, right, left);
-          else if (index === 1) triangle(target, left, ridge, bottom);
-          else triangle(target, ridge, right, bottom);
-        } else if (count === 2) triangle(target, top, index === 0 ? left : right, bottom);
-        else trace(target, rim);
-      },
-      // The dark table a glyph sits on, so its light ink never crosses a facet.
-      prismTable: (target, x, y, radius) => trace(target, rim, x, y + radius * 0.04, radius * 0.6),
-      // The light that refracts out along the pavilion's lower right edge.
-      prismEdge(target, x, y, radius) {
-        target.moveTo(x + (right[0] + (bottom[0] - right[0]) * 0.12) * radius, y + (right[1] + (bottom[1] - right[1]) * 0.12) * radius);
-        target.lineTo(x + (right[0] + (bottom[0] - right[0]) * 0.78) * radius, y + (right[1] + (bottom[1] - right[1]) * 0.78) * radius);
-      },
-      // One small four-point glint on the crown.
-      prismGlint(target, x, y, radius) {
-        const gx = x - radius * 0.26, gy = y - radius * 0.5, arm = radius * 0.17, waist = arm * 0.22;
-        target.moveTo(gx, gy - arm); target.lineTo(gx + waist, gy - waist); target.lineTo(gx + arm, gy); target.lineTo(gx + waist, gy + waist);
-        target.lineTo(gx, gy + arm); target.lineTo(gx - waist, gy + waist); target.lineTo(gx - arm, gy); target.lineTo(gx - waist, gy - waist); target.closePath();
-      },
-      // None below 6px, three small diamonds on a small seal, six on a large
-      // one, each pointing out from the centre between the two rings.
-      sigilMarkCount: markCount,
-      sigilMarks(target, x, y, radius) {
-        const count = markCount(radius);
-        if (!count) return;
-        const points = marks[count], at = radius * 0.73, long = Math.max(1.4, radius * 0.12), wide = long * 0.58;
-        for (let index = 0; index < points.length; index += 2) {
-          const cos = points[index], sin = points[index + 1], mx = x + cos * at, my = y + sin * at;
-          target.moveTo(mx + cos * long, my + sin * long); target.lineTo(mx - sin * wide, my + cos * wide);
-          target.lineTo(mx - cos * long, my - sin * long); target.lineTo(mx + sin * wide, my - cos * wide); target.closePath();
-        }
-      },
-      // The centre seal: a small rotated square, or a dot on a tiny node.
-      sigilSeal(target, x, y, radius) {
-        if (radius < 6) { target.moveTo(x + Math.max(1.2, radius * 0.24), y); target.arc(x, y, Math.max(1.2, radius * 0.24), 0, Math.PI * 2); return; }
-        const seal = radius * 0.2;
-        target.moveTo(x, y - seal); target.lineTo(x + seal, y); target.lineTo(x, y + seal); target.lineTo(x - seal, y); target.closePath();
-      },
-    });
-  }
-  const VOID_SHAPES = buildVoidShapes();
-  // The theme's second hue, read once a frame; a free theme's is its bright tone.
-  let premiumAccentAt = -1, premiumAccentHex = null;
-  function premiumAccent(time) {
-    if (time !== premiumAccentAt) {
-      premiumAccentAt = time;
-      const hex = window.MefiMusic?.themePalette?.()?.canvas?.accent2;
-      premiumAccentHex = typeof hex === "string" && /^#[\da-f]{6}$/i.test(hex) ? hex : null;
-    }
-    return premiumAccentHex;
-  }
-  const derivedColors = new Map();
-  // A colour's whitened core (hot), light glyph ink, a dark body that still
-  // carries the hue (deep) and the gem's shadow plane (shade); its gradients
-  // are filled in on first use.
-  function derivedColor(color) {
-    let derived = derivedColors.get(color);
-    if (!derived) {
-      if (derivedColors.size >= 64) derivedColors.clear();
-      const hex = /^#[\da-f]{6}$/i.test(color) ? color : COLORS.active;
-      const rgb = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
-      const mix = (from, toward, amount) => from.map((value, index) => Math.round(value + (toward[index] - value) * amount));
-      const css = (triple) => `#${triple.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
-      const deep = mix(rgb, [7, 8, 16], 0.86);
-      derived = { hex, rgb, hot: css(mix(rgb, [255, 255, 255], 0.6)), ink: css(mix(rgb, [255, 255, 255], 0.86)), deep: css(deep), shade: css(mix(deep, rgb, 0.4)),
-        accent: undefined, glow: [null, null], disc: [null, null], fade: [null, null], core: null, halo: null, well: [null, null] };
-      derivedColors.set(color, derived);
-    }
-    return derived;
-  }
-  const rgbaOf = (triple, alpha) => `rgba(${triple.join(",")},${alpha})`;
-  // Singularity's paints in unit space: the outer glow, the accretion disc
-  // (brightest on its approaching lower-left side, a trace of the theme's
-  // second hue on the far side, hottest at its inner edge) and the horizon:
-  // black, a soft deep tint inside the photon ring, a thin gap before the disc.
-  function singularityPaints(derived, lit, accent) {
-    const index = lit ? 1 : 0;
-    if (derived.accent !== accent) { derived.accent = accent; derived.disc[0] = derived.disc[1] = null; }
-    if (!derived.glow[index]) {
-      const glow = ctx.createRadialGradient(0, 0, 0.5, 0, 0, lit ? 1.72 : 1.45);
-      glow.addColorStop(0, rgbaOf(derived.rgb, lit ? 0.46 : 0.3)); glow.addColorStop(0.3, rgbaOf(derived.rgb, lit ? 0.16 : 0.09)); glow.addColorStop(1, rgbaOf(derived.rgb, 0));
-      derived.glow[index] = glow;
-      const fade = ctx.createRadialGradient(0, 0, 0.66, 0, 0, 0.97);
-      fade.addColorStop(0, `${derived.deep}00`); fade.addColorStop(1, `${derived.deep}${lit ? "80" : "9e"}`);
-      derived.fade[index] = fade;
-    }
-    if (!derived.disc[index]) {
-      const hot = derived.hot, far = accent ?? hot;
-      const disc = typeof ctx.createConicGradient === "function" ? ctx.createConicGradient(Math.PI * 0.72, 0, 0) : ctx.createRadialGradient(-0.35, 0.35, 0, 0, 0, 1);
-      const alpha = (hex, value) => `${hex}${Math.round(value * 255).toString(16).padStart(2, "0")}`;
-      disc.addColorStop(0, hot); disc.addColorStop(0.14, alpha(derived.hex, lit ? 1 : 0.94)); disc.addColorStop(0.34, alpha(derived.hex, lit ? 0.56 : 0.42));
-      disc.addColorStop(0.5, alpha(far, lit ? 0.3 : 0.2));
-      disc.addColorStop(0.66, alpha(derived.hex, lit ? 0.56 : 0.42)); disc.addColorStop(0.86, alpha(derived.hex, lit ? 1 : 0.94)); disc.addColorStop(1, hot);
-      derived.disc[index] = disc;
-    }
-    if (!derived.core) {
-      const core = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.68);
-      core.addColorStop(0, "#020105"); core.addColorStop(0.62, "#020105"); core.addColorStop(0.87, derived.shade); core.addColorStop(0.92, "#020105"); core.addColorStop(1, "#020105");
-      derived.core = core;
-    }
-    return derived;
-  }
-  // Prism and Sigil glow only while they work or are chosen.
-  function premiumHalo(derived) {
-    if (!derived.halo) {
-      derived.halo = ctx.createRadialGradient(0, 0, 0.55, 0, 0, 1.6);
-      derived.halo.addColorStop(0, rgbaOf(derived.rgb, 0.3)); derived.halo.addColorStop(1, rgbaOf(derived.rgb, 0));
-    }
-    return derived.halo;
-  }
-  // A faint well of the colour inside the Sigil's seal, for depth.
-  function sigilWell(derived, lit) {
-    const index = lit ? 1 : 0;
-    if (!derived.well[index]) {
-      const well = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.92);
-      well.addColorStop(0, rgbaOf(derived.rgb, lit ? 0.22 : 0.15)); well.addColorStop(1, rgbaOf(derived.rgb, 0));
-      derived.well[index] = well;
-    }
-    return derived.well[index];
-  }
-
   function colorOf(node) {
     const palette = window.MefiMusic?.themePalette?.()?.canvas;
     if (node.kind === "assistant") return palette?.bright ?? COLORS.assistant;
@@ -1462,6 +1295,32 @@
     }
   }
 
+  // Node styles: every rail node is painted by renderer/node-styles.js
+  // (window.MefiNodeStyles, bundled first), the painters the Command view
+  // uses, capped at detail tier T2 for the rail's small sizes. The rail's
+  // colours are hex strings; each becomes one stable [r, g, b] triple, so the
+  // module's colour and paint caches hit frame after frame. Motion lives by
+  // id (buildGraph rebuilds the nodes). Without the module (a bare harness)
+  // a node is one plain disc.
+  const railTints = new Map();
+  function railTint(color) {
+    let triple = railTints.get(color);
+    if (!triple) {
+      if (railTints.size >= 64) railTints.clear();
+      const text = typeof color === "string" ? color.trim() : "";
+      const hex = /^#[\da-f]{6}$/i.test(text) ? text.slice(1) : /^#[\da-f]{3}$/i.test(text) ? text.slice(1).replace(/./g, "$&$&") : COLORS.active.slice(1);
+      const value = parseInt(hex, 16);
+      triple = [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+      railTints.set(color, triple);
+    }
+    return triple;
+  }
+  const railMotion = new Map();
+  const railStep = { style: "orbs", active: false, selected: false, lift: 0, progress: null, orbit: 0, status: null, time: 0, frame: 0 };
+  const railPaint = { kind: "session", selected: false, chosen: false, active: false, alpha: 1, glyph: false, monogram: false, motion: null, time: 0, still: false, detail: 2, extraGlow: false, theme: null };
+  let railFrameAt = null;
+  let railFrame = 0;
+
   function draw(time) {
     if (!width || !height) resize();
     ctx.clearRect(0, 0, width, height);
@@ -1554,6 +1413,16 @@
     // nodes, far to near
     const ordered = [...nodes].sort((a, b) => projected.get(b).depth - projected.get(a).depth);
     const running = Boolean(window.mefiStudio?.assistantState) && assistant.state?.status === "running";
+    // The appearance, the node styles and their theme are read once a frame.
+    const appearance = window.MefiMusic?.graphPreferences?.() ?? {};
+    const nodeStyle = appearance.nodeStyle ?? "orbs";
+    const styles = window.MefiNodeStyles ?? null;
+    const theme = styles ? styles.theme(window.MefiMusic?.themePalette?.()?.canvas ?? null) : null;
+    const dt = railFrameAt == null ? 0 : Math.min(0.05, Math.max(0, (time - railFrameAt) / 1000));
+    railFrameAt = time;
+    railFrame += 1;
+    if (railMotion.size > 512) railMotion.clear();
+    railStep.style = nodeStyle; railStep.time = time; railStep.frame = railFrame;
     for (const node of ordered) {
       const p = projected.get(node);
       if (p.depth < 60) continue;
@@ -1588,130 +1457,38 @@
       if (node.stale) fresh = Math.min(fresh, 0.45);
       const focused = assistant.state?.focus;
       const selected = isHover || node.kind === "session" && node.id === activeSessionId || focused && node.kind === focused.kind && node.id === focused.id;
-      const appearance = window.MefiMusic?.graphPreferences?.() ?? {};
-      const nodeStyle = appearance.nodeStyle ?? "orbs";
-      if (appearance.extraGlow === true) {
-        const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 2.8);
-        glow.addColorStop(0, color + "77"); glow.addColorStop(0.45, color + "33"); glow.addColorStop(1, color + "00");
-        ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, radius * 2.8, 0, Math.PI * 2); ctx.fill();
-      }
-      if (nodeStyle === "minimal") {
-        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, radius * (working ? 0.65 : 0.48)), 0, Math.PI * 2);
-        ctx.fillStyle = color; ctx.globalAlpha = (selected || working ? 0.95 : 0.6) * visibility; ctx.fill(); ctx.globalAlpha = visibility;
-        if (selected) { ctx.strokeStyle = "#eef3fa"; ctx.lineWidth = 1.5; ctx.stroke(); }
-      } else if (nodeStyle === "halo") {
-        ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = "#101822"; ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = working || selected ? 2 : 1.4;
-        ctx.shadowColor = color; ctx.shadowBlur = working || selected ? 10 : 5; ctx.stroke(); ctx.shadowBlur = 0;
-        ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.6, 0, Math.PI * 2); ctx.globalAlpha = 0.3 * visibility; ctx.lineWidth = 0.8; ctx.stroke(); ctx.globalAlpha = visibility;
-        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1.5, radius * 0.16), 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill(); ctx.restore();
-      } else if (nodeStyle === "crystal") {
-        ctx.save(); const points = Array.from({ length: 6 }, (_, index) => ({ x: p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, y: p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius }));
-        ctx.beginPath(); points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y)); ctx.closePath();
-        const gem = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
-        gem.addColorStop(0, color + "cc"); gem.addColorStop(0.45, color + "44"); gem.addColorStop(1, "#0c131f");
-        ctx.fillStyle = gem; ctx.fill(); ctx.strokeStyle = color; ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
-        ctx.globalAlpha = 0.35 * visibility; ctx.beginPath(); points.filter((_, index) => index % 2 === 0).forEach((point) => { ctx.moveTo(p.x, p.y); ctx.lineTo(point.x, point.y); }); ctx.lineWidth = 0.7; ctx.stroke(); ctx.restore();
-      } else if (nodeStyle === "singularity") {
-        // A near-black core behind a thin photon ring, inside an accretion disc
-        // whose brightness turns with the angle, over a faint outer glow.
-        const lit = working || selected, paints = singularityPaints(derivedColor(color), lit, premiumAccent(time));
-        ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
-        ctx.fillStyle = paints.glow[lit ? 1 : 0]; ctx.beginPath(); ctx.arc(0, 0, lit ? 1.72 : 1.45, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(0, 0, 0.96, 0, Math.PI * 2); ctx.fillStyle = paints.deep; ctx.fill(); ctx.fillStyle = paints.disc[lit ? 1 : 0]; ctx.fill();
-        ctx.fillStyle = paints.fade[lit ? 1 : 0]; ctx.fill();
-        ctx.fillStyle = paints.core; ctx.beginPath(); ctx.arc(0, 0, 0.68, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-        ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.6, 0, Math.PI * 2); ctx.strokeStyle = paints.hot; ctx.lineWidth = Math.max(0.7, radius * (lit ? 0.085 : 0.065));
-        ctx.globalAlpha = (lit ? 1 : 0.86) * visibility; ctx.stroke();
-        if (selected) { ctx.beginPath(); ctx.arc(p.x, p.y, radius * 1.16, 0, Math.PI * 2); ctx.lineWidth = 1.4; ctx.globalAlpha = 0.9 * visibility; ctx.stroke(); }
-        ctx.globalAlpha = visibility;
-      } else if (nodeStyle === "prism") {
-        // A kite-cut gem lit from the upper left: the crown in the whitened
-        // colour, the pavilion's left plane in the colour and its right in
-        // shadow, a crisp rim, the light that refracts out along the lower
-        // right edge in the theme's second hue and one glint. A small gem keeps
-        // two planes, a tiny one a single plane; an agent's glyph sits on a
-        // dark table in a light ink.
-        const lit = working || selected, paints = derivedColor(color), glyph = isAgent && radius >= 4.5;
-        const facets = VOID_SHAPES.prismFacets(radius);
-        ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
-        if (lit) { ctx.fillStyle = premiumHalo(paints); ctx.beginPath(); ctx.arc(0, 0, 1.6, 0, Math.PI * 2); ctx.fill(); }
-        ctx.beginPath(); VOID_SHAPES.trace(ctx, VOID_SHAPES.prismRim); ctx.fillStyle = paints.deep; ctx.fill();
-        for (let facet = 0; facet < facets; facet += 1) {
-          const tone = facets === 1 ? 1 : facet; // 0 light, 1 mid, 2 shadow
-          ctx.beginPath(); VOID_SHAPES.prismFacet(ctx, facets, facet);
-          ctx.fillStyle = tone === 0 ? paints.hot : tone === 1 ? color : paints.shade;
-          ctx.globalAlpha = (tone === 0 ? lit ? 0.96 : 0.86 : tone === 1 ? lit ? 0.86 : 0.7 : 1) * visibility; ctx.fill();
-        }
-        ctx.restore();
-        if (glyph) {
-          ctx.beginPath(); VOID_SHAPES.prismTable(ctx, p.x, p.y, radius); ctx.fillStyle = paints.deep; ctx.globalAlpha = 0.94 * visibility; ctx.fill();
-          ctx.strokeStyle = paints.hot; ctx.lineWidth = 0.8; ctx.globalAlpha = 0.5 * visibility; ctx.stroke();
-        }
-        ctx.beginPath(); VOID_SHAPES.trace(ctx, VOID_SHAPES.prismRim, p.x, p.y, radius); ctx.strokeStyle = selected ? paints.hot : color; ctx.lineWidth = selected ? 1.6 : working ? 1.2 : 0.85;
-        ctx.globalAlpha = (selected ? 1 : working ? 0.95 : 0.72) * visibility; ctx.stroke();
-        if (facets === 3) {
-          ctx.beginPath(); VOID_SHAPES.prismEdge(ctx, p.x, p.y, radius);
-          ctx.strokeStyle = premiumAccent(time) ?? paints.hot; ctx.lineWidth = Math.max(0.8, radius * 0.075); ctx.globalAlpha = (lit ? 1 : 0.86) * visibility; ctx.stroke();
-        }
-        if (radius >= 8 && !glyph) {
-          ctx.beginPath(); VOID_SHAPES.prismGlint(ctx, p.x, p.y, radius);
-          ctx.fillStyle = "#ffffff"; ctx.globalAlpha = 0.92 * visibility; ctx.fill();
-        }
-        ctx.globalAlpha = visibility;
-      } else if (nodeStyle === "sigil") {
-        // A calm double ring (the outer crisp, the inner faint) with a few small
-        // diamonds in the theme's second hue between them and a seal at the
-        // centre; an agent shows its glyph instead of the seal.
-        const lit = working || selected, paints = derivedColor(color);
-        ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
-        if (lit) { ctx.fillStyle = premiumHalo(paints); ctx.beginPath(); ctx.arc(0, 0, 1.6, 0, Math.PI * 2); ctx.fill(); }
-        ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fillStyle = paints.deep; ctx.globalAlpha = 0.92 * visibility; ctx.fill();
-        ctx.fillStyle = sigilWell(paints, lit); ctx.globalAlpha = visibility; ctx.fill();
-        ctx.restore();
-        ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.9, 0, Math.PI * 2); ctx.strokeStyle = color; ctx.lineWidth = selected ? 2 : lit ? 1.5 : 1.1;
-        ctx.globalAlpha = (lit ? 1 : 0.8) * visibility; ctx.stroke();
-        if (radius >= 6) {
-          ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.56, 0, Math.PI * 2); ctx.lineWidth = 0.8; ctx.globalAlpha = (lit ? 0.5 : 0.36) * visibility; ctx.stroke();
-          ctx.beginPath(); VOID_SHAPES.sigilMarks(ctx, p.x, p.y, radius);
-          ctx.fillStyle = premiumAccent(time) ?? paints.hot; ctx.globalAlpha = (lit ? 1 : 0.88) * visibility; ctx.fill();
-        }
-        if (!(isAgent && radius >= 4.5)) {
-          ctx.beginPath(); VOID_SHAPES.sigilSeal(ctx, p.x, p.y, radius);
-          ctx.fillStyle = color; ctx.globalAlpha = (lit ? 1 : 0.9) * visibility; ctx.fill();
-        }
-        ctx.globalAlpha = visibility;
-      } else if (nodeStyle === "glass") {
-        ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2); ctx.fillStyle = "#172331"; ctx.fill();
-        const glass = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
-        glass.addColorStop(0, color + "66"); glass.addColorStop(1, color + "08"); ctx.fillStyle = glass; ctx.fill();
-        ctx.strokeStyle = color; ctx.globalAlpha = (selected ? 0.95 : working ? 0.72 : 0.42) * visibility; ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke(); ctx.globalAlpha = visibility;
-        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, radius - 2), Math.PI * 1.13, Math.PI * 1.6);
-        ctx.strokeStyle = "rgba(231,243,255,0.55)"; ctx.lineWidth = 1; ctx.stroke();
+      const record = styles ? styles.motionRecord(railMotion, node.id) : null;
+      const tint = styles ? railTint(color) : null;
+      if (styles) {
+        railStep.active = working; railStep.selected = Boolean(selected); railStep.lift = isHover ? 1 : 0;
+        railStep.progress = node.progress; railStep.orbit = working && !isAgent ? 1.1 : 0; railStep.status = isAgent ? node.status ?? null : null;
+        styles.stepMotion(record, railStep, dt, still);
+        record.tint = tint;
+        const paint = railPaint;
+        paint.kind = node.kind; paint.selected = Boolean(selected); paint.chosen = Boolean(selected) && !isHover; paint.active = working;
+        // The orbs keep the freshness fade they always had on the rail.
+        paint.alpha = visibility * (nodeStyle === "orbs" ? Math.max(0.5, fresh) : 1);
+        paint.glyph = isAgent && radius >= 4.5; paint.motion = record; paint.time = time; paint.still = still;
+        paint.detail = styles.tier(radius, 2); paint.extraGlow = appearance.extraGlow === true; paint.theme = theme;
+        styles.paint(ctx, nodeStyle, p, radius, tint, paint);
       } else {
-        // Restrained luminous orbs retain the constellation's visual identity.
-        const spread = working || selected ? 2.4 : 1.8;
-        const halo = ctx.createRadialGradient(p.x, p.y, radius * 0.4, p.x, p.y, radius * spread);
-        halo.addColorStop(0, color + (working ? "44" : "20")); halo.addColorStop(1, color + "00");
-        ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(p.x, p.y, radius * spread, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-        ctx.fillStyle = "#151a22"; ctx.fill();
-        const body = ctx.createRadialGradient(p.x - radius * 0.25, p.y - radius * 0.3, 0, p.x, p.y, radius);
-        body.addColorStop(0, color + "dd"); body.addColorStop(0.5, color + "88"); body.addColorStop(1, color + "22");
-        ctx.globalAlpha = Math.max(0.5, fresh) * visibility; ctx.fillStyle = body; ctx.fill(); ctx.globalAlpha = visibility;
-        ctx.strokeStyle = color; ctx.globalAlpha = (selected ? 0.95 : working ? 0.8 : 0.35) * visibility;
-        ctx.lineWidth = selected ? 1.6 : 1; ctx.stroke(); ctx.globalAlpha = visibility;
+        ctx.fillStyle = color; ctx.globalAlpha = 0.6 * visibility; ctx.fill();
+        ctx.strokeStyle = color; ctx.globalAlpha = (selected ? 0.95 : working ? 0.8 : 0.45) * visibility; ctx.lineWidth = selected ? 1.6 : 1; ctx.stroke();
+        ctx.globalAlpha = visibility;
       }
       if (isAgent && nodeStyle !== "minimal" && radius >= 4.5) {
         // The role glyph and the status ring: what this satellite is, and
         // whether it is working (a spinning arc), waiting its turn (dashed)
         // or stuck (amber). The Command view draws the same through MefiTree.
-        // On the Void collection's dark bodies (Singularity's core, Prism's
-        // table, Sigil's seal) the glyph takes a light ink and sits inside.
-        const premiumInk = nodeStyle === "singularity" || nodeStyle === "prism" || nodeStyle === "sigil" ? derivedColor(color).ink : null;
-        agentGlyph(ctx, node.role, p.x, p.y, radius * (premiumInk ? 0.56 : 0.7), premiumInk ?? glyphInk(color));
-        if (node.status === "running") {
+        // The style dresses the glyph (the Void collection's light ink, inside
+        // its dark bodies) and may draw the status ring its own way.
+        const look = styles ? styles.glyph(nodeStyle, tint, theme) : null;
+        const glyphScale = look ? look.scale : 0.7, lookInk = look?.ink ?? null, ringGap = look ? look.ringGap : 3.5;
+        agentGlyph(ctx, node.role, p.x, p.y, radius * glyphScale, lookInk ?? glyphInk(color));
+        if (styles && styles.ring(ctx, nodeStyle, p, radius, tint, { status: node.status ?? null, builder: false, ring: radius + ringGap, time, still, motion: record, theme })) {
+          // the style drew the status ring
+        } else if (node.status === "running") {
           const phase = noMotion() ? 0 : time / 380;
           ctx.beginPath(); ctx.arc(p.x, p.y, radius + 3.5, phase, phase + Math.PI * 1.3);
           ctx.strokeStyle = color; ctx.lineWidth = 1.3; ctx.globalAlpha = 0.9 * visibility; ctx.stroke(); ctx.globalAlpha = visibility;
@@ -1732,14 +1509,17 @@
       }
       if (appearance.orbitTrails === true && !isAgent && working) {
         const phase = noMotion() ? Math.PI / 3 : time / 1100 * Math.PI * 2;
-        ctx.save(); ctx.lineCap = "round";
-        ctx.strokeStyle = "rgba(125,178,255,0.22)"; ctx.lineWidth = 0.8;
-        ctx.beginPath(); ctx.arc(p.x, p.y, radius + 9, 0, Math.PI * 2); ctx.stroke();
-        for (let segment = 2; segment >= 0; segment -= 1) {
-          ctx.strokeStyle = `rgba(125,178,255,${0.8 - segment * 0.24})`; ctx.lineWidth = 2.6 - segment * 0.6;
-          ctx.beginPath(); ctx.arc(p.x, p.y, radius + 9, phase - (segment + 1) * 0.62, phase - segment * 0.62); ctx.stroke();
+        // A style may draw the orbit in its own language; otherwise the blue arcs.
+        if (!(styles && styles.orbit(ctx, nodeStyle, p, radius, tint, { running: true, phase, ring: radius + 9, time, still, motion: record, theme }))) {
+          ctx.save(); ctx.lineCap = "round";
+          ctx.strokeStyle = "rgba(125,178,255,0.22)"; ctx.lineWidth = 0.8;
+          ctx.beginPath(); ctx.arc(p.x, p.y, radius + 9, 0, Math.PI * 2); ctx.stroke();
+          for (let segment = 2; segment >= 0; segment -= 1) {
+            ctx.strokeStyle = `rgba(125,178,255,${0.8 - segment * 0.24})`; ctx.lineWidth = 2.6 - segment * 0.6;
+            ctx.beginPath(); ctx.arc(p.x, p.y, radius + 9, phase - (segment + 1) * 0.62, phase - segment * 0.62); ctx.stroke();
+          }
+          ctx.restore();
         }
-        ctx.restore();
       }
       const notes = node.kind === "session" ? checkpoints[node.id] : null;
       if (notes?.length) {
@@ -2390,7 +2170,6 @@
     agentGlyphKind,
     glyphInk,
     // The Void collection's gem and seal, so the Command view cuts the same shapes.
-    voidShapes: VOID_SHAPES,
     // Agent travel: live positions in tree space (the Command view overrides
     // its agent nodes from these every frame), and the Command-only task nodes
     // a reference agent may fly to.

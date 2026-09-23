@@ -150,6 +150,7 @@ imports.
 | `brains.js` | 3,777 | The brain-map editor over the data `scripts/brains.cjs` validates. |
 | `nav.js` | 2,133 | The navigation registry: one list of destinations behind the rail, the palette, the help sheet and the shortcuts. |
 | `tree3d.js` | 2,151 | The 3D task-tree rail. |
+| `node-styles.js` | 819 | `window.MefiNodeStyles`: the node-style painters the Command view and the tree rail share (the eight looks, their motion records, detail tiers and theme tones, and the overlay and wire hooks each style may take over). Bundled before `tree3d.js`, which with `idle.js` falls back to a plain disc when it is absent. |
 | `tasks.js` | 1,571 | The task board, per-task logs and ideas, and the reference menu. |
 | `explorer.js` | 1,430 | The A-Eyes session explorer overlay. |
 | `booklet.js` | 1,318 | The model catalog, filters, the studio launcher and the boot sequence. |

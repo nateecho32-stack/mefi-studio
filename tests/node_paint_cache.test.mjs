@@ -17,6 +17,7 @@ test("cached orb gradients retain exact radii, colors and screen-space geometry 
   let assertionError;
   try {
     await copyFile(path.join(studio, "renderer", "idle.js"), path.join(fixture, "idle.js"));
+    await copyFile(path.join(studio, "renderer", "node-styles.js"), path.join(fixture, "node-styles.js"));
     const env = { ...process.env, MEFI_NODE_PAINT_FIXTURE: fixture };
     delete env.ELECTRON_RUN_AS_NODE;
     // Chromium helpers inherit cwd and can retain its Windows directory

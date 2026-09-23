@@ -309,6 +309,11 @@
     nodeLayout: "constellation",
     orbitTrails: false,
     extraGlow: false,
+    // Node motion (renderer/node-styles.js) lives by id, so a refresh that
+    // rebuilds the node objects keeps every eased value and clock.
+    nodeMotion: new Map(),
+    nodeTheme: null, // MefiNodeStyles.theme(palette), rebuilt by syncGraphTheme
+    styleBurstUntil: 0, // a style switch or a new selection draws at the hot cadence until then
     orbitVel: 0,
     settleUntil: 0,
     labels: LABEL_MODES.includes(storedLabels) ? storedLabels : "auto",
@@ -3599,6 +3604,8 @@
     const known = typeof music?.isNodeStyle === "function" ? music.isNodeStyle(preferences.nodeStyle) : ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"].includes(preferences.nodeStyle);
     const style = known ? preferences.nodeStyle : state.nodeStyle;
     const layout = ["constellation", "tree", "radial", "helix", "layers"].includes(preferences.nodeLayout) ? preferences.nodeLayout : state.nodeLayout;
+    // A new style settles in at the hot cadence for 400 ms (motionHot).
+    if (style !== state.nodeStyle) state.styleBurstUntil = (globalThis.performance?.now?.() ?? Date.now()) + 400;
     state.nodeStyle = style;
     if (layout === state.nodeLayout) return;
     state.nodeLayout = layout;
@@ -3610,307 +3617,32 @@
     ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2);
   }
 
-  // Gradients are evaluated under the transform at fill time. Reuse unit
-  // paints while retaining the original screen-space paths, rims and glyphs.
-  // The context owns its paints; old palettes cannot grow the cache forever.
-  function orbPaints(ctx, tint, active, selected) {
-    const contexts = state.orbPaintCache ??= new WeakMap();
-    let cache = contexts.get(ctx);
-    if (!cache) { cache = new Map(); contexts.set(ctx, cache); }
-    const key = `${tint.join(",")}|${Boolean(active)}|${Boolean(selected)}`;
-    let paints = cache.get(key);
-    if (paints) return paints;
-    const halo = ctx.createRadialGradient(0, 0, 0.45, 0, 0, active || selected ? 1.9 : 1.45);
-    halo.addColorStop(0, rgba(tint, active ? 0.22 : 0.1));
-    halo.addColorStop(1, rgba(tint, 0));
-    const body = ctx.createRadialGradient(-0.25, -0.3, 0, 0, 0, 1);
-    body.addColorStop(0, rgba(tint, 0.95));
-    body.addColorStop(0.42, rgba(tint, 0.48));
-    body.addColorStop(1, rgba(tint, 0.1));
-    paints = { halo, body };
-    if (cache.size >= 128) cache.delete(cache.keys().next().value);
-    cache.set(key, paints);
-    return paints;
-  }
-
-  // ---------- the Void collection's node styles ----------
-  // The orbs' frame budget applies: every gradient (the conic accretion disc
-  // included) is a unit-space paint cached per context, tint and theme hue;
-  // the derived tones are cached triples so rgba() memoizes their strings. A
-  // frame allocates nothing new and every path has a fixed, small number of
-  // segments. The node's own tint (done green, working lavender, error amber)
-  // stays the dominant colour; the theme's second hue (accent2) is only ever a
-  // highlight.
-  // The gem and seal shapes are tree3d.js's (bundled first and shared on
-  // window.MefiTree.voidShapes), so the rail cuts the same gem; without them
-  // (a bare harness) the gem falls back to a plain disc and the seal to a dot.
-  function voidShapes() {
-    return globalThis.window?.MefiTree?.voidShapes ?? null;
-  }
-  // The theme's second hue, parsed once per theme change (music.js resolves it
-  // on the canvas palette; a free theme's falls back to its bright tone).
-  let premiumAccentHex = null, premiumAccentRgb = null;
-  function premiumAccent(fallback) {
-    const hex = state.canvasPalette?.accent2 ?? null;
-    if (hex !== premiumAccentHex) {
-      premiumAccentHex = hex;
-      const value = typeof hex === "string" && /^#[\da-f]{6}$/i.test(hex) ? parseInt(hex.slice(1), 16) : NaN;
-      premiumAccentRgb = Number.isNaN(value) ? null : [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+  // Every node surface is painted by renderer/node-styles.js
+  // (window.MefiNodeStyles, bundled first and shared with the tree rail), in
+  // the chosen style; a bare harness without it gets one plain disc. One
+  // options scratch is reused for every node.
+  const SURFACE = { kind: "task", selected: false, chosen: false, active: false, alpha: 1, glyph: false, monogram: false, motion: null, time: 0, still: false, detail: 3, extraGlow: false, theme: null };
+  function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1, time = 0, still = false, detail = 3, chosen = false, motion = null } = {}) {
+    node._extraGlow = state.extraGlow === true;
+    const styles = globalThis.window?.MefiNodeStyles;
+    if (styles) {
+      // A node that wears a glyph (the hub's monogram, an agent's role) is
+      // told so: the Void collection gives it a dark body to wear it on.
+      const monogram = node.kind === "assistant" || node.kind === "music";
+      const options = SURFACE;
+      options.kind = node.kind; options.selected = Boolean(selected); options.chosen = Boolean(chosen); options.active = Boolean(active);
+      options.alpha = (node._fade ?? 1) * alpha;
+      options.glyph = monogram || node.kind === "agent" && radius >= 4.5; options.monogram = monogram;
+      options.motion = motion; options.time = time; options.still = Boolean(still); options.detail = detail;
+      options.extraGlow = node._extraGlow; options.theme = state.nodeTheme ?? null;
+      styles.paint(ctx, state.nodeStyle ?? "orbs", p, radius, tint, options);
+      return;
     }
-    return premiumAccentRgb ?? fallback;
-  }
-
-  function premiumPaints(ctx, tint, style, lit) {
-    const contexts = state.premiumPaintCache ??= new WeakMap();
-    let cache = contexts.get(ctx);
-    if (!cache) { cache = new Map(); contexts.set(ctx, cache); }
-    const key = `${style}|${tint.join(",")}|${lit}|${premiumAccentHex}`;
-    let paints = cache.get(key);
-    if (paints) return paints;
-    const mix = (toward, amount) => tint.map((value, index) => Math.round(value + (toward[index] - value) * amount));
-    // hot: the whitened tint; ink: a light glyph ink that keeps a trace of the
-    // hue; deep: a body dark enough to read as depth, still carrying the hue.
-    const hot = mix([255, 255, 255], 0.6), ink = mix([255, 255, 255], 0.86), deep = mix([7, 8, 16], 0.86);
-    const shade = deep.map((value, index) => Math.round(value + (tint[index] - value) * 0.4));
-    const accent = premiumAccent(hot);
-    const conic = typeof ctx.createConicGradient === "function";
-    let glow = null, disc = null, fade = null, core = null;
-    if (style === "singularity") {
-      glow = ctx.createRadialGradient(0, 0, 0.5, 0, 0, lit ? 1.72 : 1.45);
-      glow.addColorStop(0, rgba(tint, lit ? 0.46 : 0.3));
-      glow.addColorStop(0.3, rgba(tint, lit ? 0.16 : 0.09));
-      glow.addColorStop(1, rgba(tint, 0));
-      // The accretion disc, brightest on its approaching (lower-left) side and
-      // dimmest opposite, where a trace of the theme's second hue shows...
-      disc = conic ? ctx.createConicGradient(Math.PI * 0.72, 0, 0) : ctx.createRadialGradient(-0.35, 0.35, 0, 0, 0, 1);
-      disc.addColorStop(0, rgba(hot, 1));
-      disc.addColorStop(0.14, rgba(tint, lit ? 1 : 0.94));
-      disc.addColorStop(0.34, rgba(tint, lit ? 0.56 : 0.42));
-      disc.addColorStop(0.5, rgba(accent, lit ? 0.3 : 0.2));
-      disc.addColorStop(0.66, rgba(tint, lit ? 0.56 : 0.42));
-      disc.addColorStop(0.86, rgba(tint, lit ? 1 : 0.94));
-      disc.addColorStop(1, rgba(hot, 1));
-      // ...and hottest at its inner edge, cooling into the glow outside.
-      fade = ctx.createRadialGradient(0, 0, 0.66, 0, 0, 0.97);
-      fade.addColorStop(0, rgba(deep, 0));
-      fade.addColorStop(1, rgba(deep, lit ? 0.5 : 0.62));
-      // The horizon: black at the centre, warming to a deep tint just inside
-      // the photon ring (a soft inner edge), then a thin black gap before the
-      // disc begins.
-      core = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.68);
-      core.addColorStop(0, "rgba(2,1,5,1)");
-      core.addColorStop(0.62, "rgba(2,1,5,1)");
-      core.addColorStop(0.87, rgba(shade, 1));
-      core.addColorStop(0.92, "rgba(2,1,5,1)");
-      core.addColorStop(1, "rgba(2,1,5,1)");
-    } else if (lit) {
-      // Prism and Sigil glow only while they work or are chosen.
-      glow = ctx.createRadialGradient(0, 0, 0.55, 0, 0, 1.6);
-      glow.addColorStop(0, rgba(tint, 0.3));
-      glow.addColorStop(1, rgba(tint, 0));
-    }
-    if (style === "sigil") {
-      // A faint well of the node's hue inside the seal, for depth.
-      core = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.92);
-      core.addColorStop(0, rgba(tint, lit ? 0.22 : 0.15));
-      core.addColorStop(1, rgba(tint, 0));
-    }
-    paints = { hot, ink, deep, shade, accent, glow, disc, fade, core };
-    if (cache.size >= 128) cache.delete(cache.keys().next().value);
-    cache.set(key, paints);
-    return paints;
-  }
-
-  // The light ink a role glyph wears on the Void collection's dark bodies
-  // (Singularity's core, Prism's table, Sigil's seal), or null for the orbs'
-  // own ink. Agent tints are long-lived triples, so the ink is kept per tint
-  // and a frame builds no cache key for it.
-  const premiumInks = new WeakMap();
-  function premiumGlyphInk(ctx, tint) {
-    const style = state.nodeStyle;
-    if (style !== "singularity" && style !== "prism" && style !== "sigil") return null;
-    let ink = premiumInks.get(tint);
-    if (!ink) { ink = rgba(premiumPaints(ctx, tint, style, false).ink, 1); premiumInks.set(tint, ink); }
-    return ink;
-  }
-
-  // A near-black core behind a thin photon ring, inside an accretion disc
-  // whose brightness turns with the angle, over a faint outer glow.
-  function drawSingularity(ctx, p, radius, tint, lit, selected) {
-    const paints = premiumPaints(ctx, tint, "singularity", lit);
-    const { glow, disc, fade, core, hot, deep } = paints;
-    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
-    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, lit ? 1.72 : 1.45, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(0, 0, 0.96, 0, Math.PI * 2);
-    ctx.fillStyle = rgba(deep, 1); ctx.fill();
-    ctx.fillStyle = disc; ctx.fill();
-    ctx.fillStyle = fade; ctx.fill();
-    ctx.fillStyle = core; ctx.beginPath(); ctx.arc(0, 0, 0.68, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.6, 0, Math.PI * 2);
-    ctx.strokeStyle = rgba(hot, lit ? 1 : 0.86); ctx.lineWidth = Math.max(0.7, radius * (lit ? 0.085 : 0.065)); ctx.stroke();
-    if (selected) { ctx.beginPath(); ctx.arc(p.x, p.y, radius * 1.16, 0, Math.PI * 2); ctx.strokeStyle = rgba(hot, 0.9); ctx.lineWidth = 1.4; ctx.stroke(); }
-    return paints;
-  }
-
-  // A kite-cut gem lit from the upper left: the crown in the whitened tint,
-  // the pavilion's left plane in the tint and its right in shadow, a crisp
-  // rim, the light that refracts out along the lower right edge in the
-  // theme's second hue and one specular glint. A small gem keeps two planes,
-  // a tiny one a single plane; a glyph sits on a dark table in a light ink.
-  function drawPrism(ctx, p, radius, tint, lit, active, selected, glyph) {
-    const shapes = voidShapes();
-    const paints = premiumPaints(ctx, tint, "prism", lit);
-    const { glow, hot, deep, shade, accent } = paints;
-    const facets = shapes ? shapes.prismFacets(radius) : 0;
-    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
-    if (glow) { ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, 1.6, 0, Math.PI * 2); ctx.fill(); }
-    ctx.beginPath();
-    if (shapes) shapes.trace(ctx, shapes.prismRim); else ctx.arc(0, 0, 0.9, 0, Math.PI * 2);
-    ctx.fillStyle = rgba(deep, 1); ctx.fill();
-    if (!shapes) { ctx.fillStyle = rgba(tint, lit ? 0.86 : 0.7); ctx.fill(); }
-    for (let facet = 0; facet < facets; facet += 1) {
-      const tone = facets === 1 ? 1 : facet; // 0 light, 1 mid, 2 shadow
-      ctx.beginPath(); shapes.prismFacet(ctx, facets, facet);
-      ctx.fillStyle = tone === 0 ? rgba(hot, lit ? 0.96 : 0.86) : tone === 1 ? rgba(tint, lit ? 0.86 : 0.7) : rgba(shade, 1);
-      ctx.fill();
-    }
-    ctx.restore();
-    if (glyph && shapes) {
-      ctx.beginPath(); shapes.prismTable(ctx, p.x, p.y, radius);
-      ctx.fillStyle = rgba(deep, 0.94); ctx.fill();
-      ctx.strokeStyle = rgba(hot, 0.5); ctx.lineWidth = 0.8; ctx.stroke();
-    }
-    ctx.beginPath();
-    if (shapes) shapes.trace(ctx, shapes.prismRim, p.x, p.y, radius); else ctx.arc(p.x, p.y, radius * 0.9, 0, Math.PI * 2);
-    ctx.strokeStyle = selected ? rgba(hot, 1) : rgba(tint, active ? 0.95 : 0.72); ctx.lineWidth = selected ? 1.6 : active ? 1.2 : 0.85; ctx.stroke();
-    if (facets === 3) {
-      ctx.beginPath(); shapes.prismEdge(ctx, p.x, p.y, radius);
-      ctx.strokeStyle = rgba(accent, lit ? 1 : 0.86); ctx.lineWidth = Math.max(0.8, radius * 0.075); ctx.stroke();
-      if (radius >= 8 && !glyph) {
-        ctx.beginPath(); shapes.prismGlint(ctx, p.x, p.y, radius);
-        ctx.fillStyle = "rgba(255,255,255,0.92)"; ctx.fill();
-      }
-    }
-    return paints;
-  }
-
-  // A calm double ring (the outer crisp, the inner faint) with a few small
-  // diamonds in the theme's second hue between them and a seal at the centre;
-  // a node that wears a glyph shows its glyph instead of the seal.
-  function drawSigil(ctx, p, radius, tint, lit, selected, glyph) {
-    const shapes = voidShapes();
-    const paints = premiumPaints(ctx, tint, "sigil", lit);
-    const { glow, core, deep, accent } = paints;
-    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
-    if (glow) { ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, 1.6, 0, Math.PI * 2); ctx.fill(); }
-    ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2);
-    ctx.fillStyle = rgba(deep, 0.92); ctx.fill();
-    ctx.fillStyle = core; ctx.fill();
-    ctx.restore();
-    ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.9, 0, Math.PI * 2);
-    ctx.strokeStyle = rgba(tint, lit ? 1 : 0.8); ctx.lineWidth = selected ? 2 : lit ? 1.5 : 1.1; ctx.stroke();
-    if (radius >= 6) {
-      ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.56, 0, Math.PI * 2);
-      ctx.strokeStyle = rgba(tint, lit ? 0.5 : 0.36); ctx.lineWidth = 0.8; ctx.stroke();
-      if (shapes) { ctx.beginPath(); shapes.sigilMarks(ctx, p.x, p.y, radius); ctx.fillStyle = rgba(accent, lit ? 1 : 0.88); ctx.fill(); }
-    }
-    if (!glyph) {
-      ctx.beginPath();
-      if (shapes) shapes.sigilSeal(ctx, p.x, p.y, radius); else ctx.arc(p.x, p.y, Math.max(1.2, radius * 0.24), 0, Math.PI * 2);
-      ctx.fillStyle = rgba(tint, lit ? 1 : 0.9); ctx.fill();
-    }
-    return paints;
-  }
-
-  function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1 } = {}) {
     ctx.save();
     ctx.globalAlpha = (node._fade ?? 1) * alpha;
-    node._extraGlow = state.extraGlow === true;
-    if (node._extraGlow) {
-      const spread = radius * (active || selected ? 2.25 : 1.8);
-      const glow = ctx.createRadialGradient(p.x, p.y, radius * 0.25, p.x, p.y, spread);
-      glow.addColorStop(0, rgba(tint, active || selected ? 0.32 : 0.16));
-      glow.addColorStop(0.45, rgba(tint, active || selected ? 0.14 : 0.05));
-      glow.addColorStop(1, rgba(tint, 0));
-      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, spread, 0, Math.PI * 2); ctx.fill();
-    }
-    const style = state.nodeStyle ?? "orbs";
-    if (style === "halo") {
-      ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(10,17,28,0.82)"; ctx.fill();
-      ctx.strokeStyle = rgba(tint, active || selected ? 0.95 : 0.68); ctx.lineWidth = active || selected ? 2 : 1.4;
-      ctx.shadowColor = rgba(tint, 0.6); ctx.shadowBlur = active || selected ? 12 : 6; ctx.stroke(); ctx.shadowBlur = 0;
-      ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.6, 0, Math.PI * 2); ctx.strokeStyle = rgba(tint, 0.24); ctx.lineWidth = 0.8; ctx.stroke();
-      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1.5, radius * 0.16), 0, Math.PI * 2); ctx.fillStyle = rgba(tint, 0.9); ctx.fill();
-      ctx.restore(); return;
-    }
-    if (style === "crystal") {
-      const points = Array.from({ length: 6 }, (_, index) => ({ x: p.x + Math.cos(index * Math.PI / 3 - Math.PI / 2) * radius, y: p.y + Math.sin(index * Math.PI / 3 - Math.PI / 2) * radius }));
-      ctx.beginPath(); points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y)); ctx.closePath();
-      const gem = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
-      gem.addColorStop(0, rgba(tint, 0.8)); gem.addColorStop(0.45, rgba(tint, 0.28)); gem.addColorStop(1, "rgba(12,19,31,0.96)");
-      ctx.fillStyle = gem; ctx.fill(); ctx.strokeStyle = rgba(tint, active || selected ? 0.95 : 0.6); ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
-      ctx.beginPath(); for (const point of points.filter((_, index) => index % 2 === 0)) { ctx.moveTo(p.x, p.y); ctx.lineTo(point.x, point.y); }
-      ctx.strokeStyle = rgba(tint, 0.35); ctx.lineWidth = 0.7; ctx.stroke();
-      ctx.restore(); return;
-    }
-    if (style === "singularity" || style === "prism" || style === "sigil") {
-      const lit = active || selected;
-      const monogram = node.kind === "assistant" || node.kind === "music";
-      // A node that wears a glyph (the hub's monogram, an agent's role) gets
-      // a dark body to wear it on: the core, the gem's table, the seal.
-      const glyph = monogram || node.kind === "agent" && radius >= 4.5;
-      const paints = style === "singularity" ? drawSingularity(ctx, p, radius, tint, lit, selected)
-        : style === "prism" ? drawPrism(ctx, p, radius, tint, lit, active, selected, glyph)
-          : drawSigil(ctx, p, radius, tint, lit, selected, glyph);
-      if (monogram) {
-        ctx.font = '600 10px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-        ctx.fillStyle = rgba(paints.ink, 1);
-        ctx.fillText(node.kind === "music" ? "♪" : "M", p.x, p.y + 0.5);
-      }
-      ctx.restore(); return;
-    }
-    if (style === "minimal") {
-      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(3, radius * (active ? 0.65 : 0.48)), 0, Math.PI * 2);
-      ctx.fillStyle = rgba(tint, selected || active ? 0.95 : 0.6); ctx.fill();
-      if (selected) { ctx.strokeStyle = "#eef3fa"; ctx.lineWidth = 1.5; ctx.stroke(); }
-      ctx.restore(); return;
-    }
-    if (style === "glass") {
-      traceNodeSurface(ctx, "circle", p.x, p.y, radius);
-      ctx.fillStyle = "#172331"; ctx.fill();
-      const glass = ctx.createLinearGradient(p.x - radius, p.y - radius, p.x + radius, p.y + radius);
-      glass.addColorStop(0, rgba(tint, active || selected ? 0.42 : 0.22)); glass.addColorStop(0.55, "rgba(31,43,59,0.15)"); glass.addColorStop(1, rgba(tint, 0.06));
-      ctx.fillStyle = glass; ctx.fill(); ctx.strokeStyle = rgba(tint, selected ? 0.95 : active ? 0.72 : 0.42); ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
-      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(2, radius - 3), Math.PI * 1.13, Math.PI * 1.6);
-      ctx.strokeStyle = "rgba(231,243,255,0.55)"; ctx.lineWidth = 1; ctx.stroke();
-      ctx.restore(); return;
-    }
-    const glowRadius = radius * (active || selected ? 1.9 : 1.45);
-    const { halo, body } = orbPaints(ctx, tint, active, selected);
-    // One transform block for both unit-space paints: the halo disc at its
-    // glow radius, then the opaque core and the body over it. The circles are
-    // traced in that same unit space (the transform maps them onto the exact
-    // screen circles), so the three save/restore pairs the screen-space
-    // version needed become one per orb; the rim strokes in screen space.
-    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
-    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(0, 0, glowRadius / radius, 0, Math.PI * 2); ctx.fill();
-    // A luminous orb with an opaque centre: restrained halo, one clear rim.
-    ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2);
-    ctx.fillStyle = "#151a22"; ctx.fill();
-    ctx.fillStyle = body; ctx.fill();
-    ctx.restore();
     traceNodeSurface(ctx, "circle", p.x, p.y, radius);
-    ctx.strokeStyle = rgba(tint, selected ? 1 : active ? 0.85 : 0.55);
-    ctx.lineWidth = selected ? 1.8 : active ? 1.3 : 0.8; ctx.stroke();
-    if (!["assistant", "music"].includes(node.kind)) {
-      ctx.fillStyle = "rgba(242,249,255,0.62)"; ctx.beginPath(); ctx.arc(p.x - radius * 0.25, p.y - radius * 0.3, Math.max(1, radius * 0.13), 0, Math.PI * 2); ctx.fill();
-    }
-    if (node.kind === "assistant" || node.kind === "music") {
-      ctx.font = '600 10px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillStyle = "#edf0f5"; ctx.fillText(node.kind === "music" ? "♪" : "M", p.x, p.y + 0.5);
-    }
+    ctx.fillStyle = rgba(tint, 0.6); ctx.fill();
+    ctx.strokeStyle = rgba(tint, selected ? 1 : active ? 0.85 : 0.55); ctx.lineWidth = selected ? 1.8 : 1; ctx.stroke();
     ctx.restore();
   }
 
@@ -3923,12 +3655,17 @@
     ctx.save();
     ctx.globalAlpha = (node._fade ?? 1) * Math.max(0.35, emphasis(node));
     const hex = agentHex(node.role);
-    // On the Void collection's near-black bodies the glyph takes a light ink
-    // and sits inside the core.
-    const premiumInk = premiumGlyphInk(ctx, tint);
-    window.MefiTree?.agentGlyph?.(ctx, node.role, p.x, p.y, radius * (premiumInk ? 0.56 : 0.7), premiumInk ?? window.MefiTree?.glyphInk?.(hex) ?? "#0b1016");
-    const ring = radius + 3.5;
-    if (node.status === "running" || node.builder) {
+    // The style dresses the glyph (the Void collection's light ink, sitting
+    // inside its near-black core) and may draw the status ring its own way;
+    // otherwise the orb's ink and the ring below.
+    const styles = globalThis.window?.MefiNodeStyles;
+    const look = styles ? styles.glyph(state.nodeStyle, tint, state.nodeTheme) : null;
+    const glyphScale = look ? look.scale : 0.7, glyphInk = look?.ink ?? null, ringGap = look ? look.ringGap : 3.5;
+    window.MefiTree?.agentGlyph?.(ctx, node.role, p.x, p.y, radius * glyphScale, glyphInk ?? window.MefiTree?.glyphInk?.(hex) ?? "#0b1016");
+    const ring = radius + ringGap;
+    if (styles && styles.ring(ctx, state.nodeStyle, p, radius, tint, { status: node.status ?? null, builder: Boolean(node.builder), ring, time, still, motion: node._m ?? null, theme: state.nodeTheme ?? null })) {
+      // the style drew the status ring and its badges
+    } else if (node.status === "running" || node.builder) {
       const phase = still ? 0 : time / 380;
       ctx.beginPath(); ctx.arc(p.x, p.y, ring, phase, phase + Math.PI * 1.3);
       ctx.strokeStyle = rgba(tint, 0.9); ctx.lineWidth = 1.3; ctx.stroke();
@@ -3995,14 +3732,18 @@
     const breathe = still ? 0.5 : (Math.sin(time / 1900) + 1) / 2;
     ctx.save();
     ctx.globalAlpha = (node._fade ?? 1) * emphasis(node);
-    const ring = radius + 5 + breathe * 2.5;
-    ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI * 2);
-    ctx.strokeStyle = rgba(tint, 0.18 + breathe * 0.14); ctx.lineWidth = 1; ctx.stroke();
-    if (state.nodes.some((entry) => entry.kind === "agent" && !entry.builder && !entry.dying)) {
-      ctx.setLineDash([2, 5]);
-      ctx.beginPath(); ctx.arc(p.x, p.y, radius * 3.1, 0, Math.PI * 2);
-      ctx.strokeStyle = rgba(tint, 0.1); ctx.lineWidth = 0.8; ctx.stroke();
-      ctx.setLineDash([]);
+    const crew = state.nodes.some((entry) => entry.kind === "agent" && !entry.builder && !entry.dying);
+    const styles = globalThis.window?.MefiNodeStyles;
+    if (!(styles && styles.hubDress(ctx, state.nodeStyle, p, radius, tint, { crew, breathe, time, still, motion: node._m ?? null, theme: state.nodeTheme ?? null }))) {
+      const ring = radius + 5 + breathe * 2.5;
+      ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI * 2);
+      ctx.strokeStyle = rgba(tint, 0.18 + breathe * 0.14); ctx.lineWidth = 1; ctx.stroke();
+      if (crew) {
+        ctx.setLineDash([2, 5]);
+        ctx.beginPath(); ctx.arc(p.x, p.y, radius * 3.1, 0, Math.PI * 2);
+        ctx.strokeStyle = rgba(tint, 0.1); ctx.lineWidth = 0.8; ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
     ctx.restore();
   }
@@ -4013,6 +3754,13 @@
     const running = node._workLabel === "Running";
     const phase = still ? Math.PI / 3 : time / (running ? 1100 : 2400) * Math.PI * 2;
     const ring = radius + 9;
+    // A style may draw the orbit in its own language (node._m.orbit is the
+    // integrated phase); without one the blue arcs below.
+    const styles = globalThis.window?.MefiNodeStyles;
+    if (styles && styles.orbit(ctx, state.nodeStyle, p, radius, node._m?.tint ?? null, { running, phase, ring, time, still, motion: node._m ?? null, theme: state.nodeTheme ?? null })) {
+      node._orbitTrail = { drawn: true, animated: !still, segments: 3, phase, radius: ring };
+      return;
+    }
     ctx.save(); ctx.lineCap = "round";
     ctx.strokeStyle = "rgba(125,178,255,0.22)"; ctx.lineWidth = 0.8;
     ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI * 2); ctx.stroke();
@@ -4643,6 +4391,9 @@
     const theme = window.MefiMusic?.themePalette?.() ?? null;
     const palette = theme?.canvas;
     state.canvasPalette = palette ?? null;
+    // The node styles' theme: the palette as stable triples (renderer/node-styles.js).
+    // Its key changes with the palette, so every style's cached paints rebuild.
+    state.nodeTheme = globalThis.window?.MefiNodeStyles?.theme(palette ?? null) ?? null;
     state.themeKey = theme?.theme ?? document.documentElement?.dataset?.studioTheme ?? null;
     NODE_RGB.warm = palette?.bright ? hexToRgb(palette.bright) : color("--gold-bright", NODE_RGB.warm);
     NODE_RGB.task = [...NODE_RGB.warm];
@@ -6445,6 +6196,9 @@
     finally { profiler?.end(span); }
   }
 
+  // An agent tether's dash, handed to a style that draws the tether itself.
+  const TETHER_DASH = Object.freeze([6, 4]);
+
   // One look per relationship, so the eye can tell what a line means before
   // reading either end: root→session plain, session→todo faint and tinted by
   // the todo's state, a task's anchor dotted, the hub link doubled, the
@@ -6467,6 +6221,11 @@
     const focusIds = layers?.focusIds ?? null;
     const penFor = (a, b) => (focusIds && far !== ctx && !(focusIds.has(a.node.id) && focusIds.has(b.node.id)) ? far : ctx);
     const marching = typeof noMotion === "function" ? !noMotion() : false;
+    // A style may draw its own wires (renderer/node-styles.js); one without
+    // them, or a bare harness, keeps the lines below. One scratch per frame.
+    const nodeStyles = globalThis.window?.MefiNodeStyles ?? null;
+    const wire = nodeStyles ? { kind: "session", tint: null, alpha: 1, width: 1, dash: null, march: false, double: false, active: false, inspected: false, curved: false, cp: null, far: false, time, still: !marching, seed: 0, rA: 0, rB: 0, lifetime: 1 } : null;
+    const bend = nodeStyles ? { x1: 0, y1: 0, x2: 0, y2: 0 } : null;
     // Keep the work tether underneath each waveform so its endpoints and
     // assignment remain readable as the sound bends the connection.
     for (const edge of state.edges) {
@@ -6484,6 +6243,18 @@
       const response = audioLinked && state.audioEffects?.splitBands === false ? b.node._audioResponse : null;
       const light = response ? response.level * 0.24 + response.beat * 0.12 : 0;
       const pen = penFor(a, b);
+      if (wire) {
+        const curved = Boolean(primary && branches) && !style.double;
+        if (curved) { const middle = (a.p.y + b.p.y) / 2; bend.x1 = a.p.x; bend.y1 = middle; bend.x2 = b.p.x; bend.y2 = middle; }
+        wire.kind = style.kind; wire.tint = tint; wire.alpha = lifetime * Math.min(0.95, style.alpha + light); wire.width = style.width + light * 1.8;
+        wire.dash = style.dash; wire.march = Boolean(style.march && marching); wire.double = Boolean(style.double);
+        wire.active = active; wire.inspected = Boolean(inspected); wire.curved = curved; wire.cp = curved ? bend : null; wire.far = pen !== ctx;
+        wire.seed = b.node._m?.seed ?? 0; wire.rA = a.node._pr ?? 0; wire.rB = b.node._pr ?? 0; wire.lifetime = lifetime;
+        if (nodeStyles.wire(pen, state.nodeStyle, a.p, b.p, wire)) {
+          if (audioLinked) drawAudioConnection(pen, a, b, tint, lifetime, time, Boolean(primary && branches));
+          continue;
+        }
+      }
       pen.strokeStyle = rgba(tint, lifetime * Math.min(0.95, style.alpha + light));
       pen.lineWidth = style.width + light * 1.8;
       pen.setLineDash?.(style.dash);
@@ -6523,6 +6294,17 @@
       const light = response ? response.level * 0.24 + response.beat * 0.12 : 0;
       // an agent's tether: dashed, and marching toward the work while it runs
       const pen = penFor({ node, p }, target);
+      if (wire) {
+        const working = node.status === "running" || Boolean(node.builder);
+        wire.kind = "tether"; wire.tint = agentRgb(node.role); wire.alpha = lifetime * ((state.nodeLayout === "tree" ? 0.18 : 0.38) + light); wire.width = 1 + light * 1.8;
+        wire.dash = TETHER_DASH; wire.march = marching && working; wire.double = false;
+        wire.active = working; wire.inspected = false; wire.curved = false; wire.cp = null; wire.far = pen !== ctx;
+        wire.seed = node._m?.seed ?? 0; wire.rA = node._pr ?? 0; wire.rB = target.node._pr ?? 0; wire.lifetime = lifetime;
+        if (nodeStyles.wire(pen, state.nodeStyle, p, target.p, wire)) {
+          if (audioLinked) drawAudioConnection(pen, { node, p }, target, agentRgb(node.role), lifetime, time);
+          continue;
+        }
+      }
       pen.strokeStyle = rgba(agentRgb(node.role), lifetime * ((state.nodeLayout === "tree" ? 0.18 : 0.38) + light));
       pen.lineWidth = 1 + light * 1.8;
       pen.setLineDash?.([6, 4]);
@@ -7454,7 +7236,8 @@
     const flightPx = Math.hypot(state.camera.tx - state.camera.x, state.camera.ty - state.camera.y, state.camera.tz - state.camera.z) * state.fit * state.zoom * (state.overviewScale ?? 1);
     state.cameraMoving = !still && (flightPx > 8 || centerFlight > 8 || (state.zoomTarget != null && Math.abs(state.zoomTarget - state.zoom) > 0.03));
     // What earns the display's full rate: a glide, a zoom, or a hand on the tree.
-    state.motionHot = !still && (state.cameraMoving || flightPx > 0.5 || centerFlight > 0.5 || state.zoomTarget != null || Number.isFinite(state.fitTarget) || Boolean(state.morph || state.lifeHot || state.panning || state.rotating));
+    // A style's short effects (a switch, a selection settling) earn it too.
+    state.motionHot = !still && (state.cameraMoving || flightPx > 0.5 || centerFlight > 0.5 || state.zoomTarget != null || Number.isFinite(state.fitTarget) || Boolean(state.morph || state.lifeHot || state.panning || state.rotating) || state.styleBurstUntil > time);
 
     const { ctx } = el;
     // Two layers: the sky, and while a node is focused or a card hovered
@@ -7485,10 +7268,18 @@
     const projected = state.nodes.map((node) => ({ node, p: project(node) }));
     const runningIds = autopilotBusyIds(state.assistant);
     const runningJobs = autopilotJobs(state.assistant);
+    // Motion records (renderer/node-styles.js) live by id: a refresh that
+    // rebuilds the node objects no longer snaps a hover lift or a clock back.
+    const nodeStyles = globalThis.window?.MefiNodeStyles ?? null;
+    const motionTable = nodeStyles ? (state.nodeMotion ??= new Map()) : null;
+    const frameNo = (state.frameNo = (state.frameNo ?? 0) + 1);
     for (const { node } of projected) {
       node._orbitTrail = null; node._extraGlow = false;
       const wantLift = state.hoverNode === node || state.selected?.id === node.id ? 1 : 0;
-      node._lift = easeLift(node._lift, wantLift, dt, still);
+      const motion = motionTable ? nodeStyles.motionRecord(motionTable, node.id) : null;
+      node._m = motion;
+      if (motion) { motion.lift = easeLift(motion.lift, wantLift, dt, still); motion.seen = frameNo; node._lift = motion.lift; }
+      else node._lift = easeLift(node._lift, wantLift, dt, still);
       node._audioResponse = nodeAudioResponse(node, visualMusic, audioNodes, state.audioResponse);
       node._bubble = null; node._bubblePaint = null;
       const ids = [node.id, node.sessionId, node.task?.id, node.workTask?.id].filter(Boolean).map(String);
@@ -7499,6 +7290,8 @@
         node.progress = typeof job?.progress === "number" && Number.isFinite(job.progress) ? job.progress : null;
       }
     }
+    // A record whose node has been gone for 90 frames is dropped.
+    if (motionTable && frameNo % 64 === 0) for (const [id, record] of motionTable) if (frameNo - record.seen > 90) motionTable.delete(id);
     layoutProjectedGraph(projected, graphArea, state.camMode, time, still);
     if (state.morph) {
       const elapsed = (globalThis.performance?.now?.() ?? Date.now()) - state.morph.at;
@@ -7564,12 +7357,19 @@
     // at an agent carries the signal itself instead (wave, see surgeLine)
     const now = Date.now();
     state.pulses = state.pulses.filter((pulse) => now - pulse.start < pulse.duration);
+    // A style may draw the travelling pulse (surge) and its landing (land)
+    // itself; one options scratch serves every pulse this frame.
+    const pulseLook = nodeStyles ? { kind: "dot", time, still, rTo: 0 } : null;
     for (const pulse of state.pulses) {
       // A pulse launched from a HUD row (an absorbed record) starts at that
       // screen point rather than at a node.
       const from = screenPoints.get(pulse.from.id) ?? project(pulse.from);
       const to = screenPoints.get(pulse.to.id) ?? project(pulse.to);
       const t = still ? 1 : Math.min(1, (now - pulse.start) / pulse.duration);
+      if (pulseLook) {
+        pulseLook.kind = pulse.wave ? "wave" : "dot"; pulseLook.rTo = pulse.to?._pr ?? 0;
+        if (nodeStyles.surge(ctx, state.nodeStyle, from, to, t, pulse, pulseLook)) continue;
+      }
       if (pulse.wave) {
         surgeLine(ctx, from, to, t, pulse, still);
         continue;
@@ -7603,6 +7403,18 @@
       ctx.fill();
       ctx.shadowBlur = 0;
     }
+    // Landings: over the last fifth of its travel a pulse settles on its node
+    // (u runs 0 → 1), drawn by the style when it has a landing of its own.
+    if (pulseLook) {
+      for (const pulse of state.pulses) {
+        const t = still ? 1 : Math.min(1, (now - pulse.start) / pulse.duration);
+        if (t < 0.8) continue;
+        const to = screenPoints.get(pulse.to.id) ?? project(pulse.to);
+        pulseLook.kind = pulse.wave ? "wave" : "dot"; pulseLook.rTo = pulse.to?._pr ?? 0;
+        pulse._rgb ??= hexToRgb(pulse.color ?? "#a9ffcd");
+        nodeStyles.land(ctx, state.nodeStyle, to, pulseLook.rTo, pulse._rgb, (t - 0.8) / 0.2, pulseLook);
+      }
+    }
     ctx.lineCap = "butt";
     if (still) state.pulses = [];
 
@@ -7635,6 +7447,13 @@
     // Familiar luminous orbs: one restrained halo and one status rim.
     // Managed anchors stay fixed while work and compact labels update.
     const ordered = [...projected].sort((a, b) => b.p.depth - a.p.depth);
+    // Detail tiers (MefiNodeStyles.tier): frames that run long step every node
+    // down, past 15 ms to T2 and past 20 ms to T1, until they recover under 12.
+    const cost = state.frameCost;
+    state.detailCap = cost > 20 ? 1 : cost > 15 ? Math.min(state.detailCap ?? 3, 2) : cost >= 12 ? state.detailCap ?? 3 : 3;
+    const costCap = state.detailCap;
+    const stepFlags = { style: state.nodeStyle, active: false, selected: false, progress: null, orbit: 0, status: null, time, frame: frameNo };
+    const growNow = Date.now();
     const nodesSpan = profiler?.begin("command.nodes");
     try {
     for (const { node, p } of ordered) {
@@ -7655,7 +7474,38 @@
       const base = node.kind === "todo" ? 4.5 : node.kind === "assistant" ? 15 : node.kind === "agent" ? 10 : node.kind === "task" ? 12 : 11;
       const radius = Math.max(2, Math.min(visual.maxRadius, base * Math.max(0.75, Math.min(1.15, p.k))) * nodeScale);
       node._px = p.x; node._py = p.y; node._pr = radius;
-      drawNodeSurface(ctx, node, p, radius, tint, { selected: Boolean(selected), active, alpha: Math.max(0.35, visual.alpha * factor) });
+      // The node's motion steps with what it is doing now. Its detail tier is
+      // capped on the far layer, when dimmed, while the camera flies and when
+      // frames run long; a lit node may go one tier above its cap.
+      const chosen = state.selected?.id === node.id;
+      const motion = node._m ?? null;
+      let detail = 3;
+      if (nodeStyles) {
+        if (motion) {
+          stepFlags.active = active; stepFlags.selected = Boolean(selected); stepFlags.progress = node.progress;
+          stepFlags.orbit = node._workLabel === "Running" ? 1.1 : node._workLabel === "Next" ? 2.4 : 0;
+          stepFlags.status = node.kind === "agent" ? node.status ?? null : null;
+          nodeStyles.stepMotion(motion, stepFlags, dt, still);
+          motion.tint = tint;
+        }
+        const lit = active || Boolean(selected);
+        const cap = Math.min(costCap, ctx !== el.ctx || factor <= 0.3 ? 1 : state.cameraMoving && !lit ? 2 : 3);
+        detail = nodeStyles.tier(radius, lit ? cap + 1 : cap);
+      }
+      const surface = { selected: Boolean(selected), active, alpha: Math.max(0.35, visual.alpha * factor), time, still, detail, chosen, motion };
+      drawNodeSurface(ctx, node, p, radius, tint, surface);
+      if (nodeStyles) {
+        // A style's arrival (t01 runs over the node's grow) and its selection
+        // mark; neither draws anything for a style without one.
+        const fx = state.fx.get(node.id);
+        const grow = fx?.bornAt != null && fx.absorbAt == null ? (growNow - fx.bornAt) / NODE_GROW_MS : 1;
+        const marked = Boolean(selected) || chosen || (motion?.sel ?? 0) > 0.01;
+        if (marked || grow >= 0 && grow < 1) {
+          const overlay = { kind: node.kind, selected: Boolean(selected), chosen, hover: state.hoverNode === node, active, alpha: (node._fade ?? 1) * surface.alpha, time, still, detail, motion, theme: state.nodeTheme ?? null };
+          if (grow >= 0 && grow < 1) nodeStyles.arrival(ctx, state.nodeStyle, p, radius, tint, grow, overlay);
+          if (marked) nodeStyles.select(ctx, state.nodeStyle, p, radius, tint, overlay);
+        }
+      }
       drawWorkOrbit(ctx, node, p, radius, time, still);
       drawFiledWork(ctx, node, p, radius, runningIds, time, still);
       drawAgentDress(ctx, node, p, radius, tint, time, still);
@@ -8350,6 +8200,8 @@
     // button, Done, or a card whose node just left the graph) would fall to
     // <body>. Either surface can hold it, so ask both.
     const focusInCard = !node && (Boolean(el.info?.contains(document.activeElement)) || Boolean(el.nodePanel?.contains(document.activeElement)));
+    // The style's selection settles at the hot cadence for 400 ms (motionHot).
+    if ((node?.id ?? null) !== (state.selected?.id ?? null)) state.styleBurstUntil = (globalThis.performance?.now?.() ?? Date.now()) + 400;
     state.selected = node ? { id: node.id, kind: node.kind, node, via: options.via ?? "pointer" } : null;
     if (!node) exitFocus(); // letting go of the selection lets go of the focus too
     if (node?.doneHold) ackDoneHold(node.id); // the click is the read

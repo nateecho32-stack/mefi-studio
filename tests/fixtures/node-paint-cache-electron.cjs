@@ -128,7 +128,7 @@ function browserChecks() {
   result.movingGradientCreates = created;
   const palette = Array.from({ length: 160 }, (_, i) => [i, 101, 201]);
   for (const tint of palette) paint(tint);
-  result.cacheEntries = state.orbPaintCache.get(ctx).size;
+  result.cacheEntries = window.MefiNodeStyles.cacheStats(ctx).entries;
   const beforeRecent = created; paint(palette.at(-1)); result.recentReused = created === beforeRecent;
   const beforeOldest = created; paint(colors[0]); result.oldestEvicted = created > beforeOldest;
   const second = createCanvas().ctx;
@@ -153,7 +153,11 @@ app.whenReady().then(async () => {
   const source = fs.readFileSync(path.join(root, "idle.js"), "utf8");
   const start = source.indexOf("  function traceNodeSurface("), end = source.indexOf("  function drawWorkOrbit(", start);
   if (start < 0 || end <= start) throw new Error("Node painter extraction markers are missing");
-  const script = `(${browserChecks.toString().replace("// PRODUCTION_NODE_PAINT", source.slice(start, end))})()`;
+  // The painters themselves (renderer/node-styles.js) load first, whole, as
+  // the booklet bundles them; the idle.js adapter slice then paints through
+  // window.MefiNodeStyles exactly as the Command view does.
+  const painters = fs.readFileSync(path.join(root, "node-styles.js"), "utf8");
+  const script = `${painters}\n;(${browserChecks.toString().replace("// PRODUCTION_NODE_PAINT", source.slice(start, end))})()`;
   Object.assign(report, await window.webContents.executeJavaScript(script));
   await finish();
 }).catch(finish);

@@ -89,7 +89,7 @@ test("the backdrop follows the colour theme unless an override is saved", () => 
   assert.deepEqual(plain(read(env, "BACKDROP_ORDER")).sort(), Object.keys(backdrops).sort(), "the picker lists every scene once");
 });
 
-test("the Void collection's themes each follow their own sky, and the rail draws its node styles without per-frame paints", () => {
+test("the Void collection's themes each follow their own sky, and the rail paints its nodes through the shared node styles", () => {
   const { env, state } = speechFixture();
   const backdrops = plain(read(env, "BACKDROPS"));
   for (const [theme, scene] of Object.entries({ void: "deepspace", eclipse: "dust", abyss: "fireflies", dusk: "grid" })) {
@@ -98,40 +98,43 @@ test("the Void collection's themes each follow their own sky, and the rail draws
     state.themeKey = theme;
     assert.equal(env.activeBackdrop(), scene);
   }
-  const branches = section(tree, 'nodeStyle === "singularity"', 'nodeStyle === "glass"');
-  for (const style of ["singularity", "prism", "sigil"]) assert.ok(branches.includes(`nodeStyle === "${style}"`), `the tree rail draws ${style}`);
-  for (const allocation of ["createRadialGradient", "createLinearGradient", "Array.from", ".filter(", ".map("]) assert.ok(!branches.includes(allocation), `the rail's premium branches avoid ${allocation} per node`);
+  const draw = section(tree, "  function draw(", "  let lastDraw = -Infinity;");
+  const loop = section(draw, "    for (const node of ordered) {", "    // sparks: a hovering agent");
+  assert.ok(draw.includes("window.MefiNodeStyles"), "draw() looks the shared painters up");
+  assert.ok(loop.includes("styles.paint(ctx, nodeStyle, p, radius, tint, paint)"), "one paint call per node");
+  for (const style of ["glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"]) assert.ok(!loop.includes(`nodeStyle === "${style}"`), `the rail keeps no ${style} branch of its own`);
+  for (const allocation of ["createRadialGradient", "createLinearGradient", "createConicGradient", "Array.from", ".filter(", ".map("]) assert.ok(!loop.includes(allocation), `the rail's node loop avoids ${allocation} per node`);
+  assert.equal(draw.split("graphPreferences?.()").length - 1, 1, "the appearance is read once per frame");
+  assert.ok(!loop.includes("graphPreferences"), "never per node");
 });
 
-// The rail's Void branches, evaluated with the helpers they close over. Each
-// call paints one node the way tree3d.js's frame loop does.
-function railPainter() {
-  const pieces = section(tree, "  // The Void collection's node styles (gated in music.js)", "  function colorOf(node) {");
-  const chain = section(tree, '      } else if (nodeStyle === "singularity") {', '      } else if (nodeStyle === "glass") {');
-  const window = { MefiMusic: { themePalette: () => ({ canvas: { accent2: "#36d1ff" } }) } };
-  return new Function("window", "COLORS", `
-    let ctx = null;
-    ${pieces}
-    return {
-      shapes: VOID_SHAPES,
-      paint(target, nodeStyle, { p = { x: 50, y: 50 }, radius = 8, color = "#b9b0ff", working = false, selected = false, isAgent = false, time = 1000 } = {}) {
-        ctx = target; const visibility = 1;
-        if (false) {
-        ${chain}
-        }
-      },
-    };
-  `)(window, { active: "#c9a86a" });
+// The shared painters in a vm, fed the rail's hex colours through its own
+// triple memo (tree3d.js railTint), frame after frame.
+async function railPainter() {
+  const nodeStyles = await readFile(new URL("../renderer/node-styles.js", import.meta.url), "utf8");
+  const env = vm.createContext({ window: {}, COLORS: { active: "#c9a86a" } });
+  vm.runInContext(nodeStyles, env);
+  vm.runInContext(section(tree, "  const railTints = new Map();", "  const railMotion = new Map();"), env);
+  return { styles: env.window.MefiNodeStyles, railTint: env.railTint };
 }
 
-test("the rail's Void styles reuse their paints frame to frame and cut the Command view's shapes", () => {
-  const rail = railPainter();
-  assert.ok(tree.includes("voidShapes: VOID_SHAPES"), "the tree hands its Void shapes to the Command view");
-  for (const copy of ["const PRISM_RIM", "const SIGIL_MARKS", "function tracePoints(", "function tracePolygon("]) {
+test("the rail's styles reuse their paints frame to frame, and the shared shapes live in node-styles.js alone", async () => {
+  const { styles, railTint } = await railPainter();
+  assert.equal(railTint("#b9b0ff"), railTint("#b9b0ff"), "one stable triple per colour, so the caches hit");
+  assert.deepEqual(plain(railTint("#b9b0ff")), [185, 176, 255]);
+  assert.deepEqual(plain(railTint("#abc")), [170, 187, 204]);
+  assert.deepEqual(plain(railTint("nope")), [201, 168, 106], "an unreadable colour falls back to the active tone");
+  for (const copy of ["const PRISM_RIM", "const SIGIL_MARKS", "function tracePoints(", "function tracePolygon(", "derivedColor(", "singularityPaints(", "sigilWell(", "premiumHalo(", "VOID_SHAPES"]) {
     assert.ok(!idle.includes(copy) && !tree.includes(copy), `no second copy of ${copy} survives`);
   }
-  assert.ok(Object.isFrozen(rail.shapes), "the shared shapes cannot be edited by either painter");
-  for (const style of ["singularity", "prism", "sigil"]) {
+  assert.ok(!idle.includes("function buildVoidShapes(") && !tree.includes("function buildVoidShapes("), "the Void shapes are built only in node-styles.js");
+  assert.ok(!tree.includes("voidShapes:"), "the rail no longer hands shapes to the Command view");
+  assert.ok(Object.isFrozen(styles.shapes), "the shared shapes cannot be edited by either painter");
+  const theme = styles.theme({ background: "#050507", text: "#ece5d8", accent2: "#36d1ff" });
+  // Soft glass and Crystal still build their wash per node (the free styles'
+  // rework caches it); every other style builds nothing once warmed.
+  const perPaint = { glass: 1, crystal: 1 };
+  for (const style of styles.STYLES) {
     const counts = { gradients: 0, lineTo: 0 };
     const target = new Proxy({}, {
       get(_target, name) {
@@ -141,12 +144,67 @@ test("the rail's Void styles reuse their paints frame to frame and cut the Comma
       },
       set() { return true; },
     });
-    for (const [time, working] of [[1000, true], [1016, true], [1032, false], [1048, false]]) rail.paint(target, style, { radius: 12, working, time });
+    const paint = (color, working, selected, x) => styles.paint(target, style, { x, y: 20 }, 12, railTint(color), { kind: "session", active: working, selected, alpha: 1, monogram: false, time: 1000, detail: styles.tier(12, 2), theme });
+    for (const [working, selected] of [[true, false], [false, false], [false, true], [true, true]]) for (const color of ["#b9b0ff", "#57ff9a"]) paint(color, working, selected, 50);
     const settled = counts.gradients;
-    for (const [time, working] of [[1064, true], [1080, false], [1096, true]]) rail.paint(target, style, { radius: 12, working, time, p: { x: 90, y: 20 } });
-    assert.equal(counts.gradients, settled, `${style} builds its paints once and reuses them on later frames`);
-    if (style !== "singularity") assert.ok(counts.lineTo > 0, `${style} traces the shared shapes`);
+    for (const [working, selected] of [[true, false], [false, true], [false, false]]) for (const color of ["#b9b0ff", "#57ff9a"]) paint(color, working, selected, 90);
+    assert.ok(counts.gradients - settled <= 6 * (perPaint[style] ?? 0), `${style} builds its paints once and reuses them on later frames`);
+    if (style === "prism" || style === "sigil") assert.ok(counts.lineTo > 0, `${style} traces the shared shapes`);
   }
+});
+
+test("the real rail paints each node once a frame through MefiNodeStyles and reads the appearance once", async () => {
+  const nodeStyles = await readFile(new URL("../renderer/node-styles.js", import.meta.url), "utf8");
+  const frames = new Map(), painted = [];
+  let nextFrame = 0, now = 0, reads = 0, bodyObserver;
+  const element = () => ({ style: {}, clientWidth: 420, clientHeight: 600, append() {}, addEventListener() {}, setAttribute() {}, removeAttribute() {}, querySelector: () => null, classList: { contains: () => false, toggle() {} } });
+  const ctx = new Proxy({}, {
+    get: (target, key) => key in target ? target[key] : key === "measureText" ? (text) => ({ width: String(text).length * 7 }) : () => ({ addColorStop() {} }),
+    set: (target, key, value) => { target[key] = value; return true; },
+  });
+  const canvas = element(), rail = element();
+  canvas.getContext = () => ctx;
+  const elements = { "tree-canvas": canvas, "tree-rail": rail, "tree-stats": element() };
+  const bodyClasses = new Set(["workspace-active"]);
+  const document = { hidden: false, body: { classList: { contains: (name) => bodyClasses.has(name) } }, getElementById: (id) => elements[id] ?? null, createElement: element, addEventListener() {} };
+  const window = {
+    devicePixelRatio: 1, matchMedia: () => ({ matches: false }), addEventListener() {},
+    MefiMusic: {
+      graphPreferences: () => { reads += 1; return { nodeStyle: "sigil", nodeLayout: "constellation", orbitTrails: true, extraGlow: false }; },
+      themePalette: () => ({ canvas: { background: "#050507", text: "#ece5d8", accent2: "#36d1ff", bright: "#e6c98d" } }),
+    },
+    mefiStudio: {
+      eyesState: async () => ({ ok: true, sessions: [{ id: "s1", title: "Current session", timeUpdated: Date.now() }, { id: "s2", title: "Earlier session", timeUpdated: Date.now() - 60000 }], todos: [] }),
+      assistantState: async () => ({ ok: true, state: { status: "idle", agents: [] } }),
+      eyesCheckpointsRead: async () => ({ checkpoints: {} }),
+      onEyesActivity() {}, onAssistant() {}, onCheckpoints() {},
+    },
+  };
+  const context = vm.createContext({
+    window, document, console, performance: { now: () => now },
+    localStorage: { getItem: () => null, setItem() {} },
+    requestAnimationFrame: (callback) => { const id = ++nextFrame; frames.set(id, callback); return id; },
+    cancelAnimationFrame: (id) => frames.delete(id),
+    MutationObserver: class { constructor(callback) { bodyObserver = callback; } observe() {} },
+    ResizeObserver: class { observe() {} },
+  });
+  vm.runInContext(nodeStyles, context);
+  const real = window.MefiNodeStyles;
+  window.MefiNodeStyles = { ...real, paint(target, style, p, radius, tint, options) { painted.push({ target, style, radius, tint, detail: options.detail, motion: options.motion }); return real.paint(target, style, p, radius, tint, options); } };
+  vm.runInContext(tree, context);
+  await window.MefiTree.init();
+  const frame = (time) => { now = time; const pending = [...frames.values()]; frames.clear(); for (const callback of pending) callback(time); };
+  bodyClasses.delete("workspace-active"); bodyObserver();
+  frame(1);
+  const first = painted.length, readsFirst = reads;
+  assert.ok(first >= 2, `the rail painted its nodes (${first})`);
+  assert.equal(readsFirst, 1, "graphPreferences is read once in a frame");
+  assert.ok(painted.every(({ target, style, detail }) => target === ctx && style === "sigil" && detail <= 2), "on the rail's canvas, in the chosen style, at tier T2 at most");
+  frame(40);
+  assert.equal(painted.length, 2 * first, "one paint per node per frame");
+  assert.equal(reads, 2);
+  assert.equal(painted[first].tint, painted[0].tint, "a node's colour stays one triple across frames");
+  assert.equal(painted[first].motion, painted[0].motion, "and its motion record survives the frame");
 });
 
 test("speech bubbles: one per node, repeats refresh, a cap, expiry, and the pointer holds one up", () => {
@@ -658,6 +716,24 @@ test("the gate draws at the display's rate while the camera moves, and only whil
   state.motionHot = false;
   for (const time of [216.9, 233.6, 250.3]) env.frame(time);
   assert.deepEqual(drawn, [216.9, 250.3], "at rest the tree draws at 30 fps");
+});
+
+test("a style switch or a new selection draws at the display's rate for a moment", () => {
+  const state = { nodeStyle: "orbs", nodeLayout: "constellation", styleBurstUntil: 0, active: false };
+  const env = vm.createContext({ state, el: { width: 0, height: 0 }, refitLayout() {} });
+  vm.runInContext(section(idle, "  function applyTreePreferences(", "  function traceNodeSurface("), env);
+  const before = Date.now();
+  env.applyTreePreferences({ nodeStyle: "sigil" });
+  assert.ok(state.styleBurstUntil >= before + 400 && state.styleBurstUntil <= Date.now() + 400, "a new style settles in at the hot cadence for 400 ms");
+  state.styleBurstUntil = 0;
+  env.applyTreePreferences({ nodeStyle: "sigil", orbitTrails: true });
+  assert.equal(state.styleBurstUntil, 0, "the same style is no switch");
+  const select = section(idle, "  function selectNode(", "    state.selected = node ?");
+  assert.ok(select.includes("state.styleBurstUntil = (globalThis.performance?.now?.() ?? Date.now()) + 400"), "a new selection settles at the hot cadence too");
+  const frame = section(idle, "  function drawFrame(", "    const { ctx } = el;");
+  assert.ok(/state\.motionHot = !still && \(.*\|\| state\.styleBurstUntil > time\);/.test(frame), "the burst joins motionHot, so the frame-cost gate still decides");
+  // The scheduler itself still reads only state (the gate tests above).
+  assert.ok(!section(idle, "  // Animation state belongs", "  function drawFrame(").includes("styleBurstUntil"));
 });
 
 test("a floating panel carves the clear rectangle without re-seeding the tree, and the projection centre glides after it", () => {
