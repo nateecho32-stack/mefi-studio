@@ -440,6 +440,9 @@ function normalizeQuestion(entry, index) {
         label: str(entry.answer.label).slice(0, 120) || null,
         text: str(entry.answer.text).slice(0, 400) || null,
         via: str(entry.answer.via).slice(0, 24) || null,
+        // Why an answer could not be applied (the task moved on, the split
+        // chain is at its limit), kept so the card still says so after a reload.
+        ...(str(entry.answer.error).trim() ? { error: str(entry.answer.error).trim().slice(0, 200) } : {}),
       }
     : null;
   return {

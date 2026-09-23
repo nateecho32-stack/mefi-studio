@@ -94,7 +94,6 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   assistantControl: (action) => ipcRenderer.invoke("assistant:control", { action }),
   assistantPrefs: (patch) => ipcRenderer.invoke("assistant:prefs", patch),
   assistantAnswer: (payload) => ipcRenderer.invoke("assistant:answer", payload ?? {}),
-  assistantRaiseIssue: (payload) => ipcRenderer.invoke("assistant:raise-issue", payload ?? {}),
   assistantDoneLog: (payload) => ipcRenderer.invoke("assistant:done-log", payload ?? {}),
   assistantClearDoneLog: () => ipcRenderer.invoke("assistant:clear-done"),
   // Brain maps: the pipeline editor's store, parts catalog and gates.

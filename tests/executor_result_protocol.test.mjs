@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseExecutorResult } from "../scripts/assistant.mjs";
+import { parseExecutorResult, verifyCompletion } from "../scripts/assistant.mjs";
 import { executorHost } from "./fixtures/host_executor.mjs";
 
 test("saved result text echoed by a tool is not a new worker result", () => {
@@ -137,4 +137,104 @@ test("a done+verified retry whose only change is a TESTRUNS row discharges on it
   saved = code.board().tasks[0];
   assert.equal(saved.status, "open", "a non-ledger file change keeps the obligation outstanding");
   assert.equal(saved.verification.reason, "outstanding obligations remain");
+});
+
+// The owner lane. What only the owner can do (the board, Studio's task store,
+// another session's files) is neither work this task still owes nor a
+// hand-off: it goes under owner:, reaches the owner once as an "owner" issue,
+// and never fails verification. The remaining-prose reader is not widened.
+const ownerTask = (id, extra = {}) => ({ id, title: "Follow-up 2: TESTRUNS append helper", prompt: "Verify the append helper", status: "open", createdAt: 1, ...extra });
+const settleRaises = () => new Promise((resolve) => setImmediate(resolve));
+function raisingHost(options) {
+  const h = executorHost(options);
+  const raised = [];
+  h.env.assistantRaiseIssue = async (issue) => { raised.push(issue); return null; };
+  return { h, raised };
+}
+
+test("the worker prompt teaches the owner: part of the result line", async () => {
+  const h = executorHost({ tasks: [ownerTask("task_prompt_fixture")] });
+  h.wake(); await h.pump();
+  const prompt = h.starts[0].child.prompt;
+  assert.ok(prompt.includes("MEFI_RESULT: done: <what you finished>; remaining: <what this task still owes, or none>; owner: <what only the owner can do, or leave it out>"));
+  assert.ok(prompt.includes("Anything only the owner can do (board changes, Studio's task store, another session's files) goes under owner:, never under remaining: or MEFI_NEXT."));
+  // The cmd.exe route turns double quotes into spaces.
+  assert.match(prompt, /Use\W+owner\W+for something only the owner can do/);
+  assert.match(prompt, /\|verify\|owner> ::/);
+  assert.match(prompt, /Print the exact line MEFI_JOB_DONE as the last thing you say\.$/);
+});
+
+test("an owner: part is raised as the owner's, after the run's own asks, with the card's chain", async () => {
+  const { h, raised } = raisingHost({ tasks: [ownerTask("task_owner_fixture", { splitFrom: "task_parent_fixture", splitDepth: 2 })] });
+  h.wake(); await h.pump();
+  await h.finish("task_owner_fixture", { lines: [
+    "MEFI_ASK: scope :: the reader has to be written too",
+    "MEFI_RESULT: done: the helper is verified; remaining: none; owner: reword the stored acceptance",
+    "MEFI_JOB_DONE",
+  ] });
+  await settleRaises();
+  assert.deepEqual(raised.map((issue) => [issue.kind, issue.title]), [["scope", "the reader has to be written too"], ["owner", "reword the stored acceptance"]]);
+  const owner = raised[1];
+  assert.equal(owner.source, "worker");
+  assert.equal(owner.taskId, "task_owner_fixture");
+  assert.equal(owner.taskTitle, "Follow-up 2: TESTRUNS append helper");
+  assert.equal(owner.runId, h.starts[0].runId);
+  assert.equal(owner.splitFrom, "task_parent_fixture");
+  assert.equal(owner.splitDepth, 2);
+  assert.equal(raised[0].splitDepth, 2, "a MEFI_ASK carries the chain too, so its card offers Split only where it can land");
+  // The owner's part is no obligation of this card: it verifies.
+  h.advance(31000); await h.pump();
+  const saved = h.board().tasks[0];
+  assert.equal(saved.lastAttempt.result.parts.owner, "reword the stored acceptance");
+  assert.equal(saved.status, "done");
+  assert.equal(saved.verification.evidence?.outstanding ?? false, false);
+  // A denial asks nothing.
+  const { h: quiet, raised: none } = raisingHost({ tasks: [ownerTask("task_quiet_fixture")] });
+  quiet.wake(); await quiet.pump();
+  await quiet.finish("task_quiet_fixture", { lines: ["MEFI_RESULT: done: all of it; remaining: none; owner: none", "MEFI_JOB_DONE"] });
+  await settleRaises();
+  assert.deepEqual(none, []);
+});
+
+test("remaining: none beside an owner: part is not outstanding; the same leftover under remaining: still is", () => {
+  const resultNote = parseExecutorResult("MEFI_RESULT: done: the helper; remaining: none; owner: reword the stored acceptance");
+  assert.deepEqual(resultNote.parts, { done: "the helper", remaining: "none", owner: "reword the stored acceptance" });
+  const verdict = verifyCompletion({ verdictOk: true, changedFiles: 1, hasSession: true, resultNote });
+  assert.equal(verdict.evidence.outstanding, false);
+  assert.equal(verdict.state, "verified");
+  const owed = verifyCompletion({ verdictOk: true, changedFiles: 1, hasSession: true, resultNote: parseExecutorResult("MEFI_RESULT: done: the helper; remaining: reword the stored acceptance") });
+  assert.equal(owed.evidence.outstanding, true);
+  assert.equal(owed.reason, "outstanding obligations remain");
+});
+
+test("a run the owner or the host stopped raises none of its asks", async () => {
+  const { h, raised } = raisingHost({ tasks: [ownerTask("task_stopped_fixture")] });
+  h.wake(); await h.pump();
+  // How Stop all and a project switch mark the runs they end.
+  h.autopilot.jobs.find((job) => job.taskId === "task_stopped_fixture").stopUser = true;
+  await h.finish("task_stopped_fixture", { code: 1, lines: [
+    "MEFI_ASK: owner :: flip task_landing_fixture1 to done",
+    "MEFI_RESULT: done: half of it; remaining: the rest; owner: flip the landing card",
+  ] });
+  await settleRaises();
+  assert.deepEqual(raised, []);
+  assert.equal(h.board().tasks[0].status, "open", "it resumes from its checkpoint");
+  assert.equal(h.board().tasks[0].runFailures, undefined);
+});
+
+test("the live map's per-run cap bounds how many asks one run raises", async () => {
+  const lines = ["MEFI_ASK: scope :: one", "MEFI_ASK: missing :: two", "MEFI_ASK: conflict :: three", "MEFI_JOB_DONE"];
+  const { h, raised } = raisingHost({ tasks: [ownerTask("task_cap_fixture")] });
+  // The rules as the issue lane last read them.
+  h.env.issuePolicySeen = { perRun: 1 };
+  h.wake(); await h.pump();
+  await h.finish("task_cap_fixture", { lines });
+  await settleRaises();
+  assert.deepEqual(raised.map((issue) => issue.title), ["one"]);
+  // With nothing read yet the module's cap stands.
+  const { h: fresh, raised: all } = raisingHost({ tasks: [ownerTask("task_nocap_fixture")] });
+  fresh.wake(); await fresh.pump();
+  await fresh.finish("task_nocap_fixture", { lines });
+  await settleRaises();
+  assert.deepEqual(all.map((issue) => issue.title), ["one", "two", "three"]);
 });

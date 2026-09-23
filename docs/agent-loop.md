@@ -583,6 +583,48 @@ stay: an ask that offers a split (the split files new work), and an owner-only
 ask (`issueKind: "owner"`, something only the owner can do), which is usually
 raised just as the card finishes.
 
+**Owner asks.** A leftover only the owner can act on (flipping or archiving a
+card on the live board, correcting a stored acceptance in Studio's task store,
+landing another session's files) is the `owner` issue kind: "needs something
+only you can do", answered *I'll take care of it* (recommended), *Answer it in
+one line* or *Leave it for review*. It offers neither Split nor Try again, so
+answering it makes no new card and re-arms nothing. A worker files one three
+ways: a `MEFI_ASK: owner :: …` line; the `owner:` part of its `MEFI_RESULT`
+line, which is raised as one owner ask instead of counting as remaining work;
+or a scope, missing, conflict, capability or blocked ask that is really put to
+the owner ("Will you …", "Should the owner …", "May Studio's stored
+acceptance …", or one naming a lane only the owner may touch), which
+`ownerDirected` in `scripts/agent-issues.cjs` files as `owner`. A permission
+that names what it wants and a risk are never refiled. One run's asks are
+raised one after another, and a run the owner or the host stopped raises none.
+An answer that could not be applied keeps its reason, and its card reads
+"— not applied: …".
+
+**Splits carry the ask.** A split card's brief is the worker's ask and its
+detail, and the split never re-runs the parent. The live brain map's triage
+`splitDepth` caps the chain (default 3; 0 turns Split off). A card already at
+the cap is not offered Split, and its card says why.
+
+**Repeat asks.** With the map's `repeatAsks: "fold"` (the default), an ask
+another card put to the owner within the last 24 hours opens no new card.
+While that card is open the new ask waits on it ("already asked on another
+card (q_…) · no new card"); once it is answered, the answer is written onto
+the new card as a record ("already answered on another card (q_…)"), and a
+folded split is not split again. Two asks are the same when they are the same
+kind and either use exactly the same words, or name the same other cards and
+share at least half of their content words (card ids and commit hashes left
+out). Naming the same cards is not enough on its own: "task_205… duplicates
+the parent gate card" and "both duplicate gate cards are already done" are
+different questions. A grant or a risk is never folded, nor is a host-raised
+run failure, and an answer that failed to apply is not carried over.
+`repeatAsks: "ask"` asks every one.
+
+**The remaining-prose pattern is frozen.** The verifier's remaining-work
+denial pattern (`handedElsewhereNote` in `scripts/assistant.mjs`) was widened
+five times on 2026-09-22 for each new way a worker phrased an owner-only
+leftover. The `owner:` lane gives those leftovers their own slot, so a new
+phrasing belongs there, not in another alternative in that pattern.
+
 **History compaction.** Every change to a card's brief, log, attempt or
 verdict adds a revision to its `contextHistory`, and a finished card used to
 keep all of them: they were 91% of the frozen 7.9 MB 2d Trippy Hell board.

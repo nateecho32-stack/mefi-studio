@@ -2359,6 +2359,12 @@
         : question.status === "expired" ? "Expired without an answer"
         : question.status === "superseded" ? "Superseded by a newer question"
         : `You chose: ${question.answer.label ?? question.answer.text ?? "answered"}`;
+      // An answer the host could not carry out (the task left the board, the
+      // split chain is at the map's limit) says why instead of reading as done.
+      if (question.status === "answered" && question.answer.error) {
+        note.textContent += ` — not applied: ${question.answer.error}`;
+        card.dataset.applied = "false";
+      }
       card.append(note);
     }
     return card;

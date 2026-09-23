@@ -71,6 +71,47 @@ test("normalizeState keeps questions with their options and answers", () => {
   assert.equal(question.answer.optionId, "offer_1");
 });
 
+test("normalizeState keeps why an answer was not applied, and no error key when it was", () => {
+  const raw = assistant.emptyState(1000);
+  const answered = (id, error) => ({ id, at: 900, title: "Split the extra work out?", status: "answered",
+    options: [{ id: "split", label: "Split the extra work out" }], answer: { at: 950, optionId: "split", label: "Split the extra work out", via: "option", error } });
+  raw.questions = [answered("q1", `  ${"x".repeat(300)}`), answered("q2", null), answered("q3", "   "), answered("q4", { not: "text" })];
+  const state = assistant.normalizeState(raw, 2000);
+  assert.equal(state.questions[0].answer.error, "x".repeat(200));
+  for (const question of state.questions.slice(1)) assert.equal("error" in question.answer, false, question.id);
+});
+
+// The Ask rail's card, run from the renderer source against a bare document.
+const idleSource = await readFile(new URL("../renderer/idle.js", import.meta.url), "utf8");
+function askCardHost() {
+  const node = (tag) => ({
+    tag, children: [], dataset: {}, className: "", textContent: "", title: "",
+    append(...items) { this.children.push(...items); },
+    setAttribute() {}, addEventListener() {},
+  });
+  const context = vm.createContext({ document: { createElement: node }, agoLabel: () => "now", nav() {} });
+  const from = idleSource.indexOf("  function askCard(");
+  const to = idleSource.indexOf("  async function answerQuestion(", from);
+  assert.ok(from >= 0 && to > from, "renderer section exists: askCard");
+  vm.runInContext(`${idleSource.slice(from, to)}\nthis.askCard = askCard;`, context);
+  const find = (item, className) => item.className === className ? item : item.children.map((child) => find(child, className)).find(Boolean) ?? null;
+  return { askCard: context.askCard, find };
+}
+
+test("an answered card says when its answer could not be applied", async () => {
+  const { askCard, find } = askCardHost();
+  const card = (answer) => askCard({ id: "q1", at: 900, kind: "question", source: "issue", title: "Split the extra work out?", status: "answered", options: [], answer });
+  const refused = card({ label: "Split the extra work out", error: "This follow-up chain is 3 deep; edit the parent or create a task by hand." });
+  assert.equal(refused.dataset.applied, "false");
+  assert.equal(find(refused, "ask-answer-note").textContent, "You chose: Split the extra work out — not applied: This follow-up chain is 3 deep; edit the parent or create a task by hand.");
+  const applied = card({ label: "Keep to the brief" });
+  assert.equal(applied.dataset.applied, undefined);
+  assert.equal(find(applied, "ask-answer-note").textContent, "You chose: Keep to the brief");
+  // The warning reads in the rail's warn colour, from the shared token.
+  const css = await readFile(new URL("../renderer/styles.css", import.meta.url), "utf8");
+  assert.match(css, /\.ask-card\[data-applied="false"\][^{]*\{[^}]*color:\s*var\(--warn\)/);
+});
+
 test("normalizeState drops malformed questions and clamps the tail", () => {
   const raw = assistant.emptyState(1000);
   raw.questions = [{ title: "" }, null, { title: "kept", options: [] }];

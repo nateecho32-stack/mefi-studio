@@ -124,6 +124,17 @@ const ISSUE_KINDS = {
     recommend: "retry",
     autoAnswer: "retry",
   },
+  // Not a decision about the work at all: the leftover is the owner's to do.
+  // Splitting it out only made a card whose worker could ask the same again.
+  owner: {
+    label: "something only you can do",
+    severity: "decision",
+    ask: "policy",
+    headline: (context) => `${context.subject} needs something only you can do`,
+    lead: "The agent finished what it can; the rest is yours (the board, Studio's task store, another session's files).",
+    options: ["acknowledge", "instruct", "hold"],
+    recommend: "acknowledge",
+  },
   // Raised by the host, not by a worker: a run that ended without the verdict.
   "run-failed": {
     label: "a run that stopped",
@@ -195,6 +206,11 @@ const ISSUE_OPTIONS = {
     description: "Your approval is written on the task; the agent may make the risky change.",
     verb: "proceed",
   },
+  acknowledge: {
+    label: "I'll take care of it",
+    description: "Recorded on the task; no new card is made and nothing is re-armed.",
+    verb: "acknowledge",
+  },
   hold: {
     label: "Leave it for review",
     description: "Nothing changes; the task keeps this note and waits for you.",
@@ -235,11 +251,65 @@ function parseIssueLine(line) {
   return normalizeIssue({ kind: kind ?? "conflict", title, detail: rest.slice(1).join(" · "), source: "worker" });
 }
 
+// ---- questions for the owner ------------------------------------------------
+// Workers kept filing "Will you correct the stored acceptance?" as a scope
+// ask. It is not a decision about the work: nothing a worker can build answers
+// it, so Split made a card whose worker re-verified and asked it again. A
+// question put TO the owner, or one naming a lane only the owner may touch,
+// is filed as `owner` instead.
+const OWNER_QUESTION = [
+  /^(?:["'“‘`]\s*)?(?:will|would|can|could)\s+you\b/i,
+  // "Should the owner land …". Studio and the host are this repo's own code
+  // too ("Should the host clamp it?" is a question about the work), so they
+  // count only when the ask is about Studio's stored record: "May Studio's
+  // stored acceptance be corrected".
+  /^(?:["'“‘`]\s*)?(?:should|may|can|could|will|would|must)\s+(?:the\s+)?owner\b/i,
+  /^(?:["'“‘`]\s*)?(?:should|may|can|could|will|would|must)\s+(?:the\s+)?(?:studio|host)(?:['’]s)?\s+(?:own\s+)?(?:task[-\s]store|stored|board)\b/i,
+];
+const OWNER_LANE = [
+  /\bowner[-\s](?:only|side)\b/i,
+  /\bonly\s+the\s+owner\b/i,
+  /\btask[-\s]store\b/i,
+  // Negated only: "workers can rewrite it" is a statement about the work.
+  /\bworkers?\s+(?:(?:may|must|can|should)\s+not|cannot|can['’]t|mustn['’]t|(?:is|are)\s+(?:not\s+allowed|forbidden|barred)\s+(?:to|from))\s+(?:\w+\s+){0,2}?(?:re)?(?:writ(?:e|ing)|edit(?:ing)?|mutat(?:e|ing)|chang(?:e|ing)|touch(?:ing)?|clos(?:e|ing)|flip(?:ping)?)\b/i,
+  // Moving a named card on the live board is the owner's move.
+  /\b(?:flip|close|archive|retire|sweep)\b[^.;?!]{0,60}\btask_[a-z0-9_]{8,}/i,
+  // A named card's stored acceptance lives in Studio's task store.
+  /\btask_[a-z0-9_]{8,}\b[^.;?!]{0,40}\bstored\s+(?:\w+\s+)?acceptance\b|\bstored\s+(?:\w+\s+)?acceptance\b[^.;?!]{0,40}\btask_[a-z0-9_]{8,}/i,
+];
+// Kinds a worker files an owner question under. A permission issue that names
+// its permission is a real grant and stays one; a risk is never moved.
+const OWNER_FROM = new Set(["scope", "missing", "conflict", "capability", "blocked"]);
+
+/** Whether an ask is really something only the owner can do. */
+function ownerDirected(title, detail = null) {
+  const ask = clean(title, TITLE_MAX);
+  const text = `${ask} ${clean(detail, DETAIL_MAX)}`;
+  return OWNER_QUESTION.some((pattern) => pattern.test(ask)) || OWNER_LANE.some((pattern) => pattern.test(text));
+}
+
+function ownerKindFor(kind, title, detail, permission) {
+  const movable = OWNER_FROM.has(kind) || (kind === "permission" && !permission);
+  return movable && ownerDirected(title, detail) ? "owner" : kind;
+}
+
+// How deep a task sits in a split chain: its own splitDepth, or, for a chain
+// split before that was recorded, its leading "Follow-up N:" levels — counted
+// the way main.cjs's split counts them.
+function splitDepthOf(raw) {
+  const own = Number(raw.splitDepth);
+  if (Number.isInteger(own) && own > 0) return Math.min(own, 20);
+  const lead = /^(?:Follow-up(?: \d+)?:\s*)+/i.exec(String(raw.taskTitle ?? ""))?.[0] ?? "";
+  return Math.min(20, [...lead.matchAll(/Follow-up(?: (\d+))?:/gi)].reduce((sum, match) => sum + (Number(match[1]) || 1), 0));
+}
+
 /** Bound, clean and complete an issue from any source. */
 function normalizeIssue(raw = {}, { now = null } = {}) {
   const title = clean(raw.title, TITLE_MAX);
   if (!title) return null;
-  const kind = ISSUE_KIND_IDS.includes(raw.kind) ? raw.kind : "conflict";
+  const detail = clean(raw.detail, DETAIL_MAX) || null;
+  const permission = clean(raw.permission, 60) || null;
+  const kind = ownerKindFor(ISSUE_KIND_IDS.includes(raw.kind) ? raw.kind : "conflict", title, detail, permission);
   const evidence = (Array.isArray(raw.evidence) ? raw.evidence : raw.evidence ? [raw.evidence] : [])
     .map((line) => clean(line, 200)).filter(Boolean).slice(-EVIDENCE_LINES);
   return {
@@ -248,7 +318,7 @@ function normalizeIssue(raw = {}, { now = null } = {}) {
     kind,
     severity: ISSUE_KINDS[kind].severity,
     title,
-    detail: clean(raw.detail, DETAIL_MAX) || null,
+    detail,
     source: ["worker", "assistant", "host"].includes(raw.source) ? raw.source : "worker",
     taskId: clean(raw.taskId, 80) || null,
     taskTitle: clean(raw.taskTitle, TITLE_MAX) || null,
@@ -257,8 +327,10 @@ function normalizeIssue(raw = {}, { now = null } = {}) {
     role: clean(raw.role, 40) || null,
     file: clean(raw.file, 200) || null,
     check: clean(raw.check, 120) || null,
-    permission: clean(raw.permission, 60) || null,
+    permission,
     attempts: Number.isFinite(raw.attempts) && raw.attempts >= 0 ? Math.floor(raw.attempts) : 0,
+    splitFrom: clean(raw.splitFrom, 80) || null,
+    splitDepth: splitDepthOf(raw),
     evidence,
   };
 }
@@ -287,6 +359,10 @@ const DEFAULT_POLICY = Object.freeze({
   autoRetryLimit: 2,
   // How many decision cards may be open at once before new ones queue behind.
   maxOpenAsks: 6,
+  // How deep a follow-up chain may grow by Split; 0 turns Split off.
+  splitDepth: 3,
+  // "fold": an ask another card already put to the owner opens no new card.
+  repeatAsks: "fold",
 });
 
 /** The policy a brain map's triage node produces, bounded and always safe. */
@@ -295,10 +371,14 @@ function normalizePolicy(raw = {}) {
     .filter((kind) => AUTO_ANSWERABLE.has(kind) && !ALWAYS_ASK.has(kind));
   const limit = Number(raw.autoRetryLimit);
   const open = Number(raw.maxOpenAsks);
+  // A missing depth is the default, not zero: zero is a real "Split off".
+  const depth = raw.splitDepth === null || raw.splitDepth === undefined || raw.splitDepth === "" ? NaN : Number(raw.splitDepth);
   return {
     auto,
     autoRetryLimit: Number.isFinite(limit) ? Math.max(0, Math.min(5, Math.floor(limit))) : DEFAULT_POLICY.autoRetryLimit,
     maxOpenAsks: Number.isFinite(open) ? Math.max(1, Math.min(20, Math.floor(open))) : DEFAULT_POLICY.maxOpenAsks,
+    splitDepth: Number.isFinite(depth) ? Math.max(0, Math.min(5, Math.floor(depth))) : DEFAULT_POLICY.splitDepth,
+    repeatAsks: raw.repeatAsks === "ask" ? "ask" : "fold",
   };
 }
 
@@ -336,12 +416,12 @@ function triageIssue(issue, { policy = DEFAULT_POLICY, openAsks = 0, now = Date.
     // Over the open-card budget the question still gets built; the host queues
     // it rather than dropping it, so nothing an agent asked is ever lost.
     queued: openAsks >= rules.maxOpenAsks,
-    question: questionForIssue(normalized, { now }),
+    question: questionForIssue(normalized, { now, policy: rules }),
   };
 }
 
 /** The Ask card for an issue: about the task, with options that act on it. */
-function questionForIssue(issue, { now = Date.now() } = {}) {
+function questionForIssue(issue, { now = Date.now(), policy = DEFAULT_POLICY } = {}) {
   const normalized = normalizeIssue(issue, { now });
   if (!normalized) return null;
   const kind = ISSUE_KINDS[normalized.kind];
@@ -349,15 +429,27 @@ function questionForIssue(issue, { now = Date.now() } = {}) {
   const context = { subject };
   const evidence = normalized.evidence.length ? ` Last output: ${normalized.evidence.slice(-1)[0]}` : "";
   const where = normalized.file ? ` In ${normalized.file}.` : normalized.check ? ` Check: ${normalized.check}.` : "";
-  const detail = [
+  // Split is offered only where it can land: a chain already as deep as the
+  // live map allows would refuse it after the owner picked it.
+  const limit = normalizePolicy(policy).splitDepth;
+  const noSplit = kind.options.includes("split") && normalized.splitDepth >= limit;
+  const splitNote = !noSplit ? ""
+    : limit === 0 ? "Split is turned off in the live brain map."
+    : `Split is not offered: this follow-up chain is already ${normalized.splitDepth} deep.`;
+  const said = [
     normalized.detail ? `The agent says: ${normalized.detail}` : kind.lead,
     where.trim(),
     evidence.trim(),
-  ].filter(Boolean).join(" ").slice(0, 400);
-  const options = kind.options.map((id) => {
+  ].filter(Boolean).join(" ");
+  const detail = splitNote ? `${said.slice(0, 399 - splitNote.length)} ${splitNote}` : said.slice(0, 400);
+  const options = kind.options.filter((id) => !(noSplit && id === "split")).map((id) => {
     const option = ISSUE_OPTIONS[id];
+    // Every answer carries what was asked, so the decision written on the
+    // task (and a split card's brief) says what it was about.
     const payload = { issueKind: normalized.kind, ...(normalized.taskId ? { taskId: normalized.taskId } : {}),
-      ...(normalized.permission && option.verb === "grant" ? { permission: normalized.permission } : {}) };
+      ...(normalized.permission && option.verb === "grant" ? { permission: normalized.permission } : {}),
+      ask: normalized.title,
+      ...(option.verb === "split" && normalized.detail ? { detail: clean(normalized.detail, 300) } : {}) };
     return {
       id,
       label: option.verb === "grant" && normalized.permission ? `Grant ${normalized.permission} for this task` : option.label,
@@ -415,9 +507,125 @@ function runFailureIssue({ task, failures = 1, error = null, outputTail = [], ru
   }, { now });
 }
 
+/**
+ * The owner lane of a run's result line ("MEFI_RESULT: …; owner: reword the
+ * stored acceptance"). What only the owner can do is not work this task still
+ * owes, so it becomes one `owner` issue rather than a "remaining" that fails
+ * verification. "none" and its kin ask for nothing.
+ */
+const OWNER_DENIAL = /^(?:none|nothing|nil|n\/?a|no|not\s+(?:applicable|needed|any)|leave\s+it\s+out|left\s+out|omitted)\b/i;
+
+function ownerResultIssue(parts) {
+  const owed = clean(parts?.owner, TITLE_MAX);
+  // A worker that copies the template's "<…, or leave it out>" says nothing.
+  const bare = owed.replace(/^[\s(<[{"'`*_.–—-]+/, "");
+  if (!bare || /^<[^>]*>$/.test(owed) || OWNER_DENIAL.test(bare)) return null;
+  return { kind: "owner", title: owed, source: "worker" };
+}
+
+// ---- repeat asks --------------------------------------------------------------
+// The same question from another card. A split follow-up re-verifies its
+// parent's work and meets the same owner-only leftover, so the ask comes back
+// word for word, or reworded around the same card ids. Either way it is one
+// decision: the owner has already answered it, or still has it open.
+const REPEAT_WINDOW_MS = 24 * 60 * 60 * 1000;
+const TASK_REF = /\btask_[a-z0-9_]{8,}\b/gi;
+
+// The other cards an ask names, sorted; the cards it is about do not count.
+function askRefs(text, exclude = []) {
+  const skip = new Set(exclude.filter(Boolean).map((id) => String(id).toLowerCase()));
+  const ids = (String(text ?? "").match(TASK_REF) ?? []).map((id) => id.toLowerCase());
+  return [...new Set(ids)].filter((id) => !skip.has(id)).sort();
+}
+
+const askWords = (text) => String(text ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+// The content words of an ask, card ids and filler left out and plurals and
+// tenses folded ("corrected" is "correct"), for telling a reworded ask from a
+// different one about the same cards.
+const ASK_FILLER = new Set(["the", "and", "for", "with", "that", "this", "these", "those", "both", "are", "was", "were", "has", "have", "had",
+  "will", "would", "can", "could", "should", "may", "might", "must", "you", "your", "its", "not", "but", "from", "into", "onto", "about",
+  "already", "again", "still", "just", "them", "they", "their", "then", "than", "any", "all", "one", "two", "some", "there", "here", "what", "which", "who", "how", "why", "when"]);
+// A light stem: "stored", "stores" and "store" all read "stor".
+const stemAsk = (word) => {
+  const base = word.length > 5 && word.endsWith("ing") ? word.slice(0, -3)
+    : word.length > 4 && word.endsWith("ed") ? word.slice(0, -2)
+    : word.length > 3 && word.endsWith("s") && !word.endsWith("ss") ? word.slice(0, -1) : word;
+  return base.length > 3 && base.endsWith("e") ? base.slice(0, -1) : base;
+};
+const askTerms = (text) => new Set(askWords(String(text ?? "").replace(TASK_REF, " ")).split(" ")
+  // Commit hashes and other ids are not words of the ask.
+  .filter((word) => word.length >= 3 && !ASK_FILLER.has(word) && !/\d/.test(word)).map(stemAsk));
+
+// Share of the shorter ask's content words that the other ask also uses.
+function askOverlap(a, b) {
+  const mine = askTerms(a);
+  const theirs = askTerms(b);
+  if (!mine.size || !theirs.size) return 0;
+  let shared = 0;
+  for (const word of mine) if (theirs.has(word)) shared += 1;
+  return shared / Math.min(mine.size, theirs.size);
+}
+
+// What a saved issue question asked: the ask its options carry, or — for a
+// card saved before they carried one — its title after the headline.
+function savedAsk(question) {
+  const payloads = (Array.isArray(question?.options) ? question.options : [])
+    .map((option) => option?.action?.payload).filter((payload) => payload && typeof payload === "object");
+  const pick = (key) => payloads.find((payload) => typeof payload[key] === "string" && payload[key])?.[key] ?? null;
+  const title = String(question?.title ?? "");
+  let ask = pick("ask");
+  const kind = ISSUE_KINDS[question?.context?.issueKind];
+  if (!ask && kind) {
+    const taskTitle = question.context.taskTitle;
+    const lead = `${kind.headline({ subject: taskTitle ? `"${clean(taskTitle, 90)}"` : "This work" })}: `;
+    // A subject clipped another way still ends in its quote before the headline's own words.
+    const [before, after] = kind.headline({ subject: "\u0000" }).split("\u0000");
+    const at = title.indexOf(`"${after}: `, before.length);
+    ask = title.startsWith(lead) ? title.slice(lead.length) : at >= 0 ? title.slice(at + after.length + 3) : null;
+  }
+  const detail = String(question?.detail ?? "");
+  const said = detail.startsWith("The agent says: ") ? detail.slice(16).split(" Last output: ")[0] : "";
+  return { ask: clean(ask ?? title, 240), detail: clean(pick("detail") ?? said, DETAIL_MAX), permission: pick("permission") };
+}
+
+/**
+ * An earlier issue question that asks what this issue asks: the same kind,
+ * raised inside the window, naming the same other cards in mostly the same
+ * words, or asking in exactly the same words. The newest match wins. A host-raised issue (a run that stopped) is
+ * about its own run and never repeats another card's. A grant or a risk is
+ * about the task that asked, so another card's answer never stands in for
+ * it, and an answer that could not be applied is no answer to carry over.
+ */
+function repeatAsk(issue, questions, { now = Date.now(), windowMs = REPEAT_WINDOW_MS } = {}) {
+  const normalized = normalizeIssue(issue, { now });
+  if (!normalized || normalized.source === "host" || ALWAYS_ASK.has(normalized.kind)) return null;
+  const words = askWords(normalized.title);
+  let found = null;
+  for (const question of Array.isArray(questions) ? questions : []) {
+    if (question?.source !== "issue" || !["open", "answered", "dismissed"].includes(question.status)) continue;
+    if (question.status !== "open" && question.answer?.error) continue;
+    if (!Number.isFinite(question.at) || now - question.at > windowMs) continue;
+    const saved = savedAsk(question);
+    // A card saved before the owner kind existed is read as it would be filed now.
+    if (ownerKindFor(question.context?.issueKind, saved.ask, saved.detail, saved.permission) !== normalized.kind) continue;
+    const exclude = [normalized.taskId, normalized.splitFrom, question.context?.taskId];
+    const mine = askRefs(`${normalized.title} ${normalized.detail ?? ""}`, exclude);
+    const theirs = askRefs(`${saved.ask} ${saved.detail}`, exclude);
+    // The same cards alone are not the same question: two asks about one pair
+    // of gate cards ("it duplicates the parent" and "both are already done")
+    // must also share at least half their words, or the second never reaches
+    // the owner.
+    const sameCards = mine.length > 0 && mine.join(" ") === theirs.join(" ") && askOverlap(normalized.title, saved.ask) >= 0.5;
+    const sameWords = words.length >= 12 && askWords(saved.ask) === words;
+    if (sameCards || sameWords) found = question;
+  }
+  return found;
+}
+
 /** The line the worker's prompt teaches, so the protocol is discoverable. */
 function issuePromptLine() {
-  return `If something needs a decision only the owner can make, print one line "${ISSUE_MARK} <${ISSUE_KIND_IDS.filter((kind) => kind !== "run-failed").join("|")}> :: <one-line question> :: <what you saw>" and keep working on what you can. It reaches the owner as a card; it is not a way to end the job.`;
+  return `If something needs a decision only the owner can make, print one line "${ISSUE_MARK} <${ISSUE_KIND_IDS.filter((kind) => kind !== "run-failed").join("|")}> :: <one-line question> :: <what you saw>" and keep working on what you can. It reaches the owner as a card; it is not a way to end the job. Use "owner" for something only the owner can do (the board, Studio's task store, another session's files); it reaches the owner once and makes no new card.`;
 }
 
 module.exports = {
@@ -429,12 +637,17 @@ module.exports = {
   ALWAYS_ASK,
   AUTO_ANSWERABLE,
   DEFAULT_POLICY,
+  REPEAT_WINDOW_MS,
   parseIssueLine,
   normalizeIssue,
   normalizePolicy,
+  ownerDirected,
   collectIssues,
   triageIssue,
   questionForIssue,
   runFailureIssue,
+  ownerResultIssue,
+  askRefs,
+  repeatAsk,
   issuePromptLine,
 };

@@ -4073,6 +4073,8 @@ html[data-shell="rail"] .settings-card { scroll-margin-top: var(--s4); }
 #idle-hud .ask-custom input { flex: 1; min-width: 0; min-height: 30px; padding: 4px 8px; font-size: 11px; }
 #idle-hud .ask-custom button { flex: none; min-height: 30px; }
 #idle-hud .ask-answer-note { color: var(--live); font-size: 11px; line-height: 1.5; }
+/* An answer the host refused ("not applied: …") reads as a warning, not done. */
+#idle-hud .ask-card[data-applied="false"] .ask-answer-note { color: var(--warn); }
 
 /* the rail replaces the old edges: the card and Follow banner step left */
 #idle-hud .cmd-card { right: calc(24px + var(--command-rail-width) + 16px); }
@@ -19966,6 +19968,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         : question.status === "expired" ? "Expired without an answer"
         : question.status === "superseded" ? "Superseded by a newer question"
         : `You chose: ${question.answer.label ?? question.answer.text ?? "answered"}`;
+      // An answer the host could not carry out (the task left the board, the
+      // split chain is at the map's limit) says why instead of reading as done.
+      if (question.status === "answered" && question.answer.error) {
+        note.textContent += ` — not applied: ${question.answer.error}`;
+        card.dataset.applied = "false";
+      }
       card.append(note);
     }
     return card;

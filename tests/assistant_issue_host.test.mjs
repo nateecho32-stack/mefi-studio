@@ -19,7 +19,7 @@ const section = (start, end) => {
 function issueHost({ policy = brains.issuePolicyFor(brains.defaultMap()), tasks = [{ id: "task_1", title: "Add the retry banner", status: "open", logs: [] }] } = {}) {
   const state = assistant.emptyState(1000);
   const board = { tasks, requests: [] };
-  const logs = [], events = [], shapes = [], backlog = [], created = [], wakes = [], messages = [];
+  const logs = [], events = [], shapes = [], backlog = [], created = [], wakes = [], messages = [], replies = [];
   const env = vm.createContext({
     console,
     assistantState: state,
@@ -39,6 +39,8 @@ function issueHost({ policy = brains.issuePolicyFor(brains.defaultMap()), tasks 
     assistantCreateTask: async (payload) => { created.push(payload); return { id: `task_${created.length + 1}`, ...payload }; },
     assistantAskForWork: (reason) => wakes.push(reason),
     assistantMessage: async (text) => { messages.push(text); return { ok: true }; },
+    // The thread's local status line (answer.apply's announce).
+    assistantAppendReply(text, via, intent) { replies.push({ text, via, intent }); return { text, via, intent }; },
     assistantWorkOn: async () => ({ ok: true }),
     assistantControl: async () => ({ ok: true }),
     getAssistant: async () => ({ pendingOffers: () => [] }),
@@ -53,7 +55,7 @@ function issueHost({ policy = brains.issuePolicyFor(brains.defaultMap()), tasks 
     EXECUTOR_START_FAILURE_GRACE: 5,
   });
   vm.runInContext(section("// ---- agent issues", "async function assistantSetPrefs("), env);
-  return { env, state, board, logs, events, shapes, backlog, created, wakes, messages };
+  return { env, state, board, logs, events, shapes, backlog, created, wakes, messages, replies };
 }
 
 // Values that crossed out of the vm carry that realm's prototypes, so they
@@ -173,13 +175,212 @@ test("a heavier retry is a routing hint for the next dispatch", async () => {
 
 test("splitting the extra work out makes a card for it and keeps this brief", async () => {
   const h = issueHost();
-  await h.env.assistantIssueAction({ action: "split", payload: { taskId: "task_1", issueKind: "scope" } }, "the store belongs in its own task");
+  const result = await h.env.assistantIssueAction({ action: "split", payload: { taskId: "task_1", issueKind: "scope", ask: "the store has to be written too" } }, "the store belongs in its own task");
+  assert.deepEqual(plain(result), { ok: true, task: "task_1", decision: "split", rearmed: false });
   assert.equal(h.created.length, 1);
   assert.match(h.created[0].title, /Follow-up: Add the retry banner/);
+  // A typed note still wins over the ask as the new card's brief.
   assert.equal(h.created[0].prompt, "the store belongs in its own task");
   assert.equal(h.created[0].splitFrom, "task_1");
   assert.equal(h.created[0].splitDepth, 1);
   assert.equal(h.board.tasks[0].decisions.at(-1).choice, "split");
+  // The parent is still open, and a split never re-arms it: re-running it
+  // wiped its verification budget and its worker only re-verified its work.
+  assert.equal(h.board.tasks[0].status, "open");
+  assert.deepEqual(plain(h.backlog), []);
+  assert.deepEqual(plain(h.wakes), []);
+});
+
+test("a split with no note briefs the new card with the ask itself", async () => {
+  const h = issueHost();
+  const question = await h.env.assistantRaiseIssue(workerIssue("scope", "the retry store has to be written too", { detail: "the brief only covers the view" }));
+  const split = question.options.find((option) => option.id === "split");
+  assert.equal(split.action.payload.ask, "the retry store has to be written too");
+  assert.equal(split.action.payload.detail, "the brief only covers the view");
+  assert.equal((await h.env.assistantAnswer({ id: question.id, optionId: "split" })).ok, true);
+  assert.equal(h.created.length, 1);
+  const [card] = h.created;
+  assert.equal(card.title, "Follow-up: Add the retry banner");
+  assert.equal(card.prompt, "the retry store has to be written too — the brief only covers the view\n\n"
+    + "Split out of \"Add the retry banner\" (task_1) by the owner: build only this. If it turns out to be something only the owner can do "
+    + "(the board, Studio's task store, another session's files), put it under owner: in MEFI_RESULT and finish; do not ask to split it again.");
+  // The decision says what it was about, and the log line keeps its wording.
+  const task = h.board.tasks[0];
+  assert.equal(task.decisions.at(-1).choice, "split");
+  assert.equal(task.decisions.at(-1).ask, "the retry store has to be written too");
+  assert.equal(task.decisions.at(-1).text, null);
+  assert.equal(task.logs.at(-1).text, "You decided: split the extra work out");
+  assert.deepEqual(plain(h.backlog), [], "the open parent is not re-armed");
+  // A card saved before answers carried their ask keeps the old brief.
+  const old = issueHost();
+  await old.env.assistantIssueAction({ action: "split", payload: { taskId: "task_1", issueKind: "scope" } });
+  assert.match(old.created[0].prompt, /^Work the agent found while building "Add the retry banner" that its brief did not cover\./);
+  assert.equal(old.board.tasks[0].decisions.at(-1).ask, undefined);
+});
+
+test("how deep Split may go is the live map's, and a map can turn it off", async () => {
+  const base = brains.issuePolicyFor(brains.defaultMap());
+  const chained = () => [{ id: "task_1", title: "Follow-up: Add the retry banner", status: "open", splitFrom: "task_0", splitDepth: 1, logs: [] }];
+  const one = issueHost({ policy: { ...base, splitDepth: 1 }, tasks: chained() });
+  const refused = await one.env.assistantIssueAction({ action: "split", payload: { taskId: "task_1", issueKind: "scope", ask: "more" } });
+  assert.equal(refused.ok, false);
+  assert.match(refused.error, /This follow-up chain is 1 deep; edit the parent or create a task by hand/);
+  assert.deepEqual(one.created, []);
+  assert.equal(one.board.tasks[0].decisions, undefined, "nothing is recorded for a refused split");
+  const off = issueHost({ policy: { ...base, splitDepth: 0 } });
+  const none = await off.env.assistantIssueAction({ action: "split", payload: { taskId: "task_1", issueKind: "scope" } });
+  assert.equal(none.ok, false);
+  assert.match(none.error, /Split is turned off in the live brain map/);
+  assert.deepEqual(off.created, []);
+  // A map saved before the setting existed reads as the default three.
+  const { splitDepth: _unset, ...legacy } = base;
+  const old = issueHost({ policy: legacy, tasks: [{ ...chained()[0], title: "Follow-up 2: Add the retry banner", splitDepth: 2 }] });
+  assert.equal((await old.env.assistantIssueAction({ action: "split", payload: { taskId: "task_1", issueKind: "scope" } })).ok, true);
+  assert.equal(old.created[0].title, "Follow-up 3: Add the retry banner");
+  // A card already at the limit is not offered Split at all.
+  const deep = issueHost({ tasks: [{ id: "task_1", title: "Follow-up 3: Add the retry banner", status: "open", splitDepth: 3, logs: [] }] });
+  const question = await deep.env.assistantRaiseIssue(workerIssue("scope", "still more than the brief", { taskTitle: "Follow-up 3: Add the retry banner", splitDepth: 3 }));
+  assert.deepEqual(question.options.map((option) => option.id), ["narrow", "replan", "hold"]);
+  assert.match(question.detail, /Split is not offered: this follow-up chain is already 3 deep/);
+});
+
+test("an answer the host refuses is kept on the card with its reason, across a reload", async () => {
+  const policy = { ...brains.issuePolicyFor(brains.defaultMap()) };
+  const h = issueHost({ policy, tasks: [{ id: "task_1", title: "Follow-up: Add the retry banner", status: "open", splitFrom: "task_0", splitDepth: 1, logs: [] }] });
+  const question = await h.env.assistantRaiseIssue(workerIssue("scope", "the store has to be written too", { taskTitle: "Follow-up: Add the retry banner", splitDepth: 1 }));
+  assert.ok(question.options.some((option) => option.id === "split"), "offered while the map allows it");
+  // The owner tightens the map before answering.
+  policy.splitDepth = 1;
+  const answer = await h.env.assistantAnswer({ id: question.id, optionId: "split" });
+  assert.equal(answer.ok, false);
+  assert.match(h.state.questions[0].answer.error, /This follow-up chain is 1 deep/);
+  const reloaded = assistant.normalizeState(JSON.parse(JSON.stringify(h.state)), Date.now());
+  assert.match(reloaded.questions[0].answer.error, /This follow-up chain is 1 deep/);
+  assert.ok(reloaded.questions[0].answer.error.length <= 200);
+  // A success carries no error key at all.
+  const ok = issueHost();
+  const asked = await ok.env.assistantRaiseIssue(workerIssue("scope", "the store has to be written too"));
+  await ok.env.assistantAnswer({ id: asked.id, optionId: "narrow" });
+  const clean = assistant.normalizeState(JSON.parse(JSON.stringify(ok.state)), Date.now());
+  assert.equal("error" in clean.questions[0].answer, false);
+});
+
+test("taking care of it yourself is recorded on the card, and nothing is made or re-armed", async () => {
+  const h = issueHost();
+  const question = await h.env.assistantRaiseIssue(workerIssue("scope", "Will you correct the stored acceptance on task_delegate_b4f73d934d18f69906d57de9?", {
+    detail: "workers may not rewrite Studio's task store",
+  }));
+  assert.equal(question.context.issueKind, "owner", "an owner-directed scope ask is filed as the owner's");
+  assert.match(question.title, /"Add the retry banner" needs something only you can do/);
+  assert.deepEqual(question.options.map((option) => option.id), ["acknowledge", "instruct", "hold"]);
+  assert.equal((await h.env.assistantAnswer({ id: question.id, optionId: "acknowledge" })).ok, true);
+  const task = h.board.tasks[0];
+  assert.equal(task.decisions.at(-1).choice, "acknowledge");
+  assert.equal(task.decisions.at(-1).kind, "owner");
+  assert.match(task.decisions.at(-1).ask, /^Will you correct the stored acceptance/);
+  assert.equal(task.logs.at(-1).text, "You decided: you'll take care of this yourself");
+  assert.equal(task.status, "open");
+  assert.deepEqual(h.created, []);
+  assert.deepEqual(plain(h.backlog), []);
+  assert.deepEqual(plain(h.wakes), []);
+  const direct = await h.env.assistantIssueAction({ action: "acknowledge", payload: { taskId: "task_1", issueKind: "owner" } });
+  assert.deepEqual(plain(direct), { ok: true, task: "task_1", decision: "acknowledge", rearmed: false });
+});
+
+test("the same ask from another card waits on the open card, or takes its answer, instead of a new card", async () => {
+  const tasks = () => [1, 2, 3].map((n) => ({ id: `task_${n}`, title: `Follow-up ${n}: TESTRUNS append helper`, status: "open", logs: [] }));
+  const ask = (n, title, kind = "scope") => workerIssue(kind, title, { taskId: `task_${n}`, taskTitle: `Follow-up ${n}: TESTRUNS append helper` });
+  const h = issueHost({ tasks: tasks() });
+  const first = await h.env.assistantRaiseIssue(ask(1, "Will you correct the stored acceptance on task_delegate_b4f73d934d18f69906d57de9?"));
+  assert.ok(first);
+  // Still open: another card's ask about the same card waits on it.
+  assert.equal(await h.env.assistantRaiseIssue(ask(2, "May Studio's stored acceptance for task_delegate_b4f73d934d18f69906d57de9 be corrected?")), null);
+  assert.equal(h.state.questions.length, 1);
+  assert.ok(h.logs.some((row) => row.kind === "issue" && row.text === `already asked on another card (${first.id}) · no new card`));
+  assert.equal(h.board.tasks[1].decisions, undefined);
+  // Answered: the answer is written onto the next card that asks, as a record.
+  await h.env.assistantAnswer({ id: first.id, optionId: "acknowledge" });
+  assert.equal(await h.env.assistantRaiseIssue(ask(3, "Workers may not rewrite Studio's task store; will you reword task_delegate_b4f73d934d18f69906d57de9's acceptance?")), null);
+  assert.equal(h.state.questions.length, 1, "no new card");
+  const task = h.board.tasks[2];
+  assert.equal(task.decisions.at(-1).choice, "acknowledge");
+  assert.equal(task.decisions.at(-1).text, `already answered on another card (${first.id})`);
+  assert.match(task.decisions.at(-1).ask, /^Workers may not rewrite/);
+  assert.match(task.logs.at(-1).text, /^Assistant decided: you'll take care of this yourself — already answered on another card/);
+  assert.ok(h.logs.some((row) => row.kind === "decision" && row.text.startsWith(`already answered on another card (${first.id})`)));
+  assert.deepEqual(plain(h.backlog), []);
+  assert.deepEqual(h.created, []);
+  // A folded split is a record of it: nothing is split again.
+  const s = issueHost({ tasks: tasks() });
+  const scoped = await s.env.assistantRaiseIssue(ask(1, "the reader for task_shared_store01 has to be written too"));
+  await s.env.assistantAnswer({ id: scoped.id, optionId: "split", text: "the reader is its own card" });
+  assert.equal(s.created.length, 1);
+  assert.equal(await s.env.assistantRaiseIssue(ask(2, "task_shared_store01 still has no reader")), null);
+  assert.equal(s.created.length, 1, "the earlier split is not made again");
+  assert.equal(s.board.tasks[1].decisions.at(-1).choice, "split");
+  assert.match(s.board.tasks[1].decisions.at(-1).text, /^already answered on another card \(q_[0-9_]+\): the reader is its own card$/);
+  assert.deepEqual(plain(s.backlog), []);
+});
+
+test("a map may ask every repeat again, and a grant or a risk is asked on every card", async () => {
+  const tasks = () => [1, 2].map((n) => ({ id: `task_${n}`, title: `Card ${n}`, status: "open", logs: [] }));
+  const ask = (n, title, kind = "owner", extra = {}) => workerIssue(kind, title, { taskId: `task_${n}`, taskTitle: `Card ${n}`, ...extra });
+  const loud = issueHost({ policy: { ...brains.issuePolicyFor(brains.defaultMap()), repeatAsks: "ask" }, tasks: tasks() });
+  assert.ok(await loud.env.assistantRaiseIssue(ask(1, "Will you flip task_landing00001 to done?")));
+  assert.ok(await loud.env.assistantRaiseIssue(ask(2, "Will you flip task_landing00001 to done?")));
+  assert.equal(loud.state.questions.length, 2);
+  for (const kind of ["risk", "permission"]) {
+    const h = issueHost({ tasks: tasks() });
+    const said = "landing task_sibling000001's refactor drops the old table";
+    const first = await h.env.assistantRaiseIssue(ask(1, said, kind, { permission: "write-files" }));
+    await h.env.assistantAnswer({ id: first.id, optionId: kind === "risk" ? "proceed" : "grant" });
+    assert.ok(await h.env.assistantRaiseIssue(ask(2, said, kind, { permission: "write-files" })), `${kind} reaches the owner again`);
+    assert.equal(h.board.tasks[1].decisions, undefined, "no answer is carried over");
+    assert.equal(h.board.tasks[1].grants, undefined);
+  }
+});
+
+test("a map that keeps stopped runs out of the decision lane raises nothing for them", async () => {
+  const h = issueHost({ policy: { ...brains.issuePolicyFor(brains.defaultMap()), fromFailures: false } });
+  const job = { title: "Commit the memory-cap telemetry", ref: { id: "task_1", runFailures: 4 } };
+  assert.equal(await h.env.assistantBuildFailureQuestion(job, 5, { outputTail: ["FAIL tests/board.test.mjs"] }), null);
+  assert.equal(h.state.questions.length, 0);
+  assert.ok(!h.logs.some((row) => row.kind === "issue" || row.kind === "decision"));
+  assert.equal(h.board.tasks[0].decisions, undefined);
+  // A worker's own ask still reaches the owner.
+  assert.ok(await h.env.assistantRaiseIssue(workerIssue("scope", "the store has to be written too")));
+});
+
+test("open cards expire after the ask node's hours, as the live rules last said", async () => {
+  const h = issueHost({ policy: { ...brains.issuePolicyFor(brains.defaultMap()), expireHours: 2 } });
+  const question = await h.env.assistantRaiseIssue(workerIssue("scope", "the store has to be written too"));
+  question.at -= 3 * 60 * 60 * 1000;
+  assert.equal(h.env.assistantPruneQuestions(), 1);
+  assert.equal(h.state.questions[0].status, "expired");
+  // The default map keeps two days.
+  const d = issueHost();
+  const kept = await d.env.assistantRaiseIssue(workerIssue("scope", "the store has to be written too"));
+  kept.at -= 3 * 60 * 60 * 1000;
+  assert.equal(d.env.assistantPruneQuestions(), 0);
+  assert.equal(d.state.questions[0].status, "open");
+});
+
+test("with announce on, the thread says what your answer did", async () => {
+  const h = issueHost({ policy: { ...brains.issuePolicyFor(brains.defaultMap()), announce: true } });
+  await h.env.assistantIssueAction({ action: "split", payload: { taskId: "task_1", issueKind: "scope", ask: "the store" } });
+  assert.equal(h.replies.length, 1);
+  assert.equal(h.replies[0].text, "Your answer on \"Add the retry banner\": split the extra work out — \"Follow-up: Add the retry banner\" is on the board.");
+  assert.equal(h.replies[0].intent, "status");
+  await h.env.assistantIssueAction({ action: "acknowledge", payload: { taskId: "task_1", issueKind: "owner" } });
+  assert.equal(h.replies.at(-1).text, "Your answer on \"Add the retry banner\": you'll take care of this yourself.");
+  // The assistant's own record says nothing, and it is never a chat message.
+  await h.env.assistantIssueAction({ action: "retry", payload: { taskId: "task_1", issueKind: "run-failed" } }, "settled", { origin: "assistant" });
+  assert.equal(h.replies.length, 2);
+  assert.deepEqual(h.messages, []);
+  // A map without announce stays quiet.
+  const quiet = issueHost();
+  await quiet.env.assistantIssueAction({ action: "acknowledge", payload: { taskId: "task_1", issueKind: "owner" } });
+  assert.deepEqual(quiet.replies, []);
 });
 
 test("a follow-up's own split numbers the chain from its root instead of repeating its title", async () => {

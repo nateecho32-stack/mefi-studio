@@ -8237,9 +8237,23 @@ async function brainsDraft(payload = {}) {
 // node decides whether the assistant settles it or the owner does, and the
 // answer is applied to the task it was about.
 
-async function assistantRaiseIssue(raw, { openAsks = null } = {}) {
-  await ensureAssistant();
+// The live rules as last read, for readers that cannot wait on the brain
+// store: the run's output reader caps MEFI_ASK lines by perRun and the
+// question pruner ages cards by expireHours. Refreshed on every read below.
+let issuePolicySeen = null;
+
+async function liveIssuePolicy() {
   const policy = await activeIssuePolicy();
+  issuePolicySeen = policy && typeof policy === "object" ? policy : null;
+  return issuePolicySeen ?? {};
+}
+
+async function assistantRaiseIssue(raw, { openAsks = null, fromFailure = false } = {}) {
+  await ensureAssistant();
+  const policy = await liveIssuePolicy();
+  // The intake node's "from failures" switch: a map may keep stopped runs out
+  // of the decision lane entirely, log line and all.
+  if (fromFailure && policy.fromFailures === false) return null;
   const open = openAsks ?? assistantState.questions.filter((question) => question.status === "open").length;
   const triage = agentIssues.triageIssue(raw, { policy, openAsks: open });
   if (!triage.ok) return null;
@@ -8252,7 +8266,7 @@ async function assistantRaiseIssue(raw, { openAsks = null } = {}) {
     // The assistant's answer is recorded on the card, never applied as a
     // retry: settle has already re-armed a failed run with its failure
     // counted, and a retry here would erase the budgets that stop a loop.
-    const applied = await assistantIssueAction({ action: triage.answer.verb, payload: { taskId: issue.taskId, issueKind: issue.kind } },
+    const applied = await assistantIssueAction({ action: triage.answer.verb, payload: { taskId: issue.taskId, issueKind: issue.kind, ask: issue.title } },
       `the assistant settled this: ${triage.answer.reason}`, { origin: "assistant" });
     assistantLog("decision", `settled by the assistant · ${triage.answer.label}${applied?.error ? ` — ${applied.error}` : ""}`);
     await saveAssistant({ force: true });
@@ -8268,6 +8282,26 @@ async function assistantRaiseIssue(raw, { openAsks = null } = {}) {
   const duplicate = assistantState.questions.some((question) => question.status === "open" && question.source === "issue"
     && question.context?.taskId === issue.taskId && question.context?.issueKind === issue.kind);
   if (duplicate) return null;
+  // The same ask from another card within a day is one decision, not a new
+  // one: a split follow-up that meets its parent's owner-only leftover asks
+  // it again word for word. Still open, it waits where it is; answered, the
+  // answer is written onto this card too, as a record that re-arms nothing.
+  // A grant or a risk is never carried over (repeatAsk skips those kinds).
+  const earlier = policy.repeatAsks === "ask" ? null : agentIssues.repeatAsk(issue, assistantState.questions, { now: Date.now() });
+  if (earlier) {
+    if (earlier.status === "open") {
+      assistantLog("issue", `already asked on another card (${earlier.id}) · no new card`);
+      return null;
+    }
+    const option = earlier.options?.find((entry) => entry.id === earlier.answer?.optionId) ?? null;
+    const said = earlier.answer?.text ? `: ${assistantClip(earlier.answer.text, 200)}` : "";
+    const verb = option?.action?.kind === "issue" ? option.action.action : option?.dismiss ? "hold" : "instruct";
+    const applied = await assistantIssueAction({ action: verb, payload: { taskId: issue.taskId, issueKind: issue.kind, ask: issue.title } },
+      `already answered on another card (${earlier.id})${said}`, { origin: "assistant" });
+    assistantLog("decision", `already answered on another card (${earlier.id}) · ${earlier.answer?.label ?? verb}${applied?.error ? ` — ${applied.error}` : ""}`);
+    await saveAssistant({ force: true });
+    return null;
+  }
   return assistantQuestion(triage.question);
 }
 
@@ -8282,8 +8316,15 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
   const taskId = typeof payload.taskId === "string" ? payload.taskId : null;
   const text = String(note ?? "").trim().slice(0, 400);
   const byAssistant = origin === "assistant";
-  if (verb === "hold") return { ok: true, held: true };
+  // The owner's hold changes nothing. The assistant records one only when it
+  // folds a repeat ask into an earlier card the owner held, so this card's
+  // worker reads that it was already left for review.
+  if (verb === "hold" && !byAssistant) return { ok: true, held: true };
   if (!taskId) return { ok: false, error: "That decision is not about a task on this board." };
+  // What was asked rides on the answer: it is written on the decision, and it
+  // is the brief of the card a split makes.
+  const ask = typeof payload.ask === "string" ? assistantClip(payload.ask, 140) || null : null;
+  const askDetail = typeof payload.detail === "string" ? assistantClip(payload.detail, 300) || null : null;
   const wording = {
     retry: "try again",
     "retry-deep": "try again with a heavier model",
@@ -8293,8 +8334,13 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
     grant: `grant ${payload.permission ?? "the extra reach"} for this task`,
     proceed: "go ahead with the risky change",
     instruct: text || "follow the note on this task",
+    acknowledge: "you'll take care of this yourself",
+    hold: "leave it for review",
   }[verb];
   if (!wording) return { ok: false, error: `unknown decision: ${verb}` };
+  // Read defensively: a map saved before these settings existed has neither.
+  const policy = byAssistant ? {} : await liveIssuePolicy();
+  const splitLimit = Number.isInteger(policy.splitDepth) ? Math.max(0, Math.min(5, policy.splitDepth)) : 3;
   let title = null;
   let finished = false;
   let split = null;
@@ -8302,16 +8348,17 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
     const index = board.tasks.findIndex((task) => task?.id === taskId);
     if (index < 0) return { ok: false, error: "That task is no longer on the board." };
     const task = board.tasks[index];
-    if (verb === "split") {
+    if (verb === "split" && !byAssistant) {
       // A split extends a chain from its root title: "Follow-up: X", then
       // "Follow-up 2: X" and "Follow-up 3: X", so a follow-up's own split never
       // collides with it. splitFrom/splitDepth carry the lineage (parentTaskId
       // and depth mean delegation). A chain split before splitDepth existed
-      // counts its own title prefixes.
+      // counts its own title prefixes. How deep it may go is the live map's.
+      if (splitLimit === 0) return { ok: false, error: "Split is turned off in the live brain map; edit the task or create one by hand." };
       const lead = /^(?:Follow-up(?: \d+)?:\s*)+/i.exec(String(task.title ?? ""))?.[0] ?? "";
       const levels = [...lead.matchAll(/Follow-up(?: (\d+))?:/gi)].reduce((sum, match) => sum + (Number(match[1]) || 1), 0);
       const depth = (Number.isInteger(task.splitDepth) && task.splitDepth > 0 ? task.splitDepth : levels) + 1;
-      if (depth > 3) return { ok: false, error: "This follow-up chain is 3 deep; edit the parent or create a task by hand." };
+      if (depth > splitLimit) return { ok: false, error: `This follow-up chain is ${splitLimit} deep; edit the parent or create a task by hand.` };
       const root = assistantClip(String(task.title ?? "").slice(lead.length) || "the task", 60);
       split = { depth, title: depth === 1 ? `Follow-up: ${root}` : `Follow-up ${depth}: ${root}` };
     }
@@ -8320,6 +8367,7 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
     const at = Date.now();
     task.decisions = [...(Array.isArray(task.decisions) ? task.decisions : []), {
       at, kind: payload.issueKind ?? null, choice: verb, text: text || null,
+      ...(ask ? { ask } : {}),
       ...(verb === "grant" && payload.permission ? { permission: String(payload.permission).slice(0, 60) } : {}),
     }].slice(-12);
     if (verb === "grant" && payload.permission) {
@@ -8333,30 +8381,48 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
   // No retry, pin or counter reset for the assistant's own answer: the
   // budgets that park a looping card stay intact.
   if (byAssistant) return { ok: true, task: taskId, decision: verb, rearmed: false };
+  // The thread says what the answer did, when the live map asks for that.
+  const said = (result) => {
+    if (policy.announce === true && typeof assistantAppendReply === "function") {
+      try {
+        assistantAppendReply(`Your answer on "${assistantClip(title ?? taskId, 60)}": ${wording}${verb === "split" && split ? ` — "${split.title}" is on the board` : ""}.`, "local", "status");
+        saveAssistant({ force: true }).catch(() => {});
+      } catch {}
+    }
+    return result;
+  };
+  // Something only the owner can do: recorded, and nothing else moves.
+  if (verb === "acknowledge") return said({ ok: true, task: taskId, decision: verb, rearmed: false });
   // A heavier retry is a routing hint for the next dispatch, held in memory
   // exactly like the classifier's own shape answers.
   if (verb === "retry-deep") rememberWorkShape(taskId, { weight: "deep", intent: "build", complexity: "high", role: "worker" });
-  // A split files the uncovered work as a new card and re-arms nothing, so it
-  // is made even when the card it was split from has finished meanwhile.
+  // A split files the uncovered work as a new card and never re-arms the one
+  // it came from: re-running the parent wiped its verification budget and
+  // loop ledger, and its worker only re-verified what it had already done.
+  // The new card's brief is the ask itself; a typed note still wins.
   if (verb === "split") {
+    const brief = ask
+      ? `${ask}${askDetail ? ` — ${askDetail}` : ""}\n\nSplit out of "${title ?? "the task"}" (${taskId}) by the owner: build only this. If it turns out to be something only the owner can do (the board, Studio's task store, another session's files), put it under owner: in MEFI_RESULT and finish; do not ask to split it again.`
+      : `Work the agent found while building "${title ?? "the task"}" that its brief did not cover. Decide the scope from the parent task's decision log.`;
     const created = await assistantCreateTask({
       title: split.title,
-      prompt: text || `Work the agent found while building "${title ?? "the task"}" that its brief did not cover. Decide the scope from the parent task's decision log.`,
+      prompt: text || brief,
       source: "chat", pin: false, splitFrom: taskId, splitDepth: split.depth,
     });
     if (!created) return { ok: false, error: "The follow-up task could not be created." };
+    return said({ ok: true, task: taskId, decision: verb, rearmed: false });
   }
   // A late answer never reopens finished work: it stays recorded on the card.
-  if (finished) return { ok: true, task: taskId, decision: verb, rearmed: false };
+  if (finished) return said({ ok: true, task: taskId, decision: verb, rearmed: false });
   if (verb === "replan") {
     // Planning is a surface, not a background pass: the card is re-armed with
     // the decision on it and the plan is opened from the task itself.
     assistantLog("decision", `"${assistantClip(title ?? taskId, 60)}" goes back to planning`);
   }
   const retried = await backlogControl({ action: "retry", taskId });
-  if (!retried?.ok) return { ok: true, task: taskId, decision: verb, error: retried?.error ?? null };
+  if (!retried?.ok) return said({ ok: true, task: taskId, decision: verb, error: retried?.error ?? null });
   assistantAskForWork("a decision was answered");
-  return { ok: true, task: taskId, decision: verb };
+  return said({ ok: true, task: taskId, decision: verb });
 }
 
 // The owner's answer to a duplicate-family ask (assistant.mjs auditPass
@@ -8466,12 +8532,15 @@ function assistantQuestionAction(option, text = null) {
 }
 
 // Questions do not stay open forever: a decision nobody made after two days is
-// history, not a prompt.
+// history, not a prompt. The ask node's "expire after" sets the age, read from
+// the live rules as last seen (the issue lane keeps them; this runs sync).
 function assistantPruneQuestions(now = Date.now()) {
   if (!Array.isArray(assistantState?.questions)) return 0;
+  const hours = Number(typeof issuePolicySeen !== "undefined" ? issuePolicySeen?.expireHours : NaN);
+  const ttl = Number.isFinite(hours) && hours > 0 ? Math.min(168, hours) * 60 * 60 * 1000 : ASSISTANT_QUESTION_TTL_MS;
   let pruned = 0;
   for (const question of assistantState.questions) {
-    if (question.status === "open" && now - (question.at || 0) > ASSISTANT_QUESTION_TTL_MS) {
+    if (question.status === "open" && now - (question.at || 0) > ttl) {
       question.status = "expired";
       pruned += 1;
     }
@@ -8601,12 +8670,6 @@ async function assistantAnswer(payload = {}) {
   return { ok: true, state: assistantState };
 }
 
-async function assistantQuestions() {
-  await ensureAssistant();
-  if (assistantPruneQuestions()) await saveAssistant();
-  return { ok: true, questions: assistantState.questions, state: assistantState };
-}
-
 // The assistant's own last reply offered a next step ("could work on X"): turn
 // that into a real card with the first offer recommended. Only one offer card
 // is open at a time — a newer reply supersedes the old one.
@@ -8662,6 +8725,7 @@ function assistantBuildFailureQuestion(job, failures, evidence = {}) {
     : typeof assistantModule !== "undefined" && typeof assistantModule?.isProviderOutage === "function"
       && assistantModule.isProviderOutage({ error: evidence.error ?? null, lastWords: tail.at(-1) ?? null, resultNote: tail.some((line) => line.startsWith("MEFI_RESULT:")) }) === true;
   if (outage) return null;
+  // fromFailure: the intake node's "from failures" switch can keep these out.
   return assistantRaiseIssue(agentIssues.runFailureIssue({
     task: { id: job.ref.id, title: job.title },
     failures,
@@ -8670,7 +8734,7 @@ function assistantBuildFailureQuestion(job, failures, evidence = {}) {
     runId: evidence.runId ?? null,
     sessionId: evidence.sessionId ?? null,
     checks: evidence.checks ?? [],
-  }));
+  }), { fromFailure: true });
 }
 
 // ---- the done log -----------------------------------------------------------
@@ -10964,7 +11028,13 @@ async function spawnNextJob() {
   // Decisions the run cannot make for itself go to the owner while it keeps
   // working, instead of coming back later as an unexplained failure.
   const askLine = ` ${agentIssues.issuePromptLine()}`;
-  const tail = `${identity} Keep verification and board bookkeeping in the current task. Never create a child task merely to close, update, verify or confirm another card. Report evidence and actual remaining implementation scope on this attempt instead; hand off only substantive unfinished work.${handoff}${askLine}${budget} Optionally print one line "MEFI_RESULT: done: <what you finished>; remaining: <what is left>" naming your own account of the work (one line, under 300 characters). Print the exact line ${EXECUTOR_DONE_MARK} as the last thing you say.`;
+  // The run's asks are capped by the live map's intake node; the reader of
+  // its output cannot wait on the brain store, so the rules are read now.
+  if (typeof liveIssuePolicy === "function") liveIssuePolicy().catch(() => {});
+  // The owner lane: a leftover only the owner can act on is neither work this
+  // task owes (remaining: fails verification) nor a hand-off (MEFI_NEXT makes
+  // a card whose worker meets the same wall), so it has a part of its own.
+  const tail = `${identity} Keep verification and board bookkeeping in the current task. Never create a child task merely to close, update, verify or confirm another card. Report evidence and actual remaining implementation scope on this attempt instead; hand off only substantive unfinished work.${handoff}${askLine}${budget} Optionally print one line "MEFI_RESULT: done: <what you finished>; remaining: <what this task still owes, or none>; owner: <what only the owner can do, or leave it out>" naming your own account of the work (one line, under 300 characters). Anything only the owner can do (board changes, Studio's task store, another session's files) goes under owner:, never under remaining: or MEFI_NEXT. Print the exact line ${EXECUTOR_DONE_MARK} as the last thing you say.`;
   // Push memory: the builder gets a compiled mini-index of what the studio
   // already knows about this job. It does not have to remember to search.
   let memoryBit = "";
@@ -11204,17 +11274,21 @@ async function spawnNextJob() {
         }
       })
       .catch(() => {});
-    // What the run asked for while it worked (MEFI_ASK), then — if it stopped
-    // without the verdict — the stop itself, as an issue about the task rather
-    // than another silent retry. Guarded for the vm test slices that do not
-    // carry the issue host.
-    if (job.kind === "task" && job.ref?.id && typeof assistantRaiseIssue === "function") {
-      for (const raised of Array.isArray(entry.issues) ? entry.issues : []) {
-        try {
-          assistantRaiseIssue({ ...raised, taskId: job.ref.id, taskTitle: job.title, runId: entry.id, sessionId: sessionId ?? null,
-            attempts: Math.floor(Number(job.ref.runFailures) || 0) })?.catch?.(() => {});
-        } catch {}
-      }
+    // What the run asked for while it worked (MEFI_ASK) and what it left for
+    // the owner (its result's owner: part), then — if it stopped without the
+    // verdict — the stop itself, as an issue about the task rather than
+    // another silent retry. A run the owner or the host stopped (Stop all,
+    // switching projects) raises nothing of its own: it resumes from its
+    // checkpoint and can ask again. One run's issues are raised in turn, so
+    // the one-open-card rule sees the card the one before it opened. Guarded
+    // for the vm test slices that do not carry the issue host.
+    if (!userStop && job.kind === "task" && job.ref?.id && typeof assistantRaiseIssue === "function") {
+      const owed = agentIssues.ownerResultIssue(entry.resultNote?.parts);
+      const raising = [...(Array.isArray(entry.issues) ? entry.issues : []), ...(owed ? [owed] : [])];
+      raising.reduce((chain, raised) => chain.then(() => assistantRaiseIssue({ ...raised, taskId: job.ref.id, taskTitle: job.title, runId: entry.id,
+        sessionId: sessionId ?? null, attempts: Math.floor(Number(job.ref.runFailures) || 0),
+        // The chain it sits in, so its card offers Split only where Split can land.
+        splitFrom: job.ref.splitFrom ?? null, splitDepth: job.ref.splitDepth ?? null })).catch(() => {}), Promise.resolve());
     }
     if (!ok && !userStop && job.kind === "task" && job.ref?.id && typeof assistantBuildFailureQuestion === "function") {
       try {
@@ -11799,8 +11873,10 @@ async function spawnNextJob() {
       if (handoff?.kind === "call") entry.calls.add(handoff.role);
       // A decision the run cannot make for itself. Read on the same colour
       // strip and anchored the same way as the verdict, so a run can neither
-      // end its job by asking nor open a card by quoting the protocol.
-      if (entry.issues.length < agentIssues.ISSUE_MAX_PER_RUN) {
+      // end its job by asking nor open a card by quoting the protocol. How
+      // many one run may raise is the live map's intake "per run".
+      const perRun = Number(typeof issuePolicySeen !== "undefined" ? issuePolicySeen?.perRun : NaN);
+      if (entry.issues.length < (Number.isInteger(perRun) && perRun > 0 ? Math.min(perRun, agentIssues.ISSUE_MAX_PER_RUN) : agentIssues.ISSUE_MAX_PER_RUN)) {
         const asked = agentIssues.parseIssueLine(line);
         if (asked && !entry.issues.some((item) => item.kind === asked.kind && item.title === asked.title)) {
           entry.issues.push({ ...asked, evidence: entry.outputTail.slice(-2) });
@@ -15116,12 +15192,6 @@ function registerIpc() {
   ipcMain.handle("assistant:answer", (_event, payload) => assistantAnswer(payload ?? {}));
   ipcMain.handle("assistant:done-log", (_event, payload) => assistantDoneLog(payload ?? {}));
   ipcMain.handle("assistant:clear-done", () => assistantClearDoneLog());
-  // An issue raised from a surface rather than a run — the same triage path a
-  // worker's MEFI_ASK takes, so one set of rules decides every decision.
-  ipcMain.handle("assistant:raise-issue", async (_event, payload) => {
-    const question = await assistantRaiseIssue({ ...(payload ?? {}), source: "assistant" });
-    return { ok: true, question: question ?? null, state: assistantState };
-  });
 
   // Brain maps: the pipeline as a graph, its parts catalog, and the switches
   // activating one moves.
