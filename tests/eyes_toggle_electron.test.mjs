@@ -24,7 +24,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform === "win32" || process.platform === "darwin" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("one hide/show visibility toggle: the eyes log tail pauses hidden, snaps one fetch on show, resumes without duplicates", { skip: !canRun, timeout: 90000 }, async (t) => {
+test("one hide/show visibility toggle: the eyes log tail pauses hidden, snaps one fetch on show, resumes without duplicates", { skip: !canRun, timeout: 140000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-log-toggle-"));
   let assertionError;
   try {

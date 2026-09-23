@@ -14,7 +14,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("cold startup gates access on actual readiness, shows progress, and recovers failed reads", { skip: !canRun, timeout: 65000 }, async (t) => {
+test("cold startup gates access on actual readiness, shows progress, and recovers failed reads", { skip: !canRun, timeout: 115000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-startup-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));

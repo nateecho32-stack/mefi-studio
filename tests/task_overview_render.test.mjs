@@ -12,7 +12,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("task overview and delegated details show confirmed progress, navigate subtasks, and fit 600px", { skip: !canRun, timeout: 45000 }, async (t) => {
+test("task overview and delegated details show confirmed progress, navigate subtasks, and fit 600px", { skip: !canRun, timeout: 95000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-task-overview-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));

@@ -7,6 +7,14 @@
 // second, serialized `node --test` invocation once the rest of the suite has
 // drained. Exit codes chain like `&&`.
 //
+// The remaining Electron fixtures (render captures, the packaging privacy
+// check) stay off the default file concurrency too, but keep a small bounded
+// lane instead of full serialization: a loaded full run saw five simultaneous
+// `node:test` cancellations across them (TESTRUNS, 2026-09-22), all of them
+// fixture starvation rather than assertions. They run after the CPU-only
+// stage at a fixed two-file width, so unrelated behavioural suites keep the
+// default concurrency and a slow desktop cannot starve every capture at once.
+//
 // Flags: `--fast` leaves out every suite that launches the real Electron
 // binary (render captures, the occlusion probe, the packaging privacy check:
 // the slow, desktop-bound, load-sensitive ones) so a contributor gets a
@@ -54,8 +62,10 @@ for (const file of all) {
   if (launchesElectron.test(await readFile(file, "utf8"))) heavy.add(file);
 }
 const selected = fast ? all.filter((file) => !heavy.has(file)) : all;
-const parallel = selected.filter((file) => !serialized.has(path.basename(file)));
-const exclusive = selected.filter((file) => serialized.has(path.basename(file)));
+const inSerialized = (file) => serialized.has(path.basename(file));
+const parallel = selected.filter((file) => !inSerialized(file) && !heavy.has(file));
+const heavyLane = selected.filter((file) => !inSerialized(file) && heavy.has(file));
+const exclusive = selected.filter(inSerialized);
 
 if (listOnly) {
   for (const file of selected) console.log(path.relative(studio, file).split(path.sep).join("/"));
@@ -128,29 +138,36 @@ async function waitForSettledSources() {
   process.exit(1);
 }
 
-const runGroup = (files) => {
-  const run = spawnSync(process.execPath, ["--test", ...files], { cwd: studio, stdio: "inherit" });
+const runGroup = (files, concurrency = 0) => {
+  const flags = concurrency > 0 ? [`--test-concurrency=${concurrency}`] : [];
+  const run = spawnSync(process.execPath, ["--test", ...flags, ...files], { cwd: studio, stdio: "inherit" });
   return { failed: run.status !== 0 || Boolean(run.error), status: run.status };
 };
 
-const settledAtLaunch = await waitForSettledSources();
-if (parallel.length) {
-  const outcome = runGroup(parallel);
-  if (outcome.failed) {
-    // A failed parallel stage is only trustworthy evidence about the code
-    // when the sources it read are the ones that launched it. If they moved
-    // mid-run, the vm-section failures may be transient-content reads (the
-    // rotating ReferenceError signature), not regressions.
-    if ((await sourceFingerprint()) !== settledAtLaunch) {
-      console.error(
-        "run-node-tests: sources changed while the suite was running - vm-section failures in this run " +
-          "may be transient-content reads (the rotating ReferenceError signature), not code regressions. " +
-          "Rerun on a quiet tree before acting on them.",
-      );
-    }
-    process.exit(outcome.status ?? 1);
+// The CPU-only suites run first at the runner's default width; a failure is
+// only trustworthy evidence about the code when the sources it read are the
+// ones that launched it, so both stages re-check the fingerprint before
+// reporting.
+const runStage = async (files, concurrency, label) => {
+  if (!files.length) return;
+  const outcome = runGroup(files, concurrency);
+  if (!outcome.failed) return;
+  if ((await sourceFingerprint()) !== settledAtLaunch) {
+    console.error(
+      `run-node-tests: sources changed while the ${label} stage was running - vm-section failures in this run ` +
+        "may be transient-content reads (the rotating ReferenceError signature), not code regressions. " +
+        "Rerun on a quiet tree before acting on them.",
+    );
   }
-}
+  process.exit(outcome.status ?? 1);
+};
+
+const settledAtLaunch = await waitForSettledSources();
+await runStage(parallel, 0, "parallel");
+// The Electron fixtures run after the CPU-only suites have drained, at a
+// fixed two-file width: enough to overlap I/O waits, few enough that a
+// loaded desktop cannot starve every capture at once.
+await runStage(heavyLane, 2, "Electron fixture");
 // The exclusive fixtures each get their own invocation: a single
 // `node --test a b` call still runs the two files concurrently, and two
 // live windows fighting over occlusion and visibility is exactly what this

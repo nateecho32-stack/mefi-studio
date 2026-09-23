@@ -191,7 +191,7 @@ test("a hidden background window stays recoverable and rejected native prompts s
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const electron = path.join(root, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : "electron");
 test("isolated Electron renderer crashes recover twice, stop at the cap, and accept manual reload", {
-  skip: process.platform !== "win32" || !existsSync(electron), timeout: 60000,
+  skip: process.platform !== "win32" || !existsSync(electron), timeout: 105000,
 }, async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "mefi-renderer-recovery-"));
   try {

@@ -12,7 +12,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("cached orb gradients retain exact radii, colors and screen-space geometry across pixel densities", { skip: !canRun, timeout: 50000 }, async (t) => {
+test("cached orb gradients retain exact radii, colors and screen-space geometry across pixel densities", { skip: !canRun, timeout: 90000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-node-paint-"));
   let assertionError;
   try {

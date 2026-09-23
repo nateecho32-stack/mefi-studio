@@ -41,7 +41,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform === "win32" || process.platform === "darwin" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("an occluded booklet window's worker/MessageChannel channel answers while rAF stays silent under the page CSP", { skip: !canRun, timeout: 90000 }, async (t) => {
+test("an occluded booklet window's worker/MessageChannel channel answers while rAF stays silent under the page CSP", { skip: !canRun, timeout: 140000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-occlusion-"));
   let assertionError;
   try {

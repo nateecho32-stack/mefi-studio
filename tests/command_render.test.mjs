@@ -124,7 +124,7 @@ const runFixture = async () => {
   }
 };
 
-test("real Command renderer paints finite task nodes, continues frames, and survives exit/reentry", { skip: !canRun, timeout: 100000 }, async () => {
+test("real Command renderer paints finite task nodes, continues frames, and survives exit/reentry", { skip: !canRun, timeout: 140000 }, async () => {
   try {
     await runFixture();
   } catch (error) {
