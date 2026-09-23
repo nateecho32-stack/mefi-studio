@@ -10,6 +10,15 @@ const desktopHost = process.env.MEFI_PERFORMANCE_DESKTOP_HOST === "1";
 if (!root || !path.isAbsolute(root)) throw new Error("An isolated performance renderer fixture directory is required");
 const started = Date.now();
 const report = { errors: [], errorDetails: [], networkAttempts: [], processAttempts: [] };
+// Built by scripts/build-booklet.mjs alongside renderer/booklet.html. The
+// renderer is one concatenated <script>, so Chromium names booklet.html and a
+// bundle-absolute line; the map resolves that to the renderer/<file>:<line>
+// that actually threw. Absent, the raw bundle coordinates remain the fallback.
+const { resolveBookletLocation } = require(path.join(__dirname, "..", "..", "scripts", "booklet-source-location.cjs"));
+let bookletSourceMap = null;
+try {
+  bookletSourceMap = JSON.parse(fs.readFileSync(path.join(root, "renderer", "booklet.sources.json"), "utf8"));
+} catch {}
 app.setName("Studio Performance Renderer Fixture");
 for (const name of ["userData", "sessionData", "crashDumps"]) {
   const directory = path.join(root, name);
@@ -96,28 +105,41 @@ app.whenReady().then(async () => {
   contents.setAudioMuted(true);
   contents.setFrameRate(60);
   contents.setWindowOpenHandler(() => ({ action: "deny" }));
-  contents.on("console-message", (_event, detail, oldMessage) => {
-    const level = typeof detail === "object" ? detail.level : detail;
+  contents.on("console-message", (event, detailsOrLevel, legacyMessage, legacyLine, legacySourceId) => {
+    // Electron's console-message has more than one runtime shape: newer builds
+    // pass a MessageDetails object (some spread its fields onto the event) while
+    // legacy builds pass (level, message, line, sourceId) after the event.
+    // Electron 44.4.1 does the latter but also carries the details on the event,
+    // so reading only the second argument silently produced no errorDetails.
+    const modern = detailsOrLevel && typeof detailsOrLevel === "object" ? detailsOrLevel : null;
+    const spread = !modern && event && typeof event === "object"
+      && (event.sourceId != null || event.sourceUrl != null || typeof event.lineNumber === "number")
+      ? event : null;
+    const details = modern || spread;
+    const level = details ? details.level : detailsOrLevel;
     if (level === "error" || level === 3) {
-      const message = String(typeof detail === "object" ? detail.message : oldMessage);
+      const message = String(details ? details.message : legacyMessage);
       report.errors.push(message);
       // Name where the renderer raised it: a bare "Cannot set properties of
       // undefined (setting 'hidden')" cannot be attributed without the source
-      // location, which is what the pre-navigation race needs pinned.
-      if (typeof detail === "object") report.errorDetails.push({
-        message,
-        sourceId: detail.sourceId ?? null,
-        lineNumber: detail.lineNumber ?? null,
-        columnNumber: detail.columnNumber ?? null,
-      });
+      // location, which is what the pre-navigation race needs pinned. The new
+      // `source` field translates the concatenated bundle coordinate back to
+      // renderer/<file>:<line>; raw fields are preserved for the fallback.
+      const sourceId = details ? (details.sourceUrl ?? details.sourceId ?? legacySourceId ?? null) : (legacySourceId ?? null);
+      const lineNumber = details ? (details.lineNumber ?? legacyLine ?? null) : (legacyLine ?? null);
+      const columnNumber = details ? (details.columnNumber ?? null) : null;
+      const location = resolveBookletLocation(bookletSourceMap, sourceId, lineNumber, columnNumber);
+      report.errorDetails.push({ message, sourceId, lineNumber, columnNumber, source: location.source });
     }
   });
   // Pair each collected error with the location Chromium reported so a
-  // saturated-run failure names the exact assignment, not only its text.
+  // saturated-run failure names the exact assignment, not only its text. Prefer
+  // the resolved renderer/<file>:<line>; fall back to the bundle coordinate.
   const errorSummary = () => report.errors.map((message, index) => {
     const detail = report.errorDetails[index];
-    if (!detail || (!detail.sourceId && !Number.isFinite(detail.lineNumber))) return message;
-    return `${message} @ ${detail.sourceId || "?"}:${detail.lineNumber ?? "?"}:${detail.columnNumber ?? "?"}`;
+    if (!detail || (!detail.source && !detail.sourceId && !Number.isFinite(detail.lineNumber))) return message;
+    const where = detail.source || `${detail.sourceId || "?"}:${detail.lineNumber ?? "?"}:${detail.columnNumber ?? "?"}`;
+    return `${message} @ ${where}`;
   });
   contents.on("render-process-gone", (_event, detail) => finish(new Error(`Renderer exited: ${detail.reason}`)));
   const run = (code) => contents.executeJavaScript(`(async()=>{${code}})()`, true);
