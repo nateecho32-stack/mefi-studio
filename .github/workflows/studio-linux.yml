@@ -46,6 +46,10 @@ jobs:
           # for whichever this runner actually has.
           sudo apt-get install -y --no-install-recommends libasound2t64 \
             || sudo apt-get install -y --no-install-recommends libasound2
+      # npm ci leaves electron/ without its dist/ on the runner (release.yml
+      # fetches it the same way), and the smoke below failed "not found".
+      - name: Fetch the Electron binary
+        run: node node_modules/electron/install.js
       - name: Headless smoke under Xvfb
         run: |
           xvfb-run -a node_modules/electron/dist/electron --no-sandbox --disable-gpu --disable-dev-shm-usage --password-store=basic --user-data-dir="$RUNNER_TEMP/mefi-user-data" . --smoke
