@@ -15,7 +15,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-async function runFixture(t, desktopHost = false) {
+async function runFixture(t, desktopHost = false, resumeSheet = "") {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-performance-render-"));
   try {
     await mkdir(path.join(fixture, "renderer"));
@@ -29,6 +29,7 @@ async function runFixture(t, desktopHost = false) {
     await copyFile(path.join(studio, "data", "models.json"), path.join(fixture, "data", "models.json"));
     await build({ root: fixture });
     const env = { ...process.env, MEFI_PERFORMANCE_RENDER_FIXTURE: fixture, MEFI_PERFORMANCE_DESKTOP_HOST: desktopHost ? "1" : "0" };
+    if (resumeSheet) env.MEFI_PERFORMANCE_RESUME_SHEET = resumeSheet;
     delete env.ELECTRON_RUN_AS_NODE;
     const child = spawn(executable, [path.join(studio, "tests", "fixtures", "performance-render-electron.cjs")], { cwd: fixture, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
@@ -91,4 +92,14 @@ test("desktop performance capture measures real Electron processes and IPC witho
   const report = await runFixture(t, true);
   assert.ok(report.hostSamples >= 2 && report.processMetricsMeasured && report.ipcMeasured);
   assert.ok(report.hostFrozen && report.exportedCapture && report.payloadExcluded);
+});
+
+// Opt-in: MEFI_PERFORMANCE_RESUME_SHEET=explorer node --test tests/performance_render.test.mjs
+// Seeds localStorage["mefiStudio.resume"] in the preload and requires the real
+// Chromium boot to land on that sheet. Unset (the default) the fixture keeps
+// its existing capture path and this test is skipped.
+test("the seeded resume key deep-links to the explorer sheet in real Chromium", { skip: !canRun || !process.env.MEFI_PERFORMANCE_RESUME_SHEET, timeout: 140000 }, async (t) => {
+  const report = await runFixture(t, false, process.env.MEFI_PERFORMANCE_RESUME_SHEET);
+  assert.equal(report.resumeSheet, process.env.MEFI_PERFORMANCE_RESUME_SHEET);
+  assert.equal(report.resumeRestored, true);
 });

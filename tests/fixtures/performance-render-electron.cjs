@@ -7,6 +7,12 @@ const path = require("node:path");
 const { fileURLToPath } = require("node:url");
 const root = process.env.MEFI_PERFORMANCE_RENDER_FIXTURE;
 const desktopHost = process.env.MEFI_PERFORMANCE_DESKTOP_HOST === "1";
+// Opt-in real-Chromium deep link. Empty (the default) leaves every existing
+// run byte-for-byte unchanged; set to a sheet id (e.g. "explorer") to seed
+// localStorage["mefiStudio.resume"] in the preload and assert that the bare
+// startup lands on that sheet. No CDP: the renderer is driven through its own
+// public MefiNav.resumeReady API.
+const resumeSheet = String(process.env.MEFI_PERFORMANCE_RESUME_SHEET || "").trim();
 if (!root || !path.isAbsolute(root)) throw new Error("An isolated performance renderer fixture directory is required");
 const started = Date.now();
 const report = { errors: [], errorDetails: [], networkAttempts: [], processAttempts: [] };
@@ -99,6 +105,7 @@ app.whenReady().then(async () => {
     localStorage.setItem("mefiStudio.zen","0");
     localStorage.setItem("mefiStudio.zenReactive","0");
     localStorage.setItem("mefiStudio.commandHome","0");
+    ${resumeSheet ? `localStorage.setItem("mefiStudio.resume", JSON.stringify({ at: Date.now(), sheet: ${JSON.stringify(resumeSheet)} }));` : ""}
   `);
   const window = new BrowserWindow({ show: false, width: 1280, height: 900, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });
   const contents = window.webContents;
@@ -193,6 +200,27 @@ app.whenReady().then(async () => {
   };
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
   await until("window.MefiProfiler && window.MefiNav", "profiler and navigation startup");
+  if (resumeSheet) {
+    // The preload seeded localStorage["mefiStudio.resume"] before any page
+    // script ran, exactly as a reload would. Feed that saved payload to the
+    // real boot gate ("The saved launch") and require the requested sheet to
+    // open, so a real Chromium proves the resume key still deep-links without
+    // CDP. This is why the seeded key must survive until here: the capture=1
+    // diagnostic path skips the boot, so nothing has consumed it yet.
+    const restored = await run("return Boolean((await window.MefiNav.resumeReady({ isCurrent: () => true }))?.restored);");
+    await until(`!document.getElementById('${resumeSheet}-overlay').hidden`, `resume key opens the ${resumeSheet} deep link`);
+    assert.equal(restored, true, "the resume payload restores its surface");
+    assert.equal(await run('return localStorage.getItem("mefiStudio.resume");'), null, "the resume key is consumed exactly once");
+    assert.ok(await run(`return document.getElementById('${resumeSheet}-overlay').contains(document.getElementById('${resumeSheet}-tree'));`),
+      "the requested sheet is the restored surface");
+    assert.deepEqual(report.errors, [], `Renderer errors: ${JSON.stringify(errorSummary())}`);
+    assert.deepEqual(report.networkAttempts, []);
+    assert.deepEqual(report.processAttempts, []);
+    report.resumeSheet = resumeSheet;
+    report.resumeRestored = true;
+    finish();
+    return;
+  }
   await run("window.MefiNav.go('profiler');");
   await until("!document.getElementById('profiler-overlay').hidden", "profiler opens from navigation");
   assert.equal(await run("return window.MefiProfiler.snapshot().renderer.recording;"), false, "opening the panel never starts profiling implicitly");
