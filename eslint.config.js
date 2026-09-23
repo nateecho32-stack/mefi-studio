@@ -14,6 +14,7 @@ const shared = {
   TextEncoder: "readonly", TextDecoder: "readonly", WebSocket: "readonly", Intl: "readonly", atob: "readonly", btoa: "readonly",
   MessageChannel: "readonly", MessagePort: "readonly", BroadcastChannel: "readonly", Event: "readonly", EventTarget: "readonly",
   CustomEvent: "readonly", ErrorEvent: "readonly", PromiseRejectionEvent: "readonly", navigator: "readonly",
+  DOMException: "readonly",
 };
 
 const node = {
@@ -39,7 +40,8 @@ const browser = {
   HTMLDetailsElement: "readonly", HTMLImageElement: "readonly", HTMLTemplateElement: "readonly", SVGElement: "readonly",
   Element: "readonly", Node: "readonly", NodeList: "readonly", NodeFilter: "readonly", Text: "readonly", Comment: "readonly",
   DocumentFragment: "readonly", ShadowRoot: "readonly", Range: "readonly", Selection: "readonly", DOMParser: "readonly",
-  DOMRect: "readonly", Path2D: "readonly", OffscreenCanvas: "readonly", ImageData: "readonly", FileReader: "readonly",
+  DOMRect: "readonly", DOMPoint: "readonly", DOMMatrix: "readonly", Option: "readonly",
+  Path2D: "readonly", OffscreenCanvas: "readonly", ImageData: "readonly", FileReader: "readonly",
   Worker: "readonly", XMLHttpRequest: "readonly", Notification: "readonly", speechSynthesis: "readonly",
   SpeechSynthesisUtterance: "readonly", CSS: "readonly",
 };
