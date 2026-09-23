@@ -7,6 +7,22 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- **A machine that settles just under busy no longer holds new workers
+  forever.** After a lag spike, new worker starts waited for two readings at
+  40 ms or less, and a laptop that settled at 41–99 ms never got there. Once
+  every reading has stayed under the 100 ms busy line for three minutes the
+  hold lifts; a busy reading restarts that clock, and the hold says how long
+  is left.
+- **Memory and lag holds are no longer filed as "Fix:" cards.** A briefing
+  alert about the machine's memory or responsiveness described the host, not
+  the code, and its card only ran into the same hold. An alert that names a
+  file is still filed.
+- **Ctrl R keeps your place.** Electron's default menu reloaded the window
+  without saving the view, selection and typed text. Studio's own menu saves
+  them first, the way an update's reload does, and keeps the edit, zoom and
+  full-screen shortcuts.
+
 ## [0.3.3] - 2026-09-23
 
 Discord perks and Server Styler controls, a regrouped menu, a Usage popover

@@ -1455,12 +1455,24 @@ export function sameFixProblem(a, b) {
   return left.files.every((file) => right.files.includes(file)) || right.files.every((file) => left.files.includes(file));
 }
 
+// A briefing alert about the host itself (memory pressure, a lag or
+// responsiveness hold on new workers) describes the machine, not the code. A
+// worker cannot fix it, and a "Fix:" card for it ran into the very hold it
+// described; the Machine role and the owner deal with those. An alert that
+// names a repository file ("memory leak in renderer/idle.js") is still code.
+const HOST_CAPACITY_ALERT = /\b(?:memory\s+(?:pressure|hold|floor|shortfall|is\s+(?:low|critical))|low\s+(?:free\s+)?memory|(?:machine|host)\s+(?:lag|responsiveness|memory|capacity)|responsiveness\s+(?:degraded|hold)|lag\s+(?:hold|holds|blocks?|blocking)|capacity\s+hold|worker\s+starts?\s+(?:held|blocked))\b/i;
+
+export function hostCapacityAlert(alert, problem = alertProblem({ title: alert?.title, detail: alert?.detail, alertTitle: alert?.title })) {
+  return HOST_CAPACITY_ALERT.test(`${alert?.title ?? ""} ${alert?.detail ?? ""}`) && problem.files.length === 0;
+}
+
 export function requestsFromBriefing(briefing, existing = []) {
   const requests = [];
   for (const alert of briefing?.alerts ?? []) {
     if (!alert?.title || (alert.severity ?? "info") === "info") continue;
     const sessionIds = Array.isArray(alert.sessionIds) ? alert.sessionIds.filter(Boolean) : [];
     const problem = alertProblem({ title: alert.title, detail: alert.detail, alertTitle: alert.title });
+    if (hostCapacityAlert(alert, problem)) continue;
     const duplicates = (request) =>
       request.alertTitle === alert.title ||
       (request.source === "fix" && sessionsOverlap(requestSessions(request), sessionIds)) ||

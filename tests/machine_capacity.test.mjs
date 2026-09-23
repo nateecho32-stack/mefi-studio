@@ -161,6 +161,35 @@ test("sustained response lag holds new work and recovery needs two responsive re
   assert.equal((await machine.capacity()).canStart, true);
 });
 
+test("a latch that settles between the recovery and busy lines lifts after lagMaxHoldMs, and a busy reading restarts that clock", async () => {
+  const machine = fixture({ lagMaxHoldMs: 60_000 });
+  machine.lag(150);
+  await machine.capacity();
+  machine.advance();
+  assert.equal((await machine.capacity()).resources.lagPressure, true, "two busy readings latch the hold");
+  // 70 ms: under the busy line, over the 40 ms recovery line. Before the cap
+  // this held forever, since each such reading reset the recovery count.
+  machine.lag(70);
+  machine.advance();
+  const calm = await machine.capacity();
+  assert.equal(calm.canStart, false);
+  assert.match(calm.reason, /the hold lifts in \d+ s/);
+  for (let i = 0; i < 10; i += 1) { machine.advance(); await machine.capacity(); }
+  machine.lag(120); machine.advance();
+  assert.equal((await machine.capacity()).canStart, false, "a busy reading restarts the clock");
+  machine.lag(70);
+  for (let i = 0; i < 19; i += 1) { machine.advance(); assert.equal((await machine.capacity()).canStart, false, `still held at ${i}`); }
+  machine.advance();
+  const lifted = await machine.capacity();
+  assert.equal(lifted.canStart, true, "a minute under the busy line lifts the hold");
+  assert.equal(lifted.resources.lagPressure, false);
+  // Relatching still takes two busy readings.
+  machine.lag(150); machine.advance();
+  assert.equal((await machine.capacity()).canStart, true);
+  machine.advance();
+  assert.equal((await machine.capacity()).canStart, false);
+});
+
 test("a zero-lag recovery sample explains the pending readings instead of citing healthy lag", async () => {
   const machine = fixture();
   machine.lag(100);

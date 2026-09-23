@@ -624,6 +624,42 @@ async function saveResume() {
   } catch {}
 }
 
+// Electron's default menu stayed live behind the hidden menu bar, and its
+// View › Reload (Ctrl R) reloaded without saveResume, so the page came back on
+// its default view with typed text gone. This menu keeps the defaults worth
+// having (edit shortcuts, zoom, full screen, devtools) and sends both reloads
+// through the same save the updater's reload makes first.
+async function reloadKeepingPlace({ ignoreCache = false } = {}) {
+  if (!window || window.isDestroyed()) return;
+  await saveResume();
+  if (window.isDestroyed()) return;
+  if (ignoreCache) window.webContents.reloadIgnoringCache();
+  else window.webContents.reload();
+}
+
+function applicationMenu() {
+  return Menu.buildFromTemplate([
+    // Quit the way the tray's Quit does, so closing does not park in the tray.
+    { label: "File", submenu: [{ label: "Quit", accelerator: "CmdOrCtrl+Q", click: () => { app.isQuitting = true; app.quit(); } }] },
+    { role: "editMenu" },
+    {
+      label: "View",
+      submenu: [
+        { label: "Reload", accelerator: "CmdOrCtrl+R", click: () => reloadKeepingPlace().catch(() => {}) },
+        { label: "Force Reload", accelerator: "CmdOrCtrl+Shift+R", click: () => reloadKeepingPlace({ ignoreCache: true }).catch(() => {}) },
+        { role: "toggleDevTools" },
+        { type: "separator" },
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" },
+      ],
+    },
+    { role: "windowMenu" },
+  ]);
+}
+
 async function applyReload(files) {
   if (!window || window.isDestroyed()) return { ok: false };
   await saveResume();
@@ -15615,6 +15651,7 @@ function guardWindowNavigation(contents, pageFile) {
 function createWindow() {
   const saved = savedWindowBounds();
   const page = path.join(STUDIO_ROOT, "renderer", "booklet.html");
+  Menu.setApplicationMenu(applicationMenu());
   window = new BrowserWindow({
     width: Math.max(MIN_WINDOW.width, saved?.width ?? 1460),
     height: Math.max(MIN_WINDOW.height, saved?.height ?? 940),

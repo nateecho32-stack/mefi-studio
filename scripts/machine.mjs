@@ -27,6 +27,12 @@ export const WORKER_CAPACITY_DEFAULTS = Object.freeze({
   lagRecoveryMs: 40,
   pressureSamples: 2,
   recoverySamples: 2,
+  // The latch releases after recoverySamples readings at or under
+  // lagRecoveryMs. A machine that settles between the two lines (41-99 ms,
+  // common on a loaded laptop) never got there, so the hold outlived the
+  // spike for good. After this long with every reading under lagBusyMs the
+  // latch releases anyway; a busy reading restarts the clock.
+  lagMaxHoldMs: 3 * 60 * 1000,
   // Admission floor tuning: the host machine genuinely sits at 474–585 MB
   // free, so the old 256+256=512 MB sum nondeterministically blocked starts
   // whenever free memory dipped under it — a memory hold, not a lag hold.
@@ -75,6 +81,8 @@ export function createWorkerCapacitySampler({
   let lagPressure = false;
   let highSamples = 0;
   let recoverySamples = 0;
+  // While the lag latch is on: when readings last went under lagBusyMs.
+  let calmSince = null;
   let severeMemoryCap = false;
   let severeCapLowSamples = 0;
   let severeCapHighSamples = 0;
@@ -158,11 +166,15 @@ export function createWorkerCapacitySampler({
     } else if (lagMs >= options.lagBusyMs) {
       highSamples += 1;
       recoverySamples = 0;
+      calmSince = null;
       if (lagMs >= options.lagCriticalMs || highSamples >= options.pressureSamples) lagPressure = true;
     } else {
       highSamples = 0;
       recoverySamples = lagMs <= options.lagRecoveryMs ? recoverySamples + 1 : 0;
+      if (lagPressure && calmSince === null) calmSince = sampledAt;
       if (recoverySamples >= options.recoverySamples) lagPressure = false;
+      if (lagPressure && sampledAt - calmSince >= options.lagMaxHoldMs) lagPressure = false;
+      if (!lagPressure) calmSince = null;
     }
 
     const memoryPressure = memoryKnown && availableMemoryMB < requiredMemoryMB;
@@ -196,6 +208,10 @@ export function createWorkerCapacitySampler({
         const progress = Math.min(recoverySamples, options.recoverySamples);
         const lagNote = lagMs >= options.lagBusyMs ? ` after ${Math.round(lagMs)} ms lag` : "";
         reason = `Waiting for machine responsiveness to recover (${progress} of ${options.recoverySamples} responsive readings needed${lagNote}).`;
+        if (calmSince !== null) {
+          const left = Math.max(0, Math.ceil((options.lagMaxHoldMs - (sampledAt - calmSince)) / 1000));
+          reason += ` Lag is back below the busy line; if it stays there, the hold lifts in ${left} s.`;
+        }
       }
     }
     // Structured hold classification so consumers can tell a memory gate from
