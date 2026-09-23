@@ -638,7 +638,8 @@ test("the agent dress, hub dress and work orbit let a style draw its own and kee
   assert.deepEqual(asked.at(-1), ["ring", "orbs", "running", 13.5, true]);
   state.nodeStyle = "minimal"; const before = asked.length;
   env.drawAgentDress(ctx, agent, p, 10, tint, 100, false);
-  assert.equal(asked.length, before, "Minimal still leaves agents bare");
+  assert.equal(asked.length, before + 1, "Minimal dresses its agents too");
+  assert.deepEqual([glyphs.at(-1)[0], asked.at(-1)], ["watcher", ["ring", "minimal", "running", 13.5, false]], "its glyph and its status ring");
   state.nodeStyle = "prism"; arcs = [];
   env.drawHubDress(ctx, { kind: "assistant" }, p, 15, tint, 100, false);
   assert.deepEqual(asked.at(-1), ["hub", "prism", true]);
@@ -664,6 +665,13 @@ test("the agent dress, hub dress and work orbit let a style draw its own and kee
   env.drawHubDress(ctx, { kind: "assistant", _detail: 0 }, p, 15, tint, 100, false);
   env.drawWorkOrbit(ctx, work, p, 12, 100, false);
   assert.deepEqual(details, [1, 0, 2], "the ring, the hub dress and the orbit read the node's capped tier");
+  // The orbit turns on the record's integrated phase, so starting or stopping
+  // work never jumps it; reduced motion parks it at π/3.
+  work._m = { orbit: 1.23 };
+  env.drawWorkOrbit(ctx, work, p, 12, 100, false);
+  assert.equal(work._orbitTrail.phase, 1.23);
+  env.drawWorkOrbit(ctx, work, p, 12, 5000, true);
+  assert.equal(work._orbitTrail.phase, Math.PI / 3);
 });
 
 // drawFrame's landing pass hands every arrived pulse to landPulse.

@@ -1445,6 +1445,9 @@
       // A chore the assistant filed has no node of its own to hold: it sinks
       // straight into the hub's absorbed list.
       if (fx.filed) { state.doneHold.delete(id); markAbsorb(id); continue; }
+      // Held on the board this rebuild: sweepFx must keep its entry, or the
+      // node would vanish at the next rebuild and never fly home.
+      fx.seen = true;
       const host = fx.anchorId ? state.nodes.find((node) => node.id === fx.anchorId && !node.dying) : null;
       const sx = fx.lastX ?? host?.x ?? 190;
       const sy = fx.lastY ?? host?.y ?? 46;
@@ -3679,8 +3682,10 @@
   // The role glyph inside the orb and a ring that says what the agent is up
   // to: a spinning arc while it works, a dashed ring while it waits its turn,
   // amber when it failed, a green tick for a beat when it just finished.
+  // Every style dresses its agents, Minimal included (its glyph sits on a
+  // small backing disc and its ring hugs it).
   function drawAgentDress(ctx, node, p, radius, tint, time, still) {
-    if (node.kind !== "agent" || node._absorbed || radius < 4.5 || state.nodeStyle === "minimal") return;
+    if (node.kind !== "agent" || node._absorbed || radius < 4.5) return;
     ctx.save();
     ctx.globalAlpha = (node._fade ?? 1) * Math.max(0.35, emphasis(node));
     const hex = agentHex(node.role);
@@ -3777,14 +3782,91 @@
     ctx.restore();
   }
 
+  // The done-hold badge: a finished task's "!" waiting to be read. It beats
+  // (1.6 s, up to a tenth bigger) and sends a faint echo out on every beat,
+  // and every 4.8 s it wiggles for half a second, so unread work catches the
+  // eye without shouting. Its label exclusion is one fixed box that never
+  // scales or moves, so labels never dance with it. Reduced motion: a still
+  // badge. Theme wells and ink (the legacy greens without the node styles).
+  const DONE_BADGE_WELL = [23, 48, 37], DONE_BADGE_INK = [167, 229, 192];
+  function drawDoneBadge(ctx, node, p, radius, time, still) {
+    const bx = p.x + radius + 6, by = p.y - radius - 5;
+    const excl = node._doneExcl ??= { x: 0, y: 0, r: 9 };
+    excl.x = bx; excl.y = by; node._excl = excl;
+    const theme = state.nodeTheme ?? null;
+    const done = theme?.done ?? NODE_RGB.done;
+    const offset = node._m?.seed ?? 0;
+    const beatAt = still ? 0 : (time / 1600 + offset) % 1;
+    const beat = still ? 0 : Math.max(0, Math.sin(Math.PI * 2 * beatAt));
+    const wiggleAt = still ? 1 : ((time + offset * 4800) % 4800) / 520;
+    const angle = wiggleAt < 1 ? 0.2 * Math.sin(3 * Math.PI * wiggleAt) * (1 - wiggleAt) : 0;
+    const scale = 1 + 0.1 * beat;
+    ctx.save();
+    const echo = !still && beatAt < 0.6 ? beatAt / 0.6 : -1;
+    if (echo >= 0) {
+      // The node pulses green on the same beat: a ring off its rim.
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius + 2 + 4 * echo, 0, Math.PI * 2);
+      ctx.strokeStyle = rgba(done, Math.round(0.4 * (1 - echo) * 32) / 32); ctx.lineWidth = 1.2; ctx.stroke();
+    }
+    ctx.translate(bx, by);
+    if (echo >= 0) {
+      // The echo leaves the badge's edge as the beat starts: 3 px out,
+      // fading from .45 to nothing.
+      const u = echo;
+      ctx.beginPath(); ctx.roundRect(-6 - 3 * u, -6 - 3 * u, 12 + 6 * u, 12 + 6 * u, 3 + 2 * u);
+      ctx.strokeStyle = rgba(done, Math.round(0.45 * (1 - u) * 32) / 32); ctx.lineWidth = 1; ctx.stroke();
+    }
+    ctx.rotate(angle); ctx.scale(scale, scale);
+    ctx.beginPath(); ctx.roundRect(-6, -6, 12, 12, 3);
+    ctx.fillStyle = rgba(theme?.doneWell ?? DONE_BADGE_WELL, 1); ctx.fill();
+    ctx.strokeStyle = rgba(done, 0.8); ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = rgba(theme?.doneInk ?? DONE_BADGE_INK, 1); ctx.font = '600 9px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("!", 0, 0);
+    ctx.restore();
+  }
+
+  // Work-left meter: only a known worker fraction, never inferred activity.
+  // A slim rounded bar under the node on the theme's track. It eases toward
+  // each new fraction (the motion record's progress), fades in and out with
+  // the node's work or selection, and while the node works a light glint
+  // runs along the part that is done.
+  const METER_TRACK = [48, 57, 71];
+  function drawProgressMeter(ctx, node, p, radius, tint, active, selected, time, still) {
+    if (typeof node.progress !== "number" || !Number.isFinite(node.progress)) return;
+    const motion = node._m ?? null;
+    const shown = motion && !still ? Math.max(motion.work, motion.sel) : active || selected ? 1 : 0;
+    if (!(shown > 0.02)) return;
+    const fraction = Math.max(0, Math.min(1, motion && !still && Number.isFinite(motion.progress) ? motion.progress : node.progress));
+    const width = Math.max(14, Math.min(22, radius * 1.6)), x = p.x - width / 2, y = p.y + radius + 5;
+    const theme = state.nodeTheme ?? null;
+    ctx.save();
+    ctx.globalAlpha *= (node._fade ?? 1) * shown;
+    ctx.beginPath(); ctx.roundRect(x, y, width, 2, 1);
+    ctx.fillStyle = rgba(theme?.track ?? METER_TRACK, 0.9); ctx.fill();
+    const filled = width * fraction;
+    if (filled >= 0.5) {
+      ctx.beginPath(); ctx.roundRect(x, y, filled, 2, 1);
+      ctx.fillStyle = rgba(tint, 0.85); ctx.fill();
+      const ink = active && !still && filled >= 6 ? globalThis.window?.MefiNodeStyles?.inkOf(tint, theme) : null;
+      if (ink) {
+        const u = (time / 1500 + (motion?.seed ?? 0)) % 1;
+        const from = Math.max(x, x - 6 + u * (filled + 6)), to = Math.min(x + filled, x + u * (filled + 6));
+        if (to - from > 0.5) { ctx.beginPath(); ctx.roundRect(from, y, to - from, 2, 1); ctx.fillStyle = rgba(ink.spec, 0.7); ctx.fill(); }
+      }
+    }
+    ctx.restore();
+  }
+
   function drawWorkOrbit(ctx, node, p, radius, time, still) {
     node._orbitTrail = null;
     if (!state.orbitTrails || !["Running", "Next"].includes(node._workLabel) || node.kind === "agent") return;
     const running = node._workLabel === "Running";
-    const phase = still ? Math.PI / 3 : time / (running ? 1100 : 2400) * Math.PI * 2;
+    // The node's motion record integrates the orbit (a Running turn 1.1 s, a
+    // Next one 2.4 s), so a node that starts or stops working never jumps;
+    // without one the same speeds from the clock.
+    const phase = still ? Math.PI / 3 : Number.isFinite(node._m?.orbit) ? node._m.orbit : time / (running ? 1100 : 2400) * Math.PI * 2;
     const ring = radius + 9;
-    // A style may draw the orbit in its own language (node._m.orbit is the
-    // integrated phase); without one the blue arcs below.
+    // A style may draw the orbit in its own language (the free styles share
+    // a themed one); without the node styles the blue arcs below.
     const styles = globalThis.window?.MefiNodeStyles;
     if (styles && styles.orbit(ctx, state.nodeStyle, p, radius, node._m?.tint ?? null, orbitLook(node, running, phase, ring, time, still))) {
       node._orbitTrail = { drawn: true, animated: !still, segments: 3, phase, radius: ring };
@@ -7531,25 +7613,31 @@
       const colliding = state.collisionSessions.size > 0 && Boolean(node.sessionId) && state.collisionSessions.has(node.sessionId);
       const selected = state.selected?.id === node.id || state.hoverNode === node || state.query && state.matchSet.has(node.id);
       const hold = node.doneHold ? state.doneHold.get(node.id) ?? null : null;
-      const tint = hold ? NODE_RGB.done : colliding && active && node.kind !== "agent" ? NODE_RGB.collision : colorOf(node);
+      let tint = hold ? NODE_RGB.done : colliding && active && node.kind !== "agent" ? NODE_RGB.collision : colorOf(node);
       const factor = emphasis(node);
-      const base = node.kind === "todo" ? 4.5 : node.kind === "assistant" ? 15 : node.kind === "agent" ? 10 : node.kind === "task" ? 12 : 11;
-      const radius = Math.max(2, Math.min(visual.maxRadius, base * Math.max(0.75, Math.min(1.15, p.k))) * nodeScale);
-      node._px = p.x; node._py = p.y; node._pr = radius;
-      // The node's motion steps with what it is doing now. Its detail tier is
-      // capped on the far layer, when dimmed, while the camera flies and when
-      // frames run long; a lit node may go one tier above its cap.
+      // The node's motion steps with what it is doing now: its levels ease,
+      // its clock runs at the style's tempo, and a colour change (running to
+      // done, a clash, a status) cross-fades over 450 ms instead of popping.
       const chosen = state.selected?.id === node.id;
       const motion = node._m ?? null;
+      if (nodeStyles && motion) {
+        stepFlags.active = active; stepFlags.selected = Boolean(selected); stepFlags.progress = node.progress;
+        stepFlags.orbit = node._workLabel === "Running" ? 1.1 : node._workLabel === "Next" ? 2.4 : 0;
+        stepFlags.status = node.kind === "agent" ? node.status ?? null : null;
+        nodeStyles.stepMotion(motion, stepFlags, dt, still);
+        tint = nodeStyles.shownTint(motion, tint, time, still);
+      }
+      const base = node.kind === "todo" ? 4.5 : node.kind === "assistant" ? 15 : node.kind === "agent" ? 10 : node.kind === "task" ? 12 : 11;
+      // Hover and selection ease the node up a twentieth (the record's sel),
+      // on top of the lift that raises its size cap.
+      const pop = motion ? 1 + 0.05 * motion.sel : 1;
+      const radius = Math.max(2, Math.min(visual.maxRadius, base * Math.max(0.75, Math.min(1.15, p.k))) * nodeScale) * pop;
+      node._px = p.x; node._py = p.y; node._pr = radius;
+      // The detail tier is capped on the far layer, when dimmed, while the
+      // camera flies and when frames run long; a lit node may go one tier
+      // above its cap.
       let detail = 3;
       if (nodeStyles) {
-        if (motion) {
-          stepFlags.active = active; stepFlags.selected = Boolean(selected); stepFlags.progress = node.progress;
-          stepFlags.orbit = node._workLabel === "Running" ? 1.1 : node._workLabel === "Next" ? 2.4 : 0;
-          stepFlags.status = node.kind === "agent" ? node.status ?? null : null;
-          nodeStyles.stepMotion(motion, stepFlags, dt, still);
-          motion.tint = tint;
-        }
         const lit = active || Boolean(selected);
         const cap = Math.min(costCap, ctx !== el.ctx || factor <= 0.3 ? 1 : state.cameraMoving && !lit ? 2 : 3);
         detail = nodeStyles.tier(radius, lit ? cap + 1 : cap);
@@ -7557,6 +7645,9 @@
       // The same tier reaches the node's orbit, ring and hub dress below, and
       // (a frame late, like _pr) its wires and pulses.
       node._detail = detail;
+      // How far the look reaches past the body (a lattice, shards, a jet):
+      // other nodes' labels keep clear of it (nodeLabelBlocker).
+      node._styleReach = nodeStyles ? radius * nodeStyles.reach(state.nodeStyle ?? "orbs", motion) : 0;
       const surface = surfaceFlags;
       surface.selected = Boolean(selected); surface.active = active; surface.alpha = Math.max(0.35, visual.alpha * factor);
       surface.detail = detail; surface.chosen = chosen; surface.motion = motion;
@@ -7578,29 +7669,21 @@
       drawFiledWork(ctx, node, p, radius, runningIds, time, still);
       drawAgentDress(ctx, node, p, radius, tint, time, still);
       drawHubDress(ctx, node, p, radius, tint, time, still);
-      // Work-left meter: only a known worker fraction, never inferred activity.
-      if ((active || selected) && typeof node.progress === "number" && Number.isFinite(node.progress)) {
-        const fraction = Math.max(0, Math.min(1, node.progress));
-        ctx.fillStyle = "#303947"; ctx.fillRect(p.x - 9, p.y + radius + 5, 18, 1.5);
-        ctx.fillStyle = rgba(tint, 0.8); ctx.fillRect(p.x - 9, p.y + radius + 5, 18 * fraction, 1.5);
-      }
+      // Work-left meter (drawProgressMeter): a known worker fraction, eased.
+      drawProgressMeter(ctx, node, p, radius, tint, active, Boolean(selected), time, still);
       drawNodeAudio(ctx, node, p, radius, tint, node._audioResponse, audioNodes ? visualMusic : null, time / 1.8);
       // Collision boost: a thin amber rim, same restraint as the music beat —
-      // the clash color marks the session while the fight is still live.
+      // the clash color marks the session while the fight is still live. It
+      // pulses (0.9 s, in the node's own phase); at rest it holds its middle.
       if (colliding && (active || selected)) {
-        traceNodeSurface(ctx, visual.shape, p.x, p.y, radius + 2.5);
-        ctx.strokeStyle = rgba(NODE_RGB.collision, 0.55);
-        ctx.lineWidth = 1.2;
+        const beat = still ? 0.5 : 0.5 + 0.5 * Math.sin(Math.PI * 2 * (time / 900 + (motion?.seed ?? 0)));
+        traceNodeSurface(ctx, visual.shape, p.x, p.y, radius + 2 + beat);
+        ctx.strokeStyle = still ? rgba(NODE_RGB.collision, 0.55) : rgba(NODE_RGB.collision, Math.round((0.4 + 0.3 * beat) * 32) / 32);
+        ctx.lineWidth = 1 + 0.4 * beat;
         ctx.stroke();
       }
       node._excl = null;
-      if (hold && !hold.ackedAt) {
-        const bx = p.x + radius + 6, by = p.y - radius - 5;
-        ctx.beginPath(); ctx.roundRect(bx - 6, by - 6, 12, 12, 3);
-        ctx.fillStyle = "#173025"; ctx.fill(); ctx.strokeStyle = rgba(NODE_RGB.done, 0.8); ctx.lineWidth = 1; ctx.stroke();
-        ctx.fillStyle = "#a7e5c0"; ctx.font = '600 9px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("!", bx, by);
-        node._excl = { x: bx, y: by, r: 9 };
-      }
+      if (hold && !hold.ackedAt) drawDoneBadge(ctx, node, p, radius, time, still);
     }
     } finally { profiler?.end(nodesSpan); }
 
@@ -7868,7 +7951,8 @@
     for (const { node, p } of projected) {
       if (node.dying || node._absorbed) continue;
       if ((node._fade ?? 1) <= 0.02) { ghosts.push({ node, cx: p.x, cy: p.y, reach: (node._pr ?? 4) + 5 }); continue; }
-      const radius = Math.max(5, node._orbitTrail?.radius ?? node._pr ?? 4) + 3;
+      // A style that draws past the body (node._styleReach) blocks as far.
+      const radius = Math.max(5, node._orbitTrail?.radius ?? node._pr ?? 4, node._styleReach ?? 0) + 3;
       const rect = { node, x: p.x - radius, y: p.y - radius, w: radius * 2, h: radius * 2, cx: p.x, cy: p.y, reach: (node._pr ?? 4) + 5 };
       rects.push(rect);
       const left = Math.floor(rect.x / cellSize), right = Math.floor((rect.x + rect.w) / cellSize);
