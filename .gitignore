@@ -44,3 +44,7 @@ website/
 *.swo
 *.orig
 *.rej
+
+# Built alongside renderer/booklet.html by scripts/build-booklet.mjs; consumed by
+# the perf-render fixture to resolve error locations. Regenerated on every build.
+renderer/booklet.sources.json

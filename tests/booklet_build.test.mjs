@@ -46,6 +46,7 @@ const INLINE_SCRIPTS = [
   "planning.js",
   "music.js",
   "onboarding.js",
+  "community.js",
   "booklet.js",
 ];
 
