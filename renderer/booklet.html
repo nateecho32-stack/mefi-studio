@@ -4649,32 +4649,77 @@ body.music-preview-active #toast-host { left: calc(var(--shell-rail-w) + var(--m
 .music-node-preview i { position: absolute; display: block; width: 10px; height: 10px; top: 16px; left: calc(50% - 5px); border: 1px solid currentColor; border-radius: 50%; background: var(--panel-solid); }
 .music-node-preview i:nth-child(2) { width: 7px; height: 7px; top: 6px; left: calc(50% - 30px); opacity: .6; }
 .music-node-preview i:nth-child(3) { width: 7px; height: 7px; top: 29px; left: calc(50% + 24px); opacity: .6; }
+/* The node styles in miniature. One carved block per style, each opened by
+   its "node style: <name>" banner: the style's own rules, then its own
+   motion inside its own prefers-reduced-motion block (html[data-motion]
+   stops it too). A block ends at the blank line before the next banner. */
+
+/* node style: orbs */
 .music-preview-orbs i { background: radial-gradient(circle at 35% 30%, var(--gold-bright), var(--gold-dim) 60%, transparent 75%); box-shadow: 0 0 10px var(--gold-dim), 0 0 0 3px var(--tint-gold-2); }
 .music-preview-orbs i:first-child { width: 19px; height: 19px; top: 12px; left: calc(50% - 9px); }
+@media (prefers-reduced-motion: no-preference) {
+  /* orbs thumbnail motion */
+}
+
+/* node style: glass */
 .music-preview-glass i { background: linear-gradient(140deg, color-mix(in srgb, var(--gold-bright) 35%, transparent), var(--tint-gold-1)); border-color: color-mix(in srgb, var(--gold-bright) 65%, transparent); box-shadow: inset 0 1px 2px rgba(255,255,255,.3); }
 .music-preview-glass i:first-child { width: 23px; height: 23px; top: 9px; left: calc(50% - 11px); }
 .music-preview-glass i:not(:first-child) { width: 12px; height: 12px; }
+@media (prefers-reduced-motion: no-preference) {
+  /* glass thumbnail motion */
+}
+
+/* node style: minimal */
 .music-preview-minimal i { width: 5px; height: 5px; top: 18px; left: calc(50% - 2px); border: 0; background: currentColor; }
 .music-preview-minimal i:nth-child(2) { top: 7px; left: calc(50% - 28px); }
 .music-preview-minimal i:nth-child(3) { top: 30px; left: calc(50% + 26px); }
+@media (prefers-reduced-motion: no-preference) {
+  /* minimal thumbnail motion */
+}
+
+/* node style: halo */
 .music-preview-halo i { background: transparent; border-width: 2px; box-shadow: 0 0 7px var(--gold), inset 0 0 5px var(--gold-dim); }
 .music-preview-halo i:first-child { width: 23px; height: 23px; top: 9px; left: calc(50% - 11px); outline: 1px solid var(--gold-dim); outline-offset: 4px; }
+@media (prefers-reduced-motion: no-preference) {
+  /* halo thumbnail motion */
+}
+
+/* node style: crystal */
 .music-preview-crystal i { border-radius: 1px; transform: rotate(45deg); background: linear-gradient(135deg, var(--gold-bright), var(--gold-dim) 48%, var(--panel-solid) 51%, var(--gold)); box-shadow: 0 0 8px var(--gold-dim); }
 .music-preview-crystal i:first-child { width: 21px; height: 21px; top: 10px; left: calc(50% - 10px); }
-/* The Void collection in miniature, drawn like the canvas painters: a black
-   core in a thin photon ring inside an accretion ring that is brightest low on
-   the left; a kite-cut gem (light crown, mid and shadowed pavilion, the second
-   hue refracting along its lower right edge); a double ring with small marks
-   in the second hue around a centre seal. */
+@media (prefers-reduced-motion: no-preference) {
+  /* crystal thumbnail motion */
+}
+
+/* node style: singularity */
+/* A black core in a thin photon ring inside an accretion ring that is
+   brightest low on the left, drawn like the canvas painter. */
 .music-preview-singularity i { border: 0; background: radial-gradient(circle closest-side, #020105 0 40%, var(--gold-bright) 52% 70%, color-mix(in srgb, var(--gold) 45%, transparent) 84%, transparent); box-shadow: -1px 1px 5px -1px var(--gold); }
 .music-preview-singularity i:first-child { width: 22px; height: 22px; top: 9px; left: calc(50% - 11px); background: radial-gradient(circle closest-side, #020105 0 47%, var(--gold-bright) 52% 61%, #020105 66% 69%, transparent 73%), conic-gradient(from 220deg, color-mix(in srgb, var(--gold-bright) 50%, #fff), var(--gold-bright) 12%, color-mix(in srgb, var(--gold) 38%, transparent) 32%, rgba(var(--accent-2-rgb, var(--studio-accent-rgb)), .3) 50%, color-mix(in srgb, var(--gold) 38%, transparent) 68%, var(--gold-bright) 88%, color-mix(in srgb, var(--gold-bright) 50%, #fff)); box-shadow: -2px 2px 10px -3px var(--gold-bright), 1px -1px 12px -4px rgba(var(--accent-2-rgb, var(--studio-accent-rgb)), .5); }
+@media (prefers-reduced-motion: no-preference) {
+  /* singularity thumbnail motion */
+}
+
+/* node style: prism */
+/* A kite-cut gem: a light crown, a mid and a shadowed pavilion, the second
+   hue refracting along its lower right edge. */
 .music-preview-prism { filter: drop-shadow(0 0 3px color-mix(in srgb, var(--gold) 45%, transparent)); }
 .music-preview-prism i { border: 0; border-radius: 0; background: linear-gradient(180deg, color-mix(in srgb, var(--gold-bright) 42%, #fff) 0 36%, transparent 36%), linear-gradient(84.9deg, color-mix(in srgb, var(--gold-bright) 74%, #07080f) 0 45%, color-mix(in srgb, var(--gold-bright) 46%, #07080f) 45%); clip-path: polygon(50% 0, 100% 36.2%, 50% 100%, 0 36.2%); }
 .music-preview-prism i:not(:first-child) { width: 6px; height: 7.5px; }
 .music-preview-prism i:first-child { width: 20px; height: 24px; top: 8px; left: calc(50% - 10px); background: radial-gradient(circle at 36% 21%, #fff 0 .8px, transparent 1.4px), linear-gradient(123deg, transparent 0 67.5%, var(--accent-2, var(--gold-bright)) 67.5% 72%, transparent 72%), linear-gradient(180deg, color-mix(in srgb, var(--gold-bright) 42%, #fff) 0 36%, transparent 36%), linear-gradient(84.9deg, color-mix(in srgb, var(--gold-bright) 74%, #07080f) 0 45%, color-mix(in srgb, var(--gold-bright) 46%, #07080f) 45%); }
+@media (prefers-reduced-motion: no-preference) {
+  /* prism thumbnail motion */
+}
+
+/* node style: sigil */
+/* A double ring with small marks in the second hue around a centre seal. */
 .music-preview-sigil i { border: 1px solid currentColor; background: radial-gradient(circle, currentColor 0 1px, transparent 1.6px), var(--panel-solid); }
 .music-preview-sigil i:first-child { width: 22px; height: 22px; top: 9px; left: calc(50% - 11px); border-width: 1.5px; box-shadow: 0 0 9px -3px var(--gold); background: radial-gradient(circle at 50% 12%, var(--accent-2, currentColor) 0 1px, transparent 1.6px), radial-gradient(circle at 83% 31%, var(--accent-2, currentColor) 0 1px, transparent 1.6px), radial-gradient(circle at 83% 69%, var(--accent-2, currentColor) 0 1px, transparent 1.6px), radial-gradient(circle at 50% 88%, var(--accent-2, currentColor) 0 1px, transparent 1.6px), radial-gradient(circle at 17% 69%, var(--accent-2, currentColor) 0 1px, transparent 1.6px), radial-gradient(circle at 17% 31%, var(--accent-2, currentColor) 0 1px, transparent 1.6px), radial-gradient(circle closest-side, transparent 0 55%, color-mix(in srgb, currentColor 40%, transparent) 57% 63%, transparent 65%), var(--panel-solid); }
 .music-preview-sigil i:first-child::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4.5px; height: 4.5px; background: currentColor; transform: translate(-50%, -50%) rotate(45deg); }
+@media (prefers-reduced-motion: no-preference) {
+  /* sigil thumbnail motion */
+}
+
 .music-node-layout .music-node-preview { width: 80px; max-width: 100%; align-self: center; }
 .music-node-layout .music-node-preview i { width: 6px; height: 6px; opacity: .8; }
 .music-node-layout .music-node-preview i:first-child { width: 8px; height: 8px; opacity: 1; }
@@ -15407,6 +15452,36 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const swell = (m, period, pose = 0.5) => m.still ? pose : 0.5 + 0.5 * Math.sin(TAU * cycle(m, period));
   const turn = (m, period, pose = 0) => m.still ? pose : TAU * cycle(m, period);
 
+  // One-shot curves over t in [0, 1] (clamped), for a cell assembling, a
+  // badge popping in, an arrival ring: easeOut decelerates (cubic),
+  // easeOutBack overshoots a little and settles, smooth01 is the smooth step.
+  const easeOut = (t) => { const k = 1 - clamp01(t); return 1 - k * k * k; };
+  const easeOutBack = (t) => { if (!(t > 0)) return 0; if (t >= 1) return 1; const k = t - 1; return 1 + 2.70158 * k * k * k + 1.70158 * k * k; };
+  const smooth01 = (t) => { const k = clamp01(t); return k * k * (3 - 2 * k); };
+
+  // A regular polygon as one closed subpath (the caller begins, fills and
+  // strokes): `sides` vertices on radius r around (x, y), the first at angle
+  // `rot` (−π/2 puts a vertex on top: a pointy-top hexagon). One moveTo,
+  // sides − 1 lineTo, one closePath; nothing is allocated.
+  function polyPath(ctx, x, y, r, sides, rot = 0) {
+    const step = TAU / sides;
+    ctx.moveTo(x + Math.cos(rot) * r, y + Math.sin(rot) * r);
+    for (let index = 1; index < sides; index += 1) ctx.lineTo(x + Math.cos(rot + index * step) * r, y + Math.sin(rot + index * step) * r);
+    ctx.closePath();
+  }
+
+  // A point on an ellipse (radii rx, ry, turned by `tilt`) at parameter
+  // `angle`, written into the caller's own scratch `out` as { x, y, depth }.
+  // depth = sin(angle): above 0 on the near half (below the centre line
+  // before the tilt), so an orbit can pass behind a body and in front of it.
+  function ellipseAt(cx, cy, rx, ry, tilt, angle, out) {
+    const ex = Math.cos(angle) * rx, ey = Math.sin(angle) * ry, cos = Math.cos(tilt), sin = Math.sin(tilt);
+    out.x = cx + ex * cos - ey * sin;
+    out.y = cy + ex * sin + ey * cos;
+    out.depth = Math.sin(angle);
+    return out;
+  }
+
   // The canvas palette as stable triples, built once per palette. `hi` is the
   // highlight a tone mixes toward (white on dark themes, near-black on light
   // ones); `orbit` is the theme's second hue or a blue that reads on the bg.
@@ -15494,6 +15569,25 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
   const tierIn = (radius, level) => level <= 0 ? 1 : clamp01((radius - TIER_CUTS[Math.min(3, level)]) / 1.2);
 
+  // Extra glow (the appearance toggle): a soft halo under any style, out to
+  // 1.8 radii, 2.25 while the node is lit. One unit-space radial per canvas,
+  // tint and lit level, drawn under the node's own transform, so a steady
+  // frame builds nothing; paint() lays it under the look.
+  function extraGlow(ctx, p, radius, tint, lit) {
+    const key = `glow|${tint.join(",")}|${lit}`;
+    let glow = cacheGet(ctx, key);
+    if (!glow) {
+      glow = ctx.createRadialGradient(0, 0, 0.25, 0, 0, lit ? 2.25 : 1.8);
+      glow.addColorStop(0, rgba(tint, lit ? 0.32 : 0.16));
+      glow.addColorStop(0.45, rgba(tint, lit ? 0.14 : 0.05));
+      glow.addColorStop(1, rgba(tint, 0));
+      cachePut(ctx, key, glow);
+    }
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, lit ? 2.25 : 1.8, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+
   // The registry: one entry per style, registered by its own section below.
   // Entry: { speedup, paint(ctx, p, radius, tint, o, m), glyph, ring, hubDress,
   // orbit, arrival, select, wire, surge, land, reach }.
@@ -15514,7 +15608,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   // The Void collection's shapes, built once and shared by both canvases, so
   // the rail and the Command view cut the same gem and mark the same seal. The
   // helpers only add subpaths (the caller begins and fills), at a screen
-  // position and radius or in unit space.
+  // position and radius or in unit space. This section is closed: a style's
+  // new shapes live in its own section under a style prefix (sigilHex…).
   function buildVoidShapes() {
     // Prism: a kite-cut gem lit from the upper left, as x, y pairs in unit
     // space. A short crown over the girdle, a long pavilion below it; the
@@ -15914,15 +16009,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const m = n.motion ?? poseOf(n);
     ctx.save();
     ctx.globalAlpha = n.alpha;
-    if (n.extraGlow) {
-      const lit = n.active || n.selected;
-      const spread = radius * (lit ? 2.25 : 1.8);
-      const glow = ctx.createRadialGradient(p.x, p.y, radius * 0.25, p.x, p.y, spread);
-      glow.addColorStop(0, rgba(tint, lit ? 0.32 : 0.16));
-      glow.addColorStop(0.45, rgba(tint, lit ? 0.14 : 0.05));
-      glow.addColorStop(1, rgba(tint, 0));
-      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, spread, 0, Math.PI * 2); ctx.fill();
-    }
+    if (n.extraGlow) extraGlow(ctx, p, radius, tint, n.active || n.selected);
     (lookOf(style) ?? LOOKS.orbs).paint(ctx, p, radius, tint, n, m);
     ctx.restore();
   }
@@ -16005,7 +16092,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   Object.freeze(WIRE_DEFAULTS);
   // Infra helpers the style sections share; named here so the ones no look
   // uses yet keep the linter quiet.
-  void [cycle, swell, turn, qa, tierIn, motionOf];
+  void [cycle, swell, turn, qa, tierIn, motionOf, easeOut, easeOutBack, smooth01, polyPath, ellipseAt];
   window.MefiNodeStyles = Object.freeze({
     version: 1, STYLES, PREMIUM, shapes: SHAPES,
     seed, hash, approach, motionRecord, stepMotion, shownTint, theme, inkOf, tier,
@@ -17332,8 +17419,20 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return triple;
   }
   const railMotion = new Map();
+  // A record not seen for 90 rail frames is dropped (checked every 64); past
+  // RAIL_MOTION_MAX the records not seen last frame go first, never the
+  // whole table, so no frame restarts every node's clock at once.
+  const RAIL_MOTION_MAX = 2048;
+  function pruneRailMotion() {
+    if (railFrame % 64 === 0) for (const [id, record] of railMotion) if (railFrame - record.seen > 90) railMotion.delete(id);
+    if (railMotion.size > RAIL_MOTION_MAX) for (const [id, record] of railMotion) if (railFrame - record.seen > 1) railMotion.delete(id);
+  }
   const railStep = { style: "orbs", active: false, selected: false, lift: 0, progress: null, orbit: 0, status: null, time: 0, frame: 0 };
   const railPaint = { kind: "session", selected: false, chosen: false, active: false, alpha: 1, glyph: false, monogram: false, motion: null, time: 0, still: false, detail: 2, extraGlow: false, theme: null };
+  // The agent ring's and the work orbit's options, one scratch each, filled
+  // per node (a style's hook reads them at once and never keeps them).
+  const railRing = { status: null, builder: false, ring: 0, time: 0, still: false, motion: null, theme: null };
+  const railOrbit = { running: true, phase: 0, ring: 0, time: 0, still: false, motion: null, theme: null };
   let railFrameAt = null;
   let railFrame = 0;
 
@@ -17344,6 +17443,20 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
 
     const projected = new Map();
     for (const node of nodes) projected.set(node, project(node));
+
+    // The appearance, the node styles, their theme and the motion clock are
+    // read once a frame, before anything is drawn: edges, pulses and nodes all
+    // paint in the chosen style.
+    const still = noMotion();
+    const appearance = window.MefiMusic?.graphPreferences?.() ?? {};
+    const nodeStyle = appearance.nodeStyle ?? "orbs";
+    const styles = window.MefiNodeStyles ?? null;
+    const theme = styles ? styles.theme(window.MefiMusic?.themePalette?.()?.canvas ?? null) : null;
+    const dt = railFrameAt == null ? 0 : Math.min(0.05, Math.max(0, (time - railFrameAt) / 1000));
+    railFrameAt = time;
+    railFrame += 1;
+    pruneRailMotion();
+    railStep.style = nodeStyle; railStep.time = time; railStep.frame = railFrame;
 
     // edges, far to near
     const orderedEdges = [...edges].sort((a, b) => projected.get(b.a).depth - projected.get(a.a).depth);
@@ -17362,8 +17475,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     ctx.globalAlpha = 1;
 
     // pulses — a line that ends at an agent carries the signal itself
-    // (wave, see surgeLine); the rest stay travelling dots
-    const still = noMotion();
+    // (wave, see surgeLine); the rest stay travelling dots. One that reached
+    // its node kicks the node's motion as it goes (the arrival flash a look
+    // may read).
+    if (styles && !still) for (const pulse of pulses) if (time - pulse.start >= pulse.duration) { const record = railMotion.get(pulse.to?.id); if (record) record.kick = 1; }
     pulses = pulses.filter((pulse) => time - pulse.start < pulse.duration);
     for (const pulse of pulses) {
       const a = projected.get(pulse.from);
@@ -17429,16 +17544,6 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // nodes, far to near
     const ordered = [...nodes].sort((a, b) => projected.get(b).depth - projected.get(a).depth);
     const running = Boolean(window.mefiStudio?.assistantState) && assistant.state?.status === "running";
-    // The appearance, the node styles and their theme are read once a frame.
-    const appearance = window.MefiMusic?.graphPreferences?.() ?? {};
-    const nodeStyle = appearance.nodeStyle ?? "orbs";
-    const styles = window.MefiNodeStyles ?? null;
-    const theme = styles ? styles.theme(window.MefiMusic?.themePalette?.()?.canvas ?? null) : null;
-    const dt = railFrameAt == null ? 0 : Math.min(0.05, Math.max(0, (time - railFrameAt) / 1000));
-    railFrameAt = time;
-    railFrame += 1;
-    if (railMotion.size > 512) railMotion.clear();
-    railStep.style = nodeStyle; railStep.time = time; railStep.frame = railFrame;
     for (const node of ordered) {
       const p = projected.get(node);
       if (p.depth < 60) continue;
@@ -17502,7 +17607,13 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         const look = styles ? styles.glyph(nodeStyle, tint, theme) : null;
         const glyphScale = look ? look.scale : 0.7, lookInk = look?.ink ?? null, ringGap = look ? look.ringGap : 3.5;
         agentGlyph(ctx, node.role, p.x, p.y, radius * glyphScale, lookInk ?? glyphInk(color));
-        if (styles && styles.ring(ctx, nodeStyle, p, radius, tint, { status: node.status ?? null, builder: false, ring: radius + ringGap, time, still, motion: record, theme })) {
+        let ringDrawn = false;
+        if (styles) {
+          railRing.status = node.status ?? null; railRing.ring = radius + ringGap;
+          railRing.time = time; railRing.still = still; railRing.motion = record; railRing.theme = theme;
+          ringDrawn = styles.ring(ctx, nodeStyle, p, radius, tint, railRing);
+        }
+        if (ringDrawn) {
           // the style drew the status ring
         } else if (node.status === "running") {
           const phase = noMotion() ? 0 : time / 380;
@@ -17526,7 +17637,13 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       if (appearance.orbitTrails === true && !isAgent && working) {
         const phase = noMotion() ? Math.PI / 3 : time / 1100 * Math.PI * 2;
         // A style may draw the orbit in its own language; otherwise the blue arcs.
-        if (!(styles && styles.orbit(ctx, nodeStyle, p, radius, tint, { running: true, phase, ring: radius + 9, time, still, motion: record, theme }))) {
+        let orbitDrawn = false;
+        if (styles) {
+          railOrbit.phase = phase; railOrbit.ring = radius + 9;
+          railOrbit.time = time; railOrbit.still = still; railOrbit.motion = record; railOrbit.theme = theme;
+          orbitDrawn = styles.orbit(ctx, nodeStyle, p, radius, tint, railOrbit);
+        }
+        if (!orbitDrawn) {
           ctx.save(); ctx.lineCap = "round";
           ctx.strokeStyle = "rgba(125,178,255,0.22)"; ctx.lineWidth = 0.8;
           ctx.beginPath(); ctx.arc(p.x, p.y, radius + 9, 0, Math.PI * 2); ctx.stroke();
@@ -18185,7 +18302,6 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     agentGlyph,
     agentGlyphKind,
     glyphInk,
-    // The Void collection's gem and seal, so the Command view cuts the same shapes.
     // Agent travel: live positions in tree space (the Command view overrides
     // its agent nodes from these every frame), and the Command-only task nodes
     // a reference agent may fly to.
@@ -18340,6 +18456,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const NODE_ABSORB_MS = 800;
   const NODE_ABSORB_TTL = 6000;
   const ABSORBED_MAX = 8; // briefs a host keeps readable on its card
+  // A pulse that reaches its node kicks the node's motion and, for this long
+  // after, is the node style's to land (drawFrame's landing pass).
+  const LAND_TAIL_MS = 380;
   // A task that finishes while the view watches holds the board before it
   // sinks: it pulses green and wears a wiggling "!" you can click to read the
   // work first. Anything already finished before the view saw it — archived
@@ -21761,8 +21880,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   // Hover and selection come forward in about 90 ms and settle back in about
-  // 160 ms; with no frame time (or reduced motion) they land at once.
+  // 160 ms; with no frame time (or reduced motion) they land at once. The
+  // node styles' approach eases the rail's lift the same way; without them
+  // (a bare harness) the same curve runs here.
   function easeLift(current, want, dt, still) {
+    const styles = globalThis.window?.MefiNodeStyles;
+    if (styles) return styles.approach(current, want, dt, 0.09, 0.16, still);
     if (still || !(dt > 0) || !Number.isFinite(current)) return want;
     const next = current + (want - current) * (1 - Math.exp(-dt / (want > current ? 0.09 : 0.16)));
     return Math.abs(next - want) < 0.01 ? want : next;
@@ -21835,6 +21958,27 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   // the chosen style; a bare harness without it gets one plain disc. One
   // options scratch is reused for every node.
   const SURFACE = { kind: "task", selected: false, chosen: false, active: false, alpha: 1, glyph: false, monogram: false, motion: null, time: 0, still: false, detail: 3, extraGlow: false, theme: null };
+  // The agent ring's, the hub dress's and the work orbit's options: one
+  // scratch each, filled per node (a style's hook reads them at once and
+  // never keeps them).
+  const RING = { status: null, builder: false, ring: 0, time: 0, still: false, motion: null, theme: null };
+  const HUB = { crew: false, breathe: 0.5, time: 0, still: false, motion: null, theme: null };
+  const ORBIT = { running: false, phase: 0, ring: 0, time: 0, still: false, motion: null, theme: null };
+  function ringLook(node, ring, time, still) {
+    RING.status = node.status ?? null; RING.builder = Boolean(node.builder); RING.ring = ring;
+    RING.time = time; RING.still = still; RING.motion = node._m ?? null; RING.theme = state.nodeTheme ?? null;
+    return RING;
+  }
+  function hubLook(node, crew, breathe, time, still) {
+    HUB.crew = crew; HUB.breathe = breathe;
+    HUB.time = time; HUB.still = still; HUB.motion = node._m ?? null; HUB.theme = state.nodeTheme ?? null;
+    return HUB;
+  }
+  function orbitLook(node, running, phase, ring, time, still) {
+    ORBIT.running = running; ORBIT.phase = phase; ORBIT.ring = ring;
+    ORBIT.time = time; ORBIT.still = still; ORBIT.motion = node._m ?? null; ORBIT.theme = state.nodeTheme ?? null;
+    return ORBIT;
+  }
   function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1, time = 0, still = false, detail = 3, chosen = false, motion = null } = {}) {
     node._extraGlow = state.extraGlow === true;
     const styles = globalThis.window?.MefiNodeStyles;
@@ -21876,7 +22020,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const glyphScale = look ? look.scale : 0.7, glyphInk = look?.ink ?? null, ringGap = look ? look.ringGap : 3.5;
     window.MefiTree?.agentGlyph?.(ctx, node.role, p.x, p.y, radius * glyphScale, glyphInk ?? window.MefiTree?.glyphInk?.(hex) ?? "#0b1016");
     const ring = radius + ringGap;
-    if (styles && styles.ring(ctx, state.nodeStyle, p, radius, tint, { status: node.status ?? null, builder: Boolean(node.builder), ring, time, still, motion: node._m ?? null, theme: state.nodeTheme ?? null })) {
+    if (styles && styles.ring(ctx, state.nodeStyle, p, radius, tint, ringLook(node, ring, time, still))) {
       // the style drew the status ring and its badges
     } else if (node.status === "running" || node.builder) {
       const phase = still ? 0 : time / 380;
@@ -21947,7 +22091,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     ctx.globalAlpha = (node._fade ?? 1) * emphasis(node);
     const crew = state.nodes.some((entry) => entry.kind === "agent" && !entry.builder && !entry.dying);
     const styles = globalThis.window?.MefiNodeStyles;
-    if (!(styles && styles.hubDress(ctx, state.nodeStyle, p, radius, tint, { crew, breathe, time, still, motion: node._m ?? null, theme: state.nodeTheme ?? null }))) {
+    if (!(styles && styles.hubDress(ctx, state.nodeStyle, p, radius, tint, hubLook(node, crew, breathe, time, still)))) {
       const ring = radius + 5 + breathe * 2.5;
       ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI * 2);
       ctx.strokeStyle = rgba(tint, 0.18 + breathe * 0.14); ctx.lineWidth = 1; ctx.stroke();
@@ -21970,7 +22114,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // A style may draw the orbit in its own language (node._m.orbit is the
     // integrated phase); without one the blue arcs below.
     const styles = globalThis.window?.MefiNodeStyles;
-    if (styles && styles.orbit(ctx, state.nodeStyle, p, radius, node._m?.tint ?? null, { running, phase, ring, time, still, motion: node._m ?? null, theme: state.nodeTheme ?? null })) {
+    if (styles && styles.orbit(ctx, state.nodeStyle, p, radius, node._m?.tint ?? null, orbitLook(node, running, phase, ring, time, still))) {
       node._orbitTrail = { drawn: true, animated: !still, segments: 3, phase, radius: ring };
       return;
     }
@@ -22640,6 +22784,23 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       agentRgbCache.set(role, triple);
     }
     return triple;
+  }
+
+  // A pulse that reached its node, `since` ms ago (drawFrame's landing pass,
+  // node styles only). Its first landed frame kicks the node's motion (kick
+  // = 1, the arrival flash any look may read); then for LAND_TAIL_MS the
+  // style lands it (u runs 0 → 1; look.pulse and look.motion are the pulse
+  // and its node's record) at the hot cadence. A style without a landing of
+  // its own lets the pulse go (pulse._landed).
+  function landPulse(ctx, styles, pulse, point, since, look, time, still) {
+    const motion = state.nodeMotion?.get(pulse.to?.id) ?? null;
+    const arrived = !pulse._kicked;
+    if (arrived) { pulse._kicked = true; if (motion && !still) motion.kick = 1; }
+    look.kind = pulse.wave ? "wave" : "dot"; look.rTo = pulse.to?._pr ?? 0; look.pulse = pulse; look.motion = motion;
+    pulse._rgb ??= hexToRgb(pulse.color ?? "#a9ffcd");
+    const u = still ? 1 : Math.min(1, Math.max(0, since) / LAND_TAIL_MS);
+    if (!styles.land(ctx, state.nodeStyle, point, look.rTo, pulse._rgb, u, look)) pulse._landed = true;
+    else if (arrived && !still) state.styleBurstUntil = Math.max(state.styleBurstUntil ?? 0, time + LAND_TAIL_MS);
   }
 
   // A `wave` pulse never launches a dot: the line itself answers. It bows on
@@ -25569,11 +25730,16 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // pulses: bright travelling dots on the working path — a line that ends
     // at an agent carries the signal itself instead (wave, see surgeLine)
     const now = Date.now();
-    state.pulses = state.pulses.filter((pulse) => now - pulse.start < pulse.duration);
+    // With the node styles a pulse outlives its travel by its landing; a style
+    // with no landing of its own lets it go after the first landed frame.
+    const landTail = nodeStyles ? LAND_TAIL_MS : 0;
+    state.pulses = state.pulses.filter((pulse) => now - pulse.start < pulse.duration + (pulse._landed ? 0 : landTail));
     // A style may draw the travelling pulse (surge) and its landing (land)
     // itself; one options scratch serves every pulse this frame.
-    const pulseLook = nodeStyles ? { kind: "dot", time, still, rTo: 0 } : null;
+    const pulseLook = nodeStyles ? { kind: "dot", time, still, rTo: 0, pulse: null, motion: null } : null;
     for (const pulse of state.pulses) {
+      // An arrived pulse's head is done: the landing pass below has it now.
+      if (!still && now - pulse.start >= pulse.duration) continue;
       // A pulse launched from a HUD row (an absorbed record) starts at that
       // screen point rather than at a node.
       const from = screenPoints.get(pulse.from.id) ?? project(pulse.from);
@@ -25581,6 +25747,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       const t = still ? 1 : Math.min(1, (now - pulse.start) / pulse.duration);
       if (pulseLook) {
         pulseLook.kind = pulse.wave ? "wave" : "dot"; pulseLook.rTo = pulse.to?._pr ?? 0;
+        pulseLook.pulse = pulse; pulseLook.motion = state.nodeMotion?.get(pulse.to?.id) ?? null;
         if (nodeStyles.surge(ctx, state.nodeStyle, from, to, t, pulse, pulseLook)) continue;
       }
       if (pulse.wave) {
@@ -25616,16 +25783,12 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       ctx.fill();
       ctx.shadowBlur = 0;
     }
-    // Landings: over the last fifth of its travel a pulse settles on its node
-    // (u runs 0 → 1), drawn by the style when it has a landing of its own.
+    // Landings: every pulse that reached its node (see landPulse).
     if (pulseLook) {
       for (const pulse of state.pulses) {
-        const t = still ? 1 : Math.min(1, (now - pulse.start) / pulse.duration);
-        if (t < 0.8) continue;
-        const to = screenPoints.get(pulse.to.id) ?? project(pulse.to);
-        pulseLook.kind = pulse.wave ? "wave" : "dot"; pulseLook.rTo = pulse.to?._pr ?? 0;
-        pulse._rgb ??= hexToRgb(pulse.color ?? "#a9ffcd");
-        nodeStyles.land(ctx, state.nodeStyle, to, pulseLook.rTo, pulse._rgb, (t - 0.8) / 0.2, pulseLook);
+        const since = now - pulse.start - pulse.duration;
+        if (!still && since < 0) continue;
+        landPulse(ctx, nodeStyles, pulse, screenPoints.get(pulse.to.id) ?? project(pulse.to), since, pulseLook, time, still);
       }
     }
     ctx.lineCap = "butt";
@@ -25666,6 +25829,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     state.detailCap = cost > 20 ? 1 : cost > 15 ? Math.min(state.detailCap ?? 3, 2) : cost >= 12 ? state.detailCap ?? 3 : 3;
     const costCap = state.detailCap;
     const stepFlags = { style: state.nodeStyle, active: false, selected: false, progress: null, orbit: 0, status: null, time, frame: frameNo };
+    // The surface's flags and the arrival/selection options: one scratch each
+    // for the frame, filled per node (drawNodeSurface reads its flags at once;
+    // a style's hook never keeps its options).
+    const surfaceFlags = { selected: false, active: false, alpha: 1, time, still, detail: 3, chosen: false, motion: null };
+    const overlay = { kind: "task", selected: false, chosen: false, hover: false, active: false, alpha: 1, time, still, detail: 3, motion: null, theme: state.nodeTheme ?? null };
     const growNow = Date.now();
     const nodesSpan = profiler?.begin("command.nodes");
     try {
@@ -25705,7 +25873,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         const cap = Math.min(costCap, ctx !== el.ctx || factor <= 0.3 ? 1 : state.cameraMoving && !lit ? 2 : 3);
         detail = nodeStyles.tier(radius, lit ? cap + 1 : cap);
       }
-      const surface = { selected: Boolean(selected), active, alpha: Math.max(0.35, visual.alpha * factor), time, still, detail, chosen, motion };
+      const surface = surfaceFlags;
+      surface.selected = Boolean(selected); surface.active = active; surface.alpha = Math.max(0.35, visual.alpha * factor);
+      surface.detail = detail; surface.chosen = chosen; surface.motion = motion;
       drawNodeSurface(ctx, node, p, radius, tint, surface);
       if (nodeStyles) {
         // A style's arrival (t01 runs over the node's grow) and its selection
@@ -25714,7 +25884,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         const grow = fx?.bornAt != null && fx.absorbAt == null ? (growNow - fx.bornAt) / NODE_GROW_MS : 1;
         const marked = Boolean(selected) || chosen || (motion?.sel ?? 0) > 0.01;
         if (marked || grow >= 0 && grow < 1) {
-          const overlay = { kind: node.kind, selected: Boolean(selected), chosen, hover: state.hoverNode === node, active, alpha: (node._fade ?? 1) * surface.alpha, time, still, detail, motion, theme: state.nodeTheme ?? null };
+          overlay.kind = node.kind; overlay.selected = Boolean(selected); overlay.chosen = chosen; overlay.hover = state.hoverNode === node;
+          overlay.active = active; overlay.alpha = (node._fade ?? 1) * surface.alpha; overlay.detail = detail; overlay.motion = motion;
           if (grow >= 0 && grow < 1) nodeStyles.arrival(ctx, state.nodeStyle, p, radius, tint, grow, overlay);
           if (marked) nodeStyles.select(ctx, state.nodeStyle, p, radius, tint, overlay);
         }

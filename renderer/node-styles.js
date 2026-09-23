@@ -211,6 +211,36 @@
   const swell = (m, period, pose = 0.5) => m.still ? pose : 0.5 + 0.5 * Math.sin(TAU * cycle(m, period));
   const turn = (m, period, pose = 0) => m.still ? pose : TAU * cycle(m, period);
 
+  // One-shot curves over t in [0, 1] (clamped), for a cell assembling, a
+  // badge popping in, an arrival ring: easeOut decelerates (cubic),
+  // easeOutBack overshoots a little and settles, smooth01 is the smooth step.
+  const easeOut = (t) => { const k = 1 - clamp01(t); return 1 - k * k * k; };
+  const easeOutBack = (t) => { if (!(t > 0)) return 0; if (t >= 1) return 1; const k = t - 1; return 1 + 2.70158 * k * k * k + 1.70158 * k * k; };
+  const smooth01 = (t) => { const k = clamp01(t); return k * k * (3 - 2 * k); };
+
+  // A regular polygon as one closed subpath (the caller begins, fills and
+  // strokes): `sides` vertices on radius r around (x, y), the first at angle
+  // `rot` (−π/2 puts a vertex on top: a pointy-top hexagon). One moveTo,
+  // sides − 1 lineTo, one closePath; nothing is allocated.
+  function polyPath(ctx, x, y, r, sides, rot = 0) {
+    const step = TAU / sides;
+    ctx.moveTo(x + Math.cos(rot) * r, y + Math.sin(rot) * r);
+    for (let index = 1; index < sides; index += 1) ctx.lineTo(x + Math.cos(rot + index * step) * r, y + Math.sin(rot + index * step) * r);
+    ctx.closePath();
+  }
+
+  // A point on an ellipse (radii rx, ry, turned by `tilt`) at parameter
+  // `angle`, written into the caller's own scratch `out` as { x, y, depth }.
+  // depth = sin(angle): above 0 on the near half (below the centre line
+  // before the tilt), so an orbit can pass behind a body and in front of it.
+  function ellipseAt(cx, cy, rx, ry, tilt, angle, out) {
+    const ex = Math.cos(angle) * rx, ey = Math.sin(angle) * ry, cos = Math.cos(tilt), sin = Math.sin(tilt);
+    out.x = cx + ex * cos - ey * sin;
+    out.y = cy + ex * sin + ey * cos;
+    out.depth = Math.sin(angle);
+    return out;
+  }
+
   // The canvas palette as stable triples, built once per palette. `hi` is the
   // highlight a tone mixes toward (white on dark themes, near-black on light
   // ones); `orbit` is the theme's second hue or a blue that reads on the bg.
@@ -298,6 +328,25 @@
   }
   const tierIn = (radius, level) => level <= 0 ? 1 : clamp01((radius - TIER_CUTS[Math.min(3, level)]) / 1.2);
 
+  // Extra glow (the appearance toggle): a soft halo under any style, out to
+  // 1.8 radii, 2.25 while the node is lit. One unit-space radial per canvas,
+  // tint and lit level, drawn under the node's own transform, so a steady
+  // frame builds nothing; paint() lays it under the look.
+  function extraGlow(ctx, p, radius, tint, lit) {
+    const key = `glow|${tint.join(",")}|${lit}`;
+    let glow = cacheGet(ctx, key);
+    if (!glow) {
+      glow = ctx.createRadialGradient(0, 0, 0.25, 0, 0, lit ? 2.25 : 1.8);
+      glow.addColorStop(0, rgba(tint, lit ? 0.32 : 0.16));
+      glow.addColorStop(0.45, rgba(tint, lit ? 0.14 : 0.05));
+      glow.addColorStop(1, rgba(tint, 0));
+      cachePut(ctx, key, glow);
+    }
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, lit ? 2.25 : 1.8, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+
   // The registry: one entry per style, registered by its own section below.
   // Entry: { speedup, paint(ctx, p, radius, tint, o, m), glyph, ring, hubDress,
   // orbit, arrival, select, wire, surge, land, reach }.
@@ -318,7 +367,8 @@
   // The Void collection's shapes, built once and shared by both canvases, so
   // the rail and the Command view cut the same gem and mark the same seal. The
   // helpers only add subpaths (the caller begins and fills), at a screen
-  // position and radius or in unit space.
+  // position and radius or in unit space. This section is closed: a style's
+  // new shapes live in its own section under a style prefix (sigilHex…).
   function buildVoidShapes() {
     // Prism: a kite-cut gem lit from the upper left, as x, y pairs in unit
     // space. A short crown over the girdle, a long pavilion below it; the
@@ -718,15 +768,7 @@
     const m = n.motion ?? poseOf(n);
     ctx.save();
     ctx.globalAlpha = n.alpha;
-    if (n.extraGlow) {
-      const lit = n.active || n.selected;
-      const spread = radius * (lit ? 2.25 : 1.8);
-      const glow = ctx.createRadialGradient(p.x, p.y, radius * 0.25, p.x, p.y, spread);
-      glow.addColorStop(0, rgba(tint, lit ? 0.32 : 0.16));
-      glow.addColorStop(0.45, rgba(tint, lit ? 0.14 : 0.05));
-      glow.addColorStop(1, rgba(tint, 0));
-      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, spread, 0, Math.PI * 2); ctx.fill();
-    }
+    if (n.extraGlow) extraGlow(ctx, p, radius, tint, n.active || n.selected);
     (lookOf(style) ?? LOOKS.orbs).paint(ctx, p, radius, tint, n, m);
     ctx.restore();
   }
@@ -809,7 +851,7 @@
   Object.freeze(WIRE_DEFAULTS);
   // Infra helpers the style sections share; named here so the ones no look
   // uses yet keep the linter quiet.
-  void [cycle, swell, turn, qa, tierIn, motionOf];
+  void [cycle, swell, turn, qa, tierIn, motionOf, easeOut, easeOutBack, smooth01, polyPath, ellipseAt];
   window.MefiNodeStyles = Object.freeze({
     version: 1, STYLES, PREMIUM, shapes: SHAPES,
     seed, hash, approach, motionRecord, stepMotion, shownTint, theme, inkOf, tier,

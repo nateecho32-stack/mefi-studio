@@ -127,6 +127,9 @@
   const NODE_ABSORB_MS = 800;
   const NODE_ABSORB_TTL = 6000;
   const ABSORBED_MAX = 8; // briefs a host keeps readable on its card
+  // A pulse that reaches its node kicks the node's motion and, for this long
+  // after, is the node style's to land (drawFrame's landing pass).
+  const LAND_TAIL_MS = 380;
   // A task that finishes while the view watches holds the board before it
   // sinks: it pulses green and wears a wiggling "!" you can click to read the
   // work first. Anything already finished before the view saw it — archived
@@ -3548,8 +3551,12 @@
   }
 
   // Hover and selection come forward in about 90 ms and settle back in about
-  // 160 ms; with no frame time (or reduced motion) they land at once.
+  // 160 ms; with no frame time (or reduced motion) they land at once. The
+  // node styles' approach eases the rail's lift the same way; without them
+  // (a bare harness) the same curve runs here.
   function easeLift(current, want, dt, still) {
+    const styles = globalThis.window?.MefiNodeStyles;
+    if (styles) return styles.approach(current, want, dt, 0.09, 0.16, still);
     if (still || !(dt > 0) || !Number.isFinite(current)) return want;
     const next = current + (want - current) * (1 - Math.exp(-dt / (want > current ? 0.09 : 0.16)));
     return Math.abs(next - want) < 0.01 ? want : next;
@@ -3622,6 +3629,27 @@
   // the chosen style; a bare harness without it gets one plain disc. One
   // options scratch is reused for every node.
   const SURFACE = { kind: "task", selected: false, chosen: false, active: false, alpha: 1, glyph: false, monogram: false, motion: null, time: 0, still: false, detail: 3, extraGlow: false, theme: null };
+  // The agent ring's, the hub dress's and the work orbit's options: one
+  // scratch each, filled per node (a style's hook reads them at once and
+  // never keeps them).
+  const RING = { status: null, builder: false, ring: 0, time: 0, still: false, motion: null, theme: null };
+  const HUB = { crew: false, breathe: 0.5, time: 0, still: false, motion: null, theme: null };
+  const ORBIT = { running: false, phase: 0, ring: 0, time: 0, still: false, motion: null, theme: null };
+  function ringLook(node, ring, time, still) {
+    RING.status = node.status ?? null; RING.builder = Boolean(node.builder); RING.ring = ring;
+    RING.time = time; RING.still = still; RING.motion = node._m ?? null; RING.theme = state.nodeTheme ?? null;
+    return RING;
+  }
+  function hubLook(node, crew, breathe, time, still) {
+    HUB.crew = crew; HUB.breathe = breathe;
+    HUB.time = time; HUB.still = still; HUB.motion = node._m ?? null; HUB.theme = state.nodeTheme ?? null;
+    return HUB;
+  }
+  function orbitLook(node, running, phase, ring, time, still) {
+    ORBIT.running = running; ORBIT.phase = phase; ORBIT.ring = ring;
+    ORBIT.time = time; ORBIT.still = still; ORBIT.motion = node._m ?? null; ORBIT.theme = state.nodeTheme ?? null;
+    return ORBIT;
+  }
   function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1, time = 0, still = false, detail = 3, chosen = false, motion = null } = {}) {
     node._extraGlow = state.extraGlow === true;
     const styles = globalThis.window?.MefiNodeStyles;
@@ -3663,7 +3691,7 @@
     const glyphScale = look ? look.scale : 0.7, glyphInk = look?.ink ?? null, ringGap = look ? look.ringGap : 3.5;
     window.MefiTree?.agentGlyph?.(ctx, node.role, p.x, p.y, radius * glyphScale, glyphInk ?? window.MefiTree?.glyphInk?.(hex) ?? "#0b1016");
     const ring = radius + ringGap;
-    if (styles && styles.ring(ctx, state.nodeStyle, p, radius, tint, { status: node.status ?? null, builder: Boolean(node.builder), ring, time, still, motion: node._m ?? null, theme: state.nodeTheme ?? null })) {
+    if (styles && styles.ring(ctx, state.nodeStyle, p, radius, tint, ringLook(node, ring, time, still))) {
       // the style drew the status ring and its badges
     } else if (node.status === "running" || node.builder) {
       const phase = still ? 0 : time / 380;
@@ -3734,7 +3762,7 @@
     ctx.globalAlpha = (node._fade ?? 1) * emphasis(node);
     const crew = state.nodes.some((entry) => entry.kind === "agent" && !entry.builder && !entry.dying);
     const styles = globalThis.window?.MefiNodeStyles;
-    if (!(styles && styles.hubDress(ctx, state.nodeStyle, p, radius, tint, { crew, breathe, time, still, motion: node._m ?? null, theme: state.nodeTheme ?? null }))) {
+    if (!(styles && styles.hubDress(ctx, state.nodeStyle, p, radius, tint, hubLook(node, crew, breathe, time, still)))) {
       const ring = radius + 5 + breathe * 2.5;
       ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI * 2);
       ctx.strokeStyle = rgba(tint, 0.18 + breathe * 0.14); ctx.lineWidth = 1; ctx.stroke();
@@ -3757,7 +3785,7 @@
     // A style may draw the orbit in its own language (node._m.orbit is the
     // integrated phase); without one the blue arcs below.
     const styles = globalThis.window?.MefiNodeStyles;
-    if (styles && styles.orbit(ctx, state.nodeStyle, p, radius, node._m?.tint ?? null, { running, phase, ring, time, still, motion: node._m ?? null, theme: state.nodeTheme ?? null })) {
+    if (styles && styles.orbit(ctx, state.nodeStyle, p, radius, node._m?.tint ?? null, orbitLook(node, running, phase, ring, time, still))) {
       node._orbitTrail = { drawn: true, animated: !still, segments: 3, phase, radius: ring };
       return;
     }
@@ -4427,6 +4455,23 @@
       agentRgbCache.set(role, triple);
     }
     return triple;
+  }
+
+  // A pulse that reached its node, `since` ms ago (drawFrame's landing pass,
+  // node styles only). Its first landed frame kicks the node's motion (kick
+  // = 1, the arrival flash any look may read); then for LAND_TAIL_MS the
+  // style lands it (u runs 0 → 1; look.pulse and look.motion are the pulse
+  // and its node's record) at the hot cadence. A style without a landing of
+  // its own lets the pulse go (pulse._landed).
+  function landPulse(ctx, styles, pulse, point, since, look, time, still) {
+    const motion = state.nodeMotion?.get(pulse.to?.id) ?? null;
+    const arrived = !pulse._kicked;
+    if (arrived) { pulse._kicked = true; if (motion && !still) motion.kick = 1; }
+    look.kind = pulse.wave ? "wave" : "dot"; look.rTo = pulse.to?._pr ?? 0; look.pulse = pulse; look.motion = motion;
+    pulse._rgb ??= hexToRgb(pulse.color ?? "#a9ffcd");
+    const u = still ? 1 : Math.min(1, Math.max(0, since) / LAND_TAIL_MS);
+    if (!styles.land(ctx, state.nodeStyle, point, look.rTo, pulse._rgb, u, look)) pulse._landed = true;
+    else if (arrived && !still) state.styleBurstUntil = Math.max(state.styleBurstUntil ?? 0, time + LAND_TAIL_MS);
   }
 
   // A `wave` pulse never launches a dot: the line itself answers. It bows on
@@ -7356,11 +7401,16 @@
     // pulses: bright travelling dots on the working path — a line that ends
     // at an agent carries the signal itself instead (wave, see surgeLine)
     const now = Date.now();
-    state.pulses = state.pulses.filter((pulse) => now - pulse.start < pulse.duration);
+    // With the node styles a pulse outlives its travel by its landing; a style
+    // with no landing of its own lets it go after the first landed frame.
+    const landTail = nodeStyles ? LAND_TAIL_MS : 0;
+    state.pulses = state.pulses.filter((pulse) => now - pulse.start < pulse.duration + (pulse._landed ? 0 : landTail));
     // A style may draw the travelling pulse (surge) and its landing (land)
     // itself; one options scratch serves every pulse this frame.
-    const pulseLook = nodeStyles ? { kind: "dot", time, still, rTo: 0 } : null;
+    const pulseLook = nodeStyles ? { kind: "dot", time, still, rTo: 0, pulse: null, motion: null } : null;
     for (const pulse of state.pulses) {
+      // An arrived pulse's head is done: the landing pass below has it now.
+      if (!still && now - pulse.start >= pulse.duration) continue;
       // A pulse launched from a HUD row (an absorbed record) starts at that
       // screen point rather than at a node.
       const from = screenPoints.get(pulse.from.id) ?? project(pulse.from);
@@ -7368,6 +7418,7 @@
       const t = still ? 1 : Math.min(1, (now - pulse.start) / pulse.duration);
       if (pulseLook) {
         pulseLook.kind = pulse.wave ? "wave" : "dot"; pulseLook.rTo = pulse.to?._pr ?? 0;
+        pulseLook.pulse = pulse; pulseLook.motion = state.nodeMotion?.get(pulse.to?.id) ?? null;
         if (nodeStyles.surge(ctx, state.nodeStyle, from, to, t, pulse, pulseLook)) continue;
       }
       if (pulse.wave) {
@@ -7403,16 +7454,12 @@
       ctx.fill();
       ctx.shadowBlur = 0;
     }
-    // Landings: over the last fifth of its travel a pulse settles on its node
-    // (u runs 0 → 1), drawn by the style when it has a landing of its own.
+    // Landings: every pulse that reached its node (see landPulse).
     if (pulseLook) {
       for (const pulse of state.pulses) {
-        const t = still ? 1 : Math.min(1, (now - pulse.start) / pulse.duration);
-        if (t < 0.8) continue;
-        const to = screenPoints.get(pulse.to.id) ?? project(pulse.to);
-        pulseLook.kind = pulse.wave ? "wave" : "dot"; pulseLook.rTo = pulse.to?._pr ?? 0;
-        pulse._rgb ??= hexToRgb(pulse.color ?? "#a9ffcd");
-        nodeStyles.land(ctx, state.nodeStyle, to, pulseLook.rTo, pulse._rgb, (t - 0.8) / 0.2, pulseLook);
+        const since = now - pulse.start - pulse.duration;
+        if (!still && since < 0) continue;
+        landPulse(ctx, nodeStyles, pulse, screenPoints.get(pulse.to.id) ?? project(pulse.to), since, pulseLook, time, still);
       }
     }
     ctx.lineCap = "butt";
@@ -7453,6 +7500,11 @@
     state.detailCap = cost > 20 ? 1 : cost > 15 ? Math.min(state.detailCap ?? 3, 2) : cost >= 12 ? state.detailCap ?? 3 : 3;
     const costCap = state.detailCap;
     const stepFlags = { style: state.nodeStyle, active: false, selected: false, progress: null, orbit: 0, status: null, time, frame: frameNo };
+    // The surface's flags and the arrival/selection options: one scratch each
+    // for the frame, filled per node (drawNodeSurface reads its flags at once;
+    // a style's hook never keeps its options).
+    const surfaceFlags = { selected: false, active: false, alpha: 1, time, still, detail: 3, chosen: false, motion: null };
+    const overlay = { kind: "task", selected: false, chosen: false, hover: false, active: false, alpha: 1, time, still, detail: 3, motion: null, theme: state.nodeTheme ?? null };
     const growNow = Date.now();
     const nodesSpan = profiler?.begin("command.nodes");
     try {
@@ -7492,7 +7544,9 @@
         const cap = Math.min(costCap, ctx !== el.ctx || factor <= 0.3 ? 1 : state.cameraMoving && !lit ? 2 : 3);
         detail = nodeStyles.tier(radius, lit ? cap + 1 : cap);
       }
-      const surface = { selected: Boolean(selected), active, alpha: Math.max(0.35, visual.alpha * factor), time, still, detail, chosen, motion };
+      const surface = surfaceFlags;
+      surface.selected = Boolean(selected); surface.active = active; surface.alpha = Math.max(0.35, visual.alpha * factor);
+      surface.detail = detail; surface.chosen = chosen; surface.motion = motion;
       drawNodeSurface(ctx, node, p, radius, tint, surface);
       if (nodeStyles) {
         // A style's arrival (t01 runs over the node's grow) and its selection
@@ -7501,7 +7555,8 @@
         const grow = fx?.bornAt != null && fx.absorbAt == null ? (growNow - fx.bornAt) / NODE_GROW_MS : 1;
         const marked = Boolean(selected) || chosen || (motion?.sel ?? 0) > 0.01;
         if (marked || grow >= 0 && grow < 1) {
-          const overlay = { kind: node.kind, selected: Boolean(selected), chosen, hover: state.hoverNode === node, active, alpha: (node._fade ?? 1) * surface.alpha, time, still, detail, motion, theme: state.nodeTheme ?? null };
+          overlay.kind = node.kind; overlay.selected = Boolean(selected); overlay.chosen = chosen; overlay.hover = state.hoverNode === node;
+          overlay.active = active; overlay.alpha = (node._fade ?? 1) * surface.alpha; overlay.detail = detail; overlay.motion = motion;
           if (grow >= 0 && grow < 1) nodeStyles.arrival(ctx, state.nodeStyle, p, radius, tint, grow, overlay);
           if (marked) nodeStyles.select(ctx, state.nodeStyle, p, radius, tint, overlay);
         }

@@ -56,6 +56,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   model-performance ctime check on filesystems that do not advance ctime.
 - The TESTRUNS append helper no longer doubles a "(task, run)" suffix the
   title already carries.
+- **The tree rail now wears the Command view's node looks.** Both canvases
+  paint every node through one shared module (`renderer/node-styles.js`), so
+  the rail's own drifted copies of the eight styles are gone. On the rail this
+  is a visible change: orbs gain the Command view's highlight, a quiet glow
+  (1.9 radii when lit instead of 2.4) and fade their halo and rim with
+  freshness too; Soft glass, Halo and Crystal take the Command view's fills
+  and washes; Extra glow reaches at most 2.25 radii (was 2.8); the smallest
+  Minimal dot is 3 px (was 2). The Command view looks exactly as before.
 
 ### Security
 - The Analyzer's GitHub issue read runs `gh` without a shell and without

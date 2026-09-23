@@ -1316,8 +1316,20 @@
     return triple;
   }
   const railMotion = new Map();
+  // A record not seen for 90 rail frames is dropped (checked every 64); past
+  // RAIL_MOTION_MAX the records not seen last frame go first, never the
+  // whole table, so no frame restarts every node's clock at once.
+  const RAIL_MOTION_MAX = 2048;
+  function pruneRailMotion() {
+    if (railFrame % 64 === 0) for (const [id, record] of railMotion) if (railFrame - record.seen > 90) railMotion.delete(id);
+    if (railMotion.size > RAIL_MOTION_MAX) for (const [id, record] of railMotion) if (railFrame - record.seen > 1) railMotion.delete(id);
+  }
   const railStep = { style: "orbs", active: false, selected: false, lift: 0, progress: null, orbit: 0, status: null, time: 0, frame: 0 };
   const railPaint = { kind: "session", selected: false, chosen: false, active: false, alpha: 1, glyph: false, monogram: false, motion: null, time: 0, still: false, detail: 2, extraGlow: false, theme: null };
+  // The agent ring's and the work orbit's options, one scratch each, filled
+  // per node (a style's hook reads them at once and never keeps them).
+  const railRing = { status: null, builder: false, ring: 0, time: 0, still: false, motion: null, theme: null };
+  const railOrbit = { running: true, phase: 0, ring: 0, time: 0, still: false, motion: null, theme: null };
   let railFrameAt = null;
   let railFrame = 0;
 
@@ -1328,6 +1340,20 @@
 
     const projected = new Map();
     for (const node of nodes) projected.set(node, project(node));
+
+    // The appearance, the node styles, their theme and the motion clock are
+    // read once a frame, before anything is drawn: edges, pulses and nodes all
+    // paint in the chosen style.
+    const still = noMotion();
+    const appearance = window.MefiMusic?.graphPreferences?.() ?? {};
+    const nodeStyle = appearance.nodeStyle ?? "orbs";
+    const styles = window.MefiNodeStyles ?? null;
+    const theme = styles ? styles.theme(window.MefiMusic?.themePalette?.()?.canvas ?? null) : null;
+    const dt = railFrameAt == null ? 0 : Math.min(0.05, Math.max(0, (time - railFrameAt) / 1000));
+    railFrameAt = time;
+    railFrame += 1;
+    pruneRailMotion();
+    railStep.style = nodeStyle; railStep.time = time; railStep.frame = railFrame;
 
     // edges, far to near
     const orderedEdges = [...edges].sort((a, b) => projected.get(b.a).depth - projected.get(a.a).depth);
@@ -1346,8 +1372,10 @@
     ctx.globalAlpha = 1;
 
     // pulses — a line that ends at an agent carries the signal itself
-    // (wave, see surgeLine); the rest stay travelling dots
-    const still = noMotion();
+    // (wave, see surgeLine); the rest stay travelling dots. One that reached
+    // its node kicks the node's motion as it goes (the arrival flash a look
+    // may read).
+    if (styles && !still) for (const pulse of pulses) if (time - pulse.start >= pulse.duration) { const record = railMotion.get(pulse.to?.id); if (record) record.kick = 1; }
     pulses = pulses.filter((pulse) => time - pulse.start < pulse.duration);
     for (const pulse of pulses) {
       const a = projected.get(pulse.from);
@@ -1413,16 +1441,6 @@
     // nodes, far to near
     const ordered = [...nodes].sort((a, b) => projected.get(b).depth - projected.get(a).depth);
     const running = Boolean(window.mefiStudio?.assistantState) && assistant.state?.status === "running";
-    // The appearance, the node styles and their theme are read once a frame.
-    const appearance = window.MefiMusic?.graphPreferences?.() ?? {};
-    const nodeStyle = appearance.nodeStyle ?? "orbs";
-    const styles = window.MefiNodeStyles ?? null;
-    const theme = styles ? styles.theme(window.MefiMusic?.themePalette?.()?.canvas ?? null) : null;
-    const dt = railFrameAt == null ? 0 : Math.min(0.05, Math.max(0, (time - railFrameAt) / 1000));
-    railFrameAt = time;
-    railFrame += 1;
-    if (railMotion.size > 512) railMotion.clear();
-    railStep.style = nodeStyle; railStep.time = time; railStep.frame = railFrame;
     for (const node of ordered) {
       const p = projected.get(node);
       if (p.depth < 60) continue;
@@ -1486,7 +1504,13 @@
         const look = styles ? styles.glyph(nodeStyle, tint, theme) : null;
         const glyphScale = look ? look.scale : 0.7, lookInk = look?.ink ?? null, ringGap = look ? look.ringGap : 3.5;
         agentGlyph(ctx, node.role, p.x, p.y, radius * glyphScale, lookInk ?? glyphInk(color));
-        if (styles && styles.ring(ctx, nodeStyle, p, radius, tint, { status: node.status ?? null, builder: false, ring: radius + ringGap, time, still, motion: record, theme })) {
+        let ringDrawn = false;
+        if (styles) {
+          railRing.status = node.status ?? null; railRing.ring = radius + ringGap;
+          railRing.time = time; railRing.still = still; railRing.motion = record; railRing.theme = theme;
+          ringDrawn = styles.ring(ctx, nodeStyle, p, radius, tint, railRing);
+        }
+        if (ringDrawn) {
           // the style drew the status ring
         } else if (node.status === "running") {
           const phase = noMotion() ? 0 : time / 380;
@@ -1510,7 +1534,13 @@
       if (appearance.orbitTrails === true && !isAgent && working) {
         const phase = noMotion() ? Math.PI / 3 : time / 1100 * Math.PI * 2;
         // A style may draw the orbit in its own language; otherwise the blue arcs.
-        if (!(styles && styles.orbit(ctx, nodeStyle, p, radius, tint, { running: true, phase, ring: radius + 9, time, still, motion: record, theme }))) {
+        let orbitDrawn = false;
+        if (styles) {
+          railOrbit.phase = phase; railOrbit.ring = radius + 9;
+          railOrbit.time = time; railOrbit.still = still; railOrbit.motion = record; railOrbit.theme = theme;
+          orbitDrawn = styles.orbit(ctx, nodeStyle, p, radius, tint, railOrbit);
+        }
+        if (!orbitDrawn) {
           ctx.save(); ctx.lineCap = "round";
           ctx.strokeStyle = "rgba(125,178,255,0.22)"; ctx.lineWidth = 0.8;
           ctx.beginPath(); ctx.arc(p.x, p.y, radius + 9, 0, Math.PI * 2); ctx.stroke();
@@ -2169,7 +2199,6 @@
     agentGlyph,
     agentGlyphKind,
     glyphInk,
-    // The Void collection's gem and seal, so the Command view cuts the same shapes.
     // Agent travel: live positions in tree space (the Command view overrides
     // its agent nodes from these every frame), and the Command-only task nodes
     // a reference agent may fly to.

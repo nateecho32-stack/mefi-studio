@@ -8,6 +8,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import vm from "node:vm";
 import { NODE_STYLES_SOURCE as source, loadNodeStyles, recordingContext, gradientsBuilt, plain } from "./fixtures/node-styles-harness.mjs";
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
@@ -276,6 +277,42 @@ test("detail tiers cut clear of the common radii and honour a cap", () => {
   assert.equal(tier(15, NaN), 3, "no cap is no cap");
 });
 
+// The infra section's private helpers, run on their own (they are shared by
+// every style section but not exported).
+function infraHelpers(names) {
+  const context = vm.createContext({});
+  return vm.runInContext(`(function () { "use strict";\n${sectionOf("infra")}\nreturn { ${names.join(", ")} }; })()`, context);
+}
+
+test("the shared one-shot curves, polygon path and ellipse point every section may use", () => {
+  const { easeOut, easeOutBack, smooth01, polyPath, ellipseAt } = infraHelpers(["easeOut", "easeOutBack", "smooth01", "polyPath", "ellipseAt"]);
+  for (const curve of [easeOut, easeOutBack, smooth01]) {
+    assert.deepEqual([curve(-1), curve(0), curve(1), curve(2)], [0, 0, 1, 1], "each runs 0 → 1 and clamps outside");
+  }
+  assert.equal(easeOut(0.5), 0.875, "a cubic ease-out");
+  assert.equal(smooth01(0.5), 0.5);
+  assert.ok(Math.abs(smooth01(0.25) - 0.15625) < 1e-12, "the smooth step");
+  const back = [0.2, 0.4, 0.6, 0.8].map(easeOutBack);
+  assert.ok(Math.max(...back) > 1 && Math.max(...back) < 1.11, "easeOutBack overshoots a little, then settles");
+  // A pointy-top hexagon: one subpath, five lineTo, the first vertex on top.
+  const ctx = recordingContext({ center: { x: 50, y: 50 } });
+  ctx.beginPath(); polyPath(ctx, 50, 50, 10, 6, -Math.PI / 2);
+  assert.deepEqual([ctx.calls.moveTo, ctx.calls.lineTo, ctx.calls.closePath], [1, 5, 1]);
+  assert.deepEqual(plain(ctx.calls.log[1]), ["moveTo", 50, 40]);
+  assert.ok(Math.abs(ctx.calls.pathReach - 10) < 1e-9, "every vertex on the radius");
+  const square = recordingContext();
+  polyPath(square, 0, 0, 4, 4);
+  assert.deepEqual(plain(square.calls.log[0]), ["moveTo", 4, 0], "rot defaults to 0");
+  // ellipseAt writes into the caller's scratch and answers it.
+  const out = { x: 0, y: 0, depth: 0 };
+  assert.equal(ellipseAt(10, 20, 8, 3, 0, 0, out), out, "no allocation: the scratch comes back");
+  assert.deepEqual(plain(out), { x: 18, y: 20, depth: 0 });
+  ellipseAt(10, 20, 8, 3, 0, Math.PI / 2, out);
+  assert.ok(Math.abs(out.x - 10) < 1e-9 && Math.abs(out.y - 23) < 1e-9 && out.depth === 1, "the near half sits below the centre line");
+  ellipseAt(10, 20, 8, 3, Math.PI / 2, 0, out);
+  assert.ok(Math.abs(out.x - 10) < 1e-9 && Math.abs(out.y - 28) < 1e-9, "the tilt turns the ellipse about its centre");
+});
+
 test("each canvas owns one bounded paint cache that cacheStats reads", () => {
   const styles = loadNodeStyles();
   const ctx = recordingContext();
@@ -289,6 +326,22 @@ test("each canvas owns one bounded paint cache that cacheStats reads", () => {
   assert.deepEqual(plain(styles.cacheStats(recordingContext())), { entries: 0, created: 0 }, "another canvas starts empty");
 });
 
+test("the recording canvas follows transform() like a real one and tells gradients apart in its log", () => {
+  const ctx = recordingContext({ center: { x: 0, y: 0 } });
+  ctx.save(); ctx.transform(1, 0, 0, 0.4, 10, 0);
+  assert.deepEqual(plain(ctx.getTransform()), { a: 1, b: 0, c: 0, d: 0.4, e: 10, f: 0 });
+  ctx.beginPath(); ctx.moveTo(0, 10);
+  assert.ok(Math.abs(ctx.calls.pathReach - Math.hypot(10, 4)) < 1e-9, "a squash applies to the points drawn under it");
+  ctx.restore();
+  assert.deepEqual(plain(ctx.matrix()), [1, 0, 0, 1, 0, 0]);
+  const first = ctx.createRadialGradient(0, 0, 0, 0, 0, 1), second = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+  first.addColorStop(0, "red"); second.addColorStop(0, "red");
+  ctx.fillStyle = first; ctx.fillStyle = second; ctx.fillStyle = first;
+  const sets = ctx.calls.log.filter(([name]) => name === "set:fillStyle").map(([, value]) => value);
+  assert.deepEqual(sets, ["grad:radial#0(0,0,0,0,0,1)[0 red]", "grad:radial#1(0,0,0,0,0,1)[0 red]", "grad:radial#0(0,0,0,0,0,1)[0 red]"], "each paint logs as its own tag");
+  assert.deepEqual(plain(ctx.calls.log.filter(([name]) => name === "addColorStop")), [["addColorStop", "grad:radial#0(0,0,0,0,0,1)", 0, "red"], ["addColorStop", "grad:radial#1(0,0,0,0,0,1)", 0, "red"]]);
+});
+
 // ===== the paint contract, every style =====
 
 test("every style restores the canvas, honours an unknown style as orbs, and adds a bounded extra glow", () => {
@@ -298,7 +351,7 @@ test("every style restores the canvas, honours an unknown style as orbs, and add
     ctx.globalAlpha = 0.73; ctx.lineWidth = 3; ctx.fillStyle = "#123456";
     styles.paint(ctx, style, { x: 50, y: 50 }, 12, [120, 180, 220], options);
     assert.equal(ctx.calls.saves, ctx.calls.restores, `${style} leaves the canvas state as it found it`);
-    assert.deepEqual([ctx.globalAlpha, ctx.lineWidth, ctx.fillStyle, plain(ctx.transform())], [0.73, 3, "#123456", [1, 0, 0, 1, 0, 0]]);
+    assert.deepEqual([ctx.globalAlpha, ctx.lineWidth, ctx.fillStyle, plain(ctx.matrix())], [0.73, 3, "#123456", [1, 0, 0, 1, 0, 0]]);
     assert.ok(ctx.calls.fill + ctx.calls.stroke > 0, `${style} draws something`);
   }
   const unknown = recordingContext(), orbs = recordingContext();
@@ -311,6 +364,13 @@ test("every style restores the canvas, honours an unknown style as orbs, and add
     styles.paint(glowing, style, { x: 50, y: 50 }, 12, [120, 180, 220], { extraGlow: true });
     assert.equal(glowing.calls.radial, plainCtx.calls.radial + 1, `${style}: Extra glow adds one halo`);
     assert.ok(glowing.calls.reach > 12 * 1.5 && glowing.calls.reach <= 12 * 2.25 + 1e-9, `${style}: the glow leaves a crisp edge (${glowing.calls.reach.toFixed(1)}px)`);
+    // The halo is a cached unit-space paint: the next frame builds no radial.
+    const built = glowing.calls.radial;
+    styles.paint(glowing, style, { x: 70, y: 30 }, 9, [120, 180, 220], { extraGlow: true, alpha: 0.5 });
+    assert.equal(glowing.calls.radial, built, `${style}: Extra glow reuses its halo on later frames`);
+    const lit = recordingContext();
+    styles.paint(lit, style, { x: 50, y: 50 }, 12, [120, 180, 220], { extraGlow: true, active: true });
+    assert.ok(lit.calls.reach > 12 * 1.8 && lit.calls.reach <= 12 * 2.25 + 1e-9, `${style}: a lit glow reaches further, still inside 2.25r (${lit.calls.reach.toFixed(1)}px)`);
   }
 });
 
@@ -384,12 +444,13 @@ test("Classic, Soft glass and Minimal use distinct rendering without altering no
 test("Extra glow adds a bounded visible halo to every chosen style without changing geometry", () => {
   const styles = loadNodeStyles();
   for (const style of ["orbs", "glass", "minimal"]) {
-    const radii = [];
-    const ctx = { save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc() {}, fill() {}, stroke() {}, createRadialGradient(...args) { radii.push(args[5]); return { addColorStop() {} }; }, createLinearGradient: () => ({ addColorStop() {} }) };
-    styles.paint(ctx, style, { x: 100, y: 100 }, 12, [220, 180, 110], { kind: "task" }); const normal = radii.length;
+    const ctx = recordingContext({ center: { x: 100, y: 100 } });
+    styles.paint(ctx, style, { x: 100, y: 100 }, 12, [220, 180, 110], { kind: "task" });
+    const normal = ctx.calls.radial, bodyReach = ctx.calls.reach, bodyPath = ctx.calls.pathReach;
     styles.paint(ctx, style, { x: 100, y: 100 }, 12, [220, 180, 110], { kind: "task", extraGlow: true });
-    assert.equal(radii.length - normal, style === "orbs" ? 1 : normal + 1, "orbs reuse their base paints; enabling glow adds one new halo");
-    assert.ok(radii.some((radius) => radius > 12 && radius <= 12 * 2.25)); assert.ok(Math.max(...radii) <= 12 * 2.25, "glow leaves a crisp edge instead of filling the surrounding branch");
+    assert.equal(ctx.calls.radial - normal, 1, "the base paints are reused; enabling glow adds one new halo");
+    assert.ok(ctx.calls.reach > bodyReach && ctx.calls.reach > 12 && ctx.calls.reach <= 12 * 2.25 + 1e-9, "glow leaves a crisp edge instead of filling the surrounding branch");
+    assert.equal(ctx.calls.pathReach, bodyPath, "the glow changes no node geometry");
   }
 });
 

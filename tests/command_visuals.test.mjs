@@ -106,6 +106,29 @@ test("the Void collection's themes each follow their own sky, and the rail paint
   for (const allocation of ["createRadialGradient", "createLinearGradient", "createConicGradient", "Array.from", ".filter(", ".map("]) assert.ok(!loop.includes(allocation), `the rail's node loop avoids ${allocation} per node`);
   assert.equal(draw.split("graphPreferences?.()").length - 1, 1, "the appearance is read once per frame");
   assert.ok(!loop.includes("graphPreferences"), "never per node");
+  const edges = draw.indexOf("    // edges, far to near");
+  for (const once of ["graphPreferences?.()", "const styles = window.MefiNodeStyles", "const theme = styles ?", "railFrame += 1;", "pruneRailMotion();"]) {
+    assert.ok(draw.indexOf(once) >= 0 && draw.indexOf(once) < edges, `${once} runs before the edge pass, so edges and pulses can wear the style too`);
+  }
+  assert.ok(!loop.includes("{ status:") && !loop.includes("{ running:"), "the ring and orbit options are scratches, not literals per node");
+  assert.ok(section(draw, "    // pulses", "    // tethers").includes("record.kick = 1"), "a pulse that reaches its node kicks the node's motion");
+});
+
+test("the rail's motion records are pruned by when they were last seen, never all at once", () => {
+  const env = vm.createContext({ railFrame: 0 });
+  vm.runInContext(section(tree, "  const railMotion = new Map();", "  const railStep = {"), env);
+  const railMotion = vm.runInContext("railMotion", env);
+  const fill = (count, seen) => { for (let index = 0; index < count; index += 1) railMotion.set(`${seen}:${index}`, { seen }); };
+  fill(3, 10); fill(3, 100); fill(3, 127);
+  env.railFrame = 127; vm.runInContext("pruneRailMotion()", env);
+  assert.equal(railMotion.size, 9, "only every 64th frame looks");
+  env.railFrame = 128; vm.runInContext("pruneRailMotion()", env);
+  assert.deepEqual([...railMotion.keys()].map((id) => id.split(":")[0]), ["100", "100", "100", "127", "127", "127"], "records unseen for 90 frames go; recent ones keep their clocks");
+  const max = vm.runInContext("RAIL_MOTION_MAX", env);
+  railMotion.clear(); fill(max, 200); fill(5, 150);
+  env.railFrame = 201; vm.runInContext("pruneRailMotion()", env);
+  assert.equal(railMotion.size, max, "past the cap, the records not seen last frame go first");
+  assert.ok([...railMotion.values()].every((record) => record.seen === 200), "and every node on screen keeps its record");
 });
 
 // The shared painters in a vm, fed the rail's hex colours through its own

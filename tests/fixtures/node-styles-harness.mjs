@@ -44,8 +44,14 @@ const round = (value) => typeof value === "number" ? Math.round(value * 1e6) / 1
 //   alphas                                globalAlpha at every fill and stroke
 //   texts                                 [{ text, ink, alpha }]
 //   shadowBlurs                           every shadowBlur value set
-//   log                                   every call, [name, ...args rounded to 1e-6]
-// ctx.transform() reads the current matrix [a, b, c, d, e, f].
+//   log                                   every call, [name, ...args rounded to 1e-6];
+//                                         a gradient logs as its tag (below)
+// Like a real canvas, ctx.transform(a, b, c, d, e, f) multiplies the current
+// matrix and ctx.getTransform() reads it as { a, b, c, d, e, f }; ctx.matrix()
+// reads it as [a, b, c, d, e, f]. Every gradient carries a stable tag,
+// "grad:<kind>#<n>(<args>)" plus its stops once any are added, which is what
+// the log records when it is set as a fill or stroke, so two frames that fill
+// with different cached paints never compare equal.
 export function recordingContext({ center = { x: 50, y: 50 }, conic = true } = {}) {
   const calls = {
     fill: 0, stroke: 0, arc: 0, ellipse: 0, lineTo: 0, moveTo: 0, quadraticCurveTo: 0, bezierCurveTo: 0, closePath: 0,
@@ -70,16 +76,27 @@ export function recordingContext({ center = { x: 50, y: 50 }, conic = true } = {
   const point = (x, y, extra = 0) => { calls.reach = Math.max(calls.reach, distance(x, y) + extra * scaleOf()); };
   const pathPoint = (x, y) => { point(x, y); calls.pathReach = Math.max(calls.pathReach, distance(x, y)); };
   const log = (name, args) => calls.log.push([name, ...Array.from(args, round)]);
+  // A gradient's tag: its kind, its index among this canvas's gradients, its
+  // arguments and (once added) its stops.
+  const TAG = Symbol("gradient");
+  const tagOf = (value) => value && typeof value === "object" && value[TAG] ? value[TAG]() : round(value);
   const gradient = (kind, args) => {
     calls[kind] += 1;
     const record = { kind, args: Array.from(args), stops: [] };
+    const name = `grad:${kind}#${calls.gradients.length}(${record.args.map(round).join(",")})`;
     calls.gradients.push(record);
     log(`create:${kind}`, args);
-    return { addColorStop: (offset, colour) => record.stops.push([offset, colour]) };
+    const tag = () => record.stops.length ? `${name}[${record.stops.map(([offset, colour]) => `${round(offset)} ${colour}`).join(";")}]` : name;
+    return {
+      [TAG]: tag,
+      addColorStop: (offset, colour) => { record.stops.push([offset, colour]); calls.log.push(["addColorStop", name, round(offset), colour]); },
+    };
   };
   const ctx = {
     calls,
-    transform: () => m.slice(),
+    transform(a, b, c, d, e, f) { m = multiply(m, [a, b, c, d, e, f]); log("transform", arguments); },
+    getTransform: () => ({ a: m[0], b: m[1], c: m[2], d: m[3], e: m[4], f: m[5] }),
+    matrix: () => m.slice(),
     save() { calls.saves += 1; stack.push({ m: m.slice(), dash: dash.slice(), props: STATE_KEYS.map((key) => props[key]) }); log("save", []); },
     restore() {
       calls.restores += 1; log("restore", []);
@@ -139,7 +156,7 @@ export function recordingContext({ center = { x: 50, y: 50 }, conic = true } = {
       set: (value) => {
         props[key] = value;
         if (key === "shadowBlur") calls.shadowBlurs.push(value);
-        calls.log.push([`set:${key}`, round(value)]);
+        calls.log.push([`set:${key}`, tagOf(value)]);
       },
     });
   }

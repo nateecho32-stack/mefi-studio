@@ -607,13 +607,13 @@ test("drawNodeSurface hands each node to MefiNodeStyles, and a bare harness pain
 });
 
 test("the agent dress, hub dress and work orbit let a style draw its own and keep theirs otherwise", () => {
-  const glyphs = [], asked = [];
+  const glyphs = [], asked = [], options = { ring: new Set(), hub: new Set(), orbit: new Set() };
   let arcs = [], answer = false;
   const spy = {
     glyph: (style) => style === "sigil" ? { ink: "INK", scale: 0.5, ringGap: 4 } : null,
-    ring: (_ctx, style, _p, _radius, _tint, o) => { asked.push(["ring", style, o.status, o.ring, o.still]); return answer; },
-    hubDress: (_ctx, style, _p, _radius, _tint, o) => { asked.push(["hub", style, o.crew]); return answer; },
-    orbit: (_ctx, style, _p, _radius, _tint, o) => { asked.push(["orbit", style, o.running, o.ring]); return answer; },
+    ring: (_ctx, style, _p, _radius, _tint, o) => { options.ring.add(o); asked.push(["ring", style, o.status, o.ring, o.still]); return answer; },
+    hubDress: (_ctx, style, _p, _radius, _tint, o) => { options.hub.add(o); asked.push(["hub", style, o.crew]); return answer; },
+    orbit: (_ctx, style, _p, _radius, _tint, o) => { options.orbit.add(o); asked.push(["orbit", style, o.running, o.ring]); return answer; },
   };
   const state = { nodeStyle: "sigil", nodeTheme: null, agentTrails: new Map(), nodes: [{ kind: "agent" }], orbitTrails: true };
   const env = vm.createContext({
@@ -654,6 +654,47 @@ test("the agent dress, hub dress and work orbit let a style draw its own and kee
   answer = false;
   env.drawWorkOrbit(ctx, work, p, 12, 100, false);
   assert.equal(arcs.length, 4, "a declined orbit keeps the blue arcs");
+  assert.deepEqual([options.ring.size, options.hub.size, options.orbit.size], [1, 1, 1], "each hook's options are one scratch, reused for every node");
+});
+
+// drawFrame's landing pass hands every arrived pulse to landPulse.
+test("a landed pulse kicks its node's motion once and belongs to the style for the landing tail", () => {
+  const lands = [];
+  let answer = true;
+  const styles = { land: (_ctx, style, point, radius, tint, u, o) => { lands.push({ style, point, radius, tint: [...tint], u, kind: o.kind, pulse: o.pulse, motion: o.motion }); return answer; } };
+  const record = { kick: 0 };
+  const state = { nodeStyle: "sigil", nodeMotion: new Map([["task", record]]), styleBurstUntil: 0 };
+  const env = vm.createContext({ state, Math, LAND_TAIL_MS: 380, hexToRgb: () => [1, 2, 3] });
+  vm.runInContext(section("function landPulse(", "function surgeLine("), env);
+  const look = { kind: "dot", time: 0, still: false, rTo: 0, pulse: null, motion: null };
+  const node = { id: "task", _pr: 12 }, point = { x: 10, y: 20 };
+  const pulse = { to: node, color: "#010203", wave: true };
+  env.landPulse({}, styles, pulse, point, 0, look, 1000, false);
+  assert.equal(record.kick, 1, "the arrival kicks the node's motion");
+  assert.equal(state.styleBurstUntil, 1380, "a landing draws at the hot cadence for its tail");
+  assert.deepEqual({ ...lands[0], pulse: lands[0].pulse === pulse, motion: lands[0].motion === record }, { style: "sigil", point, radius: 12, tint: [1, 2, 3], u: 0, kind: "wave", pulse: true, motion: true });
+  record.kick = 0.4;
+  env.landPulse({}, styles, pulse, point, 190, look, 1190, false);
+  assert.equal(record.kick, 0.4, "only the first landed frame kicks");
+  assert.equal(lands[1].u, 0.5, "u runs over the landing tail");
+  env.landPulse({}, styles, pulse, point, 900, look, 1900, false);
+  assert.equal(lands[2].u, 1);
+  assert.equal(pulse._landed, undefined, "a style that lands keeps the pulse to the end of its tail");
+  // A style without a landing: the kick still lands, the pulse goes.
+  answer = false; state.styleBurstUntil = 0; record.kick = 0;
+  const declined = { to: node };
+  env.landPulse({}, styles, declined, point, 5, look, 2000, false);
+  assert.deepEqual([record.kick, declined._landed, state.styleBurstUntil], [1, true, 0]);
+  // Reduced motion: no kick, the landing's end pose.
+  const quiet = { to: { id: "task" } }; record.kick = 0;
+  env.landPulse({}, styles, quiet, point, -400, look, 3000, true);
+  assert.deepEqual([record.kick, lands.at(-1).u], [0, 1]);
+  // drawFrame keeps a pulse through its landing only with the node styles, and
+  // an arrived pulse no longer draws its head.
+  const frame = section("function drawFrame(", "function measure(");
+  assert.ok(frame.includes("const landTail = nodeStyles ? LAND_TAIL_MS : 0;"));
+  assert.ok(frame.includes("now - pulse.start < pulse.duration + (pulse._landed ? 0 : landTail)"));
+  assert.ok(frame.includes("if (!still && now - pulse.start >= pulse.duration) continue;"));
 });
 
 test("graph connections offer each wire to the style and keep the plain line when it declines", () => {
