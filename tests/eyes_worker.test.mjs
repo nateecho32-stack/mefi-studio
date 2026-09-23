@@ -161,20 +161,22 @@ test("the real reader scopes sessions by folder through the worker and the proje
 
 test("the facade shares one session-scope read across the reads of an operation", async () => {
   let idReads = 0;
+  // An absolute root on this platform: "C:/proj" is not absolute on Linux.
+  const drive = process.platform === "win32" ? "C:" : "";
   const fake = {
     listSessionIds: async () => { idReads += 1; return ["a"]; },
-    listSessions: async () => [{ id: "a", directory: "C:/proj" }],
+    listSessions: async () => [{ id: "a", directory: `${drive}/proj` }],
     listTodos: async () => [{ sessionId: "a" }, { sessionId: "b" }],
-    listChanges: async () => [{ sessionId: "a", file: "C:/elsewhere/x.js" }, { sessionId: "a", file: "C:/proj/y.js" }],
+    listChanges: async () => [{ sessionId: "a", file: `${drive}/elsewhere/x.js` }, { sessionId: "a", file: `${drive}/proj/y.js` }],
     readJson: async () => [],
     writeJson: async () => {},
   };
-  const projects = createProjects({ defaultRoot: "C:/proj", studioRoot: "C:/studio", isDirectory: () => true });
-  projects.select(projects.add("C:/proj").id);
+  const projects = createProjects({ defaultRoot: `${drive}/proj`, studioRoot: `${drive}/studio`, isDirectory: () => true });
+  projects.select(projects.add(`${drive}/proj`).id);
   const scoped = projects.eyes(fake);
   const [todos, changes] = await Promise.all([scoped.listTodos(), scoped.listChanges()]);
   assert.deepEqual(todos, [{ sessionId: "a" }]);
-  assert.deepEqual(changes, [{ sessionId: "a", file: "C:/proj/y.js" }]);
+  assert.deepEqual(changes, [{ sessionId: "a", file: `${drive}/proj/y.js` }]);
   assert.equal(idReads, 1, "two concurrent reads shared one scope read");
   await scoped.listTodos();
   assert.equal(idReads, 1, "a read inside the scope window reuses it");

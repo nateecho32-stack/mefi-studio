@@ -41,6 +41,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   the box, and Home's usage note shows a sub-cent day as $0.004, not $0.00.
 - The Machine scan starts PowerShell only when a LÖVE process is running,
   which roughly halves the cost of a scan.
+- On Linux and macOS a worker's own checkout (`MEFI_STUDIO_WORKTREE_RUNS=1`)
+  is removed after its work merges. Its `node_modules` link is a symlink
+  there, which the exclude rule `node_modules/` did not match, so every
+  settled checkout was kept as if it held unsaved edits.
 
 ### Changed
 - **`npm test` runs every leg and every stage**, even after one fails, and

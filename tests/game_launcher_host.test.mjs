@@ -20,10 +20,12 @@ function section(start, end) {
   return source.slice(from, to);
 }
 
-function launcher(gameRoot) {
+// The launchers take Windows paths; `pathImpl: path.win32` reads them the same
+// way on a Linux runner for the cases that launch nothing.
+function launcher(gameRoot, { pathImpl = path } = {}) {
   const launched = [];
   const context = vm.createContext({
-    path, existsSync, spawn, GAME_ROOT: gameRoot,
+    path: pathImpl, existsSync, spawn, GAME_ROOT: gameRoot,
     buildWindowsCmdArgs: windowsCommandLine.buildWindowsCmdArgs,
     // streamChild pipes a launch into the studio log; here it hands the child
     // to the test, which waits for it to finish.
@@ -65,7 +67,7 @@ test("a checkout path cmd cannot carry is refused, not launched", () => {
   // `%` would expand inside cmd's view of an executable path, so the command
   // token is refused outright; the IPC caller gets an error to show, not a
   // throw and not a mangled launch.
-  const { context, launched } = launcher("C:\\fixture\\100%OS% Hell");
+  const { context, launched } = launcher("C:\\fixture\\100%OS% Hell", { pathImpl: path.win32 });
   const result = context.runCmd("game", "C:\\fixture\\100%OS% Hell\\Run Game (LOVE2D).cmd");
   assert.equal(result.ok, false);
   assert.match(result.error, /^cannot launch Run Game \(LOVE2D\)\.cmd: Executable path must not contain/);

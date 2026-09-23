@@ -89,7 +89,11 @@ async function excludeWorktrees(root) {
   try {
     const current = fs.readFileSync(file, "utf8");
     const lines = current.split(/\r?\n/);
-    const missing = [".mefi/worktrees/", "node_modules/"].filter((rule) => !lines.some((line) => line.trim() === rule));
+    // "node_modules", not "node_modules/": the trailing slash matches only a
+    // directory, and on Linux and macOS the link is a symlink, which git sees
+    // as a file. It read as an untracked edit, so every settled checkout was
+    // kept "for recovery".
+    const missing = [".mefi/worktrees/", "node_modules"].filter((rule) => !lines.some((line) => line.trim() === rule));
     if (missing.length) fs.appendFileSync(file, `${current.endsWith("\n") ? "" : "\n"}${missing.join("\n")}\n`);
   } catch {
     // A missing exclude file only costs status noise; it never blocks a run.

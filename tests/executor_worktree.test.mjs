@@ -130,6 +130,9 @@ test("a checkout shares the root install through a junction and cleanup never de
   await writeFile(path.join(repo, "node_modules", "probe-pkg", "marker.txt"), "shared\n");
   const wt = await worktrees.prepare({ root: repo, runId: "run_7" });
   assert.equal(wt.nodeModules, "junction");
+  // Without a trailing slash, so it also covers the link where it is a symlink
+  // (Linux, macOS), which git treats as a file, not a directory.
+  assert.ok((await readFile(path.join(repo, ".git", "info", "exclude"), "utf8")).split(/\r?\n/).includes("node_modules"));
   assert.equal(
     await readFile(path.join(wt.path, "node_modules", "probe-pkg", "marker.txt"), "utf8"),
     "shared\n",
