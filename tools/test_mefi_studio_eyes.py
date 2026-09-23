@@ -608,7 +608,7 @@ class MefiStudioEyesTests(unittest.TestCase):
         self.assertIn("pollStart, pollStop", self.boot, "MefiBoot exposes the shared guard to the renderer modules")
         self.assertIn('window.MefiBoot.pollStart("nav.badges", badgeTick, BADGE_POLL_MS)', self.nav, "the badge poll's interval itself stops while the window hides, not just its fetch")
         self.assertIn('window.MefiBoot.pollStart("explorer.state", explorerTick, EXPLORER_POLL_MS)', self.explorer, "the explorer poll's interval itself stops while the window hides, not just its fetch")
-        self.assertIn('if (document.visibilityState === "visible" && !els.overlay.hidden) load();', self.explorer, "the explorer poll reads the visibility state before each fetch while the sheet is open")
+        self.assertIn('if (document.visibilityState === "visible" && els.overlay && !els.overlay.hidden) load();', self.explorer, "the explorer poll reads the visibility state before each fetch while the sheet is open")
         self.assertIn('window.MefiBoot.pollStart("tasks.board", tasksTick, TASKS_POLL_MS)', self.tasks, "the tasks poll's interval itself stops while the window hides, not just its fetch")
         self.assertIn("if (!document.hidden && !els.overlay.hidden) load();", self.tasks, "the tasks poll makes no fetch while hidden or while the sheet is closed")
         self.assertIn('window.MefiBoot.pollStart("eyes.log", refreshLog, 5000)', self.eyesRenderer, "the eyes log poll's interval itself stops while the window hides, not just its fetch")
