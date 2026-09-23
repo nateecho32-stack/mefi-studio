@@ -15951,8 +15951,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   // centre. At work six hex cells slide out of the seal's edges one after
   // another and lock onto them (a honeycomb round the seal), a scan lights one
   // cell after another together with the rune beside it (1.4 s a circuit),
-  // and a hexagon sweeps out to 1.52. The cells fold back in, last first, as
-  // the work eases off. Everything runs on the node's integrated clock, so a
+  // and a hexagon sweeps out to 1.52 under the cells. The cells fold back in,
+  // last first, as the work eases off, and glide whenever the work stops or
+  // starts halfway. Everything runs on the node's integrated clock, so a
   // node speeding up never jumps; reduced motion holds a designed pose (ring
   // at rest, rune and cell 0 lit, no sweep). Detail steps down with the tier:
   // T0 is the seal and one turning rune tick, T1 three runes and three cells,
@@ -16006,7 +16007,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
   // The chosen node's crown: the six points of a hexagram (tips at 1.3), cut
   // where they meet the seal (1.04), so no line crosses the runes. Per point:
-  // base, tip, base, as x, y pairs; tip 0 on top.
+  // base, tip, base, as x, y pairs; tip 0 on top. Unturned, every point sits
+  // in a gap between two working cells (a point spans 21 to 39 degrees off a
+  // cell's direction; a cell 15 either side of it), which is where the crown
+  // settles while the node works.
   const SIGIL_CROWN = (() => {
     const tip = 1.3, inner = tip / Math.sqrt(3), clip = 1.04;
     const ix = inner * Math.cos(Math.PI / 6), iy = inner * Math.sin(Math.PI / 6);
@@ -16038,6 +16042,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const SIGIL_FONT = '700 8px system-ui, "Segoe UI", sans-serif';
   const SIGIL_AT = { x: 0, y: 0 };
   const SIGIL_CELLS = new Float64Array(6);
+  // The work orbit's track circumscribes the caller's orbit circle (r + 9):
+  // its flat sides touch that circle, so its bottom edge keeps the legacy
+  // clearance over the progress meter, and its corners (15% further out)
+  // point at the cells.
+  const SIGIL_ORBIT_OUT = 1 / Math.cos(Math.PI / 6);
 
   const sigilFrac = (value) => value - Math.floor(value);
   const sigilNum = (value, fallback) => Number.isFinite(value) ? value : fallback;
@@ -16102,23 +16111,28 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   // A tint's tones under a theme, and its three radials, per canvas. The body
-  // sinks toward the theme's background (a pale parchment seal on a light
-  // theme, a dark one on a dark theme) and the ink rises toward its
-  // highlight; on a light theme the rim darkens a little and the glows use
-  // the hue itself, so every state tint stays legible. The theme's second hue
-  // is only ever a highlight (the tail rune, the lit cell, the crown, the
-  // wire packets); without one it is the whitened tint. A flash lights the
-  // seal in the whitened tint, or on paper in the hue itself. Colour strings
-  // are all at alpha 1: every level is a globalAlpha gain.
+  // sinks toward the theme's background (a dark seal on a dark theme; on a
+  // light one only halfway, so the seal carries its state's hue, an apricot
+  // seal for amber, off the page) and the ink rises toward its highlight; on
+  // a light theme the rim darkens (3:1 on the page for amber) and the glows
+  // use the hue itself, so every state tint stays legible. The theme's second
+  // hue is only ever a highlight (the tail rune, the lit cell, the crown, the
+  // wire packets); without one, or when it is the tint's own hue (a working
+  // node on a theme whose bright is its second hue), it is the tint risen
+  // toward the highlight. A flash lights the seal in the whitened tint, or on
+  // paper in the hue itself. Colour strings are all at alpha 1: every level
+  // is a globalAlpha gain.
   const sigilKeys = new WeakMap();
   function sigilTones(tint, palette) {
     const light = palette.light === true, hi = palette.hi ?? WHITE, bg = palette.bg ?? theme(null).bg;
-    const edge = light ? mix(tint, hi, 0.45) : tint;
-    const deep = mix(tint, bg, light ? 0.72 : 0.84);
+    const edge = light ? mix(tint, hi, 0.4) : tint;
+    const deep = mix(tint, bg, light ? 0.5 : 0.84);
     const hot = mix(tint, hi, 0.55);
     const ink = mix(tint, hi, light ? 0.9 : 0.88);
     const rune = mix(tint, hi, light ? 0.55 : 0.42);
-    const accent = palette.accent2 ?? hot;
+    const second = palette.accent2;
+    const own = second ? Math.abs(second[0] - tint[0]) + Math.abs(second[1] - tint[1]) + Math.abs(second[2] - tint[2]) < 40 : true;
+    const accent = own ? hot : second;
     const halo = light ? tint : hot;
     return {
       tint, edge, deep, hot, ink, rune, accent, halo, light,
@@ -16144,8 +16158,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
   function sigilWellPaint(ctx, tones) {
     const well = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.92);
-    well.addColorStop(0, rgba(tones.tint, 0.3));
-    well.addColorStop(0.6, rgba(tones.tint, 0.1));
+    well.addColorStop(0, rgba(tones.tint, tones.light ? 0.4 : 0.3));
+    well.addColorStop(0.6, rgba(tones.tint, tones.light ? 0.14 : 0.1));
     well.addColorStop(1, rgba(tones.tint, 0));
     return well;
   }
@@ -16174,20 +16188,55 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return memo.ink;
   }
 
-  // The working cells: six (three at T1) pointy-top cells slide out of the
-  // seal's edges along the edge normals and lock at 1.19. While the node
-  // works each assembles on the work's age, .12 s after the one before it,
-  // with a little overshoot; once it stops they fold back in on the eased
-  // work level, the last one first. The scan's cell (and the one it just
-  // left) wear the second hue, and at T3 the struck rune is written into the
-  // lit cell, engraved in the body's tone. Drawn under the seal, so the cells
-  // come out of it.
-  function sigilCells(ctx, tones, detail, base, work, active, age, lit, flare, trail, px, rune, engrave) {
-    const step = detail >= 2 ? 1 : 2;
-    const gain = Math.min(1, work / 0.25);
-    for (let k = 0; k < 6; k += step) {
+  // How far out each working cell stands (0 folded in, 1 locked on, a little
+  // over while it overshoots), into SIGIL_CELLS. While the node works each
+  // assembles on the work's age, .12 s after the one before it; once it
+  // stops they fold back in on the eased work level, the last one first.
+  // The two curves are unrelated and the age restarts, so a work that stops
+  // before its cells are out (or starts again while they fold) would jump:
+  // each record keeps the extents it painted and the time (ms), a cell
+  // never folds while the work runs nor comes out while it rests, and it
+  // moves at most 1/.10 s out and 1/.16 s in, so any toggle glides (and the
+  // first frame of a start eases off its steepest step). A second paint in
+  // the same frame holds; a first sight, a gap over 250 ms, a clock running
+  // back or reduced motion takes the curves as they are.
+  const sigilCellState = new WeakMap();
+  function sigilExtents(m, time, active, work, age, still) {
+    for (let k = 0; k < 6; k += 1) {
       SIGIL_CELLS[k] = active ? easeOutBack((age - 0.12 * k) / 0.3) : smooth01((work - 0.15 - 0.09 * k) / 0.35);
     }
+    let state = sigilCellState.get(m);
+    if (still) {
+      if (state) state[6] = NaN;
+      return;
+    }
+    if (!state) {
+      state = new Float64Array(7);
+      state[6] = NaN;
+      sigilCellState.set(m, state);
+    }
+    const gap = time - state[6];
+    if (gap >= 0 && gap <= 250) {
+      const dt = Math.min(gap, 50) / 1000, out = dt / 0.1, back = dt / 0.16;
+      for (let k = 0; k < 6; k += 1) {
+        const last = state[k];
+        const want = active ? Math.max(SIGIL_CELLS[k], Math.min(last, 1)) : Math.min(SIGIL_CELLS[k], last);
+        SIGIL_CELLS[k] = want > last + out ? last + out : want < last - back ? last - back : want;
+      }
+    }
+    for (let k = 0; k < 6; k += 1) state[k] = SIGIL_CELLS[k];
+    state[6] = time;
+  }
+
+  // The working cells: six (three at T1) pointy-top cells slide out of the
+  // seal's edges along the edge normals and lock at 1.19, as far as
+  // sigilExtents has them. The scan's cell (and the one it just left) wear
+  // the second hue, and at T3 the struck rune is written into the lit cell,
+  // engraved in the body's tone. Drawn under the seal, so the cells come out
+  // of it.
+  function sigilCells(ctx, tones, detail, base, work, lit, flare, trail, px, rune, engrave) {
+    const step = detail >= 2 ? 1 : 2;
+    const gain = Math.min(1, work / 0.25);
     const scan = detail >= 2;
     const left = sigilSlot(lit - 1);
     const leaving = scan && trail > 0.01 && SIGIL_CELLS[left] > 0.02;
@@ -16267,10 +16316,22 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
     // An agent's status ring is its work sign: no lattice round an agent.
     const lattice = n.kind !== "agent";
+    ctx.lineJoin = "miter";
+    // At work a hexagon sweeps out from the rim to 1.52 and fades, under the
+    // cells: a ripple through the gaps of the honeycomb.
+    if (lattice && !still && work > 0.02) {
+      const u = sigilFrac(clock / 4.8 + seed);
+      const sweep = 0.6 * (1 - u) * (1 - u) * work;
+      if (sweep > 0.01) {
+        ctx.beginPath(); sigilHex(ctx, 0, 0, SIGIL_SEAL * (1 + 0.55 * u));
+        ctx.globalAlpha = base * sweep; ctx.strokeStyle = tones.edgeS; ctx.lineWidth = 1.2 * px; ctx.stroke();
+      }
+    }
     // The rune beside the scan's cell (the ring's slot nearest its direction).
     const shape0 = Math.floor(seed * 6) % 6;
     const near = sigilSlot(slot - Math.round(ring / SIGIL_SIXTH));
-    if (lattice && work > 0.02 && detail >= 1) sigilCells(ctx, tones, detail, base, work, n.active, age, slot, flare, trail, px, (near + shape0) % 6, detail >= 3 ? tierIn(r, 3) : 0);
+    if (lattice) sigilExtents(m, n.time, n.active, work, age, still);
+    if (lattice && work > 0.02 && detail >= 1) sigilCells(ctx, tones, detail, base, work, slot, flare, trail, px, (near + shape0) % 6, detail >= 3 ? tierIn(r, 3) : 0);
     // The seal: body, well, the landing flash, the rim.
     ctx.lineJoin = "miter";
     ctx.beginPath(); sigilHex(ctx, 0, 0, SIGIL_SEAL);
@@ -16280,7 +16341,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       ctx.globalAlpha = base * (0.6 + 0.4 * lit); ctx.fillStyle = tones.well; ctx.fill();
     }
     if (kick > 0.01) { ctx.globalAlpha = base * 0.5 * kick; ctx.fillStyle = tones.flashS; ctx.fill(); }
-    ctx.globalAlpha = base * (0.85 + 0.15 * lit); ctx.strokeStyle = tones.edgeS;
+    ctx.globalAlpha = base * (tones.light ? 0.95 + 0.05 * lit : 0.85 + 0.15 * lit); ctx.strokeStyle = tones.edgeS;
     ctx.lineWidth = (1.1 + 0.45 * lit + 0.35 * sel + 0.4 * kick) * px; ctx.stroke();
     // T3: a faint inner border while the seal rests (the cells take over at work).
     const border = detail >= 3 ? 0.32 * (1 - work) * tierIn(r, 3) : 0;
@@ -16316,10 +16377,14 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       // work the rune beside the scan's cell. They cross-fade with the work.
       const restHead = near === slot ? flare : flare * (1 - work);
       const workHead = near === slot ? 0 : flare * work;
+      // The tail cools from the head's ink into the second hue over the
+      // first fifth of the step, so the hand-over never flips its colour.
       const tail = odd > 0 ? trail * (1 - work) * odd : 0;
       if (tail > 0.01) {
+        const cool = Math.min(1, phase / 0.2);
         ctx.beginPath(); sigilRune(ctx, (slot + 5 + shape0) % 6, sigilSlot(slot - 1));
-        ctx.globalAlpha = base * tail; ctx.strokeStyle = tones.accentS; ctx.lineWidth = 1.2 * px; ctx.stroke();
+        if (cool > 0.01) { ctx.globalAlpha = base * tail * cool; ctx.strokeStyle = tones.accentS; ctx.lineWidth = 1.2 * px; ctx.stroke(); }
+        if (cool < 0.99) { ctx.globalAlpha = base * tail * (1 - cool); ctx.strokeStyle = tones.inkS; ctx.lineWidth = 1.6 * px; ctx.stroke(); }
       }
       const lead = workHead > restHead ? near : slot;
       const spark = detail >= 3 ? tierIn(r, 3) * Math.max(restHead, workHead) * 0.8 : 0;
@@ -16345,16 +16410,6 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         const size = 0.2 * (still ? 1 : 1 + 0.12 * Math.sin(TAU * sigilFrac(clock / 3.2 + seed * 0.37)));
         ctx.beginPath(); ctx.moveTo(0, -size); ctx.lineTo(size, 0); ctx.lineTo(0, size); ctx.lineTo(-size, 0); ctx.closePath();
         ctx.globalAlpha = base * (0.85 + 0.15 * lit); ctx.fillStyle = tones.edgeS; ctx.fill();
-      }
-    }
-    // At work a hexagon sweeps out from the rim to 1.52 and fades.
-    if (lattice && !still && work > 0.02) {
-      const u = sigilFrac(clock / 4.8 + seed);
-      const sweep = 0.6 * (1 - u) * (1 - u) * work;
-      if (sweep > 0.01) {
-        ctx.lineJoin = "miter";
-        ctx.beginPath(); sigilHex(ctx, 0, 0, SIGIL_SEAL * (1 + 0.55 * u));
-        ctx.globalAlpha = base * sweep; ctx.strokeStyle = tones.edgeS; ctx.lineWidth = 1.2 * px; ctx.stroke();
       }
     }
     ctx.restore();
@@ -16425,7 +16480,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       const states = sigilStates(palette);
       const statusAt = m && Number.isFinite(m.statusAt) ? m.statusAt : -1e9;
       const pop = still ? 1 : easeOutBack((time - statusAt) / 320);
-      const bx = p.x + radius + 3, by = p.y - radius - 3;
+      // The badge sits up and to the right, 2 px of air off the ring.
+      const bx = p.x + radius + 4, by = p.y - radius - 4;
       if (status === "error") {
         const pulse = still ? 1 : 0.5 + 0.5 * Math.sin(TAU * sigilFrac(time / 1200 + seed));
         ctx.beginPath(); sigilHex(ctx, p.x, p.y, ring);
@@ -16472,14 +16528,16 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return true;
   }
 
-  // The work orbit: a comet running round a flat-top hexagon at r + 9 (its
-  // corners toward the cells, so its sides pass between them) in the node's
-  // own tint (the theme's orbit hue without one), three pieces fading behind
-  // its head, on the node's integrated orbit phase.
+  // The work orbit: a comet running round a flat-top hexagon whose sides
+  // touch the caller's orbit circle (r + 9: the bottom side keeps the legacy
+  // 2.5 px over the progress meter; the corners, 15% further out, point at
+  // the cells and clear them) in the node's own tint (the theme's orbit hue
+  // without one), three pieces fading behind its head, on the node's
+  // integrated orbit phase.
   function sigilOrbit(ctx, p, radius, tint, o) {
     const palette = o.theme ?? theme(null);
     const tones = sigilPaints(ctx, tint ?? palette.orbit, palette);
-    const ring = sigilNum(o.ring, radius + 9);
+    const ring = sigilNum(o.ring, radius + 9) * SIGIL_ORBIT_OUT;
     const still = o.still === true, m = o.motion ?? null;
     const phase = still ? sigilNum(o.phase, Math.PI / 3) : sigilNum(m?.orbit, sigilNum(o.phase, 0));
     const head = 6 * sigilFrac(phase / TAU) + 12;
@@ -16520,32 +16578,64 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return true;
   }
 
-  // Hover: a hexagon at 1.2 in the whitened tint, breathing a little (it
-  // steps back while the cells are out, which carry their own mark, and
-  // gives way to the crown on a chosen node at work). Chosen:
-  // the six points of a hexagram at 1.3 in the theme's second hue, turning
-  // once in 20 s; a small node keeps a second hexagon instead.
+  // Hover: a hexagon at 1.2 in the whitened tint, breathing a little. While
+  // the cells are out it opens to 1.7 and turns flat-top (30 degrees round),
+  // a frame round the honeycomb, clear of the cells and inside the orbit's
+  // track; on a chosen node it gives way to the crown there. Chosen: the six
+  // points of a hexagram at 1.3 in the theme's second hue, turning once in
+  // 20 s; while the node works the turn eases off and the crown settles with
+  // every point in a gap between two cells, so it never crosses them (a
+  // small node keeps a second hexagon instead, opening like the hover's).
+  // An agent grows no cells: its marks keep their resting shape.
+  // The crown's turn per motion record: the angle and the time (ms) it was
+  // drawn at, integrated so that easing into the gaps never jumps.
+  const sigilCrownState = new WeakMap();
+  function sigilCrownTurn(m, time, seed, work) {
+    const rest = TAU * sigilFrac(time / 20000 + seed);
+    const settled = rest + work * (Math.round(rest / SIGIL_SIXTH) * SIGIL_SIXTH - rest);
+    if (!m) return settled;
+    let state = sigilCrownState.get(m);
+    if (!state) {
+      state = new Float64Array(2);
+      state[1] = NaN;
+      sigilCrownState.set(m, state);
+    }
+    const gap = time - state[1];
+    let angle = settled;
+    if (gap >= 0 && gap <= 250) {
+      const dt = gap / 1000;
+      angle = state[0] + dt * (TAU / 20) * (1 - work);
+      const nearest = Math.round(angle / SIGIL_SIXTH) * SIGIL_SIXTH;
+      angle = nearest + (angle - nearest) * Math.exp(-dt * work / 0.2);
+    }
+    angle -= TAU * Math.floor(angle / TAU);
+    state[0] = angle; state[1] = time;
+    return angle;
+  }
   function sigilSelect(ctx, p, radius, tint, o) {
     const m = o.motion ?? null;
     const sel = clamp01(sigilNum(m?.sel, o.selected === true || o.chosen === true ? 1 : 0));
     if (sel < 0.01) return true;
     const tones = sigilPaints(ctx, tint, o.theme ?? theme(null));
     const still = o.still === true, time = sigilNum(o.time, 0), seed = sigilNum(m?.seed, 0);
-    const work = clamp01(sigilNum(m?.work, o.active === true ? 1 : 0));
+    const chosen = o.chosen === true;
+    const work = o.kind === "agent" ? 0 : clamp01(sigilNum(m?.work, o.active === true ? 1 : 0));
     const alpha = sigilNum(o.alpha, 1), detail = sigilNum(o.detail, 3);
+    const open = work > 0.001, cos = open ? Math.cos(work * SIGIL_SIXTH / 2) : 1, sin = open ? Math.sin(work * SIGIL_SIXTH / 2) : 0;
     ctx.save();
     ctx.translate(p.x, p.y);
     ctx.lineCap = "round"; ctx.lineJoin = "round";
-    const hover = (1.2 + (still ? 0 : 0.03 * Math.sin(TAU * sigilFrac(time / 1800 + seed)))) * radius;
-    const gain = 0.75 * sel * (1 - (o.chosen === true ? 1 : 0.7) * work);
+    const breath = still || work >= 1 ? 0 : 0.03 * (1 - work) * Math.sin(TAU * sigilFrac(time / 1800 + seed));
+    const hover = (1.2 + 0.5 * work + breath) * radius;
+    const gain = 0.75 * sel * (chosen ? 1 - work : 1);
     if (gain > 0.01) {
-      ctx.beginPath(); sigilHex(ctx, 0, 0, hover);
+      ctx.beginPath(); sigilHexTurned(ctx, 0, 0, hover, cos, sin);
       ctx.globalAlpha = alpha * gain; ctx.strokeStyle = tones.hotS; ctx.lineWidth = 1.4; ctx.stroke();
     }
-    if (o.chosen === true) {
+    if (chosen) {
       ctx.strokeStyle = tones.accentS; ctx.globalAlpha = alpha * 0.85 * sel;
       if (detail >= 2) {
-        ctx.rotate(still ? 0 : TAU * sigilFrac(time / 20000 + seed));
+        ctx.rotate(still ? 0 : sigilCrownTurn(m, time, seed, work));
         ctx.scale(radius, radius);
         ctx.beginPath();
         for (let k = 0; k < 6; k += 1) {
@@ -16555,7 +16645,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         }
         ctx.lineWidth = 1.6 / radius; ctx.stroke();
       } else {
-        ctx.beginPath(); sigilHex(ctx, 0, 0, radius * 1.32);
+        ctx.beginPath(); sigilHexTurned(ctx, 0, 0, radius * (1.32 + 0.38 * work), cos, sin);
         ctx.lineWidth = 1.4; ctx.stroke();
       }
     }
@@ -16710,8 +16800,13 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return true;
   }
 
-  // Labels clear the seal at rest and the lattice and its sweep at work.
-  const sigilReach = (m) => 1 + 0.55 * clamp01(sigilNum(m?.work, 0));
+  // Labels clear the seal at rest and the lattice and its sweep at work, and
+  // the selection's marks (the crown's tips at 1.3; the hover frame, 1.7 at
+  // work) as the selection eases in.
+  function sigilReach(m) {
+    const work = clamp01(sigilNum(m?.work, 0)), sel = clamp01(sigilNum(m?.sel, 0));
+    return 1 + Math.max(0.55 * work, sel * (0.3 + 0.4 * work));
+  }
 
   LOOKS.sigil = { speedup: 3, paint: paintSigil, glyph: { scale: 0.52, ringGap: 3.5, ink: sigilGlyphInk }, ring: sigilRing, hubDress: sigilHub, orbit: sigilOrbit, arrival: sigilArrival, select: sigilSelect, wire: sigilWire, surge: sigilSurge, land: sigilLand, reach: sigilReach };
 

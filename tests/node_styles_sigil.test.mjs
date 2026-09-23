@@ -12,6 +12,13 @@ const FRAME = 1000 / 30;
 const ACCENT = { background: "#050507", text: "#ece5d8", accent2: "#36d1ff" };
 const LIGHT = { background: "#f3f0e8", text: "#1d2330", accent2: "#b07a2a" };
 const luminance = (text) => { const [r, g, b] = String(text).match(/\d+(\.\d+)?/g).slice(0, 3).map(Number); return r * 0.2126 + g * 0.7152 + b * 0.0722; };
+// WCAG relative luminance and contrast ratio of "rgba(r,g,b,a)" strings.
+const relative = (text) => {
+  const linear = (value) => { const c = value / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const [r, g, b] = String(text).match(/\d+(\.\d+)?/g).slice(0, 3).map(Number);
+  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+};
+const contrast = (a, b) => (Math.max(relative(a), relative(b)) + 0.05) / (Math.min(relative(a), relative(b)) + 0.05);
 
 // A motion record stepped at 30 Hz from time 0 to `time` (ms) in one state.
 function stepped(styles, { id = "task:sigil", active = false, selected = false, status = null, still = false, time = 0, orbit = 0 } = {}) {
@@ -48,6 +55,20 @@ function pathBefore(log, at) {
   return log.slice(start, at).filter(([name]) => name === "moveTo" || name === "lineTo").map(([, x, y]) => [x, y]);
 }
 const slotOf = ([x, y]) => (((Math.round(Math.atan2(y, x) / (Math.PI / 3))) % 6) + 6) % 6;
+// How far out each working cell stands in a paint's op log (0 when it is not
+// drawn): cell k opens (vertex 0, on top) at (.85 + .326e) along its normal,
+// .32e up.
+function extentsOf(ctx) {
+  const out = [0, 0, 0, 0, 0, 0];
+  for (const [name, x, y] of ctx.calls.log) {
+    if (name !== "moveTo" || !(Math.hypot(x, y) > 0.84) || !(Math.abs(x) > 0.3)) continue;
+    for (let k = 0; k < 6; k += 1) {
+      const nx = Math.cos(k * Math.PI / 3), ny = Math.sin(k * Math.PI / 3), e = (x / nx - 0.85) / 0.326;
+      if (e > 0 && Math.abs(ny * (0.85 + 0.326 * e) - 0.32 * e - y) < 1e-5) out[k] = Math.max(out[k], e);
+    }
+  }
+  return out;
+}
 
 test("Sigil is a full style pack: its own body, glyph dress, rings, dial, orbit, marks, wires, pulses and landing", () => {
   const styles = loadNodeStyles();
@@ -232,6 +253,108 @@ test("Sigil at work assembles its cells one after another and folds them back, l
   assert.deepEqual(cellsOf(paint(styles, { kind: "agent", active: true })), [], "no lattice round an agent");
 });
 
+test("Sigil's cells glide when the work stops before they are out, or starts again while they fold", () => {
+  const styles = loadNodeStyles();
+  const run = (script) => {
+    const record = styles.motionRecord(new Map(), "task:toggle");
+    const flags = { style: "sigil", active: false, selected: false, progress: null, orbit: 0, status: null, time: 0, frame: 0 };
+    styles.stepMotion(record, flags, 0, false);
+    const frames = [];
+    for (const [active, count] of script) {
+      flags.active = active;
+      for (let index = 0; index < count; index += 1) {
+        flags.time += FRAME; flags.frame += 1;
+        styles.stepMotion(record, flags, 1 / 30, false);
+        frames.push({ active, work: record.work, cells: extentsOf(paint(styles, { active, motion: record, time: flags.time, detail: 3 })) });
+      }
+    }
+    frames.forEach(({ cells }, index) => {
+      if (!index) return;
+      cells.forEach((extent, k) => assert.ok(Math.abs(extent - frames[index - 1].cells[k]) <= 0.35, `cell ${k} moves ${(extent - frames[index - 1].cells[k]).toFixed(2)} in one frame (frame ${index})`));
+    });
+    return frames;
+  };
+  // Stopped .3 s in: cells 0 to 2 are out, 3 to 5 not yet; none comes out now.
+  const early = run([[false, 10], [true, 9], [false, 45]]);
+  const stop = early.findIndex(({ active }, index) => index > 10 && !active);
+  assert.ok(early[stop - 1].cells[2] > 0.3 && early[stop - 1].cells[3] === 0, `half assembled when it stops (${early[stop - 1].cells.map((e) => e.toFixed(2))})`);
+  for (let index = stop; index < early.length; index += 1) {
+    early[index].cells.forEach((extent, k) => assert.ok(extent <= early[index - 1].cells[k] + 1e-9, `cell ${k} only folds once the work stops`));
+  }
+  assert.deepEqual(early.at(-1).cells, [0, 0, 0, 0, 0, 0], "and all are in again");
+  // Started again at work ≈ .45, halfway through the fold: no cell folds away
+  // to come out again; the ones still out stay and the rest follow.
+  const refold = run([[true, 60], [false, 14], [true, 40]]);
+  const restart = refold.findIndex(({ active }, index) => index > 60 && active);
+  const held = refold[restart - 1];
+  assert.ok(held.work > 0.4 && held.work < 0.5 && held.cells[1] > 0.3, `folding when it starts again (work ${held.work.toFixed(2)}, ${held.cells.map((e) => e.toFixed(2))})`);
+  for (let index = restart; index < refold.length; index += 1) {
+    refold[index].cells.forEach((extent, k) => assert.ok(extent >= held.cells[k] - 1e-9, `cell ${k} holds (${extent.toFixed(2)} < ${held.cells[k].toFixed(2)})`));
+  }
+  assert.ok(refold.at(-1).cells.every((extent) => Math.abs(extent - 1) < 1e-6), "and all six lock on again");
+  // A second paint of the same record in the same frame changes nothing.
+  const record = styles.motionRecord(new Map(), "task:twice");
+  const flags = { style: "sigil", active: true, selected: false, progress: null, orbit: 0, status: null, time: 0, frame: 0 };
+  styles.stepMotion(record, flags, 0, false);
+  for (let index = 0; index < 5; index += 1) { flags.time += FRAME; styles.stepMotion(record, flags, 1 / 30, false); paint(styles, { active: true, motion: record, time: flags.time }); }
+  assert.deepEqual(extentsOf(paint(styles, { active: true, motion: record, time: flags.time })), extentsOf(paint(styles, { active: true, motion: record, time: flags.time })));
+});
+
+test("Sigil's rest tail cools from ink into the second hue; the sweep runs under the cells; a second hue that is the tint's own gives way", () => {
+  const styles = loadNodeStyles();
+  const theme = styles.theme(ACCENT);
+  const ink = styles.glyph("sigil", TINT, theme).ink, accent = "rgba(54,209,255,1)";
+  // A record at rest `phase` of the way through a rune step (a step is .7 clock s).
+  const atPhase = (phase) => {
+    const record = stepped(styles, { time: 0 });
+    record.clock = 0.7 * (40 + phase - ((record.seed * 6) % 1));
+    return paint(styles, { motion: record, time: 1000, theme });
+  };
+  const inkAndAccent = (ctx) => {
+    let style = null, alpha = 1;
+    const strokes = { ink: [], accent: [] };
+    for (const [name, value] of ctx.calls.log) {
+      if (name === "set:strokeStyle") style = value;
+      if (name === "set:globalAlpha") alpha = value;
+      if (name === "stroke" && (style === ink || style === accent)) strokes[style === ink ? "ink" : "accent"].push(alpha);
+    }
+    return strokes;
+  };
+  const fresh = inkAndAccent(atPhase(0.02)), cooled = inkAndAccent(atPhase(0.5));
+  assert.equal(fresh.ink.length, 2, "just after the step the old head is still mostly ink");
+  assert.ok(fresh.accent.length <= 1 && (fresh.accent[0] ?? 0) < Math.min(...fresh.ink), `and barely the second hue (${fresh.accent} < ${fresh.ink})`);
+  assert.deepEqual([cooled.ink.length, cooled.accent.length], [1, 1], "halfway on, the tail is all second hue");
+  // The sweep hexagon (centred, past the seal) is stroked before any cell is filled.
+  const record = stepped(styles, { active: true, time: 2000 });
+  record.clock = 4.8 * (10 + 0.3 - (record.seed % 1));
+  const log = paint(styles, { active: true, motion: record, time: 2000, theme }).calls.log;
+  const sweep = log.findIndex(([name], at) => name === "stroke" && (() => { const [first] = pathBefore(log, at); return first && Math.abs(first[0]) < 1e-9 && -first[1] > 1.05; })());
+  const cell = log.findIndex(([name], at) => name === "fill" && pathBefore(log, at).some(([x, y]) => Math.hypot(x, y) > 0.84 && Math.abs(x) > 0.3));
+  assert.ok(sweep > 0 && cell > sweep, `the sweep (${sweep}) under the cells (${cell})`);
+  // Aurora: its second hue is the working tint itself, so the lit cell (and
+  // the crown) take the tint risen toward white instead.
+  const mint = [167, 243, 218], aurora = styles.theme({ background: "#050d13", text: "#e7f5ee", accent2: "#a7f3da" });
+  const hot = `rgba(${mint.map((value) => Math.round(value + (255 - value) * 0.55)).join(",")},1)`;
+  const cellFills = (tint) => {
+    const ctx = recordingContext();
+    styles.paint(ctx, "sigil", P, 12, tint, { kind: "task", active: true, theme: aurora });
+    const log = ctx.calls.log, found = new Set();
+    let style = null;
+    log.forEach(([name, value], at) => {
+      if (name === "set:fillStyle") style = value;
+      const [first] = name === "fill" ? pathBefore(log, at) : [];
+      if (first && Math.hypot(...first) > 0.84 && Math.abs(first[0]) > 0.3) found.add(style);
+    });
+    return found;
+  };
+  const deep = `rgba(${mint.map((value, index) => Math.round(value + ([5, 13, 19][index] - value) * 0.84)).join(",")},1)`;
+  assert.deepEqual([...cellFills(mint)].sort(), [deep, hot].sort(), `the lit cell in ${hot}, not mint on mint`);
+  const crown = recordingContext();
+  styles.select(crown, "sigil", P, 12, mint, { kind: "task", selected: true, chosen: true, alpha: 1, time: 0, still: true, detail: 3, motion: null, theme: aurora });
+  assert.equal(crown.calls.strokes.at(-1).style, hot);
+  assert.ok(cellFills(TINT).has("rgba(167,243,218,1)"), "another tint keeps the theme's second hue");
+});
+
 test("Sigil's runes are written in turn at rest, and at work the rune beside the lit cell strikes", () => {
   const styles = loadNodeStyles();
   const theme = styles.theme(ACCENT);
@@ -326,6 +449,16 @@ test("Sigil marks a selected node, and wears its glyphs in an ink that reads on 
   const [darkBody] = bodyOf(styles.theme(ACCENT)), [paleBody, paleRim] = bodyOf(paper);
   assert.ok(luminance(darkBody) < 60 && luminance(paleBody) > 170, `${darkBody} / ${paleBody}`);
   assert.ok(luminance(paleRim) < luminance("rgba(120,180,220,1)") - 40, `a darker rim on paper (${paleRim})`);
+  // On paper the seal carries its state's hue: a blocked (amber) seal stands
+  // off the page, and its rim still reads at 3:1.
+  const page = "rgba(243,240,232,1)";
+  const amber = recordingContext();
+  styles.paint(amber, "sigil", P, 12, [255, 212, 121], { kind: "task", theme: paper });
+  const [amberBody, amberRim] = [amber.calls.fills[0].style, amber.calls.strokes[0].style];
+  assert.ok((relative(page) - relative(amberBody)) / relative(page) >= 0.06, `an apricot seal, not the page (${amberBody})`);
+  const [r, g, b] = amberBody.match(/\d+/g).map(Number);
+  assert.ok(r - b > 60 && g - b > 40, `and amber in hue (${amberBody})`);
+  assert.ok(contrast(amberRim, page) >= 3, `the rim at ${contrast(amberRim, page).toFixed(2)}:1 (${amberRim})`);
 });
 
 test("Sigil's agent ring steps two opposite hexagon edges; queued, failed and done keep their colours and badges", () => {
@@ -353,6 +486,9 @@ test("Sigil's agent ring steps two opposite hexagon edges; queued, failed and do
   const error = ring("error", 5000).ctx;
   assert.ok(error.calls.strokes.some(({ style }) => style === "rgba(255,212,121,1)"), "failed: the amber ring");
   assert.deepEqual(error.calls.texts.map(({ text }) => text), ["!"], "and its badge");
+  // The badge sits at (r + 4, −r − 4): its hexagon (5.4 out) comes no nearer
+  // the centre than 14.9 px, the ring's hexagon no further than 12.1 px that way.
+  assert.deepEqual(plain(error.calls.log.find(([name]) => name === "translate")), ["translate", P.x + 14, P.y - 14], "the badge keeps 2 px of air off the ring");
   const done = ring("done", 5000).ctx;
   assert.deepEqual([done.calls.texts.length, done.calls.strokes.some(({ style }) => style === "rgba(104,236,164,1)")], [0, true], "done: the green tick");
   for (const status of ["idle", null, "unknown"]) {
@@ -383,7 +519,19 @@ test("Sigil's hub dial, work orbit, arrival and selection speak the same hex lan
   // The work orbit: a flat-top hexagon (a corner toward each cell) in the node's tint, never the old blue.
   const orbit = recordingContext();
   styles.orbit(orbit, "sigil", P, 12, TINT, { running: true, phase: 1, ring: 21, time: 0, still: false, detail: 3, motion: { seed: 0, orbit: 2 }, theme });
-  assert.deepEqual(plain(orbit.calls.log.find(([name]) => name === "moveTo")), ["moveTo", 71, 50], "the track's first corner points right");
+  assert.deepEqual(plain(orbit.calls.log.find(([name]) => name === "moveTo")), ["moveTo", 74.248711, 50], "the track's first corner points right, 21/cos 30° out");
+  // Its sides touch the caller's orbit circle (r + 9): the bottom side stays
+  // 2.5 px under the progress meter (r + 5 … r + 6.5), as the legacy circle did,
+  // and neither the track nor the comet comes inside it (the cells end at 1.46r).
+  const points = orbit.calls.log.filter(([name]) => name === "moveTo" || name === "lineTo").map(([, x, y]) => [x - P.x, y - P.y]);
+  assert.ok(points.every(([x, y]) => Math.hypot(x, y) >= 21 - 1e-6), "nothing inside r + 9");
+  assert.ok(Math.abs(Math.max(...points.map(([, y]) => y)) - 21) < 1e-6, "the bottom side lies at r + 9");
+  for (let phase = 0; phase < 6.3; phase += 0.35) {
+    const lap = recordingContext();
+    styles.orbit(lap, "sigil", P, 12, TINT, { running: true, phase, ring: 21, time: 0, still: false, detail: 3, motion: { seed: 0, orbit: phase }, theme });
+    const at = lap.calls.log.filter(([name]) => name === "moveTo" || name === "lineTo").map(([, x, y]) => Math.hypot(x - P.x, y - P.y));
+    assert.ok(Math.min(...at) >= 21 - 1e-6 && Math.max(...at) <= 21 / Math.cos(Math.PI / 6) + 1e-6, `the comet keeps to the track (phase ${phase.toFixed(2)})`);
+  }
   assert.ok(orbit.calls.strokes.every(({ style }) => style === "rgba(120,180,220,1)"), "in the node's own tint");
   assert.ok(!JSON.stringify(orbit.calls.log).includes("125,178,255"));
   const phased = recordingContext();
@@ -420,6 +568,65 @@ test("Sigil's hub dial, work orbit, arrival and selection speak the same hex lan
   const easing = recordingContext();
   styles.select(easing, "sigil", P, 12, TINT, { kind: "task", selected: false, chosen: false, alpha: 1, time: 0, still: false, detail: 3, motion: { seed: 0, sel: 0.4, work: 0 }, theme });
   assert.ok(Math.abs(easing.calls.alphas[0] - 0.75 * 0.4) < 1e-12, "the mark eases with the selection");
+});
+
+test("Sigil's selection marks keep off the working cells: the crown settles into their gaps, the hover frame opens round them", () => {
+  const styles = loadNodeStyles();
+  const theme = styles.theme(ACCENT);
+  const SIXTH = Math.PI / 3;
+  const offCell = (angle) => { const rest = ((angle % SIXTH) + SIXTH) % SIXTH; return Math.min(rest, SIXTH - rest); };
+  const turnDelta = (a, b) => { const d = (((b - a) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI; return Math.abs(d); };
+  // A chosen node at rest, then at work, the crown drawn every 30 Hz frame.
+  const record = stepped(styles, { selected: true, time: 600 });
+  const flags = { style: "sigil", active: false, selected: true, progress: null, orbit: 0, status: null, time: 600, frame: 18 };
+  const crown = () => {
+    flags.time += FRAME; flags.frame += 1;
+    styles.stepMotion(record, flags, 1 / 30, false);
+    const ctx = recordingContext({ center: P });
+    styles.select(ctx, "sigil", P, 12, TINT, { kind: "task", selected: true, chosen: true, hover: false, active: flags.active, alpha: 1, time: flags.time, still: false, detail: 3, motion: record, theme });
+    const log = ctx.calls.log, turn = log.find(([name]) => name === "rotate")[1];
+    const scaled = log.findIndex(([name]) => name === "scale");
+    const points = log.slice(scaled).filter(([name]) => name === "moveTo" || name === "lineTo").map(([, x, y]) => [Math.hypot(x, y), Math.atan2(y, x) + turn]);
+    return { turn, points };
+  };
+  const turns = [];
+  for (let index = 0; index < 20; index += 1) turns.push(crown().turn);
+  assert.ok(turnDelta(turns[0], turns.at(-1)) > 0.15, "at rest the crown turns");
+  flags.active = true;
+  let last = turns.at(-1), settled = null;
+  for (let index = 0; index < 90; index += 1) {
+    settled = crown();
+    assert.ok(turnDelta(last, settled.turn) <= 0.1, `the crown eases into place (${(turnDelta(last, settled.turn) * 180 / Math.PI).toFixed(2)}° in a frame)`);
+    last = settled.turn;
+  }
+  assert.ok(offCell(settled.turn) < 0.01, "at work it settles on a sixth: its points sit between the cells");
+  for (const [reach, angle] of settled.points) assert.ok(reach <= 1.3 + 1e-5 && offCell(angle) >= 20 * Math.PI / 180, `a crown point ${(offCell(angle) * 180 / Math.PI).toFixed(1)}° off a cell`);
+  assert.ok(turnDelta(settled.turn, crown().turn) < 1e-3, "and holds there");
+  // Hovered (not chosen) at work: a flat-top frame at 1.7r round the honeycomb,
+  // every cell vertex at least .12r inside it.
+  assert.ok(extentsOf(paint(styles, { active: true, theme })).every((extent) => Math.abs(extent - 1) < 1e-6), "the still pose's cells, all locked on");
+  const worker = stepped(styles, { active: true, selected: true, time: 3000 });
+  const frame = recordingContext({ center: P });
+  styles.select(frame, "sigil", P, 12, TINT, { kind: "task", selected: true, chosen: false, hover: true, active: true, alpha: 1, time: 3000, still: false, detail: 3, motion: worker, theme });
+  const corners = frame.calls.log.filter(([name]) => name === "moveTo" || name === "lineTo").map(([, x, y]) => [x / 12, y / 12]);
+  assert.equal(corners.length, 6);
+  for (const [x, y] of corners) assert.ok(Math.abs(Math.hypot(x, y) - 1.7) < 1e-5 && offCell(Math.atan2(y, x)) < 1e-5, "flat-top, a corner toward each cell");
+  const inradius = 1.7 * Math.cos(Math.PI / 6);
+  for (let k = 0; k < 6; k += 1) {
+    for (let v = 0; v < 6; v += 1) {
+      const cx = 1.176 * Math.cos(k * SIXTH) + 0.32 * Math.cos(v * SIXTH - Math.PI / 2), cy = 1.176 * Math.sin(k * SIXTH) + 0.32 * Math.sin(v * SIXTH - Math.PI / 2);
+      for (let side = 0; side < 6; side += 1) {
+        const depth = inradius - (cx * Math.cos(side * SIXTH + Math.PI / 6) + cy * Math.sin(side * SIXTH + Math.PI / 6));
+        assert.ok(depth >= 0.12, `cell ${k} vertex ${v} is ${depth.toFixed(3)}r inside side ${side}`);
+      }
+    }
+  }
+  // A chosen node at work leaves the hover frame to its crown; labels clear both marks.
+  const both = recordingContext();
+  styles.select(both, "sigil", P, 12, TINT, { kind: "task", selected: true, chosen: true, active: true, alpha: 1, time: 3000, still: false, detail: 3, motion: worker, theme });
+  assert.deepEqual([both.calls.stroke, both.calls.lineTo], [1, 12], "the crown alone");
+  assert.ok(Math.abs(styles.reach("sigil", stepped(styles, { selected: true, time: 2000 })) - 1.3) < 1e-9, "a selected seal at rest: the crown's tips");
+  assert.ok(Math.abs(styles.reach("sigil", worker) - 1.7) < 1e-9, "at work: the hover frame");
 });
 
 test("Sigil wires are cut in the rune rhythm; active ones march with a groove and two hex packets", () => {
