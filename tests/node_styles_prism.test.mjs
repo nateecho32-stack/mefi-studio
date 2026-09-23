@@ -61,8 +61,8 @@ test("Prism's detail steps down from a turning brilliant to a small kite within 
   const BUDGET = {
     0: { quiet: 9, working: 9, arc: 1, fill: 3, stroke: 1 },
     1: { quiet: 22, working: 28, arc: 1, fill: 12, stroke: 3 },
-    2: { quiet: 30, working: 40, arc: 1, fill: 17, stroke: 5 },
-    3: { quiet: 42, working: 57, arc: 1, fill: 18, stroke: 6 },
+    2: { quiet: 30, working: 40, arc: 1, fill: 17, stroke: 6 },
+    3: { quiet: 42, working: 57, arc: 1, fill: 18, stroke: 7 },
   };
   for (const [name, flags] of Object.entries(STATES)) {
     for (const detail of [0, 1, 2, 3]) {
@@ -163,6 +163,50 @@ test("Prism's facets turn through the key light and a pavilion facet catches fir
   assert.ok(ridges.size > 20, "a small gem's ridge visibly turns");
 });
 
+test("Prism's working shards are two-tone crystals on a traced, tilted orbit, the caustics secondary", () => {
+  const styles = loadNodeStyles();
+  const theme = styles.theme(DARK);
+  // TINT's lit tone (mixed .62 toward white) and the tint itself.
+  const LIT = "rgba(242,227,200,1)", SHADE = "rgba(220,180,110,1)";
+  const { record, step } = recordFor(styles, { active: true });
+  let twoTone = 0, back = 0, quads = { 2: 0, 3: 0 };
+  for (let frame = 0; frame < 180; frame += 1) {
+    stepOn(styles, record, step, 1);
+    const ctx = paintOnce(styles, 15, { active: true, motion: record, time: step.time, detail: 3, theme });
+    const lit = ctx.calls.fills.some(({ style, alpha }) => style === LIT && Math.abs(alpha - 0.95) < 1e-9);
+    const shade = ctx.calls.fills.some(({ style, alpha }) => style === SHADE && Math.abs(alpha - 0.75) < 1e-9);
+    if (lit && shade) twoTone += 1;
+    if (ctx.calls.fills.some(({ style, alpha }) => style === SHADE && Math.abs(alpha - 0.55) < 1e-9)) back += 1;
+    // The orbit's trace: its far half behind the gem, its near half in front.
+    const ellipses = ctx.calls.log.filter(([name]) => name === "ellipse").map((call) => call.slice(3, 8).map((value) => Math.round(value * 1000) / 1000));
+    assert.deepEqual(ellipses, [[1.34, 0.42, -0.35, 3.142, 6.283], [1.34, 0.42, -0.35, 0, 3.142]]);
+    quads[3] = Math.max(quads[3], ctx.calls.quadraticCurveTo);
+    quads[2] = Math.max(quads[2], paintOnce(styles, 9.8, { active: true, motion: record, time: step.time, detail: 2, theme }).calls.quadraticCurveTo);
+  }
+  assert.equal(twoTone, 180, "a near shard is always cut in a lit and a shaded half");
+  assert.ok(back > 60, `the far shards pass behind the gem in the dim tint (${back}/180)`);
+  // Glint and twinkle (4 curves each) plus three caustic sparkles at T3; glint and two at T2.
+  assert.ok(quads[3] <= 4 + 4 + 3 * 4 && quads[2] <= 4 + 2 * 4, JSON.stringify(quads));
+  // The shards stand tall enough to read: every near shard's lit half spans
+  // .5 radii or more (the log keeps the unit-space points the gem is drawn in).
+  const ctx = paintOnce(styles, 15, { active: true, motion: record, time: step.time, detail: 3, theme });
+  const log = plain(ctx.calls.log), at = log.findLastIndex(([name, style]) => name === "set:fillStyle" && style === LIT);
+  const opened = at - log.slice(0, at).reverse().findIndex(([name]) => name === "beginPath");
+  const shards = [];
+  for (const [name, x, y] of log.slice(opened, at)) {
+    if (name === "moveTo") shards.push([[x, y]]);
+    else if (name === "lineTo") shards.at(-1).push([x, y]);
+  }
+  assert.ok(shards.length >= 1);
+  for (const points of shards) {
+    let span = 0;
+    for (const [x0, y0] of points) for (const [x1, y1] of points) span = Math.max(span, Math.hypot(x1 - x0, y1 - y0));
+    assert.ok(span >= 0.5, `a near shard is a real crystal, not a speck (${span.toFixed(2)} r)`);
+  }
+  // No trace on a small (T1) gem, which keeps two shards.
+  assert.equal(paintOnce(styles, 7.5, { active: true, motion: record, time: step.time, detail: 1, theme }).calls.ellipse, 0);
+});
+
 test("Prism marks a selected node, glows while lit, flashes on a landing kick and fades with the caller", () => {
   const styles = loadNodeStyles();
   const quiet = paintOnce(styles, 12, {}), selected = paintOnce(styles, 12, { selected: true }), chosen = paintOnce(styles, 12, { selected: true, chosen: true });
@@ -209,6 +253,46 @@ test("Prism keeps the tint dominant and reads on dark and light themes", () => {
     assert.ok(luminance(channels(monogram.ink)) > 200, `light ink (${monogram.ink})`);
     const table = hub.calls.fills.find(({ alpha }) => Math.abs(alpha - 0.94) < 1e-9);
     assert.ok(table && luminance(channels(table.style)) < 90, "on a dark table");
+  }
+});
+
+test("Prism stays legible on a light theme: every facet off the ground, a pale glow and band, deeper state inks", () => {
+  const styles = loadNodeStyles();
+  const theme = styles.theme(LIGHT), ground = luminance([243, 240, 232]);
+  // Over a full turn (7 s), no opaque facet of a pale state tint melts into the cream.
+  for (const tint of [[255, 212, 121], [104, 236, 164], [185, 176, 255]]) {
+    const { record, step } = recordFor(styles, {});
+    let closest = Infinity, tone = "";
+    for (let frame = 0; frame < 215; frame += 1) {
+      stepOn(styles, record, step, 1);
+      const ctx = recordingContext({ center: P });
+      styles.paint(ctx, "prism", P, 15, tint, { kind: "task", motion: record, time: step.time, detail: 3, theme });
+      for (const { style, alpha } of ctx.calls.fills) {
+        if (typeof style !== "string" || alpha !== 1) continue;
+        const apart = Math.abs(luminance(channels(style)) - ground);
+        if (apart < closest) { closest = apart; tone = style; }
+      }
+    }
+    assert.ok(closest >= 20, `${tint}: every opaque facet stands off the light ground (closest ${tone}, ${closest.toFixed(1)})`);
+  }
+  // The lit glow is built from a paled tint (no brown haze), ends at 1.45
+  // radii (inside the shards' orbit), and the light band peaks in plain white.
+  const tint = [160, 110, 60];
+  const lit = recordingContext({ center: P });
+  styles.paint(lit, "prism", P, 15, tint, { kind: "task", selected: true, time: 0, detail: 3, theme });
+  const glow = lit.calls.gradients.find(({ kind }) => kind === "radial"), band = lit.calls.gradients.find(({ kind }) => kind === "linear");
+  assert.equal(glow.args.at(-1), 1.45);
+  assert.ok(luminance(channels(glow.stops[0][1])) > luminance(tint) + 40, `a pale glow (${glow.stops[0][1]})`);
+  assert.ok(band.stops.some(([offset, colour]) => offset === 0.5 && colour === "rgba(255,255,255,0.42)"));
+  const dark = recordingContext({ center: P });
+  styles.paint(dark, "prism", P, 15, tint, { kind: "task", selected: true, time: 0, detail: 3, theme: styles.theme(DARK) });
+  assert.equal(dark.calls.gradients.find(({ kind }) => kind === "radial").stops[0][1], "rgba(160,110,60,0.3)", "a dark theme keeps the tint's own glow");
+  // The error and done rings deepen their state colours on the cream.
+  for (const [status, raw] of [["error", "rgba(255,212,121,1)"], ["done", "rgba(104,236,164,1)"]]) {
+    const ctx = recordingContext({ center: P });
+    styles.ring(ctx, "prism", P, 8, TINT, { status, builder: false, ring: 11.5, time: 1000, still: true, detail: 3, motion: null, theme });
+    const edges = ctx.calls.strokes.map(({ style }) => style);
+    assert.ok(!edges.includes(raw) && edges.every((style) => ground - luminance(channels(style)) > 60), `${status}: a deeper ink on a light theme (${edges})`);
   }
 });
 
@@ -268,15 +352,60 @@ test("Prism's hub dress, work orbit, arrival and selection draw in the spectrum"
   stepOn(styles, record, step, 5);
   assert.notDeepEqual(plain(orbitAt().calls.log), plain(first.calls.log), "the comet travels with motion.orbit");
   // Arrival: a starburst and a shockwave, bounded, fading to nothing.
+  const arrive = (t01, detail = 3, radius = 12) => {
+    const ctx = recordingContext({ center: P });
+    assert.equal(styles.arrival(ctx, "prism", P, radius, TINT, t01, { kind: "task", alpha: 0.9, time: 0, still: false, detail, motion: record, theme }), true);
+    assert.equal(ctx.calls.saves, ctx.calls.restores);
+    assert.ok(ctx.calls.alphas.every((alpha) => alpha <= 0.9 + 1e-12));
+    return ctx;
+  };
+  // Each ray is a tapered triangle (moveTo, lineTo tip, lineTo, closePath): [length, base width] in px.
+  const raysOf = (ctx) => {
+    const log = plain(ctx.calls.log), rays = [];
+    for (let index = 0; index + 3 < log.length; index += 1) {
+      const [move, tip, other, close] = log.slice(index, index + 4);
+      if (move[0] !== "moveTo" || tip[0] !== "lineTo" || other[0] !== "lineTo" || close[0] !== "closePath") continue;
+      const baseX = (move[1] + other[1]) / 2, baseY = (move[2] + other[2]) / 2;
+      rays.push([Math.hypot(tip[1] - P.x, tip[2] - P.y) - Math.hypot(baseX - P.x, baseY - P.y), Math.hypot(move[1] - other[1], move[2] - other[2])]);
+    }
+    return rays;
+  };
   let widest = 0;
   for (const t01 of [0.05, 0.25, 0.5, 0.75, 0.95]) {
-    const ctx = recordingContext({ center: P });
-    assert.equal(styles.arrival(ctx, "prism", P, 12, TINT, t01, { kind: "task", alpha: 0.9, time: 0, still: false, detail: 3, motion: record, theme }), true);
-    assert.ok(ctx.calls.fill >= 4 && ctx.calls.alphas.every((alpha) => alpha <= 0.9 + 1e-12));
+    const ctx = arrive(t01);
+    assert.ok(ctx.calls.fill >= 4);
     widest = Math.max(widest, ctx.calls.reach / 12);
-    assert.equal(ctx.calls.saves, ctx.calls.restores);
   }
   assert.ok(widest > 1.8 && widest <= 2.25, `the burst reaches out, inside 2.25 radii (${widest.toFixed(2)})`);
+  // Halfway through, the long rays still reach .7 radii past their bases, on bases a few pixels wide.
+  const halfway = raysOf(arrive(0.5, 3, 15)), long = halfway.filter(([length]) => length >= 0.7 * 15);
+  assert.equal(halfway.length, 12, "six rays and six glints");
+  assert.equal(long.length, 6, `six long rays (${halfway.map(([length]) => (length / 15).toFixed(2))})`);
+  const early = raysOf(arrive(0.25, 3, 15)).sort((one, two) => two[0] - one[0]).slice(0, 6);
+  assert.ok(early.every(([, width]) => width >= 2.5), `the long rays have body (${early.map(([, width]) => width.toFixed(1))} px)`);
+  // The flash lights the gem's own turned outline, not a stand-in kite: the
+  // first path is the body's silhouette at the same turn.
+  // (every filled path, as its unit-space points)
+  const pathsOf = (ctx) => {
+    const paths = [];
+    let points = [];
+    for (const [name, x, y] of plain(ctx.calls.log)) {
+      if (name === "beginPath") points = [];
+      else if (name === "moveTo" || name === "lineTo") points.push([x, y]);
+      else if (name === "fill") paths.push(JSON.stringify(points));
+    }
+    return paths;
+  };
+  const body = recordingContext({ center: P });
+  styles.paint(body, "prism", P, 12, TINT, { kind: "task", time: 0, detail: 3, motion: record, theme });
+  const [flash] = pathsOf(arrive(0.1));
+  assert.ok(pathsOf(body).includes(flash), "the flash fills the body's own silhouette");
+  const kite = pathsOf(arrive(0.1, 0))[0];
+  assert.ok(flash !== kite && JSON.parse(kite).length === 4, "the turned gem's silhouette; the small kite at T0");
+  // A far, dimmed or moving node gets the flash, the six rays and the ring, no glints.
+  const plainBurst = arrive(0.3, 1);
+  assert.equal(raysOf(plainBurst).length, 6);
+  assert.equal(plainBurst.calls.stroke, 1);
   // Selection: a hover ring at 1.22 radii; the chosen node's three arcs turn.
   const hover = recordingContext({ center: P });
   styles.select(hover, "prism", P, 12, TINT, { kind: "task", selected: true, chosen: false, hover: true, alpha: 1, time: 0, still: true, detail: 3, motion: null, theme });
@@ -294,6 +423,25 @@ test("Prism's hub dress, work orbit, arrival and selection draw in the spectrum"
   const idle = recordingContext({ center: P });
   styles.select(idle, "prism", P, 12, TINT, { kind: "task", selected: false, chosen: false, alpha: 1, time: 0, still: true, detail: 3, motion: null, theme });
   assert.equal(idle.calls.stroke, 0, "nothing to mark");
+  // Let go, a node fades out in what it wore: the chosen node's dispersed
+  // arcs (at .95 × its easing level), a hovered node's ring.
+  const letGo = (was) => {
+    const { record: held, step: steps } = recordFor(styles, { selected: true }, 30, `task:${was}`);
+    const select = (flags) => {
+      const ctx = recordingContext({ center: P });
+      styles.select(ctx, "prism", P, 12, TINT, { kind: "task", selected: false, chosen: false, hover: false, alpha: 1, time: steps.time, still: false, detail: 3, motion: held, theme, ...flags });
+      return ctx;
+    };
+    select(was === "chosen" ? { selected: true, chosen: true } : { selected: true, hover: true });
+    steps.selected = false;
+    stepOn(styles, held, steps, 3);
+    assert.ok(held.sel > 0.2 && held.sel < 0.9);
+    return { ctx: select({}), sel: held.sel };
+  };
+  const chosenFade = letGo("chosen"), hoverFade = letGo("hovered");
+  assert.equal(chosenFade.ctx.calls.arc, 3, "a chosen node's arcs fade out as arcs");
+  assert.ok(chosenFade.ctx.calls.alphas.every((alpha) => Math.abs(alpha - 0.95 * chosenFade.sel) < 1e-9));
+  assert.deepEqual(hoverFade.ctx.calls.log.filter(([name]) => name === "arc").map((call) => call[3]), [12 * 1.22], "a hovered node's ring fades out as a ring");
   assert.ok(styles.reach("prism", null) >= 1 && styles.reach("prism", record) <= 1.8 && styles.reach("prism", record) > 1.4, "label clearance widens for the shards");
 });
 
@@ -332,6 +480,34 @@ test("Prism's wires refract: a glint runs the beam and splits into three strands
   // The S-curve keeps its bezier; the glint moves along it.
   const curved = wire({ curved: true, cp: { x1: a.x, y1: 95, x2: b.x, y2: 95 } });
   assert.ok(curved.ctx.calls.bezierCurveTo >= 1);
+  // On the tree's S-curve the strands split off the drawn curve itself (its
+  // end tangent turns vertical only in the last pixels), never off a point
+  // hanging beside it.
+  {
+    const from = { x: 100, y: 40 }, to = { x: 300, y: 140 }, middle = (from.y + to.y) / 2, cp = { x1: from.x, y1: middle, x2: to.x, y2: middle };
+    const ctx = recordingContext({ center: to });
+    styles.wire(ctx, "prism", from, to, { kind: "session", tint: [180, 170, 255], alpha: 0.6, width: 1.4, dash: [], march: false, double: false, active: true, inspected: true, curved: true, cp, far: false, time: 700, still: false, seed: 0.3, rA: 8, rB: 12, detail: 3, lifetime: 1 });
+    const starts = plain(ctx.calls.log).filter(([name]) => name === "moveTo").slice(-3);
+    for (const [, x, y] of starts) {
+      let nearest = Infinity;
+      for (let index = 0; index <= 2000; index += 1) {
+        const u = index / 2000, v = 1 - u;
+        const cx = v * v * v * from.x + 3 * v * v * u * cp.x1 + 3 * v * u * u * cp.x2 + u * u * u * to.x;
+        const cy = v * v * v * from.y + 3 * v * v * u * cp.y1 + 3 * v * u * u * cp.y2 + u * u * u * to.y;
+        nearest = Math.min(nearest, Math.hypot(cx - x, cy - y));
+      }
+      assert.ok(nearest <= 1.5 && Math.hypot(x - to.x, y - to.y) > 12, `a strand starts on the curve, outside the node (${nearest.toFixed(2)} px off)`);
+    }
+  }
+  // An edge fading out through its lifetime fades its glint and strands with
+  // it: every layer scales with the lifetime, however bright the stroke.
+  const bright = wire({ alpha: 0.9, lifetime: 1 }), fading = wire({ alpha: 0.45, lifetime: 0.5 });
+  assert.equal(fading.ctx.calls.alphas.length, bright.ctx.calls.alphas.length);
+  assert.ok(fading.ctx.calls.alphas.every((alpha, index) => Math.abs(alpha - 0.5 * bright.ctx.calls.alphas[index]) < 1e-12), `${fading.ctx.calls.alphas} vs ${bright.ctx.calls.alphas}`);
+  // Strands into a quiet edge's target only at full detail; a lit edge's into any but the smallest.
+  const strandsOf = (extra) => wire({ dash: [], march: false, ...extra }).ctx.calls.strokes.filter(({ width }) => Math.abs(width - 1.19) < 0.01).length;
+  assert.deepEqual([2, 3].map((detail) => strandsOf({ active: false, detail })), [0, 3]);
+  assert.deepEqual([0, 1].map((detail) => strandsOf({ detail })), [0, 3]);
   assert.notDeepEqual(plain(wire({ time: 100 }).ctx.calls.log), plain(wire({ time: 400 }).ctx.calls.log), "the glint travels");
   // The rail: only the active session's edges carry the glint; the rest stay plain.
   const railQuiet = wire({ rail: true, active: false, detail: 2, dash: [], march: false });
@@ -371,6 +547,12 @@ test("Prism's pulses split into the spectrum near the node and land as a colour 
     assert.ok(ctx.calls.reach <= 12 * 2.25);
     assert.equal(gradientsBuilt(ctx), 0);
   }
+  // A far, dimmed or moving target (detail ≤ 1): one head to the end, one ring on landing.
+  const lowHead = surge(0.95, { detail: 1 });
+  assert.deepEqual([lowHead.ctx.calls.arc, new Set(lowHead.ctx.calls.fills.map(({ style }) => style)).size], [1, 1]);
+  const lowLand = recordingContext({ center: to });
+  assert.equal(styles.land(lowLand, "prism", to, 12, [241, 220, 174], 0.3, { kind: "dot", time: 0, still: false, rTo: 12, detail: 1, pulse, motion: null }), true);
+  assert.deepEqual([lowLand.calls.arc, lowLand.calls.stroke, lowLand.calls.fill], [1, 1, 0]);
   const railLand = recordingContext({ center: to });
   assert.equal(styles.land(railLand, "prism", to, 6, [241, 220, 174], 0.3, { kind: "dot", time: 0, still: false, rTo: 6, detail: 2, rail: true }), true);
   assert.deepEqual([railLand.calls.arc, railLand.calls.stroke], [1, 1], "the rail lands as a single ring");

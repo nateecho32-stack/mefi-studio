@@ -674,10 +674,15 @@
   const PRISM_FLARE_AT = 0.52 * PRISM_BAND_COS + 0.38 * PRISM_BAND_SIN;
   // The spectrum's ends; the theme's second hue is its middle.
   const PRISM_ROSE = Object.freeze([255, 92, 148]), PRISM_BLUE = Object.freeze([104, 128, 255]);
-  const PRISM_RAMP = 24;
+  // Facet tones: fine enough steps that a facet turning slowly through the
+  // light never ticks; the small kite's two planes sit on fixed steps.
+  const PRISM_RAMP = 48, PRISM_KITE_BASE = Math.floor(PRISM_RAMP * 0.15), PRISM_KITE_LIT = Math.floor(PRISM_RAMP * 0.39);
+  // Every facet tone stands at least this far off the background (luminance).
+  const PRISM_APART = 22;
   const PRISM_SOLID = Object.freeze([]), PRISM_QUEUE_DASH = Object.freeze([2, 3]), PRISM_CREW_DASH = Object.freeze([2, 5]);
   // The shards' orbit: an ellipse 1.34 × .42 tilted −.35.
-  const PRISM_ORBIT_X = 1.34, PRISM_ORBIT_Y = 0.42, PRISM_ORBIT_COS = Math.cos(-0.35), PRISM_ORBIT_SIN = Math.sin(-0.35);
+  const PRISM_ORBIT_X = 1.34, PRISM_ORBIT_Y = 0.42, PRISM_ORBIT_TILT = -0.35;
+  const PRISM_ORBIT_COS = Math.cos(PRISM_ORBIT_TILT), PRISM_ORBIT_SIN = Math.sin(PRISM_ORBIT_TILT);
 
   function prismUnit(x, y, z) {
     const length = Math.hypot(x, y, z);
@@ -810,28 +815,49 @@
   // (and rebuilt when the theme changes), with every colour string built once.
   const prismToneCache = new WeakMap();
   const prismThemeOf = (value) => value && value.bg ? value : theme(null);
-  // The theme the last body was painted under: wires and pulses carry none,
-  // so they take the node canvas's.
+  // The theme the last body was painted under: wires, pulses and landings
+  // carry none today, so they take the node canvas's (their own `theme` wins
+  // once the callers pass one).
   let prismLastTheme = theme(null);
+  const prismHookTheme = (o) => o.theme && o.theme.bg ? o.theme : prismLastTheme;
+  const prismLuma = (rgb) => 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+  // A tone pushed toward the theme's contrast ink until it stands
+  // PRISM_APART off the background, so a pale tint's lit facets on a light
+  // theme (or a deep tint's shadow on a dark one) never melt into the ground.
+  // Runs once per tint and theme.
+  function prismApart(tone, currentTheme) {
+    const ground = prismLuma(currentTheme.bg);
+    let apart = tone;
+    for (let step = 1; step <= 20 && Math.abs(prismLuma(apart) - ground) < PRISM_APART; step += 1) apart = mix(tone, currentTheme.hi, step * 0.05);
+    return apart;
+  }
   function prismTones(tint, currentTheme) {
     let tones = prismToneCache.get(tint);
     if (tones && tones.theme === currentTheme) return tones;
     const light = currentTheme.light === true, low = light ? currentTheme.hi : currentTheme.bg;
-    const dusk = mix(tint, low, light ? 0.52 : 0.76), shade = mix(tint, low, light ? 0.28 : 0.5), hot = mix(tint, WHITE, 0.62);
+    // A light theme keeps the lit tones nearer the tint: white-hot facets
+    // would vanish into a pale ground.
+    const dusk = mix(tint, low, light ? 0.52 : 0.76), shade = mix(tint, low, light ? 0.28 : 0.5), hot = mix(tint, WHITE, light ? 0.28 : 0.62);
     const ramp = new Array(PRISM_RAMP);
     for (let step = 0; step < PRISM_RAMP; step += 1) {
       const at = (step + 0.5) / PRISM_RAMP;
-      ramp[step] = rgba(at < 0.36 ? mix(dusk, shade, at / 0.36) : at < 0.68 ? mix(shade, tint, (at - 0.36) / 0.32) : mix(tint, hot, (at - 0.68) / 0.32), 1);
+      const tone = at < 0.36 ? mix(dusk, shade, at / 0.36) : at < 0.68 ? mix(shade, tint, (at - 0.36) / 0.32) : mix(tint, hot, (at - 0.68) / 0.32);
+      ramp[step] = rgba(prismApart(tone, currentTheme), 1);
     }
     const accent = currentTheme.accent2 ?? mix(tint, WHITE, 0.5);
     const specA = light ? mix(PRISM_ROSE, currentTheme.hi, 0.14) : mix(PRISM_ROSE, tint, 0.16);
     const specB = light ? mix(PRISM_BLUE, currentTheme.hi, 0.14) : mix(PRISM_BLUE, tint, 0.16);
-    const ink = mix(tint, WHITE, 0.86);
+    const ink = mix(tint, WHITE, 0.86), rim = light ? mix(tint, currentTheme.hi, 0.35) : tint;
     tones = {
-      theme: currentTheme, key: `prism|${tint.join(",")}|${currentTheme.key}`, ink, ramp,
+      theme: currentTheme, light, key: `prism|${tint.join(",")}|${currentTheme.key}`, ink, ramp,
+      // The lit glow's colour: a pale tint on a light theme, never a brown haze.
+      glow: light ? mix(tint, WHITE, 0.55) : tint,
       base: rgba(mix(tint, low, light ? 0.6 : 0.84), 1),
-      tint: rgba(tint, 1), hot: rgba(hot, 1), spec: rgba(mix(tint, WHITE, 0.9), 1), white: rgba(WHITE, 1),
-      rim: rgba(light ? mix(tint, currentTheme.hi, 0.35) : tint, 1),
+      tint: rgba(tint, 1), hot: rgba(hot, 1), spec: rgba(mix(tint, WHITE, light ? 0.5 : 0.9), 1), white: rgba(WHITE, 1),
+      rim: rgba(rim, 1), chosen: rgba(light ? mix(tint, currentTheme.hi, 0.55) : hot, 1),
+      // The shards' lit and shaded halves, and the faint trace of their orbit.
+      shardLit: rgba(light ? tint : hot, 1), shardShade: rgba(light ? rim : tint, 1), shardShadeAlpha: light ? 0.9 : 0.75,
+      trace: rgba(rim, 1),
       table: rgba(mix(tint, low, 0.82), 1),
       accent: rgba(accent, 1),
       glare: rgba(light ? mix(tint, currentTheme.hi, 0.3) : mix(tint, WHITE, 0.82), 1),
@@ -846,18 +872,23 @@
   function prismPaints(ctx, tones) {
     return cacheGet(ctx, tones.key) ?? cachePut(ctx, tones.key, { glow: null, sweep: null });
   }
-  function prismGlow(ctx, tint) {
-    const glow = ctx.createRadialGradient(0, 0, 0.55, 0, 0, 1.6);
-    glow.addColorStop(0, rgba(tint, 0.3));
-    glow.addColorStop(0.5, rgba(tint, 0.1));
-    glow.addColorStop(1, rgba(tint, 0));
+  // The glow ends at 1.45 radii, inside the shards' orbit, so it lights the
+  // gem without sealing it in a bubble.
+  const PRISM_GLOW = 1.45;
+  function prismGlow(ctx, tones) {
+    const glow = ctx.createRadialGradient(0, 0, 0.55, 0, 0, PRISM_GLOW), colour = tones.glow;
+    glow.addColorStop(0, rgba(colour, tones.light ? 0.22 : 0.3));
+    glow.addColorStop(0.5, rgba(colour, tones.light ? 0.07 : 0.1));
+    glow.addColorStop(1, rgba(colour, 0));
     return glow;
   }
   function prismSweep(ctx, tones) {
     const band = ctx.createLinearGradient(-0.34, 0, 0.34, 0);
     band.addColorStop(0, rgba(WHITE, 0));
     band.addColorStop(0.36, rgba(WHITE, 0.1));
-    band.addColorStop(0.5, rgba(tones.ink, 0.66));
+    // (a light theme's band peaks in plain white: a tinted near-white would
+    // bleach its paler crown into the ground)
+    band.addColorStop(0.5, tones.light ? rgba(WHITE, 0.42) : rgba(tones.ink, 0.66));
     band.addColorStop(0.64, rgba(WHITE, 0.1));
     band.addColorStop(1, rgba(WHITE, 0));
     return band;
@@ -871,53 +902,72 @@
   function prismSmall(ctx, tones, n, base, theta, work, sel, kick, pixel) {
     ctx.globalAlpha = base;
     ctx.beginPath(); prismKite(ctx);
-    ctx.fillStyle = n.glyph ? tones.table : tones.ramp[3]; ctx.fill();
+    ctx.fillStyle = n.glyph ? tones.table : tones.ramp[PRISM_KITE_BASE]; ctx.fill();
     const ridge = 0.55 * Math.sin(theta);
     ctx.beginPath();
     ctx.moveTo(0, PRISM_TOP); ctx.lineTo(-PRISM_GIRDLE, PRISM_GIRDLE_Y); ctx.lineTo(0, PRISM_BOTTOM); ctx.lineTo(ridge, PRISM_GIRDLE_Y); ctx.closePath();
-    ctx.globalAlpha = base * (n.glyph ? 0.4 : 1); ctx.fillStyle = tones.ramp[9]; ctx.fill();
+    ctx.globalAlpha = base * (n.glyph ? 0.4 : 1); ctx.fillStyle = tones.ramp[PRISM_KITE_LIT]; ctx.fill();
     ctx.beginPath(); prismKite(ctx);
     ctx.globalAlpha = base * (n.chosen ? 1 : Math.min(1, 0.8 + 0.2 * work + 0.1 * sel));
-    ctx.strokeStyle = n.chosen ? tones.hot : tones.rim; ctx.lineWidth = (n.chosen ? 1.3 : 0.8 + 0.3 * work + 0.5 * sel) * pixel; ctx.stroke();
+    ctx.strokeStyle = n.chosen ? tones.chosen : tones.rim; ctx.lineWidth = (n.chosen ? 1.3 : 0.8 + 0.3 * work + 0.5 * sel) * pixel; ctx.stroke();
     if (kick > 0.01) { ctx.globalAlpha = base * 0.6 * kick; ctx.fillStyle = tones.spec; ctx.fill(); }
   }
 
-  // The working shards: `count` thin crystals round a tilted ellipse, the
-  // ones behind the gem (front false) drawn dim before it, the near ones
-  // bright after it; each twinkles by its width as it turns.
+  // The working shards: `count` crystals round a tilted ellipse, the ones
+  // behind the gem (front false) drawn dim in the tint before it, the near
+  // ones after it as two-tone crystals (the half facing the key light lit,
+  // the other shaded: one fill per tone); each turns about its long axis, so
+  // its width swells and thins as it goes. A faint trace of the orbit (T2+)
+  // runs behind the gem and, for its near half, in front of it.
   function prismShards(ctx, tones, m, base, work, count, radius, time, still, front) {
     const steps = PRISM_SHARD_STEPS[count];
-    const spin = still ? 0 : TAU * cycle(m, PRISM_SHARD_LAP), cs = Math.cos(spin), ss = Math.sin(spin);
-    let drawn = false;
-    ctx.beginPath();
-    for (let index = 0; index < count; index += 1) {
-      const ck = still ? steps.pc[index] : cs * steps.c[index] - ss * steps.s[index];
-      const sk = still ? steps.ps[index] : ss * steps.c[index] + cs * steps.s[index];
-      if ((sk >= 0) !== front) continue;
-      const ex = PRISM_ORBIT_X * ck, ey = PRISM_ORBIT_Y * sk;
-      const x = ex * PRISM_ORBIT_COS - ey * PRISM_ORBIT_SIN, y = ex * PRISM_ORBIT_SIN + ey * PRISM_ORBIT_COS;
-      const size = work * (0.8 + 0.28 * sk) * (index === 3 ? tierIn(radius, 3) : index === 2 ? tierIn(radius, 2) : tierIn(radius, 1));
-      if (size < 0.04) continue;
-      // A thin crystal standing across the ring's plane, turning (its width
-      // swells and thins) as it goes.
-      const half = (still ? 0.075 : 0.03 + 0.08 * prismWave(time / 1900 + index * 0.37 + m.seed)) * size, tall = 0.25 * size;
-      const ux = -PRISM_ORBIT_SIN * tall, uy = PRISM_ORBIT_COS * tall, wx = PRISM_ORBIT_COS * half, wy = PRISM_ORBIT_SIN * half;
-      ctx.moveTo(x - ux, y - uy); ctx.lineTo(x + wx, y + wy); ctx.lineTo(x + ux, y + uy); ctx.lineTo(x - wx, y - wy); ctx.closePath();
-      drawn = true;
+    const trace = work * (count >= 3 ? tierIn(radius, 2) : 0);
+    if (trace > 0.02 && typeof ctx.ellipse === "function") {
+      ctx.beginPath(); ctx.ellipse(0, 0, PRISM_ORBIT_X, PRISM_ORBIT_Y, PRISM_ORBIT_TILT, front ? 0 : Math.PI, front ? Math.PI : TAU);
+      ctx.globalAlpha = base * (front ? 0.16 : 0.12) * trace; ctx.strokeStyle = tones.trace; ctx.lineWidth = 0.8 / radius; ctx.stroke();
     }
-    if (!drawn) return;
-    ctx.globalAlpha = base * (front ? 0.95 : 0.6);
-    ctx.fillStyle = front ? tones.hot : tones.tint; ctx.fill();
+    const spin = still ? 0 : TAU * cycle(m, PRISM_SHARD_LAP), cs = Math.cos(spin), ss = Math.sin(spin);
+    for (let pass = front ? 0 : 1; pass < 2; pass += 1) {
+      let drawn = false;
+      ctx.beginPath();
+      for (let index = 0; index < count; index += 1) {
+        const ck = still ? steps.pc[index] : cs * steps.c[index] - ss * steps.s[index];
+        const sk = still ? steps.ps[index] : ss * steps.c[index] + cs * steps.s[index];
+        if ((sk >= 0) !== front) continue;
+        const ex = PRISM_ORBIT_X * ck, ey = PRISM_ORBIT_Y * sk;
+        const x = ex * PRISM_ORBIT_COS - ey * PRISM_ORBIT_SIN, y = ex * PRISM_ORBIT_SIN + ey * PRISM_ORBIT_COS;
+        const size = work * (0.8 + 0.28 * sk) * (index === 3 ? tierIn(radius, 3) : index === 2 ? tierIn(radius, 2) : tierIn(radius, 1));
+        if (size < 0.04) continue;
+        // A double-terminated crystal standing across the ring's plane: a
+        // point, parallel sides, a point (sx, sy: a shoulder, .42 of the way
+        // from the middle to a point); a far one is a plain dim diamond.
+        const half = (still ? 0.1 : 0.06 + 0.09 * prismWave(time / 1900 + index * 0.37 + m.seed)) * size, tall = 0.34 * size;
+        const ux = -PRISM_ORBIT_SIN * tall, uy = PRISM_ORBIT_COS * tall, wx = PRISM_ORBIT_COS * half, wy = PRISM_ORBIT_SIN * half;
+        const sx = 0.42 * ux, sy = 0.42 * uy;
+        ctx.moveTo(x - ux, y - uy);
+        if (!front) { ctx.lineTo(x + wx, y + wy); ctx.lineTo(x + ux, y + uy); ctx.lineTo(x - wx, y - wy); }
+        else if (pass === 1) { ctx.lineTo(x + wx - sx, y + wy - sy); ctx.lineTo(x + wx + sx, y + wy + sy); ctx.lineTo(x + ux, y + uy); }
+        else { ctx.lineTo(x + ux, y + uy); ctx.lineTo(x - wx + sx, y - wy + sy); ctx.lineTo(x - wx - sx, y - wy - sy); }
+        ctx.closePath();
+        drawn = true;
+      }
+      if (!drawn) return;
+      if (!front) { ctx.globalAlpha = base * 0.55; ctx.fillStyle = tones.tint; }
+      else if (pass === 0) { ctx.globalAlpha = base * 0.95; ctx.fillStyle = tones.shardLit; }
+      else { ctx.globalAlpha = base * tones.shardShadeAlpha; ctx.fillStyle = tones.shardShade; }
+      ctx.fill();
+    }
   }
-  // Caustics: three small four-point sparkles round a working gem, each
-  // living .7 s at a spot hashed from the node's seed and its life.
-  function prismCaustics(ctx, tones, m, base, work, radius, time) {
+  // Caustics: small four-point sparkles round a working gem (two, three at
+  // T3), each living .7 s at a spot hashed from the node's seed and its
+  // life; secondary to the shards.
+  function prismCaustics(ctx, tones, m, base, work, radius, time, count) {
     const fade = work * tierIn(radius, 2);
     let drawn = false;
     ctx.beginPath();
-    for (let index = 0; index < 3; index += 1) {
-      const at = time / 700 + index / 3 + m.seed * 5, life = at - Math.floor(at), turn = Math.floor(at) * 3 + index;
-      const arm = 0.6 * life * (1 - life) * fade;
+    for (let index = 0; index < count; index += 1) {
+      const at = time / 700 + index / count + m.seed * 5, life = at - Math.floor(at), turn = Math.floor(at) * 3 + index;
+      const arm = 0.45 * life * (1 - life) * fade;
       if (arm < 0.025) continue;
       const direction = Math.floor(hash(m.seed, turn) * 16) & 15, far = 1.08 + 0.32 * hash(m.seed, turn + 7919);
       prismStar(ctx, PRISM_RING.c[direction] * far, PRISM_RING.s[direction] * far, arm);
@@ -927,24 +977,28 @@
     ctx.globalAlpha = base * 0.95; ctx.fillStyle = tones.glare; ctx.fill();
   }
 
+  // A motion object without a clock (a hand-made one) holds the still pose;
+  // the gem's turn for a motion (the arrival flash reuses the body's).
+  const prismStill = (m, still) => still === true || m.still === true || !(Number.isFinite(m.clock) && Number.isFinite(m.seed));
+  const prismTheta = (m, still) => still ? PRISM_STILL_TURN : TAU * cycle(m, PRISM_SPIN);
+
   function paintPrism(ctx, p, radius, tint, n, m) {
     if (!(radius > 0)) return;
     const currentTheme = prismThemeOf(n.theme);
     prismLastTheme = currentTheme;
     const tones = prismTones(tint, currentTheme), paints = prismPaints(ctx, tones);
-    // A motion object without a clock (a hand-made one) holds the still pose.
-    const base = n.alpha, still = m.still === true || n.still || !(Number.isFinite(m.clock) && Number.isFinite(m.seed)), time = n.time, pixel = 1 / radius;
+    const base = n.alpha, still = prismStill(m, n.still), time = n.time, pixel = 1 / radius;
     const detail = n.detail >= 3 ? 3 : n.detail >= 2 ? 2 : n.detail >= 1 ? 1 : 0;
     const work = prismLevel(m.work, n.active ? 1 : 0), lit = prismLevel(m.lit, n.active || n.selected ? 1 : 0);
     const sel = prismLevel(m.sel, n.selected ? 1 : 0), kick = still ? 0 : prismLevel(m.kick, 0);
-    const theta = still ? PRISM_STILL_TURN : TAU * cycle(m, PRISM_SPIN);
+    const theta = prismTheta(m, still);
     ctx.save();
     ctx.translate(p.x, p.y); ctx.scale(radius, radius);
     // The glow, only while it works or is chosen, eased with the node.
     if (lit > 0.01) {
-      paints.glow ??= prismGlow(ctx, tint);
+      paints.glow ??= prismGlow(ctx, tones);
       ctx.globalAlpha = base * lit * (still ? 0.86 : 0.72 + 0.28 * swell(m, 2.6));
-      ctx.fillStyle = paints.glow; ctx.beginPath(); ctx.arc(0, 0, 1.6, 0, TAU); ctx.fill();
+      ctx.fillStyle = paints.glow; ctx.beginPath(); ctx.arc(0, 0, PRISM_GLOW, 0, TAU); ctx.fill();
     }
     if (detail === 0) {
       prismSmall(ctx, tones, n, base, theta, work, sel, kick, pixel);
@@ -1013,7 +1067,7 @@
     }
     if (kick > 0.01) { ctx.globalAlpha = base * 0.6 * kick; ctx.fillStyle = tones.spec; ctx.fill(); }
     ctx.globalAlpha = base * (n.chosen ? 1 : Math.min(1, 0.72 + 0.23 * work + 0.05 * sel));
-    ctx.strokeStyle = n.chosen ? tones.hot : tones.rim;
+    ctx.strokeStyle = n.chosen ? tones.chosen : tones.rim;
     ctx.lineWidth = (n.chosen ? 1.6 : 0.85 + 0.35 * work + 0.6 * sel) * pixel; ctx.stroke();
     // A glyph (an agent's role, the hub's monogram) sits on a dark table.
     if (n.glyph) {
@@ -1059,7 +1113,7 @@
       }
     }
     if (shards) prismShards(ctx, tones, m, base, work, shards, radius, time, still, true);
-    if (shards && detail >= 2 && !still) prismCaustics(ctx, tones, m, base, work, radius, time);
+    if (shards && detail >= 2 && !still) prismCaustics(ctx, tones, m, base, work, radius, time, detail >= 3 ? 3 : 2);
     ctx.restore();
     voidMonogram(ctx, p, n, tones.ink);
   }
@@ -1069,6 +1123,23 @@
     if (still || !Number.isFinite(m.statusAt) || !Number.isFinite(time)) return 1;
     const pop = easeOutBack((time - m.statusAt) / 320);
     return pop > 0.02 ? pop : 0.02;
+  }
+  // The error and done inks: the theme's amber and green, deepened on a
+  // light theme so the ring, the badge's edge and its mark read on a pale
+  // ground. Built once per theme.
+  const prismStateCache = new WeakMap();
+  function prismStates(currentTheme) {
+    let inks = prismStateCache.get(currentTheme);
+    if (!inks) {
+      const light = currentTheme.light === true;
+      inks = {
+        amber: rgba(light ? mix(currentTheme.amber, currentTheme.hi, 0.35) : currentTheme.amber, 1),
+        done: rgba(light ? mix(currentTheme.done, currentTheme.hi, 0.35) : currentTheme.done, 1),
+        amberWell: rgba(currentTheme.amberWell, 1), doneWell: rgba(currentTheme.doneWell, 1),
+      };
+      prismStateCache.set(currentTheme, inks);
+    }
+    return inks;
   }
   // A status badge cut as a small gem: a diamond well in the state's colour
   // with a "!" or a tick, top right of the node.
@@ -1116,14 +1187,13 @@
       ctx.globalAlpha = base * 0.5; ctx.strokeStyle = tones.tint; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, TAU); ctx.stroke();
     } else {
-      const error = status === "error";
-      const amber = rgba(currentTheme.amber, 1), done = rgba(currentTheme.done, 1);
+      const error = status === "error", inks = prismStates(currentTheme);
       if (error) {
-        ctx.globalAlpha = base * (0.55 + 0.35 * swell(m, 1.2, 0.5)); ctx.strokeStyle = amber; ctx.lineWidth = 1.4;
+        ctx.globalAlpha = base * (0.55 + 0.35 * swell(m, 1.2, 0.5)); ctx.strokeStyle = inks.amber; ctx.lineWidth = 1.4;
         ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, TAU); ctx.stroke();
       }
       ctx.globalAlpha = base;
-      prismBadge(ctx, p.x + radius + 3, p.y - radius - 3, prismPop(m, o.time, still), rgba(error ? currentTheme.amberWell : currentTheme.doneWell, 1), error ? amber : done, error ? "!" : "tick");
+      prismBadge(ctx, p.x + radius + 3, p.y - radius - 3, prismPop(m, o.time, still), error ? inks.amberWell : inks.doneWell, error ? inks.amber : inks.done, error ? "!" : "tick");
     }
     ctx.restore();
     return true;
@@ -1175,28 +1245,33 @@
     ctx.restore();
     return true;
   }
-  // Arrival: a spectral flash. The gem flashes white, six rays of the
-  // spectrum shoot out (two per colour) and a thin ring opens behind them.
+  // Arrival: a spectral flash. The gem itself (its turned outline, as the
+  // body paints it this frame) flashes white, six long rays of the spectrum
+  // shoot out (two per colour) with six short glints between them, and a
+  // shockwave in the second hue opens ahead of them. A far, dimmed or
+  // moving node (detail ≤ 1) gets the flash, the six rays and the ring.
   function prismArrival(ctx, p, radius, tint, t01, o) {
     const t = clamp01(t01), currentTheme = prismThemeOf(o.theme), tones = prismTones(tint, currentTheme);
-    const m = motionOf(o), grow = easeOut(t), fade = 1 - t, alpha = Number.isFinite(o.alpha) ? o.alpha : 1;
+    const m = motionOf(o), still = prismStill(m, o.still), detail = Number.isFinite(o.detail) ? o.detail : 3;
+    const grow = easeOut(t), fade = 1 - t, alpha = Number.isFinite(o.alpha) ? o.alpha : 1;
     ctx.save();
     ctx.lineCap = "round";
-    if (t < 0.6) {
+    if (t < 0.5 && radius > 0) {
       ctx.save();
       ctx.translate(p.x, p.y); ctx.scale(radius, radius);
-      ctx.beginPath(); prismKite(ctx);
-      ctx.globalAlpha = alpha * 0.55 * (1 - t / 0.6) * (1 - t / 0.6); ctx.fillStyle = tones.spec; ctx.fill();
+      ctx.beginPath();
+      if (detail >= 1) { prismTurn(detail >= 2 ? 6 : 4, prismTheta(m, still)); prismOutline(ctx); } else prismKite(ctx);
+      const flash = 1 - t / 0.5;
+      ctx.globalAlpha = alpha * 0.85 * flash * Math.sqrt(flash); ctx.fillStyle = tones.spec; ctx.fill();
       ctx.restore();
     }
-    // A starburst: six long tapered rays of the spectrum (two per hue) and
-    // six short glints between them burst from the gem and fly off; a faint
-    // shockwave opens ahead of them.
-    const turn = (m.seed ?? 0) * TAU, ct = Math.cos(turn), st = Math.sin(turn);
-    const inner = radius * (0.95 + 0.55 * grow * grow), outer = radius * (1.3 + 0.7 * grow), short = radius * (1.12 + 0.45 * grow);
-    const wide = Math.max(0.9, radius * 0.08) * (0.3 + 0.7 * fade);
-    ctx.globalAlpha = alpha * 0.95 * fade;
-    for (let color = 0; color < 4; color += 1) {
+    // The starburst: tapered rays from just off the gem out past two radii
+    // (the glints .6 as long), thinning as they fly and fade.
+    const turn = (Number.isFinite(m.seed) ? m.seed : 0) * TAU, ct = Math.cos(turn), st = Math.sin(turn);
+    const inner = radius * (0.92 + 0.3 * grow), outer = radius * (1.25 + 0.8 * grow), short = inner + 0.6 * (outer - inner);
+    const wide = Math.max(1.3, 0.11 * radius) * (0.4 + 0.6 * fade);
+    ctx.globalAlpha = alpha * 0.95 * (1 - t * t);
+    for (let color = 0, colours = detail <= 1 ? 3 : 4; color < colours; color += 1) {
       ctx.beginPath();
       for (let ray = color === 3 ? 1 : color * 2; ray < 12; ray += color === 3 ? 2 : 6) {
         const cx = ct * PRISM_RAYS.c[ray] - st * PRISM_RAYS.s[ray], cy = st * PRISM_RAYS.c[ray] + ct * PRISM_RAYS.s[ray];
@@ -1207,7 +1282,7 @@
       ctx.fillStyle = color === 3 ? tones.glare : tones.spectrum[color]; ctx.fill();
     }
     if (t > 0.05) {
-      ctx.globalAlpha = alpha * 0.45 * fade * fade; ctx.lineWidth = 0.8; ctx.strokeStyle = tones.glare;
+      ctx.globalAlpha = alpha * 0.5 * fade * fade; ctx.lineWidth = 1.1; ctx.strokeStyle = tones.accent;
       ctx.beginPath(); ctx.arc(p.x, p.y, radius * (1.15 + 0.95 * grow), 0, TAU); ctx.stroke();
     }
     ctx.restore();
@@ -1215,18 +1290,26 @@
   }
   // Selection: a hover ring at 1.22 radii; the chosen node wears three arcs
   // of the spectrum at slightly different radii (a dispersed ring), turning
-  // once in 9 s.
+  // once in 9 s. A node let go keeps what it wore while its level fades, so
+  // a chosen node's arcs fade out instead of turning into the hover ring
+  // (remembered per motion record; a hovered node forgets it).
+  const prismWasChosen = new WeakMap();
   function prismSelect(ctx, p, radius, tint, o) {
     const m = motionOf(o), still = o.still === true || m.still === true;
     const marked = o.selected === true || o.chosen === true;
     const sel = still ? (marked ? 1 : 0) : prismLevel(m.sel, marked ? 1 : 0);
+    const keep = !still && o.motion != null && typeof o.motion === "object";
+    if (keep) {
+      if (o.chosen === true) { if (!prismWasChosen.has(m)) prismWasChosen.set(m, true); }
+      else if ((o.selected === true || sel <= 0.01) && prismWasChosen.has(m)) prismWasChosen.delete(m);
+    }
     if (sel <= 0.01 && o.chosen !== true) return true;
     const tones = prismTones(tint, prismThemeOf(o.theme)), alpha = Number.isFinite(o.alpha) ? o.alpha : 1;
     ctx.save();
     ctx.lineCap = "round";
-    if (o.chosen === true) {
+    if (o.chosen === true || (keep && o.selected !== true && prismWasChosen.has(m))) {
       const spin = still ? -Math.PI / 2 : TAU * cycle(m, 9);
-      ctx.globalAlpha = alpha * 0.95 * Math.max(sel, 0.4); ctx.lineWidth = 1.6;
+      ctx.globalAlpha = alpha * 0.95 * (o.chosen === true ? Math.max(sel, 0.4) : sel); ctx.lineWidth = 1.6;
       for (let index = 0; index < 3; index += 1) {
         const from = spin + index * TAU / 3 + 0.12;
         ctx.beginPath(); ctx.arc(p.x, p.y, radius * (1.2 + 0.04 * index), from, from + TAU / 3 - 0.24);
@@ -1278,10 +1361,13 @@
     const tint = o.tint;
     const dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy);
     if (!tint || !(length > 1)) return false;
-    const tones = prismTones(tint, prismLastTheme);
+    const tones = prismTones(tint, prismHookTheme(o));
     const alpha = Number.isFinite(o.alpha) ? o.alpha : 1, width = Number.isFinite(o.width) ? o.width : 1;
     const time = Number.isFinite(o.time) ? o.time : 0, still = o.still === true, lit = active || o.inspected === true;
     const far = o.far === true, seed = Number.isFinite(o.seed) ? o.seed : 0;
+    // The overlays' boost is taken on the stroke's alpha before its lifetime,
+    // so an edge fading out fades its glint and strands with it.
+    const lifetime = Number.isFinite(o.lifetime) ? clamp01(o.lifetime) : 1, core = lifetime > 0 ? alpha / lifetime : alpha;
     ctx.save();
     const base = ctx.globalAlpha;
     ctx.strokeStyle = tones.tint;
@@ -1305,25 +1391,28 @@
         let point = prismAlong(a, b, o, from); ctx.moveTo(point.x, point.y);
         point = prismAlong(a, b, o, (from + to) / 2); ctx.lineTo(point.x, point.y);
         point = prismAlong(a, b, o, to); ctx.lineTo(point.x, point.y);
-        ctx.globalAlpha = base * Math.min(1, alpha * 2.4) * (active ? 0.85 : 0.55) * (ends > 1 ? 1 : ends);
+        ctx.globalAlpha = base * Math.min(1, core * 2.4) * lifetime * (active ? 0.85 : 0.55) * (ends > 1 ? 1 : ends);
         ctx.strokeStyle = tones.glare; ctx.lineWidth = width + 0.7; ctx.stroke();
       }
     }
     // The split: three strands fan from 2.4 target radii out into the node.
+    // A lit edge splits into any tiered target but the smallest; a quiet one
+    // only into a full-detail (T3) target. On the tree's S-curve the split
+    // starts ON the drawn curve (its end tangent turns only in the last
+    // pixels) and the strands aim from there into the node.
     const rB = Number.isFinite(o.rB) ? o.rB : 0, detail = Number.isFinite(o.detail) ? o.detail : 3;
-    if (!rail && rB > 0 && (detail >= 2 || lit) && length > 3 * rB + 20) {
-      let ux = dx / length, uy = dy / length;
-      if (o.curved === true && o.cp) {
-        const tx = b.x - o.cp.x2, ty = b.y - o.cp.y2, tangent = Math.hypot(tx, ty);
-        if (tangent > 0.5) { ux = tx / tangent; uy = ty / tangent; }
-      }
-      const sx = b.x - ux * 2.4 * rB, sy = b.y - uy * 2.4 * rB, spread = 0.35 * rB, nx = -uy * spread, ny = ux * spread;
-      const split = 1 - 2.4 * rB / length;
+    if (!rail && rB > 0 && detail >= (lit ? 1 : 3) && length > 3 * rB + 20) {
+      const curved = o.curved === true && o.cp, back = 2.4 * rB / length;
+      const split = 1 - (curved ? Math.min(0.45, back) : back);
+      let sx = a.x + dx * split, sy = a.y + dy * split;
+      if (curved) { const start = prismAlong(a, b, o, split); sx = start.x; sy = start.y; }
+      const tx = b.x - sx, ty = b.y - sy, toward = Math.hypot(tx, ty) || 1, ux = tx / toward, uy = ty / toward;
+      const spread = 0.35 * rB, nx = -uy * spread, ny = ux * spread;
       const flare = still ? 0.5 : Math.max(0, 1 - Math.abs(u - split) / 0.2);
       ctx.lineWidth = Math.max(0.8, width * 0.85);
       for (let index = 0; index < 3; index += 1) {
         ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(b.x + nx * (index - 1), b.y + ny * (index - 1));
-        ctx.globalAlpha = base * Math.min(1, alpha * 1.6) * (lit ? 1 : 0.7) * (0.4 + 0.6 * flare);
+        ctx.globalAlpha = base * Math.min(1, core * 1.6) * lifetime * (lit ? 1 : 0.7) * (0.4 + 0.6 * flare);
         ctx.strokeStyle = tones.strands[index]; ctx.stroke();
       }
     }
@@ -1354,8 +1443,8 @@
     if (o.rail === true) return false;
     const dx = to.x - from.x, dy = to.y - from.y, length = Math.hypot(dx, dy);
     if (!(length >= 2)) return true;
-    const tones = prismTones(prismPulseRgb(pulse), prismLastTheme);
-    const small = pulse?.small === true, packet = pulse?.packet === true;
+    const tones = prismTones(prismPulseRgb(pulse), prismHookTheme(o));
+    const small = pulse?.small === true, packet = pulse?.packet === true, detail = Number.isFinite(o.detail) ? o.detail : 3;
     ctx.save();
     const base = ctx.globalAlpha;
     ctx.lineCap = "round"; ctx.strokeStyle = tones.tint;
@@ -1379,7 +1468,8 @@
       ctx.globalAlpha = base * (0.2 + 0.28 * index); ctx.lineWidth = (small ? 1.2 : 1.8) + 0.5 * index; ctx.stroke();
     }
     const x = from.x + dx * head, y = from.y + dy * head;
-    const split = smooth01((head - 0.7) / 0.3), rTo = Number.isFinite(o.rTo) && o.rTo > 0 ? o.rTo : 6;
+    // (a far, dimmed or moving target, detail ≤ 1, keeps one head)
+    const split = detail <= 1 ? 0 : smooth01((head - 0.7) / 0.3), rTo = Number.isFinite(o.rTo) && o.rTo > 0 ? o.rTo : 6;
     const size = small ? 1.6 : packet ? 3 : 2.3;
     // The white head, fading as it splits.
     if (split < 1) {
@@ -1401,15 +1491,16 @@
     return true;
   }
   // A pulse landing: a colour flash, three arcs of the spectrum opening out
-  // round the node and a sparkle over it; the rail gets one ring.
+  // round the node and a sparkle over it; the rail, and a far, dimmed or
+  // moving target (detail ≤ 1), get one ring.
   function prismLand(ctx, p, radius, tint, u, o) {
     if (o.still === true) return false;
-    const tones = prismTones(tint ?? prismLastTheme.orbit, prismLastTheme);
+    const currentTheme = prismHookTheme(o), tones = prismTones(tint ?? currentTheme.orbit, currentTheme);
     const r = radius > 4 ? radius : 4, t = clamp01(u), grow = easeOut(t), fade = 1 - t;
     ctx.save();
     const base = ctx.globalAlpha;
     ctx.lineCap = "round";
-    if (o.rail === true) {
+    if (o.rail === true || (Number.isFinite(o.detail) && o.detail <= 1)) {
       ctx.globalAlpha = base * 0.8 * fade; ctx.strokeStyle = tones.accent; ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.arc(p.x, p.y, r * (1.1 + 0.5 * grow), 0, TAU); ctx.stroke();
       ctx.restore();
