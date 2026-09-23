@@ -320,6 +320,7 @@ test("the coding tier saves on its own and the model field follows the tier and 
   assert.match(env.get("executor-model").placeholder, /mefi-zai\/glm-5\.3-flash · on your z\.ai plan/);
   const status = () => env.get("executor-tier-status").textContent;
   assert.match(status(), /Fast tier: OpenCode runs mefi-zai\/glm-5\.3-flash/);
+  assert.doesNotMatch(status(), /leaves no session/, "OpenCode builders are verified from their own sessions");
   assert.match(status(), /Free → opencode\/nemotron-3\.5-lightning-free \(from the first scan\)/);
   assert.match(status(), /Heavy → mefi-zai\/glm-5\.3 \(on your z\.ai plan\)/);
   env.get("executor-model").value = "mefi-zai/glm-5.3";
@@ -335,6 +336,7 @@ test("the coding tier saves on its own and the model field follows the tier and 
   assert.deepEqual(env.writes[2], { executorCli: "claude" });
   assert.match(env.get("executor-model").placeholder, /opus · Claude Code alias/, "switching builders shows that CLI's own tier default");
   assert.match(status(), /Heavy tier: Claude Code runs opus/);
+  assert.match(status(), /Claude Code leaves no session Studio can check, so its finished tasks wait for you to confirm them\./);
   env.get("executor-tier").value = "free";
   await env.get("executor-tier").trigger("change");
   assert.match(status(), /Free tier: no free model is saved for Claude Code, so builds wait/);

@@ -10180,6 +10180,7 @@ async function spawnNextJob() {
       sawDone: entry.sawDone === true,
       spoke: entry.spoke === true,
       sessionId,
+      ...(entry.routeLabel ? { route: entry.routeLabel } : {}),
       at: Date.now(),
       tail: lastWords,
       ...(errorMessage ? { error: String(errorMessage).slice(0, 500) } : {}),
@@ -10860,6 +10861,7 @@ async function spawnNextJob() {
     delete entry.stopping;
     autopilot.waiting = null; // a job actually spawned — the emit below carries it
     runLabel = label;
+    entry.routeLabel = label;
     const current = () => entry.child === nextChild && !entry.finished;
     // A dispatch acknowledgement precedes process creation. Confirm the real
     // spawn in the same conversation once Node reports it, including after a
@@ -11606,6 +11608,10 @@ async function autopilotHousekeeping() {
       changedByVerify = true;
       verifyNotes.push(`verification waiting for "${assistantClip(row.title, 60)}" — ${evidenceGap}`);
     };
+    // Builders other than OpenCode (claude, grok, codex, antigravity) leave no
+    // session the evidence readers can see, so waiting or retrying cannot
+    // produce proof: the verifier hands those straight to the owner.
+    const sessionlessRoute = (attempt) => !attempt.sessionId && ["claude", "grok", "codex", "antigravity"].includes(attempt.route) ? attempt.route : null;
     const attemptChanges = (attempt) => {
       if (!attempt.sessionId) return [];
       const window = attemptEvidenceWindow(attempt);
@@ -11763,6 +11769,7 @@ async function autopilotHousekeeping() {
           commit: attemptCommit(attempt),
           priorAttempts: Number(task.verifyAttempts) || 0,
           priorVerified,
+          sessionlessRoute: sessionlessRoute(attempt),
         });
         // Policy Lab PR0 — the receipt for this settlement. The board keeps
         // settling by the verdict exactly as before; the receipt records what
@@ -11853,6 +11860,7 @@ async function autopilotHousekeeping() {
           resultNote: attempt.result ?? null,
           commit: attemptCommit(attempt),
           priorAttempts: Number(request.verifyAttempts) || 0,
+          sessionlessRoute: sessionlessRoute(attempt),
         });
         // Policy Lab PR0 — settled inbox rows get receipts too, so directly
         // executed requests carry the same runner-observed evidence tasks do.

@@ -880,7 +880,8 @@
         : tier === "free" && !active.model
           ? `Free tier: no free model is saved for ${cliName}, so builds wait until one is${cli === "opencode" ? " (run the first scan, or save a free provider/model id)" : ""}.`
           : `${tierNames[tier]} tier: ${cliName} runs ${active.model || "its CLI default"}${tier === "free" ? ", one worker at a time" : ""}.`;
-      executorTierStatus.textContent = `${lead} ${["free", "fast", "heavy"].map(describe).join(" · ")}.`;
+      const review = cli === "opencode" ? "" : ` ${cliName} leaves no session Studio can check, so its finished tasks wait for you to confirm them.`;
+      executorTierStatus.textContent = `${lead} ${["free", "fast", "heavy"].map(describe).join(" · ")}.${review}`;
     }
     // Each model field names the provider it saves to, and its placeholder is
     // what that role runs while the field is empty — the host resolves it,
