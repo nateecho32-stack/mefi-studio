@@ -258,7 +258,7 @@ function recordCheck(options) {
   }
   if (result.error === "auth") {
     // The grant is gone (revoked, or the refresh token was refused). Perks run
-    // out with the grace period; the card offers "Link again".
+    // out with the grace period; the card offers "Link my Discord" again.
     return { ...next, checkedAt: at, nextCheckAt: at + CHECK_EVERY_MS, state: "relink", failures: 0 };
   }
   // network, rate-limit and anything unrecognised: transient, back off.
