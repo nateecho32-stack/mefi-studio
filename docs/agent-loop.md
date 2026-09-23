@@ -487,9 +487,97 @@ finding that has stayed clear for four reviews, and keeps the learned hot and
 cold paths across reviews (they used to be dropped on every review).
 
 **Switches.** `memoryAlign`, `loopGuard` and `loopGuardApply` are assistant
-prefs (`assistant:prefs`), all on by default. `loopGuardApply: false` keeps
-counting and reports "would hold N" without holding anything; `loopGuard:
-false` releases every hold the keeper stamped.
+prefs (`assistant:prefs`), all on by default. `loopGuardApply: false` releases
+the holds the keeper stamped and keeps counting, reporting "would hold N"
+instead; `loopGuard: false` releases them and stops counting. Neither touches a
+hold the owner asked for (`by: "owner"`, below), which only *Try again*
+releases. `compactHistory`, also on by default, turns off the history
+compaction described below; it has no switch in the app, but
+`assistant:prefs` accepts it, as does `"compactHistory": false` in the
+`assistant` block of the app's `settings.json`. A pref changes only once it is
+saved: a failed save leaves the running keeper on the old value, the one the
+switch flips back to.
+
+**Owner controls.** The Explorer panel has three switches next to
+*Proactive*: *Memory alignment*, *Loop guard* and *Hold looping cards*.
+*Hold looping cards* is disabled while *Loop guard* is off, and the status
+line under the switches is announced to screen readers (`role="status"`).
+Each switch saves
+its pref straight away, flips back if the save fails, and follows the saved
+prefs whenever the assistant state arrives. In the Tasks view, a card the loop
+guard holds shows its "Loop guard: …" reason and remedy, with a **Try again**
+button. A card waiting on a duplicate shows "Waiting for <title> (the same
+work)", with a **Run anyway** button. Both buttons use the ordinary retry path
+(`backlogControl` retry, `backlog.retryTask`): Try again releases the hold and
+restarts the count, and Run anyway drops the duplicate link. Neither button
+shows while a worker or the verifier has the card.
+
+**Duplicate families.** The keeper asks the owner once about each family of
+open cards that look like the same work: "These N cards look like the same
+work", with *Keep the oldest, wait the rest on it* (recommended) or *Keep them
+all*. It asks at most 2 new questions a pass, and never while a member is
+running, in review or in a group. Nothing changes until the owner answers;
+then every member is stamped `familyDecision`. With keep-oldest, the other
+members get `duplicateOf` and wait ("Waiting for X (the same work)"). When the
+kept card completes, the keeper archives them as its completion, so a parent
+waiting on one of them as a handoff child resolves too. A link to a card that
+was deleted, or archived unfinished, is dropped and the card runs on its own.
+*Run anyway* (or *Work on it*) removes the link. A split or handoff child of
+another member is never asked about, since it is that card's extra scope, not
+a copy, and cards from different parents are asked about apart. The card kept
+is the oldest that can run; a family whose cards are all held or parked is not
+asked about until one is retried. A typed reply leaves the ask open. A
+`Work on "X"` card belongs to X's family, even when its title was clipped (the
+full label is read from its prompt). The overseer warns "cards looping" while
+the loop guard holds cards, and notes "duplicate work waiting for a decision";
+it repeats a standing hold on the owner's thread only when the count grows.
+
+**Repeating work.** A chain of splits, `Work on "X"` cards and re-filed copies
+is a new card each time, so no single card's ledger reaches its limit even
+while the chain spends run after run re-verifying finished work. The keeper
+therefore also reads a family's runs across all its cards, finished ones
+included: when 3 of its last 4 verdicts changed no file, or only the TESTRUNS
+notebook and its archive (`verification.ledgerOnly`, which the verifier
+stamps when those are the only changed files), and one of its cards waits to
+run, the owner is asked once: "This work keeps coming back" — *Hold it for my
+review* (recommended) or *Let it run*. A hold stamps `loopGuard` with
+`kind: "family"` and `by: "owner"` on the waiting cards, shown and released
+like any loop hold (Try again), but never by the loop-guard switches. Either
+answer stamps every member, and only runs after the answer count towards
+asking again. The ask is superseded once none of the cards it would hold is
+still open.
+
+Issue asks on finished cards: the keeper supersedes an open issue ask whose
+card finished, since answering it could only re-arm finished work. Two kinds
+stay: an ask that offers a split (the split files new work), and an owner-only
+ask (`issueKind: "owner"`, something only the owner can do), which is usually
+raised just as the card finishes.
+
+**History compaction.** Every change to a card's brief, log, attempt or
+verdict adds a revision to its `contextHistory`, and a finished card used to
+keep all of them: they were 91% of the frozen 7.9 MB 2d Trippy Hell board.
+Once a completed card (done, or archived as done) is past the tidy clock
+(`tidyDoneAfterHours`), the keeper compacts its history in the same mutation,
+oldest card first, at most 20 cards a pass, and only cards the pass did not
+otherwise change. `taskContext.compactHistory` keeps the first entry, the last
+entry, every restore, every entry whose restorable brief or `remaining`
+differs from the entry kept before it, and the last entry of each attempt
+(`lastAttempt.runId`). It drops the rest, which is log lines, claims and
+verifier churn. Kept entries are never rewritten or renumbered, so the card's
+`contextVersion`, every brief it can be restored to and each attempt's final
+evidence stay. The history is stamped `compacted: { at, dropped }`. The keeper
+marks those rows in `revisionKinds`, and the gateway records them with kind
+`"compacted"`. `recordTaskRevision` then keeps the shorter history, with no
+new revision, only when it drops entries and changes nothing else and the
+card still matches its latest entry. Every other row is recorded the ordinary
+way, which discards a shorter history. A details form left open at a dropped
+revision fails safe when saved ("A task changed while these details were
+open"). The tidy line reports the pass ("compacted the history of 20 finished
+cards (826 KB saved)"), and housekeeping keeps `historyCompacted` and
+`historyBytesSaved`; the bytes are measured the way the board file is written,
+so they are what the file loses. Compaction tells a brief field cleared to
+`null` from one left out, since restoring either gives back a different brief. On a copy of the Trippy board, two keeper passes took 38
+cards from 1150 to 649 revisions and the file from 7.9 MB to 4.7 MB.
 
 **Seeing it.** The keeper's tidy line in the activity log carries the pass's
 summary ("held 1 looping card · aligned 5 memory notes · 3 stalled
@@ -502,5 +590,7 @@ node tools/memory_audit.mjs --data "dist/Mefi Studio AI+/resources/app/data/proj
 
 It prints every card by state (done, doing, review, stopped, stalled,
 looping, would-hold), where its memory disagrees with the board, duplicate
-card families and duplicate lessons. It reads copies in memory and never
-writes to the data folder (`--json` output goes under `tools/logs/` only).
+card families and duplicate lessons, and ends with what compaction could
+still drop ("history: 38 completed cards could drop 501 revisions (2310
+KB)"). It reads copies in memory and never writes to the data folder
+(`--json` output goes under `tools/logs/` only).

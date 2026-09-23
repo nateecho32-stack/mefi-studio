@@ -29,7 +29,8 @@ const looping = (from) => Array.from({ length: 4 }, (_, index) => [
 ]).flat();
 const folderNote = (state, id, text, at, kind = "run") => assistant.applyNodeContext(state, { target: { kind: "task", id: `task:${id}` }, kind, role: kind === "note" ? "owner" : "executor", text, at });
 
-function keeperHost({ tasks = [], folders = [], questions = [], housekeeping = {}, prefs = {}, module = assistant, backlogModule = backlog } = {}) {
+function keeperHost({ tasks = [], folders = [], questions = [], housekeeping = {}, prefs = {}, module = assistant, backlogModule = backlog, checkpoints = undefined } = {}) {
+  const stores = { checkpoints: checkpoints === undefined ? undefined : structuredClone(checkpoints) };
   let state = { ...assistant.emptyState(NOW - HOUR), projectId: "project-a" };
   for (const [id, text, at, kind] of folders) state = folderNote(state, id, text, at, kind);
   state.questions = structuredClone(questions);
@@ -46,7 +47,10 @@ function keeperHost({ tasks = [], folders = [], questions = [], housekeeping = {
     backlog: backlogModule,
     consumeReviewedTaskGroups: async () => {},
     getAssistant: async () => module,
-    getEyes: async () => ({ readJson: async (_key, fallback) => fallback, writeJson: async () => {} }),
+    getEyes: async () => ({
+      readJson: async (key, fallback) => (stores[key] === undefined ? fallback : structuredClone(stores[key])),
+      writeJson: async (key, value) => { stores[key] = structuredClone(value); },
+    }),
     CHECKPOINTS_PATH: "checkpoints",
     // The gateway: a synchronous mutator, then the awaited view write — the
     // window in which the rest of the app keeps writing assistant state.
@@ -77,10 +81,28 @@ function keeperHost({ tasks = [], folders = [], questions = [], housekeeping = {
     env, logs, errors, emitted,
     get state() { return env.assistantState; },
     board: () => structuredClone(board),
+    stores,
     whileWriting(fn) { during = fn; },
     run: (entry = null) => env.assistantKeeperJob(NOW, entry),
   };
 }
+
+test("a checkpoint written while the board write is in flight survives the keeper's checkpoint tidy", async () => {
+  // 52 notes on one session: tidy keeps the newest 50. Meanwhile a run adds
+  // a note to it and a new session gets its first one.
+  const note = (index) => ({ at: NOW - (60 - index) * MIN, text: `note ${index}` });
+  const h = keeperHost({ checkpoints: { ses_long: Array.from({ length: 52 }, (_, index) => note(index)) } });
+  h.whileWriting(() => {
+    h.stores.checkpoints.ses_long.push({ at: NOW + 1, text: "added meanwhile" });
+    h.stores.checkpoints.ses_new = [{ at: NOW + 2, text: "a new session" }];
+  });
+  await h.run();
+  const saved = h.stores.checkpoints;
+  assert.equal(saved.ses_long.length, 51, "tidy's trim of the two oldest, plus the note added meanwhile");
+  assert.deepEqual(saved.ses_long.slice(0, 2).map((row) => row.text), ["note 2", "note 3"]);
+  assert.equal(saved.ses_long.at(-1).text, "added meanwhile");
+  assert.deepEqual(saved.ses_new, [{ at: NOW + 2, text: "a new session" }]);
+});
 
 const openCard = { id: "task_open", title: "Add the retry banner", status: "open", updatedAt: NOW - HOUR, logs: [], verification: { state: "unverified", reason: "no attributable edits and no named checks" } };
 

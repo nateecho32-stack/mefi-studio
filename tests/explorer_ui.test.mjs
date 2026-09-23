@@ -210,6 +210,56 @@ test("stale tags and the folded group keep their own row-label titles", async ()
   assert.equal(expanded[6].title, env.labelOf(expanded[6]).text, "the revealed row keeps title and label in sync");
 });
 
+test("the audit switches beside Proactive reflect saved prefs, save one pref each, and put a failed save back", async () => {
+  const browser = environment();
+  await browser.open();
+  for (const id of ["memory-align", "loop-guard", "loop-guard-apply"]) assert.equal(browser.element(id).disabled, true, `${id} needs the desktop bridge`);
+
+  const saves = [];
+  const feeds = [];
+  const prefs = { proactive: true, memoryAlign: false, loopGuard: true, loopGuardApply: true };
+  let reply = (patch) => ({ ok: true, state: { prefs: { ...prefs, ...patch } } });
+  const env = environment({
+    assistantState: async () => ({ ok: true, state: { prefs } }),
+    assistantMessage: async () => ({ ok: true }),
+    assistantPrefs: async (patch) => { saves.push(patch); return reply(patch); },
+    onAssistant: (fn) => feeds.push(fn),
+  });
+  await env.open();
+  const memory = env.element("memory-align");
+  const guard = env.element("loop-guard");
+  const hold = env.element("loop-guard-apply");
+  const line = env.element("assistant-status");
+  assert.deepEqual([memory.checked, guard.checked, hold.checked], [false, true, true], "the switches show the saved prefs");
+  assert.deepEqual([memory.disabled, guard.disabled, hold.disabled], [false, false, false]);
+
+  guard.checked = false;
+  guard.dispatch("change");
+  await flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(saves)), [{ loopGuard: false }], "one pref per switch, through assistantPrefs");
+  assert.equal(hold.disabled, true, "Hold looping cards greys out while the loop guard is off");
+  assert.equal(hold.checked, true, "its own pref is left alone");
+  assert.match(line.text, /^loop guard off · every held card is released/);
+
+  feeds.forEach((fn) => fn({ state: { prefs: { ...prefs, loopGuard: true, loopGuardApply: false } } }));
+  assert.deepEqual([guard.checked, hold.checked, hold.disabled], [true, false, false], "a pushed state is reflected whenever it arrives");
+
+  hold.checked = true;
+  hold.dispatch("change");
+  await flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(saves.at(-1))), { loopGuardApply: true });
+  assert.match(line.text, /^holding looping cards/);
+
+  reply = () => ({ ok: false, error: "settings file is read-only" });
+  memory.checked = true;
+  memory.dispatch("change");
+  await flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(saves.at(-1))), { memoryAlign: true });
+  assert.equal(memory.checked, false, "a failed save puts the switch back");
+  assert.equal(line.text, "settings file is read-only");
+  assert.equal(line.style.color, "var(--bad)");
+});
+
 test("the Machine panel surfaces the latched severe-memory cap instead of reading as a free machine", async () => {
   const machineFeeds = [];
   const env = environment({ onMachineStatus: (fn) => machineFeeds.push(fn) });

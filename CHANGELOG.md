@@ -7,6 +7,44 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Owner controls for the loop guard.** The Explorer panel gains *Memory
+  alignment*, *Loop guard* and *Hold looping cards* switches next to
+  *Proactive*. A card the loop guard holds shows why and how to fix it in the
+  Tasks view, with a **Try again** button that releases the hold and restarts
+  the count. A card waiting on a duplicate shows "Waiting for <title>" with a
+  **Run anyway** button. See docs/agent-loop.md §10.
+- **Duplicate card families become one owner decision.** When open cards look
+  like the same work, the keeper asks once: keep the oldest and wait the rest
+  on it, or keep them all. Linked copies wait for the kept card and close with
+  it. Nothing is linked until you answer.
+- **Repeating work is put to you once.** A chain of follow-ups and "Work on"
+  cards whose runs keep re-verifying finished work (3 of its last 4 runs
+  changed nothing but the TESTRUNS notebook) raises one question: hold it for
+  your review, or let it run. The verifier marks a run whose only changes were
+  the ledger (`verification.ledgerOnly`).
+
+### Changed
+- **Finished cards keep a compact history.** Once a completed card is past
+  the tidy clock, the keeper drops the revisions that changed neither its
+  brief nor an attempt's final result, up to 20 cards a pass. Every brief it
+  can be restored to, each attempt's last entry and the first and latest
+  revisions stay, unchanged. On a copy of the frozen 2d Trippy Hell board this
+  took 1150 revisions to 649 and the file from 7.9 MB to 4.7 MB. The tidy line
+  and `node tools/memory_audit.mjs` report what it saves; the `compactHistory`
+  pref turns it off.
+- **Hold looping cards off now releases the keeper's holds** (it used to stop
+  only new ones); holds you asked for stay until Try again.
+
+### Fixed
+- A torn `eyes-assistant.json` is copied aside (`.broken-<time>.json`) before
+  the assistant starts over, instead of being overwritten by the empty state
+  on the next save.
+- The keeper no longer drops a checkpoint written while its pass is in flight.
+- An assistant pref only changes once it is saved; an error raised while
+  switching projects still reaches the app log; a failed save at quit is
+  logged.
+
 ## [0.3.0] - 2026-09-22
 
 One navigation rail, Brain maps as a real node editor, ad-free radio, model

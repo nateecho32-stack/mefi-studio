@@ -574,6 +574,92 @@ test("cooling tasks offer a targeted retry while prerequisite blockers do not of
   assert(!env.get("task-status-row").children.some((item) => ["Do next", "Retry now"].includes(item.textContent)));
 });
 
+const LOOP_REASON = "Loop guard: 6 attempts since your last retry ended without verified progress (tests failed). Read the last attempts, edit or split the brief, then choose Try again.";
+
+test("a loop-guard hold shows its reason and remedy and Try again releases it through the retry path", async () => {
+  const task = { id: "loop", projectId: "p", title: "Fix the export", status: "open", lastRunError: "exit 1", loopGuard: { v: 1, count: 6, reason: "tests failed", by: "keeper" } };
+  const calls = [];
+  const env = environment({ tasks: [task], overview: true, bridge: {
+    backlogStatus: async () => ({ ok: true, projectId: "p", taskStates: [{ id: "loop", stage: "blocked", blockedBy: "loop", reason: LOOP_REASON }] }),
+    tasksAction: async (payload) => {
+      calls.push(payload);
+      const released = { ...task };
+      delete released.loopGuard;
+      return { ok: true, task: { ...released, pin: true }, backlog: { ok: true, projectId: "p", taskStates: [{ id: "loop", stage: "ready", reason: "You chose this to go next" }] } };
+    },
+  } });
+  await env.api.open({ taskId: "loop" });
+  const card = env.get("task-list").children.find((element) => element.dataset.overviewId === "loop");
+  assert.equal(card.dataset.stage, "blocked");
+  assert.equal(card.children.find((element) => element.className === "task-overview-note").textContent, LOOP_REASON, "the hold's reason wins over the last run error");
+  assert.ok(descendants(card).some((element) => element.dataset.taskAction === "try-again" && element.textContent === "Try again"), "the card offers Try again");
+  const readiness = descendants(env.get("task-detail")).find((element) => element.dataset.taskReadiness);
+  assert.equal(readiness.dataset.taskReadiness, "blocked");
+  assert.equal(readiness.textContent, LOOP_REASON, "the detail shows the hold's reason with its remedy");
+  assert.equal(env.get("task-detail").textContent.split("Loop guard:").length, 2, "the reason is shown once, not repeated as a review line");
+  assert.equal(env.api.summary().review, 1, "a held card counts under Review");
+  const row = env.get("task-status-row").children;
+  const tryAgain = row.find((element) => element.dataset.taskAction === "try-again");
+  assert.equal(tryAgain.textContent, "Try again");
+  assert.equal(tryAgain.className, "primary");
+  assert.equal(tryAgain.disabled, false);
+  assert.equal(row.find((element) => element.textContent === "Mark done").className, "ghost");
+  assert(!row.some((element) => ["Retry", "Confirm done"].includes(element.textContent)), "the hold's own action replaces the generic Retry");
+  tryAgain.click(); await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ taskId: "loop", projectId: "p", action: "retry" }]);
+  assert.equal(env.api.state.tasks[0].loopGuard, undefined);
+  assert(!env.get("task-status-row").children.some((element) => element.dataset.taskAction === "try-again"), "a released card no longer offers Try again");
+  assert.doesNotMatch(env.get("task-detail").textContent, /Loop guard/);
+  assert.equal(env.saved.length, 0, "the release never overwrites the board snapshot");
+});
+
+test("a duplicate you linked says what it waits for and Run anyway clears the link through the retry path", async () => {
+  const tasks = [
+    { id: "dup", projectId: "p", title: "Export tasks again", status: "open", duplicateOf: "orig" },
+    { id: "orig", projectId: "p", title: "Build the export", status: "open" },
+  ];
+  const calls = [];
+  const env = environment({ tasks, overview: true, bridge: {
+    backlogStatus: async () => ({ ok: true, projectId: "p", taskStates: [{ id: "dup", stage: "waiting", blockedBy: "duplicate", reason: "Waiting for Build the export (the same work)" }, { id: "orig", stage: "ready", reason: "Ready for an available worker" }] }),
+    tasksAction: async (payload) => { calls.push(payload); return { ok: false, error: "Held for assertion" }; },
+  } });
+  await env.api.open();
+  const card = env.get("task-list").children.find((element) => element.dataset.overviewId === "dup");
+  assert.equal(card.children.find((element) => element.className === "task-overview-note").textContent, "Waiting for Build the export (the same work)");
+  const runAnyway = descendants(card).find((element) => element.dataset.taskAction === "run-anyway");
+  assert.equal(runAnyway.textContent, "Run anyway");
+  runAnyway.click(); await settle();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ taskId: "dup", projectId: "p", action: "retry" }]);
+  assert.equal(env.api.state.tasks[0].duplicateOf, "orig", "a rejected release keeps the link");
+  await env.api.open({ taskId: "dup" });
+  const readiness = descendants(env.get("task-detail")).find((element) => element.dataset.taskReadiness);
+  assert.equal(readiness.dataset.taskReadiness, "waiting");
+  assert.equal(readiness.textContent, "Waiting for Build the export (the same work)");
+  assert.equal(env.api.summary().review, 0, "waiting on the original is not a review");
+  const row = env.get("task-status-row").children;
+  assert.equal(row.find((element) => element.dataset.taskAction === "run-anyway").className, "primary");
+  assert.equal(row.find((element) => element.textContent === "Mark done").className, "ghost");
+  assert(!env.get("task-list").children.find((element) => element.dataset.overviewId === "orig").textContent.includes("Run anyway"), "the original offers nothing");
+});
+
+test("Try again and Run anyway are never offered while a worker or the checker holds the card", async () => {
+  const tasks = [
+    { id: "working", projectId: "p", title: "Working card", status: "active", runId: "run_1" },
+    { id: "checking", projectId: "p", title: "Checking card", status: "awaiting_verification" },
+    { id: "claimed", projectId: "p", title: "Claimed card", status: "open", runId: "run_2" },
+  ];
+  const states = [{ id: "working", stage: "blocked", blockedBy: "loop", reason: LOOP_REASON }, { id: "checking", stage: "blocked", blockedBy: "loop", reason: LOOP_REASON }, { id: "claimed", stage: "waiting", blockedBy: "duplicate", reason: "Waiting for Working card (the same work)" }];
+  const env = environment({ tasks, overview: true, bridge: {
+    backlogStatus: async () => ({ ok: true, projectId: "p", taskStates: states }),
+    tasksAction: async () => { throw new Error("a held card must not be retried"); },
+  } });
+  for (const task of tasks) {
+    await env.api.open({ taskId: task.id });
+    assert(!env.get("task-status-row").children.some((element) => ["try-again", "run-anyway"].includes(element.dataset.taskAction)), `${task.id} offers no release`);
+  }
+  assert(!descendants(env.get("task-list")).some((element) => ["try-again", "run-anyway"].includes(element.dataset.taskAction)), "no overview card offers one either");
+});
+
 test("board Add creates an explicit project task once, preserves newer typing and never routes through chat", async () => {
   const calls = []; let finish;
   const pending = new Promise((resolve) => { finish = resolve; });

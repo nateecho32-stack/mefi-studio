@@ -146,6 +146,21 @@ test("failed or pending edit tools are not treated as completed file changes", a
   assert.equal(board().tasks[0].verification.state, "unverified");
 });
 
+test("a run whose only changes are the TESTRUNS ledger is stamped ledgerOnly; any other file clears it", async () => {
+  for (const [changes, expected] of [
+    [[{ file: "TESTRUNS.md", status: "completed" }], true],
+    [[{ file: "C:\\repo\\docs\\archive\\testruns-2026-09.md", status: "completed" }, { files: ["TESTRUNS.md"], status: "completed" }], true],
+    [[{ file: "TESTRUNS.md", status: "completed" }, { file: "main.cjs", status: "completed" }], undefined],
+    [[{ file: "docs/archive/notes.md", status: "completed" }], undefined],
+  ]) {
+    const { env, board } = verificationHost({ tasks: [{ id: "task", title: "Rerun the gate", status: "awaiting_verification", lastAttempt: { startedAt: 1, at: 2, sessionId: "ledger-session", code: 0 } }], changes });
+    await env.autopilotHousekeeping();
+    const verification = board().tasks[0].verification;
+    assert.equal(verification.ledgerOnly, expected, JSON.stringify(changes));
+    assert.equal(verification.changedFiles, changes.length, "the count is unchanged");
+  }
+});
+
 test("failed or skipped checks cannot become completion evidence under another field name", () => {
   for (const field of ["tests", "ran", "verified", "audit"]) {
     const failure = assistant.verifyCompletion({ verdictOk: true, changedFiles: 3, hasSession: true, resultNote: { parts: { [field]: "npm test failed" } } });

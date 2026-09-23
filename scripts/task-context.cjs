@@ -4,7 +4,7 @@
 // Run-claim state (status, runId, leases, progress) is not brief context and
 // is not snapshotted.
 const { createHash } = require("node:crypto");
-const { dependencyIds } = require("./backlog.cjs");
+const { dependencyIds, completedTask } = require("./backlog.cjs");
 
 const object = (value) => value && typeof value === "object" && !Array.isArray(value);
 const rows = (value) => Array.isArray(value) ? value : [];
@@ -28,6 +28,36 @@ const digest = (snapshot) => createHash("sha256").update(JSON.stringify(canonica
 const entriesOf = (task) => rows(task?.contextHistory?.entries).filter((entry) => object(entry) && object(entry.snapshot) && entry.snapshot.id === task?.id && typeof entry.id === "string" && Number.isInteger(entry.revision));
 const historyEntries = (task) => task?.contextHistory?.version === 1 && Array.isArray(task.contextHistory.entries) ? task.contextHistory.entries : [];
 
+// A latest entry hashed under an older FIELDS list (one that still carried
+// status/runId) is compared through the current list, so upgraded boards do
+// not gain a catch-up revision on every row at their first mutation. An
+// entry already on the current list cannot match here, so it is not re-hashed.
+// The old list could not record absorbedInto, so an absorbed legacy entry
+// borrows the live value instead of reading as a change.
+function legacyMatch(entry, task, hash) {
+  if (!entry?.snapshot || !Object.keys(entry.snapshot).some((key) => !FIELDS.includes(key))) return false;
+  const legacy = entry.snapshot.status === "absorbed" && task.absorbedInto !== undefined && !Object.hasOwn(entry.snapshot, "absorbedInto")
+    ? { ...entry.snapshot, absorbedInto: task.absorbedInto }
+    : entry.snapshot;
+  return digest(snapshotTask(legacy)) === hash;
+}
+
+// Whether `entries` is `prior` with entries dropped and nothing else: the same
+// first and last entry, and every entry one of the prior's, by id and hash, in
+// order. Saved bodies are never compared.
+function compactionOf(entries, prior) {
+  if (!entries.length || !prior.length || entries.length > prior.length) return false;
+  const same = (a, b) => a === b || (object(a) && object(b) && typeof a.id === "string" && a.id === b.id && a.hash === b.hash);
+  if (!same(entries[0], prior[0]) || !same(entries[entries.length - 1], prior[prior.length - 1])) return false;
+  let at = 0;
+  for (const entry of entries) {
+    while (at < prior.length && !same(entry, prior[at])) at += 1;
+    if (at >= prior.length) return false;
+    at += 1;
+  }
+  return true;
+}
+
 function recordTaskRevision(task, { previous = null, kind = "updated", note = "", now = Date.now() } = {}) {
   if (!object(task) || !task.id) return task;
   const snapshot = snapshotTask(task);
@@ -35,23 +65,21 @@ function recordTaskRevision(task, { previous = null, kind = "updated", note = ""
   const supplied = historyEntries(task);
   const prior = previous?.id === task.id ? historyEntries(previous) : [];
   const priorLatest = prior[prior.length - 1];
+  // A history compactHistory shortened is kept as supplied, with no revision
+  // appended, when it only drops prior entries and the card is still what its
+  // latest entry says. Checked before the fast paths below, which would hand
+  // back the prior history. Anything else is recorded the ordinary way, and
+  // that discards the shorter history.
+  if (kind === "compacted") {
+    if (priorLatest && compactionOf(supplied, prior) && (priorLatest.hash === hash || legacyMatch(priorLatest, task, hash))) return task;
+    kind = "updated";
+  }
   // The trusted current store is enough for a no-op. Do not serialize, copy,
   // or walk years of old snapshots just because a heartbeat refreshed a lease.
   if (kind !== "restored" && priorLatest?.hash === hash) {
     return task.contextHistory === previous.contextHistory ? task : { ...task, contextHistory: previous.contextHistory };
   }
-  // A latest entry hashed under an older FIELDS list (one that still carried
-  // status/runId) is compared through the current list, so upgraded boards do
-  // not gain a catch-up revision on every row at their first mutation. An
-  // entry already on the current list cannot match here, so it is not re-hashed.
-  // The old list could not record absorbedInto, so an absorbed legacy entry
-  // borrows the live value instead of reading as a change.
-  if (kind !== "restored" && priorLatest?.snapshot && Object.keys(priorLatest.snapshot).some((key) => !FIELDS.includes(key))) {
-    const legacy = priorLatest.snapshot.status === "absorbed" && task.absorbedInto !== undefined && !Object.hasOwn(priorLatest.snapshot, "absorbedInto")
-      ? { ...priorLatest.snapshot, absorbedInto: task.absorbedInto }
-      : priorLatest.snapshot;
-    if (digest(snapshotTask(legacy)) === hash) return task.contextHistory === previous.contextHistory ? task : { ...task, contextHistory: previous.contextHistory };
-  }
+  if (kind !== "restored" && legacyMatch(priorLatest, task, hash)) return task.contextHistory === previous.contextHistory ? task : { ...task, contextHistory: previous.contextHistory };
   // Preserve a revision already appended by restoreTaskRevision when the board
   // gateway records that mutation too. Compare IDs/hashes, never whole saved
   // bodies. The gateway must strip client-supplied history before calling us.
@@ -76,7 +104,9 @@ function recordTaskRevision(task, { previous = null, kind = "updated", note = ""
   if (!currentLatest || (currentLatest.hash || digest(currentLatest.snapshot)) !== hash || kind === "restored") append(snapshot, kind, note, now);
   if (entries.length === existing.length && extendsPrior && task.contextHistory) return task;
   const { contextHistory, ...body } = task;
-  return { ...copy(body), contextHistory: { version: 1, entries } };
+  // A compaction stamp stays with the history it describes.
+  const stamp = (extendsPrior ? contextHistory : previous?.contextHistory)?.compacted;
+  return { ...copy(body), contextHistory: { version: 1, entries, ...(object(stamp) ? { compacted: stamp } : {}) } };
 }
 
 function taskHistory(task, { limit = 40, before = null } = {}) {
@@ -101,6 +131,55 @@ function restoreTaskRevision(task, revisionId, { now = Date.now() } = {}) {
     else restored[key] = copy(entry.snapshot[key]);
   }
   return { ok: true, task: recordTaskRevision(restored, { previous: task, kind: "restored", note: `Restored brief from revision ${entry.revision}. Files and run results were not changed.`, now }) };
+}
+
+// History compaction for finished work. Most of a completed card's revisions
+// record log lines, claims and verifier churn, never a different brief. Kept:
+// the first entry (the baseline saveTaskEdits falls back to), the last (its
+// revision is the card's contextVersion), every restore, every entry whose
+// restorable brief or `remaining` differs from the entry kept before it, and
+// the last entry of each attempt (lastAttempt.runId). Kept entries are the same
+// objects, never renumbered or re-hashed; the history is a new object stamped
+// `compacted: { at, dropped }` (dropped is the running total), because the
+// board gateway memoizes rows by history identity. A history with nothing to
+// drop is still stamped once, so the keeper does not read it again. Open work,
+// a history under COMPACT_MIN_ENTRIES entries, and one compacted with no
+// revision since come back as the same task. Bytes are the history's JSON,
+// measured only when it changes (0 and 0 otherwise). The caller persists the
+// result through recordTaskRevision with kind "compacted".
+const COMPACT_MIN_ENTRIES = 4;
+const COMPACT_KEYS = [...RESTORABLE, "remaining"];
+function compactHistory(task, { now = Date.now() } = {}) {
+  const unchanged = { task, dropped: 0, bytesBefore: 0, bytesAfter: 0 };
+  if (!object(task) || !completedTask(task)) return unchanged;
+  const history = task.contextHistory;
+  const entries = historyEntries(task);
+  if (entries.length < COMPACT_MIN_ENTRIES) return unchanged;
+  // A history this module did not write is left as it is.
+  if (entries.some((entry) => !object(entry) || !object(entry.snapshot) || entry.snapshot.id !== task.id || typeof entry.id !== "string" || !Number.isInteger(entry.revision))) return unchanged;
+  const stamp = object(history.compacted) ? history.compacted : null;
+  if (stamp && Number(stamp.at) >= Number(entries[entries.length - 1].at)) return unchanged;
+  // A field set to null and a field left out are different briefs to restore
+  // (restore writes the one and deletes the other), so they compare apart.
+  const briefOf = (entry) => JSON.stringify(canonical(COMPACT_KEYS.map((key) => (Object.hasOwn(entry.snapshot, key) ? [entry.snapshot[key]] : []))));
+  const runOf = (entry) => JSON.stringify(entry.snapshot.lastAttempt?.runId ?? null);
+  const lastOfRun = new Map(entries.map((entry, index) => [runOf(entry), index]));
+  const kept = [];
+  let brief = null;
+  entries.forEach((entry, index) => {
+    const own = briefOf(entry);
+    if (index === 0 || index === entries.length - 1 || entry.kind === "restored" || own !== brief || lastOfRun.get(runOf(entry)) === index) {
+      kept.push(entry);
+      brief = own;
+    }
+  });
+  const dropped = entries.length - kept.length;
+  if (!dropped && stamp) return unchanged;
+  const next = { ...history, entries: kept, compacted: { at: now, dropped: Math.max(0, Math.floor(Number(stamp?.dropped) || 0)) + dropped } };
+  // Measured the way the board file is written (indented, the history two
+  // levels deep in the row list), so the saving is what the file loses.
+  const size = (value) => Buffer.byteLength(JSON.stringify([{ contextHistory: value }], null, 2));
+  return { task: { ...task, contextHistory: next }, dropped, bytesBefore: size(history), bytesAfter: size(next) };
 }
 
 function renderValue(value) {
@@ -202,4 +281,4 @@ function resolveStaleFileScope(task, { exists = null, locate = null } = {}) {
   return { changed, files, ...(file ? { file } : {}), healed, missing };
 }
 
-module.exports = { snapshotTask, recordTaskRevision, taskHistory, restoreTaskRevision, buildTaskHandoff, resolveStaleFileScope };
+module.exports = { snapshotTask, recordTaskRevision, taskHistory, restoreTaskRevision, compactHistory, buildTaskHandoff, resolveStaleFileScope };

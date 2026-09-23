@@ -27,7 +27,9 @@ export const AI_PARALLEL_MAX = 6;
 // memoryAlign, loopGuard and loopGuardApply are the keeper audit pass's kill
 // switches (auditPass): aligning memory with the board, counting outcomes, and
 // stamping a hold. loopGuard off also releases every hold the keeper stamped.
-export const DEFAULT_PREFS = { proactive: true, keepAwake: true, background: true, backlogMode: false, foldAfterMinutes: 60, staleAfterHours: 24, tidyDoneAfterHours: 24, parallel: 8, aiParallel: 4, memoryAlign: true, loopGuard: true, loopGuardApply: true };
+// compactHistory off stops the keeper compacting finished cards' history
+// (task-context's compactHistory, run by main.cjs assistantKeeperJob).
+export const DEFAULT_PREFS = { proactive: true, keepAwake: true, background: true, backlogMode: false, foldAfterMinutes: 60, staleAfterHours: 24, tidyDoneAfterHours: 24, parallel: 8, aiParallel: 4, memoryAlign: true, loopGuard: true, loopGuardApply: true, compactHistory: true };
 
 // One lag spike is a resample signal. The foreman only holds after two
 // consecutive samples strictly above the threshold.
@@ -276,8 +278,12 @@ export function emptyState(now = Date.now()) {
     },
     // loopArmedAt is set once, by the first keeper pass that runs the audit:
     // outcomes logged before it are never charged to a card. The other audit
-    // counters are the last pass's, like the tidy counters beside them.
-    housekeeping: { lastAt: 0, tasksArchived: 0, ideasPruned: 0, requestsCleared: 0, checkpointsDropped: 0, foldersCleaned: 0, lastText: "", loopArmedAt: 0, loopsHeld: 0, wouldHold: 0, stalled: 0, memoryAligned: 0, questionsSuperseded: 0 },
+    // counters are the last pass's, like the tidy counters beside them:
+    // loopsHeld counts the holds that pass stamped, loopsHolding every card
+    // held after it, familiesWaiting the duplicate families awaiting the owner.
+    // historyCompacted counts the finished cards whose history the pass
+    // compacted, historyBytesSaved the history bytes that dropped.
+    housekeeping: { lastAt: 0, tasksArchived: 0, ideasPruned: 0, requestsCleared: 0, checkpointsDropped: 0, foldersCleaned: 0, lastText: "", loopArmedAt: 0, loopsHeld: 0, wouldHold: 0, stalled: 0, memoryAligned: 0, questionsSuperseded: 0, loopsHolding: 0, familiesWaiting: 0, historyCompacted: 0, historyBytesSaved: 0 },
     problems: [],
     questions: [],
     unread: 0,
@@ -518,6 +524,10 @@ export function normalizeState(raw, now = Date.now()) {
       stalled: Math.floor(num(housekeeping.stalled, 0)),
       memoryAligned: Math.floor(num(housekeeping.memoryAligned, 0)),
       questionsSuperseded: Math.floor(num(housekeeping.questionsSuperseded, 0)),
+      loopsHolding: Math.floor(num(housekeeping.loopsHolding, 0)),
+      familiesWaiting: Math.floor(num(housekeeping.familiesWaiting, 0)),
+      historyCompacted: Math.floor(num(housekeeping.historyCompacted, 0)),
+      historyBytesSaved: Math.floor(num(housekeeping.historyBytesSaved, 0)),
     };
     state.problems = asArray(raw.problems).map(normalizeProblem).filter(Boolean);
     state.questions = clampTail(asArray(raw.questions).map(normalizeQuestion).filter(Boolean), CAPS.questions);
@@ -858,6 +868,11 @@ export function overseerDigest(state, now = Date.now()) {
       lastAt: num(housekeeping.lastAt, 0),
       ageMin: num(housekeeping.lastAt, 0) ? Math.round((now - num(housekeeping.lastAt, 0)) / MINUTE) : null,
       cleared: Math.floor(num(housekeeping.tasksArchived, 0) + num(housekeeping.ideasPruned, 0) + num(housekeeping.requestsCleared, 0)),
+      // The keeper's audit: cards the loop guard holds now (a state saved
+      // before loopsHolding has only the last pass's new holds), and
+      // duplicate families waiting for the owner's decision.
+      loopsHeld: Math.floor(Math.max(num(housekeeping.loopsHeld, 0), num(housekeeping.loopsHolding, 0))),
+      familiesWaiting: Math.floor(num(housekeeping.familiesWaiting, 0)),
     },
     ai: { keyPresent: bool(ai.keyPresent, false), online: bool(ai.online, false), failures: Math.floor(num(ai.failures, 0)), backoffMin: Math.max(0, Math.round((num(ai.backoffUntil, 0) - now) / MINUTE)) },
     prefs: normalizePrefs(current.prefs),
@@ -900,6 +915,8 @@ const LOCAL_FINDING_PATTERNS = [
   /^(no api key)(?=:|$)/i,
   /^(errors rising)(?=:|$)/i,
   /^(housekeeping stale)(?=:|$)/i,
+  /^(cards looping)(?=:|$)/i,
+  /^(duplicate work waiting for a decision)(?=:|$)/i,
 ];
 const LESSON_QUIET_MERGES = 4;
 function localFindingKey(text) {
@@ -922,7 +939,7 @@ export function overseerReview(digest, overseer = null) {
   const prevFindings = new Set(asArray(previous.findings).map((entry) => str(entry?.title)));
   const prevDigest = isObject(previous.digest) ? previous.digest : null;
   const findings = [];
-  const add = (severity, title, detail = "") => findings.push({ severity, title: clip(title, 80), detail: clip(detail, 240), persisting: prevFindings.has(title) });
+  const add = (severity, title, detail = "", extra = null) => findings.push({ severity, title: clip(title, 80), detail: clip(detail, 240), persisting: prevFindings.has(title), ...extra });
   for (const role of asArray(d.errorRoles).slice(0, 4)) add("warn", `${role} failing`, `the ${role} agent ended its last run in error`);
   if (num(d.problems?.count, 0)) add(d.problems.count >= 3 ? "warn" : "info", `${plural(d.problems.count, "open problem")}`, `${d.problems.kinds.slice(0, 4).join(", ")}${num(d.problems.aged, 0) ? ` · ${d.problems.aged} over 1h old` : ""}`);
   if (num(d.replies?.unanswered, 0)) add("warn", "unanswered messages", `${plural(d.replies.unanswered, "user message")} still waiting on a reply`);
@@ -936,6 +953,14 @@ export function overseerReview(digest, overseer = null) {
   const errorTally = (value) => (Array.isArray(value) ? value.length : num(value, 0)); // digests before the role-tagged records kept a bare count
   if (prevDigest && errorTally(prevDigest.logErrors) < errorTally(d.logErrors)) add("warn", "errors rising", `error log entries ${errorTally(prevDigest.logErrors)} → ${errorTally(d.logErrors)} since the last review`);
   if (d.housekeeping?.ageMin !== null && num(d.housekeeping?.ageMin, 0) > 4 * 60) add("info", "housekeeping stale", `last tidy ${ago(d.housekeeping.ageMin)}`);
+  // The keeper's audit, in the owner's hands: a held card waits for Try again,
+  // a duplicate family for its question on the rail. Neither files an upgrade:
+  // more cards would not help a card that loops. Both are owner holds
+  // (ownerHold): overseerTalk speaks one when it begins and again only when
+  // its count grew since the last review, never every review while it waits.
+  const grew = (field) => Boolean(prevDigest) && num(prevDigest.housekeeping?.[field], 0) < num(d.housekeeping?.[field], 0);
+  if (num(d.housekeeping?.loopsHeld, 0)) add("warn", "cards looping", `${plural(num(d.housekeeping.loopsHeld, 0), "card")} held by the loop guard · read the last attempts, edit or split the brief, then choose Try again`, { ownerHold: true, grew: grew("loopsHeld") });
+  if (num(d.housekeeping?.familiesWaiting, 0)) add("info", "duplicate work waiting for a decision", `${plural(num(d.housekeeping.familiesWaiting, 0), "duplicate card family", "duplicate card families")} · answer "These cards look like the same work" on the rail`, { ownerHold: true, grew: grew("familiesWaiting") });
   const weights = { critical: 25, warn: 12, info: 4 };
   const score = Math.max(0, Math.min(100, 100 - findings.reduce((sum, entry) => sum + (weights[entry.severity] ?? 4), 0)));
   const health = score >= 80 ? "good" : score >= 50 ? "fair" : "poor";
@@ -979,8 +1004,14 @@ function wakeRole(roles, seen, role) {
 // should send to fix it. Operational findings wake the owning scout;
 // unanswered mail is flagged so the host restarts those replies; a healthy
 // review with nothing repaired stays quiet so the thread is not spammed.
+// An owner hold (overseerReview's ownerHold findings) is spoken when it begins
+// and when its count grows: while it merely persists the owner has been told,
+// so it is left out here, though it still scores in the review. serious says
+// whether what is spoken belongs on the owner's thread (a warn or critical
+// finding, or a repair), so a standing hold never carries the rest there.
 export function overseerTalk(review, { repaired = [], digest = null } = {}) {
-  const findings = asArray(isObject(review) ? review.findings : null).filter(isObject);
+  const told = (entry) => entry.ownerHold === true && entry.persisting === true && entry.grew !== true;
+  const findings = asArray(isObject(review) ? review.findings : null).filter((entry) => isObject(entry) && !told(entry));
   const fixed = asArray(repaired).filter((item) => typeof item === "string" && item);
   const roles = [];
   const seen = new Set();
@@ -999,7 +1030,7 @@ export function overseerTalk(review, { repaired = [], digest = null } = {}) {
       if (detail.includes(kind) || title.includes(kind.replace(/-/g, " "))) wakeRole(roles, seen, PROBLEM_ROLES[kind]);
     }
   }
-  if (!findings.length && !fixed.length) return { say: "", reply: "", roles: [], dispatch: false, organize: false, resumeUnanswered: false };
+  if (!findings.length && !fixed.length) return { say: "", reply: "", roles: [], dispatch: false, organize: false, resumeUnanswered: false, serious: false };
   const findingBits = findings.slice(0, 3).map((entry) => `${entry.title}${entry.detail ? ` (${clip(entry.detail, 50)})` : ""}`);
   const say = clip(
     fixed.length
@@ -1024,6 +1055,7 @@ export function overseerTalk(review, { repaired = [], digest = null } = {}) {
     dispatch: roles.includes("foreman") || findings.some((entry) => /builder|stuck|stale session|queue/i.test(str(entry.title))),
     organize: findings.some((entry) => /stale session|tree|organiz/i.test(str(entry.title))),
     resumeUnanswered,
+    serious: fixed.length > 0 || findings.some((entry) => entry.severity === "warn" || entry.severity === "critical"),
   };
 }
 
@@ -4553,14 +4585,229 @@ const loopHoldable = (task) => waitingTask(task) && !task.runId && !task.lease &
 
 // Duplicate families: unresolved cards that are one obligation minted twice —
 // a split's "Follow-up:" chain, a handoff clone renamed " — follow-up xxxxxx",
-// a title clipped with "…". Reported, never merged: cards titled "Audit: css"
-// are different selectors and files, so audit findings never form a family.
+// a title clipped with "…", and a "Work on it" card (`Work on "X"`, clipped
+// at 60 characters, so its closing quote may be gone), which is the work X it
+// points at. Reported, never merged: cards titled "Audit: css" are different
+// selectors and files, so audit findings never form a family.
 function familyKey(task) {
-  const title = (str(task?.originalTitle).trim() || str(task?.title).trim())
-    .replace(/^(?:follow-up(?:\s+\d+)?:\s*)+/i, "")
-    .replace(/\s+—\s+follow-up\s+\S+$/i, "")
-    .replace(/…$/, "");
+  let title = str(task?.originalTitle).trim() || str(task?.title).trim();
+  // A clipped "Work on it" title keeps its full label in the prompt it was
+  // queued with ("Work on \"X\". Queued with Work on it — …").
+  const queued = /^work on\s+"/i.test(title) ? /^work on\s+"(.+?)"\.\s/i.exec(str(task?.prompt)) : null;
+  if (queued) title = queued[1].trim();
+  for (let before = ""; before !== title; ) {
+    before = title;
+    title = title.replace(/^work on\s+"(.*?)"?$/i, "$1").replace(/^(?:follow-up(?:\s+\d+)?:\s*)+/i, "").trim();
+  }
+  title = title.replace(/\s+—\s+follow-up\s+\S+$/i, "").replace(/…$/, "");
   return /^audit:/i.test(title) ? "" : compactKey(title);
+}
+
+// A family is put to the owner once: "These N cards look like the same work",
+// keep the oldest (the rest wait on it) or keep them all. Only the owner's
+// answer links anything (main.cjs assistantFamilyAction stamps familyDecision
+// on every member, and duplicateOf on the ones that wait); the keeper only
+// proposes, at most FAMILY_ASKS_PER_PASS new asks a pass.
+const FAMILY_ASKS_PER_PASS = 2;
+const FAMILY_DETAIL_MAX = 400;
+// A worker holds it, the verifier has it, or a group owns it: a family with
+// such a member is not asked about until it settles.
+const busyTask = (task) =>
+  ["active", "running", "awaiting_verification", "verifying", "absorbed"].includes(task.status) || Boolean(task.absorbedInto || task.runId || task.lease);
+const unresolvedTask = (task) => isObject(task) && !completedTaskRow(task) && task.status !== "archived";
+// What backlog.workState says of the card itself: the loop guard's hold, or a
+// park after failed verification or five failed runs. Such a card runs only
+// once the owner retries it, so the rest of a family never wait on it.
+const cardHold = (task) =>
+  isObject(task.loopGuard) ? "held by the loop guard"
+    : task.verification?.state === "failed" || num(task.verifyAttempts, 0) >= 3 || num(task.runFailures, 0) >= 5 ? "parked" : "";
+
+// The cards a card was split from (splitFrom) or delegated by (parentTaskId),
+// nearest first, followed across the whole board. A split files the work its
+// parent's brief did not cover and a handoff child is its parent's
+// obligation: lineage is never a copy of the same work.
+function lineageOf(task, board) {
+  const ids = [];
+  const seen = new Set([str(task.id)]);
+  let id = str(task.splitFrom) || str(task.parentTaskId);
+  while (id && !seen.has(id) && ids.length < 32) {
+    ids.push(id);
+    seen.add(id);
+    const up = board.get(id);
+    id = up ? str(up.splitFrom) || str(up.parentTaskId) : "";
+  }
+  return ids;
+}
+
+// A family split by where its cards come from, each part asked about apart.
+// A split (splitFrom) is the extra scope of the card it was split from, so it
+// is only ever asked about with other splits of that same card, never with
+// that card's copies, even once the card itself has finished. The other cards
+// part by the top of their lineage, else the run or plan that filed them:
+// cards from different parents are different obligations even under one
+// title (a handoff child is renamed " — follow-up xxxxxx" exactly because its
+// title collides with unrelated work), so keeping the oldest only links cards
+// of one lineage. Cards with no root join the only root there is, or are
+// asked about together when there are several.
+function familyParts(key, members, board) {
+  const parts = new Map();
+  const put = (part, task) => {
+    if (!parts.has(part)) parts.set(part, []);
+    parts.get(part).push(task);
+  };
+  const rootOf = (task) => lineageOf(task, board).at(-1) || (str(task.fromRun) ? `run:${str(task.fromRun)}` : str(task.planningId) ? `plan:${str(task.planningId)}` : "");
+  const rest = members.filter((task) => !str(task.splitFrom));
+  const roots = rest.map(rootOf);
+  const oneRoot = new Set(roots.filter(Boolean)).size <= 1;
+  rest.forEach((task, index) => put(oneRoot ? key : `${key}#${roots[index]}`, task));
+  for (const task of members) if (str(task.splitFrom)) put(`${key}#split:${str(task.splitFrom)}`, task);
+  return [...parts.entries()];
+}
+
+function familyAsk(key, members, board, now) {
+  const order = (task) => num(task.createdAt, 0) || num(task.updatedAt, 0) || Infinity;
+  const ordered = members
+    .map((task, index) => ({ task, index }))
+    .sort((a, b) => order(a.task) - order(b.task) || a.index - b.index)
+    .map(({ task }) => task);
+  // The oldest card that can run is the one kept (auditPass asks only when
+  // there is one); a held or parked card is listed as such.
+  const keep = ordered.find((task) => !cardHold(task)) ?? ordered[0];
+  const named = (id) => (board.has(id) ? `"${clip(str(board.get(id).title) || id, 40)}"` : id);
+  const lines = ordered.map((task, index) => {
+    const bits = [`${index + 1}) "${clip(str(task.title) || str(task.id), 50)}"`, str(task.status) || "open"];
+    if (cardHold(task)) bits.push(cardHold(task));
+    if (num(task.createdAt, 0)) bits.push(`created ${ago((now - num(task.createdAt, 0)) / MINUTE)}`);
+    if (str(task.parentTaskId)) bits.push(`from ${named(str(task.parentTaskId))}`);
+    else if (str(task.splitFrom)) bits.push(`split from ${named(str(task.splitFrom))}`);
+    return bits.join(" · ");
+  });
+  const listed = (count) => `${lines.slice(0, count).join("; ")}${count < lines.length ? `; +${lines.length - count} more` : ""}`;
+  let shown = lines.length;
+  while (shown > 1 && listed(shown).length > FAMILY_DETAIL_MAX) shown -= 1;
+  const memberIds = ordered.map((task) => str(task.id));
+  const keepTitle = clip(str(keep.title) || str(keep.id), 60);
+  return {
+    familyKey: key,
+    kind: "question",
+    source: "family",
+    title: `These ${ordered.length} cards look like the same work`,
+    detail: clip(listed(shown), FAMILY_DETAIL_MAX),
+    context: { severity: "decision", taskId: str(keep.id), taskTitle: str(keep.title) || str(keep.id) },
+    options: [
+      {
+        id: "keep-oldest",
+        label: keep === ordered[0] ? "Keep the oldest, wait the rest on it" : "Keep the oldest that can run, wait the rest on it",
+        description: `"${keepTitle}" runs; the others wait for it and close as the same work when it is done.`,
+        recommended: true,
+        action: { kind: "family", choice: "keep-oldest", familyKey: key, keepId: str(keep.id), memberIds },
+      },
+      {
+        id: "keep-all",
+        label: "Keep them all",
+        description: "Every card runs on its own, and these cards are not asked about again.",
+        action: { kind: "family", choice: "keep-all", familyKey: key, memberIds },
+      },
+    ],
+  };
+}
+
+// Repeating work: a chain of splits, "Work on it" wrappers and re-filed
+// copies is a new card each time, so no one card's ledger ever reaches its
+// limit, but the family's runs show it. When CHURN_IDLE of the family's last
+// CHURN_WINDOW runs (every member's verdicts, finished cards included) changed
+// no file, or only the TESTRUNS notebook and its archive
+// (verification.ledgerOnly, stamped by the verifier), the owner is asked once:
+// hold the waiting cards for review, or let the work run. Only runs after the
+// family's last such answer count, so "Let it run" is asked again only after
+// CHURN_WINDOW more runs, and a hold the owner chose is released by Try again.
+const CHURN_WINDOW = 4;
+const CHURN_IDLE = 3;
+const CHURN_MIN_CARDS = 3;
+const CHURN_CHOICES = new Set(["hold", "let-run"]);
+function familyRuns(members) {
+  const runs = new Map();
+  for (const task of members) {
+    const verdicts = [task.verification, ...asArray(task.contextHistory?.entries).map((entry) => entry?.snapshot?.verification)];
+    for (const verdict of verdicts) {
+      if (!isObject(verdict) || !num(verdict.at, 0) || !["verified", "unverified", "failed"].includes(verdict.state)) continue;
+      runs.set(`${str(task.id)}@${num(verdict.at, 0)}`, { at: num(verdict.at, 0), idle: verdict.changedFiles === 0 || verdict.ledgerOnly === true });
+    }
+  }
+  return [...runs.values()].sort((a, b) => b.at - a.at);
+}
+function churnAsk(key, members, waiting, idle, window) {
+  const part = `${key}#churn`;
+  const order = (task) => num(task.createdAt, 0) || num(task.updatedAt, 0) || Infinity;
+  const ordered = members.slice().sort((a, b) => order(a) - order(b));
+  const lines = ordered.map((task, index) => `${index + 1}) "${clip(str(task.title) || str(task.id), 50)}" · ${str(task.status) || "open"}`);
+  let shown = lines.length;
+  const listed = (count) => `${lines.slice(0, count).join("; ")}${count < lines.length ? `; +${lines.length - count} more` : ""}`;
+  while (shown > 1 && listed(shown).length > FAMILY_DETAIL_MAX) shown -= 1;
+  const memberIds = ordered.map((task) => str(task.id));
+  const holdIds = waiting.map((task) => str(task.id));
+  const reason = `${idle} of this work's last ${window} runs changed nothing but the TESTRUNS notebook`;
+  return {
+    familyKey: part,
+    kind: "question",
+    source: "family",
+    title: `This work keeps coming back: ${plural(members.length, "card")}, and ${idle} of its last ${window} runs changed nothing`,
+    detail: clip(listed(shown), FAMILY_DETAIL_MAX),
+    context: { severity: "decision", taskId: holdIds[0], taskTitle: str(waiting[0].title) || holdIds[0] },
+    options: [
+      {
+        id: "hold",
+        label: "Hold it for my review",
+        description: `${plural(holdIds.length, "waiting card")} stop${holdIds.length === 1 ? "s" : ""} until you choose Try again on ${holdIds.length === 1 ? "it" : "them"}.`,
+        recommended: true,
+        action: { kind: "family", choice: "hold", familyKey: part, memberIds, holdIds, reason },
+      },
+      {
+        id: "let-run",
+        label: "Let it run",
+        description: `Nothing changes; this is asked again only after ${CHURN_WINDOW} more runs.`,
+        action: { kind: "family", choice: "let-run", familyKey: part, memberIds },
+      },
+    ],
+  };
+}
+
+// The owner's duplicate links, settled: a card linked to one that is now
+// completed is closed as that card's completion (completionFromTaskId, so a
+// parent waiting on it as a handoff child resolves through completedTask), and
+// a link to a card that left the board or was archived unfinished is dropped
+// so the card runs on its own. The owner approved the link, so the keeper may
+// close the card. A card a worker or the verifier holds is left until it
+// settles. Chains settle in one pass, so a second pass changes nothing, and an
+// untouched row keeps its identity.
+function settleDuplicateLinks(rows, now, report) {
+  const out = rows.slice();
+  const at = new Map();
+  out.forEach((task, index) => {
+    if (isObject(task) && str(task.id)) at.set(str(task.id), index);
+  });
+  const note = (task, text) => [...asArray(task.logs), { at: now, kind: "status", text }].slice(-40);
+  for (let changed = true, rounds = 0; changed && rounds <= out.length; rounds += 1) {
+    changed = false;
+    out.forEach((task, index) => {
+      if (!unresolvedTask(task) || !str(task.duplicateOf) || busyTask(task)) return;
+      const targetId = str(task.duplicateOf);
+      const target = targetId !== str(task.id) && at.has(targetId) ? out[at.get(targetId)] : null;
+      const title = target ? clip(str(target.title) || targetId, 80) : "";
+      if (target && completedTaskRow(target)) {
+        out[index] = { ...task, status: "archived", doneAt: now, completionFromTaskId: str(target.id), updatedAt: now, logs: note(task, `closed as a duplicate of "${title}" (you linked them)`) };
+        report.duplicatesClosed += 1;
+        changed = true;
+      } else if (!target || target.status === "archived") {
+        const next = { ...task, logs: note(task, `duplicate link dropped — ${target ? `"${title}" was archived unfinished` : "the card it waited for is gone"}; this card runs on its own`) };
+        delete next.duplicateOf;
+        out[index] = next;
+        report.duplicateLinksDropped += 1;
+        changed = true;
+      }
+    });
+  }
+  return out;
 }
 
 // Review cards and handoff waits nobody has touched for LOOP_LIMITS.stalledHours.
@@ -4756,21 +5003,35 @@ function auditIssues(task, folder, { looping, ledger, stalled, family, now }) {
 // host says its workState honours them (hostCaps.loopHold); otherwise the card
 // is counted in wouldHold. loopGuard off releases every hold the keeper
 // stamped and counts nothing. memoryAlign off returns an empty delta.
+// Duplicate links the owner made are settled first thing after the ledger
+// (settleDuplicateLinks), and duplicate families are proposed as owner asks
+// (familyAsks) only when the host says its workState waits a linked card
+// (hostCaps.duplicateWait); they are counted in familiesWaiting either way.
 export function auditPass({ tasks, nodeFolders, questions = [], sessions = null, now = Date.now(), prefs = {}, armedAt, hostCaps = {} } = {}) {
   const rules = normalizePrefs({ ...DEFAULT_PREFS, ...(isObject(prefs) ? prefs : {}) });
   const armed = typeof armedAt === "number" && Number.isFinite(armedAt) ? armedAt : now;
   const stampHolds = rules.loopGuardApply && isObject(hostCaps) && hostCaps.loopHold === true;
-  const report = { loopsHeld: 0, loopsReleased: 0, wouldHold: 0, stalled: 0, families: 0, memoryAligned: 0, questionsSuperseded: 0, cardsLooping: [], familyGroups: [] };
+  const askFamilies = isObject(hostCaps) && hostCaps.duplicateWait === true;
+  const report = { loopsHeld: 0, loopsHolding: 0, loopsReleased: 0, wouldHold: 0, stalled: 0, families: 0, familiesWaiting: 0, familiesChurning: 0, familiesAsked: 0, duplicatesClosed: 0, duplicateLinksDropped: 0, memoryAligned: 0, questionsSuperseded: 0, cardsLooping: [], familyGroups: [] };
   const looping = new Map();
   const ledgers = new Map();
-  const rows = asArray(tasks).map((task) => {
-    if (!isObject(task)) return task;
+  const counted = asArray(tasks).map((row) => {
+    if (!isObject(row)) return row;
     if (!rules.loopGuard) {
-      if (!isObject(task.loopGuard) || task.loopGuard.by !== "keeper") return task;
+      if (!isObject(row.loopGuard) || row.loopGuard.by !== "keeper") return row;
       report.loopsReleased += 1;
-      const next = { ...task };
+      const next = { ...row };
       delete next.loopGuard;
       return next;
+    }
+    // Hold looping cards off: the keeper's own holds are released, and the
+    // card is counted as would-hold again below. A hold the owner asked for
+    // (by: "owner", a family's "Hold it for my review") stays until Try again.
+    let task = row;
+    if (!rules.loopGuardApply && isObject(row.loopGuard) && row.loopGuard.by === "keeper") {
+      task = { ...row };
+      delete task.loopGuard;
+      report.loopsReleased += 1;
     }
     // Finished, archived and grouped rows are not counted: nothing dispatches
     // them, and if one reopens its ledger picks up from where it stopped.
@@ -4797,6 +5058,8 @@ export function auditPass({ tasks, nodeFolders, questions = [], sessions = null,
     }
     return next;
   });
+  const rows = settleDuplicateLinks(counted, now, report);
+  report.loopsHolding = rows.filter((task) => unresolvedTask(task) && isObject(task.loopGuard)).length;
 
   const stalled = new Set();
   const families = new Map();
@@ -4819,6 +5082,56 @@ export function auditPass({ tasks, nodeFolders, questions = [], sessions = null,
     }));
   report.families = report.familyGroups.length;
   const familyOf = new Map(report.familyGroups.flatMap((family) => family.members.map((member) => [member.id, family])));
+  const board = new Map(rows.filter((task) => isObject(task) && str(task.id)).map((task) => [str(task.id), task]));
+
+  // A family waits for the owner while two or more of its members are free to
+  // run (not linked to another card, not a split or handoff child of another
+  // member) and one of them has no decision yet, and none is running, in
+  // review or grouped. It is asked about per lineage root (familyParts), and
+  // only while one of those cards can run: a family that is all held or
+  // parked waits for Try again first. An open ask about any of the same cards
+  // is never repeated; the rest are asked FAMILY_ASKS_PER_PASS at a time.
+  const openFamilyAsks = asArray(questions).filter((question) => isObject(question) && (question.status ?? "open") === "open" && question.source === "family");
+  const askedFamilies = new Set(openFamilyAsks.flatMap((question) => asArray(question.options).map((option) => str(option?.action?.familyKey)).filter(Boolean)));
+  const askedCards = new Set(openFamilyAsks.flatMap((question) => asArray(question.options).flatMap((option) => asArray(option?.action?.memberIds).map(str))));
+  const familyAsks = [];
+  for (const [key, members] of [...families.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    if (members.length < 2 || members.some(busyTask)) continue;
+    const memberIds = new Set(members.map((task) => str(task.id)));
+    const free = members.filter((task) => !str(task.duplicateOf) && !lineageOf(task, board).some((id) => memberIds.has(id)));
+    for (const [part, group] of familyParts(key, free, board)) {
+      if (group.length < 2 || group.every((task) => isObject(task.familyDecision)) || group.every((task) => cardHold(task))) continue;
+      report.familiesWaiting += 1;
+      const asked = askedFamilies.has(part) || group.some((task) => askedCards.has(str(task.id)));
+      if (askFamilies && !asked && familyAsks.length < FAMILY_ASKS_PER_PASS) familyAsks.push(familyAsk(part, group, board, now));
+    }
+  }
+
+  // Repeating work (churnAsk): every card sharing a family key, finished ones
+  // included, since a churning chain finishes each card before the next is
+  // filed. Asked only while none of it is busy and a card of it waits to run,
+  // and only by a host whose workState honours an owner's hold.
+  const chains = new Map();
+  for (const task of rows) {
+    if (!isObject(task) || task.status === "absorbed") continue;
+    const key = familyKey(task);
+    if (!key) continue;
+    if (!chains.has(key)) chains.set(key, []);
+    chains.get(key).push(task);
+  }
+  for (const [key, members] of [...chains.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+    if (members.length < CHURN_MIN_CARDS || members.some(busyTask)) continue;
+    const waiting = members.filter((task) => unresolvedTask(task) && loopHoldable(task) && !isObject(task.loopGuard) && !str(task.duplicateOf));
+    if (!waiting.length) continue;
+    const decidedAt = Math.max(0, ...members.map((task) => (isObject(task.familyDecision) && CHURN_CHOICES.has(task.familyDecision.choice) ? num(task.familyDecision.at, 0) : 0)));
+    const runs = familyRuns(members).filter((run) => run.at > decidedAt).slice(0, CHURN_WINDOW);
+    const idle = runs.filter((run) => run.idle).length;
+    if (idle < CHURN_IDLE) continue;
+    report.familiesChurning += 1;
+    const asked = askedFamilies.has(`${key}#churn`);
+    if (askFamilies && hostCaps.loopHold === true && !asked && familyAsks.length < FAMILY_ASKS_PER_PASS) familyAsks.push(churnAsk(key, members, waiting, idle, runs.length));
+  }
+  report.familiesAsked = familyAsks.length;
 
   const memoryDelta = rules.memoryAlign ? alignMemory({ nodeFolders, tasks: rows, now }) : { relabel: [], append: [], settle: [] };
   report.memoryAligned = memoryDelta.relabel.length + memoryDelta.append.length + memoryDelta.settle.length;
@@ -4828,16 +5141,26 @@ export function auditPass({ tasks, nodeFolders, questions = [], sessions = null,
   // the keeper supersedes them after its await. An ask that offers a split
   // (scope, capability, missing) stays while its card is on the board: the
   // split files the uncovered work the agent reported as a new card, and
-  // needs nothing re-armed.
-  const board = new Map(rows.filter((task) => isObject(task) && str(task.id)).map((task) => [str(task.id), task]));
+  // needs nothing re-armed, and so does an owner-only ask (agent-issues'
+  // "owner" kind), which is usually raised as the card finishes. A family ask
+  // goes once fewer than two of its cards are still open: there is nothing left
+  // to choose between; a repeating-work ask once none of the cards it would
+  // hold is still open.
   const offersSplit = (question) => asArray(question.options).some((option) => isObject(option) && (option.id === "split" || option.action?.action === "split"));
   const supersedeQuestionIds = asArray(questions)
     .filter((question) => {
-      if (!isObject(question) || (question.status ?? "open") !== "open" || question.source !== "issue") return false;
+      if (!isObject(question) || (question.status ?? "open") !== "open") return false;
+      if (question.source === "family") {
+        const hold = asArray(question.options).find((option) => isObject(option?.action) && option.action.choice === "hold");
+        if (hold) return !asArray(hold.action.holdIds).some((id) => unresolvedTask(board.get(str(id))));
+        const memberIds = uniqueStrings(asArray(question.options).flatMap((option) => asArray(option?.action?.memberIds)));
+        return memberIds.filter((id) => unresolvedTask(board.get(id))).length < 2;
+      }
+      if (question.source !== "issue") return false;
       const taskId = str(question.context?.taskId);
       if (!taskId) return false;
       const task = board.get(taskId);
-      return !task || (completedTaskRow(task) && !offersSplit(question));
+      return !task || (completedTaskRow(task) && !offersSplit(question) && question.context?.issueKind !== "owner");
     })
     .map((question) => str(question.id))
     .filter(Boolean);
@@ -4857,9 +5180,13 @@ export function auditPass({ tasks, nodeFolders, questions = [], sessions = null,
   if (report.wouldHold) parts.push(`would hold ${plural(report.wouldHold, "looping card")}`);
   if (report.stalled) parts.push(plural(report.stalled, "stalled review"));
   if (report.families) parts.push(plural(report.families, "duplicate family", "duplicate families"));
+  if (report.familiesChurning) parts.push(plural(report.familiesChurning, "repeating piece of work", "repeating pieces of work"));
+  if (report.familiesAsked) parts.push(`asked about ${plural(report.familiesAsked, "duplicate family", "duplicate families")}`);
+  if (report.duplicatesClosed) parts.push(`closed ${plural(report.duplicatesClosed, "duplicate card")}`);
+  if (report.duplicateLinksDropped) parts.push(`dropped ${plural(report.duplicateLinksDropped, "duplicate link")}`);
   if (report.memoryAligned) parts.push(`aligned ${plural(report.memoryAligned, "memory note")}`);
   if (report.questionsSuperseded) parts.push(`superseded ${plural(report.questionsSuperseded, "stale question")}`);
-  return { tasks: rows, memoryDelta, supersedeQuestionIds, report, text: parts.join(" · "), findings };
+  return { tasks: rows, memoryDelta, supersedeQuestionIds, familyAsks, report, text: parts.join(" · "), findings };
 }
 
 // Work verbs instruct the assistant to do something; query verbs ask it to

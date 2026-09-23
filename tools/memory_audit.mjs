@@ -3,9 +3,10 @@
 // and eyes-assistant.json, runs tidy() and auditPass() on in-memory copies,
 // and prints each card grouped by state (done / doing / review / stopped /
 // stalled / looping / would-hold / open) with what its memory says, where
-// memory and board disagree, the duplicate families and the near-duplicate
-// lessons. Nothing in the data folder is ever written; --json writes only
-// under tools/logs/.
+// memory and board disagree, the duplicate families, the near-duplicate
+// lessons, and how much of the completed cards' history the keeper's
+// compaction (task-context compactHistory) could drop. Nothing in the data
+// folder is ever written; --json writes only under tools/logs/.
 //
 // node tools/memory_audit.mjs [--data DIR] [--now MS] [--armed-at MS|now]
 //   [--host-hold] [--json FILE]
@@ -18,9 +19,12 @@
 // --host-hold report holds as stamped (the host honours loop holds) instead
 //             of "would hold"
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { auditPass, lessonGroups, normalizeState, tidy } from "../scripts/assistant.mjs";
+
+const { compactHistory } = createRequire(import.meta.url)("../scripts/task-context.cjs");
 
 const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LOGS = path.join(studio, "tools", "logs");
@@ -66,7 +70,7 @@ const clip = (text, max) => {
 const when = (ms) => (ms ? new Date(ms).toISOString() : "never");
 
 function report(audit) {
-  const { dataDir, now, armedAt, tasks, folders, legacyKeys, result, lessons } = audit;
+  const { dataDir, now, armedAt, tasks, folders, legacyKeys, result, lessons, history } = audit;
   const lines = [];
   lines.push(`Memory audit — ${dataDir}`);
   lines.push(`now ${when(now)} · ${tasks} cards · ${folders} memory folders · outcomes counted ${armedAt ? `since ${when(armedAt)}` : "over each card's whole log window (the guard is not armed yet)"}`);
@@ -108,6 +112,9 @@ function report(audit) {
     lines.push(`  keeps "${clip(group[0].text, 90)}" (${group[0].hits} hits)`);
     for (const row of group.slice(1)) lines.push(`    folds "${clip(row.text, 90)}" (${row.hits} hits)`);
   }
+  lines.push("");
+  const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+  lines.push(`history: ${plural(history.cards, "completed card")} could drop ${plural(history.revisions, "revision")} (${Math.round(history.bytes / 1024)} KB)${history.enabled ? "" : " · compaction is off (the compactHistory pref)"}`);
   return lines.join("\n");
 }
 
@@ -144,6 +151,17 @@ async function main() {
     armedAt,
     hostCaps: { loopHold: flag("--host-hold") },
   });
+  // What the keeper's history compaction could drop from the completed cards
+  // (it compacts each one once it is past the tidy clock, 20 a pass).
+  // compactHistory is pure: the rows read are not changed.
+  const history = { cards: 0, revisions: 0, bytes: 0, enabled: state.prefs.compactHistory !== false };
+  for (const task of tasks) {
+    const out = compactHistory(task, { now });
+    if (!(out.dropped > 0)) continue;
+    history.cards += 1;
+    history.revisions += out.dropped;
+    history.bytes += Math.max(0, out.bytesBefore - out.bytesAfter);
+  }
   const audit = {
     dataDir,
     now,
@@ -154,6 +172,7 @@ async function main() {
     tidy: tidied.report.text,
     result,
     lessons: lessonGroups(state.overseer.lessons).filter((group) => group.length > 1),
+    history,
   };
   console.log(report(audit));
   if (output) {

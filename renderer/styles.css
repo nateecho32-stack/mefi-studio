@@ -1323,6 +1323,9 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 
 .sheet-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .sheet-actions .switch { font-size: var(--fs-sm); }
+/* A switch that cannot change right now (Hold looping cards while the loop
+   guard is off, any switch outside the desktop app) reads as unavailable. */
+.sheet-actions .switch:has(input:disabled) { opacity: 0.55; cursor: default; }
 .sheet-close { margin-left: 2px; }
 .sheet-close .glyph { color: var(--muted); }
 .sheet-close:hover .glyph { color: var(--ivory); }

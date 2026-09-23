@@ -1336,6 +1336,9 @@
       </div>
       <div class="sheet-actions">
         <label class="switch" title="Let the always-on assistant add an AI brief every 5 minutes (needs a key); tidy, fix and organise run either way"><input type="checkbox" id="proactive-mode" checked><span class="track"></span><span>Proactive</span></label>
+        <label class="switch" title="Keep each card's notes in line with the board: the keeper writes the checker's verdict into the card's notes and quiets notes from finished cards. Your own notes are never changed."><input type="checkbox" id="memory-align" checked><span class="track"></span><span>Memory alignment</span></label>
+        <label class="switch" title="Watch for cards that keep failing without progress. Turning this off also releases every card it is holding."><input type="checkbox" id="loop-guard" checked><span class="track"></span><span>Loop guard</span></label>
+        <label class="switch" title="Stop a looping card until you choose Try again on it. Off: the cards the loop guard is holding are released and it only reports what it would hold; a hold you asked for stays until Try again. Needs Loop guard on."><input type="checkbox" id="loop-guard-apply" checked><span class="track"></span><span>Hold looping cards</span></label>
         <button id="brief-run" class="primary">Brief me</button>
         <button id="improve-run" class="ghost" title="Ask the assistant to propose improvements for this app">Improve</button>
         <button id="grow-run" class="ghost" title="Explore old sessions and draft follow-up requests">Grow</button>
@@ -1353,7 +1356,7 @@
       </section>
       <aside class="explorer-col">
         <h3>Assistant <span class="badge premium" id="assistant-model">not connected</span></h3>
-        <p class="eyes-status" id="assistant-status">idle</p>
+        <p class="eyes-status" id="assistant-status" role="status" aria-live="polite">idle</p>
         <p class="eyes-status assistant-service" id="assistant-service" role="status">service starting…</p>
         <div id="assistant-thread" class="assistant-thread" aria-live="polite" aria-label="Assistant thread"></div>
         <div class="assistant-composer">

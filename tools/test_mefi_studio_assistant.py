@@ -1539,7 +1539,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
         self.assertEqual([], state["messages"], "a non-list becomes an empty thread")
         self.assertEqual([{"at": 0, "kind": "tick", "text": "tick 40"}], state["log"], "junk log entries are dropped, valid ones kept")
         self.assertNotIn("junk", state)
-        self.assertEqual({"proactive": True, "keepAwake": True, "background": True, "backlogMode": False, "foldAfterMinutes": 60, "staleAfterHours": 24, "tidyDoneAfterHours": 24, "parallel": 12, "aiParallel": 1, "memoryAlign": True, "loopGuard": True, "loopGuardApply": True}, state["prefs"], "parallel 99 clamps to 12, aiParallel 0 to 1")
+        self.assertEqual({"proactive": True, "keepAwake": True, "background": True, "backlogMode": False, "foldAfterMinutes": 60, "staleAfterHours": 24, "tidyDoneAfterHours": 24, "parallel": 12, "aiParallel": 1, "memoryAlign": True, "loopGuard": True, "loopGuardApply": True, "compactHistory": True}, state["prefs"], "parallel 99 clamps to 12, aiParallel 0 to 1")
         self.assertEqual("deepseek-v4.1-flash", state["ai"]["model"])
         self.assertEqual(2, state["ai"]["failures"])
         self.assertEqual("HTTP 401 unauthorized", state["ai"]["lastError"])

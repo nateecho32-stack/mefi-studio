@@ -34,6 +34,13 @@
   // shows, and the tick bails while hidden or while the sheet is closed, so a
   // hidden app issues no store reads.
   const EXPLORER_POLL_MS = 5000;
+  // The keeper audit's switches beside Proactive (docs/agent-loop.md §10):
+  // the assistant pref each one saves and the status line for either side.
+  const AUDIT_SWITCHES = {
+    memoryAlign: { name: "memory alignment", on: "memory alignment on · the keeper writes each checker verdict into the card's notes and quiets finished cards", off: "memory alignment off · card notes stay as the workers wrote them" },
+    loopGuard: { name: "loop guard", on: "loop guard on · cards that keep failing without progress are counted from the next keeper pass", off: "loop guard off · every held card is released on the next keeper pass" },
+    loopGuardApply: { name: "hold looping cards", on: "holding looping cards · a looping card waits for your Try again", off: "not holding looping cards · the cards it holds are released on the next keeper pass, and it only reports what it would hold" },
+  };
 
   const base = (file) => (file ? file.split(/[\\/]/).pop() : "(unknown)");
   // #tree-explore & friends bind straight to open(), so arg 0 can be a click Event.
@@ -697,6 +704,14 @@
     return element;
   }
 
+  // The audit switches save through the desktop bridge only, and Hold looping
+  // cards means nothing while the loop guard itself is off.
+  function syncAuditSwitches() {
+    const bridge = Boolean(window.mefiStudio?.assistantPrefs);
+    for (const key of Object.keys(AUDIT_SWITCHES)) if (els[key]) els[key].disabled = !bridge;
+    if (els.loopGuardApply && els.loopGuard?.checked === false) els.loopGuardApply.disabled = true;
+  }
+
   // The service part of the column: status line, thread, composer, the three
   // controls, activity and housekeeping. Cheap enough to run on every push.
   function renderAssistantService() {
@@ -732,6 +747,10 @@
       els.proactive.disabled = !bridge;
       if (service?.prefs) els.proactive.checked = service.prefs.proactive !== false;
     }
+    for (const key of Object.keys(AUDIT_SWITCHES)) {
+      if (els[key] && service?.prefs) els[key].checked = service.prefs[key] !== false;
+    }
+    syncAuditSwitches();
     if (els.thread) {
       els.thread.textContent = "";
       const messages = (service?.messages ?? []).slice(-20);
@@ -1303,6 +1322,9 @@
       requestInput: "request-input",
       requestAdd: "request-add",
       proactive: "proactive-mode",
+      memoryAlign: "memory-align",
+      loopGuard: "loop-guard",
+      loopGuardApply: "loop-guard-apply",
       auditRun: "audit-run",
       auditStatus: "audit-status",
       auditFindings: "audit-findings",
@@ -1446,6 +1468,30 @@
       takeAssistant(result.state);
       status(proactive ? "proactive on · the service briefs with AI every 5 minutes when a key is saved" : "proactive off · tidy, fix and organise still run every tick");
     });
+    // The audit switches save the same way: one assistant pref each, the
+    // switch put back when the save fails, the status line on success.
+    for (const [key, words] of Object.entries(AUDIT_SWITCHES)) {
+      const input = els[key];
+      input?.addEventListener("change", async () => {
+        const value = input.checked;
+        syncAuditSwitches();
+        if (!window.mefiStudio?.assistantPrefs) {
+          status(`${words.name} requires desktop mode`, true);
+          input.checked = !value;
+          syncAuditSwitches();
+          return;
+        }
+        const result = await window.mefiStudio.assistantPrefs({ [key]: value }).catch((error) => ({ ok: false, error: String(error?.message ?? error) }));
+        if (!result?.ok) {
+          status(result?.error ?? "preference not saved", true);
+          input.checked = !value;
+          syncAuditSwitches();
+          return;
+        }
+        takeAssistant(result.state);
+        status(value ? words.on : words.off);
+      });
+    }
     window.mefiStudio?.onCheckpoints?.((data) => {
       state.checkpoints = data ?? {};
       renderTree();

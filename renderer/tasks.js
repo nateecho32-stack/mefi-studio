@@ -73,12 +73,23 @@
   const syncBadge = () => window.MefiNav?.setBadge?.("tasks", openTaskCount());
   const revealSelected = () => els.list?.querySelector("li.selected")?.scrollIntoView({ block: "nearest" });
   const isDone = (task) => ["done", "archived", "completed", "resolved"].includes(task?.status);
+  // A loop-guard hold waits for the owner's Try again, so it counts as review.
   const needsReview = (task) => !isDone(task) && task?.status !== "active" && (
     task?.status === "awaiting_verification" || task?.status === "verifying" ||
-    ["unverified", "failed"].includes(task?.verification?.state) || (task?.runFailures ?? 0) >= 5
+    ["unverified", "failed"].includes(task?.verification?.state) || (task?.runFailures ?? 0) >= 5 ||
+    scheduledTask(task)?.blockedBy === "loop"
   );
   const taskStage = (task) => isDone(task) ? "done" : needsReview(task) ? "review" : "open";
   const scheduledTask = (task) => state.backlog?.taskStates?.find((item) => item.id === task.id);
+  // The owner holds: the keeper's loop guard ("loop") and a card you linked as
+  // a duplicate of unfinished work ("duplicate"). Both release through the
+  // retry path (backlog.retryTask drops loopGuard and duplicateOf and restarts
+  // the loop count); neither is offered while a worker or checker holds it.
+  const ownerHold = (task) => {
+    const scheduled = scheduledTask(task);
+    if (!["loop", "duplicate"].includes(scheduled?.blockedBy)) return null;
+    return task?.runId || ["active", "running", "verifying", "awaiting_verification"].includes(task?.status) ? null : scheduled;
+  };
   const matchesReadiness = (task) => state.readiness === "all" || (state.readiness === "waiting" ? ["waiting", "cooling"].includes(scheduledTask(task)?.stage) : state.readiness === "blocked" ? ["blocked", "approval"].includes(scheduledTask(task)?.stage) : scheduledTask(task)?.stage === state.readiness);
   const keepSelectedVisible = () => { const task = selectedTask(); if (task && state.backlog?.taskStates && !matchesReadiness(task)) state.readiness = "all"; };
   const summary = (tasks = state.tasks) => (Array.isArray(tasks) ? tasks : []).reduce((counts, task) => {
@@ -156,7 +167,7 @@
     if (task?.status === "awaiting_verification" || task?.status === "verifying") {
       return { stage, label: stageLabel("review"), summary: "The worker finished. Completion checks are pending; this work is not marked done yet." };
     }
-    if (stage === "review") return { stage, label: stageLabel("blocked"), summary: task?.verification?.reason || task?.lastRunError || "The last attempt could not be confirmed. Review its result before retrying or marking it done." };
+    if (stage === "review") return { stage, label: stageLabel("blocked"), summary: ownerHold(task)?.reason || task?.verification?.reason || task?.lastRunError || "The last attempt could not be confirmed. Review its result before retrying or marking it done." };
     return { stage, label: stageLabel(task?.status === "active" ? "running" : "open"), summary: task?.lastRunError || task?.prompt || "Ready for the assistant." };
   }
 
@@ -443,12 +454,18 @@
     if (model.current && model.currentStage === "review") card.append(node("p", "task-overview-note", isDone(model.current) ? "This historical completion still needs verified evidence or your confirmation." : describe(model.current.status === "absorbed" ? group.task : model.current).summary));
     if (model.current && ["blocked", "waiting"].includes(model.currentStage)) {
       const scheduled = scheduledTask(model.current);
-      const reason = model.currentStage === "blocked" ? model.current.verification?.reason || model.current.lastRunError || (scheduled?.stage === "blocked" ? scheduled.reason : "Review the previous attempt before continuing.") : ["waiting", "cooling", "approval"].includes(scheduled?.stage) ? scheduled.reason : null;
+      const reason = model.currentStage === "blocked" ? ownerHold(model.current)?.reason || model.current.verification?.reason || model.current.lastRunError || (scheduled?.stage === "blocked" ? scheduled.reason : "Review the previous attempt before continuing.") : ["waiting", "cooling", "approval"].includes(scheduled?.stage) ? scheduled.reason : null;
       if (reason) card.append(node("p", "task-overview-note", reason));
     }
     if (stage === "done" && group.task) card.append(node("p", "task-overview-note", doneSummary(group.task)));
     const actions = node("div", "task-overview-actions");
     if (group.planId && (group.plan || group.kind === "approved-plan")) actions.append(rowButton(planning ? "Continue planning" : "View plan", "Open the saved destination, discussion and decisions", () => { close(); window.MefiPlanning?.open?.({ planId: group.planId }); }));
+    const release = model.current && !model.current.unavailable ? holdAction(model.current) : null;
+    if (release && !release.disabled) {
+      const button = rowButton(release.label, release.title, release.run);
+      button.dataset.taskAction = release.action;
+      actions.append(button);
+    }
     const target = model.current?.status === "absorbed" ? group.task : model.current?.unavailable ? null : model.current || group.task;
     if (target && state.tasks.some((task) => task.id === target.id)) actions.append(rowButton("Open current task", "Open the full brief, result and task history", () => window.MefiTasks.selectTask(target.id)));
     if (actions.children.length) card.append(actions);
@@ -689,19 +706,39 @@
     return parts.join(" · ");
   }
 
+  // The one button an owner hold offers, on the detail pane and the overview
+  // card alike: the targeted retry through the host, never a local edit.
+  function holdAction(task) {
+    const hold = ownerHold(task);
+    if (!hold) return null;
+    const loop = hold.blockedBy === "loop";
+    return {
+      label: loop ? "Try again" : "Run anyway",
+      action: loop ? "try-again" : "run-anyway",
+      className: "primary",
+      title: loop
+        ? "Release the loop guard's hold and restart its count from now. Read the last attempts first, and edit or split the brief if the same failure would repeat."
+        : "Clear the duplicate link and run this card on its own instead of waiting for the card it repeats",
+      disabled: !window.mefiStudio?.tasksAction,
+      run: () => runTaskAction(task, "retry"),
+    };
+  }
+
   // Verb-first actions: the common move (finish / reopen) is the one big
   // button, and the rarer moves sit beside it as ghosts.
   function statusActions(task) {
     const actions = [];
     const scheduled = scheduledTask(task);
     const awaitingApproval = scheduled?.stage === "approval";
+    const release = holdAction(task);
     if (awaitingApproval) actions.push({ label: "Approve build", action: "approve", className: "primary", title: "Approve the brief shown here so this task can build when scheduling and prerequisites allow", disabled: !window.mefiStudio?.backlogControl || scheduled.canApprove !== true || !task.buildScope, run: () => runTaskAction(task, "approve", { expectedScope: task.buildScope }) });
+    if (release) actions.push(release);
     if (isDone(task)) {
       actions.push({ label: "Reopen", className: "primary", title: "Put this task back on the open board", run: () => setTaskStatus(task, "open") });
     } else {
-      actions.push({ label: needsReview(task) ? "Confirm done" : "Mark done", className: awaitingApproval ? "ghost" : "primary", title: "Mark this task complete after reviewing its result", run: () => setTaskStatus(task, "done") });
+      actions.push({ label: needsReview(task) && !release ? "Confirm done" : "Mark done", className: awaitingApproval || release ? "ghost" : "primary", title: "Mark this task complete after reviewing its result", run: () => setTaskStatus(task, "done") });
     }
-    if (needsReview(task) || scheduled?.stage === "cooling") actions.push({ label: scheduled?.stage === "cooling" ? "Retry now" : "Retry", className: "ghost", title: scheduled?.blockedBy ? scheduled.reason : "Return this task to the queue for another attempt", disabled: ["verifying", "awaiting_verification"].includes(task.status) || scheduled?.canRetry === false, run: () => {
+    if (!release && (needsReview(task) || scheduled?.stage === "cooling")) actions.push({ label: scheduled?.stage === "cooling" ? "Retry now" : "Retry", className: "ghost", title: scheduled?.blockedBy ? scheduled.reason : "Return this task to the queue for another attempt", disabled: ["verifying", "awaiting_verification"].includes(task.status) || scheduled?.canRetry === false, run: () => {
       if (window.mefiStudio?.tasksAction) return runTaskAction(task, "retry");
       delete task.verification;
       delete task.verifyAttempts;
@@ -1038,7 +1075,9 @@
       origin.addEventListener("click", () => window.MefiNav?.go?.("plans", { planId: task.planningId }));
       els.detail.append(origin);
     }
-    if (needsReview(task)) {
+    // An owner hold's reason (and its remedy) is the readiness line below, so
+    // it is not repeated up here.
+    if (needsReview(task) && !ownerHold(task)) {
       const review = document.createElement("p");
       review.className = "finding";
       review.textContent = `${describe(task).label}: ${describe(task).summary}`;

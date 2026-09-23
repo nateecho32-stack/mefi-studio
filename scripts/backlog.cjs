@@ -77,6 +77,34 @@ function validateDependencies(tasks, taskId, dependsOn) {
   return { ok: true, dependsOn: next.dependsOn };
 }
 
+// The owner's duplicate link (a family ask answered "keep the oldest", written
+// by main.cjs assistantFamilyAction). A card whose duplicateOf names a card
+// still on the board waits for it: nothing dispatches it, and once that card
+// is completed the keeper closes this one as its completion (assistant.mjs
+// auditPass), so it keeps waiting until then. A link to a card that left the
+// board or was archived unfinished is ignored, and so is a ring of links that
+// leads back to this card: no card waits on itself. canRetry stays unset:
+// Run anyway is retryTask, which drops the link. While the card it waits for
+// is itself blocked (held, parked, or waiting on a blocked card in turn), the
+// wait is blocked too and names that card's hold, so a handoff parent counts
+// this child as needing review instead of waiting on it forever.
+function duplicateState(item, tasks, now, autoBuild) {
+  const target = typeof item?.duplicateOf === "string" ? item.duplicateOf.trim() : "";
+  if (!target || target === item.id) return null;
+  const byId = new Map(rows(tasks).map((task) => [task.id, task]));
+  const original = byId.get(target);
+  if (!original || (original.status === "archived" && !completedTask(original))) return null;
+  for (let id = target, hops = 0; typeof id === "string" && hops <= byId.size; hops += 1) {
+    if (id === item.id) return null;
+    id = byId.get(id)?.duplicateOf;
+  }
+  const title = String(original.title ?? "").trim().slice(0, 120) || original.id;
+  if (completedTask(original)) return { stage: "waiting", blockedBy: "duplicate", reason: `${title} is done; this card closes as the same work`, duplicateOf: original.id };
+  const held = workState(original, now, { tasks, autoBuild });
+  if (held.stage === "blocked") return { stage: "blocked", blockedBy: "duplicate", reason: `Waiting for ${title} (the same work), which is blocked: ${String(held.reason ?? "").slice(0, 400)}`, duplicateOf: original.id };
+  return { stage: "waiting", blockedBy: "duplicate", reason: `Waiting for ${title} (the same work)`, duplicateOf: original.id };
+}
+
 function workState(item, now = Date.now(), { tasks = null, autoBuild = true } = {}) {
   if (item.absorbedInto) return { stage: "grouped", reason: "Included in a task group", groupId: item.absorbedInto };
   if (item.status === "done" || item.status === "archived") return { stage: "done", reason: item.status === "archived" ? "Archived completion" : "Completed" };
@@ -105,6 +133,10 @@ function workState(item, now = Date.now(), { tasks = null, autoBuild = true } = 
     const remedy = String(item.loopGuard.remedy ?? "").trim().slice(0, 240) || "Read the last attempts, edit or split the brief, then choose Try again.";
     return { stage: "blocked", blockedBy: "loop", reason: `Loop guard: ${count || "repeated"} attempt${count === 1 ? "" : "s"} since your last retry ended without verified progress${why ? ` (${why})` : ""}. ${remedy}` };
   }
+  // The owner's duplicate link waits the card on the one it names; the card's
+  // own parks and hold above come first, so a link never masks them.
+  const duplicate = Array.isArray(tasks) ? duplicateState(item, tasks, now, autoBuild) : null;
+  if (duplicate) return duplicate;
   if (Number(item.nextRunAt) > now) return { stage: "cooling", reason: "Waiting before another attempt", retryAt: Number(item.nextRunAt) };
   if (item.status && item.status !== "open" && item.status !== "pending" && item.status !== "queued") return { stage: "blocked", reason: `Held (${String(item.status).slice(0, 40)})` };
   if (!buildAllowed(item, { autoBuild })) return { stage: "approval", reason: "Verify first: review this task and approve its build", canApprove: true, buildScope: buildScope(item), ...dependency };
@@ -143,7 +175,9 @@ function summarizeBacklog({ tasks = [], requests = [], ideas = [], jobs = [], co
 
 function retryTask(task, now = Date.now()) {
   const next = { ...task, status: "open", updatedAt: now, pin: true, pinAt: now };
-  for (const name of ["runFailures", "providerFailures", "nextRunAt", "lastRunError", "verifyAttempts", "verification", "verificationReceiptId", "doneAt", "runId", "lease", "buildApproval", "loopGuard"]) delete next[name];
+  // duplicateOf goes too: Run anyway on a card waiting for its duplicate. Its
+  // familyDecision stays, so the keeper does not ask about the family again.
+  for (const name of ["runFailures", "providerFailures", "nextRunAt", "lastRunError", "verifyAttempts", "verification", "verificationReceiptId", "doneAt", "runId", "lease", "buildApproval", "loopGuard", "duplicateOf"]) delete next[name];
   // The owner's acknowledgement for the loop guard: the ledger restarts from
   // now, so outcomes logged before this retry are never counted again.
   next.loopLedger = { v: 1, at: now, n: 0, reasons: {} };
@@ -155,5 +189,8 @@ function retryTask(task, now = Date.now()) {
 // The keeper stamps loop holds only on a host whose workState honours them:
 // assistantKeeperJob passes hostCaps.loopHold from this.
 const LOOP_HOLD = 1;
+// Likewise the keeper asks the owner about duplicate families only on a host
+// whose workState waits a linked card (duplicateState): hostCaps.duplicateWait.
+const DUPLICATE_WAIT = 1;
 
-module.exports = { workState, summarizeBacklog, retryTask, dependencyState, dependencyIds, completedTask, validateDependencies, buildScope, hasBuildApproval, buildAllowed, LOOP_HOLD };
+module.exports = { workState, summarizeBacklog, retryTask, dependencyState, dependencyIds, completedTask, validateDependencies, buildScope, hasBuildApproval, buildAllowed, LOOP_HOLD, DUPLICATE_WAIT };

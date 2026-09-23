@@ -3563,9 +3563,25 @@ async function assistantKeyPresent() {
 async function loadAssistant() {
   const now = Date.now();
   let raw = null;
+  let text = null;
   try {
-    raw = JSON.parse(await readFile(projectDataPath(ASSISTANT_PATH), "utf8"));
-  } catch {}
+    text = await readFile(projectDataPath(ASSISTANT_PATH), "utf8");
+    raw = JSON.parse(text);
+  } catch {
+    // A file that is there but does not parse (a torn write) holds the agents'
+    // memory, questions and thread. The fresh state loaded instead would save
+    // over it, so a copy is set aside first.
+    if (text !== null) {
+      const target = projectDataPath(ASSISTANT_PATH);
+      const broken = target.replace(/\.json$/, `.broken-${now}.json`);
+      try {
+        await copyFile(target, broken);
+        logLine(`[assistant] ${path.basename(target)} did not parse; a copy is kept at ${broken} and the assistant starts from an empty state`);
+      } catch (error) {
+        logLine(`[assistant] ${path.basename(target)} did not parse and could not be copied aside: ${error?.message ?? error}`);
+      }
+    }
+  }
   let moduleError = null;
   try {
     const assistant = await getAssistant();
@@ -3816,8 +3832,11 @@ function saveAssistantSync() {
     // Atomic like assistantWrite: a crash mid-write used to tear the store.
     writeFileSync(tmp, JSON.stringify(assistantState, null, 2));
     renameSync(tmp, target);
-  } catch {
+  } catch (error) {
     rmSync(tmp, { force: true });
+    // The last save before quitting: say so when it fails, so a lost thread
+    // or folder has a trace.
+    logLine(`[assistant] saving ${path.basename(target)} at quit failed: ${error?.message ?? error}`);
   }
 }
 
@@ -3841,6 +3860,12 @@ function assistantLog(kind, text, extra = null, role = null) {
 // agent, then to the assistant host itself — a digest record never has an
 // empty role.
 function logError(text, role = null) {
+  // No state (a project switch between dropping one and loading the next):
+  // the error still reaches the app log instead of vanishing.
+  if (!assistantState) {
+    logLine(`[error] ${String(text).slice(0, 400)}`);
+    return null;
+  }
   const fallback = [...pool.running.values()].map((entry) => entry.role).find(Boolean) ?? null;
   return assistantLog("error", text, null, role ?? fallback ?? "assistant");
 }
@@ -5078,16 +5103,26 @@ async function assistantKeeperJob(now, entry) {
   const checkpoints = await (await getEyes()).readJson(CHECKPOINTS_PATH, {});
   // The audit pass (loop ledger and holds, memory against the board, stale
   // asks) runs after tidy in the same mutation when the loaded assistant.mjs
-  // has one. It stamps holds only because this host's workState honours them.
+  // has one. It stamps holds only because this host's workState honours them,
+  // and asks about duplicate families only because it waits a linked card.
   const audits = typeof assistant.auditPass === "function";
-  const hostCaps = { loopHold: typeof backlog !== "undefined" && backlog?.LOOP_HOLD === 1 };
+  const hostCaps = { loopHold: typeof backlog !== "undefined" && backlog?.LOOP_HOLD === 1, duplicateWait: typeof backlog !== "undefined" && backlog?.DUPLICATE_WAIT === 1 };
+  // Finished cards' history is compacted in the same mutation when this
+  // host's task-context can (compactHistory) and the compactHistory pref is
+  // not off.
+  const compacts = assistantState?.prefs?.compactHistory !== false && typeof taskContext !== "undefined" && typeof taskContext?.compactHistory === "function";
   let foldersIn = {};
   let auditError = null;
+  let compactError = null;
   const result = await mutateBoard((board) => {
     // What the folders were when tidy read them: the write-back below merges
     // against this, folder by folder.
     foldersIn = assistantState.nodeFolders ?? {};
     auditError = null;
+    compactError = null;
+    // Rows as read: tidy and the audit hand back an untouched row as the same
+    // object, and only those rows are compacted.
+    const read = new Set(board.tasks);
     const tidy = assistant.tidy({
       tasks: board.tasks,
       ideas: board.ideas,
@@ -5120,26 +5155,84 @@ async function assistantKeeperJob(now, entry) {
         audit = null;
       }
     }
+    let tasks = Array.isArray(audit?.tasks) ? audit.tasks : tidy.tasks;
+    // A completed card past the tidy clock that this pass left alone drops
+    // the revisions that changed neither its brief nor an attempt's final
+    // evidence, oldest card first and at most 20 a pass. The gateway records
+    // those rows with kind "compacted" (revisionKinds), so the shorter history
+    // is kept; a row it cannot take that way is recorded as usual instead.
+    const revisionKinds = {};
+    const compacted = [];
+    if (compacts) {
+      try {
+        const cutoff = now - (Number(assistantState.prefs?.tidyDoneAfterHours) || 24) * 3600000;
+        const age = (task) => Math.max(Number(task.doneAt) || 0, Number(task.updatedAt) || 0);
+        const due = tasks
+          .map((task, index) => ({ task, index }))
+          .filter(({ task }) => read.has(task) && task?.contextHistory && typeof task.id === "string" && age(task) > 0 && age(task) < cutoff)
+          .sort((a, b) => age(a.task) - age(b.task));
+        const next = tasks.slice();
+        for (const { task, index } of due) {
+          if (compacted.length >= 20) break;
+          const out = taskContext.compactHistory(task, { now });
+          if (!out?.task || out.task === task) continue;
+          next[index] = out.task;
+          revisionKinds[task.id] = "compacted";
+          compacted.push({ id: task.id, dropped: out.dropped, bytes: Math.max(0, out.bytesBefore - out.bytesAfter) });
+        }
+        if (compacted.length) tasks = next;
+      } catch (error) {
+        compactError = error;
+        compacted.length = 0;
+        for (const id of Object.keys(revisionKinds)) delete revisionKinds[id];
+      }
+    }
     return {
-      tasks: Array.isArray(audit?.tasks) ? audit.tasks : tidy.tasks,
+      tasks,
       ideas: tidy.ideas,
       requests: tidy.requests,
       checkpoints: tidy.checkpoints,
       nodeFolders: tidy.nodeFolders,
       report: tidy.report,
       changed: tidy.changed,
-      audit: audit ? { memoryDelta: audit.memoryDelta, supersedeQuestionIds: audit.supersedeQuestionIds, report: audit.report, text: audit.text } : null,
+      revisionKinds,
+      compacted,
+      audit: audit ? { memoryDelta: audit.memoryDelta, supersedeQuestionIds: audit.supersedeQuestionIds, familyAsks: audit.familyAsks, report: audit.report, text: audit.text } : null,
     };
   });
   if (auditError) logError(`audit pass failed: ${auditError?.message ?? auditError}`);
-  // Checkpoints are a fourth store the gateway does not carry; they were read
-  // and compared inside the lock, so their write is serialized with the rest.
+  if (compactError) logError(`history compaction failed: ${compactError?.message ?? compactError}`);
+  // The compactions the gateway kept: a row it recorded the ordinary way
+  // instead carries no stamp from this pass.
+  const savedAt = (id) => (Array.isArray(result.tasks) ? result.tasks : []).find((task) => task?.id === id)?.contextHistory?.compacted?.at;
+  const compactions = (Array.isArray(result.compacted) ? result.compacted : []).filter((row) => row.dropped > 0 && savedAt(row.id) === now);
+  const historyCompacted = compactions.length;
+  const historyBytesSaved = compactions.reduce((sum, row) => sum + row.bytes, 0);
+  // Checkpoints are a fourth store the gateway does not carry. tidy decided
+  // against the copy read before the pass, and other writers (a run's
+  // checkpoint, the owner's) keep adding while the board write is in flight,
+  // so only what tidy dropped is taken out of the store as it is now: whole
+  // session lists it retired and the rows it trimmed. Anything written
+  // meanwhile stays.
   if (result.checkpoints !== undefined) {
     const eyes = await getEyes();
-    const before = await eyes.readJson(CHECKPOINTS_PATH, {});
-    if (JSON.stringify(before) !== JSON.stringify(result.checkpoints)) {
-      await eyes.writeJson(CHECKPOINTS_PATH, result.checkpoints);
-      send("eyes:checkpoints", result.checkpoints);
+    const live = await eyes.readJson(CHECKPOINTS_PATH, {});
+    const tidied = result.checkpoints && typeof result.checkpoints === "object" ? result.checkpoints : {};
+    const read = checkpoints && typeof checkpoints === "object" ? checkpoints : {};
+    const next = {};
+    for (const [key, rows] of Object.entries(live && typeof live === "object" ? live : {})) {
+      if (Object.hasOwn(read, key) && !Object.hasOwn(tidied, key)) continue;
+      if (!Array.isArray(rows) || !Array.isArray(read[key]) || !Array.isArray(tidied[key])) {
+        next[key] = rows;
+        continue;
+      }
+      const kept = new Set(tidied[key].map((row) => JSON.stringify(row)));
+      const dropped = new Set(read[key].map((row) => JSON.stringify(row)).filter((row) => !kept.has(row)));
+      next[key] = dropped.size ? rows.filter((row) => !dropped.has(JSON.stringify(row))) : rows;
+    }
+    if (JSON.stringify(live) !== JSON.stringify(next)) {
+      await eyes.writeJson(CHECKPOINTS_PATH, next);
+      send("eyes:checkpoints", next);
     }
   }
   const report = result.report ?? {};
@@ -5184,8 +5277,24 @@ async function assistantKeeperJob(now, entry) {
     superseded += 1;
     assistantEmit({ kind: "question", ...question });
   }
+  // The audit's duplicate-family asks, one owner question per family and never
+  // a second while one about the same family is open (an ask may have landed
+  // while the board write was in flight). Nothing is linked until the owner
+  // answers (assistantFamilyAction).
+  if (typeof assistantQuestion === "function" && Array.isArray(audit?.familyAsks) && audit.familyAsks.length) {
+    const asked = new Set((Array.isArray(assistantState.questions) ? assistantState.questions : [])
+      .filter((question) => question?.status === "open" && question.source === "family")
+      .flatMap((question) => (Array.isArray(question.options) ? question.options : []).map((option) => option?.action?.familyKey))
+      .filter(Boolean));
+    for (const ask of audit.familyAsks.slice(0, 2)) {
+      if (!ask?.familyKey || asked.has(ask.familyKey)) continue;
+      if (assistantQuestion(ask)) asked.add(ask.familyKey);
+    }
+  }
   const counts = audit?.report ?? {};
   const tidyText = report.text || (result.written?.length ? "tidied" : "nothing to tidy");
+  const savedText = historyBytesSaved >= 1048576 ? `${(historyBytesSaved / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(historyBytesSaved / 1024))} KB`;
+  const said = [historyCompacted ? `compacted the history of ${historyCompacted} finished card${historyCompacted === 1 ? "" : "s"} (${savedText} saved)` : "", audit?.text ?? ""].filter(Boolean);
   const prior = assistantState.housekeeping ?? {};
   assistantState.housekeeping = {
     lastAt: now,
@@ -5194,7 +5303,7 @@ async function assistantKeeperJob(now, entry) {
     requestsCleared: report.requestsCleared ?? 0,
     checkpointsDropped: report.checkpointsDropped ?? 0,
     foldersCleaned: report.foldersCleaned ?? 0,
-    lastText: audit?.text ? (tidyText === "nothing to tidy" ? audit.text : `${tidyText} · ${audit.text}`) : tidyText,
+    lastText: said.length ? (tidyText === "nothing to tidy" ? said.join(" · ") : [tidyText, ...said].join(" · ")) : tidyText,
     // Armed once, by the first pass that audits with the guard on: outcomes
     // logged before it are never charged. The guard switched off disarms it,
     // so switching it back on charges nothing logged while it was off.
@@ -5204,6 +5313,10 @@ async function assistantKeeperJob(now, entry) {
     stalled: counts.stalled ?? 0,
     memoryAligned: counts.memoryAligned ?? 0,
     questionsSuperseded: superseded,
+    loopsHolding: counts.loopsHolding ?? 0,
+    familiesWaiting: counts.familiesWaiting ?? 0,
+    historyCompacted,
+    historyBytesSaved,
   };
   assistantLog("tidy", assistantState.housekeeping.lastText);
   // Only tidy's own changes are visited: a pass that wrote nothing but loop
@@ -5601,7 +5714,9 @@ async function assistantOverseerJob(now, entry) {
   if (talk.say) {
     assistantCommitThought(talk.say, "overseer");
     if (talk.reply) assistantCommitThought(talk.reply, "thinker");
-    const serious = (review.findings ?? []).some((finding) => finding?.severity === "warn" || finding?.severity === "critical") || repaired.length;
+    // The talk says whether what it spoke is serious: a standing owner hold it
+    // left out never carries the rest of the review onto the owner's thread.
+    const serious = typeof talk.serious === "boolean" ? talk.serious : (review.findings ?? []).some((finding) => finding?.severity === "warn" || finding?.severity === "critical") || repaired.length;
     if (serious) assistantAppendReply(`Overseer: ${talk.say} ${talk.reply}`.trim(), "local", "overseer");
     assistantLog("overseer", `told the assistant: ${assistantClip(talk.say, 140)}`);
   }
@@ -6867,10 +6982,16 @@ async function assistantWorkOn(raw) {
         task.loopLedger = { v: 1, at: now, n: 0, reasons: {} };
         task.status = "open";
       }
+      // Work on it overrides the owner's duplicate link the way Run anyway
+      // (backlog.retryTask) does: the card runs on its own instead of waiting
+      // for, or closing as, the card it was linked to. Its familyDecision
+      // stays, so the keeper does not ask about the family again.
+      const unlinked = typeof task.duplicateOf === "string" && task.duplicateOf !== "";
+      delete task.duplicateOf;
       task.pin = true;
       task.pinAt = now;
       task.updatedAt = now;
-      task.logs = [...(task.logs ?? []), { at: now, kind: "status", text: wasFinished ? "reopened — work on it" : "pinned — work on it" }].slice(-40);
+      task.logs = [...(task.logs ?? []), { at: now, kind: "status", text: `${wasFinished ? "reopened — work on it" : "pinned — work on it"}${unlinked ? " · duplicate link dropped, it runs on its own" : ""}` }].slice(-40);
       return { tasks: board.tasks, hit: true, id: task.id, status: task.status, wasFinished };
     });
     if (pinned.hit) {
@@ -7371,6 +7492,82 @@ async function assistantIssueAction(action = {}, note = null, { origin = "owner"
   return { ok: true, task: taskId, decision: verb };
 }
 
+// The owner's answer to a duplicate-family ask (assistant.mjs auditPass
+// proposes it; only the owner answers it). Every member still on the board is
+// stamped with familyDecision, so the keeper never asks about these cards
+// again. "keep-oldest" also links each other open member to the kept card
+// (duplicateOf): backlog.workState waits it on that card, the keeper closes it
+// as the same work once that card is completed, and Run anyway (retryTask)
+// drops the link. The kept card waits on nothing. "keep-all" links nothing.
+async function assistantFamilyAction(action = {}) {
+  const choice = ["keep-oldest", "keep-all", "hold", "let-run"].includes(action.choice) ? action.choice : null;
+  if (!choice) return { ok: false, error: `unknown family decision: ${action.choice}` };
+  const memberIds = [...new Set((Array.isArray(action.memberIds) ? action.memberIds : []).filter((id) => typeof id === "string" && id))].slice(0, 40);
+  if (choice === "hold" || choice === "let-run") return assistantChurnAction(choice, memberIds, action);
+  const keepId = choice === "keep-oldest" && typeof action.keepId === "string" ? action.keepId : null;
+  if (memberIds.length < 2 || (choice === "keep-oldest" && !memberIds.includes(keepId))) return { ok: false, error: "That decision does not name the cards it is about." };
+  let keptTitle = null;
+  const recorded = await mutateBoard((board) => {
+    const byId = new Map(board.tasks.filter((task) => task?.id).map((task) => [task.id, task]));
+    const keep = keepId ? byId.get(keepId) : null;
+    if (choice === "keep-oldest" && !keep) return { ok: false, error: "The card to keep is no longer on the board." };
+    const members = memberIds.map((id) => byId.get(id)).filter(Boolean);
+    const at = Date.now();
+    let linked = 0;
+    for (const task of members) {
+      task.familyDecision = { at, choice, keepId };
+      if (!keep) continue;
+      if (task === keep) {
+        delete task.duplicateOf;
+        continue;
+      }
+      if (task.status === "done" || task.status === "archived") continue;
+      task.duplicateOf = keep.id;
+      task.logs = [...(task.logs ?? []), { at, kind: "decision", text: `You decided: the same work as "${assistantClip(keep.title || keep.id, 80)}" — this card waits for it and closes when it is done` }].slice(-40);
+      task.updatedAt = at;
+      linked += 1;
+    }
+    keptTitle = keep?.title ?? null;
+    return { ok: true, stamped: members.length, linked };
+  });
+  if (!recorded?.ok) return { ok: false, error: recorded?.error ?? "Those cards could not be updated." };
+  assistantLog("decision", choice === "keep-oldest"
+    ? `kept "${assistantClip(keptTitle ?? keepId, 60)}" · ${recorded.linked} duplicate card${recorded.linked === 1 ? " waits" : "s wait"} on it`
+    : `kept all ${recorded.stamped} cards of a duplicate family`);
+  return { ok: true, decision: choice, stamped: recorded.stamped, linked: recorded.linked };
+}
+
+// The owner's answer to the keeper's repeating-work ask (assistant.mjs
+// churnAsk): "hold" stops the cards that wait to run with an owner's hold
+// (loopGuard by: "owner", released only by Try again, never by the loop-guard
+// switches); "let-run" changes nothing. Both stamp every member, so only runs
+// after the answer count towards asking again.
+async function assistantChurnAction(choice, memberIds, action = {}) {
+  if (memberIds.length < 1) return { ok: false, error: "That decision does not name the cards it is about." };
+  const holdIds = new Set(choice === "hold" ? (Array.isArray(action.holdIds) ? action.holdIds : []).filter((id) => memberIds.includes(id)) : []);
+  const reason = String(action.reason ?? "").trim().slice(0, 160) || "this work keeps coming back without changing anything";
+  const recorded = await mutateBoard((board) => {
+    const byId = new Map(board.tasks.filter((task) => task?.id).map((task) => [task.id, task]));
+    const members = memberIds.map((id) => byId.get(id)).filter(Boolean);
+    if (!members.length) return { ok: false, error: "Those cards are no longer on the board." };
+    const at = Date.now();
+    let held = 0;
+    for (const task of members) {
+      task.familyDecision = { at, choice, keepId: null };
+      const waiting = !task.runId && !task.lease && !task.absorbedInto && (!task.status || ["open", "pending", "queued"].includes(task.status));
+      if (!holdIds.has(task.id) || !waiting) continue;
+      task.loopGuard = { v: 1, at, kind: "family", count: 0, reason: `you held it for review: ${reason}`, remedy: "Read the last attempts, then edit, split or close the brief, or choose Try again to run it as it is.", by: "owner" };
+      task.logs = [...(task.logs ?? []), { at, kind: "decision", text: `You decided: hold this work for your review — ${reason}` }].slice(-40);
+      task.updatedAt = at;
+      held += 1;
+    }
+    return { ok: true, stamped: members.length, held };
+  });
+  if (!recorded?.ok) return { ok: false, error: recorded?.error ?? "Those cards could not be updated." };
+  assistantLog("decision", choice === "hold" ? `held ${recorded.held} card${recorded.held === 1 ? "" : "s"} of repeating work for review` : `let ${recorded.stamped} cards of repeating work run`);
+  return { ok: true, decision: choice, stamped: recorded.stamped, held: recorded.held };
+}
+
 // ---- agent questions --------------------------------------------------------
 // A structured ask from the agents: the decision is named, the options are
 // written down with one flagged recommended, and nothing moves until the owner
@@ -7396,6 +7593,8 @@ function assistantQuestionAction(option, text = null) {
   // the work re-armed the way it was answered. Anything the owner typed rides
   // along as the note the next worker reads first.
   if (action.kind === "issue") return assistantIssueAction(action, text ?? option.note ?? null);
+  // The owner's decision about a duplicate family (the keeper's family ask).
+  if (action.kind === "family") return assistantFamilyAction(action);
   return null;
 }
 
@@ -7484,6 +7683,13 @@ async function assistantAnswer(payload = {}) {
   const option = question.options.find((entry) => entry.id === payload.optionId) ?? null;
   const text = String(payload.text ?? "").trim().slice(0, 400);
   if (!option && !text) return { ok: false, error: "Choose an option or write an answer.", state: assistantState };
+  // A duplicate-family ask is decided only by one of its options: they stamp
+  // the cards so the keeper never asks again, and words cannot say which card
+  // to keep. A typed answer leaves the ask open for that choice.
+  if (question.source === "family" && !option) {
+    const repeating = (Array.isArray(question.options) ? question.options : []).some((entry) => entry?.action?.choice === "hold");
+    return { ok: false, error: repeating ? "Choose Hold it for my review or Let it run: a typed answer cannot decide whether this work waits." : "Choose Keep the oldest or Keep them all: a typed answer cannot decide which cards are the same work.", state: assistantState };
+  }
   if (option?.dismiss) {
     question.status = "dismissed";
     question.answer = { at: Date.now(), optionId: option.id, label: option.label, text: null, via: "option" };
@@ -7705,8 +7911,10 @@ async function assistantSetPrefs(patch = {}) {
   await ensureAssistant();
   const clean = {};
   // memoryAlign, loopGuard and loopGuardApply are the keeper audit's kill
-  // switches (assistant.auditPass); loopGuard off releases the keeper's holds.
-  for (const key of ["proactive", "keepAwake", "background", "memoryAlign", "loopGuard", "loopGuardApply"]) if (typeof patch?.[key] === "boolean") clean[key] = patch[key];
+  // switches (assistant.auditPass); loopGuard off, or loopGuardApply off,
+  // releases the keeper's holds. compactHistory off stops the keeper's
+  // compaction of finished cards' history.
+  for (const key of ["proactive", "keepAwake", "background", "memoryAlign", "loopGuard", "loopGuardApply", "compactHistory"]) if (typeof patch?.[key] === "boolean") clean[key] = patch[key];
   for (const key of ["foldAfterMinutes", "staleAfterHours", "tidyDoneAfterHours"]) {
     const value = Number(patch?.[key]);
     if (patch?.[key] !== undefined && Number.isFinite(value) && value > 0) clean[key] = value;
@@ -7714,10 +7922,12 @@ async function assistantSetPrefs(patch = {}) {
   if (patch?.parallel !== undefined) clean.parallel = assistantParallel(patch.parallel, EXECUTOR_PARALLEL_MAX, assistantState.prefs.parallel ?? 8);
   if (patch?.aiParallel !== undefined) clean.aiParallel = assistantParallel(patch.aiParallel, AI_PARALLEL_MAX, assistantState.prefs.aiParallel ?? 4);
   if (Object.keys(clean).length) {
-    assistantState.prefs = { ...assistantState.prefs, ...clean };
+    // Saved first: a failed write leaves the running keeper on the prefs the
+    // switch shows once it flips back, never on the value that was refused.
     const settings = await readSettings();
     settings.assistant = { ...(settings.assistant ?? {}), ...clean };
     await writeSettings(settings);
+    assistantState.prefs = { ...assistantState.prefs, ...clean };
     applyKeepAwake();
     applyTray();
     assistantPoolCounts();
@@ -8997,15 +9207,20 @@ async function mutateBoard(mutator) {
       const kind = patch.revisionKind ?? "updated";
       const note = patch.revisionNote ?? "";
       const now = Date.now();
+      // Rows the mutator compacted (taskContext.compactHistory), by id: they
+      // are recorded with kind "compacted", which keeps the shorter history
+      // instead of discarding it. No other per-row kind is honoured.
+      const kinds = patch.revisionKinds && typeof patch.revisionKinds === "object" ? patch.revisionKinds : null;
       const tasks = (patch.tasks ?? board.tasks).map((task) => {
         if (task?.buildApproval && !backlog.hasBuildApproval(task)) delete task.buildApproval;
         const prior = previous.get(task?.id);
         const history = task?.contextHistory;
+        const rowKind = kinds && typeof task?.id === "string" && Object.hasOwn(kinds, task.id) && kinds[task.id] === "compacted" ? "compacted" : kind;
         // Untouched: the read snapshot's history object with the body that
         // last matched its latest hash. recordTaskRevision would recompute
         // that hash and return the row as it is.
-        if (kind !== "restored" && prior && history && history === prior.contextHistory && revisionBodies.get(history) === rowBody(task)) return task;
-        const next = taskContext.recordTaskRevision(task, { previous: prior, kind, note, now });
+        if (rowKind !== "restored" && prior && history && history === prior.contextHistory && revisionBodies.get(history) === rowBody(task)) return task;
+        const next = taskContext.recordTaskRevision(task, { previous: prior, kind: rowKind, note, now });
         const saved = next?.contextHistory;
         if (saved && saved.version === 1 && Array.isArray(saved.entries) && typeof saved.entries[saved.entries.length - 1]?.hash === "string") revisionBodies.set(saved, rowBody(next));
         return next;
@@ -11743,6 +11958,15 @@ async function autopilotHousekeeping() {
         const ledgerChanges = (rows) => Array.isArray(rows)
           ? rows.reduce((count, row) => count + (row?.files?.length ? row.files : [row?.file]).filter((file) => /(?:^|[\\/])testruns\.md$/i.test(String(file ?? ""))).length, 0)
           : 0;
+        // A run whose only changes are the ledger (TESTRUNS.md and the rows it
+        // rotated into docs/archive/testruns-*.md) changed nothing else: its
+        // verdict says so (verification.ledgerOnly), and the keeper's family
+        // pass counts it as a run that changed nothing.
+        const ledgerFile = (file) => /(?:^|[\\/])testruns\.md$/i.test(file) || /(?:^|[\\/])docs[\\/]archive[\\/]testruns-[^\\/]*\.md$/i.test(file);
+        const ledgerOnly = (rows) => {
+          const all = Array.isArray(rows) ? rows.flatMap((row) => (row?.files?.length ? row.files : [row?.file])).filter(Boolean).map(String) : [];
+          return all.length > 0 && all.every(ledgerFile);
+        };
         const files = attemptChanges(attempt);
         if (files === null) { waitForEvidence(task); continue; }
         const observedChecks = attemptChecks(attempt);
@@ -11793,7 +12017,7 @@ async function autopilotHousekeeping() {
           delete task.runId;
           delete task.lease;
           delete task.verifyAttempts;
-          task.verification = { state: "verified", at: now, reason: verdict.reason, sentinel: attempt.sawDone === true, exit: attempt.code ?? null, changedFiles: files.length, checks: verdict.evidence?.observedChecks ?? null };
+          task.verification = { state: "verified", at: now, reason: verdict.reason, sentinel: attempt.sawDone === true, exit: attempt.code ?? null, changedFiles: files.length, checks: verdict.evidence?.observedChecks ?? null, ...(ledgerOnly(files) ? { ledgerOnly: true } : {}) };
           note(task, `verified — ${verdict.reason}${Array.isArray(task.remaining) && task.remaining.length ? ` · ${task.remaining.length} follow-up(s) handed on` : ""}`);
           verifyNotes.push(`verified "${assistantClip(task.title, 60)}"`);
           // Only a verified attempt teaches the path memory: the files it
@@ -11817,7 +12041,7 @@ async function autopilotHousekeeping() {
           } else {
             task.nextRunAt = now + 60 * 1000;
           }
-          task.verification = { state: verdict.state, at: now, reason: verdict.reason, sentinel: attempt.sawDone === true, exit: attempt.code ?? null, changedFiles: files.length };
+          task.verification = { state: verdict.state, at: now, reason: verdict.reason, sentinel: attempt.sawDone === true, exit: attempt.code ?? null, changedFiles: files.length, ...(ledgerOnly(files) ? { ledgerOnly: true } : {}) };
           note(task, `unverified — ${verdict.reason}${overseerMiss(overseerRunFor(task, attempt))}${outcome(verdict)}`);
           verifyNotes.push(`reopened "${assistantClip(task.title, 60)}" — ${verdict.reason}`);
         }

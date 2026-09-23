@@ -1332,6 +1332,9 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 
 .sheet-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .sheet-actions .switch { font-size: var(--fs-sm); }
+/* A switch that cannot change right now (Hold looping cards while the loop
+   guard is off, any switch outside the desktop app) reads as unavailable. */
+.sheet-actions .switch:has(input:disabled) { opacity: 0.55; cursor: default; }
 .sheet-close { margin-left: 2px; }
 .sheet-close .glyph { color: var(--muted); }
 .sheet-close:hover .glyph { color: var(--ivory); }
@@ -6155,6 +6158,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       </div>
       <div class="sheet-actions">
         <label class="switch" title="Let the always-on assistant add an AI brief every 5 minutes (needs a key); tidy, fix and organise run either way"><input type="checkbox" id="proactive-mode" checked><span class="track"></span><span>Proactive</span></label>
+        <label class="switch" title="Keep each card's notes in line with the board: the keeper writes the checker's verdict into the card's notes and quiets notes from finished cards. Your own notes are never changed."><input type="checkbox" id="memory-align" checked><span class="track"></span><span>Memory alignment</span></label>
+        <label class="switch" title="Watch for cards that keep failing without progress. Turning this off also releases every card it is holding."><input type="checkbox" id="loop-guard" checked><span class="track"></span><span>Loop guard</span></label>
+        <label class="switch" title="Stop a looping card until you choose Try again on it. Off: the cards the loop guard is holding are released and it only reports what it would hold; a hold you asked for stays until Try again. Needs Loop guard on."><input type="checkbox" id="loop-guard-apply" checked><span class="track"></span><span>Hold looping cards</span></label>
         <button id="brief-run" class="primary">Brief me</button>
         <button id="improve-run" class="ghost" title="Ask the assistant to propose improvements for this app">Improve</button>
         <button id="grow-run" class="ghost" title="Explore old sessions and draft follow-up requests">Grow</button>
@@ -6172,7 +6178,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       </section>
       <aside class="explorer-col">
         <h3>Assistant <span class="badge premium" id="assistant-model">not connected</span></h3>
-        <p class="eyes-status" id="assistant-status">idle</p>
+        <p class="eyes-status" id="assistant-status" role="status" aria-live="polite">idle</p>
         <p class="eyes-status assistant-service" id="assistant-service" role="status">service starting…</p>
         <div id="assistant-thread" class="assistant-thread" aria-live="polite" aria-label="Assistant thread"></div>
         <div class="assistant-composer">
@@ -26649,6 +26655,13 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   // shows, and the tick bails while hidden or while the sheet is closed, so a
   // hidden app issues no store reads.
   const EXPLORER_POLL_MS = 5000;
+  // The keeper audit's switches beside Proactive (docs/agent-loop.md §10):
+  // the assistant pref each one saves and the status line for either side.
+  const AUDIT_SWITCHES = {
+    memoryAlign: { name: "memory alignment", on: "memory alignment on · the keeper writes each checker verdict into the card's notes and quiets finished cards", off: "memory alignment off · card notes stay as the workers wrote them" },
+    loopGuard: { name: "loop guard", on: "loop guard on · cards that keep failing without progress are counted from the next keeper pass", off: "loop guard off · every held card is released on the next keeper pass" },
+    loopGuardApply: { name: "hold looping cards", on: "holding looping cards · a looping card waits for your Try again", off: "not holding looping cards · the cards it holds are released on the next keeper pass, and it only reports what it would hold" },
+  };
 
   const base = (file) => (file ? file.split(/[\\/]/).pop() : "(unknown)");
   // #tree-explore & friends bind straight to open(), so arg 0 can be a click Event.
@@ -26709,8 +26722,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       } else {
         state.assistant = window.MefiTree?.assistantState?.() ?? state.assistant;
       }
-      renderTree();
-      renderDetail();
+      paintTreeAndDetail();
       renderAssistant();
       // A failed store read must not read as "nothing here": name the failure
       // in the tree too, and let the next poll tick retry.
@@ -26728,10 +26740,15 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       }).catch((error) => {
         if (els.machineLines) els.machineLines.textContent = `machine scan failed: ${String(error?.message ?? error)}`;
       });
-      window.mefiStudio?.machineSet?.({}).then((result) => {
-        if (result?.ok && els.machineAuto) els.machineAuto.checked = result.machine.autoKill !== false;
-        if (result?.ok && els.machineMemoryOverride) els.machineMemoryOverride.checked = result.machine.memoryWarnOverride === true;
-      });
+      // Read once per open, and read-only: machineSet({}) as a read rewrote
+      // settings.json and auth.json on every 5 s tick.
+      if (!state.machinePrefsRead) {
+        state.machinePrefsRead = true;
+        (window.mefiStudio?.machineGet ?? window.mefiStudio?.machineSet)?.({}).then((result) => {
+          if (result?.ok && els.machineAuto) els.machineAuto.checked = result.machine.autoKill !== false;
+          if (result?.ok && els.machineMemoryOverride) els.machineMemoryOverride.checked = result.machine.memoryWarnOverride === true;
+        }).catch(() => { state.machinePrefsRead = false; });
+      }
     } catch (error) {
       // Never leave the pending "Loading sessions…" note stuck: render the
       // failure and let the poll retry.
@@ -27019,6 +27036,39 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
   }
 
+  // The 5 s poll re-reads everything. Repainting identical rows would wipe a
+  // half-typed checkpoint and pull keyboard focus off the tree, so the poll
+  // repaints only when something the tree or the detail shows has changed
+  // (the minute bucket keeps the "3m ago" labels honest).
+  let paintedSignature = "";
+  function treeSignature() {
+    const org = state.assistant?.organization ?? null;
+    return JSON.stringify([
+      state.selected, Boolean(state.foldedOpen), Math.floor(Date.now() / 60000),
+      state.sessions.map((s) => [s.id, s.parentId, s.title, s.agent, s.model?.id, s.timeUpdated, s.cost, s.tokens?.input, s.tokens?.output]),
+      state.todos.map((t) => [t.id, t.sessionId, t.status, t.content]),
+      Object.entries(state.checkpoints ?? {}).map(([id, notes]) => [id, notes?.length ?? 0, notes?.[0]?.note]),
+      state.changes.filter((c) => c.sessionId === state.selected).slice(0, 12).map((c) => [c.id, c.time]),
+      [org?.order, org?.folded, org?.stale],
+    ]);
+  }
+  function paintTreeAndDetail() {
+    const signature = treeSignature();
+    if (signature === paintedSignature) return;
+    const active = document.activeElement;
+    const draft = els.detail?.querySelector?.("input.grow");
+    const draftValue = draft?.value ?? "";
+    const draftFocused = Boolean(draft) && active === draft;
+    const treeIndex = active && els.tree?.contains?.(active) ? [...els.tree.children].indexOf(active) : -1;
+    renderTree();
+    renderDetail();
+    paintedSignature = signature;
+    const nextDraft = els.detail?.querySelector?.("input.grow");
+    if (nextDraft && draftValue) nextDraft.value = draftValue;
+    if (nextDraft && draftFocused) nextDraft.focus({ preventScroll: true });
+    else if (treeIndex >= 0) els.tree.children[Math.min(treeIndex, els.tree.children.length - 1)]?.focus?.({ preventScroll: true });
+  }
+
   function revealSelected() {
     // .explorer-col is the scroller, so this moves the column, not the page.
     els.tree?.querySelector("li.selected")?.scrollIntoView({ block: "center" });
@@ -27029,6 +27079,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     window.dispatchEvent(new CustomEvent("mefi:tree-select", { detail: { sessionId } }));
     renderTree();
     renderDetail();
+    paintedSignature = treeSignature();
     revealSelected();
   }
 
@@ -27274,6 +27325,14 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return element;
   }
 
+  // The audit switches save through the desktop bridge only, and Hold looping
+  // cards means nothing while the loop guard itself is off.
+  function syncAuditSwitches() {
+    const bridge = Boolean(window.mefiStudio?.assistantPrefs);
+    for (const key of Object.keys(AUDIT_SWITCHES)) if (els[key]) els[key].disabled = !bridge;
+    if (els.loopGuardApply && els.loopGuard?.checked === false) els.loopGuardApply.disabled = true;
+  }
+
   // The service part of the column: status line, thread, composer, the three
   // controls, activity and housekeeping. Cheap enough to run on every push.
   function renderAssistantService() {
@@ -27309,6 +27368,10 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       els.proactive.disabled = !bridge;
       if (service?.prefs) els.proactive.checked = service.prefs.proactive !== false;
     }
+    for (const key of Object.keys(AUDIT_SWITCHES)) {
+      if (els[key] && service?.prefs) els[key].checked = service.prefs[key] !== false;
+    }
+    syncAuditSwitches();
     if (els.thread) {
       els.thread.textContent = "";
       const messages = (service?.messages ?? []).slice(-20);
@@ -27799,9 +27862,19 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   function open(options) {
+    // A restored deep link (nav's resumeReady) runs from its own
+    // DOMContentLoaded handler, which is registered before this module's
+    // init(); open() can therefore reach the els.overlay write below while the
+    // map is still empty, throwing "Cannot set properties of undefined
+    // (setting 'hidden')". Build the map on demand — init() is idempotent and
+    // only safe once the document is parsed — then bail if the overlay is
+    // genuinely absent instead of throwing.
+    if (!els.overlay && document.readyState !== "loading") init();
+    if (!els.overlay) return Promise.resolve();
     window.MefiNav?.claim?.("explorer");
     const params = optionsOf(options);
     els.overlay.hidden = false;
+    state.machinePrefsRead = false;
     if (typeof params.sessionId === "string" && params.sessionId) {
       state.selected = params.sessionId;
       // The shared "current session" signal: the rail highlights it, A-Eyes
@@ -27833,6 +27906,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     // that the rows exist. Only while the sheet is still up: a close during
     // load() already handed focus back, and the next surface must keep it.
     settled.then(() => {
+      if (!els.overlay) return;
       revealSelected();
       const sheet = els.overlay.querySelector(".explorer-sheet");
       const active = document.activeElement;
@@ -27845,7 +27919,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   function close() {
-    if (els.overlay.hidden) return;
+    if (!els.overlay || els.overlay.hidden) return;
     els.overlay.hidden = true;
     window.MefiNav?.release?.("explorer");
   }
@@ -27869,6 +27943,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       requestInput: "request-input",
       requestAdd: "request-add",
       proactive: "proactive-mode",
+      memoryAlign: "memory-align",
+      loopGuard: "loop-guard",
+      loopGuardApply: "loop-guard-apply",
       auditRun: "audit-run",
       auditStatus: "audit-status",
       auditFindings: "audit-findings",
@@ -27913,7 +27990,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     els.tidy?.addEventListener("click", () => control("tidy"));
     els.fix?.addEventListener("click", () => control("fix"));
     els.overseer?.addEventListener("click", () => control("overseer"));
-    els.pause?.addEventListener("click", () => control(state.assistant?.status === "paused" ? "resume" : "pause"));
+    // Resume is the same start-work every surface sends, so a Workspace pause
+    // (which also holds new work) is fully lifted from here too.
+    els.pause?.addEventListener("click", () => control(state.assistant?.status === "paused" ? "start-work" : "pause"));
     els.stopAll?.addEventListener("click", () => control("stop-all"));
     els.restart?.addEventListener("click", () => restartStudio());
     window.mefiStudio?.onAssistant?.((payload) => {
@@ -28010,6 +28089,30 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       takeAssistant(result.state);
       status(proactive ? "proactive on · the service briefs with AI every 5 minutes when a key is saved" : "proactive off · tidy, fix and organise still run every tick");
     });
+    // The audit switches save the same way: one assistant pref each, the
+    // switch put back when the save fails, the status line on success.
+    for (const [key, words] of Object.entries(AUDIT_SWITCHES)) {
+      const input = els[key];
+      input?.addEventListener("change", async () => {
+        const value = input.checked;
+        syncAuditSwitches();
+        if (!window.mefiStudio?.assistantPrefs) {
+          status(`${words.name} requires desktop mode`, true);
+          input.checked = !value;
+          syncAuditSwitches();
+          return;
+        }
+        const result = await window.mefiStudio.assistantPrefs({ [key]: value }).catch((error) => ({ ok: false, error: String(error?.message ?? error) }));
+        if (!result?.ok) {
+          status(result?.error ?? "preference not saved", true);
+          input.checked = !value;
+          syncAuditSwitches();
+          return;
+        }
+        takeAssistant(result.state);
+        status(value ? words.on : words.off);
+      });
+    }
     window.mefiStudio?.onCheckpoints?.((data) => {
       state.checkpoints = data ?? {};
       renderTree();
@@ -28650,12 +28753,23 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const syncBadge = () => window.MefiNav?.setBadge?.("tasks", openTaskCount());
   const revealSelected = () => els.list?.querySelector("li.selected")?.scrollIntoView({ block: "nearest" });
   const isDone = (task) => ["done", "archived", "completed", "resolved"].includes(task?.status);
+  // A loop-guard hold waits for the owner's Try again, so it counts as review.
   const needsReview = (task) => !isDone(task) && task?.status !== "active" && (
     task?.status === "awaiting_verification" || task?.status === "verifying" ||
-    ["unverified", "failed"].includes(task?.verification?.state) || (task?.runFailures ?? 0) >= 5
+    ["unverified", "failed"].includes(task?.verification?.state) || (task?.runFailures ?? 0) >= 5 ||
+    scheduledTask(task)?.blockedBy === "loop"
   );
   const taskStage = (task) => isDone(task) ? "done" : needsReview(task) ? "review" : "open";
   const scheduledTask = (task) => state.backlog?.taskStates?.find((item) => item.id === task.id);
+  // The owner holds: the keeper's loop guard ("loop") and a card you linked as
+  // a duplicate of unfinished work ("duplicate"). Both release through the
+  // retry path (backlog.retryTask drops loopGuard and duplicateOf and restarts
+  // the loop count); neither is offered while a worker or checker holds it.
+  const ownerHold = (task) => {
+    const scheduled = scheduledTask(task);
+    if (!["loop", "duplicate"].includes(scheduled?.blockedBy)) return null;
+    return task?.runId || ["active", "running", "verifying", "awaiting_verification"].includes(task?.status) ? null : scheduled;
+  };
   const matchesReadiness = (task) => state.readiness === "all" || (state.readiness === "waiting" ? ["waiting", "cooling"].includes(scheduledTask(task)?.stage) : state.readiness === "blocked" ? ["blocked", "approval"].includes(scheduledTask(task)?.stage) : scheduledTask(task)?.stage === state.readiness);
   const keepSelectedVisible = () => { const task = selectedTask(); if (task && state.backlog?.taskStates && !matchesReadiness(task)) state.readiness = "all"; };
   const summary = (tasks = state.tasks) => (Array.isArray(tasks) ? tasks : []).reduce((counts, task) => {
@@ -28733,7 +28847,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     if (task?.status === "awaiting_verification" || task?.status === "verifying") {
       return { stage, label: stageLabel("review"), summary: "The worker finished. Completion checks are pending; this work is not marked done yet." };
     }
-    if (stage === "review") return { stage, label: stageLabel("blocked"), summary: task?.verification?.reason || task?.lastRunError || "The last attempt could not be confirmed. Review its result before retrying or marking it done." };
+    if (stage === "review") return { stage, label: stageLabel("blocked"), summary: ownerHold(task)?.reason || task?.verification?.reason || task?.lastRunError || "The last attempt could not be confirmed. Review its result before retrying or marking it done." };
     return { stage, label: stageLabel(task?.status === "active" ? "running" : "open"), summary: task?.lastRunError || task?.prompt || "Ready for the assistant." };
   }
 
@@ -29020,12 +29134,18 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     if (model.current && model.currentStage === "review") card.append(node("p", "task-overview-note", isDone(model.current) ? "This historical completion still needs verified evidence or your confirmation." : describe(model.current.status === "absorbed" ? group.task : model.current).summary));
     if (model.current && ["blocked", "waiting"].includes(model.currentStage)) {
       const scheduled = scheduledTask(model.current);
-      const reason = model.currentStage === "blocked" ? model.current.verification?.reason || model.current.lastRunError || (scheduled?.stage === "blocked" ? scheduled.reason : "Review the previous attempt before continuing.") : ["waiting", "cooling", "approval"].includes(scheduled?.stage) ? scheduled.reason : null;
+      const reason = model.currentStage === "blocked" ? ownerHold(model.current)?.reason || model.current.verification?.reason || model.current.lastRunError || (scheduled?.stage === "blocked" ? scheduled.reason : "Review the previous attempt before continuing.") : ["waiting", "cooling", "approval"].includes(scheduled?.stage) ? scheduled.reason : null;
       if (reason) card.append(node("p", "task-overview-note", reason));
     }
     if (stage === "done" && group.task) card.append(node("p", "task-overview-note", doneSummary(group.task)));
     const actions = node("div", "task-overview-actions");
     if (group.planId && (group.plan || group.kind === "approved-plan")) actions.append(rowButton(planning ? "Continue planning" : "View plan", "Open the saved destination, discussion and decisions", () => { close(); window.MefiPlanning?.open?.({ planId: group.planId }); }));
+    const release = model.current && !model.current.unavailable ? holdAction(model.current) : null;
+    if (release && !release.disabled) {
+      const button = rowButton(release.label, release.title, release.run);
+      button.dataset.taskAction = release.action;
+      actions.append(button);
+    }
     const target = model.current?.status === "absorbed" ? group.task : model.current?.unavailable ? null : model.current || group.task;
     if (target && state.tasks.some((task) => task.id === target.id)) actions.append(rowButton("Open current task", "Open the full brief, result and task history", () => window.MefiTasks.selectTask(target.id)));
     if (actions.children.length) card.append(actions);
@@ -29266,19 +29386,39 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return parts.join(" · ");
   }
 
+  // The one button an owner hold offers, on the detail pane and the overview
+  // card alike: the targeted retry through the host, never a local edit.
+  function holdAction(task) {
+    const hold = ownerHold(task);
+    if (!hold) return null;
+    const loop = hold.blockedBy === "loop";
+    return {
+      label: loop ? "Try again" : "Run anyway",
+      action: loop ? "try-again" : "run-anyway",
+      className: "primary",
+      title: loop
+        ? "Release the loop guard's hold and restart its count from now. Read the last attempts first, and edit or split the brief if the same failure would repeat."
+        : "Clear the duplicate link and run this card on its own instead of waiting for the card it repeats",
+      disabled: !window.mefiStudio?.tasksAction,
+      run: () => runTaskAction(task, "retry"),
+    };
+  }
+
   // Verb-first actions: the common move (finish / reopen) is the one big
   // button, and the rarer moves sit beside it as ghosts.
   function statusActions(task) {
     const actions = [];
     const scheduled = scheduledTask(task);
     const awaitingApproval = scheduled?.stage === "approval";
+    const release = holdAction(task);
     if (awaitingApproval) actions.push({ label: "Approve build", action: "approve", className: "primary", title: "Approve the brief shown here so this task can build when scheduling and prerequisites allow", disabled: !window.mefiStudio?.backlogControl || scheduled.canApprove !== true || !task.buildScope, run: () => runTaskAction(task, "approve", { expectedScope: task.buildScope }) });
+    if (release) actions.push(release);
     if (isDone(task)) {
       actions.push({ label: "Reopen", className: "primary", title: "Put this task back on the open board", run: () => setTaskStatus(task, "open") });
     } else {
-      actions.push({ label: needsReview(task) ? "Confirm done" : "Mark done", className: awaitingApproval ? "ghost" : "primary", title: "Mark this task complete after reviewing its result", run: () => setTaskStatus(task, "done") });
+      actions.push({ label: needsReview(task) && !release ? "Confirm done" : "Mark done", className: awaitingApproval || release ? "ghost" : "primary", title: "Mark this task complete after reviewing its result", run: () => setTaskStatus(task, "done") });
     }
-    if (needsReview(task) || scheduled?.stage === "cooling") actions.push({ label: scheduled?.stage === "cooling" ? "Retry now" : "Retry", className: "ghost", title: scheduled?.blockedBy ? scheduled.reason : "Return this task to the queue for another attempt", disabled: ["verifying", "awaiting_verification"].includes(task.status) || scheduled?.canRetry === false, run: () => {
+    if (!release && (needsReview(task) || scheduled?.stage === "cooling")) actions.push({ label: scheduled?.stage === "cooling" ? "Retry now" : "Retry", className: "ghost", title: scheduled?.blockedBy ? scheduled.reason : "Return this task to the queue for another attempt", disabled: ["verifying", "awaiting_verification"].includes(task.status) || scheduled?.canRetry === false, run: () => {
       if (window.mefiStudio?.tasksAction) return runTaskAction(task, "retry");
       delete task.verification;
       delete task.verifyAttempts;
@@ -29615,7 +29755,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       origin.addEventListener("click", () => window.MefiNav?.go?.("plans", { planId: task.planningId }));
       els.detail.append(origin);
     }
-    if (needsReview(task)) {
+    // An owner hold's reason (and its remedy) is the readiness line below, so
+    // it is not repeated up here.
+    if (needsReview(task) && !ownerHold(task)) {
       const review = document.createElement("p");
       review.className = "finding";
       review.textContent = `${describe(task).label}: ${describe(task).summary}`;
