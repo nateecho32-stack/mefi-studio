@@ -775,6 +775,8 @@
     if (!window.mefiStudio?.launchStudio) {
       hint.textContent = "Open the desktop app to connect providers or use the optional game launcher.";
       actions.querySelectorAll("button").forEach((b) => (b.disabled = true));
+      document.querySelectorAll("#server-styler-actions button").forEach((b) => (b.disabled = true));
+      document.getElementById("server-styler-status").textContent = "Server Styler controls are available in the Mefi desktop app.";
       document.getElementById("studio-desktop").hidden = true;
       // Updates, the speed probe, the auditor and Agents & queue need the host too.
       document.querySelectorAll("[data-desktop-only]").forEach((node) => { node.hidden = true; });
@@ -789,6 +791,7 @@
     function paintStylerStatus(status) {
       stylerStatus.textContent = status?.message ?? "Server Styler status is unavailable.";
       stylerStatus.dataset.state = status?.state ?? "error";
+      if (typeof stylerActions.querySelector !== "function") return;
       stylerActions.querySelector('[data-styler-action="start"]').disabled = ["starting", "online", "setup"].includes(status?.state);
       stylerActions.querySelector('[data-styler-action="open"]').disabled = !["online", "setup"].includes(status?.state);
       stylerActions.querySelector('[data-styler-action="folder"]').disabled = status?.state === "missing";
