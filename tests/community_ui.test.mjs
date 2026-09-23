@@ -34,9 +34,9 @@ const CATALOG = {
     { key: "dusk", name: "Neon Dusk", accent: "#ff5fa2", bright: "#ffa3cb", accent2: "#3fd0ff" },
   ],
   nodeStyles: [
-    { key: "singularity", name: "Singularity", detail: "A dark core in a bright ring" },
-    { key: "prism", name: "Prism", detail: "Refracting facets" },
-    { key: "sigil", name: "Sigil", detail: "Rune-marked rings" },
+    { key: "singularity", name: "Singularity", detail: "A black hole with a turning disc" },
+    { key: "prism", name: "Prism", detail: "A turning crystal that splits light" },
+    { key: "sigil", name: "Sigil", detail: "Hex runes that assemble as it works" },
   ],
 };
 const MINUTE = 60000, HOUR = 60 * MINUTE, DAY = 24 * HOUR;
