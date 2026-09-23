@@ -1,6 +1,8 @@
-// Studio's own local-file player and its ad-free radio decks. Streaming stays
-// inside Spotify's official embed; its cross-origin playback state is
-// deliberately not guessed.
+// Style & sound: Studio's color themes, node styles and layouts, the members'
+// Void collection (its own premium store, gated by MefiCommunity), the
+// local-file player and the ad-free radio decks. Streaming stays inside
+// Spotify's official embed; its cross-origin playback state is deliberately
+// not guessed.
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.music.v1";
@@ -12,6 +14,13 @@
     ember: { name: "Ember", accent: "#dd997a", bright: "#ffc5a9", rgb: "221,153,122", bg: "#100805", panel: "#21150f", muted: "#c0ab9d" },
     aurora: { name: "Aurora", accent: "#71cbb7", bright: "#a7f3da", rgb: "113,203,183", bg: "#050d13", panel: "#101f29", muted: "#abc4c9", text: "#e7f5ee" },
     rose: { name: "Rose", accent: "#dc96af", bright: "#ffbed3", rgb: "220,150,175", bg: "#10080f", panel: "#23141e", muted: "#c6aebc", text: "#f7e5ea" },
+    // The Void collection: members of the Void Engine Discord unlock these (see
+    // scripts/community.cjs, whose SELF_UNLOCKED switch unlocks them in a fork).
+    // Each carries a second hue that the premium tier paints with.
+    void: { name: "Void", accent: "#7c6cff", bright: "#b9b0ff", accent2: "#36d1ff", rgb: "124,108,255", bg: "#030208", panel: "#0b0914", muted: "#a49fc2", text: "#ece9ff", premium: true },
+    eclipse: { name: "Eclipse", accent: "#e8a93c", bright: "#ffd98a", accent2: "#ff6a3d", rgb: "232,169,60", bg: "#040404", panel: "#111013", muted: "#b8ad98", text: "#f3ecdf", premium: true },
+    abyss: { name: "Abyss", accent: "#2fd6c3", bright: "#8ff5e8", accent2: "#7b5cff", rgb: "47,214,195", bg: "#01080b", panel: "#06151a", muted: "#9dbfc0", text: "#e2f7f4", premium: true },
+    dusk: { name: "Neon Dusk", accent: "#ff5fa2", bright: "#ffa3cb", accent2: "#3fd0ff", rgb: "255,95,162", bg: "#0a0512", panel: "#170c24", muted: "#c4a9c9", text: "#fbe9f3", premium: true },
   };
   const DEFAULT_THEME = "aurora";
   const NODE_STYLES = {
@@ -20,7 +29,31 @@
     minimal: { name: "Minimal", detail: "Quiet points" },
     halo: { name: "Halo", detail: "Luminous rings" },
     crystal: { name: "Crystal", detail: "Faceted gems" },
+    singularity: { name: "Singularity", detail: "A dark core in a bright ring", premium: true },
+    prism: { name: "Prism", detail: "Refracting facets", premium: true },
+    sigil: { name: "Sigil", detail: "Rune-marked rings", premium: true },
   };
+  // Saved preferences only ever hold free keys; a premium choice lives in its
+  // own store (PREMIUM_KEY) and shows only while the community layer allows it.
+  const isPremiumTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].premium === true;
+  const isFreeTheme = (key) => key === "custom" || typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].premium !== true;
+  const isNodeStyle = (key) => typeof key === "string" && Object.hasOwn(NODE_STYLES, key);
+  const isPremiumNodeStyle = (key) => isNodeStyle(key) && NODE_STYLES[key].premium === true;
+  const isFreeNodeStyle = (key) => isNodeStyle(key) && NODE_STYLES[key].premium !== true;
+  function safePremium(value) {
+    const raw = value && typeof value === "object" ? value : {};
+    const choice = {};
+    if (isPremiumTheme(raw.theme)) choice.theme = raw.theme;
+    if (isPremiumNodeStyle(raw.nodeStyle)) choice.nodeStyle = raw.nodeStyle;
+    return choice;
+  }
+  // The fork sentence is community.js's, read when it is needed; this copy
+  // covers start:web and load order. tests/community_ui.test.mjs pins it to
+  // scripts/community.cjs.
+  const FORK_FALLBACK = "Members of the Void Engine Discord unlock these. Studio is MIT-licensed: fork the project and unlock it yourself, or ask an agent to do it for you.";
+  function forkCopy() {
+    try { const copy = window.MefiCommunity?.FORK_COPY; return typeof copy === "string" && copy ? copy : FORK_FALLBACK; } catch { return FORK_FALLBACK; }
+  }
   const NODE_LAYOUTS = {
     constellation: { name: "Constellation", detail: "An open arrangement" },
     tree: { name: "Branches", detail: "A clear hierarchy" },
@@ -94,10 +127,10 @@
     const dim = readableColor(mixColor(text, base.panel, .5), base.panel, 3);
     const border = readableColor(mixColor(base.accent, base.panel, .6), base.panel, 3);
     const canvasText = readableColor(base.text || "#ece5d8", base.bg);
-    return { accent: base.accent, bright, background: base.bg, surface: base.panel, text, muted, dim, border,
+    return { accent: base.accent, bright, accent2: base.accent2 || bright, background: base.bg, surface: base.panel, text, muted, dim, border,
       rgb: channels(base.accent).join(","), surfaceRgb: channels(base.panel).join(","),
       onAccent: contrast("#FFFFFF", base.accent) > contrast("#000000", base.accent) ? "#FFFFFF" : "#000000",
-      canvas: { background: base.bg, accent: base.accent, bright: readableColor(base.bright, base.bg, 3), text: canvasText, muted: readableColor(mixColor(canvasText, base.bg, .32), base.bg), dim: readableColor(mixColor(canvasText, base.bg, .5), base.bg, 3) } };
+      canvas: { background: base.bg, accent: base.accent, bright: readableColor(base.bright, base.bg, 3), accent2: base.accent2 || readableColor(base.bright, base.bg, 3), text: canvasText, muted: readableColor(mixColor(canvasText, base.bg, .32), base.bg), dim: readableColor(mixColor(canvasText, base.bg, .5), base.bg, 3) } };
   }
 
   function spotifyLink(raw) {
@@ -119,10 +152,12 @@
     const raw = value && typeof value === "object" ? value : {};
     const volume = Number(raw.volume);
     const spotify = [...new Set((Array.isArray(raw.spotify) ? raw.spotify : []).map((item) => spotifyLink(item)?.url).filter(Boolean))].slice(0, 6);
-    return { theme: raw.theme === "custom" || Object.hasOwn(THEMES, raw.theme) ? raw.theme : DEFAULT_THEME, customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, spotify,
-      nodeStyle: Object.hasOwn(NODE_STYLES, raw.nodeStyle) ? raw.nodeStyle : "orbs",
+    return { theme: isFreeTheme(raw.theme) ? raw.theme : DEFAULT_THEME, customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, spotify,
+      nodeStyle: isFreeNodeStyle(raw.nodeStyle) ? raw.nodeStyle : "orbs",
       nodeLayout: Object.hasOwn(NODE_LAYOUTS, raw.nodeLayout) ? raw.nodeLayout : "constellation",
       station: STATION_IDS.has(raw.station) ? raw.station : null,
+      // The source tab, and whether a station was sounding when Studio closed.
+      source: raw.source === "radio" || raw.source === "spotify" ? raw.source : "local", radioOn: raw.radioOn === true,
       orbitTrails: raw.orbitTrails === true, extraGlow: raw.extraGlow === true };
   }
   function audioFile(file) { return Boolean(file && (String(file.type || "").startsWith("audio/") || /\.(mp3|m4a|aac|flac|wav|ogg|opus|webm)$/i.test(file.name || ""))); }
@@ -139,6 +174,14 @@
   let stored;
   try { stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch {}
   const prefs = safePreferences(stored);
+  const PREMIUM_KEY = "mefiStudio.music.premium.v1";
+  const COMMUNITY_HINT_KEY = "mefiStudio.community.v1";
+  let storedPremium;
+  try { storedPremium = JSON.parse(localStorage.getItem(PREMIUM_KEY) || "null"); } catch {}
+  // The saved premium choice, kept even while it is locked so a returning
+  // member gets it back; `effective` is what is actually on screen.
+  const premium = safePremium(storedPremium);
+  const effective = { theme: prefs.theme, nodeStyle: prefs.nodeStyle };
   const state = { source: "local", tracks: [], selected: -1, spotify: null, opened: false, sending: false, notice: "", error: false,
     station: null, mirror: 0, deck: "a", radioPhase: "idle", radioNote: "" };
   const els = {};
@@ -147,6 +190,7 @@
   let recommender = null;
   let priorFocus = null;
   let previewFrame = 0;
+  let jumpFrame = 0;
   let restoreWorkspace = false;
   let deckB = null;
   let pendingDeck = null;
@@ -156,7 +200,38 @@
   let tuneGeneration = 0;
 
   const persist = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(safePreferences(prefs))); } catch {} };
+  const persistPremium = () => { try { localStorage.setItem(PREMIUM_KEY, JSON.stringify(safePremium(premium))); } catch {} };
   const event = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
+  // The one gate. MefiCommunity answers from its last status (or its boot
+  // hint); without it (start:web, or before it loads) the hint it leaves in
+  // storage decides, so a member does not flash the free theme at launch.
+  function premiumAllowed() {
+    const community = window.MefiCommunity;
+    if (community && typeof community.has === "function") {
+      try { return community.has("premium") === true; } catch { return false; }
+    }
+    let hint = null;
+    try { hint = JSON.parse(localStorage.getItem(COMMUNITY_HINT_KEY) || "null"); } catch {}
+    return hint?.premium === true && (hint.validUntil == null || Number.isFinite(hint.validUntil) && hint.validUntil > Date.now());
+  }
+  // Join, link and copy need the desktop bridge behind MefiCommunity.
+  const communityActions = () => Boolean(window.MefiCommunity) && Boolean(window.mefiStudio?.communityLink || window.mefiStudio?.communityOpen);
+  // Link needs a build with a Discord client id and an account that is not
+  // linked yet, or one Discord asks to link again; before the first status, no.
+  function communityLinkable() {
+    try {
+      const current = window.MefiCommunity?.status?.();
+      return current?.configured === true && !(current.linked === true && current.state !== "relink");
+    } catch { return false; }
+  }
+  // navigate:false (the Workspace select, and the Void tiles in this sheet)
+  // explains without leaving the view.
+  function offerUnlock(kind, key, name, navigate = true) {
+    if (typeof window.MefiCommunity?.offer === "function") {
+      try { window.MefiCommunity.offer(navigate ? { kind, key, name } : { kind, key, name, navigate: false }); return; } catch {}
+    }
+    note(`${name} is part of the Void collection. ${forkCopy()}`);
+  }
   function status() {
     const track = state.tracks[state.selected];
     const tuned = station(state.station);
@@ -166,7 +241,7 @@
     const deck = activeDeck();
     const playing = state.source === "radio" ? (state.radioPhase === "playing" || state.radioPhase === "buffering") && Boolean(deck?.src) && !deck.paused
       : state.source === "local" && Boolean(audio?.src) && !audio.paused && !audio.ended;
-    return { source: state.source, playing, title, track: title, theme: prefs.theme, ...graphPreferences(),
+    return { source: state.source, playing, title, track: title, theme: effective.theme, ...graphPreferences(),
       queueLength: state.tracks.length, externalPlayback: state.source === "spotify", supported: true,
       station: state.station, stationName: tuned?.name || null, radioPhase: state.source === "radio" ? state.radioPhase : "idle" };
   }
@@ -175,16 +250,23 @@
     state.notice = String(text || ""); state.error = error;
     if (els.notice) { els.notice.textContent = state.notice; els.notice.dataset.error = String(error); }
   }
-  function applyTheme(theme, save = true) {
-    const key = theme === "custom" || Object.hasOwn(THEMES, theme) ? theme : DEFAULT_THEME;
-    const palette = resolvePalette(key, prefs.customColors);
-    prefs.theme = key;
-    const tokens = { "--gold": palette.accent, "--gold-bright": palette.bright, "--gold-dim": `rgba(${palette.rgb},.32)`, "--hairline": `rgba(${channels(palette.border).join(",")},.5)`, "--hairline-strong": palette.border, "--tint-gold-1": `rgba(${palette.rgb},.06)`, "--tint-gold-2": `rgba(${palette.rgb},.09)`, "--tint-gold-3": `rgba(${palette.rgb},.14)`, "--ring": `0 0 0 3px rgba(${palette.rgb},.15)`, "--glow-gold": `0 0 14px rgba(${palette.rgb},.3)`, "--bg": palette.background, "--bg-deep": palette.background, "--cmd-bg": palette.background, "--panel-solid": palette.surface, "--panel": `rgba(${palette.surfaceRgb},.85)`, "--glass": `rgba(${palette.surfaceRgb},.76)`, "--glass-hard": `rgba(${palette.surfaceRgb},.94)`, "--glass-soft": `rgba(${palette.surfaceRgb},.7)`, "--ivory": palette.text, "--muted": palette.muted, "--dim": palette.dim, "--ink": palette.onAccent };
-    for (const [name, value] of Object.entries(tokens)) document.documentElement.style.setProperty(name, value);
-    for (const [name, value] of Object.entries(palette.canvas)) document.documentElement.style.setProperty(`--canvas-${name}`, value);
-    document.documentElement.style.setProperty("--studio-accent-rgb", palette.rgb);
-    document.documentElement.dataset.studioTheme = key;
-    for (const button of els.themes?.children || []) {
+  function themeTokens(palette) {
+    return { "--gold": palette.accent, "--gold-bright": palette.bright, "--gold-dim": `rgba(${palette.rgb},.32)`, "--hairline": `rgba(${channels(palette.border).join(",")},.5)`, "--hairline-strong": palette.border, "--tint-gold-1": `rgba(${palette.rgb},.06)`, "--tint-gold-2": `rgba(${palette.rgb},.09)`, "--tint-gold-3": `rgba(${palette.rgb},.14)`, "--ring": `0 0 0 3px rgba(${palette.rgb},.15)`, "--glow-gold": `0 0 14px rgba(${palette.rgb},.3)`, "--bg": palette.background, "--bg-deep": palette.background, "--cmd-bg": palette.background, "--panel-solid": palette.surface, "--panel": `rgba(${palette.surfaceRgb},.85)`, "--glass": `rgba(${palette.surfaceRgb},.76)`, "--glass-hard": `rgba(${palette.surfaceRgb},.94)`, "--glass-soft": `rgba(${palette.surfaceRgb},.7)`, "--ivory": palette.text, "--muted": palette.muted, "--dim": palette.dim, "--ink": palette.onAccent };
+  }
+  const themeDetail = (key) => { const palette = resolvePalette(key, prefs.customColors); return { theme: key, tier: isPremiumTheme(key) ? "premium" : "free", ...palette, tokens: themeTokens(palette) }; };
+  // Paints a theme without deciding whether it may be shown or saved.
+  function paintTheme(key) {
+    const detail = themeDetail(key);
+    const root = document.documentElement;
+    for (const [name, value] of Object.entries(detail.tokens)) root.style.setProperty(name, value);
+    for (const [name, value] of Object.entries(detail.canvas)) root.style.setProperty(`--canvas-${name}`, value);
+    root.style.setProperty("--studio-accent-rgb", detail.rgb);
+    root.style.setProperty("--accent-2", detail.accent2);
+    root.style.setProperty("--accent-2-rgb", channels(detail.accent2).join(","));
+    root.dataset.studioTheme = key;
+    root.dataset.studioThemeTier = detail.tier;
+    effective.theme = key;
+    for (const button of [...els.themes?.children || [], ...els.premiumThemes?.children || []]) {
       button.setAttribute("aria-pressed", String(button.dataset.theme === key));
       if (button.dataset.theme === "custom") button.style.setProperty("--swatch", prefs.customColors.accent);
     }
@@ -192,8 +274,33 @@
     for (const [name, pair] of Object.entries(els.customInputs || {})) {
       pair.picker.value = prefs.customColors[name]; pair.hex.value = prefs.customColors[name]; pair.hex.setAttribute("aria-invalid", "false");
     }
-    if (save) persist();
-    event("mefi-theme-change", { theme: key, ...palette, tokens });
+    return detail;
+  }
+  // options.navigate === false: a locked choice is explained in place (the
+  // Workspace select fires on every arrow key, so it must not change the view,
+  // and a Void tile in this sheet must not close it).
+  function applyTheme(theme, save = true, options) {
+    if (isPremiumTheme(theme)) {
+      if (!premiumAllowed()) {
+        // Locked: nothing changes. Announcing what is still on screen rolls
+        // back any picker that already moved (the Workspace theme select).
+        event("mefi-theme-change", themeDetail(effective.theme));
+        offerUnlock("theme", theme, THEMES[theme].name, options?.navigate !== false);
+        return effective.theme;
+      }
+      const detail = paintTheme(theme);
+      if (save && premium.theme !== theme) { premium.theme = theme; persistPremium(); }
+      event("mefi-theme-change", detail);
+      return theme;
+    }
+    const key = isFreeTheme(theme) ? theme : DEFAULT_THEME;
+    prefs.theme = key;
+    const detail = paintTheme(key);
+    if (save) {
+      persist();
+      if (premium.theme) { delete premium.theme; persistPremium(); }
+    }
+    event("mefi-theme-change", detail);
     return key;
   }
   function applyCustomColors(patch, save = true) {
@@ -203,21 +310,88 @@
     applyTheme("custom", save);
     return true;
   }
-  function graphPreferences() { return { nodeStyle: prefs.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
+  // Read per node per frame by the tree rail: plain fields, no storage reads.
+  function graphPreferences() { return { nodeStyle: effective.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
   function syncTreePreferences(save) {
     const value = graphPreferences();
     Object.assign(document.documentElement.dataset, value);
-    for (const choice of els.nodeStyles?.children || []) choice.setAttribute("aria-pressed", String(choice.dataset.nodeStyle === value.nodeStyle));
+    for (const choice of [...els.nodeStyles?.children || [], ...els.premiumStyles?.children || []]) choice.setAttribute("aria-pressed", String(choice.dataset.nodeStyle === value.nodeStyle));
     for (const choice of els.nodeLayouts?.children || []) choice.setAttribute("aria-pressed", String(choice.dataset.nodeLayout === value.nodeLayout));
     if (els.orbitTrails) els.orbitTrails.checked = value.orbitTrails;
     if (els.extraGlow) els.extraGlow.checked = value.extraGlow;
     if (save) persist();
     event("mefi-tree-preferences", value);
   }
-  function applyNodeStyle(style, save = true) {
-    prefs.nodeStyle = Object.hasOwn(NODE_STYLES, style) ? style : "orbs";
+  // options.navigate === false, as for applyTheme: the explanation comes where
+  // the style was chosen.
+  function applyNodeStyle(style, save = true, options) {
+    if (isPremiumNodeStyle(style)) {
+      if (!premiumAllowed()) {
+        // Locked: keep the style on screen and re-announce it for any picker.
+        syncTreePreferences(false);
+        offerUnlock("nodeStyle", style, NODE_STYLES[style].name, options?.navigate !== false);
+        return effective.nodeStyle;
+      }
+      effective.nodeStyle = style;
+      if (save && premium.nodeStyle !== style) { premium.nodeStyle = style; persistPremium(); }
+      syncTreePreferences(false);
+      return style;
+    }
+    prefs.nodeStyle = isFreeNodeStyle(style) ? style : "orbs";
+    effective.nodeStyle = prefs.nodeStyle;
+    if (save && premium.nodeStyle) { delete premium.nodeStyle; persistPremium(); }
     syncTreePreferences(save);
     return prefs.nodeStyle;
+  }
+  // Community changes re-apply a stored premium choice, or fall back to the
+  // free preferences when membership lapses. Neither path writes storage: the
+  // premium choice stays saved for when the member links again. The event's
+  // own verdict is used as given, so it cannot race MefiCommunity's status.
+  function syncPremium(allowed = premiumAllowed()) {
+    if (allowed) {
+      if (premium.theme && effective.theme !== premium.theme) event("mefi-theme-change", paintTheme(premium.theme));
+      if (premium.nodeStyle && effective.nodeStyle !== premium.nodeStyle) { effective.nodeStyle = premium.nodeStyle; syncTreePreferences(false); }
+    } else {
+      let revoked = false;
+      if (isPremiumTheme(effective.theme)) { applyTheme(prefs.theme, false); revoked = true; }
+      if (isPremiumNodeStyle(effective.nodeStyle)) { effective.nodeStyle = prefs.nodeStyle; syncTreePreferences(false); revoked = true; }
+      if (revoked) window.MefiToast?.("Void collection locked again; your choice is saved.", "info");
+    }
+    renderPremiumLocks(allowed);
+  }
+  // A fork with SELF_UNLOCKED says so instead of thanking a membership.
+  function selfUnlocked() {
+    try { return window.MefiCommunity?.status?.()?.selfUnlocked === true; } catch { return false; }
+  }
+  // Locked choices keep their full colour and art with a small lock; the
+  // pointer's tooltip gives the reason. Only a locked picker shows the fork
+  // path and its buttons; a member gets one quiet line instead.
+  function renderPremiumLocks(allowed = premiumAllowed()) {
+    for (const [group, className, what] of [[els.premiumThemes, "music-theme-locked", "theme"], [els.premiumStyles, "music-node-locked", "node style"]]) {
+      for (const choice of group?.children || []) {
+        if (allowed) { choice.classList.remove(className); choice.removeAttribute("aria-disabled"); choice.title = ""; }
+        else { choice.classList.add(className); choice.setAttribute("aria-disabled", "true"); choice.title = `A Void collection ${what} for Void Engine Discord members. Choose it to see how to unlock it.`; }
+        const badge = els.premiumBadges?.get(choice);
+        if (badge) badge.hidden = allowed;
+      }
+    }
+    const actions = communityActions();
+    const linkable = communityLinkable();
+    const manageable = typeof window.MefiCommunity?.open === "function";
+    const unlockedLine = selfUnlocked() ? "Unlocked in this build" : "Unlocked with your Void Engine membership";
+    const fork = forkCopy();
+    for (const box of els.premiumBoxes || []) {
+      box.tag.hidden = allowed;
+      box.fineprint.hidden = allowed;
+      if (box.fineprint.textContent !== fork) box.fineprint.textContent = fork;
+      box.actions.hidden = allowed || !actions;
+      box.desktop.hidden = allowed || actions;
+      box.link.hidden = !linkable;
+      box.member.hidden = !allowed;
+      if (box.memberText.textContent !== unlockedLine) box.memberText.textContent = unlockedLine;
+      box.manage.hidden = !manageable;
+      box.group.setAttribute("aria-describedby", allowed ? box.member.id : box.fineprint.id);
+    }
   }
   function applyNodeLayout(layout, save = true) {
     prefs.nodeLayout = Object.hasOwn(NODE_LAYOUTS, layout) ? layout : "constellation";
@@ -259,6 +433,75 @@
       preview.setAttribute("aria-hidden", "true");
       for (let index = 0; index < (kind === "style" ? 3 : 5); index += 1) element("i", null, null, preview);
       element("strong", null, option.name, choice);
+      element("small", null, option.detail, choice);
+    }
+    return group;
+  }
+  // The Void collection sits in its own group under the free choices, which
+  // stay exactly as they were. Locked buttons stay focusable and clickable
+  // (aria-disabled, never disabled) so a click can explain how to unlock them.
+  function premiumBox(parent, kind) {
+    const box = element("div", "music-premium", null, parent);
+    const title = element("h4", "music-node-label music-premium-heading", "Void collection", box);
+    title.id = `music-premium-${kind}-label`;
+    // A narrow sheet folds this pill to its lock; the word stays for screen readers (music.css).
+    const tag = element("span", "music-premium-tag", null, title);
+    element("span", "music-premium-tag-text", "Members", tag);
+    tag.title = "For Void Engine Discord members";
+    // The caller names the group (a literal id, which scripts/auditor.mjs can see).
+    const group = element("div", kind === "theme" ? "music-themes" : "music-node-choices", null, box);
+    group.setAttribute("role", "group"); group.setAttribute("aria-labelledby", title.id);
+    const fineprint = element("p", "music-fineprint", forkCopy(), box);
+    fineprint.id = `music-premium-${kind}-fineprint`;
+    group.setAttribute("aria-describedby", fineprint.id);
+    const actions = element("div", "music-premium-actions", null, box);
+    button("Join the Discord", "ghost mini", actions, () => window.MefiCommunity?.join?.(), `music-premium-${kind}-join`);
+    const link = button("Link my Discord", "ghost mini", actions, () => window.MefiCommunity?.link?.(), `music-premium-${kind}-link`);
+    button("Copy agent prompt", "ghost mini", actions, () => window.MefiCommunity?.copyAgentPrompt?.(), `music-premium-${kind}-prompt`);
+    const desktop = element("p", "music-premium-desktop", "Desktop app only", box);
+    desktop.id = `music-premium-${kind}-desktop`;
+    const member = element("p", "music-premium-member", null, box);
+    member.id = `music-premium-${kind}-member`;
+    const memberText = element("span", "music-premium-member-text", "Unlocked with your Void Engine membership", member);
+    const manage = button("Manage in Settings › Community", "music-premium-manage", member, () => window.MefiCommunity?.open?.(), `music-premium-${kind}-manage`);
+    (els.premiumBoxes ||= []).push({ tag, group, fineprint, actions, desktop, link, member, memberText, manage });
+    return group;
+  }
+  // The lock reads as a glyph; "Members" stays in the button's name for
+  // screen readers. It sits beside the name, never over the art.
+  function premiumBadge(choice, parent = choice) {
+    const badge = element("span", "music-premium-lock", null, parent);
+    element("span", "music-premium-lock-text", "Members", badge);
+    (els.premiumBadges ||= new Map()).set(choice, badge);
+  }
+  // A locked tile explains itself where it is (navigate:false): leaving for
+  // Settings would close this sheet.
+  function premiumThemeChoices(parent) {
+    const group = premiumBox(parent, "theme");
+    group.id = "music-premium-themes";
+    for (const [key, palette] of Object.entries(THEMES).filter(([key]) => isPremiumTheme(key))) {
+      const choice = button(palette.name, "music-theme music-theme-premium", group, () => applyTheme(key, true, { navigate: false }), `music-theme-${key}`);
+      choice.dataset.theme = key; choice.dataset.premium = "true";
+      // Two-tone swatch: the theme's accent ring around its second hue.
+      choice.style.setProperty("--swatch", palette.accent); choice.style.setProperty("--swatch-2", palette.accent2);
+      choice.setAttribute("aria-pressed", String(effective.theme === key));
+      premiumBadge(choice);
+    }
+    return group;
+  }
+  function premiumStyleChoices(parent) {
+    const group = premiumBox(parent, "style");
+    group.id = "music-node-premium-styles";
+    for (const [key, option] of Object.entries(NODE_STYLES).filter(([key]) => isPremiumNodeStyle(key))) {
+      const choice = button(null, "music-node-choice music-node-style music-node-premium", group, () => applyNodeStyle(key, true, { navigate: false }), `music-node-style-${key}`);
+      choice.dataset.nodeStyle = key; choice.dataset.premium = "true";
+      choice.setAttribute("aria-pressed", String(effective.nodeStyle === key));
+      const preview = element("span", `music-node-preview music-preview-${key}`, null, choice);
+      preview.setAttribute("aria-hidden", "true");
+      for (let index = 0; index < 3; index += 1) element("i", null, null, preview);
+      const label = element("span", "music-premium-name", null, choice);
+      element("strong", null, option.name, label);
+      premiumBadge(choice, label);
       element("small", null, option.detail, choice);
     }
     return group;
@@ -387,7 +630,7 @@
     state.radioPhase = "connecting";
     pendingDeck = target;
     if (!viaFailover) state.radioNote = "";
-    prefs.station = id; persist();
+    prefs.station = id; prefs.source = "radio"; prefs.radioOn = true; persist();
     if (els.embed) { els.embed.remove(); els.embed = null; }
     target.crossOrigin = "anonymous";
     target.volume = live ? 0 : prefs.volume;
@@ -427,6 +670,7 @@
     state.deck = "a";
     state.radioPhase = "idle";
     audio.volume = prefs.volume;
+    prefs.radioOn = false; persist();
   }
   function setVolume(value) {
     const level = Number(value);
@@ -446,6 +690,7 @@
       audio?.pause();
     }
     state.source = next;
+    if (prefs.source !== next) { prefs.source = next; persist(); }
     // Radio borrows deck A, so coming back hands the selected track back to
     // it: loaded, not playing.
     const track = state.tracks[state.selected];
@@ -666,53 +911,88 @@
     sheet.tabIndex = -1; sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-modal", "false"); sheet.setAttribute("aria-labelledby", "music-heading");
     els.sheet = sheet;
     const header = element("header", "music-header", null, sheet);
+    els.header = header;
     const heading = element("div", null, null, header);
     element("span", "eyebrow", "Your look. Your sound.", heading);
     const title = element("h2", null, "Style & sound", heading); title.id = "music-heading";
+    // The jump strip: Look · Sound, the group in view marked as you scroll.
+    const jump = element("nav", "music-jump", null, heading); jump.setAttribute("aria-label", "Style & sound groups");
+    els.jumps = {};
+    for (const [group, label, hint] of [["look", "Look", "Color theme and node tree"], ["sound", "Sound", "Music, audio link and recommendations"]]) {
+      if (group === "sound") element("span", "music-jump-dot", "·", jump).setAttribute("aria-hidden", "true");
+      els.jumps[group] = button(label, "music-jump-link", jump, () => jumpTo(group), `music-jump-${group}`);
+      els.jumps[group].title = hint;
+    }
     button("Close", "ghost", header, close, "music-close");
     const body = element("div", "music-body", null, sheet);
+    // Look first: the color theme, then the node tree with its Void styles.
+    // The header strip jumps between Look and Sound; a jump lands on the
+    // group's label, so the next Tab continues inside that group.
     const settings = element("div", "music-settings", null, body);
-    const audioLink = element("section", "music-audio-link", null, settings);
-    audioLink.setAttribute("aria-labelledby", "music-audio-heading");
-    const audioHeading = element("h3", null, "Audio link", audioLink); audioHeading.id = "music-audio-heading";
-    element("p", "music-fineprint", "Gentle waves and node glow follow quiet or loud music. Add drum accents or background glow when you want more movement.", audioLink);
-    const audioControls = element("div", "music-audio-controls", null, audioLink);
-    const sourceLabel = element("label", null, "Listen to", audioControls);
-    els.audioSource = element("select", null, null, sourceLabel); els.audioSource.id = "music-audio-source";
-    for (const [value, title] of [["auto", "Auto · local or desktop"], ["local", "Local player"], ["desktop", "Desktop audio / Spotify"], ["mic", "Microphone"]]) {
-      const option = element("option", null, title, els.audioSource); option.value = value;
+    settings.id = "music-look"; settings.setAttribute("role", "region"); settings.setAttribute("aria-labelledby", "music-look-label");
+    const lookLabel = element("p", "eyebrow music-group-label", "Look", settings); lookLabel.id = "music-look-label"; lookLabel.tabIndex = -1;
+    const themeSection = element("section", "music-section music-colors", null, settings);
+    element("span", "eyebrow", "Set the mood", themeSection); element("h3", null, "Color theme", themeSection);
+    els.themes = element("div", "music-themes", null, themeSection);
+    els.themes.setAttribute("role", "group"); els.themes.setAttribute("aria-label", "Color theme");
+    for (const [key, palette] of [...Object.entries(THEMES).filter(([key]) => isFreeTheme(key)), ["custom", { name: "Custom palette", bright: prefs.customColors.accent }]]) {
+      const choice = button(palette.name, "music-theme", els.themes, () => applyTheme(key));
+      choice.dataset.theme = key; choice.style.setProperty("--swatch", palette.bright); choice.setAttribute("aria-pressed", String(effective.theme === key));
     }
-    els.audioSource.addEventListener("change", () => { window.MefiIdle?.setAudioSource?.(els.audioSource.value); renderAudioLink(); });
-    els.audioToggle = button("Connect audio", "ghost", audioControls, () => {
-      const status = window.MefiIdle?.audioStatus?.();
-      window.MefiIdle?.setMusicReactive?.(!audioLinkEnabled(status));
-      renderAudioLink();
-    }, "music-audio-toggle");
-    els.audioState = element("p", "music-audio-state", "Audio link off", audioLink); els.audioState.id = "music-audio-state"; els.audioState.setAttribute("role", "status");
-    els.audioHint = element("p", "music-fineprint", "", audioLink); els.audioHint.id = "music-audio-hint";
-    els.audioSource.setAttribute("aria-describedby", els.audioHint.id);
-    const responseLabel = element("label", "music-audio-response", "Response", audioLink);
-    els.audioResponse = element("input", null, null, responseLabel); els.audioResponse.id = "music-audio-response";
-    els.audioResponse.type = "range"; els.audioResponse.min = "0"; els.audioResponse.max = "2"; els.audioResponse.step = "0.05";
-    els.audioResponseValue = element("output", null, "35%", responseLabel); els.audioResponseValue.setAttribute("for", els.audioResponse.id);
-    els.audioResponse.addEventListener("input", () => { window.MefiIdle?.setAudioResponse?.(Number(els.audioResponse.value)); renderAudioLink(); });
-    const responseHint = element("p", "music-fineprint", "Starts gently at 35%. Lower to 0% to settle the effects without changing playback volume.", audioLink); responseHint.id = "music-audio-response-hint";
-    els.audioResponse.setAttribute("aria-label", "Audio response strength"); els.audioResponse.setAttribute("aria-describedby", responseHint.id);
-    const audioEffectsHeading = element("h4", "music-node-label", "Reactions", audioLink); audioEffectsHeading.id = "music-audio-effects-label";
-    const audioEffects = element("div", "music-effects music-audio-effects", null, audioLink); audioEffects.setAttribute("role", "group"); audioEffects.setAttribute("aria-labelledby", audioEffectsHeading.id);
-    els.audioEffects = {};
-    for (const [key, effect] of Object.entries(AUDIO_EFFECTS)) {
-      const id = `music-audio-${key}`;
-      const row = element("label", "music-effect", null, audioEffects);
+    els.customPalette = element("fieldset", "music-custom-palette", null, themeSection); els.customPalette.id = "music-custom-palette";
+    element("legend", null, "Your colors", els.customPalette);
+    const help = element("p", "music-fineprint", "Choose a color or enter #RRGGBB. Studio adjusts text and borders when needed for readability.", els.customPalette); help.id = "music-custom-help";
+    els.customInputs = {};
+    for (const [key, title] of [["accent", "Accent"], ["background", "Background"], ["surface", "Panels"], ["text", "Text"]]) {
+      const row = element("div", "music-color-row", null, els.customPalette);
+      const label = element("label", null, title, row); label.htmlFor = `music-color-${key}-hex`;
+      const picker = element("input", "music-color-picker", null, row); picker.type = "color"; picker.id = `music-color-${key}`; picker.value = prefs.customColors[key];
+      picker.setAttribute("aria-label", `${title} color`); picker.setAttribute("aria-describedby", help.id);
+      const hex = element("input", "music-color-hex", null, row); hex.type = "text"; hex.id = `music-color-${key}-hex`; hex.value = prefs.customColors[key]; hex.maxLength = 7; hex.spellcheck = false;
+      hex.setAttribute("aria-label", `${title} hex color`); hex.setAttribute("aria-describedby", help.id); hex.setAttribute("pattern", "#[0-9A-Fa-f]{6}");
+      picker.addEventListener("input", () => applyCustomColors({ [key]: picker.value }));
+      hex.addEventListener("input", () => {
+        const valid = Boolean(hexColor(hex.value)); hex.setAttribute("aria-invalid", String(!valid));
+        if (valid) applyCustomColors({ [key]: hex.value });
+      });
+      els.customInputs[key] = { picker, hex };
+    }
+    button("Reset custom colors", "ghost music-custom-reset", els.customPalette, () => applyCustomColors(CUSTOM_DEFAULTS), "music-custom-reset");
+    els.premiumThemes = premiumThemeChoices(themeSection);
+    element("p", "music-fineprint", "Colors are separate from node style and layout.", themeSection);
+    const nodeSection = element("section", "music-node-settings", null, settings);
+    nodeSection.setAttribute("aria-labelledby", "music-node-heading");
+    const nodeHeading = element("h3", null, "Node tree", nodeSection); nodeHeading.id = "music-node-heading";
+    element("p", "music-node-intro", "See your changes in the live tree. Appearance and arrangement are independent.", nodeSection);
+    els.nodeStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => isFreeNodeStyle(key))), effective.nodeStyle, applyNodeStyle);
+    els.premiumStyles = premiumStyleChoices(nodeSection);
+    els.nodeLayouts = graphChoices(nodeSection, "layout", NODE_LAYOUTS, prefs.nodeLayout, applyNodeLayout);
+    const layoutHint = element("p", "music-fineprint", "Choosing a layout rearranges the tree. Existing nodes keep their places as work updates.", nodeSection);
+    layoutHint.id = "music-node-layout-hint";
+    els.nodeLayouts.setAttribute("aria-describedby", layoutHint.id);
+    const effectsHeading = element("h4", "music-node-label", "Effects", nodeSection); effectsHeading.id = "music-effects-label";
+    const effects = element("div", "music-effects", null, nodeSection); effects.setAttribute("role", "group"); effects.setAttribute("aria-labelledby", effectsHeading.id);
+    for (const [key, id, effectClass, title, hint] of [
+      ["orbitTrails", "music-orbit-trails", "music-effect-orbitTrails", "Blue orbit trails", "Circle queued and running work."],
+      ["extraGlow", "music-extra-glow", "music-effect-extraGlow", "Extra glow", "Brighter halos and luminous cores."],
+    ]) {
+      const row = element("label", `music-effect ${effectClass}`, null, effects);
+      const sample = element("span", "music-effect-sample", null, row); sample.setAttribute("aria-hidden", "true");
       const copy = element("span", "music-effect-copy", null, row);
-      element("strong", null, effect.title, copy);
-      const description = element("small", null, effect.detail, copy); description.id = `${id}-hint`;
-      const input = element("input", null, null, row); input.type = "checkbox"; input.id = id; input.checked = effect.enabled;
-      input.setAttribute("aria-label", effect.title); input.setAttribute("aria-describedby", description.id);
-      input.addEventListener("change", () => { window.MefiIdle?.setAudioEffects?.({ [key]: input.checked }); renderAudioLink(); });
-      els.audioEffects[key] = input;
+      element("strong", null, title, copy);
+      const description = element("small", null, hint, copy); description.id = `${id}-hint`;
+      const input = element("input", null, null, row); input.type = "checkbox"; input.id = id; input.checked = prefs[key];
+      input.setAttribute("aria-label", title); input.setAttribute("aria-describedby", description.id);
+      input.addEventListener("change", () => applyNodeEffects({ [key]: input.checked }));
+      els[key] = input;
     }
+    element("p", "music-fineprint", "Decorative effects keep work nodes in place. Reduced motion pauses the orbit trails.", nodeSection);
+    // Sound: the player, the audio link directly under it, then the
+    // listening companion (the aside).
     const main = element("main", "music-main", null, body);
+    main.id = "music-sound"; main.setAttribute("aria-labelledby", "music-sound-label");
+    const soundLabel = element("p", "eyebrow music-group-label", "Sound", main); soundLabel.id = "music-sound-label"; soundLabel.tabIndex = -1;
+    els.groups = { look: { group: settings, label: lookLabel }, sound: { group: main, label: soundLabel } };
     const tabs = element("div", "music-tabs", null, main); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "Music source");
     els.localTab = button("Local music", "music-tab", tabs, () => setSource("local"), "music-local-tab");
     els.radioTab = button("Ad-free radio", "music-tab", tabs, () => setSource("radio"), "music-radio-tab");
@@ -793,61 +1073,47 @@
     els.recent = element("div", "music-recent", null, els.spotify);
     els.spotifyPlayer = element("div", "music-spotify-player", null, els.spotify);
     element("p", "music-fineprint", "Spotify manages playback and may offer previews or ask you to sign in. Local player controls do not control Spotify.", els.spotify);
-    const nodeSection = element("section", "music-node-settings", null, settings);
-    nodeSection.setAttribute("aria-labelledby", "music-node-heading");
-    const nodeHeading = element("h3", null, "Node tree", nodeSection); nodeHeading.id = "music-node-heading";
-    element("p", "music-node-intro", "See your changes in the live tree. Appearance and arrangement are independent.", nodeSection);
-    els.nodeStyles = graphChoices(nodeSection, "style", NODE_STYLES, prefs.nodeStyle, applyNodeStyle);
-    els.nodeLayouts = graphChoices(nodeSection, "layout", NODE_LAYOUTS, prefs.nodeLayout, applyNodeLayout);
-    const layoutHint = element("p", "music-fineprint", "Choosing a layout rearranges the tree. Existing nodes keep their places as work updates.", nodeSection);
-    layoutHint.id = "music-node-layout-hint";
-    els.nodeLayouts.setAttribute("aria-describedby", layoutHint.id);
-    const effectsHeading = element("h4", "music-node-label", "Effects", nodeSection); effectsHeading.id = "music-effects-label";
-    const effects = element("div", "music-effects", null, nodeSection); effects.setAttribute("role", "group"); effects.setAttribute("aria-labelledby", effectsHeading.id);
-    for (const [key, id, effectClass, title, hint] of [
-      ["orbitTrails", "music-orbit-trails", "music-effect-orbitTrails", "Blue orbit trails", "Circle queued and running work."],
-      ["extraGlow", "music-extra-glow", "music-effect-extraGlow", "Extra glow", "Brighter halos and luminous cores."],
-    ]) {
-      const row = element("label", `music-effect ${effectClass}`, null, effects);
-      const sample = element("span", "music-effect-sample", null, row); sample.setAttribute("aria-hidden", "true");
+    const audioLink = element("section", "music-audio-link", null, main);
+    audioLink.setAttribute("aria-labelledby", "music-audio-heading");
+    const audioHeading = element("h3", null, "Audio link", audioLink); audioHeading.id = "music-audio-heading";
+    element("p", "music-fineprint", "Gentle waves and node glow follow quiet or loud music. Add drum accents or background glow when you want more movement.", audioLink);
+    const audioControls = element("div", "music-audio-controls", null, audioLink);
+    const sourceLabel = element("label", null, "Listen to", audioControls);
+    els.audioSource = element("select", null, null, sourceLabel); els.audioSource.id = "music-audio-source";
+    for (const [value, title] of [["auto", "Auto · local or desktop"], ["local", "Local player"], ["desktop", "Desktop audio / Spotify"], ["mic", "Microphone"]]) {
+      const option = element("option", null, title, els.audioSource); option.value = value;
+    }
+    els.audioSource.addEventListener("change", () => { window.MefiIdle?.setAudioSource?.(els.audioSource.value); renderAudioLink(); });
+    els.audioToggle = button("Connect audio", "ghost", audioControls, () => {
+      const status = window.MefiIdle?.audioStatus?.();
+      window.MefiIdle?.setMusicReactive?.(!audioLinkEnabled(status));
+      renderAudioLink();
+    }, "music-audio-toggle");
+    els.audioState = element("p", "music-audio-state", "Audio link off", audioLink); els.audioState.id = "music-audio-state"; els.audioState.setAttribute("role", "status");
+    els.audioHint = element("p", "music-fineprint", "", audioLink); els.audioHint.id = "music-audio-hint";
+    els.audioSource.setAttribute("aria-describedby", els.audioHint.id);
+    const responseLabel = element("label", "music-audio-response", "Response", audioLink);
+    els.audioResponse = element("input", null, null, responseLabel); els.audioResponse.id = "music-audio-response";
+    els.audioResponse.type = "range"; els.audioResponse.min = "0"; els.audioResponse.max = "2"; els.audioResponse.step = "0.05";
+    els.audioResponseValue = element("output", null, "35%", responseLabel); els.audioResponseValue.setAttribute("for", els.audioResponse.id);
+    els.audioResponse.addEventListener("input", () => { window.MefiIdle?.setAudioResponse?.(Number(els.audioResponse.value)); renderAudioLink(); });
+    const responseHint = element("p", "music-fineprint", "Starts gently at 35%. Lower to 0% to settle the effects without changing playback volume.", audioLink); responseHint.id = "music-audio-response-hint";
+    els.audioResponse.setAttribute("aria-label", "Audio response strength"); els.audioResponse.setAttribute("aria-describedby", responseHint.id);
+    const audioEffectsHeading = element("h4", "music-node-label", "Reactions", audioLink); audioEffectsHeading.id = "music-audio-effects-label";
+    const audioEffects = element("div", "music-effects music-audio-effects", null, audioLink); audioEffects.setAttribute("role", "group"); audioEffects.setAttribute("aria-labelledby", audioEffectsHeading.id);
+    els.audioEffects = {};
+    for (const [key, effect] of Object.entries(AUDIO_EFFECTS)) {
+      const id = `music-audio-${key}`;
+      const row = element("label", "music-effect", null, audioEffects);
       const copy = element("span", "music-effect-copy", null, row);
-      element("strong", null, title, copy);
-      const description = element("small", null, hint, copy); description.id = `${id}-hint`;
-      const input = element("input", null, null, row); input.type = "checkbox"; input.id = id; input.checked = prefs[key];
-      input.setAttribute("aria-label", title); input.setAttribute("aria-describedby", description.id);
-      input.addEventListener("change", () => applyNodeEffects({ [key]: input.checked }));
-      els[key] = input;
+      element("strong", null, effect.title, copy);
+      const description = element("small", null, effect.detail, copy); description.id = `${id}-hint`;
+      const input = element("input", null, null, row); input.type = "checkbox"; input.id = id; input.checked = effect.enabled;
+      input.setAttribute("aria-label", effect.title); input.setAttribute("aria-describedby", description.id);
+      input.addEventListener("change", () => { window.MefiIdle?.setAudioEffects?.({ [key]: input.checked }); renderAudioLink(); });
+      els.audioEffects[key] = input;
     }
-    element("p", "music-fineprint", "Decorative effects keep work nodes in place. Reduced motion pauses the orbit trails.", nodeSection);
     const aside = element("aside", "music-side", null, body);
-    const themeSection = element("section", "music-section music-colors", null, settings);
-    element("span", "eyebrow", "Set the mood", themeSection); element("h3", null, "Color theme", themeSection);
-    els.themes = element("div", "music-themes", null, themeSection);
-    els.themes.setAttribute("role", "group"); els.themes.setAttribute("aria-label", "Color theme");
-    for (const [key, palette] of [...Object.entries(THEMES), ["custom", { name: "Custom palette", bright: prefs.customColors.accent }]]) {
-      const choice = button(palette.name, "music-theme", els.themes, () => applyTheme(key));
-      choice.dataset.theme = key; choice.style.setProperty("--swatch", palette.bright); choice.setAttribute("aria-pressed", String(prefs.theme === key));
-    }
-    els.customPalette = element("fieldset", "music-custom-palette", null, themeSection); els.customPalette.id = "music-custom-palette";
-    element("legend", null, "Your colors", els.customPalette);
-    const help = element("p", "music-fineprint", "Choose a color or enter #RRGGBB. Studio adjusts text and borders when needed for readability.", els.customPalette); help.id = "music-custom-help";
-    els.customInputs = {};
-    for (const [key, title] of [["accent", "Accent"], ["background", "Background"], ["surface", "Panels"], ["text", "Text"]]) {
-      const row = element("div", "music-color-row", null, els.customPalette);
-      const label = element("label", null, title, row); label.htmlFor = `music-color-${key}-hex`;
-      const picker = element("input", "music-color-picker", null, row); picker.type = "color"; picker.id = `music-color-${key}`; picker.value = prefs.customColors[key];
-      picker.setAttribute("aria-label", `${title} color`); picker.setAttribute("aria-describedby", help.id);
-      const hex = element("input", "music-color-hex", null, row); hex.type = "text"; hex.id = `music-color-${key}-hex`; hex.value = prefs.customColors[key]; hex.maxLength = 7; hex.spellcheck = false;
-      hex.setAttribute("aria-label", `${title} hex color`); hex.setAttribute("aria-describedby", help.id); hex.setAttribute("pattern", "#[0-9A-Fa-f]{6}");
-      picker.addEventListener("input", () => applyCustomColors({ [key]: picker.value }));
-      hex.addEventListener("input", () => {
-        const valid = Boolean(hexColor(hex.value)); hex.setAttribute("aria-invalid", String(!valid));
-        if (valid) applyCustomColors({ [key]: hex.value });
-      });
-      els.customInputs[key] = { picker, hex };
-    }
-    button("Reset custom colors", "ghost music-custom-reset", els.customPalette, () => applyCustomColors(CUSTOM_DEFAULTS), "music-custom-reset");
-    element("p", "music-fineprint", "Colors are separate from node style and layout.", themeSection);
     const ai = element("section", "music-section music-ai", null, aside);
     element("span", "eyebrow", "A listening companion", ai); element("h3", null, "Find your next sound", ai);
     const moodLabel = element("label", "music-mood-label", "What are you in the mood for?", ai);
@@ -877,6 +1143,43 @@
     sheet.addEventListener("keydown", (event) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }
     });
+    sheet.addEventListener("scroll", scheduleJump, { passive: true });
+  }
+  // A jump scrolls the group to just under the sticky header (Look is the top)
+  // and moves focus to its label without a second scroll; the scroll itself
+  // updates the strip's mark.
+  function jumpTo(group) {
+    const target = els.groups?.[group];
+    if (!target || !els.sheet) return;
+    let top = 0;
+    if (group !== "look") {
+      try { top = els.sheet.scrollTop + target.group.getBoundingClientRect().top - els.header.getBoundingClientRect().bottom + 1; } catch { top = 0; }
+    }
+    let still = false;
+    try { still = Boolean(window.MefiNav?.noMotion?.()); } catch {}
+    try { els.sheet.scrollTo({ top: Math.max(0, top), behavior: still ? "auto" : "smooth" }); } catch {}
+    target.label.focus?.({ preventScroll: true });
+  }
+  // Sound is marked once its group reaches the header, or the sheet is at its
+  // end (a short Sound group never reaches the top); Look otherwise.
+  function syncJump() {
+    jumpFrame = 0;
+    if (!state.opened || !els.groups) return;
+    let current = "look";
+    try {
+      const room = els.sheet.scrollHeight - els.sheet.clientHeight;
+      const line = els.header.getBoundingClientRect().bottom + 32;
+      if ((room > 2 && els.sheet.scrollTop >= room - 2) || els.groups.sound.group.getBoundingClientRect().top <= line) current = "sound";
+    } catch {}
+    for (const [group, link] of Object.entries(els.jumps || {})) {
+      if (group === current) { if (link.getAttribute?.("aria-current") !== "true") link.setAttribute("aria-current", "true"); }
+      else link.removeAttribute("aria-current");
+    }
+  }
+  function scheduleJump() {
+    if (!state.opened || jumpFrame) return;
+    if (typeof window.requestAnimationFrame === "function") jumpFrame = window.requestAnimationFrame(syncJump);
+    else syncJump();
   }
   function updatePreview() {
     previewFrame = 0;
@@ -917,10 +1220,31 @@
     });
     bindDeck(audio);
     state.station = prefs.station;
-    build(); applyTheme(prefs.theme, false); syncTreePreferences(false); render();
+    // The last session's source comes back with it. Local files are granted
+    // per session and must be chosen again; a Spotify link returns to its tab
+    // and its player mounts when the sheet opens, since Spotify owns playback.
+    const lastSpotify = prefs.source === "spotify" ? spotifyLink(prefs.spotify[0]) : null;
+    if (lastSpotify) { state.spotify = lastSpotify; state.source = "spotify"; }
+    else if (prefs.source === "radio") state.source = "radio";
+    // A member's premium choice is painted straight away, in place of the free
+    // one rather than after it, and nothing is written back.
+    const unlocked = premiumAllowed();
+    if (unlocked && premium.nodeStyle) effective.nodeStyle = premium.nodeStyle;
+    build();
+    if (unlocked && premium.theme) event("mefi-theme-change", paintTheme(premium.theme));
+    else applyTheme(prefs.theme, false);
+    syncTreePreferences(false); renderPremiumLocks(unlocked); render();
+    if (lastSpotify) els.spotifyInput.value = lastSpotify.url;
+    // A station that was sounding when Studio closed is tuned again. Smoke and
+    // capture runs share the owner's profile, so they stay silent.
+    const headless = /[?&](?:smoke|capture)=1(?:&|$)/.test(String(window.location?.search || ""));
+    if (state.source === "radio" && prefs.radioOn && station(state.station) && !headless) tune(state.station);
     window.addEventListener("resize", schedulePreview);
     window.addEventListener("mefi-tree-view", (event) => syncTreeView(event.detail?.view));
     window.addEventListener("mefi-audio-change", (event) => renderAudioLink(event.detail));
+    window.addEventListener("mefi-community-change", (event) => syncPremium(typeof event?.detail?.premium === "boolean" ? event.detail.premium : premiumAllowed()));
+    // Linking can become possible or moot with the entitlement unchanged.
+    window.addEventListener("mefi-community-status", () => renderPremiumLocks());
     if (typeof window.ResizeObserver === "function") new window.ResizeObserver(schedulePreview).observe(els.preview);
     window.addEventListener("beforeunload", () => { for (const track of state.tracks) URL.revokeObjectURL(track.url); });
   }
@@ -935,13 +1259,17 @@
     els.sheet.setAttribute("aria-modal", "false");
     if (restoreWorkspace) window.MefiWorkspace.exit();
     document.body.classList.add("music-preview-active");
-    render(); syncTreeView(); els.sheet.focus(); schedulePreview();
+    mountSpotify();
+    renderPremiumLocks();
+    render(); syncTreeView(); els.sheet.focus(); schedulePreview(); scheduleJump();
   }
   function close() {
     if (!els.overlay || els.overlay.hidden) return;
     state.opened = false; els.overlay.hidden = true;
     if (previewFrame) window.cancelAnimationFrame?.(previewFrame);
     previewFrame = 0;
+    if (jumpFrame) window.cancelAnimationFrame?.(jumpFrame);
+    jumpFrame = 0;
     window.MefiIdle?.setSettingsPreview?.(null);
     document.body.classList.remove("music-preview-active");
     if (restoreWorkspace) window.MefiWorkspace?.enter?.();
@@ -951,7 +1279,13 @@
   }
   window.MefiMusic = { init, open, close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
     stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })), setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, loadSpotify, setSource, applyTheme, applyCustomColors,
-    customColors: () => ({ ...prefs.customColors }), themePalette: () => ({ theme: prefs.theme, ...resolvePalette(prefs.theme, prefs.customColors) }) };
+    customColors: () => ({ ...prefs.customColors }), themePalette: () => ({ theme: effective.theme, ...resolvePalette(effective.theme, prefs.customColors) }),
+    // isNodeStyle is for the tree painters; the catalog feeds Settings › Community.
+    isNodeStyle,
+    premiumCatalog: () => ({
+      themes: Object.entries(THEMES).filter(([key]) => isPremiumTheme(key)).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, accent2: theme.accent2 })),
+      nodeStyles: Object.entries(NODE_STYLES).filter(([key]) => isPremiumNodeStyle(key)).map(([key, style]) => ({ key, name: style.name, detail: style.detail })),
+    }) };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();

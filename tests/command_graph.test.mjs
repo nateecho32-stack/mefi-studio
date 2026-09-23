@@ -337,6 +337,25 @@ test("node details and Follow controls reserve real graph space", () => {
   assert.ok(env.usableArea().w > area.w, "closing the detail card returns its space");
 });
 
+test("inspect mode's wider rail carves the clear area but keeps the layout frame, so a click never re-seeds the tree", () => {
+  const { env, state, el } = graphContext();
+  el.hud = {};
+  env.getComputedStyle = () => ({ getPropertyValue: (name) => (name === "--command-rail-width" ? "344px" : "") });
+  el.rail = box(1440 - 24 - 344, 150, 344, 700);
+  const resting = { ...env.usableArea() };
+  const frame = { ...state.graphFrame };
+  // Selecting a node turns on inspect mode: the rail widens and rises.
+  state.focusMode = true; state.graphAreaAt = 0;
+  el.rail = box(1440 - 24 - 520, 76, 520, 800);
+  const inspecting = env.usableArea();
+  assert.deepEqual({ ...state.graphFrame }, frame, "the frame the saved layout is keyed on stays put");
+  assert.ok(inspecting.x + inspecting.w <= 1440 - 24 - 520 - 20, "the clear rectangle still keeps off the wider rail");
+  assert.ok(inspecting.w < resting.w, "and the tree glides over to make room");
+  state.focusMode = false; state.graphAreaAt = 0;
+  el.rail = box(1440 - 24 - 344, 150, 344, 700);
+  assert.deepEqual({ ...env.usableArea() }, resting, "leaving inspect mode gives the space back");
+});
+
 test("Zen releases invisible panel bounds and wake immediately restores them", () => {
   const { env, state, el } = graphContext({ chat: true });
   Object.assign(state, { hudRects: [], hudRectsAt: 0 });
@@ -1379,16 +1398,136 @@ test("verification stays distinct from running work even when its saved graph st
   assert.deepEqual(Array.from(labels.env.labelCandidates(projected), ({ node }) => node.id), [running.id, verifying.id]);
 });
 
+// The Void collection's gem and seal shapes, built from tree3d.js exactly as
+// the rail builds them and handed to the Command view on window.MefiTree.
+const treeSource = await readFile(new URL("../renderer/tree3d.js", import.meta.url), "utf8");
+function voidShapesWindow() {
+  const a = treeSource.indexOf("  function buildVoidShapes("), b = treeSource.indexOf("  const VOID_SHAPES = buildVoidShapes();", a);
+  assert.ok(a >= 0 && b > a, "missing the shared Void shapes in tree3d.js");
+  return { MefiTree: { voidShapes: vm.runInNewContext(`${treeSource.slice(a, b)}buildVoidShapes();`, { Math, Object }) } };
+}
+
 test("every node style respects Follow/search dimming and its lifecycle fade", () => {
-  const env = vm.createContext({ state: {}, Math, rgba: (_tint, alpha) => `rgba(120,180,220,${alpha})` });
+  const env = vm.createContext({ state: {}, Math, WeakMap, Map, window: voidShapesWindow(), rgba: (_tint, alpha) => `rgba(120,180,220,${alpha})` });
   vm.runInContext(section("function traceNodeSurface(", "function drawWorkOrbit("), env);
-  for (const style of ["orbs", "glass", "minimal", "halo", "crystal"]) {
+  for (const style of ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"]) {
     const alphas = [];
     const ctx = { save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, closePath() {}, moveTo() {}, lineTo() {}, arc() {}, fill() { alphas.push(this.globalAlpha); }, stroke() { alphas.push(this.globalAlpha); }, createRadialGradient: () => ({ addColorStop() {} }), createLinearGradient: () => ({ addColorStop() {} }) };
     env.state.nodeStyle = style;
     env.drawNodeSurface(ctx, { kind: "task", _fade: 0.5 }, { x: 50, y: 50 }, 12, [120,180,220], { alpha: 0.4 });
     assert.ok(alphas.length > 0 && alphas.every((alpha) => alpha === 0.2), `${style} preserves both independent fading factors`);
   }
+});
+
+// A canvas stand-in that follows translate/scale, so every point a painter
+// touches is measured in screen space, and counts what each frame allocates.
+// `reach` covers everything (glows included); `pathReach` only the straight
+// path work (facets, marks, seals).
+function recordingContext() {
+  const calls = { fill: 0, stroke: 0, arc: 0, lineTo: 0, radial: 0, linear: 0, conic: 0, saves: 0, restores: 0, reach: 0, pathReach: 0, lineWidths: [], texts: [] };
+  const stack = [];
+  let t = { x: 0, y: 0, s: 1 };
+  const distance = (x, y) => Math.hypot(t.x + x * t.s - 50, t.y + y * t.s - 50);
+  const point = (x, y, extra = 0) => { calls.reach = Math.max(calls.reach, distance(x, y) + extra * t.s); };
+  const pathPoint = (x, y) => { point(x, y); calls.pathReach = Math.max(calls.pathReach, distance(x, y)); };
+  const ctx = {
+    calls,
+    save() { calls.saves++; stack.push({ ...t }); }, restore() { calls.restores++; t = stack.pop(); },
+    translate(x, y) { t.x += x * t.s; t.y += y * t.s; }, scale(s) { t.s *= s; },
+    beginPath() {}, closePath() {}, moveTo: (x, y) => pathPoint(x, y), lineTo: (x, y) => { calls.lineTo++; pathPoint(x, y); },
+    arc: (x, y, r) => { calls.arc++; point(x, y, r); },
+    fill() { calls.fill++; }, stroke() { calls.stroke++; calls.lineWidths.push(this.lineWidth); },
+    fillText(text) { calls.texts.push({ text, ink: this.fillStyle }); },
+    createRadialGradient() { calls.radial++; return { addColorStop() {} }; }, createLinearGradient() { calls.linear++; return { addColorStop() {} }; },
+    createConicGradient() { calls.conic++; return { addColorStop() {} }; },
+  };
+  return ctx;
+}
+
+test("Singularity, Prism and Sigil draw distinct bounded surfaces and reuse their paints on the next frame", () => {
+  const state = { nodeStyle: "orbs" };
+  const env = vm.createContext({ state, Math, WeakMap, Map, window: voidShapesWindow(), rgba: (tint, alpha) => `rgba(${tint.join(",")},${alpha})` });
+  vm.runInContext(section("function traceNodeSurface(", "function drawWorkOrbit("), env);
+  const node = { kind: "task", x: 1, y: 2, z: 3 };
+  const shapes = new Set();
+  for (const style of ["singularity", "prism", "sigil"]) {
+    state.nodeStyle = style;
+    const first = recordingContext();
+    env.drawNodeSurface(first, node, { x: 50, y: 50 }, 12, [220, 180, 110], { active: true });
+    const { calls } = first;
+    assert.ok(calls.fill > 0 && calls.stroke > 0, `${style} paints a surface and an outline`);
+    assert.equal(calls.saves, calls.restores, `${style} leaves the canvas state as it found it`);
+    assert.ok(calls.reach <= 12 * 1.8, `${style} stays inside its glow radius (${calls.reach.toFixed(1)}px)`);
+    assert.ok(calls.pathReach <= 12 * 1.1, `${style} keeps its facets and marks on the node (${calls.pathReach.toFixed(1)}px)`);
+    if (style === "singularity") assert.equal(calls.conic, 1, "the accretion disc's brightness turns with the angle");
+    assert.ok(calls.lineTo < 64 && calls.arc < 8, `${style} has a small, fixed amount of path work`);
+    shapes.add(`${calls.arc}/${calls.lineTo}/${calls.fill}/${calls.stroke}`);
+    // The next frame, with a fresh but equal tint, allocates no new paints.
+    const painted = (recorded) => recorded.calls.radial + recorded.calls.linear + recorded.calls.conic;
+    const gradients = painted(first);
+    env.drawNodeSurface(first, node, { x: 80, y: 20 }, 12, [220, 180, 110], { active: true });
+    assert.equal(painted(first), gradients, `${style} reuses its cached paints`);
+    // Paints belong to their context: another canvas builds its own once.
+    const other = recordingContext();
+    env.drawNodeSurface(other, node, { x: 50, y: 50 }, 12, [220, 180, 110], { active: true });
+    assert.equal(painted(other), gradients);
+    env.drawNodeSurface(other, node, { x: 50, y: 50 }, 12, [220, 180, 110], { active: true });
+    assert.equal(painted(other), gradients);
+    assert.deepEqual([node.x, node.y, node.z], [1, 2, 3], `${style} leaves node geometry alone`);
+  }
+  assert.equal(shapes.size, 3, "each premium style has its own drawing");
+  for (const style of ["singularity", "prism", "sigil"]) {
+    state.nodeStyle = style;
+    const quiet = recordingContext(), chosen = recordingContext();
+    env.drawNodeSurface(quiet, node, { x: 50, y: 50 }, 12, [120, 180, 220]);
+    env.drawNodeSurface(chosen, node, { x: 50, y: 50 }, 12, [120, 180, 220], { selected: true });
+    assert.ok(Math.max(...chosen.calls.lineWidths) > Math.max(...quiet.calls.lineWidths), `${style} marks the selected node`);
+    if (style !== "singularity") assert.ok(quiet.calls.reach <= 12 * 1.1, `${style} glows only while it works or is chosen`);
+    // The hub's monogram reads on every Void body: a light ink, never the dark one.
+    const hub = recordingContext();
+    env.drawNodeSurface(hub, { kind: "assistant" }, { x: 50, y: 50 }, 15, [120, 180, 220]);
+    const [monogram] = hub.calls.texts, ink = monogram?.ink.match(/\d+/g)?.slice(0, 3).map(Number);
+    assert.equal(monogram?.text, "M");
+    assert.ok(ink && ink[0] * 0.2126 + ink[1] * 0.7152 + ink[2] * 0.0722 > 200, `${style} writes the hub's M in a light ink (${monogram?.ink})`);
+  }
+  // Prism cuts fewer planes as it shrinks: three, then two halves, then one.
+  state.nodeStyle = "prism";
+  const fills = [12, 5, 3].map((radius) => { const recorded = recordingContext(); env.drawNodeSurface(recorded, node, { x: 50, y: 50 }, radius, [120, 180, 220]); return recorded.calls.fill; });
+  assert.ok(fills[0] > fills[1] && fills[1] > fills[2], `a small gem keeps fewer facets (${fills.join(", ")} fills)`);
+  state.nodeStyle = "sigil";
+  const small = recordingContext(), large = recordingContext(), medium = recordingContext();
+  env.drawNodeSurface(small, node, { x: 50, y: 50 }, 4, [120, 180, 220]);
+  env.drawNodeSurface(medium, node, { x: 50, y: 50 }, 8, [120, 180, 220]);
+  env.drawNodeSurface(large, node, { x: 50, y: 50 }, 12, [120, 180, 220]);
+  assert.equal(small.calls.lineTo, 0, "a tiny sigil skips marks it could not show");
+  // Three marks on a small seal, six on a large one (three lineTo per diamond, plus the seal's three).
+  assert.equal(medium.calls.lineTo, 3 * 3 + 3, "a small sigil carries three marks around its seal");
+  assert.equal(large.calls.lineTo, 6 * 3 + 3, "a large sigil carries six");
+});
+
+test("the Void collection's styles pass the Command style allowlist; unknown keys still do not", () => {
+  const state = { nodeStyle: "orbs", nodeLayout: "constellation", screenLayout: null, active: false };
+  let fits = 0;
+  const env = vm.createContext({ state, el: { width: 0, height: 0 }, refitLayout: () => { fits += 1; } });
+  vm.runInContext(section("function applyTreePreferences(", "function traceNodeSurface("), env);
+  for (const style of ["singularity", "prism", "sigil"]) {
+    env.applyTreePreferences({ nodeStyle: style, nodeLayout: "constellation" });
+    assert.equal(state.nodeStyle, style);
+  }
+  for (const bad of ["invalid", "__proto__", "Prism", null]) {
+    env.applyTreePreferences({ nodeStyle: bad });
+    assert.equal(state.nodeStyle, "sigil", String(bad));
+  }
+  assert.equal(fits, 0, "a style change never reflows the layout");
+  // With music.js present its style list is the one that counts.
+  const asked = [];
+  const music = vm.createContext({ state, el: { width: 0, height: 0 }, refitLayout: () => { fits += 1; }, window: { MefiMusic: { isNodeStyle: (key) => { asked.push(key); return key === "nebula"; } } } });
+  vm.runInContext(section("function applyTreePreferences(", "function traceNodeSurface("), music);
+  music.applyTreePreferences({ nodeStyle: "nebula" });
+  assert.equal(state.nodeStyle, "nebula", "a style music.js knows passes");
+  music.applyTreePreferences({ nodeStyle: "prism" });
+  assert.equal(state.nodeStyle, "nebula", "a style music.js does not list is refused");
+  assert.deepEqual(asked, ["nebula", "prism"]);
 });
 
 test("checkpoint click targets cannot be covered by task labels", () => {

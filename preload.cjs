@@ -1,5 +1,5 @@
 // Mefi's Studio AI+ — preload bridge (CJS; Electron's safe preload format).
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("mefiStudio", {
   performanceControl: (payload) => ipcRenderer.invoke("performance:control", payload ?? {}),
@@ -28,6 +28,15 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   // The first launch of a fresh install runs auto setup by itself (main.cjs
   // firstLaunchAutoSetup) and announces the saved record here.
   onAutoSetup: (callback) => ipcRenderer.on("setup:auto-setup", (_event, data) => callback(data)),
+  onSettingsChanged: (callback) => ipcRenderer.on("settings:changed", (_event, data) => callback(data)),
+  // File.path left Electron in v32; a dropped file's path comes from webUtils.
+  pathForFile: (file) => {
+    try {
+      return webUtils?.getPathForFile?.(file) || null;
+    } catch {
+      return null;
+    }
+  },
   // First run on OpenCode (renderer/onboarding.js): scan, apply, map.
   firstRunStatus: () => ipcRenderer.invoke("setup:first-run-status"),
   firstScan: (payload) => ipcRenderer.invoke("setup:first-scan", payload ?? {}),
@@ -51,7 +60,7 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   usageTracker: () => ipcRenderer.invoke("usage:tracker", {}),
   usageForTask: (taskId) => ipcRenderer.invoke("usage:task", { taskId }),
   opencodeCredits: () => ipcRenderer.invoke("opencode:credits", {}),
-  usageAccounts: () => ipcRenderer.invoke("usage:accounts", {}),
+  usageAccounts: (options = {}) => ipcRenderer.invoke("usage:accounts", { probe: options?.probe === true }),
   openExternal: (url) => ipcRenderer.invoke("shell:open", url),
   shellReveal: (filePath) => ipcRenderer.invoke("shell:reveal", filePath),
   shellCopy: (text) => ipcRenderer.invoke("shell:copy", text),
@@ -127,7 +136,18 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   releaseStatus: () => ipcRenderer.invoke("release:status"),
   releaseCheck: () => ipcRenderer.invoke("release:check"),
   releaseApply: () => ipcRenderer.invoke("release:apply"),
+  // Void Engine Discord link (main.cjs "Discord community link"): every call
+  // answers { ok, status } with the public status only; tokens never cross.
+  communityStatus: () => ipcRenderer.invoke("community:status"),
+  communityLink: () => ipcRenderer.invoke("community:link"),
+  communityLinkCancel: () => ipcRenderer.invoke("community:link-cancel"),
+  communityCheck: () => ipcRenderer.invoke("community:check"),
+  communityUnlink: () => ipcRenderer.invoke("community:unlink"),
+  communityPrompt: (action) => ipcRenderer.invoke("community:prompt", { action: typeof action === "string" ? action : null }),
+  communityOpen: (target) => ipcRenderer.invoke("community:open", { target: typeof target === "string" ? target : null }),
+  onCommunityEvent: (callback) => ipcRenderer.on("community:event", (_event, status) => callback(status)),
   machineStatus: (kill) => ipcRenderer.invoke("machine:status", { kill: Boolean(kill) }),
+  machineGet: () => ipcRenderer.invoke("machine:get"),
   machineSet: (prefs) => ipcRenderer.invoke("machine:set", prefs),
   machineKill: (pid) => ipcRenderer.invoke("machine:kill", { pid }),
   onAssistantStatus: (callback) => ipcRenderer.on("assistant:status", (_event, status) => callback(status)),

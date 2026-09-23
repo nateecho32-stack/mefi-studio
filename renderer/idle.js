@@ -164,7 +164,9 @@
     minimal: "Minimal",
   };
   const BACKDROP_ORDER = ["follow", "aurora", "deepspace", "nebula", "embers", "fireflies", "bokeh", "dust", "grid", "minimal"];
-  const THEME_BACKDROP = { gold: "dust", midnight: "deepspace", forest: "fireflies", violet: "nebula", ember: "embers", aurora: "aurora", rose: "bokeh", custom: "dust" };
+  const THEME_BACKDROP = { gold: "dust", midnight: "deepspace", forest: "fireflies", violet: "nebula", ember: "embers", aurora: "aurora", rose: "bokeh", custom: "dust",
+    // The Void collection (members' themes, gated in music.js).
+    void: "deepspace", eclipse: "dust", abyss: "fireflies", dusk: "grid" };
   // Speech bubbles: what an agent says while it works, drawn beside its orb.
   const SPEECH_TTL = 4200; // a plain remark
   const SPEECH_TTL_LONG = 6500; // a reply or a finding worth reading
@@ -200,7 +202,23 @@
   const FOCUS_DRIFT = 0.55; // of ORBIT_BASE
   const ROTATE_SPEED = 0.005; // right-drag: radians per pixel
   const PITCH_MAX = 0.55; // right-drag vertical tilt clamp
-  const CAMERA_EASE = 0.045;
+  const CAMERA_EASE = 0.045;   // per 30 fps frame; drawFrame converts it to elapsed time
+  // The camera's glide: seconds for a critically damped approach (95% in
+  // about 2.4x this, velocity kept across retargets). See smoothDamp().
+  const CAMERA_SMOOTH = 0.38;
+  // A critically damped step toward target that keeps its velocity in
+  // vel[key] (the Game Programming Gems 4 form): no overshoot, no lurch from
+  // rest, and a retarget mid-flight bends the path instead of restarting it.
+  function smoothDamp(current, target, vel, key, smoothTime, dt) {
+    if (!(dt > 0)) return current;
+    const omega = 2 / smoothTime;
+    const x = omega * dt;
+    const decay = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+    const change = current - target;
+    const temp = ((vel[key] ?? 0) + omega * change) * dt;
+    vel[key] = ((vel[key] ?? 0) - omega * temp) * decay;
+    return target + (change + temp) * decay;
+  }
   const POPUP_MS = 45000; // evidence popup interval
   const HUD_DIM_MS = 6000;
   const AMBIENT_ZEN_MS = 30000;
@@ -285,7 +303,8 @@
     pickerHoldUntil: 0,
     // Command-hub state
     ambient: true,
-    orbit: "paused",
+    // The Orbit switch (Space) as the owner last left it, remembered per machine.
+    orbit: readStore("mefiStudio.cmdOrbit") === "auto" ? "auto" : "paused",
     nodeStyle: "orbs",
     nodeLayout: "constellation",
     orbitTrails: false,
@@ -2444,7 +2463,6 @@
     for (const id of ids) state.workPinSeen.set(id, now);
     return ids;
   }
-  const matchesIdSet = (node, ids) => Boolean(node) && (ids?.size ?? 0) > 0 && (ids.has(String(node.id ?? "")) || ids.has(String(node.sessionId ?? "")) || ids.has(String(node.task?.id ?? "")));
 
   // Follow resolves the actual worker's task before its session. Activity can
   // move attention between workers, but never redirects it to an unrelated
@@ -2571,10 +2589,6 @@
     if (active) renderHint();
   }
 
-  function workNode() {
-    return followCandidates(state.nodes, autopilotJobs(state.assistant), state.touches, Date.now(), state.completedTaskIds)[0]?.node ?? null;
-  }
-
   function refreshAssistantCache() {
     const summary = assistantSummary();
     const full = assistantFull();
@@ -2644,12 +2658,6 @@
     focusNode(node, { zoom: 1.4 });
     if (focus) focusComposer();
     return true;
-  }
-
-  function assistantTone() {
-    const summary = assistantSummary();
-    const full = assistantFull();
-    return { tone: summary.tone, running: Boolean(window.mefiStudio?.assistantState) && full?.status === "running" };
   }
 
   // The satellites' statuses follow every push without a full snapshot.
@@ -3191,7 +3199,7 @@
     else if (state.selected?.kind === "folded") text = "Enter lists them in the Explorer · ← → sessions · Esc clears";
     else if (state.selected) text = "Enter opens it in the Explorer · ↑ ↓ move · Esc clears";
     else if (state.camMode === "follow") text = state.follow ? `Following ${state.follow.title} · drag or zoom to hold your own view` : "Waiting for active work · the camera holds here";
-    else if (state.orbit === "paused") text = "orbit paused · Space resumes · click a node · F fits";
+    else if (state.orbit === "paused") text = "spin paused · Space resumes · click a node · F fits";
     el.hint.textContent = text;
   }
 
@@ -3241,7 +3249,7 @@
   // (the window, the rails, a feed toggle: the layout re-seeds against it
   // anyway), in the overview camera, whose back-off is instant, and under
   // reduced motion. Returns how far it still has to go, in pixels.
-  function stepCenter(area, still) {
+  function stepCenter(area, still, ease = CAMERA_EASE) {
     const frame = state.graphFrame ?? area;
     const frameKey = `${frame.x},${frame.y},${frame.w},${frame.h}`;
     const tx = area.x + area.w / 2, ty = area.y + area.h / 2;
@@ -3251,9 +3259,9 @@
       state.center = { x: tx, y: ty, frameKey };
       return 0;
     }
-    center.x += (tx - center.x) * CAMERA_EASE;
-    center.y += (ty - center.y) * CAMERA_EASE;
-    return left * (1 - CAMERA_EASE);
+    center.x += (tx - center.x) * ease;
+    center.y += (ty - center.y) * ease;
+    return left * (1 - ease);
   }
 
   function centerX() {
@@ -3312,6 +3320,16 @@
   }
 
   // The HUD owns the top and bottom strips; fit against what is left.
+  // The rail's width at rest (the --command-rail-width token), read once per
+  // window size: inspect mode widens the live box, the layout frame does not.
+  function railRestWidth() {
+    if (!Number.isFinite(state.railRestWidth)) {
+      const value = el.hud && typeof getComputedStyle === "function" ? parseFloat(getComputedStyle(el.hud).getPropertyValue("--command-rail-width")) : NaN;
+      state.railRestWidth = Number.isFinite(value) ? value : 0;
+    }
+    return state.railRestWidth;
+  }
+
   function usableArea() {
     if (state.settingsPreview) {
       const area = state.settingsPreview;
@@ -3348,7 +3366,15 @@
     // header still blocks the top strip.
     if (rail) {
       if (state.railCollapsed) top = Math.max(top, rail.bottom + 24);
-      else right = Math.min(right, rail.left - 28);
+      else {
+        // Inspect mode widens the rail over the canvas on every selection. The
+        // frame, which the saved layout is keyed on, keeps the rail's resting
+        // edge so a click never re-seeds the tree; the wider box is carved out
+        // of the clear rectangle below and the projection centre glides after it.
+        const rest = state.focusMode ? railRestWidth() : 0;
+        const edge = rest > 0 ? Math.max(rail.left, rail.right - rest) : rail.left;
+        right = Math.min(right, edge - 28);
+      }
     } else {
       if (feed && !state.feedCollapsed && feed.left < el.width / 2) left = Math.max(left, feed.right + 28);
       if (chat && state.chatLogOpen && chat.left > el.width / 2) right = Math.min(right, chat.left - 28);
@@ -3376,7 +3402,7 @@
     // selection card opening on a click carves the rectangle without
     // re-seeding the tree, and the projection centre glides after it —
     // stepCenter — instead of jumping.)
-    for (const panel of [feed, chat, visibleBox(el.info), visibleBox(el.followStatus), visibleBox(el.legend), visibleBox(el.pop)]) {
+    for (const panel of [feed, chat, state.focusMode && !state.railCollapsed ? rail : null, visibleBox(el.info), visibleBox(el.followStatus), visibleBox(el.legend), visibleBox(el.pop)]) {
       if (!panel) continue;
       const x = panel.left - 20, y = panel.top - 20, rightEdge = panel.right + 20, bottomEdge = panel.bottom + 20;
       spaces = spaces.flatMap((area) => {
@@ -3394,8 +3420,11 @@
     return state.graphArea;
   }
 
-  function autoFit() {
+  function autoFit({ ease = false } = {}) {
     // Keep the whole constellation inside the frame at any window size.
+    // An explicit fit (F, Fit, a restore) lands at once; the refit a panel
+    // opening or closing asks for eases there (drawFrame steps state.fit
+    // toward fitTarget), so selecting a node no longer pops the tree's scale.
     // The graph orbits around the vertical axis, so its horizontal reach is the
     // radius in the x/z plane at any angle, while its vertical reach is just y.
     // Fitting each axis against its own side of the safe area fills a wide
@@ -3416,8 +3445,14 @@
     // 1.3: perspective magnifies the near side (k up to ~1.25) and halos need air.
     const fitX = Math.max(120, area.w - 96) / (reach * 2 * 1.3);
     const fitY = Math.max(100, area.h - 60) / (maxY * 2 * 1.6);
+    const next = Math.max(0.24, Math.min(2.4, Math.min(fitX, fitY)));
+    if (ease && !noMotion() && Number.isFinite(state.fit)) {
+      state.fitTarget = next;
+      return;
+    }
+    state.fitTarget = null;
     const visibleScale = state.fit * state.zoom;
-    state.fit = Math.max(0.24, Math.min(2.4, Math.min(fitX, fitY)));
+    state.fit = next;
     if (state.camMode === "follow") state.zoom = Math.max(0.45, Math.min(2.6, visibleScale / state.fit));
   }
 
@@ -3457,7 +3492,20 @@
     setCamMode("orbit", { quiet: true });
   }
 
+  // A layout switch (arrangement, 2D/3D, Fit, Orbit) is instant underneath:
+  // the new anchors are saved at once and the harnesses read them at once. On
+  // screen each node travels from where it was painted to its new spot
+  // (drawFrame blends the projected points), so the tree morphs instead of
+  // teleporting. A switch mid-morph starts from the positions on screen.
+  function beginLayoutMorph(ms = 240) {
+    if (noMotion()) return;
+    const from = new Map();
+    for (const node of state.nodes) if (Number.isFinite(node._px) && Number.isFinite(node._py)) from.set(node.id, { x: node._px, y: node._py });
+    if (from.size) state.morph = { from, at: globalThis.performance?.now?.() ?? Date.now(), ms };
+  }
+
   function refitLayout() {
+    if (state.active && typeof beginLayoutMorph === "function") beginLayoutMorph();
     state.screenLayout = null;
     state.overviewScale = 1;
     state.center = null; // the centre snaps to the refit frame
@@ -3504,12 +3552,24 @@
     return NODE_RGB.session;
   }
 
+  // Hover and selection come forward in about 90 ms and settle back in about
+  // 160 ms; with no frame time (or reduced motion) they land at once.
+  function easeLift(current, want, dt, still) {
+    if (still || !(dt > 0) || !Number.isFinite(current)) return want;
+    const next = current + (want - current) * (1 - Math.exp(-dt / (want > current ? 0.09 : 0.16)));
+    return Math.abs(next - want) < 0.01 ? want : next;
+  }
+
   function nodeVisualProfile(node) {
     const focused = state.hoverNode === node || Boolean(state.selected && state.selected.id === node.id);
     const verifying = node._workLabel === "Verifying" || (node.task ?? node.workTask)?.status === "awaiting_verification";
     const working = !verifying && (node._workLabel === "Running" || node.state === "active") || node.kind === "agent" && node.status === "running";
-    const prominent = focused || working || node.kind === "assistant";
-    return { prominent, maxRadius: prominent ? 15 : 11, alpha: prominent ? 1 : 0.65, shape: "circle" };
+    const always = working || node.kind === "assistant";
+    // Hover and selection ease an orb forward and back (drawFrame steps
+    // node._lift); working orbs and the hub stay forward. Without a stepped
+    // value the profile answers at once, as it always did.
+    const lift = always ? 1 : Number.isFinite(node._lift) ? node._lift : focused ? 1 : 0;
+    return { prominent: always || focused, maxRadius: 11 + 4 * lift, alpha: 0.65 + 0.35 * lift, shape: "circle" };
   }
 
   function setSettingsPreview(rect) {
@@ -3542,7 +3602,12 @@
   function applyTreePreferences(preferences = {}) {
     if (typeof preferences.orbitTrails === "boolean") state.orbitTrails = preferences.orbitTrails;
     if (typeof preferences.extraGlow === "boolean") state.extraGlow = preferences.extraGlow;
-    const style = ["orbs", "glass", "minimal", "halo", "crystal"].includes(preferences.nodeStyle) ? preferences.nodeStyle : state.nodeStyle;
+    // music.js owns the style names and gates the Void collection, so it
+    // only ever sends a style the viewer may see; a bare harness without it
+    // still knows the built-in eight.
+    const music = globalThis.window?.MefiMusic;
+    const known = typeof music?.isNodeStyle === "function" ? music.isNodeStyle(preferences.nodeStyle) : ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"].includes(preferences.nodeStyle);
+    const style = known ? preferences.nodeStyle : state.nodeStyle;
     const layout = ["constellation", "tree", "radial", "helix", "layers"].includes(preferences.nodeLayout) ? preferences.nodeLayout : state.nodeLayout;
     state.nodeStyle = style;
     if (layout === state.nodeLayout) return;
@@ -3578,6 +3643,196 @@
     return paints;
   }
 
+  // ---------- the Void collection's node styles ----------
+  // The orbs' frame budget applies: every gradient (the conic accretion disc
+  // included) is a unit-space paint cached per context, tint and theme hue;
+  // the derived tones are cached triples so rgba() memoizes their strings. A
+  // frame allocates nothing new and every path has a fixed, small number of
+  // segments. The node's own tint (done green, working lavender, error amber)
+  // stays the dominant colour; the theme's second hue (accent2) is only ever a
+  // highlight.
+  // The gem and seal shapes are tree3d.js's (bundled first and shared on
+  // window.MefiTree.voidShapes), so the rail cuts the same gem; without them
+  // (a bare harness) the gem falls back to a plain disc and the seal to a dot.
+  function voidShapes() {
+    return globalThis.window?.MefiTree?.voidShapes ?? null;
+  }
+  // The theme's second hue, parsed once per theme change (music.js resolves it
+  // on the canvas palette; a free theme's falls back to its bright tone).
+  let premiumAccentHex = null, premiumAccentRgb = null;
+  function premiumAccent(fallback) {
+    const hex = state.canvasPalette?.accent2 ?? null;
+    if (hex !== premiumAccentHex) {
+      premiumAccentHex = hex;
+      const value = typeof hex === "string" && /^#[\da-f]{6}$/i.test(hex) ? parseInt(hex.slice(1), 16) : NaN;
+      premiumAccentRgb = Number.isNaN(value) ? null : [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+    }
+    return premiumAccentRgb ?? fallback;
+  }
+
+  function premiumPaints(ctx, tint, style, lit) {
+    const contexts = state.premiumPaintCache ??= new WeakMap();
+    let cache = contexts.get(ctx);
+    if (!cache) { cache = new Map(); contexts.set(ctx, cache); }
+    const key = `${style}|${tint.join(",")}|${lit}|${premiumAccentHex}`;
+    let paints = cache.get(key);
+    if (paints) return paints;
+    const mix = (toward, amount) => tint.map((value, index) => Math.round(value + (toward[index] - value) * amount));
+    // hot: the whitened tint; ink: a light glyph ink that keeps a trace of the
+    // hue; deep: a body dark enough to read as depth, still carrying the hue.
+    const hot = mix([255, 255, 255], 0.6), ink = mix([255, 255, 255], 0.86), deep = mix([7, 8, 16], 0.86);
+    const shade = deep.map((value, index) => Math.round(value + (tint[index] - value) * 0.4));
+    const accent = premiumAccent(hot);
+    const conic = typeof ctx.createConicGradient === "function";
+    let glow = null, disc = null, fade = null, core = null;
+    if (style === "singularity") {
+      glow = ctx.createRadialGradient(0, 0, 0.5, 0, 0, lit ? 1.72 : 1.45);
+      glow.addColorStop(0, rgba(tint, lit ? 0.46 : 0.3));
+      glow.addColorStop(0.3, rgba(tint, lit ? 0.16 : 0.09));
+      glow.addColorStop(1, rgba(tint, 0));
+      // The accretion disc, brightest on its approaching (lower-left) side and
+      // dimmest opposite, where a trace of the theme's second hue shows...
+      disc = conic ? ctx.createConicGradient(Math.PI * 0.72, 0, 0) : ctx.createRadialGradient(-0.35, 0.35, 0, 0, 0, 1);
+      disc.addColorStop(0, rgba(hot, 1));
+      disc.addColorStop(0.14, rgba(tint, lit ? 1 : 0.94));
+      disc.addColorStop(0.34, rgba(tint, lit ? 0.56 : 0.42));
+      disc.addColorStop(0.5, rgba(accent, lit ? 0.3 : 0.2));
+      disc.addColorStop(0.66, rgba(tint, lit ? 0.56 : 0.42));
+      disc.addColorStop(0.86, rgba(tint, lit ? 1 : 0.94));
+      disc.addColorStop(1, rgba(hot, 1));
+      // ...and hottest at its inner edge, cooling into the glow outside.
+      fade = ctx.createRadialGradient(0, 0, 0.66, 0, 0, 0.97);
+      fade.addColorStop(0, rgba(deep, 0));
+      fade.addColorStop(1, rgba(deep, lit ? 0.5 : 0.62));
+      // The horizon: black at the centre, warming to a deep tint just inside
+      // the photon ring (a soft inner edge), then a thin black gap before the
+      // disc begins.
+      core = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.68);
+      core.addColorStop(0, "rgba(2,1,5,1)");
+      core.addColorStop(0.62, "rgba(2,1,5,1)");
+      core.addColorStop(0.87, rgba(shade, 1));
+      core.addColorStop(0.92, "rgba(2,1,5,1)");
+      core.addColorStop(1, "rgba(2,1,5,1)");
+    } else if (lit) {
+      // Prism and Sigil glow only while they work or are chosen.
+      glow = ctx.createRadialGradient(0, 0, 0.55, 0, 0, 1.6);
+      glow.addColorStop(0, rgba(tint, 0.3));
+      glow.addColorStop(1, rgba(tint, 0));
+    }
+    if (style === "sigil") {
+      // A faint well of the node's hue inside the seal, for depth.
+      core = ctx.createRadialGradient(0, 0, 0, 0, 0, 0.92);
+      core.addColorStop(0, rgba(tint, lit ? 0.22 : 0.15));
+      core.addColorStop(1, rgba(tint, 0));
+    }
+    paints = { hot, ink, deep, shade, accent, glow, disc, fade, core };
+    if (cache.size >= 128) cache.delete(cache.keys().next().value);
+    cache.set(key, paints);
+    return paints;
+  }
+
+  // The light ink a role glyph wears on the Void collection's dark bodies
+  // (Singularity's core, Prism's table, Sigil's seal), or null for the orbs'
+  // own ink. Agent tints are long-lived triples, so the ink is kept per tint
+  // and a frame builds no cache key for it.
+  const premiumInks = new WeakMap();
+  function premiumGlyphInk(ctx, tint) {
+    const style = state.nodeStyle;
+    if (style !== "singularity" && style !== "prism" && style !== "sigil") return null;
+    let ink = premiumInks.get(tint);
+    if (!ink) { ink = rgba(premiumPaints(ctx, tint, style, false).ink, 1); premiumInks.set(tint, ink); }
+    return ink;
+  }
+
+  // A near-black core behind a thin photon ring, inside an accretion disc
+  // whose brightness turns with the angle, over a faint outer glow.
+  function drawSingularity(ctx, p, radius, tint, lit, selected) {
+    const paints = premiumPaints(ctx, tint, "singularity", lit);
+    const { glow, disc, fade, core, hot, deep } = paints;
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, lit ? 1.72 : 1.45, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0, 0.96, 0, Math.PI * 2);
+    ctx.fillStyle = rgba(deep, 1); ctx.fill();
+    ctx.fillStyle = disc; ctx.fill();
+    ctx.fillStyle = fade; ctx.fill();
+    ctx.fillStyle = core; ctx.beginPath(); ctx.arc(0, 0, 0.68, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.6, 0, Math.PI * 2);
+    ctx.strokeStyle = rgba(hot, lit ? 1 : 0.86); ctx.lineWidth = Math.max(0.7, radius * (lit ? 0.085 : 0.065)); ctx.stroke();
+    if (selected) { ctx.beginPath(); ctx.arc(p.x, p.y, radius * 1.16, 0, Math.PI * 2); ctx.strokeStyle = rgba(hot, 0.9); ctx.lineWidth = 1.4; ctx.stroke(); }
+    return paints;
+  }
+
+  // A kite-cut gem lit from the upper left: the crown in the whitened tint,
+  // the pavilion's left plane in the tint and its right in shadow, a crisp
+  // rim, the light that refracts out along the lower right edge in the
+  // theme's second hue and one specular glint. A small gem keeps two planes,
+  // a tiny one a single plane; a glyph sits on a dark table in a light ink.
+  function drawPrism(ctx, p, radius, tint, lit, active, selected, glyph) {
+    const shapes = voidShapes();
+    const paints = premiumPaints(ctx, tint, "prism", lit);
+    const { glow, hot, deep, shade, accent } = paints;
+    const facets = shapes ? shapes.prismFacets(radius) : 0;
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
+    if (glow) { ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, 1.6, 0, Math.PI * 2); ctx.fill(); }
+    ctx.beginPath();
+    if (shapes) shapes.trace(ctx, shapes.prismRim); else ctx.arc(0, 0, 0.9, 0, Math.PI * 2);
+    ctx.fillStyle = rgba(deep, 1); ctx.fill();
+    if (!shapes) { ctx.fillStyle = rgba(tint, lit ? 0.86 : 0.7); ctx.fill(); }
+    for (let facet = 0; facet < facets; facet += 1) {
+      const tone = facets === 1 ? 1 : facet; // 0 light, 1 mid, 2 shadow
+      ctx.beginPath(); shapes.prismFacet(ctx, facets, facet);
+      ctx.fillStyle = tone === 0 ? rgba(hot, lit ? 0.96 : 0.86) : tone === 1 ? rgba(tint, lit ? 0.86 : 0.7) : rgba(shade, 1);
+      ctx.fill();
+    }
+    ctx.restore();
+    if (glyph && shapes) {
+      ctx.beginPath(); shapes.prismTable(ctx, p.x, p.y, radius);
+      ctx.fillStyle = rgba(deep, 0.94); ctx.fill();
+      ctx.strokeStyle = rgba(hot, 0.5); ctx.lineWidth = 0.8; ctx.stroke();
+    }
+    ctx.beginPath();
+    if (shapes) shapes.trace(ctx, shapes.prismRim, p.x, p.y, radius); else ctx.arc(p.x, p.y, radius * 0.9, 0, Math.PI * 2);
+    ctx.strokeStyle = selected ? rgba(hot, 1) : rgba(tint, active ? 0.95 : 0.72); ctx.lineWidth = selected ? 1.6 : active ? 1.2 : 0.85; ctx.stroke();
+    if (facets === 3) {
+      ctx.beginPath(); shapes.prismEdge(ctx, p.x, p.y, radius);
+      ctx.strokeStyle = rgba(accent, lit ? 1 : 0.86); ctx.lineWidth = Math.max(0.8, radius * 0.075); ctx.stroke();
+      if (radius >= 8 && !glyph) {
+        ctx.beginPath(); shapes.prismGlint(ctx, p.x, p.y, radius);
+        ctx.fillStyle = "rgba(255,255,255,0.92)"; ctx.fill();
+      }
+    }
+    return paints;
+  }
+
+  // A calm double ring (the outer crisp, the inner faint) with a few small
+  // diamonds in the theme's second hue between them and a seal at the centre;
+  // a node that wears a glyph shows its glyph instead of the seal.
+  function drawSigil(ctx, p, radius, tint, lit, selected, glyph) {
+    const shapes = voidShapes();
+    const paints = premiumPaints(ctx, tint, "sigil", lit);
+    const { glow, core, deep, accent } = paints;
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
+    if (glow) { ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, 1.6, 0, Math.PI * 2); ctx.fill(); }
+    ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2);
+    ctx.fillStyle = rgba(deep, 0.92); ctx.fill();
+    ctx.fillStyle = core; ctx.fill();
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.9, 0, Math.PI * 2);
+    ctx.strokeStyle = rgba(tint, lit ? 1 : 0.8); ctx.lineWidth = selected ? 2 : lit ? 1.5 : 1.1; ctx.stroke();
+    if (radius >= 6) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.56, 0, Math.PI * 2);
+      ctx.strokeStyle = rgba(tint, lit ? 0.5 : 0.36); ctx.lineWidth = 0.8; ctx.stroke();
+      if (shapes) { ctx.beginPath(); shapes.sigilMarks(ctx, p.x, p.y, radius); ctx.fillStyle = rgba(accent, lit ? 1 : 0.88); ctx.fill(); }
+    }
+    if (!glyph) {
+      ctx.beginPath();
+      if (shapes) shapes.sigilSeal(ctx, p.x, p.y, radius); else ctx.arc(p.x, p.y, Math.max(1.2, radius * 0.24), 0, Math.PI * 2);
+      ctx.fillStyle = rgba(tint, lit ? 1 : 0.9); ctx.fill();
+    }
+    return paints;
+  }
+
   function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1 } = {}) {
     ctx.save();
     ctx.globalAlpha = (node._fade ?? 1) * alpha;
@@ -3608,6 +3863,22 @@
       ctx.fillStyle = gem; ctx.fill(); ctx.strokeStyle = rgba(tint, active || selected ? 0.95 : 0.6); ctx.lineWidth = selected ? 1.7 : 1; ctx.stroke();
       ctx.beginPath(); for (const point of points.filter((_, index) => index % 2 === 0)) { ctx.moveTo(p.x, p.y); ctx.lineTo(point.x, point.y); }
       ctx.strokeStyle = rgba(tint, 0.35); ctx.lineWidth = 0.7; ctx.stroke();
+      ctx.restore(); return;
+    }
+    if (style === "singularity" || style === "prism" || style === "sigil") {
+      const lit = active || selected;
+      const monogram = node.kind === "assistant" || node.kind === "music";
+      // A node that wears a glyph (the hub's monogram, an agent's role) gets
+      // a dark body to wear it on: the core, the gem's table, the seal.
+      const glyph = monogram || node.kind === "agent" && radius >= 4.5;
+      const paints = style === "singularity" ? drawSingularity(ctx, p, radius, tint, lit, selected)
+        : style === "prism" ? drawPrism(ctx, p, radius, tint, lit, active, selected, glyph)
+          : drawSigil(ctx, p, radius, tint, lit, selected, glyph);
+      if (monogram) {
+        ctx.font = '600 10px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillStyle = rgba(paints.ink, 1);
+        ctx.fillText(node.kind === "music" ? "♪" : "M", p.x, p.y + 0.5);
+      }
       ctx.restore(); return;
     }
     if (style === "minimal") {
@@ -3662,7 +3933,10 @@
     ctx.save();
     ctx.globalAlpha = (node._fade ?? 1) * Math.max(0.35, emphasis(node));
     const hex = agentHex(node.role);
-    window.MefiTree?.agentGlyph?.(ctx, node.role, p.x, p.y, radius * 0.7, window.MefiTree?.glyphInk?.(hex) ?? "#0b1016");
+    // On the Void collection's near-black bodies the glyph takes a light ink
+    // and sits inside the core.
+    const premiumInk = premiumGlyphInk(ctx, tint);
+    window.MefiTree?.agentGlyph?.(ctx, node.role, p.x, p.y, radius * (premiumInk ? 0.56 : 0.7), premiumInk ?? window.MefiTree?.glyphInk?.(hex) ?? "#0b1016");
     const ring = radius + 3.5;
     if (node.status === "running" || node.builder) {
       const phase = still ? 0 : time / 380;
@@ -5710,7 +5984,7 @@
     if (!node) return;
     // Every focusNode call is a user decision (a click, a search hit, keyboard
     // navigation, a card link) — the camera belongs to them from here on.
-    setCamMode("free", { quiet: true });
+    setCamMode("free", { quiet: true, transient: true });
     focusOn(node);
     if (zoom) glideZoom(Math.max(state.zoomTarget ?? state.zoom, zoom));
   }
@@ -5830,7 +6104,7 @@
       const seen = state.agentSeq[node.role] ?? { pulse: motion.pulseSeq, spark: motion.sparkSeq, done: motion.doneSeq };
       if (motion.pulseSeq > seen.pulse && target) {
         const tint = agentHex(node.role);
-        state.pulses.push({ from: node, to: target, start: now, duration: 320, color: tint, glow: tint, small: true, wave: true });
+        state.pulses.push({ from: node, to: target, start: now, duration: 520, color: tint, glow: tint, small: true, wave: true });
         if (state.pulses.length > 24) state.pulses.shift();
       }
       if (motion.sparkSeq > seen.spark && travelling && !noMotion()) spawnParticles(node, 3, { gold: true, tint: agentRgb(node.role) });
@@ -5960,6 +6234,12 @@
   }
 
   // Animation state belongs to the scheduler, independent of graph styling.
+  // Command draws at 30 fps at rest and at the display's rate (capped near
+  // 60-75 fps) while the camera, a zoom or a drag is moving, as long as the
+  // measured frame cost leaves room for it.
+  const AMBIENT_FRAME_MS = 30;
+  const HOT_FRAME_MS = 12;
+  const HOT_FRAME_BUDGET_MS = 9;
   let lastFrameAt = 0;
   let frameRequest = 0;
   function frame(time) {
@@ -5972,10 +6252,13 @@
     // 60 Hz): vsync timestamps jitter by a millisecond or two, and a 32.9 ms
     // tick that missed a 33 ms gate cost a whole extra tick — a 50 ms hitch
     // that read as judder in every camera glide.
-    if (!document.hidden && time - lastFrameAt >= 30) {
+    const hot = state.motionHot && Number.isFinite(state.frameCost) && state.frameCost < HOT_FRAME_BUDGET_MS;
+    if (!document.hidden && time - lastFrameAt >= (hot ? HOT_FRAME_MS : AMBIENT_FRAME_MS)) {
       lastFrameAt = time;
       const profiler = globalThis.window?.MefiProfiler;
       const span = profiler?.begin("command.frame");
+      const clock = globalThis.performance;
+      const startedAt = clock?.now?.();
       try {
         drawFrame(time);
       } catch (error) {
@@ -5987,6 +6270,12 @@
         }
       } finally {
         profiler?.end(span);
+        // A smoothed cost of the draw itself decides whether the hot cadence
+        // can be afforded; one slow frame does not flip it.
+        if (Number.isFinite(startedAt)) {
+          const cost = clock.now() - startedAt;
+          state.frameCost = Number.isFinite(state.frameCost) ? state.frameCost * 0.9 + cost * 0.1 : cost;
+        }
       }
     }
     frameRequest = requestAnimationFrame(frame);
@@ -6800,7 +7089,7 @@
     return 7;
   }
 
-  function drawCallouts(projected, { near, far = near, focusIds = null } = {}) {
+  function drawCallouts(projected, { near, far = near, focusIds = null, dt = 0 } = {}) {
     state.calloutRects = [];
     for (const { node } of projected) { node._callout = null; node._cardRect = null; }
     if (state.labels === "none" || !near) return;
@@ -6833,7 +7122,18 @@
       if (!layout) continue;
       const dimmed = focusIds ? !focusIds.has(node.id) : false;
       const lifted = state.hoverCallout === node.id;
-      drawCallout(dimmed && far !== near ? far : near, node, layout, content, size, { lifted, dimmed, still });
+      // The card's lift eases like the orb's (about 90 ms in, 160 ms out);
+      // with no frame time, or reduced motion, it lands at once.
+      const lifts = (state.cardLift ??= new Map());
+      const want = lifted ? 1 : 0;
+      const from = lifts.get(node.id) ?? 0;
+      let lift = want;
+      if (!still && dt > 0) {
+        lift = from + (want - from) * (1 - Math.exp(-dt / (want > from ? 0.09 : 0.16)));
+        if (Math.abs(lift - want) < 0.01) lift = want;
+      }
+      if (lift > 0) lifts.set(node.id, lift); else lifts.delete(node.id);
+      drawCallout(dimmed && far !== near ? far : near, node, layout, content, size, { lifted, lift, dimmed, still });
       const hit = { x: Math.min(layout.rect.x, layout.sx) - 8, y: Math.min(layout.rect.y, layout.sy) - 8 };
       hit.w = Math.max(layout.rect.x + layout.rect.w, layout.sx) + 8 - hit.x;
       hit.h = Math.max(layout.rect.y + layout.rect.h, layout.sy) + 8 - hit.y;
@@ -6865,39 +7165,44 @@
   // line under it, the bubble hanging below. Hover lifts the card a touch and
   // glows it; outside a focused branch it paints dimmer (and on the blurred
   // layer).
-  function drawCallout(ctx, node, layout, content, size, { lifted = false, dimmed = false, still = true } = {}) {
+  function drawCallout(ctx, node, layout, content, size, { lifted = false, lift = lifted ? 1 : 0, dimmed = false, still = true } = {}) {
     const tint = node.kind === "agent" ? agentRgb(node.role) : colorOf(node);
-    const styleChoice = state.cardStyle === "auto" ? (lifted || state.selected?.id === node.id || content.mark === "live" ? "filled" : "outline") : state.cardStyle;
-    // At rest a card sits back a little; the one the user is on comes forward.
-    const forward = lifted || state.selected?.id === node.id;
-    const alpha = (node._fade ?? 1) * (dimmed ? 0.5 : forward ? 1 : 0.86) * Math.max(0.4, emphasis(node));
+    const selected = state.selected?.id === node.id;
+    const styleChoice = state.cardStyle === "auto" ? (lifted || selected || content.mark === "live" ? "filled" : "outline") : state.cardStyle;
+    // At rest a card sits back a little; the one the user is on comes forward,
+    // easing with the hover (lift) rather than switching in one frame.
+    const forwardMix = selected ? 1 : Math.max(0, Math.min(1, lift));
+    const baseFilled = state.cardStyle === "auto" ? selected || content.mark === "live" : state.cardStyle === "filled";
+    const fillMix = baseFilled ? 1 : state.cardStyle === "auto" ? forwardMix : 0;
+    const alpha = (node._fade ?? 1) * (dimmed ? 0.5 : 0.86 + 0.14 * forwardMix) * Math.max(0.4, emphasis(node));
     const paper = state.canvasPalette?.background ?? "#101620";
     const { sx, sy, ex, ey, side, rect, bubble, w } = layout;
     const plateH = layout.plateH ?? CALLOUT_TITLE_H + 3 + (size.subH ?? 0);
     const filled = styleChoice === "filled";
     ctx.save();
     ctx.globalAlpha = alpha;
-    if (lifted && !still) {
-      ctx.translate(ex, ey); ctx.scale(1.06, 1.06); ctx.translate(-ex, -ey);
-      ctx.shadowColor = rgba(tint, 0.35); ctx.shadowBlur = 14;
+    if (lift > 0.001 && !still) {
+      const s = 1 + 0.06 * lift;
+      ctx.translate(ex, ey); ctx.scale(s, s); ctx.translate(-ex, -ey);
+      ctx.shadowColor = rgba(tint, 0.35 * lift); ctx.shadowBlur = 14 * lift;
     }
     // The plate: paper first so the sky never shows through the words, then
     // a wash of the node's tint, then a hairline in it.
     const plate = () => { ctx.beginPath(); ctx.roundRect(rect.x, rect.y, w, plateH, [7, 7, 0, 0]); };
     plate();
-    ctx.fillStyle = paper; ctx.globalAlpha = alpha * (filled ? 0.94 : 0.78); ctx.fill(); ctx.globalAlpha = alpha;
-    ctx.fillStyle = rgba(tint, filled ? 0.14 : 0.06); ctx.fill();
+    ctx.fillStyle = paper; ctx.globalAlpha = alpha * (0.78 + 0.16 * fillMix); ctx.fill(); ctx.globalAlpha = alpha;
+    ctx.fillStyle = rgba(tint, 0.06 + 0.08 * fillMix); ctx.fill();
     ctx.shadowBlur = 0;
     plate();
-    ctx.strokeStyle = rgba(tint, forward ? 0.6 : filled ? 0.45 : 0.32); ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = rgba(tint, Math.max(0.32 + 0.13 * fillMix, 0.6 * forwardMix)); ctx.lineWidth = 1; ctx.stroke();
     // The leader from the bar's near corner down to the orb, with its rim dot.
-    ctx.strokeStyle = rgba(tint, forward ? 0.8 : 0.55); ctx.lineWidth = 1; ctx.lineCap = "round";
+    ctx.strokeStyle = rgba(tint, 0.55 + 0.25 * forwardMix); ctx.lineWidth = 1; ctx.lineCap = "round";
     ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
     ctx.fillStyle = rgba(tint, 0.9); ctx.beginPath(); ctx.arc(sx, sy, 1.8, 0, Math.PI * 2); ctx.fill();
     // The bar along the plate's bottom edge.
     const barEnd = ex + side * w;
-    ctx.lineWidth = forward ? 2 : 1.5;
-    ctx.strokeStyle = rgba(tint, forward ? 0.95 : 0.75);
+    ctx.lineWidth = 1.5 + 0.5 * forwardMix;
+    ctx.strokeStyle = rgba(tint, 0.75 + 0.2 * forwardMix);
     if (node.kind === "assistant") {
       ctx.lineWidth = 1.2;
       ctx.beginPath(); ctx.moveTo(ex, ey - 1.5); ctx.lineTo(barEnd, ey - 1.5); ctx.moveTo(ex, ey + 1.5); ctx.lineTo(barEnd, ey + 1.5); ctx.stroke();
@@ -7032,7 +7337,7 @@
     if (!state.focus) state.focusRestore = { orbit: state.orbit };
     state.focus = { id: node.id, kind: node.kind, since: Date.now() };
     selectNode(node);
-    setCamMode("free", { quiet: true });
+    setCamMode("free", { quiet: true, transient: true });
     focusOn(node);
     glideZoom(FOCUS_ZOOM[node.kind] ?? 1.9);
     if (state.orbit === "paused" && state.view !== "2d" && !noMotion()) setOrbit("auto", { quiet: true });
@@ -7085,7 +7390,15 @@
   }
 
   function drawFrame(time) {
-    if (!state.lastFrame) state.lastFrame = time;
+    // One clock per frame: how long since the last draw, clamped to 50 ms, as
+    // a hidden tab, an open sheet or a held picker pauses the loop and
+    // resuming must not leap by the whole pause. The eases were tuned per
+    // 30 fps frame; perSec() turns one into the fraction to cover for the time
+    // that really passed, so a glide takes the same wall-clock time at any
+    // frame rate (exact at 30 Hz) and a dropped frame no longer slows it down.
+    const perSec = (perFrame30, seconds) => 1 - Math.pow(1 - perFrame30, seconds * 30);
+    const dt = Math.min(0.05, Math.max(0, (time - (state.lastFrame ?? time)) / 1000));
+    state.lastFrame = time;
     const still = noMotion();
     const measuredEnergy = audioEnergy();
     const backgroundLinked = !still && state.reactive && Boolean(state.inputStream || state.localAudio) && state.audioEffects?.background === true && state.audioResponse > 0;
@@ -7102,34 +7415,60 @@
     const graphFrameKey = `${graphArea.x},${graphArea.y},${graphArea.w},${graphArea.h}`;
     if (state.graphFrameKey !== graphFrameKey) {
       state.graphFrameKey = graphFrameKey;
-      if (state.camMode === "orbit" || state.camMode === "follow") autoFit();
+      if (state.camMode === "orbit" || state.camMode === "follow") autoFit({ ease: true });
     }
-    const centerFlight = stepCenter(graphArea, still);
+    // A refit eases in about a fifth of a second; Follow keeps the visible
+    // scale while it does, exactly as the instant fit would.
+    if (Number.isFinite(state.fitTarget)) {
+      const before = state.fit;
+      const settle = still || Math.abs(state.fitTarget - state.fit) < 0.0015;
+      state.fit = settle ? state.fitTarget : state.fit + (state.fitTarget - state.fit) * perSec(0.18, dt);
+      if (state.camMode === "follow") state.zoom = Math.max(0.45, Math.min(2.6, state.zoom * before / state.fit));
+      if (settle) state.fitTarget = null;
+    }
+    const cameraEase = perSec(CAMERA_EASE, dt);
+    const centerFlight = stepCenter(graphArea, still, cameraEase);
     updateFollowCamera(Date.now());
     const target = orbitTarget(energy);
-    state.orbitVel += (target - state.orbitVel) * ORBIT_EASE;
+    state.orbitVel += (target - state.orbitVel) * perSec(ORBIT_EASE, dt);
     if (still) state.orbitVel = 0;
-    state.angle += state.orbitVel;
-    if (still) {
+    // orbitVel is radians per 30 fps frame, as tuned
+    state.angle += state.orbitVel * dt * 30;
+    // The camera glides on a critically damped spring (CAMERA_SMOOTH): it
+    // eases out of rest instead of lurching at full speed, settles in about
+    // 0.9 s instead of crawling for two, and a click that retargets mid-glide
+    // keeps the velocity it has. A drag moves the camera directly (x = tx)
+    // and leaves no velocity behind.
+    const camVel = (state.camVel ??= { x: 0, y: 0, z: 0, zoom: 0 });
+    if (still || state.panning) {
       state.camera.x = state.camera.tx;
       state.camera.y = state.camera.ty;
       state.camera.z = state.camera.tz;
+      camVel.x = 0; camVel.y = 0; camVel.z = 0;
     } else {
-      state.camera.x += (state.camera.tx - state.camera.x) * CAMERA_EASE;
-      state.camera.y += (state.camera.ty - state.camera.y) * CAMERA_EASE;
-      state.camera.z += (state.camera.tz - state.camera.z) * CAMERA_EASE;
+      state.camera.x = smoothDamp(state.camera.x, state.camera.tx, camVel, "x", CAMERA_SMOOTH, dt);
+      state.camera.y = smoothDamp(state.camera.y, state.camera.ty, camVel, "y", CAMERA_SMOOTH, dt);
+      state.camera.z = smoothDamp(state.camera.z, state.camera.tz, camVel, "z", CAMERA_SMOOTH, dt);
     }
-    if (state.camMode === "follow" && state.followZoomTarget != null && !still) state.zoom += (state.followZoomTarget - state.zoom) * 0.065;
+    if (state.camMode === "follow" && state.followZoomTarget != null && !still) state.zoom += (state.followZoomTarget - state.zoom) * perSec(0.065, dt);
     if (state.zoomTarget != null) {
       // The glide a click (or a search hit) asked for: the same ease as the
       // camera, so scale and pan settle together; snap and stop once there.
-      if (still || Math.abs(state.zoomTarget - state.zoom) < 0.003) setZoom(state.zoomTarget);
-      else state.zoom += (state.zoomTarget - state.zoom) * CAMERA_EASE;
-    }
+      if (still || Math.abs(state.zoomTarget - state.zoom) < 0.003) {
+        setZoom(state.zoomTarget);
+        camVel.zoom = 0;
+      } else {
+        // In log space, so doubling and halving the scale take the same time;
+        // the same spring as the pan, so scale and pan settle together.
+        state.zoom = Math.exp(smoothDamp(Math.log(state.zoom), Math.log(state.zoomTarget), camVel, "zoom", CAMERA_SMOOTH, dt));
+      }
+    } else camVel.zoom = 0;
     // Callouts keep their spots while the camera is in flight (placeCallout):
     // "in flight" is a pan still worth more than a few pixels, or a zoom glide.
     const flightPx = Math.hypot(state.camera.tx - state.camera.x, state.camera.ty - state.camera.y, state.camera.tz - state.camera.z) * state.fit * state.zoom * (state.overviewScale ?? 1);
     state.cameraMoving = !still && (flightPx > 8 || centerFlight > 8 || (state.zoomTarget != null && Math.abs(state.zoomTarget - state.zoom) > 0.03));
+    // What earns the display's full rate: a glide, a zoom, or a hand on the tree.
+    state.motionHot = !still && (state.cameraMoving || flightPx > 0.5 || centerFlight > 0.5 || state.zoomTarget != null || Number.isFinite(state.fitTarget) || Boolean(state.morph || state.lifeHot || state.panning || state.rotating));
 
     const { ctx } = el;
     // Two layers: the sky, and while a node is focused or a card hovered
@@ -7162,6 +7501,8 @@
     const runningJobs = autopilotJobs(state.assistant);
     for (const { node } of projected) {
       node._orbitTrail = null; node._extraGlow = false;
+      const wantLift = state.hoverNode === node || state.selected?.id === node.id ? 1 : 0;
+      node._lift = easeLift(node._lift, wantLift, dt, still);
       node._audioResponse = nodeAudioResponse(node, visualMusic, audioNodes, state.audioResponse);
       node._bubble = null; node._bubblePaint = null;
       const ids = [node.id, node.sessionId, node.task?.id, node.workTask?.id].filter(Boolean).map(String);
@@ -7173,12 +7514,61 @@
       }
     }
     layoutProjectedGraph(projected, graphArea, state.camMode, time, still);
+    if (state.morph) {
+      const elapsed = (globalThis.performance?.now?.() ?? Date.now()) - state.morph.at;
+      const t = still ? 1 : Math.max(0, Math.min(1, elapsed / state.morph.ms));
+      if (t < 1) {
+        const e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        for (const entry of projected) {
+          const from = state.morph.from.get(entry.node.id);
+          if (from) entry.p = { ...entry.p, x: from.x + (entry.p.x - from.x) * e, y: from.y + (entry.p.y - from.y) * e };
+        }
+      } else state.morph = null;
+    }
+    // Life cycle on screen: fresh work grows out of its host and finished
+    // work flies home and sinks in. stepFx eases scale and fade, but saved
+    // screen anchors win over its world-space travel, so the travel is
+    // blended here, between the painted points (builders keep returnFrom).
+    let lifeHot = false;
+    if (state.fx.size && !still) {
+      const nowFx = Date.now();
+      const pointOf = new Map(projected.map(({ node, p }) => [node.id, p]));
+      for (const entry of projected) {
+        const fx = state.fx.get(entry.node.id);
+        if (!fx || fx.builder) continue;
+        const hostP = pointOf.get(absorbHost(fx)?.id);
+        if (!hostP) continue;
+        if (fx.absorbAt != null) {
+          const t = Math.min(1, Math.max(0, (nowFx - fx.absorbAt) / NODE_ABSORB_MS));
+          fx.fromScreen ??= { x: entry.p.x, y: entry.p.y };
+          const e = smoothStep(t);
+          entry.p = { ...entry.p, x: fx.fromScreen.x + (hostP.x - fx.fromScreen.x) * e, y: fx.fromScreen.y + (hostP.y - fx.fromScreen.y) * e };
+          lifeHot = true;
+        } else if (fx.bornAt != null && nowFx - fx.bornAt >= 0 && nowFx - fx.bornAt < NODE_GROW_MS) {
+          const e = easeOut((nowFx - fx.bornAt) / NODE_GROW_MS);
+          entry.p = { ...entry.p, x: hostP.x + (entry.p.x - hostP.x) * e, y: hostP.y + (entry.p.y - hostP.y) * e };
+          lifeHot = true;
+        }
+      }
+    }
+    state.lifeHot = lifeHot;
     const screenPoints = new Map(projected.map(({ node, p }) => [node.id, p]));
     computeBranch();
     // A focused node that left the graph releases the focus; otherwise the
     // sharp set decides which layer each element paints on this frame.
     if (state.focus && !state.nodes.some((entry) => entry.id === state.focus.id)) exitFocus();
-    const focusIds = splitIds();
+    // Racking focus out: the far canvas un-blurs over its CSS transition
+    // (260 ms). The nodes that were on it stay there until it has, then come
+    // back to the sharp layer, rather than all snapping sharp in one frame.
+    // The blur class itself follows the live set, so the un-blur starts now.
+    const liveFocusIds = splitIds();
+    let focusIds = liveFocusIds;
+    if (liveFocusIds || still) state.farHold = liveFocusIds ? { ids: liveFocusIds, until: 0 } : null;
+    else if (state.farHold) {
+      state.farHold.until ||= Date.now() + 280;
+      if (Date.now() < state.farHold.until) focusIds = state.farHold.ids;
+      else state.farHold = null;
+    }
     state.focusIds = focusIds;
     const layerFor = (node) => (focusIds && far !== ctx && !focusIds.has(node.id) ? far : ctx);
 
@@ -7232,12 +7622,14 @@
 
     // particles: vaporized external work
     state.particles = state.particles.filter((particle) => particle.life > 0);
-    const dt = still ? 0 : 0.016;
+    // Particles were tuned at 0.016 of their velocity per 30 fps frame.
+    const frames30 = still ? 0 : dt * 30;
+    const step = 0.016 * frames30;
     for (const particle of state.particles) {
-      particle.x += particle.vx * dt;
-      particle.y += particle.vy * dt;
-      particle.vy += 6 * dt;
-      particle.life -= still ? 0 : particle.decay;
+      particle.x += particle.vx * step;
+      particle.y += particle.vy * step;
+      particle.vy += 6 * step;
+      particle.life -= particle.decay * frames30;
       const life = Math.max(0, particle.life);
       ctx.beginPath();
       ctx.arc(particle.x, particle.y, Math.max(0, particle.size * life), 0, Math.PI * 2);
@@ -7329,12 +7721,12 @@
     // bubbles and the compact labels stepping around them
     stepDeferred(Date.now());
     stepSpeech(Date.now());
-    drawCallouts(projected, { near: ctx, far, focusIds });
+    drawCallouts(projected, { near: ctx, far, focusIds, dt });
     drawSpeech(projected);
     drawLabels(projected);
     ctx.restore();
     if (far !== ctx) far.restore();
-    syncFarLayer(focusIds);
+    syncFarLayer(liveFocusIds);
   }
 
   // ---------- labels ----------
@@ -7859,6 +8251,11 @@
     }
     if (key !== state.tipNode) {
       state.tipNode = key;
+      // The pointer is in canvas space (the canvas is fixed at inset 0) but the
+      // tip lives in #idle-hud, which the app rail shifts right: measure the
+      // HUD's origin once per tip, not on every move.
+      const hudBox = el.hud?.getBoundingClientRect?.();
+      state.tipOrigin = hudBox ? { left: hudBox.left, top: hudBox.top, width: hudBox.width } : null;
       const title = el.tip.querySelector(".tip-title");
       const meta = el.tip.querySelector(".tip-meta");
       if (state.hoverSpeech && !state.hoverBubble && !state.hoverNode) {
@@ -7878,8 +8275,9 @@
       }
     }
     el.tip.hidden = false;
-    el.tip.style.setProperty("--x", `${Math.min(el.width - 260, px + 14)}px`);
-    el.tip.style.setProperty("--y", `${Math.max(12, py - 12)}px`);
+    const origin = state.tipOrigin ?? { left: 0, top: 0, width: el.width };
+    el.tip.style.setProperty("--x", `${Math.max(8, Math.min(origin.width - 260, px - origin.left + 14))}px`);
+    el.tip.style.setProperty("--y", `${Math.max(12, py - origin.top - 12)}px`);
   }
 
   function hideTip() {
@@ -8372,13 +8770,16 @@
     const threadTop = oldThread?.scrollTop ?? 0;
     const threadPinned = !oldThread || oldThread.scrollTop + oldThread.clientHeight >= oldThread.scrollHeight - 28;
     const cardTop = state.cardScrollId === selected?.id ? host.scrollTop : 0;
-    host.textContent = "";
     el.infoParallel = null;
     if (!selected) {
+      // The floating card fades out (styles.css presence) with what it last
+      // showed; the next selection rebuilds it. The rail panel empties now.
+      if (host === el.nodePanel) host.textContent = "";
       showHost(false);
       state.cardScrollId = null;
       return;
     }
+    host.textContent = "";
     showHost(true);
     const node = selected.node;
     const info = host;
@@ -8778,7 +9179,7 @@
       }
 
       action("Open Explorer", () => nav("explorer", { assistant: true }), { primary: true, title: "The full thread in the Session explorer (E)" });
-      action(full?.status === "paused" ? "Resume" : "Pause", () => assistantControl(full?.status === "paused" ? "resume" : "pause", "control"), {
+      action(full?.status === "paused" ? "Resume" : "Pause", () => assistantControl(full?.status === "paused" ? "start-work" : "pause", "control"), {
         title: "Pause or resume the assistant service",
       });
       action("Tidy", () => assistantControl("tidy", "tidy"), { title: "Archive done tasks, prune ideas, clear resolved requests" });
@@ -9111,14 +9512,16 @@
       const running = state.orbit !== "paused";
       el.orbitBtn.disabled = flat;
       el.orbitBtn.setAttribute("aria-pressed", running && !flat ? "true" : "false");
-      el.orbitBtn.title = flat ? "Orbit (3D view only)" : running ? "Orbit on · Space pauses" : "Orbit paused · Space resumes";
+      el.orbitBtn.title = flat ? "Spin (3D view only)" : running ? "Spin on · Space pauses" : "Spin paused · Space resumes";
     }
+    // The camera mode "orbit" reads as Overview on screen: Spin is the only
+    // control that turns the tree, so the toolbar never shows two "Orbit"s.
     if (el.camOrbitBtn) {
       const on = state.camMode === "orbit";
       el.camOrbitBtn.setAttribute("aria-pressed", on ? "true" : "false");
       el.camOrbitBtn.title = on
-        ? "Camera: orbit — the whole tree stays framed · click for a free camera (C cycles orbit / follow / free)"
-        : "Camera: orbit — keep the whole tree framed (C)";
+        ? "Camera: overview — the whole tree stays framed · click for a free camera (C cycles overview / follow / free)"
+        : "Camera: overview — keep the whole tree framed (C)";
     }
     if (el.camFollowBtn) {
       const on = state.camMode === "follow";
@@ -9132,13 +9535,17 @@
       const viewLabel = el.viewBtn.querySelector(".label");
       if (viewLabel) viewLabel.textContent = state.view === "2d" ? "2D" : "3D";
       el.viewBtn.title = state.view === "2d" ? "View: flat 2D map (V toggles 3D)" : "View: 3D orbit (V toggles 2D)";
+      el.viewBtn.setAttribute("aria-label", state.view === "2d" ? "Map: flat 2D" : "Map: 3D orbit");
     }
     if (el.labelsBtn) {
       el.labelsBtn.dataset.labels = state.labels;
       const label = el.labelsBtn.querySelector(".label");
       if (label) label.textContent = state.labels;
       el.labelsBtn.title = state.labels === "auto" ? "Auto labels: current work and inspected nodes · hover or search for more (L cycles labels)" : `Node labels: ${state.labels} (L cycles auto / all / none)`;
+      el.labelsBtn.setAttribute("aria-label", `Node labels: ${state.labels}`);
     }
+    // Map and Labels sit one menu away, so View ▾ carries their state.
+    if (el.viewMenuBtn) el.viewMenuBtn.title = `View: ${state.view === "2d" ? "flat 2D map" : "3D orbit"} · labels ${state.labels} · zoom`;
   }
 
   function setOrbit(mode, options = {}) {
@@ -9156,9 +9563,15 @@
               : "auto";
     const changed = next !== state.orbit;
     state.orbit = next;
+    // Focus borrows the orbit quietly; only the owner's own switch is saved,
+    // and it is also the setting that leaving a focused node goes back to.
+    if (!options.quiet) {
+      writeStore("mefiStudio.cmdOrbit", next);
+      if (state.focusRestore) state.focusRestore.orbit = next;
+    }
     syncViewControls();
     renderHint();
-    if (changed && !options.quiet) window.MefiToast?.(next === "paused" ? "orbit paused" : "orbit resumed", "info");
+    if (changed && !options.quiet) window.MefiToast?.(next === "paused" ? "spin paused" : "spin resumed", "info");
   }
 
   // Camera autopilot. Orbit refits the whole constellation (the graph rebuild's
@@ -9190,14 +9603,16 @@
       }
     }
     // Quiet + unchanged (a wheel tick in free mode, say) skips the DOM churn;
-    // an explicit mode click always re-syncs and re-applies.
+    // an explicit mode click always re-syncs and re-applies. A transient step
+    // into free (a wheel zoom, a drag, a node click) lasts for this visit
+    // only: the next launch starts from the mode the owner last picked.
     if (!options.quiet || changed) {
-      if (changed) writeStore("mefiStudio.cmdCam", next);
+      if (changed && !options.transient) writeStore("mefiStudio.cmdCam", next);
       syncViewControls();
       renderHint();
       if (changed && !options.quiet) {
         window.MefiToast?.(
-          next === "orbit" ? "camera: orbit — the whole tree stays in frame" : next === "follow" ? "camera: follow — tracking the current work" : "camera: free",
+          next === "orbit" ? "camera: overview — the whole tree stays in frame" : next === "follow" ? "camera: follow — tracking the current work" : "camera: free",
           "info"
         );
       }
@@ -9211,7 +9626,7 @@
 
   // A zoom the user asked for (wheel, buttons, keys): the mode steps aside.
   function userZoom(value) {
-    setCamMode("free", { quiet: true });
+    setCamMode("free", { quiet: true, transient: true });
     setZoom(value);
   }
 
@@ -9240,28 +9655,141 @@
     if (!state.settingsPreview) window.MefiToast?.(next === "2d" ? "2D map view" : "3D orbit view", "info");
   }
 
+  // The toolbar's popovers hang from the button that opened them: under the
+  // toolbar strip, right edges lined up with the button, inside the HUD (which
+  // starts at the app menu's edge). The top bar runs to two rows below 1650px
+  // and three below 760px, so the fixed top: 70px this replaces landed on the
+  // composer there. The inline styles win over the .pop defaults.
+  function placePop(pop, anchor) {
+    if (!pop || !anchor || !el.hud) return;
+    const button = anchor.getBoundingClientRect();
+    if (!button.width && !button.height) return;
+    const strip = anchor.closest?.(".cmd-tools")?.getBoundingClientRect?.() ?? button;
+    const hud = el.hud.getBoundingClientRect();
+    const edge = 12;
+    const top = Math.round(Math.max(button.bottom, strip.bottom) - hud.top + 6);
+    const widest = Math.max(edge, hud.width - pop.offsetWidth - edge);
+    pop.style.top = `${top}px`;
+    pop.style.right = `${Math.min(widest, Math.max(edge, Math.round(hud.right - button.right)))}px`;
+    pop.style.maxHeight = `${Math.max(160, Math.round(hud.height - top - edge))}px`;
+  }
+
+  // Whether a HUD list can be seen: its own hidden flag says too little once
+  // a breakpoint hides its corner (Legend and Usage go at 1100px and below).
+  function shownOnScreen(node) {
+    if (!node || node.hidden !== false) return false;
+    return typeof node.checkVisibility === "function" ? node.checkVisibility() : (node.getClientRects?.().length ?? 0) > 0;
+  }
+
+  // The Usage breakdown is tracker.js's; Command only asks it to close, and
+  // only while it is on screen. Says whether there was one to close.
+  function closeUsagePop() {
+    if (!shownOnScreen(el.usagePop) || typeof window.MefiUsageTracker?.setOpen !== "function") return false;
+    window.MefiUsageTracker.setOpen(false);
+    return true;
+  }
+
   function onAmbienceOutside(event) {
     if (el.pop?.contains(event.target) || el.ambienceBtn?.contains(event.target)) return;
     closeAmbience();
   }
 
-  function toggleAmbience() {
+  function toggleAmbience(event) {
     if (!el.pop) return;
     if (el.pop.hidden) {
+      closeViewMenu();
+      closeUsagePop();
       el.pop.hidden = false;
       el.ambienceBtn?.setAttribute("aria-expanded", "true");
+      placePop(el.pop, el.ambienceBtn);
       document.addEventListener("mousedown", onAmbienceOutside);
+      // Opened from the keyboard, focus steps into the dialog itself so the
+      // next Tab reaches its first row instead of Leave. Never onto a select:
+      // a focused select holds the frame loop (holdForPicker).
+      if (event?.detail === 0) el.pop.focus?.({ preventScroll: true });
       bumpHud();
     } else {
       closeAmbience();
     }
   }
 
-  function closeAmbience() {
+  function closeAmbience({ focus = false } = {}) {
     if (!el.pop) return;
     if (!el.pop.hidden) document.removeEventListener("mousedown", onAmbienceOutside);
     el.pop.hidden = true;
     el.ambienceBtn?.setAttribute("aria-expanded", "false");
+    if (focus) el.ambienceBtn?.focus?.({ preventScroll: true });
+  }
+
+  // View ▾ holds Map (2D/3D), Labels and zoom. A click, Enter or Space opens
+  // it onto its first item; arrows and Home/End move, Esc closes it back onto
+  // its button and Tab closes it on the way past. It stays open under its own
+  // items (zoom twice, cycle the labels). Closed, it owns no key at all, so
+  // every single-key shortcut still reaches the canvas.
+  function viewMenuItems() {
+    return [...(el.viewPop?.querySelectorAll?.("[role='menuitem']") ?? [])].filter((item) => !item.disabled);
+  }
+
+  function onViewMenuOutside(event) {
+    if (el.viewPop?.contains(event.target) || el.viewMenuBtn?.contains(event.target)) return;
+    closeViewMenu();
+  }
+
+  function openViewMenu() {
+    if (!el.viewPop || el.viewPop.hidden === false) return;
+    closeAmbience();
+    closeUsagePop();
+    el.viewPop.hidden = false;
+    el.viewMenuBtn?.setAttribute("aria-expanded", "true");
+    placePop(el.viewPop, el.viewMenuBtn);
+    document.addEventListener("mousedown", onViewMenuOutside);
+    viewMenuItems()[0]?.focus?.({ preventScroll: true });
+    bumpHud();
+  }
+
+  function closeViewMenu({ focus = false } = {}) {
+    if (!el.viewPop) return;
+    if (el.viewPop.hidden === false) document.removeEventListener("mousedown", onViewMenuOutside);
+    el.viewPop.hidden = true;
+    el.viewMenuBtn?.setAttribute("aria-expanded", "false");
+    if (focus) el.viewMenuBtn?.focus?.({ preventScroll: true });
+  }
+
+  function toggleViewMenu() {
+    if (el.viewPop?.hidden === false) closeViewMenu({ focus: true });
+    else openViewMenu();
+  }
+
+  // Keys inside the open menu stop here, so an arrow never also walks the
+  // node tree underneath. Letters still bubble: V and L work from the menu.
+  function viewMenuKey(event) {
+    const items = viewMenuItems();
+    if (!items.length) return;
+    const at = items.indexOf(document.activeElement);
+    let next = null;
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") next = (at + 1) % items.length;
+    else if (event.key === "ArrowUp" || event.key === "ArrowLeft") next = at < 0 ? items.length - 1 : (at - 1 + items.length) % items.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = items.length - 1;
+    else if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeViewMenu({ focus: true });
+      return;
+    } else if (event.key === "Tab") {
+      // Leave from the button, so Tab carries on along the toolbar.
+      closeViewMenu({ focus: true });
+      return;
+    }
+    if (next === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    items[next].focus({ preventScroll: true });
+  }
+
+  function viewMenuFocusOut(event) {
+    const next = event.relatedTarget;
+    if (next && !el.viewPop?.contains(next) && next !== el.viewMenuBtn) closeViewMenu();
   }
 
   // ---------- keyboard ----------
@@ -9409,8 +9937,20 @@
   // One Esc step per press; nav owns focus and the layers above this one.
   function escape() {
     if (!state.active) return false;
+    // What opened last closes first: the toolbar's popovers, then the
+    // corner's Usage and Legend lists (only while they can be seen), and only
+    // then the search, the inspected node and Command itself.
+    if (el.viewPop && el.viewPop.hidden === false) {
+      closeViewMenu({ focus: true });
+      return true;
+    }
     if (el.pop && el.pop.hidden === false) {
-      closeAmbience();
+      closeAmbience({ focus: el.pop.contains(document.activeElement) });
+      return true;
+    }
+    if (closeUsagePop()) return true;
+    if (state.legendOpen && shownOnScreen(el.legendList)) {
+      setLegend(false);
       return true;
     }
     if (state.query) {
@@ -9429,8 +9969,14 @@
       releaseNode();
       return true;
     }
-    exit();
+    leave();
     return true;
+  }
+
+  // Leave Command for the view it was entered from; nav owns that memory.
+  function leave() {
+    if (window.MefiNav?.leaveCommand) window.MefiNav.leaveCommand();
+    else exit();
   }
 
   // ---------- lifecycle ----------
@@ -9440,7 +9986,10 @@
     return Boolean(state.ambientZenEnabled && state.active && !document.hidden && !state.settingsPreview &&
       !document.body.dataset.sheet && (!top || top === "command") &&
       !state.panning && !state.rotating && !state.query &&
-      el.pop?.hidden !== false && (!state.feedMenuOpen || state.feedCollapsed) &&
+      // No open menu or popover fades out from under the pointer: Ambience,
+      // View and the Usage breakdown all hold Zen off while they are up.
+      el.pop?.hidden !== false && el.viewPop?.hidden !== false &&
+      document.getElementById?.("cmd-usage-pop")?.hidden !== false && (!state.feedMenuOpen || state.feedCollapsed) &&
       !Array.from(document.querySelectorAll?.("#idle-hud details[open]") ?? []).some((node) => !node.closest?.("[hidden]")) &&
       !focus?.matches?.("input, textarea, select, [contenteditable='true']"));
   }
@@ -9580,6 +10129,7 @@
     if (el.search) el.search.value = "";
     if (el.searchCount) el.searchCount.textContent = "";
     closeAmbience();
+    closeViewMenu();
     el.canvas.hidden = false;
     if (el.far) el.far.hidden = false;
     el.hud.hidden = false;
@@ -9674,6 +10224,7 @@
     cancelAnimationFrame(frameRequest);
     frameRequest = 0;
     closeAmbience();
+    closeViewMenu();
     hideTip();
     clearSearch();
     el.canvas.hidden = true;
@@ -9774,24 +10325,28 @@
     const dpr = window.devicePixelRatio || 1;
     const width = window.innerWidth;
     const height = window.innerHeight;
-    el.canvas.width = width * dpr;
-    el.canvas.height = height * dpr;
-    el.canvas.style.width = width + "px";
-    el.canvas.style.height = height + "px";
-    el.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (el.far && el.farCtx) {
-      el.far.width = width * dpr;
-      el.far.height = height * dpr;
-      el.far.style.width = width + "px";
-      el.far.style.height = height + "px";
-      el.farCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
+    // Writing a canvas's width clears and reallocates its bitmap (about 13 MB
+    // each at 1080p and 125%), so an entry or a no-op resize keeps both.
+    const bitmapW = Math.round(width * dpr);
+    const bitmapH = Math.round(height * dpr);
+    const fit = (canvas, ctx) => {
+      if (canvas.width !== bitmapW || canvas.height !== bitmapH) {
+        canvas.width = bitmapW;
+        canvas.height = bitmapH;
+      }
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
+      ctx.setTransform(bitmapW / width, 0, 0, bitmapH / height, 0, 0);
+    };
+    fit(el.canvas, el.ctx);
+    if (el.far && el.farCtx) fit(el.far, el.farCtx);
     el.width = width;
     el.height = height;
     state.labelWidths.clear();
     state.speechLineCache?.clear();
     state.hudRectsAt = 0;
     state.graphAreaAt = 0;
+    state.railRestWidth = null;
     state.center = null;
     if (state.camMode === "orbit") autoFit(); // a new window still shows every node
   }
@@ -9853,8 +10408,8 @@
     ["cmd-branch", "Shift F", "Fit the selected branch"],
     ["cmd-home", "Home", "Select the root and fit"],
     ["cmd-zoom", "+ − 0", "Zoom in · out · reset"],
-    ["cmd-orbit", "Space", "Pause / resume the orbit"],
-    ["cmd-cam", "C", "Camera: orbit / follow / free"],
+    ["cmd-orbit", "Space", "Pause / resume the spin"],
+    ["cmd-cam", "C", "Camera: overview / follow / free"],
     ["cmd-view", "V", "Switch 3D orbit / flat 2D map"],
     ["cmd-labels", "L", "Node labels: auto / all / none"],
     ["cmd-search", "S", "Find a session, todo or task"],
@@ -9978,6 +10533,9 @@
     el.autopilotToggle = document.getElementById("idle-autopilot");
     el.ambienceBtn = document.getElementById("idle-ambience");
     el.pop = document.getElementById("idle-ambience-pop");
+    el.viewMenuBtn = document.getElementById("idle-view-menu");
+    el.viewPop = document.getElementById("idle-view-pop");
+    el.usagePop = document.getElementById("cmd-usage-pop");
     el.legendToggle = document.getElementById("idle-legend-toggle");
     el.legend = document.getElementById("cmd-legend");
     el.legendList = document.getElementById("cmd-legend-list");
@@ -10039,7 +10597,7 @@
       el.cardStyle.value = state.cardStyle;
       el.cardStyle.addEventListener("change", () => setCardStyle(el.cardStyle.value));
     }
-    el.exitBtn?.addEventListener("click", exit);
+    el.exitBtn?.addEventListener("click", leave);
     watchPickers();
     el.home?.addEventListener("change", () => {
       window.mefiStudio?.prefsSet?.({ commandHome: el.home.checked });
@@ -10108,8 +10666,24 @@
     el.zoomIn?.addEventListener("click", () => userZoom(state.zoom * 1.12));
     el.labelsBtn?.addEventListener("click", () => setLabels(nextLabels()));
     el.viewBtn?.addEventListener("click", () => setView(state.view === "2d" ? "3d" : "2d"));
-    el.autopilotToggle?.addEventListener("change", () => {
-      window.mefiStudio?.assistantAutopilot?.({ enabled: el.autopilotToggle.checked, execute: el.autopilotToggle.checked });
+    // Busy while the host saves, and back to the confirmed state on failure:
+    // a switch that shows On when nothing was saved would say work is running.
+    el.autopilotToggle?.addEventListener("change", async () => {
+      const toggle = el.autopilotToggle;
+      const wanted = toggle.checked;
+      if (!window.mefiStudio?.assistantAutopilot) return;
+      toggle.disabled = true;
+      toggle.setAttribute("aria-busy", "true");
+      try {
+        const result = await window.mefiStudio.assistantAutopilot({ enabled: wanted, execute: wanted });
+        if (!result || result.ok === false) throw new Error(result?.error ?? "the host did not confirm it");
+      } catch (error) {
+        toggle.checked = !wanted;
+        window.MefiToast?.(`Autopilot not saved · ${String(error?.message ?? error)}`, "bad");
+      } finally {
+        toggle.disabled = false;
+        toggle.removeAttribute("aria-busy");
+      }
     });
     el.chatSend?.addEventListener("click", () => sendAssistant(el.chatInput?.value));
     el.chatInput?.addEventListener("keydown", (event) => {
@@ -10172,6 +10746,16 @@
     setRailTab(state.railTab, { save: false });
     document.getElementById("idle-chat-explorer")?.addEventListener("click", () => nav("explorer", { assistant: true }));
     el.ambienceBtn?.addEventListener("click", toggleAmbience);
+    // A way out of Ambience (Style & sound ↗) closes it on the way.
+    el.pop?.addEventListener("click", (event) => { if (event.target?.closest?.("[data-nav]")) closeAmbience(); });
+    el.viewMenuBtn?.addEventListener("click", toggleViewMenu);
+    el.viewPop?.addEventListener("keydown", viewMenuKey);
+    el.viewPop?.addEventListener("focusout", viewMenuFocusOut);
+    // Both popovers hang from their buttons, so they follow them on a resize.
+    window.addEventListener("resize", () => {
+      if (el.pop?.hidden === false) placePop(el.pop, el.ambienceBtn);
+      if (el.viewPop?.hidden === false) placePop(el.viewPop, el.viewMenuBtn);
+    });
     el.legendToggle?.addEventListener("click", () => setLegend(!state.legendOpen));
     el.feedMenu?.addEventListener("click", () => setFeedMenu(!state.feedMenuOpen));
     el.feedToggle?.addEventListener("click", () => setFeedCollapsed(!state.feedCollapsed));
@@ -10294,7 +10878,7 @@
         if (!state.panning.moved) {
           if (Math.hypot(event.clientX - state.panning.x, event.clientY - state.panning.y) <= 4) return;
           state.panning.moved = true;
-          setCamMode("free", { quiet: true }); // a drag is the user's camera now
+          setCamMode("free", { quiet: true, transient: true }); // a drag is the user's camera now
           hideTip();
         }
         const scale = Math.max(0.01, state.fit * state.zoom * (state.overviewScale ?? 1));
@@ -10357,7 +10941,12 @@
         event.preventDefault();
         state.ambient = false;
         state.settleUntil = Date.now() + SETTLE_MS;
-        userZoom(state.zoom * (event.deltaY > 0 ? 0.92 : 1.08));
+        // Proportional to the wheel's own delta: a mouse notch (100 px, or 3
+        // lines) is the same 8% step as before, while a trackpad's stream of
+        // small deltas zooms in small steps instead of 8% per event.
+        const perUnit = event.deltaMode === 1 ? 0.0278 : event.deltaMode === 2 ? 0.0834 : 0.000834;
+        const delta = Math.max(-240, Math.min(240, Number(event.deltaY) || 0));
+        if (delta) userZoom(state.zoom * Math.exp(-delta * perUnit));
       },
       { passive: false }
     );

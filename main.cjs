@@ -1,5 +1,5 @@
 // Mefi's Studio AI+ — Electron main process (CommonJS: Electron's most reliable main format).
-// Window + IPC for the catalog, the LÖVE launcher, and the optional speed probe.
+// Window, tray and IPC; the service loop, executor and board gateway; settings, keys, updates and headless CLI flags.
 
 // Two helpers this file gained after the shipped builds already knew how to
 // carry them: scripts/updater.mjs holds a live payload until every local
@@ -72,12 +72,23 @@ const { createEyesClient, wrapEyes } = require("./scripts/eyes-client.cjs");
 const { createModelPerformanceStore } = require("./scripts/model-performance.cjs");
 const { limitsFromPlan, aggregateUsage, mergeLedgers, rollupUsage, formatUsage, opencodeWindows, parseOpencodeUsage, describeOpencodeStatus, describeAccountStatus,
   parseOpenrouterKey, parseOpenrouterCredits, parseGatewayCredits, parseZaiQuota, providerInfo,
-  parseClaudeCliResult, parseGrokCliResult, parseAntigravityCliResult, parseCodexCliResult } = require("./scripts/usage-tracker.cjs");
+  parseClaudeCliResult, parseGrokCliResult, parseAntigravityCliResult, parseCodexCliResult,
+  parseClaudeUsage, parseCodexRateLimits, parseCodexRollout, parseGrokBilling, parseAntigravityUsage } = require("./scripts/usage-tracker.cjs");
 const { createPerformanceProfiler } = require("./scripts/performance-profiler.cjs");
 const { buildContext } = require("./scripts/context-manager.cjs");
 const { scrubOutbound } = require("./scripts/redaction.cjs");
 const { createBreaker } = require("./scripts/provider-breaker.cjs");
 const { buildWindowsCmdArgs } = require("./scripts/windows-command-line.cjs");
+// The Discord community link behind the Void collection perks. Both helpers
+// postdate installed builds, so they load through the guard: without the rules
+// module the feature reports itself unavailable (no card, premium stays
+// locked); without the login module a saved state still reads but nothing can
+// link or check. The login module requires the rules module, so it loads only
+// after the rules did.
+const community = optionalHelper("./scripts/community.cjs", () => require("./scripts/community.cjs"), null);
+const discordOAuth = community
+  ? optionalHelper("./scripts/discord-oauth.cjs", () => require("./scripts/discord-oauth.cjs"), null)
+  : null;
 const electron = require("electron");
 
 if (typeof electron === "string" || !electron.app) {
@@ -125,11 +136,23 @@ const SETTINGS_PATH = path.join(app.getPath("userData"), "settings.json");
 // split): settings.json stays plain, copyable state, auth.json stays
 // machine-bound. A missing auth file simply means no keys are saved.
 const AUTH_PATH = path.join(app.getPath("userData"), "auth.json");
+// settings.json health, shared by the startup read below and readSettings
+// (settingsFromDisk has the rules): the text last parsed or written here, the
+// session's saves held in memory while nothing good was ever read, the
+// unreadable bytes last copied aside and where they went, and the one queue
+// every read-modify-write rides (updateSettings).
+const settingsDisk = { good: null, held: null, broken: null, copy: null, unreadable: false, queue: Promise.resolve() };
 const projects = createProjects({
   defaultRoot: REPO_ROOT,
   studioRoot: STUDIO_ROOT,
   preferredRoot: process.env.MEFI_STUDIO_REPO ? REPO_ROOT : null,
-  saved: (() => { try { return JSON.parse(readFileSync(SETTINGS_PATH, "utf8")).projects; } catch { return {}; } })(),
+  // logLine cannot run yet (send reads `projects`), so a broken file found
+  // this early is reported on the console; each held save logs it again.
+  saved: (() => {
+    let bytes = null, failure = null;
+    try { bytes = readFileSync(SETTINGS_PATH); } catch (error) { failure = error; }
+    return settingsFromDisk(bytes, failure, (line) => console.error(line)).projects;
+  })(),
   isDirectory: (root) => { try { return statSync(root).isDirectory(); } catch { return false; } },
 });
 const projectRoot = () => projects.current().path;
@@ -142,7 +165,7 @@ let projectAgentJobs = 0;
 const originalIpcHandle = ipcMain.handle.bind(ipcMain);
 
 function handleProjectIpc(channel, handler) {
-  if (channel.startsWith("projects:") || channel.startsWith("performance:") || channel.startsWith("startup:")) return originalIpcHandle(channel, handler);
+  if (channel.startsWith("projects:") || channel.startsWith("performance:") || channel.startsWith("startup:") || channel.startsWith("community:") || APP_WIDE_CHANNELS.has(channel)) return originalIpcHandle(channel, handler);
   originalIpcHandle(channel, (_event, ...args) => {
     if (projectSwitching) return { ok: false, error: "Switching projects. Try again in a moment." };
     const project = projects.active();
@@ -150,6 +173,10 @@ function handleProjectIpc(channel, handler) {
     return projects.run(project, () => Promise.resolve().then(() => handler(_event, ...args)).finally(() => { projectOperations -= 1; }));
   });
 }
+// The account readings belong to the owner, not to a project: they run
+// through a project switch and never hold one up. (Declared beside the
+// wrapper so the tests that load it from here up to app.setName see it.)
+const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits"]);
 ipcMain.handle = handleProjectIpc;
 
 app.setName("Mefi's Studio AI+");
@@ -346,7 +373,7 @@ async function resourcePass({ kill = true, reason = "poll", withProcesses = true
   if (kill && limits.autoKill) {
     for (const verdict of verdicts) {
       if (!verdict.killable) continue;
-      spawn("taskkill", ["/pid", String(verdict.pid), "/t", "/f"], { windowsHide: true });
+      spawn("taskkill", ["/pid", String(verdict.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
       const action = { at: Date.now(), reason, pid: verdict.pid, status: verdict.status, label: verdict.name, commandLine: verdict.commandLine };
       actions.push(action);
       machineEvents.unshift(action);
@@ -703,18 +730,18 @@ async function applyRestart(files, { counted = true } = {}) {
     updateDrainRequested = true;
     return { deferred: true, reason: `${running.length} build job(s) finishing before update; new dispatches wait` };
   }
-  const settings = await readSettings();
-  const at = Date.now();
-  const recent = (settings.update?.restarts ?? []).filter((stamp) => at - stamp < 60000);
-  settings.update = {
-    ...(settings.update ?? {}),
-    auto: updater?.status().auto !== false,
-    lastRestart: { at, files, kind: "restart" },
-    restarts: counted ? [...recent, at].slice(-5) : recent,
-  };
-  // The relaunched window comes back where this one was.
-  if (window && !window.isDestroyed()) settings.window = { bounds: window.getBounds(), maximized: window.isMaximized() };
-  await writeSettings(settings);
+  await updateSettings((settings) => {
+    const at = Date.now();
+    const recent = (settings.update?.restarts ?? []).filter((stamp) => at - stamp < 60000);
+    settings.update = {
+      ...(settings.update ?? {}),
+      auto: updater?.status().auto !== false,
+      lastRestart: { at, files, kind: "restart" },
+      restarts: counted ? [...recent, at].slice(-5) : recent,
+    };
+    // The relaunched window comes back where this one was.
+    if (window && !window.isDestroyed()) settings.window = { bounds: window.getBounds(), maximized: window.isMaximized() };
+  });
   await saveResume();
   try {
     window?.webContents.session.flushStorageData();
@@ -994,16 +1021,30 @@ async function downloadReleaseBuild() {
   let expected = typeof latest.asset.digest === "string" && latest.asset.digest.startsWith("sha256:")
     ? latest.asset.digest.slice(7).toLowerCase()
     : null;
+  // A release that publishes a .sha256 asset has promised a checksum, so one
+  // that cannot be read stops the update the way a mismatch does:
+  // fetchChecksum answers null for a non-OK response or a body with no digest,
+  // and a network failure throws. Only a release that publishes no checksum
+  // at all is staged unverified.
   if (!expected && latest.checksum) {
+    let published = null;
+    let reason = "the response held no SHA-256";
     try {
-      expected = await module.fetchChecksum({ asset: latest.checksum, token });
-    } catch {}
+      published = await module.fetchChecksum({ asset: latest.checksum, token });
+    } catch (error) {
+      reason = String(error?.message ?? error);
+    }
+    if (!published) {
+      await rm(root, { recursive: true, force: true });
+      throw new Error(`the release's checksum (${latest.checksum.name ?? "sha256 asset"}) could not be read, so the build was not staged: ${reason}`);
+    }
+    expected = published;
   }
   if (expected && expected !== downloaded.sha256.toLowerCase()) {
     await rm(root, { recursive: true, force: true });
     throw new Error("the downloaded build failed its SHA-256 check");
   }
-  logLine(`[release] downloaded v${version} (${Math.round(downloaded.bytes / (1024 * 1024))} MB${expected ? ", verified" : ", no checksum published"})`);
+  logLine(`[release] downloaded v${version} (${Math.round(downloaded.bytes / (1024 * 1024))} MB${expected ? ", verified" : ", unverified: the release publishes no checksum"})`);
   const installRoot = path.dirname(process.execPath);
   const prepared = await module.stageUpdate({ zipPath: downloaded.path, stagingDir: path.join(root, "staging"), installRoot });
   const scriptPath = path.join(root, "apply-update.ps1");
@@ -1038,11 +1079,11 @@ async function applyReleaseUpdate() {
       publishRelease({ staged: prepared });
     }
     publishRelease({ state: "applying", error: null });
-    const settings = await readSettings();
-    settings.release = { ...(settings.release ?? {}), lastApply: { from: app.getVersion(), to: prepared.version, at: Date.now() } };
-    // The relaunched window comes back where this one was.
-    if (window && !window.isDestroyed()) settings.window = { bounds: window.getBounds(), maximized: window.isMaximized() };
-    await writeSettings(settings);
+    await updateSettings((settings) => {
+      settings.release = { ...(settings.release ?? {}), lastApply: { from: app.getVersion(), to: prepared.version, at: Date.now() } };
+      // The relaunched window comes back where this one was.
+      if (window && !window.isDestroyed()) settings.window = { bounds: window.getBounds(), maximized: window.isMaximized() };
+    });
     await saveResume();
     try {
       window?.webContents.session.flushStorageData();
@@ -1052,6 +1093,7 @@ async function applyReleaseUpdate() {
     stopUpdateWatch();
     stopEyesWatch();
     stopMachineWatch();
+    stopCommunityWatch();
     stopAssistant();
     const helper = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", prepared.scriptPath], {
       detached: true,
@@ -1088,6 +1130,483 @@ async function announceRelease() {
   }, { force: true });
   logLine(`[release] updated ${last?.from ?? "?"} -> ${version}`);
 }
+
+// ---- Discord community link: the Void collection perks ---------------------
+// Opt-in and quiet: nothing here reaches the network until the user links a
+// Discord account, and after that only to re-read that account's membership
+// about once a week (sooner, backing off to daily, after a failed check). The
+// rules (card cadence, re-check, entitlement, the fork switch SELF_UNLOCKED)
+// live in scripts/community.cjs; the OAuth2 PKCE login and every POST it needs
+// live in scripts/discord-oauth.cjs. This block keeps the state and the timing:
+//   - settings.community in settings.json, plain and community.normalize()'d:
+//     the card cadence and the public half of the link (id, names, roles,
+//     times). prefs:set cannot reach it.
+//   - the refresh token, safeStorage-encrypted, alone in community-auth.json
+//     (not auth.json). Discord rotates it on every refresh, so the new one is
+//     saved before the access token that came with it is used.
+//   - the access token, in memory only.
+// Without a keystore nothing is written: the link lives for this session and
+// reports the state "session". Tokens never cross IPC; the renderer only ever
+// sees community.publicStatus(). The assistant loop never calls in here.
+const COMMUNITY_AUTH_PATH = path.join(app.getPath("userData"), "community-auth.json");
+// The card actions community:prompt accepts, from the rules module. The literal
+// covers a rules module that predates the export; with no module at all every
+// handler answers "unavailable" before this gate.
+const COMMUNITY_PROMPT_ACTIONS = new Set(Array.isArray(community?.PROMPT_ACTIONS) ? community.PROMPT_ACTIONS : ["shown", "snooze", "never", "reset", "joined"]);
+const COMMUNITY_WATCH_FIRST_MS = 15_000;
+const COMMUNITY_WATCH_EVERY_MS = 60 * 60 * 1000;
+const COMMUNITY_ACCESS_MARGIN_MS = 5 * 60 * 1000;
+let communityTokens = null; // { accessToken, refreshToken, expiresAt }, memory only
+let communitySession = null; // { link } when the keystore is unavailable
+let communityLinkRun = null; // { controller, promise } while an authorize is open
+let communityUnlinkRun = null;
+let communityCheckInFlight = null;
+let communityGeneration = 0; // link and unlink bump it; a check that began before drops its answer
+let communityLastManualCheck = null;
+let communityWatch = null;
+let communitySignatureSent = null;
+let communityPublishing = Promise.resolve();
+
+// The public-client id: the environment wins so a maintainer can test an app
+// before the constant is filled. Empty means "not configured".
+function communityClientId() {
+  if (!community || !discordOAuth) return "";
+  const id = String(process.env.MEFI_STUDIO_DISCORD_CLIENT_ID || community.CLIENT_ID || "").trim();
+  return /^\d{1,32}$/.test(id) ? id : "";
+}
+
+function communityUnavailableStatus() {
+  return {
+    available: false, configured: false, linked: false, linking: false, selfUnlocked: false,
+    user: null, roles: [], state: null,
+    entitlement: { premium: false, perks: [], validUntil: null, reason: "unlinked" },
+    checkedAt: null, lastOkAt: null, nextCheckAt: null,
+    prompt: { due: false, never: false, snoozeUntil: null },
+    inviteUrl: "", serverUrl: "", forkCopy: "", agentPrompt: "",
+  };
+}
+
+function communityKeystore() {
+  try {
+    return safeStorage.isEncryptionAvailable() === true;
+  } catch {
+    return false;
+  }
+}
+
+async function communityRead() {
+  const settings = await readSettings();
+  const state = community.normalize(settings.community);
+  if (communitySession) state.link = communitySession.link;
+  return { settings, state };
+}
+
+// Every change rides updateSettings, the app-wide settings queue, on a fresh
+// read: a stamp, a card action, a check and any other settings save landing
+// together cannot undo each other. `change` is synchronous and returns the
+// next state, or null to write nothing; the result is the normalized next
+// state, or the current one. A session-only link stays in memory, and
+// settings.json keeps the cadence only.
+async function communityMutate(change) {
+  let result = null;
+  await updateSettings((settings) => {
+    const state = community.normalize(settings.community);
+    if (communitySession) state.link = communitySession.link;
+    const next = change(state);
+    if (!next) {
+      result = state;
+      return false;
+    }
+    result = community.normalize(next);
+    if (communitySession) communitySession.link = result.link;
+    settings.community = communitySession ? { ...result, link: null } : result;
+  });
+  return result;
+}
+
+// The STATUS every community:* reply carries. The first computation stamps
+// firstSeenAt, which starts the three-day quiet period before the first card.
+async function communitySnapshot() {
+  if (!community) return communityUnavailableStatus();
+  let { state } = await communityRead();
+  if (state.firstSeenAt == null) {
+    state = await communityMutate((current) => (current.firstSeenAt == null ? { ...current, firstSeenAt: Date.now() } : null));
+  }
+  return community.publicStatus({ state, now: Date.now(), clientId: communityClientId(), linking: Boolean(communityLinkRun) });
+}
+
+// Mirrors publishRelease: only a change a user could see reaches the renderer.
+// Chained, so a slow snapshot can never push after a newer one.
+function publishCommunity({ force = false } = {}) {
+  const run = communityPublishing.then(async () => {
+    const status = await communitySnapshot();
+    const signature = community ? community.signature(status) : "unavailable";
+    if (force || signature !== communitySignatureSent) {
+      communitySignatureSent = signature;
+      send("community:event", status);
+    }
+    return status;
+  });
+  communityPublishing = run.catch(() => null);
+  return run;
+}
+
+async function communityFailure(error, extra = {}) {
+  let status;
+  try {
+    status = await communitySnapshot();
+  } catch {
+    status = communityUnavailableStatus();
+  }
+  return { ok: false, error, ...extra, status };
+}
+
+async function communityLoadRefresh() {
+  if (communityTokens?.refreshToken) return communityTokens.refreshToken;
+  if (communitySession || !communityKeystore()) return null;
+  try {
+    const saved = JSON.parse(await readFile(COMMUNITY_AUTH_PATH, "utf8"));
+    const blob = typeof saved?.refreshTokenEncrypted === "string" ? saved.refreshTokenEncrypted : "";
+    return blob ? safeStorage.decryptString(Buffer.from(blob, "base64")) || null : null;
+  } catch {
+    return null;
+  }
+}
+
+// Memory first, then disk, and both before the caller uses the access token:
+// Discord has already retired the refresh token this pair replaced. So a pair
+// whose disk write fails stays in memory, the only live copy after a refresh;
+// a link that gives up puts the previous pair back itself (communityAdopt).
+async function communityKeep(tokens, { persist = !communitySession } = {}) {
+  communityTokens = {
+    accessToken: typeof tokens?.accessToken === "string" ? tokens.accessToken : null,
+    refreshToken: typeof tokens?.refreshToken === "string" ? tokens.refreshToken : null,
+    expiresAt: Number.isFinite(tokens?.expiresAt) ? tokens.expiresAt : null,
+  };
+  if (!persist || !communityTokens.refreshToken) return;
+  await authStore.atomicWriteJson(COMMUNITY_AUTH_PATH, {
+    refreshTokenEncrypted: safeStorage.encryptString(communityTokens.refreshToken).toString("base64"),
+  });
+}
+
+function communityRecord(link, result) {
+  const next = community.recordCheck({ link, result, now: Date.now() });
+  return communitySession && next?.state === "ok" ? { ...next, state: "session" } : next;
+}
+
+// Who the saved grant belongs to and whether they are still in the server. A
+// live access token from this session answers directly; otherwise the refresh
+// token buys a new pair, which is kept before it is used.
+async function communityMembership() {
+  const held = communityTokens;
+  if (held?.accessToken && Number(held.expiresAt) - Date.now() > COMMUNITY_ACCESS_MARGIN_MS) {
+    const quick = await discordOAuth.fetchMember({ accessToken: held.accessToken, guildId: community.GUILD_ID });
+    if (quick?.ok || quick?.error !== "auth") return quick;
+  }
+  const refreshToken = await communityLoadRefresh();
+  if (!refreshToken) return { ok: false, error: "auth" };
+  const renewed = await discordOAuth.refresh({ clientId: communityClientId(), refreshToken });
+  if (!renewed?.ok) return renewed ?? { ok: false, error: "network" };
+  await communityKeep(renewed.tokens);
+  return discordOAuth.fetchMember({ accessToken: renewed.tokens.accessToken, guildId: community.GUILD_ID });
+}
+
+// One check at a time, shared by the watcher and "Check now". The answer is
+// folded into the link read AFTER the network wait, and dropped when a link or
+// unlink happened meanwhile. A rotated refresh token is still kept, so an
+// unlink that waited for this check revokes the live one.
+function checkCommunity() {
+  if (communityCheckInFlight) return communityCheckInFlight;
+  communityCheckInFlight = (async () => {
+    if (!community || !discordOAuth) return { ok: false, error: "unavailable" };
+    if (!communityClientId()) return { ok: false, error: "not-configured" };
+    if (communityLinkRun || communityUnlinkRun) return { ok: false, error: "busy" };
+    const generation = communityGeneration;
+    const before = await communityRead();
+    if (!before.state.link) return { ok: false, error: "unlinked" };
+    const result = (await communityMembership()) ?? { ok: false, error: "network" };
+    let link = null;
+    await communityMutate((state) => {
+      if (generation !== communityGeneration || !state.link || state.link.userId !== before.state.link.userId) return null;
+      const next = communityRecord(state.link, result);
+      if (!next) return null;
+      link = next;
+      return { ...state, link };
+    });
+    if (!link) return { ok: false, error: "canceled" };
+    logLine(`[community] membership check: ${link.state}`);
+    if (result.ok) return { ok: true };
+    return { ok: false, error: typeof result.error === "string" ? result.error : "network", ...(Number.isFinite(result.retryAfterMs) ? { retryAfterMs: result.retryAfterMs } : {}) };
+  })()
+    .catch((error) => {
+      logLine(`[community] check failed: ${String(error?.message ?? error).slice(0, 200)}`);
+      return { ok: false, error: "network" };
+    })
+    .finally(() => {
+      communityCheckInFlight = null;
+    });
+  return communityCheckInFlight;
+}
+
+async function checkCommunityNow() {
+  if (!community) return communityFailure("unavailable");
+  if (!communityClientId()) return communityFailure("not-configured");
+  if (communityLinkRun || communityUnlinkRun) return communityFailure("busy");
+  const { state } = await communityRead();
+  if (!state.link) return communityFailure("unlinked");
+  let outcome;
+  if (communityCheckInFlight) {
+    outcome = await communityCheckInFlight;
+  } else {
+    const now = Date.now();
+    if (communityLastManualCheck != null && now - communityLastManualCheck < community.CHECK_THROTTLE_MS) {
+      return communityFailure("throttled", { retryAfterMs: communityLastManualCheck + community.CHECK_THROTTLE_MS - now });
+    }
+    communityLastManualCheck = now;
+    outcome = await checkCommunity();
+  }
+  return { ...outcome, status: await publishCommunity() };
+}
+
+// Hands a grant this app will not keep back to Discord, best effort. Revoking
+// either token ends both; the refresh token is the one Discord asks for.
+async function communityHandBack(clientId, tokens) {
+  const grant = tokens?.refreshToken || tokens?.accessToken;
+  if (!grant) return;
+  try {
+    await discordOAuth.revoke({ clientId, token: grant });
+  } catch {
+    // revoke() answers { ok } and never throws; this guards an older module.
+  }
+}
+
+// The token file as it is now, for a link that gives up to put back: its JSON
+// object, or null when there is none (or it is unreadable, so useless anyway).
+async function communityAuthFileNow() {
+  try {
+    const saved = JSON.parse(await readFile(COMMUNITY_AUTH_PATH, "utf8"));
+    return saved && typeof saved === "object" ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+// Keeps a fresh grant and records its link: the tokens first (memory, then the
+// encrypted file when there is a keystore), then settings.community. Until the
+// record is written, a failed step or a Cancel (checked again after every wait)
+// puts the tokens, the storage mode and the token file back as they were, and
+// the answer is { ok: false, error } so the caller hands the grant back. A
+// Cancel that lands after the record is written is too late: the link stands,
+// and Unlink removes it.
+async function communityAdopt(result, canceled) {
+  // A check in flight finishes first (its answer is dropped). It may rotate
+  // the saved pair, so what a failure puts back is read only after it ends.
+  communityGeneration += 1;
+  if (communityCheckInFlight) await communityCheckInFlight;
+  const before = { tokens: communityTokens, session: communitySession };
+  let file; // the token file as it was, once this link may have rewritten it
+  const putBack = async (error) => {
+    communityTokens = before.tokens;
+    communitySession = before.session;
+    if (file !== undefined) {
+      try {
+        if (file) await authStore.atomicWriteJson(COMMUNITY_AUTH_PATH, file);
+        else await rm(COMMUNITY_AUTH_PATH, { force: true });
+      } catch (restoreError) {
+        logLine(`[community] community-auth.json could not be put back: ${String(restoreError?.message ?? restoreError).slice(0, 200)}`);
+      }
+    }
+    return { ok: false, error };
+  };
+  try {
+    if (canceled()) return putBack("canceled");
+    // No keystore: nothing is written, and an older grant's file goes (it
+    // could not be decrypted now anyway).
+    const persist = communityKeystore();
+    const saved = persist ? await communityAuthFileNow() : null;
+    if (!persist) await rm(COMMUNITY_AUTH_PATH, { force: true });
+    if (canceled()) return putBack("canceled");
+    if (persist) file = saved;
+    await communityKeep(result.tokens, { persist });
+    if (canceled()) return putBack("canceled");
+    let link = null;
+    await communityMutate((state) => {
+      if (canceled()) return null;
+      // The storage mode switches inside the queue, so no other write lands
+      // half in the old mode and half in the new.
+      communitySession = persist ? null : { link: null };
+      link = communityRecord(state.link, result);
+      return link ? { ...state, link } : null;
+    });
+    if (!link) return putBack(canceled() ? "canceled" : "auth");
+    return { ok: true, link, persist };
+  } catch (error) {
+    logLine(`[community] keeping the Discord link failed: ${String(error?.message ?? error).slice(0, 200)}`);
+    return putBack("storage");
+  }
+}
+
+async function linkCommunity() {
+  if (!community || !discordOAuth) return communityFailure("unavailable");
+  const clientId = communityClientId();
+  if (!clientId) return communityFailure("not-configured");
+  if (communityLinkRun || communityUnlinkRun) return communityFailure("busy");
+  const controller = new AbortController();
+  const canceled = () => controller.signal.aborted;
+  communityLinkRun = { controller, promise: null };
+  const run = (async () => {
+    publishCommunity().catch(() => {});
+    const result = await discordOAuth.authorize({
+      clientId,
+      guildId: community.GUILD_ID,
+      ports: community.REDIRECT_PORTS,
+      scopes: community.SCOPES,
+      signal: controller.signal,
+      // Only the authorize URL this module built reaches the browser.
+      openExternal: (url) => (community.isAllowedDiscordUrl(url) ? shell.openExternal(url) : Promise.reject(new Error("refused"))),
+    });
+    const failed = { ok: false, error: typeof result?.error === "string" ? result.error : "network", ...(Number.isFinite(result?.retryAfterMs) ? { retryAfterMs: result.retryAfterMs } : {}) };
+    if (!result?.tokens) return failed;
+    // Discord has granted by now. A grant this link does not record is handed
+    // back rather than left active where Unlink cannot reach it: canceled
+    // (Cancel, or an Unlink), the user/member read failed after the code
+    // exchange, or keeping it failed (communityAdopt).
+    const recordable = !canceled() && (result.ok || result.error === "not-member");
+    const kept = recordable ? await communityAdopt(result, canceled) : null;
+    if (!kept?.ok) {
+      await communityHandBack(clientId, result.tokens);
+      if (canceled()) return { ok: false, error: "canceled" };
+      return kept ? { ok: false, error: kept.error } : failed;
+    }
+    logLine(`[community] linked Discord (${kept.link.state}${kept.persist ? "" : ", this session only"})`);
+    return result.ok ? { ok: true } : { ok: false, error: typeof result.error === "string" ? result.error : "network" };
+  })().catch((error) => {
+    logLine(`[community] link failed: ${String(error?.message ?? error).slice(0, 200)}`);
+    return { ok: false, error: "network" };
+  });
+  communityLinkRun.promise = run;
+  let outcome;
+  try {
+    outcome = await run;
+  } finally {
+    communityLinkRun = null;
+  }
+  return { ...outcome, status: await publishCommunity() };
+}
+
+async function cancelCommunityLink() {
+  if (!community) return communityFailure("unavailable");
+  const open = communityLinkRun;
+  if (!open) return communityFailure("not-linking");
+  open.controller.abort();
+  if (open.promise) await open.promise;
+  return { ok: true, status: await publishCommunity() };
+}
+
+// Revoke at Discord first (best effort), then forget: the link, the encrypted
+// refresh token file and the tokens in memory. A link or check in flight
+// finishes first, so nothing it saves can outlive the unlink.
+async function unlinkCommunity() {
+  if (!community) return communityFailure("unavailable");
+  if (!communityUnlinkRun) {
+    communityUnlinkRun = (async () => {
+      communityGeneration += 1;
+      const open = communityLinkRun;
+      if (open) {
+        open.controller.abort();
+        if (open.promise) await open.promise;
+      }
+      if (communityCheckInFlight) await communityCheckInFlight;
+      const token = await communityLoadRefresh();
+      const clientId = communityClientId();
+      let revoked = false;
+      if (token && clientId) {
+        try {
+          revoked = (await discordOAuth.revoke({ clientId, token }))?.ok === true;
+        } catch {
+          revoked = false;
+        }
+      }
+      communityTokens = null;
+      await rm(COMMUNITY_AUTH_PATH, { force: true });
+      await communityMutate((state) => {
+        communitySession = null;
+        return { ...state, link: null };
+      });
+      logLine(`[community] unlinked Discord${token ? (revoked ? "; grant revoked" : "; Discord did not confirm the revoke") : ""}`);
+      return { ok: true, revoked };
+    })()
+      .catch((error) => {
+        logLine(`[community] unlink failed: ${String(error?.message ?? error).slice(0, 200)}`);
+        return { ok: false, error: "storage" };
+      })
+      .finally(() => {
+        communityUnlinkRun = null;
+      });
+  }
+  const outcome = await communityUnlinkRun;
+  return { ...outcome, status: await publishCommunity() };
+}
+
+async function communityPromptAction(action) {
+  if (!community) return communityFailure("unavailable");
+  if (!COMMUNITY_PROMPT_ACTIONS.has(action)) return communityFailure("action");
+  await communityMutate((state) => community.applyPrompt({ state, action, now: Date.now() }));
+  return { ok: true, status: await publishCommunity() };
+}
+
+// A name in, a hard-coded URL out: no renderer-supplied URL reaches the shell.
+async function openCommunityTarget(target) {
+  if (!community) return communityFailure("unavailable");
+  const url = community.linkTarget(target);
+  if (!url || !community.isAllowedDiscordUrl(url)) return communityFailure("target");
+  try {
+    await shell.openExternal(url);
+  } catch {
+    return communityFailure("open");
+  }
+  return { ok: true, status: await communitySnapshot() };
+}
+
+// Hourly and cheap: a check reaches Discord only when checkDue says the weekly
+// (or back-off) time has come; every tick republishes, so a card coming due or
+// a grace period running out reaches the renderer without a restart. `live`
+// turns false when the watch that started the tick stops: from then on the
+// tick starts no check and pushes nothing.
+async function communityWatchTick(live = () => true) {
+  if (!community || communityLinkRun || communityUnlinkRun) return null;
+  const { state } = await communityRead();
+  if (!live()) return null;
+  if (state.link && communityClientId() && community.checkDue({ link: state.link, now: Date.now() })) await checkCommunity();
+  return live() ? publishCommunity() : null;
+}
+
+function startCommunityWatch() {
+  if (communityWatch || !community || SMOKE || CAPTURE || CLI_MODE) return { ok: true, running: Boolean(communityWatch) };
+  const watch = { first: null, timer: null };
+  const live = () => communityWatch === watch;
+  const tick = () => communityWatchTick(live).catch((error) => logLine(`[community] watch failed: ${String(error?.message ?? error).slice(0, 200)}`));
+  watch.first = setTimeout(tick, COMMUNITY_WATCH_FIRST_MS);
+  watch.first.unref?.();
+  watch.timer = setInterval(tick, COMMUNITY_WATCH_EVERY_MS);
+  watch.timer.unref?.();
+  communityWatch = watch;
+  return { ok: true, running: true };
+}
+
+// Stopped with the other watchers when Studio closes its last window or
+// applies a release update. Both timers go, and a tick already under way
+// starts no check and pushes nothing after this (a check it already started
+// finishes and saves its answer).
+function stopCommunityWatch() {
+  if (communityWatch) {
+    clearTimeout(communityWatch.first);
+    clearInterval(communityWatch.timer);
+  }
+  communityWatch = null;
+  return { ok: true, running: false };
+}
+// ---- end of the Discord community link --------------------------------------
 
 async function queueRequests(additions, { automaticGrowth = false } = {}) {
   if (!additions?.length) return 0;
@@ -1672,11 +2191,13 @@ const ASSISTANT_CHAT_SYSTEM = [
 // well; one id per installation, kept beside the (encrypted) key.
 async function assistantSessionId() {
   const settings = await readSettings();
-  if (!settings.assistantSession) {
-    settings.assistantSession = `ses_mefi_${crypto.randomBytes(12).toString("hex")}`;
-    await writeSettings(settings);
-  }
-  return settings.assistantSession;
+  if (settings.assistantSession) return settings.assistantSession;
+  // Minted on the queue's fresh read, so two first calls agree on one id.
+  const saved = await updateSettings((next) => {
+    if (next.assistantSession) return false;
+    next.assistantSession = `ses_mefi_${crypto.randomBytes(12).toString("hex")}`;
+  });
+  return saved.assistantSession;
 }
 
 // The key saved in Settings, readable only through the keystore that wrote it.
@@ -2426,10 +2947,323 @@ async function readZaiAccount(apiKey) {
   catch (error) { return { ok: false, code: error.code || "shape", error: redactSecret(error.message, apiKey) }; }
 }
 
-async function usageAccounts() {
+// A local LM Studio server has no account; the reading is whether it answers
+// and which model it serves.
+async function readLmStudioAccount(endpoint) {
+  const model = await compatEndpointModel(endpoint);
+  let host = null;
+  try { host = new URL(endpoint).host; } catch {}
+  return { ok: true, local: { reachable: model !== null, model, host } };
+}
+
+// ---- plan windows through the coding CLIs -------------------------------------
+// Claude Code, Codex, Grok and Antigravity answer for their own plan windows
+// over their own logins, with no model call: Claude Code a get_usage control
+// request on its stream-json channel, Codex its app-server's rate-limit read,
+// Grok its billing extension over agent stdio, Antigravity its /usage command.
+// The Studio never reads their credentials and never keeps or logs what they
+// print beyond the one reply it asked for. Each probe starts a 150-240 MB
+// binary for a few seconds, so probes run only while someone is looking (the
+// Usage panel or the Model Lab tracker asks with probe: true), two at a time
+// at most and one per CLI, and a reading is kept for five minutes (a failure
+// for one). A caller always gets the last reading at once; a stale one is
+// refreshed in the background and the panel asks again.
+const CLI_PLAN_TTL_MS = 5 * 60000;
+const CLI_PLAN_RETRY_MS = 60000;
+// A cold start of a large CLI on a loaded machine has taken ~30 s.
+const CLI_PLAN_TIMEOUT_MS = 45000;
+const CLI_PLAN_CONCURRENCY = 2;
+const cliPlanState = new Map();
+const cliPlanQueue = [];
+let cliPlanActive = 0;
+
+function drainCliPlanQueue() {
+  while (cliPlanActive < CLI_PLAN_CONCURRENCY && cliPlanQueue.length) {
+    const job = cliPlanQueue.shift();
+    cliPlanActive += 1;
+    job().finally(() => {
+      cliPlanActive -= 1;
+      drainCliPlanQueue();
+    });
+  }
+}
+
+function cliPlanReading(provider, run, { allow = false } = {}) {
+  const entry = cliPlanState.get(provider) ?? { result: null, inFlight: null };
+  cliPlanState.set(provider, entry);
+  const age = entry.result ? Date.now() - entry.result.at : Infinity;
+  const expired = age >= (entry.result?.ok ? CLI_PLAN_TTL_MS : CLI_PLAN_RETRY_MS);
+  if (allow && expired && !entry.inFlight) {
+    entry.inFlight = new Promise((resolve) => {
+      cliPlanQueue.push(async () => {
+        let result;
+        try { result = await run(); }
+        catch (error) { result = { ok: false, code: "unavailable", error: String(error?.message ?? error).slice(0, 160) }; }
+        entry.result = { at: Date.now(), ...result };
+        entry.inFlight = null;
+        resolve(entry.result);
+      });
+      drainCliPlanQueue();
+    });
+  }
+  return { result: entry.result, refreshing: Boolean(entry.inFlight) };
+}
+
+const cliErrorText = (value) => String(value ?? "unknown error").replace(/\s+/g, " ").trim().slice(0, 160);
+
+// A CLI launched through cmd.exe is the shell's child, and Grok may start MCP
+// servers of its own, so a probe that has to go ends its whole process tree.
+function endCliTree(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  if (process.platform === "win32" && child.pid) {
+    try { spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" }).on?.("error", () => {}); } catch {}
+  } else {
+    try { child.kill(); } catch {}
+  }
+}
+
+// One exchange of JSON lines with a CLI. `onLine` sees each parsed line with
+// `send` to answer on and `done` to settle the probe; the CLI is then asked
+// to leave (stdin closed) and its tree is ended if it lingers - at once with
+// `killAfterAnswer`, for a CLI that never exits on end of input.
+function cliExchange({ label, command, args = [], shell = false, start, onLine, killAfterAnswer = false, timeoutMs = CLI_PLAN_TIMEOUT_MS }) {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      const options = { cwd: os.tmpdir(), windowsHide: true, stdio: ["pipe", "pipe", "ignore"] };
+      child = shell ? spawn("cmd.exe", ["/d", "/s", "/c", command], options) : spawn(command, args, options);
+    } catch (error) {
+      resolve({ ok: false, code: "spawn", error: `${label} could not be started: ${cliErrorText(error?.message ?? error)}` });
+      return;
+    }
+    let settled = false;
+    let buffer = "";
+    const finish = (result, { kill = false } = {}) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { child.stdin?.end(); } catch {}
+      if (kill) endCliTree(child);
+      else {
+        const linger = setTimeout(() => endCliTree(child), 5000);
+        child.once?.("close", () => clearTimeout(linger));
+      }
+      resolve(result);
+    };
+    const timer = setTimeout(() => finish({ ok: false, code: "timeout", error: `${label} did not report usage within ${Math.round(timeoutMs / 1000)} s.` }, { kill: true }), timeoutMs);
+    const send = (message) => {
+      try { child.stdin?.write(`${JSON.stringify(message)}\n`); } catch {}
+    };
+    child.stdout?.on("data", (chunk) => {
+      buffer += chunk;
+      let index;
+      while (!settled && (index = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, index).trim();
+        buffer = buffer.slice(index + 1);
+        if (!line.startsWith("{")) continue;
+        let message;
+        try { message = JSON.parse(line); } catch { continue; }
+        onLine(message, { send, done: (result) => finish(result, { kill: killAfterAnswer }) });
+      }
+      // A single line past a few MB is not a reply this probe asked for.
+      if (buffer.length > 4 * 1024 * 1024) buffer = "";
+    });
+    child.stdin?.on?.("error", () => {});
+    child.on("error", (error) => finish({ ok: false, code: "spawn", error: `${label} could not be started: ${cliErrorText(error?.message ?? error)}` }));
+    child.on("close", (code) => finish({ ok: false, code: "unavailable", error: `${label} exited (${code ?? "no status"}) without reporting usage.` }));
+    start(send);
+  });
+}
+const parsedLimits = (label, parse) => {
+  try { return { ok: true, limits: { ...parse(), asOf: Date.now() } }; }
+  catch (error) { return { ok: false, code: "shape", error: `${label}: ${cliErrorText(error?.message ?? error)}` }; }
+};
+
+const CLAUDE_USAGE_COMMAND = "claude -p --input-format stream-json --output-format stream-json --verbose --no-session-persistence --strict-mcp-config --tools= --permission-mode dontAsk";
+function probeClaudeUsage() {
+  return cliExchange({
+    label: "Claude Code",
+    shell: true,
+    command: CLAUDE_USAGE_COMMAND,
+    start: (send) => send({ type: "control_request", request_id: "mefi-usage", request: { subtype: "get_usage", skip_behaviors: true } }),
+    onLine: (message, { done }) => {
+      if (message.type !== "control_response" || message.response?.request_id !== "mefi-usage") return;
+      if (message.response.subtype !== "success") done({ ok: false, code: "unavailable", error: `Claude Code could not report usage: ${cliErrorText(message.response.error)}` });
+      else done(parsedLimits("Claude Code usage", () => parseClaudeUsage(message.response.response)));
+    },
+  });
+}
+
+// Codex's app-server speaks newline JSON-RPC. The rate-limit read is a plain
+// GET on Codex's own ChatGPT login; nothing here ever asks the server to
+// spend a reset credit.
+function codexProbeError(error) {
+  const message = cliErrorText(error?.message ?? error);
+  return /auth/i.test(message)
+    ? { ok: false, code: "auth", error: `Codex needs a ChatGPT login to report plan windows (${message}).` }
+    : { ok: false, code: "unavailable", error: `Codex could not report usage: ${message}` };
+}
+function probeCodexLimits() {
+  return cliExchange({
+    label: "Codex",
+    shell: true,
+    command: "codex app-server",
+    start: (send) => send({ id: 1, method: "initialize", params: { clientInfo: { name: "mefi-studio", title: null, version: "1" } } }),
+    onLine: (message, { send, done }) => {
+      if (message.id === 1) {
+        if (message.error) return done(codexProbeError(message.error));
+        send({ method: "initialized" });
+        send({ id: 2, method: "account/rateLimits/read", params: { excludeResetCreditDetails: true } });
+      } else if (message.id === 2) {
+        if (message.error) return done(codexProbeError(message.error));
+        done(parsedLimits("Codex rate limits", () => parseCodexRateLimits(message.result)));
+      }
+    },
+  });
+}
+
+// xAI's grok (spawned without a shell, like grokCompletion, so Windows finds
+// grok.exe rather than an unrelated npm "grok" shim) answers its billing
+// extension over ACP. It does not exit on end of input, so once it has
+// answered - long after its own startup - its tree is ended at once.
+function probeGrokBilling() {
+  return cliExchange({
+    label: "Grok",
+    command: "grok",
+    args: ["agent", "stdio"],
+    killAfterAnswer: true,
+    start: (send) => send({ jsonrpc: "2.0", id: 0, method: "initialize", params: { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false } } }),
+    onLine: (message, { send, done }) => {
+      if (message.id === 0) {
+        if (message.error) return done({ ok: false, code: "unavailable", error: `Grok could not start its agent: ${cliErrorText(message.error?.message)}` });
+        send({ jsonrpc: "2.0", id: 1, method: "_x.ai/billing", params: {} });
+      } else if (message.id === 1) {
+        if (message.error) {
+          const detail = cliErrorText(message.error?.data ?? message.error?.message);
+          return done(/auth/i.test(detail)
+            ? { ok: false, code: "auth", error: `Grok needs its grok.com login to report credits (${detail}).` }
+            : { ok: false, code: "unavailable", error: `Grok could not report usage: ${detail}` });
+        }
+        done(parsedLimits("Grok billing", () => parseGrokBilling(message.result)));
+      }
+    },
+  });
+}
+
+// Antigravity prints its /usage report as one JSON document in print mode;
+// auto-update is held off so a usage read never turns into an install.
+function probeAntigravityUsage() {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn("agy", ["--output-format", "json", "-p", "/usage"], {
+        cwd: os.tmpdir(), windowsHide: true, stdio: ["ignore", "pipe", "ignore"], env: { ...process.env, AGY_CLI_DISABLE_AUTO_UPDATE: "true" },
+      });
+    } catch (error) {
+      resolve({ ok: false, code: "spawn", error: `Antigravity could not be started: ${cliErrorText(error?.message ?? error)}` });
+      return;
+    }
+    let settled = false;
+    let out = "";
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      endCliTree(child);
+      finish({ ok: false, code: "timeout", error: `Antigravity did not report usage within ${Math.round(CLI_PLAN_TIMEOUT_MS / 1000)} s.` });
+    }, CLI_PLAN_TIMEOUT_MS);
+    child.stdout?.on("data", (chunk) => {
+      if (out.length < 1024 * 1024) out += chunk;
+    });
+    child.on("error", (error) => finish({ ok: false, code: "spawn", error: `Antigravity could not be started: ${cliErrorText(error?.message ?? error)}` }));
+    child.on("close", () => finish(parsedLimits("Antigravity usage", () => parseAntigravityUsage(out))));
+  });
+}
+
+// Codex also writes its windows into every session rollout (token_count
+// events), so a reading exists without starting anything: the newest of the
+// last eight local days' rollouts. A rollout can run to hundreds of MB, so
+// only its tail is read, and the newest is decided by event time because
+// Codex rewrites old rollouts and bumps their mtime. The Studio's own Codex
+// replies run --ephemeral and write none; the builders' runs and the owner's
+// own sessions do.
+const CODEX_ROLLOUT_DAYS = 8;
+const CODEX_ROLLOUT_FILES = 8;
+const CODEX_ROLLOUT_TAILS = [256 * 1024, 2 * 1024 * 1024];
+const codexRolloutCache = new Map();
+function codexRolloutFs() {
+  const fsp = require("node:fs/promises");
+  return {
+    readdir: (dir) => fsp.readdir(dir),
+    stat: (file) => fsp.stat(file),
+    async readRange(file, start, length) {
+      const handle = await fsp.open(file, "r");
+      try {
+        const buffer = Buffer.alloc(length);
+        const { bytesRead } = await handle.read(buffer, 0, length, start);
+        return buffer.subarray(0, bytesRead).toString("utf8");
+      } finally {
+        await handle.close();
+      }
+    },
+  };
+}
+async function tailCodexRollout(fsApi, { file, size }) {
+  for (const span of CODEX_ROLLOUT_TAILS) {
+    const start = Math.max(0, size - span);
+    let chunk;
+    try { chunk = await fsApi.readRange(file, start, size - start); } catch { return null; }
+    const found = parseCodexRollout(chunk, { fromStart: start === 0 });
+    if (found || start === 0) return found;
+  }
+  return null;
+}
+async function readCodexRollouts({ now = Date.now(), fsApi = codexRolloutFs(), root = process.env.CODEX_HOME || path.join(os.homedir(), ".codex") } = {}) {
+  const today = new Date(now);
+  const files = [];
+  for (let back = 0; back < CODEX_ROLLOUT_DAYS; back += 1) {
+    const day = new Date(today.getFullYear(), today.getMonth(), today.getDate() - back);
+    const dir = path.join(root, "sessions", String(day.getFullYear()), String(day.getMonth() + 1).padStart(2, "0"), String(day.getDate()).padStart(2, "0"));
+    let names;
+    try { names = await fsApi.readdir(dir); } catch { continue; }
+    for (const name of names) if (/^rollout-.*\.jsonl$/.test(String(name))) files.push(path.join(dir, String(name)));
+  }
+  const stats = (await Promise.all(files.map(async (file) => {
+    try {
+      const info = await fsApi.stat(file);
+      return { file, size: info.size, mtimeMs: info.mtimeMs };
+    } catch {
+      return null;
+    }
+  }))).filter(Boolean).sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, CODEX_ROLLOUT_FILES);
+  const seen = new Set();
+  let best = null;
+  for (const entry of stats) {
+    const key = `${entry.file}|${entry.size}|${entry.mtimeMs}`;
+    seen.add(key);
+    if (!codexRolloutCache.has(key)) codexRolloutCache.set(key, await tailCodexRollout(fsApi, entry));
+    const found = codexRolloutCache.get(key);
+    if (found && (!best || found.observedAt > best.observedAt)) best = found;
+  }
+  for (const key of codexRolloutCache.keys()) if (!seen.has(key)) codexRolloutCache.delete(key);
+  if (!best) return { ok: false, code: "none", error: `No Codex session in the last ${CODEX_ROLLOUT_DAYS} days.` };
+  const snapshot = { ...best.snapshot, plan_type: best.snapshot.plan_type ?? best.planType };
+  return { ok: true, limits: parseCodexRateLimits(snapshot, { now, observedAt: best.observedAt, source: "rollout" }) };
+}
+
+const CLI_PLAN_PROBES = { claude: probeClaudeUsage, codex: probeCodexLimits, grok: probeGrokBilling, antigravity: probeAntigravityUsage };
+
+// `probe` says someone is looking at the numbers: only then may a CLI be
+// started. Without it the CLI plans report their last reading, or that none
+// has been taken yet, and Codex still has its rollouts.
+async function usageAccounts({ probe = false } = {}) {
   const settings = await readSettings();
   const keyOf = (field) => decryptKey(settings, field);
   const accounts = [];
+  const pending = [];
   const add = (provider, entry) => accounts.push({ provider, ...providerInfo(provider), connected: true, ...entry });
   const live = async (provider, read, promise, shape) => {
     const result = await promise;
@@ -2438,6 +3272,8 @@ async function usageAccounts() {
       : { read, ok: false, fetchedAt: result.at ?? null, error: result.error, code: result.code ?? "http" });
   };
   const none = (provider, note) => add(provider, { read: "none", ok: true, fetchedAt: null, note });
+  const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
+  const order = normalizeAutoProviders(settings.aiAutoProviders);
   const reads = [];
   const goKey = keyOf("apiKeyEncrypted");
   if (goKey) reads.push(live("opencode-go", "windows", fetchOpencodeUsage({ maxAgeMs: 60000 }), (result) => ({ usage: result.usage })));
@@ -2447,19 +3283,34 @@ async function usageAccounts() {
   if (openrouterKey) reads.push(live("openrouter", "key", cachedAccountRead("openrouter", () => readOpenrouterAccount(openrouterKey)), (result) => ({ key: result.key, credits: result.credits })));
   const gatewayKey = keyOf("gatewayApiKeyEncrypted");
   if (gatewayKey) reads.push(live("gateway", "credits", cachedAccountRead("gateway", () => readGatewayAccount(gatewayKey)), (result) => ({ credits: result.credits })));
+  if (provider === "lmstudio" || order.includes("lmstudio") || settings.lmStudioEndpoint) {
+    const endpoint = normalizeLmStudioEndpoint(settings.lmStudioEndpoint);
+    reads.push(live("lmstudio", "local", cachedAccountRead("lmstudio", () => readLmStudioAccount(endpoint)), (result) => ({ local: result.local })));
+  }
+  const installed = Promise.all([grokCliAvailable(), claudeCliAvailable(), codexCliAvailable(), antigravityCliAvailable()]);
   await Promise.all(reads);
-  if (keyOf("zenApiKeyEncrypted")) none("opencode-zen", "OpenCode Zen has no balance or usage API; the balance lives in the OpenCode console. Recorded Zen turns are counted below.");
-  if (keyOf("jevApiKeyEncrypted")) none("typesafe", "TypeSafe publishes no usage API; Jev calls are counted from the local ledger.");
+  if (keyOf("zenApiKeyEncrypted")) none("opencode-zen", "OpenCode Zen has no balance or usage API; the balance lives in the OpenCode console. Recorded Zen calls and their reported cost are counted below.");
+  if (keyOf("jevApiKeyEncrypted")) none("typesafe", "TypeSafe publishes no usage API; Jev calls are counted from the local ledger and bill the route they ride.");
   if (keyOf("customApiKeyEncrypted") && normalizeCompatEndpoint(settings.customEndpoint)) none("custom", "A custom endpoint has no account reading; its calls are counted from the local ledger.");
-  const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
-  const order = normalizeAutoProviders(settings.aiAutoProviders);
-  if (provider === "lmstudio" || order.includes("lmstudio") || settings.lmStudioEndpoint) none("lmstudio", "A local server has no account; its tokens are counted and nothing is billed.");
-  const [grok, claude, codex, antigravity] = await Promise.all([grokCliAvailable(), claudeCliAvailable(), codexCliAvailable(), antigravityCliAvailable()]);
-  for (const [id, installed] of [["grok", grok], ["claude", claude], ["codex", codex], ["antigravity", antigravity]]) {
-    if (installed) none(id, `${AUTO_PROVIDER_NAMES[id]} bills its own login and has no account API; its replies report tokens, which are counted below.`);
+  const [grok, claude, codex, antigravity] = await installed;
+  for (const [id, present] of [["claude", claude], ["codex", codex], ["grok", grok], ["antigravity", antigravity]]) {
+    if (!present) continue;
+    const { result, refreshing } = cliPlanReading(id, CLI_PLAN_PROBES[id], { allow: probe });
+    if (refreshing) pending.push(id);
+    let entry = result?.ok
+      ? { read: "limits", ok: true, fetchedAt: result.at, limits: result.limits }
+      : result
+        ? { read: "limits", ok: false, fetchedAt: result.at, code: result.code ?? "unavailable", error: result.error }
+        : { read: "limits", ok: false, fetchedAt: null, code: refreshing ? "pending" : "idle", error: refreshing ? "Reading plan windows…" : "Open the Usage panel to read plan windows." };
+    // Codex's own rollouts stand in until, or unless, the live read answers.
+    if (id === "codex" && !entry.ok) {
+      const rollout = await cachedAccountRead("codex-rollout", () => readCodexRollouts());
+      if (rollout.ok) entry = { read: "limits", ok: true, fetchedAt: rollout.limits.asOf, limits: rollout.limits, ...(result && !result.ok ? { liveError: result.error } : {}) };
+    }
+    add(id, { ...entry, refreshing });
   }
   const ordered = accounts.sort((a, b) => Number(b.read !== "none") - Number(a.read !== "none") || a.label.localeCompare(b.label));
-  return { ok: true, at: Date.now(), accounts: ordered };
+  return { ok: true, at: Date.now(), accounts: ordered, pending };
 }
 
 async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = null, provider = "unknown", taskType = "routine", source = "request", escalationOf = null } = {}) {
@@ -2497,6 +3348,11 @@ async function chatCompletion(endpoint, apiKey, model, body, { sessionHeader = n
     // Only an explicit USD field counts as reported cost. Missing billing data
     // and subscription calls are not free, and catalog prices are not receipts.
     observed.costUsd = typeof usage.cost_usd === "number" && Number.isFinite(usage.cost_usd) && usage.cost_usd >= 0 ? usage.cost_usd : null;
+    // Zen bills its balance per call and says so in a top-level `cost` (a USD
+    // string; "0" for a free model). Go replies carry `cost: "0"` too, but Go
+    // bills a plan, so only a Zen reply's cost is a receipt.
+    const zenCost = provider === "zen" && payload.cost !== null && payload.cost !== undefined && String(payload.cost).trim() !== "" ? Number(payload.cost) : NaN;
+    if (observed.costUsd === null && Number.isFinite(zenCost) && zenCost >= 0) observed.costUsd = zenCost;
     const choice = payload.choices?.[0] ?? {};
     const text = choice.message?.content ?? "";
     const reasoning = choice.message?.reasoning_content ?? "";
@@ -2539,6 +3395,7 @@ function responsesAsChat(payload = {}) {
   const usage = payload.usage ?? {};
   return {
     model: payload.model,
+    cost: payload.cost,
     usage: { prompt_tokens: usage.input_tokens, completion_tokens: usage.output_tokens, total_tokens: usage.total_tokens,
       prompt_tokens_details: { cached_tokens: usage.input_tokens_details?.cached_tokens }, cost_usd: usage.cost_usd },
     choices: [{ message: { content: text, reasoning_content: reasoning }, finish_reason: payload.status === "incomplete" ? payload.incomplete_details?.reason ?? "incomplete" : payload.status ?? null }],
@@ -5941,11 +6798,13 @@ function assistantWorkJob(entry) {
 }
 
 // Re-enqueues everything in a pendingWork() result that is not already in
-// flight: journal entries (3 attempts per job id), unanswered messages, then
-// the roles that were mid-run. Returns the human labels of what restarted.
+// flight: journal entries (WORK_MAX_ATTEMPTS per job id), unanswered
+// messages, then the roles that were mid-run. Returns the human labels of
+// what restarted.
 function assistantRestartWork(pending) {
   const restarted = [];
   const roles = new Set();
+  const maxAttempts = assistantModule?.WORK_MAX_ATTEMPTS ?? 3;
   for (const job of pending?.jobs ?? []) {
     const key = job.key || (job.kind === "role" ? job.payload?.role || job.role : job.id);
     if (assistantInFlight(job.id) || assistantInFlight(key)) continue;
@@ -5953,9 +6812,9 @@ function assistantRestartWork(pending) {
     // Waiting work never consumed an attempt. Reopening a paused app must not
     // exhaust the retry budget of a saved job that has not started yet.
     const attempts = (job.attempts ?? 1) + (job.status === "running" ? 1 : 0);
-    if (attempts > 3) {
+    if (attempts > maxAttempts) {
       assistantJournal({ id: job.id, done: true });
-      logError(`gave up after 3 attempts: ${label}`);
+      logError(`gave up after ${maxAttempts} attempts: ${label}`);
       continue;
     }
     const runnable = assistantWorkJob(job);
@@ -6542,7 +7401,9 @@ function refreshTray() {
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: "Open Studio", click: showWindow },
-        { label: held ? "Start agents" : paused ? "Resume assistant" : "Pause assistant", click: () => (held ? releaseStartupHold() : paused ? assistantResume() : assistantPause()).catch(() => {}) },
+        // Resume is start-work, as in the app: a Workspace pause also held new
+        // work, and a bare assistantResume() would leave that hold in place.
+        { label: held ? "Start agents" : paused ? "Resume assistant" : "Pause assistant", click: () => (held ? releaseStartupHold() : paused ? assistantControl("start-work") : assistantPause()).catch(() => {}) },
         { type: "separator" },
         {
           label: "Quit",
@@ -7318,10 +8179,10 @@ async function brainsActivate(id, { applyGates = true } = {}) {
         if (gates.briefing !== null) moved.push(brains.GATES.briefing.label);
       }
       if (gates.jev !== null || gates.modelChoice !== null) {
-        const settings = await readSettings();
-        if (gates.jev !== null) { settings.jevShadow = gates.jev === true; moved.push(brains.GATES.jev.label); }
-        if (gates.modelChoice !== null) { settings.modelSelection = gates.modelChoice; moved.push(brains.GATES.modelChoice.label); }
-        await writeSettings(settings);
+        await updateSettings((settings) => {
+          if (gates.jev !== null) { settings.jevShadow = gates.jev === true; moved.push(brains.GATES.jev.label); }
+          if (gates.modelChoice !== null) { settings.modelSelection = gates.modelChoice; moved.push(brains.GATES.modelChoice.label); }
+        });
         if (gates.jev !== null) { try { (await getJevQueue()).wake(); } catch {} }
       }
     } catch (error) {
@@ -7924,9 +8785,9 @@ async function assistantSetPrefs(patch = {}) {
   if (Object.keys(clean).length) {
     // Saved first: a failed write leaves the running keeper on the prefs the
     // switch shows once it flips back, never on the value that was refused.
-    const settings = await readSettings();
-    settings.assistant = { ...(settings.assistant ?? {}), ...clean };
-    await writeSettings(settings);
+    await updateSettings((settings) => {
+      settings.assistant = { ...(settings.assistant ?? {}), ...clean };
+    });
     assistantState.prefs = { ...assistantState.prefs, ...clean };
     applyKeepAwake();
     applyTray();
@@ -12298,13 +13159,14 @@ async function setAutopilot(prefs = {}) {
   // The same bound applies to saved settings and interactive controls.
   autopilot.parallel = Math.min(autopilot.parallel, EXECUTOR_PARALLEL_CAP);
   const save = (setAutopilot.pendingSave ?? Promise.resolve()).catch(() => {}).then(async () => {
-    const settings = await readSettings();
-    const autoBuild = buildRevision !== null && buildRevision === setAutopilot.buildRevision ? prefs.autoBuild : autopilot.autoBuild !== false;
-    settings.ui = {
-      ...(settings.ui ?? {}),
-      autopilot: { enabled: autopilot.enabled, execute: autopilot.execute, autoBuild, minutes: autopilot.minutes, parallel: autopilot.parallelNarrowedFrom ?? autopilot.parallel, adaptiveParallel: autopilot.adaptiveParallel === true, mode: autopilot.mode === "cluster" ? "cluster" : "swarm" },
-    };
-    await writeSettings(settings);
+    let autoBuild;
+    await updateSettings((settings) => {
+      autoBuild = buildRevision !== null && buildRevision === setAutopilot.buildRevision ? prefs.autoBuild : autopilot.autoBuild !== false;
+      settings.ui = {
+        ...(settings.ui ?? {}),
+        autopilot: { enabled: autopilot.enabled, execute: autopilot.execute, autoBuild, minutes: autopilot.minutes, parallel: autopilot.parallelNarrowedFrom ?? autopilot.parallel, adaptiveParallel: autopilot.adaptiveParallel === true, mode: autopilot.mode === "cluster" ? "cluster" : "swarm" },
+      };
+    });
     if (buildRevision !== null && buildRevision === setAutopilot.buildRevision) autopilot.autoBuild = autoBuild;
   });
   setAutopilot.pendingSave = save;
@@ -12474,12 +13336,13 @@ async function bootAutopilot() {
 // read: the blobs move to auth.json first, then leave the preferences file, so
 // no crash window ever holds them nowhere.
 async function readSettings() {
-  let settings = {};
+  let bytes = null, failure = null;
   try {
-    settings = JSON.parse(await readFile(SETTINGS_PATH, "utf8"));
-  } catch {
-    settings = {};
+    bytes = await readFile(SETTINGS_PATH);
+  } catch (error) {
+    failure = error;
   }
+  const settings = settingsFromDisk(bytes, failure);
   const { auth: stale, plain } = authStore.splitAuthFields(settings);
   const auth = await authStore.readAuthStore(AUTH_PATH);
   if (Object.keys(stale).length) {
@@ -12496,10 +13359,80 @@ async function readSettings() {
 // with no keys anywhere writes no auth file at all.
 async function writeSettings(next) {
   const { auth, plain } = authStore.splitAuthFields(next);
-  await authStore.atomicWriteJson(SETTINGS_PATH, { ...plain, projects: projects.saved() });
+  const saved = { ...plain, projects: projects.saved() };
+  if (settingsDisk.unreadable && settingsDisk.good === null) {
+    // Nothing good was ever read, so this view grew from {}: writing it would
+    // replace every saved preference and project. Hold it for the session and
+    // leave the broken file for the owner. Keys still reach auth.json, whose
+    // own read was fine.
+    settingsDisk.held = JSON.stringify(saved);
+    logLine(`[settings] change kept until restart only: settings.json is unreadable${settingsDisk.copy ? ` (copied to ${settingsDisk.copy})` : ""}; fix or remove it to save again`);
+  } else {
+    await authStore.atomicWriteJson(SETTINGS_PATH, saved);
+    Object.assign(settingsDisk, { good: JSON.stringify(saved), held: null, unreadable: false });
+  }
   if (Object.keys(auth).length || Object.keys(await authStore.readAuthStore(AUTH_PATH)).length) {
     await authStore.writeAuthStore(AUTH_PATH, auth);
   }
+}
+
+// One verdict for every settings.json read, the startup read included. A
+// missing file is a fresh install and reads as {}. Anything else (a torn or
+// empty write, a sync conflict, a bad hand edit, a locked file) never reads
+// as {}: unparseable bytes are copied aside to settings.broken-<time>.json
+// once, the failure is logged, and the view falls back to the last copy this
+// process parsed or wrote, so the next save rewrites the file from that.
+// With no such copy, writeSettings holds saves in memory instead.
+function settingsFromDisk(bytes, failure, log = logLine) {
+  if (failure?.code === "ENOENT") {
+    settingsDisk.unreadable = false;
+    return {};
+  }
+  if (!failure) {
+    const text = bytes.toString("utf8");
+    try {
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("not a JSON object");
+      Object.assign(settingsDisk, { good: text, held: null, unreadable: false });
+      return parsed;
+    } catch (error) {
+      failure = error;
+    }
+    if (text !== settingsDisk.broken) {
+      settingsDisk.broken = text;
+      const copy = path.join(path.dirname(SETTINGS_PATH), `settings.broken-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
+      try {
+        writeFileSync(copy, bytes);
+        settingsDisk.copy = copy;
+        log(`[settings] settings.json is unreadable (${failure.message}); copied it to ${copy}`);
+      } catch (error) {
+        log(`[settings] settings.json is unreadable (${failure.message}) and could not be copied aside: ${error.message}`);
+      }
+    }
+  } else if (!settingsDisk.unreadable) {
+    log(`[settings] settings.json could not be read: ${failure.message}`);
+  }
+  settingsDisk.unreadable = true;
+  const fallback = settingsDisk.good ?? settingsDisk.held;
+  return fallback ? JSON.parse(fallback) : {};
+}
+
+// Every read-modify-write of settings.json runs here, one at a time and on a
+// fresh read, so two writers landing together (a prefs toggle and an
+// autopilot save) both keep their change. `mutate` edits the merged view in
+// place and returns false to write nothing; keep it quick, since every other
+// save waits on it. Without `mutate` the view is saved as read, which is how
+// a changed project list (projects.saved()) reaches the file. Resolves to the
+// view, saved or not.
+function updateSettings(mutate) {
+  const run = settingsDisk.queue.then(async () => {
+    const settings = await readSettings();
+    if (mutate && (await mutate(settings)) === false) return settings;
+    await writeSettings(settings);
+    return settings;
+  });
+  settingsDisk.queue = run.catch(() => {});
+  return run;
 }
 
 function send(channel, payload) {
@@ -12526,11 +13459,10 @@ async function firstLaunchAutoSetup() {
     return result;
   }
   const record = { at: Date.now(), automatic: true, applied: result.applied === true, summary: String(result.summary ?? ""), notes: Array.isArray(result.notes) ? result.notes.map(String) : [] };
-  const next = await readSettings();
-  if (!next.autoSetup) {
+  await updateSettings((next) => {
+    if (next.autoSetup) return false;
     next.autoSetup = record;
-    await writeSettings(next);
-  }
+  });
   logLine(`[setup] first launch: ${record.summary}`);
   send("setup:auto-setup", record);
   return { ...result, record };
@@ -13024,7 +13956,7 @@ async function adoptProject(previous, next, { savedAgents = 0, selected = false 
   autopilot.waiting = null;
   autopilot.lastError = null;
   autopilot.infraFailures = autopilot.parkedUntil = 0;
-  await writeSettings(await readSettings());
+  await updateSettings();
   const eyes = await getEyes();
   const [tasks, requests, ideas] = await Promise.all([eyes.readJson(TASKS_PATH, []), eyes.readJson(REQUESTS_PATH, []), eyes.readJson(IDEAS_PATH, [])]);
   send("projects:changed", projects.list());
@@ -13200,7 +14132,7 @@ function registerIpc() {
         const switched = await selectProject(added.id);
         if (switched.ok !== false) return { ...switched, addedId: added.id, selectedId: added.id };
       }
-      await writeSettings(await readSettings());
+      await updateSettings();
       const result = { ...projects.list(), addedId: added.id };
       send("projects:changed", result);
       return result;
@@ -13230,7 +14162,7 @@ function registerIpc() {
       try {
         const removed = projects.remove(id);
         if (!removed.activeChanged) {
-          await writeSettings(await readSettings());
+          await updateSettings();
           send("projects:changed", projects.list());
           return { ...projects.list(), removedId: removed.removed.id };
         }
@@ -13376,7 +14308,7 @@ function registerIpc() {
 
   ipcMain.handle("studio:stop", () => {
     if (!activeChild) return { ok: true, stopped: false };
-    spawn("taskkill", ["/pid", String(activeChild.pid), "/t", "/f"]);
+    spawn("taskkill", ["/pid", String(activeChild.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
     logLine("stop requested");
     return { ok: true, stopped: true };
   });
@@ -13404,12 +14336,13 @@ function registerIpc() {
   });
 
   ipcMain.handle("settings:set-key", async (_event, apiKey, which = "opencode") => {
-    const settings = await readSettings();
     const field = keyFieldFor(which);
-    if (!apiKey) delete settings[field];
-    else if (safeStorage.isEncryptionAvailable()) settings[field] = safeStorage.encryptString(apiKey).toString("base64");
-    else return { ok: false, error: "OS encryption unavailable" };
-    await writeSettings(settings);
+    if (apiKey && !safeStorage.isEncryptionAvailable()) return { ok: false, error: "OS encryption unavailable" };
+    const encrypted = apiKey ? safeStorage.encryptString(apiKey).toString("base64") : null;
+    await updateSettings((settings) => {
+      if (encrypted) settings[field] = encrypted;
+      else delete settings[field];
+    });
     providerBreaker.reset(); // a new key deserves a try now, not after a pause
     if (["gateway", "jev", "zen", "openrouter"].includes(which)) (await getJevQueue()).wake();
     return { ok: true };
@@ -13418,9 +14351,9 @@ function registerIpc() {
   ipcMain.handle("jev:status", () => jevStatus());
   ipcMain.handle("jev:probe", () => probeJev());
   ipcMain.handle("jev:set-enabled", async (_event, enabled) => {
-    const settings = await readSettings();
-    settings.jevShadow = enabled === true;
-    await writeSettings(settings);
+    await updateSettings((settings) => {
+      settings.jevShadow = enabled === true;
+    });
     (await getJevQueue()).wake();
     return jevStatus();
   });
@@ -13429,9 +14362,9 @@ function registerIpc() {
   ipcMain.handle("jev:set-route", async (_event, value) => {
     const client = await loadModule("scripts/decision-client.mjs");
     if (!client.isJevRoute(value)) return { ok: false, error: "Unknown Jev route" };
-    const settings = await readSettings();
-    settings.jevRoute = client.normalizeJevRoute(value);
-    await writeSettings(settings);
+    await updateSettings((settings) => {
+      settings.jevRoute = client.normalizeJevRoute(value);
+    });
     (await getJevQueue()).wake();
     return jevStatus();
   });
@@ -13506,8 +14439,22 @@ function registerIpc() {
     };
   });
 
+  // The patch lands on the queue's fresh read, so a save landing beside it
+  // keeps its change; a refusal writes nothing.
   ipcMain.handle("settings:set-ai-routing", async (_event, patch = {}) => {
-    const settings = await readSettings();
+    let refusal = null;
+    await updateSettings((settings) => {
+      refusal = applyAiRoutingPatch(settings, patch);
+      if (refusal) return false;
+    });
+    if (refusal) return refusal;
+    providerBreaker.reset(); // new routes, models or endpoints start unpaused
+    return { ok: true };
+  });
+
+  // Applies a routing patch to a settings view in place. A refusal comes back
+  // as the reply, and the caller writes nothing.
+  function applyAiRoutingPatch(settings, patch) {
     if (patch.modelSelection !== undefined) {
       if (!["jev", "fixed"].includes(patch.modelSelection)) return { ok: false, error: "Unknown model selection mode" };
       settings.modelSelection = patch.modelSelection;
@@ -13621,10 +14568,8 @@ function registerIpc() {
       if (raw) settings[key] = raw;
       else delete settings[key];
     }
-    await writeSettings(settings);
-    providerBreaker.reset(); // new routes, models or endpoints start unpaused
-    return { ok: true };
-  });
+    return null;
+  }
 
   // Auto setup: the one-click path through the same settings the controls
   // above write. Detection reads saved-key flags, CLI installs and — only when
@@ -13644,7 +14589,7 @@ function registerIpc() {
       loadModule("scripts/first-run-service.mjs"), loadModule("scripts/first-scan.mjs"), loadModule("scripts/first-map.mjs"), loadModule("scripts/choice-judge.mjs"), loadModule("scripts/setup-assist.mjs"),
     ]);
     firstRunService = service.createFirstRunService({
-      scanner, mapper, judge, readSettings, writeSettings, decryptKey,
+      scanner, mapper, judge, readSettings, writeSettings, updateSettings, decryptKey,
       assistantRoute: async () => { try { return await resolveAiRoute("routine"); } catch (error) { return { ok: false, error: String(error?.message ?? error) }; } },
       projects,
       analyzeProject: async () => { const result = await runAnalyzer({ kind: "project" }); return result?.ok ? result.result : null; },
@@ -13665,7 +14610,12 @@ function registerIpc() {
   }
   ipcMain.handle("setup:first-run-status", async () => (await firstRun()).status());
   ipcMain.handle("setup:first-scan", async (_event, payload) => (await firstRun()).scan(payload ?? {}));
-  ipcMain.handle("setup:first-scan-apply", async (_event, payload) => (await firstRun()).apply(payload ?? {}));
+  ipcMain.handle("setup:first-scan-apply", async (_event, payload) => {
+    const result = await (await firstRun()).apply(payload ?? {});
+    // The walkthrough can apply routing behind an already-open Settings page.
+    if (result?.ok !== false) send("settings:changed", { source: "first-scan" });
+    return result;
+  });
   ipcMain.handle("setup:first-map", async (_event, payload) => (await firstRun()).map(payload ?? {}));
   ipcMain.handle("setup:first-map-cancel", async () => (await firstRun()).cancel());
   ipcMain.handle("setup:first-assist", async (_event, payload) => (await firstRun()).assist(payload ?? {}));
@@ -13699,13 +14649,13 @@ function registerIpc() {
       return { ...plan, applied: false, summary: `Already set up - ${summary.charAt(0).toLowerCase()}${summary.slice(1)}` };
     }
     if (!apply) return { ...plan, applied: false, planned: true, summary };
-    // Re-read before writing so a concurrent key or routing save is not lost.
-    const next = await readSettings();
-    if (plan.changes.provider !== undefined) next.aiProvider = plan.changes.provider;
-    if (plan.changes.modelSelection !== undefined) next.modelSelection = plan.changes.modelSelection;
-    if (plan.changes.executorCli !== undefined) next.executorCli = plan.changes.executorCli;
-    if (plan.changes.autoFallback === false) next.aiAutoFallback = false;
-    await writeSettings(next);
+    // Applied on the queue's fresh read so a concurrent key or routing save is not lost.
+    await updateSettings((next) => {
+      if (plan.changes.provider !== undefined) next.aiProvider = plan.changes.provider;
+      if (plan.changes.modelSelection !== undefined) next.modelSelection = plan.changes.modelSelection;
+      if (plan.changes.executorCli !== undefined) next.executorCli = plan.changes.executorCli;
+      if (plan.changes.autoFallback === false) next.aiAutoFallback = false;
+    });
     providerBreaker.reset(); // the routes it just chose start unpaused
     logLine(`[setup] auto setup: ${summary}`);
     return { ...plan, applied: true, summary };
@@ -13808,9 +14758,9 @@ function registerIpc() {
   // Every connected provider's own account reading, one entry per provider:
   // a live window, quota or balance where the provider offers one over the
   // saved key, and a plain statement where it does not. Keys never cross IPC.
-  ipcMain.handle("usage:accounts", async () => {
-    try { return await usageAccounts(); }
-    catch (error) { return { ok: false, error: error.message, accounts: [] }; }
+  ipcMain.handle("usage:accounts", async (_event, options = {}) => {
+    try { return await usageAccounts({ probe: options?.probe === true }); }
+    catch (error) { return { ok: false, error: error.message, accounts: [], pending: [] }; }
   });
 
   ipcMain.handle("speed:measurements-read", async () => {
@@ -13831,7 +14781,19 @@ function registerIpc() {
     return { ok: true, path: result.filePaths[0] };
   });
 
-  ipcMain.handle("shell:open", (_event, url) => shell.openExternal(url));
+  // Web links only: a renderer-supplied file:, javascript:, ms-settings: or
+  // other custom-scheme URL would hand an arbitrary target to the OS shell.
+  ipcMain.handle("shell:open", async (_event, url) => {
+    let parsed = null;
+    try {
+      parsed = typeof url === "string" && url.length <= 8192 ? new URL(url) : null;
+    } catch {
+      parsed = null;
+    }
+    if (!parsed || (parsed.protocol !== "http:" && parsed.protocol !== "https:")) return { ok: false, error: "Only http and https links open outside Studio." };
+    await shell.openExternal(parsed.href);
+    return { ok: true };
+  });
   ipcMain.handle("shell:reveal", (_event, filePath) => {
     if (filePath) shell.showItemInFolder(String(filePath));
     return { ok: true };
@@ -14140,9 +15102,9 @@ function registerIpc() {
     return { ok: true, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, proactive: true, ...(settings.ui ?? {}) } };
   });
   ipcMain.handle("prefs:set", async (_event, prefs) => {
-    const settings = await readSettings();
-    settings.ui = { ...(settings.ui ?? {}), ...(prefs ?? {}) };
-    await writeSettings(settings);
+    const settings = await updateSettings((next) => {
+      next.ui = { ...(next.ui ?? {}), ...(prefs ?? {}) };
+    });
     return { ok: true, prefs: settings.ui };
   });
 
@@ -14158,16 +15120,41 @@ function registerIpc() {
       return { ok: false, error: String(error?.message ?? error) };
     }
   });
-  ipcMain.handle("machine:set", async (_event, prefs) => {
+  // Reading the machine preferences must not write settings.json (and with it
+  // auth.json): the Explorer used machine:set({}) as a read on every poll.
+  ipcMain.handle("machine:get", async () => {
     const settings = await readSettings();
-    settings.machine = { ...MACHINE_DEFAULTS, ...(settings.machine ?? {}), ...(prefs ?? {}) };
-    await writeSettings(settings);
+    return { ok: true, machine: { ...MACHINE_DEFAULTS, ...(settings.machine ?? {}) } };
+  });
+  ipcMain.handle("machine:set", async (_event, prefs) => {
+    const settings = await updateSettings((next) => {
+      next.machine = { ...MACHINE_DEFAULTS, ...(next.machine ?? {}), ...(prefs ?? {}) };
+    });
     return { ok: true, machine: settings.machine };
   });
+  // taskkill /t /f takes the whole tree, so the renderer's pid must name a row
+  // the panel offers a stop for: a LÖVE process in the latest scan that is a
+  // test run, or one the resource manager would kill itself (resourcePass's
+  // automatic path checks verdict.killable). readMachineStatus reuses a scan
+  // under two seconds old and otherwise rescans, so a pid that has exited
+  // since the panel drew it, and may name another process by now, is refused.
   ipcMain.handle("machine:kill", async (_event, { pid } = {}) => {
-    if (!pid) return { ok: false, error: "pid required" };
-    spawn("taskkill", ["/pid", String(pid), "/t", "/f"], { windowsHide: true });
-    logLine(`[machine] manual kill pid ${pid}`);
+    const target = Number(pid);
+    if (!Number.isInteger(target) || target <= 0) return { ok: false, error: "pid required" };
+    let status;
+    try {
+      status = await readMachineStatus();
+    } catch (error) {
+      return { ok: false, error: `machine scan failed: ${String(error?.message ?? error)}` };
+    }
+    const verdict = (status?.processes ?? []).find((row) => Number(row?.pid) === target);
+    if (!verdict || !(verdict.killable || verdict.test)) {
+      logLine(`[machine] refused manual kill of pid ${target}: not a LOVE test run in the latest scan`);
+      return { ok: false, error: `pid ${target} is not a LOVE test run in the latest machine scan` };
+    }
+    machineReadCache = null;
+    spawn("taskkill", ["/pid", String(target), "/t", "/f"], { windowsHide: true, stdio: "ignore" }).on?.("error", () => {});
+    logLine(`[machine] manual kill pid ${target} (${verdict.status})`);
     return { ok: true };
   });
 
@@ -14178,9 +15165,9 @@ function registerIpc() {
     return { ok: true, status: updateEvent({ auto: settings.update?.auto !== false, watching: false }) };
   });
   ipcMain.handle("update:set", async (_event, { auto } = {}) => {
-    const settings = await readSettings();
-    settings.update = { ...(settings.update ?? {}), auto: auto !== false };
-    await writeSettings(settings);
+    await updateSettings((settings) => {
+      settings.update = { ...(settings.update ?? {}), auto: auto !== false };
+    });
     const status = updater?.setAuto(auto !== false) ?? updateEvent({ auto: auto !== false, watching: false });
     return { ok: true, status };
   });
@@ -14209,6 +15196,19 @@ function registerIpc() {
     return { ok: true, status: releaseStatus() };
   });
   ipcMain.handle("release:apply", async () => applyReleaseUpdate());
+
+  // ---- Community ----------------------------------------------------------
+  // The Discord link behind the Void collection perks (the "Discord community
+  // link" block beside the release watcher). App-wide, so handleProjectIpc
+  // lets community:* through ungated. Every reply carries the public status;
+  // tokens stay in this process.
+  ipcMain.handle("community:status", async () => ({ ok: true, status: await communitySnapshot() }));
+  ipcMain.handle("community:link", async () => linkCommunity());
+  ipcMain.handle("community:link-cancel", async () => cancelCommunityLink());
+  ipcMain.handle("community:check", async () => checkCommunityNow());
+  ipcMain.handle("community:unlink", async () => unlinkCommunity());
+  ipcMain.handle("community:prompt", async (_event, payload) => communityPromptAction(payload?.action));
+  ipcMain.handle("community:open", async (_event, payload) => openCommunityTarget(payload?.target));
 }
 
 // Bounds a restart saved, when they still land on a display that exists.
@@ -14226,11 +15226,45 @@ function savedWindowBounds() {
   }
 }
 
+// The smallest window every layout is built and checked for (the verifiers
+// drive 600px-wide windows); bounds saved from a smaller one open at this size.
+const MIN_WINDOW = Object.freeze({ width: 600, height: 560 });
+
+// The Studio window only ever shows its own page. A link that asks for a new
+// window opens in the default browser (http and https only, never as a child
+// window of the app), and anything that would navigate the window itself away
+// from the booklet (a dropped link, a stray href, a script) is refused. The
+// booklet reloading itself, with any query, stays allowed.
+function guardWindowNavigation(contents, pageFile) {
+  const { fileURLToPath } = require("node:url");
+  const page = path.resolve(pageFile);
+  const samePath = (file) => (process.platform === "win32" ? file.toLowerCase() === page.toLowerCase() : file === page);
+  const isPage = (url) => {
+    try {
+      const target = new URL(String(url));
+      return target.protocol === "file:" && samePath(path.resolve(fileURLToPath(target)));
+    } catch {
+      return false;
+    }
+  };
+  contents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/i.test(String(url))) shell.openExternal(url).catch(() => {});
+    return { action: "deny" };
+  });
+  // Electron carries the target on the event; older builds passed it second.
+  contents.on("will-navigate", (event, legacyUrl) => {
+    if (!isPage(event?.url ?? legacyUrl)) event.preventDefault();
+  });
+}
+
 function createWindow() {
   const saved = savedWindowBounds();
+  const page = path.join(STUDIO_ROOT, "renderer", "booklet.html");
   window = new BrowserWindow({
-    width: saved?.width ?? 1460,
-    height: saved?.height ?? 940,
+    width: Math.max(MIN_WINDOW.width, saved?.width ?? 1460),
+    height: Math.max(MIN_WINDOW.height, saved?.height ?? 940),
+    minWidth: MIN_WINDOW.width,
+    minHeight: MIN_WINDOW.height,
     ...(saved ? { x: saved.x, y: saved.y } : {}),
     show: !SMOKE && !CAPTURE,
     backgroundColor: "#0d1118",
@@ -14257,6 +15291,7 @@ function createWindow() {
     },
   });
   if (saved?.maximized) window.maximize();
+  guardWindowNavigation(window.webContents, page);
   // Zen mode's "desktop audio" reactive input arrives as a getDisplayMedia
   // request. Answer it with the screen the window sits on plus system
   // loopback, so no source picker ever opens over the constellation.
@@ -14279,7 +15314,7 @@ function createWindow() {
     });
   }
   const view = window;
-  const loadView = () => view.loadFile(path.join(STUDIO_ROOT, "renderer", "booklet.html"), {
+  const loadView = () => view.loadFile(page, {
     query: { capture: CAPTURE ? "1" : "0", smoke: SMOKE ? "1" : "0" },
   });
   rendererRecovery = attachRendererRecovery({
@@ -14515,9 +15550,9 @@ app.whenReady().then(() => {
         app.exit(1);
         return;
       }
-      const settings = await readSettings();
-      settings.apiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
-      await writeSettings(settings);
+      await updateSettings((settings) => {
+        settings.apiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
+      });
       console.log(`key stored encrypted (${key.length} chars, ${process.platform} safeStorage)`);
       app.exit(0);
     })();
@@ -14536,9 +15571,9 @@ app.whenReady().then(() => {
         app.exit(1);
         return;
       }
-      const settings = await readSettings();
-      settings.zaiApiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
-      await writeSettings(settings);
+      await updateSettings((settings) => {
+        settings.zaiApiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
+      });
       console.log(`z.ai key stored encrypted (${key.length} chars, ${process.platform} safeStorage)`);
       app.exit(0);
     })();
@@ -14561,9 +15596,9 @@ app.whenReady().then(() => {
         app.exit(1);
         return;
       }
-      const settings = await readSettings();
-      settings.customApiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
-      await writeSettings(settings);
+      await updateSettings((settings) => {
+        settings.customApiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
+      });
       console.log(`custom endpoint key stored encrypted (${key.length} chars, ${process.platform} safeStorage)`);
       app.exit(0);
     })();
@@ -14586,9 +15621,9 @@ app.whenReady().then(() => {
         app.exit(1);
         return;
       }
-      const settings = await readSettings();
-      settings.gatewayApiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
-      await writeSettings(settings);
+      await updateSettings((settings) => {
+        settings.gatewayApiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
+      });
       console.log(`AI gateway key stored encrypted (${key.length} chars, ${process.platform} safeStorage) — route: Vercel AI Gateway`);
       app.exit(0);
     })();
@@ -14607,9 +15642,9 @@ app.whenReady().then(() => {
         app.exit(1);
         return;
       }
-      const settings = await readSettings();
-      settings.jevApiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
-      await writeSettings(settings);
+      await updateSettings((settings) => {
+        settings.jevApiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
+      });
       console.log(`Jev API key stored encrypted (${key.length} chars, ${process.platform} safeStorage) — route: TypeSafe Jev API`);
       app.exit(0);
     })();
@@ -14628,9 +15663,9 @@ app.whenReady().then(() => {
         app.exit(1);
         return;
       }
-      const settings = await readSettings();
-      settings.zenApiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
-      await writeSettings(settings);
+      await updateSettings((settings) => {
+        settings.zenApiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
+      });
       console.log(`OpenCode Zen key stored encrypted (${key.length} chars, ${process.platform} safeStorage) — route: OpenCode Zen`);
       app.exit(0);
     })();
@@ -14649,9 +15684,9 @@ app.whenReady().then(() => {
         app.exit(1);
         return;
       }
-      const settings = await readSettings();
-      settings.openrouterApiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
-      await writeSettings(settings);
+      await updateSettings((settings) => {
+        settings.openrouterApiKeyEncrypted = safeStorage.encryptString(key).toString("base64");
+      });
       console.log(`OpenRouter key stored encrypted (${key.length} chars, ${process.platform} safeStorage) — route: OpenRouter`);
       app.exit(0);
     })();
@@ -14745,6 +15780,8 @@ app.whenReady().then(() => {
   // Both are fire-and-forget: a failure is logged, never an unhandled rejection.
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => startUpdateWatch().catch((error) => logLine(`[update] watch failed: ${error?.message ?? error}`)), 3500);
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => startReleaseWatch(), 6000);
+  // Its first look is 15 s in; nothing reaches Discord unless a link exists.
+  if (!SMOKE && !CAPTURE && !CLI_MODE) startCommunityWatch();
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRestart().catch(() => {}));
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRelease().catch(() => {}));
   // The assistant service runs on its own clock, renderer or not; the smoke
@@ -14808,6 +15845,7 @@ app.on("window-all-closed", () => {
   stopReleaseWatch();
   stopEyesWatch();
   stopMachineWatch();
+  stopCommunityWatch();
   if (process.platform !== "darwin") app.quit();
 });
 
@@ -14835,11 +15873,11 @@ app.on("before-quit", (event) => {
 });
 
 process.on("exit", () => {
-  if (activeChild) spawn("taskkill", ["/pid", String(activeChild.pid), "/t", "/f"]);
+  if (activeChild) spawn("taskkill", ["/pid", String(activeChild.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
   saveAssistantSync();
   for (const entry of autopilot.jobs) {
     const pid = entry.pid ?? entry.child?.pid;
-    if (pid) spawn("taskkill", ["/pid", String(pid), "/t", "/f"]);
+    if (pid) spawn("taskkill", ["/pid", String(pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
   }
 });
 
