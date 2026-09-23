@@ -752,15 +752,68 @@ test("graph connections offer each wire to the style and keep the plain line whe
   assert.equal(ctx.lineCap, "butt");
 });
 
+test("the session and todo hops on the way to busy work carry work too, and the edge loop allocates no look", () => {
+  const root = { node: { id: "root", kind: "root" }, p: { x: 0, y: 0 } };
+  const session = { node: { id: "s1", kind: "session" }, p: { x: 100, y: 100 } };
+  const todo = { node: { id: "s1:0", kind: "todo", sessionId: "s1", state: "active" }, p: { x: 200, y: 200 } };
+  const offered = [];
+  const spy = { wire: (_pen, _style, _a, _b, o) => { offered.push({ kind: o.kind, active: o.active, march: o.march, flow: o.flow, dash: o.dash }); return true; } };
+  const state = { nodeStyle: "orbs", nodeLayout: "constellation", edges: [{ a: 0, b: 1 }, { a: 1, b: 2 }] };
+  let busy = new Set();
+  const env = vm.createContext({ state, Math, Map, NODE_RGB: { task: [1, 2, 3] }, rgba: () => "color", agentRgb: () => [4, 5, 6], colorOf: () => [7, 8, 9], isBusyNode: (node) => busy.has(node.id), window: { MefiNodeStyles: spy } });
+  vm.runInContext(section("function drawGraphConnections(", "function drawFrame("), env);
+  const ctx = { beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, setLineDash() {} };
+  const render = () => { offered.length = 0; env.drawGraphConnections(ctx, [root, session, todo], new Set(), false, 500); return offered.map(({ kind, flow }) => `${kind}:${flow}`); };
+  assert.deepEqual(render(), ["session:false", "todo:false"], "quiet hops carry nothing");
+  busy = new Set(["s1", "s1:0"]);
+  env.noMotion = () => false;
+  assert.deepEqual(render(), ["session:true", "todo:true"], "the hops toward busy work flow (the style runs them calmer than the task's own wire)");
+  assert.ok(offered.every(({ active, march }) => active === true && march === false), "active, with no dashes to march");
+  env.noMotion = () => true;
+  assert.deepEqual(render(), ["session:true", "todo:true"], "reduced motion still offers them, held");
+  delete env.noMotion;
+  const loop = section("function drawGraphConnectionsImpl(", "// ---------- backdrop scenes");
+  assert.ok(loop.includes("const style = edgeStyleInto(EDGE_LOOK, edge, a, b, active, inspected, primary);"), "the edge loop fills one look scratch");
+  assert.ok(!loop.includes("{ active, inspected, primary }"), "and builds no option literal per edge");
+});
+
 // A pulse along a tree branch rides the branch's S-curve; the hub link and
 // the constellation stay straight.
 test("a travelling pulse carries its branch's S-curve controls and the node theme to surge", () => {
+  // drawFrame's pulse pass, run on its own with a spy surge.
   const frame = section("function drawFrame(", "function measure(");
-  assert.ok(frame.includes("const pulseLook = nodeStyles ? { kind: \"dot\", time, still, rTo: 0, detail: 3, pulse: null, motion: null, cp: null, theme: state.nodeTheme ?? null } : null;"));
-  assert.ok(frame.includes("const pulseBranches = state.nodeLayout === \"tree\" || state.nodeLayout === \"layers\";"));
-  assert.ok(frame.includes("state.branchParents?.get(pulse.to?.id) === pulse.from?.id || state.branchParents?.get(pulse.from?.id) === pulse.to?.id"), "either direction along a parent link");
-  assert.ok(frame.includes("pulseBend.x1 = from.x; pulseBend.y1 = middle; pulseBend.x2 = to.x; pulseBend.y2 = middle;"), "the wire's own S-curve controls (symmetric, so they serve both directions)");
-  assert.ok(frame.includes("pulseLook.cp = branch ? pulseBend : null;"));
+  const start = frame.indexOf("    // pulses: bright travelling dots"), end = frame.indexOf("    // particles: vaporized external work");
+  assert.ok(start > 0 && end > start, "the pulse pass");
+  const surges = [], lands = [];
+  const spy = { surge: (_ctx, style, _from, _to, _t, pulse, o) => { surges.push({ id: pulse.id, style, cp: o.cp && { ...o.cp }, theme: o.theme, kind: o.kind }); return true; } };
+  const theme = { key: "theme" };
+  const root = { id: "root", kind: "root", x: 0, y: 0 }, hub = { id: "assistant", kind: "assistant", x: 100, y: 0 };
+  const session = { id: "s1", kind: "session", x: 40, y: 100 }, task = { id: "t1", kind: "task", x: 200, y: 300 };
+  const state = { nodeStyle: "orbs", nodeLayout: "tree", nodeTheme: theme, nodeMotion: new Map(), pulses: [], branchParents: new Map([["s1", "root"], ["t1", "s1"], ["assistant", "root"]]) };
+  const env = vm.createContext({
+    state, Math, Map, Date: { now: () => 1000 }, LAND_TAIL_MS: 380, musicBands: { bass: 0 }, hexToRgb: () => [1, 2, 3],
+    project: (node) => ({ x: node.x, y: node.y }), surgeLine() { throw new Error("the style drew it"); }, landPulse: (...args) => lands.push(args),
+  });
+  vm.runInContext(`function pulsePass(ctx, nodeStyles, time, still, screenPoints) {\n${frame.slice(start, end)}\n}`, env);
+  const screen = new Map([root, hub, session, task].map((node) => [node.id, { x: node.x, y: node.y }]));
+  const run = () => {
+    surges.length = 0;
+    const pulse = (id, from, to, extra = {}) => ({ id, from, to, start: 500, duration: 900, color: "#ffffff", ...extra });
+    state.pulses = [pulse("down", session, task), pulse("up", task, session, { wave: true }), pulse("hub", root, hub), pulse("back", hub, root), pulse("across", hub, task)];
+    env.pulsePass({}, spy, 1000, false, screen);
+    return Object.fromEntries(surges.map(({ id, cp }) => [id, cp]));
+  };
+  const tree = run();
+  assert.deepEqual(tree.down, { x1: 40, y1: 200, x2: 200, y2: 200 }, "parent → child rides the branch's S-curve");
+  assert.deepEqual(tree.up, { x1: 200, y1: 200, x2: 40, y2: 200 }, "child → parent too, the same curve walked the other way");
+  assert.deepEqual([tree.hub, tree.back, tree.across], [null, null, null], "the hub link (either way) and a pulse off any branch stay straight");
+  assert.ok(surges.every(({ theme: seen, style }) => seen === theme && style === "orbs"), "every pulse carries the node theme");
+  assert.deepEqual(surges.map(({ kind }) => kind), ["dot", "wave", "dot", "dot", "dot"]);
+  assert.equal(lands.length, 0, "nothing has landed yet");
+  state.nodeLayout = "layers";
+  assert.deepEqual(run().down, { x1: 40, y1: 200, x2: 200, y2: 200 }, "Layers draws the same S-curves");
+  state.nodeLayout = "constellation";
+  assert.ok(Object.values(run()).every((cp) => cp === null), "the constellation's straight wires carry straight pulses");
   assert.ok(section("function landPulse(", "function surgeLine(").includes("look.cp = null;"), "a landing never sees a travelling pulse's curve");
 });
 

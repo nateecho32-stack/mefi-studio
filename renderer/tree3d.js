@@ -1385,6 +1385,9 @@
         railWire.tint = tone.tint; railWire.alpha = visibility * tone.alpha; railWire.lifetime = visibility;
         railWire.dash = RAIL_NO_DASH; railWire.march = false; railWire.flow = false; railWire.active = active;
         railWire.seed = railMotion.get(edge.b.id)?.seed ?? 0; railWire.rA = edge.a._pr ?? 0; railWire.rB = edge.b._pr ?? 0;
+        // (railWire.alpha carries the visibility; a plain line the style
+        // left to the rail below must not dim the next edge's style twice)
+        ctx.globalAlpha = 1;
         if (styles.wire(ctx, nodeStyle, a, b, railWire)) continue;
       }
       ctx.globalAlpha = visibility;
@@ -1452,10 +1455,11 @@
       if (!a || !b || a.depth < 60 || b.depth < 60) continue;
       if (styles) {
         // A tether is working by definition: the style may glow it and run
-        // its flow toward the node the agent works on.
+        // its flow (flow: true) toward the node the agent works on. Its line
+        // is solid, so there is nothing to march.
         const visibility = node.opacity ?? 1;
         railWire.kind = "tether"; railWire.tint = railTint(agentColor(node.role)); railWire.alpha = visibility * 0.38; railWire.lifetime = visibility;
-        railWire.dash = RAIL_NO_DASH; railWire.march = !still; railWire.flow = true; railWire.active = true;
+        railWire.dash = RAIL_NO_DASH; railWire.march = false; railWire.flow = true; railWire.active = true;
         railWire.seed = railMotion.get(node.id)?.seed ?? 0; railWire.rA = node._pr ?? 0; railWire.rB = target._pr ?? 0;
         if (styles.wire(ctx, nodeStyle, a, b, railWire)) continue;
       }

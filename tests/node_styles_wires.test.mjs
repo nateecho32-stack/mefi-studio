@@ -38,7 +38,8 @@ test("the wires section keeps a frame free of allocations, gradients per frame a
     assert.ok(!code.includes(banned), `the wires section never uses ${banned}`);
   }
   assert.equal(code.split("createRadialGradient(").length - 1, 1, "one radial, the cached light sprite");
-  assert.ok(code.includes("sprites.size >= LIGHT_SPRITES_MAX") && code.includes("const LIGHT_SPRITES_MAX = 32;"), "the sprites are capped at 32 a canvas");
+  assert.ok(code.includes("let sprite = cacheGet(ctx, key);") && code.includes("cachePut(ctx, key, sprite);"), "the sprites live in the node paint cache (no second cache)");
+  assert.ok(code.includes("key = `wire|light|${tone.join(\",\")}`; lightKeys.set(tone, key);"), "keyed by the tone's value, remembered per triple (no alpha, time or radius)");
   assert.ok(!/style === "/.test(code) && !/style !== "/.test(code), "the defaults never branch on a style's name (a style's feel is its WIRE_PACKS row)");
   assert.ok(code.includes("const WIRE_DEFAULTS = { wire: wireDefault, surge: surgeDefault, land: landDefault };"));
 });
@@ -101,13 +102,14 @@ test("a lit wire lays a soft glow under the line; minimal keeps its bare line", 
 
 test("a working wire carries the style's flow: comet, sheen, bead, sparks", () => {
   const styles = loadNodeStyles();
-  // glow strokes + the line + the flow's strokes (the head's light is a fill)
-  const expected = { orbs: 2 + 1 + 3, glass: 2 + 1 + 2, minimal: 1 + 1, halo: 2 + 1 + 4, crystal: 2 + 1 + 3 };
-  const lights = { orbs: 1, glass: 0, minimal: 0, halo: 1, crystal: 1 };
+  // glow strokes + the line + the flow's strokes (the head's light is a fill,
+  // and so is crystal's sparkle)
+  const expected = { orbs: 2 + 1 + 3, glass: 2 + 1 + 2, minimal: 1 + 1, halo: 2 + 1 + 4, crystal: 2 + 1 + 2 };
+  const fills = { orbs: 1, glass: 0, minimal: 0, halo: 1, crystal: 2 };
   for (const style of FREE) {
     const { calls, ctx } = draw(styles, style, working({ time: 700 }));
     assert.equal(calls.stroke, expected[style], `${style}: strokes`);
-    assert.equal(calls.fill, lights[style], `${style}: the light round the flow's head`);
+    assert.equal(calls.fill, fills[style], `${style}: the light round the flow's head`);
     assert.ok(calls.lineWidths.every((width) => width <= 5), `${style}: within the 5 px budget`);
     assert.ok(calls.alphas.every((alpha) => alpha > 0 && alpha <= 1), `${style}: alphas`);
     // Flow strokes are single dashes moved by the offset: a scratch pattern
@@ -141,7 +143,7 @@ test("a curved wire keeps the caller's S-curve, the hub link stays doubled, and 
     const { calls } = draw(styles, style, working({ curved: true, cp }));
     const curves = calls.log.filter(([name]) => name === "bezierCurveTo");
     assert.ok(curves.length >= 1 && curves.every((entry) => plain(entry.slice(1)).join() === [20, 60, 260, 60, 260, 40].join()), `${style}: the S-curve through the caller's controls`);
-    assert.equal(calls.lineTo, style === "crystal" ? 2 : 0, `${style}: no straight chord drawn (crystal's one glint aside: two arms)`);
+    assert.ok(style === "crystal" ? calls.lineTo > 0 && calls.lineTo % 7 === 0 && calls.closePath === calls.lineTo / 7 : calls.lineTo === 0, `${style}: no straight chord drawn (crystal's sparkles aside: closed eight-point stars)`);
     const hub = draw(styles, style, wire({ kind: "hub", double: true, dash: [], width: 1, alpha: 0.34, active: true, march: true, flow: true })).calls;
     assert.equal(hub.strokes.at(-1).alpha, 0.34, `${style}: the doubled line last`);
     const moves = hub.log.slice(hub.log.findLastIndex(([name]) => name === "beginPath")).filter(([name]) => name === "moveTo").length;
@@ -189,9 +191,10 @@ test("a steady stream of wires builds each light once and nothing after", () => 
       styles.wire(ctx, style, A, B, wire({ inspected: true, time }));
       if (frame === 0) assert.ok(gradientsBuilt(ctx) <= 3, `${style}: at most one light per tint`);
     }
-    assert.equal(ctx.calls.radial, ["glass", "minimal"].includes(style) ? 0 : 3, `${style}: nothing built after the first frame`);
+    const lights = ["glass", "minimal"].includes(style) ? 0 : 3;
+    assert.equal(ctx.calls.radial, lights, `${style}: nothing built after the first frame`);
     assert.equal(ctx.calls.linear + ctx.calls.conic, 0);
-    assert.equal(styles.cacheStats(ctx).entries, 0, "the lights live outside the node paint cache");
+    assert.deepEqual(plain(styles.cacheStats(ctx)), { entries: lights, created: lights }, `${style}: one node paint cache entry per tone, counted by cacheStats`);
   }
 });
 
@@ -208,6 +211,76 @@ test("on a light theme the flow leans dark and carries no light", () => {
     if (style !== "minimal") assert.notDeepEqual(flowInks(onLight), flowInks(onDark), `${style}: the head's ink follows the theme`);
     const darkest = (calls) => Math.min(...calls.strokes.map(({ style: ink }) => { const [r, g, b] = ink.match(/\d+/g).map(Number); return r + g + b; }));
     assert.ok(darkest(onLight) < darkest(onDark), `${style}: toward the theme's highlight, which is dark there`);
+  }
+});
+
+test("minimal's bead stands out from the dashes it rides: pale, near opaque, well over the line's width", () => {
+  const styles = loadNodeStyles();
+  const dark = styles.theme({ background: "#050507", text: "#ece5d8" });
+  const { calls } = draw(styles, "minimal", working({ time: 700, theme: dark }));
+  const [line, bead] = calls.strokes;
+  assert.deepEqual(line, { style: "rgba(120,180,220,1)", alpha: 0.55, width: 1.4 });
+  assert.notEqual(bead.style, line.style, "the bead is not the wire's own ink");
+  const [r, g, b] = bead.style.match(/\d+/g).map(Number);
+  assert.ok(r + g + b > 120 + 180 + 220, `it is the tint's pale highlight (${bead.style})`);
+  assert.ok(bead.alpha >= 0.9 && bead.width >= 3.5 && bead.width <= 5, `and a solid dot (${bead.alpha}, ${bead.width} px)`);
+  assert.equal(calls.fill + calls.radial, 0, "and still no light");
+});
+
+test("a lit wire's glow breathes visibly; still, it holds one pose", () => {
+  const styles = loadNodeStyles();
+  // seed .3: the 2.6 s breath peaks at 2470 ms and bottoms out at 1170 ms
+  const glow = (time, extra = {}) => draw(styles, "orbs", wire({ active: true, seed: 0.3, time, ...extra })).calls.strokes[1].alpha;
+  assert.ok(glow(2470) >= 1.7 * glow(1170), `the breath swings the glow strongly (${glow(1170)} → ${glow(2470)})`);
+  assert.equal(glow(1170, { still: true }), glow(2470, { still: true }), "reduced motion: one pose");
+  const [low, high] = [glow(1170, { still: true }), glow(2470)];
+  assert.ok(low < high, "the pose sits inside the breath");
+});
+
+test("a relay hop (session, todo) flows calmer than the task's own wire; o.flow gates the flow, march only the dashes", () => {
+  const styles = loadNodeStyles();
+  for (const style of FREE) {
+    const flowAlphas = (o) => { const calls = draw(styles, style, o).calls; return calls.strokes.slice(-1)[0].alpha; };
+    const task = flowAlphas(working({ time: 700 }));
+    const hop = flowAlphas(working({ kind: "session", dash: [], time: 700, march: false }));
+    assert.ok(Math.abs(hop - 0.6 * task) < 1e-9, `${style}: a session hop flows at .6 of the alpha (${task} → ${hop})`);
+    // .7 of the pace: the hop's head sits where the task's sat 1/.7 as long ago
+    const head = (o) => draw(styles, style, o).calls.log.filter(([name]) => name === "set:lineDashOffset").at(-1)[1];
+    assert.ok(Math.abs(head(working({ kind: "todo", dash: [], march: false, time: 700 })) - head(working({ time: 490 }))) < 1e-6, `${style}: at .7 of the pace`);
+    // A caller that says flow: true flows with motion on even without a march (the rail's tether).
+    const quiet = draw(styles, style, wire({ active: true, march: false, flow: false })).calls.stroke;
+    assert.ok(draw(styles, style, wire({ active: true, march: false, flow: true, time: 700 })).calls.stroke > quiet, `${style}: flow, not march, decides`);
+    // A caller without the key falls back to march.
+    const legacy = wire({ active: true, march: true, time: 700 });
+    delete legacy.flow;
+    assert.ok(draw(styles, style, legacy).calls.stroke > quiet, `${style}: march stands in for a missing flow`);
+  }
+});
+
+test("crystal's glints are sparkles, not crosses, and a light theme keeps the pulse's diamond alone", () => {
+  const styles = loadNodeStyles();
+  const light = styles.theme({ background: "#f2efe6", text: "#1c1b18" });
+  const { calls } = draw(styles, "crystal", working({ time: 700 }));
+  assert.ok(calls.lineWidths.every((width) => width >= 1), "no hairline arms on the wire");
+  const star = calls.log.slice(calls.log.findLastIndex(([name]) => name === "beginPath"));
+  assert.ok(star.filter(([name]) => name === "lineTo").length === 7 && star.some(([name]) => name === "fill"), "a filled eight-point star");
+  // Unequal arms: the long tips more than twice as far out as the short ones.
+  const [tip, , side, , tail, , other] = star.filter(([name]) => name === "moveTo" || name === "lineTo").map(([, x, y]) => ({ x, y }));
+  const long = Math.hypot(tip.x - tail.x, tip.y - tail.y) / 2, short = Math.hypot(side.x - other.x, side.y - other.y) / 2;
+  assert.ok(long >= 2 * short && short > 0, `long ${long.toFixed(2)} px against short ${short.toFixed(2)} px`);
+  const head = (theme) => { const ctx = recordingContext(); styles.surge(ctx, "crystal", A, B, 0.5, pulse(), look({ theme, time: 400 })); return ctx.calls; };
+  const onDark = head(undefined), onLight = head(light);
+  assert.deepEqual([onDark.stroke, onLight.stroke], [3, 3], "the tail's three pieces, and no glint strokes, in either theme");
+  assert.equal(onLight.fill, onDark.fill - 1, "the light theme drops the sparkle from the head");
+});
+
+test("reduced motion on a light theme flashes a fainter, finer line", () => {
+  const styles = loadNodeStyles();
+  const light = styles.theme({ background: "#f2efe6", text: "#1c1b18" });
+  for (const style of FREE) {
+    const flash = (theme) => { const ctx = recordingContext(); styles.surge(ctx, style, A, B, 1, pulse(), look({ still: true, theme })); return ctx.calls.strokes[0]; };
+    assert.deepEqual([flash(undefined).alpha, flash(undefined).width], [0.5, 2]);
+    assert.deepEqual([flash(light).alpha, flash(light).width], [0.3, 1.5], `${style}: .3 and 1.5 px on a light ground`);
   }
 });
 
@@ -324,24 +397,73 @@ test("a landing swells off the rim and fades over its tail, continuing the arriv
     assert.ok(early.calls.reach <= 12 * 3 + 20, `${style}: within reach (${early.calls.reach})`);
     assert.equal(early.calls.saves, early.calls.restores);
     if (style !== "minimal") {
-      // The surge's last light and the landing's first meet at the same alpha.
-      const arrive = recordingContext();
-      styles.surge(arrive, style, A, B, 0.9999, pulse(), look());
-      const land = recordingContext();
-      styles.land(land, style, B, 12, [241, 220, 174], 0, look({ pulse: pulse() }));
-      assert.ok(Math.abs(arrive.calls.fills.at(-1).alpha - land.calls.fills[0].alpha) < 0.01, `${style}: no pop at arrival`);
+      // The surge's last light and the landing's first meet at the same alpha
+      // and the same size, on the Command view and on the rail.
+      for (const rail of [false, true]) {
+        const arrive = recordingContext();
+        styles.surge(arrive, style, A, B, 0.9999, pulse(), look({ rail }));
+        const land = recordingContext();
+        styles.land(land, style, B, 12, [241, 220, 174], 0, look({ pulse: pulse(), rail }));
+        const where = `${style}${rail ? " on the rail" : ""}`;
+        assert.ok(Math.abs(arrive.calls.fills.at(-1).alpha - land.calls.fills[0].alpha) < 0.01, `${where}: no pop at arrival`);
+        const scale = (calls, pick) => pick(calls.log.filter(([name]) => name === "scale"))[1];
+        const last = scale(arrive.calls, (list) => list.at(-1)), first = scale(land.calls, (list) => list[0]);
+        assert.ok(Math.abs(first / last - 1) < 0.01, `${where}: the bloom keeps its size across the handover (${last} → ${first})`);
+      }
     }
   }
 });
 
-test("pulse lights are capped at 32 a canvas, oldest out first", () => {
+test("a landing ring keeps travelling while it fades, in the tint's pale highlight on a dark ground", () => {
+  const styles = loadNodeStyles();
+  const dark = styles.theme({ background: "#050507", text: "#ece5d8" });
+  const rings = (style, u, o = {}) => {
+    const ctx = recordingContext({ center: B });
+    styles.land(ctx, style, B, 12, TINT, u, look({ theme: dark, ...o }));
+    return { arcs: ctx.calls.log.filter(([name]) => name === "arc").map(([, , , r]) => r).filter((r) => r > 1.5), strokes: ctx.calls.strokes, calls: ctx.calls };
+  };
+  for (const style of FREE) {
+    const half = rings(style, 0.5), late = rings(style, 0.75);
+    assert.ok(late.arcs[0] >= 1.08 * half.arcs[0], `${style}: the ring is still growing late in its tail (${half.arcs[0]} → ${late.arcs[0]})`);
+    const crisp = (ring) => ring.strokes.find((stroke) => stroke.style !== "rgba(120,180,220,1)") ?? ring.strokes.at(-1);
+    assert.ok(crisp(late).alpha <= crisp(half).alpha * 0.15 + 1e-9, `${style}: its light falls off as the cube of what is left (${crisp(half).alpha} → ${crisp(late).alpha})`);
+    const pale = rings(style, 0.3).strokes.filter((stroke) => stroke.style !== "rgba(120,180,220,1)");
+    assert.ok(pale.length >= 1, `${style}: the crisp ring is not the raw tint on a dark ground`);
+    for (const stroke of pale) {
+      const [r, g, b] = stroke.style.match(/\d+/g).map(Number);
+      assert.ok(r + g + b > 120 + 180 + 220, `${style}: it leans pale (${stroke.style})`);
+    }
+  }
+  // Halo's second ring runs out past the first rather than merging into it.
+  for (const u of [0.6, 0.75, 0.9]) {
+    const { arcs } = rings("halo", u);
+    assert.equal(arcs.length, 2, `halo at u ${u}: two rings`);
+    assert.ok(arcs[1] - arcs[0] >= 3, `halo at u ${u}: ${arcs[1].toFixed(1)} is well outside ${arcs[0].toFixed(1)}`);
+  }
+  // The rail's small nodes: one crisp ring a short way out, and a small bloom.
+  for (const style of FREE) {
+    for (const u of [0, 0.3, 0.7]) {
+      const rail = recordingContext({ center: B });
+      styles.land(rail, style, B, 5, TINT, u, look({ theme: dark, rail: true, detail: 2 }));
+      assert.ok(rail.calls.stroke <= 1, `${style} on the rail at u ${u}: one ring (${rail.calls.stroke})`);
+      assert.ok(rail.calls.reach <= 3.2 * 5, `${style} on the rail at u ${u}: within 3.2r (${rail.calls.reach})`);
+      assert.equal(rail.calls.lineTo, 0, `${style} on the rail: no rays`);
+    }
+  }
+});
+
+test("pulse lights share the node paint cache: one per colour, by value, within its bound", () => {
   const styles = loadNodeStyles();
   const ctx = recordingContext();
   const colour = (index) => `#${(0x203040 + index * 0x010203).toString(16).padStart(6, "0")}`;
   for (let index = 0; index < 40; index += 1) styles.surge(ctx, "orbs", A, B, 0.5, pulse({ color: colour(index), glow: colour(index) }), look());
   assert.equal(ctx.calls.radial, 40);
-  styles.surge(ctx, "orbs", A, B, 0.5, pulse({ color: colour(39), glow: colour(39) }), look());
-  assert.equal(ctx.calls.radial, 40, "a recent colour reuses its light");
-  styles.surge(ctx, "orbs", A, B, 0.5, pulse({ color: colour(0), glow: colour(0) }), look());
-  assert.equal(ctx.calls.radial, 41, "the oldest was let go");
+  assert.deepEqual(plain(styles.cacheStats(ctx)), { entries: 40, created: 40 }, "every light is a counted cache entry");
+  for (const index of [0, 17, 39]) styles.surge(ctx, "orbs", A, B, 0.5, pulse({ color: colour(index), glow: colour(index) }), look());
+  assert.equal(ctx.calls.radial, 40, "a colour seen before reuses its light");
+  // A wire tint equal by value to a pulse colour shares its light.
+  styles.wire(ctx, "orbs", A, B, working({ tint: [0x20, 0x30, 0x40], time: 700 }));
+  assert.equal(ctx.calls.radial, 40, "equal triples share one sprite");
+  for (let index = 40; index < 200; index += 1) styles.surge(ctx, "orbs", A, B, 0.5, pulse({ color: colour(index), glow: colour(index) }), look());
+  assert.equal(styles.cacheStats(ctx).entries, 128, "the cache's own bound holds");
 });

@@ -247,6 +247,8 @@ test("the rail's edges, tethers and pulses wear the style through one scratch ea
     assert.ok(literal.includes("detail: 2") && literal.includes("rail: true"), `${scratch} carries the rail's tier cap and rail: true`);
   }
   for (const allocation of ["Array.from", ".map(", "{ kind:", "new Map"]) assert.ok(!edges.slice(edges.indexOf("for (const edge")).includes(allocation) && !tethers.includes(allocation), `no ${allocation} per edge or tether`);
+  assert.match(edges, /ctx\.globalAlpha = 1;\s+if \(styles\.wire\(ctx, nodeStyle, a, b, railWire\)\) continue;/, "a plain line the style declined never dims the next edge the style draws (its alpha rides in railWire)");
+  assert.ok(tethers.includes("railWire.march = false; railWire.flow = true; railWire.active = true;"), "a tether's solid line has nothing to march; it carries work (flow)");
 
   const nodeStyles = await readFile(new URL("../renderer/node-styles.js", import.meta.url), "utf8");
   const frames = new Map(), offers = { wire: [], surge: [], land: [] };
@@ -286,7 +288,7 @@ test("the rail's edges, tethers and pulses wear the style through one scratch ea
   const real = window.MefiNodeStyles;
   const spy = (name) => (...args) => {
     const o = args[name === "wire" ? 4 : name === "surge" ? 6 : 6];
-    offers[name].push({ o, copy: { ...o }, target: args[0], style: args[1], t: name === "surge" ? args[4] : undefined, u: name === "land" ? args[5] : undefined, tint: name === "land" ? args[4] : undefined });
+    offers[name].push({ o, copy: { ...o }, target: args[0], style: args[1], t: name === "surge" ? args[4] : undefined, u: name === "land" ? args[5] : undefined, tint: name === "land" ? args[4] : undefined, kick: o.motion?.kick });
     return real[name](...args);
   };
   window.MefiNodeStyles = { ...real, wire: spy("wire"), surge: spy("surge"), land: spy("land") };
@@ -310,9 +312,14 @@ test("the rail's edges, tethers and pulses wear the style through one scratch ea
   assert.equal(offers.land.length, 1, "the arrived pulse lands in the style");
   const landing = offers.land[0];
   assert.ok(Math.abs(landing.u - 95 / 380) < 1e-9 && landing.copy.rail === true && landing.copy.pulse && plain(landing.tint).length === 3, "u runs over the 380 ms tail, with the pulse and its colour as a triple");
+  // The first landed frame kicks the target's rail motion record, once.
+  assert.ok(landing.copy.motion && travel.copy.motion === landing.copy.motion, "the landing carries the target's motion record");
+  assert.equal(travel.kick, 0, "no kick while the pulse travels");
+  assert.equal(landing.kick, 1, "the first landed frame kicks the target");
   const surges = offers.surge.length;
   frame(100 + 900 + 300);
   assert.equal(offers.land.length, 2, "the landing plays out its tail");
+  assert.ok(offers.land[1].kick < 1, `and never kicks it again (the kick decays: ${offers.land[1].kick})`);
   assert.equal(offers.surge.length, surges, "an arrived pulse no longer travels");
   frame(100 + 900 + 420);
   assert.equal(offers.land.length, 2, "and then it is gone");
@@ -612,16 +619,24 @@ test("every relationship gets its own line style and the active path marches", (
   const env = vm.createContext({ Boolean });
   vm.runInContext(section(idle, "  // One look per relationship", "  function drawGraphConnectionsImpl("), env);
   const a = (kind) => ({ node: { kind } });
-  assert.equal(env.edgeStyleFor({}, a("root"), a("assistant")).double, true, "the hub link is doubled");
-  assert.equal(env.edgeStyleFor({ assistant: true }, a("session"), a("agent")).kind, "hub");
-  const task = env.edgeStyleFor({ task: true }, a("session"), a("task"), { active: true });
+  const look = (edge, from, to, active = false, inspected = false, primary = false) => env.edgeStyleInto({}, edge, from, to, active, inspected, primary);
+  assert.equal(look({}, a("root"), a("assistant")).double, true, "the hub link is doubled");
+  assert.equal(look({ assistant: true }, a("session"), a("agent")).kind, "hub");
+  const task = look({ task: true }, a("session"), a("task"), true);
   assert.deepEqual(plain(task.dash), [2, 4]);
   assert.equal(task.march, true);
-  assert.equal(env.edgeStyleFor({}, a("session"), a("task")).march, false);
-  const done = env.edgeStyleFor({}, a("session"), { node: { kind: "todo", state: "done" } });
+  assert.equal(look({}, a("session"), a("task")).march, false);
+  const done = look({}, a("session"), { node: { kind: "todo", state: "done" } });
   assert.equal(done.kind, "todo"); assert.equal(done.alpha, 0.3);
-  assert.deepEqual(plain(env.edgeStyleFor({}, a("root"), a("folded")).dash), [1, 5]);
-  assert.equal(env.edgeStyleFor({}, a("root"), a("session")).kind, "session");
+  assert.deepEqual(plain(look({}, a("root"), a("folded")).dash), [1, 5]);
+  assert.equal(look({}, a("root"), a("session")).kind, "session");
+  // The frame loop refills one scratch: every field is set afresh, so a
+  // hub link's doubling or a task's march never leaks into the next edge.
+  const scratch = vm.runInContext("EDGE_LOOK", env);
+  assert.equal(env.edgeStyleInto(scratch, {}, a("root"), a("assistant"), false, false, false), scratch);
+  assert.deepEqual(plain(env.edgeStyleInto(scratch, { task: true }, a("session"), a("task"), true, false, false)), { kind: "task", dash: [2, 4], width: 1.4, alpha: 0.55, march: true, double: false });
+  assert.deepEqual(plain(env.edgeStyleInto(scratch, {}, a("root"), a("session"), false, true, false)), { kind: "session", dash: [], width: 1.3, alpha: 0.65, march: false, double: false });
+  assert.ok(vm.runInContext("[NO_DASH, TASK_DASH, FOLDED_DASH]", env).every((dash) => Object.isFrozen(dash)), "shared frozen dashes");
 });
 
 test("focus closes in by kind, turns the tree slowly, and lets go of the orbit it borrowed", () => {

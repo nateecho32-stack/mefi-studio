@@ -6250,18 +6250,22 @@
   // the todo's state, a task's anchor dotted, the hub link doubled, the
   // finished cluster stippled. The active path (a running worker's node) is
   // the bright one and its dots march while the work runs. The dash patterns
-  // are shared frozen arrays (setLineDash copies what it is given), so no
-  // edge allocates one a frame.
+  // are shared frozen arrays (setLineDash copies what it is given), and the
+  // frame loop fills one look scratch (EDGE_LOOK) through edgeStyleInto, so
+  // no edge allocates a dash or a look a frame.
   const NO_DASH = Object.freeze([]);
   const TASK_DASH = Object.freeze([2, 4]);
   const FOLDED_DASH = Object.freeze([1, 5]);
-  function edgeStyleFor(edge, a, b, { active = false, inspected = false, primary = false } = {}) {
+  const EDGE_LOOK = { kind: "session", dash: NO_DASH, width: 1, alpha: 0, march: false, double: false };
+  function edgeStyleInto(out, edge, a, b, active, inspected, primary) {
     const hub = Boolean(edge.assistant) || (a.node.kind === "root" && b.node.kind === "assistant") || (a.node.kind === "assistant" && b.node.kind === "root");
-    if (hub) return { kind: "hub", dash: NO_DASH, width: 1, alpha: 0.34, double: true };
-    if (edge.task || b.node.kind === "task" || b.node.kind === "task-group") return { kind: "task", dash: TASK_DASH, width: active || inspected ? 1.4 : 1, alpha: inspected ? 0.7 : active ? 0.55 : primary ? 0.32 : 0.12, march: active };
-    if (b.node.kind === "todo") return { kind: "todo", dash: NO_DASH, width: active ? 1.2 : 0.8, alpha: b.node.state === "done" ? 0.3 : inspected ? 0.6 : active ? 0.5 : 0.14 };
-    if (b.node.kind === "folded") return { kind: "folded", dash: FOLDED_DASH, width: 0.9, alpha: 0.22 };
-    return { kind: "session", dash: NO_DASH, width: inspected ? 1.3 : 0.9, alpha: inspected ? 0.65 : active ? 0.5 : primary ? 0.3 : 0.16 };
+    out.march = false; out.double = false;
+    if (hub) { out.kind = "hub"; out.dash = NO_DASH; out.width = 1; out.alpha = 0.34; out.double = true; }
+    else if (edge.task || b.node.kind === "task" || b.node.kind === "task-group") { out.kind = "task"; out.dash = TASK_DASH; out.width = active || inspected ? 1.4 : 1; out.alpha = inspected ? 0.7 : active ? 0.55 : primary ? 0.32 : 0.12; out.march = Boolean(active); }
+    else if (b.node.kind === "todo") { out.kind = "todo"; out.dash = NO_DASH; out.width = active ? 1.2 : 0.8; out.alpha = b.node.state === "done" ? 0.3 : inspected ? 0.6 : active ? 0.5 : 0.14; }
+    else if (b.node.kind === "folded") { out.kind = "folded"; out.dash = FOLDED_DASH; out.width = 0.9; out.alpha = 0.22; }
+    else { out.kind = "session"; out.dash = NO_DASH; out.width = inspected ? 1.3 : 0.9; out.alpha = inspected ? 0.65 : active ? 0.5 : primary ? 0.3 : 0.16; }
+    return out;
   }
 
   function drawGraphConnectionsImpl(ctx, projected, runningIds, audioLinked, time, layers = null) {
@@ -6281,8 +6285,10 @@
     const nodeStyles = globalThis.window?.MefiNodeStyles ?? null;
     // `detail` is the lower of the two ends' tiers from the frame before (the
     // node loop sets node._detail after the wires are drawn, as it sets _pr).
-    // `flow` says the wire carries work (its dashes would march with motion
-    // on), so reduced motion can still show a held flow on it.
+    // `flow` says the wire carries work: a busy task's anchor (its dashes
+    // march with motion on), a working agent's tether, and the session and
+    // todo hops on the way to busy work. Reduced motion still offers it, so
+    // a style can hold its flow in a still pose.
     const wire = nodeStyles ? { kind: "session", tint: null, alpha: 1, width: 1, dash: null, march: false, flow: false, double: false, active: false, inspected: false, curved: false, cp: null, far: false, time, still: !marching, seed: 0, rA: 0, rB: 0, detail: 3, lifetime: 1, theme: state.nodeTheme ?? null } : null;
     const bend = nodeStyles ? { x1: 0, y1: 0, x2: 0, y2: 0 } : null;
     // Keep the work tether underneath each waveform so its endpoints and
@@ -6298,7 +6304,7 @@
       const branches = state.nodeLayout === "tree" || state.nodeLayout === "layers";
       const primary = state.branchParents?.get(b.node.id) === a.node.id;
       const tint = active || inspected ? colorOf(b.node) : b.node.kind === "todo" && b.node.state === "done" ? NODE_RGB.done ?? NODE_RGB.task : NODE_RGB.task;
-      const style = edgeStyleFor(edge, a, b, { active, inspected, primary });
+      const style = edgeStyleInto(EDGE_LOOK, edge, a, b, active, inspected, primary);
       const response = audioLinked && state.audioEffects?.splitBands === false ? b.node._audioResponse : null;
       const light = response ? response.level * 0.24 + response.beat * 0.12 : 0;
       const pen = penFor(a, b);
@@ -6306,7 +6312,7 @@
         const curved = Boolean(primary && branches) && !style.double;
         if (curved) { const middle = (a.p.y + b.p.y) / 2; bend.x1 = a.p.x; bend.y1 = middle; bend.x2 = b.p.x; bend.y2 = middle; }
         wire.kind = style.kind; wire.tint = tint; wire.alpha = lifetime * Math.min(0.95, style.alpha + light); wire.width = style.width + light * 1.8;
-        wire.dash = style.dash; wire.march = Boolean(style.march && marching); wire.flow = Boolean(style.march); wire.double = Boolean(style.double);
+        wire.dash = style.dash; wire.march = style.march && marching; wire.flow = style.march || (active && (style.kind === "session" || style.kind === "todo")); wire.double = style.double;
         wire.active = active; wire.inspected = Boolean(inspected); wire.curved = curved; wire.cp = curved ? bend : null; wire.far = pen !== ctx;
         wire.seed = b.node._m?.seed ?? 0; wire.rA = a.node._pr ?? 0; wire.rB = b.node._pr ?? 0; wire.detail = Math.min(a.node._detail ?? 3, b.node._detail ?? 3); wire.lifetime = lifetime;
         if (nodeStyles.wire(pen, state.nodeStyle, a.p, b.p, wire)) {
