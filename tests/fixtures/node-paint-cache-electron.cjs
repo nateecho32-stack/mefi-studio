@@ -45,36 +45,60 @@ function browserChecks() {
   const rgba = (tint, alpha) => `rgba(${tint[0]},${tint[1]},${tint[2]},${alpha})`;
   // PRODUCTION_NODE_PAINT
 
-  // Direct screen-space oracle from the pre-cache orb painter. Keep it
-  // independent of production helpers so radius quantization, transformed
-  // outlines, gradient-stop changes, and stale theme colors remain detectable.
+  // Direct screen-space oracle for the Classic orb in its still pose (no
+  // motion record: lit = active || selected, sel = selected, work = active;
+  // breath at its middle, no sway, the glint at its resting angle) on the
+  // default theme (background #050507). Keep it independent of production
+  // helpers so radius quantization, transformed outlines, gradient-stop
+  // changes, and stale theme colors remain detectable.
   function reference(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1 } = {}) {
+    const TAU = Math.PI * 2;
+    const blend = (from, toward, amount) => from.map((value, index) => Math.round(value + (toward[index] - value) * amount));
+    const white = [255, 255, 255], luma = ([r, g, b]) => r * 0.2126 + g * 0.7152 + b * 0.0722;
+    const lit = active || selected ? 1 : 0, sel = selected ? 1 : 0, work = active ? 1 : 0;
+    const base = (node._fade ?? 1) * alpha;
     ctx.save();
-    ctx.globalAlpha = (node._fade ?? 1) * alpha;
+    ctx.globalAlpha = base;
     if (state.extraGlow) {
-      const spread = radius * (active || selected ? 2.25 : 1.8);
+      const spread = radius * (lit ? 2.25 : 1.8);
       const glow = ctx.createRadialGradient(p.x, p.y, radius * 0.25, p.x, p.y, spread);
-      glow.addColorStop(0, rgba(tint, active || selected ? 0.32 : 0.16));
-      glow.addColorStop(0.45, rgba(tint, active || selected ? 0.14 : 0.05));
+      glow.addColorStop(0, rgba(tint, lit ? 0.32 : 0.16));
+      glow.addColorStop(0.45, rgba(tint, lit ? 0.14 : 0.05));
       glow.addColorStop(1, rgba(tint, 0));
-      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, spread, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, spread, 0, TAU); ctx.fill();
     }
-    const glowRadius = radius * (active || selected ? 1.9 : 1.45);
-    const halo = ctx.createRadialGradient(p.x, p.y, radius * 0.45, p.x, p.y, glowRadius);
-    halo.addColorStop(0, rgba(tint, active ? 0.22 : 0.1)); halo.addColorStop(1, rgba(tint, 0));
-    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(p.x, p.y, glowRadius, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-    ctx.fillStyle = "#151a22"; ctx.fill();
-    const body = ctx.createRadialGradient(p.x - radius * 0.25, p.y - radius * 0.3, 0, p.x, p.y, radius);
-    body.addColorStop(0, rgba(tint, 0.95)); body.addColorStop(0.42, rgba(tint, 0.48)); body.addColorStop(1, rgba(tint, 0.1));
+    // The halo: a ring from the body's edge out to its breathing reach.
+    const breath = 0.5, reach = 1.42 + 0.3 * lit + 0.08 * breath, outer = radius * reach;
+    const halo = ctx.createRadialGradient(p.x, p.y, outer * 0.3, p.x, p.y, outer);
+    halo.addColorStop(0, rgba(tint, 0.3)); halo.addColorStop(0.42, rgba(tint, 0.12)); halo.addColorStop(1, rgba(tint, 0));
+    ctx.globalAlpha = base * (0.42 + 0.58 * lit) * (0.86 + 0.14 * breath);
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(p.x, p.y, outer, 0, TAU); ctx.moveTo(p.x + radius, p.y); ctx.arc(p.x, p.y, radius, 0, TAU, true); ctx.fill();
+    ctx.globalAlpha = base;
+    // An opaque core sunk toward the background, the body with its specular.
+    const core = blend(tint, [5, 5, 7], 0.84), spec = blend(tint, white, 0.8);
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, TAU);
+    ctx.fillStyle = rgba(core, 1); ctx.fill();
+    const body = ctx.createRadialGradient(p.x - radius * 0.3, p.y - radius * 0.36, 0, p.x, p.y, radius);
+    body.addColorStop(0, rgba(spec, 0.96)); body.addColorStop(0.1, rgba(blend(tint, white, 0.4), 0.9));
+    body.addColorStop(0.28, rgba(tint, 0.8)); body.addColorStop(0.62, rgba(tint, 0.42)); body.addColorStop(1, rgba(tint, 0.1));
     ctx.fillStyle = body; ctx.fill();
-    ctx.strokeStyle = rgba(tint, selected ? 1 : active ? 0.85 : 0.55);
-    ctx.lineWidth = selected ? 1.8 : active ? 1.3 : 0.8; ctx.stroke();
-    if (node.kind !== "assistant" && node.kind !== "music") {
-      ctx.fillStyle = "rgba(242,249,255,0.62)"; ctx.beginPath(); ctx.arc(p.x - radius * 0.25, p.y - radius * 0.3, Math.max(1, radius * 0.13), 0, Math.PI * 2); ctx.fill();
-    } else {
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, TAU);
+    ctx.strokeStyle = rgba(tint, Math.round((0.5 + 0.32 * lit + 0.18 * sel) * 32) / 32);
+    ctx.lineWidth = 0.8 + 0.5 * lit + 0.5 * sel; ctx.stroke();
+    // The glint: a streak of rim light at .84 r, faded in from 6 px over 1.2 px.
+    const shown = Math.min(1, Math.max(0, (radius - 6) / 1.2));
+    if (shown > 0) {
+      const angle = 0.35;
+      ctx.globalAlpha = base * shown * (0.3 + 0.7 * work) * (0.75 + 0.25 * 1);
+      ctx.strokeStyle = rgba(spec, 0.95); ctx.lineWidth = Math.max(0.8, radius * 0.09); ctx.lineCap = "round";
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.84, angle - 0.42, angle + 0.42); ctx.stroke();
+      ctx.globalAlpha = base;
+    }
+    if (node.kind === "assistant" || node.kind === "music") {
+      // Light on a dark theme unless the body's centre is pale.
+      const centre = luma(blend(core, tint, 0.76));
       ctx.font = '600 10px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillStyle = "#edf0f5"; ctx.fillText(node.kind === "music" ? "♪" : "M", p.x, p.y + 0.5);
+      ctx.fillStyle = rgba(centre > 185 ? blend(tint, [11, 14, 20], 0.84) : blend(tint, white, 0.9), 1); ctx.fillText(node.kind === "music" ? "♪" : "M", p.x, p.y + 0.5);
     }
     ctx.restore();
   }

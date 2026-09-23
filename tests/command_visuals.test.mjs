@@ -156,9 +156,9 @@ test("the rail's styles reuse their paints frame to frame, and the shared shapes
   assert.ok(!tree.includes("voidShapes:"), "the rail no longer hands shapes to the Command view");
   assert.ok(Object.isFrozen(styles.shapes), "the shared shapes cannot be edited by either painter");
   const theme = styles.theme({ background: "#050507", text: "#ece5d8", accent2: "#36d1ff" });
-  // Soft glass and Crystal still build their wash per node (the free styles'
-  // rework caches it); every other style builds nothing once warmed.
-  const perPaint = { glass: 1, crystal: 1 };
+  // Every style, the free ones included, builds its paints once per canvas,
+  // tint and theme, and nothing on a later frame.
+  const perPaint = { glass: 0, crystal: 0 };
   for (const style of styles.STYLES) {
     const counts = { gradients: 0, lineTo: 0 };
     const target = new Proxy({}, {
