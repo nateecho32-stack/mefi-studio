@@ -461,15 +461,8 @@
   }
   const SHAPES = buildVoidShapes();
 
-  // The Void bodies' shared tones: hot, the whitened tint; ink, a light glyph
-  // ink that keeps a trace of the hue; deep, a body dark enough to read as
-  // depth, still carrying the hue; shade, the gem's shadow plane. The theme's
-  // second hue (accent) is only ever a highlight; without one it is `hot`.
-  const VOID_DEEP = Object.freeze([7, 8, 16]);
-  function voidTones(tint, accent2) {
-    const hot = mix(tint, WHITE, 0.6), ink = mix(tint, WHITE, 0.86), deep = mix(tint, VOID_DEEP, 0.86);
-    return { hot, ink, deep, shade: mix(deep, tint, 0.4), accent: accent2 ?? hot };
-  }
+  // (W1's shared voidTones went at integration: each Void look now builds its
+  // own theme-aware tones in its section.)
   // A node that wears a glyph (the hub's monogram, an agent's role) writes it
   // in the light ink, inside the dark body.
   function voidMonogram(ctx, p, o, ink) {
@@ -1079,8 +1072,9 @@
   // The T0 hot spot's tail sits .55 rad behind its head on the disc.
   const HOLE_SPOT_COS = Math.cos(0.55), HOLE_SPOT_SIN = Math.sin(0.55);
   // A pulse's path: the wire up to `sh` (reached at time `th`), then the
-  // capture swoop round the target (see holeSurgePoint).
-  const HOLE_SPIRAL = { sh: 1, th: 1, rho0: 0, angle0: 0, dir: 1, drop: 0, sweep: 0 };
+  // capture swoop round the target (see holeSurgePoint); `cp` is the tree's
+  // S-curve the pulse rides (the caller's o.cp), else null (the gravity bend).
+  const HOLE_SPIRAL = { sh: 1, th: 1, rho0: 0, angle0: 0, dir: 1, drop: 0, sweep: 0, cp: null };
   // The disc's squash: seen from a little above its plane.
   const HOLE_SQ = 0.34;
   // Where a disc ellipse (radius R, squashed by HOLE_SQ) enters the horizon's
@@ -1786,12 +1780,15 @@
     return value;
   }
   // A wire bent by the target's gravity, with motes falling INTO the target
-  // (s = u², so they speed up as they near it): three on an active wire, one
-  // at rest on a wire between larger nodes (both ends T2+) or on the hub's,
-  // a session's or an inspected wire; the many small wires stay one line
-  // each. The tree's S-curves keep their shape; a far (blurred) pen gets the
-  // line alone; the rail bends every edge (at the cost of the line) and
-  // carries motes only on the active session's edges. One save/restore per
+  // (s = u², so they speed up as they near it): three on a wire that carries
+  // work (o.flow: a busy task's anchor, a working tether, the hops toward busy
+  // work; one parked in a still pose; a caller without o.flow, an active
+  // wire), one at rest on a wire between larger nodes (both ends T2+) or on
+  // the hub's, a session's, an active or an inspected wire; the many small
+  // wires stay one line each. The tree's S-curves keep their shape; a far
+  // (blurred) pen gets the line alone; the rail bends every edge (at the cost
+  // of the line) and carries motes only on the active session's edges
+  // (o.active there; the rail's edges offer no flow). One save/restore per
   // edge hands the canvas back as it was: measured in Electron's software
   // canvas it costs less than reading the stroke style back, and it replaces
   // resetting the dash, its offset and the cap by hand.
@@ -1822,10 +1819,11 @@
     } else holeWirePath(ctx, a, b, cp, 0, 0, 0);
     ctx.stroke();
     const active = o.active === true;
-    const lively = active || o.inspected === true || o.kind === "hub" || o.kind === "session" || (Number.isFinite(o.detail) ? o.detail : 3) >= 2;
-    const motes = o.far || !lively || rail && !active ? 0 : still ? (active ? 1 : 0) : active ? (rail ? 2 : 3) : 1;
+    const flowing = rail ? active : typeof o.flow === "boolean" ? o.flow : active;
+    const lively = flowing || active || o.inspected === true || o.kind === "hub" || o.kind === "session" || (Number.isFinite(o.detail) ? o.detail : 3) >= 2;
+    const motes = o.far || !lively || rail && !flowing ? 0 : still ? (flowing ? 1 : 0) : flowing ? (rail ? 2 : 3) : 1;
     if (motes) {
-      const period = active ? 900 : 2600, seedValue = Number.isFinite(o.seed) ? o.seed : 0;
+      const period = flowing ? 900 : 2600, seedValue = Number.isFinite(o.seed) ? o.seed : 0;
       ctx.beginPath();
       for (let k = 0; k < motes; k += 1) {
         const u = still ? Math.sqrt(0.6) : holeFrac(time / period + seedValue + k / motes);
@@ -1839,7 +1837,7 @@
       // wire dims its motes with it.
       if (dash) ctx.setLineDash?.(HOLE_NO_DASH);
       ctx.lineCap = "round";
-      ctx.globalAlpha = Math.min(0.9, alpha * 1.5); ctx.strokeStyle = holeMote(tint); ctx.lineWidth = active ? 1.8 : 1.4;
+      ctx.globalAlpha = Math.min(0.9, alpha * 1.5); ctx.strokeStyle = holeMote(tint); ctx.lineWidth = flowing ? 1.8 : 1.4;
       ctx.stroke();
     }
     ctx.restore();
@@ -1889,7 +1887,7 @@
     const path = HOLE_SPIRAL;
     if (t <= path.th) {
       const k = t / path.th;
-      return holeWirePoint(from, to, null, path.sh * k * k);
+      return holeWirePoint(from, to, path.cp, path.sh * k * k);
     }
     const w = (t - path.th) / (1 - path.th);
     const rho = path.rho0 - path.drop * w;
@@ -1904,16 +1902,32 @@
   // pulse's own duration) turn smoothly, ≤ ~25° a frame: a fast pulse dives
   // in with a hook, a slow or short one curls round the target (up to 150°).
   // The landing's swirl carries the fall on from where the head went in
-  // (the entry is kept on the pulse, like its parsed colour).
-  function holeCapture(from, to, bend, rTo, pulse) {
+  // (the entry is kept on the pulse, like its parsed colour). On the tree's
+  // S-curve (`cp`) the handoff is where the curve comes within the same
+  // reach of the target (bisection over s .25–.97), and the curve's own
+  // direction there sets the swoop.
+  function holeCapture(from, to, bend, rTo, pulse, cp = null) {
     const path = HOLE_SPIRAL;
-    const pull = 2 * Math.hypot(bend.cx - to.x, bend.cy - to.y);
+    path.cp = cp;
     const reach = Math.min(Math.max(3 * rTo, 12), 0.4 * bend.len);
-    const sh = pull > 0 ? Math.min(0.97, Math.max(0.25, 1 - reach / pull)) : 1;
-    const start = holeWirePoint(from, to, null, sh);
+    let sh;
+    if (cp) {
+      let lo = 0.25, hi = 0.97;
+      for (let step = 0; step < 14; step += 1) {
+        const mid = (lo + hi) / 2, point = holeWirePoint(from, to, cp, mid);
+        if (Math.hypot(point.x - to.x, point.y - to.y) > reach) lo = mid; else hi = mid;
+      }
+      sh = (lo + hi) / 2;
+    } else {
+      const pull = 2 * Math.hypot(bend.cx - to.x, bend.cy - to.y);
+      sh = pull > 0 ? Math.min(0.97, Math.max(0.25, 1 - reach / pull)) : 1;
+    }
+    const start = holeWirePoint(from, to, cp, sh);
     const vx = start.x - to.x, vy = start.y - to.y;
     // The wire's direction (and speed per unit of s) at the handoff.
-    const tx = 2 * (1 - sh) * (bend.cx - from.x) + 2 * sh * (to.x - bend.cx), ty = 2 * (1 - sh) * (bend.cy - from.y) + 2 * sh * (to.y - bend.cy);
+    const rest = 1 - sh;
+    const tx = cp ? 3 * rest * rest * (cp.x1 - from.x) + 6 * rest * sh * (cp.x2 - cp.x1) + 3 * sh * sh * (to.x - cp.x2) : 2 * rest * (bend.cx - from.x) + 2 * sh * (to.x - bend.cx);
+    const ty = cp ? 3 * rest * rest * (cp.y1 - from.y) + 6 * rest * sh * (cp.y2 - cp.y1) + 3 * sh * sh * (to.y - cp.y2) : 2 * rest * (bend.cy - from.y) + 2 * sh * (to.y - bend.cy);
     const rho0 = Math.hypot(vx, vy), drop = Math.max(0, rho0 - rTo * 0.55);
     const rate = 2 * sh * Math.hypot(tx, ty);
     const th = rate > 0 && drop > 0 ? rate / (rate + drop) : 1;
@@ -1926,12 +1940,14 @@
   }
   // A pulse: a spark speeding along the gravity bend with a three-segment
   // tail, captured by its target at the end (a wave pulse also warms its
-  // whole path). On the rail (at most 11 px nodes) it rides the bent edge
-  // all the way, smaller and without the glow.
+  // whole path). A pulse on a tree S-curve (o.cp) rides the curve as drawn
+  // instead of the bend. On the rail (at most 11 px nodes) it rides the bent
+  // edge all the way, smaller and without the glow.
   function surgeSingularity(ctx, from, to, t, pulse, o) {
     const bend = holeBend(from.x, from.y, to.x, to.y);
     if (!(bend.len > 2)) return true;
     const rail = o.rail === true;
+    const cp = !rail && o.cp ? o.cp : null;
     const rgb = holeColour(pulse?.color);
     const paints = holeSparkPaints(ctx, rgb);
     const small = pulse?.small === true, wave = o.kind === "wave" || pulse?.wave === true;
@@ -1939,16 +1955,16 @@
     ctx.lineCap = "round";
     if (holeStill(o)) {
       ctx.globalAlpha = 0.5; ctx.strokeStyle = paints.line; ctx.lineWidth = (small ? 1.3 : 2) * (rail ? 0.6 : 1);
-      ctx.beginPath(); holeWirePath(ctx, from, to, null, 0, 0, 0); ctx.stroke();
+      ctx.beginPath(); holeWirePath(ctx, from, to, cp, 0, 0, 0); ctx.stroke();
       ctx.restore();
       return true;
     }
     const head = clamp01(t);
     if (wave) {
       ctx.globalAlpha = 0.3 * Math.sin(Math.PI * head); ctx.strokeStyle = paints.line; ctx.lineWidth = (small ? 1.2 : 1.7) * (rail ? 0.6 : 1);
-      ctx.beginPath(); holeWirePath(ctx, from, to, null, 0, 0, 0); ctx.stroke();
+      ctx.beginPath(); holeWirePath(ctx, from, to, cp, 0, 0, 0); ctx.stroke();
     }
-    if (rail) { HOLE_SPIRAL.sh = 1; HOLE_SPIRAL.th = 1; } else holeCapture(from, to, bend, o.rTo > 0 ? o.rTo : 8, pulse);
+    if (rail) { HOLE_SPIRAL.sh = 1; HOLE_SPIRAL.th = 1; HOLE_SPIRAL.cp = null; } else holeCapture(from, to, bend, o.rTo > 0 ? o.rTo : 8, pulse, cp);
     const size = (small ? 0.75 : wave ? 1.25 : 1) * (rail ? 0.6 : 1);
     // The tail: three segments behind the head, thinning and fading; its
     // steps shorten through the capture (to .43 of the wire's), so they
@@ -2215,11 +2231,6 @@
   // (and rebuilt when the theme changes), with every colour string built once.
   const prismToneCache = new WeakMap();
   const prismThemeOf = (value) => value && value.bg ? value : theme(null);
-  // The theme the last body was painted under: wires, pulses and landings
-  // carry none today, so they take the node canvas's (their own `theme` wins
-  // once the callers pass one).
-  let prismLastTheme = theme(null);
-  const prismHookTheme = (o) => o.theme && o.theme.bg ? o.theme : prismLastTheme;
   const prismLuma = (rgb) => 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
   // A tone pushed toward the theme's contrast ink until it stands
   // PRISM_APART off the background, so a pale tint's lit facets on a light
@@ -2410,7 +2421,6 @@
   function paintPrism(ctx, p, radius, tint, n, m) {
     if (!(radius > 0)) return;
     const currentTheme = prismThemeOf(n.theme);
-    prismLastTheme = currentTheme;
     const tones = prismTones(tint, currentTheme), paints = prismPaints(ctx, tones);
     const base = n.alpha, still = prismStill(m, n.still), time = n.time, pixel = 1 / radius;
     const detail = n.detail >= 3 ? 3 : n.detail >= 2 ? 2 : n.detail >= 1 ? 1 : 0;
@@ -2756,11 +2766,13 @@
 
   // Wires: a refracted beam. The line keeps the caller's pen (width, dash,
   // march, the hub's double line, the tree's S-curve); a lit (active or
-  // inspected) edge gets a soft beam under it; a glint runs along it (3.2 s,
-  // 1.1 s when active); near a large or lit target the beam splits into
-  // three strands (rose, the tint, blue) that fan into the node. The far
-  // (blurred) pen gets the line alone. On the rail, only the active session's
-  // edges carry the glint; the rest keep the rail's plain line.
+  // inspected) edge gets a soft beam under it; a glint runs along it (3.2 s;
+  // 1.1 s and brighter on a wire that carries work, o.flow, where a still
+  // pose parks it halfway; a caller without o.flow, an active wire); near a
+  // large or lit target the beam splits into three strands (rose, the tint,
+  // blue) that fan into the node. The far (blurred) pen gets the line alone.
+  // On the rail, only the active session's edges carry the glint; the rest
+  // keep the rail's plain line.
   function prismWireLine(ctx, a, b, o, width) {
     ctx.beginPath();
     if (o.double === true) {
@@ -2774,17 +2786,31 @@
     }
     ctx.lineWidth = width; ctx.stroke();
   }
-  // A point u along the wire (its S-curve when curved) into PRISM_POINT.
+  // A point u along the wire (its S-curve `cp` when it has one) into
+  // PRISM_POINT; its unit direction there into PRISM_HEADING.
   const PRISM_POINT = { x: 0, y: 0 };
-  function prismAlong(a, b, o, u) {
-    if (o.curved === true && o.cp) {
+  const PRISM_HEADING = { x: 1, y: 0 };
+  function prismAlong(a, b, cp, u) {
+    if (cp) {
       const v = 1 - u, w0 = v * v * v, w1 = 3 * v * v * u, w2 = 3 * v * u * u, w3 = u * u * u;
-      PRISM_POINT.x = w0 * a.x + w1 * o.cp.x1 + w2 * o.cp.x2 + w3 * b.x;
-      PRISM_POINT.y = w0 * a.y + w1 * o.cp.y1 + w2 * o.cp.y2 + w3 * b.y;
+      PRISM_POINT.x = w0 * a.x + w1 * cp.x1 + w2 * cp.x2 + w3 * b.x;
+      PRISM_POINT.y = w0 * a.y + w1 * cp.y1 + w2 * cp.y2 + w3 * b.y;
     } else {
       PRISM_POINT.x = a.x + (b.x - a.x) * u; PRISM_POINT.y = a.y + (b.y - a.y) * u;
     }
     return PRISM_POINT;
+  }
+  function prismHeading(a, b, cp, u) {
+    let hx = b.x - a.x, hy = b.y - a.y;
+    if (cp) {
+      const v = 1 - u;
+      const cx = 3 * v * v * (cp.x1 - a.x) + 6 * v * u * (cp.x2 - cp.x1) + 3 * u * u * (b.x - cp.x2);
+      const cy = 3 * v * v * (cp.y1 - a.y) + 6 * v * u * (cp.y2 - cp.y1) + 3 * u * u * (b.y - cp.y2);
+      if (Math.hypot(cx, cy) > 1e-6) { hx = cx; hy = cy; }
+    }
+    const length = Math.hypot(hx, hy) || 1;
+    PRISM_HEADING.x = hx / length; PRISM_HEADING.y = hy / length;
+    return PRISM_HEADING;
   }
   function prismWire(ctx, a, b, o) {
     const rail = o.rail === true, active = o.active === true;
@@ -2792,7 +2818,9 @@
     const tint = o.tint;
     const dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy);
     if (!tint || !(length > 1)) return false;
-    const tones = prismTones(tint, prismHookTheme(o));
+    const tones = prismTones(tint, prismThemeOf(o.theme));
+    const cp = o.curved === true && o.cp ? o.cp : null;
+    const flowing = rail ? active : typeof o.flow === "boolean" ? o.flow : active;
     const alpha = Number.isFinite(o.alpha) ? o.alpha : 1, width = Number.isFinite(o.width) ? o.width : 1;
     const time = Number.isFinite(o.time) ? o.time : 0, still = o.still === true, lit = active || o.inspected === true;
     const far = o.far === true, seed = Number.isFinite(o.seed) ? o.seed : 0;
@@ -2812,17 +2840,18 @@
     prismWireLine(ctx, a, b, o, width);
     if (far) { ctx.restore(); return true; }
     ctx.setLineDash(PRISM_SOLID); ctx.lineDashOffset = 0; ctx.lineCap = "round";
-    // The glint: a short bright dash running a → b, fading in and out at the ends.
-    const u = still ? 0 : ((time / (active ? 1100 : 3200) + seed) % 1 + 1) % 1;
-    if (!still) {
+    // The glint: a short bright dash running a → b, fading in and out at the
+    // ends (a still pose keeps it halfway on a wire that carries work).
+    const u = still ? 0.5 : ((time / (flowing ? 1100 : 3200) + seed) % 1 + 1) % 1;
+    if (!still || flowing) {
       const span = Math.min(0.2, Math.max(0.05, 18 / length)), head = u * (1 + span), tail = head - span;
       const from = tail < 0 ? 0 : tail, to = head > 1 ? 1 : head, ends = 4 * u * (1 - u);
       if (to > from && ends > 0.02) {
         ctx.beginPath();
-        let point = prismAlong(a, b, o, from); ctx.moveTo(point.x, point.y);
-        point = prismAlong(a, b, o, (from + to) / 2); ctx.lineTo(point.x, point.y);
-        point = prismAlong(a, b, o, to); ctx.lineTo(point.x, point.y);
-        ctx.globalAlpha = base * Math.min(1, core * 2.4) * lifetime * (active ? 0.85 : 0.55) * (ends > 1 ? 1 : ends);
+        let point = prismAlong(a, b, cp, from); ctx.moveTo(point.x, point.y);
+        point = prismAlong(a, b, cp, (from + to) / 2); ctx.lineTo(point.x, point.y);
+        point = prismAlong(a, b, cp, to); ctx.lineTo(point.x, point.y);
+        ctx.globalAlpha = base * Math.min(1, core * 2.4) * lifetime * (flowing ? 0.85 : 0.55) * (ends > 1 ? 1 : ends);
         ctx.strokeStyle = tones.glare; ctx.lineWidth = width + 0.7; ctx.stroke();
       }
     }
@@ -2833,10 +2862,10 @@
     // pixels) and the strands aim from there into the node.
     const rB = Number.isFinite(o.rB) ? o.rB : 0, detail = Number.isFinite(o.detail) ? o.detail : 3;
     if (!rail && rB > 0 && detail >= (lit ? 1 : 3) && length > 3 * rB + 20) {
-      const curved = o.curved === true && o.cp, back = 2.4 * rB / length;
-      const split = 1 - (curved ? Math.min(0.45, back) : back);
+      const back = 2.4 * rB / length;
+      const split = 1 - (cp ? Math.min(0.45, back) : back);
       let sx = a.x + dx * split, sy = a.y + dy * split;
-      if (curved) { const start = prismAlong(a, b, o, split); sx = start.x; sy = start.y; }
+      if (cp) { const start = prismAlong(a, b, cp, split); sx = start.x; sy = start.y; }
       const tx = b.x - sx, ty = b.y - sy, toward = Math.hypot(tx, ty) || 1, ux = tx / toward, uy = ty / toward;
       const spread = 0.35 * rB, nx = -uy * spread, ny = ux * spread;
       const flare = still ? 0.5 : Math.max(0, 1 - Math.abs(u - split) / 0.2);
@@ -2851,9 +2880,9 @@
     return true;
   }
   // Pulse colours: parsed once per colour, one stable triple each. Keyed on
-  // the colour string alone: idle's `pulse._rgb` is a fresh array for every
-  // pulse, and the tones cache on the triple's identity, so taking it would
-  // rebuild them on every pulse's first frame.
+  // the colour string alone, since the tones cache on the triple's identity:
+  // a caller's triple (idle's and the rail's `pulse._rgb` are stable per
+  // colour, a hand-made one may not be) could rebuild them on a pulse's first frame.
   const prismPulseColours = new Map();
   function prismPulseRgb(pulse) {
     const text = typeof pulse?.color === "string" ? pulse.color : "#a9ffcd";
@@ -2870,37 +2899,48 @@
   }
   // A pulse: a white head with a fading tail runs the beam; from t .7 it
   // splits into three heads of the spectrum that fan into the node the way
-  // the wire's strands do. A packet rides the head as a small gem. The rail
-  // keeps its own pulses; reduced motion shows the beam lit, still.
+  // the wire's strands do. A packet rides the head as a small gem. On a tree
+  // S-curve (o.cp) it rides the curve as drawn. The rail keeps its own
+  // pulses; reduced motion shows the beam lit, still.
+  function prismBeam(ctx, from, to, cp) {
+    ctx.beginPath(); ctx.moveTo(from.x, from.y);
+    if (cp) ctx.bezierCurveTo(cp.x1, cp.y1, cp.x2, cp.y2, to.x, to.y);
+    else ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+  }
   function prismSurge(ctx, from, to, t, pulse, o) {
     if (o.rail === true) return false;
     const dx = to.x - from.x, dy = to.y - from.y, length = Math.hypot(dx, dy);
     if (!(length >= 2)) return true;
-    const tones = prismTones(prismPulseRgb(pulse), prismHookTheme(o));
+    const tones = prismTones(prismPulseRgb(pulse), prismThemeOf(o.theme));
     const small = pulse?.small === true, packet = pulse?.packet === true, detail = Number.isFinite(o.detail) ? o.detail : 3;
+    const cp = o.cp ?? null;
     ctx.save();
     const base = ctx.globalAlpha;
     ctx.lineCap = "round"; ctx.strokeStyle = tones.tint;
     if (o.still === true) {
       ctx.globalAlpha = base * 0.5; ctx.lineWidth = small ? 1.3 : 2;
-      ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); ctx.stroke();
+      prismBeam(ctx, from, to, cp);
       ctx.restore();
       return true;
     }
-    const head = clamp01(t), ux = dx / length, uy = dy / length;
+    const head = clamp01(t);
     // The wake: the whole beam warms while the pulse is on it.
     ctx.globalAlpha = base * 0.24 * 4 * head * (1 - head); ctx.lineWidth = small ? 1.1 : 1.6;
-    ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); ctx.stroke();
+    prismBeam(ctx, from, to, cp);
     // The tail: three segments behind the head, brighter toward it.
     const tail = Math.min(0.2, 60 / length);
     for (let index = 0; index < 3; index += 1) {
       const u0 = head - tail * (3 - index) / 3, u1 = head - tail * (2 - index) / 3;
       if (u1 <= 0) continue;
       const s0 = u0 < 0 ? 0 : u0;
-      ctx.beginPath(); ctx.moveTo(from.x + dx * s0, from.y + dy * s0); ctx.lineTo(from.x + dx * u1, from.y + dy * u1);
+      ctx.beginPath();
+      let point = prismAlong(from, to, cp, s0); ctx.moveTo(point.x, point.y);
+      point = prismAlong(from, to, cp, u1); ctx.lineTo(point.x, point.y);
       ctx.globalAlpha = base * (0.2 + 0.28 * index); ctx.lineWidth = (small ? 1.2 : 1.8) + 0.5 * index; ctx.stroke();
     }
-    const x = from.x + dx * head, y = from.y + dy * head;
+    const heading = prismHeading(from, to, cp, head), ux = heading.x, uy = heading.y;
+    const at = prismAlong(from, to, cp, head), x = at.x, y = at.y;
     // (a far, dimmed or moving target, detail ≤ 1, keeps one head)
     const split = detail <= 1 ? 0 : smooth01((head - 0.7) / 0.3), rTo = Number.isFinite(o.rTo) && o.rTo > 0 ? o.rTo : 6;
     const size = small ? 1.6 : packet ? 3 : 2.3;
@@ -2926,11 +2966,10 @@
   // A pulse landing: a colour flash, three arcs of the spectrum opening out
   // round the node and a sparkle over it; the rail, and a far, dimmed or
   // moving target (detail ≤ 1), get one ring. The colour is the pulse's own,
-  // resolved to its stable triple the way the surge does (the tint idle hands
-  // over is a fresh array per pulse).
+  // resolved to its stable triple the way the surge does.
   function prismLand(ctx, p, radius, tint, u, o) {
     if (o.still === true) return false;
-    const currentTheme = prismHookTheme(o), rgb = o.pulse ? prismPulseRgb(o.pulse) : tint ?? currentTheme.orbit;
+    const currentTheme = prismThemeOf(o.theme), rgb = o.pulse ? prismPulseRgb(o.pulse) : tint ?? currentTheme.orbit;
     const tones = prismTones(rgb, currentTheme);
     const r = radius > 4 ? radius : 4, t = clamp01(u), grow = easeOut(t), fade = 1 - t;
     ctx.save();
@@ -3213,11 +3252,10 @@
     spark.addColorStop(1, rgba(tones.halo, 0));
     return spark;
   }
-  // Wires and pulses are handed no theme: they read the one the Sigil bodies
-  // were last painted in (a frozen, memoized palette record, never a caller's
-  // scratch), else the defaults.
-  let sigilTheme = null;
-  const sigilThemeOf = (o) => o.theme ?? sigilTheme ?? theme(null);
+  // Wires, pulses and landings read the theme their caller hands them
+  // (o.theme, the canvas's frozen, memoized palette record), else the
+  // defaults.
+  const sigilThemeOf = (o) => o.theme ?? theme(null);
 
   // The glyph ink on a Sigil body: the tint risen almost to the highlight
   // (light on a dark seal, dark on a light one).
@@ -3247,6 +3285,16 @@
   // back or reduced motion takes the curves as they are.
   const sigilCellState = new WeakMap();
   function sigilExtents(m, time, active, work, age, still, pairs) {
+    // At rest with every cell folded in (most of a board, every frame) only
+    // the record's time moves: the full pass below would compute the same.
+    if (!active && !still && !(work > 0.02)) {
+      const rest = sigilCellState.get(m);
+      if (rest && rest[0] === 0 && rest[1] === 0 && rest[2] === 0 && rest[3] === 0 && rest[4] === 0 && rest[5] === 0) {
+        rest[6] = time;
+        for (let k = 0; k < 6; k += 1) SIGIL_CELLS[k] = 0;
+        return;
+      }
+    }
     for (let k = 0; k < 6; k += 1) {
       const order = pairs ? k % 3 : k;
       SIGIL_CELLS[k] = active ? easeOutBack((age - 0.12 * order) / 0.3) : smooth01((work - 0.15 - 0.09 * order) / 0.35);
@@ -3331,7 +3379,6 @@
 
   function paintSigil(ctx, p, radius, tint, n, m) {
     const palette = n.theme;
-    sigilTheme = palette;
     const tones = sigilPaints(ctx, tint, palette);
     const r = radius > 0.5 ? radius : 0.5, px = 1 / r;
     const detail = Math.max(0, Math.min(3, Math.floor(sigilNum(n.detail, 3))));
@@ -3721,10 +3768,12 @@
   }
 
   // Wires: cut in the rune rhythm, drifting slowly at rest and marching while
-  // the work runs, where a faint groove lies under the runes and two hex
-  // packets in the second hue ride along, turning. The far (blurred) pen
-  // keeps the runes alone. On the rail only an active session's wires carry
-  // the runes; every other rail wire keeps its plain line.
+  // the work runs, where a faint groove lies under the runes; a wire that
+  // carries work (o.flow; a caller without it, an active wire) has two hex
+  // packets in the second hue riding along, turning (a still pose parks one
+  // halfway). The far (blurred) pen keeps the runes alone. On the rail only
+  // an active session's wires carry the runes; every other rail wire keeps
+  // its plain line.
   function sigilWirePath(ctx, a, b, cp) {
     ctx.moveTo(a.x, a.y);
     if (cp) ctx.bezierCurveTo(cp.x1, cp.y1, cp.x2, cp.y2, b.x, b.y);
@@ -3769,12 +3818,13 @@
       ctx.moveTo(a.x - nx, a.y - ny); ctx.lineTo(b.x - nx, b.y - ny);
     } else sigilWirePath(ctx, a, b, cp);
     ctx.globalAlpha = base * alpha; ctx.lineWidth = width; ctx.stroke();
-    if (active && overlays && !still && sigilNum(o.detail, 3) >= 1) {
+    const flowing = typeof o.flow === "boolean" ? o.flow : active;
+    if (flowing && overlays && sigilNum(o.detail, 3) >= 1) {
       ctx.setLineDash(SIGIL_NO_DASH);
-      const seed = sigilNum(o.seed, 0), turn = time / 520, cos = Math.cos(turn), sin = Math.sin(turn);
+      const seed = sigilNum(o.seed, 0), turn = still ? 0 : time / 520, cos = Math.cos(turn), sin = Math.sin(turn);
       ctx.beginPath();
-      for (let k = 0; k < 2; k += 1) {
-        const u = sigilFrac(time / 1900 + seed + k / 2);
+      for (let k = 0; k < (still ? 1 : 2); k += 1) {
+        const u = still ? 0.5 : sigilFrac(time / 1900 + seed + k / 2);
         const at = sigilAlong(a, b, cp, u);
         sigilHexTurned(ctx, at.x, at.y, 2.6 * Math.min(1, 4 * Math.sin(Math.PI * u)), cos, sin);
       }
@@ -3796,8 +3846,9 @@
     return pulse._sigilRgb;
   }
   // A travelling pulse: a turning hex packet with two smaller hexes trailing
-  // it; a wave also writes a run of runes behind its head. Reduced motion: a
-  // faint wire with the packet resting halfway. The rail keeps its own dot.
+  // it; a wave also writes a run of runes behind its head. On a tree S-curve
+  // (o.cp) it rides the curve as drawn. Reduced motion: a faint wire with the
+  // packet resting halfway. The rail keeps its own dot.
   function sigilSurge(ctx, from, to, t, pulse, o) {
     if (o.rail === true) return false;
     const dx = to.x - from.x, dy = to.y - from.y, len = Math.hypot(dx, dy);
@@ -3805,13 +3856,15 @@
     const live = pulse ?? o.pulse ?? null;
     const tones = sigilPaints(ctx, sigilPulseRgb(live), sigilThemeOf(o));
     const size = live?.packet ? 4.2 : live?.small ? 2.4 : 3.4;
+    const cp = o.cp ?? null;
     const base = sigilBase(ctx);
     ctx.save();
     ctx.lineCap = "butt"; ctx.lineJoin = "round";
     if (o.still === true) {
-      ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y);
+      ctx.beginPath(); sigilWirePath(ctx, from, to, cp);
       ctx.globalAlpha = base * 0.4; ctx.strokeStyle = tones.tintS; ctx.lineWidth = live?.small ? 1.2 : 1.6; ctx.stroke();
-      ctx.beginPath(); sigilHex(ctx, from.x + dx * 0.5, from.y + dy * 0.5, size);
+      const middle = sigilAlong(from, to, cp, 0.5);
+      ctx.beginPath(); sigilHex(ctx, middle.x, middle.y, size);
       ctx.globalAlpha = base * 0.9; ctx.fillStyle = tones.tintS; ctx.fill();
       ctx.restore();
       return true;
@@ -3821,7 +3874,10 @@
     if (live?.wave) {
       const tail = Math.max(0, head - 0.3);
       ctx.setLineDash(SIGIL_DASHES.session); ctx.lineDashOffset = -((time / 55) % SIGIL_PERIODS.session);
-      ctx.beginPath(); ctx.moveTo(from.x + dx * tail, from.y + dy * tail); ctx.lineTo(from.x + dx * head, from.y + dy * head);
+      ctx.beginPath();
+      let at = sigilAlong(from, to, cp, tail); ctx.moveTo(at.x, at.y);
+      // (on a curve, four chords follow it; a straight wire needs one)
+      for (let step = cp ? 1 : 4; step <= 4; step += 1) { at = sigilAlong(from, to, cp, tail + (head - tail) * step / 4); ctx.lineTo(at.x, at.y); }
       ctx.globalAlpha = base * (0.25 + 0.45 * envelope) * show; ctx.strokeStyle = tones.tintS; ctx.lineWidth = live.small ? 1.2 : 1.8; ctx.stroke();
       ctx.setLineDash(SIGIL_NO_DASH);
     }
@@ -3830,10 +3886,11 @@
     for (let k = sigilNum(o.detail, 3) >= 2 ? 2 : 1; k >= 1; k -= 1) {
       const u = head - k * gap;
       if (u <= 0) continue;
-      ctx.beginPath(); sigilHexTurned(ctx, from.x + dx * u, from.y + dy * u, size * (1 - 0.22 * k), cos, sin);
+      const at = sigilAlong(from, to, cp, u);
+      ctx.beginPath(); sigilHexTurned(ctx, at.x, at.y, size * (1 - 0.22 * k), cos, sin);
       ctx.globalAlpha = base * (0.7 - 0.25 * k) * show; ctx.fill();
     }
-    const hx = from.x + dx * head, hy = from.y + dy * head;
+    const at = sigilAlong(from, to, cp, head), hx = at.x, hy = at.y;
     ctx.beginPath(); sigilHexTurned(ctx, hx, hy, size, cos, sin);
     ctx.globalAlpha = base * show; ctx.fill();
     ctx.globalAlpha = base * 0.9 * show; ctx.strokeStyle = tones.hotS; ctx.lineWidth = 1; ctx.stroke();

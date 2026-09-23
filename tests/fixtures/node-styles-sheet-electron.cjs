@@ -123,7 +123,8 @@ function pageSetup() {
   const RADII = [3, 4.5, 6, 8, 12, 15];
   const TIMES = [null, 0, 333, 667, 1000, 2000]; // null: reduced motion
   const ARRIVAL = [0, 1, 2, 3, 4, 5].map((step) => (step + 0.5) / 6);
-  // Wires, as idle.js edgeStyleFor and the agent tether hand them over.
+  // Wires, as idle.js edgeStyleInto and the agent tether hand them over
+  // (rows with rail: true, as the tree rail's railWire does).
   const node = (kind, tint, r, extra = {}) => ({ kind, tint, r, ...extra });
   const WIRES = [
     { id: "hub", label: "hub (double)", kind: "hub", tint: "task", dash: [], width: 1, alpha: 0.34, double: true, a: node("session", "session", 7), b: node("assistant", "assistant", 11) },
@@ -138,7 +139,13 @@ function pageSetup() {
     { id: "pulse-dot", label: "pulse dot (hub → task)", wave: false, color: "#f1dcae", glow: "#e6c98d", duration: 900, wire: WIRES[1], a: node("assistant", "assistant", 11), b: node("task", "warm", 9, { active: true }) },
     { id: "pulse-wave", label: "pulse wave + packet (agent → hub)", wave: true, packet: true, role: "watcher", glow: null, duration: 1100, wire: WIRES[6], a: WIRES[6].a, b: node("assistant", "assistant", 11) },
   ];
-  const PULSE_T = [null, 0.15, 0.4, 0.65, 0.85, 0.95];
+  WIRES.push({ id: "rail-edge", label: "rail edge (active session)", kind: "session", tint: "task", dash: [], width: 1, alpha: 0.5, active: true, rail: true, a: node("session", "session", 5), b: node("task", "warm", 5, { active: true }) });
+  PULSES.push({ id: "pulse-small", label: "pulse dot small (session → todo)", small: true, wave: false, color: "#a9ffcd", glow: "#57ff9a", duration: 900, wire: WIRES[2], a: node("session", "session", 8), b: node("todo", "pending", 4.5) });
+  PULSES.push({ id: "pulse-rail", label: "rail pulse dot", rail: true, wave: false, color: "#f1dcae", glow: "#e6c98d", duration: 900, wire: WIRES[WIRES.length - 1], a: node("session", "session", 5), b: node("task", "warm", 5, { active: true }) });
+  // Pulse columns: still, travelling at t .5 and .92 (surge only), then
+  // landed (t > 1: u = t − 1 of the 380 ms tail, land only), the order the
+  // Command view draws them in.
+  const PULSE_T = [null, 0.5, 0.92, 1.1, 1.4, 1.75];
 
   // One theme's colours: the module theme and the Command view's node tints.
   function context(themeSpec, spec) {
@@ -352,8 +359,12 @@ function pageSetup() {
       kind: spec.kind, tint, alpha: spec.alpha, width: spec.width, dash: spec.dash, march: spec.march === true && !still,
       double: spec.double === true, active: spec.active === true, inspected: spec.inspected === true, curved: spec.curved === true,
       cp: spec.curved ? { x1: a.x, y1: middle, x2: b.x, y2: middle } : null, far: false, time: t ?? 0, still,
-      seed: styles.seed(`sheet:${spec.id}:b`), rA: spec.a.r, rB: spec.b.r, lifetime: 1,
+      seed: styles.seed(`sheet:${spec.id}:b`), rA: spec.a.r, rB: spec.b.r, lifetime: 1, theme: c.theme, detail: spec.rail ? 2 : 3,
+      // idle: flow on a busy task's anchor, a working tether and the hops
+      // toward busy work (offered under still too); the rail's edges never.
+      flow: spec.flow ?? (spec.active === true && spec.rail !== true),
     };
+    if (spec.rail === true) o.rail = true;
     const drawn = call("wire", () => styles.wire(ctx, style, a, b, o));
     if (!drawn && notes) {
       ctx.strokeStyle = css(tint, spec.alpha); ctx.lineWidth = 1;
@@ -362,21 +373,36 @@ function pageSetup() {
     if (notes) mark(notes, "wire", drawn, true);
     return drawn;
   }
+  // A pulse at t: t ≤ 1 travels (surge; t 1 under still), t > 1 has landed u =
+  // t − 1 into its tail (land). Its colour's triple is stable per colour, as
+  // idle's pulseRgb hands it over.
+  const pulseRgbs = new Map();
+  const pulseRgb = (color) => { let rgb = pulseRgbs.get(color); if (!rgb) { rgb = hexRgb(color); pulseRgbs.set(color, rgb); } return rgb; };
   function drawPulse(ctx, c, style, a, b, spec, t, still, notes, call = direct) {
     const color = spec.color ?? c.agentHex(spec.role);
-    const tt = still ? 1 : t;
-    const pulse = { color, glow: spec.glow ?? color, wave: spec.wave === true, packet: spec.packet === true, small: false, start: 0, duration: spec.duration, from: { id: "sheet:a", _pr: spec.a.r }, to: { id: "sheet:b", _pr: spec.b.r } };
-    const pulseLook = { kind: pulse.wave ? "wave" : "dot", time: tt * spec.duration, still, rTo: spec.b.r };
+    const landed = !still && t > 1 ? Math.min(1, t - 1) : null;
+    const tt = still ? 1 : Math.min(1, t);
+    const pulse = { color, glow: spec.glow ?? color, wave: spec.wave === true, packet: spec.packet === true, small: spec.small === true, start: 0, duration: spec.duration, from: { id: "sheet:a", _pr: spec.a.r }, to: { id: "sheet:b", _pr: spec.b.r } };
+    const pulseLook = { kind: pulse.wave ? "wave" : "dot", time: tt * spec.duration + (landed ?? 0) * 380, still, rTo: spec.b.r, detail: spec.rail ? 2 : 3, pulse, motion: null, cp: null, theme: c.theme };
+    if (spec.rail === true) pulseLook.rail = true;
+    if (landed !== null || still) {
+      pulse._rgb = pulseRgb(color);
+      if (landed !== null) {
+        const drew = call("land", () => styles.land(ctx, style, b, spec.b.r, pulse._rgb, landed, pulseLook));
+        if (notes) mark(notes, "land", drew, false);
+        return drew;
+      }
+    }
     const drawn = call("surge", () => styles.surge(ctx, style, a, b, tt, pulse, pulseLook));
     if (!drawn && notes) {
       ctx.beginPath(); ctx.arc(a.x + (b.x - a.x) * tt, a.y + (b.y - a.y) * tt, 2.2, 0, TAU);
       ctx.fillStyle = color; ctx.fill();
     }
     if (notes) mark(notes, "surge", drawn, true);
-    if (tt >= 0.8) {
-      pulse._rgb = hexRgb(color);
-      const landed = call("land", () => styles.land(ctx, style, b, spec.b.r, pulse._rgb, (tt - 0.8) / 0.2, pulseLook));
-      if (notes) mark(notes, "land", landed, false);
+    // Under still idle lands every pulse once, at u = 1, in the same frame.
+    if (still) {
+      const drew = call("land", () => styles.land(ctx, style, b, spec.b.r, pulse._rgb, 1, pulseLook));
+      if (notes) mark(notes, "land", drew, false);
     }
     return drawn;
   }
@@ -498,19 +524,19 @@ function pageSetup() {
       ctx.fillStyle = rule; ctx.fillRect(8, top + LINE_H - 0.5, L.width - 16, 1);
       rowLabel(ctx, c, top, LINE_H, spec.label, notes, wireTint(c, spec));
     });
-    block("pulses — MefiNodeStyles.surge() then land() from t .8; a declined surge is drawn as a plain dot marked “legacy”. Columns: still (t 1), t .15, .4, .65, .85, .95", L.pulsesTop);
+    block("pulses — MefiNodeStyles.surge() while travelling, then land() over the 380 ms tail; a declined surge is drawn as a plain dot marked “legacy”. Columns: still (t 1, landed), t .5, .92, landed u .1, .4, .75", L.pulsesTop);
     PULSES.forEach((spec, index) => {
       const top = L.pulsesTop + index * LINE_H, notes = {};
       for (let column = 0; column < PULSE_T.length; column += 1) {
         const x0 = LABEL_W + column * L.lineW, t = PULSE_T[column], still = t === null;
         const a = { x: x0 + 34, y: top + LINE_H - 24 }, b = { x: x0 + L.lineW - 34, y: top + 24 };
         const time = still ? null : Math.round(t * spec.duration);
-        const before = notes.surge?.module ?? 0;
+        const hook = !still && t > 1 ? "land" : "surge", before = notes[hook]?.module ?? 0;
         ctx.save(); drawWire(ctx, c, style, a, b, spec.wire, time, still, {}); ctx.restore();
         ctx.save(); drawPulse(ctx, c, style, a, b, spec, t, still, notes); ctx.restore();
         ctx.save(); paintEndpoint(ctx, c, style, a, spec.a, time, still); paintEndpoint(ctx, c, style, b, spec.b, time, still); ctx.restore();
-        text(ctx, still ? "still" : `t ${String(t).replace(/^0/, "")}`, x0 + 6, top + 11, 8.5, dim);
-        if ((notes.surge?.module ?? 0) === before) text(ctx, "legacy", x0 + L.lineW - 6, top + LINE_H - 6, 8.5, dim, { align: "right" });
+        text(ctx, still ? "still" : t > 1 ? `land u ${(t - 1).toFixed(2).replace(/^0/, "")}` : `t ${String(t).replace(/^0/, "")}`, x0 + 6, top + 11, 8.5, dim);
+        if ((notes[hook]?.module ?? 0) === before) text(ctx, hook === "land" ? "no landing" : "legacy", x0 + L.lineW - 6, top + LINE_H - 6, 8.5, dim, { align: "right" });
         if (column) { ctx.fillStyle = rule; ctx.fillRect(x0 - 0.5, top + 4, 1, LINE_H - 8); }
       }
       ctx.fillStyle = rule; ctx.fillRect(8, top + LINE_H - 0.5, L.width - 16, 1);

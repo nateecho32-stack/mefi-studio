@@ -4622,10 +4622,24 @@
     const arrived = !pulse._kicked;
     if (arrived) { pulse._kicked = true; if (motion && !still) motion.kick = 1; }
     look.kind = pulse.wave ? "wave" : "dot"; look.rTo = pulse.to?._pr ?? 0; look.detail = pulse.to?._detail ?? 3; look.pulse = pulse; look.motion = motion; look.cp = null;
-    pulse._rgb ??= hexToRgb(pulse.color ?? "#a9ffcd");
+    pulse._rgb ??= pulseRgb(pulse.color);
     const u = still ? 1 : Math.min(1, Math.max(0, since) / LAND_TAIL_MS);
     if (!styles.land(ctx, state.nodeStyle, point, look.rTo, pulse._rgb, u, look)) pulse._landed = true;
     else if (arrived && !still) state.styleBurstUntil = Math.max(state.styleBurstUntil ?? 0, time + LAND_TAIL_MS);
+  }
+  // A pulse colour as one stable (frozen) triple per colour string: a style's
+  // paints cached on the tint's identity then hit for every later pulse of
+  // that colour instead of rebuilding on each one's landing.
+  const pulseRgbCache = new Map();
+  function pulseRgb(color) {
+    const key = typeof color === "string" ? color : "#a9ffcd";
+    let triple = pulseRgbCache.get(key);
+    if (!triple) {
+      if (pulseRgbCache.size >= 64) pulseRgbCache.clear();
+      triple = Object.freeze(hexToRgb(key));
+      pulseRgbCache.set(key, triple);
+    }
+    return triple;
   }
 
   // A `wave` pulse never launches a dot: the line itself answers. It bows on
@@ -6947,8 +6961,10 @@
   }
 
   // Where one candidate puts the leader, the bar and the card, in screen space.
+  // The leader leaves from outside the look (node._styleReach: a lattice,
+  // shards, a selection's marks), not through it.
   function calloutLayout(node, p, candidate, size) {
-    const r = (node._pr ?? 6) + 3;
+    const r = Math.max(node._pr ?? 6, node._styleReach ?? 0) + 3;
     const sx = p.x + candidate.side * CALLOUT_COS * r;
     const sy = p.y + candidate.vert * CALLOUT_SIN * r;
     const ex = p.x + candidate.side * CALLOUT_COS * (r + candidate.length);
@@ -6984,7 +7000,7 @@
     } else {
       for (const other of projected) {
         if (other.node === node || other.node._absorbed || other.node.dying || other.p?.x == null) continue;
-        if (segmentDistance(other.p.x, other.p.y, layout.sx, layout.sy, layout.ex, layout.ey) < (other.node._pr ?? 4) + 5) { score += 2; break; }
+        if (segmentDistance(other.p.x, other.p.y, layout.sx, layout.sy, layout.ex, layout.ey) < Math.max(other.node._pr ?? 4, other.node._styleReach ?? 0) + 5) { score += 2; break; }
       }
     }
     for (const other of placedRects) if (segmentHitsRect(layout.sx, layout.sy, layout.ex, layout.ey, other)) { score += 2; break; }
@@ -7695,6 +7711,10 @@
     // a style's hook never keeps its options).
     const surfaceFlags = { selected: false, active: false, alpha: 1, time, still, detail: 3, chosen: false, motion: null };
     const overlay = { kind: "task", selected: false, chosen: false, hover: false, active: false, alpha: 1, time, still, detail: 3, motion: null, theme: state.nodeTheme ?? null };
+    // A Void look marks a selection a few pixels off the node whatever its
+    // size (Prism's arcs round a 3 px todo reach 2.2 radii), past what its
+    // reach in radii covers on a small node: see node._styleReach below.
+    const selectReachFloor = nodeStyles ? nodeStyles.PREMIUM.includes(state.nodeStyle) : false;
     const growNow = Date.now();
     const nodesSpan = profiler?.begin("command.nodes");
     try {
@@ -7747,8 +7767,12 @@
       // (a frame late, like _pr) its wires and pulses.
       node._detail = detail;
       // How far the look reaches past the body (a lattice, shards, a jet):
-      // other nodes' labels keep clear of it (nodeLabelBlocker).
-      node._styleReach = nodeStyles ? radius * nodeStyles.reach(state.nodeStyle ?? "orbs", motion) : 0;
+      // other nodes' labels keep clear of it (nodeLabelBlocker), and so do
+      // its own label and callout leader. A Void look's selection keeps at
+      // least 4 px past the rim, eased in with the selection.
+      const styleReach = nodeStyles ? radius * nodeStyles.reach(state.nodeStyle ?? "orbs", motion) : 0;
+      const marking = selectReachFloor ? Math.max(motion?.sel ?? 0, chosen ? 1 : 0) : 0;
+      node._styleReach = marking > 0.01 ? Math.max(styleReach, radius + 4 * marking) : styleReach;
       const surface = surfaceFlags;
       surface.selected = Boolean(selected); surface.active = active; surface.alpha = Math.max(0.35, visual.alpha * factor);
       surface.detail = detail; surface.chosen = chosen; surface.motion = motion;
@@ -7787,7 +7811,18 @@
         const clash = state.nodeTheme?.light === true ? nodeStyles?.inkOf(NODE_RGB.collision, state.nodeTheme).hot ?? null : null;
         ctx.save();
         ctx.globalAlpha *= dim;
-        traceNodeSurface(ctx, visual.shape, p.x, p.y, radius + 2 + beat);
+        if (state.nodeStyle === "sigil" && nodeStyles) {
+          // Sigil's seal is a pointy-top hexagon (.98 r): the rim follows it,
+          // a hexagon ~2.2 px off its edges, rather than a round mark round it.
+          const rim = 0.98 * radius + 2.6 + beat;
+          ctx.beginPath();
+          for (let k = 0; k < 6; k += 1) {
+            const angle = (k / 3 - 0.5) * Math.PI;
+            if (k) ctx.lineTo(p.x + rim * Math.cos(angle), p.y + rim * Math.sin(angle));
+            else ctx.moveTo(p.x + rim * Math.cos(angle), p.y + rim * Math.sin(angle));
+          }
+          ctx.closePath();
+        } else traceNodeSurface(ctx, visual.shape, p.x, p.y, radius + 2 + beat);
         ctx.strokeStyle = clash ? rgba(clash, Math.round((0.5 + 0.25 * beat) * 32) / 32) : still ? rgba(NODE_RGB.collision, 0.55) : rgba(NODE_RGB.collision, Math.round((0.4 + 0.3 * beat) * 32) / 32);
         ctx.lineWidth = 1 + 0.4 * beat;
         ctx.stroke();
@@ -8170,8 +8205,9 @@
       let height = workStatus ? 33 + (lines.length - 1) * 16 : LABEL_HEIGHT;
       let width = Math.max(...lines.map((line) => measure(ctx, font, line)), workStatus ? 72 : 0);
       // The hub's filed pips hang below its rim: give its label the extra ring
-      // so the chip cannot park on top of them.
-      const radius = (node._orbitTrail?.radius ?? node._pr ?? 4) + (node.kind === "assistant" && node.filedWork?.length ? FILED_PIP_RING : 0);
+      // so the chip cannot park on top of them. A look that reaches past the
+      // body (node._styleReach) keeps its own label clear as well.
+      const radius = Math.max(node._orbitTrail?.radius ?? node._pr ?? 4, node._styleReach ?? 0) + (node.kind === "assistant" && node.filedWork?.length ? FILED_PIP_RING : 0);
       let rect = null, paint = null;
       const needsName = priority <= 2.15 || node.kind === "task" && node._workLabel === "Running";
       const placeNearby = () => {

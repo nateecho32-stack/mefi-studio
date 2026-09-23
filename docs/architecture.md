@@ -33,6 +33,7 @@ walk through the agent loop read [agent-loop.md](agent-loop.md).
 | **Swarm / Cluster** | Agent mode: Swarm spreads workers across the queue, Cluster keeps them on one goal at a time. |
 | **Awaiting verification** | A finished attempt whose completion is not yet established; housekeeping checks the evidence before it becomes **Done**. |
 | **Orb, callout, absorb** | Command-view vocabulary: an orb is a node, a callout is its floating card, and absorb is a finished node collapsing into its host. |
+| **Node style / `MefiNodeStyles`** | How a node is drawn: one of eight looks (five free, three in the Void collection), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
 | **Ruins Runner** | The author's LÖVE game, an optional external project Studio can launch. A fresh clone works without it. |
 | **Discord Server Styler** | An optional separate bot and local dashboard. Settings can start it, open its dashboard or folder, show its status and stop a process Studio started. |
 | **Void collection** | The members' perk: four themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil) that unlock for members of the Void Engine Discord. They are picked in Style & sound, the themes also in Your Studio's theme select, and Settings › Community shows them all. A locked one explains itself where you clicked it. Everything else stays free. |
@@ -213,7 +214,10 @@ revision history stay in the project's ignored local `planning.json`.
   (**Classic orbs**, **Soft glass**, **Minimal**, **Halo**, **Crystal**, plus
   the Void collection's **Singularity**, **Prism** and **Sigil** for Discord
   members) and arrangement (**Constellation**, **Branches**, **Rings**,
-  **Helix**, **Terraces**) per project, in 2D or real 3D.
+  **Helix**, **Terraces**) per project, in 2D or real 3D. Every node style
+  moves all the time and faster while its node works (a Sigil's hex cells
+  assemble, a Singularity's disc spins up, a Prism's shards orbit); reduced
+  motion holds each in a still pose.
 - The sky follows the colour theme — Aurora ribbons, Deep space, Nebula,
   Rising embers, Fireflies, Soft bokeh, Warm dust — or pick a **Backdrop**
   (plus Quiet grid and Minimal) in the Ambience pop. **Speech bubbles** beside

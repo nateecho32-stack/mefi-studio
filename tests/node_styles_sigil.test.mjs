@@ -813,8 +813,14 @@ test("Sigil wires are cut in the rune rhythm; active ones march with a groove an
   assert.notDeepEqual(plain(wire({ kind: "task", active: true, march: true, time: 1100 }).pen.calls.log), plain(active.pen.calls.log), "marching");
   const far = wire({ kind: "task", active: true, march: true, far: true });
   assert.deepEqual([far.pen.calls.stroke, far.pen.calls.fill], [1, 0], "the far pen keeps the runes alone");
-  const still = wire({ kind: "task", active: true, still: true });
-  assert.deepEqual([still.pen.calls.fill, offsetOf(still.pen)], [0, 0], "still: no packets, no drift");
+  // The packets ride a wire that carries work (o.flow; without it, an
+  // active wire): an active hub link carries none, its groove alone.
+  const hub = wire({ kind: "hub", active: true, flow: false });
+  assert.deepEqual([hub.pen.calls.stroke, hub.pen.calls.fill], [2, 0], "no work runs on it: the groove, no packets");
+  assert.equal(wire({ kind: "task", active: true, flow: true }).pen.calls.fill, 1, "flow carries the packets");
+  const still = wire({ kind: "task", active: true, flow: true, still: true });
+  assert.deepEqual([still.pen.calls.fill, still.pen.calls.lineTo, offsetOf(still.pen)], [1, 2 + 5, 0], "still: the groove, the runes and one packet parked halfway, no drift");
+  assert.equal(wire({ kind: "task", active: true, flow: false, still: true }).pen.calls.fill, 0, "a still wire without flow: no packet");
   const double = wire({ kind: "hub", double: true });
   assert.deepEqual([double.pen.calls.moveTo, double.pen.calls.lineTo, double.pen.calls.stroke], [2, 2, 1], "the hub's double line");
   const curve = wire({ curved: true, cp: { x1: 20, y1: 55, x2: 220, y2: 55 }, active: true });
@@ -825,9 +831,11 @@ test("Sigil wires are cut in the rune rhythm; active ones march with a groove an
   const railActive = wire({ rail: true, active: true, detail: 2 });
   assert.deepEqual([railActive.drawn, railActive.pen.calls.stroke, railActive.pen.calls.fill, dashOf(railActive.pen)], [true, 1, 0, "5,2,1.5,2"]);
   assert.equal(styles.wire(recordingContext(), "sigil", a, b, { kind: "session", tint: null }), false, "no tint: the caller's line");
-  // A theme on the offer (or the one the bodies were painted in) gives the packets its second hue.
+  // The theme on the offer gives the packets its second hue; a body painted
+  // in another theme never leaks into a wire offered none.
+  assert.equal(wire({ active: true, theme: styles.theme(ACCENT) }).pen.calls.fills[0].style, "rgba(54,209,255,1)");
   styles.paint(recordingContext(), "sigil", P, 12, TINT, { theme: styles.theme(ACCENT) });
-  assert.equal(wire({ active: true }).pen.calls.fills[0].style, "rgba(54,209,255,1)");
+  assert.equal(wire({ active: true }).pen.calls.fills[0].style, "rgba(194,221,239,1)", "no theme offered: the defaults");
 });
 
 test("Sigil pulses run as a turning hex packet with two trailing hexes and land in a hex burst", () => {

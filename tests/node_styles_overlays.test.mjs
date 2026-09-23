@@ -605,7 +605,8 @@ test("the node loop cross-fades tints, pops the hover, pulses the clash rim and 
     "tint = nodeStyles.shownTint(motion, tint, time, still);",
     "const pop = motion ? 1 + 0.05 * motion.sel : 1;",
     "* nodeScale) * pop;",
-    "node._styleReach = nodeStyles ? radius * nodeStyles.reach(state.nodeStyle ?? \"orbs\", motion) : 0;",
+    "const styleReach = nodeStyles ? radius * nodeStyles.reach(state.nodeStyle ?? \"orbs\", motion) : 0;",
+    "node._styleReach = marking > 0.01 ? Math.max(styleReach, radius + 4 * marking) : styleReach;",
     "const dim = Math.max(0.35, factor);",
     "drawProgressMeter(ctx, node, p, radius, tint, active, Boolean(selected), time, still, dim);",
     "if (hold && (!hold.ackedAt || !still && growNow - hold.ackedAt < DONE_BADGE_OUT_MS)) drawDoneBadge(ctx, node, p, radius, time, still, hold, growNow, dim);",
@@ -617,11 +618,45 @@ test("the node loop cross-fades tints, pops the hover, pulses the clash rim and 
     // On a light theme the clash rim takes the amber's darker ink and pulses higher.
     "const clash = state.nodeTheme?.light === true ? nodeStyles?.inkOf(NODE_RGB.collision, state.nodeTheme).hot ?? null : null;",
     "clash ? rgba(clash, Math.round((0.5 + 0.25 * beat) * 32) / 32)",
+    // Sigil's clash rim follows its hexagonal seal instead of circling it.
+    "if (state.nodeStyle === \"sigil\" && nodeStyles) {",
+    "const rim = 0.98 * radius + 2.6 + beat;",
+    "} else traceNodeSurface(ctx, visual.shape, p.x, p.y, radius + 2 + beat);",
   ]) assert.ok(loop.includes(line), `the node loop carries ${line}`);
   assert.ok(loop.indexOf("nodeStyles.stepMotion(") < loop.indexOf("const radius ="), "the motion steps before the radius reads its eased hover");
   for (const gone of ["motion.tint = tint", "#303947", "#173025", "#a7e5c0", "fillRect("]) assert.ok(!loop.includes(gone), `the loop no longer carries ${gone}`);
   // appendDoneHoldNodes keeps the held entry through the sweep.
   assert.ok(section("function appendDoneHoldNodes(", "// After a rebuild").includes("fx.seen = true;"));
+});
+
+test("a Void look's selection keeps a node's reach 4 px past a small rim, eased with the selection", () => {
+  const frame = section("function drawFrame(", "function measure(");
+  assert.ok(frame.includes("const selectReachFloor = nodeStyles ? nodeStyles.PREMIUM.includes(state.nodeStyle) : false;"), "the floor is the Void looks' (their selections mark past the rim)");
+  const start = frame.indexOf("      const styleReach = nodeStyles ?"), end = frame.indexOf("node._styleReach = marking");
+  const body = frame.slice(start, frame.indexOf(";", end) + 1);
+  const reachOf = new Function("nodeStyles", "state", "radius", "motion", "chosen", "selectReachFloor", "node", `${body} return node._styleReach;`);
+  const styles = loadNodeStyles();
+  const at = (style, radius, sel, chosen = false) => reachOf(styles, { nodeStyle: style }, radius, { sel, work: 0 }, chosen, styles.PREMIUM.includes(style), {});
+  // A 3 px chosen Prism todo: its arcs sit up to r + 3.6 (pen 1.3), past 1.6r.
+  assert.equal(at("prism", 3, 1, true), 3 + 4);
+  assert.equal(at("prism", 3, 0.5), 3 + 2, "eased in with the selection");
+  assert.equal(at("prism", 3, 0), 3 * styles.reach("prism", { sel: 0, work: 0 }), "unselected: the look's own reach");
+  assert.equal(at("prism", 15, 1, true), 15 * styles.reach("prism", { sel: 1, work: 0 }), "a large node's reach in radii already covers it");
+  assert.equal(at("sigil", 4, 1), 4 + 4);
+  assert.equal(at("orbs", 3, 1, true), 3, "the free looks mark inside their reach: no floor");
+  assert.equal(reachOf(null, { nodeStyle: "prism" }, 3, null, true, false, {}), 0, "no module, no reach");
+});
+
+test("a node's own label and callout leader clear its look's reach", () => {
+  const labels = section("function drawLabelsImpl(", "// ---------- hover tooltip");
+  assert.ok(labels.includes("const radius = Math.max(node._orbitTrail?.radius ?? node._pr ?? 4, node._styleReach ?? 0) + (node.kind === \"assistant\""), "the own label steps out past the look");
+  const env = vm.createContext({ Math, CALLOUT_COS: Math.SQRT1_2, CALLOUT_SIN: Math.SQRT1_2, CALLOUT_TITLE_H: 18 });
+  vm.runInContext(section("function calloutLayout(", "const CALLOUT_HARD"), env);
+  const size = { w: 120, subH: 0, bubbleH: 0 }, candidate = { side: 1, vert: -1, length: 74 };
+  const bare = env.calloutLayout({ _pr: 12 }, { x: 300, y: 400 }, candidate, size);
+  const reaching = env.calloutLayout({ _pr: 12, _styleReach: 12 * 1.6 }, { x: 300, y: 400 }, candidate, size);
+  assert.ok(Math.abs(Math.hypot(bare.sx - 300, bare.sy - 400) - 15) < 1e-9, "a plain node's leader leaves 3 px off its rim");
+  assert.ok(Math.abs(Math.hypot(reaching.sx - 300, reaching.sy - 400) - (19.2 + 3)) < 1e-9, "a reaching look's leader leaves 3 px past its reach");
 });
 
 test("labels step clear of a look that reaches past its node", () => {

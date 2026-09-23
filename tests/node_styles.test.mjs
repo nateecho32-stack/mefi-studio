@@ -536,3 +536,44 @@ test("each premium style has its own drawing", () => {
   }));
   assert.equal(signatures.size, 3);
 });
+
+// The caller's wire, surge and land offers (contract §4): `flow` says a wire
+// carries work (offered under still too), `cp` is the tree's S-curve a pulse
+// rides, `theme` the canvas's. Every Void look reads them as offered.
+test("the Void looks' wires and pulses follow the caller's flow, curve and theme", () => {
+  const a = { x: 20, y: 200 }, b = { x: 220, y: 40 };
+  const offer = (extra = {}) => ({ kind: "task", tint: [220, 180, 110], alpha: 0.55, width: 1.4, dash: [], march: false, flow: false, double: false, active: true, inspected: false, curved: false, cp: null, far: false, time: 1000, still: false, seed: 0.3, rA: 8, rB: 12, detail: 3, lifetime: 1, theme: null, ...extra });
+  const wireLog = (styles, style, extra) => { const ctx = recordingContext({ center: b }); styles.wire(ctx, style, a, b, offer(extra)); return JSON.stringify(plain(ctx.calls.log)); };
+  const accent = { background: "#050507", text: "#ece5d8", accent2: "#36d1ff" };
+  for (const style of ["singularity", "prism", "sigil"]) {
+    const styles = loadNodeStyles();
+    // Flow runs the style's work overlay; an active wire that carries none
+    // (a hub link) keeps its quiet look, and a still pose holds the flow.
+    assert.notEqual(wireLog(styles, style, { flow: true }), wireLog(styles, style, { flow: false }), `${style}: flow runs the work overlay`);
+    assert.notEqual(wireLog(styles, style, { flow: true, still: true }), wireLog(styles, style, { flow: false, still: true }), `${style}: a still pose holds the flow`);
+    assert.equal(wireLog(styles, style, { flow: true, still: true, time: 0 }), wireLog(styles, style, { flow: true, still: true, time: 99999 }), `${style}: that pose never moves`);
+    // No theme leaks from the last body painted: a wire offered none takes the defaults.
+    const fresh = wireLog(loadNodeStyles(), style, { flow: true });
+    styles.paint(recordingContext(), style, a, 12, [220, 180, 110], { kind: "task", active: true, theme: styles.theme(accent) });
+    assert.equal(wireLog(styles, style, { flow: true }), fresh, `${style}: a wire offered no theme takes the defaults`);
+    // A pulse on a tree S-curve rides the curve as drawn: every point it
+    // draws lies on or right beside the curve, and some lie well off the chord.
+    const cp = { x1: a.x, y1: 120, x2: b.x, y2: 120 };
+    const curve = [];
+    for (let step = 0; step <= 400; step += 1) {
+      const u = step / 400, v = 1 - u;
+      curve.push([v * v * v * a.x + 3 * v * v * u * cp.x1 + 3 * v * u * u * cp.x2 + u * u * u * b.x, v * v * v * a.y + 3 * v * v * u * cp.y1 + 3 * v * u * u * cp.y2 + u * u * u * b.y]);
+    }
+    const offCurve = (x, y) => Math.min(...curve.map(([cx, cy]) => Math.hypot(cx - x, cy - y)));
+    const offChord = (x, y) => Math.abs((b.y - a.y) * x - (b.x - a.x) * y + b.x * a.y - b.y * a.x) / Math.hypot(b.x - a.x, b.y - a.y);
+    for (const t of [0.3, 0.6]) {
+      const ctx = recordingContext({ center: b });
+      const pulse = { color: "#f1dcae", duration: 900 };
+      assert.equal(styles.surge(ctx, style, a, b, t, pulse, { kind: "dot", time: 400, still: false, rTo: 12, detail: 3, pulse, motion: null, cp, theme: null }), true);
+      const points = ctx.calls.log.filter(([name, x, y]) => (name === "moveTo" || name === "lineTo" || name === "arc") && x > 10 && y > 10);
+      assert.ok(points.length > 0, `${style} draws its pulse at t ${t}`);
+      for (const [name, x, y] of points) assert.ok(offCurve(x, y) <= 6, `${style} at t ${t}: ${name} (${x}, ${y}) sits ${offCurve(x, y).toFixed(1)} px off the curve`);
+      assert.ok(points.some(([, x, y]) => offChord(x, y) > 8), `${style} at t ${t} leaves the straight chord`);
+    }
+  }
+});
