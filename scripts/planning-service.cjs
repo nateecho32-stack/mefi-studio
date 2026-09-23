@@ -1,4 +1,18 @@
 "use strict";
+// The host side of Plans, one service per project (`createPlanningService`,
+// wired in main.cjs). It runs the user's planning actions through
+// scripts/planning.cjs, asks the model for interview turns, extra questions,
+// explanations and specification drafts, and converts an approved
+// specification into board tasks. The rules it keeps:
+//   - Every payload must name this project; a switched project is refused.
+//   - A model reply is a proposal. An interview reading is filed as an
+//     unconfirmed interpretation, never as the user's answer, and a reply is
+//     applied only if the plan's version did not move while it was written.
+//   - The user's own message is saved before the model is called, so it
+//     survives a failed reply.
+//   - Conversion journals its intent first, then admits the tasks through the
+//     board gateway (`mutateBoard`), so a retry never duplicates or rewrites
+//     admitted work.
 
 const { applyPlanningAction, buildImplementationTasks } = require("./planning.cjs");
 

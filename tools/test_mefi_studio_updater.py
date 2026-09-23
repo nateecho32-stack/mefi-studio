@@ -153,6 +153,7 @@ const scope = {
   UPDATE_GRACE_MS: 0,
   readSettings: async () => JSON.parse(JSON.stringify(stored)),
   writeSettings: async (next) => { stored = JSON.parse(JSON.stringify(next)); },
+  settingsDisk: { queue: Promise.resolve() },
   saveResume: async () => {},
   stopUpdateWatch: () => {},
   stopEyesWatch: () => {},
@@ -164,6 +165,8 @@ const scope = {
 };
 const bind = (body) => new Function("scope", `with (scope) { ${body} }`)(scope);
 scope.applyRestart = bind(`return (${restartSource.replace("async function applyRestart(", "async function (")});`);
+// Settings saves ride main's queue, lifted the same way.
+scope.updateSettings = bind(`return (${cut("function updateSettings(", "\\nfunction send(channel, payload)")});`);
 bind(applySource);
 const apply = handlers["update:apply"];
 const viaMain = { restart: (files) => scope.applyRestart(files) };

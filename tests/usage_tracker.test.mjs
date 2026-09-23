@@ -8,6 +8,7 @@ const {
   canonicalProvider, providerInfo, normalizeStoreUsage, mergeLedgers,
   parseOpenrouterKey, parseOpenrouterCredits, parseGatewayCredits, parseZaiQuota, describeAccountStatus,
   parseCliJson, parseClaudeCliResult, parseGrokCliResult, parseAntigravityCliResult, parseCodexCliResult,
+  parseClaudeUsage, parseCodexRateLimits, parseCodexRollout, parseGrokBilling, parseAntigravityUsage,
 } = require("../scripts/usage-tracker.cjs");
 
 const localTime = (year, month, day, hour = 12, minute = 0) => new Date(year, month - 1, day, hour, minute).getTime();
@@ -245,8 +246,14 @@ test("the other providers' readings are normalized and refused when unusable", (
   assert.equal(parseOpenrouterKey({ data: { usage: 3, limit: null } }).percent, null, "no key limit means no percentage");
   assert.throws(() => parseOpenrouterKey({ data: {} }), /no usable usage/);
   assert.throws(() => parseOpenrouterKey({}), /no data/);
-  assert.deepEqual(parseOpenrouterCredits({ data: { total_credits: 100.5, total_usage: 25.75 } }), { totalCredits: 100.5, totalUsage: 25.75, remaining: 74.75 });
+  assert.deepEqual(parseOpenrouterCredits({ data: { total_credits: 100.5, total_usage: 25.75 } }), { totalCredits: 100.5, totalUsage: 25.75, remaining: 74.75, balance: 74.75 });
+  assert.deepEqual(parseOpenrouterCredits({ data: { total_credits: 5, total_usage: 5.02 } }), { totalCredits: 5, totalUsage: 5.02, remaining: 0, balance: 5 - 5.02 }, "an overdrawn account keeps its sign");
   assert.throws(() => parseOpenrouterCredits({ data: { total_credits: 1 } }), /no usable totals/);
+  const free = parseOpenrouterKey({ data: { usage: 0.11, limit: null, is_free_tier: true, is_management_key: false, free_model_daily_requests: { used: 12, limit: 50, remaining: 38 }, byok_usage: 0, expires_at: null } });
+  assert.deepEqual(free.freeDaily, { used: 12, limit: 50, remaining: 38 }, "the free-model allowance is read");
+  assert.equal(free.isManagementKey, false);
+  assert.equal(free.byokUsage, 0);
+  assert.equal(parseOpenrouterKey({ data: { usage: 1, free_model_daily_requests: { used: "x" } } }).freeDaily, null, "an unusable allowance is left out");
   assert.deepEqual(parseGatewayCredits({ balance: "95.50", total_used: "4.50" }), { balance: 95.5, totalUsed: 4.5 }, "the REST sample carries strings");
   assert.deepEqual(parseGatewayCredits({ balance: 12, total_used: 0 }), { balance: 12, totalUsed: 0 });
   assert.throws(() => parseGatewayCredits({ total_used: "1" }), /no usable balance/);
@@ -256,16 +263,209 @@ test("the other providers' readings are normalized and refused when unusable", (
     { type: "TIME_LIMIT", percentage: 3, currentValue: 12 },
   ] } });
   assert.equal(quota.level, "pro");
-  assert.deepEqual(quota.rolling, { percent: 40.5, resetsAt: "2026-09-21T15:00:00.000Z" });
-  assert.deepEqual(quota.weekly, { percent: 12, resetsAt: null });
+  assert.equal(quota.plan, "tokens");
+  assert.deepEqual(quota.rolling, { percent: 40.5, resetsAt: "2026-09-21T15:00:00.000Z", used: null, limit: null, remaining: null, measure: "tokens", minutes: 300 });
+  assert.deepEqual(quota.weekly, { percent: 12, resetsAt: null, used: null, limit: null, remaining: null, measure: "tokens", minutes: 10080 });
   assert.equal(quota.tools.percent, 3);
+  assert.equal(quota.tools.measure, "calls");
   assert.equal(parseZaiQuota({ limits: [{ type: "TOKENS_LIMIT", unit: 3, number: 5, percentage: 150 }] }).rolling.percent, 100, "a percentage past the cap is clamped");
   assert.throws(() => parseZaiQuota({ data: {} }), /no limits/);
-  assert.throws(() => parseZaiQuota({ data: { limits: [{ type: "OTHER" }] } }), /no recognisable window/);
+  assert.throws(() => parseZaiQuota({ data: { limits: [{ type: "OTHER" }] } }), /no recognisable window \(types: OTHER\)/, "the refusal names what it saw");
   // z.ai refuses a key with HTTP 200 and an envelope: that is an auth failure, named, not a changed shape
   assert.throws(() => parseZaiQuota({ code: 401, msg: "token expired or incorrect", success: false }), (error) => error.code === "auth" && /z\.ai rejected the saved key \(401\): token expired or incorrect\. Save a current key/.test(error.message));
   assert.throws(() => parseZaiQuota({ code: 1001, msg: "Authentication parameter not received in Header, unable to authenticate", success: false }), (error) => error.code === "auth" && /rejected the saved key \(1001\)/.test(error.message));
   assert.throws(() => parseZaiQuota({ code: 500, msg: "busy", success: false }), (error) => error.code === "http" && /could not be read \(code 500\): busy/.test(error.message));
+});
+
+// A live Lite reply after z.ai moved coding plans to credits (2026-07-30),
+// verbatim from a public report on 2026-09-21: CREDIT_LIMIT rows only.
+const zaiCreditReply = () => ({ code: 200, msg: "Operation successful", success: true, data: { level: "lite", limits: [
+  { type: "CREDIT_LIMIT", unit: 3, number: 5, usage: 2000, currentValue: 23, remaining: 1976, percentage: 1, nextResetTime: 1790033645897 },
+  { type: "CREDIT_LIMIT", unit: 6, number: 1, usage: 10000, currentValue: 268, remaining: 9731, percentage: 2, nextResetTime: 1790292019984 },
+] } });
+
+test("z.ai's credit plans are read from their counts, and an empty plan list is a state, not a failure", () => {
+  const now = 1790020000000;
+  const quota = parseZaiQuota(zaiCreditReply(), { now });
+  assert.equal(quota.level, "lite");
+  assert.equal(quota.plan, "credits");
+  assert.equal(quota.empty, false);
+  assert.deepEqual(quota.rolling, { percent: 1.2, resetsAt: "2026-09-21T23:34:05.897Z", used: 23, limit: 2000, remaining: 1976, measure: "credits", minutes: 300 }, "the counts beat the server's rounded percentage");
+  assert.equal(quota.weekly.percent, 2.7);
+  assert.equal(quota.weekly.limit, 10000);
+  assert.equal(quota.tools, null, "credit plans charge tools in credits and send no tool row");
+  assert.deepEqual(quota.other, []);
+  // numbers that arrive as strings are still numbers
+  const strings = parseZaiQuota({ data: { limits: [{ type: "CREDIT_LIMIT", unit: "3", number: "5", usage: "2000", currentValue: "402", nextResetTime: String(now + 3600000) }] } }, { now });
+  assert.equal(strings.rolling.percent, 20.1);
+  assert.equal(strings.rolling.remaining, 1598);
+  // a five-hour reset further off than five hours is impossible and dropped
+  const far = parseZaiQuota({ data: { limits: [{ type: "CREDIT_LIMIT", unit: 3, number: 5, usage: 2000, currentValue: 1, nextResetTime: now + 10 * 3600000 }] } }, { now });
+  assert.equal(far.rolling.resetsAt, null);
+  // a legacy plan: token windows by percentage, the tool quota by its counts
+  const legacy = parseZaiQuota({ code: 200, success: true, data: { planName: "Pro", limits: [
+    { type: "TOKENS_LIMIT", unit: 3, number: 5, percentage: 25, nextResetTime: now + 3600000 },
+    { type: "TOKENS_LIMIT", unit: 6, number: 1, percentage: 9, nextResetTime: now + 86400000 },
+    { type: "TIME_LIMIT", unit: 5, number: 1, usage: 1000, currentValue: 224, remaining: 776, percentage: 22, usageDetails: [{ modelCode: "search-prime", usage: 210 }] },
+  ] } }, { now });
+  assert.equal(legacy.level, "pro");
+  assert.equal(legacy.plan, "tokens");
+  assert.equal(legacy.tools.percent, 22.4);
+  assert.equal(legacy.tools.minutes, null, "unit 5 is only a month on the tool row");
+  // an unfamiliar window length is kept as another window, not dropped
+  const odd = parseZaiQuota({ data: { limits: [{ type: "CREDIT_LIMIT", unit: 1, number: 30, usage: 100, currentValue: 50 }] } }, { now });
+  assert.equal(odd.rolling, null);
+  assert.equal(odd.other[0].minutes, 43200);
+  assert.equal(odd.other[0].percent, 50);
+  // a team plan (or a key with no coding plan) lists nothing
+  const team = parseZaiQuota({ code: 200, msg: "ok", success: true, data: { limits: [], level: "pro" } }, { now });
+  assert.deepEqual(team, { level: "pro", plan: null, empty: true, rolling: null, weekly: null, tools: null, other: [] });
+  assert.throws(() => parseZaiQuota({ data: { limits: [{ type: "NEW_LIMIT", unit: 3, number: 5, percentage: 1 }, { type: "OTHER" }] } }, { now }), /no recognisable window \(types: NEW_LIMIT, OTHER\)/);
+});
+
+// Claude Code's get_usage body as the installed 2.1.280 answered it on
+// 2026-09-22 (limit fields only; the rest of the reply is ignored).
+const claudeUsageBody = () => ({
+  subscription_type: "max", rate_limits_available: true, session: {}, behaviors: {},
+  rate_limits: {
+    five_hour: { utilization: 88, resets_at: "2026-09-23T01:10:00.296623+00:00", limit_dollars: null },
+    seven_day: { utilization: 24, resets_at: "2026-09-28T11:00:00.296646+00:00" },
+    seven_day_opus: null, seven_day_sonnet: null, seven_day_oauth_apps: null, tangelo: { opaque: true },
+    model_scoped: [{ display_name: "Fable", utilization: 0, resets_at: "2026-09-28T11:00:00+00:00" }],
+    limits: [
+      { kind: "session", group: "session", percent: 88, resets_at: "2026-09-23T01:10:00.296623+00:00", severity: "warning", is_active: true },
+      { kind: "weekly_all", group: "weekly", percent: 24, resets_at: "2026-09-28T11:00:00.296646+00:00", severity: "normal", is_active: false },
+      { kind: "weekly_scoped", group: "weekly", percent: 0, resets_at: "2026-09-28T11:00:00+00:00", severity: "normal", is_active: false, scope: { model: { display_name: "Fable" } } },
+    ],
+    extra_usage: { is_enabled: false, utilization: null },
+  },
+});
+
+test("Claude Code's usage reply becomes plan windows classified by kind, never by label", () => {
+  const now = Date.parse("2026-09-23T00:00:00Z");
+  const limits = parseClaudeUsage(claudeUsageBody(), { now });
+  assert.equal(limits.plan, "max");
+  assert.equal(limits.available, true);
+  assert.equal(limits.blocked, false);
+  assert.deepEqual(limits.windows.map((window) => [window.id, window.short, window.label, window.percent, window.severity]), [
+    ["5h", "5h", "5-hour session", 88, "warning"],
+    ["week", "Wk", "Weekly · all models", 24, "normal"],
+    ["week:fable", "Fable", "Weekly · Fable", 0, "normal"],
+  ]);
+  assert.equal(limits.windows[0].resetsAt, "2026-09-23T01:10:00.296Z");
+  assert.equal(limits.windows[2].scope, "Fable");
+  // an older reply without limits[] falls back to the named windows
+  const body = claudeUsageBody();
+  delete body.rate_limits.limits;
+  body.rate_limits.seven_day_opus = { utilization: 100, resets_at: "2026-09-28T11:00:00Z" };
+  const named = parseClaudeUsage(body, { now });
+  assert.deepEqual(named.windows.map((window) => [window.short, window.percent]), [["5h", 88], ["Wk", 24], ["Opus", 100], ["Fable", 0]]);
+  assert.equal(named.blocked, true, "a spent window blocks");
+  // a past reset reads as reset, not as the stale percentage
+  const later = parseClaudeUsage(claudeUsageBody(), { now: Date.parse("2026-09-23T02:00:00Z") });
+  assert.equal(later.windows[0].percent, 0);
+  assert.equal(later.windows[0].reset, true);
+  // an API-key login has no plan windows: a state with a note, not an error
+  const keyed = parseClaudeUsage({ subscription_type: null, rate_limits_available: false }, { now });
+  assert.equal(keyed.available, false);
+  assert.deepEqual(keyed.windows, []);
+  assert.match(keyed.note, /not available for this login/);
+  assert.throws(() => parseClaudeUsage({ rate_limits_available: true, rate_limits: {} }, { now }), /no plan windows/);
+  assert.throws(() => parseClaudeUsage(null), /no usage reply/);
+});
+
+// codex app-server's account/rateLimits/read, as 0.154.0 answered it on
+// 2026-09-22: a Pro account with only a weekly window, spent.
+const codexLive = () => ({
+  ordinaryUsageAllowed: false,
+  rateLimits: { limitId: "codex", planType: "pro", primary: { usedPercent: 100, windowDurationMins: 10080, resetsAt: 1790437552 }, secondary: null, credits: { hasCredits: false, unlimited: false, balance: "0" }, rateLimitReachedType: "rate_limit_reached" },
+  rateLimitsByLimitId: { codex: { limitId: "codex", planType: "pro", primary: { usedPercent: 100, windowDurationMins: 10080, resetsAt: 1790437552 }, secondary: null, credits: { hasCredits: false, unlimited: false, balance: "0" } } },
+  rateLimitResetCredits: null, accountId: "acct", rateLimitUpsell: null,
+});
+const rolloutLine = (timestamp, rateLimits) => JSON.stringify({ timestamp, type: "event_msg", payload: { type: "token_count", info: null, rate_limits: rateLimits } });
+
+test("Codex windows are classified by length from the live read and from session rollouts", () => {
+  const now = Date.parse("2026-09-22T20:00:00Z");
+  const live = parseCodexRateLimits(codexLive(), { now });
+  assert.equal(live.plan, "pro");
+  assert.equal(live.blocked, true);
+  assert.deepEqual(live.windows.map((window) => [window.id, window.short, window.percent, window.resetsAt]), [["week", "Wk", 100, "2026-09-26T15:45:52.000Z"]], "a lone weekly window in the primary slot is still the weekly window");
+  assert.deepEqual(live.credits, { hasCredits: false, unlimited: false, balance: 0 });
+  // five hours and a week, the older Plus pattern, sort shortest first
+  const both = parseCodexRateLimits({ rateLimits: { primary: { usedPercent: 12.5, windowDurationMins: 10080, resetsAt: 1790437552 }, secondary: { usedPercent: 40, windowDurationMins: 300, resetsAt: 1790040000 } } }, { now });
+  assert.deepEqual(both.windows.map((window) => window.short), ["5h", "Wk"]);
+  assert.equal(both.blocked, false);
+  // a free plan's 30-day window, and an unfamiliar length
+  assert.equal(parseCodexRateLimits({ primary: { used_percent: 3, window_minutes: 43200, resets_at: 1791000000 } }, { now }).windows[0].short, "Mo");
+  assert.equal(parseCodexRateLimits({ primary: { used_percent: 3, window_minutes: 720 } }, { now }).windows[0].label, "12-hour window");
+  // a snapshot taken before its reset: the window has emptied since
+  const stale = parseCodexRateLimits({ plan_type: "plus", primary: { used_percent: 100, window_minutes: 10080, resets_at: 1790000000 } }, { now, observedAt: 1789500000000, source: "rollout" });
+  assert.equal(stale.windows[0].percent, 0);
+  assert.equal(stale.windows[0].reset, true);
+  assert.equal(stale.blocked, false);
+  assert.equal(stale.source, "rollout");
+  assert.equal(stale.asOf, 1789500000000);
+  // legacy shapes: resets relative to the event, and the flat pre-2025-09 fields
+  const relative = parseCodexRateLimits({ primary: { used_percent: 50, window_minutes: 300, resets_in_seconds: 3600 } }, { now, observedAt: now - 600000 });
+  assert.equal(relative.windows[0].resetsAt, new Date(now - 600000 + 3600000).toISOString());
+  assert.equal(parseCodexRateLimits({ primary_used_percent: 70, primary_window_minutes: 300 }, { now }).windows[0].percent, 70);
+  // no windows at all (an API key, another provider): a note, not a failure
+  const none = parseCodexRateLimits({ rateLimits: { limitId: "codex", primary: null, secondary: null } }, { now });
+  assert.deepEqual(none.windows, []);
+  assert.match(none.note, /no plan windows/);
+  assert.throws(() => parseCodexRateLimits(null), /no rate-limit reply/);
+});
+
+test("a rollout tail yields its newest main-lane snapshot with a window, never the prompts around it", () => {
+  const codex = (percent, minutes = 10080) => ({ limit_id: "codex", limit_name: null, primary: { used_percent: percent, window_minutes: minutes, resets_at: 1790437552 }, secondary: null, credits: null, plan_type: "pro", rate_limit_reached_type: null });
+  const chunk = [
+    "tial line cut by the tail read {\"token_count\" \"rate_limits\"",
+    rolloutLine("2026-09-20T04:00:00.000Z", codex(93)),
+    JSON.stringify({ timestamp: "2026-09-20T04:04:00.000Z", type: "response_item", payload: { type: "message", content: "a prompt that mentions token_count and rate_limits" } }),
+    rolloutLine("2026-09-20T04:05:21.460Z", codex(100)),
+    rolloutLine("2026-09-20T04:05:21.800Z", { limit_id: "premium", primary: null, secondary: null, plan_type: null }),
+    rolloutLine("2026-09-20T04:05:22.000Z", { limit_id: "codex", primary: null, secondary: null, plan_type: "pro" }),
+    "",
+  ].join("\n");
+  const found = parseCodexRollout(chunk);
+  assert.equal(found.observedAt, Date.parse("2026-09-20T04:05:21.460Z"), "the premium lane and a header-less event are skipped");
+  assert.equal(found.snapshot.primary.used_percent, 100);
+  assert.equal(found.planType, "pro");
+  // ordered by event time, not by position in the file
+  const shuffled = [rolloutLine("2026-09-20T05:00:00.000Z", codex(20)), rolloutLine("2026-09-20T04:00:00.000Z", codex(90))].join("\n");
+  assert.equal(parseCodexRollout(shuffled, { fromStart: true }).snapshot.primary.used_percent, 20);
+  assert.equal(parseCodexRollout(shuffled).snapshot.primary.used_percent, 90, "without fromStart the first line is the cut one and is dropped");
+  assert.equal(parseCodexRollout("nothing here\n{\"type\":\"session_meta\"}", { fromStart: true }), null);
+});
+
+test("Grok's billing pool and Antigravity's usage groups become plan windows", () => {
+  const now = Date.parse("2026-09-22T20:00:00Z");
+  // grok 1.0.40's _x.ai/billing on 2026-09-22 (money fields are cents; {} is zero)
+  const grok = parseGrokBilling({ config: { creditUsagePercent: 100, currentPeriod: { type: "USAGE_PERIOD_TYPE_WEEKLY", start: "2026-09-17T23:11:37.803130+00:00", end: "2026-09-24T23:11:37.803130+00:00" }, onDemandCap: {}, onDemandUsed: {}, prepaidBalance: {}, isUnifiedBillingUser: true } }, { now });
+  assert.deepEqual(grok.windows.map((window) => [window.id, window.short, window.label, window.percent, window.resetsAt]), [["week", "Wk", "Weekly credits", 100, "2026-09-24T23:11:37.803Z"]]);
+  assert.equal(grok.blocked, true);
+  assert.deepEqual(grok.credits, { prepaidUsd: 0, onDemandCapUsd: 0, onDemandUsedUsd: 0 });
+  const topped = parseGrokBilling({ subscriptionTier: "SuperGrok", config: { creditUsagePercent: 100, currentPeriod: { type: "USAGE_PERIOD_TYPE_WEEKLY", end: "2026-09-24T23:11:37Z" }, prepaidBalance: { val: 500 } } }, { now });
+  assert.equal(topped.blocked, false, "prepaid credit keeps a full pool usable");
+  assert.equal(topped.plan, "SuperGrok");
+  assert.equal(topped.credits.prepaidUsd, 5);
+  const legacy = parseGrokBilling({ config: { monthlyLimit: { val: 2000 }, used: { val: 500 }, billingPeriodEnd: "2026-10-01T00:00:00Z" } }, { now });
+  assert.deepEqual(legacy.windows.map((window) => [window.short, window.percent]), [["Cr", 25]]);
+  assert.match(parseGrokBilling({ config: {} }, { now }).note, /no credit usage/);
+  assert.throws(() => parseGrokBilling({}), /no config/);
+  // agy 1.2.6's /usage in print mode (a third-party capture; agy is not installed here)
+  const agy = parseAntigravityUsage(`Checking for updates...\n${JSON.stringify({ status: "SUCCESS", num_turns: 0, command: { name: "usage", data: { groups: [
+    { name: "Gemini Models", buckets: [{ id: "gemini-weekly", window: "weekly", remaining_fraction: 0, reset_time: "2026-09-24T00:02:21Z" }] },
+    { name: "Claude and GPT models", buckets: [{ id: "3p-weekly", window: "weekly", remaining_fraction: 1, reset_time: "2026-09-29T20:00:00Z" }] },
+  ] } } })}`, { now });
+  assert.deepEqual(agy.windows.map((window) => [window.id, window.short, window.label, window.percent, window.resetsAt]), [
+    ["gemini-weekly", "Gemini", "Gemini Models · weekly", 100, "2026-09-24T00:02:21.000Z"],
+    ["3p-weekly", "Claude", "Claude and GPT models · weekly", 0, null],
+  ], "a full bucket's reset moves on every read and is not shown");
+  assert.equal(agy.blocked, true);
+  assert.throws(() => parseAntigravityUsage(JSON.stringify({ status: "ERROR" })), /no usage groups/);
+  assert.equal(providerInfo("claude").account, "limits");
+  assert.equal(providerInfo("lmstudio").account, "local");
 });
 
 test("status errors explain the account state without echoing a credential or raw body", () => {
@@ -351,4 +551,70 @@ test("the Codex CLI event stream yields the agent message and the turn's tokens,
   assert.equal(silent.ok, false, "a turn with no agent message is not a reply");
   assert.equal(parseCodexCliResult("plain text reply"), null, "a text reply is not mistaken for the event stream");
   assert.equal(parseCodexCliResult(""), null);
+});
+
+// aggregateUsage feeds every bucket in one pass. This is the report written
+// the plain way (filter the ledger per bucket, total each one), kept here as
+// the reference: sums must match to the last bit and every list must keep its
+// order, over ties, future rows, unknown fields and fractional costs.
+function referenceReport(observations, { now, days = 14 }) {
+  const TOKENS = ["inputTokens", "outputTokens", "reasoningTokens", "cacheReadTokens", "cacheWriteTokens", "totalTokens"];
+  const num = (value) => (typeof value === "number" && Number.isFinite(value) ? value : null);
+  const field = (rows, read) => {
+    let known = null, knownRecords = 0;
+    for (const row of rows) { const value = num(read(row)); if (value === null) continue; known = (known ?? 0) + value; knownRecords += 1; }
+    return { known, knownRecords, unknownRecords: rows.length - knownRecords };
+  };
+  const totals = (rows) => ({
+    calls: rows.length,
+    errors: rows.filter((row) => row.status === "error").length,
+    cancelled: rows.filter((row) => row.status === "cancelled").length,
+    origins: { studio: rows.filter((row) => row.origin !== "opencode-cli").length, "opencode-cli": rows.filter((row) => row.origin === "opencode-cli").length },
+    usage: Object.fromEntries([...TOKENS.map((key) => [key, field(rows, (row) => row.tokenUsage?.[key])]), ["costUsd", field(rows, (row) => row.costUsd)]]),
+  });
+  const group = (rows, key) => { const map = new Map(); for (const row of rows) { const k = key(row); if (!map.has(k)) map.set(k, []); map.get(k).push(row); } return [...map]; };
+  const ordered = observations.slice().sort((a, b) => a.at - b.at);
+  const midnight = (at) => { const d = new Date(at); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+  const dayKey = (at) => { const d = new Date(at); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  const windows = (rows) => Object.fromEntries([["today", midnight(now)], ["week", now - 7 * 86400000], ["month", now - 30 * 86400000]].map(([name, from]) => [name, totals(rows.filter((row) => row.at >= from && row.at <= now))]));
+  const byCalls = (a, b) => b.calls - a.calls || a.provider.localeCompare(b.provider);
+  return {
+    generatedAt: now,
+    days: group(ordered, (row) => dayKey(row.at)).sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, days)
+      .map(([day, rows]) => ({ day, ...totals(rows), providers: group(rows, (row) => row.provider).map(([provider, entries]) => ({ provider, ...providerInfo(provider), ...totals(entries) })).sort(byCalls) })),
+    ...windows(ordered),
+    totals: totals(ordered),
+    range: { from: ordered[0]?.at ?? null, to: ordered.at(-1)?.at ?? null },
+    origins: { studio: totals(ordered.filter((row) => row.origin !== "opencode-cli")), "opencode-cli": totals(ordered.filter((row) => row.origin === "opencode-cli")) },
+    providers: group(ordered, (row) => row.provider).map(([provider, rows]) => ({
+      provider, ...providerInfo(provider),
+      providerIds: [...new Set(rows.map((row) => row.providerId).filter(Boolean))],
+      models: new Set(rows.map((row) => row.model).filter(Boolean)).size,
+      ...totals(rows), ...windows(rows),
+    })).sort(byCalls),
+    models: group(ordered, (row) => `${row.provider}::${row.model || "unknown"}`)
+      .map(([, rows]) => ({ provider: rows[0].provider, label: providerInfo(rows[0].provider).label, model: rows[0].model || "unknown", ...totals(rows), ...windows(rows) }))
+      .sort((a, b) => b.calls - a.calls || a.model.localeCompare(b.model)),
+  };
+}
+
+test("the one-pass report matches the per-bucket totals to the last bit", () => {
+  const now = localTime(2026, 9, 22, 17, 10);
+  let seed = 11;
+  const rand = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const providers = ["opencode", "zai", "openrouter", "claude", "lmstudio"];
+  const studio = Array.from({ length: 600 }, (_, index) => observation({
+    at: now - Math.floor(rand() * 40 * 86400000) + (index % 9 === 0 ? 3600000 : 0),
+    provider: providers[index % providers.length],
+    model: index % 13 === 0 ? "" : `model-${index % 7}`,
+    status: index % 17 === 0 ? "error" : index % 23 === 0 ? "cancelled" : "ok",
+    costUsd: index % 5 === 0 ? null : rand() * 0.03,
+    tokenUsage: { inputTokens: Math.floor(rand() * 9000), outputTokens: index % 4 ? Math.floor(rand() * 900) : null, totalTokens: rand() * 1e4 },
+  }));
+  const store = Array.from({ length: 600 }, (_, index) => turn({ id: `t${index}`, at: now - (index % 50) * 3600000, provider: providers[(index * 3) % providers.length], cost: index % 3 ? rand() * 0.01 : 0 }));
+  const merged = mergeLedgers({ studio, store });
+  for (const days of [14, 3, 90]) {
+    const report = aggregateUsage(merged, { now, days });
+    assert.equal(JSON.stringify(report), JSON.stringify(referenceReport(merged, { now, days })), `days=${days}`);
+  }
 });

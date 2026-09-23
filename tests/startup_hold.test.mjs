@@ -120,12 +120,14 @@ test("Resume while held releases the service first, then resumes as before", asy
 
 test("the tray offers Start agents while held and rebuilds its menu only when that entry changes", async () => {
   let builds = 0, released = 0, pauses = 0, resumes = 0;
+  const controls = [];
   const tray = { tooltip: null, menu: null, setToolTip(text) { this.tooltip = text; }, setContextMenu(menu) { this.menu = menu; builds += 1; } };
   const autopilot = { held: true };
   const env = host(section("function refreshTray()", "// ---- the thread"), {
     tray, autopilot, assistantState: { status: "running" }, assistantModule: null, trayPaused: null,
     Menu: { buildFromTemplate: (items) => items }, showWindow() {},
     releaseStartupHold: async () => { released += 1; }, assistantResume: async () => { resumes += 1; }, assistantPause: async () => { pauses += 1; },
+    assistantControl: async (action) => { controls.push(action); },
   });
   env.refreshTray();
   assert.match(tray.tooltip, /agents waiting for you/);
@@ -145,6 +147,7 @@ test("the tray offers Start agents while held and rebuilds its menu only when th
   env.refreshTray();
   assert.equal(tray.menu[1].label, "Resume assistant");
   await tray.menu[1].click();
-  assert.equal(resumes, 1);
+  assert.deepEqual(controls, ["start-work"], "the tray resumes through start-work, like every Resume in the app");
+  assert.equal(resumes, 0, "a bare assistantResume would leave a Workspace hold on new work");
   assert.equal(released, 1, "once released the tray never calls the launch release again");
 });

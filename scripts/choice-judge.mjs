@@ -17,7 +17,6 @@
 
 import { parseAnswers, validateQuestionSpec } from "./decision-client.mjs";
 
-export const JUDGE_KINDS = Object.freeze(["jev", "assistant", "opencode-free", "fixed"]);
 export const DEFAULT_JUDGE_TIMEOUT_MS = 15000;
 export const OPENCODE_JUDGE_TIMEOUT_MS = 90000;
 export const FREE_TIER_REFUSAL = /free tier can only be used from within opencode/i;

@@ -229,11 +229,11 @@ test("normal background mode switches between cadence ticks and reloads its own 
     clearTimeout: (id) => cleared.push(id),
     assistantWrite: () => f.projects.eyes(f.eyes).writeJson(assistantFile, context.assistantState),
     ensureAssistant: async () => { context.assistantState = await f.projects.eyes(f.eyes).readJson(assistantFile, { status: "running", messages: [] }); },
-    readSettings: async () => ({}), writeSettings: async () => {},
+    readSettings: async () => ({}), writeSettings: async () => {}, settingsDisk: { queue: Promise.resolve() },
     getEyes: async () => f.projects.eyes(f.eyes), send: (name, data) => sends.push([name, data]),
     emitAutopilot() {}, assistantSchedule: () => scheduled.push(f.projects.current().id),
   });
-  vm.runInContext(section("function taskView(", "async function setTaskDependencies(") + "\n" + section("function projectBusyReason(", "function createCatalogFileReader("), context);
+  vm.runInContext(section("function taskView(", "async function setTaskDependencies(") + "\n" + section("function projectBusyReason(", "function createCatalogFileReader(") + "\n" + section("function updateSettings(", "function send(channel, payload)"), context);
   assert.equal(context.projectBusyReason(), null, "a pending cadence timer does not lock the project selector");
   const result = await context.selectProject(f.secondary.id);
   assert.equal(result.ok, true);
@@ -272,10 +272,10 @@ test("background roster work and an overlapping read drain instead of refusing t
     mkdir, statSync, path, setTimeout, clearTimeout, Date,
     assistantClearQueue: (options) => { cleared.push(options); context.pool.queue = []; context.pool.running.clear(); },
     assistantWrite: async () => {}, ensureAssistant: async () => { context.assistantState = { status: "running", messages: [] }; },
-    readSettings: async () => ({}), writeSettings: async () => {},
+    readSettings: async () => ({}), writeSettings: async () => {}, settingsDisk: { queue: Promise.resolve() },
     getEyes: async () => f.projects.eyes(f.eyes), send() {}, emitAutopilot() {}, assistantSchedule() {},
   });
-  vm.runInContext(section("function taskView(", "async function setTaskDependencies(") + "\n" + section("async function waitForProjectIdle(", "let stopAllPromise") + "\n" + section("function projectBusyReason(", "function createCatalogFileReader("), context);
+  vm.runInContext(section("function taskView(", "async function setTaskDependencies(") + "\n" + section("async function waitForProjectIdle(", "let stopAllPromise") + "\n" + section("function projectBusyReason(", "function createCatalogFileReader(") + "\n" + section("function updateSettings(", "function send(channel, payload)"), context);
   assert.match(context.projectBusyReason(), /finishing work/, "the gate itself still reads busy");
   const startedAt = Date.now();
   const switching = context.selectProject(f.secondary.id);

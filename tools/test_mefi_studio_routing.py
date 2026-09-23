@@ -494,7 +494,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         handler = _function_body(self.main, "autoSetup")
         self.assertTrue(handler, "autoSetup callable missing")
         self.assertRegex(handler, r'planAutoSetup\(\{ settings, keys, clis(?:, local)? \}\)')
-        self.assertIn("await writeSettings(next)", handler, "only detected, planned changes are written")
+        self.assertIn("await updateSettings((next) =>", handler, "only detected, planned changes are written, through the settings queue")
         self.assertIn("applied: false", handler, "an already-configured machine reports a no-op")
         self.assertIn("if (!apply) return", handler, "the walkthrough's scan can plan without writing")
         self.assertIn("autoSetup: (options) => autoSetup(options)", self.main, "the first-run service receives the same callable")

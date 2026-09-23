@@ -12,18 +12,22 @@
 // shared node_modules through a junction (npm ci fallback) so builds and
 // tests run inside it.
 
-const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
 const GIT_TIMEOUT_MS = 120000;
 const NPM_TIMEOUT_MS = 10 * 60 * 1000;
 
+// git and npm inherit the host environment minus Studio's own
+// MEFI_STUDIO_*_KEY / _TOKEN credentials, which platform.cjs's spawn withholds
+// from every child. It is required here rather than at load: main.cjs requires
+// this module unconditionally but treats platform.cjs as optional, so a missing
+// shim fails a worktree run (through the catch below) instead of the launch.
 function runProcess(exe, root, args, timeoutMs = GIT_TIMEOUT_MS) {
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(exe, args, { cwd: root, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+      child = require("./platform.cjs").spawn(exe, args, { cwd: root, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     } catch (error) {
       resolve({ code: -1, stdout: "", stderr: String(error?.message ?? error) });
       return;

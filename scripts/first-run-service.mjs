@@ -31,6 +31,14 @@ export function createFirstRunService(deps = {}) {
   for (const [name, value] of Object.entries({ scanner, mapper, judge, readSettings, writeSettings, projects })) {
     if (!value) throw new Error(`first-run service: ${name} is required`);
   }
+  // The host passes its settings queue (main.cjs updateSettings) so this
+  // read-modify-write cannot undo a save landing beside it; alone, the same
+  // contract runs unqueued on the two callbacks.
+  const updateSettings = deps.updateSettings ?? (async (mutate) => {
+    const next = await readSettings();
+    if ((await mutate(next)) !== false) await writeSettings(next);
+    return next;
+  });
   if (typeof exec !== "function") throw new Error("first-run service: an exec function is required");
 
   let lastScan = null;
@@ -105,7 +113,6 @@ export function createFirstRunService(deps = {}) {
     const plan = scanner.planFirstRun({ scan: lastScan.scan, keys: keysOf(settings), prefs: chosen });
     const modelId = (value) => (typeof value === "string" && scanner.MODEL_ID.test(value) ? value : null);
     const applied = [];
-    const next = await readSettings();
     const firstRun = {
       version: FIRST_RUN_VERSION,
       scanAt: lastScan.at,
@@ -119,26 +126,27 @@ export function createFirstRunService(deps = {}) {
       preferFree: chosen.preferFree,
       warnings: plan.warnings,
     };
-    next.firstRun = firstRun;
-    applied.push("firstRun");
-    if (plan.ok && (!next.executorCli || next.executorCli === "opencode")) {
-      if (next.executorCli !== "opencode") applied.push("executorCli");
-      next.executorCli = "opencode";
-    }
-    const models = next.executorModels && typeof next.executorModels === "object" ? { ...next.executorModels } : {};
-    if (firstRun.builder.model) {
-      if (models.opencode !== firstRun.builder.model) applied.push("executorModels.opencode");
-      models.opencode = firstRun.builder.model;
-    } else if (models.opencode) {
-      delete models.opencode;
-      applied.push("executorModels.opencode");
-    }
-    next.executorModels = models;
-    if (plan.judge.kind === "jev" && next.modelSelection !== "jev") {
-      next.modelSelection = "jev";
-      applied.push("modelSelection");
-    }
-    await writeSettings(next);
+    await updateSettings((next) => {
+      next.firstRun = firstRun;
+      applied.push("firstRun");
+      if (plan.ok && (!next.executorCli || next.executorCli === "opencode")) {
+        if (next.executorCli !== "opencode") applied.push("executorCli");
+        next.executorCli = "opencode";
+      }
+      const models = next.executorModels && typeof next.executorModels === "object" ? { ...next.executorModels } : {};
+      if (firstRun.builder.model) {
+        if (models.opencode !== firstRun.builder.model) applied.push("executorModels.opencode");
+        models.opencode = firstRun.builder.model;
+      } else if (models.opencode) {
+        delete models.opencode;
+        applied.push("executorModels.opencode");
+      }
+      next.executorModels = models;
+      if (plan.judge.kind === "jev" && next.modelSelection !== "jev") {
+        next.modelSelection = "jev";
+        applied.push("modelSelection");
+      }
+    });
     // Auto setup reconciles the assistant route and the builder CLI with what
     // the machine has (saved keys, installed CLIs, a local server), so a
     // machine without OpenCode still leaves this step configured.

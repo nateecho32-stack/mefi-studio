@@ -6,7 +6,12 @@ const closed = new Set(["done", "closed", "complete", "completed", "archived", "
 const live = (item) => !closed.has(String(item?.status ?? "").toLowerCase());
 const sameProject = (item, incoming) => !incoming.projectId || !item?.projectId || item.projectId === incoming.projectId;
 const string = (value) => String(value ?? "").trim();
-const titleKey = (value) => string(value).toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+// "Work on it" titles a card with the label it points at ("Work on \"X\"")
+// while the underlying work may already be titled "X". Unwrap that pure display
+// form here too, so the chat admission key matches the shared compactKey the
+// promotion and spawn guards use instead of stacking a duplicate beside it.
+const unwrapWorkOn = (value) => string(value).replace(/^work on\s+["'\u2018\u2019\u201c\u201d]([\s\S]+?)["'\u2018\u2019\u201c\u201d][.!?]*$/i, "$1");
+const titleKey = (value) => unwrapWorkOn(value).toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
 
 const actionFamilies = new Map([
   ["add", "add"], ["adding", "add"], ["create", "add"], ["creating", "add"], ["implement", "add"], ["implementing", "add"], ["build", "add"], ["building", "add"],
@@ -29,7 +34,7 @@ function briefOf(item) {
   let value = string(item?.prompt) || string(item?.title);
   // Host-added focus context is provenance, not another user requirement.
   value = value.replace(/\n\nThe user pointed the assistant at (?:task|session|todo) "[^\n]*" \(id: [^\n]*\) while asking for this\.$/, "");
-  const resolved = value.match(/^Work on "([^"\n]+)"\. Queued from the assistant chat — the user (?:said|confirmed with) "[^\n]*"\.$/);
+  const resolved = value.match(/^Work on "([^"\n]+)"\. Queued (?:from the assistant chat — the user (?:said|confirmed with) "[^\n]*"|with Work on it — the user pointed at [^\n]*)\.$/);
   return resolved ? resolved[1] : value;
 }
 

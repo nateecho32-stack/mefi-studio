@@ -26,7 +26,13 @@
 //   - concurrent free-tier requests on one model queue behind each other
 //     (a second call sat for 120 s), so free work must be serialized.
 
-import { spawn } from "node:child_process";
+import studioPlatform from "./platform.cjs";
+
+// Every child goes through platform.cjs's spawn, which withholds Studio's own
+// MEFI_STUDIO_*_KEY / _TOKEN credentials. The env this module is handed is
+// normally the whole host environment (process.env by default, spread into the
+// judge's and the first map's run env), so node's own spawn would pass them on.
+const { spawn } = studioPlatform;
 
 export const SCAN_VERSION = 1;
 export const DEFAULT_STEP_TIMEOUT_MS = 20000;

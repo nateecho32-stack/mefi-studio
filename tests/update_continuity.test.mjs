@@ -140,13 +140,14 @@ function restartHost() {
     Date, activeChild: null, autopilot: { jobs: [{ id: "real", finished: false }] }, window: null,
     UPDATE_GRACE_MS: 0, updater: { status: () => ({ auto: true }) },
     readSettings: async () => structuredClone(settings), writeSettings: async (next) => { settings = next; },
+    settingsDisk: { queue: Promise.resolve() },
     saveResume: async () => {}, setTimeout: (fn) => { fn(); }, send() {},
     assistantAskForWork: () => { asks += 1; },
     stopUpdateWatch() {}, stopEyesWatch() {}, stopMachineWatch() {}, relaunchArgs: () => ["--updated"],
     stopAssistant() { assistantStops += 1; },
     app: { releaseSingleInstanceLock() {}, relaunch() { assert.equal(assistantStops, 1, "save helpers before the next process can start"); }, exit: () => { exits += 1; } },
   });
-  vm.runInContext(section("// A pending restart drains", "async function startUpdateWatch("), env);
+  vm.runInContext(section("// A pending restart drains", "async function startUpdateWatch(") + section("function updateSettings(", "function send(channel, payload)"), env);
   return { env, exits: () => exits, asks: () => asks, assistantStops: () => assistantStops, settings: () => settings };
 }
 

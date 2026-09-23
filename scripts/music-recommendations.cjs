@@ -1,4 +1,10 @@
 "use strict";
+// Music suggestions for a mood: validates the request (`musicRequest`), parses
+// a model's reply into at most five title/artist picks with Spotify search
+// links (`musicSuggestions`), and runs one request at a time over the host's
+// routine AI route (`createMusicRecommender`, wired in main.cjs). The mood is
+// data for the prompt, never an instruction: this path has no tools, shell,
+// board or dispatch, and a reply can only ever become a list of suggestions.
 
 const clip = (value, length) => typeof value === "string" ? value.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, length) : "";
 

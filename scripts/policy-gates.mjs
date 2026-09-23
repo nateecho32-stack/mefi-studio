@@ -25,7 +25,6 @@ import path from "node:path";
 import { BASELINE_POLICY, policyIdentity } from "./policy.mjs";
 
 export const POLICY_STATE_SCHEMA = 1;
-export const LIFECYCLE_STAGES = Object.freeze(["proposed", "replay_passed", "heldout_passed", "shadow", "canary", "active", "rejected", "rolled_back"]);
 
 const clipText = (value, max) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 

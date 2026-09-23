@@ -131,6 +131,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     setTimeout: (fn, delay) => { const timer = { fn, delay, at: now + delay, unref() {} }; timers.push(timer); if (delay === 3000) queueMicrotask(fn); return timer; },
     clearTimeout: (timer) => { timer.cancelled = true; }, setInterval: () => ({ unref() {} }), clearInterval() {},
     readSettings: async () => copy(settings), writeSettings: async (next) => { settings = copy(next); }, sweepSnapshotLocks: async () => {},
+    settingsDisk: { queue: Promise.resolve() },
     autopilotStatus: () => autopilot,
     spawn: (command, args, options) => {
       if (command === "taskkill") {
@@ -165,6 +166,7 @@ export function executorHost({ tasks = [], requests = [], parallel = 1, adaptive
     section("function assistantSuperviseJobs(", "function assistantStaleWork("),
     section("async function setAutopilot(", "// Settings may override the defaults"),
     section("let autopilotBootPromise = null;", "async function readSettings("),
+    section("function updateSettings(", "function send(channel, payload)"),
     section("function machineMemoryWarnOverride(", "let machineTimer = null;"),
   ].join("\n"), env);
   if (realWatches) vm.runInContext(section("function watchJobProgress(", "// Starts eligible work"), env);

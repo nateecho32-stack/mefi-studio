@@ -1,3 +1,21 @@
+// Cascade gates for the renderer stylesheets. A stylesheet is reduced to its
+// cascade winners: the last value for each (at-rule context, selector,
+// property, !important) key. Four modes:
+//   <base.css> <candidate.css>  the two files keep identical winners.
+//   [--git <ref>] [file.css]    the working copy against a git ref (default
+//                               HEAD and renderer/styles.css), so an
+//                               intentional deletion reads as a difference.
+//   --merge [--ours|--theirs|--base <ref>] [file.css]
+//                               a resolved styles.css merge keeps every
+//                               winner either side changed from the merge
+//                               base; exits 0 (MERGE-CSS-SKIP) when no merge
+//                               is in progress.
+//   --unused [--allow cls,...] [file.css ...]
+//                               every class a winner-bearing selector names
+//                               appears in the other renderer html, js and
+//                               css files (never the generated booklet.html).
+// `npm run check` runs --merge and --unused. Line endings are folded before
+// any comparison, and no file is ever rewritten.
 import { readFileSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import { execFileSync } from "node:child_process";

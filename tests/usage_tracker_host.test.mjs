@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import path from "node:path";
+import { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -17,7 +19,8 @@ const buildSource = await readFile(new URL("../scripts/build-booklet.mjs", impor
 const projectsSource = await readFile(new URL("../scripts/projects.cjs", import.meta.url), "utf8");
 
 const code = mainSource.slice(mainSource.indexOf("const OPENCODE_USAGE_URL"), mainSource.indexOf("async function usageTrackerLimits()"));
-const accountCode = mainSource.slice(mainSource.indexOf("const ACCOUNT_READ_TIMEOUT_MS"), mainSource.indexOf("async function usageAccounts()"));
+const accountCode = mainSource.slice(mainSource.indexOf("const ACCOUNT_READ_TIMEOUT_MS"), mainSource.indexOf("async function usageAccounts("));
+assert.ok(mainSource.indexOf("async function usageAccounts(") > mainSource.indexOf("const ACCOUNT_READ_TIMEOUT_MS"), "the account readers' slice anchors are in order");
 const payload = { usage: { rolling: { status: "ok", percent: 12, resetsAt: "2026-08-22T17:00:00Z" }, weekly: { status: "ok", percent: 34 }, monthly: { status: "ok", percent: 56 } } };
 
 function fixture({ key = "test-key", fetchImpl = null } = {}) {
@@ -39,7 +42,7 @@ function fixture({ key = "test-key", fetchImpl = null } = {}) {
 const jsonResponse = (body, status) => ({ ok: status >= 200 && status < 300, status, json: async () => body, text: async () => JSON.stringify(body) });
 
 // The account readers for the other providers, run against a scripted fetch.
-function accountFixture(routes) {
+function accountFixture(routes, extra = {}) {
   const calls = [];
   const context = vm.createContext({
     Date, AbortController, setTimeout, clearTimeout, Map, String, Number, Promise,
@@ -48,6 +51,12 @@ function accountFixture(routes) {
     parseOpenrouterCredits: tracker.parseOpenrouterCredits,
     parseGatewayCredits: tracker.parseGatewayCredits,
     parseZaiQuota: tracker.parseZaiQuota,
+    parseClaudeUsage: tracker.parseClaudeUsage,
+    parseCodexRateLimits: tracker.parseCodexRateLimits,
+    parseCodexRollout: tracker.parseCodexRollout,
+    parseGrokBilling: tracker.parseGrokBilling,
+    parseAntigravityUsage: tracker.parseAntigravityUsage,
+    ...extra,
     fetch: async (url, options) => {
       calls.push({ url, options });
       const route = routes[url];
@@ -138,7 +147,7 @@ test("OpenRouter is read from the key endpoint; the balance is added only when t
     "https://openrouter.ai/api/v1/key": { body: keyBody },
     "https://openrouter.ai/api/v1/credits": { body: { data: { total_credits: 100, total_usage: 25.5 } } },
   });
-  assert.deepEqual((await managed.context.readOpenrouterAccount("or-key")).credits, { totalCredits: 100, totalUsage: 25.5, remaining: 74.5 });
+  assert.deepEqual((await managed.context.readOpenrouterAccount("or-key")).credits, { totalCredits: 100, totalUsage: 25.5, remaining: 74.5, balance: 74.5 });
   const rejected = accountFixture({ "https://openrouter.ai/api/v1/key": { body: { error: { message: "bad or-key" } }, status: 401 } });
   const failure = await rejected.context.readOpenrouterAccount("or-key");
   assert.equal(failure.ok, false);
@@ -203,7 +212,9 @@ test("each account reading is cached and concurrent readers share one request", 
 test("the bridge, the IPC handlers and the bundle all carry the tracker", () => {
   assert.match(preloadSource, /usageTracker: \(\) => ipcRenderer\.invoke\("usage:tracker"/);
   assert.match(preloadSource, /opencodeCredits: \(\) => ipcRenderer\.invoke\("opencode:credits"/);
-  assert.match(preloadSource, /usageAccounts: \(\) => ipcRenderer\.invoke\("usage:accounts"/);
+  assert.match(preloadSource, /usageAccounts: \(options = \{\}\) => ipcRenderer\.invoke\("usage:accounts", \{ probe: options\?\.probe === true \}\)/, "the renderer says when someone is looking, and nothing else crosses");
+  assert.match(mainSource, /usageAccounts\(\{ probe: options\?\.probe === true \}\)/);
+  assert.match(mainSource, /const APP_WIDE_CHANNELS = new Set\(\["usage:accounts", "opencode:credits"\]\)/, "account readings never hold up a project switch");
   assert.match(mainSource, /require\("\.\/scripts\/usage-tracker\.cjs"\)/);
   assert.match(mainSource, /ipcMain\.handle\("usage:tracker"/);
   assert.match(mainSource, /ipcMain\.handle\("opencode:credits"/);
@@ -255,4 +266,241 @@ test("both surfaces exist in the template and are driven by the tracker module",
   assert.match(modelLabSource, /window\.MefiUsageTracker\?\.refresh\?\.\(\)/);
   assert.match(idleSource, /window\.MefiUsageTracker\?\.open\?\.\(\)/);
   assert.match(idleSource, /MefiUsageTracker\?\.tick\?\.\(\)/);
+});
+
+test("z.ai's credit-plan reply reaches the panel as windows with their credit counts", async () => {
+  const body = { code: 200, msg: "Operation successful", success: true, data: { level: "lite", limits: [
+    { type: "CREDIT_LIMIT", unit: 3, number: 5, usage: 2000, currentValue: 402, remaining: 1597, percentage: 20, nextResetTime: Date.now() + 3600000 },
+    { type: "CREDIT_LIMIT", unit: 6, number: 1, usage: 10000, currentValue: 5207, remaining: 4792, percentage: 52, nextResetTime: Date.now() + 86400000 },
+  ] } };
+  const f = accountFixture({ "https://api.z.ai/api/monitor/usage/quota/limit": { body } });
+  const result = await f.context.readZaiAccount("zai-key");
+  assert.equal(result.ok, true);
+  assert.equal(result.quota.plan, "credits");
+  assert.equal(result.quota.rolling.percent, 20.1);
+  assert.equal(result.quota.rolling.limit, 2000);
+  assert.equal(result.quota.weekly.percent, 52.1);
+  const team = accountFixture({ "https://api.z.ai/api/monitor/usage/quota/limit": { body: { code: 200, success: true, data: { limits: [], level: "pro" } } } });
+  const empty = await team.context.readZaiAccount("zai-key");
+  assert.equal(empty.ok, true, "a key with no plan windows is read, not failed");
+  assert.equal(empty.quota.empty, true);
+});
+
+// ---- the CLI plan probes, against a scripted child process -----------------
+// A fake child speaks the probe's protocol: every line the host writes is
+// recorded, and `script` answers it. Nothing real is spawned.
+function fakeChild(script) {
+  const child = new EventEmitter();
+  child.pid = 4242;
+  child.exitCode = null;
+  child.signalCode = null;
+  child.stdout = new EventEmitter();
+  child.written = [];
+  child.ended = false;
+  child.reply = (message) => child.stdout.emit("data", `${JSON.stringify(message)}\n`);
+  child.exit = (code = 0) => {
+    child.exitCode = code;
+    child.emit("close", code);
+  };
+  child.stdin = {
+    write(line) {
+      const message = JSON.parse(line);
+      child.written.push(message);
+      queueMicrotask(() => script?.(message, child));
+    },
+    end() { child.ended = true; },
+    on() {},
+  };
+  return child;
+}
+// Values made inside the vm carry its realm's prototypes; compare their data.
+const plain = (value) => JSON.parse(JSON.stringify(value));
+function probeFixture(script, { platform = "win32" } = {}) {
+  const spawned = [];
+  const children = [];
+  const spawn = (command, args, options) => {
+    spawned.push({ command, args, options });
+    if (command === "taskkill") return { on() {} };
+    const child = fakeChild(script);
+    children.push(child);
+    return child;
+  };
+  const f = accountFixture({}, { spawn, path, Buffer, os: { tmpdir: () => "C:/tmp", homedir: () => "C:/home" }, process: { platform, env: {} }, JSON, Set, queueMicrotask });
+  return { ...f, spawned, children };
+}
+const claudeBody = { subscription_type: "max", rate_limits_available: true, rate_limits: { limits: [
+  { kind: "session", group: "session", percent: 88, resets_at: new Date(Date.now() + 3600000).toISOString(), severity: "warning" },
+  { kind: "weekly_all", group: "weekly", percent: 24, resets_at: new Date(Date.now() + 5 * 86400000).toISOString(), severity: "normal" },
+] }, session: { cwd: "C:/private/path" } };
+
+test("Claude Code is asked for get_usage on its stream-json channel and never for a model turn", async () => {
+  const f = probeFixture((message, child) => {
+    if (message.type === "control_request") child.reply({ type: "control_response", response: { subtype: "success", request_id: message.request_id, response: claudeBody } });
+  });
+  const result = await f.context.probeClaudeUsage();
+  assert.equal(result.ok, true);
+  assert.equal(result.limits.plan, "max");
+  assert.deepEqual(result.limits.windows.map((window) => [window.short, window.percent]), [["5h", 88], ["Wk", 24]]);
+  assert.ok(result.limits.asOf > 0);
+  assert.equal(f.spawned[0].command, "cmd.exe");
+  assert.deepEqual(plain(f.spawned[0].args), ["/d", "/s", "/c", "claude -p --input-format stream-json --output-format stream-json --verbose --no-session-persistence --strict-mcp-config --tools= --permission-mode dontAsk"]);
+  assert.equal(f.spawned[0].options.cwd, "C:/tmp", "the probe runs outside the project");
+  assert.deepEqual(plain(f.children[0].written), [{ type: "control_request", request_id: "mefi-usage", request: { subtype: "get_usage", skip_behaviors: true } }], "one control request and nothing else - no prompt");
+  assert.equal(f.children[0].ended, true, "the CLI is asked to leave once it answered");
+  assert.doesNotMatch(JSON.stringify(result), /private/, "nothing but the limits is kept");
+  // an error control response is named
+  const refused = probeFixture((message, child) => child.reply({ type: "control_response", response: { subtype: "error", request_id: message.request_id, error: "get_usage is not supported in this context" } }));
+  const failure = await refused.context.probeClaudeUsage();
+  assert.equal(failure.ok, false);
+  assert.equal(failure.code, "unavailable");
+  assert.match(failure.error, /Claude Code could not report usage: get_usage is not supported/);
+});
+
+test("Codex is asked through app-server's rate-limit read after the initialize handshake", async () => {
+  const live = { ordinaryUsageAllowed: false, rateLimits: { limitId: "codex", planType: "pro", primary: { usedPercent: 100, windowDurationMins: 10080, resetsAt: Math.round(Date.now() / 1000) + 86400 }, secondary: null } };
+  const f = probeFixture((message, child) => {
+    if (message.id === 1) {
+      child.reply({ method: "remoteControl/status/changed", params: {} });
+      child.reply({ id: 1, result: { userAgent: "codex" } });
+    } else if (message.id === 2) child.reply({ id: 2, result: live });
+  });
+  const result = await f.context.probeCodexLimits();
+  assert.equal(result.ok, true);
+  assert.equal(result.limits.blocked, true);
+  assert.deepEqual(result.limits.windows.map((window) => [window.short, window.percent]), [["Wk", 100]]);
+  assert.deepEqual(plain(f.spawned[0].args), ["/d", "/s", "/c", "codex app-server"]);
+  assert.deepEqual(f.children[0].written.map((message) => message.method), ["initialize", "initialized", "account/rateLimits/read"]);
+  assert.deepEqual(plain(f.children[0].written[2].params), { excludeResetCreditDetails: true }, "reset credits are never touched");
+  const unsigned = probeFixture((message, child) => {
+    if (message.id === 1) child.reply({ id: 1, result: {} });
+    else if (message.id === 2) child.reply({ id: 2, error: { code: -32600, message: "chatgpt authentication required to read rate limits" } });
+  });
+  const failure = await unsigned.context.probeCodexLimits();
+  assert.equal(failure.code, "auth");
+  assert.match(failure.error, /needs a ChatGPT login/);
+});
+
+test("Grok is asked for billing over ACP and its lingering process tree is ended once it answered", async () => {
+  const f = probeFixture((message, child) => {
+    if (message.id === 0) {
+      child.reply({ jsonrpc: "2.0", id: 0, result: { protocolVersion: 1 } });
+      child.reply({ jsonrpc: "2.0", method: "_x.ai/mcp/servers_updated", params: {} });
+    } else if (message.id === 1) child.reply({ jsonrpc: "2.0", id: 1, result: { config: { creditUsagePercent: 42, currentPeriod: { type: "USAGE_PERIOD_TYPE_WEEKLY", end: new Date(Date.now() + 86400000).toISOString() } } } });
+  });
+  const result = await f.context.probeGrokBilling();
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.limits.windows.map((window) => [window.label, window.percent]), [["Weekly credits", 42]]);
+  assert.equal(f.spawned[0].command, "grok", "spawned without a shell so Windows finds xAI's grok.exe");
+  assert.deepEqual(plain(f.spawned[0].args), ["agent", "stdio"]);
+  assert.deepEqual(f.children[0].written.map((message) => message.method), ["initialize", "_x.ai/billing"]);
+  assert.deepEqual(plain(f.spawned.at(-1)), { command: "taskkill", args: ["/pid", "4242", "/t", "/f"], options: { windowsHide: true, stdio: "ignore" } }, "grok does not exit on end of input, so its tree is ended");
+  const unsigned = probeFixture((message, child) => {
+    if (message.id === 0) child.reply({ jsonrpc: "2.0", id: 0, result: {} });
+    else child.reply({ jsonrpc: "2.0", id: 1, error: { code: -32603, message: "Internal error", data: "Billing data requires auth with grok.com" } });
+  });
+  assert.equal((await unsigned.context.probeGrokBilling()).code, "auth");
+});
+
+test("a CLI that never answers is timed out and its tree ended; one that exits early is named", async () => {
+  const silent = probeFixture(() => {});
+  const timeout = await silent.context.cliExchange({ label: "Silent CLI", command: "silent", start: (send) => send({ id: 1 }), onLine: () => {}, timeoutMs: 20 });
+  assert.equal(timeout.ok, false);
+  assert.equal(timeout.code, "timeout");
+  assert.match(timeout.error, /Silent CLI did not report usage/);
+  assert.equal(silent.spawned.at(-1).command, "taskkill");
+  const quitter = probeFixture((message, child) => child.exit(1));
+  const early = await quitter.context.probeCodexLimits();
+  assert.equal(early.code, "unavailable");
+  assert.match(early.error, /Codex exited \(1\) without reporting usage/);
+  const elsewhere = probeFixture(() => {}, { platform: "linux" });
+  let killed = false;
+  const result = elsewhere.context.cliExchange({ label: "Quiet", command: "quiet", start: () => {}, onLine: () => {}, timeoutMs: 20 });
+  elsewhere.children[0].kill = () => { killed = true; };
+  await result;
+  assert.equal(killed, true, "off Windows the child itself is killed");
+});
+
+test("CLI plan readings are cached, refreshed in the background, single-flight, and never started without a look", async () => {
+  const f = probeFixture(() => {});
+  const { cliPlanReading } = f.context;
+  let runs = 0;
+  let release;
+  const run = () => { runs += 1; return new Promise((resolve) => { release = () => resolve({ ok: true, limits: { windows: [] } }); }); };
+  const idle = cliPlanReading("claude", run, { allow: false });
+  assert.deepEqual(plain(idle), { result: null, refreshing: false });
+  assert.equal(runs, 0, "no look, no probe");
+  const first = cliPlanReading("claude", run, { allow: true });
+  assert.equal(first.refreshing, true);
+  assert.equal(first.result, null, "the caller is answered at once, not after the probe");
+  await Promise.resolve();
+  assert.equal(cliPlanReading("claude", run, { allow: true }).refreshing, true);
+  assert.equal(runs, 1, "one probe per CLI in flight");
+  release();
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const fresh = cliPlanReading("claude", run, { allow: true });
+  assert.equal(fresh.result.ok, true);
+  assert.equal(fresh.refreshing, false);
+  assert.equal(runs, 1, "a fresh reading is not re-probed");
+  // no more than two probes run at once; the third waits its turn
+  const gates = [];
+  const slow = (id) => () => { runs += 1; return new Promise((resolve) => gates.push(() => resolve({ ok: false, code: "unavailable", error: `${id} failed` }))); };
+  const before = runs;
+  cliPlanReading("codex", slow("codex"), { allow: true });
+  cliPlanReading("grok", slow("grok"), { allow: true });
+  cliPlanReading("antigravity", slow("antigravity"), { allow: true });
+  await Promise.resolve();
+  assert.equal(runs - before, 2, "concurrency is capped at two");
+  gates.shift()();
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(runs - before, 3, "the queued probe starts when a slot frees");
+  gates.forEach((open) => open());
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const failed = cliPlanReading("codex", slow("codex"), { allow: true });
+  assert.equal(failed.result.ok, false);
+  assert.equal(failed.refreshing, false, "a failure is kept for a minute before it is tried again");
+});
+
+test("Codex rollouts stand in with the newest snapshot of the last eight days, read from their tails", async () => {
+  const now = new Date(2026, 8, 22, 20, 0).getTime();
+  const root = "C:/home/.codex";
+  const dayDir = (daysBack) => {
+    const day = new Date(2026, 8, 22 - daysBack);
+    return path.join(root, "sessions", String(day.getFullYear()), String(day.getMonth() + 1).padStart(2, "0"), String(day.getDate()).padStart(2, "0"));
+  };
+  const line = (timestamp, percent, limitId = "codex") => JSON.stringify({ timestamp, type: "event_msg", payload: { type: "token_count", info: null, rate_limits: { limit_id: limitId, primary: limitId === "codex" ? { used_percent: percent, window_minutes: 10080, resets_at: Math.round(now / 1000) + 86400 } : null, secondary: null, plan_type: "pro" } } });
+  const files = {
+    [path.join(dayDir(2), "rollout-2026-09-20T04-00-00-a.jsonl")]: { mtimeMs: now, text: `${line("2026-09-20T04:00:00Z", 93)}\n${line("2026-09-20T04:05:00Z", 100)}\n${line("2026-09-20T04:05:01Z", 0, "premium")}\n` },
+    [path.join(dayDir(0), "rollout-2026-09-22T09-00-00-b.jsonl")]: { mtimeMs: now - 3600000, text: `${line("2026-09-19T09:00:00Z", 12)}\n` },
+    [path.join(dayDir(9), "rollout-2026-09-13T09-00-00-c.jsonl")]: { mtimeMs: now + 1, text: `${line("2026-09-22T19:00:00Z", 1)}\n` },
+  };
+  const reads = [];
+  const fsApi = {
+    readdir: async (dir) => {
+      const names = Object.keys(files).filter((file) => path.dirname(file) === dir).map((file) => path.basename(file));
+      if (!names.length) throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+      return [...names, "notes.txt"];
+    },
+    stat: async (file) => ({ size: Buffer.byteLength(files[file].text), mtimeMs: files[file].mtimeMs }),
+    readRange: async (file, start, length) => { reads.push({ file, start, length }); return Buffer.from(files[file].text).subarray(start, start + length).toString("utf8"); },
+  };
+  const f = probeFixture(() => {});
+  const result = await f.context.readCodexRollouts({ now, fsApi, root });
+  assert.equal(result.ok, true);
+  assert.equal(result.limits.source, "rollout");
+  assert.equal(result.limits.asOf, Date.parse("2026-09-20T04:05:00Z"), "decided by event time, not the rewritten file's mtime; the premium lane is skipped");
+  assert.equal(result.limits.windows[0].percent, 100);
+  assert.equal(result.limits.plan, "pro");
+  assert.ok(reads.every((read) => !read.file.includes("2026-09-13")), "a rollout older than eight days is never opened");
+  const again = reads.length;
+  await f.context.readCodexRollouts({ now, fsApi, root });
+  assert.equal(reads.length, again, "an unchanged rollout is not read twice");
+  const none = await f.context.readCodexRollouts({ now, fsApi: { ...fsApi, readdir: async () => { throw new Error("ENOENT"); } }, root });
+  assert.equal(none.ok, false);
+  assert.match(none.error, /No Codex session in the last 8 days/);
+});
+
+test("only a Zen reply's own cost is recorded as a price", () => {
+  assert.match(mainSource, /const zenCost = provider === "zen" && payload\.cost !== null/, "Go replies carry cost \"0\" for a plan and are never priced from it");
+  assert.match(mainSource, /if \(observed\.costUsd === null && Number\.isFinite\(zenCost\) && zenCost >= 0\) observed\.costUsd = zenCost;/);
+  assert.match(mainSource, /model: payload\.model,\r?\n    cost: payload\.cost,/, "the Responses reply keeps Zen's cost on its way back");
 });

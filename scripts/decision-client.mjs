@@ -101,7 +101,6 @@ export const JEV_ROUTES = Object.freeze({
   }),
 });
 export const DEFAULT_JEV_ROUTE = "vercel";
-export const DEFAULT_GATEWAY_BASE_URL = JEV_ROUTES.vercel.baseUrl;
 export const DEFAULT_JEV_MODEL = JEV_ROUTES.vercel.model;
 export const QUESTION_TYPES = Object.freeze(["choice", "score", "noul"]);
 

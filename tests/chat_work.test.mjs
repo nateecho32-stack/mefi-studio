@@ -59,6 +59,15 @@ test("known chat wrappers and focus provenance do not create another obligation"
   assert.equal(find({ tasks: [wrapped] }, ask("Please add the search button")).item, wrapped);
 });
 
+test("the pinned Work on it wrapper is the label it points at, not new work", () => {
+  const pinned = task('Work on "Add search button". Queued with Work on it — the user pointed at session (id: session-1).', { title: 'Work on "Add search button"' });
+  assert.equal(find({ tasks: [pinned] }, ask("Please add the search button")).item, pinned);
+  assert.equal(find({ tasks: [pinned] }, { title: "Add search button", resolvedTitle: "Add search button", prompt: "Add search button" }).item, pinned);
+  const plain = task("Add search button");
+  const incoming = ask('Work on "Add search button". Queued with Work on it — the user pointed at session (id: session-1).');
+  assert.equal(find({ tasks: [plain] }, incoming).item, plain);
+});
+
 test("unfinished requests and tasks cover queued, running, held, and verifying work", () => {
   for (const status of [undefined, "open", "pending", "queued", "running", "active", "blocked", "cooling", "awaiting_verification"]) {
     for (const kind of ["task", "request"]) {

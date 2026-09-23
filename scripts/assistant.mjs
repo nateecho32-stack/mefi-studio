@@ -44,10 +44,7 @@ export function createMachineLagGate({ threshold = 100, requiredSamples = 2 } = 
 const PREF_RANGES = { parallel: [1, PARALLEL_MAX], aiParallel: [1, AI_PARALLEL_MAX] }; // integer prefs clamped into a range
 export const INTENTS = ["status", "tasks", "ideas", "collisions", "machine", "agents", "suggest", "tidy", "fix", "organize", "pause", "resume", "resume-work", "help", "request", "chat", "overseer", "compact", "builder", "log", "planning-status"];
 export const ACTION_KINDS = ["idle", "tick", "audit", "brief", "fix", "tidy", "organize", "message", "overseer"];
-export const LOG_KINDS = ["tick", "message", "reply", "fix", "tidy", "organize", "audit", "brief", "collision", "machine", "error", "control", "overseer", "think", "question", "mail"];
 export const THINKING_KEEP = 8; // committed inner-monologue bubbles kept in the thread
-export const FIX_KINDS = ["data", "catalog", "requests", "process", "build", "overseer"];
-export const PROBLEM_KINDS = ["update-held", "store-unavailable", "ai-offline", "audit", "collision", "machine", "work-stale", "overseer", "executor"];
 // Open problems pull their owner onto the next tick so a collision or audit
 // error is worked on as soon as it appears, not when that role's cadence next
 // elapses. ai-offline is omitted: no role can mint a key.
@@ -63,7 +60,6 @@ export const PROBLEM_ROLES = {
 };
 // The work journal: in-flight jobs only, written to disk at every start and
 // finish so a crash leaves the truth on disk for the next boot to restart.
-export const WORK_KINDS = ["responder", "improve", "grow", "explore", "expand", "audit", "brief", "ideas", "reference", "analyzer", "overseer", "compact", "dispatch", "role"];
 export const WORK_STALE_MS = 10 * MINUTE; // a journal entry older than this is a `work-stale` problem
 export const WORK_MAX_ATTEMPTS = 3; // a job restarted this often is dropped
 const KIND_ROLES = { responder: "responder", improve: "improver", grow: "grower", explore: "improver", expand: "grower", audit: "auditor", brief: "briefer", ideas: "ideas", reference: "reference", analyzer: "reference", overseer: "overseer", compact: "compactor", dispatch: "foreman" };
@@ -380,13 +376,6 @@ export function applyThought(state, thought, now = Date.now()) {
   const indexes = messages.map((message, index) => (message.role === "thinking" ? index : -1)).filter((index) => index >= 0);
   const drop = indexes.length > THINKING_KEEP ? new Set(indexes.slice(0, indexes.length - THINKING_KEEP)) : null;
   return { ...current, thinking, messages: clampTail(drop ? messages.filter((_, index) => !drop.has(index)) : messages, CAPS.messages) };
-}
-
-export function clearThought(state, role = null, now = Date.now()) {
-  const current = isObject(state) ? state : emptyState(now);
-  if (!current.thinking) return current;
-  if (role && current.thinking.role !== role) return current;
-  return { ...current, thinking: null };
 }
 
 function normalizeFix(entry) {
@@ -3929,7 +3918,7 @@ const reportedCheckFailure = (parts) => checkReports(parts).some((text) => /\b(?
 // repo-wide lane ("none in repo scope", "none in the repository") names
 // this work's own scope too, so repo/repository/code/implementation count.
 const noRemainingScopeTail = /^(?:(?:in|within)\s+(?:this\s+|the\s+)?(?:subtask'?s?|task'?s?|card'?s?|attempt'?s?|retry'?s?)?\s*scope|(?:in|within)\s+(?:this\s+|the\s+)?(?:repo(?:sitory)?|code|implementation)'?s?(?:\s+scope)?|for\s+(?:this|the)\s+(?:card|task|subtask|attempt|retry|scope|work))$/i;
-const handedElsewhereNote = /\b(?:parent|integration|deferred|handed(?:\s+(?:off|on|over))?|follow-?ups?|out\s+of\s+scope|owner[-\s]?(?:only|side)|owner[-\s/]*bookkeeping|owner(?:'s)?\s+(?:responsibilit(?:y|ies)|hands?))\b/i;
+const handedElsewhereNote = /\b(?:parent|integration|deferred|handed(?:\s+(?:off|on|over))?|follow-?ups?|out\s+of\s+scope|owner[-\s]?(?:only|side)|owner(?:'s)?[-\s/]*bookkeeping|owner(?:'s)?\s+(?:responsibilit(?:y|ies)|hands?))\b/i;
 const noRemainingWork = (text) => {
   let body = str(text).trim().replace(/[.!\s]+$/, "");
   const note = /^(.*)\s*\(([^()]*)\)$/.exec(body);

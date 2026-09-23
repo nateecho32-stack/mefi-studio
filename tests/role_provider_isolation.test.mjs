@@ -14,6 +14,9 @@ const handlerSource = source.slice(
   source.indexOf("// Auto setup: the one-click path"),
 );
 assert.ok(handlerSource.includes("settings:set-ai-routing"), "the AI routing handler must be found");
+// The handler saves through main's settings queue, evaluated for real.
+const queueSource = source.slice(source.indexOf("function updateSettings("), source.indexOf("function send(channel, payload)"));
+assert.ok(queueSource.startsWith("function updateSettings("), "the settings queue must be found");
 
 const AI_PROVIDERS = ["auto", "zai", "opencode", "zen", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
 const AI_AUTO_PROVIDERS = ["zai", "opencode", "zen", "grok", "claude", "codex", "antigravity", "lmstudio", "custom"];
@@ -26,13 +29,14 @@ function host(initial = {}) {
   const context = vm.createContext({
     readSettings: async () => structuredClone(state.settings),
     writeSettings: async (next) => { state.settings = structuredClone(next); state.writes += 1; },
+    settingsDisk: { queue: Promise.resolve() },
     providerBreaker: { reset() { state.resets += 1; } },
     AI_PROVIDERS, AI_AUTO_PROVIDERS, EXECUTOR_CLIS, EXECUTOR_TIERS,
     OPENCODE_MODEL_ID: /^[^\s/]+\/.+$/,
     ZAI_MODEL_ROUTINE: "glm-5.3-flash",
     ipcMain: { handle: (channel, fn) => handlers.set(channel, fn) },
   });
-  vm.runInContext(handlerSource, context);
+  vm.runInContext(`${handlerSource}\n${queueSource}`, context);
   return {
     state,
     apply: (patch) => handlers.get("settings:set-ai-routing")({}, patch),

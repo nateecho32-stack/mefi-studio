@@ -1,12 +1,18 @@
-// A-Eyes data layer — reads the live OpenCode session store read-only.
+// A-Eyes data layer. Two jobs share this module:
 //
-// Sources:
-//   ~/.local/share/opencode/opencode.db   sessions, todos, tool parts (edits/diffs)
-//   ~/.local/share/opencode/log/opencode.log
-//   <repo>/tools/logs                      PNG evidence + manifests
+// 1. Reads of the live OpenCode session store, which it never writes:
+//      ~/.local/share/opencode/opencode.db   sessions, todos, tool parts (edits/diffs)
+//      ~/.local/share/opencode/log/opencode.log
+//      <repo>/tools/logs                      PNG evidence + manifests
+//    That DB is opened with { readOnly: true }, so it is safe while an
+//    OpenCode session is writing.
 //
-// Everything here is read-only; the DB is opened with { readOnly: true } so it
-// is safe while an OpenCode session is writing.
+// 2. The studio's own board store, which it does write. readJson/writeJson
+//    keep the data/*.json stores (temp file + rename, and a byte-validated row
+//    cache). When the host enables it, the requests, tasks and ideas boards
+//    move into a read-write SQLite authority outside data/ (board.db, or
+//    MEFI_STUDIO_BOARD_DB), which this module creates and migrates in place;
+//    the JSON files then become exported views. See "board store" below.
 
 import { DatabaseSync } from "node:sqlite";
 import { spawnSync } from "node:child_process";

@@ -48,11 +48,12 @@ function storeHost({ file = null, settings = { jevShadow: false, modelSelection:
     assistantSetPrefs: async (patch) => { prefCalls.push(patch); Object.assign(state.prefs, patch); return { ok: true }; },
     readSettings: async () => ({ ...saved }),
     writeSettings: async (next) => { Object.assign(saved, next); },
+    settingsDisk: { queue: Promise.resolve() },
     getJevQueue: () => ({ wake: () => jevWakes.push(Date.now()) }),
     resolveAiRoute: async () => ({ ok: false }),
     httpAssistantCall: async () => ({ ok: false }),
   });
-  vm.runInContext(section("// ---- brain maps ---", "// ---- agent issues"), env);
+  vm.runInContext(section("// ---- brain maps ---", "// ---- agent issues") + section("function updateSettings(", "function send(channel, payload)"), env);
   return { env, disk, autopilot, saved, state, logs, sent, autopilotCalls, prefCalls, jevWakes };
 }
 

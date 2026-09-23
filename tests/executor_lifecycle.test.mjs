@@ -87,6 +87,7 @@ function settingsHost() {
   const env = vm.createContext({
     Date, os: { cpus: () => Array(8).fill({}) }, autopilot, EXECUTOR_PARALLEL_MAX: 12, EXECUTOR_PARALLEL_CAP: 3,
     readSettings: async () => structuredClone(saved), writeSettings: async (next) => { saved = structuredClone(next); events.push("saved"); },
+    settingsDisk: { queue: Promise.resolve() },
     proactiveTimer: null, emitAutopilot() {}, autopilotStatus: () => autopilot, assistantAskForWork: () => events.push("asked"),
     setTimeout: () => ({ unref() {} }), setInterval: () => ({ unref() {} }), clearInterval() {},
     getPolicyModule: async () => null, warmPolicyBaseline() {}, sweepSnapshotLocks: async () => {}, logLine() {},
@@ -98,6 +99,7 @@ function settingsHost() {
   });
   vm.runInContext(section("async function setAutopilot(", "// Settings may override the defaults") +
     section("let autopilotBootPromise =", "async function readSettings()") +
+    section("function updateSettings(", "function send(channel, payload)") +
     section("async function startAssistant()", "// Quit path:") +
     section("let executorFillInFlight = null;", "// Work the assistant does on its own plumbing"), env);
   return { env, autopilot, events, saved: () => saved };

@@ -79,9 +79,10 @@ test("manual mode retains its two-worker default and one-to-three worker limits"
     os: { cpus: () => Array(16).fill({}) }, autopilot,
     EXECUTOR_PARALLEL_MAX: 12, EXECUTOR_PARALLEL_CAP: 3,
     readSettings: async () => ({ ui: { marker: "retained" } }), writeSettings: async (next) => { saved = next; },
+    settingsDisk: { queue: Promise.resolve() },
     proactiveTimer: null, emitAutopilot() {}, autopilotStatus: () => ({ parallel: autopilot.parallel }), assistantAskForWork() {},
   });
-  vm.runInContext(section("async function setAutopilot(", "// Settings may override the defaults"), env);
+  vm.runInContext(section("async function setAutopilot(", "// Settings may override the defaults") + section("function updateSettings(", "function send(channel, payload)"), env);
   assert.equal(env.machineParallelDefault(), 2);
   assert.equal(env.savedExecutorParallel({ parallel: 1 }), 1);
   assert.equal(env.savedExecutorParallel({ parallel: 3 }), 3);

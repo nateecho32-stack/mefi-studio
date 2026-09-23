@@ -28,7 +28,9 @@ const text = (value, max = 160) => String(value ?? "").replace(/[\u0000-\u001f]/
 // decides what a zero cost means: a metered account prices every call (zero
 // is a free model), a plan or subscription bills nothing per call (zero is
 // "not priced", never "free"), and a local server has no bill at all.
-// `account` names the live reading the host can make with a saved key.
+// `account` names the live reading the host can make: over a saved key
+// (windows, quota, key, credits), through the provider's own CLI login
+// (limits), or against the local server (local).
 const PROVIDERS = Object.freeze([
   { key: "opencode-go", label: "OpenCode Go", kind: "plan", account: "windows", aliases: ["opencode-go", "go"] },
   { key: "opencode-zen", label: "OpenCode Zen", kind: "metered", account: null, aliases: ["opencode-zen", "zen"] },
@@ -36,13 +38,13 @@ const PROVIDERS = Object.freeze([
   { key: "openrouter", label: "OpenRouter", kind: "metered", account: "key", aliases: ["openrouter"] },
   { key: "gateway", label: "Vercel AI Gateway", kind: "metered", account: "credits", aliases: ["gateway", "vercel", "ai-gateway", "vercel-ai-gateway"] },
   { key: "typesafe", label: "TypeSafe Jev API", kind: "metered", account: null, aliases: ["typesafe", "jev"] },
-  { key: "claude", label: "Claude Code CLI", kind: "subscription", account: null, aliases: ["claude", "claude-code", "anthropic"] },
-  { key: "grok", label: "Grok CLI", kind: "subscription", account: null, aliases: ["grok", "xai", "x-ai"] },
-  { key: "codex", label: "Codex CLI", kind: "subscription", account: null, aliases: ["codex", "codex-cli", "openai-codex"] },
-  { key: "antigravity", label: "Antigravity CLI", kind: "subscription", account: null, aliases: ["antigravity", "agy"] },
+  { key: "claude", label: "Claude Code CLI", kind: "subscription", account: "limits", aliases: ["claude", "claude-code", "anthropic"] },
+  { key: "grok", label: "Grok CLI", kind: "subscription", account: "limits", aliases: ["grok", "xai", "x-ai"] },
+  { key: "codex", label: "Codex CLI", kind: "subscription", account: "limits", aliases: ["codex", "codex-cli", "openai-codex"] },
+  { key: "antigravity", label: "Antigravity CLI", kind: "subscription", account: "limits", aliases: ["antigravity", "agy"] },
   { key: "google", label: "Google Gemini", kind: "metered", account: null, aliases: ["google", "gemini", "google-vertex", "vertex"] },
   { key: "openai", label: "OpenAI", kind: "metered", account: null, aliases: ["openai"] },
-  { key: "lmstudio", label: "LM Studio (local)", kind: "local", account: null, aliases: ["lmstudio", "lm-studio"] },
+  { key: "lmstudio", label: "LM Studio (local)", kind: "local", account: "local", aliases: ["lmstudio", "lm-studio"] },
   { key: "ollama", label: "Ollama (local)", kind: "local", account: null, aliases: ["ollama"] },
   { key: "custom", label: "Custom endpoint", kind: "custom", account: null, aliases: ["custom"] },
 ]);
@@ -201,56 +203,133 @@ function startOfNextUtcMonth(at) {
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1);
 }
 
-function grouped(rows, read) {
-  const map = new Map();
-  for (const row of rows) {
-    const key = read(row);
-    if (!map.has(key)) map.set(key, []);
-    map.get(key).push(row);
-  }
-  return map;
+// A running totals() for one bucket. Rows are added in ledger order and each
+// usage field sums exactly as usageOf does (the first known value lands on
+// 0, and the sum stays null until one does), so a bucket fed row by row reads
+// the same numbers, to the last bit, as totals() over the same rows. Sums
+// live in a Float64Array: a plain array seeded with null boxed every addition.
+const USAGE_KEYS = [...TOKEN_FIELDS, "costUsd"];
+function tally() {
+  return { calls: 0, errors: 0, cancelled: 0, studio: 0, cli: 0, sums: new Float64Array(USAGE_KEYS.length), records: new Int32Array(USAGE_KEYS.length) };
 }
-const unique = (values) => [...new Set(values.filter(Boolean))];
+function tallyRow(bucket, row, values, known) {
+  bucket.calls += 1;
+  if (row.status === "error") bucket.errors += 1;
+  if (row.status === "cancelled") bucket.cancelled += 1;
+  if (row.origin === ORIGINS.cli) bucket.cli += 1;
+  else bucket.studio += 1;
+  for (let index = 0; index < values.length; index += 1) {
+    if (!known[index]) continue;
+    bucket.sums[index] += values[index];
+    bucket.records[index] += 1;
+  }
+}
+function tallied(bucket) {
+  return {
+    calls: bucket.calls,
+    errors: bucket.errors,
+    cancelled: bucket.cancelled,
+    origins: { [ORIGINS.studio]: bucket.studio, [ORIGINS.cli]: bucket.cli },
+    usage: Object.fromEntries(USAGE_KEYS.map((key, index) => [key, { known: bucket.records[index] ? bucket.sums[index] : null, knownRecords: bucket.records[index], unknownRecords: bucket.calls - bucket.records[index] }])),
+  };
+}
 
 // Day buckets use the machine's local calendar; the Go plan's weekly and
 // monthly windows are UTC, matching the provider's own reset boundaries.
 // Records that arrive without an origin are Studio ledger rows.
+// One pass feeds every bucket the report shows (the windows, both origins,
+// each day and its providers, each provider and model with their windows);
+// filtering and totalling the whole ledger once per bucket cost 110 ms on the
+// main process at 22k records, every time the Usage panel refreshed.
 function aggregateUsage(observations, { now = Date.now(), days = 14 } = {}) {
   const all = (Array.isArray(observations) ? observations : [])
     .filter((row) => row && number(row.at) !== null)
     .map((row) => (row.origin ? row : fromStudio(row)));
   const ordered = all.slice().sort((a, b) => a.at - b.at);
   const limit = Math.max(1, Math.min(90, Math.round(number(days) ?? 14)));
-  const since = (rows, from) => totals(rows.filter((row) => row.at >= from && row.at <= now));
-  const windows = (rows) => ({
-    today: since(rows, startOfLocalDay(now)),
-    week: since(rows, now - 7 * DAY_MS),
-    month: since(rows, now - 30 * DAY_MS),
-  });
-  const providerRows = (rows) => [...grouped(rows, (row) => row.provider)]
-    .map(([provider, entries]) => ({ provider, ...providerInfo(provider), ...totals(entries) }))
-    .sort((a, b) => b.calls - a.calls || a.provider.localeCompare(b.provider));
-  const daysList = [...grouped(ordered, (row) => dayKeyOf(row.at)).entries()]
+  const starts = [startOfLocalDay(now), now - 7 * DAY_MS, now - 30 * DAY_MS];
+  const windowTallies = () => [tally(), tally(), tally()];
+  const values = new Float64Array(USAGE_KEYS.length);
+  const known = new Uint8Array(USAGE_KEYS.length);
+  const tallyWindows = (buckets, row) => {
+    if (row.at > now) return;
+    for (let index = 0; index < starts.length; index += 1) if (row.at >= starts[index]) tallyRow(buckets[index], row, values, known);
+  };
+  const windowsOf = (buckets) => ({ today: tallied(buckets[0]), week: tallied(buckets[1]), month: tallied(buckets[2]) });
+  const whole = tally();
+  const wholeWindows = windowTallies();
+  const origins = { [ORIGINS.studio]: tally(), [ORIGINS.cli]: tally() };
+  const dayBuckets = new Map();
+  const providerBuckets = new Map();
+  // Models in first-seen order of provider::model, looked up per provider so
+  // no key string is built per row.
+  const modelList = [];
+  // The ledger is in time order, so rows share a local day in long runs: the
+  // day's bucket is kept with its [start, end) and only a row outside it
+  // formats a day key.
+  let day = null, dayStart = Infinity, dayEnd = -Infinity;
+  for (const row of ordered) {
+    for (let index = 0; index < USAGE_KEYS.length; index += 1) {
+      const value = number(index === USAGE_KEYS.length - 1 ? row.costUsd : row.tokenUsage?.[USAGE_KEYS[index]]);
+      known[index] = value === null ? 0 : 1;
+      values[index] = value ?? 0;
+    }
+    tallyRow(whole, row, values, known);
+    tallyWindows(wholeWindows, row);
+    tallyRow(origins[row.origin === ORIGINS.cli ? ORIGINS.cli : ORIGINS.studio], row, values, known);
+    if (!(row.at >= dayStart && row.at < dayEnd)) {
+      const dayKey = dayKeyOf(row.at);
+      day = dayBuckets.get(dayKey);
+      if (!day) dayBuckets.set(dayKey, (day = { bucket: tally(), providers: new Map() }));
+      const date = new Date(row.at);
+      dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+      dayEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime();
+    }
+    tallyRow(day.bucket, row, values, known);
+    let dayProvider = day.providers.get(row.provider);
+    if (!dayProvider) day.providers.set(row.provider, (dayProvider = tally()));
+    tallyRow(dayProvider, row, values, known);
+    let provider = providerBuckets.get(row.provider);
+    if (!provider) providerBuckets.set(row.provider, (provider = { bucket: tally(), windows: windowTallies(), ids: new Set(), models: new Set(), byModel: new Map() }));
+    tallyRow(provider.bucket, row, values, known);
+    tallyWindows(provider.windows, row);
+    if (row.providerId) provider.ids.add(row.providerId);
+    if (row.model) provider.models.add(row.model);
+    const modelKey = String(row.model || "unknown");
+    let model = provider.byModel.get(modelKey);
+    if (!model) {
+      provider.byModel.set(modelKey, (model = { provider: row.provider, model: row.model || "unknown", bucket: tally(), windows: windowTallies() }));
+      modelList.push(model);
+    }
+    tallyRow(model.bucket, row, values, known);
+    tallyWindows(model.windows, row);
+  }
+  const daysList = [...dayBuckets.entries()]
     .sort((a, b) => (a[0] < b[0] ? 1 : -1))
     .slice(0, limit)
-    .map(([day, entries]) => ({ day, ...totals(entries), providers: providerRows(entries) }));
+    .map(([day, entry]) => ({
+      day, ...tallied(entry.bucket),
+      providers: [...entry.providers]
+        .map(([provider, bucket]) => ({ provider, ...providerInfo(provider), ...tallied(bucket) }))
+        .sort((a, b) => b.calls - a.calls || a.provider.localeCompare(b.provider)),
+    }));
   return {
     generatedAt: now,
     days: daysList,
-    ...windows(ordered),
-    totals: totals(ordered),
+    ...windowsOf(wholeWindows),
+    totals: tallied(whole),
     range: { from: ordered.length ? ordered[0].at : null, to: ordered.length ? ordered[ordered.length - 1].at : null },
-    origins: Object.fromEntries(Object.values(ORIGINS).map((origin) => [origin, totals(ordered.filter((row) => (row.origin === ORIGINS.cli ? ORIGINS.cli : ORIGINS.studio) === origin))])),
-    providers: [...grouped(ordered, (row) => row.provider)]
-      .map(([provider, entries]) => ({
+    origins: Object.fromEntries(Object.values(ORIGINS).map((origin) => [origin, tallied(origins[origin])])),
+    providers: [...providerBuckets]
+      .map(([provider, entry]) => ({
         provider, ...providerInfo(provider),
-        providerIds: unique(entries.map((row) => row.providerId)),
-        models: unique(entries.map((row) => row.model)).length,
-        ...totals(entries), ...windows(entries),
+        providerIds: [...entry.ids],
+        models: entry.models.size,
+        ...tallied(entry.bucket), ...windowsOf(entry.windows),
       }))
       .sort((a, b) => b.calls - a.calls || a.provider.localeCompare(b.provider)),
-    models: [...grouped(ordered, (row) => `${row.provider}::${row.model || "unknown"}`)]
-      .map(([, entries]) => ({ provider: entries[0].provider, label: providerInfo(entries[0].provider).label, model: entries[0].model || "unknown", ...totals(entries), ...windows(entries) }))
+    models: modelList
+      .map((entry) => ({ provider: entry.provider, label: providerInfo(entry.provider).label, model: entry.model, ...tallied(entry.bucket), ...windowsOf(entry.windows) }))
       .sort((a, b) => b.calls - a.calls || a.model.localeCompare(b.model)),
   };
 }
@@ -323,6 +402,13 @@ function parseOpenrouterKey(payload) {
   const money = (value) => (number(value) !== null && value >= 0 ? value : null);
   const limit = money(data.limit);
   const remaining = money(data.limit_remaining);
+  // Free-model requests carry their own daily allowance (50 a day under $10
+  // of purchased credit, 1000 above it), which is the whole story for a key
+  // on an account with no credits.
+  const daily = data.free_model_daily_requests;
+  const freeDaily = daily && typeof daily === "object" && count(daily.used) === daily.used && count(daily.limit) === daily.limit && daily.limit > 0
+    ? { used: daily.used, limit: daily.limit, remaining: count(daily.remaining) === daily.remaining ? daily.remaining : Math.max(0, daily.limit - daily.used) }
+    : null;
   return {
     label: text(data.label, 60) || null,
     usage,
@@ -334,14 +420,20 @@ function parseOpenrouterKey(payload) {
     limitReset: text(data.limit_reset, 40) || null,
     percent: limit && limit > 0 ? Math.round((Math.min(usage, limit) / limit) * 1000) / 10 : null,
     isFreeTier: data.is_free_tier === true,
+    isManagementKey: data.is_management_key === true,
+    freeDaily,
+    expiresAt: text(data.expires_at, 40) || null,
+    byokUsage: money(data.byok_usage),
   };
 }
+// `remaining` stays clamped for the older readers; `balance` keeps its sign so
+// an account that has spent past its credit says so instead of reading $0.
 function parseOpenrouterCredits(payload) {
   const data = payload?.data;
   if (!data || typeof data !== "object") throw new Error("The OpenRouter credits reply has no data");
   const totalCredits = number(data.total_credits), totalUsage = number(data.total_usage);
   if (totalCredits === null || totalUsage === null || totalCredits < 0 || totalUsage < 0) throw new Error("The OpenRouter credits reply has no usable totals");
-  return { totalCredits, totalUsage, remaining: Math.max(0, totalCredits - totalUsage) };
+  return { totalCredits, totalUsage, remaining: Math.max(0, totalCredits - totalUsage), balance: totalCredits - totalUsage };
 }
 
 // Vercel AI Gateway (GET /v1/credits): the documented REST sample carries the
@@ -357,9 +449,41 @@ function parseGatewayCredits(payload) {
 }
 
 // z.ai's coding-plan quota (GET /api/monitor/usage/quota/limit). The endpoint
-// is what z.ai's own usage plugin calls, not a documented API: the parser
-// reads only the fields that plugin reads and refuses anything else.
-function parseZaiQuota(payload) {
+// is what z.ai's own usage plugin calls, not a documented API. Since
+// 2026-07-30 the coding plans bill in credits: the five-hour and weekly rows
+// arrive as CREDIT_LIMIT with the cap in `usage` and the spend in
+// `currentValue`. Legacy plans still send TOKENS_LIMIT rows (a percentage
+// only) and a TIME_LIMIT row for the monthly tool quota. Rows are told apart
+// by unit and number (3/5 is five hours, 6/1 one week), never by position,
+// and a reply the parser cannot place is refused rather than guessed at.
+const numeric = (value) => number(typeof value === "string" && value.trim() ? Number(value) : value);
+const ZAI_PLAN_TYPES = new Set(["CREDIT_LIMIT", "TOKENS_LIMIT"]);
+const ZAI_UNIT_MINUTES = { 1: 1440, 3: 60, 6: 10080 };
+const ZAI_MEASURES = { CREDIT_LIMIT: "credits", TOKENS_LIMIT: "tokens", TIME_LIMIT: "calls" };
+function zaiWindow(row, now) {
+  const cap = numeric(row.usage), current = numeric(row.currentValue), left = numeric(row.remaining);
+  const used = current !== null && current >= 0 ? current : cap !== null && left !== null ? Math.max(0, cap - left) : null;
+  // The counts are more precise than the server's rounded percentage.
+  let percent = cap !== null && cap > 0 && used !== null ? (used / cap) * 100 : numeric(row.percentage);
+  if (percent === null || percent < 0) return null;
+  percent = Math.min(100, Math.round(percent * 10) / 10);
+  const unit = numeric(row.unit), span = numeric(row.number);
+  const minutes = row.type !== "TIME_LIMIT" && span !== null && span > 0 && ZAI_UNIT_MINUTES[unit] ? span * ZAI_UNIT_MINUTES[unit] : null;
+  // z.ai has reported five-hour resets further off than five hours; an
+  // impossible reset is dropped rather than shown.
+  let reset = numeric(row.nextResetTime);
+  if (reset !== null && (reset <= 0 || !Number.isFinite(new Date(reset).getTime()) || (minutes === 300 && reset > now + 5 * HOUR_MS + 60000))) reset = null;
+  return {
+    percent,
+    resetsAt: reset === null ? null : new Date(reset).toISOString(),
+    used,
+    limit: cap,
+    remaining: left ?? (cap !== null && used !== null ? Math.max(0, cap - used) : null),
+    measure: ZAI_MEASURES[row.type] ?? "tokens",
+    minutes,
+  };
+}
+function parseZaiQuota(payload, { now = Date.now() } = {}) {
   // z.ai answers a refused or expired key with HTTP 200 and an envelope
   // ({ code: 401, msg, success: false }; 1001 when no key reached it), so the
   // refusal is read from the body and named as such, not as a changed shape.
@@ -376,19 +500,29 @@ function parseZaiQuota(payload) {
   const data = payload?.data && typeof payload.data === "object" ? payload.data : payload;
   const limits = Array.isArray(data?.limits) ? data.limits : null;
   if (!limits) throw new Error("The z.ai quota reply has no limits");
-  const window = (predicate) => {
-    const row = limits.find((entry) => entry && typeof entry === "object" && predicate(entry));
-    if (!row) return null;
-    const percent = number(row.percentage);
-    if (percent === null || percent < 0) return null;
-    const reset = number(row.nextResetTime);
-    return { percent: Math.min(100, percent), resetsAt: reset !== null && reset > 0 ? new Date(reset).toISOString() : null };
+  const level = text(data?.level ?? data?.planName ?? data?.plan ?? "", 20).toLowerCase() || null;
+  const rows = limits.filter((entry) => entry && typeof entry === "object");
+  // A team plan, or a key with no coding plan, answers with an empty list:
+  // a real state with nothing to draw, not a changed reply.
+  if (!rows.length) return { level, plan: null, empty: true, rolling: null, weekly: null, tools: null, other: [] };
+  const windows = rows.filter((row) => ZAI_PLAN_TYPES.has(row.type)).map((row) => zaiWindow(row, now)).filter(Boolean);
+  const toolRow = rows.filter((row) => row.type === "TIME_LIMIT").pop();
+  const tools = toolRow ? zaiWindow(toolRow, now) : null;
+  const rolling = windows.find((window) => window.minutes === 300) ?? null;
+  const weekly = windows.find((window) => window.minutes === 10080) ?? null;
+  if (!windows.length && !tools) {
+    const types = [...new Set(rows.map((row) => text(row.type, 24) || "untyped"))].join(", ");
+    throw new Error(`The z.ai quota reply has no recognisable window (types: ${types})`);
+  }
+  return {
+    level,
+    plan: windows.some((window) => window.measure === "credits") ? "credits" : windows.length ? "tokens" : null,
+    empty: false,
+    rolling,
+    weekly,
+    tools,
+    other: windows.filter((window) => window !== rolling && window !== weekly),
   };
-  const rolling = window((row) => row.type === "TOKENS_LIMIT" && row.unit === 3 && row.number === 5);
-  const weekly = window((row) => row.type === "TOKENS_LIMIT" && row.unit === 6 && row.number === 1);
-  const tools = window((row) => row.type === "TIME_LIMIT");
-  if (!rolling && !weekly && !tools) throw new Error("The z.ai quota reply has no recognisable window");
-  return { level: text(data?.level, 20) || null, rolling, weekly, tools };
 }
 
 function describeAccountStatus(label, status, body = "", secret = null) {
@@ -558,6 +692,245 @@ function parseCodexCliResult(stdout) {
   };
 }
 
+// ---- plan windows the coding CLIs report -----------------------------------
+// Claude Code, Codex, Grok and Antigravity each know their own plan's windows
+// and answer for them over their own login: the host asks the CLI (never a
+// credential file) and these parsers turn every answer into one shape,
+//   Limits = { plan, source, asOf, windows, blocked, available, note }
+// with each window { id, short, label, percent, resetsAt, severity, scope,
+// minutes }. `short` is the compact bar's label, `label` the long one.
+// Windows sort shortest first, so a five-hour window always leads.
+const isoTime = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  const date = new Date(typeof value === "string" && /^\d+$/.test(value.trim()) ? Number(value) : value);
+  return Number.isFinite(date.getTime()) && date.getTime() > 0 ? date.toISOString() : null;
+};
+const SEVERITIES = new Set(["normal", "warning", "critical"]);
+function limitWindow({ id, short, label, percent, resetsAt = null, severity = null, scope = null, minutes = null }) {
+  const value = numeric(percent);
+  if (value === null || value < 0) return null;
+  return {
+    id: text(id, 60) || "window",
+    short: text(short, 6) || "Now",
+    label: text(label, 60) || text(id, 60) || "Current window",
+    percent: Math.min(100, Math.round(value * 10) / 10),
+    resetsAt: isoTime(resetsAt),
+    severity: SEVERITIES.has(severity) ? severity : null,
+    scope: scope ? text(scope, 40) : null,
+    minutes: numeric(minutes),
+  };
+}
+function limitsOf(windows, extra = {}) {
+  const list = windows.filter(Boolean)
+    .map((window, index) => ({ window, index }))
+    .sort((a, b) => (a.window.minutes ?? Infinity) - (b.window.minutes ?? Infinity) || a.index - b.index)
+    .map(({ window }) => window);
+  return {
+    plan: null, source: "cli", asOf: null, available: true, note: null,
+    ...extra,
+    windows: list,
+    blocked: typeof extra.blocked === "boolean" ? extra.blocked : list.some((window) => window.percent >= 100),
+  };
+}
+// A window whose reset has already passed has emptied since the reading was
+// taken; it reads as reset, never as the stale percentage.
+function markResets(windows, now) {
+  for (const window of windows) {
+    if (window && window.resetsAt && Date.parse(window.resetsAt) <= now) {
+      window.percent = 0;
+      window.reset = true;
+    }
+  }
+  return windows;
+}
+
+// Claude Code answers a `get_usage` control request on its stream-json
+// channel with the same body its /usage screen draws: `rate_limits.limits[]`
+// rows classified by `kind` (session, weekly_all, weekly_scoped with the
+// model's display name), percent 0-100 and an ISO reset. Older replies carry
+// only the named windows (five_hour, seven_day, seven_day_opus/_sonnet with
+// `utilization`) and `model_scoped[]`. An API-key, Bedrock or Vertex login
+// has no plan windows at all, which is a state, not a failure.
+const CLAUDE_KINDS = {
+  session: { id: "5h", short: "5h", label: "5-hour session", minutes: 300 },
+  weekly_all: { id: "week", short: "Wk", label: "Weekly · all models", minutes: 10080 },
+};
+const claudeScoped = (name) => ({ id: `week:${name.toLowerCase()}`, short: name.slice(0, 6), label: `Weekly · ${name}`, minutes: 10080, scope: name });
+function parseClaudeUsage(body, { now = Date.now() } = {}) {
+  if (!body || typeof body !== "object") throw new Error("Claude Code sent no usage reply");
+  const plan = text(body.subscription_type, 24).toLowerCase() || null;
+  if (body.rate_limits_available === false) {
+    return limitsOf([], { plan, available: false, note: "Plan windows are not available for this login (API key, Bedrock or Vertex)." });
+  }
+  const limits = body.rate_limits && typeof body.rate_limits === "object" ? body.rate_limits : {};
+  let windows = [];
+  if (Array.isArray(limits.limits) && limits.limits.length) {
+    windows = limits.limits.filter((row) => row && typeof row === "object").map((row) => {
+      const name = text(row.scope?.model?.display_name ?? row.scope?.surface?.display_name ?? "", 40);
+      const group = row.group === "weekly" ? { short: "Wk", minutes: 10080 } : row.group === "session" ? { short: "5h", minutes: 300 } : { short: text(row.kind, 6), minutes: null };
+      const shape = CLAUDE_KINDS[row.kind] ?? (name ? claudeScoped(name) : { id: text(row.kind, 40), label: text(row.kind, 40).replace(/_/g, " "), ...group });
+      return limitWindow({ ...shape, percent: row.percent, resetsAt: row.resets_at, severity: row.severity });
+    });
+  } else {
+    const named = [
+      ["five_hour", CLAUDE_KINDS.session], ["seven_day", CLAUDE_KINDS.weekly_all],
+      ["seven_day_opus", claudeScoped("Opus")], ["seven_day_sonnet", claudeScoped("Sonnet")],
+    ];
+    windows = named.map(([key, shape]) => (limits[key] && typeof limits[key] === "object" ? limitWindow({ ...shape, percent: limits[key].utilization, resetsAt: limits[key].resets_at }) : null));
+    for (const row of Array.isArray(limits.model_scoped) ? limits.model_scoped : []) {
+      const name = text(row?.display_name, 40);
+      if (name) windows.push(limitWindow({ ...claudeScoped(name), percent: row.utilization, resetsAt: row.resets_at }));
+    }
+  }
+  const result = limitsOf(markResets(windows.filter(Boolean), now), { plan });
+  if (!result.windows.length) throw new Error("Claude Code reported no plan windows");
+  return result;
+}
+
+// Codex reports its plan windows two ways: live, from `codex app-server`'s
+// account/rateLimits/read (camelCase, `resetsAt` in epoch seconds), and after
+// the fact in every session rollout's token_count events (snake_case; older
+// builds wrote `resets_in_seconds` relative to the event, older still a flat
+// `primary_used_percent`). Which slot a window sits in means nothing - Plus
+// and Pro accounts now carry only a weekly window, in `primary` - so windows
+// are classified by their length. `ordinaryUsageAllowed: false` is the live
+// read saying the plan is spent; the rollouts leave `rate_limit_reached_type`
+// null even at 100%, so there a full window is the only signal.
+const CODEX_WINDOWS = {
+  300: { id: "5h", short: "5h", label: "5-hour window" },
+  10080: { id: "week", short: "Wk", label: "Weekly window" },
+  43200: { id: "month", short: "Mo", label: "30-day window" },
+};
+function codexWindow(raw, observedAt) {
+  if (!raw || typeof raw !== "object") return null;
+  const minutes = numeric(raw.windowDurationMins ?? raw.window_minutes);
+  const hours = minutes !== null && minutes > 0 ? Math.round(minutes / 60) : null;
+  const shape = CODEX_WINDOWS[minutes] ?? (hours ? { id: `${minutes}m`, short: `${hours}h`, label: `${hours}-hour window` } : { id: "window", short: "Now", label: "Current window" });
+  const seconds = numeric(raw.resetsAt ?? raw.resets_at);
+  const relative = numeric(raw.resets_in_seconds);
+  const reset = seconds !== null && seconds > 0 ? seconds * 1000 : relative !== null && observedAt !== null ? observedAt + relative * 1000 : null;
+  return limitWindow({ ...shape, minutes, percent: raw.usedPercent ?? raw.used_percent, resetsAt: reset });
+}
+function parseCodexRateLimits(input, { now = Date.now(), observedAt = null, source = "cli" } = {}) {
+  if (!input || typeof input !== "object") throw new Error("Codex sent no rate-limit reply");
+  const live = "rateLimits" in input || "rateLimitsByLimitId" in input;
+  const snapshot = live ? input.rateLimitsByLimitId?.codex ?? input.rateLimits : input;
+  const empty = "Codex reported no plan windows (an API-key login or another provider).";
+  if (!snapshot || typeof snapshot !== "object") return limitsOf([], { source, asOf: observedAt, note: empty, blocked: input.ordinaryUsageAllowed === false });
+  const flat = !snapshot.primary && !snapshot.secondary && numeric(snapshot.primary_used_percent) !== null;
+  const windows = flat
+    ? [codexWindow({ used_percent: snapshot.primary_used_percent, window_minutes: snapshot.primary_window_minutes }, observedAt),
+      codexWindow({ used_percent: snapshot.secondary_used_percent, window_minutes: snapshot.secondary_window_minutes }, observedAt)]
+    : [codexWindow(snapshot.primary, observedAt), codexWindow(snapshot.secondary, observedAt)];
+  markResets(windows.filter(Boolean), now);
+  const creditsRaw = snapshot.credits && typeof snapshot.credits === "object" ? snapshot.credits : null;
+  const credits = creditsRaw ? {
+    hasCredits: (creditsRaw.hasCredits ?? creditsRaw.has_credits) === true,
+    unlimited: creditsRaw.unlimited === true,
+    balance: numeric(creditsRaw.balance),
+  } : null;
+  const result = limitsOf(windows, {
+    plan: text(snapshot.planType ?? snapshot.plan_type, 24).toLowerCase() || null,
+    source, asOf: observedAt, credits,
+    blocked: input.ordinaryUsageAllowed === false || windows.some((window) => window && window.percent >= 100),
+  });
+  if (!result.windows.length) result.note = empty;
+  return result;
+}
+// The newest main-lane snapshot in a rollout's tail. A tail read usually
+// starts mid-line, so its first line is dropped unless the read began at the
+// top of the file. Only token_count lines are parsed; everything else in a
+// rollout (the prompts, the replies) is skipped unread. The last event is not
+// always the useful one: a `premium` lane or a header-less provider writes
+// null windows, so the newest snapshot with a window wins, by event time.
+function parseCodexRollout(chunk, { fromStart = false } = {}) {
+  const lines = String(chunk ?? "").split(/\r?\n/);
+  if (!fromStart) lines.shift();
+  let best = null, planType = null, planAt = -Infinity;
+  for (const line of lines) {
+    if (!line.includes("\"token_count\"") || !line.includes("\"rate_limits\"")) continue;
+    let event;
+    try { event = JSON.parse(line); } catch { continue; }
+    const limits = event?.payload?.type === "token_count" ? event.payload.rate_limits : null;
+    if (!limits || typeof limits !== "object") continue;
+    const at = Date.parse(event.timestamp);
+    if (!Number.isFinite(at)) continue;
+    const plan = text(limits.plan_type, 24).toLowerCase();
+    if (plan && at >= planAt) { planType = plan; planAt = at; }
+    if (limits.limit_id && limits.limit_id !== "codex") continue;
+    const hasWindow = [limits.primary, limits.secondary].some((window) => window && typeof window === "object") || numeric(limits.primary_used_percent) !== null;
+    if (hasWindow && (!best || at >= best.observedAt)) best = { snapshot: limits, observedAt: at };
+  }
+  return best ? { ...best, planType } : null;
+}
+
+// Grok's `_x.ai/billing` extension (over `grok agent stdio`) returns the
+// credit pool its login draws on: one usage percent for the current period
+// (weekly for unified billing) plus prepaid and on-demand money in cents
+// ({ val }, where {} is zero). A full pool with prepaid credit or on-demand
+// headroom left is not blocked. `monthlyLimit`/`used` are the deprecated
+// shape, read only when the percent is missing.
+function parseGrokBilling(result, { now = Date.now() } = {}) {
+  const config = result?.config;
+  if (!config || typeof config !== "object") throw new Error("The Grok billing reply has no config");
+  const usd = (value) => {
+    const cents = value && typeof value === "object" ? numeric(value.val ?? 0) : numeric(value);
+    return cents === null ? null : cents / 100;
+  };
+  const period = config.currentPeriod && typeof config.currentPeriod === "object" ? config.currentPeriod : {};
+  const kind = String(period.type ?? "").toUpperCase();
+  const shape = kind.includes("WEEK") ? { id: "week", short: "Wk", label: "Weekly credits", minutes: 10080 }
+    : kind.includes("MONTH") ? { id: "month", short: "Mo", label: "Monthly credits", minutes: 43200 }
+      : kind.includes("DAY") ? { id: "day", short: "Day", label: "Daily credits", minutes: 1440 }
+        : { id: "period", short: "Cr", label: "Credits" };
+  let percent = numeric(config.creditUsagePercent);
+  if (percent === null) {
+    const limit = usd(config.monthlyLimit), used = usd(config.used);
+    if (limit !== null && limit > 0 && used !== null) percent = (used / limit) * 100;
+  }
+  const window = percent === null ? null : limitWindow({ ...shape, percent, resetsAt: period.end ?? config.billingPeriodEnd ?? null });
+  markResets([window], now);
+  const credits = { prepaidUsd: usd(config.prepaidBalance), onDemandCapUsd: usd(config.onDemandCap), onDemandUsedUsd: usd(config.onDemandUsed) };
+  const spare = (credits.prepaidUsd ?? 0) > 0 || (credits.onDemandCapUsd ?? 0) > (credits.onDemandUsedUsd ?? 0);
+  return limitsOf([window], {
+    plan: text(result.subscriptionTier, 40) || null,
+    credits,
+    blocked: Boolean(window && window.percent >= 100 && !spare),
+    note: window ? null : "Grok reported no credit usage for this period.",
+  });
+}
+
+// Antigravity's `/usage` command in print mode: model groups, each with
+// buckets carrying the fraction left and a reset. A full bucket's reset moves
+// on every read, so it is not shown.
+function parseAntigravityUsage(stdout, { now = Date.now() } = {}) {
+  const parsed = parseCliJson(stdout);
+  const groups = parsed?.command?.data?.groups;
+  if (!parsed || parsed.status !== "SUCCESS" || !Array.isArray(groups) || !groups.length) throw new Error("Antigravity reported no usage groups");
+  const windows = [];
+  for (const group of groups) {
+    const name = text(group?.name, 40);
+    for (const bucket of Array.isArray(group?.buckets) ? group.buckets : []) {
+      const left = numeric(bucket?.remaining_fraction);
+      if (left === null) continue;
+      const period = text(bucket.window, 20).toLowerCase();
+      const minutes = period === "weekly" ? 10080 : period === "daily" ? 1440 : null;
+      windows.push(limitWindow({
+        id: text(bucket.id, 60) || `${name}-${period}`,
+        short: name.split(/\s+/)[0] || (period === "weekly" ? "Wk" : period),
+        label: `${name || "Models"} · ${period || "window"}`,
+        minutes,
+        percent: (1 - Math.min(1, Math.max(0, left))) * 100,
+        resetsAt: left >= 1 ? null : bucket.reset_time,
+        scope: name || null,
+      }));
+    }
+  }
+  const result = limitsOf(markResets(windows.filter(Boolean), now), {});
+  if (!result.windows.length) throw new Error("Antigravity reported no usage groups");
+  return result;
+}
+
 // ---- one unit of work, across both ledgers ---------------------------------
 // "What did this task cost" has two halves and they live in different stores:
 // the turns the coding worker ran (OpenCode's store, keyed by session) and the
@@ -622,4 +995,5 @@ module.exports = {
   parseOpencodeUsage, parseOpenrouterKey, parseOpenrouterCredits, parseGatewayCredits, parseZaiQuota,
   describeAccountStatus, describeOpencodeStatus,
   parseCliJson, parseClaudeCliResult, parseGrokCliResult, parseAntigravityCliResult, parseCodexCliResult,
+  parseClaudeUsage, parseCodexRateLimits, parseCodexRollout, parseGrokBilling, parseAntigravityUsage,
 };

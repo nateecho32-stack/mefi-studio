@@ -21,6 +21,7 @@ const PROMISES = [
   { file: "scripts/task-context.cjs", says: "Pure: callers persist the", keeps: ["filesystem"] },
   { file: "scripts/task-delegation.cjs", says: "This pure module runs inside the board mutation gateway", keeps: ["electron", "filesystem", "network", "processes"] },
   { file: "scripts/provider-breaker.cjs", says: "no module-level singleton", keeps: ["filesystem", "network", "processes", "timers"] },
+  { file: "scripts/community.cjs", says: "Pure module: no Electron, no filesystem, no network. Time is injectable", keeps: ["electron", "filesystem", "network", "injectableClock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;
