@@ -3638,7 +3638,7 @@
   // surface this frame (node._detail).
   const RING = { status: null, builder: false, ring: 0, time: 0, still: false, detail: 3, motion: null, theme: null };
   const HUB = { crew: false, breathe: 0.5, time: 0, still: false, detail: 3, motion: null, theme: null };
-  const ORBIT = { running: false, phase: 0, ring: 0, time: 0, still: false, detail: 3, motion: null, theme: null };
+  const ORBIT = { running: false, run: 0, phase: 0, ring: 0, time: 0, still: false, detail: 3, motion: null, theme: null };
   function ringLook(node, ring, time, still) {
     RING.status = node.status ?? null; RING.builder = Boolean(node.builder); RING.ring = ring;
     RING.time = time; RING.still = still; RING.detail = node._detail ?? 3; RING.motion = node._m ?? null; RING.theme = state.nodeTheme ?? null;
@@ -3649,8 +3649,8 @@
     HUB.time = time; HUB.still = still; HUB.detail = node._detail ?? 3; HUB.motion = node._m ?? null; HUB.theme = state.nodeTheme ?? null;
     return HUB;
   }
-  function orbitLook(node, running, phase, ring, time, still) {
-    ORBIT.running = running; ORBIT.phase = phase; ORBIT.ring = ring;
+  function orbitLook(node, running, run, phase, ring, time, still) {
+    ORBIT.running = running; ORBIT.run = run; ORBIT.phase = phase; ORBIT.ring = ring;
     ORBIT.time = time; ORBIT.still = still; ORBIT.detail = node._detail ?? 3; ORBIT.motion = node._m ?? null; ORBIT.theme = state.nodeTheme ?? null;
     return ORBIT;
   }
@@ -3766,7 +3766,10 @@
     const breathe = still ? 0.5 : (Math.sin(time / 1900) + 1) / 2;
     ctx.save();
     ctx.globalAlpha = (node._fade ?? 1) * emphasis(node);
-    const crew = state.nodes.some((entry) => entry.kind === "agent" && !entry.builder && !entry.dying);
+    // Any agent out on the board (a plain scan: no closure per frame).
+    const nodes = state.nodes;
+    let crew = false;
+    for (let index = 0; index < nodes.length && !crew; index += 1) crew = nodes[index].kind === "agent" && !nodes[index].builder && !nodes[index].dying;
     const styles = globalThis.window?.MefiNodeStyles;
     if (!(styles && styles.hubDress(ctx, state.nodeStyle, p, radius, tint, hubLook(node, crew, breathe, time, still)))) {
       const ring = radius + 5 + breathe * 2.5;
@@ -3797,12 +3800,16 @@
     const bx = p.x + radius + 6, by = p.y - radius - 5;
     const excl = node._doneExcl ??= { x: 0, y: 0, r: 9 };
     excl.x = bx; excl.y = by; node._excl = excl;
-    // How far it has come in (back-out, peaking near 1.1) or gone out.
+    // How far it has come in (back-out, peaking near 1.1) or gone out. The
+    // pop runs from the first frame the badge is drawn, not from the finish:
+    // a board that caught up late still sees it pop, in step with the
+    // node's tint cross-fade, which starts on that frame too.
     let grow = 1;
     if (hold && Number.isFinite(now)) {
       if (hold.ackedAt) grow = still ? 0 : (1 - Math.min(1, Math.max(0, (now - hold.ackedAt) / DONE_BADGE_OUT_MS))) ** 2;
-      else if (!still) {
-        const u = Math.min(1, Math.max(0, (now - hold.since) / DONE_BADGE_POP_MS));
+      else {
+        hold.shownAt ??= now;
+        const u = still ? 1 : Math.min(1, Math.max(0, (now - hold.shownAt) / DONE_BADGE_POP_MS));
         grow = u >= 1 ? 1 : 1 + 2.70158 * (u - 1) ** 3 + 1.70158 * (u - 1) ** 2;
       }
     }
@@ -3861,13 +3868,18 @@
     ctx.fillStyle = rgba(theme?.track ?? METER_TRACK, 0.9); ctx.fill();
     const filled = width * fraction;
     if (filled >= 0.5) {
+      // On a light theme the tint itself would melt into the pale track: the
+      // fill takes a darker ink of the tint there (inkOf's hot, cached) and
+      // the glint runs in the background's colour.
+      const styles = globalThis.window?.MefiNodeStyles;
+      const light = theme?.light === true && Boolean(styles);
+      const ink = light || active && !still && filled >= 6 ? styles?.inkOf(tint, theme) ?? null : null;
       ctx.beginPath(); ctx.roundRect(x, y, filled, 2, 1);
-      ctx.fillStyle = rgba(tint, 0.85); ctx.fill();
-      const ink = active && !still && filled >= 6 ? globalThis.window?.MefiNodeStyles?.inkOf(tint, theme) : null;
-      if (ink) {
+      ctx.fillStyle = light ? rgba(ink.hot, 0.9) : rgba(tint, 0.85); ctx.fill();
+      if (ink && active && !still && filled >= 6) {
         const u = (time / 1500 + (motion?.seed ?? 0)) % 1;
         const from = Math.max(x, x - 6 + u * (filled + 6)), to = Math.min(x + filled, x + u * (filled + 6));
-        if (to - from > 0.5) { ctx.beginPath(); ctx.roundRect(from, y, to - from, 2, 1); ctx.fillStyle = rgba(ink.spec, 0.7); ctx.fill(); }
+        if (to - from > 0.5) { ctx.beginPath(); ctx.roundRect(from, y, to - from, 2, 1); ctx.fillStyle = light ? rgba(theme.bg, 0.7) : rgba(ink.spec, 0.7); ctx.fill(); }
       }
     }
     ctx.restore();
@@ -3875,29 +3887,71 @@
 
   function drawWorkOrbit(ctx, node, p, radius, time, still) {
     node._orbitTrail = null;
-    if (!state.orbitTrails || !["Running", "Next"].includes(node._workLabel) || node.kind === "agent") return;
-    const running = node._workLabel === "Running";
+    if (node.kind === "agent") return;
+    const label = node._workLabel === "Running" || node._workLabel === "Next" ? node._workLabel : null;
+    // The node's motion record remembers the orbit it showed, so none pops:
+    // once the label drops (the work finished or moved on) the orbit fades
+    // out over ORBIT_OUT_MS, still turning (drawFrame keeps its speed while
+    // it fades), and one that comes back mid-fade fades in from there; a
+    // Running <-> Next change eases the orbit's strength (`run`, 1 for
+    // Running) over ORBIT_SWAP_MS instead of stepping it. A fresh orbit
+    // starts whole; reduced motion simply shows the label.
+    const m = node._m ?? null;
+    let shown = label, fade = 1;
+    if (m) {
+      const on = label !== null;
+      if (!state.orbitTrails || still) {
+        m.orbitLabel = state.orbitTrails ? label : null; m.orbitOn = on; m.orbitFadeAt = NaN;
+      } else {
+        if (on !== (m.orbitOn === true)) {
+          m.orbitFadeFrom = m.orbitLabel ? orbitFade(m, !on, time) : 1; m.orbitFadeAt = time; m.orbitOn = on;
+        }
+        fade = orbitFade(m, on, time);
+        if (on) {
+          if (m.orbitLabel && m.orbitLabel !== label) { m.orbitRunFrom = orbitRun(m, m.orbitLabel === "Running", time, false); m.orbitSwapAt = time; }
+          m.orbitLabel = label;
+        } else if (fade > 0 && m.orbitLabel) shown = m.orbitLabel;
+        else m.orbitLabel = null;
+      }
+    }
+    if (!state.orbitTrails || !shown) return;
+    const running = shown === "Running";
     // The node's motion record integrates the orbit (a Running turn 1.1 s, a
     // Next one 2.4 s), so a node that starts or stops working never jumps;
     // without one the same speeds from the clock.
-    const phase = still ? Math.PI / 3 : Number.isFinite(node._m?.orbit) ? node._m.orbit : time / (running ? 1100 : 2400) * Math.PI * 2;
+    const phase = still ? Math.PI / 3 : Number.isFinite(m?.orbit) ? m.orbit : time / (running ? 1100 : 2400) * Math.PI * 2;
     const ring = radius + 9;
+    if (fade < 1) { ctx.save(); ctx.globalAlpha *= fade; }
     // A style may draw the orbit in its own language (the free styles share
     // a themed one); without the node styles the blue arcs below.
     const styles = globalThis.window?.MefiNodeStyles;
-    if (styles && styles.orbit(ctx, state.nodeStyle, p, radius, node._m?.tint ?? null, orbitLook(node, running, phase, ring, time, still))) {
-      node._orbitTrail = { drawn: true, animated: !still, segments: 3, phase, radius: ring };
-      return;
+    if (!(styles && styles.orbit(ctx, state.nodeStyle, p, radius, m?.tint ?? null, orbitLook(node, running, orbitRun(m, running, time, still), phase, ring, time, still)))) {
+      ctx.save(); ctx.lineCap = "round";
+      ctx.strokeStyle = "rgba(125,178,255,0.22)"; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI * 2); ctx.stroke();
+      for (let segment = 2; segment >= 0; segment -= 1) {
+        ctx.strokeStyle = `rgba(125,178,255,${0.8 - segment * 0.24})`; ctx.lineWidth = 2.6 - segment * 0.6;
+        ctx.beginPath(); ctx.arc(p.x, p.y, ring, phase - (segment + 1) * 0.62, phase - segment * 0.62); ctx.stroke();
+      }
+      ctx.restore();
     }
-    ctx.save(); ctx.lineCap = "round";
-    ctx.strokeStyle = "rgba(125,178,255,0.22)"; ctx.lineWidth = 0.8;
-    ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, Math.PI * 2); ctx.stroke();
-    for (let segment = 2; segment >= 0; segment -= 1) {
-      ctx.strokeStyle = `rgba(125,178,255,${0.8 - segment * 0.24})`; ctx.lineWidth = 2.6 - segment * 0.6;
-      ctx.beginPath(); ctx.arc(p.x, p.y, ring, phase - (segment + 1) * 0.62, phase - segment * 0.62); ctx.stroke();
-    }
-    ctx.restore();
+    if (fade < 1) ctx.restore();
     node._orbitTrail = { drawn: true, animated: !still, segments: 3, phase, radius: ring };
+  }
+  const ORBIT_OUT_MS = 400, ORBIT_SWAP_MS = 250;
+  // The orbit's fade (1 whole): from where it was when its label last came
+  // or went, toward 1 while the label is on and 0 once it is off.
+  function orbitFade(m, on, time) {
+    if (!Number.isFinite(m.orbitFadeAt)) return 1;
+    return Math.max(0, Math.min(1, m.orbitFadeFrom + (on ? 1 : -1) * (time - m.orbitFadeAt) / ORBIT_OUT_MS));
+  }
+  // How far the orbit is a Running one (1) rather than a Next one (0), eased
+  // over ORBIT_SWAP_MS from the value it had when the label last changed.
+  function orbitRun(m, running, time, still) {
+    const want = running ? 1 : 0;
+    if (still || !m || !Number.isFinite(m.orbitSwapAt)) return want;
+    const u = (time - m.orbitSwapAt) / ORBIT_SWAP_MS;
+    return u >= 0 && u < 1 ? m.orbitRunFrom + (want - m.orbitRunFrom) * u * u * (3 - 2 * u) : want;
   }
 
   // The chores the assistant filed for itself park as pips under the hub — one
@@ -7639,7 +7693,10 @@
       const motion = node._m ?? null;
       if (nodeStyles && motion) {
         stepFlags.active = active; stepFlags.selected = Boolean(selected); stepFlags.progress = node.progress;
-        stepFlags.orbit = node._workLabel === "Running" ? 1.1 : node._workLabel === "Next" ? 2.4 : 0;
+        // A work orbit fading out after its label dropped keeps turning at
+        // its speed (drawWorkOrbit keeps the label it shows on the record).
+        const orbiting = node._workLabel === "Running" || node._workLabel === "Next" ? node._workLabel : motion.orbitLabel;
+        stepFlags.orbit = orbiting === "Running" ? 1.1 : orbiting === "Next" ? 2.4 : 0;
         stepFlags.status = node.kind === "agent" ? node.status ?? null : null;
         nodeStyles.stepMotion(motion, stepFlags, dt, still);
         tint = nodeStyles.shownTint(motion, tint, time, still);
@@ -7697,10 +7754,14 @@
       // pulses (0.9 s, in the node's own phase); at rest it holds its middle.
       if (colliding && (active || selected)) {
         const beat = still ? 0.5 : 0.5 + 0.5 * Math.sin(Math.PI * 2 * (time / 900 + (motion?.seed ?? 0)));
+        // On a light theme the pale amber would vanish into the background
+        // (and the pale amber node): the rim takes the amber's deep ink there
+        // and pulses a little stronger.
+        const clash = state.nodeTheme?.light === true ? nodeStyles?.inkOf(NODE_RGB.collision, state.nodeTheme).hot ?? null : null;
         ctx.save();
         ctx.globalAlpha *= dim;
         traceNodeSurface(ctx, visual.shape, p.x, p.y, radius + 2 + beat);
-        ctx.strokeStyle = still ? rgba(NODE_RGB.collision, 0.55) : rgba(NODE_RGB.collision, Math.round((0.4 + 0.3 * beat) * 32) / 32);
+        ctx.strokeStyle = clash ? rgba(clash, Math.round((0.5 + 0.25 * beat) * 32) / 32) : still ? rgba(NODE_RGB.collision, 0.55) : rgba(NODE_RGB.collision, Math.round((0.4 + 0.3 * beat) * 32) / 32);
         ctx.lineWidth = 1 + 0.4 * beat;
         ctx.stroke();
         ctx.restore();

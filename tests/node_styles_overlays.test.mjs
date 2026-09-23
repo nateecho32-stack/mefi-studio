@@ -111,10 +111,15 @@ test("the running arc eases with the work level and keeps the legacy sweep", () 
   const bare = recordingContext();
   styles.ring(bare, "orbs", P, 10, TINT, { status: "running", ring: 13.5, time: 0, still: false });
   assert.equal(alphaOf(bare.calls.strokes[2].style), 0.9);
-  // On a light theme a pastel hue deepens a little to read as a thin ring.
-  const pale = recordingContext();
-  styles.ring(pale, "orbs", P, 10, TINT, { status: "running", ring: 13.5, time: 0, still: true, detail: 3, motion: null, theme: styles.theme(LIGHT) });
-  assert.ok(pale.calls.strokes.length === 3 && pale.calls.strokes.every(({ style }) => !style.startsWith(`rgba(${TINT.join(",")},`)));
+  // On a light theme a pastel hue deepens (nearly half way to the theme's
+  // highlight) to read as a thin ring, and the tail sits higher so the comet
+  // still tapers instead of shrinking to its head.
+  const light = styles.theme(LIGHT), pale = recordingContext();
+  styles.ring(pale, "orbs", P, 10, TINT, { status: "running", ring: 13.5, time: 0, still: true, detail: 3, motion: null, theme: light });
+  const deep = `rgba(${TINT.map((channel, index) => Math.round(channel + (plain(light.hi)[index] - channel) * 0.45)).join(",")},`;
+  assert.ok(pale.calls.strokes.length === 3 && pale.calls.strokes.every(({ style }) => style.startsWith(deep)), `in the deeper hue (${strokeStyles(pale)})`);
+  assert.deepEqual(strokeStyles(pale).map(alphaOf), [0.34, 0.62, 0.9], "a stronger tail on a pale background");
+  assert.deepEqual(strokeStyles(ring(spinning, 1900)).map(alphaOf), [0.24, 0.52, 0.9], "the dark theme keeps its own");
 });
 
 test("queued dashes march, the error ring pulses, and both come back as they were", () => {
@@ -142,15 +147,21 @@ test("queued dashes march, the error ring pulses, and both come back as they wer
   assert.ok(joining.calls.alphas[0] > 0.2 && joining.calls.alphas[0] < 0.3, `a quarter of the way in (${joining.calls.alphas[0]})`);
   // The error ring pulses between .6 and .95 on a 1.3 s swell; at rest it sits near the legacy .85.
   const failed = steppedRecord(styles, "agent:error", { status: "error" });
-  const seen = new Set();
+  const seen = new Set(), widths = [], radii = [];
   for (let step = 0; step < 40; step += 1) {
     failed.clock += 0.05;
-    seen.add(alphaOf(strokeStyles(at("error", failed, 5000))[0]));
+    const beat = at("error", failed, 5000);
+    seen.add(alphaOf(strokeStyles(beat)[0]));
+    widths.push(beat.calls.lineWidths[0]); radii.push(arcs(beat)[0][3]);
   }
   const levels = [...seen];
   assert.ok(levels.length >= 6 && Math.min(...levels) >= 0.59 && Math.max(...levels) <= 0.96 && Math.max(...levels) - Math.min(...levels) > 0.25, `it pulses (${levels.sort().join(", ")})`);
+  // It swells in width (1.2 → 1.7 px) and size (+.6 px) on the same beat.
+  assert.ok(Math.min(...widths) >= 1.2 - 1e-9 && Math.max(...widths) <= 1.7 + 1e-9 && Math.max(...widths) - Math.min(...widths) > 0.4, `its width beats (${widths.map((value) => value.toFixed(2))})`);
+  assert.ok(Math.min(...radii) >= 13.5 - 1e-9 && Math.max(...radii) <= 14.1 + 1e-9 && Math.max(...radii) - Math.min(...radii) > 0.45, "and its ring breathes out and back");
   const rest = at("error", steppedRecord(styles, "agent:error-still", { status: "error", still: true }), 5000, true);
   assert.equal(alphaOf(strokeStyles(rest)[0]), 0.84375);
+  assert.deepEqual([Math.round(rest.calls.lineWidths[0] * 1e4) / 1e4, Math.round(arcs(rest)[0][3] * 1e4) / 1e4], [1.555, 13.926], "at rest near the legacy 1.4 px, a hair out");
   assert.deepEqual(rest.calls.texts.map(({ text, ink }) => [text, ink]), [["!", "rgba(255,212,121,1)"]], "the amber \"!\" badge");
   assert.ok(rest.calls.fills.some(({ style }) => style === `rgba(${plain(theme.amberWell).join(",")},1)`), "on the theme's amber well");
 });
@@ -233,6 +244,17 @@ test("the hub dress breathes on a 6 s cycle in the hub's own phase, and the crew
   };
   assert.deepEqual([arcs(bare(0, 0))[0][3], arcs(bare(1, 0))[0][3]], [20, 22.5], "the caller's breath");
   assert.notEqual(sets(bare(0, 0), "lineDashOffset")[0], sets(bare(0, 700), "lineDashOffset")[0], "the crew ring drifts on o.time");
+  // The crew ring is a T1 extra: none on the smallest tier, fading in over
+  // T1's first 1.2 px, whole on a far layer's capped T1.
+  const tiered = (radius, detail) => {
+    const ctx = recordingContext();
+    styles.hubDress(ctx, "orbs", P, radius, TINT, { crew: true, time: 0, still: true, detail, motion: null, theme });
+    assert.equal(ctx.calls.saves, ctx.calls.restores); assert.equal(ctx.globalAlpha, 1);
+    return ctx;
+  };
+  assert.equal(tiered(5, 0).calls.stroke, 1, "the smallest tier: the breathing ring alone");
+  assert.ok(Math.abs(tiered(6.6, 1).calls.alphas[1] - 0.5) < 1e-9, "half way in 0.6 px into T1");
+  assert.deepEqual(tiered(15, 1).calls.alphas, [1, 1], "a capped far hub keeps its crew ring whole");
 });
 
 test("the work orbit runs on the integrated phase in the theme's orbit hue: four arcs, three segments, r + 9", () => {
@@ -270,6 +292,14 @@ test("the work orbit runs on the integrated phase in the theme's orbit hue: four
     styles.orbit(next, "orbs", P, 12, TINT, { running: false, phase: 0.4, ring: 21, time: 0, still: stillPose, detail: 3, motion, theme: accent });
     assert.ok(next.calls.alphas.length === 4 && next.calls.alphas.every((alpha) => alpha === 0.65), "a Next orbit at .65");
   }
+  // o.run (the caller's eased Running <-> Next mix) glides between the two.
+  const mixed = (run, running) => {
+    const ctx = recordingContext();
+    styles.orbit(ctx, "orbs", P, 12, TINT, { running, run, phase: 0.4, ring: 21, time: 0, still: false, detail: 3, motion: record, theme: accent });
+    return ctx.calls.alphas[0];
+  };
+  assert.deepEqual([mixed(1, true), mixed(0, false)], [1, 0.65], "its ends are Running and Next");
+  assert.ok(Math.abs(mixed(0.5, false) - 0.825) < 1e-12 && Math.abs(mixed(0.5, true) - 0.825) < 1e-12, "half way between, whichever label it is heading for");
 });
 
 test("an arriving node sends a bright ring a radius out, and reduced motion lets it simply appear", () => {
@@ -437,6 +467,18 @@ test("the done-hold badge pops in as the hold starts and shrinks away once read"
   assert.equal(frame(10_200).calls.stroke, 1, "no echo while it pops");
   assert.equal(frame(10_400).calls.stroke, 3, "the echoes start once it is in");
   assert.equal(scaleOf(frame(10_000, true)), 1, "reduced motion: whole at once");
+  // The board caught up late (the node first drawn 900 ms after the finish):
+  // the pop starts on that first drawn frame, with the tint cross-fade.
+  const late = { since: 30_000, ackedAt: null };
+  const lateFrame = (now) => {
+    const ctx = recordingContext();
+    env.drawDoneBadge(ctx, node, { x: 100, y: 100 }, 10, 800, false, late, now);
+    return ctx;
+  };
+  assert.equal(lateFrame(30_900).calls.log.length, 0, "nothing on the first drawn frame");
+  assert.equal(late.shownAt, 30_900);
+  const lateScales = [30_910, 31_020, 31_300].map((now) => scaleOf(lateFrame(now)));
+  assert.ok(lateScales[0] < 0.2 && lateScales[1] > 0.5 && lateScales[1] < 1.12 && lateScales[2] === 1, `then the pop plays in full (${lateScales})`);
   // Read (clicked): it shrinks away over 200 ms.
   hold.ackedAt = 20_000;
   const going = [20_000, 20_100, 20_190].map((now) => scaleOf(frame(now)));
@@ -480,8 +522,80 @@ test("the work-left meter eases on the record's progress over the theme's track 
   const dimmed = recordingContext();
   env.drawProgressMeter(dimmed, node, { x: 100, y: 100 }, 12, TINT, true, false, 2000, false, 0.35);
   assert.ok(dimmed.calls.alphas.length >= 2 && dimmed.calls.alphas.every((alpha) => Math.abs(alpha - 0.35) < 1e-12), `dimmed (${dimmed.calls.alphas})`);
+  // A dark theme fills in the tint itself with a light glint on the done part.
+  const glintTime = ((0.5 - record.seed + 1) % 1) * 1500; // the glint half way along
+  const glinting = recordingContext();
+  env.drawProgressMeter(glinting, node, { x: 100, y: 100 }, 12, TINT, true, false, glintTime, false);
+  assert.deepEqual(glinting.calls.fills.map(({ style }) => style), [`rgba(${plain(theme.track).join(",")},0.9)`, `rgba(${TINT.join(",")},0.85)`, `rgba(${plain(styles.inkOf(TINT, theme).spec).join(",")},0.7)`]);
+  // On a light theme the tint would melt into the pale track: the fill takes
+  // the tint's darker ink and the glint the background.
+  const light = styles.theme(LIGHT), pale = badgeEnv(light);
+  pale.window.MefiNodeStyles = styles;
+  const lit = recordingContext();
+  pale.drawProgressMeter(lit, node, { x: 100, y: 100 }, 12, TINT, true, false, glintTime, false);
+  assert.deepEqual(lit.calls.fills.map(({ style }) => style), [`rgba(${plain(light.track).join(",")},0.9)`, `rgba(${plain(styles.inkOf(TINT, light).hot).join(",")},0.9)`, `rgba(${plain(light.bg).join(",")},0.7)`], "a darker fill and a background glint");
+  assert.ok(!lit.calls.fills[1].style.startsWith(`rgba(${TINT.join(",")},`), "never the raw tint");
+  const restingPale = recordingContext();
+  pale.drawProgressMeter(restingPale, node, { x: 100, y: 100 }, 12, TINT, true, false, glintTime, true);
+  assert.equal(restingPale.calls.fills[1].style, lit.calls.fills[1].style, "the same darker fill at rest, with no glint");
+  assert.equal(restingPale.calls.fill, 2);
   node.progress = null;
   assert.equal(meter().calls.fill, 0, "never an inferred fraction");
+});
+
+test("a work orbit fades out once its label drops, fades back from there, and glides between Running and Next", () => {
+  const styles = loadNodeStyles();
+  const state = { orbitTrails: true, nodeStyle: "orbs", nodeTheme: styles.theme(DARK) };
+  const load = (module) => {
+    const env = vm.createContext({ state, Math, Map, WeakMap, window: { MefiNodeStyles: module } });
+    vm.runInContext(section("function traceNodeSurface(", "function graphLayoutSeeds("), env);
+    return env;
+  };
+  const env = load(styles);
+  const record = steppedRecord(styles, "task:orbit-life", { active: true, orbit: 1.1 });
+  const node = { id: "task:orbit-life", kind: "task", _workLabel: "Running", _m: record };
+  const frame = (label, time, still = false, host = env) => {
+    node._workLabel = label;
+    const ctx = recordingContext();
+    host.drawWorkOrbit(ctx, node, P, 12, time, still);
+    assert.equal(ctx.calls.saves, ctx.calls.restores); assert.equal(ctx.globalAlpha, 1);
+    return ctx;
+  };
+  // The track is the orbit's first stroke: its alpha is the whole orbit's gain.
+  const gain = (ctx) => ctx.calls.alphas[0] ?? 0;
+  assert.equal(gain(frame("Running", 1000)), 1);
+  // The task finished: the orbit fades over 400 ms, still turning, then is gone.
+  assert.equal(gain(frame("Done", 1100)), 1, "whole on the frame the label drops");
+  const fading = frame("Done", 1300);
+  assert.ok(Math.abs(gain(fading) - 0.5) < 1e-12 && node._orbitTrail?.drawn === true, `half way out (${gain(fading)})`);
+  assert.ok(fading.calls.alphas.every((alpha) => Math.abs(alpha - 0.5) < 1e-12), "every arc of it");
+  assert.equal(record.orbitLabel, "Running", "the record keeps the label it shows, so drawFrame keeps its speed");
+  assert.equal(frame("Done", 1500).calls.stroke, 0, "gone after 400 ms");
+  assert.deepEqual([node._orbitTrail, record.orbitLabel], [null, null]);
+  // Back mid-fade: it fades in from where it was instead of jumping whole.
+  frame("Running", 2000); frame(null, 2100);
+  assert.ok(Math.abs(gain(frame(null, 2300)) - 0.5) < 1e-12);
+  assert.ok(Math.abs(gain(frame("Running", 2300)) - 0.5) < 1e-12, "no jump back to whole");
+  assert.ok(Math.abs(gain(frame("Running", 2400)) - 0.75) < 1e-12);
+  assert.equal(gain(frame("Running", 2600)), 1);
+  // Running to Next: the strength glides from 1 to .65 over 250 ms; and back.
+  frame("Running", 3000);
+  const toNext = [3100, 3225, 3350].map((time) => gain(frame("Next", time)));
+  assert.ok(toNext[0] === 1 && Math.abs(toNext[1] - 0.825) < 1e-12 && toNext[2] === 0.65, `Running to Next (${toNext})`);
+  const toRunning = [4000, 4125, 4250].map((time) => gain(frame("Running", time)));
+  assert.ok(toRunning[0] === 0.65 && Math.abs(toRunning[1] - 0.825) < 1e-12 && toRunning[2] === 1, `and back (${toRunning})`);
+  // Reduced motion simply shows the label: no fade, no glide.
+  assert.equal(gain(frame("Next", 5000, true)), 0.65);
+  assert.equal(frame(null, 5100, true).calls.stroke, 0);
+  // A style that declines keeps the legacy arcs, faded the same way.
+  const legacy = load({ orbit: () => false });
+  frame("Running", 6000, false, legacy); frame(null, 6100, false, legacy);
+  const old = frame(null, 6200, false, legacy);
+  assert.ok(old.calls.stroke === 4 && old.calls.alphas.every((alpha) => Math.abs(alpha - 0.75) < 1e-12), `the legacy arcs fade too (${old.calls.alphas})`);
+  // Trails off: nothing, and the record forgets the label.
+  state.orbitTrails = false;
+  assert.equal(frame("Running", 7000).calls.stroke, 0);
+  assert.equal(record.orbitLabel, null);
 });
 
 test("the node loop cross-fades tints, pops the hover, pulses the clash rim and hands labels the style's reach", () => {
@@ -497,6 +611,12 @@ test("the node loop cross-fades tints, pops the hover, pulses the clash rim and 
     "if (hold && (!hold.ackedAt || !still && growNow - hold.ackedAt < DONE_BADGE_OUT_MS)) drawDoneBadge(ctx, node, p, radius, time, still, hold, growNow, dim);",
     "ctx.globalAlpha *= dim;",
     "rgba(NODE_RGB.collision, 0.55)",
+    // A fading work orbit keeps turning at its speed.
+    "const orbiting = node._workLabel === \"Running\" || node._workLabel === \"Next\" ? node._workLabel : motion.orbitLabel;",
+    "stepFlags.orbit = orbiting === \"Running\" ? 1.1 : orbiting === \"Next\" ? 2.4 : 0;",
+    // On a light theme the clash rim takes the amber's darker ink and pulses higher.
+    "const clash = state.nodeTheme?.light === true ? nodeStyles?.inkOf(NODE_RGB.collision, state.nodeTheme).hot ?? null : null;",
+    "clash ? rgba(clash, Math.round((0.5 + 0.25 * beat) * 32) / 32)",
   ]) assert.ok(loop.includes(line), `the node loop carries ${line}`);
   assert.ok(loop.indexOf("nodeStyles.stepMotion(") < loop.indexOf("const radius ="), "the motion steps before the radius reads its eased hover");
   for (const gone of ["motion.tint = tint", "#303947", "#173025", "#a7e5c0", "fillRect("]) assert.ok(!loop.includes(gone), `the loop no longer carries ${gone}`);

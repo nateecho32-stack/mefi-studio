@@ -652,6 +652,7 @@ test("the agent dress, hub dress and work orbit let a style draw its own and kee
   assert.deepEqual(asked.at(-1), ["orbit", "prism", true, 21]);
   assert.equal(arcs.length, 0, "a style's own orbit replaces the blue arcs");
   assert.deepEqual({ ...work._orbitTrail, phase: undefined }, { drawn: true, animated: true, segments: 3, phase: undefined, radius: 21 }, "and still reports the orbit it drew");
+  assert.equal([...options.orbit][0].run, 1, "a Running orbit is all Running (o.run, eased over a Running <-> Next change)");
   answer = false;
   env.drawWorkOrbit(ctx, work, p, 12, 100, false);
   assert.equal(arcs.length, 4, "a declined orbit keeps the blue arcs");
