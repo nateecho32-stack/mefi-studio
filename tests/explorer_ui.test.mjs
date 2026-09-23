@@ -329,6 +329,12 @@ test("a pre-navigation deep link runs open() before init() without the .hidden t
   await explorer.open({ sessionId: "ses-root" });
   trace.push(`open:mapBuilt=${env.lookups > 0}`);
 
+  // close() shares the same element map, so a pre-navigation close() must also
+  // no-op instead of throwing or building the map ahead of init().
+  explorer.close();
+  assert.equal(env.lookups, 0, "close() before init() does not build the element map");
+  assert.equal(env.element("explorer-overlay").hidden, true, "close() before init() leaves the overlay closed");
+
   env.domReady();
   trace.push(`init:mapBuilt=${env.lookups > 0}`);
 
