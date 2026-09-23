@@ -520,56 +520,9 @@ test("Halo and Crystal use distinct bounded surfaces while preserving node posit
 
 // ===== the Void collection: Singularity, Prism, Sigil =====
 
-// One premium style's shared checks at radius 12: a surface and an outline,
-// a restored canvas, a bounded reach, a fixed amount of path work, paints
-// reused on the next frame and owned by their canvas, a selected node marked,
-// and the hub's monogram in a light ink. Answers the style's signature.
-function premiumSurface(style, extra = () => {}) {
-  const styles = loadNodeStyles();
-  const node = { kind: "task", active: true };
-  const first = recordingContext();
-  styles.paint(first, style, { x: 50, y: 50 }, 12, [220, 180, 110], node);
-  const { calls } = first;
-  assert.ok(calls.fill > 0 && calls.stroke > 0, `${style} paints a surface and an outline`);
-  assert.equal(calls.saves, calls.restores, `${style} leaves the canvas state as it found it`);
-  assert.ok(calls.reach <= 12 * 1.8, `${style} stays inside its glow radius (${calls.reach.toFixed(1)}px)`);
-  assert.ok(calls.pathReach <= 12 * 1.1, `${style} keeps its facets and marks on the node (${calls.pathReach.toFixed(1)}px)`);
-  assert.ok(calls.lineTo < 64 && calls.arc < 8, `${style} has a small, fixed amount of path work`);
-  extra(styles, first);
-  const signature = `${calls.arc}/${calls.lineTo}/${calls.fill}/${calls.stroke}`;
-  // The next frame, with a fresh but equal tint, allocates no new paints.
-  const gradients = gradientsBuilt(first);
-  styles.paint(first, style, { x: 80, y: 20 }, 12, [220, 180, 110], node);
-  assert.equal(gradientsBuilt(first), gradients, `${style} reuses its cached paints`);
-  // Paints belong to their context: another canvas builds its own once.
-  const other = recordingContext();
-  styles.paint(other, style, { x: 50, y: 50 }, 12, [220, 180, 110], node);
-  assert.equal(gradientsBuilt(other), gradients);
-  styles.paint(other, style, { x: 50, y: 50 }, 12, [220, 180, 110], node);
-  assert.equal(gradientsBuilt(other), gradients);
-  const quiet = recordingContext(), chosen = recordingContext();
-  styles.paint(quiet, style, { x: 50, y: 50 }, 12, [120, 180, 220], { kind: "task" });
-  styles.paint(chosen, style, { x: 50, y: 50 }, 12, [120, 180, 220], { kind: "task", selected: true });
-  assert.ok(Math.max(...chosen.calls.lineWidths) > Math.max(...quiet.calls.lineWidths), `${style} marks the selected node`);
-  if (style !== "singularity") assert.ok(quiet.calls.reach <= 12 * 1.1, `${style} glows only while it works or is chosen`);
-  // The hub's monogram reads on every Void body: a light ink, never the dark one.
-  const hub = recordingContext();
-  styles.paint(hub, style, { x: 50, y: 50 }, 15, [120, 180, 220], { kind: "assistant" });
-  const [monogram] = hub.calls.texts, ink = monogram?.ink.match(/\d+/g)?.slice(0, 3).map(Number);
-  assert.equal(monogram?.text, "M");
-  assert.ok(ink && ink[0] * 0.2126 + ink[1] * 0.7152 + ink[2] * 0.0722 > 200, `${style} writes the hub's M in a light ink (${monogram?.ink})`);
-  return signature;
-}
-
 // Singularity (the black hole) has its own suite: tests/node_styles_singularity.test.mjs.
 
-test("Prism cuts a bounded gem that keeps fewer facets as it shrinks", () => {
-  premiumSurface("prism");
-  // Prism cuts fewer planes as it shrinks: three, then two halves, then one.
-  const styles = loadNodeStyles();
-  const fills = [12, 5, 3].map((radius) => { const recorded = recordingContext(); styles.paint(recorded, "prism", { x: 50, y: 50 }, radius, [120, 180, 220], { kind: "task" }); return recorded.calls.fill; });
-  assert.ok(fills[0] > fills[1] && fills[1] > fills[2], `a small gem keeps fewer facets (${fills.join(", ")} fills)`);
-});
+// Prism (the turning crystal) has its own suite: tests/node_styles_prism.test.mjs.
 
 // Sigil's own suite (the hex seal, its cells, rings, wires and pulses):
 // tests/node_styles_sigil.test.mjs.
