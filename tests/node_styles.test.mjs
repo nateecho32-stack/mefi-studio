@@ -463,9 +463,10 @@ test("orbs retain luminous cores and a single status rim without stacked status 
     const ctx = recordingContext();
     styles.paint(ctx, "orbs", { x: 50, y: 50 }, 12, [220, 180, 110], { kind, active: true });
     assert.equal(ctx.calls.radial, 2, "one breathing halo and one body with its specular");
-    // One rim on the body's edge; the only other stroke is the glint riding inside it.
+    // One rim on the body's edge (lit, at the middle of its breath: .82 × .925);
+    // the only other stroke is the glint riding inside it.
     const [rim, glint, ...rest] = ctx.calls.strokes;
-    assert.deepEqual([rim.style, rim.width, rest.length], ["rgba(220,180,110,0.8125)", 1.3, 0]);
+    assert.deepEqual([rim.style, rim.width, rest.length], ["rgba(220,180,110,0.75)", 1.3, 0]);
     assert.ok(glint.style === "rgba(248,240,226,0.95)" && glint.width < rim.width, "the glint is a thin streak of light, not a second status ring");
     assert.ok(ctx.calls.fills.some(({ style }) => style === "rgba(39,33,23,1)"), "an opaque, theme-derived core: connections never show through it");
     assert.ok(!ctx.calls.fills.some(({ style }) => typeof style === "string" && (style === "#151a22" || style.startsWith("rgba(242,249,255"))), "no hard-coded navy core or flat white dot");

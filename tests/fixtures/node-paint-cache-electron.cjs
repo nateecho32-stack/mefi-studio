@@ -67,12 +67,14 @@ function browserChecks() {
       glow.addColorStop(1, rgba(tint, 0));
       ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, spread, 0, TAU); ctx.fill();
     }
-    // The halo: a ring from the body's edge out to its breathing reach.
-    const breath = 0.5, reach = 1.42 + 0.3 * lit + 0.08 * breath, outer = radius * reach;
-    const halo = ctx.createRadialGradient(p.x, p.y, outer * 0.3, p.x, p.y, outer);
-    halo.addColorStop(0, rgba(tint, 0.3)); halo.addColorStop(0.42, rgba(tint, 0.12)); halo.addColorStop(1, rgba(tint, 0));
-    ctx.globalAlpha = base * (0.42 + 0.58 * lit) * (0.86 + 0.14 * breath);
-    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(p.x, p.y, outer, 0, TAU); ctx.moveTo(p.x + radius, p.y); ctx.arc(p.x, p.y, radius, 0, TAU, true); ctx.fill();
+    // The halo: a disc out to its breathing reach, its paint clear inside
+    // half the reach.
+    const breath = 0.5, reach = 1.38 + 0.26 * lit + 0.16 * breath, outer = radius * reach;
+    const halo = ctx.createRadialGradient(p.x, p.y, outer * 0.5, p.x, p.y, outer);
+    halo.addColorStop(0, rgba(tint, 0)); halo.addColorStop(0.12, rgba(tint, 0.21)); halo.addColorStop(0.36, rgba(tint, 0.15));
+    halo.addColorStop(0.7, rgba(tint, 0.07)); halo.addColorStop(1, rgba(tint, 0));
+    ctx.globalAlpha = base * (0.42 + 0.58 * lit) * (0.7 + 0.3 * breath);
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(p.x, p.y, outer, 0, TAU); ctx.fill();
     ctx.globalAlpha = base;
     // An opaque core sunk toward the background, the body with its specular.
     const core = blend(tint, [5, 5, 7], 0.84), spec = blend(tint, white, 0.8);
@@ -82,16 +84,17 @@ function browserChecks() {
     body.addColorStop(0, rgba(spec, 0.96)); body.addColorStop(0.1, rgba(blend(tint, white, 0.4), 0.9));
     body.addColorStop(0.28, rgba(tint, 0.8)); body.addColorStop(0.62, rgba(tint, 0.42)); body.addColorStop(1, rgba(tint, 0.1));
     ctx.fillStyle = body; ctx.fill();
+    // The rim, breathing with the halo (at the middle of its breath here).
     ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, TAU);
-    ctx.strokeStyle = rgba(tint, Math.round((0.5 + 0.32 * lit + 0.18 * sel) * 32) / 32);
+    ctx.strokeStyle = rgba(tint, Math.round((0.5 + 0.32 * lit + 0.18 * sel) * (0.85 + 0.15 * breath) * 32) / 32);
     ctx.lineWidth = 0.8 + 0.5 * lit + 0.5 * sel; ctx.stroke();
     // The glint: a streak of rim light at .84 r, faded in from 6 px over 1.2 px.
     const shown = Math.min(1, Math.max(0, (radius - 6) / 1.2));
     if (shown > 0) {
       const angle = 0.35;
-      ctx.globalAlpha = base * shown * (0.3 + 0.7 * work) * (0.75 + 0.25 * 1);
+      ctx.globalAlpha = base * shown * (0.5 + 0.5 * work) * (0.75 + 0.25 * 1);
       ctx.strokeStyle = rgba(spec, 0.95); ctx.lineWidth = Math.max(0.8, radius * 0.09); ctx.lineCap = "round";
-      ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.84, angle - 0.42, angle + 0.42); ctx.stroke();
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.84, angle - 0.55, angle + 0.55); ctx.stroke();
       ctx.globalAlpha = base;
     }
     if (node.kind === "assistant" || node.kind === "music") {
@@ -161,6 +164,45 @@ function browserChecks() {
   second.createRadialGradient = (...args) => { secondCreates++; return secondCreate(...args); };
   drawNodeSurface(second, { kind: "task" }, { x: 40, y: 40 }, 8.123, colors[0]);
   result.secondContextCreates = secondCreates;
+
+  // Motion, through the same adapter the Command view uses: a working orb
+  // with a motion record changes between frames 0.4 s apart; under reduced
+  // motion two frames far apart are identical; and after the first frame no
+  // gradient (radial or linear) is built across ten frames of changing clock.
+  const styles = window.MefiNodeStyles;
+  const moving = document.createElement("canvas"); moving.width = 96; moving.height = 96;
+  const motionCtx = moving.getContext("2d");
+  let motionBuilds = 0;
+  for (const name of ["createRadialGradient", "createLinearGradient"]) {
+    const real = motionCtx[name].bind(motionCtx);
+    motionCtx[name] = (...args) => { motionBuilds++; return real(...args); };
+  }
+  const shot = (record, still) => {
+    motionCtx.fillStyle = "#102030"; motionCtx.fillRect(0, 0, 96, 96);
+    drawNodeSurface(motionCtx, { kind: "task" }, { x: 48, y: 48 }, 15, colors[1], { active: true, still, motion: record, time: 0 });
+    return motionCtx.getImageData(0, 0, 96, 96).data;
+  };
+  const differing = (a, b) => { let count = 0; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) count++; return count; };
+  const table = new Map();
+  const flags = { style: "orbs", active: true, selected: false, progress: null, orbit: 0, status: null, time: 0, frame: 0 };
+  const animated = styles.motionRecord(table, "task:animated");
+  styles.stepMotion(animated, flags, 1 / 30, false);
+  const firstFrame = shot(animated, false);
+  const warmBuilds = motionBuilds;
+  for (let i = 0; i < 12; i++) styles.stepMotion(animated, flags, 1 / 30, false);
+  const laterFrame = shot(animated, false);
+  for (let i = 0; i < 10; i++) { styles.stepMotion(animated, flags, 1 / 30, false); shot(animated, false); }
+  const still = styles.motionRecord(table, "task:still");
+  styles.stepMotion(still, flags, 1 / 30, true);
+  const stillFirst = shot(still, true);
+  for (let i = 0; i < 90; i++) styles.stepMotion(still, flags, 1 / 30, true);
+  const stillLater = shot(still, true);
+  result.motion = {
+    animatedChannels: differing(firstFrame, laterFrame),
+    stillChannels: differing(stillFirst, stillLater),
+    warmBuilds,
+    steadyBuilds: motionBuilds - warmBuilds,
+  };
   return result;
 }
 
