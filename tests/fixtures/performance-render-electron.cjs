@@ -112,12 +112,19 @@ app.whenReady().then(async () => {
       });
     }
   });
+  // Pair each collected error with the location Chromium reported so a
+  // saturated-run failure names the exact assignment, not only its text.
+  const errorSummary = () => report.errors.map((message, index) => {
+    const detail = report.errorDetails[index];
+    if (!detail || (!detail.sourceId && !Number.isFinite(detail.lineNumber))) return message;
+    return `${message} @ ${detail.sourceId || "?"}:${detail.lineNumber ?? "?"}:${detail.columnNumber ?? "?"}`;
+  });
   contents.on("render-process-gone", (_event, detail) => finish(new Error(`Renderer exited: ${detail.reason}`)));
   const run = (code) => contents.executeJavaScript(`(async()=>{${code}})()`, true);
   const until = async (expression, label) => {
     const deadline = Date.now() + 5000;
     while (Date.now() < deadline) {
-      assert.deepEqual(report.errors, [], `Renderer errors before ${label}: ${JSON.stringify(report.errors)}`);
+      assert.deepEqual(report.errors, [], `Renderer errors before ${label}: ${JSON.stringify(errorSummary())}`);
       if (await run(`return Boolean(${expression});`)) return;
       await sleep(35);
     }
@@ -206,7 +213,7 @@ app.whenReady().then(async () => {
     report.payloadExcluded = true;
     report.exportedCapture = true;
     fs.writeFileSync(path.join(root, "profiler-host.png"), (await capturePage()).toPNG());
-    assert.deepEqual(report.errors, []);
+    assert.deepEqual(report.errors, [], `Renderer errors: ${JSON.stringify(errorSummary())}`);
     assert.deepEqual(report.networkAttempts, []);
     assert.deepEqual(report.processAttempts, []);
     finish();
@@ -308,7 +315,7 @@ app.whenReady().then(async () => {
   assert.ok(resumed.frames.every((frame) => frame.durationMs < 1000), "the 1.1 second hidden gap is excluded from frame timings");
   report.hiddenGapExcluded = true;
   await run("await window.MefiProfiler.stop();");
-  assert.deepEqual(report.errors, []);
+  assert.deepEqual(report.errors, [], `Renderer errors: ${JSON.stringify(errorSummary())}`);
   assert.deepEqual(report.networkAttempts, []);
   assert.deepEqual(report.processAttempts, []);
   finish();
