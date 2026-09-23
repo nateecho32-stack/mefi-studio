@@ -10,7 +10,7 @@ repository root (`main.cjs`, `preload.cjs`, `scripts/`, `renderer/`,
 | --- | --- |
 | `main.cjs` | The Electron main process: windows, tray, IPC handlers, the service loop host, dispatch. One file, by design; sections are marked with banner comments. |
 | `preload.cjs` | The `window.mefiStudio` bridge. Every renderer call to the host goes through here. |
-| `scripts/` | Host-side logic outside the main process: the assistant and agent roles (`assistant.mjs`), the OpenCode store reader (`eyes.mjs`), machine capacity, policy, packaging, the check gates and the booklet build. |
+| `scripts/` | Host-side logic outside the main process: the assistant and agent roles (`assistant.mjs`), the OpenCode store reader and the board store (`eyes.mjs`), machine capacity, policy, packaging, the check gates and the booklet build. |
 | `renderer/` | The UI. `booklet.template.html` plus one classic-script `.js` per surface (`workspace.js`, `idle.js` for Command view, `nav.js` for the destination registry, `tasks.js`, `onboarding.js`, ...) and the stylesheets. `booklet.html` is generated from all of it and committed. |
 | `tests/` | Node suites (`*.test.mjs`) and `tests/fixtures/` (Electron fixtures, fake bridges, replay data). |
 | `tools/` | Python contracts (`test_mefi_studio_*.py`), the Electron verifiers (`verify_*.py`) and profiling helpers. |
@@ -55,7 +55,7 @@ is not reachable by the check chain, so a misplaced file is caught at
 Every application change must pass the three gates:
 
 ```
-npm run check     # syntax + target coverage + spec-collision audit
+npm run check     # targets, spec collisions, CSS merge + unused, syntax, TESTRUNS
 npm test          # node --test tests/**/*.test.mjs  +  python unittest discover
 npm run audit     # scripts/auditor.mjs (renderer/template contracts)
 ```
@@ -73,15 +73,32 @@ timing-sensitive under load. `npm run lint` fetches eslint through `npx` so the
 app keeps zero runtime dependencies; CI runs it too. `.editorconfig` sets
 two-space indentation, LF line endings and UTF-8.
 
-Two named sub-gates run inside `npm run check` and work standalone:
+`npm run check` chains six stages, in this order, and stops at the first one
+that fails. Each also runs on its own:
 
 - `npm run check:targets` (`scripts/check-targets.mjs`) — catches stale
   checks: every node target referenced by a npm script must exist on disk,
   and every `scripts/*.mjs` + `renderer/*.js` source (plus the `main`
-  entry) must be covered by the check chain. Guarded by
-  `tests/check_targets.test.mjs`.
+  entry) must be covered by the check chain; `package.json` and
+  `data/*.json` carry no UTF-8 BOM; and no tracked text file holds a raw
+  control character (C0 other than tab, LF and CR, or DEL) or a bidi control
+  (U+202A-202E, U+2066-2069). Write those as escapes (`\u001b`, `\0`).
+  Guarded by `tests/check_targets.test.mjs`.
 - `npm run check:specs` (`scripts/spec-collisions.mjs`) — duplicate spec
   names and unshimmed contracts; see "Test file conventions" below.
+- `npm run check:css:merge` (`scripts/check-css.mjs --merge`) — after a
+  `renderer/styles.css` merge, the resolution keeps both sides' cascade
+  winners; a no-op when no merge is in progress. See "Editing conventions
+  under parallel sessions" below.
+- `npm run check:css:unused` (`scripts/check-css.mjs --unused`) — every class
+  a renderer stylesheet styles still appears in the renderer's markup,
+  scripts or other stylesheets.
+- `node scripts/check-syntax.mjs` — compiles every `scripts/` and
+  `renderer/` source the way Node would load it, in one process, without
+  running it. It has no npm script of its own.
+- `npm run check:testruns` (`scripts/check-testruns.mjs`) — the structural
+  gate for `TESTRUNS.md`: duplicate row headings, rows out of order in the
+  live region, and OneDrive conflict copies.
 
 Record each test run in `TESTRUNS.md` by appending through
 `node scripts/append-testruns-row.mjs` (row block as a quoted argument,
@@ -112,7 +129,8 @@ The rules below are enforced by `npm run check:specs`
 (`scripts/spec-collisions.mjs`), which runs as part of `npm run check`,
 guarded by synthetic-fixture tests in `tests/spec_collisions.test.mjs`, and
 gated in CI by `.github/workflows/ci.yml` (audit + guard tests +
-full check on every push and pull request).
+full check on every branch push and pull request; a tag push does not run
+it).
 
 ### 1. Spec basenames are unique across `tools/` and `tests/`
 

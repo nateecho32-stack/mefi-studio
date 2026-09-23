@@ -1,18 +1,32 @@
 # Your first project in Mefi's Studio AI+
 
-The in-app walkthrough opens automatically on your first launch and explains
-the five steps below. You can close it whenever you want; it remembers your
-place and stays closed on later launches. Choose **Start here** at the foot of
-the left rail, or open the guide from Help, to continue.
+The in-app walkthrough opens automatically on your first launch. It has seven
+stops: **Scan**, **Your workspace**, **First map**, **Connections**,
+**Create**, **Monitor** and **Review**. The numbered sections below cover the
+five stops you work through by hand. You can close the guide whenever you
+want; it remembers your place and stays closed on later launches. Choose
+**Start here** at the foot of the menu on the left, or open the guide from
+Settings or Shortcuts (`?`), to continue.
 
-Each lesson has a **Walk me…** button. It keeps a small coach in the corner
+The other two stops only read. **Scan** starts by itself on the first launch
+and finds out what this computer already has: the OpenCode command line, the
+providers linked in it, the free models it can reach and the keys saved in
+Studio. It saves nothing until you choose **Use this setup**. **First map**
+runs a read-only explorer over the selected folder and saves its suggested
+first tasks as ideas, never as tasks. Once a setup is saved, selecting a
+folder starts the map; **Map this project** starts it by hand.
+
+Five stops have a **Walk me…** button. It keeps a small coach in the corner
 while it opens the matching menu with you and highlights the exact control: the
-project **+**, the connection groups, the task box, Live work, and Review. Press
-**Done — next stop** and the coach travels to the next menu; the first stop ticks
-itself off as soon as you select a project. **Esc** or **End tour** puts the
-coach away, and the setup trail under the workspace invitation shows what is
-done. Reading the guide never creates or starts work, so nothing runs until you
-do it yourself.
+project **+**, Settings › Providers, the task box, Live work, and Review. Scan
+and First map have no menu to walk to, so they have no Walk button: their
+buttons (**Run the first scan**, **Map this project**) sit on the guide's own
+sheet, and the coach hands you back to it at those stops. Press **Done — next
+stop** and the coach travels to the next menu; the workspace stop ticks itself
+off as soon as you select a project. **Esc** or **End tour** puts the coach
+away, and the setup trail under the workspace invitation shows what is done.
+The guide never creates a task or starts a build, so nothing is built until
+you do it yourself.
 
 ## Every launch: choose the project, then start the agents
 
@@ -52,7 +66,7 @@ sections are required, and nothing starts on its own.
 - **Git** — needed only to clone this repository. **Python 3** is needed only
   for the test contracts (`npm test`).
 - **A builder CLI (optional)** — `opencode` is the preferred coding worker;
-  `grok`, `claude` and `agy` (Antigravity) are detected too. Studio connects
+  `grok`, `claude`, `codex` and `agy` (Antigravity) are detected too. Studio connects
   without one, but no build can start until one is installed and signed in.
 - **`gh` (optional)** — when GitHub CLI is signed in, Studio can reuse its
   token for private release updates instead of saving one.
@@ -70,8 +84,8 @@ sections are required, and nothing starts on its own.
 
 ### Open your first folder
 
-Add a folder in **Projects** with **+** — the **M+** at the top of the left
-rail opens it — or choose **Open a folder**. The first folder you open becomes the active project, and Studio scans
+Add a folder in **Projects** with **+** — the **M+** at the top of the menu
+on the left opens it — or choose **Open a folder**. The first folder you open becomes the active project, and Studio scans
 it locally — no AI request — showing old plans and starting points in
 **Analyzer**. Later folders are added alongside; select one to switch, and
 **Remove project** drops a folder from the list without touching its files
@@ -81,8 +95,9 @@ it locally — no AI request — showing old plans and starting points in
 
 A fresh install runs **auto setup** by itself on its first launch, from the
 keys, CLIs and local servers already on the machine, and Settings says what it
-chose. Open **Settings & connections** to review that choice, press **Run auto
-setup** again after adding a key or CLI, or pick a route yourself. The
+chose. Open **Settings › Auto setup** (`4`, or `Ctrl ,` from anywhere) to
+review that choice, press **Run auto setup** again after adding a key or CLI,
+or pick a route yourself under **Providers**. The
 assistant (conversation) and the builder (coding work) are separate
 capabilities: a saved key alone never proves a build can start.
 
@@ -90,7 +105,7 @@ capabilities: a saved key alone never proves a build can start.
 | --- | --- | --- |
 | z.ai coding plan | **z.ai GLM** | a saved z.ai key |
 | OpenCode Go subscription | **OpenCode Go** | its saved key |
-| Grok, Claude Code or Antigravity login | that CLI | the CLI on PATH, no key |
+| Grok, Claude Code, Codex or Antigravity login | that CLI | the CLI on PATH, no key |
 | A local model server | **LM Studio (local)** | LM Studio running with a loaded model |
 | Another OpenAI-compatible server | **Custom endpoint** | endpoint URL and key |
 
@@ -105,15 +120,16 @@ capabilities: a saved key alone never proves a build can start.
   machines does not work. Headless installs can pass keys with
   `electron . --set-key`, `--set-zai-key`, `--set-gateway-key`,
   `--set-jev-key`, `--set-zen-key`, `--set-openrouter-key` and
-  `--set-custom-key`; the README's Keys section pairs each flag with its
-  `MEFI_STUDIO_*_KEY` variable.
+  `--set-custom-key`; [.env.example](.env.example) pairs each flag with its
+  `MEFI_STUDIO_*_KEY` variable. Unset the variable once the key is stored:
+  while it is set, Studio uses it instead of the saved key.
 - Models are saved per provider and per builder CLI, so switching routes never
   carries one provider's model id into another.
 
 ### Review the defaults
 
 These ship on and are the choices most worth a look on another machine; every
-one stays editable in **Settings & connections** or the workspace.
+one stays editable in **Settings** or the workspace.
 
 - **Auto build** is on by default. Turn it off for **Verify first** when a new
   user should approve each task before it runs.
@@ -122,19 +138,20 @@ one stays editable in **Settings & connections** or the workspace.
 - **Proactive** briefings, **useWeb**, **auto reference** and the machine
   guards (auto-kill strays, 240 idle seconds, 20-minute age, 1.5 GB) are on.
   Relax the guards on a small or busy machine rather than switching them off.
-- **Your name**, the **companion name**, **Studio theme** and the movement
-  preference live under **Make yourself at home** and stay per machine.
+- **Your name**, the **companion name**, the **Studio theme**, **Motion**
+  (Full, Calm or Off), **Blur behind panels** and **Open Workspace on launch**
+  live in **Settings › Your Studio** and stay per machine.
 
 ### Optional integrations
 
-- **Ruins Runner (LÖVE)** — the Studio tab launches the game checkout when one
-  is found. Set `MEFI_STUDIO_GAME_ROOT` when it is not a sibling `2d Trippy
+- **Ruins Runner (LÖVE)** — Settings › Integrations launches the game checkout
+  when one is found. Set `MEFI_STUDIO_GAME_ROOT` when it is not a sibling `2d Trippy
   Hell` folder, and run the game's `tools/build-windows.ps1` once if its LÖVE
   runtime is missing.
 - **A different working repository** — set `MEFI_STUDIO_REPO`; otherwise Studio
   opens with no project until a folder is chosen.
-- **Private release updates** — save a read-only GitHub token in **App
-  updates**, set `MEFI_STUDIO_GITHUB_TOKEN`, or let Studio reuse the `gh`
+- **Private release updates** — save a read-only GitHub token in **Settings ›
+  Updates**, set `MEFI_STUDIO_GITHUB_TOKEN`, or let Studio reuse the `gh`
   token.
 
 ### What not to copy between machines
@@ -151,8 +168,8 @@ still local state — build the new machine's own state with the steps above.
 In **Projects**, choose **+** and select an existing project folder. The first
 folder you open becomes the active project; Studio scans it locally and shows
 what it found in **Analyzer**. Check the name and folder above the conversation.
-Later folders are added to **Projects** (the **M+** at the top of the left
-rail) — select one to switch. Tasks,
+Later folders are added to **Projects** (the **M+** at the top of the menu)
+— select one to switch. Tasks,
 conversations, plans and references belong to that project. For your first run,
 use a small project whose changes you can easily inspect.
 
@@ -163,9 +180,10 @@ preference is saved for all projects and can be changed at any time.
 
 ## 2. Connect your tools
 
-Open **Settings & connections**. A fresh install already ran auto setup once on
-its first launch; configure your assistant connection and coding provider using
-the connection controls there, or choose **Run auto setup** to apply a
+Open **Settings** (`4`, or `Ctrl ,` from anywhere). A fresh install already ran
+auto setup once on its first launch; configure your assistant connection and
+coding provider in the **Connections** group there (**Providers**, **Model
+routing**, **Coding workers**), or choose **Run auto setup** to apply a
 configuration from the keys, CLIs and local servers already on this machine. The setup overview above the controls shows what was detected; auto
 setup explains each choice and never sends a request or changes a saved key.
 You do not need every option: save the model for the provider you actually
@@ -213,9 +231,10 @@ workers, what needs you, what is next, the machine and today's usage; its
 **Pause** button holds all new work until you press **Resume**.
 
 **Your work** gives you All, Queue, Ideas, Review and Done views. **Live** in
-the left rail opens Command view, where **Live work** shows running workers, reported steps and queue
+the menu opens Command view, where **Live work** shows running workers, reported steps and queue
 readiness, and the **Agents** tab holds Autopilot, Parallel builds, Build mode
-and Agent mode with an at-a-glance strip above them. Open a task to inspect its brief, dependencies, attempts and evidence.
+and Agent mode with an at-a-glance strip above them (**Agents & queue ↗** in
+Settings opens it too). Open a task to inspect its brief, dependencies, attempts and evidence.
 
 | What you see | What it means | Next step |
 | --- | --- | --- |
@@ -246,9 +265,11 @@ reported recovery instructions; do not delete task records or ownership files
 to force another run. An unresponsive external operation can still require
 restarting Studio after the external process is stopped.
 
-Use **Settings & connections** for connection errors, **Tasks** for prerequisites
-and retry limits, and **Session explorer** for session details. **Ctrl K** finds
-tools, **H** returns home, **D** opens Command and **Esc** closes the current layer.
+Use **Settings** (**Providers**, and the **Connection log** under System) for
+connection errors, the **Task board** for prerequisites and retry limits, and
+the **Session explorer** for session details. **Ctrl K** (Search Studio) finds
+any page, tool or setting, **Ctrl ,** opens Settings, **H** returns home, **D**
+opens Command and **Esc** closes the current layer.
 
 ## Download and data notes
 

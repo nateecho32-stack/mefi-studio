@@ -8,6 +8,38 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Void Engine Discord perks.** Members of the Void Engine Discord unlock
+  the **Void collection**. It has four themes, **Void**, **Eclipse**,
+  **Abyss** and **Neon Dusk**, each with a second accent hue, its own
+  Command-view sky and a premium finish on primary buttons. It also has three
+  node styles, **Singularity**, **Prism** and **Sigil**. All are in Style &
+  sound, and the themes also in the theme select in Settings › Your Studio;
+  everything that was free stays free.
+  - **Linking.** Settings › Community, which **Community** at the foot of the
+    menu opens, links a Discord account through Discord's own login in the
+    browser. It uses OAuth2 with PKCE, a loopback redirect on 127.0.0.1, and
+    no client secret. Studio then re-reads the membership every seven days;
+    a failed check is retried after an hour, then six hours, then daily, and
+    keeps the perks for 14 days. Leaving the server locks them at the next
+    check.
+  - **The weekly card.** A small card invites non-members to join: not in
+    the first three days, then at most weekly, and monthly after four
+    ignored showings. **Not now** and **Don't show again** are honoured.
+  - **Privacy.** Nothing reaches Discord until you link. The refresh token is
+    encrypted with the OS keystore in its own `community-auth.json`, and
+    **Unlink** revokes the grant and deletes that file.
+  - **Locked items** stay clickable and explain themselves where you are, in
+    a toast or the workspace's inline card, without changing the view; **See
+    the perks** opens Settings › Community.
+  - **Forks.** The lock is honest: `SELF_UNLOCKED = true` in
+    `scripts/community.cjs` unlocks everything without Discord. Every locked
+    group offers **Copy agent prompt**, which asks a coding agent to make that
+    change.
+
+  Linking stays off until the maintainer sets the Discord application id (or
+  `MEFI_STUDIO_DISCORD_CLIENT_ID`). The new files are `scripts/community.cjs`,
+  `scripts/discord-oauth.cjs` and `renderer/community.js`, with five new test
+  suites. See docs/community.md.
 - **Owner controls for the loop guard.** The Explorer panel gains *Memory
   alignment*, *Loop guard* and *Hold looping cards* switches next to
   *Proactive*. A card the loop guard holds shows why and how to fix it in the
@@ -25,6 +57,46 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   the ledger (`verification.ledgerOnly`).
 
 ### Changed
+- **The menus are regrouped so each section means one thing.** The menu down
+  the left edge (the rail) now reads **Home**; **Work**: Task board, Plans,
+  Ideas, Brain maps and Analyzer; **Live**: Command view, Activity, Explorer
+  and Overhead; **Models**: Model catalog and Model Lab; and **Settings**:
+  Settings, Style & sound and Profiler. Its foot holds **Search** (`Ctrl K`),
+  **Start here**, **Shortcuts** (`?`), **Community** and the update badge,
+  and **Keep menu open** pins it. The menu is one tab stop that the arrow keys
+  walk, and `Ctrl ,` opens Settings from anywhere. A pinned menu behaves
+  unpinned in windows under 1100px wide, and the window no longer shrinks
+  below 600×560. The tab pages' header names the page you are on, with a
+  **← Command view** chip when Command sent you there.
+  - **Search Studio.** `Ctrl K` (it was Key commands) files every result
+    under its menu section, and finds each Settings card by name ("Settings ›
+    Providers").
+  - **Settings** gains **Find a setting** and three groups: **Connections**
+    (Auto setup, Providers, Model routing, Coding workers, Jev, and **Agents &
+    queue ↗** to Command's Agents panel), **Personal** (Your Studio,
+    Community, and **Style & sound ↗**) and **System** (Updates, Diagnostics,
+    Integrations, Connection log). Every card has a deep link,
+    `MefiNav.go("studio", { section })`, and the update badge and the update
+    toasts open Settings › Updates.
+  - **Your Studio** gathers your name, the companion's name and a theme quick
+    select (from the project panel's *Make yourself at home*), **Motion**
+    (from the page header, now Full · Calm · Off), whether the companion
+    moves, **Blur behind panels** (from the Task board) and **Open Workspace
+    on launch**. The **M+** project panel now holds projects only.
+  - **Diagnostics** is a new Settings card with the speed probe (moved out of
+    the updates card), **Open profiler**, **Run auditor** and **Machine**.
+  - **Style & sound** opens on **Look** (the colour theme with the Void
+    collection, then the node tree) before **Sound** (the player, the Audio
+    link, Find your next sound), with a **Look · Sound** strip in its header.
+    A locked Void item explains itself in the sheet instead of leaving it.
+- **The Command toolbar is four labelled groups and Leave**, nine controls
+  where there were thirteen: **Agents** (Swarm / Cluster) · **Camera** (Fit,
+  Overview / Follow, Spin) · **View ▾** (Map 2D / 3D, Labels, Zoom) ·
+  **Sound** (Music, Ambience). The two controls both called Orbit are now
+  **Spin**, the only one that turns the tree (`Space` pauses it), and
+  **Overview**, the camera mode that keeps the whole tree framed, with its own
+  icon. **Ambience** reads Look → Sound → Calm, hangs from its own button and
+  links on to Style & sound; its Audio link row moved to Style & sound.
 - **Finished cards keep a compact history.** Once a completed card is past
   the tidy clock, the keeper drops the revisions that changed neither its
   brief nor an attempt's final result, up to 20 cards a pass. Every brief it
@@ -35,15 +107,81 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   pref turns it off.
 - **Hold looping cards off now releases the keeper's holds** (it used to stop
   only new ones); holds you asked for stay until Try again.
+- **The Usage popover covers every provider.** It now has one card per plan,
+  each with a bar and reset time per window: OpenCode Go, z.ai, and new
+  cards for Claude Code, Codex, Grok and Antigravity. The coding CLIs are
+  read through their own logins with no prompt and no credential read:
+  Claude Code's `get_usage`, Codex's app-server rate limits (between reads,
+  its session rollouts), Grok's billing extension and Antigravity's
+  `/usage`. These CLIs start only while the popover or the Model Lab tracker
+  is open, two at a time, and a reading is kept five minutes.
+  - **Balances:** OpenRouter shows the free-model allowance and a signed
+    account balance instead of a lifetime "spent · $0.00 left". Vercel AI
+    Gateway and a local LM Studio server (reachable, which model) are listed
+    too.
+  - **Today:** one row per provider with recorded calls. A failed call reads
+    "1 call · 1 failed", never "? tokens".
+  - **Go estimate:** the local estimate shows only while the live Go read is
+    down.
+  - **The pill** shows the lead plan's first window and its fullest other
+    window, so a spent month is not hidden behind an empty 5-hour window.
+  - **Escape** closes the popover without leaving Command, and opening
+    either Legend or Usage closes the other.
+- OpenCode Zen replies now record their reported `cost`, so Zen calls are
+  priced instead of unpriced (Go's `cost: "0"` is still never read as a
+  price). The account readings no longer wait for, or hold up, a project
+  switch.
 
 ### Fixed
+- **z.ai usage reads again.** z.ai moved coding plans to credits on
+  2026-07-30 (`CREDIT_LIMIT` rows), and the parser only knew the older token
+  windows, so the panel said "The z.ai quota reply has no recognisable
+  window". Credit plans now show credits used of the cap. A team plan or a
+  key with no plan says so instead of failing, and an impossible five-hour
+  reset time is dropped.
+- An idle rolling window no longer prints a reset time that moves on every
+  read.
 - A torn `eyes-assistant.json` is copied aside (`.broken-<time>.json`) before
   the assistant starts over, instead of being overwritten by the empty state
   on the next save.
+- Settings saves no longer undo each other. Every change to `settings.json`
+  (a preference toggle, an autopilot save, a Community stamp, a saved key)
+  waits its turn on one queue and applies to a fresh read, so two changes
+  landing together both stick.
+- A `settings.json` that stops parsing is copied aside
+  (`settings.broken-<time>.json`) and logged instead of silently read as
+  empty. The next save rebuilds it from the last good copy read this session;
+  with none, changes last until restart rather than rewriting every
+  preference and the project list from nothing.
 - The keeper no longer drops a checkpoint written while its pass is in flight.
 - An assistant pref only changes once it is saved; an error raised while
   switching projects still reaches the app log; a failed save at quit is
   logged.
+- Catalog tools' "Where should I use it?" ranking and task fit heatmap weigh
+  request headroom again. An unlimited model entered the speed scale at a raw
+  10^9 and pushed every limited model's speed score to zero; it now sits one
+  step above the roomiest limited model.
+- The Overhead sheet's task poll backs off again while the board is
+  unchanged. Its task boxes were written onto the task data, so every painted
+  frame made the next poll look new.
+
+### Security
+- **`npm run start:web` is loopback-only and serves an allow-list.** The
+  browser fallback now listens on 127.0.0.1 and serves only `renderer/`,
+  `assets/` and the public `data/models.json` catalog. It used to listen on
+  every interface and serve the whole repository, including the local tasks,
+  conversations and logs under `data/`. Pinned by `tests/serve_web.test.mjs`.
+- **`shell:open` opens only http and https links.** It used to hand any URL
+  the renderer passed straight to the OS shell, including `file:` and custom
+  schemes. Community links do not use it: the renderer names a target and
+  main opens a hard-coded Discord URL.
+- **The Studio window never leaves its own page.** A link that asks for a new
+  window opens in the default browser, and only if it is http or https;
+  nothing opens as a child window of the app. Anything that would navigate
+  the window itself away from the bundled page (a dropped link, a stray
+  `href`, a script) is refused, while the page's own reloads still work.
+  `setWindowOpenHandler` and a `will-navigate` guard in `main.cjs`; pinned by
+  `tests/main_window_guards.test.mjs`.
 
 ## [0.3.0] - 2026-09-22
 

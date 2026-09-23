@@ -59,6 +59,7 @@ the weight is, not to be exact.
 | `provider-breaker.cjs` | 194 | A circuit breaker per provider for the host's own model calls, adapted from BetterC0de. `httpAssistantCall` and `assistantFetch` gate every call on it. |
 | `redaction.cjs` | 92 | `scrubOutbound`, the gate every outbound payload passes through, and `safeExcerpt`. |
 | `credentials.cjs` | 93 | Which environment variables may back each saved key: Studio's own `MEFI_STUDIO_*` names and the names other tools share. |
+| `auth-store.cjs` | 93 | Keeps the key ciphertext in `auth.json`, apart from the `settings.json` preferences: splits a settings view into the two, merges them back into one view for callers, and writes the auth file atomically. |
 | `decision-client.mjs` | 631 | The Jev classifier client over its four routes. |
 | `model-routing.mjs` | 165 | Jev chooses among the supported model routes, from the catalog and the local ledger. |
 | `work-classification.mjs` | 241 | Builds the narrow questions Jev answers, and interprets the answers conservatively. |
@@ -78,7 +79,7 @@ the weight is, not to be exact.
 | `projects.cjs` | 254 | Project identity and storage boundaries. |
 | `path-scope.cjs` · `paths.cjs` | 21 · 31 | Folder containment for scoping sessions; the source, workspace and game kept apart. |
 | `machine.mjs` | 486 | Machine coordination: CPU and memory, test leases, the LÖVE process table. |
-| `eyes.mjs` | 2,519 | The A-Eyes data layer: read-only reads of the live OpenCode session store. |
+| `eyes.mjs` | 2,519 | The A-Eyes data layer, with two jobs: read-only reads of the live OpenCode session store, and the studio's own board store, which it writes (`readJson`/`writeJson` for the `data/*.json` stores, and the optional read-write SQLite board authority with its schema migration). |
 | `eyes-worker.mjs` · `eyes-client.cjs` | 49 · 207 | Host `eyes.mjs` on a worker thread, so its synchronous SQLite reads never block the main process. |
 | `project-work.cjs` | 371 | Work that already exists in an open folder, read from the engineering-skills conventions. |
 
@@ -107,6 +108,17 @@ worker's claim).
 | `performance-profiler.cjs` | 251 | Opt-in, in-memory host diagnostics. |
 | `music-recommendations.cjs` | 58 | Validates a mood request and parses a model's music suggestions. |
 
+### The community link
+
+The Void Engine Discord login behind the members' Void collection. The host
+side is the "Discord community link" block and the `// ---- Community ----`
+handlers in `main.cjs`. See [community.md](community.md).
+
+| File | Lines | Purpose |
+| --- | ---: | --- |
+| `community.cjs` | 437 | Pure rules: the Void Engine ids, the fork switch `SELF_UNLOCKED`, the weekly card's cadence, when a linked account is re-checked, what a check result means, entitlement with its 14-day offline grace, the Discord link allow-list, PKCE and the public status. No Electron, filesystem or network, and time is injectable. `module_purity.test.mjs` holds it to that; `community_rules.test.mjs` pins the rules. |
+| `discord-oauth.cjs` | 408 | The network half: the OAuth2 PKCE login through a one-shot `127.0.0.1` loopback redirect, the secret-less token exchange, refresh, the membership read and revoke. Every POST the feature makes lives here, and everything it reaches for is injectable. `discord_oauth.test.mjs` runs a real loopback against a fake Discord. |
+
 ### Build, checks and release (CLIs)
 
 `build-booklet.mjs` inlines the renderer into `renderer/booklet.html`.
@@ -116,9 +128,10 @@ worker's claim).
 write-side companion to the `check-testruns.mjs` gate: it lands a new row at
 the true top of the live region (the dated rows above the `## Read Before Any
 Tests` anchor — the archive below that anchor is frozen), under a
-cross-process lock with a re-verified atomic write. `salvage-smoke.mjs` smokes
-`salvageJson` from the real `main.cjs` text. `serve.mjs` serves
-`npm run start:web`.
+cross-process lock with a re-verified atomic write. `rotate-testruns.mjs` is
+the third piece: past 20 live rows it moves the oldest, whole and verbatim,
+into `docs/archive/testruns-YYYY-MM.md`, and the append helper runs it after
+every append. `serve.mjs` serves `npm run start:web`.
 `package-portable.mjs`, `package-release.mjs` and `make-icon.mjs` build
 releases, while `updater.mjs` (live source updates) and `release-updater.mjs`
 (GitHub releases) keep installed copies current.
@@ -133,18 +146,32 @@ imports.
 | File | Lines | Purpose |
 | --- | ---: | --- |
 | `idle.js` | 10,560 | The Command view: the 3D node constellation that is also the menu. Its costs are in [performance.md](performance.md). |
+| `brains.js` | 3,777 | The brain-map editor over the data `scripts/brains.cjs` validates. |
 | `nav.js` | 2,133 | The navigation registry: one list of destinations behind the rail, the palette, the help sheet and the shortcuts. |
 | `tree3d.js` | 2,151 | The 3D task-tree rail. |
 | `tasks.js` | 1,571 | The task board, per-task logs and ideas, and the reference menu. |
 | `explorer.js` | 1,430 | The A-Eyes session explorer overlay. |
 | `booklet.js` | 1,318 | The model catalog, filters, the studio launcher and the boot sequence. |
-| `brains.js` | 1,309 | The brain-map editor over the data `scripts/brains.cjs` validates. |
-| `music.js` | 958 | Studio's local-file player and its ad-free radio decks. |
+| `music.js` | 1,291 | Style & sound: Studio's colour themes, node styles and layouts, the members' Void collection (its own premium store, gated by `MefiCommunity`), the local-file player and the ad-free radio decks. |
 | `workspace.js` | 865 | The home screen: project context, the conversation and durable results. |
 | `planning.js` | 764 | The plan interview and reviewed task handoffs. |
 | `onboarding.js` | 692 | The resumable *Start here* walkthrough. |
-| `analyzer.js` · `tracker.js` · `eyes.js` · `palette.js` · `graph.js` · `ideas.js` · `overhead.js` | 532 · 512 · 493 · 456 · 441 · 425 · 333 | Analyzer, usage tracker, change feed, `Ctrl K`, Graph tab, Ideas and Overhead. |
+| `community.js` | 726 | `window.MefiCommunity`: the perk gate the Style pickers ask (`has`, with a boot hint so a member's theme does not flash), the quiet weekly "join the Discord" card, Settings › Community, the in-place explanation of a locked item, and the action that Search lists and `nav.js`'s `RAIL_SLOTS` puts at the menu foot as Community. It sees only the public status from main, never a token. Bundled after `music.js` and before `booklet.js`. |
+| `analyzer.js` · `tracker.js` · `eyes.js` · `palette.js` · `graph.js` · `ideas.js` · `overhead.js` | 532 · 512 · 493 · 456 · 441 · 425 · 333 | Analyzer, usage tracker (the Command Usage popover and the Model Lab Tracker tab; its host readers live in `main.cjs` from `const ACCOUNT_READ_TIMEOUT_MS` to `usageAccounts`, its parsers in `scripts/usage-tracker.cjs`), change feed, `Ctrl K`, Graph tab, Ideas and Overhead. |
 | `boot.js` · `model-lab.js` · `profiler.js` · `task-groups.js` · `startup.js` · `performance-core.js` · `sidebar.js` · `stage-labels.js` | 264 · 253 · 184 · 182 · 130 · 108 · 98 · 36 | Startup readiness, Model Lab, the live profiler, read-only task grouping, the launch screen, bounded measurements, the project menu, and one vocabulary for task badges. |
+
+Five stylesheets are inlined, in this order, so a later one wins a tie with
+an earlier one:
+
+| File | Lines | Purpose |
+| --- | ---: | --- |
+| `styles.css` | 3,980 | The Club Blackout theme: its tokens and most surfaces. Its section order is load-bearing, as its header explains. |
+| `music.css` | 218 | The music room, plus the theme tokens that also colour Command and the boards. |
+| `planning.css` · `brains.css` · `profiler.css` | 151 · 426 · 40 | The Plans sheet, the brain-map editor and the profiler overlay. |
+
+`npm run check` runs `check-css.mjs --unused` over all five, and `--merge`
+over `styles.css` while a merge is in progress (see
+[CONTRIBUTING.md](../CONTRIBUTING.md)).
 
 ## `data/` — local state, never published
 
@@ -163,7 +190,7 @@ commit rewrites the JSON view as well.
 
 ## Tests and tools
 
-- **`tests/*.test.mjs`** (177 files) run on Node's own `node:test` and
+- **`tests/*.test.mjs`** (about 210 files) run on Node's own `node:test` and
   `node:assert/strict`, with no test dependencies. `scripts/run-node-tests.mjs`
   is the runner; `npm run test:fast` skips the real-Electron suites and the
   Python stage.
@@ -178,6 +205,17 @@ commit rewrites the JSON view as well.
   `module_purity.test.mjs` (a module that promises in its header to touch no
   filesystem, network or clock is held to it), `spec_collisions.test.mjs` and
   `check_targets.test.mjs`.
+- **The menus and the window** are pinned by `app_rail.test.mjs` (the menu's
+  sections and foot, `RAIL_SLOTS`, its arrow keys, the 1100px pin and
+  `Ctrl ,`), `settings_nav.test.mjs` (Settings' Find field, groups, jumps,
+  deep links and Search entries), `command_toolbar.test.mjs` (the Command
+  toolbar's groups, View ▾ and Ambience) and `main_window_guards.test.mjs`
+  (the 600×560 minimum and the window's navigation guards).
+- **The community link** has five: `community_rules`, `discord_oauth`,
+  `community_host`, `community_bridge` and `community_ui` (each `.test.mjs`)
+  cover the rules, a real loopback login against a fake Discord, the
+  `main.cjs` block in a `vm` slice, the preload pairs, and the renderer's
+  card, gates and Settings › Community.
 - **`tools/test_mefi_studio_*.py`** (22 files) are contract tests that pin
   source text and function bodies in `main.cjs` and the renderer; `npm test`
   runs them after the Node suites.
@@ -199,5 +237,11 @@ commit rewrites the JSON view as well.
   `scripts/platform.cjs` and `scripts/windows-command-line.cjs`.
 - **a control in the UI:** its destination in `renderer/nav.js`, then the
   owning `renderer/*.js` and `booklet.template.html`; rebuild the booklet.
+- **the Discord link or a Void collection lock misbehaves:**
+  `scripts/community.cjs` (the rules) and `scripts/discord-oauth.cjs` (the
+  network). Then the "Discord community link" block in `main.cjs`, and
+  `renderer/community.js`. Last, the premium branches of `applyTheme` and
+  `applyNodeStyle` in `renderer/music.js`. [community.md](community.md) walks
+  the flow.
 - **something only the running app shows:** the recipes in
   [performance.md](performance.md) and `tools/profile_studio.mjs`.

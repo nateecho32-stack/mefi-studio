@@ -5,7 +5,9 @@ Studio can link your Discord account to the **Void Engine** server
 four extra themes and three node styles. Linking is optional, and nothing
 contacts Discord until you choose **Link my Discord**. The lock is honest: a
 fork can switch it off with one documented constant (see
-[Unlocking it yourself](#unlocking-it-yourself)).
+[Unlocking it yourself](#unlocking-it-yourself)). The link and its status
+live in **Settings › Community**, which **Community** at the foot of the menu
+opens.
 
 This page follows the feature end to end: the weekly card, the login, the
 weekly re-check, what is stored and where, the setup a maintainer does once,
@@ -39,16 +41,21 @@ colors** and the five original node styles. The Void collection adds:
   their geometry once and cache their gradients per canvas, like the existing
   orb paints, so the Command frame budget does not grow.
 - The pickers in **Style & sound** show the collection as its own "Void
-  collection" group under the free choices. The workspace's **Studio theme**
-  select has a "Void collection · Discord members" group.
+  collection" group under the free choices. The **Studio theme** quick select
+  in Settings › Your Studio has a "Void collection · Discord members" group,
+  whose options read "Void · members" and so on while they are locked.
 
 ### Locked, unlocked, and losing access
 
 - **Locked items** stay focusable. They carry `aria-disabled="true"` (never
   `disabled`) and a **Members** badge. Clicking one changes nothing: the
-  current theme or style is announced again, so the workspace select rolls
-  back. Then **Settings › Community** opens with a note such as "Void is a Void
-  collection theme."
+  current theme or style is announced again, so the Your Studio theme select
+  rolls back. The lock is then explained in place, and the view does not
+  change. On the workspace the inline card shows a note such as "Void is part
+  of the Void collection. Link your Discord membership to use it, or build it
+  yourself (see below)." Anywhere else, Style & sound and Settings included, a
+  12-second toast says so, and its **See the perks** opens **Settings ›
+  Community** with that note and the item marked in the collection strip.
 - Every locked group shows the same fine print:
 
   > Members of the Void Engine Discord unlock these. Studio is MIT-licensed:
@@ -114,7 +121,7 @@ What each button does:
 | Button | Effect |
 | --- | --- |
 | **Join the Discord** | Opens the invite in your browser, resets the showing count and holds the card for a day, long enough to join and come back to link. |
-| **I'm a member – link my account** | Starts the login. Hidden when linking is not configured, or when an account is already linked and does not need linking again. |
+| **Link my Discord** | Starts the login. Hidden when linking is not configured, or when an account is already linked and does not need linking again. |
 | **Not now** (or Esc) | Snoozes the card for a week. |
 | **Don't show again** | Stops the card. Settings › Community keeps Join and Link available. |
 
@@ -125,7 +132,8 @@ these:
 - the desktop bridge is present
 - the boot layer is gone
 - no sheet or dialog is open (`MefiNav.state.transient`)
-- the *Start here* walkthrough is neither new nor being read
+- the *Start here* walkthrough is neither new nor being read, and its own
+  invitation is not on screen
 - no key was pressed in the last 45 seconds
 - the window is visible
 
@@ -211,7 +219,7 @@ last window or applies a release update.
 | --- | --- | --- |
 | Member | `ok` | Roles refreshed. `lastOkAt` and `checkedAt` set to now, next check in 7 days. |
 | Not in the server | `not-member` | Perks locked **at once**, roles cleared, next check in 7 days. |
-| Grant refused (`401`/`403`, `invalid_grant`) | `relink` | Settings offers **Link again**. Perks last until the grace period ends. |
+| Grant refused (`401`/`403`, `invalid_grant`) | `relink` | Settings says Discord needs you to link again and offers **Link my Discord**. Perks last until the grace period ends. |
 | Network error, `5xx`, rate limit | `offline` | Retries after 1 hour, then 6 hours, then daily. A longer `Retry-After` wins, up to 7 days. Perks last until the grace period ends. |
 
 ### 4. Entitlement
@@ -320,16 +328,21 @@ The status is:
 
 In the renderer, `window.MefiCommunity` offers:
 - `has(perk)`, `status()`, `refresh()`
-- `offer({ kind, key, name, navigate })`, `open({ note })`. With
-  `navigate: false` (the Workspace theme select, which fires on every arrow
-  key) a locked item is explained in place, in the inline card or a toast,
-  and the view never changes.
+- `offer({ kind, key, name, navigate })`, `open({ note, lead, key })`. Every
+  locked picker passes `navigate: false`: the Void tiles in Style & sound,
+  which would otherwise close their sheet, and the Your Studio theme select,
+  which fires on every arrow key. The item is then explained in place, in the
+  inline card or a toast, and the view never changes. Without it, `offer()`
+  opens Settings › Community.
 - `join()`, `link()`, `cancelLink()`, `check()`, `unlink()`
 - `copyAgentPrompt()`
 - the `FORK_COPY` and `AGENT_PROMPT` strings
 
-It also registers a `Ctrl K` action, "Void Engine Discord & perks". The
-workspace's **Community** button and the Settings nav item open the same card.
+It also registers the "Void Engine Discord & perks" action, which Search
+Studio (`Ctrl K`) files under Community. `RAIL_SLOTS` in `renderer/nav.js`
+gives it a place at the foot of the menu, so **Community** there opens
+Settings › Community too. So do the Community row in Settings' own list and,
+on the classic shell, the project panel's **Community** button.
 
 ## Maintainer setup (Phase 0)
 
@@ -429,6 +442,7 @@ inducing server joins.
 | `scripts/discord-oauth.cjs` | The network half: loopback login, token exchange, refresh, member read and revoke. |
 | `main.cjs` | The "Discord community link" block (state, storage, watcher, link/check/unlink), the `// ---- Community ----` IPC handlers, and the `community:` project-gate bypass. |
 | `preload.cjs` | The eight `community*` bridge methods. |
-| `renderer/community.js` | `window.MefiCommunity`: the perk gate, the weekly card, Settings › Community, and the palette action. |
+| `renderer/community.js` | `window.MefiCommunity`: the perk gate, the weekly card, Settings › Community, and the action that Search lists and the menu foot shows as **Community**. |
+| `renderer/nav.js` | `RAIL_SLOTS`, which places that late-registered action at the menu foot. |
 | `renderer/music.js`, `music.css`, `idle.js`, `tree3d.js` | The Void collection itself: catalog, pickers, the premium tier CSS and the node painters. |
 | `tests/community_rules.test.mjs`, `discord_oauth.test.mjs`, `community_host.test.mjs`, `community_bridge.test.mjs`, `community_ui.test.mjs` | Rules; real loopback login against a fake Discord; the main block in a `vm` slice; the preload pairs; the renderer card and gates. |

@@ -2,7 +2,7 @@
 
 Read-only audit of the renderer, the settings layer and the day-to-day agent
 workflow at `316c492` plus the uncommitted eyes-worker work. The browser-only
-build (`npm run serve`) was rendered at 1440×900 and every surface was walked;
+build (`npm run start:web`) was rendered at 1440×900 and every surface was walked;
 three parallel code audits (navigation, settings, workflow) produced the
 citations below, and the load-bearing claims were re-checked by hand. Counts
 marked "live DOM" were read from the running page. Nothing in the repository

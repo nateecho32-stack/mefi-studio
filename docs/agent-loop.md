@@ -1,88 +1,102 @@
 # How the agent loop works
 
 A grounded walkthrough of Mefi's Studio AI+'s autonomous agent loop, from a
-chat message to a verified task. Every file:line citation below was re-derived
-from the code it points at on 2026-09-22, after the loop cleanup; they drift
-whenever those files change, so treat a citation that no longer lands on what
-the sentence describes as stale, not as the code being wrong. Companion reading:
+chat message to a verified task. Code is cited by name: the function,
+closure, constant or marker comment that holds it, so grep for it. This page
+carried file:line citations until 2026-09-22, but `main.cjs` moves by hundreds
+of lines a day and they were 250-650 lines off within a day of being
+re-derived. Several names are closures, not top-level functions: `finish`,
+`settle`, `wire`, `attach`, `cancelClaim`, `spawnAttempt` and
+`fallbackToOpencode` live inside `spawnNextJob`, and `overseerRunFor`,
+`overseerRunPending` and `refreshLease` inside `autopilotHousekeeping`. Grep
+`const finish = async`, not `function finish`. Companion reading:
 [`agent-loop-verification.md`](agent-loop-verification.md)
 (what has been verified about planning/integration) and the [README](../README.md).
 
 ## 1. Intake: chat becomes a board task
 
 The assistant thread, the Command composer and the board box all land in
-`assistantCreateTask` (main.cjs:8309). It writes a task with
-`status: "open"`, `source: "chat"`, a log line `task created by the assistant`
-(main.cjs:8326) and dedupes on a compact title key so a retried send cannot
+`assistantCreateTask` in `main.cjs`. It writes a task with
+`status: "open"`, `source: "chat"` and a log line `task created by the
+assistant`, and dedupes on a compact title key so a retried send cannot
 double the work. Tasks live in the project's `data/eyes-tasks.json`; requests
 (a lighter inbox) live in `data/eyes-requests.json`.
 
 ## 2. The tick: autopilotPass
 
-The loop's heartbeat is `autopilotPass` (main.cjs:11594), scheduled by
-`setAutopilot` every `autopilot.minutes` (default 5) via `setInterval`
-(main.cjs:11702). One tick, in order:
+The loop's heartbeat is `autopilotPass`, scheduled by `setAutopilot` every
+`autopilot.minutes` (default 5) via `setInterval`. One tick, in order:
 
 1. A brief, only when the roster's key gate sees no key (keyless CLI route,
-   custom key; main.cjs:11612) and the backlog is not draining:
-   `autopilotProactivePass` (main.cjs:8141) briefs at most once per 5 minutes
-   and logs only news. With a key the briefer briefs on its own cadence; the
-   watcher and auditor file collision, duplicate and audit requests keylessly
-   either way (scripts/assistant.mjs:90-106). The proactive switch
-   (renderer/explorer.js:1382) turns this timer on and off (main.cjs:13357)
-   and gates the AI roles; the foreman dispatches regardless.
+   custom key; the `expand` flag in `autopilotPass`) and the backlog is not
+   draining: `autopilotProactivePass` briefs at most once per 4.5 minutes
+   (0.9 of the default tick) and logs only news. With a key the briefer
+   briefs on its own cadence; the watcher and auditor file collision,
+   duplicate and audit requests keylessly either way (`ai: false` in
+   `AGENT_ROLES`, scripts/assistant.mjs; `assistantWatcherJob` and
+   `assistantAuditorJob` in main.cjs). The proactive switch
+   (`#proactive-mode`, wired in `init()` in renderer/explorer.js) turns this
+   timer on and off through the `assistant:prefs` handler and gates the AI
+   roles; the foreman dispatches regardless.
 2. Every 6th/12th tick: `grow`/`improve` expansion, on the same keyless path
-   only (main.cjs:11615-11622); with a key the grower and improver own it.
-3. `classifyPendingWork` shapes pending work and the queue depth is refreshed
-   (main.cjs:11625-11626). A history/feed row is written only when the pass
-   queued something (main.cjs:11628).
-4. `assistantAskForWork` (main.cjs:11631 → 4832) wakes the **foreman**, whose
-   pass (main.cjs:4706-4724) settles (`autopilotHousekeeping`, §6), promotes
-   requests, admits backlog ideas while draining and fills free worker slots;
-   the tick no longer runs those steps a second time. Dispatch also happens
-   when a job ends (main.cjs:10272) or the pool is widened
-   (main.cjs:11708-11710).
+   only, and not while `growthBoardFacts(eyes).growthHeld` holds growth back;
+   with a key the grower and improver own it.
+3. `classifyPendingWork` shapes pending work and `refreshAutopilotQueue`
+   refreshes the queue depth. A history/feed row
+   (`pushAutopilotHistory("pass", …)`) is written only when the pass queued
+   something.
+4. `assistantAskForWork("auto builder pass")` wakes the **foreman**, whose
+   pass (`assistantForemanJob`) settles (`autopilotHousekeeping`, §6),
+   promotes requests, admits backlog ideas while draining and fills free
+   worker slots; the tick no longer runs those steps a second time. Dispatch
+   also happens when a job ends (`assistantAskForWork("a slot came free")` in
+   `finish`) or the pool is widened (`"the pool was widened"`, in
+   `setAutopilot`).
 
 ## 3. Selection and claim: spawnNextJob
 
-`spawnNextJob` (main.cjs:8924) is the dispatcher; `executeNextRequest`
-(main.cjs:8503) calls it once per free slot:
+`spawnNextJob` is the dispatcher; `executeNextRequest` calls it once per
+free slot:
 
 - Candidates are `open` tasks not live anywhere, sorted oldest-first, filtered
   by backlog readiness (`backlog.workState`), failure backoff (`nextRunAt`,
-  max 5 `runFailures`) and title-key collisions with live work
-  (main.cjs:9114-9117). Requests and tasks are then ranked together, not
-  inbox-first: `executorResume.compare` puts resumable work ahead, then
-  `compareWork` orders by pin and age (main.cjs:9123-9126). The queue used to
-  shadow the whole board, so a chat task waited behind every filed request.
+  max 5 `runFailures`) and title-key collisions with live work (the `open`
+  and `runnable` lists in `spawnNextJob`). Requests and tasks are then ranked
+  together, not inbox-first (`ranked`): `executorResume.compare` puts
+  resumable work ahead, then `compareWork` orders by pin, then the operator's
+  worth band (chat work first; scripts/policy.mjs), then age. The queue used
+  to shadow the whole board, so a chat task waited behind every filed request.
 - Each candidate passes a collaboration gate (`assistantModule.claimWork`,
-  main.cjs:9153): a file claimed by a sibling job, a finished-but-
+  then `shouldHoldWork`): a file claimed by a sibling job, a finished-but-
   uncommitted session, or a live editor defers the pick. The "skip" line for
-  a held pick, like the "executor route failed" line (main.cjs:9045), is
-  latched: logged once per distinct reason, not on every wake (main.cjs:9193).
-- The pick is recorded as a Policy Lab `decision` (main.cjs:9229); an
-  all-deferred pass that repeats with the same held set is recorded once, and
-  the recommended order is `observation.actions` itself, with no duplicate
-  `recommended` array (main.cjs:9226). A selected pick's decision is held
-  and written just before its `attempt-start`, with its pick-time `at`, so a
-  claim released before launch leaves no decision the lab would never read.
-- A run entry is built with id `run_<startedAt>_<seq>` (main.cjs:9269)
+  a held pick (`autopilot.lastSkipLog`), like the "executor route failed"
+  line (`autopilot.routeFaultLogged`), is latched: logged once per distinct
+  reason, not on every wake.
+- The pick is recorded as a Policy Lab `decision` (the marker "Policy Lab
+  PR1 — the decision record" in `spawnNextJob`); an all-deferred pass that
+  repeats with the same held set is recorded once
+  (`autopilot.lastDeferredDecisionKey`), and the recommended order is
+  `observation.actions` itself, with no duplicate `recommended` array. A
+  selected pick's decision is held (`pendingPolicyDecision`) and written just
+  before its `attempt-start`, with its pick-time `at`, so a claim released
+  before launch leaves no decision the lab would never read.
+- A run entry (`const entry`) is built with id `run_<startedAt>_<seq>`
   carrying `outputTail`, `sawDone`, `handoffs`, `calls`, `depth`, etc.
-- The claim is ONE transactional `mutateBoard` (main.cjs:9381-9412): the task
-  is re-read fresh, checked still `open`, then stamped `status: "active"`,
-  `runId` and `lease = { pid, at }` (main.cjs:9407), with no log line. Since
-  `status` and `runId` left the brief-context `FIELDS`
-  (scripts/task-context.cjs:13, which gained `absorbedInto`), neither a claim
-  nor its release adds a `contextHistory` revision; a revision hashed under
-  the old list is compared through the new one (scripts/task-context.cjs:49).
-  A lost race returns `"lost"`.
-- File-level write locks (`claimWrite`, main.cjs:9361) keep a second
-  dispatch off the same paths; a machine-lease and capacity recheck can still
-  cancel the claim before any child exists (main.cjs:9461-9468). Every release
-  names its gate (`cancelClaim(reason)`, main.cjs:9315): an executor-log
-  `{ event: "release", reason, heldMs }` row (main.cjs:9331), and the
-  advisory roster the claim left on the Command view is cleared
-  (main.cjs:9335).
+- The claim is ONE transactional `mutateBoard` (the comment "The claim is one
+  transactional mutation" in `spawnNextJob`): the task is re-read fresh,
+  checked still `open`, then stamped `status: "active"`, `runId` and
+  `lease = { pid, at }`, with no log line. Since `status` and `runId` left
+  the brief-context `FIELDS` (scripts/task-context.cjs, which gained
+  `absorbedInto`), neither a claim nor its release adds a `contextHistory`
+  revision; a revision hashed under the old list is compared through the new
+  one (`legacyMatch`, same file). A lost race returns `"lost"`.
+- File-level write locks (`claimRegistry.claimWrite`) keep a second
+  dispatch off the same paths; a machine-lease and capacity recheck (the
+  comment "Race recheck of the machine lease") can still cancel the claim
+  before any child exists. Every release names its gate
+  (`cancelClaim(reason)`): an executor-log
+  `{ event: "release", reason, heldMs }` row, and the advisory roster the
+  claim left on the Command view is cleared (`autopilot.clusterAgents = []`).
 - The release rows answered why claims were dropped: on 2026-09-22, 31 of
   113 claims were released, every one at a capacity gate (responsiveness
   16, memory 13, update hold 2), 15-25 s into the planner/reviewer advisory.
@@ -96,35 +110,38 @@ The loop's heartbeat is `autopilotPass` (main.cjs:11594), scheduled by
 
 ## 4. The worker: a headless CLI agent
 
-The prompt is assembled piecewise against `EXECUTOR_PROMPT_MAX` (24000,
-main.cjs:3237): title, resume checkpoint, the task brief, prior-failure note,
-compiled memory primer, collaboration advice, then the fixed tail — run
-identity, handoff protocol (`MEFI_NEXT:`, `MEFI_CALL:`, capped at 3 each,
-main.cjs:3233-3234), the ~15-minute budget warning, `MEFI_RESULT:` (asked for
-as one line under 300 characters) and the verdict sentinel `MEFI_JOB_DONE`
-(main.cjs:9578). For tasks, the brief tells the worker to re-read its full
-record in `data/eyes-tasks.json` via `taskContext.buildTaskHandoff`
-(main.cjs:9701) — exactly the handoff this walkthrough was dispatched with.
+The prompt is assembled piecewise against `EXECUTOR_PROMPT_MAX` (24000):
+title, resume checkpoint, the task brief, prior-failure note, compiled memory
+primer, collaboration advice and smaller hints such as the hot and cold
+paths, then the fixed tail (`const tail` in `spawnNextJob`) — run identity,
+handoff protocol (`MEFI_NEXT:`, at most `EXECUTOR_MAX_HANDOFFS` = 3 per run;
+`MEFI_CALL:`, which wakes a role from `EXECUTOR_CALLABLE` at most once per
+role), the owner-question line (`agentIssues.issuePromptLine`), the ~15-minute
+budget warning (`EXECUTOR_BUDGET_MINUTES`), `MEFI_RESULT:` (asked for as one
+line under 300 characters) and the verdict sentinel `MEFI_JOB_DONE`
+(`EXECUTOR_DONE_MARK`). For tasks, the brief tells the worker to re-read its
+full record in `data/eyes-tasks.json` via `taskContext.buildTaskHandoff` —
+exactly the handoff this walkthrough was dispatched with.
 
-The run is a child process (main.cjs:10459): `cmd.exe /c opencode run
+The run is a child process (`spawnAttempt`): `cmd.exe /c opencode run
 --auto` with the prompt on **stdin** (never the command line), tools
 auto-approved because nobody is at the keyboard. `grok`, `claude`, `codex` and
-`antigravity` are alternative routes with the same contract (main.cjs:10295) —
-except `grok`, which takes the prompt as a positional argument rather than on
-stdin, so a run's brief is visible in that process's command line.
-A one-shot fallback to opencode covers a CLI that exits non-zero without ever
-writing to stdout (main.cjs:10504); output on stderr alone — a deprecation
-notice, say — does not count as the CLI having reported on the work.
+`antigravity` are alternative routes with the same contract (`isCliRun` and
+the CLI branches of `spawnAttempt`) — except `grok`, which takes the prompt as
+a positional argument rather than on stdin, so a run's brief is visible in
+that process's command line. A one-shot fallback to opencode
+(`fallbackToOpencode`, from `attach`) covers a CLI that exits non-zero without
+ever writing to stdout; output on stderr alone — a deprecation notice, say —
+does not count as the CLI having reported on the work.
 
-Output is line-buffered by `wire()` (main.cjs:10301): every line marks
-`spoke` (and, on stdout, `spokeOut`), the strict line-match
-`isDoneMarkerLine` sets `sawDone` (main.cjs:10323;
-scripts/assistant.mjs:3514 — quoting the sentinel in prose never counts),
-`MEFI_RESULT:` is parsed into `resultNote` — a line over 300 characters is
-clipped, not dropped, since dropping it cost the card its result, its named
-checks and its overseer run (scripts/assistant.mjs:3530) — and
-`MEFI_NEXT:`/`MEFI_CALL:` lines become handoffs and role wake-ups
-(main.cjs:10329-10339). A run already at
+Output is line-buffered by `wire()`: every line marks `spoke` (and, on
+stdout, `spokeOut`), the strict line-match `isDoneMarkerLine`
+(scripts/assistant.mjs) sets `sawDone` — quoting the sentinel in prose never
+counts — `MEFI_RESULT:` is parsed into `resultNote` by `parseExecutorResult`
+(same file) — a line over 300 characters is clipped, not dropped, since
+dropping it cost the card its result, its named checks and its overseer run —
+and `MEFI_NEXT:`/`MEFI_CALL:` lines become handoffs and role wake-ups
+(`parseExecutorHandoff`). A run already at
 `EXECUTOR_MAX_DEPTH` is told not to hand off, and a `MEFI_NEXT:` it prints
 anyway is declined, not accepted: no child can be admitted past the limit,
 so accepting it made the line a `remaining` obligation nothing could
@@ -136,19 +153,21 @@ anchored to the start of the line and read through the same colour strip, so
 a run can neither talk itself into being done nor talk the board into new
 work by quoting the protocol, and a CLI that wraps its last line in colour
 still has its verdict counted. The last 8/40 non-empty lines, colour codes
-stripped, feed `outputTail`/`outputLog` (main.cjs:10351-10356), so a bare
-colour reset can no longer become the run's recorded last line; the live
+stripped, feed `outputTail`/`outputLog` (the comment "The kept tails must
+never…" in `wire`), so a bare colour reset can no longer become the run's
+recorded last line; the live
 studio-log echo is stripped the same way and skips colour-only lines. The
 overseer's "builder finished" note quotes the worker's own `done:` summary,
 never the sentinel or the raw `MEFI_RESULT:` line (`assistantHearBuilder`).
 Progress checkpoints (todos, fraction) are polled from the session every 10s
-(`EXECUTOR_PROGRESS_POLL_MS`, main.cjs:3269) into `runProgress` — the object
-this task's own JSON shows. A save is a board write and a broadcast, so it is
-paced by what changed (`queueExecutorCheckpoint`, main.cjs:8404): a session
-binding, a todo or fraction change, the sentinel or the result line is saved
-within 1 s; a plain output line within 30 s (main.cjs:10360). Two watchdogs
-back the budget: a wedged-start kill (main.cjs:10591) and the hard 25-minute
-kill (main.cjs:10564).
+(`EXECUTOR_PROGRESS_POLL_MS`, by `watchJobProgress`) into `runProgress` — the
+object this task's own JSON shows. A save is a board write and a broadcast, so
+it is paced by what changed (`queueExecutorCheckpoint`): a session binding, a
+todo or fraction change, the sentinel or the result line is saved within 1 s;
+a plain output line within 30 s (the `delay: 30000` call in `wire`). Two
+watchdogs, both armed in `attach`, back the budget: a wedged-start kill
+(`startWatchdog`, against `startBudgetMs`) and the hard 25-minute kill
+(`EXECUTOR_KILL_MS`).
 
 The wedged-start kill fires when a run has neither printed a line nor
 registered a session within its start budget. That budget used to be a fixed
@@ -183,74 +202,77 @@ instead of ~30 at three). Automatic mode holds new starts for 30 s instead.
 
 ## 5. Settlement: finish()
 
-When the child closes, `finish()` (main.cjs:9718) runs:
+When the child closes, `finish()` (`const finish = async` in
+`spawnNextJob`) runs:
 
-- The run's OpenCode session is attributed first (`attributeRunSession`,
-  main.cjs:9733 → 8433) so evidence has an owner.
-- The verdict: `ok = no spawn error && (sawDone || exit 0)` (main.cjs:9747).
+- The run's OpenCode session is attributed first (`attributeRunSession`) so
+  evidence has an owner.
+- The verdict: `ok = no spawn error && (sawDone || exit 0)` (`const ok`).
   `opencode run` exits 1 even on a clean run, so the exit code is not the
-  success signal (main.cjs:9555), and `ok` only means the run reported
-  success (main.cjs:9744-9746).
+  success signal (the comment saying so sits above `const handoff` in
+  `spawnNextJob`), and `ok` only means the run reported success (the comment
+  above `const ok`).
 - A durable `finish` event is appended to `data/executor-log.jsonl`
-  (main.cjs:9755) — its tail leaves out the sentinel and result lines, which
-  it records as `sawDone`/`result` — and a Policy Lab `attempt-finish` record
-  (main.cjs:9823). Ledger appends ride one chain, and the first append in each
-  process trims a ledger past 4 MB to its last 5000 lines (`executorLog`,
-  main.cjs:7541).
+  (`executorLog({ event: "finish", … })`) — its tail leaves out the sentinel
+  and result lines, which it records as `sawDone`/`result` — and a Policy Lab
+  `attempt-finish` record. Ledger appends ride one chain, and the first
+  append in each process trims a ledger past 4 MB to its last 5000 lines
+  (`executorLog`).
 - The attempt's `lastAttempt.tail` is the worker's last real line, not the
   sentinel, and `lastAttempt.support` keeps one marker per advisory (role, ok,
   size or error); the raw advisory text reached the worker in its brief
-  (main.cjs:9842-9859).
-- One ownership-fenced `settle()` mutation (main.cjs:9862) then:
+  (`const attempt` in `finish`).
+- One ownership-fenced `settle()` mutation (`const settle`, inside `finish`)
+  then:
   - **ok** → `status: "awaiting_verification"` with the attempt's evidence;
-    handoffs become visible `remaining` obligations (main.cjs:10027) and
-    `runExecutorHandoffs` (main.cjs:10231 → 10891) queues them as requests;
-    a done report also schedules the overseer's own verification commands
-    (`scheduleVerificationOnDone`, main.cjs:10041) which
-    `runVerificationJobs` (main.cjs:10234 → 10857) executes. The card gets one
-    line, `run finished (…) — awaiting verification · verifying: <commands>`
-    plus any hand-off counts (main.cjs:10056), where a separate "verification
-    scheduled" line used to follow; the worker's own `MEFI_RESULT` goes on a
-    `result` line after it.
+    handoffs become visible `remaining` obligations and `runExecutorHandoffs`
+    (called from `finish`) queues them as requests; a done report also
+    schedules the overseer's own verification commands
+    (`scheduleVerificationOnDone`, scripts/assistant.mjs) which
+    `runVerificationJobs` executes. The card gets one line,
+    `run finished (…) — awaiting verification · verifying: <commands>` plus
+    any hand-off counts, where a separate "verification scheduled" line used
+    to follow; the worker's own `MEFI_RESULT` goes on a `result` line after
+    it.
   - **user stop** → checkpoint saved, task returns to `open` with no failure
-    charged (main.cjs:10062).
+    charged (the `userStop` branch).
   - **failure** → `runFailures += 1`, backoff 1 min, then 20m/40m/80m;
-    after 5 tries parked for manual reopen (main.cjs:10099-10103). Infra
+    after 5 tries parked for manual reopen ("gave up after 5 tries"). Infra
     failures (spawn error or a silent death <15s) trip an executor breaker
-    that parks all dispatch (main.cjs:10245-10251).
+    that parks all dispatch (`infraFail`, `AUTOPILOT_PARK_MS`, in `finish`).
   - **start kill** → the wedged-start watchdog killed a run that never
     registered a session and never printed a line. The runner failed, not the
     work, so the card goes back to `open` on its own cooldown (1m, 2m, 4m…
     capped at 30m) with `startFailures += 1` and **no attempt charged**
-    (main.cjs:10076). Past `EXECUTOR_START_FAILURE_GRACE` (5) consecutive start
-    kills the card is charged as an ordinary failure after all, so a task that
+    (the `startKilled(task)` branch). Past `EXECUTOR_START_FAILURE_GRACE`
+    (5) consecutive start kills the card is charged as an ordinary failure after all, so a task that
     really does wedge its runner still reaches review; any run that does start
     clears the streak. Before this, a stretch of slow CLI starts spent every
     card's five tries without a single brief being read — the studio's own
     executor log for 2026-09-18 shows 91 of 160 runs killed that way and not
     one task reaching `done`.
-- Chat-sourced work gets a thread reply ("Finished (verifying)") at
-  main.cjs:10263, and the freed slot is refilled (main.cjs:10272).
+- Chat-sourced work gets a thread reply ("Finished (verifying)"), and the
+  freed slot is refilled (`assistantAskForWork("a slot came free")`).
 
 ## 6. Verification: autopilotHousekeeping
 
-Reported success is not done. Housekeeping (main.cjs:11014) runs in every
-foreman pass and on the settle kicks below. It gathers evidence per
-`awaiting_verification` card — session file changes (`eyes.listChanges`,
-main.cjs:11145) and executed checks (`eyes.listSessionChecks`,
-main.cjs:11153) inside the attempt's time window — plus the command results
-of the overseer run queued for that attempt (main.cjs:11368), and calls
-`verifyCompletion` (scripts/assistant.mjs:3776):
+Reported success is not done. Housekeeping (`autopilotHousekeeping`) runs
+in every foreman pass and on the settle kicks below. It gathers evidence per
+`awaiting_verification` card — session file changes (`eyes.listChanges`) and
+executed checks (`eyes.listSessionChecks`) inside the attempt's time window —
+plus the command results of the overseer run queued for that attempt
+(`verificationRunChecks(overseerRunFor(…))`), and calls `verifyCompletion`
+(scripts/assistant.mjs):
 
 - **verified** → `status: "done"`, `doneAt`, receipt id kept, and the line
-  `verified — <reason>` (main.cjs:11404-11415). Receipts land in
-  `data/policy-lab/receipts.jsonl` (main.cjs:11550).
+  `verified — <reason>`. Receipts land in `data/policy-lab/receipts.jsonl`
+  (`receiptsModule.appendReceipt`).
 - **unverified** → back to `open`, `verifyAttempts += 1`, retry in 60s;
-  bounded at `VERIFY_MAX_ATTEMPTS` (3) (main.cjs:11425-11436). The line reads
-  `unverified — <reason> · retry n/3` (main.cjs:11439).
+  bounded at `VERIFY_MAX_ATTEMPTS` (3, scripts/assistant.mjs). The line reads
+  `unverified — <reason> · retry n/3`.
 - **failed** (the third unverified attempt) → parked for manual review with no
-  `nextRunAt` (main.cjs:11434); the line ends `· parked for manual review`
-  (main.cjs:11212).
+  `nextRunAt` (the comment "Out of verification budget"); the line ends
+  `· parked for manual review` (the `outcome` helper).
 
 Edits without an attributable session, or zero changed files with no executed
 named checks, are exactly the "no attributable edits and no named checks"
@@ -258,19 +280,20 @@ reopen this task experienced on its first attempt.
 
 An overseer run counts only for the attempt it was queued for — its key
 carries the attempt's run id; a legacy row without one needs a run that landed
-after the attempt started (`overseerRunFor`, main.cjs:11294) — because the
+after the attempt started (`overseerRunFor`) — because the
 `verificationRun` stamp is never cleared. A done card is reopened by its own
 attempt's failed run only if that result landed after the verdict it
-contradicts, never over the user's manual Done (main.cjs:11316-11317), with
-the line `reopened — overseer check failed — …` (main.cjs:11338). Session and
-overseer checks are judged together (latest wins) but summarized apart, so
-the reason names who ran the check (scripts/assistant.mjs:3802-3847). A task
-keeps the overseer's result on the stamp only (main.cjs:10805); its detail
-view shows it as an "Overseer check" line (renderer/tasks.js:1131-1138) in
-place of the old "verification run passed/failed" log line, which request
-rows keep (main.cjs:10810). A task's verification job carries its card's
-`projectPath` and runs there; a job without one runs in the active project
-root (scripts/assistant.mjs:3650; main.cjs:10774).
+contradicts, never over the user's manual Done (`doneRun`), with the line
+`reopened — overseer check failed — …`. Session and overseer checks are
+judged together (latest wins) but summarized apart, so the reason names who
+ran the check (`verifyCompletion`). A task keeps the overseer's result on the
+stamp only (`runVerificationJob`); its detail view shows it as an "Overseer
+check" line (`renderDetail` in renderer/tasks.js) in place of the old
+"verification run passed/failed" log line, which request rows keep. A task's
+verification job carries its card's `projectPath` (`scheduleVerificationOnDone`)
+and `runVerificationJob` runs it there; a job without one runs in the active
+project root. A job whose commands use `npm` in a folder with no
+`package.json` moves to the Studio checkout instead, and logs that it did.
 
 Evidence is fetched only for cards the pass can actually judge. The prefetch
 above runs outside the board lock, so it used to read `listChanges` and
@@ -279,19 +302,19 @@ ones the mutator then skips because their overseer check is still in flight
 (`overseerRunPending`) or because they are still waiting on handed-off children
 (`waitingTaskIds`). Those reads are eyes-worker round trips into the OpenCode
 store, they were discarded, and they repeated on every pass for as long as the
-card waited. Both gates now run before the prefetch (main.cjs:11138-11139),
-the handoff one against the same `reconcileTaskHandoffs` result the mutator
-will compute (exact, not the one-pass-stale saved `handoffState`), and only
+card waited. Both gates now run before the prefetch (its
+`overseerRunPending` and `waitingOnHandoffs` skips), the handoff one against
+the same `reconcileTaskHandoffs` result the mutator will compute (exact, not the one-pass-stale saved `handoffState`), and only
 on boards that have outstanding obligations at all. In a monitored
 handoff-heavy hour that took 2,464 store reads down to 22 with an identical
 board outcome. The prefetch's rows are only a hint (the mutator re-derives
 every decision under the lock), so they come from a plain board read, not a
-no-op transaction (main.cjs:11093-11100). The opened-files set
-(`eyes.listReads`), which only teaches path memory, is read after the settle
-and only for attempts verified with edits (main.cjs:11528-11544). The
-board-wide stale-scope heal (`healBoardFileScopes`, main.cjs:10967) runs at
-most every 5 minutes (main.cjs:11019), and a basename its walk could not find
-is not walked for again for 30 minutes (main.cjs:10971-10978).
+no-op transaction (`viaGateway`). The opened-files set (`eyes.listReads`),
+which only teaches path memory, is read after the settle and only for
+attempts verified with edits. The board-wide stale-scope heal
+(`healBoardFileScopes`) runs at most every 5 minutes
+(`SCOPE_HEAL_INTERVAL_MS`), and a basename its walk could not find is not
+walked for again for 30 minutes (`scopeMisses`).
 
 The pass no longer waits for the next tick to look again (2026-09-21):
 
@@ -317,36 +340,43 @@ verifying cards keep a name at rest (`recentVerifyingIds`), the label is the
 compact one-line chip rather than the two-line RUNNING-style plate, and
 verifying callouts rank behind live sessions for the card budget. The HUD's
 "Verifying N" count carries the total. Housekeeping also refreshes
-live leases (main.cjs:11192-11194) and re-queues claims whose run died with the
-app (`executorResume.recover`, main.cjs:11187). It logs one `housekeeping:`
-line only when the sweep did something (main.cjs:11564-11574), and counts the
-queue depth from the collections its mutation returned (main.cjs:11576).
+live leases (`refreshLease`) and re-queues claims whose run died with the app
+(`executorResume.recover`). It logs one `housekeeping:` line only when the
+sweep did something (`swept`), and counts the queue depth from the
+collections its mutation returned (`refreshAutopilotQueue(eyes, result)`).
 
 ## 7. Renderer surfaces
 
-- `renderer/booklet.js:1312` — the boot sequence; `startAgents` choice
-  releases the launch hold so the loop may dispatch ("Open and start agents").
-  A launch that resumed an interrupted session (main.cjs `startupResume`) never
-  holds in the first place, so the agents that were running come back with it.
-- `renderer/explorer.js:1382` — proactive toggle (service preference);
-  `:1398-1410` subscribes to checkpoint/briefing/request pushes.
-- `renderer/eyes.js:5` — the change-feed view state (sessions, changes,
-  todos, agent filter) over worker sessions.
-- `renderer/boot.js:217` — shared read-only IPC methods
-  (`assistantStatus`, `tasksList`, …) and the visibility-gated poll guard
-  (`:230-260`).
-- `main.cjs:7668` — `autopilotStatus`, the `assistant:status` push. It carries
-  only what a renderer reads (the capacity verdict, not the machine sample; no
-  pids, project paths or queue depth), with every key on every push, because
-  the Command view merges pushes into its slot (renderer/idle.js:5122). A
-  waiting reason is re-sent only when it changes, digits ignored so a
-  drifting memory figure is not news (`setAutopilotWaiting`, main.cjs:7713),
-  and pause and stop clear it (main.cjs:6135-6138, 11668-11671); the Command
-  header shows "paused" ahead of any waiting reason (renderer/idle.js:5281).
-- `renderer/workspace.js:425-441` — a tasks, ideas or status push already
-  carries its own data, so the workspace re-reads only the backlog snapshot;
-  the 15 s backstop and the visibility refresh still re-read every panel
-  (`:872-873`).
+- `renderer/booklet.js`, the boot sequence (`window.MefiBoot.run`) — the
+  `startAgents` choice releases the launch hold (`MefiStartup.begin` →
+  `startup:begin` → `releaseStartupHold` in main.cjs) so the loop may
+  dispatch ("Open and start agents"). A launch that resumed an interrupted
+  session (main.cjs `startupResume`) never holds in the first place, so the
+  agents that were running come back with it.
+- `renderer/explorer.js`, `init()` — the proactive toggle (`#proactive-mode`,
+  a service preference), and the subscriptions to checkpoint, briefing and
+  request pushes (`onCheckpoints`, `onBriefing`, `onRequests`).
+- `renderer/eyes.js`, `const state` — the change-feed view state (sessions,
+  changes, todos, agent filter) over worker sessions.
+- `renderer/boot.js`, `readMethods` — shared read-only IPC methods
+  (`assistantStatus`, `tasksList`, …), and the visibility-gated poll guard
+  under the `// ---- shared poll guard` marker (`pollStart`, `pollStop`).
+- `autopilotStatus` in main.cjs, the `assistant:status` push (`emitAutopilot`).
+  It carries only what a renderer reads (the capacity verdict, not the machine
+  sample; no pids, project paths or queue depth), with every key on every
+  push, because the Command view replaces its slot with each push and carries
+  over only its own graph summary keys (`adoptAssistantStatus` and
+  `GRAPH_SUMMARY_KEYS` in renderer/idle.js). A waiting reason is re-sent only
+  when it changes, with measurements (MB, GB, ms, %) ignored so a drifting
+  memory figure is not news (`setAutopilotWaiting`); a changed count such as
+  "1 of 2" still is. Pause and stop clear it (`assistantPause`,
+  `setAutopilot`); the Command header shows "paused" ahead of any waiting
+  reason (`renderFeed` in renderer/idle.js).
+- `renderer/workspace.js`, `scheduleBacklogRead` and `readBacklog` — a tasks,
+  ideas or status push already carries its own data, so the workspace
+  re-reads only the backlog snapshot; the 15 s backstop
+  (`pollStart("workspace.refresh", …)`) and the visibility refresh still
+  re-read every panel.
 
 ## 8. Worked example: this task's own loop trace
 

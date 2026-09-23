@@ -1,5 +1,59 @@
 # Agent loop and startup measurements
 
+## Worker output stops repainting the rail per line, September 22, 2026
+
+Measured on the running packaged app itself (Command home, five `opencode`
+workers), by attaching to its main process's inspector and profiling the
+renderer through `webContents.debugger` for 12 seconds; no restart, no flags.
+The renderer's UI thread was about half busy, and a quarter of it was worker
+stdout: every `studio:log` line (a dozen a second while several builders
+ran) cost two separate forced layouts of the whole document.
+
+- `studioLog` (renderer/booklet.js) rewrote the Settings connection log and
+  pinned its scroll per line, 9 ms each, although that card sat folded
+  shut in a tab covered by Command. It now paints at most once a frame, and
+  only while the card is open on a shown tab; opening either paints the
+  backlog.
+- The same line reached `pushFeed` (renderer/idle.js), whose `renderFeed`
+  rebuilt the rail and the chat thread each time; `fillThread` measured the
+  thread's scroll before and after a rebuild, 8 ms per line. A push after a
+  quiet 250 ms still paints at once, pushes inside that window share one
+  trailing paint, and `fillThread` leaves a thread alone when every bubble,
+  age label and the pending reply would read the same.
+
+| Live renderer, 12 s on Command | Before | After |
+|---|---:|---:|
+| `studioLog` | 148 calls, 1,463 ms | 0 calls |
+| `fillThread` | 169 calls, 1,437 ms | 12 calls, 79 ms |
+| `renderFeed` | 160 calls, 1,647 ms | 24 calls, 170 ms |
+| Command frames drawn | 223 (about 18 per second) | 385 (about 32 per second) |
+
+Command was losing almost half its frames behind that work and now holds its
+30 Hz target. Because it draws more frames, the GPU process's CPU rose with
+it: canvas raster is now the largest remaining cost while Command is on
+screen (about 70% of a core). Removing the HUD's backdrop blurs, or hiding
+the page Command covers, moved it by less than the run-to-run noise in a
+hardware-composited scratch window, so neither changed. In the same harness
+with software rendering (80 tasks, 6 sessions, 12 lines a second), the
+renderer main thread went from 26.4% to 17–19% busy.
+
+Two recurring main-process stalls, found in the same live profile:
+
+| Main-process block | Before | After |
+|---|---:|---:|
+| Auditor pass (every 5 minutes): `findUnusedSelectors` re-read the 2.5 MB renderer corpus per stylesheet, and its interpolation regex retried at every letter | 586 ms median | 132 ms |
+| `usage:tracker` aggregation at 22.7k records (Usage panel, every 5 minutes on Command): each bucket re-filtered and re-totalled the whole ledger | 120 ms median | 24 ms |
+
+`usageIndex` in scripts/check-css.mjs indexes each file once. A corpus
+indexes as the union of its parts, and the prefix scan matches the old
+regex exactly (tests/check_css_unused.test.mjs); `npm run check`'s unused
+selector step went from about 550 to 270 ms. `aggregateUsage` feeds every
+bucket in one pass in ledger order, with `Float64Array` sums (a plain array
+seeded with `null` boxed each addition). A reference report built the old
+way pins it JSON-exact, float sums included (tests/usage_tracker.test.mjs).
+Parity was also checked against the previous modules on the live ledger plus
+17.5k synthetic store rows. None of these numbers are pass/fail thresholds.
+
 ## Command frames stop paying for every node twice, September 21, 2026
 
 Why the app felt choppy: with Command as the home view and six builder
