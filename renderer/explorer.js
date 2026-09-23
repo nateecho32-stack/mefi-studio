@@ -94,8 +94,7 @@
       } else {
         state.assistant = window.MefiTree?.assistantState?.() ?? state.assistant;
       }
-      renderTree();
-      renderDetail();
+      paintTreeAndDetail();
       renderAssistant();
       // A failed store read must not read as "nothing here": name the failure
       // in the tree too, and let the next poll tick retry.
@@ -113,10 +112,15 @@
       }).catch((error) => {
         if (els.machineLines) els.machineLines.textContent = `machine scan failed: ${String(error?.message ?? error)}`;
       });
-      window.mefiStudio?.machineSet?.({}).then((result) => {
-        if (result?.ok && els.machineAuto) els.machineAuto.checked = result.machine.autoKill !== false;
-        if (result?.ok && els.machineMemoryOverride) els.machineMemoryOverride.checked = result.machine.memoryWarnOverride === true;
-      });
+      // Read once per open, and read-only: machineSet({}) as a read rewrote
+      // settings.json and auth.json on every 5 s tick.
+      if (!state.machinePrefsRead) {
+        state.machinePrefsRead = true;
+        (window.mefiStudio?.machineGet ?? window.mefiStudio?.machineSet)?.({}).then((result) => {
+          if (result?.ok && els.machineAuto) els.machineAuto.checked = result.machine.autoKill !== false;
+          if (result?.ok && els.machineMemoryOverride) els.machineMemoryOverride.checked = result.machine.memoryWarnOverride === true;
+        }).catch(() => { state.machinePrefsRead = false; });
+      }
     } catch (error) {
       // Never leave the pending "Loading sessions…" note stuck: render the
       // failure and let the poll retry.
@@ -404,6 +408,39 @@
     }
   }
 
+  // The 5 s poll re-reads everything. Repainting identical rows would wipe a
+  // half-typed checkpoint and pull keyboard focus off the tree, so the poll
+  // repaints only when something the tree or the detail shows has changed
+  // (the minute bucket keeps the "3m ago" labels honest).
+  let paintedSignature = "";
+  function treeSignature() {
+    const org = state.assistant?.organization ?? null;
+    return JSON.stringify([
+      state.selected, Boolean(state.foldedOpen), Math.floor(Date.now() / 60000),
+      state.sessions.map((s) => [s.id, s.parentId, s.title, s.agent, s.model?.id, s.timeUpdated, s.cost, s.tokens?.input, s.tokens?.output]),
+      state.todos.map((t) => [t.id, t.sessionId, t.status, t.content]),
+      Object.entries(state.checkpoints ?? {}).map(([id, notes]) => [id, notes?.length ?? 0, notes?.[0]?.note]),
+      state.changes.filter((c) => c.sessionId === state.selected).slice(0, 12).map((c) => [c.id, c.time]),
+      [org?.order, org?.folded, org?.stale],
+    ]);
+  }
+  function paintTreeAndDetail() {
+    const signature = treeSignature();
+    if (signature === paintedSignature) return;
+    const active = document.activeElement;
+    const draft = els.detail?.querySelector?.("input.grow");
+    const draftValue = draft?.value ?? "";
+    const draftFocused = Boolean(draft) && active === draft;
+    const treeIndex = active && els.tree?.contains?.(active) ? [...els.tree.children].indexOf(active) : -1;
+    renderTree();
+    renderDetail();
+    paintedSignature = signature;
+    const nextDraft = els.detail?.querySelector?.("input.grow");
+    if (nextDraft && draftValue) nextDraft.value = draftValue;
+    if (nextDraft && draftFocused) nextDraft.focus({ preventScroll: true });
+    else if (treeIndex >= 0) els.tree.children[Math.min(treeIndex, els.tree.children.length - 1)]?.focus?.({ preventScroll: true });
+  }
+
   function revealSelected() {
     // .explorer-col is the scroller, so this moves the column, not the page.
     els.tree?.querySelector("li.selected")?.scrollIntoView({ block: "center" });
@@ -414,6 +451,7 @@
     window.dispatchEvent(new CustomEvent("mefi:tree-select", { detail: { sessionId } }));
     renderTree();
     renderDetail();
+    paintedSignature = treeSignature();
     revealSelected();
   }
 
@@ -1184,9 +1222,19 @@
   }
 
   function open(options) {
+    // A restored deep link (nav's resumeReady) runs from its own
+    // DOMContentLoaded handler, which is registered before this module's
+    // init(); open() can therefore reach the els.overlay write below while the
+    // map is still empty, throwing "Cannot set properties of undefined
+    // (setting 'hidden')". Build the map on demand — init() is idempotent and
+    // only safe once the document is parsed — then bail if the overlay is
+    // genuinely absent instead of throwing.
+    if (!els.overlay && document.readyState !== "loading") init();
+    if (!els.overlay) return Promise.resolve();
     window.MefiNav?.claim?.("explorer");
     const params = optionsOf(options);
     els.overlay.hidden = false;
+    state.machinePrefsRead = false;
     if (typeof params.sessionId === "string" && params.sessionId) {
       state.selected = params.sessionId;
       // The shared "current session" signal: the rail highlights it, A-Eyes
@@ -1218,6 +1266,7 @@
     // that the rows exist. Only while the sheet is still up: a close during
     // load() already handed focus back, and the next surface must keep it.
     settled.then(() => {
+      if (!els.overlay) return;
       revealSelected();
       const sheet = els.overlay.querySelector(".explorer-sheet");
       const active = document.activeElement;
@@ -1230,7 +1279,7 @@
   }
 
   function close() {
-    if (els.overlay.hidden) return;
+    if (!els.overlay || els.overlay.hidden) return;
     els.overlay.hidden = true;
     window.MefiNav?.release?.("explorer");
   }
@@ -1298,7 +1347,9 @@
     els.tidy?.addEventListener("click", () => control("tidy"));
     els.fix?.addEventListener("click", () => control("fix"));
     els.overseer?.addEventListener("click", () => control("overseer"));
-    els.pause?.addEventListener("click", () => control(state.assistant?.status === "paused" ? "resume" : "pause"));
+    // Resume is the same start-work every surface sends, so a Workspace pause
+    // (which also holds new work) is fully lifted from here too.
+    els.pause?.addEventListener("click", () => control(state.assistant?.status === "paused" ? "start-work" : "pause"));
     els.stopAll?.addEventListener("click", () => control("stop-all"));
     els.restart?.addEventListener("click", () => restartStudio());
     window.mefiStudio?.onAssistant?.((payload) => {
