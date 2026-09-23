@@ -9,7 +9,7 @@ const root = process.env.MEFI_PERFORMANCE_RENDER_FIXTURE;
 const desktopHost = process.env.MEFI_PERFORMANCE_DESKTOP_HOST === "1";
 if (!root || !path.isAbsolute(root)) throw new Error("An isolated performance renderer fixture directory is required");
 const started = Date.now();
-const report = { errors: [], networkAttempts: [], processAttempts: [] };
+const report = { errors: [], errorDetails: [], networkAttempts: [], processAttempts: [] };
 app.setName("Studio Performance Renderer Fixture");
 for (const name of ["userData", "sessionData", "crashDumps"]) {
   const directory = path.join(root, name);
@@ -98,7 +98,19 @@ app.whenReady().then(async () => {
   contents.setWindowOpenHandler(() => ({ action: "deny" }));
   contents.on("console-message", (_event, detail, oldMessage) => {
     const level = typeof detail === "object" ? detail.level : detail;
-    if (level === "error" || level === 3) report.errors.push(String(typeof detail === "object" ? detail.message : oldMessage));
+    if (level === "error" || level === 3) {
+      const message = String(typeof detail === "object" ? detail.message : oldMessage);
+      report.errors.push(message);
+      // Name where the renderer raised it: a bare "Cannot set properties of
+      // undefined (setting 'hidden')" cannot be attributed without the source
+      // location, which is what the pre-navigation race needs pinned.
+      if (typeof detail === "object") report.errorDetails.push({
+        message,
+        sourceId: detail.sourceId ?? null,
+        lineNumber: detail.lineNumber ?? null,
+        columnNumber: detail.columnNumber ?? null,
+      });
+    }
   });
   contents.on("render-process-gone", (_event, detail) => finish(new Error(`Renderer exited: ${detail.reason}`)));
   const run = (code) => contents.executeJavaScript(`(async()=>{${code}})()`, true);
