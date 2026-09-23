@@ -455,16 +455,21 @@ test("style hooks a look leaves null keep the caller's own drawing", () => {
 });
 
 // ===== the free styles: Classic orbs, Soft glass, Minimal, Halo, Crystal =====
+// (the free looks' own suite is tests/node_styles_free.test.mjs)
 
 test("orbs retain luminous cores and a single status rim without stacked status rings", () => {
   const styles = loadNodeStyles();
   for (const kind of ["task", "agent", "session"]) {
-    const paints = [], gradients = [];
-    const ctx = { save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc() {}, fillRect() {}, fill() { paints.push(["fill", this.fillStyle]); }, stroke() { paints.push(["stroke", this.strokeStyle]); }, createRadialGradient() { const stops = []; gradients.push(stops); return { addColorStop: (...stop) => stops.push(stop) }; } };
+    const ctx = recordingContext();
     styles.paint(ctx, "orbs", { x: 50, y: 50 }, 12, [220, 180, 110], { kind, active: true });
-    assert.equal(paints.filter(([operation]) => operation === "stroke").length, 1);
-    assert.equal(gradients.length, 2, "one restrained halo and one coloured core");
-    assert.ok(paints.some(([operation, value]) => operation === "fill" && value === "#151a22"), "connections must not show through the core");
+    assert.equal(ctx.calls.radial, 2, "one breathing halo and one body with its specular");
+    // One rim on the body's edge (lit, at the middle of its breath: .82 × .775);
+    // the only other stroke is the glint riding inside it.
+    const [rim, glint, ...rest] = ctx.calls.strokes;
+    assert.deepEqual([rim.style, rim.width, rest.length], ["rgba(220,180,110,0.625)", 1.3, 0]);
+    assert.ok(glint.style === "rgba(248,240,226,0.95)" && glint.width < rim.width, "the glint is a thin streak of light, not a second status ring");
+    assert.ok(ctx.calls.fills.some(({ style }) => style === "rgba(39,33,23,1)"), "an opaque, theme-derived core: connections never show through it");
+    assert.ok(!ctx.calls.fills.some(({ style }) => typeof style === "string" && (style === "#151a22" || style.startsWith("rgba(242,249,255"))), "no hard-coded navy core or flat white dot");
   }
 });
 
@@ -472,11 +477,13 @@ test("Classic, Soft glass and Minimal use distinct rendering without altering no
   const styles = loadNodeStyles();
   const counts = {};
   for (const style of ["orbs", "glass", "minimal"]) {
-    const calls = { radial: 0, linear: 0, fill: 0 };
-    const ctx = { save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc() {}, fill() { calls.fill += 1; }, stroke() {}, createRadialGradient() { calls.radial += 1; return { addColorStop() {} }; }, createLinearGradient() { calls.linear += 1; return { addColorStop() {} }; } };
-    styles.paint(ctx, style, { x: 50, y: 50 }, 12, [220, 180, 110], { kind: "task", active: true }); counts[style] = calls;
+    const ctx = recordingContext();
+    styles.paint(ctx, style, { x: 50, y: 50 }, 12, [220, 180, 110], { kind: "task", active: true });
+    const { radial, linear, fill, stroke } = ctx.calls;
+    counts[style] = { radial, linear, fill, stroke };
+    if (style !== "orbs") assert.ok(ctx.calls.reach <= 12 + 1e-9, `${style} draws inside the node's own radius`);
   }
-  assert.deepEqual(counts, { orbs: { radial: 2, linear: 0, fill: 4 }, glass: { radial: 0, linear: 1, fill: 2 }, minimal: { radial: 0, linear: 0, fill: 1 } });
+  assert.deepEqual(counts, { orbs: { radial: 2, linear: 0, fill: 3, stroke: 2 }, glass: { radial: 0, linear: 2, fill: 3, stroke: 4 }, minimal: { radial: 0, linear: 0, fill: 1, stroke: 1 } });
 });
 
 test("Extra glow adds a bounded visible halo to every chosen style without changing geometry", () => {
@@ -495,11 +502,19 @@ test("Extra glow adds a bounded visible halo to every chosen style without chang
 test("Halo and Crystal use distinct bounded surfaces while preserving node positions", () => {
   const styles = loadNodeStyles();
   for (const style of ["halo", "crystal"]) {
-    const calls = { arcs: 0, lines: 0, saves: 0, restores: 0 };
-    const ctx = { save() { calls.saves++; }, restore() { calls.restores++; }, beginPath() {}, closePath() {}, moveTo() {}, lineTo() { calls.lines++; }, arc() { calls.arcs++; }, stroke() {}, fill() {}, createLinearGradient() { return { addColorStop() {} }; } };
-    styles.paint(ctx, style, { x: 50, y: 50 }, 12, [120, 180, 220], { kind: "task" });
-    assert.equal(calls.saves, calls.restores);
-    assert.ok(style === "halo" ? calls.arcs === 3 && calls.lines === 0 : calls.lines >= 8 && calls.arcs === 0);
+    for (const active of [false, true]) {
+      const ctx = recordingContext();
+      styles.paint(ctx, style, { x: 50, y: 50 }, 12, [120, 180, 220], { kind: "task", active });
+      const { calls } = ctx;
+      assert.equal(calls.saves, calls.restores);
+      assert.deepEqual(calls.shadowBlurs, [], `${style} never sets shadowBlur`);
+      if (style === "halo") assert.ok(calls.arc === (active ? 6 : 4) && calls.lineTo === 0, `halo: glow, body and ring, dashed inner ring, core${active ? ", comet head and tail" : ""} (${calls.arc} arcs)`);
+      else assert.ok(calls.lineTo >= 8 && calls.arc === 0, `crystal cuts an octagon with lines only (${calls.lineTo} lineTo, ${calls.arc} arcs)`);
+      assert.ok(calls.pathReach <= 12 * 1.56, `${style} keeps its geometry on the node (${calls.pathReach.toFixed(1)}px)`);
+      const built = gradientsBuilt(ctx);
+      styles.paint(ctx, style, { x: 70, y: 40 }, 9, [120, 180, 220], { kind: "task", active });
+      assert.equal(gradientsBuilt(ctx), built, `${style} reuses its cached paints on the next frame`);
+    }
   }
 });
 

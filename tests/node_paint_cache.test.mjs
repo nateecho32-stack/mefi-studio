@@ -50,7 +50,12 @@ test("cached orb gradients retain exact radii, colors and screen-space geometry 
     assert.equal(report.oldestEvicted, true);
     assert.equal(report.secondContextCreates, 2, "each canvas owns its own bounded gradient cache");
     assert.equal(report.contextRestored, true, "node painting must restore the caller's transform and opacity");
-    t.diagnostic(`Pixel deltas by DPR: ${report.scenes.map((scene) => `${scene.dpr}: max ${scene.maxDelta}, mean ${scene.meanDelta.toFixed(6)}`).join("; ")}`);
+    // Motion: an animated orb moves, a still one holds its pose, and steady frames build no gradient.
+    assert.ok(report.motion.animatedChannels > 200, `a working orb changes between frames 0.4 s apart (${report.motion.animatedChannels} channels)`);
+    assert.equal(report.motion.stillChannels, 0, "reduced motion holds one pose, pixel for pixel");
+    assert.ok(report.motion.warmBuilds > 0, "the first frame builds the orb's paints");
+    assert.equal(report.motion.steadyBuilds, 0, "no gradient is built after the first frame");
+    t.diagnostic(`Pixel deltas by DPR: ${report.scenes.map((scene) => `${scene.dpr}: max ${scene.maxDelta}, mean ${scene.meanDelta.toFixed(6)}`).join("; ")}; motion ${JSON.stringify(report.motion)}`);
   } catch (error) {
     assertionError = error;
     throw error;
