@@ -374,6 +374,44 @@ test("every style restores the canvas, honours an unknown style as orbs, and add
   }
 });
 
+test("Extra glow eases with the node's lit level: the quiet and lit halos cross-fade instead of popping", () => {
+  const styles = loadNodeStyles();
+  const tint = [120, 180, 220], p = { x: 50, y: 50 }, base = 0.8;
+  const record = styles.motionRecord(new Map(), "task:glow");
+  const flags = { style: "minimal", active: true, selected: false, progress: null, orbit: 0, status: null, time: 0, frame: 0 };
+  const ctx = recordingContext();
+  // Minimal's body is one flat fill, so every gradient fill is a glow layer.
+  const glowFrame = () => {
+    const from = ctx.calls.fills.length;
+    styles.paint(ctx, "minimal", p, 12, tint, { active: true, alpha: base, extraGlow: true, motion: record });
+    return ctx.calls.fills.slice(from).filter(({ style }) => typeof style === "object").map(({ alpha }) => alpha);
+  };
+  assert.deepEqual(glowFrame(), [base], "not lit yet: the quiet halo alone, at the caller's alpha");
+  const shares = [];
+  for (let frame = 0; frame < 40 && record.lit < 1; frame += 1) {
+    styles.stepMotion(record, flags, 1 / 30, false);
+    const layers = glowFrame();
+    if (record.lit < 1) {
+      assert.equal(layers.length, 2, "while it eases, both halos show");
+      assert.ok(Math.abs(layers[0] - base * (1 - record.lit)) < 1e-12 && Math.abs(layers[1] - base * record.lit) < 1e-12, "weighted by the eased lit level, never above the caller's alpha");
+      shares.push(layers[1] / base);
+    } else assert.deepEqual(layers, [base], "fully lit: the lit halo alone");
+  }
+  assert.equal(record.lit, 1);
+  assert.ok(shares.length >= 3 && shares.every((share, index) => index === 0 ? share < 0.35 : share > shares[index - 1] && share - shares[index - 1] < 0.35), "the lit share climbs in small steps (no pop)");
+  const built = ctx.calls.radial;
+  assert.equal(built, 2, "each halo is built once, the first time it shows");
+  glowFrame(); glowFrame();
+  assert.equal(ctx.calls.radial, built, "a steady frame builds nothing");
+  assert.equal(styles.cacheStats(ctx).entries, 1, "one cache entry per tint holds both halos: no lit level in the key");
+  // Reduced motion snaps the level; a motion object without one reads the flags.
+  styles.stepMotion(record, { ...flags, active: false }, 1 / 30, true);
+  assert.deepEqual(glowFrame(), [base]);
+  const bare = recordingContext();
+  styles.paint(bare, "minimal", p, 12, tint, { selected: true, extraGlow: true, motion: { seed: 0, clock: 0, still: true } });
+  assert.ok(bare.calls.reach > 12 * 1.8, "a selected node without a lit level glows lit");
+});
+
 test("every style respects Follow/search dimming and its lifecycle fade", () => {
   const styles = loadNodeStyles();
   for (const style of STYLES) {

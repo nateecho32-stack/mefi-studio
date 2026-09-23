@@ -1327,9 +1327,10 @@
   const railStep = { style: "orbs", active: false, selected: false, lift: 0, progress: null, orbit: 0, status: null, time: 0, frame: 0 };
   const railPaint = { kind: "session", selected: false, chosen: false, active: false, alpha: 1, glyph: false, monogram: false, motion: null, time: 0, still: false, detail: 2, extraGlow: false, theme: null };
   // The agent ring's and the work orbit's options, one scratch each, filled
-  // per node (a style's hook reads them at once and never keeps them).
-  const railRing = { status: null, builder: false, ring: 0, time: 0, still: false, motion: null, theme: null };
-  const railOrbit = { running: true, phase: 0, ring: 0, time: 0, still: false, motion: null, theme: null };
+  // per node (a style's hook reads them at once and never keeps them); their
+  // detail is the node's own tier, as its paint has.
+  const railRing = { status: null, builder: false, ring: 0, time: 0, still: false, detail: 2, motion: null, theme: null };
+  const railOrbit = { running: true, phase: 0, ring: 0, time: 0, still: false, detail: 2, motion: null, theme: null };
   let railFrameAt = null;
   let railFrame = 0;
 
@@ -1477,6 +1478,7 @@
       const selected = isHover || node.kind === "session" && node.id === activeSessionId || focused && node.kind === focused.kind && node.id === focused.id;
       const record = styles ? styles.motionRecord(railMotion, node.id) : null;
       const tint = styles ? railTint(color) : null;
+      const detail = styles ? styles.tier(radius, 2) : 2;
       if (styles) {
         railStep.active = working; railStep.selected = Boolean(selected); railStep.lift = isHover ? 1 : 0;
         railStep.progress = node.progress; railStep.orbit = working && !isAgent ? 1.1 : 0; railStep.status = isAgent ? node.status ?? null : null;
@@ -1487,7 +1489,7 @@
         // The orbs keep the freshness fade they always had on the rail.
         paint.alpha = visibility * (nodeStyle === "orbs" ? Math.max(0.5, fresh) : 1);
         paint.glyph = isAgent && radius >= 4.5; paint.motion = record; paint.time = time; paint.still = still;
-        paint.detail = styles.tier(radius, 2); paint.extraGlow = appearance.extraGlow === true; paint.theme = theme;
+        paint.detail = detail; paint.extraGlow = appearance.extraGlow === true; paint.theme = theme;
         styles.paint(ctx, nodeStyle, p, radius, tint, paint);
       } else {
         ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
@@ -1507,7 +1509,7 @@
         let ringDrawn = false;
         if (styles) {
           railRing.status = node.status ?? null; railRing.ring = radius + ringGap;
-          railRing.time = time; railRing.still = still; railRing.motion = record; railRing.theme = theme;
+          railRing.time = time; railRing.still = still; railRing.detail = detail; railRing.motion = record; railRing.theme = theme;
           ringDrawn = styles.ring(ctx, nodeStyle, p, radius, tint, railRing);
         }
         if (ringDrawn) {
@@ -1537,7 +1539,7 @@
         let orbitDrawn = false;
         if (styles) {
           railOrbit.phase = phase; railOrbit.ring = radius + 9;
-          railOrbit.time = time; railOrbit.still = still; railOrbit.motion = record; railOrbit.theme = theme;
+          railOrbit.time = time; railOrbit.still = still; railOrbit.detail = detail; railOrbit.motion = record; railOrbit.theme = theme;
           orbitDrawn = styles.orbit(ctx, nodeStyle, p, radius, tint, railOrbit);
         }
         if (!orbitDrawn) {

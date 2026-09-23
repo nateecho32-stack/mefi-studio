@@ -3631,23 +3631,24 @@
   const SURFACE = { kind: "task", selected: false, chosen: false, active: false, alpha: 1, glyph: false, monogram: false, motion: null, time: 0, still: false, detail: 3, extraGlow: false, theme: null };
   // The agent ring's, the hub dress's and the work orbit's options: one
   // scratch each, filled per node (a style's hook reads them at once and
-  // never keeps them).
-  const RING = { status: null, builder: false, ring: 0, time: 0, still: false, motion: null, theme: null };
-  const HUB = { crew: false, breathe: 0.5, time: 0, still: false, motion: null, theme: null };
-  const ORBIT = { running: false, phase: 0, ring: 0, time: 0, still: false, motion: null, theme: null };
+  // never keeps them). `detail` is the tier drawFrame capped for the node's
+  // surface this frame (node._detail).
+  const RING = { status: null, builder: false, ring: 0, time: 0, still: false, detail: 3, motion: null, theme: null };
+  const HUB = { crew: false, breathe: 0.5, time: 0, still: false, detail: 3, motion: null, theme: null };
+  const ORBIT = { running: false, phase: 0, ring: 0, time: 0, still: false, detail: 3, motion: null, theme: null };
   function ringLook(node, ring, time, still) {
     RING.status = node.status ?? null; RING.builder = Boolean(node.builder); RING.ring = ring;
-    RING.time = time; RING.still = still; RING.motion = node._m ?? null; RING.theme = state.nodeTheme ?? null;
+    RING.time = time; RING.still = still; RING.detail = node._detail ?? 3; RING.motion = node._m ?? null; RING.theme = state.nodeTheme ?? null;
     return RING;
   }
   function hubLook(node, crew, breathe, time, still) {
     HUB.crew = crew; HUB.breathe = breathe;
-    HUB.time = time; HUB.still = still; HUB.motion = node._m ?? null; HUB.theme = state.nodeTheme ?? null;
+    HUB.time = time; HUB.still = still; HUB.detail = node._detail ?? 3; HUB.motion = node._m ?? null; HUB.theme = state.nodeTheme ?? null;
     return HUB;
   }
   function orbitLook(node, running, phase, ring, time, still) {
     ORBIT.running = running; ORBIT.phase = phase; ORBIT.ring = ring;
-    ORBIT.time = time; ORBIT.still = still; ORBIT.motion = node._m ?? null; ORBIT.theme = state.nodeTheme ?? null;
+    ORBIT.time = time; ORBIT.still = still; ORBIT.detail = node._detail ?? 3; ORBIT.motion = node._m ?? null; ORBIT.theme = state.nodeTheme ?? null;
     return ORBIT;
   }
   function drawNodeSurface(ctx, node, p, radius, tint, { selected = false, active = false, alpha = 1, time = 0, still = false, detail = 3, chosen = false, motion = null } = {}) {
@@ -4461,13 +4462,13 @@
   // node styles only). Its first landed frame kicks the node's motion (kick
   // = 1, the arrival flash any look may read); then for LAND_TAIL_MS the
   // style lands it (u runs 0 → 1; look.pulse and look.motion are the pulse
-  // and its node's record) at the hot cadence. A style without a landing of
-  // its own lets the pulse go (pulse._landed).
+  // and its node's record, look.detail that node's tier) at the hot cadence.
+  // A style without a landing of its own lets the pulse go (pulse._landed).
   function landPulse(ctx, styles, pulse, point, since, look, time, still) {
     const motion = state.nodeMotion?.get(pulse.to?.id) ?? null;
     const arrived = !pulse._kicked;
     if (arrived) { pulse._kicked = true; if (motion && !still) motion.kick = 1; }
-    look.kind = pulse.wave ? "wave" : "dot"; look.rTo = pulse.to?._pr ?? 0; look.pulse = pulse; look.motion = motion;
+    look.kind = pulse.wave ? "wave" : "dot"; look.rTo = pulse.to?._pr ?? 0; look.detail = pulse.to?._detail ?? 3; look.pulse = pulse; look.motion = motion;
     pulse._rgb ??= hexToRgb(pulse.color ?? "#a9ffcd");
     const u = still ? 1 : Math.min(1, Math.max(0, since) / LAND_TAIL_MS);
     if (!styles.land(ctx, state.nodeStyle, point, look.rTo, pulse._rgb, u, look)) pulse._landed = true;
@@ -6269,7 +6270,9 @@
     // A style may draw its own wires (renderer/node-styles.js); one without
     // them, or a bare harness, keeps the lines below. One scratch per frame.
     const nodeStyles = globalThis.window?.MefiNodeStyles ?? null;
-    const wire = nodeStyles ? { kind: "session", tint: null, alpha: 1, width: 1, dash: null, march: false, double: false, active: false, inspected: false, curved: false, cp: null, far: false, time, still: !marching, seed: 0, rA: 0, rB: 0, lifetime: 1 } : null;
+    // `detail` is the lower of the two ends' tiers from the frame before (the
+    // node loop sets node._detail after the wires are drawn, as it sets _pr).
+    const wire = nodeStyles ? { kind: "session", tint: null, alpha: 1, width: 1, dash: null, march: false, double: false, active: false, inspected: false, curved: false, cp: null, far: false, time, still: !marching, seed: 0, rA: 0, rB: 0, detail: 3, lifetime: 1 } : null;
     const bend = nodeStyles ? { x1: 0, y1: 0, x2: 0, y2: 0 } : null;
     // Keep the work tether underneath each waveform so its endpoints and
     // assignment remain readable as the sound bends the connection.
@@ -6294,7 +6297,7 @@
         wire.kind = style.kind; wire.tint = tint; wire.alpha = lifetime * Math.min(0.95, style.alpha + light); wire.width = style.width + light * 1.8;
         wire.dash = style.dash; wire.march = Boolean(style.march && marching); wire.double = Boolean(style.double);
         wire.active = active; wire.inspected = Boolean(inspected); wire.curved = curved; wire.cp = curved ? bend : null; wire.far = pen !== ctx;
-        wire.seed = b.node._m?.seed ?? 0; wire.rA = a.node._pr ?? 0; wire.rB = b.node._pr ?? 0; wire.lifetime = lifetime;
+        wire.seed = b.node._m?.seed ?? 0; wire.rA = a.node._pr ?? 0; wire.rB = b.node._pr ?? 0; wire.detail = Math.min(a.node._detail ?? 3, b.node._detail ?? 3); wire.lifetime = lifetime;
         if (nodeStyles.wire(pen, state.nodeStyle, a.p, b.p, wire)) {
           if (audioLinked) drawAudioConnection(pen, a, b, tint, lifetime, time, Boolean(primary && branches));
           continue;
@@ -6344,7 +6347,7 @@
         wire.kind = "tether"; wire.tint = agentRgb(node.role); wire.alpha = lifetime * ((state.nodeLayout === "tree" ? 0.18 : 0.38) + light); wire.width = 1 + light * 1.8;
         wire.dash = TETHER_DASH; wire.march = marching && working; wire.double = false;
         wire.active = working; wire.inspected = false; wire.curved = false; wire.cp = null; wire.far = pen !== ctx;
-        wire.seed = node._m?.seed ?? 0; wire.rA = node._pr ?? 0; wire.rB = target.node._pr ?? 0; wire.lifetime = lifetime;
+        wire.seed = node._m?.seed ?? 0; wire.rA = node._pr ?? 0; wire.rB = target.node._pr ?? 0; wire.detail = Math.min(node._detail ?? 3, target.node._detail ?? 3); wire.lifetime = lifetime;
         if (nodeStyles.wire(pen, state.nodeStyle, p, target.p, wire)) {
           if (audioLinked) drawAudioConnection(pen, { node, p }, target, agentRgb(node.role), lifetime, time);
           continue;
@@ -7406,8 +7409,9 @@
     const landTail = nodeStyles ? LAND_TAIL_MS : 0;
     state.pulses = state.pulses.filter((pulse) => now - pulse.start < pulse.duration + (pulse._landed ? 0 : landTail));
     // A style may draw the travelling pulse (surge) and its landing (land)
-    // itself; one options scratch serves every pulse this frame.
-    const pulseLook = nodeStyles ? { kind: "dot", time, still, rTo: 0, pulse: null, motion: null } : null;
+    // itself; one options scratch serves every pulse this frame. Its detail
+    // is the target's tier from the frame before.
+    const pulseLook = nodeStyles ? { kind: "dot", time, still, rTo: 0, detail: 3, pulse: null, motion: null } : null;
     for (const pulse of state.pulses) {
       // An arrived pulse's head is done: the landing pass below has it now.
       if (!still && now - pulse.start >= pulse.duration) continue;
@@ -7417,7 +7421,7 @@
       const to = screenPoints.get(pulse.to.id) ?? project(pulse.to);
       const t = still ? 1 : Math.min(1, (now - pulse.start) / pulse.duration);
       if (pulseLook) {
-        pulseLook.kind = pulse.wave ? "wave" : "dot"; pulseLook.rTo = pulse.to?._pr ?? 0;
+        pulseLook.kind = pulse.wave ? "wave" : "dot"; pulseLook.rTo = pulse.to?._pr ?? 0; pulseLook.detail = pulse.to?._detail ?? 3;
         pulseLook.pulse = pulse; pulseLook.motion = state.nodeMotion?.get(pulse.to?.id) ?? null;
         if (nodeStyles.surge(ctx, state.nodeStyle, from, to, t, pulse, pulseLook)) continue;
       }
@@ -7496,9 +7500,15 @@
     const ordered = [...projected].sort((a, b) => b.p.depth - a.p.depth);
     // Detail tiers (MefiNodeStyles.tier): frames that run long step every node
     // down, past 15 ms to T2 and past 20 ms to T1, until they recover under 12.
+    // Recovery climbs one tier at a time, 30 frames apart, so the cheaper
+    // frames of a lowered cap cannot bounce the whole tree straight back to
+    // T3 and down again.
     const cost = state.frameCost;
-    state.detailCap = cost > 20 ? 1 : cost > 15 ? Math.min(state.detailCap ?? 3, 2) : cost >= 12 ? state.detailCap ?? 3 : 3;
-    const costCap = state.detailCap;
+    const capWas = state.detailCap ?? 3;
+    let costCap = cost > 20 ? 1 : cost > 15 ? Math.min(capWas, 2) : capWas;
+    if (costCap < 3 && !(cost >= 12) && frameNo - (state.detailCapAt ?? -Infinity) >= 30) costCap += 1;
+    if (costCap !== capWas) state.detailCapAt = frameNo;
+    state.detailCap = costCap;
     const stepFlags = { style: state.nodeStyle, active: false, selected: false, progress: null, orbit: 0, status: null, time, frame: frameNo };
     // The surface's flags and the arrival/selection options: one scratch each
     // for the frame, filled per node (drawNodeSurface reads its flags at once;
@@ -7544,6 +7554,9 @@
         const cap = Math.min(costCap, ctx !== el.ctx || factor <= 0.3 ? 1 : state.cameraMoving && !lit ? 2 : 3);
         detail = nodeStyles.tier(radius, lit ? cap + 1 : cap);
       }
+      // The same tier reaches the node's orbit, ring and hub dress below, and
+      // (a frame late, like _pr) its wires and pulses.
+      node._detail = detail;
       const surface = surfaceFlags;
       surface.selected = Boolean(selected); surface.active = active; surface.alpha = Math.max(0.35, visual.alpha * factor);
       surface.detail = detail; surface.chosen = chosen; surface.motion = motion;

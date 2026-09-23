@@ -329,21 +329,35 @@
   const tierIn = (radius, level) => level <= 0 ? 1 : clamp01((radius - TIER_CUTS[Math.min(3, level)]) / 1.2);
 
   // Extra glow (the appearance toggle): a soft halo under any style, out to
-  // 1.8 radii, 2.25 while the node is lit. One unit-space radial per canvas,
-  // tint and lit level, drawn under the node's own transform, so a steady
-  // frame builds nothing; paint() lays it under the look.
+  // 1.8 radii, 2.25 while the node is lit. `lit` is the node's eased 0..1
+  // level (m.lit): the quiet and the lit halo cross-fade by globalAlpha, so
+  // hover and selection never pop it, and at 0 or 1 only one of them draws.
+  // One cache entry per canvas and tint holds both unit-space radials, each
+  // built the first time it shows and drawn under the node's own transform,
+  // so a steady frame builds nothing; paint() lays it under the look.
+  function glowPaint(ctx, tint, lit) {
+    const glow = ctx.createRadialGradient(0, 0, 0.25, 0, 0, lit ? 2.25 : 1.8);
+    glow.addColorStop(0, rgba(tint, lit ? 0.32 : 0.16));
+    glow.addColorStop(0.45, rgba(tint, lit ? 0.14 : 0.05));
+    glow.addColorStop(1, rgba(tint, 0));
+    return glow;
+  }
   function extraGlow(ctx, p, radius, tint, lit) {
-    const key = `glow|${tint.join(",")}|${lit}`;
-    let glow = cacheGet(ctx, key);
-    if (!glow) {
-      glow = ctx.createRadialGradient(0, 0, 0.25, 0, 0, lit ? 2.25 : 1.8);
-      glow.addColorStop(0, rgba(tint, lit ? 0.32 : 0.16));
-      glow.addColorStop(0.45, rgba(tint, lit ? 0.14 : 0.05));
-      glow.addColorStop(1, rgba(tint, 0));
-      cachePut(ctx, key, glow);
-    }
+    const key = `glow|${tint.join(",")}`;
+    const glow = cacheGet(ctx, key) ?? cachePut(ctx, key, { quiet: null, lit: null });
+    const level = lit >= 1 ? 1 : lit > 0 ? lit : 0;
+    const base = ctx.globalAlpha;
     ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
-    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, lit ? 2.25 : 1.8, 0, TAU); ctx.fill();
+    if (level < 1) {
+      glow.quiet ??= glowPaint(ctx, tint, false);
+      ctx.globalAlpha = base * (1 - level);
+      ctx.fillStyle = glow.quiet; ctx.beginPath(); ctx.arc(0, 0, 1.8, 0, TAU); ctx.fill();
+    }
+    if (level > 0) {
+      glow.lit ??= glowPaint(ctx, tint, true);
+      ctx.globalAlpha = base * level;
+      ctx.fillStyle = glow.lit; ctx.beginPath(); ctx.arc(0, 0, 2.25, 0, TAU); ctx.fill();
+    }
     ctx.restore();
   }
 
@@ -768,7 +782,9 @@
     const m = n.motion ?? poseOf(n);
     ctx.save();
     ctx.globalAlpha = n.alpha;
-    if (n.extraGlow) extraGlow(ctx, p, radius, tint, n.active || n.selected);
+    // The glow follows the eased lit level (a bare motion object without one
+    // falls back to the flags).
+    if (n.extraGlow) extraGlow(ctx, p, radius, tint, Number.isFinite(m.lit) ? m.lit : n.active || n.selected ? 1 : 0);
     (lookOf(style) ?? LOOKS.orbs).paint(ctx, p, radius, tint, n, m);
     ctx.restore();
   }

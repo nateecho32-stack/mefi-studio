@@ -607,13 +607,13 @@ test("drawNodeSurface hands each node to MefiNodeStyles, and a bare harness pain
 });
 
 test("the agent dress, hub dress and work orbit let a style draw its own and keep theirs otherwise", () => {
-  const glyphs = [], asked = [], options = { ring: new Set(), hub: new Set(), orbit: new Set() };
+  const glyphs = [], asked = [], details = [], options = { ring: new Set(), hub: new Set(), orbit: new Set() };
   let arcs = [], answer = false;
   const spy = {
     glyph: (style) => style === "sigil" ? { ink: "INK", scale: 0.5, ringGap: 4 } : null,
-    ring: (_ctx, style, _p, _radius, _tint, o) => { options.ring.add(o); asked.push(["ring", style, o.status, o.ring, o.still]); return answer; },
-    hubDress: (_ctx, style, _p, _radius, _tint, o) => { options.hub.add(o); asked.push(["hub", style, o.crew]); return answer; },
-    orbit: (_ctx, style, _p, _radius, _tint, o) => { options.orbit.add(o); asked.push(["orbit", style, o.running, o.ring]); return answer; },
+    ring: (_ctx, style, _p, _radius, _tint, o) => { options.ring.add(o); details.push(o.detail); asked.push(["ring", style, o.status, o.ring, o.still]); return answer; },
+    hubDress: (_ctx, style, _p, _radius, _tint, o) => { options.hub.add(o); details.push(o.detail); asked.push(["hub", style, o.crew]); return answer; },
+    orbit: (_ctx, style, _p, _radius, _tint, o) => { options.orbit.add(o); details.push(o.detail); asked.push(["orbit", style, o.running, o.ring]); return answer; },
   };
   const state = { nodeStyle: "sigil", nodeTheme: null, agentTrails: new Map(), nodes: [{ kind: "agent" }], orbitTrails: true };
   const env = vm.createContext({
@@ -655,24 +655,33 @@ test("the agent dress, hub dress and work orbit let a style draw its own and kee
   env.drawWorkOrbit(ctx, work, p, 12, 100, false);
   assert.equal(arcs.length, 4, "a declined orbit keeps the blue arcs");
   assert.deepEqual([options.ring.size, options.hub.size, options.orbit.size], [1, 1, 1], "each hook's options are one scratch, reused for every node");
+  // Each hook gets the tier drawFrame capped for the node (node._detail), T3
+  // for a node the loop has not tiered.
+  assert.ok(details.every((detail) => detail === 3), "no tier yet: full detail");
+  details.length = 0;
+  agent._detail = 1; work._detail = 2;
+  env.drawAgentDress(ctx, agent, p, 10, tint, 100, false);
+  env.drawHubDress(ctx, { kind: "assistant", _detail: 0 }, p, 15, tint, 100, false);
+  env.drawWorkOrbit(ctx, work, p, 12, 100, false);
+  assert.deepEqual(details, [1, 0, 2], "the ring, the hub dress and the orbit read the node's capped tier");
 });
 
 // drawFrame's landing pass hands every arrived pulse to landPulse.
 test("a landed pulse kicks its node's motion once and belongs to the style for the landing tail", () => {
   const lands = [];
   let answer = true;
-  const styles = { land: (_ctx, style, point, radius, tint, u, o) => { lands.push({ style, point, radius, tint: [...tint], u, kind: o.kind, pulse: o.pulse, motion: o.motion }); return answer; } };
+  const styles = { land: (_ctx, style, point, radius, tint, u, o) => { lands.push({ style, point, radius, tint: [...tint], u, kind: o.kind, detail: o.detail, pulse: o.pulse, motion: o.motion }); return answer; } };
   const record = { kick: 0 };
   const state = { nodeStyle: "sigil", nodeMotion: new Map([["task", record]]), styleBurstUntil: 0 };
   const env = vm.createContext({ state, Math, LAND_TAIL_MS: 380, hexToRgb: () => [1, 2, 3] });
   vm.runInContext(section("function landPulse(", "function surgeLine("), env);
-  const look = { kind: "dot", time: 0, still: false, rTo: 0, pulse: null, motion: null };
-  const node = { id: "task", _pr: 12 }, point = { x: 10, y: 20 };
+  const look = { kind: "dot", time: 0, still: false, rTo: 0, detail: 3, pulse: null, motion: null };
+  const node = { id: "task", _pr: 12, _detail: 1 }, point = { x: 10, y: 20 };
   const pulse = { to: node, color: "#010203", wave: true };
   env.landPulse({}, styles, pulse, point, 0, look, 1000, false);
   assert.equal(record.kick, 1, "the arrival kicks the node's motion");
   assert.equal(state.styleBurstUntil, 1380, "a landing draws at the hot cadence for its tail");
-  assert.deepEqual({ ...lands[0], pulse: lands[0].pulse === pulse, motion: lands[0].motion === record }, { style: "sigil", point, radius: 12, tint: [1, 2, 3], u: 0, kind: "wave", pulse: true, motion: true });
+  assert.deepEqual({ ...lands[0], pulse: lands[0].pulse === pulse, motion: lands[0].motion === record }, { style: "sigil", point, radius: 12, tint: [1, 2, 3], u: 0, kind: "wave", detail: 1, pulse: true, motion: true }, "the landing gets the target's radius and its capped tier");
   record.kick = 0.4;
   env.landPulse({}, styles, pulse, point, 190, look, 1190, false);
   assert.equal(record.kick, 0.4, "only the first landed frame kicks");
@@ -688,19 +697,21 @@ test("a landed pulse kicks its node's motion once and belongs to the style for t
   // Reduced motion: no kick, the landing's end pose.
   const quiet = { to: { id: "task" } }; record.kick = 0;
   env.landPulse({}, styles, quiet, point, -400, look, 3000, true);
-  assert.deepEqual([record.kick, lands.at(-1).u], [0, 1]);
+  assert.deepEqual([record.kick, lands.at(-1).u, lands.at(-1).detail], [0, 1, 3], "a node not tiered yet lands at full detail");
   // drawFrame keeps a pulse through its landing only with the node styles, and
   // an arrived pulse no longer draws its head.
   const frame = section("function drawFrame(", "function measure(");
   assert.ok(frame.includes("const landTail = nodeStyles ? LAND_TAIL_MS : 0;"));
   assert.ok(frame.includes("now - pulse.start < pulse.duration + (pulse._landed ? 0 : landTail)"));
   assert.ok(frame.includes("if (!still && now - pulse.start >= pulse.duration) continue;"));
+  assert.ok(frame.includes("pulseLook.detail = pulse.to?._detail ?? 3;"), "a travelling pulse carries its target's tier to surge");
+  assert.ok(frame.includes("node._detail = detail;"), "the node loop leaves each node's tier for its hooks, wires and pulses");
 });
 
 test("graph connections offer each wire to the style and keep the plain line when it declines", () => {
-  const assistant = { node: { id: "assistant", kind: "assistant", _pr: 15, _m: { seed: 0.25 } }, p: { x: 50, y: 80 } };
-  const task = { node: { id: "task", kind: "task", _pr: 12, _m: { seed: 0.75 } }, p: { x: 850, y: 480 } };
-  const agent = { node: { id: "agent", kind: "agent", role: "builder", status: "running", targetNode: task.node }, p: { x: 890, y: 480 } };
+  const assistant = { node: { id: "assistant", kind: "assistant", _pr: 15, _detail: 3, _m: { seed: 0.25 } }, p: { x: 50, y: 80 } };
+  const task = { node: { id: "task", kind: "task", _pr: 12, _detail: 2, _m: { seed: 0.75 } }, p: { x: 850, y: 480 } };
+  const agent = { node: { id: "agent", kind: "agent", role: "builder", status: "running", _detail: 1, targetNode: task.node }, p: { x: 890, y: 480 } };
   const offered = [];
   let answer = false;
   const spy = { wire: (_pen, style, a, b, o) => { offered.push({ style, a, b, o: { ...o, cp: o.cp && { ...o.cp }, dash: o.dash && [...o.dash], tint: o.tint && [...o.tint] } }); return answer; } };
@@ -714,8 +725,10 @@ test("graph connections offer each wire to the style and keep the plain line whe
   assert.equal(offered.length, 2);
   const [edge, tether] = offered;
   assert.ok(edge.a === assistant.p && edge.b === task.p && tether.a === agent.p && tether.b === task.p, "the painted points pass through");
-  assert.deepEqual({ ...edge.o }, { kind: "task", tint: [1, 2, 3], alpha: 0.32, width: 1, dash: [2, 4], march: false, double: false, active: false, inspected: false, curved: true, cp: { x1: 50, y1: 280, x2: 850, y2: 280 }, far: false, time: 500, still: true, seed: 0.75, rA: 15, rB: 12, lifetime: 1 }, "the branch arrives with its look, its S-curve controls and both radii");
-  assert.deepEqual({ ...tether.o, alpha: Math.round(tether.o.alpha * 100) / 100 }, { kind: "tether", tint: [4, 5, 6], alpha: 0.18, width: 1, dash: [6, 4], march: false, double: false, active: true, inspected: false, curved: false, cp: null, far: false, time: 500, still: true, seed: 0, rA: 0, rB: 12, lifetime: 1 }, "the tether is a wire of its own kind");
+  assert.deepEqual({ ...edge.o }, { kind: "task", tint: [1, 2, 3], alpha: 0.32, width: 1, dash: [2, 4], march: false, double: false, active: false, inspected: false, curved: true, cp: { x1: 50, y1: 280, x2: 850, y2: 280 }, far: false, time: 500, still: true, seed: 0.75, rA: 15, rB: 12, detail: 2, lifetime: 1 }, "the branch arrives with its look, its S-curve controls, both radii and the lower end's tier");
+  assert.deepEqual({ ...tether.o, alpha: Math.round(tether.o.alpha * 100) / 100 }, { kind: "tether", tint: [4, 5, 6], alpha: 0.18, width: 1, dash: [6, 4], march: false, double: false, active: true, inspected: false, curved: false, cp: null, far: false, time: 500, still: true, seed: 0, rA: 0, rB: 12, detail: 1, lifetime: 1 }, "the tether is a wire of its own kind");
+  task.node._detail = undefined; agent.node._detail = undefined; render();
+  assert.deepEqual(offered.map(({ o }) => o.detail), [3, 3], "ends not tiered yet: full detail");
   assert.ok(offered.every(({ style }) => style === "sigil"));
   answer = true;
   assert.deepEqual(render(), [], "a style that draws the wire replaces the plain line");

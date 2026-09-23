@@ -111,6 +111,8 @@ test("the Void collection's themes each follow their own sky, and the rail paint
     assert.ok(draw.indexOf(once) >= 0 && draw.indexOf(once) < edges, `${once} runs before the edge pass, so edges and pulses can wear the style too`);
   }
   assert.ok(!loop.includes("{ status:") && !loop.includes("{ running:"), "the ring and orbit options are scratches, not literals per node");
+  assert.ok(loop.includes("const detail = styles ? styles.tier(radius, 2) : 2;"), "one T2-capped tier per node");
+  for (const scratch of ["paint.detail = detail;", "railRing.detail = detail;", "railOrbit.detail = detail;"]) assert.ok(loop.includes(scratch), `${scratch} the ring and orbit draw at the node's own tier`);
   assert.ok(section(draw, "    // pulses", "    // tethers").includes("record.kick = 1"), "a pulse that reaches its node kicks the node's motion");
 });
 
