@@ -273,3 +273,24 @@ test("a builder session links back to the task it served, and other sessions off
   env.rows()[0].click(); await flush();
   assert.equal(asked.filter((payload) => payload.sessionId === "ses-root").length, 1, "a resolved session is not asked again");
 });
+
+test("the request inbox adds and removes through targeted actions and reports a refusal", async () => {
+  const calls = [];
+  let reply = (payload) => ({ ok: true, requests: payload.action === "add" ? [{ at: 9, prompt: "Fix the export", source: "manual" }, { at: 1, prompt: "Older", runId: "run_1" }] : [] });
+  const env = environment({
+    eyesRequestsRead: async () => ({ ok: true, requests: [{ at: 1, prompt: "Older", runId: "run_1" }] }),
+    eyesRequestsWrite: async () => { throw new Error("a whole-list write must not be used"); },
+    eyesRequestsAction: async (payload) => { calls.push(payload); return reply(payload); },
+  });
+  await env.open();
+  env.element("request-input").value = "Fix the export";
+  env.element("request-add").click(); await flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), { action: "add", requests: [{ prompt: "Fix the export", source: "manual" }] });
+  assert.match(env.element("request-list").textContent, /Fix the export/);
+  reply = () => ({ ok: false, error: "A worker holds this request. Stop it or let it finish before removing it." });
+  const removeOlder = () => { const rows = env.element("request-list").children; const row = rows.find((li) => /Older/.test(li.textContent)); const actions = row.children[1]; return actions.children.find((button) => button.textContent === "×"); };
+  removeOlder().click(); await flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[1])), { action: "remove", key: { at: 1, prompt: "Older" } });
+  assert.match(env.element("request-list").textContent, /Older/, "a refused remove leaves the request listed");
+  assert.match(env.element("assistant-status").textContent, /A worker holds this request/);
+});

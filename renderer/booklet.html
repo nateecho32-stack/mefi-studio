@@ -26764,10 +26764,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       return;
     }
     const drafts = result.briefing?.expand ?? [];
-    state.requests.unshift(
-      ...drafts.map((draft) => ({ title: draft.title, prompt: draft.prompt, at: Date.now(), source: "expand" }))
-    );
-    await persistRequests();
+    if (!(await addRequests(drafts.map((draft) => ({ title: draft.title, prompt: draft.prompt, source: "expand" }))))) return;
     status(`expand: ${drafts.length} draft request${drafts.length === 1 ? "" : "s"} added`);
   }
 
@@ -27744,8 +27741,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       remove.textContent = "×";
       remove.addEventListener("click", async (event) => {
         event.stopPropagation();
-        state.requests.splice(index, 1);
-        await persistRequests();
+        await changeRequests({ action: "remove", key: { at: request.at, title: request.title, prompt: request.prompt } }, () => state.requests.splice(index, 1));
       });
       actions.append(copy, remove);
       li.append(text, actions);
@@ -27756,6 +27752,34 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   async function persistRequests() {
     await window.mefiStudio?.eyesRequestsWrite?.(state.requests);
     renderRequests();
+  }
+
+  // Inbox changes are targeted: the host applies an add or a remove to its
+  // latest rows, so a request a worker claimed or the scheduler promoted in
+  // the meantime is never undone by this view's older copy. The whole-list
+  // write remains only for a bridge without the action.
+  async function changeRequests(payload, fallback) {
+    const api = window.mefiStudio;
+    if (!api?.eyesRequestsAction) {
+      fallback();
+      await persistRequests();
+      return true;
+    }
+    try {
+      const result = await api.eyesRequestsAction(payload);
+      if (!result?.ok) throw new Error(result?.error || "The request inbox could not be saved.");
+      if (Array.isArray(result.requests)) state.requests = result.requests;
+      renderRequests();
+      return true;
+    } catch (error) {
+      status(error.message || "The request inbox could not be saved.", true);
+      return false;
+    }
+  }
+
+  function addRequests(rows) {
+    const now = Date.now();
+    return changeRequests({ action: "add", requests: rows }, () => state.requests.unshift(...rows.map((row) => ({ ...row, at: now }))));
   }
 
   // sessionId/payload are optional: the header buttons pass neither, the Command
@@ -27774,15 +27798,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       }
       if (mode === "grow" || mode === "improve" || mode === "expand") {
         const drafts = result.briefing?.expand ?? [];
-        state.requests.unshift(
-          ...drafts.map((draft) => ({
-            title: draft.title,
-            prompt: draft.prompt,
-            at: Date.now(),
-            source: mode === "improve" ? "improver" : mode === "expand" ? "expand" : "grow",
-          }))
-        );
-        await persistRequests();
+        const source = mode === "improve" ? "improver" : mode === "expand" ? "expand" : "grow";
+        if (!(await addRequests(drafts.map((draft) => ({ title: draft.title, prompt: draft.prompt, source }))))) return;
         status(`${mode}: ${drafts.length} draft request${drafts.length === 1 ? "" : "s"} added to the inbox`);
       } else {
         state.briefing = result.briefing;
@@ -27984,9 +28001,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     els.requestAdd?.addEventListener("click", async () => {
       const value = els.requestInput.value.trim();
       if (!value) return;
-      state.requests.unshift({ prompt: value, at: Date.now(), source: "manual" });
+      if (!(await addRequests([{ prompt: value, source: "manual" }]))) return;
       els.requestInput.value = "";
-      await persistRequests();
       status(`request added (${state.requests.length} in inbox)`);
     });
     els.requestInput?.addEventListener("keydown", (event) => {

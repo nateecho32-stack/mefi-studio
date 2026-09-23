@@ -63,6 +63,7 @@ contextBridge.exposeInMainWorld("mefiStudio", {
   eyesWatch: (running) => ipcRenderer.invoke("eyes:watch", { running }),
   eyesRequestsRead: () => ipcRenderer.invoke("eyes:requests-read"),
   eyesRequestsWrite: (requests) => ipcRenderer.invoke("eyes:requests-write", requests),
+  eyesRequestsAction: (payload) => ipcRenderer.invoke("eyes:requests-action", payload ?? {}),
   eyesCheckpointsRead: () => ipcRenderer.invoke("eyes:checkpoints-read"),
   eyesBriefingRead: () => ipcRenderer.invoke("eyes:briefing-read"),
   eyesCollisions: () => ipcRenderer.invoke("eyes:collisions"),

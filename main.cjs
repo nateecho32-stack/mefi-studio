@@ -66,7 +66,7 @@ const executorResume = require("./scripts/executor-resume.cjs");
 const { createPlanningStore } = require("./scripts/planning.cjs");
 const { createPlanningService } = require("./scripts/planning-service.cjs");
 const projectWork = require("./scripts/project-work.cjs");
-const { applyIdeaAction } = require("./scripts/idea-actions.cjs");
+const { applyIdeaAction, applyRequestAction } = require("./scripts/idea-actions.cjs");
 const { createMusicRecommender } = require("./scripts/music-recommendations.cjs");
 const { attachRendererRecovery } = require("./scripts/renderer-recovery.cjs");
 const { createEyesClient, wrapEyes } = require("./scripts/eyes-client.cjs");
@@ -13682,6 +13682,11 @@ function registerIpc() {
   ipcMain.handle("eyes:requests-read", async () => {
     const eyes = await getEyes();
     return { ok: true, requests: await eyes.readJson(REQUESTS_PATH, []) };
+  });
+  ipcMain.handle("eyes:requests-action", async (_event, payload = {}) => {
+    if (payload.projectId && payload.projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Reload the inbox before changing it." };
+    const result = await mutateBoard((board) => applyRequestAction(board.requests, payload, Date.now()));
+    return { ok: result.ok !== false, error: result.error, requests: result.requests };
   });
   ipcMain.handle("eyes:requests-write", async (_event, requests) => {
     const next = (Array.isArray(requests) ? requests : []).map((row) => {

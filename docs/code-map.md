@@ -50,7 +50,7 @@ the weight is, not to be exact.
 | `executor-resume.cjs` | 75 | Local recovery context for a run — never completion evidence. |
 | `executor-worktrees.cjs` | 246 | A git worktree per run, so parallel runs stop contending on `.git/index`. |
 | `context-manager.cjs` | 156 | Bounded context previews with token estimates. Reads no saved state and never changes the executor prompt. |
-| `idea-actions.cjs` | 19 | Applies one UI intent to the latest board, so keeping an idea cannot overwrite a promotion. |
+| `idea-actions.cjs` | 51 | Applies one UI intent to the latest board, so keeping an idea cannot overwrite a promotion, and an inbox add or remove (`eyes:requests-action`) cannot undo a claimed or promoted request. |
 | `reconcile-board.mjs` · `reconcile-store-fork.mjs` | 247 · 157 | One-shot repairs, run with the app closed: board reconciliation, and the repo-versus-installed store fork. |
 
 ### Model calls, routing and resilience
