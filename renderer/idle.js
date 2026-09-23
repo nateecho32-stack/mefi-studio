@@ -1709,31 +1709,15 @@
     } catch {}
   }
 
-  // tasks:save overwrites the whole store: rewrite one task only from a list that
-  // was read and still holds it, never from an empty or failed read.
-  async function patchTask(id, patch) {
+  // Confirm a task done through the host's targeted status action, the same
+  // one the task board uses. tasks:save never takes status from a form, so a
+  // whole-list save here only ever appended a "marked done" log line.
+  async function confirmTaskDone(task) {
     try {
-      const all = (await window.mefiStudio?.tasksList?.())?.tasks;
-      if (!Array.isArray(all) || !all.some((entry) => entry.id === id)) return false;
-      const now = Date.now();
-      await window.mefiStudio.tasksSave(
-        all.map((entry) => {
-          if (entry.id !== id) return entry;
-          const next = { ...entry, ...patch, updatedAt: now };
-          // A finish from the constellation stamps doneAt like the board does,
-          // so the task lands under the Done mark with a real finish time.
-          if (patch.status === "done" && entry.status !== "done" && entry.status !== "archived") {
-            next.doneAt = now;
-            next.logs = [...(entry.logs ?? []), { at: now, kind: "status", text: "marked done" }].slice(-40);
-          } else if (patch.status === "open" || patch.status === "active") {
-            delete next.doneAt;
-          }
-          return next;
-        })
-      );
-      return true;
-    } catch {
-      return false;
+      const result = await window.mefiStudio?.tasksAction?.({ action: "status", status: "done", taskId: task.id, projectId: task.projectId || undefined });
+      return result?.ok ? { ok: true } : { ok: false, error: result?.error || "the task store is unavailable" };
+    } catch (error) {
+      return { ok: false, error: error?.message || "the task store is unavailable" };
     }
   }
 
@@ -9258,22 +9242,12 @@
       action("Work on it", () => workOnNode(node), {
         title: "Prioritize this task. Machine managed starts eligible work while Studio remains responsive; prerequisites, approval, file claims and any selected manual build limit still apply.",
       });
-      if (task.status === "open") {
-        action("Activate", async () => {
-          if (!(await patchTask(task.id, { status: "active" }))) {
-            window.MefiToast?.(`${task.title} · not saved, the task store could not be read`, "bad");
-            return;
-          }
-          await refreshTasks();
-          renderInfo();
-          window.MefiToast?.(`${task.title} → active`, "good");
-        });
-      }
       action(
         "Done",
         async () => {
-          if (!(await patchTask(task.id, { status: "done" }))) {
-            window.MefiToast?.(`${task.title} · not saved, the task store could not be read`, "bad");
+          const result = await confirmTaskDone(task);
+          if (!result.ok) {
+            window.MefiToast?.(`${task.title} · not marked done: ${result.error}`, "bad");
             return;
           }
           await refreshTasks();

@@ -626,6 +626,15 @@ test("verifyCompletion: evidence, not edits, decides completion", () => {
   assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 5, hasSession: false }).state, "unverified", "edits without a session are not attributable");
   // An account without an attributed session is still only a claim.
   assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 0, hasSession: false, resultNote: { parts: { tests: "lua parse pass" } } }).state, "unverified");
+  // A builder CLI that writes no OpenCode session can never supply that
+  // evidence: park it for the owner at once rather than retrying blind. It is
+  // never verified, and a real failure still reads as that failure.
+  const sessionless = verifyCompletion({ verdictOk: true, changedFiles: 5, hasSession: false, sessionlessRoute: "grok" });
+  assert.equal(sessionless.state, "failed");
+  assert.equal(sessionless.attemptNo, 1);
+  assert.match(sessionless.reason, /grok runs leave no session the verifier can read/);
+  assert.equal(verifyCompletion({ verdictOk: false, hasSession: false, sessionlessRoute: "grok" }).reason, "the run did not report success");
+  assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 2, hasSession: true, sessionlessRoute: "grok" }).state, "verified", "a session, when present, is judged as usual");
   // Partial results never verify, whatever the edits say.
   assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 4, hasSession: true, resultNote: { parts: { remaining: "catalog contract" } } }).state, "unverified");
   assert.equal(verifyCompletion({ verdictOk: true, changedFiles: 4, hasSession: true, remaining: ["handoff: follow-up"] }).state, "unverified");

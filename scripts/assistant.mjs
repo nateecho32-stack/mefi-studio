@@ -4000,7 +4000,7 @@ export function claimedCommitHash(parts = {}) {
   return null;
 }
 
-export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerChanges = 0, hasSession = false, observedChecks = [], overseerChecks = [], resolvedHandoffs = [], remaining = [], resultNote = null, commit = null, priorAttempts = 0, priorVerified = false } = {}) {
+export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerChanges = 0, hasSession = false, observedChecks = [], overseerChecks = [], resolvedHandoffs = [], remaining = [], resultNote = null, commit = null, priorAttempts = 0, priorVerified = false, sessionlessRoute = null } = {}) {
   const parts = (resultNote && isObject(resultNote) ? resultNote.parts : null) ?? {};
   const namedChecks = checkReports(parts).some(namesCheck);
   const remainingText = str(parts.remaining);
@@ -4080,6 +4080,12 @@ export function verifyCompletion({ verdictOk = false, changedFiles = 0, ledgerCh
     }
     return fail("no attributable edits and no named checks");
   }
+  // A builder CLI that writes no OpenCode session can never produce this
+  // evidence, so retrying only burns attempts: park it for the owner now.
+  // Nothing about the run is trusted more; it simply stops pretending a retry
+  // could prove it.
+  const route = str(sessionlessRoute).trim();
+  if (route) return { state: "failed", reason: `${route} runs leave no session the verifier can read; check the work and confirm it yourself, or retry it on OpenCode`, evidence, attemptNo: Math.max(0, Number(priorAttempts) || 0) + 1 };
   return fail("no session-attributed completion evidence");
 }
 

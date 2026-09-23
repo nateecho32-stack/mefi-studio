@@ -273,6 +273,13 @@ plus the command results of the overseer run queued for that attempt
 - **failed** (the third unverified attempt) → parked for manual review with no
   `nextRunAt` (the comment "Out of verification budget"); the line ends
   `· parked for manual review` (the `outcome` helper).
+- **failed at once** for a run whose builder CLI writes no OpenCode session
+  (`executorCli` claude, grok, codex or antigravity; the attempt records it as
+  `lastAttempt.route`). Session evidence can never appear for such a run, so it
+  is parked on its first check with "`<cli>` runs leave no session the verifier
+  can read" instead of retrying blind. Nothing about it is trusted more; a
+  failure it reports still reads as that failure, and Settings says so when a
+  CLI builder is chosen.
 
 Edits without an attributable session, or zero changed files with no executed
 named checks, are exactly the "no attributable edits and no named checks"

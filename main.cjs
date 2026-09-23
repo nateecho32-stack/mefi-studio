@@ -54,6 +54,7 @@ const backlog = require("./scripts/backlog.cjs");
 const boardGrowth = require("./scripts/board-growth.cjs");
 const boardGrouping = require("./scripts/board-grouping.cjs");
 const taskContext = require("./scripts/task-context.cjs");
+const taskAttempts = require("./scripts/task-attempts.cjs");
 const chatWork = require("./scripts/chat-work.cjs");
 const taskHandoffs = require("./scripts/task-handoffs.cjs");
 const executorWorktrees = require("./scripts/executor-worktrees.cjs");
@@ -65,7 +66,7 @@ const executorResume = require("./scripts/executor-resume.cjs");
 const { createPlanningStore } = require("./scripts/planning.cjs");
 const { createPlanningService } = require("./scripts/planning-service.cjs");
 const projectWork = require("./scripts/project-work.cjs");
-const { applyIdeaAction } = require("./scripts/idea-actions.cjs");
+const { applyIdeaAction, applyRequestAction } = require("./scripts/idea-actions.cjs");
 const { createMusicRecommender } = require("./scripts/music-recommendations.cjs");
 const { attachRendererRecovery } = require("./scripts/renderer-recovery.cjs");
 const { createEyesClient, wrapEyes } = require("./scripts/eyes-client.cjs");
@@ -9425,6 +9426,19 @@ async function readTaskContext({ taskId, projectId, before = null } = {}, kind =
   });
 }
 
+// Attempt history for the task detail: the executor ledger grouped by runId.
+// Read-only and lock-free — the ledger is append-only and a torn last line is
+// skipped. A sessionId (Explorer, A-Eyes) resolves the task its run served.
+async function readTaskAttempts({ taskId, sessionId, projectId, limit } = {}) {
+  const error = taskProjectError(projectId);
+  if (error) return { ok: false, error };
+  let ledger = "";
+  try { ledger = await readFile(projectDataPath(EXECUTOR_LOG_PATH), "utf8"); } catch (failure) {
+    if (failure?.code !== "ENOENT") return { ok: false, error: "The run history could not be read." };
+  }
+  return { ok: true, projectId: projects.current().id, ...taskAttempts.attemptsFromLedger(ledger, { taskId, sessionId, limit }) };
+}
+
 async function restoreTaskContext({ taskId, revisionId, projectId } = {}) {
   const error = taskProjectError(projectId);
   if (error) return { ok: false, error };
@@ -11433,6 +11447,7 @@ async function spawnNextJob() {
       sawDone: entry.sawDone === true,
       spoke: entry.spoke === true,
       sessionId,
+      ...(entry.routeLabel ? { route: entry.routeLabel } : {}),
       at: Date.now(),
       tail: lastWords,
       ...(errorMessage ? { error: String(errorMessage).slice(0, 500) } : {}),
@@ -12115,6 +12130,7 @@ async function spawnNextJob() {
     delete entry.stopping;
     autopilot.waiting = null; // a job actually spawned — the emit below carries it
     runLabel = label;
+    entry.routeLabel = label;
     const current = () => entry.child === nextChild && !entry.finished;
     // A dispatch acknowledgement precedes process creation. Confirm the real
     // spawn in the same conversation once Node reports it, including after a
@@ -12861,6 +12877,10 @@ async function autopilotHousekeeping() {
       changedByVerify = true;
       verifyNotes.push(`verification waiting for "${assistantClip(row.title, 60)}" — ${evidenceGap}`);
     };
+    // Builders other than OpenCode (claude, grok, codex, antigravity) leave no
+    // session the evidence readers can see, so waiting or retrying cannot
+    // produce proof: the verifier hands those straight to the owner.
+    const sessionlessRoute = (attempt) => !attempt.sessionId && ["claude", "grok", "codex", "antigravity"].includes(attempt.route) ? attempt.route : null;
     const attemptChanges = (attempt) => {
       if (!attempt.sessionId) return [];
       const window = attemptEvidenceWindow(attempt);
@@ -13027,6 +13047,7 @@ async function autopilotHousekeeping() {
           commit: attemptCommit(attempt),
           priorAttempts: Number(task.verifyAttempts) || 0,
           priorVerified,
+          sessionlessRoute: sessionlessRoute(attempt),
         });
         // Policy Lab PR0 — the receipt for this settlement. The board keeps
         // settling by the verdict exactly as before; the receipt records what
@@ -13117,6 +13138,7 @@ async function autopilotHousekeeping() {
           resultNote: attempt.result ?? null,
           commit: attemptCommit(attempt),
           priorAttempts: Number(request.verifyAttempts) || 0,
+          sessionlessRoute: sessionlessRoute(attempt),
         });
         // Policy Lab PR0 — settled inbox rows get receipts too, so directly
         // executed requests carry the same runner-observed evidence tasks do.
@@ -15189,6 +15211,11 @@ function registerIpc() {
     const eyes = await getEyes();
     return { ok: true, requests: await eyes.readJson(REQUESTS_PATH, []) };
   });
+  ipcMain.handle("eyes:requests-action", async (_event, payload = {}) => {
+    if (payload.projectId && payload.projectId !== projects.current().id) return { ok: false, error: "The selected project changed. Reload the inbox before changing it." };
+    const result = await mutateBoard((board) => applyRequestAction(board.requests, payload, Date.now()));
+    return { ok: result.ok !== false, error: result.error, requests: result.requests };
+  });
   ipcMain.handle("eyes:requests-write", async (_event, requests) => {
     const next = (Array.isArray(requests) ? requests : []).map((row) => {
       const { buildApproval: _untrustedApproval, buildScope: _viewScope, ...request } = row ?? {};
@@ -15385,6 +15412,7 @@ function registerIpc() {
   ipcMain.handle("tasks:dependencies", (_event, payload) => setTaskDependencies(payload ?? {}));
   ipcMain.handle("tasks:history", (_event, payload) => readTaskContext(payload ?? {}, "history"));
   ipcMain.handle("tasks:handoff", (_event, payload) => readTaskContext(payload ?? {}, "handoff"));
+  ipcMain.handle("tasks:attempts", (_event, payload) => readTaskAttempts(payload ?? {}));
   ipcMain.handle("tasks:restore", (_event, payload) => restoreTaskContext(payload ?? {}));
   ipcMain.handle("tasks:delete", (_event, payload) => deleteTask(payload ?? {}));
   ipcMain.handle("tasks:action", (_event, payload) => taskAction(payload ?? {}));

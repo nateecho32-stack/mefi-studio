@@ -157,6 +157,26 @@
     }
   }
 
+  // The task a builder session served, from the executor ledger, so a change
+  // in the feed leads back to its task. Misses are re-asked after a minute.
+  const sessionTasks = new Map();
+  function sessionTask(sessionId) {
+    const known = sessionTasks.get(sessionId);
+    if (!sessionId || (known && (known.taskId || known.pending || Date.now() - known.at < 60000))) return known ?? null;
+    if (!window.mefiStudio?.tasksAttempts) return null;
+    const record = { pending: true, taskId: null, projectId: null, at: Date.now() };
+    sessionTasks.set(sessionId, record);
+    Promise.resolve(window.mefiStudio.tasksAttempts({ sessionId, limit: 1 }))
+      .then((result) => { if (result?.ok && result.taskId) Object.assign(record, { taskId: result.taskId, projectId: result.projectId || null }); })
+      .catch(() => {})
+      .finally(() => {
+        record.pending = false;
+        record.at = Date.now();
+        if (record.taskId && findChange(state.changeId)?.sessionId === sessionId) renderInspector();
+      });
+    return record;
+  }
+
   function renderInspector() {
     const change = findChange(state.changeId);
     els.inspector.textContent = "";
@@ -184,6 +204,18 @@
       const v = document.createElement("span");
       v.textContent = value;
       els.inspector.append(k, v);
+    }
+    const owner = sessionTask(change.sessionId);
+    if (owner?.taskId) {
+      const k = document.createElement("span");
+      k.className = "k";
+      k.textContent = "task";
+      const open = document.createElement("button");
+      open.className = "ghost mini";
+      open.textContent = "Open task";
+      open.title = "Open the task this session worked on, with its attempts and completion checks";
+      open.addEventListener("click", () => window.MefiNav?.go?.("tasks", { taskId: owner.taskId, projectId: owner.projectId || undefined, filter: "all" }));
+      els.inspector.append(k, open);
     }
   }
 

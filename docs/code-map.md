@@ -36,6 +36,7 @@ the weight is, not to be exact.
 | --- | ---: | --- |
 | `assistant.mjs` | 6,486 | The always-on assistant's logic — every role, state normalisation, tree organisation, housekeeping and `verifyCompletion` — as functions of their inputs and an explicit `now`. |
 | `task-context.cjs` | 192 | Durable task revisions (`contextHistory`) and resumable briefs. Pure; callers persist the result under the board lock. |
+| `task-attempts.cjs` | 86 | A task's attempt history (start, fallback, finish, release) grouped by `runId` from `data/executor-log.jsonl`, for the task detail's Attempts fold and the Explorer/A-Eyes "Open task" links. Pure; read-only. |
 | `task-delegation.cjs` | 173 | Splits an owned task into durable slices. Pure, and runs inside the board gateway. |
 | `task-handoffs.cjs` | 129 | Durable work handed on by a finished attempt; transforms board records and never runs a worker. |
 | `task-history.mjs` | 54 | Keeps a verified inbox request on the board after the inbox releases it. |
@@ -49,7 +50,7 @@ the weight is, not to be exact.
 | `executor-resume.cjs` | 75 | Local recovery context for a run — never completion evidence. |
 | `executor-worktrees.cjs` | 246 | A git worktree per run, so parallel runs stop contending on `.git/index`. |
 | `context-manager.cjs` | 156 | Bounded context previews with token estimates. Reads no saved state and never changes the executor prompt. |
-| `idea-actions.cjs` | 19 | Applies one UI intent to the latest board, so keeping an idea cannot overwrite a promotion. |
+| `idea-actions.cjs` | 51 | Applies one UI intent to the latest board, so keeping an idea cannot overwrite a promotion, and an inbox add or remove (`eyes:requests-action`) cannot undo a claimed or promoted request. |
 | `reconcile-board.mjs` · `reconcile-store-fork.mjs` | 247 · 157 | One-shot repairs, run with the app closed: board reconciliation, and the repo-versus-installed store fork. |
 
 ### Model calls, routing and resilience

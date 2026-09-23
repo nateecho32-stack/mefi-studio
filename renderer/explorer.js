@@ -187,10 +187,7 @@
       return;
     }
     const drafts = result.briefing?.expand ?? [];
-    state.requests.unshift(
-      ...drafts.map((draft) => ({ title: draft.title, prompt: draft.prompt, at: Date.now(), source: "expand" }))
-    );
-    await persistRequests();
+    if (!(await addRequests(drafts.map((draft) => ({ title: draft.title, prompt: draft.prompt, source: "expand" }))))) return;
     status(`expand: ${drafts.length} draft request${drafts.length === 1 ? "" : "s"} added`);
   }
 
@@ -421,10 +418,13 @@
   // repaints only when something the tree or the detail shows has changed
   // (the minute bucket keeps the "3m ago" labels honest).
   let paintedSignature = "";
+  // The task a builder session served (sessionTask below), keyed by session.
+  const sessionTasks = new Map();
   function treeSignature() {
     const org = state.assistant?.organization ?? null;
     return JSON.stringify([
       state.selected, Boolean(state.foldedOpen), Math.floor(Date.now() / 60000),
+      sessionTasks.get(state.selected)?.taskId ?? null,
       state.sessions.map((s) => [s.id, s.parentId, s.title, s.agent, s.model?.id, s.timeUpdated, s.cost, s.tokens?.input, s.tokens?.output]),
       state.todos.map((t) => [t.id, t.sessionId, t.status, t.content]),
       Object.entries(state.checkpoints ?? {}).map(([id, notes]) => [id, notes?.length ?? 0, notes?.[0]?.note]),
@@ -461,6 +461,27 @@
     renderDetail();
     paintedSignature = treeSignature();
     revealSelected();
+  }
+
+  // The task a builder session served, from the executor ledger. Misses are
+  // re-asked after a minute: a running session gains its ledger row at finish.
+  // A late answer repaints through paintTreeAndDetail, which keeps a half-typed
+  // checkpoint and the focus; the task id is part of its signature.
+  function sessionTask(sessionId) {
+    const known = sessionTasks.get(sessionId);
+    if (known && (known.taskId || known.pending || Date.now() - known.at < 60000)) return known;
+    if (!window.mefiStudio?.tasksAttempts) return null;
+    const record = { pending: true, taskId: null, projectId: null, at: Date.now() };
+    sessionTasks.set(sessionId, record);
+    Promise.resolve(window.mefiStudio.tasksAttempts({ sessionId, limit: 1 }))
+      .then((result) => { if (result?.ok && result.taskId) Object.assign(record, { taskId: result.taskId, projectId: result.projectId || null }); })
+      .catch(() => {})
+      .finally(() => {
+        record.pending = false;
+        record.at = Date.now();
+        if (record.taskId && state.selected === sessionId) paintTreeAndDetail();
+      });
+    return record;
   }
 
   function renderDetail() {
@@ -518,6 +539,12 @@
     link("Open in Command", "Select this session in the Command view (D)", () =>
       window.MefiNav?.go?.("command", { sessionId: session.id })
     );
+    const owner = sessionTask(session.id);
+    if (owner?.taskId) {
+      link("Open task", "Open the task this session worked on, with its attempts and completion checks", () =>
+        window.MefiNav?.go?.("tasks", { taskId: owner.taskId, projectId: owner.projectId || undefined, filter: "all" })
+      );
+    }
     els.detail.append(links);
     const todos = sessionTodos(session.id);
     if (todos.length) {
@@ -1187,8 +1214,7 @@
       remove.textContent = "×";
       remove.addEventListener("click", async (event) => {
         event.stopPropagation();
-        state.requests.splice(index, 1);
-        await persistRequests();
+        await changeRequests({ action: "remove", key: { at: request.at, title: request.title, prompt: request.prompt } }, () => state.requests.splice(index, 1));
       });
       actions.append(copy, remove);
       li.append(text, actions);
@@ -1199,6 +1225,34 @@
   async function persistRequests() {
     await window.mefiStudio?.eyesRequestsWrite?.(state.requests);
     renderRequests();
+  }
+
+  // Inbox changes are targeted: the host applies an add or a remove to its
+  // latest rows, so a request a worker claimed or the scheduler promoted in
+  // the meantime is never undone by this view's older copy. The whole-list
+  // write remains only for a bridge without the action.
+  async function changeRequests(payload, fallback) {
+    const api = window.mefiStudio;
+    if (!api?.eyesRequestsAction) {
+      fallback();
+      await persistRequests();
+      return true;
+    }
+    try {
+      const result = await api.eyesRequestsAction(payload);
+      if (!result?.ok) throw new Error(result?.error || "The request inbox could not be saved.");
+      if (Array.isArray(result.requests)) state.requests = result.requests;
+      renderRequests();
+      return true;
+    } catch (error) {
+      status(error.message || "The request inbox could not be saved.", true);
+      return false;
+    }
+  }
+
+  function addRequests(rows) {
+    const now = Date.now();
+    return changeRequests({ action: "add", requests: rows }, () => state.requests.unshift(...rows.map((row) => ({ ...row, at: now }))));
   }
 
   // sessionId/payload are optional: the header buttons pass neither, the Command
@@ -1217,15 +1271,8 @@
       }
       if (mode === "grow" || mode === "improve" || mode === "expand") {
         const drafts = result.briefing?.expand ?? [];
-        state.requests.unshift(
-          ...drafts.map((draft) => ({
-            title: draft.title,
-            prompt: draft.prompt,
-            at: Date.now(),
-            source: mode === "improve" ? "improver" : mode === "expand" ? "expand" : "grow",
-          }))
-        );
-        await persistRequests();
+        const source = mode === "improve" ? "improver" : mode === "expand" ? "expand" : "grow";
+        if (!(await addRequests(drafts.map((draft) => ({ title: draft.title, prompt: draft.prompt, source }))))) return;
         status(`${mode}: ${drafts.length} draft request${drafts.length === 1 ? "" : "s"} added to the inbox`);
       } else {
         state.briefing = result.briefing;
@@ -1443,9 +1490,8 @@
     els.requestAdd?.addEventListener("click", async () => {
       const value = els.requestInput.value.trim();
       if (!value) return;
-      state.requests.unshift({ prompt: value, at: Date.now(), source: "manual" });
+      if (!(await addRequests([{ prompt: value, source: "manual" }]))) return;
       els.requestInput.value = "";
-      await persistRequests();
       status(`request added (${state.requests.length} in inbox)`);
     });
     els.requestInput?.addEventListener("keydown", (event) => {

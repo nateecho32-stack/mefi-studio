@@ -70,7 +70,21 @@ function environment(bridge = {}, { readyState = "complete" } = {}) {
     }
     click() { if (!this.disabled) this.dispatch("click"); }
     focus() { document.activeElement = this; }
-    querySelector() { return null; }
+    // Enough of a selector engine for "tag.class" (explorer.js asks for
+    // "input.grow" and "li.selected"); anything richer matches nothing.
+    querySelector(selector) {
+      const [tag, cls] = String(selector).split(".");
+      const walk = (node) => {
+        for (const child of node.children) {
+          if (typeof child !== "object" || !child.children) continue;
+          if ((!tag || child.tagName === tag) && (!cls || child.classes.has(cls))) return child;
+          const found = walk(child);
+          if (found) return found;
+        }
+        return null;
+      };
+      return /^[a-z]*(\.[\w-]+)?$/i.test(String(selector)) ? walk(this) : null;
+    }
     contains() { return false; }
     closest() { return null; }
     setAttribute(name, value) { this.attributes[name] = String(value); }
@@ -347,4 +361,58 @@ test("a pre-navigation deep link runs open() before init() without the .hidden t
   await env.open();
   assert.equal(env.element("explorer-overlay").hidden, false, "open() after init() shows the restored sheet");
   assert.ok(env.rows().length > 0, "the restored session tree renders once init() has run");
+});
+
+test("a builder session links back to the task it served, and other sessions offer no task link", async () => {
+  const asked = [], went = [];
+  const env = environment({
+    tasksAttempts: async (payload) => { asked.push(payload); return payload.sessionId === "ses-root" ? { ok: true, projectId: "project-a", taskId: "task-fix", attempts: [] } : { ok: true, taskId: null, attempts: [] }; },
+  });
+  env.window.MefiNav = { go: (...args) => went.push(args) };
+  await env.open();
+  env.rows()[0].click(); await flush();
+  const buttons = () => { const found = []; const walk = (node) => { for (const child of node.children || []) { if (child.tagName === "button") found.push(child); walk(child); } }; walk(env.element("explorer-detail")); return found; };
+  const open = buttons().find((button) => button.textContent === "Open task");
+  assert.ok(open, "the resolved task shows an Open task link");
+  open.click();
+  assert.deepEqual(JSON.parse(JSON.stringify(went)), [["tasks", { taskId: "task-fix", projectId: "project-a", filter: "all" }]]);
+  env.rows()[2].click(); await flush();
+  assert.ok(!buttons().some((button) => button.textContent === "Open task"), "a session with no ledger row has no task link");
+  env.rows()[0].click(); await flush();
+  assert.equal(asked.filter((payload) => payload.sessionId === "ses-root").length, 1, "a resolved session is not asked again");
+});
+
+test("a late Open task lookup repaints without losing a half-typed checkpoint", async () => {
+  let answer = null;
+  const env = environment({ tasksAttempts: () => new Promise((resolve) => { answer = resolve; }) });
+  await env.open();
+  env.rows()[0].click(); await flush();
+  const detail = env.element("explorer-detail");
+  const draft = detail.querySelector("input.grow");
+  assert.ok(draft, "the checkpoint box is shown");
+  draft.value = "half a note";
+  answer({ ok: true, projectId: "project-a", taskId: "task-fix", attempts: [] }); await flush();
+  assert.ok(detail.textContent.includes("Open task"), "the resolved task link appears");
+  assert.equal(detail.querySelector("input.grow").value, "half a note", "the repaint keeps the draft");
+});
+
+test("the request inbox adds and removes through targeted actions and reports a refusal", async () => {
+  const calls = [];
+  let reply = (payload) => ({ ok: true, requests: payload.action === "add" ? [{ at: 9, prompt: "Fix the export", source: "manual" }, { at: 1, prompt: "Older", runId: "run_1" }] : [] });
+  const env = environment({
+    eyesRequestsRead: async () => ({ ok: true, requests: [{ at: 1, prompt: "Older", runId: "run_1" }] }),
+    eyesRequestsWrite: async () => { throw new Error("a whole-list write must not be used"); },
+    eyesRequestsAction: async (payload) => { calls.push(payload); return reply(payload); },
+  });
+  await env.open();
+  env.element("request-input").value = "Fix the export";
+  env.element("request-add").click(); await flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), { action: "add", requests: [{ prompt: "Fix the export", source: "manual" }] });
+  assert.match(env.element("request-list").textContent, /Fix the export/);
+  reply = () => ({ ok: false, error: "A worker holds this request. Stop it or let it finish before removing it." });
+  const removeOlder = () => { const rows = env.element("request-list").children; const row = rows.find((li) => /Older/.test(li.textContent)); const actions = row.children[1]; return actions.children.find((button) => button.textContent === "×"); };
+  removeOlder().click(); await flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[1])), { action: "remove", key: { at: 1, prompt: "Older" } });
+  assert.match(env.element("request-list").textContent, /Older/, "a refused remove leaves the request listed");
+  assert.match(env.element("assistant-status").textContent, /A worker holds this request/);
 });
