@@ -56,48 +56,66 @@ test("a black horizon, a photon ring lit from the top, a Doppler disc and a turn
     assert.equal(ctx.calls.conic, 2, "two conic paints: the fixed Doppler light and the turning streaks");
     const [doppler, streaks] = gradients.filter(({ kind }) => kind === "conic");
     assert.ok(Math.abs(doppler.args[0] - Math.PI) < 1e-9, "the Doppler light is brightest on the approaching (left) side");
+    // The receding side keeps the node's tint with a trace of the theme's
+    // second hue, so a state's colour owns the whole disc.
+    const channels = (text) => text.match(/[\d.]+/g).slice(0, 3).map(Number);
+    const far = channels(doppler.stops.find(([offset]) => offset === 0.5)[1]);
+    const accent = palette === VOID ? [54, 209, 255] : TINT.map((channel) => Math.round(channel + (255 - channel) * 0.72));
+    const gap = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    assert.ok(gap(far, TINT) < gap(far, accent) / 2, `the receding side is the tint's (${far})`);
+    assert.ok(doppler.stops.every(([, colour]) => !colour.startsWith(`rgba(${accent.join(",")},`)), "never the second hue alone");
     assert.equal(streaks.stops.length >= 20, true, "the streak conic carries its irregular bands");
     const core = gradients.find(({ kind, args }) => kind === "radial" && args[5] === 0.52);
     assert.equal(core.stops[0][1], "rgba(2,1,5,1)", "the horizon is black on every theme");
     const photon = gradients.find(({ kind, args }) => kind === "linear" && args[1] === -0.58);
     assert.ok(luminance(photon.stops[0][1]) > luminance(photon.stops[2][1]), "the photon ring is brightest on top (the lensed far side)");
   }
-  // The Doppler fill never turns; the streaks do: the frame rotates between them.
+  // The Doppler fill never turns; the streaks do: the frame rotates between
+  // them. One transform places, sizes and tilts the node.
   const { motion, step } = record(styles, { active: true });
-  const rotations = (time) => { const ctx = recordingContext(); paint(styles, ctx, 12, { active: true, motion, time }); return ctx.calls.log.filter(([name]) => name === "rotate").map(([, angle]) => angle); };
-  const first = rotations(1000);
+  const frame = (time) => {
+    const ctx = recordingContext();
+    paint(styles, ctx, 12, { active: true, motion, time });
+    const transforms = ctx.calls.log.filter(([name]) => name === "transform");
+    assert.equal(transforms.length, 1, "one transform for the node");
+    const [, a, b] = transforms[0];
+    return { tilt: Math.atan2(b, a), spins: ctx.calls.log.filter(([name]) => name === "rotate").map(([, angle]) => angle) };
+  };
+  const first = frame(1000);
   step(3);
-  const later = rotations(1100);
-  assert.equal(first[0], later[0], "the disc keeps its tilt");
-  assert.notDeepEqual(first.slice(1), later.slice(1), "and its streaks turn");
+  const later = frame(1100);
+  assert.ok(Math.abs(first.tilt - later.tilt) < 1e-6 && first.tilt < -0.1 && first.tilt > -0.4, "the disc keeps its tilt");
+  assert.equal(first.spins.length, 4, "the streaks turn under each half's fill and turn back");
+  assert.notDeepEqual(first.spins, later.spins, "and they turn");
 });
 
 test("every tier steps down to a clean small node: exact budgets for the still pose, never above them while animated", () => {
   const styles = loadNodeStyles();
-  // [lineTo, arc, fill, stroke] per tier (radius) and state: exact in the
-  // still pose, and the ceiling while animated (every spark in view; a spark
-  // behind the horizon and inside its shadow is not drawn).
+  // [lineTo, arc, ellipse, fill, stroke] per tier (radius) and state: exact
+  // in the still pose, and the ceiling while animated (every spark in view; a
+  // spark behind the horizon and inside its shadow is not drawn, and a jet's
+  // knot is not stroked while it is invisible).
   const POSE = {
-    4.5: { quiet: [1, 7, 4, 2], working: [1, 7, 4, 2], chosen: [1, 7, 4, 2] },
-    7: { quiet: [2, 11, 6, 1], working: [7, 11, 7, 2], chosen: [2, 11, 6, 1] },
-    9.5: { quiet: [4, 11, 7, 3], working: [9, 11, 8, 3], chosen: [4, 11, 7, 3] },
-    12: { quiet: [5, 11, 7, 3], working: [14, 11, 8, 4], chosen: [5, 11, 7, 3] },
+    4.5: { quiet: [1, 3, 4, 4, 2], working: [1, 3, 4, 4, 2], chosen: [1, 3, 4, 4, 2] },
+    7: { quiet: [2, 11, 0, 6, 1], working: [7, 11, 0, 7, 2], chosen: [2, 11, 0, 6, 1] },
+    9.5: { quiet: [4, 11, 0, 7, 3], working: [9, 11, 0, 8, 3], chosen: [4, 11, 0, 7, 3] },
+    12: { quiet: [5, 11, 0, 7, 3], working: [14, 11, 0, 8, 4], chosen: [5, 11, 0, 7, 3] },
   };
   const BUDGETS = {
-    4.5: { quiet: [1, 7, 4, 2], working: [1, 7, 4, 2], chosen: [1, 7, 4, 2] },
-    7: { quiet: [2, 11, 6, 1], working: [8, 11, 7, 3], chosen: [2, 11, 6, 1] },
-    9.5: { quiet: [5, 11, 7, 3], working: [11, 11, 8, 3], chosen: [5, 11, 7, 3] },
-    12: { quiet: [7, 11, 7, 3], working: [16, 11, 8, 4], chosen: [7, 11, 7, 3] },
+    4.5: { quiet: [1, 3, 4, 4, 2], working: [1, 3, 4, 4, 2], chosen: [1, 3, 4, 4, 2] },
+    7: { quiet: [2, 11, 0, 6, 1], working: [8, 11, 0, 7, 3], chosen: [2, 11, 0, 6, 1] },
+    9.5: { quiet: [5, 11, 0, 7, 3], working: [11, 11, 0, 8, 3], chosen: [5, 11, 0, 7, 3] },
+    12: { quiet: [7, 11, 0, 7, 3], working: [15, 11, 0, 8, 4], chosen: [7, 11, 0, 7, 3] },
   };
   const STATES = { quiet: {}, working: { active: true }, chosen: { selected: true, chosen: true } };
-  const counts = (ctx) => [ctx.calls.lineTo, ctx.calls.arc, ctx.calls.fill, ctx.calls.stroke];
+  const counts = (ctx) => [ctx.calls.lineTo, ctx.calls.arc, ctx.calls.ellipse, ctx.calls.fill, ctx.calls.stroke];
   for (const [radius, byState] of Object.entries(BUDGETS)) {
     for (const [state, budget] of Object.entries(byState)) {
       const pose = recordingContext();
       paint(styles, pose, Number(radius), STATES[state]);
       assert.deepEqual(counts(pose), POSE[radius][state], `r ${radius} ${state}: the still pose's budget`);
       const live = record(styles, { active: state === "working", selected: state === "chosen" });
-      const most = [0, 0, 0, 0];
+      const most = [0, 0, 0, 0, 0];
       for (let frame = 0; frame < 150; frame += 1) {
         const time = live.step();
         const ctx = recordingContext();
@@ -110,8 +128,37 @@ test("every tier steps down to a clean small node: exact budgets for the still p
   // T0 is a tiny ringed planet: no streak conic fill, no sparks, no jets, one hot spot.
   const tiny = recordingContext();
   paint(styles, tiny, 4.5, { active: true });
-  assert.equal(tiny.calls.rotate, 1, "only the disc's tilt: nothing turns under the transform");
+  assert.equal(tiny.calls.rotate, 0, "nothing turns under the transform");
+  assert.equal(tiny.calls.log.filter(([name]) => name === "scale").length, 0, "the halves are ellipses: no squashing transform");
   assert.equal(tiny.calls.lineTo, 1, "one hot spot rides the disc");
+});
+
+test("a steady node costs few canvas operations: 36 at T0 (most of a board's todos), and fixed ceilings above it", () => {
+  const styles = loadNodeStyles();
+  // Every call and property set of one warm paint, the dispatcher's save,
+  // alpha and restore included; the ceiling over 150 animated frames (the
+  // T0 spot behind the horizon and in front of it).
+  // [quiet or chosen, working] per tier (radius).
+  const CEILINGS = { 4.5: [36, 36], 7: [56, 81], 9.5: [76, 90], 12: [80, 103] };
+  for (const [radius, [quiet, working]] of Object.entries(CEILINGS)) {
+    for (const flags of [{}, { active: true }, { selected: true, chosen: true }, { kind: "agent", glyph: true, active: true }]) {
+      const live = record(styles, { active: flags.active === true, selected: flags.selected === true });
+      const ctx = recordingContext();
+      paint(styles, ctx, Number(radius), { ...flags, motion: live.motion, time: live.flags.time });
+      const sides = new Set();
+      let most = 0;
+      for (let frame = 0; frame < 150; frame += 1) {
+        const time = live.step();
+        const from = ctx.calls.log.length;
+        paint(styles, ctx, Number(radius), { ...flags, motion: live.motion, time });
+        const log = ctx.calls.log.slice(from);
+        most = Math.max(most, log.length);
+        if (Number(radius) < 6) sides.add(log.findIndex(([name]) => name === "lineTo") < log.findIndex(([name, , , r]) => name === "arc" && r === 0.52) ? "behind" : "front");
+      }
+      assert.equal(most, flags.active ? working : quiet, `r ${radius} ${JSON.stringify(flags)}: the ceiling of canvas operations`);
+      if (Number(radius) < 6) assert.deepEqual([...sides].sort(), ["behind", "front"], "the T0 spot passes behind the horizon and in front of it");
+    }
+  }
 });
 
 test("nothing is painted under the horizon, so a node at rest alpha keeps a black shadow", () => {
@@ -232,6 +279,89 @@ test("selection thickens the photon ring, a landing kicks it, and a glyph node d
   assert.ok(changed.length >= 3 && changed.every(([from, to]) => Math.abs(to - from * 0.4) < 1e-9), "the near half (and the sparks in front) cross a glyph at .4");
 });
 
+test("infalling sparks leave the disc's rim, glow brighter while it works, and go deep on a pale page", () => {
+  const styles = loadNodeStyles();
+  const sparkRuns = (active, palette) => {
+    const theme = styles.theme(palette);
+    const live = record(styles, { active });
+    // The sparks are the only strokes in a colour at .8.
+    const isSpark = (value) => typeof value === "string" && value.endsWith(",0.8)");
+    const alphas = new Set(), inks = new Set();
+    let farthest = 0;
+    for (let frame = 0; frame < 120; frame += 1) {
+      const time = live.step();
+      const ctx = recordingContext();
+      paint(styles, ctx, 12, { active, motion: live.motion, time, theme });
+      const log = plain(ctx.calls.log);
+      log.forEach(([name, value], index) => {
+        if (name !== "set:strokeStyle" || !isSpark(value)) return;
+        for (let at = index - 1; at >= 0 && log[at][0] !== "beginPath"; at -= 1) if (log[at][0] === "moveTo" || log[at][0] === "lineTo") farthest = Math.max(farthest, Math.abs(log[at][1]));
+      });
+      for (const stroke of ctx.calls.strokes) if (isSpark(stroke.style)) { alphas.add(Math.round(stroke.alpha * 1000) / 1000); inks.add(stroke.style); }
+    }
+    return { alphas: [...alphas], inks: [...inks], farthest };
+  };
+  const quiet = sparkRuns(false, VOID), working = sparkRuns(true, VOID);
+  assert.ok(quiet.farthest > 0.9 && quiet.farthest <= 1.12 + 1e-9, `born on the disc, not in empty space (${quiet.farthest.toFixed(3)})`);
+  assert.deepEqual(quiet.alphas, [0.55], "a quiet disc's sparks are soft");
+  assert.deepEqual(working.alphas, [0.9], "a working disc's burn brighter");
+  const pale = sparkRuns(false, LIGHT);
+  assert.deepEqual(pale.alphas, [0.4], "on a pale page: softer still");
+  assert.ok(pale.inks.length === 1 && luminance(pale.inks[0]) < luminance("rgba(243,240,232,1)") - 60, `and deep, not white (${pale.inks[0]})`);
+  assert.ok(luminance(quiet.inks[0]) > 200, "white-hot on a dark page");
+});
+
+test("a jet's knots are born at the horizon's rim, thin as they travel out and fade before the tip: no blink at the wrap", () => {
+  const styles = loadNodeStyles();
+  const live = record(styles, { active: true });
+  const knot = "rgba(245,244,255,0.95)"; // the tint's rim ink on a dark page
+  let previous = null, drawn = 0, farthest = 0, faintest = 1, jump = 0;
+  for (let frame = 0; frame < 90; frame += 1) {
+    const time = live.step();
+    const ctx = recordingContext();
+    paint(styles, ctx, 15, { active: true, motion: live.motion, time });
+    const log = plain(ctx.calls.log);
+    const at = log.findIndex(([name, value]) => name === "set:strokeStyle" && value === knot);
+    const stroke = at < 0 ? null : ctx.calls.strokes.find(({ style }) => style === knot);
+    const alpha = stroke ? stroke.alpha : 0;
+    if (stroke) {
+      drawn += 1;
+      faintest = Math.min(faintest, alpha);
+      // The two knots' ends, in the node's unit frame (the jet's axis is y).
+      const ends = log.slice(0, at).reverse();
+      const path = ends.slice(0, ends.findIndex(([name]) => name === "beginPath")).filter(([name]) => name === "moveTo" || name === "lineTo");
+      assert.equal(path.length, 4, "one knot on each jet, in one stroke");
+      for (const [, x, y] of path) { assert.equal(x, 0); farthest = Math.max(farthest, Math.abs(y)); assert.ok(Math.abs(y) >= 0.62 - 1e-9, "never inside the horizon's rim"); }
+    }
+    if (previous !== null) jump = Math.max(jump, Math.abs(alpha - previous));
+    previous = alpha;
+  }
+  assert.ok(drawn > 60, `the knots run all the time (${drawn} of 90 frames)`);
+  assert.ok(farthest <= 1.5 + 0.075 - 0.32 + 0.18 + 1e-9 && farthest < 1.45, `they stop well short of the tip (${farthest.toFixed(2)})`);
+  assert.ok(faintest < 0.12, "they fade to almost nothing at both ends of their run");
+  assert.ok(jump < 0.2, `no knot blinks on or off between frames (largest step ${jump.toFixed(3)})`);
+});
+
+test("a small hub widens its horizon so the monogram always sits on black", () => {
+  const styles = loadNodeStyles();
+  for (const palette of [VOID, LIGHT]) {
+    const theme = styles.theme(palette);
+    for (const radius of [3, 4.5, 8, 12.5, 15]) {
+      const ctx = recordingContext();
+      paint(styles, ctx, radius, { kind: "assistant", theme });
+      const log = plain(ctx.calls.log);
+      // The horizon is the arc filled right after a pure-black or core fill style is set.
+      const fillAt = log.findIndex(([name, value]) => name === "set:fillStyle" && (value === "rgba(2,1,5,1)" || String(value).includes("0 rgba(2,1,5,1)")));
+      const arc = log.slice(0, fillAt).reverse().find(([name]) => name === "arc");
+      const size = arc[3] * radius;
+      assert.ok(size >= Math.min(6.45, 1.7 * radius) - 1e-6, `r ${radius}: a ${size.toFixed(1)} px horizon under the M`);
+      assert.ok(arc[3] <= 1.7 + 1e-9, "never past 1.7 radii");
+      if (radius >= 12.5) assert.ok(Math.abs(arc[3] - 0.52) < 1e-9, "a full-size hub keeps the .52 horizon");
+      assert.equal(ctx.calls.texts[0].text, "M");
+    }
+  }
+});
+
 test("every layer follows the caller's alpha, on both themes and without conic gradients", () => {
   const styles = loadNodeStyles();
   for (const palette of [VOID, LIGHT]) for (const conic of [true, false]) for (const flags of [{}, { active: true }, { kind: "agent", glyph: true, active: true }]) {
@@ -275,6 +405,16 @@ test("the status ring: a spark on a tilted ellipse while running; queued, error 
   assert.ok(popping.calls.log.some(([name, sx]) => name === "scale" && sx < 1), "a new badge grows in");
   const none = ring(null);
   assert.equal(none.calls.stroke + none.calls.fill, 0, "no status, nothing to draw");
+  // On a pale page the spark's head goes deep instead of white, so it reads.
+  const page = luminance("rgba(243,240,232,1)");
+  const pale = ring("running", { theme: styles.theme(LIGHT) });
+  assert.ok(luminance(pale.calls.fills[0].style) < page - 60, `a deep head on the light theme (${pale.calls.fills[0].style})`);
+  assert.ok(luminance(running.calls.fills[0].style) > 200, "a white-hot head on a dark one");
+  // Agents in the same state never pulse or march in lockstep: each keeps its own phase.
+  const other = record(styles, { active: true, id: "agent:scout" });
+  const phases = (status, motion) => { const ctx = recordingContext(); styles.ring(ctx, "singularity", P, 10, TINT, { status, builder: false, ring: 14, time: 1234, still: false, detail: 3, motion, theme }); return plain(ctx.calls.log).filter(([name]) => name === "set:lineDashOffset" || name === "set:globalAlpha"); };
+  assert.notDeepEqual(phases("queued", live.motion), phases("queued", other.motion), "queued dashes drift by the agent's own seed");
+  assert.notDeepEqual(phases("error", live.motion), phases("error", other.motion), "the error ellipse pulses by the agent's own seed");
   assert.deepEqual(plain(ring("running", { still: true, time: 0 }).calls.log), plain(ring("running", { still: true, time: 5000 }).calls.log), "still: the spark is parked");
 });
 
@@ -304,6 +444,11 @@ test("the hub's lensing ring breathes well outside the disc; the work orbit is a
   const next = recordingContext();
   styles.orbit(next, "singularity", P, 12, null, { running: false, phase: 1, ring: 21, time: 1000, still: false, detail: 3, motion: working.motion, theme });
   assert.equal(next.calls.fill, 1, "one comet while Next, in the theme's orbit hue without a tint");
+  // The comets' heads: white-hot on a dark page, deep on a pale one.
+  const pale = recordingContext();
+  styles.orbit(pale, "singularity", P, 12, TINT, { running: true, phase: 1, ring: 21, time: 1000, still: false, detail: 3, motion: working.motion, theme: styles.theme(LIGHT) });
+  assert.ok(pale.calls.fills.every(({ style }) => luminance(style) < luminance("rgba(243,240,232,1)") - 60), "heads that read on the light theme");
+  assert.ok(orbit.calls.fills.every(({ style }) => luminance(style) > 200), "and glow on the dark one");
 });
 
 test("arrival implodes inside 2.25 radii; selection rings at 1.18 and the chosen node ripples", () => {
@@ -331,6 +476,12 @@ test("arrival implodes inside 2.25 radii; selection rings at 1.18 and the chosen
   assert.ok(Math.abs(hover.calls.reach - 12 * 1.18) < 1.2, "at 1.18 radii");
   const chosen = select({ selected: true, chosen: true, time: 200, still: false });
   assert.equal(chosen.calls.stroke, 2, "chosen: the ring and a ripple");
+  // The ripple leaves from outside the aura's lensing band (~1.26), so the
+  // select ring, the band and the ripple never blur into one outline.
+  for (let time = 0; time < 1300; time += 50) {
+    const ripple = select({ selected: true, chosen: true, time, still: false }).calls.log.filter(([name]) => name === "arc").at(-1)[3] / 12;
+    assert.ok(ripple >= 1.32 - 1e-9 && ripple <= 1.7 + 1e-9, `the ripple at ${ripple.toFixed(2)} radii`);
+  }
   assert.notDeepEqual(plain(select({ selected: true, chosen: true, time: 900, still: false }).calls.log), plain(chosen.calls.log), "the ripple travels");
   assert.deepEqual(plain(select({ selected: true, chosen: true, time: 0, still: true }).calls.log), plain(select({ selected: true, chosen: true, time: 9000, still: true }).calls.log), "still: parked");
   const fading = select({ selected: false, time: 0, still: false, motion: { seed: 0.2, clock: 0, sel: 0.005, still: false } });
@@ -341,18 +492,42 @@ test("wires bend under gravity with motes falling into the target; far pens and 
   const styles = loadNodeStyles();
   const a = { x: 20, y: 120 }, b = { x: 220, y: 40 };
   const base = { kind: "task", tint: TINT, alpha: 0.4, width: 1.2, dash: Object.freeze([2, 4]), march: true, double: false, active: false, inspected: false, curved: false, cp: null, far: false, time: 1000, still: false, seed: 0.3, rA: 8, rB: 10, detail: 3, lifetime: 1 };
-  const wire = (extra = {}) => { const ctx = recordingContext({ center: b }); ctx.lineWidth = 2; assert.equal(styles.wire(ctx, "singularity", a, b, { ...base, ...extra }), true); assert.equal(ctx.calls.saves, ctx.calls.restores); assert.deepEqual(ctx.getLineDash(), []); assert.equal(ctx.lineWidth, 2); return ctx; };
+  // One save/restore per edge: the alpha, stroke style, width, cap, dash and
+  // its offset go back as they were.
+  const wire = (extra = {}, from = a, to = b) => {
+    const ctx = recordingContext({ center: to });
+    ctx.globalAlpha = 0.9; ctx.lineCap = "butt"; ctx.strokeStyle = "#123456"; ctx.lineWidth = 2;
+    assert.equal(styles.wire(ctx, "singularity", from, to, { ...base, ...extra }), true);
+    assert.ok(ctx.calls.saves <= 1 && ctx.calls.saves === ctx.calls.restores);
+    assert.deepEqual([ctx.globalAlpha, ctx.strokeStyle, ctx.lineWidth, ctx.lineCap, ctx.lineDashOffset, ctx.getLineDash()], [0.9, "#123456", 2, "butt", 0, []]);
+    return ctx;
+  };
   const quiet = wire();
   assert.equal(quiet.calls.quadraticCurveTo, 1, "a gravity-bent curve");
   assert.equal(quiet.calls.stroke, 2, "the line and its mote");
   assert.equal(quiet.calls.moveTo, 2, "one mote at rest");
   assert.equal(gradientsBuilt(quiet), 0, "wires build no gradients");
   assert.equal(quiet.calls.shadowBlurs.length, 0);
+  assert.ok(quiet.calls.log.some(([name, value]) => name === "set:lineCap" && value === "round"), "round-capped motes");
   assert.equal(wire({ active: true }).calls.moveTo, 4, "three motes on an active wire");
-  // The bend swirls the same way on every wire: the control point sits left of travel.
-  const control = quiet.calls.log.find(([name]) => name === "quadraticCurveTo");
-  const cross = (b.x - a.x) * (control[2] - a.y) - (b.y - a.y) * (control[1] - a.x);
-  assert.ok(cross < 0, "left of travel");
+  // The bend sags like a hanging line: the same curve whichever end it is
+  // traced from, off the middle on the downhill side, most when level.
+  const controlOf = (ctx) => ctx.calls.log.find(([name]) => name === "quadraticCurveTo").slice(1, 3);
+  const control = controlOf(quiet), back = controlOf(wire({}, b, a));
+  assert.ok(Math.abs(control[0] - back[0]) < 1e-6 && Math.abs(control[1] - back[1]) < 1e-6, "one curve both ways");
+  const sag = (from, to) => { const [cx, cy] = controlOf(wire({ march: false, dash: Object.freeze([]) }, from, to)); return [cx - (from.x + to.x) / 2, cy - (from.y + to.y) / 2]; };
+  const [, down] = sag(a, b);
+  assert.ok(down > 0, "the bend sags downward");
+  assert.ok(Math.abs(sag({ x: 0, y: 0 }, { x: 200, y: 0 })[1] - 26) < 1e-6, "a level wire sags most (.13 of its length at the control)");
+  assert.deepEqual(sag({ x: 50, y: 0 }, { x: 50, y: 200 }).map((value) => Math.abs(value)), [0, 0], "a vertical wire hangs straight");
+  // The many small wires stay one line at rest; the larger ones, the hub's,
+  // a session's and an inspected wire carry their mote.
+  assert.equal(wire({ detail: 1 }).calls.stroke, 1, "a quiet wire to a T1 node: the line alone");
+  assert.equal(wire({ detail: 1, kind: "session" }).calls.stroke, 2, "a session's wire keeps its mote");
+  assert.equal(wire({ detail: 1, inspected: true }).calls.stroke, 2, "so does an inspected one");
+  // Motes follow the wire's own alpha (half as bright again), so dimming reads even.
+  const moteAlpha = (alpha) => wire({ alpha }).calls.strokes.at(-1).alpha;
+  assert.ok(Math.abs(moteAlpha(0.4) - 0.6) < 1e-12 && Math.abs(moteAlpha(0.08) - 0.12) < 1e-12, "a dimmed wire's mote dims with it");
   // Motes speed up into the target: a mote's step grows as it falls in.
   const moteAt = (time) => { const ctx = wire({ time }); const moves = ctx.calls.log.filter(([name]) => name === "lineTo"); return moves.at(-1).slice(1); };
   const gap = (t0, t1) => { const [x0, y0] = moteAt(t0), [x1, y1] = moteAt(t1); return Math.hypot(x1 - x0, y1 - y0); };
@@ -401,6 +576,21 @@ test("a pulse accelerates along the bend and spirals round its target; the landi
   assert.ok(swept > 1.5, `spiralling round it (${swept.toFixed(2)} rad)`);
   const wave = surge(0.5, { kind: "wave" });
   assert.ok(wave.calls.quadraticCurveTo >= 1, "a wave pulse warms its bent path");
+  // A pulse that runs against a wire's direction (a satellite into the hub,
+  // a node back to the root) rides the wire drawn the other way.
+  const drawn = recordingContext();
+  styles.wire(drawn, "singularity", from, to, { kind: "task", tint: [185, 176, 255], alpha: 0.4, width: 1, dash: Object.freeze([]), time: 0, still: false, seed: 0.3, detail: 3 });
+  const [cx, cy] = drawn.calls.log.find(([name]) => name === "quadraticCurveTo").slice(1, 3);
+  const curve = [];
+  for (let k = 0; k <= 2000; k += 1) { const s = k / 2000, r = 1 - s; curve.push([r * r * from.x + 2 * r * s * cx + s * s * to.x, r * r * from.y + 2 * r * s * cy + s * s * to.y]); }
+  const offWire = (point) => Math.min(...curve.map(([x, y]) => Math.hypot(x - point.x, y - point.y)));
+  const backward = (t, extra = {}) => { const ctx = recordingContext({ center: from }); styles.surge(ctx, "singularity", to, from, t, pulse, { kind: "dot", time: t * 900, still: false, rTo: 10, detail: 3, pulse, motion: null, ...extra }); return ctx; };
+  for (const t of [0.05, 0.2, 0.4, 0.6, 0.8]) {
+    const miss = offWire(head(backward(t)));
+    assert.ok(miss < 1.5, `t ${t}: a pulse against the wire stays on it (${miss.toFixed(2)} px off)`);
+  }
+  const warmPath = backward(0.5, { kind: "wave" }).calls.log.find(([name]) => name === "quadraticCurveTo").slice(1, 3);
+  assert.ok(Math.abs(warmPath[0] - cx) < 1e-6 && Math.abs(warmPath[1] - cy) < 1e-6, "and a wave warms the same curve");
   assert.equal(surge(1, { still: true }).calls.stroke, 1, "reduced motion: one static flash of the path");
   const rail = recordingContext();
   assert.equal(styles.surge(rail, "singularity", from, to, 0.5, pulse, { kind: "dot", time: 0, still: false, rTo: 6, pulse, motion: null, detail: 2, rail: true }), false, "the rail keeps its own pulse");
