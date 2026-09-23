@@ -2133,3 +2133,40 @@ want the Electron fixtures' `node:test` timeouts (currently 45-100 s) and the
 parallel stage's width reconsidered, since under saturation the fixture's own
 80 s kill never gets to emit its classified failure before `node:test`
 cancels at 100 s. No fixture/test source modified beyond this entry.
+
+## 2026-09-22 evening - performance_render owner-present rerun passes 2/2 on a loaded desktop; pak-load/timeout is machine-load flake, not a fixture regression (task_686c8477802f55a0, run run_1790121151443_18)
+
+This card is a second, owner-present rerun of the same question. Pre-flight
+found no competing `node --test`/`npm` chain and no `electron.exe`; the desktop
+was nevertheless in use by the owner (Discord, Edge, Task Manager, Claude), so
+this is a loaded rerun rather than a machine-idle one. Load at launch: CPU
+70-91 % (three WMI samples), free RAM 515 MB, 0 `electron.exe`, 13 `node.exe`
+(IDE/MCP only). After: CPU 84 %, free RAM 669 MB, 0 `electron.exe`.
+
+Command, exactly one writer: `node --test tests/performance_render.test.mjs` ->
+**tests 2 / pass 2 / fail 0 / cancelled 0 / skipped 0, duration 68,950 ms,
+exit 0** (renderer 57,887 ms; desktop host 10,637 ms). Neither reported symptom
+recurred: no `chrome_100_percent.pak` line, and no "Profiler JSON download
+timed out". Output tee'd to
+`%TEMP%\opencode\perf_render_solo_20260922-185846.log`.
+
+Ground truth re-checked on HEAD a0f4278: `node_modules/electron/dist/` holds
+whole `chrome_100_percent.pak` (719,654 B), `chrome_200_percent.pak`
+(1,269,017 B) and `resources.pak` (12,435,445 B), so the pak line was a
+transient read from the OneDrive path, not a missing file. The `:127` in the
+original report is now a comment: the pace-scaled download budget landed in
+478cdb3, so the live timeout is `performance-render-electron.cjs:137` inside a
+100 s `node:test` budget. The failing flake-loop evidence is
+`tools/logs/performance-render-flake-loop/run-20260921-193144`: iter-01 ran at
+100 % CPU / 45 MB free / 8 `electron.exe`, hit the renderer's old 50 s
+`node:test` timeout and the desktop-host download timeout at `:127` with
+`report.elapsedMs` 18,508 (~18 s). Both a machine-idle solo run (29 s, prior
+card) and this loaded owner-present run (71 s, 2/2) pass, while the only
+reproduction came from a saturated host - so the pak-load + JSON-timeout
+signature is **machine-load flake**, not a fixture regression.
+
+Remaining: the stray pak-load line itself is still unreproduced and preserved
+in no repo log (only the full-run narrative at line 1781); and the margin is
+thin - this loaded run's renderer leg took 57.9 s of its 100 s budget, so a
+more saturated host can still cancel before the fixture's own 80 s kill
+classifies it. No fixture/test source modified beyond this entry.
