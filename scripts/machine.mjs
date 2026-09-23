@@ -256,6 +256,48 @@ export function createWorkerCapacitySampler({
 
 export const workerCapacity = createWorkerCapacitySampler();
 
+// Bounded machine-status history. The live status file used to keep only the
+// latest tick, so a restart's very first sample was overwritten before an
+// observer could read it. These helpers keep a compact, oldest-first ring of
+// ticks alongside the unchanged latest-status fields: the first post-restart
+// tick (fresh process => empty ring) is marked `first` and is never trimmed,
+// while only the most recent (limit - 1) later ticks are retained, so the
+// ring stays bounded no matter how long the app runs.
+export const MACHINE_STATUS_HISTORY_LIMIT = 20;
+
+export function machineStatusSample(status = {}) {
+  const resources = status.capacity?.resources ?? {};
+  return {
+    updatedAt: status.updatedAt ?? null,
+    reason: status.reason ?? null,
+    canStart: status.capacity?.canStart ?? null,
+    wait: status.wait ?? null,
+    holdKind: resources.holdKind ?? null,
+    lagMs: resources.lagMs ?? null,
+    availableMemoryMB: resources.availableMemoryMB ?? null,
+    memoryPressure: resources.memoryPressure ?? null,
+    busy: status.leases?.busy ?? null,
+    totalWidth: status.leases?.totalWidth ?? null,
+    running: Array.isArray(status.running) ? status.running.length : null,
+    lines: status.lines ?? null,
+  };
+}
+
+export function appendMachineStatusHistory(history = [], status = {}, { limit = MACHINE_STATUS_HISTORY_LIMIT } = {}) {
+  const cap = Math.max(2, Math.floor(Number(limit) || MACHINE_STATUS_HISTORY_LIMIT));
+  const prior = Array.isArray(history) ? history : [];
+  const sample = machineStatusSample(status);
+  if (prior.length === 0) sample.first = true;
+  const ring = prior.concat([sample]);
+  // Oldest-first: the first post-restart entry stays pinned at index 0, the
+  // rest is a sliding window over the most recent ticks.
+  while (ring.length > cap) {
+    if (ring[0]?.first === true) ring.splice(1, 1);
+    else ring.shift();
+  }
+  return ring;
+}
+
 export function isPidAlive(pid) {
   try {
     process.kill(pid, 0);
