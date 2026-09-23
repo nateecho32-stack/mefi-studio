@@ -20,7 +20,19 @@
   <img src="docs/images/workspace.png" width="900" alt="The workspace: a status strip, a conversation with the companion, and the project's work queue">
 </p>
 
-**Quick links:** [What's new](#whats-new-in-030) · [Install](#install-and-run) · [First launch](#first-launch) · [Tour](#a-short-tour) · [Keys and privacy](#keys-and-privacy) · [Community](#community--perks) · [Docs](#documentation) · [Contributing](#contributing)
+**Quick links:** [What's new](#whats-new-in-033) · [Install](#install-and-run) · [First launch](#first-launch) · [Tour](#a-short-tour) · [Keys and privacy](#keys-and-privacy) · [Community](#community--perks) · [Docs](#documentation) · [Contributing](#contributing)
+
+## What's new in 0.3.3
+
+Tidier menus, fewer repeat questions from the agents, a Usage popover for
+every plan, task run history, and safer defaults. Get the portable build from
+the [0.3.3 release](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.3.3);
+installed copies are offered it under **App updates**. The full list is in
+the [changelog](CHANGELOG.md).
+
+<p align="center">
+  <img src="docs/images/release-0.3.3/main.png" width="900" alt="Mefi's Studio AI+ 0.3.3: regrouped menus, usage for every plan, agents that ask once, task history, and safer defaults">
+</p>
 
 ## What's new in 0.3.0
 

@@ -7,6 +7,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-09-23
+
+Discord perks and Server Styler controls, a regrouped menu, a Usage popover
+for every provider, owner asks that end the follow-up loop, task run
+history, and a safer host: a local-only web preview, settings saves that
+cannot undo each other, and child processes that no longer see Studio's
+keys.
+
 ### Added
 - **Discord Server Styler controls.** Settings can start the separate bot and
   local dashboard, open the dashboard or bot folder, show setup and online
@@ -59,6 +67,21 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   changed nothing but the TESTRUNS notebook) raises one question: hold it for
   your review, or let it run. The verifier marks a run whose only changes were
   the ledger (`verification.ledgerOnly`).
+- **Owner asks.** Something only you can do (moving a card on the board,
+  correcting Studio's stored record of a task, landing another session's
+  files) now reaches you once as "needs something only you can do", answered
+  **I'll take care of it**, instead of an agent splitting it into a new card
+  that asks again. A follow-up chain split from one question no longer loops.
+  - **Repeat questions fold.** The same question from another card, within a
+    day, waits on the open card or takes your earlier answer as a record.
+    Two questions about the same cards must also be worded alike, so a
+    different question is still asked.
+  - **Split cards carry the question** they were split for, never re-run
+    their parent, and stop at the brain map's split depth (3 by default).
+- **Task run history.** A task's detail shows each attempt (who ran it, how
+  it ended, what it changed), and Explorer and Analyzer sessions link to the
+  task they served with **Open task**. The Needs you count breaks down what
+  is waiting for you.
 
 ### Changed
 - **The menus are regrouped so each section means one thing.** The menu down
@@ -135,6 +158,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   priced instead of unpriced (Go's `cost: "0"` is still never read as a
   price). The account readings no longer wait for, or hold up, a project
   switch.
+- **Brain maps show what they do.** Each part of the live map shows its
+  recent activity, and every setting says whether the host reads it or "not
+  read yet". *Repeat questions* and *Split depth* drive the decision lane, and
+  *Say what changed* posts a short line in the thread after you answer a
+  card. *Workers at once* now sets the build worker limit (at most 3); it used
+  to set a background pool that never changed how many builds ran.
+- A builder run on a CLI that writes no OpenCode session (Claude Code, Grok,
+  Codex, Antigravity) is parked for you on its first check instead of
+  retrying a verification it can never pass.
 
 ### Fixed
 - **z.ai usage reads again.** z.ai moved coding plans to credits on
@@ -168,6 +200,16 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 - The Overhead sheet's task poll backs off again while the board is
   unchanged. Its task boxes were written onto the task data, so every painted
   frame made the next poll look new.
+- **Command's Done button marks the task done.** It saved the whole board
+  and reported success without changing the task's status.
+- The request inbox adds and removes one request at a time, and a request a
+  worker holds is refused with a reason instead of being rewritten away.
+- Brain maps are saved atomically, and a map store that no longer parses is
+  set aside instead of being read as empty and overwritten.
+- An answer that could not be applied keeps its reason, and its card says
+  "not applied".
+- Explorer: a deep link restored before the panel was ready no longer throws,
+  and a late Open task lookup no longer wipes a half-typed checkpoint.
 
 ### Security
 - **`npm run start:web` is loopback-only and serves an allow-list.** The
@@ -186,6 +228,16 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   `href`, a script) is refused, while the page's own reloads still work.
   `setWindowOpenHandler` and a `will-navigate` guard in `main.cjs`; pinned by
   `tests/main_window_guards.test.mjs`.
+- **Child processes no longer inherit Studio's keys.** git, npm, the first
+  scan and executor worktree runs spawn through `scripts/platform.cjs`, which
+  withholds `MEFI_STUDIO_*_KEY` and `_TOKEN` from their environment.
+- **Updates are checked against their published SHA-256.** A digest that
+  does not match, or a checksum that cannot be read, stops the update and
+  removes what was staged; a release without a checksum is staged unverified
+  and the log says so.
+- **Stopping a process from the Machine panel is checked in main.** Only a
+  pid from the latest scan that the panel offers a stop for is killed; a
+  malformed pid or a failed scan is refused rather than trusting the page.
 
 ## [0.3.0] - 2026-09-22
 
@@ -554,6 +606,7 @@ which installed copies pick up through the in-app updater.
   locked or the cover window is destroyed.
 - Project switch drains background work instead of refusing it.
 
-[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.3.0...main
+[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.3.3...main
+[0.3.3]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.3.0...v0.3.3
 [0.3.0]: https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.3.0
 [0.2.0]: https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.2.0
