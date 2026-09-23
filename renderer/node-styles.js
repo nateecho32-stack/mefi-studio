@@ -1005,6 +1005,30 @@
     ctx.restore();
   }
 
+  // A light ground's tones that keep a tint's hue (inkOf's hot/spec sink
+  // most of the way to the near-black highlight there and turn every tint
+  // grey): `line` is the tint itself, deepened toward the highlight only as
+  // far as a pale tint needs to read on the pale ground (luma WIRE_LIGHT_GAP
+  // under the background's; the cream pulse colours need it, a saturated
+  // wire tint does not), and `deep` is the tint .35 of the way to the
+  // highlight (or .15 past the line's own lift), for heads, cores and
+  // glints: darker than the line, and still more than half as colourful as
+  // the tint. Cached per triple and rebuilt when the theme changes, like
+  // inkOf, so a frame allocates nothing.
+  const WIRE_LIGHT_GAP = 72;
+  const wireLuma = (tone) => 0.2126 * tone[0] + 0.7152 * tone[1] + 0.0722 * tone[2];
+  const wireLightTones = new WeakMap();
+  function wireLightTone(tint, currentTheme) {
+    let record = wireLightTones.get(tint);
+    if (record && record.key === currentTheme.key) return record;
+    const own = wireLuma(tint), floor = wireLuma(currentTheme.hi), ceiling = wireLuma(currentTheme.bg) - WIRE_LIGHT_GAP;
+    const lift = own > ceiling && own > floor ? Math.min(0.6, (own - ceiling) / (own - floor)) : 0;
+    const line = lift > 0 ? Object.freeze(mix(tint, currentTheme.hi, lift)) : tint;
+    record = { key: currentTheme.key, line, deep: Object.freeze(mix(tint, currentTheme.hi, Math.max(0.35, lift + 0.15))) };
+    wireLightTones.set(tint, record);
+    return record;
+  }
+
   // One repeat of a dash pattern (an odd list repeats twice over).
   function dashPeriod(dash) {
     let sum = 0;
@@ -1062,8 +1086,9 @@
   // the middle. Every stroke is one dash along the traced path, so it
   // follows the curve exactly. Tiers: the head always, the body and the
   // head's light from T1, the tail, the halo bead and the crystal glint from
-  // T2. On a light theme the tones lean dark (inkOf's hot/spec) and the
-  // heads carry no light.
+  // T2. On a light theme the flow keeps the tint's hue (wireLightTone: the
+  // body in the tint, heads, beads and sparks in its deeper tone, glass's
+  // glint a white core in a tinted band) and the heads carry no light.
   function wireFlow(ctx, a, b, cp, pack, tint, currentTheme, width, gain, detail, thin, seed, time, still, pace) {
     const path = pathSet(a, b, 0, cp);
     const len = pathMeasure(path);
@@ -1073,7 +1098,10 @@
     const travel = still ? 0.62 * len + 0.5 * span : (time / 1000) * pack.speed * pace + seed * period;
     const head = ((travel % period) + period) % period;
     const light = currentTheme.light === true;
-    const tones = inkOf(tint, currentTheme);
+    // bodyInk: a comet's tail and body; headInk: heads, beads and sparks
+    let bodyInk, headInk, frost = null;
+    if (light) { const tones = wireLightTone(tint, currentTheme); bodyInk = tones.line; headInk = tones.deep; }
+    else { const tones = inkOf(tint, currentTheme); bodyInk = tones.hot; headInk = tones.spec; frost = tones.frost; }
     const alpha = gain * pack.flowAlpha;
     const body = wireTier(detail, thin, 1), tail = wireTier(detail, thin, 2);
     const extra = pack.flowWidth;
@@ -1088,46 +1116,55 @@
     if (pack.flow === FLOW_COMET || pack.flow === FLOW_HALO) {
       // A comet: a long faint tail, a brighter body, then a round head in the
       // highlight tone (halo's also rides in a wide soft bead of the tint).
-      ctx.strokeStyle = rgba(tones.hot, 1);
+      ctx.strokeStyle = rgba(bodyInk, 1);
       if (tail > 0) flowStroke(ctx, span, period, head, width + extra * 0.5, alpha * 0.42 * tail);
       if (body > 0) flowStroke(ctx, span * 0.45, period, head, width + extra * 0.85, alpha * 0.8 * body);
       if (pack.flow === FLOW_HALO && tail > 0) {
-        ctx.strokeStyle = rgba(tint, 1);
+        ctx.strokeStyle = rgba(light ? bodyInk : tint, 1);
         flowStroke(ctx, 0.01, period, head, width + extra + 3.2, alpha * 0.34 * tail);
       }
-      ctx.strokeStyle = rgba(tones.spec, 1);
+      ctx.strokeStyle = rgba(headInk, 1);
       flowStroke(ctx, 0.01, period, head, width + extra + pack.headWidth, alpha);
     } else if (pack.flow === FLOW_SHEEN) {
       // A sheen: a long soft band of frost with a brighter core in its
-      // middle, light gliding through a glass tube.
-      ctx.strokeStyle = rgba(tones.frost, 1);
-      flowStroke(ctx, span, period, head, width + extra, alpha * 0.55);
-      if (body > 0) flowStroke(ctx, span * 0.4, period, head - span * 0.3, width + extra * 0.3, Math.min(1, alpha * 1.4 * body));
+      // middle, light gliding through a glass tube. On a light ground frost
+      // would be a dark smear: the band is the tint, the core white.
+      if (light) {
+        ctx.strokeStyle = rgba(bodyInk, 1);
+        flowStroke(ctx, span, period, head, width + extra, gain * 0.55);
+        ctx.strokeStyle = rgba(WHITE, 1);
+        if (body > 0) flowStroke(ctx, span * 0.4, period, head - span * 0.3, width + 0.3, Math.min(1, gain * 0.9 * body));
+      } else {
+        ctx.strokeStyle = rgba(frost, 1);
+        flowStroke(ctx, span, period, head, width + extra, alpha * 0.55);
+        if (body > 0) flowStroke(ctx, span * 0.4, period, head - span * 0.3, width + extra * 0.3, Math.min(1, alpha * 1.4 * body));
+      }
     } else if (pack.flow === FLOW_BEAD) {
       // A bead: one round dot well over the line's width, in the highlight
-      // tone (pale on a dark ground, dark on a light one), and no light.
-      ctx.strokeStyle = rgba(light ? tones.hot : tones.spec, 1);
+      // tone (pale on a dark ground, the tint's deep tone on a light one),
+      // and no light.
+      ctx.strokeStyle = rgba(headInk, 1);
       flowStroke(ctx, 0.01, period, head, width + extra, alpha);
     } else {
       // Twin sparks (3 px, a gap, 1.5 px) in the highlight tone, twinkling;
-      // from T2 a faint tinted light travels with them and, on a dark theme,
-      // the leading spark throws a small turning sparkle.
+      // from T2 a faint tinted light travels with them and the leading spark
+      // throws a small turning sparkle.
       const twinkle = still ? 1 : 0.78 + 0.22 * Math.sin(TAU * (time / 700 + seed));
       if (tail > 0) {
-        ctx.strokeStyle = rgba(tint, 1);
+        ctx.strokeStyle = rgba(light ? bodyInk : tint, 1);
         flowStroke(ctx, SPARK_SPAN, period, head, width + extra + 2.2, alpha * 0.24 * tail);
       }
       SPARK_DASH[3] = Math.max(0.01, period - SPARK_SPAN);
       ctx.setLineDash?.(SPARK_DASH);
       ctx.lineDashOffset = SPARK_SPAN - head;
-      ctx.strokeStyle = rgba(tones.spec, 1);
+      ctx.strokeStyle = rgba(headInk, 1);
       ctx.lineWidth = Math.min(WIRE_MAX, width + extra);
       ctx.globalAlpha = alpha * twinkle;
       ctx.stroke();
-      if (tail > 0 && !light) {
+      if (tail > 0) {
         const turn = still ? Math.PI / 4 : (time / 1000) * 1.7 + seed * TAU;
         const arm = (3 + 1.4 * twinkle) * tail, c = Math.cos(turn), s = Math.sin(turn);
-        ctx.fillStyle = rgba(tones.spec, 1);
+        ctx.fillStyle = rgba(headInk, 1);
         ctx.globalAlpha = alpha * twinkle * tail;
         ctx.beginPath();
         for (let at = head - 0.75; at <= len; at += period) {
@@ -1218,8 +1255,10 @@
   // is the style's own (a hot orb; glass's softer; minimal's flat; halo's
   // ringed; crystal's a turning glint), and over the last fifth a bloom opens
   // on the receiving node, which land carries on after arrival. On a light
-  // theme the line and core lean dark and the light is fainter. Reduced
-  // motion: one static flash.
+  // theme the pulse keeps its hue (wireLightTone: the line in the colour,
+  // deepened only as far as a cream pulse needs to read, the core and head
+  // in its deeper tone) and its light is a fainter haze of the colour, never
+  // a dark one. Reduced motion: one static flash.
   const PULSE_DEFAULT = "#a9ffcd";
   const BLOOM_ALPHA = 0.55;
   // A tail behind its head in path fractions (stops from far to near), and
@@ -1267,28 +1306,24 @@
   }
   // A pulse's head at (x, y) in the style's way: `size` is the core's radius,
   // `alpha` the head's globalAlpha; `line`, `core` and `light` the pulse's
-  // stroke, centre and light tones; `turn` spins a glint; `pale` is a light
-  // theme (whose core tone is near black: the glint head keeps its diamond
-  // alone there, so it never reads as a dark cross).
-  function pulseHead(ctx, pack, x, y, size, alpha, line, core, light, lightAlpha, turn, pale) {
+  // stroke, centre and light tones; `turn` spins a glint.
+  function pulseHead(ctx, pack, x, y, size, alpha, line, core, light, lightAlpha, turn) {
     if (pack.head !== HEAD_FLAT) {
       const soft = pack.head === HEAD_SOFT;
       lightAt(ctx, light, x, y, size * (soft ? 4.4 : pack.head === HEAD_GLINT ? 2.8 : 3.3), alpha * lightAlpha * (soft ? 0.8 : 1));
     }
     ctx.globalAlpha = alpha;
     if (pack.head === HEAD_GLINT) {
-      // A small diamond and, on a dark ground, a sparkle turning over it.
+      // A small diamond and a sparkle turning over it.
       ctx.fillStyle = rgba(line, 1);
       ctx.beginPath();
       ctx.moveTo(x, y - size * 1.2); ctx.lineTo(x + size * 0.85, y); ctx.lineTo(x, y + size * 1.2); ctx.lineTo(x - size * 0.85, y);
       ctx.closePath();
       ctx.fill();
-      if (!pale) {
-        ctx.fillStyle = rgba(core, 1);
-        ctx.beginPath();
-        wireSparkle(ctx, x, y, size * 2.6, Math.cos(turn), Math.sin(turn));
-        ctx.fill();
-      }
+      ctx.fillStyle = rgba(core, 1);
+      ctx.beginPath();
+      wireSparkle(ctx, x, y, size * 2.6, Math.cos(turn), Math.sin(turn));
+      ctx.fill();
       return;
     }
     ctx.fillStyle = rgba(pack.head === HEAD_FLAT ? line : core, 1);
@@ -1320,9 +1355,10 @@
     const pack = packOf(style);
     const currentTheme = o.theme ?? INK_DEFAULTS, light = currentTheme.light === true;
     const tone = pulse._rgb ?? (pulse._rgb = pulseTone(pulse.color));
-    const inks = inkOf(tone, currentTheme);
-    const line = light ? inks.hot : tone, core = light ? inks.ink : inks.hot;
-    const glow = light ? inks.hot : typeof pulse.glow === "string" ? pulseTone(pulse.glow) : tone;
+    let line, core;
+    if (light) { const tones = wireLightTone(tone, currentTheme); line = tones.line; core = tones.deep; }
+    else { line = tone; core = inkOf(tone, currentTheme).hot; }
+    const glow = typeof pulse.glow === "string" ? pulseTone(pulse.glow) : tone;
     const lightAlpha = light ? 0.45 : 1;
     const cp = o.cp ?? null;
     const detail = Number.isFinite(o.detail) ? o.detail : 3;
@@ -1339,7 +1375,7 @@
     if (o.still === true) {
       // One static flash of the whole line and the bloom it lands in (the
       // rail keeps drawing a pulse's frames, so there it fades with its life).
-      // On a light ground the dark line is a fainter, finer trace.
+      // On a light ground the deeper line is a fainter, finer trace.
       const fade = rail ? 1 - u : 1;
       ctx.beginPath();
       pathPiece(ctx, pathSet(from, to, 0, cp), 0, 1);
@@ -1378,14 +1414,14 @@
         ctx.fillStyle = rgba(core, 1);
         ctx.fillRect(-size / 5, -size / 5, size * 0.4, size * 0.4);
         ctx.restore();
-      } else pulseHead(ctx, pack, hx, hy, (pulse.small ? 1.3 : 1.9) * (0.6 + 0.4 * env), base * env, line, core, glow, 0.85 * lightAlpha, turn, light);
+      } else pulseHead(ctx, pack, hx, hy, (pulse.small ? 1.3 : 1.9) * (0.6 + 0.4 * env), base * env, line, core, glow, 0.85 * lightAlpha, turn);
     } else {
       // A dot runs the line with a short tail, its light and a hot centre.
       const path = pathSet(from, to, 0, cp);
       const rise = clamp01(u / 0.05);
       if (u > 0.02) pulseTail(ctx, path, u, DOT_TAIL, DOT_TAIL_ALPHA, DOT_TAIL_WIDTH, pulse.small ? 1.1 : 1.6, base * rise, short);
       const at = pathBlossom(path, u, u, u, PATH_AT);
-      pulseHead(ctx, pack, at.x, at.y, pulse.small ? 1.5 : 2.2, base * rise, line, core, glow, 0.8 * lightAlpha, turn, light);
+      pulseHead(ctx, pack, at.x, at.y, pulse.small ? 1.5 : 2.2, base * rise, line, core, glow, 0.8 * lightAlpha, turn);
     }
     // The landing's first light: a bloom opens on the receiving node.
     const landing = (u - 0.8) / 0.2;
@@ -1401,11 +1437,13 @@
   // end (an ease-out square) while the crisp ring's light falls off as the
   // cube of what is left and the soft one widens into a haze (the square),
   // so it never parks as an outline; on a dark ground the crisp ring is the
-  // tint's pale highlight, so it reads as light, not as a grey line. Glass
-  // blooms wider and softer, minimal keeps one thin
-  // ring, halo sends a second ring out past the first, crystal throws four
-  // short rays. On the rail (o.rail) the small nodes get one crisp ring and
-  // a smaller, fainter bloom.
+  // tint's pale highlight, so it reads as light, not as a grey line, and on a
+  // light one both rings keep the tint (wireLightTone) under a fainter haze
+  // of it. Glass blooms wider and softer, minimal keeps one thin ring, halo
+  // sends a second ring out past the first, and crystal's ring is an octagon
+  // (its gem's outline) with four sparkles glinting off alternate corners.
+  // On the rail (o.rail) the small nodes get one crisp round ring and a
+  // smaller, fainter bloom.
   function landDefault(ctx, p, radius, tint, u, o, style) {
     if (!p || !tint) return false;
     if (o.still === true || !(u < 1)) return true;
@@ -1413,13 +1451,15 @@
     const currentTheme = o.theme ?? INK_DEFAULTS, light = currentTheme.light === true;
     const k = u > 0 ? u : 0, e = easeOut(k), fade = 1 - k, fall = fade * fade, flash = fall * fade, grow = 1 - fall;
     const pulse = o.pulse;
-    const inks = inkOf(tint, currentTheme);
-    const ink = light ? inks.hot : tint, edge = light ? inks.hot : inks.spec;
-    const glow = light ? ink : pulse && typeof pulse.glow === "string" ? pulseTone(pulse.glow) : tint;
+    // ink: the soft ring; edge: the crisp ring; spark: crystal's glints
+    let ink, edge, spark;
+    if (light) { const tones = wireLightTone(tint, currentTheme); ink = tones.line; edge = tones.line; spark = tones.deep; }
+    else { ink = tint; edge = inkOf(tint, currentTheme).spec; spark = edge; }
+    const glow = pulse && typeof pulse.glow === "string" ? pulseTone(pulse.glow) : tint;
     const r = radius > 0 ? radius : 0;
     const detail = Number.isFinite(o.detail) ? o.detail : 3;
     const rail = o.rail === true;
-    const landing = pack.landing, soft = landing === LAND_SOFT;
+    const landing = pack.landing, soft = landing === LAND_SOFT, facets = landing === LAND_RAYS;
     const base = ctx.globalAlpha;
     ctx.save();
     if (landing !== LAND_RING) lightAt(ctx, glow, p.x, p.y, bloomRadius(r, rail) * (1 + (soft ? 0.55 : 0.3) * e), base * BLOOM_ALPHA * (rail ? RAIL_BLOOM : 1) * fall * (light ? 0.45 : 1));
@@ -1436,15 +1476,18 @@
       return true;
     }
     const reach = 6 + 0.6 * rim, swell = rim + reach * grow;
-    ctx.arc(p.x, p.y, swell, 0, TAU);
+    // crystal's ring is its gem's octagon (flat on top), turning a little
+    const facet = Math.PI / 8 + 0.35 * e;
+    if (facets) polyPath(ctx, p.x, p.y, swell, 8, facet);
+    else ctx.arc(p.x, p.y, swell, 0, TAU);
     if (detail >= 2 && landing !== LAND_RING) {
       ctx.strokeStyle = rgba(ink, 1);
-      ctx.globalAlpha = base * 0.16 * fall;
+      ctx.globalAlpha = base * (light ? 0.12 : 0.16) * fall;
       ctx.lineWidth = 2.6 + 2.2 * k;
       ctx.stroke();
       ctx.strokeStyle = rgba(edge, 1);
     }
-    ctx.globalAlpha = base * (soft ? 0.4 : landing === LAND_RING ? 0.7 : 0.62) * flash;
+    ctx.globalAlpha = base * (light ? (soft ? 0.5 : 0.7) : soft ? 0.4 : landing === LAND_RING ? 0.7 : 0.62) * flash;
     ctx.lineWidth = landing === LAND_RING ? 0.9 : 0.6 + 1.2 * fade;
     ctx.stroke();
     if (landing === LAND_DOUBLE && detail >= 1 && k > 0.22) {
@@ -1455,18 +1498,21 @@
       ctx.globalAlpha = base * 0.42 * left * left;
       ctx.lineWidth = 0.8;
       ctx.stroke();
-    } else if (landing === LAND_RAYS && detail >= 1) {
-      // crystal: four short rays flash out on the diagonals, turning a little
+    } else if (facets && detail >= 1) {
+      // crystal: four upright sparkles glint just off alternate corners of
+      // the octagon and turn with it (a quarter turn apart, so one sine and
+      // one cosine place them all)
+      const out = swell + 2, arm = 2 + 3 * fade;
+      const vx = Math.cos(facet) * out, vy = Math.sin(facet) * out;
+      const c = Math.cos(0.35 * e - Math.PI / 2), s = Math.sin(0.35 * e - Math.PI / 2);
       ctx.beginPath();
-      for (let ray = 0; ray < 4; ray += 1) {
-        const angle = Math.PI / 4 + ray * Math.PI / 2 + 0.35 * e;
-        const c = Math.cos(angle), s = Math.sin(angle), from = swell + 1.5, to = swell + 2.5 + 7 * fade;
-        ctx.moveTo(p.x + c * from, p.y + s * from);
-        ctx.lineTo(p.x + c * to, p.y + s * to);
-      }
+      wireSparkle(ctx, p.x + vx, p.y + vy, arm, c, s);
+      wireSparkle(ctx, p.x - vy, p.y + vx, arm, c, s);
+      wireSparkle(ctx, p.x - vx, p.y - vy, arm, c, s);
+      wireSparkle(ctx, p.x + vy, p.y - vx, arm, c, s);
+      ctx.fillStyle = rgba(spark, 1);
       ctx.globalAlpha = base * 0.75 * fall;
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      ctx.fill();
     }
     ctx.restore();
     return true;

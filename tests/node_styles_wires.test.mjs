@@ -31,6 +31,14 @@ const working = (extra = {}) => wire({ active: true, march: true, flow: true, ..
 const pulse = (extra = {}) => ({ color: "#f1dcae", glow: "#e6c98d", wave: false, small: false, packet: false, start: 0, duration: 900, ...extra });
 const look = (extra = {}) => ({ kind: "dot", time: 0, still: false, rTo: 12, detail: 3, pulse: null, motion: null, cp: null, ...extra });
 const draw = (styles, style, o, ctx = recordingContext({ center: B })) => { const answer = styles.wire(ctx, style, A, B, o); return { ctx, answer, calls: ctx.calls }; };
+// An ink string's channels, its chroma (max channel - min channel) and luma.
+const channels = (ink) => ink.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number);
+const chroma = (ink) => { const [r, g, b] = channels(ink); return Math.max(r, g, b) - Math.min(r, g, b); };
+const lumaOf = (ink) => { const [r, g, b] = channels(ink); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+const inks = (list) => list.map(({ style }) => style).filter((style) => typeof style === "string");
+const LIGHT = { background: "#f2efe6", text: "#1c1b18" };
+const LIGHT_LUMA = lumaOf("rgba(242,239,230,1)");
+const CREAM = [241, 220, 174]; // the hub's pulse colour, #f1dcae: nearly the light ground itself
 
 test("the wires section keeps a frame free of allocations, gradients per frame and shadowBlur", () => {
   const code = sectionOf("wires");
@@ -198,19 +206,58 @@ test("a steady stream of wires builds each light once and nothing after", () => 
   }
 });
 
-test("on a light theme the flow leans dark and carries no light", () => {
+test("on a light theme the flow keeps the tint's hue and carries no light", () => {
   const styles = loadNodeStyles();
-  const light = styles.theme({ background: "#f2efe6", text: "#1c1b18" });
+  const light = styles.theme(LIGHT);
   const dark = styles.theme({ background: "#050507", text: "#ece5d8" });
+  const TINT_CHROMA = chroma(`rgba(${TINT},1)`);
   for (const style of FREE) {
     const onDark = draw(styles, style, working({ time: 700, theme: dark })).calls;
     const onLight = draw(styles, style, working({ time: 700, theme: light })).calls;
-    assert.equal(onLight.fill, 0, `${style}: no light sprite on a pale ground`);
-    assert.equal(onLight.radial, 0);
-    const flowInks = (calls) => calls.strokes.slice(-1).map((stroke) => stroke.style);
-    if (style !== "minimal") assert.notDeepEqual(flowInks(onLight), flowInks(onDark), `${style}: the head's ink follows the theme`);
-    const darkest = (calls) => Math.min(...calls.strokes.map(({ style: ink }) => { const [r, g, b] = ink.match(/\d+/g).map(Number); return r + g + b; }));
-    assert.ok(darkest(onLight) < darkest(onDark), `${style}: toward the theme's highlight, which is dark there`);
+    assert.equal(onLight.radial, 0, `${style}: no light sprite on a pale ground`);
+    assert.equal(onLight.fill, style === "crystal" ? 1 : 0, `${style}: no light fills (crystal's sparkle aside)`);
+    // The flow's strokes are the ones after the caller's line.
+    const line = onLight.strokes.findIndex((stroke) => stroke.style === "rgba(120,180,220,1)" && stroke.alpha === 0.55 && stroke.width === 1.4);
+    const flow = onLight.strokes.slice(line + 1);
+    assert.ok(flow.length >= 1, `${style}: a flow`);
+    if (style === "glass") {
+      // Glass's glint: a white core inside a band of the tint, never a grey smear.
+      const [band, core] = flow;
+      assert.equal(core.style, "rgba(255,255,255,1)", "glass: the core is white");
+      assert.ok(core.width < band.width && core.alpha > band.alpha, `glass: a narrower, stronger core in the band (${band.width}/${band.alpha} → ${core.width}/${core.alpha})`);
+      assert.ok(chroma(band.style) >= 0.5 * TINT_CHROMA, `glass: the band keeps the hue (${band.style})`);
+      continue;
+    }
+    for (const ink of inks([...flow, ...onLight.fills])) {
+      assert.ok(chroma(ink) >= 0.5 * TINT_CHROMA, `${style}: ${ink} keeps the tint's hue (chroma ${chroma(ink)} of ${TINT_CHROMA})`);
+      assert.ok(lumaOf(ink) < LIGHT_LUMA - 60, `${style}: and reads on the pale ground (${ink})`);
+    }
+    // The head is the tint's deeper tone: darker than the body, and not the dark theme's.
+    const head = flow.at(-1).style;
+    assert.notEqual(head, onDark.strokes.at(-1).style, `${style}: the head's ink follows the theme`);
+    assert.ok(lumaOf(head) < lumaOf(`rgba(${TINT},1)`) - 30, `${style}: the head sits deeper than the tint (${head})`);
+  }
+});
+
+test("on a light theme a pale pulse colour deepens just enough to read; a strong one stays as it is", () => {
+  const styles = loadNodeStyles();
+  const light = styles.theme(LIGHT);
+  const creamChroma = chroma(`rgba(${CREAM},1)`);
+  for (const style of FREE) {
+    const ctx = recordingContext();
+    styles.surge(ctx, style, A, B, 0.5, pulse(), look({ theme: light }));
+    const drawn = inks([...ctx.calls.strokes, ...ctx.calls.fills]);
+    assert.ok(drawn.length >= 2, `${style}: a line and a head`);
+    for (const ink of drawn) {
+      assert.ok(chroma(ink) >= 0.5 * creamChroma, `${style}: ${ink} is still the cream's colour`);
+      assert.ok(lumaOf(ink) <= LIGHT_LUMA - 70, `${style}: ${ink} reads on the pale ground`);
+    }
+    // The pulse's light is a haze of its own glow colour (#e6c98d), never a dark one.
+    for (const { stops } of ctx.calls.gradients) assert.ok(stops.every(([, colour]) => colour.startsWith("rgba(230,201,141,")), `${style}: the light is the glow colour`);
+    // A colour that already reads on the ground is drawn as it is.
+    const strong = recordingContext();
+    styles.surge(strong, style, A, B, 0.5, pulse({ color: "#c85a28" }), look({ theme: light }));
+    assert.ok(strong.calls.strokes.some((stroke) => stroke.style === "rgba(200,90,40,1)"), `${style}: #c85a28 draws its line as it is`);
   }
 });
 
@@ -257,9 +304,9 @@ test("a relay hop (session, todo) flows calmer than the task's own wire; o.flow 
   }
 });
 
-test("crystal's glints are sparkles, not crosses, and a light theme keeps the pulse's diamond alone", () => {
+test("crystal's glints are sparkles, not crosses, in the pulse's own colour on a light theme", () => {
   const styles = loadNodeStyles();
-  const light = styles.theme({ background: "#f2efe6", text: "#1c1b18" });
+  const light = styles.theme(LIGHT);
   const { calls } = draw(styles, "crystal", working({ time: 700 }));
   assert.ok(calls.lineWidths.every((width) => width >= 1), "no hairline arms on the wire");
   const star = calls.log.slice(calls.log.findLastIndex(([name]) => name === "beginPath"));
@@ -271,12 +318,16 @@ test("crystal's glints are sparkles, not crosses, and a light theme keeps the pu
   const head = (theme) => { const ctx = recordingContext(); styles.surge(ctx, "crystal", A, B, 0.5, pulse(), look({ theme, time: 400 })); return ctx.calls; };
   const onDark = head(undefined), onLight = head(light);
   assert.deepEqual([onDark.stroke, onLight.stroke], [3, 3], "the tail's three pieces, and no glint strokes, in either theme");
-  assert.equal(onLight.fill, onDark.fill - 1, "the light theme drops the sparkle from the head");
+  assert.equal(onLight.fill, onDark.fill, "the head keeps its diamond and its sparkle on a light ground");
+  const sparkle = onLight.fills.at(-1).style;
+  assert.ok(chroma(sparkle) >= 0.5 * chroma(`rgba(${CREAM},1)`) && lumaOf(sparkle) < LIGHT_LUMA - 90, `in the pulse's deeper tone, not a grey cross (${sparkle})`);
+  // On the wire, a light theme keeps the leading spark's sparkle too.
+  assert.equal(draw(styles, "crystal", working({ time: 700, theme: light })).calls.fill, 1, "the wire's sparkle on a light ground");
 });
 
 test("reduced motion on a light theme flashes a fainter, finer line", () => {
   const styles = loadNodeStyles();
-  const light = styles.theme({ background: "#f2efe6", text: "#1c1b18" });
+  const light = styles.theme(LIGHT);
   for (const style of FREE) {
     const flash = (theme) => { const ctx = recordingContext(); styles.surge(ctx, style, A, B, 1, pulse(), look({ still: true, theme })); return ctx.calls.strokes[0]; };
     assert.deepEqual([flash(undefined).alpha, flash(undefined).width], [0.5, 2]);
@@ -351,10 +402,10 @@ test("each free style has its own pulse head and landing", () => {
   styles.surge(flat, "minimal", A, B, 0.5, pulse({ wave: true, packet: true }), look({ kind: "wave" }));
   styles.land(flat, "minimal", B, 12, TINT, 0.3, look());
   assert.equal(flat.calls.radial, 0);
-  // Crystal's landing throws four rays; halo's sends a second ring after the first.
-  const rays = recordingContext();
-  styles.land(rays, "crystal", B, 12, TINT, 0.3, look());
-  assert.equal(rays.calls.lineTo, 4);
+  // Crystal's landing is an octagon with four sparkles; halo's sends a second ring after the first.
+  const gem = recordingContext();
+  styles.land(gem, "crystal", B, 12, TINT, 0.3, look());
+  assert.deepEqual([gem.calls.lineTo, gem.calls.closePath], [7 + 4 * 7, 5]);
   const rings = recordingContext();
   styles.land(rings, "halo", B, 12, TINT, 0.5, look());
   assert.equal(rings.calls.arc, 3, "the bloom, the ring and the second ring");
@@ -398,13 +449,13 @@ test("a landing swells off the rim and fades over its tail, continuing the arriv
     assert.equal(early.calls.saves, early.calls.restores);
     if (style !== "minimal") {
       // The surge's last light and the landing's first meet at the same alpha
-      // and the same size, on the Command view and on the rail.
-      for (const rail of [false, true]) {
+      // and the same size, on the Command view and on the rail, on either ground.
+      for (const [rail, theme] of [[false, undefined], [true, undefined], [false, styles.theme(LIGHT)], [true, styles.theme(LIGHT)]]) {
         const arrive = recordingContext();
-        styles.surge(arrive, style, A, B, 0.9999, pulse(), look({ rail }));
+        styles.surge(arrive, style, A, B, 0.9999, pulse(), look({ rail, theme }));
         const land = recordingContext();
-        styles.land(land, style, B, 12, [241, 220, 174], 0, look({ pulse: pulse(), rail }));
-        const where = `${style}${rail ? " on the rail" : ""}`;
+        styles.land(land, style, B, 12, [241, 220, 174], 0, look({ pulse: pulse(), rail, theme }));
+        const where = `${style}${rail ? " on the rail" : ""}${theme ? " on a light ground" : ""}`;
         assert.ok(Math.abs(arrive.calls.fills.at(-1).alpha - land.calls.fills[0].alpha) < 0.01, `${where}: no pop at arrival`);
         const scale = (calls, pick) => pick(calls.log.filter(([name]) => name === "scale"))[1];
         const last = scale(arrive.calls, (list) => list.at(-1)), first = scale(land.calls, (list) => list[0]);
@@ -420,7 +471,11 @@ test("a landing ring keeps travelling while it fades, in the tint's pale highlig
   const rings = (style, u, o = {}) => {
     const ctx = recordingContext({ center: B });
     styles.land(ctx, style, B, 12, TINT, u, look({ theme: dark, ...o }));
-    return { arcs: ctx.calls.log.filter(([name]) => name === "arc").map(([, , , r]) => r).filter((r) => r > 1.5), strokes: ctx.calls.strokes, calls: ctx.calls };
+    const arcs = ctx.calls.log.filter(([name]) => name === "arc").map(([, , , r]) => r).filter((r) => r > 1.5);
+    // crystal's ring is an octagon: its first vertex sits on the ring's radius
+    const vertex = ctx.calls.log.find(([name]) => name === "moveTo");
+    if (!arcs.length && vertex) arcs.push(Math.hypot(vertex[1] - B.x, vertex[2] - B.y));
+    return { arcs, strokes: ctx.calls.strokes, calls: ctx.calls };
   };
   for (const style of FREE) {
     const half = rings(style, 0.5), late = rings(style, 0.75);
@@ -448,6 +503,65 @@ test("a landing ring keeps travelling while it fades, in the tint's pale highlig
       assert.ok(rail.calls.stroke <= 1, `${style} on the rail at u ${u}: one ring (${rail.calls.stroke})`);
       assert.ok(rail.calls.reach <= 3.2 * 5, `${style} on the rail at u ${u}: within 3.2r (${rail.calls.reach})`);
       assert.equal(rail.calls.lineTo, 0, `${style} on the rail: no rays`);
+    }
+  }
+});
+
+test("crystal lands as its gem: an octagon ring with four sparkles off alternate corners, not a reticle", () => {
+  const styles = loadNodeStyles();
+  for (const u of [0.1, 0.4]) {
+    const ctx = recordingContext({ center: B });
+    styles.land(ctx, "crystal", B, 12, TINT, u, look());
+    const log = ctx.calls.log;
+    assert.equal(log.filter(([name]) => name === "arc").length, 1, `u ${u}: no round ring (the bloom's disc alone)`);
+    assert.ok(ctx.calls.strokes.every((stroke) => stroke.width > 1), `u ${u}: no hairline rays`);
+    const points = log.filter(([name]) => name === "moveTo" || name === "lineTo").map(([, x, y]) => ({ x, y }));
+    assert.equal(points.length, 8 + 4 * 8, `u ${u}: one octagon, four eight-point sparkles`);
+    // The octagon: eight vertices on one radius, flat on top at rest (22.5° + k·45°, turned by .35·easeOut(u)).
+    const octagon = points.slice(0, 8);
+    const radius = Math.hypot(octagon[0].x - B.x, octagon[0].y - B.y);
+    assert.ok(octagon.every((point) => Math.abs(Math.hypot(point.x - B.x, point.y - B.y) - radius) < 1e-4), `u ${u}: a regular octagon`);
+    const turn = 0.35 * (1 - (1 - u) ** 3) + Math.PI / 8; // easeOut is the cubic
+    const first = Math.atan2(octagon[0].y - B.y, octagon[0].x - B.x);
+    assert.ok(Math.abs(first - turn) < 1e-4, `u ${u}: its first corner at 22.5°, turned by .35·easeOut(u) (${first.toFixed(3)})`);
+    // Each sparkle sits 2 px off alternate corners (its centre: the midpoint of its long arms' tips).
+    for (let index = 0; index < 4; index += 1) {
+      const star = points.slice(8 + index * 8, 16 + index * 8);
+      const cx = (star[0].x + star[4].x) / 2, cy = (star[0].y + star[4].y) / 2;
+      const corner = octagon[index * 2];
+      const out = Math.hypot(cx - B.x, cy - B.y);
+      assert.ok(Math.abs(out - (radius + 2)) < 1e-4, `u ${u}: sparkle ${index} sits 2 px outside the ring (${out.toFixed(2)} vs ${radius.toFixed(2)})`);
+      const along = ((cx - B.x) * (corner.x - B.x) + (cy - B.y) * (corner.y - B.y)) / (out * radius);
+      assert.ok(along > 0.9999, `u ${u}: sparkle ${index} off corner ${index * 2}`);
+    }
+    assert.equal(ctx.calls.fill, 2, `u ${u}: the bloom, then the four sparkles in one fill`);
+  }
+  // The rail keeps its one small round ring.
+  const rail = recordingContext({ center: B });
+  styles.land(rail, "crystal", B, 5, TINT, 0.3, look({ rail: true, detail: 2 }));
+  assert.deepEqual([rail.calls.stroke, rail.calls.lineTo, rail.calls.arc], [1, 0, 2], "the rail: the bloom's disc and one ring");
+});
+
+test("on a light theme a landing keeps the pulse's colour: tinted rings under a faint haze of its glow", () => {
+  const styles = loadNodeStyles();
+  const light = styles.theme(LIGHT);
+  const creamChroma = chroma(`rgba(${CREAM},1)`);
+  for (const style of FREE) {
+    const land = (u) => { const ctx = recordingContext({ center: B }); styles.land(ctx, style, B, 12, CREAM, u, look({ theme: light, pulse: pulse() })); return ctx.calls; };
+    const calls = land(0.3);
+    assert.ok(calls.stroke >= 1, `${style}: a ring`);
+    for (const ink of inks([...calls.strokes, ...calls.fills])) {
+      assert.ok(chroma(ink) >= 0.5 * creamChroma && lumaOf(ink) <= LIGHT_LUMA - 70, `${style}: ${ink} is the cream, deepened to read`);
+    }
+    const flash = 0.7 ** 3;
+    // the crisp ring is the last stroke (halo's second ring follows it)
+    const crisp = calls.strokes.at(style === "halo" ? -2 : -1);
+    assert.ok(Math.abs(crisp.alpha - (style === "glass" ? 0.5 : 0.7) * flash) < 1e-9, `${style}: the crisp ring at ${(style === "glass" ? 0.5 : 0.7)}·(1 - u)³ (${crisp.alpha})`);
+    if (style !== "minimal") {
+      const soft = calls.strokes[0];
+      assert.ok(Math.abs(soft.alpha - 0.12 * 0.49) < 1e-9, `${style}: the soft ring at .12·(1 - u)² (${soft.alpha})`);
+      assert.ok(calls.gradients.every(({ stops }) => stops.every(([, colour]) => colour.startsWith("rgba(230,201,141,"))), `${style}: the bloom is a haze of the glow colour, never a dark one`);
+      assert.ok(Math.abs(calls.fills[0].alpha - 0.55 * 0.45 * 0.49) < 1e-9, `${style}: at .25·(1 - u)² (${calls.fills[0].alpha})`);
     }
   }
 });
