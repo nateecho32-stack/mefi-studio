@@ -133,15 +133,17 @@ test("small nodes stay cheap: at r 4 every free look is at most four draw calls"
   }
 });
 
-test("detail follows the caller's tier: the extras need T1 (crystal's cut lines T2) and fade in over the tier's first 1.2 px", () => {
+test("detail follows the caller's tier: the extras need T1 (crystal's cut lines T3) and fade in over the tier's first 1.2 px", () => {
   const styles = loadNodeStyles();
   const at = (style, detail, radius = 12) => frame(styles, style, { radius, active: true, detail, motion: motion(styles, { style, active: true, clock: 0.9 }) }).calls;
   assert.deepEqual([at("orbs", 0).stroke, at("orbs", 1).stroke], [1, 2], "orbs: the glint needs T1");
   assert.deepEqual([at("glass", 0).stroke, at("glass", 1).stroke, at("glass", 2).stroke], [2, 2, 4], "glass: the rim and light catch at every size; the frost ring and caustic need T2");
   const parked = (detail) => frame(styles, "glass", { detail, motion: motion(styles, { style: "glass", still: true }) }).calls;
   assert.deepEqual([parked(0).fill, parked(1).fill], [2, 3], "glass: the sheen needs T1");
-  assert.deepEqual([at("halo", 0).setLineDash, at("halo", 1).setLineDash], [0, 1], "halo: the dashed ring turns from T1 (solid below)");
-  assert.deepEqual([at("halo", 0).stroke, at("halo", 1).stroke], [2, 4], "halo: the comet needs T1");
+  assert.deepEqual([at("halo", 0).setLineDash, at("halo", 1).setLineDash, at("halo", 2).setLineDash], [0, 0, 1], "halo: the dashed ring turns from T2 (solid below)");
+  assert.deepEqual([at("halo", 0).stroke, at("halo", 1).stroke], [3, 5], "halo: the comet needs T1 (a lit node keeps its glow band and inner ring at T0)");
+  const radialFills = (calls) => calls.fills.filter(({ style }) => typeof style !== "string").length;
+  assert.deepEqual([radialFills(at("halo", 2)), at("halo", 2).stroke, radialFills(at("halo", 3)), at("halo", 3).stroke], [0, 5, 1, 4], "halo: the glow is a stroked band up to T2, the cached radial from T3");
   // Crystal (working, so lit: the glow is one fill at every tier): a plain gem
   // below T1; the shadow facets and the table at T1; the flash at T2; the
   // cut's lines at T3.
@@ -170,13 +172,15 @@ test("Classic orbs: a theme-derived core, a baked specular, a halo ring outside 
   assert.equal(halo.stops[0][1], "rgba(220,180,110,0)", "clear at its inner radius");
   assert.ok(!ctx.calls.log.some(([name, , , , , , back]) => name === "arc" && back === true), "no ring path (no anticlockwise inner arc)");
   // Inside .65 r nothing changes over time: the same core and body paints at the
-  // caller's alpha, turned only about the centre; the glint stays past .79 r.
+  // caller's alpha, turned only about the centre (the halo between them is
+  // clear inside .67 r); the glint stays past .79 r.
   const inside = (clock, active) => {
     const recorded = frame(styles, "orbs", { active, radius: 15, motion: motion(styles, { active, clock }) });
     const glint = recorded.calls.log.filter(([name, , , radius]) => name === "arc" && Math.abs(radius - 15 * 0.84) < 1e-6);
     assert.equal(glint.length, 1, "one glint streak on .84 r");
     assert.ok(recorded.calls.strokes[1].width <= 15 * 0.09 + 1e-9, "a streak no wider than .09 r: its inner edge stays past .79 r");
-    return JSON.stringify(recorded.calls.fills.slice(1));
+    const [core, , body] = recorded.calls.fills;
+    return JSON.stringify([core, body]);
   };
   for (const active of [false, true]) {
     const reference = inside(0, active);
@@ -208,23 +212,29 @@ test("Soft glass: a tint-derived pane, a cached wash, and a feathered sheen that
   const styles = loadNodeStyles();
   const ctx = frame(styles, "glass");
   assert.equal(ctx.calls.fills[0].style, `rgba(${mix(TINT, DARK_BG, 0.78).join(",")},0.92)`, "the pane sinks the tint toward the background");
-  assert.equal(frame(styles, "glass", { theme: styles.theme(LIGHT) }).calls.fills[0].style, `rgba(${mix(TINT, LIGHT_BG, 0.5).join(",")},0.92)`, "and toward a light one, keeping more of the hue");
+  assert.equal(frame(styles, "glass", { theme: styles.theme(LIGHT) }).calls.fills[0].style, `rgba(${mix(TINT, LIGHT_BG, 0.32).join(",")},0.92)`, "and toward a light one, keeping most of the hue");
+  const alphasOf = (gradient) => plain(gradient.stops.map(([, colour]) => Number(colour.match(/[\d.]+\)$/)[0].slice(0, -1))));
   const [, sheen] = ctx.calls.gradients;
-  assert.deepEqual(plain(sheen.stops.map(([, colour]) => Number(colour.match(/[\d.]+\)$/)[0].slice(0, -1)))), [0, 0.16, 0.42, 0.16, 0], "the sheen is feathered, brightest in its middle");
-  // Idle: the sheen sweeps across the first 80% of each 6.8 s pass, from the upper left.
+  assert.deepEqual(alphasOf(sheen), [0, 0.16, 0.42, 0.16, 0], "the sheen is feathered, brightest in its middle");
+  assert.deepEqual(alphasOf(frame(styles, "glass", { theme: styles.theme(LIGHT) }).calls.gradients[1]), [0, 0.28, 0.7, 0.28, 0], "brighter on a light page");
+  // Idle: the sheen sweeps across the first 80% of each 6.8 s pass, from the
+  // upper left: the band moves along its sweep (the translate between the
+  // pane's way in and out of its unit space).
   const m = motion(styles);
+  const along = (recorded) => {
+    const moves = recorded.calls.log.filter(([name]) => name === "translate");
+    return moves.length === 4 ? moves[1][1] / Math.cos(0.72) : null;
+  };
   const shift = (phase) => {
     m.clock = clockAt(m, 6.8, phase);
-    const recorded = frame(styles, "glass", { motion: m });
-    const move = recorded.calls.log.find(([name, , y]) => name === "translate" && y === 0);
-    return move ? move[1] : null;
+    return along(frame(styles, "glass", { motion: m }));
   };
   const positions = [0.05, 0.25, 0.45, 0.75].map(shift);
   assert.ok(positions.every((value, index) => value !== null && (index === 0 || value > positions[index - 1])), `the band travels one way (${positions.map((value) => value?.toFixed(2)).join(", ")})`);
   assert.ok(positions[0] < -0.8 && positions[3] > 0.8, "across the whole pane");
   assert.equal(shift(0.9), null, "then the pane rests until the next pass");
   // Reduced motion parks the sheen near the light.
-  assert.equal(frame(styles, "glass", { motion: motion(styles, { still: true }) }).calls.log.find(([name, , y]) => name === "translate" && y === 0)[1], -0.5);
+  assert.ok(Math.abs(along(frame(styles, "glass", { motion: motion(styles, { still: true }) })) + 0.5) < 1e-5, "reduced motion parks the band by the light");
   // The wash swells with the breath, and a working rim pulses on top of it.
   const layer = (clock, active, pick) => pick(frame(styles, "glass", { active, motion: motion(styles, { style: "glass", active, clock }) }).calls);
   const washes = [0, 1.05, 2.1, 3.15].map((clock) => layer(clock, false, (calls) => calls.fills[1].alpha));
@@ -233,7 +243,7 @@ test("Soft glass: a tint-derived pane, a cached wash, and a feathered sheen that
     const alphas = [0, 0.35, 0.7, 1.05, 1.4, 1.75, 2.1, 2.45, 2.8, 3.15, 3.5, 3.85].map((clock) => layer(clock, active, (calls) => Number(calls.strokes[0].style.match(/,([\d.]+)\)$/)[1])));
     return Math.max(...alphas) - Math.min(...alphas);
   };
-  assert.ok(rimSpread(false) >= 0.05 && rimSpread(true) > 2 * rimSpread(false), `the rim breathes at rest (${rimSpread(false)}) and pulses harder while working (${rimSpread(true)})`);
+  assert.ok(rimSpread(false) >= 0.05 && rimSpread(true) > 1.5 * rimSpread(false), `the rim breathes at rest (${rimSpread(false)}) and pulses harder while working (${rimSpread(true)})`);
 });
 
 test("Minimal: a breathing dot, a sonar ring while working, a text-coloured selection ring; agents keep a backing disc", () => {
@@ -255,7 +265,7 @@ test("Minimal: a breathing dot, a sonar ring while working, a text-coloured sele
   assert.equal(frame(styles, "minimal", { selected: true, theme: styles.theme(LIGHT) }).calls.strokes[0].style, "rgba(29,35,48,0.9)");
   // An agent: a backing disc for its glyph (written by the caller in the tint), no dot.
   const agent = frame(styles, "minimal", { kind: "agent", active: true });
-  assert.deepEqual([radii(agent)[0], agent.calls.fills[0].style], [12 * 0.78, "rgba(220,180,110,0.28125)"]);
+  assert.deepEqual([radii(agent)[0], agent.calls.fills[0].style], [12 * 0.78, "rgba(220,180,110,0.375)"]);
   const hub = frame(styles, "minimal", { kind: "assistant", radius: 15 });
   assert.deepEqual([radii(hub)[0], hub.calls.fillText], [15 * 0.62, 0], "the hub: a larger dot, no monogram");
   assert.deepEqual(plain(styles.glyph("minimal", TINT, null)), { ink: "rgba(220,180,110,1)", scale: 0.62, ringGap: 2 });
@@ -289,7 +299,8 @@ test("Crystal: an octagonal brilliant turning under a fixed light, flashing the 
   const still = frame(styles, "crystal");
   const rim = outline(still);
   assert.equal(still.calls.arc, 0, "no arcs anywhere: an octagon cut from lines");
-  assert.ok(Math.abs(rim[0][1] - (50 + 12 * Math.cos(Math.PI / 8))) < 1e-6 && Math.abs(rim[0][2] - (50 + 12 * 0.965 * Math.sin(Math.PI / 8))) < 1e-6, "flat on top at rest (the tilt at its middle)");
+  // The cut is traced in the gem's unit space (the canvas at its centre, scaled by its radius).
+  assert.ok(Math.abs(rim[0][1] - Math.cos(Math.PI / 8)) < 1e-6 && Math.abs(rim[0][2] - 0.965 * Math.sin(Math.PI / 8)) < 1e-6, "flat on top at rest (the tilt at its middle)");
   // The cut turns (40 s a turn at rest, 2.6 times as fast working) while the light gradient stays put.
   const turned = frame(styles, "crystal", { motion: motion(styles, { style: "crystal", clock: 5 }) });
   assert.notDeepEqual(plain(outline(turned)[0]), plain(rim[0]), "the gem turns");
@@ -312,8 +323,8 @@ test("Crystal: an octagonal brilliant turning under a fixed light, flashing the 
   // The sparkle where the light strikes: 14% of each 3.4 s pass (1.3 s working).
   const sparkle = (phase) => { m.clock = clockAt(m, 3.4, phase); return frame(styles, "crystal", { motion: m }).calls.fill; };
   assert.equal(sparkle(0.07) - sparkle(0.5), 1, "twinkles, then rests");
-  // Below T1 a plain gem: its lit and shadow sides and the rim; a glyph node
-  // keeps its deep well at every size (its light ink would sink into the gem).
+  // Below T1 a plain gem: one lit gradient and the rim; a glyph node keeps
+  // its deep well at every size (its light ink would sink into the gem).
   const small = frame(styles, "crystal", { radius: 5 });
   assert.deepEqual([small.calls.fill, small.calls.stroke], [1, 1]);
   for (const [radius, detail] of [[5, 3], [6, 3], [12, 0]]) {
@@ -337,10 +348,10 @@ test("glyph dress: each free look writes its glyph and monogram in an ink that r
       assert.ok(Math.abs(luma(ink) - centre) >= 90, `orbs ${theme.light ? "light" : "dark"} [${tint}]: ink ${ink} on a centre of luma ${centre.toFixed(1)}`);
     }
   }
-  // Minimal writes in the tint, deepened on a light page.
-  assert.equal(styles.glyph("minimal", TINT, light).ink, `rgba(${mix(TINT, [12, 14, 20], 0.45).join(",")},1)`);
+  // Minimal writes in its edge tone: the tint, deepened on a light page.
+  assert.equal(styles.glyph("minimal", TINT, light).ink, `rgba(${mix(TINT, [12, 14, 20], 0.6).join(",")},1)`);
   assert.ok(Math.abs(luma(styles.glyph("minimal", [125, 178, 255], light).ink) - luma("rgb(243,240,232)")) >= 90, "minimal: a light-blue glyph still reads on cream");
-  for (const [style, scale, gap] of [["glass", 0.66, 3.5], ["halo", 0.5, 3.5], ["crystal", 0.5, 3.5]]) {
+  for (const [style, scale, gap] of [["glass", 0.66, 3.5], ["halo", 0.6, 3.5], ["crystal", 0.56, 3.5]]) {
     // These bodies sink toward the background: the ink rises toward the theme's highlight.
     assert.deepEqual([styles.glyph(style, TINT, dark).scale, styles.glyph(style, TINT, dark).ringGap], [scale, gap]);
     assert.ok(luma(styles.glyph(style, TINT, dark).ink) > 170, `${style}: a light ink on a dark theme`);
@@ -360,21 +371,26 @@ test("glyph dress: each free look writes its glyph and monogram in an ink that r
 test("on a light page bright tints keep a deepened edge; dark themes keep the tint itself", () => {
   const styles = loadNodeStyles();
   const light = styles.theme(LIGHT), page = luma("rgb(243,240,232)");
-  // The edge each look draws: the orb, glass and halo rims (first stroke), the minimal dot (first fill).
+  // The edge each look draws (the orb, glass and halo rims: first stroke; the
+  // minimal dot: first fill), at rest in the still pose: its colour, and how
+  // far it lands from the page at the alpha it is painted with (string alpha
+  // times the canvas's).
   const edge = (style, tint, theme) => {
     const { calls } = frame(styles, style, { tint, theme });
-    return style === "minimal" ? calls.fills[0].style : calls.strokes[0].style;
+    const { style: colour, alpha } = style === "minimal" ? calls.fills[0] : calls.strokes[0];
+    return { colour, painted: alpha * Number(colour.match(/,([\d.]+)\)$/)[1]) };
   };
   for (const tint of [[104, 236, 164], [255, 212, 121]]) {
     for (const style of ["orbs", "glass", "halo", "minimal"]) {
-      const colour = edge(style, tint, light);
-      assert.ok(Math.abs(luma(colour) - page) >= 60, `${style} [${tint}] on the light page: ${colour}`);
-      assert.ok(edge(style, tint, null).startsWith(`rgba(${tint.join(",")},`), `${style} [${tint}] on a dark theme keeps the tint`);
+      const { colour, painted } = edge(style, tint, light);
+      const standing = painted * Math.abs(luma(colour) - page);
+      assert.ok(standing >= 90, `${style} [${tint}] on the light page: ${colour} stands ${standing.toFixed(1)} luma off the page`);
+      assert.ok(edge(style, tint, null).colour.startsWith(`rgba(${tint.join(",")},`), `${style} [${tint}] on a dark theme keeps the tint`);
     }
   }
   // The orb's body deepens toward its edge on a light page too; a dark theme keeps the tint's faint edge.
   const body = (theme) => frame(styles, "orbs", { tint: [104, 236, 164], theme }).calls.gradients[1].stops.slice(3).map(([, colour]) => colour);
-  const deepened = mix([104, 236, 164], [12, 14, 20], 0.45).join(",");
+  const deepened = mix([104, 236, 164], [12, 14, 20], 0.6).join(",");
   assert.deepEqual(plain(body(light)), [`rgba(${deepened},0.5)`, `rgba(${deepened},0.35)`]);
   assert.deepEqual(plain(body(null)), ["rgba(104,236,164,0.42)", "rgba(104,236,164,0.1)"]);
   // The halo's working comet stands off its ring: a whiter head on a dark
@@ -395,17 +411,56 @@ test("small nodes keep breathing: at r 5 on T0 every free look still moves", () 
   }
 });
 
+test("the breath is deep enough to see on a todo-sized node: rims swing by a third or more at r 4 on T0", () => {
+  const styles = loadNodeStyles();
+  // Over one 4.2 s breath at rest, the first stroke (the orb and glass rims,
+  // halo's ring) at the alpha it is painted with: string alpha times the
+  // canvas's.
+  for (const style of ["orbs", "glass", "halo", "crystal"]) {
+    const m = motion(styles, { style });
+    const painted = [];
+    for (let step = 0; step < 24; step += 1) {
+      m.clock = clockAt(m, 4.2, step / 24);
+      const { style: colour, alpha } = frame(styles, style, { radius: 4, detail: 0, alpha: 0.65, motion: m }).calls.strokes[0];
+      painted.push(alpha * Number(colour.match(/,([\d.]+)\)$/)[1]));
+    }
+    const swing = Math.max(...painted) / Math.min(...painted);
+    assert.ok(swing >= 1.35, `${style}: the rim's alpha swings ${swing.toFixed(2)}x over a breath`);
+  }
+  // Halo's core dot pulses in brightness even at its 1.5 px floor.
+  const m = motion(styles, { style: "halo" });
+  const dots = [0.25, 0.75].map((phase) => { m.clock = clockAt(m, 3.1, phase); return frame(styles, "halo", { radius: 4, detail: 0, motion: m }).calls.fills.at(-1).style; });
+  assert.deepEqual(plain(dots.map((colour) => Number(colour.match(/,([\d.]+)\)$/)[1]))), [0.9375, 0.5625], "the core dot beats from .55 to .95");
+  // The orb's halo swells with the same breath: its gain doubles from the
+  // breath's low to its high, and its reach grows.
+  const orb = motion(styles);
+  const halo = [0.75, 0.25].map((phase) => { orb.clock = clockAt(orb, 4.2, phase); const { calls } = frame(styles, "orbs", { radius: 4, detail: 0, motion: orb }); return { gain: calls.fills[1].alpha, reach: calls.reach }; });
+  assert.ok(Math.abs(halo[1].gain / halo[0].gain - 2) < 1e-9 && halo[1].reach > halo[0].reach, `the orb's halo swells (${JSON.stringify(halo)})`);
+  // On a light page Soft glass's sheen crosses the pane at more than half strength.
+  const glass = motion(styles, { style: "glass" });
+  glass.clock = clockAt(glass, 6.8, 0.4);
+  const { fills } = frame(styles, "glass", { theme: styles.theme(LIGHT), motion: glass }).calls;
+  assert.ok(fills.length === 3 && fills[2].alpha >= 0.5, `mid-sweep sheen at ${fills[2]?.alpha}`);
+});
+
 test("soft entrances: the minimal sonar is born faint, and halo's inner ring cross-fades into its dashes", () => {
   const styles = loadNodeStyles();
   const m = motion(styles, { style: "minimal", active: true });
   const sonar = (phase) => { m.clock = clockAt(m, 4.2, phase); return frame(styles, "minimal", { active: true, motion: m }).calls.strokes[0].alpha; };
   assert.ok(sonar(0.005) < 0.05 && sonar(0.06) < sonar(0.12), `born faint (${sonar(0.005).toFixed(3)}), then brightening`);
-  // Across T1's first 1.2 px the solid and the dashed ring share the stroke.
+  // Across T2's first 1.2 px the solid and the dashed ring share the stroke.
   const inner = (radius) => {
     const { calls } = frame(styles, "halo", { radius, motion: motion(styles, { style: "halo", clock: 1 }) });
     return calls.strokes.filter(({ width }) => Math.abs(width - 0.8) < 1e-9).map(({ alpha }) => Number(alpha.toFixed(6)));
   };
-  assert.deepEqual(inner(5.8), [1], "solid below T1");
-  assert.deepEqual(inner(6.6), [0.5, 0.5], "half and half halfway through the fade");
-  assert.deepEqual(inner(8), [1], "dashed once T1 is in");
+  assert.deepEqual(inner(8.3), [1], "solid below T2");
+  assert.deepEqual(inner(9.1), [0.5, 0.5], "half and half halfway through the fade");
+  assert.deepEqual(inner(10), [1], "dashed once T2 is in");
+  // Halo's glow band and its radial cross-fade over T3's first 1.2 px.
+  const glow = (radius) => {
+    const { calls } = frame(styles, "halo", { radius, motion: motion(styles, { style: "halo", clock: 1 }) });
+    return [calls.radial > 0 ? calls.fills[0].alpha : 0, calls.strokes.length > 0 && Math.abs(calls.strokes[0].width - radius * 0.45) < 1e-9 ? calls.strokes[0].alpha : 0];
+  };
+  const [radial, band] = glow(11.1), [, bandBelow] = glow(10.3), [radialAbove, bandAbove] = glow(12);
+  assert.ok(radial > 0 && band > 0 && Math.abs(radial - band) < 1e-9 && bandBelow > band && radialAbove > radial && bandAbove === 0, "band below T3, radial above, half and half between");
 });

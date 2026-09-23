@@ -507,11 +507,14 @@
     return key;
   }
   // On a light theme a bright tint (done green, amber) would melt into the
-  // page, so each look's edge (a rim, a ring, the minimal dot) takes a tone
-  // deepened toward the theme's dark highlight; dark themes keep the tint.
-  const freeEdge = (tint, currentTheme) => currentTheme.light ? mix(tint, currentTheme.hi, 0.45) : tint;
-  // The rims breathe with the node, 4.2 s a breath (1.6 s working), at every size.
-  const freeBreath = (m) => 0.85 + 0.15 * swell(m, 4.2);
+  // page, so each look's edge (a rim, a ring) takes a tone deepened toward
+  // the theme's dark highlight; dark themes keep the tint. Built on a cache
+  // miss only (mix makes a new triple).
+  const freeEdge = (tint, currentTheme) => currentTheme.light ? mix(tint, currentTheme.hi, 0.6) : tint;
+  // The rims breathe with the node, 4.2 s a breath (1.6 s working), at every
+  // size and tier: ±25% of their alpha (the orb and glass rims their width
+  // too), the motion a todo-sized node keeps.
+  const freeBreath = (m) => 0.6 + 0.4 * swell(m, 4.2);
   // A dark ink that keeps a trace of the hue, for a glyph on a bright body.
   const FREE_DARK = Object.freeze([11, 14, 20]);
   const freeLuma = (triple) => triple[0] * 0.2126 + triple[1] * 0.7152 + triple[2] * 0.0722;
@@ -522,42 +525,62 @@
   // that centre (the monogram's thin letter stays light a little longer);
   // glass, halo and crystal wear theirs on a body sunk toward the
   // background, so the ink rises toward the theme's highlight; minimal
-  // writes in the tint, deepened on a light page. `dot` is minimal's dot
-  // tone (the tint, deepened on a light page).
+  // writes in its edge tone. `dot` is minimal's dot tone (the tint, deepened
+  // a little less than an edge on a light page), `dotRest` that dot's fill
+  // on a quiet node. The last (theme, tint) pair answers first: neighbours
+  // in a frame mostly share a tint, so most nodes skip both WeakMaps.
   const freeInkMemo = new WeakMap();
+  let freeInkTheme = null, freeInkTint = null, freeInkLast = null;
   function freeInks(tint, currentTheme) {
     const active = currentTheme ?? INK_DEFAULTS;
+    if (tint === freeInkTint && active === freeInkTheme) return freeInkLast;
     const byTint = freeByTheme(freeInkMemo, active);
     let inks = byTint.get(tint);
-    if (inks) return inks;
-    const tones = inkOf(tint, active);
-    const dark = mix(tint, FREE_DARK, 0.84), deep = mix(tint, FREE_DARK, 0.9), light = mix(tint, WHITE, 0.9);
-    const centre = freeLuma(mix(tones.core, tint, 0.76));
-    const dot = active.light ? mix(tint, active.hi, 0.4) : tint;
-    inks = {
-      orbs: rgba(active.light ? (centre < 95 ? light : deep) : (centre > 150 ? deep : light), 1),
-      orbsText: rgba(centre > (active.light ? 110 : 185) ? dark : light, 1),
-      glass: rgba(tones.frost, 1),
-      minimal: rgba(active.light ? mix(tint, active.hi, 0.45) : tint, 1),
-      halo: rgba(tones.hot, 1),
-      crystal: rgba(tones.ink, 1),
-      dot,
-    };
-    byTint.set(tint, inks);
+    if (!inks) {
+      const tones = inkOf(tint, active);
+      const dark = mix(tint, FREE_DARK, 0.84), deep = mix(tint, FREE_DARK, 0.9), light = mix(tint, WHITE, 0.9);
+      const centre = freeLuma(mix(tones.core, tint, 0.76));
+      inks = {
+        orbs: rgba(active.light ? (centre < 95 ? light : deep) : (centre > 150 ? deep : light), 1),
+        orbsText: rgba(centre > (active.light ? 110 : 185) ? dark : light, 1),
+        glass: rgba(tones.frost, 1),
+        minimal: rgba(freeEdge(tint, active), 1),
+        halo: rgba(tones.hot, 1),
+        crystal: rgba(tones.ink, 1),
+        dot: active.light ? mix(tint, active.hi, 0.55) : tint,
+        dotRest: null,
+      };
+      inks.dotRest = rgba(inks.dot, qa(active.light ? 0.8 : 0.6));
+      byTint.set(tint, inks);
+    }
+    freeInkTheme = active; freeInkTint = tint; freeInkLast = inks;
     return inks;
   }
   function freeMonogram(ctx, p, n, ink) {
     ctx.font = '600 10px system-ui, "Segoe UI", sans-serif'; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillStyle = ink; ctx.fillText(n.kind === "music" ? "♪" : "M", p.x, p.y + 0.5);
   }
+  // The round looks trace their arcs in pixels, where the canvas draws them
+  // fastest (its own transform is at most the display's scale; an arc drawn
+  // under a translation costs about three times as much); only a cached
+  // gradient needs the node's unit space, entered and left around its fill.
+  // (Crystal's straight cut is as cheap in its unit space and stays there.)
+  // A transform change re-maps the current path, so each clears the path
+  // first, and the way back is the inverse (cheaper than a save and a
+  // restore; paint() restores the canvas after the look in any case).
+  // freeLeave leaves an empty path for the next draw to trace.
+  function freeEnter(ctx, p, scale) { ctx.beginPath(); ctx.translate(p.x, p.y); ctx.scale(scale, scale); }
+  function freeLeave(ctx, p, scale) { ctx.beginPath(); ctx.scale(1 / scale, 1 / scale); ctx.translate(-p.x, -p.y); }
 
   // Classic orbs: a luminous bead on an opaque, theme-derived core. The body
   // is one cached radial with the specular baked in (upper left), swaying a
   // little about its centre, so nothing inside the body ever changes its
-  // brightness over time (the audio response reads it there). Outside it a
-  // halo ring breathes with the rim, and a light glint rides the rim: soft
-  // at rest, bright and quick while the node works. On a light page the
-  // body's outer stops and the rim take the deepened edge tone.
+  // brightness over time (the audio response reads it there). Around it a
+  // halo breathes deeply with the rim (the motion a todo-sized orb shows;
+  // clear inside .67 r, it lies over the core's outer ring, under the
+  // body), and a light glint rides the rim: soft at rest, bright and quick
+  // while the node works. On a light page the body's outer stops and a
+  // firmer rim take the deepened edge tone.
   const orbKeys = new WeakMap();
   function orbPaints(ctx, tint, currentTheme) {
     const key = freeKey(orbKeys, "orbs", tint, currentTheme);
@@ -565,7 +588,7 @@
     if (cached) return cached;
     const spec = mix(tint, WHITE, 0.8), edge = freeEdge(tint, currentTheme), light = currentTheme.light;
     // The halo in its own unit space (scaled by the breathing reach): clear
-    // inside half the reach (at least .69 r, so a translucent body never
+    // inside half the reach (at least .67 r, so a translucent body never
     // shows it breathing through its middle), brightest just past that and
     // fading out to the reach. A plain disc, not a ring path, so it takes
     // the canvas's fast circle fill.
@@ -582,24 +605,29 @@
     const { lit, sel, work } = freeLevels(n, m);
     const base = n.alpha;
     const breath = swell(m, 4.2);
-    const reach = 1.38 + 0.26 * lit + 0.16 * breath; // at most 1.8r
-    // One transform block: the halo in its reach's unit space, then scaled
-    // back to the body's own.
-    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius * reach, radius * reach);
-    ctx.globalAlpha = base * (0.42 + 0.58 * lit) * (0.7 + 0.3 * breath);
-    ctx.fillStyle = paints.halo;
-    ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
-    ctx.scale(1 / reach, 1 / reach);
-    ctx.globalAlpha = base;
-    if (!m.still && radius >= 5) ctx.rotate(0.14 * (2 * swell(m, 7) - 1));
-    ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU);
-    ctx.fillStyle = paints.core; ctx.fill();
-    ctx.fillStyle = paints.body; ctx.fill();
-    ctx.restore();
-    // The rim breathes with the halo (the same 4.2 s breath).
+    const reach = 1.34 + 0.22 * lit + 0.24 * breath; // at most 1.8r; clear inside .67 r
+    // The core, opaque at the caller's alpha.
     ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, TAU);
-    ctx.strokeStyle = rgba(paints.edge, qa((paints.light ? 0.55 + 0.3 * lit + 0.15 * sel : 0.5 + 0.32 * lit + 0.18 * sel) * (0.85 + 0.15 * breath)));
-    ctx.lineWidth = 0.8 + 0.5 * lit + 0.5 * sel; ctx.stroke();
+    ctx.fillStyle = paints.core; ctx.fill();
+    // The two cached radials in the orb's unit space: the halo at its reach
+    // (over the core's outer ring, under the body), then the body, swaying
+    // about its centre.
+    freeEnter(ctx, p, radius * reach);
+    ctx.arc(0, 0, 1, 0, TAU);
+    ctx.globalAlpha = base * (0.42 + 0.58 * lit) * (0.5 + 0.5 * breath);
+    ctx.fillStyle = paints.halo; ctx.fill();
+    ctx.beginPath(); ctx.scale(1 / reach, 1 / reach);
+    const sway = !m.still && radius >= 5 ? 0.14 * (2 * swell(m, 7) - 1) : 0;
+    if (sway) ctx.rotate(sway);
+    ctx.arc(0, 0, 1, 0, TAU);
+    ctx.globalAlpha = base;
+    ctx.fillStyle = paints.body; ctx.fill();
+    if (sway) { ctx.beginPath(); ctx.rotate(-sway); }
+    freeLeave(ctx, p, radius);
+    // The rim breathes with the halo (the same 4.2 s breath) in alpha and width.
+    ctx.arc(p.x, p.y, radius, 0, TAU);
+    ctx.strokeStyle = rgba(paints.edge, qa((paints.light ? 0.85 + 0.1 * lit + 0.05 * sel : 0.5 + 0.32 * lit + 0.18 * sel) * (0.55 + 0.45 * breath)));
+    ctx.lineWidth = ((paints.light ? 1 : 0.8) + 0.5 * lit + 0.5 * sel) * (0.8 + 0.4 * breath); ctx.stroke();
     // The glint (T1 up, faded in over the tier's first 1.2 px): a streak of
     // rim light riding round the inside of the rim, clear of the body's
     // middle.
@@ -619,27 +647,33 @@
 // ===== style: glass =====
 
   // Soft glass: a pane sunk toward the background under a cached tint wash
-  // that drifts and swells, a crisp breathing rim (pulsing while it works),
-  // a frost ring, one light catch that sways upper left and a caustic lower
-  // right. A soft frost sheen (a cached, feathered band) sweeps across the
-  // pane from the light over most of each pass, 2.6 times as often while it
-  // works; no clip, the band fills the pane's own circle.
+  // that swells with the node's breath, a crisp rim breathing in alpha and
+  // width (pulsing while it works), a frost ring, one light catch that sways
+  // upper left and a caustic lower right. A soft frost sheen (a cached,
+  // feathered band) sweeps across the pane from the light over most of each
+  // pass, 2.6 times as often while it works; no clip, the band fills the
+  // pane's own circle. On a light page the pane keeps most of the hue and
+  // the frost layers are brighter, so the light still reads as light on it.
   const glassKeys = new WeakMap();
+  // The sweep's direction, from the upper left toward the lower right.
+  const GLASS_SWEEP_X = Math.cos(0.72), GLASS_SWEEP_Y = Math.sin(0.72);
   function glassPaints(ctx, tint, currentTheme) {
     const key = freeKey(glassKeys, "glass", tint, currentTheme);
     const cached = cacheGet(ctx, key);
     if (cached) return cached;
+    const light = currentTheme.light;
     const wash = ctx.createLinearGradient(-0.9, -0.9, 0.9, 0.9);
     wash.addColorStop(0, rgba(tint, 0.46)); wash.addColorStop(0.5, rgba(tint, 0.12)); wash.addColorStop(1, rgba(tint, 0.05));
     const frost = mix(tint, WHITE, 0.82);
-    // The sheen across its own band axis: feathered edges, a brighter core.
-    const sheen = ctx.createLinearGradient(-0.34, 0, 0.34, 0);
-    sheen.addColorStop(0, rgba(frost, 0)); sheen.addColorStop(0.34, rgba(frost, 0.16)); sheen.addColorStop(0.5, rgba(frost, 0.42));
-    sheen.addColorStop(0.66, rgba(frost, 0.16)); sheen.addColorStop(1, rgba(frost, 0));
+    // The sheen across the sweep's axis (.34 either side of its middle):
+    // feathered edges, a brighter core.
+    const sheen = ctx.createLinearGradient(-0.34 * GLASS_SWEEP_X, -0.34 * GLASS_SWEEP_Y, 0.34 * GLASS_SWEEP_X, 0.34 * GLASS_SWEEP_Y);
+    sheen.addColorStop(0, rgba(frost, 0)); sheen.addColorStop(0.34, rgba(frost, light ? 0.28 : 0.16)); sheen.addColorStop(0.5, rgba(frost, light ? 0.7 : 0.42));
+    sheen.addColorStop(0.66, rgba(frost, light ? 0.28 : 0.16)); sheen.addColorStop(1, rgba(frost, 0));
     return cachePut(ctx, key, {
-      wash, sheen, frost, edge: freeEdge(tint, currentTheme), light: currentTheme.light,
-      pane: rgba(mix(tint, currentTheme.bg, currentTheme.light ? 0.5 : 0.78), 0.92),
-      catch: rgba(frost, 0.62), caustic: rgba(mix(tint, WHITE, 0.35), 0.5),
+      wash, sheen, frost, edge: freeEdge(tint, currentTheme), light,
+      pane: rgba(mix(tint, currentTheme.bg, light ? 0.32 : 0.78), 0.92),
+      catch: rgba(frost, light ? 0.9 : 0.62), caustic: light ? rgba(WHITE, 0.85) : rgba(mix(tint, WHITE, 0.35), 0.5),
     });
   }
   function paintGlass(ctx, p, radius, tint, n, m) {
@@ -647,46 +681,50 @@
     const { lit, sel, work } = freeLevels(n, m);
     const base = n.alpha;
     const breath = swell(m, 4.2);
-    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
-    ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU);
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, TAU);
     ctx.fillStyle = paints.pane; ctx.fill();
-    // The wash drifts with the light (the path is already traced, so the
-    // turn moves only the paint), and swells with the node's breath.
-    const drift = m.still ? 0 : 0.3 * (2 * swell(m, 9.4) - 1);
-    if (drift) ctx.rotate(drift);
-    ctx.globalAlpha = base * (0.62 + 0.38 * lit) * (0.78 + 0.22 * breath);
+    // The wash (its cached gradient in the pane's unit space) swells deeply
+    // with the node's breath.
+    freeEnter(ctx, p, radius);
+    ctx.arc(0, 0, 1, 0, TAU);
+    ctx.globalAlpha = base * (0.62 + 0.38 * lit) * (0.5 + 0.5 * breath);
     ctx.fillStyle = paints.wash; ctx.fill();
-    // The sheen (T1 up): the first 80% of each 6.8 s pass sweeps it from the
-    // upper left to the lower right (a working pane sweeps without a rest,
-    // one pass every 2.6 s), at full strength through the middle of the
-    // sweep and easing in and out at the pane's edges; reduced motion parks
-    // it by the light.
+    // The sheen (T1 up): the first 80% of each 6.8 s pass (2.6 s working)
+    // sweeps it from the upper left to the lower right, at full strength
+    // through the middle of the sweep and easing in and out at the pane's
+    // edges; reduced motion parks it by the light. The cached band moves
+    // along the sweep; the pane's circle moves back under it.
     const shown = n.detail >= 1 ? tierIn(radius, 1) : 0;
     if (shown > 0) {
       let at = -0.5, envelope = 0.8;
       if (!m.still) {
-        const u = cycle(m, 6.8) / (0.8 + 0.2 * work);
+        const u = cycle(m, 6.8) / 0.8;
         envelope = u < 1 ? smooth01(u / 0.15) * smooth01((1 - u) / 0.15) : 0;
         at = -1 + 2 * u;
       }
       const gain = shown * envelope * (0.65 + 0.35 * lit);
       if (gain > 0.004) {
-        ctx.rotate(0.72 - drift); ctx.translate(at, 0);
+        const dx = at * GLASS_SWEEP_X, dy = at * GLASS_SWEEP_Y;
+        ctx.beginPath(); ctx.translate(dx, dy);
+        ctx.arc(-dx, -dy, 1, 0, TAU);
         ctx.globalAlpha = base * gain;
-        ctx.fillStyle = paints.sheen;
-        ctx.beginPath(); ctx.arc(-at, 0, 1, 0, TAU); ctx.fill();
+        ctx.fillStyle = paints.sheen; ctx.fill();
+        ctx.beginPath(); ctx.translate(-dx, -dy);
       }
     }
-    ctx.restore();
-    // The rim breathes, and pulses on top of that while the node works.
-    ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, TAU);
-    const pulse = work > 0 ? 1 - 0.15 * work * (1 - swell(m, 2.2)) : 1;
-    const rim = paints.light ? 0.55 + 0.27 * lit + 0.18 * sel : 0.42 + 0.3 * lit + 0.23 * sel;
-    ctx.strokeStyle = rgba(paints.edge, qa(rim * (0.85 + 0.15 * breath) * pulse)); ctx.lineWidth = 1 + 0.7 * sel; ctx.stroke();
-    // The light catch, swaying upper left, at every size.
-    const sway = 0.12 * (2 * swell(m, 7.2) - 1), from = Math.PI * 1.1 + sway;
+    freeLeave(ctx, p, radius);
+    ctx.globalAlpha = base;
+    // The rim breathes in alpha and width, and pulses on top of that while
+    // the node works; a light page gets a firmer rim.
+    ctx.arc(p.x, p.y, radius, 0, TAU);
+    const pulse = work > 0 ? 1 - 0.2 * work * (1 - swell(m, 2.2)) : 1;
+    const rim = paints.light ? 0.85 + 0.1 * lit + 0.05 * sel : 0.5 + 0.28 * lit + 0.22 * sel;
+    ctx.strokeStyle = rgba(paints.edge, qa(rim * (0.55 + 0.45 * breath) * pulse)); ctx.lineWidth = (1 + 0.7 * sel) * (0.8 + 0.4 * breath); ctx.stroke();
+    // The light catch, swaying upper left, at every size (on a small pane
+    // it keeps a little over half the radius, clear of the centre).
+    const sway = 0.3 * (2 * swell(m, 7.2) - 1), from = Math.PI * 1.1 + sway;
     ctx.lineCap = "round"; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, radius - Math.max(2, radius * 0.22)), from, from + Math.PI * 0.47);
+    ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(radius * 0.55, radius - Math.max(2, radius * 0.22)), from, from + Math.PI * 0.47);
     ctx.strokeStyle = paints.catch; ctx.stroke();
     // T2 up: a frost ring inside the rim and a caustic lower right, drawn
     // last so their gains need no undoing (paint() restores the canvas).
@@ -694,7 +732,7 @@
     if (fine > 0) {
       ctx.globalAlpha = base * fine;
       ctx.beginPath(); ctx.arc(p.x, p.y, radius - Math.max(1.2, radius * 0.12), 0, TAU);
-      ctx.strokeStyle = rgba(paints.frost, qa(0.14 + 0.1 * lit)); ctx.stroke();
+      ctx.strokeStyle = rgba(paints.frost, qa(paints.light ? 0.3 + 0.15 * lit : 0.14 + 0.1 * lit)); ctx.stroke();
       ctx.globalAlpha = base * fine * (0.6 + 0.4 * lit);
       ctx.beginPath(); ctx.arc(p.x, p.y, radius - Math.max(1.6, radius * 0.14), Math.PI * 0.12 + sway, Math.PI * 0.5 + sway);
       ctx.strokeStyle = paints.caustic; ctx.stroke();
@@ -708,24 +746,24 @@
   // Minimal: one breathing dot, larger while it works, with a sonar ring
   // going out from it (born soft, never glued to the dot); a selection ring
   // in the theme's text colour. On a light page the dot and the sonar take
-  // a tone deepened toward the theme's dark highlight. An agent keeps a
-  // faint backing disc for its role glyph, the hub a larger dot and no
-  // monogram.
+  // a tone deepened toward the theme's dark highlight, at a firmer alpha.
+  // An agent keeps a backing disc for its role glyph, the hub a larger dot
+  // and no monogram.
   function paintMinimal(ctx, p, radius, tint, n, m) {
     const { lit, sel, work } = freeLevels(n, m);
     const base = n.alpha;
     const breath = 2 * swell(m, 3.6) - 1;
-    const tone = freeInks(tint, n.theme).dot;
+    const inks = freeInks(tint, n.theme), tone = inks.dot;
     let dot;
     ctx.beginPath();
     if (n.glyph && n.kind === "agent") {
       dot = radius * 0.78 * (1 + 0.05 * breath);
       ctx.arc(p.x, p.y, dot, 0, TAU);
-      ctx.fillStyle = rgba(tint, qa(0.18 + 0.1 * lit)); ctx.fill();
+      ctx.fillStyle = rgba(tint, qa(0.26 + 0.12 * lit)); ctx.fill();
     } else {
       dot = Math.max(2.5, radius * (n.monogram ? 0.62 : 0.46 + 0.14 * work + 0.05 * sel)) * (1 + (0.14 + 0.06 * work) * breath);
       ctx.arc(p.x, p.y, dot, 0, TAU);
-      ctx.fillStyle = rgba(tone, qa(0.6 + 0.35 * lit)); ctx.fill();
+      ctx.fillStyle = lit > 0 ? rgba(tone, qa(n.theme.light ? 0.8 + 0.2 * lit : 0.6 + 0.35 * lit)) : inks.dotRest; ctx.fill();
     }
     if (work > 0.01 && radius >= 4) {
       const u = m.still ? 0.45 : cycle(m, 4.2);
@@ -746,13 +784,18 @@
 
 // ===== style: halo =====
 
-  // Halo: a dark disc inside a glowing ring. The glow is a cached radial
-  // peaking on the ring (no shadowBlur), breathing deeply; the ring itself
-  // breathes, a dashed inner ring turns (crossing over from a solid one as
-  // T1 fades in), a core dot pulses, and a comet runs round the ring while
-  // the node works. On a light page the ring, the inner ring and the core
-  // take the deepened edge tone and the comet a dark head.
+  // Halo: a dark disc inside a glowing ring. The glow breathes deeply (no
+  // shadowBlur): up to T2 a single soft band stroked outside the ring, from
+  // T3 up a cached radial peaking on the ring, the two cross-fading over
+  // T3's first 1.2 px (a quiet node below T1 skips it: too faint to see).
+  // The ring breathes, a core dot pulses in size and brightness, an inner
+  // ring turns its dashes from T2 up (crossing over from a solid one as T2
+  // fades in), and a comet runs round the ring while the node works. On a
+  // light page the ring, the inner ring and the core take the deepened edge
+  // tone (the ring a firmer alpha) and the comet a dark head.
   const haloKeys = new WeakMap();
+  // Eight dashes and eight gaps round the inner ring (a scratch the painter
+  // fills; setLineDash copies it).
   const HALO_DASH = [1, 1];
   function haloPaints(ctx, tint, currentTheme) {
     const key = freeKey(haloKeys, "halo", tint, currentTheme);
@@ -762,23 +805,44 @@
     glow.addColorStop(0, rgba(tint, 0)); glow.addColorStop(0.3, rgba(tint, 0.16)); glow.addColorStop(0.45, rgba(tint, 0.42));
     glow.addColorStop(0.62, rgba(tint, 0.12)); glow.addColorStop(1, rgba(tint, 0));
     const tones = inkOf(tint, currentTheme);
-    const comet = currentTheme.light ? mix(tint, currentTheme.hi, 0.72) : mix(tint, WHITE, 0.85);
-    return cachePut(ctx, key, { glow, edge: freeEdge(tint, currentTheme), core: rgba(tones.core, 0.86), comet: rgba(comet, 0.9), hot: tones.hot });
+    const comet = currentTheme.light ? mix(tint, currentTheme.hi, 0.8) : mix(tint, WHITE, 0.85);
+    return cachePut(ctx, key, {
+      glow, edge: freeEdge(tint, currentTheme), light: currentTheme.light, band: rgba(tint, 0.14),
+      core: rgba(tones.core, 0.86), comet: rgba(comet, 0.9),
+    });
   }
   function paintHalo(ctx, p, radius, tint, n, m) {
     const paints = haloPaints(ctx, tint, n.theme);
     const { lit, sel, work } = freeLevels(n, m);
     const base = n.alpha;
-    const breath = swell(m, 3.2);
-    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
-    ctx.globalAlpha = base * (0.45 + 0.55 * lit) * (0.65 + 0.35 * breath);
-    ctx.fillStyle = paints.glow; ctx.beginPath(); ctx.arc(0, 0, 1.55, 0, TAU); ctx.fill();
-    ctx.restore();
+    const shown = n.detail >= 1 ? tierIn(radius, 1) : 0;
+    // The glow: up to T2 one soft band stroked from the ring out to 1.45 r
+    // (below T1, too faint to see on a quiet node, only a lit one keeps it,
+    // faded in over T1's first 1.2 px); from T3 up the cached radial, in the
+    // node's unit space (the two cross-fade over T3's first 1.2 px).
+    const soft = n.detail >= 3 ? tierIn(radius, 3) : 0;
+    const band = (1 - soft) * (lit + (1 - lit) * shown);
+    if (band > 0.01 || soft > 0) {
+      const glow = (0.45 + 0.55 * lit) * (0.65 + 0.35 * swell(m, 3.2));
+      ctx.beginPath();
+      if (band > 0.01) {
+        ctx.globalAlpha = base * glow * band;
+        ctx.arc(p.x, p.y, radius * 1.22, 0, TAU);
+        ctx.strokeStyle = paints.band; ctx.lineWidth = radius * 0.45; ctx.stroke();
+      }
+      if (soft > 0) {
+        freeEnter(ctx, p, radius);
+        ctx.arc(0, 0, 1.55, 0, TAU);
+        ctx.globalAlpha = base * glow * soft;
+        ctx.fillStyle = paints.glow; ctx.fill();
+        freeLeave(ctx, p, radius);
+      }
+      ctx.globalAlpha = base;
+    }
     const ringWidth = 1.4 + 0.6 * lit + 0.4 * sel;
     ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, TAU);
     ctx.fillStyle = paints.core; ctx.fill();
-    ctx.strokeStyle = rgba(paints.edge, qa((0.68 + 0.27 * lit) * freeBreath(m))); ctx.lineWidth = ringWidth; ctx.stroke();
-    const shown = n.detail >= 1 ? tierIn(radius, 1) : 0;
+    ctx.strokeStyle = rgba(paints.edge, qa((paints.light ? 0.82 + 0.16 * lit : 0.68 + 0.27 * lit) * freeBreath(m))); ctx.lineWidth = ringWidth; ctx.stroke();
     // The comet (T1 up, while it works): a bright head and a fading tail.
     if (shown > 0 && work > 0.02 && radius >= 5) {
       const head = turn(m, 4.4, -Math.PI / 2);
@@ -789,27 +853,30 @@
       ctx.beginPath(); ctx.arc(p.x, p.y, radius, head, head + 0.9); ctx.stroke();
       ctx.globalAlpha = base;
     }
+    // The core dot pulses in brightness as well as size, so it still beats
+    // while a small node holds it at its 1.5 px floor.
     if (!n.glyph) {
-      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1.5, radius * 0.16 * (1 + (0.25 + 0.3 * work) * swell(m, 3.1))), 0, TAU);
-      ctx.fillStyle = rgba(paints.edge, 0.9); ctx.fill();
+      const beat = swell(m, 3.1);
+      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1.5, radius * 0.16 * (1 + (0.25 + 0.3 * work) * beat)), 0, TAU);
+      ctx.fillStyle = rgba(paints.edge, qa(0.55 + 0.4 * beat)); ctx.fill();
     }
     // The inner ring (none on a node too small to hold it apart from the
-    // core): solid below T1, dashed and turning from T1 up; while T1 fades
+    // core): solid below T2, dashed and turning from T2 up; while T2 fades
     // in over its first 1.2 px the two cross-fade, so a zoom never pops it.
     // Only the fade band sets gains (the alpha is at base on either side),
     // and the dash is left for paint()'s restore to clear: nothing is
     // stroked after it.
     if (radius >= 5) {
-      const fading = shown > 0 && shown < 1;
+      const dashed = n.detail >= 2 ? tierIn(radius, 2) : 0;
+      const fading = dashed > 0 && dashed < 1;
       ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.6, 0, TAU);
-      if (shown < 1) {
-        if (fading) ctx.globalAlpha = base * (1 - shown);
+      if (dashed < 1) {
+        if (fading) ctx.globalAlpha = base * (1 - dashed);
         ctx.strokeStyle = rgba(paints.edge, 0.24); ctx.lineWidth = 0.8; ctx.stroke();
       }
-      if (shown > 0) {
-        const dash = TAU * radius * 0.6 / 16;
-        HALO_DASH[0] = HALO_DASH[1] = dash;
-        if (fading) ctx.globalAlpha = base * shown;
+      if (dashed > 0) {
+        HALO_DASH[0] = HALO_DASH[1] = TAU * radius * 0.6 / 16;
+        if (fading) ctx.globalAlpha = base * dashed;
         ctx.setLineDash(HALO_DASH);
         ctx.lineDashOffset = -turn(m, 14) * radius * 0.6;
         ctx.strokeStyle = rgba(paints.edge, qa(0.34 + 0.2 * work)); ctx.lineWidth = 0.8 + 0.3 * work; ctx.stroke();
@@ -818,7 +885,7 @@
     }
     if (n.monogram) freeMonogram(ctx, p, n, freeInks(tint, n.theme).halo);
   }
-  LOOKS.halo = { speedup: 2.6, paint: paintHalo, glyph: { scale: 0.5, ringGap: 3.5, ink: (tint, currentTheme) => freeInks(tint, currentTheme).halo }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, wire: null, surge: null, land: null, reach: 1 };
+  LOOKS.halo = { speedup: 2.6, paint: paintHalo, glyph: { scale: 0.6, ringGap: 3.5, ink: (tint, currentTheme) => freeInks(tint, currentTheme).halo }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, wire: null, surge: null, land: null, reach: 1 };
 
 // ===== style: crystal =====
 
@@ -830,8 +897,8 @@
   // ever pops). A tilt breathes, a sparkle twinkles where the light
   // strikes, and a lit gem glows inside an octagon. Detail by tier: below
   // T1 a plain gem; T1 adds the shadow facets and the table; T2 the flash
-  // and the sparkle; T3 the cut's lines (each fading in over its tier's
-  // first 1.2 px).
+  // and the sparkle; T3 the cut's lines on a lit gem or one of 12 px and up
+  // (each fading in over its tier's first 1.2 px).
   const crystalKeys = new WeakMap();
   const CRYSTAL_LIGHT = -Math.PI * 0.75;
   const CRYSTAL_OCT = new Float64Array(16);
@@ -857,7 +924,7 @@
     const glow = ctx.createRadialGradient(0, 0, 0.5, 0, 0, 1.55);
     glow.addColorStop(0, rgba(tint, 0.26)); glow.addColorStop(1, rgba(tint, 0));
     return cachePut(ctx, key, {
-      light, glow,
+      light, glow, firm: currentTheme.light,
       shade: rgba(mix(tint, CRYSTAL_DARK, depth), currentTheme.light ? 0.36 : 0.46), flash: rgba(mix(tint, WHITE, 0.78), 0.92),
       table: rgba(mix(tint, WHITE, 0.3), 0.62), well: rgba(tones.deep, 0.92), hot: tones.hot,
       spark: rgba(mix(tint, WHITE, 0.88), 0.95),
@@ -890,14 +957,22 @@
     }
     const shown = n.detail >= 1 ? tierIn(radius, 1) : 0;
     const flashes = n.detail >= 2 ? tierIn(radius, 2) : 0;
-    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(radius, radius);
+    // The whole gem in its unit space, one transform and no save of its own
+    // (paint() restores the canvas); strokes divide their pixel widths by
+    // the radius.
+    freeEnter(ctx, p, radius);
     if (lit > 0.01) {
       ctx.globalAlpha = base * lit;
       ctx.fillStyle = paints.glow; ctx.beginPath(); crystalOutline(ctx, 1.55); ctx.fill();
       ctx.globalAlpha = base;
     }
+    // The gem and its rim from one traced outline (the rim in unit space,
+    // its width divided back out); the facets drawn over it catch the rim's
+    // inner half, so the girdle takes the light with them.
     ctx.beginPath(); crystalOutline(ctx, 1);
     ctx.fillStyle = paints.light; ctx.fill();
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = rgba(paints.hot, qa((paints.firm ? 0.7 + 0.2 * lit + 0.1 * sel : 0.45 + 0.4 * lit + 0.15 * sel) * freeBreath(m))); ctx.lineWidth = (0.9 + 0.5 * lit + 0.6 * sel) / radius; ctx.stroke();
     if (shown > 0) {
       // Alternate facets in shadow (T1 up), then the flash (T2 up): the
       // facet facing the light and its neighbour share it by how far each
@@ -918,10 +993,10 @@
       ctx.globalAlpha = base;
     }
     // The table: a glyph sits in a deep well at every size (its light ink
-    // would sink into the bright gem otherwise); a plain gem shows its table
-    // from T1 up.
+    // would sink into the bright gem otherwise; a wider one, to hold the
+    // glyph); a plain gem shows its table from T1 up.
     if (n.glyph) {
-      ctx.beginPath(); crystalOutline(ctx, 0.52);
+      ctx.beginPath(); crystalOutline(ctx, 0.56);
       ctx.fillStyle = paints.well; ctx.fill();
     } else if (shown > 0) {
       ctx.globalAlpha = base * (0.8 + 0.2 * lit) * shown;
@@ -929,25 +1004,18 @@
       ctx.fillStyle = paints.table; ctx.fill();
       ctx.globalAlpha = base;
     }
-    ctx.restore();
-    ctx.lineJoin = "round";
-    ctx.beginPath(); ctx.moveTo(p.x + CRYSTAL_GEM[0] * radius, p.y + CRYSTAL_GEM[1] * radius);
-    for (let k = 1; k < 8; k += 1) ctx.lineTo(p.x + CRYSTAL_GEM[2 * k] * radius, p.y + CRYSTAL_GEM[2 * k + 1] * radius);
-    ctx.closePath();
-    ctx.strokeStyle = rgba(paints.hot, qa((0.45 + 0.4 * lit + 0.15 * sel) * freeBreath(m))); ctx.lineWidth = 0.9 + 0.5 * lit + 0.6 * sel; ctx.stroke();
-    // The cut's edges (T3): spokes from the rim to the table, and the table.
-    const edges = n.detail >= 3 ? tierIn(radius, 3) : 0;
-    if (edges > 0) {
+    // The cut's edges (T3, on a lit gem or one of 12 px and up): spokes from
+    // the rim to the table, and the table.
+    const edges = n.detail >= 3 ? tierIn(radius, 3) * Math.max(lit, clamp01(radius - 11)) : 0;
+    if (edges > 0.01) {
       ctx.globalAlpha = base * edges;
       ctx.beginPath();
       for (let k = 0; k < 8; k += 1) {
-        const x = CRYSTAL_GEM[2 * k] * radius, y = CRYSTAL_GEM[2 * k + 1] * radius;
-        ctx.moveTo(p.x + x, p.y + y); ctx.lineTo(p.x + x * 0.52, p.y + y * 0.52);
+        const x = CRYSTAL_GEM[2 * k], y = CRYSTAL_GEM[2 * k + 1];
+        ctx.moveTo(x, y); ctx.lineTo(x * 0.52, y * 0.52);
       }
-      ctx.moveTo(p.x + CRYSTAL_GEM[0] * radius * 0.52, p.y + CRYSTAL_GEM[1] * radius * 0.52);
-      for (let k = 1; k < 8; k += 1) ctx.lineTo(p.x + CRYSTAL_GEM[2 * k] * radius * 0.52, p.y + CRYSTAL_GEM[2 * k + 1] * radius * 0.52);
-      ctx.closePath();
-      ctx.strokeStyle = rgba(paints.hot, 0.3); ctx.lineWidth = 0.7; ctx.stroke();
+      crystalOutline(ctx, 0.52);
+      ctx.strokeStyle = rgba(paints.hot, 0.3); ctx.lineWidth = 0.7 / radius; ctx.stroke();
       ctx.globalAlpha = base;
     }
     // The sparkle where the light strikes (T2 up): the first 14% of each
@@ -956,7 +1024,7 @@
       let envelope = 0.6;
       if (!m.still) { const u = cycle(m, 3.4) / 0.14; envelope = u < 1 ? Math.sin(Math.PI * u) : 0; }
       if (envelope > 0.02) {
-        const x = p.x - 0.64 * radius, y = p.y - 0.64 * radius * tilt, arm = 0.34 * radius * envelope, waist = arm * 0.2;
+        const x = -0.64, y = -0.64 * tilt, arm = 0.34 * envelope, waist = arm * 0.2;
         ctx.globalAlpha = base * flashes;
         ctx.beginPath();
         ctx.moveTo(x, y - arm); ctx.lineTo(x + waist, y - waist); ctx.lineTo(x + arm, y); ctx.lineTo(x + waist, y + waist);
@@ -965,9 +1033,9 @@
         ctx.globalAlpha = base;
       }
     }
-    if (n.monogram) freeMonogram(ctx, p, n, freeInks(tint, n.theme).crystal);
+    if (n.monogram) { freeLeave(ctx, p, radius); freeMonogram(ctx, p, n, freeInks(tint, n.theme).crystal); }
   }
-  LOOKS.crystal = { speedup: 2.6, paint: paintCrystal, glyph: { scale: 0.5, ringGap: 3.5, ink: (tint, currentTheme) => freeInks(tint, currentTheme).crystal }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, wire: null, surge: null, land: null, reach: 1 };
+  LOOKS.crystal = { speedup: 2.6, paint: paintCrystal, glyph: { scale: 0.56, ringGap: 3.5, ink: (tint, currentTheme) => freeInks(tint, currentTheme).crystal }, ring: null, hubDress: null, orbit: null, arrival: null, select: null, wire: null, surge: null, land: null, reach: 1 };
 
 // ===== style: singularity =====
 

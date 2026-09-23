@@ -67,27 +67,30 @@ function browserChecks() {
       glow.addColorStop(1, rgba(tint, 0));
       ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(p.x, p.y, spread, 0, TAU); ctx.fill();
     }
-    // The halo: a disc out to its breathing reach, its paint clear inside
-    // half the reach.
-    const breath = 0.5, reach = 1.38 + 0.26 * lit + 0.16 * breath, outer = radius * reach;
-    const halo = ctx.createRadialGradient(p.x, p.y, outer * 0.5, p.x, p.y, outer);
-    halo.addColorStop(0, rgba(tint, 0)); halo.addColorStop(0.12, rgba(tint, 0.21)); halo.addColorStop(0.36, rgba(tint, 0.15));
-    halo.addColorStop(0.7, rgba(tint, 0.07)); halo.addColorStop(1, rgba(tint, 0));
-    ctx.globalAlpha = base * (0.42 + 0.58 * lit) * (0.7 + 0.3 * breath);
-    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(p.x, p.y, outer, 0, TAU); ctx.fill();
-    ctx.globalAlpha = base;
-    // An opaque core sunk toward the background, the body with its specular.
+    // An opaque core sunk toward the background.
     const core = blend(tint, [5, 5, 7], 0.84), spec = blend(tint, white, 0.8);
     ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, TAU);
     ctx.fillStyle = rgba(core, 1); ctx.fill();
+    // The halo over the core's outer ring: a disc out to its breathing
+    // reach, its paint clear inside half the reach.
+    const breath = 0.5, reach = 1.34 + 0.22 * lit + 0.24 * breath, outer = radius * reach;
+    const halo = ctx.createRadialGradient(p.x, p.y, outer * 0.5, p.x, p.y, outer);
+    halo.addColorStop(0, rgba(tint, 0)); halo.addColorStop(0.12, rgba(tint, 0.21)); halo.addColorStop(0.36, rgba(tint, 0.15));
+    halo.addColorStop(0.7, rgba(tint, 0.07)); halo.addColorStop(1, rgba(tint, 0));
+    ctx.globalAlpha = base * (0.42 + 0.58 * lit) * (0.5 + 0.5 * breath);
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(p.x, p.y, outer, 0, TAU); ctx.fill();
+    ctx.globalAlpha = base;
+    // The body with its specular.
     const body = ctx.createRadialGradient(p.x - radius * 0.3, p.y - radius * 0.36, 0, p.x, p.y, radius);
     body.addColorStop(0, rgba(spec, 0.96)); body.addColorStop(0.1, rgba(blend(tint, white, 0.4), 0.9));
     body.addColorStop(0.28, rgba(tint, 0.8)); body.addColorStop(0.62, rgba(tint, 0.42)); body.addColorStop(1, rgba(tint, 0.1));
-    ctx.fillStyle = body; ctx.fill();
-    // The rim, breathing with the halo (at the middle of its breath here).
     ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, TAU);
-    ctx.strokeStyle = rgba(tint, Math.round((0.5 + 0.32 * lit + 0.18 * sel) * (0.85 + 0.15 * breath) * 32) / 32);
-    ctx.lineWidth = 0.8 + 0.5 * lit + 0.5 * sel; ctx.stroke();
+    ctx.fillStyle = body; ctx.fill();
+    // The rim, breathing with the halo in alpha and width (at the middle of
+    // its breath here).
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, TAU);
+    ctx.strokeStyle = rgba(tint, Math.round((0.5 + 0.32 * lit + 0.18 * sel) * (0.55 + 0.45 * breath) * 32) / 32);
+    ctx.lineWidth = (0.8 + 0.5 * lit + 0.5 * sel) * (0.8 + 0.4 * breath); ctx.stroke();
     // The glint: a streak of rim light at .84 r, faded in from 6 px over 1.2 px.
     const shown = Math.min(1, Math.max(0, (radius - 6) / 1.2));
     if (shown > 0) {
