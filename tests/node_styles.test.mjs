@@ -546,9 +546,7 @@ function premiumSurface(style, extra = () => {}) {
   return signature;
 }
 
-test("Singularity draws a bounded black hole whose accretion disc turns with the angle", () => {
-  premiumSurface("singularity", (_styles, first) => assert.equal(first.calls.conic, 1, "the accretion disc's brightness turns with the angle"));
-});
+// Singularity (the black hole) has its own suite: tests/node_styles_singularity.test.mjs.
 
 test("Prism cuts a bounded gem that keeps fewer facets as it shrinks", () => {
   premiumSurface("prism");
