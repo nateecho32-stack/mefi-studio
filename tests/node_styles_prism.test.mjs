@@ -21,6 +21,11 @@ const STATES = {
 const DARK = { background: "#030208", text: "#ece9ff", accent2: "#36d1ff" };
 const LIGHT = { background: "#f3f0e8", text: "#1d2330", accent2: "#8a5a14" };
 const luminance = ([r, g, b]) => r * 0.2126 + g * 0.7152 + b * 0.0722;
+// Every turn of the gem fits in this hull (unit space, clockwise on screen):
+// the apexes at -1.02 and 1.08 (times the view's cos), the girdle's vertices
+// within .86 across and .1 above or below its middle.
+const GEM_LEVEL = Math.sqrt(1 - 0.1163 ** 2), GIRDLE_Y = -0.26 * GEM_LEVEL;
+const GEM_HULL = [[0, -1.02 * GEM_LEVEL], [0.86, GIRDLE_Y - 0.1], [0.86, GIRDLE_Y + 0.1], [0, 1.08 * GEM_LEVEL], [-0.86, GIRDLE_Y + 0.1], [-0.86, GIRDLE_Y - 0.1]];
 const channels = (colour) => colour.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number);
 
 // A motion record stepped at 30 Hz in a node's state; `frames` more frames on.
@@ -59,7 +64,7 @@ test("Prism's detail steps down from a turning brilliant to a small kite within 
   const styles = loadNodeStyles();
   // Worst case over a full turn (7 s) and three light sweeps, per tier and state.
   const BUDGET = {
-    0: { quiet: 9, working: 9, arc: 1, fill: 3, stroke: 1 },
+    0: { quiet: 9, working: 9, arc: 1, fill: 4, stroke: 1 },
     1: { quiet: 22, working: 28, arc: 1, fill: 12, stroke: 3 },
     2: { quiet: 30, working: 40, arc: 1, fill: 17, stroke: 6 },
     3: { quiet: 42, working: 57, arc: 1, fill: 18, stroke: 7 },
@@ -146,7 +151,8 @@ test("Prism's facets turn through the key light and a pavilion facet catches fir
     stepOn(styles, record, step, 1);
     const ctx = paintOnce(styles, 12, { motion: record, time: step.time, detail: 3, theme });
     for (const { style } of ctx.calls.fills) if (typeof style === "string") tones.add(style);
-    for (const { style, alpha } of ctx.calls.fills) if (style === "rgba(54,209,255,1)" && alpha < 1) fire.add(Math.round(alpha * 10));
+    // (the fire's second hue is the theme's #36d1ff paled a quarter toward white)
+    for (const { style, alpha } of ctx.calls.fills) if (style === "rgba(104,221,255,1)" && alpha < 1) fire.add(Math.round(alpha * 10));
     shapes.add(ctx.calls.log.filter(([name]) => name === "lineTo").slice(0, 3).map(([, x]) => x.toFixed(4)).join());
   }
   assert.ok(tones.size >= 9, `the facets pass through many tones as they turn (${tones.size})`);
@@ -161,6 +167,33 @@ test("Prism's facets turn through the key light and a pavilion facet catches fir
     ridges.add(ctx.calls.log.filter(([name]) => name === "lineTo")[5][1].toFixed(3));
   }
   assert.ok(ridges.size > 20, "a small gem's ridge visibly turns");
+});
+
+test("Prism's small kite (T0) is lit like the larger gem and catches the light band as it passes", () => {
+  const styles = loadNodeStyles();
+  const theme = styles.theme(DARK);
+  // A todo (always T0) is a crystal, not a grey chip: its lit plane reaches
+  // past the tint toward hot, its base plane sits in the shade (a strong
+  // ridge), and the two average three quarters of the tint.
+  for (const tint of [TINT, [255, 212, 121], [104, 236, 164], [185, 176, 255]]) {
+    const ctx = recordingContext({ center: P });
+    styles.paint(ctx, "prism", P, 4.5, tint, { kind: "task", time: 0, detail: 0, theme });
+    const [plane, lit] = ctx.calls.fills.map(({ style }) => luminance(channels(style)));
+    assert.ok(lit >= 0.6 * luminance(tint) && lit > plane, `${tint}: the lit plane reads (${lit.toFixed(0)} of ${luminance(tint).toFixed(0)})`);
+    assert.ok(lit >= luminance(tint) && plane >= 0.4 * luminance(tint) && plane + lit >= 1.4 * luminance(tint), `${tint}: a lit crystal, not a grey chip (${plane.toFixed(0)} / ${lit.toFixed(0)})`);
+  }
+  // The band crosses it in the big gem's rhythm: a spec flash over the whole
+  // kite rises and falls, and is gone while the band is away.
+  const { record, step } = recordFor(styles, {});
+  const levels = new Set();
+  let away = 0;
+  for (let frame = 0; frame < 120; frame += 1) {
+    stepOn(styles, record, step, 1);
+    const ctx = paintOnce(styles, 4.5, { motion: record, time: step.time, detail: 0, theme });
+    if (ctx.calls.fill === 2) away += 1;
+    else levels.add(Math.round(ctx.calls.fills[2].alpha * 40));
+  }
+  assert.ok(levels.size >= 6 && away >= 20, `the band's flash sweeps in and out (${levels.size} levels, ${away} frames dark)`);
 });
 
 test("Prism's working shards are two-tone crystals on a traced, tilted orbit, the caustics secondary", () => {
@@ -179,7 +212,21 @@ test("Prism's working shards are two-tone crystals on a traced, tilted orbit, th
     if (ctx.calls.fills.some(({ style, alpha }) => style === SHADE && Math.abs(alpha - 0.55) < 1e-9)) back += 1;
     // The orbit's trace: its far half behind the gem, its near half in front.
     const ellipses = ctx.calls.log.filter(([name]) => name === "ellipse").map((call) => call.slice(3, 8).map((value) => Math.round(value * 1000) / 1000));
-    assert.deepEqual(ellipses, [[1.34, 0.42, -0.35, 3.142, 6.283], [1.34, 0.42, -0.35, 0, 3.142]]);
+    assert.deepEqual(ellipses, [[1.34, 0.42, -0.35, 3.142, 6.283], [1.34, 0.42, -0.35, 0, 1.04], [1.34, 0.42, -0.35, 2.102, 3.142]]);
+    // The near half's two arcs stay off the body: outside the hull every turn
+    // of the gem fits in (its apexes and the girdle's band) by .05 radii.
+    for (const [rx, ry, tilt, from, to] of ellipses.slice(1)) {
+      for (let sample = 0; sample <= 24; sample += 1) {
+        const angle = from + (to - from) * sample / 24, ex = rx * Math.cos(angle), ey = ry * Math.sin(angle);
+        const x = ex * Math.cos(tilt) - ey * Math.sin(tilt), y = ex * Math.sin(tilt) + ey * Math.cos(tilt);
+        let outside = -Infinity;
+        for (let edge = 0; edge < GEM_HULL.length; edge += 1) {
+          const [x0, y0] = GEM_HULL[edge], [x1, y1] = GEM_HULL[(edge + 1) % GEM_HULL.length], length = Math.hypot(x1 - x0, y1 - y0);
+          outside = Math.max(outside, ((x - x0) * (y1 - y0) - (y - y0) * (x1 - x0)) / length);
+        }
+        assert.ok(outside >= 0.05, `the front trace clears the gem at ${angle.toFixed(2)} (${outside.toFixed(3)})`);
+      }
+    }
     quads[3] = Math.max(quads[3], ctx.calls.quadraticCurveTo);
     quads[2] = Math.max(quads[2], paintOnce(styles, 9.8, { active: true, motion: record, time: step.time, detail: 2, theme }).calls.quadraticCurveTo);
   }
@@ -294,6 +341,49 @@ test("Prism stays legible on a light theme: every facet off the ground, a pale g
     const edges = ctx.calls.strokes.map(({ style }) => style);
     assert.ok(!edges.includes(raw) && edges.every((style) => ground - luminance(channels(style)) > 60), `${status}: a deeper ink on a light theme (${edges})`);
   }
+});
+
+test("Prism's working effects on a light theme are crystal light: pale-lit two-tone shards, sparkles in the spectrum", () => {
+  const styles = loadNodeStyles();
+  const theme = styles.theme(LIGHT), ground = luminance([243, 240, 232]);
+  // The spectrum, as the running agent ring draws it.
+  const ring = recordingContext({ center: P });
+  styles.ring(ring, "prism", P, 10, [160, 130, 85], { status: "running", builder: false, ring: 13.5, time: 0, still: true, detail: 3, motion: null, theme });
+  const [rose, second, blue] = ring.calls.strokes.slice(1).map(({ style }) => style);
+  for (const tint of [[160, 130, 85], [255, 212, 121], [104, 236, 164]]) {
+    const { record, step } = recordFor(styles, { active: true });
+    const lits = new Set(), shades = new Set(), sparkles = new Set();
+    for (let frame = 0; frame < 150; frame += 1) {
+      stepOn(styles, record, step, 1);
+      const ctx = recordingContext({ center: P });
+      styles.paint(ctx, "prism", P, 15, tint, { kind: "task", active: true, motion: record, time: step.time, detail: 3, theme });
+      // The last layers: the near shards' lit (.95) and shaded (.9) halves,
+      // then the caustic sparkles (.95), each a single fill.
+      for (const { style, alpha } of ctx.calls.fills) {
+        if (Math.abs(alpha - 0.9) < 1e-9) shades.add(style);
+        else if (Math.abs(alpha - 0.95) < 1e-9 && style !== "rgba(255,255,255,1)") (style === rose || style === blue || style === second ? sparkles : lits).add(style);
+      }
+    }
+    assert.equal(lits.size, 1, `${tint}: one lit tone for the shards (${[...lits]})`);
+    assert.equal(shades.size, 1, `${tint}: one shaded tone (${[...shades]})`);
+    const lit = luminance(channels([...lits][0])), shade = luminance(channels([...shades][0]));
+    assert.ok(lit >= 110 && lit - shade >= 70, `${tint}: the lit half catches the light (${lit.toFixed(0)} over ${shade.toFixed(0)})`);
+    assert.ok(Math.abs(lit - ground) >= 22 && Math.abs(shade - ground) >= 22, `${tint}: both halves stand off the cream`);
+    // The sparkles: rose and blue by turns (never the dark second hue or a
+    // darkened tint, which read as grit), each light enough to glint.
+    assert.deepEqual([...sparkles].sort(), [blue, rose].sort(), `${tint}: sparkles in the spectrum (${[...sparkles]})`);
+    for (const style of sparkles) assert.ok(luminance(channels(style)) >= 110, style);
+  }
+  // A dark theme keeps its glare sparkles: one fill for them all.
+  const dark = styles.theme(DARK), { record, step } = recordFor(styles, { active: true });
+  let most = 0;
+  for (let frame = 0; frame < 60; frame += 1) {
+    stepOn(styles, record, step, 1);
+    const ctx = recordingContext({ center: P });
+    styles.paint(ctx, "prism", P, 15, TINT, { kind: "task", active: true, motion: record, time: step.time, detail: 3, theme: dark });
+    most = Math.max(most, ctx.calls.fills.filter(({ style, alpha }) => style === "rgba(249,242,229,1)" && Math.abs(alpha - 0.95) < 1e-9).length);
+  }
+  assert.equal(most, 1);
 });
 
 test("Prism's agent ring chases three hues, and keeps queued, error and done in their state colours", () => {
@@ -443,6 +533,22 @@ test("Prism's hub dress, work orbit, arrival and selection draw in the spectrum"
   assert.ok(chosenFade.ctx.calls.alphas.every((alpha) => Math.abs(alpha - 0.95 * chosenFade.sel) < 1e-9));
   assert.deepEqual(hoverFade.ctx.calls.log.filter(([name]) => name === "arc").map((call) => call[3]), [12 * 1.22], "a hovered node's ring fades out as a ring");
   assert.ok(styles.reach("prism", null) >= 1 && styles.reach("prism", record) <= 1.8 && styles.reach("prism", record) > 1.4, "label clearance widens for the shards");
+  // On a small gem the marks keep off the kite (which spans 1.08 radii) by a
+  // pixel or more past their pen, instead of closing into a coloured donut:
+  // the chosen arcs 2.4 px out or more on a finer pen, the hover ring 2.6 px.
+  for (const radius of [3, 4.5, 6]) {
+    const mark = (flags) => {
+      const ctx = recordingContext({ center: P });
+      styles.select(ctx, "prism", P, radius, TINT, { kind: "task", selected: true, hover: false, alpha: 1, time: 0, still: true, detail: 0, motion: null, theme, ...flags });
+      const rings = ctx.calls.log.filter(([name]) => name === "arc").map((call) => call[3]), pen = Math.max(...ctx.calls.lineWidths);
+      assert.ok(rings.every((ring) => ring - pen / 2 >= 1.08 * radius + 1), `r ${radius}: off the gem (${rings.map((ring) => ring.toFixed(1))}, pen ${pen})`);
+      return Math.max(...rings);
+    };
+    const outer = mark({ chosen: true });
+    assert.ok(outer <= 2.25 * radius, `r ${radius}: the ring stays inside 2.25 radii`);
+    mark({ chosen: false, hover: true });
+    if (radius >= 6) assert.ok(outer <= styles.reach("prism", { sel: 1 }) * radius, "a chosen node's reach covers its ring from 6 px up");
+  }
 });
 
 test("Prism's wires refract: a glint runs the beam and splits into three strands near a large target", () => {
@@ -557,4 +663,18 @@ test("Prism's pulses split into the spectrum near the node and land as a colour 
   assert.equal(styles.land(railLand, "prism", to, 6, [241, 220, 174], 0.3, { kind: "dot", time: 0, still: false, rTo: 6, detail: 2, rail: true }), true);
   assert.deepEqual([railLand.calls.arc, railLand.calls.stroke], [1, 1], "the rail lands as a single ring");
   assert.equal(styles.land(recordingContext(), "prism", to, 12, [241, 220, 174], 1, { kind: "dot", time: 0, still: true, rTo: 12, detail: 3 }), false, "no landing under reduced motion");
+  // A landing takes the pulse's colour the way its surge does, one stable
+  // triple per colour: idle hands over pulse._rgb, a fresh array for every
+  // pulse, which would rebuild the tones on every landing. It is never read.
+  let reads = 0;
+  const fresh = () => new Proxy([241, 220, 174], { get(target, key) { reads += 1; return Reflect.get(target, key); } });
+  const landings = [0, 1].map(() => {
+    const own = { ...pulse, _rgb: fresh() }, ctx = recordingContext({ center: to });
+    assert.equal(styles.land(ctx, "prism", to, 12, own._rgb, 0.4, { kind: "dot", time: 0, still: false, rTo: 12, detail: 3, pulse: own, motion: null }), true);
+    return plain(ctx.calls.log);
+  });
+  assert.equal(reads, 0, "the fresh per-pulse array is never read");
+  assert.deepEqual(landings[1], landings[0]);
+  const landed = new Set(landings[0].filter(([name]) => name === "set:strokeStyle").map(([, style]) => style));
+  assert.ok([...new Set(late.ctx.calls.fills.map(({ style }) => style))].filter((style) => landed.has(style)).length >= 3, "the landing's arcs are the surge's spectrum");
 });
