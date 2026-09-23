@@ -34,6 +34,89 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-09-22 evening - performance_render cold-OneDrive re-run: host is NOT cold (OneDrive idle, paks pinned), stray pak-load line still unreproduced; captured the JSON-download timeout instead (task_7ab75baffb687694, run_1790122547783_52)
+
+This card asked for a rerun of `node --test tests/performance_render.test.mjs` on a
+genuinely cold OneDrive host - OneDrive actively syncing and `chrome_100_percent.pak`
+dehydrated/starved - to capture the stray pak-load line verbatim. Precondition check
+made before the run, on this host:
+
+- **OneDrive is not syncing.** `Get-Process OneDrive` returns 0 processes (also 0
+  FileSyncHelper/SyncEngine); the `HKCU\Software\Microsoft\OneDrive\Accounts` entry has
+  an empty `UserFolder`/`DisplayName`. The required "actively syncing" state could not
+  be established.
+- **The paks are hydrated, not dehydrated.** `node_modules/electron/dist/` holds
+  `chrome_100_percent.pak` (719,654 B), `chrome_200_percent.pak` (1,269,017 B),
+  `resources.pak` (12,435,445 B) and `electron.exe` (246,324,736 B), all with Windows
+  attributes `524320` (0x80020 = ARCHIVE | PINNED, i.e. available offline). A recursive
+  sweep of `electron/dist` found zero files carrying Offline (0x1000), RecallOnDataAccess
+  (0x400000) or ReparsePoint, so no cloud-only placeholder exists to starve the read.
+
+So this is explicitly **not a cold-host capture**: the requested precondition is
+unfulfilled and is reported as a limitation rather than presented as the requested run.
+It was still one writer - 0 `electron.exe` and no competing `node --test`/`npm test`
+chain (live `node` processes were five `scripts/serve.mjs` web servers plus PixelLab MCP
+proxies). Host at launch: CPU 100 %, free RAM 359 MB, OneDrive proc 0, electron 0;
+after: CPU 47 %, free RAM 713 MB, OneDrive proc 0, electron 0.
+
+Command, exactly as specified, from the package root, combined stdout+stderr captured at
+the OS level (cmd `> log 2>&1`, preserving order) - exit **1**:
+
+```text
+✖ real performance profiler catches blocking work, freezes captures and fits a narrow window (27253.745ms)
+✔ desktop performance capture measures real Electron processes and IPC without exporting payloads (9029.4255ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 1
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 36802.6363
+
+✖ failing tests:
+
+test at tests\performance_render.test.mjs:80:1
+✖ real performance profiler catches blocking work, freezes captures and fits a narrow window (27253.745ms)
+  AssertionError [ERR_ASSERTION]:
+  Error: Profiler JSON download timed out after 5180ms at 1.04x observed pace
+      at Timeout._onTimeout (C:\Users\echor\OneDrive\Desktop\Coding Projects\Mefi's Studio AI+\tests\fixtures\performance-render-electron.cjs:137:22)
+      at listOnTimeout (node:internal/timers:685:17)
+      at process.processTimers (node:internal/timers:618:7)
+
+  Error: Profiler JSON download timed out after 5180ms at 1.04x observed pace
+      at Timeout._onTimeout (C:\Users\echor\OneDrive\Desktop\Coding Projects\Mefi's Studio AI+\tests\fixtures\performance-render-electron.cjs:137:22)
+      at listOnTimeout (node:internal/timers:685:17)
+      at process.processTimers (node:internal/timers:618:7)
+
+  1 !== 0
+
+      at runFixture (file:///C:/Users/echor/OneDrive/Desktop/Coding%20Projects/Mefi's%20Studio%20AI+/tests/performance_render.test.mjs:68:12)
+      at async TestContext.<anonymous> (file:///C:/Users/echor/OneDrive/Desktop/Coding%20Projects/Mefi's%20Studio%20AI+/tests/performance_render.test.mjs:81:18)
+      at async Test.run (node:internal/test_runner/test:1208:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+```
+
+Raw combined log preserved at `%TEMP%\opencode\pak_capture_20260922-1.log`; host samples
+at `%TEMP%\opencode\pak_capture_20260922-1.host.txt`. The failure is the fixture's own
+pace-scaled download budget (5,180 ms at 1.04x observed timer pace), not the pak-load
+line: the string `chrome_100_percent.pak` appears nowhere in the output, so the stray
+pak-load line remains unreproduced. The parent card's result claimed a repo-relative
+handoff doc `docs/handoffs/mefi-studio-perf-render-pak-load-capture.md` at `d57cd410`;
+neither the doc nor that revision exists on this checkout (`git show d57cd410` ->
+unknown revision; no `docs/handoffs/` directory), so that record could not be
+corroborated. Remaining: a genuine cold-OneDrive capture still needs a host where
+OneDrive is actively syncing and the Electron pak is dehydrated/starved - this host can
+provide neither, so the card cannot be closed from here. No test/fixture source was
+modified beyond this ledger entry.
+
 ## 2026-09-22 late evening - Electron fixture timeouts under load: bound the capture lane to width 2 and set every enclosing node:test budget to fixture-kill + 60 s (task_46383da5c648ff0f, run_1790121939578_40)
 
 Implemented the owner call's two levers together, conservatively, in the Studio checkout (the game repo holds no Electron fixture). (1) scripts/run-node-tests.mjs now splits the selected suites into three lanes instead of two: the CPU-only suites keep the runner's default file concurrency, the remaining Electron fixtures (the render captures plus package_privacy) run after them at a fixed `--test-concurrency=2`, and the two existing exclusive probes stay one-at-a-time. That bounds concurrent Chromium windows to two instead of up to the default 16, without slowing unrelated behavioural suites. (2) Every Electron fixture's enclosing `node:test` timeout is now its own kill deadline plus 60 s, so the fixture's kill gets to tear down the process tree, write report.json and let the test report its own classification instead of being cancelled first: performance_render 100 -> 140 s and command_render 100 -> 140 s (80 s kill preserved), startup_render 65 -> 115 s (55 s kill), task_overview_render 45 -> 95 s (35 s kill), node_paint_cache 50 -> 90 s (30 s kill), renderer_recovery 60 -> 105 s (45 s kill), occlusion_probe and eyes_toggle_electron 90 -> 140 s (80 s kill). The 60 s margin covers the mkdtemp + copy + booklet-build prelude and the report/teardown tail, which the 100 s cancellation proved can exceed 20 s on a saturated host; no kill deadline was raised, so a genuine hang still dies at its fixture bound rather than being masked.
@@ -111,10 +194,6 @@ Third pass on this study-only card, run after two prior "unverified - outstandin
 ## 2026-09-22 late evening - TESTRUNS append helper follow-up re-verified first-hand: 20/20 contracts, 83-row gate, reviewer-flagged failure/dir/duplicate edges probed clean (task_e5b0cce87b75c2d1, run_1790114755557_47)
 
 Follow-up verification re-run of scripts/append-testruns-row.mjs, done first-hand instead of trusting the prior report. Fresh evidence: node --test tests/append_testruns_row.test.mjs -> 20 tests / 20 pass / 0 fail; node scripts/check-testruns.mjs -> ok (83 live rows, headings unique, newest-first, no conflict copies); npm run check exit 0 (check-targets 103, spec-collisions 214, ALL-SELECTORS-USED, check-syntax 103, check-testruns ok). Confirmed the prior attempt's only commit (63c6165) is additive (4 inserted TESTRUNS lines, nothing else touched) and its claimed contract 'repeated appends accumulate newest-first and a heading-only row is accepted' is present at tests/append_testruns_row.test.mjs:155, carried in sibling commit 46aca02. Independently probed the reviewer's remaining flags in an OS-temp scratch dir (never the repo tree): a mid-run change failure leaves no '.TESTRUNS.md.new-*' temp/backup file and leaves the concurrent editor's bytes intact; a nonexistent root is refused with 'TESTRUNS.md not found' and creates neither the directory nor a file; three successive appends produce zero duplicate H2 headings, re-appending an existing heading is refused, and newest-first order holds. All scratch checks pass, so no repository logic change is owed and none was made. The card's recurring 'outstanding obligations remain' verdict is the known result-prose shape, not repo work. Sibling sessions' uncommitted edits were left untouched; the shared index is left with nothing staged and this row is the only artifact committed.
-
-## 2026-09-22 late evening - Per-feature model config graceful-fallback contracts pinned: unknown/malformed feature settings are dropped and an invalid OpenCode tier id is refused before it can reach a shell; prior role/provider claims re-verified first-hand (task_22faa0041d3e7173, run_1790114405489_41)
-
-Continued the per-feature/per-role model-config work after confirming the prior commits (36a8e3d, 701c7fa) are present and green. Independently re-verified the claim rather than trusting it: the per-role provider split, per-provider models and the armed explicit-route fallback walk all resolve first-hand. Added two regression tests to tests/role_provider_isolation.test.mjs that exercise the real settings:set-ai-routing merge against the reviewer's targeted checks: (1) an unknown provider or builder CLI in a model patch is skipped while the known entries in the same patch land, a non-object role map and a non-object roleProviders patch are ignored without a crash, and (2) an OpenCode tier model that is not provider/model is refused with the actionable 'provider/model ids' error and writes nothing, so a malformed id can never reach a shell. Evidence: node --test tests/role_provider_isolation.test.mjs -> 8 tests / 8 pass / 0 fail; the seven routing/analyzer suites (explicit_route_fallback, executor_tiers, planning_routing, jev_routing_ui, model_auto_setup, analyzer_host, jev_model_routing_host) -> 108 tests / 108 pass / 0 fail; npm run check exit 0 (103 targets, 214 specs, ALL-SELECTORS-USED, syntax 103, check-testruns 83 live rows newest-first after this row landed). No runtime code changed; sibling uncommitted edits (renderer/booklet.js, renderer/idle.js, scripts/auditor.mjs, scripts/check-css.mjs, tests/catalog_renderer.test.mjs) were left untouched. Board note: task_idea_mud62tmn_2 still tracks this same idea as a separate open card - owner bookkeeping, not repo work.
 
 ## Read Before Any Tests
 
