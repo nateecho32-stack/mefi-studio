@@ -26,7 +26,7 @@ function makeFixturePackage(files, checkTargets, extra = {}) {
     main: extra.main || "main.cjs",
     scripts: {
       ...(extra.scripts || {}),
-      check: `node --check ${checkTargets.join(" && node --check ")}`,
+      check: extra.check || `node --check ${checkTargets.join(" && node --check ")}`,
     },
   };
   writeFileSync(join(root, "package.json"), JSON.stringify(pkg, null, 2));
@@ -101,6 +101,29 @@ test("a stale node path in any non-check script fails the audit", () => {
     assert.deepEqual(scriptMissing, [{ script: "data", path: "scripts/gone.mjs" }]);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a stale node path in the check chain itself fails the audit", () => {
+  // The modern chain runs `node scripts/<gate>.mjs`, not `node --check`, so
+  // the check script's own targets are not owned by extractCheckTargets.
+  const files = ["main.cjs", "scripts/a.mjs", "scripts/check-syntax.mjs", "renderer/b.js"];
+  const goodCheck = "node scripts/check-syntax.mjs && node scripts/a.mjs";
+  const badCheck = "node scripts/check-syntax.mjs && node scripts/gone.mjs";
+  const good = makeFixturePackage(files, [], { check: goodCheck });
+  const bad = makeFixturePackage(files, [], { check: badCheck });
+  try {
+    const clean = audit(good, goodCheck);
+    assert.deepEqual(clean.missing, []);
+    assert.deepEqual(clean.scriptMissing, []);
+    assert.equal(main(["--package", good]), 0);
+
+    const stale = audit(bad, badCheck);
+    assert.deepEqual(stale.scriptMissing, [{ script: "check", path: "scripts/gone.mjs" }]);
+    assert.equal(main(["--package", bad]), 1);
+  } finally {
+    rmSync(good, { recursive: true, force: true });
+    rmSync(bad, { recursive: true, force: true });
   }
 });
 

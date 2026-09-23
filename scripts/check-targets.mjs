@@ -198,9 +198,14 @@ export function audit(packageRoot, checkScript) {
 
   const pkg = readPackageJson(packageRoot);
   const scriptMissing = [];
+  // Every script's `node <file>` targets are checked, `check` included: its
+  // `node --check` targets are already owned by the pass above, so those are
+  // skipped here and a missing file is named once. The rest of the chain
+  // (the syntax pass, the sibling gates) is caught here instead of at run time.
+  const checkedTargets = new Set(targets.map((t) => t.split("\\").join("/")));
   for (const [name, value] of Object.entries(pkg.scripts || {})) {
-    if (name === "check") continue;
     for (const rel of extractNodeRefs(value)) {
+      if (name === "check" && checkedTargets.has(rel.split("\\").join("/"))) continue;
       const abs = resolve(packageRoot, rel);
       if (!existsSync(abs) || !statSync(abs).isFile()) scriptMissing.push({ script: name, path: rel });
     }
