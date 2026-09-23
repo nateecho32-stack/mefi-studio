@@ -24,9 +24,14 @@ function todosFixture() {
   ];
 }
 
-function environment(bridge = {}) {
+function environment(bridge = {}, { readyState = "complete" } = {}) {
   const ids = new Map();
   const listeners = new Map();
+  const domContentLoaded = [];
+  // init() is the only caller of document.getElementById, so counting lookups
+  // is a CDP-free probe of whether the element map has been built yet. A
+  // pre-navigation open() must leave the count at zero.
+  let lookups = 0;
   let document;
   class Element {
     constructor(tag) {
@@ -73,11 +78,11 @@ function environment(bridge = {}) {
   }
   const element = (id) => { if (!ids.has(id)) ids.set(id, new Element("div")); return ids.get(id); };
   document = {
-    readyState: "complete",
-    getElementById: (id) => element(id),
+    readyState,
+    getElementById: (id) => { lookups += 1; return element(id); },
     createElement: (tag) => new Element(tag),
     createTextNode: (data) => ({ textContent: String(data) }),
-    addEventListener: () => {},
+    addEventListener: (type, fn) => { if (type === "DOMContentLoaded") domContentLoaded.push(fn); },
     activeElement: null,
     visibilityState: "visible",
     hidden: false,
@@ -102,11 +107,13 @@ function environment(bridge = {}) {
     window,
     document,
     explorer: window.MefiExplorer,
+    get lookups() { return lookups; },
     tree: () => element("explorer-tree"),
     rows: () => element("explorer-tree").children,
     labelOf,
     element,
     open: async () => { window.MefiExplorer.open(); await flush(); },
+    domReady() { document.readyState = "interactive"; for (const fn of domContentLoaded.splice(0)) fn(); },
   };
 }
 
@@ -253,4 +260,35 @@ test("the Machine panel surfaces the latched severe-memory cap instead of readin
   assert.ok(badge.classes.has("free"));
   assert.equal(lines.style.color, "", "the tint clears with the cap");
   assert.equal(badge.title, "", "the cap tooltip clears with the latch");
+});
+
+// A restored explorer deep link (nav's resumeReady) can reach open() from its
+// own DOMContentLoaded handler before explorer.js's init() has run. Reproduce
+// that ordering in the main world without CDP: load explorer.js while the
+// document is still parsing (so init() defers to DOMContentLoaded), call the
+// pre-navigation open(), then fire DOMContentLoaded. The old unguarded
+// `els.overlay.hidden = false` threw "Cannot set properties of undefined
+// (setting 'hidden')" here; the guard must leave open() a no-op until init().
+test("a pre-navigation deep link runs open() before init() without the .hidden throw", async () => {
+  const env = environment({}, { readyState: "loading" });
+  const explorer = env.window.MefiExplorer;
+  assert.ok(explorer, "explorer.js exposes its API before init() runs");
+  assert.equal(env.lookups, 0, "init() is deferred while the document is still loading");
+
+  const trace = [];
+  await explorer.open({ sessionId: "ses-root" });
+  trace.push(`open:mapBuilt=${env.lookups > 0}`);
+
+  env.domReady();
+  trace.push(`init:mapBuilt=${env.lookups > 0}`);
+
+  assert.deepEqual(trace, ["open:mapBuilt=false", "init:mapBuilt=true"],
+    "open() is observed before init(), and open() must not build the element map itself");
+  assert.equal(env.element("explorer-overlay").hidden, true, "no overlay was opened pre-init");
+
+  // The same deep link after init() opens normally, proving the guard did not
+  // swallow the restored navigation.
+  await env.open();
+  assert.equal(env.element("explorer-overlay").hidden, false, "open() after init() shows the restored sheet");
+  assert.ok(env.rows().length > 0, "the restored session tree renders once init() has run");
 });
