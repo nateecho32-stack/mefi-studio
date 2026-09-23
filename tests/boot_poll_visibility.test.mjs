@@ -539,12 +539,12 @@ test("explorer.js state poll: the tick's hidden bail precedes load, and show rel
   assert.match(source, /pollStart\("explorer\.state", explorerTick, EXPLORER_POLL_MS\)/, "the explorer poll must register under the shared guard");
   assert.match(
     source,
-    /const explorerTick = \(\) => \{\s*\n\s*if \(!window\.mefiStudio\?\.eyesState\) return;\s*\n\s*if \(document\.visibilityState === "visible" && !els\.overlay\.hidden\) load\(\);/,
+    /const explorerTick = \(\) => \{\s*\n\s*if \(!window\.mefiStudio\?\.eyesState\) return;\s*\n\s*if \(document\.visibilityState === "visible" && els\.overlay && !els\.overlay\.hidden\) load\(\);/,
     "the tick must bail while hidden before loading"
   );
   assert.match(
     source,
-    /document\.addEventListener\("visibilitychange", \(\) => \{\s*\n\s*if \(!document\.hidden && !els\.overlay\.hidden\) explorerTick\(\);/,
+    /document\.addEventListener\("visibilitychange", \(\) => \{\s*\n\s*if \(!document\.hidden && els\.overlay && !els\.overlay\.hidden\) explorerTick\(\);/,
     "the explorer must snap back on show"
   );
 });
@@ -819,6 +819,34 @@ test("explorer.state resume: a hidden stretch drifts nothing and is never replay
   assert.equal(loads, 4, "the first resumed load lands exactly one interval after show");
   clock.advance(MS * 3);
   assert.equal(loads, 7, "cadence stays exact after resume");
+});
+
+test("explorer.state tick tolerates a missing overlay element instead of throwing on .hidden", async () => {
+  const clock = makeClock();
+  const env = await loadBootWithClock(clock);
+  let loads = 0;
+  // init() builds els from the DOM; when #explorer-overlay is absent els.overlay
+  // stays undefined and the tick is still registered, so the old bare
+  // `!els.overlay.hidden` read threw on every poll. The guard must gate instead.
+  const explorerTick = compile(await extractFn("explorer.js", EXPLORER_TICK_SOURCE, "the explorer tick"), {
+    window: { mefiStudio: { eyesState: async () => ({}) } },
+    document: {
+      get hidden() {
+        return env.state.hidden;
+      },
+      get visibilityState() {
+        return env.state.hidden ? "hidden" : "visible";
+      },
+    },
+    els: {},
+    load: () => {
+      loads += 1;
+    },
+  });
+  const MS = 5000;
+  env.boot.pollStart("explorer.state", explorerTick, MS);
+  assert.doesNotThrow(() => clock.advance(MS * 2), "a missing overlay must not throw on the poll tick");
+  assert.equal(loads, 0, "a missing overlay gates the tick instead of loading");
 });
 
 test("explorer.state: an in-flight eyesState read completing while hidden must not resurrect the paused timer", async () => {

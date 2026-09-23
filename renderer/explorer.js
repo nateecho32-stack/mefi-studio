@@ -47,6 +47,7 @@
   const optionsOf = (value) =>
     value && typeof value === "object" && typeof value.preventDefault !== "function" ? value : {};
   const ago = (time) => {
+    if (!Number.isFinite(Number(time)) || !time) return "—";
     const minutes = Math.round((Date.now() - time) / 60000);
     if (minutes < 1) return "now";
     if (minutes < 60) return `${minutes}m ago`;
@@ -1410,12 +1411,12 @@
     // waiting out the interval.
     const explorerTick = () => {
       if (!window.mefiStudio?.eyesState) return;
-      if (document.visibilityState === "visible" && !els.overlay.hidden) load();
+      if (document.visibilityState === "visible" && els.overlay && !els.overlay.hidden) load();
     };
     if (window.MefiBoot?.pollStart) window.MefiBoot.pollStart("explorer.state", explorerTick, EXPLORER_POLL_MS);
     else setInterval(explorerTick, EXPLORER_POLL_MS);
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden && !els.overlay.hidden) explorerTick();
+      if (!document.hidden && els.overlay && !els.overlay.hidden) explorerTick();
     });
     els.requestInput?.addEventListener("dragover", (event) => {
       event.preventDefault();
@@ -1507,7 +1508,7 @@
     });
     window.addEventListener("mefi:tree-select", (event) => {
       state.selected = event.detail?.sessionId ?? null;
-      if (!els.overlay.hidden) {
+      if (els.overlay && !els.overlay.hidden) {
         renderTree();
         renderDetail();
       }
