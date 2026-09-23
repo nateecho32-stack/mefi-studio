@@ -37,16 +37,29 @@ function paint(styles, options = {}, { radius = 12, tint = TINT, ctx = recording
 }
 const counts = (ctx) => ({ lineTo: ctx.calls.lineTo, arc: ctx.calls.arc, fill: ctx.calls.fill, stroke: ctx.calls.stroke });
 // The working cells in a paint's op log: every cell is a hexagon traced in
-// the node's unit space, opened (vertex 0) beyond the seal and off the
-// vertical axis, which nothing else in the look is. Answers their directions (0..5).
-function cellsOf(ctx) {
+// the node's unit space (moveTo, five lineTo, closePath) round a centre off
+// the seal's; every other hexagon in the look is centred on the seal, and a
+// rune has two or three points. Answers { k (direction 0..5), reach (its
+// centre's distance), size (its circumradius), points } per cell, in order.
+function cellPaths(ctx) {
   const cells = [];
+  let points = null, path = 0;
+  const close = () => {
+    if (points && points.length === 6) {
+      const cx = points.reduce((sum, [x]) => sum + x, 0) / 6, cy = points.reduce((sum, [, y]) => sum + y, 0) / 6;
+      const reach = Math.hypot(cx, cy);
+      if (reach > 0.6) cells.push({ k: (((Math.round(Math.atan2(cy, cx) / (Math.PI / 3))) % 6) + 6) % 6, reach, size: Math.hypot(points[0][0] - cx, points[0][1] - cy), points, path });
+    }
+    points = null;
+  };
   for (const [name, x, y] of ctx.calls.log) {
-    if (name !== "moveTo" || !(Math.hypot(x, y) > 0.84) || !(Math.abs(x) > 0.3)) continue;
-    cells.push((((Math.round(Math.atan2(y, x) / (Math.PI / 3))) % 6) + 6) % 6);
+    if (name === "beginPath") path += 1;
+    if (name === "moveTo") { close(); points = [[x, y]]; } else if (name === "lineTo" && points) points.push([x, y]); else close();
   }
+  close();
   return cells;
 }
+const cellsOf = (ctx) => cellPaths(ctx).map(({ k }) => k);
 // The path behind the stroke or fill at log index `at`: its points, in the
 // coordinates they were traced in.
 function pathBefore(log, at) {
@@ -56,19 +69,18 @@ function pathBefore(log, at) {
 }
 const slotOf = ([x, y]) => (((Math.round(Math.atan2(y, x) / (Math.PI / 3))) % 6) + 6) % 6;
 // How far out each working cell stands in a paint's op log (0 when it is not
-// drawn): cell k opens (vertex 0, on top) at (.85 + .326e) along its normal,
-// .32e up.
+// drawn): at extent e a cell's centre lies f·(.85 + .29e) out along its
+// normal and its circumradius is f·.27e, where f (1 up to r 13.5) draws the
+// whole lattice in on a big node.
 function extentsOf(ctx) {
   const out = [0, 0, 0, 0, 0, 0];
-  for (const [name, x, y] of ctx.calls.log) {
-    if (name !== "moveTo" || !(Math.hypot(x, y) > 0.84) || !(Math.abs(x) > 0.3)) continue;
-    for (let k = 0; k < 6; k += 1) {
-      const nx = Math.cos(k * Math.PI / 3), ny = Math.sin(k * Math.PI / 3), e = (x / nx - 0.85) / 0.326;
-      if (e > 0 && Math.abs(ny * (0.85 + 0.326 * e) - 0.32 * e - y) < 1e-5) out[k] = Math.max(out[k], e);
-    }
+  for (const { k, reach, size } of cellPaths(ctx)) {
+    const fit = (reach - size * 0.29 / 0.27) / 0.85;
+    out[k] = Math.max(out[k], size / (0.27 * fit));
   }
   return out;
 }
+const fitOf = (ctx) => cellPaths(ctx).map(({ reach, size }) => (reach - size * 0.29 / 0.27) / 0.85);
 
 test("Sigil is a full style pack: its own body, glyph dress, rings, dial, orbit, marks, wires, pulses and landing", () => {
   const styles = loadNodeStyles();
@@ -98,7 +110,7 @@ test("Sigil steps down through the detail tiers to a seal and one turning rune t
   // [radius, detail]: [quiet, working, chosen] counts in the still pose.
   const table = [
     [4, 0, [{ lineTo: 6, arc: 1, fill: 2, stroke: 2 }, { lineTo: 6, arc: 2, fill: 3, stroke: 2 }, { lineTo: 6, arc: 2, fill: 3, stroke: 2 }]],
-    [7, 1, [{ lineTo: 16, arc: 0, fill: 3, stroke: 3 }, { lineTo: 31, arc: 1, fill: 5, stroke: 4 }, { lineTo: 16, arc: 1, fill: 4, stroke: 3 }]],
+    [7, 1, [{ lineTo: 16, arc: 0, fill: 3, stroke: 3 }, { lineTo: 46, arc: 1, fill: 5, stroke: 4 }, { lineTo: 16, arc: 1, fill: 4, stroke: 3 }]],
     [9.5, 2, [{ lineTo: 27, arc: 0, fill: 3, stroke: 5 }, { lineTo: 57, arc: 1, fill: 7, stroke: 7 }, { lineTo: 27, arc: 1, fill: 4, stroke: 5 }]],
     [12, 3, [{ lineTo: 32, arc: 1, fill: 4, stroke: 5 }, { lineTo: 59, arc: 2, fill: 8, stroke: 7 }, { lineTo: 32, arc: 2, fill: 5, stroke: 5 }]],
   ];
@@ -110,7 +122,14 @@ test("Sigil steps down through the detail tiers to a seal and one turning rune t
   const tiny = paint(styles, { detail: 0, active: true }, { radius: 4 });
   assert.equal(tiny.calls.moveTo, 2);
   assert.deepEqual(cellsOf(tiny), []);
-  assert.deepEqual(cellsOf(paint(styles, { detail: 1, active: true }, { radius: 7 })), [0, 2, 4], "T1 keeps three cells");
+  // T0's one moving mark wears the state's own hue (risen toward white), not the theme's second.
+  const ticked = paint(styles, { detail: 0, theme: styles.theme(ACCENT) }, { radius: 4 });
+  assert.deepEqual(ticked.calls.strokes.map(({ style }) => style), ["rgba(120,180,220,1)", "rgba(194,221,239,1)"], "the rim, then the tick");
+  // T1 keeps the whole honeycomb (plain, one path: no scan).
+  const small = paint(styles, { detail: 1, active: true }, { radius: 7 });
+  assert.deepEqual(cellsOf(small), [0, 1, 2, 3, 4, 5], "T1 keeps all six cells");
+  assert.equal(new Set(cellPaths(small).map(({ path }) => path)).size, 1, "in one path");
+  assert.ok(!small.calls.fills.some(({ style }) => style === "rgba(194,221,239,1)"), "and no lit cell");
   assert.deepEqual(cellsOf(paint(styles, { detail: 2, active: true }, { radius: 9.5 })).sort(), [0, 1, 2, 3, 4, 5]);
   // A tier's extras fade in over its first 1.2 px: the other three runes and
   // the inner hexagon arrive faint just past the T2 cut.
@@ -291,13 +310,61 @@ test("Sigil's cells glide when the work stops before they are out, or starts aga
   for (let index = restart; index < refold.length; index += 1) {
     refold[index].cells.forEach((extent, k) => assert.ok(extent >= held.cells[k] - 1e-9, `cell ${k} holds (${extent.toFixed(2)} < ${held.cells[k].toFixed(2)})`));
   }
-  assert.ok(refold.at(-1).cells.every((extent) => Math.abs(extent - 1) < 1e-6), "and all six lock on again");
+  assert.ok(refold.at(-1).cells.every((extent) => Math.abs(extent - 1) < 1e-4), "and all six lock on again");
   // A second paint of the same record in the same frame changes nothing.
   const record = styles.motionRecord(new Map(), "task:twice");
   const flags = { style: "sigil", active: true, selected: false, progress: null, orbit: 0, status: null, time: 0, frame: 0 };
   styles.stepMotion(record, flags, 0, false);
   for (let index = 0; index < 5; index += 1) { flags.time += FRAME; styles.stepMotion(record, flags, 1 / 30, false); paint(styles, { active: true, motion: record, time: flags.time }); }
   assert.deepEqual(extentsOf(paint(styles, { active: true, motion: record, time: flags.time })), extentsOf(paint(styles, { active: true, motion: record, time: flags.time })));
+});
+
+test("Sigil at T1 brings all six cells out in three steps of opposite pairs, and folds them back the same way", () => {
+  const styles = loadNodeStyles();
+  const record = styles.motionRecord(new Map(), "task:pairs");
+  const flags = { style: "sigil", active: false, selected: false, progress: null, orbit: 0, status: null, time: 0, frame: 0 };
+  styles.stepMotion(record, flags, 0, false);
+  const frames = [];
+  for (const [active, count] of [[false, 5], [true, 40], [false, 60]]) {
+    flags.active = active;
+    for (let index = 0; index < count; index += 1) {
+      flags.time += FRAME; flags.frame += 1;
+      styles.stepMotion(record, flags, 1 / 30, false);
+      frames.push(extentsOf(paint(styles, { active, motion: record, time: flags.time, detail: 1 }, { radius: 7 })));
+    }
+  }
+  const first = [0, 1, 2, 3, 4, 5].map((k) => frames.findIndex((cells) => cells[k] > 0));
+  const last = [0, 1, 2, 3, 4, 5].map((k) => frames.findLastIndex((cells) => cells[k] > 0));
+  frames.forEach((cells, index) => cells.slice(0, 3).forEach((extent, k) => assert.ok(Math.abs(cells[k + 3] - extent) < 1e-4, `opposite cells move together (frame ${index}: ${cells.map((e) => e.toFixed(3))})`)));
+  assert.ok(first[0] > 0 && first[1] - first[0] >= 3 && first[2] - first[1] >= 3, `out in three steps, .12 s apart (${first})`);
+  assert.ok(frames[44].every((extent) => Math.abs(extent - 1) < 1e-4), "all six locked on");
+  assert.ok(last[2] < last[1] && last[1] < last[0] && last[0] < frames.length - 1, `and back in, the last pair first (${last})`);
+});
+
+test("Sigil's cells stay clear of the work-left meter (r + 5) on every node size, overshoot included", () => {
+  const styles = loadNodeStyles();
+  for (let radius = 10; radius <= 20; radius += 0.5) {
+    for (const rate of [30, 60]) {
+      const record = styles.motionRecord(new Map(), `task:meter:${radius}`);
+      const flags = { style: "sigil", active: true, selected: false, progress: null, orbit: 0, status: null, time: 0, frame: 0 };
+      styles.stepMotion(record, flags, 0, false);
+      let lowest = -Infinity, widest = 0;
+      for (let index = 0; index < rate * 1.2; index += 1) {
+        flags.time += 1000 / rate; flags.frame += 1;
+        styles.stepMotion(record, flags, 1 / rate, false);
+        const ctx = paint(styles, { active: true, motion: record, time: flags.time, detail: 3 }, { radius });
+        for (const { points } of cellPaths(ctx)) for (const [, y] of points) lowest = Math.max(lowest, y * radius);
+        widest = Math.max(widest, ...extentsOf(ctx));
+      }
+      assert.ok(widest > 1.05, `r ${radius} at ${rate} Hz: the cells overshoot (${widest.toFixed(3)})`);
+      assert.ok(lowest <= radius + 4.5, `r ${radius} at ${rate} Hz: the lowest cell point ${(lowest - radius).toFixed(2)} px under the seal's radius`);
+    }
+    // Locked on: a big node's lattice draws in (lock and cell by one factor),
+    // a small one's stays as designed.
+    const locked = paint(styles, { active: true, detail: 3 }, { radius });
+    const fits = fitOf(locked);
+    assert.ok(fits.every((fit) => Math.abs(fit - fits[0]) < 1e-4) && (radius <= 13.5 ? Math.abs(fits[0] - 1) < 1e-4 : fits[0] < 1), `r ${radius}: fit ${fits[0].toFixed(3)}`);
+  }
 });
 
 test("Sigil's rest tail cools from ink into the second hue; the sweep runs under the cells; a second hue that is the tint's own gives way", () => {
@@ -355,6 +422,45 @@ test("Sigil's rest tail cools from ink into the second hue; the sweep runs under
   assert.ok(cellFills(TINT).has("rgba(167,243,218,1)"), "another tint keeps the theme's second hue");
 });
 
+test("Sigil's cell just left fades in the second hue, or cools into the tint where that hue is the tint's own; glyphs keep the runes faint", () => {
+  const styles = loadNodeStyles();
+  // A working record a twentieth into a scan step: the cell before the lit one is fading.
+  const leavingFills = (tint, theme) => {
+    const record = stepped(styles, { active: true, time: 2000 });
+    record.clock = 0.7 * (40 + 0.05 - ((record.seed * 6) % 1));
+    const left = (40 + Math.floor(record.seed * 6) + 5) % 6;
+    const ctx = paint(styles, { active: true, motion: record, time: 2000, theme, detail: 3 }, { tint });
+    const fills = new Map();
+    let path = 0, style = null;
+    for (const [name, value] of ctx.calls.log) {
+      if (name === "beginPath") path += 1;
+      if (name === "set:fillStyle") style = value;
+      if (name === "fill") fills.set(path, [...(fills.get(path) ?? []), style]);
+    }
+    const cell = cellPaths(ctx).find(({ k }) => k === left);
+    assert.equal(cellPaths(ctx).filter(({ path: at }) => at === cell.path).length, 1, "the cell just left has a path of its own");
+    return fills.get(cell.path);
+  };
+  const voidTheme = styles.theme(ACCENT);
+  const deep = (tint, bg) => `rgba(${tint.map((value, index) => Math.round(value + (bg[index] - value) * 0.84)).join(",")},1)`;
+  assert.deepEqual(leavingFills(TINT, voidTheme), [deep(TINT, [5, 5, 7]), "rgba(54,209,255,1)"], "a second hue of its own: it fades in that hue");
+  const mint = [167, 243, 218], aurora = styles.theme({ background: "#050d13", text: "#e7f5ee", accent2: "#a7f3da" });
+  assert.deepEqual(leavingFills(mint, aurora), [deep(mint, [5, 13, 19]), "rgba(167,243,218,1)"], "mint on aurora: it cools into the tint, not a grey wash");
+  // An agent's glyph or the hub's monogram leads: the resting runes at .55 and no head spark.
+  const runeAlpha = (ctx) => {
+    const log = ctx.calls.log, turn = log.findIndex(([name]) => name === "rotate");
+    let alpha = 1;
+    for (let at = 0; at < log.length; at += 1) {
+      if (log[at][0] === "set:globalAlpha") alpha = log[at][1];
+      if (at > turn && log[at][0] === "stroke") return alpha;
+    }
+    return null;
+  };
+  const plainSeal = paint(styles, { glyph: false, theme: voidTheme }), glyphSeal = paint(styles, { glyph: true, theme: voidTheme });
+  assert.ok(Math.abs(runeAlpha(glyphSeal) - 0.55 * runeAlpha(plainSeal)) < 1e-9, `${runeAlpha(glyphSeal)} against ${runeAlpha(plainSeal)}`);
+  assert.deepEqual([plainSeal.calls.arc, glyphSeal.calls.arc], [1, 0], "the head's spark only round a plain seal");
+});
+
 test("Sigil's runes are written in turn at rest, and at work the rune beside the lit cell strikes", () => {
   const styles = loadNodeStyles();
   const theme = styles.theme(ACCENT);
@@ -392,9 +498,35 @@ test("Sigil's runes are written in turn at rest, and at work the rune beside the
     lit.add(cell);
     const turn = log.find(([name]) => name === "rotate")[1];
     const head = headOf(ctx), gap = Math.abs(((turn + head * Math.PI / 3 - cell * Math.PI / 3) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI);
-    assert.ok(gap <= Math.PI / 6 + 0.02, `the struck rune sits beside the lit cell (${(gap * 180 / Math.PI).toFixed(1)}°)`);
+    // Chosen at the step's middle: 30 degrees off at most there, and the ring
+    // turns 14 more either way by the step's ends.
+    assert.ok(gap <= 44 * Math.PI / 180 + 0.02, `the struck rune sits beside the lit cell (${(gap * 180 / Math.PI).toFixed(1)}°)`);
   }
   assert.equal(lit.size, 6, "the scan lights every cell in a 2 s window (1.4 s a circuit)");
+  // Within one step the struck rune holds, on the ring and in the lit cell,
+  // however the ring turns on: it changes only with a new strike (60 Hz, 4 s).
+  const engravedOf = (ctx) => {
+    const log = ctx.calls.log, body = ctx.calls.fills.find(({ style }) => typeof style === "string").style;
+    let style = null, at = -1;
+    log.forEach(([name, value], index) => { if (name === "set:strokeStyle") style = value; if (name === "stroke" && style === body) at = index; });
+    return at < 0 ? null : JSON.stringify(pathBefore(log, at));
+  };
+  const steady = stepped(styles, { active: true, time: 2000 });
+  const beatFlags = { style: "sigil", active: true, selected: false, progress: null, orbit: 0, status: null, time: 2000, frame: 60 };
+  let held = null, strikes = 0, drawn = 0;
+  for (let index = 0; index < 240; index += 1) {
+    beatFlags.time += 1000 / 60; beatFlags.frame += 1;
+    styles.stepMotion(steady, beatFlags, 1 / 60, false);
+    const ctx = paint(styles, { active: true, motion: steady, time: beatFlags.time, theme, detail: 3 });
+    const now = { beat: Math.floor(steady.clock / 0.7 + steady.seed * 6), head: headOf(ctx), rune: engravedOf(ctx) };
+    if (now.rune !== null) drawn += 1;
+    if (held && held.beat === now.beat) {
+      assert.equal(now.head, held.head, `the struck rune holds through step ${now.beat} (frame ${index})`);
+      assert.equal(now.rune, held.rune, `and so does the one engraved in its cell (frame ${index})`);
+    } else strikes += 1;
+    held = now;
+  }
+  assert.ok(strikes >= 15 && drawn === 240, `a strike every .23 s, the rune engraved throughout (${strikes} strikes, ${drawn} frames)`);
   // At T3 the struck rune is written into the lit cell: the same rune,
   // engraved in the body's tone, at the cell's centre.
   const still = paint(styles, { active: true, theme, detail: 3 });
@@ -508,11 +640,15 @@ test("Sigil's agent ring steps two opposite hexagon edges; queued, failed and do
 test("Sigil's hub dial, work orbit, arrival and selection speak the same hex language", () => {
   const styles = loadNodeStyles();
   const theme = styles.theme(ACCENT);
-  // The hub: twelve rune ticks on a dial at r + 6, one lit, turning in 30 s; the crew ring in the rune rhythm.
+  // The hub: twelve rune ticks on a dial at r + 6, one lit, turning in 30 s;
+  // the crew ring a flat-top hexagon (sides on the old 3.1r circle) in the rune rhythm.
   const hub = recordingContext();
   styles.hubDress(hub, "sigil", P, 15, TINT, { crew: true, breathe: 0.5, time: 0, still: false, detail: 3, motion: null, theme });
-  assert.deepEqual([hub.calls.moveTo, hub.calls.lineTo, hub.calls.stroke, hub.calls.arc], [13, 13, 3, 1]);
+  assert.deepEqual([hub.calls.moveTo, hub.calls.lineTo, hub.calls.stroke, hub.calls.arc], [14, 18, 3, 0], "no circle in the pack");
   assert.ok(hub.calls.log.some(([name, ...dash]) => name === "setLineDash" && dash.join() === "5,2,1.5,2"));
+  const crew = hub.calls.log.slice(hub.calls.log.findIndex(([name]) => name === "setLineDash")).filter(([name]) => name === "moveTo" || name === "lineTo").map(([, x, y]) => [x - P.x, y - P.y]);
+  assert.equal(crew.length, 6);
+  for (const [x, y] of crew) assert.ok(Math.abs(Math.hypot(x, y) - 15 * 3.1 / Math.cos(Math.PI / 6)) < 1e-5 && Math.abs(Math.sin(3 * Math.atan2(y, x))) < 1e-6, "a corner toward each cell direction");
   const small = recordingContext();
   styles.hubDress(small, "sigil", P, 15, TINT, { crew: false, breathe: 0.5, time: 0, still: false, detail: 1, motion: null, theme });
   assert.equal(small.calls.lineTo, 5, "a capped hub keeps its four long ticks");
@@ -522,7 +658,7 @@ test("Sigil's hub dial, work orbit, arrival and selection speak the same hex lan
   assert.deepEqual(plain(orbit.calls.log.find(([name]) => name === "moveTo")), ["moveTo", 74.248711, 50], "the track's first corner points right, 21/cos 30° out");
   // Its sides touch the caller's orbit circle (r + 9): the bottom side stays
   // 2.5 px under the progress meter (r + 5 … r + 6.5), as the legacy circle did,
-  // and neither the track nor the comet comes inside it (the cells end at 1.46r).
+  // and neither the track nor the comet comes inside it (the cells end at 1.38r, 1.43r overshooting).
   const points = orbit.calls.log.filter(([name]) => name === "moveTo" || name === "lineTo").map(([, x, y]) => [x - P.x, y - P.y]);
   assert.ok(points.every(([x, y]) => Math.hypot(x, y) >= 21 - 1e-6), "nothing inside r + 9");
   assert.ok(Math.abs(Math.max(...points.map(([, y]) => y)) - 21) < 1e-6, "the bottom side lies at r + 9");
@@ -552,6 +688,15 @@ test("Sigil's hub dial, work orbit, arrival and selection speak the same hex lan
   });
   assert.ok(peaks[0] > peaks[1] && peaks[1] > peaks[2], "it fades as the node settles");
   assert.ok(widest <= 12 * 2.25, `arrival reach ${(widest / 12).toFixed(2)}r`);
+  // The flying hexes read as hexes: 6 px corner to corner at r 12 as they
+  // break off, and edged in the whitened tint (one path, one fill, one stroke).
+  const burst = recordingContext();
+  styles.arrival(burst, "sigil", P, 12, TINT, 0.2, { alpha: 1, time: 0, still: false, detail: 3, theme });
+  assert.deepEqual([burst.calls.fill, burst.calls.stroke, burst.calls.lineTo], [2, 2, 40], "the flash and the ring, then the six hexes");
+  assert.equal(burst.calls.strokes.at(-1).style, "rgba(194,221,239,1)");
+  const shards = burst.calls.log.slice(burst.calls.log.map(([name]) => name).lastIndexOf("beginPath")).filter(([name]) => name === "moveTo" || name === "lineTo");
+  const across = Math.hypot(shards[0][1] - shards[3][1], shards[0][2] - shards[3][2]) * 12;
+  assert.ok(across > 5.5, `a flying hex ${across.toFixed(1)} px corner to corner`);
   // Selection: a hexagon at 1.2 on hover; the hexagram's six points at 1.3 once chosen.
   const hover = recordingContext();
   styles.select(hover, "sigil", P, 12, TINT, { kind: "task", selected: true, chosen: false, alpha: 1, time: 0, still: true, detail: 3, motion: null, theme });
@@ -585,9 +730,9 @@ test("Sigil's selection marks keep off the working cells: the crown settles into
     const ctx = recordingContext({ center: P });
     styles.select(ctx, "sigil", P, 12, TINT, { kind: "task", selected: true, chosen: true, hover: false, active: flags.active, alpha: 1, time: flags.time, still: false, detail: 3, motion: record, theme });
     const log = ctx.calls.log, turn = log.find(([name]) => name === "rotate")[1];
-    const scaled = log.findIndex(([name]) => name === "scale");
+    const scaled = log.findIndex(([name]) => name === "scale"), swell = log[scaled][1] / 12;
     const points = log.slice(scaled).filter(([name]) => name === "moveTo" || name === "lineTo").map(([, x, y]) => [Math.hypot(x, y), Math.atan2(y, x) + turn]);
-    return { turn, points };
+    return { turn, swell, points };
   };
   const turns = [];
   for (let index = 0; index < 20; index += 1) turns.push(crown().turn);
@@ -601,10 +746,20 @@ test("Sigil's selection marks keep off the working cells: the crown settles into
   }
   assert.ok(offCell(settled.turn) < 0.01, "at work it settles on a sixth: its points sit between the cells");
   for (const [reach, angle] of settled.points) assert.ok(reach <= 1.3 + 1e-5 && offCell(angle) >= 20 * Math.PI / 180, `a crown point ${(offCell(angle) * 180 / Math.PI).toFixed(1)}° off a cell`);
-  assert.ok(turnDelta(settled.turn, crown().turn) < 1e-3, "and holds there");
+  // Settled, it holds its angle and breathes with the scan (a breath in 1.4 s
+  // at work): its tips between 1.235r and 1.365r, still in the gaps.
+  const swells = [];
+  for (let index = 0; index < 45; index += 1) {
+    const now = crown();
+    assert.ok(turnDelta(settled.turn, now.turn) < 1e-3, "and holds there");
+    for (const [reach, angle] of now.points) assert.ok(reach * now.swell <= 1.365 + 1e-5 && offCell(angle) >= 20 * Math.PI / 180);
+    swells.push(now.swell);
+  }
+  assert.ok(Math.min(...swells) >= 0.95 - 1e-9 && Math.max(...swells) <= 1.05 + 1e-9 && Math.max(...swells) - Math.min(...swells) > 0.08, `the crown breathes (${Math.min(...swells).toFixed(3)} to ${Math.max(...swells).toFixed(3)})`);
   // Hovered (not chosen) at work: a flat-top frame at 1.7r round the honeycomb,
-  // every cell vertex at least .12r inside it.
-  assert.ok(extentsOf(paint(styles, { active: true, theme })).every((extent) => Math.abs(extent - 1) < 1e-6), "the still pose's cells, all locked on");
+  // every cell vertex at least .2r inside it.
+  const locked = paint(styles, { active: true, theme });
+  assert.ok(extentsOf(locked).every((extent) => Math.abs(extent - 1) < 1e-4), "the still pose's cells, all locked on");
   const worker = stepped(styles, { active: true, selected: true, time: 3000 });
   const frame = recordingContext({ center: P });
   styles.select(frame, "sigil", P, 12, TINT, { kind: "task", selected: true, chosen: false, hover: true, active: true, alpha: 1, time: 3000, still: false, detail: 3, motion: worker, theme });
@@ -612,12 +767,13 @@ test("Sigil's selection marks keep off the working cells: the crown settles into
   assert.equal(corners.length, 6);
   for (const [x, y] of corners) assert.ok(Math.abs(Math.hypot(x, y) - 1.7) < 1e-5 && offCell(Math.atan2(y, x)) < 1e-5, "flat-top, a corner toward each cell");
   const inradius = 1.7 * Math.cos(Math.PI / 6);
-  for (let k = 0; k < 6; k += 1) {
-    for (let v = 0; v < 6; v += 1) {
-      const cx = 1.176 * Math.cos(k * SIXTH) + 0.32 * Math.cos(v * SIXTH - Math.PI / 2), cy = 1.176 * Math.sin(k * SIXTH) + 0.32 * Math.sin(v * SIXTH - Math.PI / 2);
+  const lattice = cellPaths(locked);
+  assert.equal(lattice.length, 6);
+  for (const { k, points } of lattice) {
+    for (const [cx, cy] of points) {
       for (let side = 0; side < 6; side += 1) {
         const depth = inradius - (cx * Math.cos(side * SIXTH + Math.PI / 6) + cy * Math.sin(side * SIXTH + Math.PI / 6));
-        assert.ok(depth >= 0.12, `cell ${k} vertex ${v} is ${depth.toFixed(3)}r inside side ${side}`);
+        assert.ok(depth >= 0.2, `cell ${k} vertex (${cx.toFixed(3)}, ${cy.toFixed(3)}) is ${depth.toFixed(3)}r inside side ${side}`);
       }
     }
   }

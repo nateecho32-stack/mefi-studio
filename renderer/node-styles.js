@@ -715,14 +715,29 @@
   // starts halfway. Everything runs on the node's integrated clock, so a
   // node speeding up never jumps; reduced motion holds a designed pose (ring
   // at rest, rune and cell 0 lit, no sweep). Detail steps down with the tier:
-  // T0 is the seal and one turning rune tick, T1 three runes and three cells,
-  // T2 all six with the inner hexagon and the scan, T3 an inner border and the
-  // head's spark. Every paint is a unit-space shape under the node's own
-  // transform; the three radials (glow, well, spark) are built once per canvas
-  // and tint, and every level eases through globalAlpha.
+  // T0 is the seal and one turning rune tick, T1 three runes and all six
+  // cells (out in three steps of opposite pairs, no scan), T2 all six runes
+  // with the inner hexagon and the scan, T3 an inner border, the rune
+  // engraved in the lit cell and the head's spark. Every paint is a
+  // unit-space shape under the node's own transform; the three radials
+  // (glow, well, spark) are built once per canvas and tint, and every level
+  // eases through globalAlpha.
   const SIGIL_SEAL = 0.98;
-  const SIGIL_CELL = 0.32;
   const SIGIL_SIXTH = Math.PI / 3;
+  // The lattice: a cell (a pointy-top hexagon, circumradius .27) slides out
+  // from under the seal's edge (.85) and locks .29 further out, its inner
+  // side .057 off the seal's. The lowest cell point (the bottom vertex of
+  // the 60 and 120 degree cells) lies at 1.257, and at 1.309 at the top of
+  // easeOutBack's overshoot (1.10); on a big node (r over 13.5) the whole
+  // lattice (lock and cell alike) draws in by one factor so that even then
+  // no cell reaches more than r + 4.2 px below the centre, clear of the
+  // work-left meter at r + 5 (with the half-pixel rim, .3 px of air at the
+  // overshoot's peak, a pixel and more once locked).
+  const SIGIL_CELL = 0.27;
+  const SIGIL_TUCK = 0.85;
+  const SIGIL_LOCK = 0.29;
+  const SIGIL_DROP = (SIGIL_TUCK + SIGIL_LOCK * 1.1) * Math.sin(Math.PI / 3) + SIGIL_CELL * 1.1;
+  const sigilFit = (r) => Math.min(1, (1 + 4.2 / r) / SIGIL_DROP);
   // A pointy-top unit hexagon (vertex 0 on top, then clockwise), its six edge
   // normals (0 pointing right: the cells' and the runes' directions) and the
   // hub's twelve dial directions.
@@ -894,7 +909,7 @@
     const accent = own ? hot : second;
     const halo = light ? tint : hot;
     return {
-      tint, edge, deep, hot, ink, rune, accent, halo, light,
+      tint, edge, deep, hot, ink, rune, accent, halo, light, own,
       tintS: rgba(tint, 1), edgeS: rgba(edge, 1), deepS: rgba(deep, 1), hotS: rgba(hot, 1), inkS: rgba(ink, 1),
       runeS: rgba(rune, 1), accentS: rgba(accent, 1), flashS: rgba(halo, 1),
       glow: null, well: null, spark: null,
@@ -951,6 +966,8 @@
   // over while it overshoots), into SIGIL_CELLS. While the node works each
   // assembles on the work's age, .12 s after the one before it; once it
   // stops they fold back in on the eased work level, the last one first.
+  // With `pairs` (T1) opposite cells move together, so the six come out in
+  // three steps (0 and 3, 1 and 4, 2 and 5) and fold back the same way.
   // The two curves are unrelated and the age restarts, so a work that stops
   // before its cells are out (or starts again while they fold) would jump:
   // each record keeps the extents it painted and the time (ms), a cell
@@ -960,9 +977,10 @@
   // the same frame holds; a first sight, a gap over 250 ms, a clock running
   // back or reduced motion takes the curves as they are.
   const sigilCellState = new WeakMap();
-  function sigilExtents(m, time, active, work, age, still) {
+  function sigilExtents(m, time, active, work, age, still, pairs) {
     for (let k = 0; k < 6; k += 1) {
-      SIGIL_CELLS[k] = active ? easeOutBack((age - 0.12 * k) / 0.3) : smooth01((work - 0.15 - 0.09 * k) / 0.35);
+      const order = pairs ? k % 3 : k;
+      SIGIL_CELLS[k] = active ? easeOutBack((age - 0.12 * order) / 0.3) : smooth01((work - 0.15 - 0.09 * order) / 0.35);
     }
     let state = sigilCellState.get(m);
     if (still) {
@@ -987,15 +1005,15 @@
     state[6] = time;
   }
 
-  // The working cells: six (three at T1) pointy-top cells slide out of the
-  // seal's edges along the edge normals and lock at 1.19, as far as
-  // sigilExtents has them. The scan's cell (and the one it just left) wear
-  // the second hue, and at T3 the struck rune is written into the lit cell,
-  // engraved in the body's tone. Drawn under the seal, so the cells come out
-  // of it.
-  function sigilCells(ctx, tones, detail, base, work, lit, flare, trail, px, rune, engrave) {
-    const step = detail >= 2 ? 1 : 2;
+  // The working cells: six pointy-top cells slide out of the seal's edges
+  // along the edge normals and lock at 1.14 (drawn in on a big node, see
+  // sigilFit), as far as sigilExtents has them. From T2 the scan's cell wears
+  // the second hue and the one it just left fades, and at T3 the struck rune
+  // is written into the lit cell, engraved in the body's tone; T1 keeps them
+  // plain, one path. Drawn under the seal, so the cells come out of it.
+  function sigilCells(ctx, tones, r, detail, base, work, lit, flare, trail, px, rune, engrave) {
     const gain = Math.min(1, work / 0.25);
+    const fit = sigilFit(r);
     const scan = detail >= 2;
     const left = sigilSlot(lit - 1);
     const leaving = scan && trail > 0.01 && SIGIL_CELLS[left] > 0.02;
@@ -1005,32 +1023,34 @@
       if (pass === 1 && !leaving || pass === 2 && !lighting) continue;
       ctx.beginPath();
       let drawn = false;
-      for (let k = 0; k < 6; k += step) {
+      for (let k = 0; k < 6; k += 1) {
         const extent = SIGIL_CELLS[k];
         if (extent <= 0.02) continue;
         const mine = pass === 0 ? !(lighting && k === lit) && !(leaving && k === left) : k === (pass === 1 ? left : lit);
         if (!mine) continue;
-        // Out from under the seal's edge to 1.176, where the cell's inner
-        // edge sits flush with the seal's (a .05 gap).
-        const reach = 0.85 + 0.326 * extent;
-        sigilHex(ctx, SIGIL_NORMAL[2 * k] * reach, SIGIL_NORMAL[2 * k + 1] * reach, SIGIL_CELL * extent);
+        const reach = fit * (SIGIL_TUCK + SIGIL_LOCK * extent);
+        sigilHex(ctx, SIGIL_NORMAL[2 * k] * reach, SIGIL_NORMAL[2 * k + 1] * reach, fit * SIGIL_CELL * extent);
         drawn = true;
       }
       if (!drawn) continue;
       ctx.globalAlpha = base * gain * 0.95; ctx.fillStyle = tones.deepS; ctx.fill();
       if (pass === 0) {
         ctx.globalAlpha = base * gain * 0.9; ctx.strokeStyle = tones.edgeS; ctx.lineWidth = px; ctx.stroke();
+      } else if (pass === 1) {
+        // The cell just left fades out of the second hue; where that hue is
+        // only the tint risen toward the highlight (aurora, a working mint
+        // node) a fading wash of it reads grey, so it cools into the tint.
+        ctx.globalAlpha = base * gain * trail * (tones.own ? 0.35 : 0.5); ctx.fillStyle = tones.own ? tones.edgeS : tones.accentS; ctx.fill();
+        ctx.globalAlpha = base * gain * 0.9; ctx.strokeStyle = tones.edgeS; ctx.lineWidth = px; ctx.stroke();
       } else {
-        const level = pass === 2 ? flare : trail;
-        ctx.globalAlpha = base * gain * level * (pass === 2 ? 0.72 : 0.5); ctx.fillStyle = tones.accentS; ctx.fill();
-        ctx.globalAlpha = base * gain * (pass === 2 ? 0.55 + 0.45 * flare : 0.9); ctx.strokeStyle = pass === 2 ? tones.hotS : tones.edgeS;
-        ctx.lineWidth = (pass === 2 ? 1.2 : 1) * px; ctx.stroke();
+        ctx.globalAlpha = base * gain * flare * 0.72; ctx.fillStyle = tones.accentS; ctx.fill();
+        ctx.globalAlpha = base * gain * (0.55 + 0.45 * flare); ctx.strokeStyle = tones.hotS; ctx.lineWidth = 1.2 * px; ctx.stroke();
       }
     }
     const extent = SIGIL_CELLS[lit], ink = lighting ? engrave * flare * Math.min(1, extent) : 0;
     if (ink > 0.01) {
       // The rune, moved from its ring slot (.69 out) to the cell's centre.
-      const reach = 0.85 + 0.326 * extent, size = 0.95 * extent, dx = SIGIL_NORMAL[2 * lit], dy = SIGIL_NORMAL[2 * lit + 1];
+      const reach = fit * (SIGIL_TUCK + SIGIL_LOCK * extent), size = 0.8 * fit * extent, dx = SIGIL_NORMAL[2 * lit], dy = SIGIL_NORMAL[2 * lit + 1];
       ctx.save();
       ctx.translate(dx * reach, dy * reach); ctx.scale(size, size); ctx.translate(-0.69 * dx, -0.69 * dy);
       ctx.lineCap = "round"; ctx.lineJoin = "round";
@@ -1060,7 +1080,8 @@
     // next as it fades into the tail.
     const ring = still ? 0 : TAU * sigilFrac(clock / 9 + seed);
     const beat = clock / 0.7 + seed * 6;
-    const slot = still ? 0 : sigilSlot(Math.floor(beat));
+    const step = Math.floor(beat);
+    const slot = still ? 0 : sigilSlot(step);
     const phase = still ? 0.5 : beat - Math.floor(beat);
     const flare = still ? 1 : (0.35 + 0.65 * easeOut(phase / 0.15)) * (1 - 0.2 * phase);
     const trail = still ? 0 : 0.8 * Math.pow(1 - phase, 1.5);
@@ -1086,11 +1107,16 @@
         ctx.globalAlpha = base * sweep; ctx.strokeStyle = tones.edgeS; ctx.lineWidth = 1.2 * px; ctx.stroke();
       }
     }
-    // The rune beside the scan's cell (the ring's slot nearest its direction).
+    // The rune beside the scan's cell: the ring's slot nearest the cell's
+    // direction at the middle of the step, so the struck rune changes only
+    // with a new strike, never while the ring turns on through the step (it
+    // stays within 44 degrees of its cell: 30, and the 14 the ring turns in
+    // half a step).
     const shape0 = Math.floor(seed * 6) % 6;
-    const near = sigilSlot(slot - Math.round(ring / SIGIL_SIXTH));
-    if (lattice) sigilExtents(m, n.time, n.active, work, age, still);
-    if (lattice && work > 0.02 && detail >= 1) sigilCells(ctx, tones, detail, base, work, slot, flare, trail, px, (near + shape0) % 6, detail >= 3 ? tierIn(r, 3) : 0);
+    const middle = TAU * sigilFrac(((step - seed * 6) * 0.7 + 0.35) / 9 + seed);
+    const near = still ? slot : sigilSlot(slot - Math.round(middle / SIGIL_SIXTH));
+    if (lattice) sigilExtents(m, n.time, n.active, work, age, still, detail < 2);
+    if (lattice && work > 0.02 && detail >= 1) sigilCells(ctx, tones, r, detail, base, work, slot, flare, trail, px, (near + shape0) % 6, detail >= 3 ? tierIn(r, 3) : 0);
     // The seal: body, well, the landing flash, the rim.
     ctx.lineJoin = "miter";
     ctx.beginPath(); sigilHex(ctx, 0, 0, SIGIL_SEAL);
@@ -1110,17 +1136,21 @@
     }
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     if (detail === 0) {
-      // T0: one rune tick turning with the ring, and a centre dot.
+      // T0: one rune tick turning with the ring, in the state's own hue
+      // risen toward the highlight (the one mark that moves carries the
+      // state), and a centre dot.
       const angle = ring - Math.PI / 2, cos = Math.cos(angle), sin = Math.sin(angle);
       ctx.beginPath(); ctx.moveTo(cos * 0.42, sin * 0.42); ctx.lineTo(cos * 0.82, sin * 0.82);
-      ctx.globalAlpha = base * 0.9; ctx.strokeStyle = tones.accentS; ctx.lineWidth = px; ctx.stroke();
+      ctx.globalAlpha = base * 0.9; ctx.strokeStyle = tones.hotS; ctx.lineWidth = px; ctx.stroke();
       if (!n.glyph) {
         ctx.beginPath(); ctx.arc(0, 0, 0.26, 0, TAU);
         ctx.globalAlpha = base * 0.9; ctx.fillStyle = tones.edgeS; ctx.fill();
       }
     } else {
       const odd = detail >= 2 ? tierIn(r, 2) : 0;
-      const dim = Math.min(1, 0.66 + 0.22 * lit + 0.35 * kick);
+      // Round an agent's glyph or the hub's monogram the resting runes stay
+      // faint and the head strikes without its spark: the glyph leads.
+      const dim = Math.min(1, 0.66 + 0.22 * lit + 0.35 * kick) * (n.glyph ? 0.55 : 1);
       ctx.save(); ctx.rotate(ring);
       // The runes: T1's three, then the other three as T2 fades them in.
       ctx.beginPath();
@@ -1146,7 +1176,7 @@
         if (cool < 0.99) { ctx.globalAlpha = base * tail * (1 - cool); ctx.strokeStyle = tones.inkS; ctx.lineWidth = 1.6 * px; ctx.stroke(); }
       }
       const lead = workHead > restHead ? near : slot;
-      const spark = detail >= 3 ? tierIn(r, 3) * Math.max(restHead, workHead) * 0.8 : 0;
+      const spark = detail >= 3 && !n.glyph ? tierIn(r, 3) * Math.max(restHead, workHead) * 0.8 : 0;
       if (spark > 0.01) {
         tones.spark ??= sigilSparkPaint(ctx, tones);
         ctx.save(); ctx.translate(SIGIL_NORMAL[2 * lead] * 0.7, SIGIL_NORMAL[2 * lead + 1] * 0.7); ctx.scale(0.24, 0.24);
@@ -1254,7 +1284,8 @@
 
   // The hub's dress: twelve rune ticks on a dial at r + 6 (every third one
   // long), turning once in 30 s, one of them lit and stepping round; the
-  // crew's ring is cut in the rune rhythm.
+  // crew's ring is a flat-top hexagon (its sides touch the legacy 3.1r
+  // circle, a corner toward each cell) cut in the rune rhythm.
   function sigilHub(ctx, p, radius, tint, o) {
     const palette = o.theme ?? theme(null);
     const tones = sigilPaints(ctx, tint, palette);
@@ -1280,7 +1311,7 @@
     if (o.crew === true) {
       ctx.save();
       ctx.setLineDash(SIGIL_DASHES.session); ctx.lineDashOffset = still ? 0 : -((time / 400) % SIGIL_PERIODS.session);
-      ctx.beginPath(); ctx.arc(p.x, p.y, radius * 3.1, 0, TAU);
+      ctx.beginPath(); sigilFlatHex(ctx, p.x, p.y, radius * 3.1 * SIGIL_ORBIT_OUT);
       ctx.globalAlpha = base * 0.12; ctx.strokeStyle = tones.edgeS; ctx.lineWidth = 0.8; ctx.stroke();
       ctx.restore();
     }
@@ -1329,10 +1360,12 @@
     ctx.globalAlpha = alpha * 0.7 * fade * fade; ctx.fillStyle = tones.flashS; ctx.fill();
     ctx.beginPath(); sigilHex(ctx, 0, 0, SIGIL_SEAL * (1 + 0.4 * easeOut(u)));
     ctx.globalAlpha = alpha * 0.8 * fade; ctx.strokeStyle = tones.edgeS; ctx.lineWidth = 1.4 / radius; ctx.stroke();
-    const out = 1 + 0.85 * easeOut(u), size = 0.2 * (1 - 0.35 * u), cos = Math.cos(u * Math.PI), sin = Math.sin(u * Math.PI);
+    // Big enough to read as hexes (6 px corner to corner at r 12), and edged.
+    const out = 1 + 0.85 * easeOut(u), size = 0.27 * (1 - 0.3 * u), cos = Math.cos(u * Math.PI), sin = Math.sin(u * Math.PI);
     ctx.beginPath();
     for (let k = 0; k < 6; k += 1) sigilHexTurned(ctx, SIGIL_HEX[2 * k] * out, SIGIL_HEX[2 * k + 1] * out, size, cos, sin);
     ctx.globalAlpha = alpha * 0.9 * fade; ctx.fillStyle = tones.accentS; ctx.fill();
+    ctx.globalAlpha = alpha * 0.6 * fade; ctx.strokeStyle = tones.hotS; ctx.lineWidth = 1 / radius; ctx.stroke();
     ctx.restore();
     return true;
   }
@@ -1343,8 +1376,9 @@
   // track; on a chosen node it gives way to the crown there. Chosen: the six
   // points of a hexagram at 1.3 in the theme's second hue, turning once in
   // 20 s; while the node works the turn eases off and the crown settles with
-  // every point in a gap between two cells, so it never crosses them (a
-  // small node keeps a second hexagon instead, opening like the hover's).
+  // every point in a gap between two cells, so it never crosses them, and
+  // breathes there with the scan (a small node keeps a second hexagon
+  // instead, opening like the hover's and breathing inward).
   // An agent grows no cells: its marks keep their resting shape.
   // The crown's turn per motion record: the angle and the time (ms) it was
   // drawn at, integrated so that easing into the gaps never jumps.
@@ -1393,18 +1427,23 @@
     }
     if (chosen) {
       ctx.strokeStyle = tones.accentS; ctx.globalAlpha = alpha * 0.85 * sel;
+      // The crown breathes with the scan (a breath a circuit: 1.4 s at work),
+      // its tips between 1.235 and 1.365 once settled, still in the gaps; a
+      // small node's hexagon breathes inward. The clock is the record's.
+      const breathe = still ? 0 : Math.sin(TAU * sigilFrac(sigilNum(m?.clock, time / 1000) / 4.2 + seed));
       if (detail >= 2) {
+        const swell = radius * (1 + 0.05 * work * breathe);
         ctx.rotate(still ? 0 : sigilCrownTurn(m, time, seed, work));
-        ctx.scale(radius, radius);
+        ctx.scale(swell, swell);
         ctx.beginPath();
         for (let k = 0; k < 6; k += 1) {
           ctx.moveTo(SIGIL_CROWN[k * 6], SIGIL_CROWN[k * 6 + 1]);
           ctx.lineTo(SIGIL_CROWN[k * 6 + 2], SIGIL_CROWN[k * 6 + 3]);
           ctx.lineTo(SIGIL_CROWN[k * 6 + 4], SIGIL_CROWN[k * 6 + 5]);
         }
-        ctx.lineWidth = 1.6 / radius; ctx.stroke();
+        ctx.lineWidth = 1.6 / swell; ctx.stroke();
       } else {
-        ctx.beginPath(); sigilHexTurned(ctx, 0, 0, radius * (1.32 + 0.38 * work), cos, sin);
+        ctx.beginPath(); sigilHexTurned(ctx, 0, 0, radius * (1.32 + 0.38 * work) * (1 - 0.015 * (1 + breathe)), cos, sin);
         ctx.lineWidth = 1.4; ctx.stroke();
       }
     }
