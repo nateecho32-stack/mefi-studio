@@ -68,6 +68,18 @@ test("the pinned Work on it wrapper is the label it points at, not new work", ()
   assert.equal(find({ tasks: [plain] }, incoming).item, plain);
 });
 
+test("quoted labels in generated chat wrappers remain one obligation", () => {
+  const title = 'Add "Export" button';
+  for (const prompt of [
+    `Work on "${title}". Queued from the assistant chat — the user said "work on it".`,
+    `Work on "${title}". Queued from the assistant chat — the user confirmed with "yes".`,
+    `Work on "${title}". Queued with Work on it — the user pointed at session (id: session-1).`,
+  ]) {
+    const saved = task(prompt, { title: `Work on "${title}"` });
+    assert.deepEqual(find({ requests: [saved] }, ask('Please add "Export" button')), { kind: "request", item: saved }, prompt);
+  }
+});
+
 test("unfinished requests and tasks cover queued, running, held, and verifying work", () => {
   for (const status of [undefined, "open", "pending", "queued", "running", "active", "blocked", "cooling", "awaiting_verification"]) {
     for (const kind of ["task", "request"]) {

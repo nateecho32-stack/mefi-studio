@@ -34,7 +34,8 @@ function briefOf(item) {
   let value = string(item?.prompt) || string(item?.title);
   // Host-added focus context is provenance, not another user requirement.
   value = value.replace(/\n\nThe user pointed the assistant at (?:task|session|todo) "[^\n]*" \(id: [^\n]*\) while asking for this\.$/, "");
-  const resolved = value.match(/^Work on "([^"\n]+)"\. Queued (?:from the assistant chat — the user (?:said|confirmed with) "[^\n]*"|with Work on it — the user pointed at [^\n]*)\.$/);
+  // The label can contain quotes; the closing delimiter is the one before ". Queued".
+  const resolved = value.match(/^Work on "(.+)"\. Queued (?:from the assistant chat — the user (?:said|confirmed with) "[^\n]*"|with Work on it — the user pointed at [^\n]*)\.$/);
   return resolved ? resolved[1] : value;
 }
 

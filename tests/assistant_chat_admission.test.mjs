@@ -135,6 +135,19 @@ test("a quoted focused title reuses its task identity when the user says work on
   assert.equal(h.effects.agents, 0);
 });
 
+test("a quoted Work on it inbox label reuses the saved request on a later chat instruction", async () => {
+  const title = 'Add "Export" button';
+  const saved = { id: "saved", title: `Work on "${title}"`,
+    prompt: `Work on "${title}". Queued with Work on it — the user pointed at session (id: session-1).`,
+    source: "chat", status: "open" };
+  const h = host({ requests: [saved] }), before = h.board();
+  const reply = await h.send('Please add "Export" button');
+  assert.deepEqual(h.board(), before);
+  assert.match(reply.text, /No extra task was queued/);
+  assert.equal(h.effects.agents, 0);
+  assert.equal(h.effects.dispatch, 0);
+});
+
 test("an ambiguous named follow-up stays in chat instead of creating a third task", async () => {
   const h = host({ tasks: [
     { id: "one", title: "Search control", prompt: "Add keyboard search", status: "open" },
