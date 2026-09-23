@@ -29,9 +29,9 @@
     minimal: { name: "Minimal", detail: "Quiet points" },
     halo: { name: "Halo", detail: "Luminous rings" },
     crystal: { name: "Crystal", detail: "Faceted gems" },
-    singularity: { name: "Singularity", detail: "A dark core in a bright ring", premium: true },
-    prism: { name: "Prism", detail: "Refracting facets", premium: true },
-    sigil: { name: "Sigil", detail: "Rune-marked rings", premium: true },
+    singularity: { name: "Singularity", detail: "A black hole with a turning disc", premium: true },
+    prism: { name: "Prism", detail: "A turning crystal that splits light", premium: true },
+    sigil: { name: "Sigil", detail: "Hex runes that assemble as it works", premium: true },
   };
   // Saved preferences only ever hold free keys; a premium choice lives in its
   // own store (PREMIUM_KEY) and shows only while the community layer allows it.
