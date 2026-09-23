@@ -48,7 +48,7 @@ test("a colour-wrapped verdict sentinel is still the run's verdict", async () =>
   h.wake(); await h.pump();
   await h.finish("ansi-fixture", { code: 1, lines: [
     "MEFI_RESULT: done: current implementation; remaining: none",
-    "[32mMEFI_JOB_DONE[0m",
+    "\u001b[32mMEFI_JOB_DONE\u001b[0m",
   ] });
   const saved = h.board().tasks[0];
   assert.equal(saved.status, "awaiting_verification", "the CLI's colour is not the worker's answer");

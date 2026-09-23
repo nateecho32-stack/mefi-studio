@@ -167,14 +167,14 @@ test("a real handoff line still parses, colour and indentation included", () => 
   for (const line of [
     "MEFI_NEXT: Verify keyboard flow :: Run the focus regression.",
     "   MEFI_NEXT: Verify keyboard flow :: Run the focus regression.",
-    "[36mMEFI_NEXT: Verify keyboard flow :: Run the focus regression.[0m",
+    "\u001b[36mMEFI_NEXT: Verify keyboard flow :: Run the focus regression.\u001b[0m",
   ]) {
     const parsed = h.env.parseExecutorHandoff(line);
     assert.equal(parsed?.kind, "next", line);
     assert.equal(parsed.title, "Verify keyboard flow");
     assert.equal(parsed.prompt, "Run the focus regression.");
   }
-  assert.equal(h.env.parseExecutorHandoff("[36mMEFI_CALL: auditor[0m")?.role, "auditor");
+  assert.equal(h.env.parseExecutorHandoff("\u001b[36mMEFI_CALL: auditor\u001b[0m")?.role, "auditor");
 });
 
 test("a worker's reference call runs a journaled gather for its saved task brief", async () => {

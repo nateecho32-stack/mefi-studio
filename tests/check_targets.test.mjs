@@ -8,10 +8,11 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { extractCheckTargets, extractNodeRefs, audit, main } from "../scripts/check-targets.mjs";
+import { extractCheckTargets, extractNodeRefs, audit, main, findRawControls, indexedFiles, trackedTextFiles } from "../scripts/check-targets.mjs";
 
 function makeFixturePackage(files, checkTargets, extra = {}) {
   const root = mkdtempSync(join(tmpdir(), "check-targets-"));
@@ -149,6 +150,85 @@ test("audit flags a UTF-8 BOM in committed data JSON and passes when BOM-free", 
     assert.deepEqual(audit(root, "node --check main.cjs").bommed, ["data/models.json"]);
     writeFileSync(dataPath, JSON.stringify({ schemaVersion: 1 }));
     assert.deepEqual(audit(root, "node --check main.cjs").bommed, []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// Raw control and bidi characters. This file spells every one as an escape,
+// which is the fix the gate asks for; the fixtures get the raw characters.
+const git = (cwd, ...args) => execFileSync("git", args, { cwd, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+
+test("findRawControls locates C0, DEL and bidi controls and passes tab, CR, LF and escapes", () => {
+  const root = mkdtempSync(join(tmpdir(), "check-targets-raw-"));
+  try {
+    writeFileSync(join(root, "clean.mjs"), 'const ANSI = /\\u001b\\[/;\r\n\tconst NUL = "\\0";\n');
+    writeFileSync(join(root, "esc.mjs"), 'const ok = 1;\nconst ANSI = /\u001b\\[/;\n');
+    writeFileSync(join(root, "mixed.md"), "a\u0000b\u007f\n\u202e \u2066\n");
+    const found = findRawControls(root, ["clean.mjs", "esc.mjs", "mixed.md", "missing.md"]);
+    assert.deepEqual(found, [
+      { file: "esc.mjs", line: 2, column: 15, code: "U+001B" },
+      { file: "mixed.md", line: 1, column: 2, code: "U+0000" },
+      { file: "mixed.md", line: 1, column: 4, code: "U+007F" },
+      { file: "mixed.md", line: 2, column: 1, code: "U+202E" },
+      { file: "mixed.md", line: 2, column: 3, code: "U+2066" },
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("indexedFiles reads git index versions 2, 3 and 4 and declines a split index", () => {
+  const root = mkdtempSync(join(tmpdir(), "check-targets-index-"));
+  const files = ["a.mjs", "deep/nested/path/one.js", "deep/nested/path/two.js", "docs/caf\u00e9.md", "img.png"];
+  const read = () => readFileSync(join(root, ".git", "index"));
+  try {
+    for (const rel of files) {
+      mkdirSync(join(root, rel, ".."), { recursive: true });
+      writeFileSync(join(root, rel), rel.endsWith(".png") ? Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0x1b]) : "export {};\n");
+    }
+    git(root, "init", "-q");
+    git(root, "add", "--", ...files);
+    assert.equal(read().readUInt32BE(4), 2);
+    assert.deepEqual(indexedFiles(read()).sort(), files);
+
+    // An intent-to-add entry carries extended flags, which moves git to v3.
+    writeFileSync(join(root, "later.md"), "# later\n");
+    git(root, "add", "-N", "later.md");
+    assert.equal(read().readUInt32BE(4), 3);
+    assert.deepEqual(indexedFiles(read()).sort(), [...files, "later.md"].sort());
+
+    git(root, "update-index", "--index-version", "4");
+    assert.equal(read().readUInt32BE(4), 4);
+    assert.deepEqual(indexedFiles(read()).sort(), [...files, "later.md"].sort());
+
+    // A split index keeps most entries in a shared file: ask git instead.
+    git(root, "update-index", "--split-index");
+    assert.equal(indexedFiles(read()), null);
+    assert.deepEqual(trackedTextFiles(root).sort(), ["a.mjs", "deep/nested/path/one.js", "deep/nested/path/two.js", "docs/caf\u00e9.md", "later.md"]);
+
+    assert.equal(indexedFiles(Buffer.from("not an index at all, just some bytes")), null);
+    assert.equal(indexedFiles(read().subarray(0, 40)), null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("main() fails on a raw control in a tracked file and ignores untracked ones", () => {
+  const root = makeFixturePackage(
+    ["main.cjs", "scripts/a.mjs", "renderer/b.js"],
+    ["main.cjs", "scripts/a.mjs", "renderer/b.js"]
+  );
+  try {
+    git(root, "init", "-q");
+    git(root, "add", "-A");
+    writeFileSync(join(root, "notes.md"), "untracked \u202e\u0000\n");
+    assert.deepEqual(audit(root, "node --check main.cjs").controls, []);
+    assert.equal(main(["--package", root]), 0);
+
+    writeFileSync(join(root, "scripts", "a.mjs"), "export {};\nconst NUL = /[\u0000]/;\n");
+    assert.deepEqual(audit(root, "node --check main.cjs").controls, [{ file: "scripts/a.mjs", line: 2, column: 15, code: "U+0000" }]);
+    assert.equal(main(["--package", root]), 1);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

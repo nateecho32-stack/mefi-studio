@@ -48,7 +48,7 @@ export const FREE_TIER_NOTES = Object.freeze({
 
 // ---- text helpers ----------------------------------------------------------------
 
-const ANSI = /\[[0-9;?]*[ -/]*[@-~]/g;
+const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
 export function stripAnsi(text) {
   return String(text ?? "").replace(ANSI, "");
 }
@@ -395,7 +395,7 @@ export function commandLine(command, args = []) {
   const quote = (value) => {
     const text = String(value);
     if (/^[A-Za-z0-9_./:=@+-]+$/.test(text)) return text;
-    if (/["\r\n ]/.test(text) || (text.match(/%/g) ?? []).length > 1) throw new Error(`unsafe argument for cmd.exe: ${text.slice(0, 60)}`);
+    if (/["\r\n\0]/.test(text) || (text.match(/%/g) ?? []).length > 1) throw new Error(`unsafe argument for cmd.exe: ${text.slice(0, 60)}`);
     return `"${text}"`;
   };
   return [command, ...args].map(quote).join(" ");
