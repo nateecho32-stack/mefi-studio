@@ -95,15 +95,17 @@ test("every tier steps down to a clean small node: exact budgets for the still p
   // in the still pose, and the ceiling while animated (every spark in view; a
   // spark behind the horizon and inside its shadow is not drawn, and a jet's
   // knot is not stroked while it is invisible).
+  // T0 at rest: the horizon, its ring, the disc in one path and the spot;
+  // lit, the aura too. T1 keeps the far half's Doppler light alone.
   const POSE = {
-    4.5: { quiet: [1, 3, 4, 4, 2], working: [1, 3, 4, 4, 2], chosen: [1, 3, 4, 4, 2] },
-    7: { quiet: [2, 11, 0, 6, 1], working: [7, 11, 0, 7, 2], chosen: [2, 11, 0, 6, 1] },
+    4.5: { quiet: [2, 1, 2, 2, 2], working: [2, 2, 2, 3, 2], chosen: [2, 2, 2, 3, 2] },
+    7: { quiet: [2, 11, 0, 5, 1], working: [7, 11, 0, 6, 2], chosen: [2, 11, 0, 5, 1] },
     9.5: { quiet: [4, 11, 0, 7, 3], working: [9, 11, 0, 8, 3], chosen: [4, 11, 0, 7, 3] },
     12: { quiet: [5, 11, 0, 7, 3], working: [14, 11, 0, 8, 4], chosen: [5, 11, 0, 7, 3] },
   };
   const BUDGETS = {
-    4.5: { quiet: [1, 3, 4, 4, 2], working: [1, 3, 4, 4, 2], chosen: [1, 3, 4, 4, 2] },
-    7: { quiet: [2, 11, 0, 6, 1], working: [8, 11, 0, 7, 3], chosen: [2, 11, 0, 6, 1] },
+    4.5: { quiet: [2, 1, 2, 2, 2], working: [2, 2, 2, 3, 2], chosen: [2, 2, 2, 3, 2] },
+    7: { quiet: [2, 11, 0, 5, 1], working: [8, 11, 0, 6, 3], chosen: [2, 11, 0, 5, 1] },
     9.5: { quiet: [5, 11, 0, 7, 3], working: [11, 11, 0, 8, 3], chosen: [5, 11, 0, 7, 3] },
     12: { quiet: [7, 11, 0, 7, 3], working: [15, 11, 0, 8, 4], chosen: [7, 11, 0, 7, 3] },
   };
@@ -125,27 +127,30 @@ test("every tier steps down to a clean small node: exact budgets for the still p
       assert.deepEqual(most, budget, `r ${radius} ${state}: the ceiling is reached, not padded`);
     }
   }
-  // T0 is a tiny ringed planet: no streak conic fill, no sparks, no jets, one hot spot.
-  const tiny = recordingContext();
+  // T0 is a tiny ringed planet: no conic, no sparks, no jets, the visible
+  // disc in one path (one chord along the horizon's edge), one hot spot.
+  const tiny = recordingContext({ conic: true });
   paint(styles, tiny, 4.5, { active: true });
   assert.equal(tiny.calls.rotate, 0, "nothing turns under the transform");
-  assert.equal(tiny.calls.log.filter(([name]) => name === "scale").length, 0, "the halves are ellipses: no squashing transform");
-  assert.equal(tiny.calls.lineTo, 1, "one hot spot rides the disc");
+  assert.equal(tiny.calls.log.filter(([name]) => name === "scale").length, 0, "the disc is ellipses: no squashing transform");
+  assert.equal(tiny.calls.ellipse, 2, "the disc's outer and inner edges");
+  assert.equal(tiny.calls.lineTo, 2, "a chord along the horizon and one hot spot riding the disc");
+  const flat = tiny.calls.log.filter(([name, value]) => name === "set:fillStyle" && String(value).startsWith("grad:"));
+  assert.ok(flat.every(([, value]) => !String(value).startsWith("grad:conic")), "under 6 px the Doppler light is a flat left-to-right paint, no conic");
 });
 
-test("a steady node costs few canvas operations: 36 at T0 (most of a board's todos), and fixed ceilings above it", () => {
+test("a steady node costs few canvas operations: 23 at T0 at rest (most of a board's todos), and fixed ceilings above it", () => {
   const styles = loadNodeStyles();
   // Every call and property set of one warm paint, the dispatcher's save,
-  // alpha and restore included; the ceiling over 150 animated frames (the
-  // T0 spot behind the horizon and in front of it).
-  // [quiet or chosen, working] per tier (radius).
-  const CEILINGS = { 4.5: [36, 36], 7: [56, 81], 9.5: [76, 90], 12: [80, 103] };
-  for (const [radius, [quiet, working]] of Object.entries(CEILINGS)) {
-    for (const flags of [{}, { active: true }, { selected: true, chosen: true }, { kind: "agent", glyph: true, active: true }]) {
+  // alpha and restore included; the ceiling over 150 animated frames. A T0
+  // node draws its aura only while lit.
+  const CEILINGS = { 4.5: { quiet: 23, working: 28, chosen: 28 }, 7: { quiet: 49, working: 74, chosen: 49 }, 9.5: { quiet: 74, working: 88, chosen: 74 }, 12: { quiet: 78, working: 101, chosen: 78 } };
+  for (const [radius, ceiling] of Object.entries(CEILINGS)) {
+    for (const [state, flags] of Object.entries({ quiet: {}, working: { active: true }, chosen: { selected: true, chosen: true }, glyph: { kind: "agent", glyph: true, active: true } })) {
       const live = record(styles, { active: flags.active === true, selected: flags.selected === true });
       const ctx = recordingContext();
       paint(styles, ctx, Number(radius), { ...flags, motion: live.motion, time: live.flags.time });
-      const sides = new Set();
+      const spot = new Set();
       let most = 0;
       for (let frame = 0; frame < 150; frame += 1) {
         const time = live.step();
@@ -153,10 +158,10 @@ test("a steady node costs few canvas operations: 36 at T0 (most of a board's tod
         paint(styles, ctx, Number(radius), { ...flags, motion: live.motion, time });
         const log = ctx.calls.log.slice(from);
         most = Math.max(most, log.length);
-        if (Number(radius) < 6) sides.add(log.findIndex(([name]) => name === "lineTo") < log.findIndex(([name, , , r]) => name === "arc" && r === 0.52) ? "behind" : "front");
+        if (Number(radius) < 6) spot.add(log.filter(([name]) => name === "lineTo").length === 2 ? "shown" : "hidden");
       }
-      assert.equal(most, flags.active ? working : quiet, `r ${radius} ${JSON.stringify(flags)}: the ceiling of canvas operations`);
-      if (Number(radius) < 6) assert.deepEqual([...sides].sort(), ["behind", "front"], "the T0 spot passes behind the horizon and in front of it");
+      assert.equal(most, ceiling[state === "glyph" ? "working" : state], `r ${radius} ${state}: the ceiling of canvas operations`);
+      if (Number(radius) < 6) assert.deepEqual([...spot].sort(), ["hidden", "shown"], "the T0 spot rides round the disc and hides behind the horizon");
     }
   }
 });
@@ -205,7 +210,7 @@ test("steady frames build nothing: no gradient after warm-up, at time 5000, or a
   const live = record(styles, { active: true });
   paint(styles, ctx, 12, { active: true, motion: live.motion, time: 0, theme });
   const warm = gradientsBuilt(ctx);
-  assert.equal(warm, 7, "seven unit-space paints per canvas, tint and theme (two conic)");
+  assert.equal(warm, 8, "eight unit-space paints per canvas, tint and theme (two conic, and T0's flat Doppler light)");
   for (const time of [33, 400, 5000, 99999]) {
     live.step();
     paint(styles, ctx, 12, { active: true, motion: live.motion, time, theme });
@@ -215,7 +220,7 @@ test("steady frames build nothing: no gradient after warm-up, at time 5000, or a
   assert.equal(gradientsBuilt(ctx), warm, "moving, resizing, lighting and dimming reuse the same paints");
   paint(styles, ctx, 12, { theme }, other);
   const withOther = gradientsBuilt(ctx);
-  assert.equal(withOther, warm + 7, "another tint builds its own paints once");
+  assert.equal(withOther, warm + 8, "another tint builds its own paints once");
   paint(styles, ctx, 12, { theme, time: 5000 });
   paint(styles, ctx, 12, { theme, time: 5000 }, other);
   assert.equal(gradientsBuilt(ctx), withOther, "going back to a tint reuses its paints");
@@ -348,15 +353,18 @@ test("a small hub widens its horizon so the monogram always sits on black", () =
     const theme = styles.theme(palette);
     for (const radius of [3, 4.5, 8, 12.5, 15]) {
       const ctx = recordingContext();
+      // Each arc's radius on screen (the frame's scale when it was traced).
+      const screen = [];
+      const arc = ctx.arc.bind(ctx);
+      ctx.arc = (x, y, r, ...rest) => { const [a, b] = ctx.matrix(); screen.push(r * Math.hypot(a, b)); return arc(x, y, r, ...rest); };
       paint(styles, ctx, radius, { kind: "assistant", theme });
       const log = plain(ctx.calls.log);
       // The horizon is the arc filled right after a pure-black or core fill style is set.
       const fillAt = log.findIndex(([name, value]) => name === "set:fillStyle" && (value === "rgba(2,1,5,1)" || String(value).includes("0 rgba(2,1,5,1)")));
-      const arc = log.slice(0, fillAt).reverse().find(([name]) => name === "arc");
-      const size = arc[3] * radius;
+      const size = screen[log.slice(0, fillAt).filter(([name]) => name === "arc").length - 1];
       assert.ok(size >= Math.min(6.45, 1.7 * radius) - 1e-6, `r ${radius}: a ${size.toFixed(1)} px horizon under the M`);
-      assert.ok(arc[3] <= 1.7 + 1e-9, "never past 1.7 radii");
-      if (radius >= 12.5) assert.ok(Math.abs(arc[3] - 0.52) < 1e-9, "a full-size hub keeps the .52 horizon");
+      assert.ok(size <= 1.7 * radius + 1e-9, "never past 1.7 radii");
+      if (radius >= 12.5) assert.ok(Math.abs(size - 0.52 * radius) < 1e-9, "a full-size hub keeps the .52 horizon");
       assert.equal(ctx.calls.texts[0].text, "M");
     }
   }
@@ -364,18 +372,47 @@ test("a small hub widens its horizon so the monogram always sits on black", () =
 
 test("every layer follows the caller's alpha, on both themes and without conic gradients", () => {
   const styles = loadNodeStyles();
-  for (const palette of [VOID, LIGHT]) for (const conic of [true, false]) for (const flags of [{}, { active: true }, { kind: "agent", glyph: true, active: true }]) {
+  for (const palette of [VOID, LIGHT]) for (const conic of [true, false]) for (const flags of [{}, { active: true }, { kind: "agent", glyph: true, active: true }]) for (const radius of [4.5, 12]) {
     const live = record(styles, { active: flags.active === true });
     live.motion.kick = 0.6;
     const full = recordingContext({ conic }), dimmed = recordingContext({ conic });
     const theme = styles.theme(palette);
-    paint(styles, full, 12, { ...flags, alpha: 1, motion: live.motion, time: 700, theme });
-    paint(styles, dimmed, 12, { ...flags, alpha: 0.3, motion: live.motion, time: 700, theme });
+    paint(styles, full, radius, { ...flags, alpha: 1, motion: live.motion, time: 700, theme });
+    paint(styles, dimmed, radius, { ...flags, alpha: 0.3, motion: live.motion, time: 700, theme });
     const a = full.calls.alphas, b = dimmed.calls.alphas;
     assert.equal(a.length, b.length);
     assert.ok(b.every((alpha, index) => alpha > 0 && alpha <= 0.3 + 1e-12 && Math.abs(alpha - 0.3 * a[index]) < 1e-12), "each layer at a gain of the caller's alpha, never above it");
     assert.ok(b.includes(0.3), "the horizon at exactly the caller's alpha");
   }
+});
+
+test("nothing jumps at the T0/T1 cut: the aura keeps its size and level, the disc its light, as a node grows past 6 px", () => {
+  const styles = loadNodeStyles();
+  // The aura's fill (its paint, alpha, arc and the frame's scale) and the
+  // Doppler level, just under and just over 6 px, lit and kicked.
+  const auraOf = (radius, flags, kick) => {
+    const live = record(styles, { active: flags.active === true, selected: flags.selected === true, still: true });
+    live.motion.kick = kick; live.motion.still = false;
+    const ctx = recordingContext();
+    const found = [];
+    const arc = ctx.arc.bind(ctx);
+    ctx.arc = (x, y, r, ...rest) => { const [a, b] = ctx.matrix(); found.push({ r, scale: Math.hypot(a, b), alpha: ctx.globalAlpha }); return arc(x, y, r, ...rest); };
+    paint(styles, ctx, radius, { ...flags, motion: live.motion, time: 0 });
+    const aura = found.find(({ r }) => Math.abs(r - 1.36) < 1e-9);
+    // T0's flat Doppler paint, or the conic above it.
+    const disc = ctx.calls.fills.find(({ style }) => /^grad:conic|^grad:linear#\d+\(-1\.08,0,1\.08,0\)/.test(String(style)));
+    return { screen: aura ? aura.r * aura.scale : 0, alpha: aura ? aura.alpha : 0, disc: disc ? disc.alpha : 0 };
+  };
+  for (const [flags, kick] of [[{ selected: true, chosen: true }, 0], [{ active: true }, 0], [{ selected: true }, 0.5]]) {
+    const below = auraOf(5.999, flags, kick), above = auraOf(6.001, flags, kick);
+    assert.ok(below.screen > 0 && Math.abs(below.screen - above.screen) < 0.02, `the aura's reach holds (${below.screen.toFixed(3)} → ${above.screen.toFixed(3)} px)`);
+    assert.ok(Math.abs(below.alpha - above.alpha) < 0.01, `and its level (${below.alpha.toFixed(3)} → ${above.alpha.toFixed(3)})`);
+    assert.ok(Math.abs(below.disc - above.disc) < 0.01, `the disc's light holds (${below.disc.toFixed(3)} → ${above.disc.toFixed(3)})`);
+  }
+  // At rest a T0 node wears no aura, and one just past 6 px barely any: it
+  // fades in over the tier's first 1.2 px.
+  assert.equal(auraOf(5.5, {}, 0).alpha, 0, "a quiet T0 node: no aura");
+  assert.ok(auraOf(6.05, {}, 0).alpha < 0.04 && auraOf(7.3, {}, 0).alpha > 0.69, "a quiet one fades its in from 6 to 7.2 px");
 });
 
 // ===== the pack's hooks =====
@@ -385,20 +422,56 @@ test("the status ring: a spark on a tilted ellipse while running; queued, error 
   const theme = styles.theme(VOID);
   const live = record(styles, { active: true, id: "agent:watcher" });
   const ring = (status, extra = {}) => { const ctx = recordingContext(); ctx.globalAlpha = 0.9; assert.equal(styles.ring(ctx, "singularity", P, 10, TINT, { status, builder: false, ring: 14, time: live.flags.time, still: false, detail: 3, motion: live.motion, theme, ...extra }), true); assert.equal(ctx.calls.saves, ctx.calls.restores); assert.equal(ctx.globalAlpha, 0.9); return ctx; };
+  // The ellipse's arcs, the tail's strokes and the head, as drawn.
+  const parts = (ctx) => {
+    const log = plain(ctx.calls.log);
+    const arcs = log.filter(([name, x, y, r]) => name === "arc" && x === 0 && y === 0 && r === 1).map(([, , , , from, to]) => [from, to]);
+    return { arcs, tail: log.filter(([name]) => name === "lineTo").length, heads: ctx.calls.fill };
+  };
   const running = ring("running");
-  assert.equal(running.calls.stroke, 4, "the ellipse and a three-segment tail");
-  assert.equal(running.calls.fill, 1, "one spark");
+  const drawn = parts(running);
+  assert.deepEqual(drawn.arcs.map(([from, to]) => [Number(from.toFixed(6)), Number(to.toFixed(6))]), [[3.141593, 6.283185], [0, 3.141593]], "the ellipse in two halves: the far one behind the hole, then the near one");
+  const halves = running.calls.strokes.slice(0, 2).map(({ alpha }) => alpha);
+  assert.ok(Math.abs(halves[0] - halves[1] / 2) < 1e-12 && Math.abs(halves[1] - 0.9 * 0.3) < 1e-12, `the far half at half the near half's alpha (${halves})`);
+  assert.equal(running.calls.stroke, 2 + drawn.tail, "and a tail of up to three segments");
+  assert.ok(drawn.tail <= 3 && drawn.heads <= 1, "one spark");
   assert.ok(running.calls.alphas.every((alpha) => alpha <= 0.9 + 1e-12), "never above the caller's alpha");
   live.step(3);
   assert.notDeepEqual(plain(ring("running").calls.log), plain(running.calls.log), "the spark orbits");
-  assert.equal(ring("running", { detail: 1 }).calls.stroke, 2, "a small node keeps one tail segment");
+  const small = ring("running", { detail: 1 });
+  assert.equal(parts(small).arcs.length, 1, "a small node's ellipse is one stroke");
+  assert.ok(parts(small).tail <= 1, "and keeps one tail segment");
   const queued = ring("queued");
   assert.deepEqual(plain(queued.calls.log.find(([name]) => name === "setLineDash")), ["setLineDash", 2, 3], "queued: a dashed ellipse");
+  // A small agent's queued ring opens up (rounder, longer dashes; a heavier
+  // line on a pale page) so it reads as a ring, not as specks.
+  const squashOf = (ctx) => { const scale = plain(ctx.calls.log).find(([name]) => name === "scale"); return scale[2] / scale[1]; };
+  const queuedSmall = ring("queued", { detail: 1 });
+  assert.deepEqual(plain(queuedSmall.calls.log.find(([name]) => name === "setLineDash")), ["setLineDash", 3, 2.5]);
+  assert.ok(Math.abs(squashOf(queuedSmall) - 0.55) < 1e-9 && Math.abs(squashOf(queued) - 0.4) < 1e-9, "rounder when small");
+  assert.deepEqual([queuedSmall.calls.strokes[0].width, ring("queued", { detail: 1, theme: styles.theme(LIGHT) }).calls.strokes[0].width], [1, 1.2], "a heavier line on a pale page");
   const error = ring("error");
   assert.ok(error.calls.strokes.some(({ style }) => style === "rgba(255,212,121,1)"), "error: the theme's amber ellipse");
   assert.deepEqual(error.calls.texts.map(({ text }) => text), ["!"], "and its badge");
   const done = ring("done");
   assert.ok(done.calls.strokes.some(({ style }) => style === "rgba(104,236,164,1)") && done.calls.lineTo === 2, "done: a green tick badge");
+  // The badges sit in dark wells on every theme, so the "!" and the tick
+  // read on a pale page too, and the error ellipse holds against it.
+  const contrast = (one, two) => {
+    const lum = (text) => { const channel = text.match(/[\d.]+/g).slice(0, 3).map((value) => { const c = Number(value) / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }); return 0.2126 * channel[0] + 0.7152 * channel[1] + 0.0722 * channel[2]; };
+    const [a, b] = [lum(one), lum(two)].sort((x, y) => y - x);
+    return (a + 0.05) / (b + 0.05);
+  };
+  for (const palette of [LIGHT, VOID]) {
+    const bg = palette === LIGHT ? "rgba(243,240,232,1)" : "rgba(3,2,8,1)";
+    const paleError = ring("error", { theme: styles.theme(palette) }), paleDone = ring("done", { theme: styles.theme(palette) });
+    const errorWell = paleError.calls.fills[0].style, doneWell = paleDone.calls.fills[0].style;
+    assert.ok(contrast(paleError.calls.texts[0].ink, errorWell) >= 4.5, `the "!" reads in its well (${contrast(paleError.calls.texts[0].ink, errorWell).toFixed(1)}:1)`);
+    const tick = paleDone.calls.strokes.at(-1).style;
+    assert.ok(contrast(tick, doneWell) >= 4.5, `the tick reads in its well (${contrast(tick, doneWell).toFixed(1)}:1)`);
+    const ellipse = paleError.calls.strokes.find(({ width }) => width === 1.4).style;
+    assert.ok(contrast(ellipse, bg) >= 3, `the error ellipse holds against the page (${contrast(ellipse, bg).toFixed(1)}:1)`);
+  }
   // A badge pops in when the status changes (easeOutBack over 320 ms).
   live.motion.statusAt = live.flags.time - 60;
   const popping = ring("error");
@@ -449,6 +522,27 @@ test("the hub's lensing ring breathes well outside the disc; the work orbit is a
   styles.orbit(pale, "singularity", P, 12, TINT, { running: true, phase: 1, ring: 21, time: 1000, still: false, detail: 3, motion: working.motion, theme: styles.theme(LIGHT) });
   assert.ok(pale.calls.fills.every(({ style }) => luminance(style) < luminance("rgba(243,240,232,1)") - 60), "heads that read on the light theme");
   assert.ok(orbit.calls.fills.every(({ style }) => luminance(style) > 200), "and glow on the dark one");
+  // The ellipse's far half, which crosses the top of the horizon, at half
+  // the near half's alpha (above T1).
+  const halves = plain(orbit.calls.log).filter(([name, x, y, r]) => name === "arc" && x === 0 && y === 0 && r === 1).map(([, , , , from, to]) => [Number(from.toFixed(4)), Number(to.toFixed(4))]);
+  assert.deepEqual(halves, [[3.1416, 6.2832], [0, 3.1416]], "the orbit's ellipse in two halves");
+  assert.ok(Math.abs(orbit.calls.strokes[0].alpha * 2 - orbit.calls.strokes[1].alpha) < 1e-12, "the far one at half alpha");
+  // Behind the hole a comet is gone within .55 radii of its centre (the
+  // black horizon hides it), whatever the phase.
+  let hidden = 0, shown = 0;
+  for (let phase = 0; phase < 6.28; phase += 0.05) {
+    const ctx = recordingContext();
+    styles.orbit(ctx, "singularity", P, 12, TINT, { running: false, phase, ring: 14, time: 0, still: true, detail: 3, motion: null, theme });
+    const log = plain(ctx.calls.log);
+    const tilt = log.find(([name]) => name === "rotate")[1];
+    const head = log.filter(([name, , , r]) => name === "arc" && r === 1.4).at(-1);
+    if (!head || !ctx.calls.fill) { hidden += 1; continue; }
+    shown += 1;
+    const dx = head[1] - P.x, dy = head[2] - P.y;
+    const behind = -dx * Math.sin(tilt) + dy * Math.cos(tilt) < -1e-9;
+    assert.ok(!behind || Math.hypot(dx, dy) >= 12 * 0.55 - 1e-9, `phase ${phase.toFixed(2)}: no head on the black behind the hole (${Math.hypot(dx, dy).toFixed(2)} px out)`);
+  }
+  assert.ok(hidden > 0 && shown > hidden, `a tight orbit's comet hides behind the horizon for part of its turn (${hidden} of ${hidden + shown})`);
 });
 
 test("arrival implodes inside 2.25 radii; selection rings at 1.18 and the chosen node ripples", () => {
@@ -464,9 +558,27 @@ test("arrival implodes inside 2.25 radii; selection rings at 1.18 and the chosen
     return ctx.calls.log.filter(([name, , , r]) => name === "arc" && r > 12 * 0.6).map(([, , , r]) => r / 12);
   };
   for (const t of [0.05, 0.2, 0.4, 0.6, 0.8, 0.95]) assert.ok(rings(t).every((size) => size >= 0.7 - 1e-9 && size <= 2.2 + 1e-9), `t ${t}: rings between .7 and 2.2 radii`);
-  const [early] = rings(0.25), [late] = rings(0.55);
-  assert.ok(early > late, `the first ring falls inward (${early.toFixed(2)} → ${late.toFixed(2)})`);
-  assert.equal(rings(0.6).length, 2, "a second ring follows it in");
+  assert.equal(rings(0.6).length, 2, "a second ring follows the first in");
+  // The caller grows the node while this runs (idle.js: easeOutBack over
+  // the 650 ms); on screen each ring only ever falls inward, from where it
+  // shows to where it lands, and never past 2.25 final radii.
+  const grow = (t) => 1 + 2.2 * (t - 1) ** 3 + 1.2 * (t - 1) ** 2;
+  const screen = [[], []];
+  for (let k = 1; k < 200; k += 1) {
+    const t = k / 200, radius = 12 * Math.max(0.01, grow(t));
+    const ctx = recordingContext();
+    styles.arrival(ctx, "singularity", P, radius, TINT, t, { alpha: 1, time: 0, still: false, theme });
+    // The rings are the strokes in the lensing ink, first ring first.
+    const log = plain(ctx.calls.log);
+    const arcs = log.filter(([name, x, y, r, from, to]) => name === "arc" && x === P.x && y === P.y && r > radius * 0.6 && to - from > 6);
+    const gains = ctx.calls.strokes.filter(({ width }) => width === 1.5 || width === 1).map(({ width }) => width === 1.5 ? 0 : 1);
+    arcs.forEach(([, , , r], index) => { if (gains[index] !== undefined) screen[gains[index]].push([t, r / 12]); });
+  }
+  for (const [index, ring] of screen.entries()) {
+    assert.ok(ring.length > 40, `ring ${index + 1} shows over the grow`);
+    for (let k = 1; k < ring.length; k += 1) assert.ok(ring[k][1] <= ring[k - 1][1] + 1e-9, `ring ${index + 1} at t ${ring[k][0].toFixed(3)}: ${ring[k - 1][1].toFixed(3)} → ${ring[k][1].toFixed(3)} final radii, never outward`);
+    assert.ok(ring[0][1] <= 2.25 && ring.at(-1)[1] < 0.9, `ring ${index + 1} falls from ${ring[0][1].toFixed(2)} to ${ring.at(-1)[1].toFixed(2)} final radii`);
+  }
   const still = recordingContext();
   styles.arrival(still, "singularity", P, 12, TINT, 0.5, { alpha: 1, time: 0, still: true, theme });
   assert.equal(still.calls.stroke + still.calls.fill, 0, "reduced motion: no implosion");
@@ -552,7 +664,7 @@ test("wires bend under gravity with motes falling into the target; far pens and 
   assert.equal(styles.wire(tetherLike, "singularity", a, b, { ...base, tint: null }), false, "no tint: the caller's own line");
 });
 
-test("a pulse accelerates along the bend and spirals round its target; the landing implodes; the rail keeps its own pulses", () => {
+test("a pulse accelerates along the bend and is captured by its target without braking; the landing implodes and swirls; the rail's ride the bent edge", () => {
   const styles = loadNodeStyles();
   const from = { x: 20, y: 150 }, to = { x: 260, y: 40 };
   const pulse = { color: "#b9b0ff", glow: "#b9b0ff", small: false, packet: false, wave: false, start: 0, duration: 900 };
@@ -568,12 +680,37 @@ test("a pulse accelerates along the bend and spirals round its target; the landi
   assert.equal(warm.calls.saves, warm.calls.restores);
   const step = (t0, t1) => { const p0 = head(surge(t0)), p1 = head(surge(t1)); return Math.hypot(p1.x - p0.x, p1.y - p0.y); };
   assert.ok(step(0.6, 0.7) > step(0.1, 0.2) * 2, "the spark speeds up as it falls (t²)");
-  const angle = (t) => { const p = head(surge(t)); return Math.atan2(p.y - to.y, p.x - to.x); };
-  const distance = (t) => { const p = head(surge(t)); return Math.hypot(p.x - to.x, p.y - to.y); };
-  assert.ok(distance(0.85) <= 10 * 1.9 + 4 + 1e-6 && distance(0.99) < 10 * 0.8, "over the last 15% it closes in on the horizon");
-  let swept = Math.abs(angle(0.99) - angle(0.86));
-  if (swept > Math.PI) swept = 2 * Math.PI - swept;
-  assert.ok(swept > 1.5, `spiralling round it (${swept.toFixed(2)} rad)`);
+  // The capture: a 30 Hz frame of the pulse at a time over its last
+  // quarter, the head never brakes (each step at least .9 of the one
+  // before), turns at most 30° a frame, and ends inside the target's photon
+  // ring; how far it curls round the target is what its frames allow: a
+  // fast pulse dives in with a hook, a slow short one curls round.
+  const frames = (a, b, rTo, duration) => {
+    const own = { ...pulse, duration };
+    const at = (t) => { const ctx = recordingContext(); styles.surge(ctx, "singularity", a, b, t, own, { kind: "dot", time: t * duration, still: false, rTo, detail: 3, pulse: own, motion: null }); return head(ctx); };
+    const points = [];
+    for (let k = Math.round(duration / 33.3 / 4); k >= 0; k -= 1) points.push(at(1 - k * 33.3 / duration));
+    const around = (point) => Math.atan2(point.y - b.y, point.x - b.x);
+    let sweep = Math.abs(around(points.at(-1)) - around(at(0.7)));
+    if (sweep > Math.PI) sweep = 2 * Math.PI - sweep;
+    return { points, sweep, pulse: own };
+  };
+  const sweeps = [];
+  for (const [a, b, rTo, duration] of [[{ x: 100, y: 300 }, { x: 400, y: 200 }, 10, 1000], [from, to, 10, 900], [to, from, 10, 900], [{ x: 20, y: 400 }, { x: 560, y: 60 }, 14, 1400], [{ x: 200, y: 200 }, { x: 262, y: 180 }, 8, 1600], [{ x: 100, y: 100 }, { x: 140, y: 150 }, 5, 520]]) {
+    const { points, sweep } = frames(a, b, rTo, duration);
+    const steps = points.slice(1).map((point, k) => [point.x - points[k].x, point.y - points[k].y]);
+    for (let k = 1; k < steps.length; k += 1) {
+      const before = Math.hypot(...steps[k - 1]), after = Math.hypot(...steps[k]);
+      assert.ok(after >= 0.9 * before, `${b.x},${b.y} frame ${k}: the head never brakes (${before.toFixed(1)} → ${after.toFixed(1)} px)`);
+      let turn = Math.abs(Math.atan2(steps[k][1], steps[k][0]) - Math.atan2(steps[k - 1][1], steps[k - 1][0]));
+      if (turn > Math.PI) turn = 2 * Math.PI - turn;
+      assert.ok(turn <= Math.PI / 6 + 1e-9, `${b.x},${b.y} frame ${k}: it turns ${(turn * 180 / Math.PI).toFixed(1)}° (≤ 30°)`);
+    }
+    const end = points.at(-1);
+    assert.ok(Math.hypot(end.x - b.x, end.y - b.y) <= rTo * 0.55 + 1e-6, "and falls into the horizon");
+    sweeps.push(sweep);
+  }
+  assert.ok(sweeps[4] > 0.6 && sweeps[4] > 3 * sweeps[0], `a slow short pulse curls round its target (${(sweeps[4] * 180 / Math.PI).toFixed(0)}°), a fast long one dives in (${(sweeps[0] * 180 / Math.PI).toFixed(0)}°)`);
   const wave = surge(0.5, { kind: "wave" });
   assert.ok(wave.calls.quadraticCurveTo >= 1, "a wave pulse warms its bent path");
   // A pulse that runs against a wire's direction (a satellite into the hub,
@@ -592,12 +729,35 @@ test("a pulse accelerates along the bend and spirals round its target; the landi
   const warmPath = backward(0.5, { kind: "wave" }).calls.log.find(([name]) => name === "quadraticCurveTo").slice(1, 3);
   assert.ok(Math.abs(warmPath[0] - cx) < 1e-6 && Math.abs(warmPath[1] - cy) < 1e-6, "and a wave warms the same curve");
   assert.equal(surge(1, { still: true }).calls.stroke, 1, "reduced motion: one static flash of the path");
-  const rail = recordingContext();
-  assert.equal(styles.surge(rail, "singularity", from, to, 0.5, pulse, { kind: "dot", time: 0, still: false, rTo: 6, pulse, motion: null, detail: 2, rail: true }), false, "the rail keeps its own pulse");
-  assert.equal(rail.calls.log.length, 0);
-  // The landing: one ring falling into the horizon; nothing under reduced motion.
+  // The rail's pulses ride the bent edge all the way: smaller, no glow, no capture.
+  const railAt = (t) => { const ctx = recordingContext(); assert.equal(styles.surge(ctx, "singularity", from, to, t, pulse, { kind: "dot", time: t * 900, still: false, rTo: 6, pulse, motion: null, detail: 2, rail: true }), true); return ctx; };
+  for (const t of [0.2, 0.5, 0.8, 0.95, 1]) {
+    const ctx = railAt(t);
+    assert.equal(gradientsBuilt(ctx), 0, "no glow sprite on the rail");
+    const core = ctx.calls.log.filter(([name]) => name === "arc").at(-1);
+    assert.ok(Math.abs(core[3] - 0.6 * 1.7) < 1e-9, "a smaller head");
+    const miss = offWire({ x: core[1], y: core[2] });
+    assert.ok(miss < 1.5, `t ${t}: on the bent edge (${miss.toFixed(2)} px off)`);
+  }
+  // The landing: one ring falling into the horizon, and, after a pulse the
+  // capture handed over, the spark swirling once round the hole just
+  // outside its disc, from where it went in and the way it was turning.
   const radii = [0.2, 0.5, 0.8].map((u) => { const ctx = recordingContext(); assert.equal(styles.land(ctx, "singularity", to, 10, [185, 176, 255], u, { kind: "dot", time: 0, still: false, rTo: 10 }), true); assert.equal(gradientsBuilt(ctx), 0); assert.equal(ctx.calls.stroke, 1); return ctx.calls.log.find(([name]) => name === "arc")[3]; });
   assert.ok(radii[0] > radii[1] && radii[1] > radii[2] && radii[0] <= 10 * 1.9, "an implosion ring");
+  const landed = frames(from, to, 10, 900).pulse;
+  assert.ok(Number.isFinite(landed._holeAngle) && Math.abs(landed._holeDir) === 1, "the capture keeps its entry on the pulse");
+  let previous = null, turned = 0;
+  for (let k = 1; k < 12; k += 1) {
+    const u = k * 33.3 / 380, ctx = recordingContext();
+    styles.land(ctx, "singularity", to, 10, [185, 176, 255], Math.min(1, u), { kind: "dot", time: 0, still: false, rTo: 10, pulse: landed });
+    const swirl = plain(ctx.calls.log).filter(([name]) => name === "arc")[1];
+    if (u >= 1) { assert.equal(swirl, undefined, "gone once it has landed"); continue; }
+    assert.ok(swirl[3] >= 10 * 1.05 - 1e-9 && swirl[3] <= 10 * 1.5 + 1e-9, `the swirl stays outside the disc (${(swirl[3] / 10).toFixed(2)} radii)`);
+    const lead = landed._holeDir > 0 ? swirl[5] : swirl[4];
+    if (previous !== null) { assert.ok((lead - previous) * landed._holeDir > 0, "it turns the way the pulse came in"); turned += Math.abs(lead - previous); }
+    previous = lead;
+  }
+  assert.ok(turned > 4, `about a turn round the hole (${turned.toFixed(1)} rad)`);
   const stillLand = recordingContext();
   assert.equal(styles.land(stillLand, "singularity", to, 10, [185, 176, 255], 1, { still: true, rail: true }), true);
   assert.equal(stillLand.calls.log.length, 0);

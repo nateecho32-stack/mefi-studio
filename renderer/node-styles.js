@@ -599,6 +599,7 @@
   const HOLE_BLACK = Object.freeze([2, 1, 5]);
   const HOLE_NO_DASH = Object.freeze([]);
   const HOLE_QUEUE_DASH = Object.freeze([2, 3]);
+  const HOLE_QUEUE_DASH_SMALL = Object.freeze([3, 2.5]);
   const HOLE_CREW_DASH = Object.freeze([2, 5]);
   // The streak conic's bright bands, as [centre, width, alpha] triples around
   // the turn: irregular on purpose, so the turning disc never looks spoked.
@@ -618,7 +619,35 @@
   const HOLE_BEND = { cx: 0, cy: 0, len: 0 };
   // The T0 hot spot's tail sits .55 rad behind its head on the disc.
   const HOLE_SPOT_COS = Math.cos(0.55), HOLE_SPOT_SIN = Math.sin(0.55);
-  const HOLE_SPIRAL = { x0: 0, y0: 0, rho0: 0, angle0: 0, dir: 1, end: 0, rhoEnd: 0, cut: 0.85 };
+  // A pulse's path: the wire up to `sh` (reached at time `th`), then the
+  // capture swoop round the target (see holeSurgePoint).
+  const HOLE_SPIRAL = { sh: 1, th: 1, rho0: 0, angle0: 0, dir: 1, drop: 0, sweep: 0 };
+  // The disc's squash: seen from a little above its plane.
+  const HOLE_SQ = 0.34;
+  // Where a disc ellipse (radius R, squashed by HOLE_SQ) enters the horizon's
+  // circle (.52), as the angle past π on its far half; π/2 when it clears it.
+  function holeEntry(R) {
+    const share = (0.2704 / (R * R) - HOLE_SQ * HOLE_SQ) / (1 - HOLE_SQ * HOLE_SQ);
+    return share > 0 && share < 1 ? Math.acos(Math.sqrt(share)) : Math.PI / 2;
+  }
+  // The far half's wings, fixed by the squash: where the outer (1.08) and
+  // inner (.62) edges pass behind the horizon, and those points.
+  const HOLE_OUTER = holeEntry(1.08), HOLE_INNER = holeEntry(0.62);
+  const HOLE_OX = 1.08 * Math.cos(HOLE_OUTER), HOLE_OY = 1.08 * Math.sin(HOLE_OUTER);
+  const HOLE_IX = 0.62 * Math.cos(HOLE_INNER), HOLE_IY = 0.62 * Math.sin(HOLE_INNER);
+  // Each node's sparks: when spark k falls (its lag in the 3.6 s cycle) and
+  // from where (its start angle), fixed by the node's seed; a frame reads
+  // them here instead of hashing (two numbers per spark).
+  const HOLE_SPARK_SEEDS = new Map();
+  function holeSparkSeeds(seedValue) {
+    let table = HOLE_SPARK_SEEDS.get(seedValue);
+    if (table) return table;
+    if (HOLE_SPARK_SEEDS.size >= 512) HOLE_SPARK_SEEDS.clear();
+    table = new Float64Array(HOLE_SPARK_MAX * 2);
+    for (let k = 0; k < HOLE_SPARK_MAX; k += 1) { table[k * 2] = hash(seedValue, k); table[k * 2 + 1] = TAU * hash(seedValue, k + 7); }
+    HOLE_SPARK_SEEDS.set(seedValue, table);
+    return table;
+  }
 
   const holeFrac = (value) => value - Math.floor(value);
   // Where a node is in a period of `period` animation seconds, offset by its seed.
@@ -693,6 +722,15 @@
     doppler.addColorStop(0.7, rgba(tint, 0.58));
     doppler.addColorStop(0.9, rgba(tint, 1));
     doppler.addColorStop(1, rgba(beam, 1));
+    // The same light for a node under 6 px, across the disc from left to
+    // right: at that size a conic reads no differently and costs a canvas
+    // several times more to record and to paint.
+    const flat = ctx.createLinearGradient(-1.08, 0, 1.08, 0);
+    flat.addColorStop(0, rgba(beam, 1));
+    flat.addColorStop(0.2, rgba(tint, 1));
+    flat.addColorStop(0.5, rgba(tint, 0.6));
+    flat.addColorStop(0.8, rgba(tint, 0.45));
+    flat.addColorStop(1, rgba(recede, 0.36));
     // The plasma streaks that turn (a banded sweep without conic support).
     const streaks = conic ? ctx.createConicGradient(0, 0, 0) : ctx.createLinearGradient(-1.1, 0, 1.1, 0);
     streaks.addColorStop(0, rgba(glint, 0));
@@ -731,7 +769,7 @@
     jet.addColorStop(0.78, rgba(beam, 0.45));
     jet.addColorStop(1, rgba(tint, 0));
     return cachePut(ctx, tones.key, {
-      tones, aura, doppler, streaks, edge, core, photon, jet,
+      tones, aura, doppler, flat, streaks, edge, core, photon, jet,
       // Infalling matter: a whitened glint on a dark page, a deep beam on a pale one.
       spark: rgba(tones.light ? beam : glint, 0.8), knot: rgba(rim, 0.95), spot: rgba(rim, 1), black: rgba(HOLE_BLACK, 1),
       ring: tones.light ? rgba(tint, 1) : photon, glow: rgba(tint, 1), hot: rgba(hot, 1), lens: rgba(lens, 1),
@@ -753,27 +791,28 @@
   // along a spiral (angle decreasing, with the disc), faster as it falls; its
   // streak grows from nothing, lengthens with its speed and closes up before
   // it vanishes.
-  function holeSparkPoint(u, start, sq, at) {
+  function holeSparkPoint(u, start, at) {
     const rest = 1 - u;
     const rho = 0.52 + 0.6 * rest * Math.sqrt(rest);
     const phi = start - 4.5 * u * Math.sqrt(u);
     const sin = Math.sin(phi);
     HOLE_SPARKS[at] = rho * Math.cos(phi);
-    HOLE_SPARKS[at + 1] = rho * sin * sq;
+    HOLE_SPARKS[at + 1] = rho * sin * HOLE_SQ;
     return sin;
   }
-  function holeSparkField(seedValue, clock, still, count, sq) {
+  function holeSparkField(seedValue, clock, still, count) {
     const n = Math.min(HOLE_SPARK_MAX, Math.ceil(count - 1e-9));
+    const seeds = holeSparkSeeds(seedValue);
     for (let k = 0; k < n; k += 1) {
       const at = k * 5, presence = clamp01(count - k);
-      const lag = hash(seedValue, k), start = TAU * hash(seedValue, k + 7);
+      const lag = seeds[k * 2], start = seeds[k * 2 + 1];
       const u = still ? 0.12 + 0.76 * lag : holeFrac(clock / 3.6 + lag);
       // A streak spans at most ~.45 rad of its spiral (short near the
       // horizon, where it sweeps fastest), growing in and closing up.
       const length = Math.min(u, Math.min(0.12, 0.067 / Math.sqrt(u + 0.01)) * presence * Math.min(1, (1 - u) / 0.18));
       if (!(length > 0.002)) { HOLE_SPARKS[at + 4] = 0; continue; }
-      holeSparkPoint(u - length, start, sq, at);
-      const near = holeSparkPoint(u, start, sq, at + 2) > 0;
+      holeSparkPoint(u - length, start, at);
+      const near = holeSparkPoint(u, start, at + 2) > 0;
       // A spark behind the horizon and already inside its shadow is hidden.
       const hx = HOLE_SPARKS[at + 2], hy = HOLE_SPARKS[at + 3];
       HOLE_SPARKS[at + 4] = near ? 2 : hx * hx + hy * hy < 0.27 ? 0 : 1;
@@ -806,12 +845,6 @@
     }
     if (edge > 0) { ctx.globalAlpha = alpha * edge; ctx.fillStyle = paints.edge; ctx.fill(); }
   }
-  // Where a disc ellipse (radius R, squashed by sq) enters the horizon's
-  // circle (.52), as the angle past π on its far half; π/2 when it clears it.
-  function holeEntry(R, sq) {
-    const share = (0.2704 / (R * R) - sq * sq) / (1 - sq * sq);
-    return share > 0 && share < 1 ? Math.acos(Math.sqrt(share)) : Math.PI / 2;
-  }
   // The far half of the disc (upper, behind the horizon) and its image lensed
   // up over the top of the horizon: a crescent hugging the photon ring,
   // thickest on top and tapering into the disc at both sides. One path, so
@@ -821,65 +854,74 @@
   // (closed by a chord a hair inside it), so nothing is painted under the
   // shadow and a node at rest alpha keeps it black. The fill closes every
   // subpath itself.
-  function holeFar(ctx, paints, alpha, sq, disc, streak, spin) {
+  function holeFar(ctx, paints, alpha, disc, streak, spin) {
     ctx.beginPath();
     ctx.arc(0, 0, 0.74, Math.PI + 0.26, TAU - 0.26);
     ctx.arc(0, 0, 0.585, TAU - 0.04, Math.PI + 0.04, true);
-    ctx.scale(1, sq);
-    const outer = holeEntry(1.08, sq), inner = holeEntry(0.62, sq);
-    const ix = 0.62 * Math.cos(inner), iy = 0.62 * Math.sin(inner);
+    ctx.scale(1, HOLE_SQ);
     ctx.moveTo(-1.08, 0);
-    ctx.arc(0, 0, 1.08, Math.PI, Math.PI + outer);
-    ctx.lineTo(-ix, -iy);
-    ctx.arc(0, 0, 0.62, Math.PI + inner, Math.PI, true);
-    ctx.moveTo(1.08 * Math.cos(outer), -1.08 * Math.sin(outer));
-    ctx.arc(0, 0, 1.08, TAU - outer, TAU);
+    ctx.arc(0, 0, 1.08, Math.PI, Math.PI + HOLE_OUTER);
+    ctx.lineTo(-HOLE_IX, -HOLE_IY);
+    ctx.arc(0, 0, 0.62, Math.PI + HOLE_INNER, Math.PI, true);
+    ctx.moveTo(HOLE_OX, -HOLE_OY);
+    ctx.arc(0, 0, 1.08, TAU - HOLE_OUTER, TAU);
     ctx.lineTo(0.62, 0);
-    ctx.arc(0, 0, 0.62, TAU, TAU - inner, true);
+    ctx.arc(0, 0, 0.62, TAU, TAU - HOLE_INNER, true);
     holeDiscFills(ctx, paints, alpha, disc, streak, 0, spin);
-    ctx.scale(1, 1 / sq);
+    ctx.scale(1, 1 / HOLE_SQ);
   }
   // The near half (lower), crossing in front of the horizon.
-  function holeNear(ctx, paints, alpha, sq, disc, streak, edge, spin) {
-    ctx.scale(1, sq);
+  function holeNear(ctx, paints, alpha, disc, streak, edge, spin) {
+    ctx.scale(1, HOLE_SQ);
     ctx.beginPath();
     ctx.arc(0, 0, 1.08, 0, Math.PI); ctx.arc(0, 0, 0.62, Math.PI, 0, true);
     holeDiscFills(ctx, paints, alpha, disc, streak, edge, spin);
-    ctx.scale(1, 1 / sq);
+    ctx.scale(1, 1 / HOLE_SQ);
   }
-  // T0 (under 6 px, most todos): a tiny ringed planet in at most 36 canvas
-  // operations, dispatcher included. The aura (its breathe is invisible this
-  // small; the lit level rides its alpha), the disc's halves traced as
-  // ellipses (no squashing transform: the fixed Doppler light alone), the
-  // horizon and a solid photon ring, and one hot spot riding the disc, drawn
-  // behind the horizon or in front of it. The spot and the ring share one
-  // stroke style and width, so whichever comes second sets neither.
-  function holeTiny(ctx, paints, base, lit, kick, sq, spin, nearGain, radius, horizon) {
-    const glow = Math.min(1, 0.78 + 0.22 * lit + 0.3 * kick);
-    ctx.globalAlpha = base * glow;
-    ctx.beginPath(); ctx.arc(0, 0, 1.72, 0, TAU); ctx.fillStyle = paints.aura; ctx.fill();
-    ctx.beginPath(); ctx.ellipse(0, 0, 1.08, 1.08 * sq, 0, Math.PI, TAU); ctx.ellipse(0, 0, 0.62, 0.62 * sq, 0, TAU, Math.PI, true);
-    ctx.fillStyle = paints.doppler; ctx.fill();
+  // T0 (under 6 px, most todos): a tiny ringed planet in 23 canvas
+  // operations at rest, dispatcher included (a board draws a hundred of
+  // them). The horizon with a solid photon ring stroked on its own path,
+  // then the whole visible disc as ONE path in front of it: the outer edge
+  // from the far half's left wing round the near half to its right wing, a
+  // chord along the horizon's edge, the inner edge back, and the fill's own
+  // closing chord; the part behind the horizon is never traced, so the near
+  // half crosses the shadow and the far half passes behind it. Its Doppler
+  // light runs left to right (a conic reads no differently at this size and
+  // costs a software canvas several times more). A hot spot rides the disc,
+  // hidden while it is behind the horizon; it shares the ring's stroke style
+  // and width. The aura only while lit or kicked (it fades in above T0 as a
+  // node grows past 6 px, so nothing pops at the cut), cut at 1.36 where its
+  // last stops are too faint to show. The frame is sized by the aura exactly
+  // as above T0: `grow` (1/aura) maps the body's radii into it and `unit` is
+  // one pixel there.
+  function holeTiny(ctx, paints, base, glow, disc, spin, unit, horizon, grow) {
+    if (glow > 0.01) {
+      ctx.globalAlpha = base * glow;
+      ctx.beginPath(); ctx.arc(0, 0, 1.36, 0, TAU); ctx.fillStyle = paints.aura; ctx.fill();
+    }
+    const shadow = horizon * grow;
+    ctx.globalAlpha = base;
+    ctx.beginPath(); ctx.arc(0, 0, shadow, 0, TAU); ctx.fillStyle = paints.black; ctx.fill();
+    ctx.strokeStyle = paints.spot; ctx.lineWidth = 0.9 * unit; ctx.stroke();
+    const outer = 1.08 * grow, inner = 0.62 * grow, reach = 0.86 * grow;
+    ctx.globalAlpha = base * disc;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, outer, outer * HOLE_SQ, 0, Math.PI + HOLE_OUTER, -HOLE_OUTER, true);
+    ctx.lineTo(HOLE_IX * grow, -HOLE_IY * grow * HOLE_SQ);
+    ctx.ellipse(0, 0, inner, inner * HOLE_SQ, 0, -HOLE_INNER, Math.PI + HOLE_INNER);
+    ctx.fillStyle = paints.flat; ctx.fill();
     // The spot's head, and its tail .55 rad behind it on the disc.
     const angle = 2.3 - spin, cos = Math.cos(angle), sin = Math.sin(angle);
-    const hx = 0.86 * cos, hy = 0.86 * sq * sin;
-    const tx = 0.86 * (cos * HOLE_SPOT_COS - sin * HOLE_SPOT_SIN), ty = 0.86 * sq * (sin * HOLE_SPOT_COS + cos * HOLE_SPOT_SIN);
-    const near = sin > 0, width = 0.9 / radius;
-    if (!near) {
-      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy);
-      ctx.strokeStyle = paints.spot; ctx.lineWidth = width; ctx.stroke();
-    }
-    ctx.globalAlpha = base;
-    ctx.beginPath(); ctx.arc(0, 0, horizon, 0, TAU); ctx.fillStyle = paints.black; ctx.fill();
-    ctx.beginPath(); ctx.arc(0, 0, horizon + 0.03, 0, TAU);
-    if (near) { ctx.strokeStyle = paints.spot; ctx.lineWidth = width; }
-    ctx.stroke();
-    ctx.globalAlpha = base * glow * nearGain;
-    ctx.beginPath(); ctx.ellipse(0, 0, 1.08, 1.08 * sq, 0, 0, Math.PI); ctx.ellipse(0, 0, 0.62, 0.62 * sq, 0, Math.PI, 0, true);
-    ctx.fillStyle = paints.doppler; ctx.fill();
-    if (near) { ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke(); }
+    const hx = reach * cos, hy = reach * HOLE_SQ * sin;
+    const tx = reach * (cos * HOLE_SPOT_COS - sin * HOLE_SPOT_SIN), ty = reach * HOLE_SQ * (sin * HOLE_SPOT_COS + cos * HOLE_SPOT_SIN);
+    const hidden = shadow * shadow;
+    if (sin < 0 && (hx * hx + hy * hy < hidden || tx * tx + ty * ty < hidden)) return;
+    ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(hx, hy); ctx.stroke();
   }
 
+  // The body. The dispatcher's save()/restore() hands the canvas back, so
+  // the body keeps its own pair only for the hub, whose monogram is set in
+  // the caller's frame after it.
   function paintSingularity(ctx, p, radius, tint, o, m) {
     const currentTheme = o.theme ?? INK_DEFAULTS;
     const paints = holePaints(ctx, tint, currentTheme);
@@ -887,39 +929,48 @@
     const detail = Number.isFinite(o.detail) ? o.detail : 3;
     const base = o.alpha;
     const lit = holeLevel(m.lit, o.active || o.selected ? 1 : 0);
-    const work = holeLevel(m.work, o.active ? 1 : 0);
-    const sel = holeLevel(m.sel, o.selected ? 1 : 0);
     const kick = still ? 0 : holeLevel(m.kick, 0);
     const seedValue = holeSeed(m);
     const clock = still || !Number.isFinite(m.clock) ? 0 : m.clock;
-    const time = still ? 0 : o.time;
     const tilt = holeTilt(seedValue), cos = Math.cos(tilt), sin = Math.sin(tilt);
-    const sq = still ? 0.34 : 0.34 * (1 + 0.06 * Math.sin(TAU * holePhase(clock, seedValue, 9)));
     const spin = TAU * holePhase(clock, seedValue, 4);
     const nearGain = o.glyph ? 0.4 : 1;
     // The hub's monogram (a fixed 10 px glyph) always sits on black: a small
     // hub widens its horizon to ~6.5 px (never past 1.7 radii).
-    const horizon = o.monogram ? Math.min(1.7, Math.max(0.52, 6.5 / radius)) : 0.52;
-    ctx.save();
+    const monogram = o.monogram === true;
+    const horizon = monogram ? Math.min(1.7, Math.max(0.52, 6.5 / radius)) : 0.52;
+    // The aura swells when lit and gulps inward when a pulse lands (and
+    // breathes above T0); it is round, so it is drawn in the tilted frame,
+    // which one transform places, sizes and tilts.
+    // At rest the aura fades in as a node grows past 6 px (T0 wears it only
+    // while lit or kicked).
+    const glow = Math.min(1, 0.7 * tierIn(radius, 1) + 0.3 * lit + 0.4 * kick);
+    const disc = 0.85 + 0.15 * lit;
+    const swell = (0.88 + 0.12 * lit) * (1 - 0.6 * kick * (1 - kick));
+    if (monogram) ctx.save();
     if (detail <= 0) {
-      // One transform places, sizes and tilts the node.
-      ctx.transform(radius * cos, radius * sin, -radius * sin, radius * cos, p.x, p.y);
-      holeTiny(ctx, paints, base, lit, kick, sq, spin, nearGain, radius, horizon);
-      ctx.restore();
-      voidMonogram(ctx, p, o, paints.tones.ink);
+      const size = radius * swell;
+      ctx.transform(size * cos, size * sin, -size * sin, size * cos, p.x, p.y);
+      // A glyph (or a small hub's monogram) reads through a faint disc.
+      holeTiny(ctx, paints, base, glow, disc * (o.glyph || horizon > 0.52 ? 0.4 : 1), spin, 1 / size, horizon, 1 / swell);
+      if (monogram) { ctx.restore(); voidMonogram(ctx, p, o, paints.tones.ink); }
       return;
     }
-    // 1. The aura breathes, swells when lit and gulps inward when a pulse
-    // lands; it is round, so it is drawn in the tilted frame, scaled once.
-    const breathe = still ? 1 : 1 + 0.02 * Math.sin(TAU * holePhase(clock, seedValue, 4.6));
-    const aura = (0.88 + 0.12 * lit) * breathe * (1 - 0.6 * kick * (1 - kick));
+    const work = holeLevel(m.work, o.active ? 1 : 0);
+    const sel = holeLevel(m.sel, o.selected ? 1 : 0);
+    const time = still ? 0 : o.time;
+    // 1. The aura, breathing; cut at 1.36 like T0's (its last stops, ≤ .03,
+    // never show, and the cut spares a software canvas a third of its area).
+    const aura = still ? swell : swell * (1 + 0.02 * tierIn(radius, 1) * Math.sin(TAU * holePhase(clock, seedValue, 4.6)));
     const size = radius * aura;
     ctx.transform(size * cos, size * sin, -size * sin, size * cos, p.x, p.y);
-    ctx.globalAlpha = base * Math.min(1, 0.7 + 0.3 * lit + 0.4 * kick);
-    ctx.beginPath(); ctx.arc(0, 0, 1.72, 0, TAU); ctx.fillStyle = paints.aura; ctx.fill();
+    if (glow > 0.01) {
+      ctx.globalAlpha = base * glow;
+      ctx.beginPath(); ctx.arc(0, 0, 1.36, 0, TAU); ctx.fillStyle = paints.aura; ctx.fill();
+    }
     ctx.scale(1 / aura, 1 / aura);
     const sparks = holeSparkCount(detail, radius, work);
-    const n = sparks > 0 ? holeSparkField(seedValue, clock, still, sparks, sq) : 0;
+    const n = sparks > 0 ? holeSparkField(seedValue, clock, still, sparks) : 0;
     const jets = work > 0.02 ? work * 0.9 * tierIn(radius, 1) : 0;
     const knots = detail >= 3 ? jets * tierIn(radius, 3) : 0;
     // Round caps only for the short strokes (sparks, knots).
@@ -947,13 +998,13 @@
       }
     }
     // 3. The far half of the disc and its lensed image, then the sparks
-    // behind the horizon (brighter while it works).
-    const disc = 0.85 + 0.15 * lit;
+    // behind the horizon (brighter while it works). At T1 (6–8.5 px) the far
+    // half is mostly behind the horizon: it keeps the Doppler light alone.
     const streak = (0.72 + 0.28 * work) * tierIn(radius, 1);
     const edge = detail >= 2 ? Math.min(1, 0.8 + 0.2 * lit + 0.35 * kick) * tierIn(radius, 2) : 0;
     const sparkGain = paints.tones.light ? 0.4 + 0.3 * work : 0.55 + 0.35 * work;
     const sparkWidth = Math.max(0.055, 0.8 / radius);
-    holeFar(ctx, paints, base, sq, disc, streak, spin);
+    holeFar(ctx, paints, base, disc, detail >= 2 ? streak * tierIn(radius, 2) : 0, spin);
     if (n) holeSparkStroke(ctx, n, 1, paints.spark, base * sparkGain, sparkWidth);
     // 4. The horizon, then the photon ring (thicker when selected, flashing
     // when a pulse lands).
@@ -964,23 +1015,52 @@
     ctx.strokeStyle = paints.photon; ctx.stroke();
     // 5. The near half crossing in front of the horizon (faint on a node that
     // wears a glyph, so the glyph reads), then the sparks in front.
-    holeNear(ctx, paints, base * nearGain, sq, disc, streak, edge, spin);
+    holeNear(ctx, paints, base * nearGain, disc, streak, edge, spin);
     if (n) holeSparkStroke(ctx, n, 2, paints.spark, base * nearGain * sparkGain, sparkWidth);
-    ctx.restore();
-    voidMonogram(ctx, p, o, paints.tones.ink);
+    if (monogram) { ctx.restore(); voidMonogram(ctx, p, o, paints.tones.ink); }
   }
 
   // The hooks' shared frame: the node's own tilt and phase, whatever `o` carries.
   const holeTheme = (o) => o.theme ?? INK_DEFAULTS;
   const holeStill = (o) => o.still === true || o.motion?.still === true;
   const holeBase = (ctx) => Number.isFinite(ctx.globalAlpha) ? ctx.globalAlpha : 1;
-  // A tilted ellipse through the transform: the path is built in the squashed
-  // frame and stroked after restore(), so its line keeps an even width.
-  function holeEllipsePath(ctx, p, rx, squash, tilt) {
+  // A tilted ellipse (or the arc of it from `from` to `to`) through the
+  // transform: the path is built in the squashed frame and stroked after
+  // restore(), so its line keeps an even width.
+  function holeEllipsePath(ctx, p, rx, squash, tilt, from = 0, to = TAU) {
     ctx.save();
     ctx.translate(p.x, p.y); ctx.rotate(tilt); ctx.scale(rx, rx * squash);
-    ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU);
+    ctx.beginPath(); ctx.arc(0, 0, 1, from, to);
     ctx.restore();
+  }
+  // A ring's ellipse, stroked in the current style and width: its far half
+  // (behind the hole, where it would cross the black horizon) at half the
+  // near half's alpha, above T1; one stroke at T0 and T1.
+  function holeRingStroke(ctx, p, rx, squash, tilt, alpha, detail) {
+    if (detail < 2) {
+      holeEllipsePath(ctx, p, rx, squash, tilt);
+      ctx.globalAlpha = alpha; ctx.stroke();
+      return;
+    }
+    holeEllipsePath(ctx, p, rx, squash, tilt, Math.PI, TAU);
+    ctx.globalAlpha = alpha * 0.5; ctx.stroke();
+    holeEllipsePath(ctx, p, rx, squash, tilt, 0, Math.PI);
+    ctx.globalAlpha = alpha; ctx.stroke();
+  }
+  // The state badges' wells: dark on every theme (the amber or green ink
+  // on them reads ~9.5:1 on a pale page as on a dark one, and they sit by a
+  // black horizon), and the error ring's ink, deepened on a pale page so it
+  // holds 3:1 against it. Per theme.
+  const holeWellMemo = new WeakMap();
+  function holeWells(currentTheme) {
+    let wells = holeWellMemo.get(currentTheme);
+    if (wells) return wells;
+    wells = {
+      amber: mix(currentTheme.amber, HOLE_BLACK, 0.8), done: mix(currentTheme.done, HOLE_BLACK, 0.8),
+      error: currentTheme.light ? mix(currentTheme.amber, currentTheme.hi, 0.45) : currentTheme.amber,
+    };
+    holeWellMemo.set(currentTheme, wells);
+    return wells;
   }
   // A point on a tilted ellipse (cos and sin of the tilt passed in).
   function holeOrbitPoint(p, rx, ry, cos, sin, angle) {
@@ -990,25 +1070,26 @@
     HOLE_POINT.depth = s;
     return HOLE_POINT;
   }
-  // How visible a point on a ring is when it swings behind the body: faint
-  // where the horizon hides it, full clear of the body's width.
-  const holeHidden = (point, p, radius) => point.depth >= 0 ? 1 : 0.3 + 0.7 * clamp01((Math.abs(point.x - p.x) - 0.45 * radius) / (0.5 * radius));
+  // How visible a point on a ring is when it swings behind the body: gone
+  // behind the horizon's shadow (within .55 radii), back in full by .75.
+  const holeHidden = (point, p, radius) => point.depth >= 0 ? 1 : clamp01((Math.hypot(point.x - p.x, point.y - p.y) - 0.55 * radius) / (0.2 * radius));
   // A comet on a tilted ellipse: a head and a three-segment tail fading
   // behind it (the motion runs with the disc, angle decreasing).
   function holeComet(ctx, p, radius, rx, ry, cos, sin, angle, head, tail, width, alpha, segments, size) {
     let px = 0, py = 0;
     for (let index = segments; index >= 0; index -= 1) {
       const point = holeOrbitPoint(p, rx, ry, cos, sin, angle + index * 0.3);
-      if (index < segments) {
-        const fade = holeHidden(point, p, radius);
+      const fade = index < segments ? holeHidden(point, p, radius) : 0;
+      if (fade > 0.004) {
         ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(point.x, point.y);
         ctx.globalAlpha = alpha * fade * (0.85 - 0.25 * index); ctx.strokeStyle = tail; ctx.lineWidth = width * (1 - 0.25 * index); ctx.stroke();
       }
       px = point.x; py = point.y;
     }
     // HOLE_POINT holds the head now (index 0 came last).
-    const point = HOLE_POINT;
-    ctx.globalAlpha = alpha * holeHidden(point, p, radius);
+    const point = HOLE_POINT, shown = holeHidden(point, p, radius);
+    if (shown <= 0.004) return;
+    ctx.globalAlpha = alpha * shown;
     ctx.beginPath(); ctx.arc(point.x, point.y, size, 0, TAU); ctx.fillStyle = head; ctx.fill();
   }
   // A small state badge at the node's upper right (error "!", done tick),
@@ -1041,35 +1122,40 @@
     const seedValue = holeSeed(m), tilt = holeTilt(seedValue), time = Number.isFinite(o.time) ? o.time : 0;
     const ring = Number.isFinite(o.ring) ? o.ring : radius + 4;
     const base = holeBase(ctx);
+    const detail = Number.isFinite(o.detail) ? o.detail : 3;
     ctx.save();
     if (running) {
       const tones = holeTones(tint, currentTheme);
-      holeEllipsePath(ctx, p, ring, 0.4, tilt);
-      ctx.globalAlpha = base * 0.3; ctx.strokeStyle = rgba(tint, 1); ctx.lineWidth = 0.8; ctx.stroke();
+      ctx.strokeStyle = rgba(tint, 1); ctx.lineWidth = 0.8;
+      holeRingStroke(ctx, p, ring, 0.4, tilt, base * 0.3, detail);
       const angle = still ? 2.4 : 2.4 - TAU * holePhase(holeClock(m, o), seedValue, 5.6);
-      const segments = (o.detail ?? 3) >= 2 ? 3 : 1;
+      const segments = detail >= 2 ? 3 : 1;
       ctx.lineCap = "round";
       // A white-hot head on a dark page, a deep one on a pale page.
       holeComet(ctx, p, radius, ring, ring * 0.4, Math.cos(tilt), Math.sin(tilt), angle, rgba(tones.light ? tones.rim : tones.ink, 1), rgba(tones.lens, 1), 1.6, base, segments, 1.35);
     } else if (status === "queued") {
-      holeEllipsePath(ctx, p, ring, 0.4, tilt);
-      ctx.setLineDash?.(HOLE_QUEUE_DASH);
+      // A small agent's ring opens up (rounder, longer dashes), so it reads
+      // as a ring and not as specks.
+      const small = detail <= 1;
+      holeEllipsePath(ctx, p, ring, small ? 0.55 : 0.4, tilt);
+      ctx.setLineDash?.(small ? HOLE_QUEUE_DASH_SMALL : HOLE_QUEUE_DASH);
       ctx.lineDashOffset = still ? 0 : -((time / 90 + seedValue * 5) % 5);
-      ctx.globalAlpha = base * 0.6; ctx.strokeStyle = rgba(tint, 1); ctx.lineWidth = 1; ctx.stroke();
+      ctx.globalAlpha = base * 0.6; ctx.strokeStyle = rgba(tint, 1); ctx.lineWidth = small && currentTheme.light ? 1.2 : 1; ctx.stroke();
       ctx.setLineDash?.(HOLE_NO_DASH);
     } else {
       const done = status === "done";
+      const wells = holeWells(currentTheme);
       const statusAt = m && Number.isFinite(m.statusAt) ? m.statusAt : -1e9;
       const pop = still ? 1 : Math.max(0.01, easeOutBack((time - statusAt) / 320));
       if (!done) {
         const pulse = still ? 1 : 0.72 + 0.28 * Math.sin(TAU * (time / 850 + seedValue));
         holeEllipsePath(ctx, p, ring, 0.4, tilt);
-        ctx.globalAlpha = base * 0.85 * pulse; ctx.strokeStyle = rgba(currentTheme.amber, 1); ctx.lineWidth = 1.4; ctx.stroke();
+        ctx.globalAlpha = base * 0.85 * pulse; ctx.strokeStyle = rgba(wells.error, 1); ctx.lineWidth = 1.4; ctx.stroke();
         ctx.globalAlpha = base;
-        holeBadge(ctx, p, radius, pop, currentTheme.amberWell, currentTheme.amber, currentTheme.amber, false);
+        holeBadge(ctx, p, radius, pop, wells.amber, currentTheme.amber, currentTheme.amber, false);
       } else {
         ctx.globalAlpha = base;
-        holeBadge(ctx, p, radius, pop, currentTheme.doneWell, currentTheme.done, currentTheme.done, true);
+        holeBadge(ctx, p, radius, pop, wells.done, currentTheme.done, currentTheme.done, true);
       }
     }
     ctx.restore();
@@ -1118,8 +1204,8 @@
     const base = holeBase(ctx);
     const detail = o.detail ?? 3;
     ctx.save();
-    holeEllipsePath(ctx, p, ring, 0.36, tilt);
-    ctx.globalAlpha = base * 0.24; ctx.strokeStyle = rgba(colour, 1); ctx.lineWidth = 0.8; ctx.stroke();
+    ctx.strokeStyle = rgba(colour, 1); ctx.lineWidth = 0.8;
+    holeRingStroke(ctx, p, ring, 0.36, tilt, base * 0.24, detail);
     const phase = still ? (Number.isFinite(o.phase) ? o.phase : Math.PI / 3) : m && Number.isFinite(m.orbit) ? m.orbit : Number.isFinite(o.phase) ? o.phase : 0;
     const cos = Math.cos(tilt), sin = Math.sin(tilt);
     const comets = o.running === false || detail <= 1 ? 1 : 2;
@@ -1133,9 +1219,11 @@
     return true;
   }
 
-  // Arrival, an implosion: two rings fall in from 2.4 radii to .7 (fading in
-  // only once inside 2.2, so nothing reaches past it), the aura rushes in
-  // behind them, and the photon ring flashes as they land.
+  // Arrival, an implosion: two rings fall in from 2.2 radii to .7, the aura
+  // rushes in behind them, and the photon ring flashes as the first lands.
+  // The caller grows the node (easeOutBack over the 650 ms) while this runs,
+  // so the rings wait until the growth has mostly happened (t .28, then
+  // .44): from there each ring's size on screen only ever shrinks.
   function arrivalSingularity(ctx, p, radius, tint, t01, o) {
     if (holeStill(o)) return true;
     const t = clamp01(t01), paints = holePaints(ctx, tint, holeTheme(o));
@@ -1146,15 +1234,15 @@
       const scale = radius * (1.25 - 0.6 * t);
       ctx.save(); ctx.translate(p.x, p.y); ctx.scale(scale, scale);
       ctx.globalAlpha = alpha * 0.55 * gulp;
-      ctx.beginPath(); ctx.arc(0, 0, 1.72, 0, TAU); ctx.fillStyle = paints.aura; ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, 1.36, 0, TAU); ctx.fillStyle = paints.aura; ctx.fill();
       ctx.restore();
     }
     ctx.strokeStyle = paints.lens;
     for (let index = 0; index < 2; index += 1) {
-      const u = (t - index * 0.25) / 0.75;
+      const u = (t - 0.28 - index * 0.16) / 0.56;
       if (!(u > 0 && u < 1)) continue;
-      const rest = 1 - u, size = 0.7 + 1.7 * rest * rest;
-      const gain = 0.7 * Math.sin(Math.PI * u) * clamp01((2.2 - size) / 0.4);
+      const rest = 1 - u, size = 0.7 + 1.5 * rest * rest;
+      const gain = 0.7 * Math.sin(Math.PI * u);
       if (gain <= 0.004) continue;
       ctx.globalAlpha = alpha * gain; ctx.lineWidth = 1.5 - 0.5 * index;
       ctx.beginPath(); ctx.arc(p.x, p.y, radius * size, 0, TAU); ctx.stroke();
@@ -1313,7 +1401,8 @@
     holeColours.set(key, triple);
     return triple;
   }
-  // A pulse colour's spark: a cached unit radial per canvas (built once).
+  // A pulse colour's spark, per canvas: its inks, and a unit radial glow
+  // built the first time a pulse there needs one (the rail's never do).
   const holeSparkKeys = new WeakMap();
   function holeSparkPaints(ctx, rgb) {
     let key = holeSparkKeys.get(rgb);
@@ -1321,78 +1410,109 @@
     const cached = cacheGet(ctx, key);
     if (cached) return cached;
     const hot = mix(rgb, WHITE, 0.55);
-    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-    glow.addColorStop(0, rgba(hot, 0.9));
-    glow.addColorStop(0.35, rgba(rgb, 0.4));
-    glow.addColorStop(1, rgba(rgb, 0));
-    return cachePut(ctx, key, { glow, head: rgba(hot, 1), tail: rgba(rgb, 1), line: rgba(rgb, 1) });
+    return cachePut(ctx, key, { rgb, hot, glow: null, head: rgba(hot, 1), tail: rgba(rgb, 1), line: rgba(rgb, 1) });
   }
-  // Where a pulse is at t: accelerating (t²) along the bent path until 85%,
-  // then spiralling round the target, falling toward its horizon.
+  function holeSparkGlow(ctx, paints) {
+    if (paints.glow) return paints.glow;
+    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    glow.addColorStop(0, rgba(paints.hot, 0.9));
+    glow.addColorStop(0.35, rgba(paints.rgb, 0.4));
+    glow.addColorStop(1, rgba(paints.rgb, 0));
+    paints.glow = glow;
+    return glow;
+  }
+  // Where a pulse is at t: speeding up (t²) along the bent wire until `sh`,
+  // reached at `th`, then captured: its distance to the target falls at the
+  // speed the wire handed it (`th` is set so the two match) while its angle
+  // round the target eases in (w²), so the head never brakes and turns
+  // smoothly into the horizon (.55 of the target's radius).
   function holeSurgePoint(from, to, t) {
-    if (t <= HOLE_SPIRAL.cut) {
-      const k = t / HOLE_SPIRAL.cut;
-      return holeWirePoint(from, to, null, HOLE_SPIRAL.end * k * k);
+    const path = HOLE_SPIRAL;
+    if (t <= path.th) {
+      const k = t / path.th;
+      return holeWirePoint(from, to, null, path.sh * k * k);
     }
-    const v = (t - HOLE_SPIRAL.cut) / (1 - HOLE_SPIRAL.cut);
-    const rho = HOLE_SPIRAL.rho0 + (HOLE_SPIRAL.rhoEnd - HOLE_SPIRAL.rho0) * v * (0.35 + 0.65 * v);
-    const angle = HOLE_SPIRAL.angle0 + HOLE_SPIRAL.dir * 2.6 * v;
+    const w = (t - path.th) / (1 - path.th);
+    const rho = path.rho0 - path.drop * w;
+    const angle = path.angle0 + path.dir * path.sweep * w * w;
     HOLE_POINT.x = to.x + Math.cos(angle) * rho;
     HOLE_POINT.y = to.y + Math.sin(angle) * rho;
     return HOLE_POINT;
   }
+  // The capture: the wire hands the pulse over ~3 radii out (never more than
+  // .4 of the wire); the swoop lasts as long as the wire's speed allows, and
+  // it may turn round the target only as far as its frames (30 Hz over the
+  // pulse's own duration) turn smoothly, ≤ ~25° a frame: a fast pulse dives
+  // in with a hook, a slow or short one curls round the target (up to 150°).
+  // The landing's swirl carries the fall on from where the head went in
+  // (the entry is kept on the pulse, like its parsed colour).
+  function holeCapture(from, to, bend, rTo, pulse) {
+    const path = HOLE_SPIRAL;
+    const pull = 2 * Math.hypot(bend.cx - to.x, bend.cy - to.y);
+    const reach = Math.min(Math.max(3 * rTo, 12), 0.4 * bend.len);
+    const sh = pull > 0 ? Math.min(0.97, Math.max(0.25, 1 - reach / pull)) : 1;
+    const start = holeWirePoint(from, to, null, sh);
+    const vx = start.x - to.x, vy = start.y - to.y;
+    // The wire's direction (and speed per unit of s) at the handoff.
+    const tx = 2 * (1 - sh) * (bend.cx - from.x) + 2 * sh * (to.x - bend.cx), ty = 2 * (1 - sh) * (bend.cy - from.y) + 2 * sh * (to.y - bend.cy);
+    const rho0 = Math.hypot(vx, vy), drop = Math.max(0, rho0 - rTo * 0.55);
+    const rate = 2 * sh * Math.hypot(tx, ty);
+    const th = rate > 0 && drop > 0 ? rate / (rate + drop) : 1;
+    const duration = pulse && pulse.duration > 0 ? pulse.duration : 1000;
+    path.sh = sh; path.th = th; path.rho0 = rho0; path.drop = drop;
+    path.angle0 = Math.atan2(vy, vx);
+    path.dir = vx * ty - vy * tx >= 0 ? 1 : -1;
+    path.sweep = Math.min(2.6, 0.16 * duration / 33.3 * (1 - th));
+    if (pulse && typeof pulse === "object" && !Object.isFrozen(pulse)) { pulse._holeAngle = path.angle0 + path.dir * path.sweep; pulse._holeDir = path.dir; }
+  }
   // A pulse: a spark speeding along the gravity bend with a three-segment
-  // tail, spiralling round its target over the last 15% (a wave pulse also
-  // warms its whole path). The rail keeps its own pulses.
+  // tail, captured by its target at the end (a wave pulse also warms its
+  // whole path). On the rail (at most 11 px nodes) it rides the bent edge
+  // all the way, smaller and without the glow.
   function surgeSingularity(ctx, from, to, t, pulse, o) {
-    if (o.rail === true) return false;
     const bend = holeBend(from.x, from.y, to.x, to.y);
     if (!(bend.len > 2)) return true;
+    const rail = o.rail === true;
     const rgb = holeColour(pulse?.color);
     const paints = holeSparkPaints(ctx, rgb);
     const small = pulse?.small === true, wave = o.kind === "wave" || pulse?.wave === true;
     ctx.save();
     ctx.lineCap = "round";
     if (holeStill(o)) {
-      ctx.globalAlpha = 0.5; ctx.strokeStyle = paints.line; ctx.lineWidth = small ? 1.3 : 2;
+      ctx.globalAlpha = 0.5; ctx.strokeStyle = paints.line; ctx.lineWidth = (small ? 1.3 : 2) * (rail ? 0.6 : 1);
       ctx.beginPath(); holeWirePath(ctx, from, to, null, 0, 0, 0); ctx.stroke();
       ctx.restore();
       return true;
     }
     const head = clamp01(t);
     if (wave) {
-      ctx.globalAlpha = 0.3 * Math.sin(Math.PI * head); ctx.strokeStyle = paints.line; ctx.lineWidth = small ? 1.2 : 1.7;
+      ctx.globalAlpha = 0.3 * Math.sin(Math.PI * head); ctx.strokeStyle = paints.line; ctx.lineWidth = (small ? 1.2 : 1.7) * (rail ? 0.6 : 1);
       ctx.beginPath(); holeWirePath(ctx, from, to, null, 0, 0, 0); ctx.stroke();
     }
-    // The spiral starts where the bend comes within ~2 radii of the target
-    // (near its end the curve runs at twice the control point's distance).
-    const rTo = o.rTo > 0 ? o.rTo : 8;
-    const pull = 2 * Math.hypot(bend.cx - to.x, bend.cy - to.y);
-    const end = Math.min(0.96, Math.max(0.25, 1 - (rTo * 1.9 + 4) / pull));
-    HOLE_SPIRAL.end = end;
-    const start = holeWirePoint(from, to, null, end);
-    const vx = start.x - to.x, vy = start.y - to.y;
-    const tx = (1 - end) * (bend.cx - from.x) + end * (to.x - bend.cx), ty = (1 - end) * (bend.cy - from.y) + end * (to.y - bend.cy);
-    HOLE_SPIRAL.rho0 = Math.hypot(vx, vy); HOLE_SPIRAL.angle0 = Math.atan2(vy, vx);
-    HOLE_SPIRAL.dir = vx * ty - vy * tx >= 0 ? 1 : -1;
-    HOLE_SPIRAL.rhoEnd = rTo * 0.55;
-    const size = small ? 0.75 : wave ? 1.25 : 1;
-    // The tail: three segments behind the head, thinning and fading.
+    if (rail) { HOLE_SPIRAL.sh = 1; HOLE_SPIRAL.th = 1; } else holeCapture(from, to, bend, o.rTo > 0 ? o.rTo : 8, pulse);
+    const size = (small ? 0.75 : wave ? 1.25 : 1) * (rail ? 0.6 : 1);
+    // The tail: three segments behind the head, thinning and fading; its
+    // steps shorten through the capture (to .43 of the wire's), so they
+    // follow the turn instead of cutting it.
+    const th = HOLE_SPIRAL.th;
+    const step = (wave ? 0.035 : 0.028) * (head > th ? 1 - 0.57 * (head - th) / (1 - th) : 1);
     let point = holeSurgePoint(from, to, head);
     let px = point.x, py = point.y;
     const hx = px, hy = py;
     ctx.strokeStyle = paints.tail;
     for (let index = 1; index <= 3; index += 1) {
-      point = holeSurgePoint(from, to, Math.max(0, head - index * (wave ? 0.035 : 0.028)));
+      point = holeSurgePoint(from, to, Math.max(0, head - index * step));
       ctx.globalAlpha = 0.62 - 0.17 * index; ctx.lineWidth = size * (2.6 - 0.55 * index);
       ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(point.x, point.y); ctx.stroke();
       px = point.x; py = point.y;
     }
-    // The head: a cached glow and a white-hot core.
-    const glow = size * 5.5;
-    ctx.save(); ctx.translate(hx, hy); ctx.scale(glow, glow);
-    ctx.globalAlpha = 1; ctx.fillStyle = paints.glow; ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
-    ctx.restore();
+    // The head: a cached glow (not on the rail) and a white-hot core.
+    if (!rail) {
+      const glow = size * 5.5;
+      ctx.save(); ctx.translate(hx, hy); ctx.scale(glow, glow);
+      ctx.globalAlpha = 1; ctx.fillStyle = holeSparkGlow(ctx, paints); ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+      ctx.restore();
+    }
     ctx.globalAlpha = 1; ctx.fillStyle = paints.head;
     ctx.beginPath(); ctx.arc(hx, hy, size * 1.7, 0, TAU); ctx.fill();
     if (pulse?.packet) {
@@ -1404,8 +1524,11 @@
   }
 
   // A landing, an implosion: a ring falling from 1.9 radii into the horizon
-  // (the rail's single ring of the style, too). The node's own paint answers
-  // with its kick: the aura gulps and the photon ring flashes.
+  // (the rail's single ring of the style), and the spark itself swirling
+  // once round the hole just outside its disc, from where it went in and
+  // the way it was turning, faster as it falls (the rings are drawn under
+  // the body, so the swirl stays outside 1.05 radii). The node's own paint
+  // answers with its kick: the aura gulps and the photon ring flashes.
   function landSingularity(ctx, p, radius, tint, u, o) {
     if (holeStill(o) || !tint) return true;
     const k = clamp01(u), r = radius > 0 ? radius : 8;
@@ -1415,6 +1538,15 @@
     ctx.save();
     ctx.globalAlpha = gain; ctx.strokeStyle = rgba(tint, 1); ctx.lineWidth = 0.8 + 1.2 * rest;
     ctx.beginPath(); ctx.arc(p.x, p.y, r * (0.55 + 1.35 * rest * rest), 0, TAU); ctx.stroke();
+    const pulse = o.pulse;
+    if (o.rail !== true && pulse && Number.isFinite(pulse._holeAngle)) {
+      const dir = pulse._holeDir === -1 ? -1 : 1;
+      const at = pulse._holeAngle + dir * 6.6 * k * Math.sqrt(k);
+      const span = 0.35 + 0.95 * rest;
+      ctx.globalAlpha = 0.95 * Math.min(1, 6 * k) * rest;
+      ctx.lineCap = "round"; ctx.strokeStyle = holeMote(tint); ctx.lineWidth = 0.9 + 0.9 * rest;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r * (1.05 + 0.45 * rest), dir > 0 ? at - span : at, dir > 0 ? at : at + span); ctx.stroke();
+    }
     ctx.restore();
     return true;
   }
