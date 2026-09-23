@@ -237,6 +237,17 @@ test("the fork sentence and agent prompt are exact, and match scripts/community.
   }
 });
 
+test("the stub catalog's node styles are music.js's, and docs/community.md lists each one as written", async () => {
+  // NODE_STYLES as music.js declares it; premiumCatalog() hands out its premium rows as { key, name, detail }.
+  const literal = musicSource.match(/const NODE_STYLES = (\{[\s\S]*?\n {2}\});/);
+  assert.ok(literal, "music.js declares NODE_STYLES");
+  const styles = vm.runInNewContext(`(${literal[1]})`);
+  const premium = Object.entries(styles).filter(([, style]) => style.premium === true).map(([key, style]) => ({ key, name: style.name, detail: style.detail }));
+  assert.deepEqual(CATALOG.nodeStyles, premium, "the stub is a copy of what premiumCatalog() hands the Community card");
+  const docs = await readFile(new URL("../docs/community.md", import.meta.url), "utf8");
+  for (const style of CATALOG.nodeStyles) assert.ok(docs.includes(`| **${style.name}** | \`${style.key}\` | ${style.detail} |`), `docs/community.md's row for ${style.key}`);
+});
+
 test("every id the module looks up exists in the template", () => {
   assert.ok(LOOKED_UP.length >= 10);
   for (const id of LOOKED_UP) assert.ok(templateElement(id), `#${id} must exist in booklet.template.html`);
