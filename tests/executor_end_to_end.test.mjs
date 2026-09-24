@@ -67,7 +67,7 @@ test("settlement re-anchors a saved file scope whose file moved during the run",
   const entry = h.autopilot.jobs[0];
   assert.deepEqual(h.board().tasks.find((item) => item.id === "moved").files, ["old/place/widget.js"], "fixture: nothing healed before the run");
   h.env.statSync = (file) => ({ isFile: () => !String(file).replace(/\\/g, "/").includes("old/place/") });
-  h.env.findBasenameUnderRoot = (root, base) => `src/${base}`;
+  h.env.findBasenamesUnderRoot = async (root, bases) => new Map([...bases].map((base) => [base, `src/${base}`]));
   entry.child.stdout.emit("data", "MEFI_JOB_DONE\n");
   await entry.reap(0);
   const row = h.board().tasks.find((item) => item.id === "moved");

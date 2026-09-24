@@ -573,7 +573,7 @@ class MefiStudioEyesTests(unittest.TestCase):
         core = (STUDIO / "scripts" / "executor-core.cjs").read_text(encoding="utf-8")
         self.assertIn("file scope healed", core, "the heal is visible on the card's work log")
         self.assertIn("scopeHeal, queuedJob }", self.main, "settlement hands the resolved heal to the settle row")
-        self.assertIn("function findBasenameUnderRoot(root, base", self.main, "the locator is a bounded basename search under the project root")
+        self.assertIn("async function findBasenamesUnderRoot(root, bases", self.main, "the locator is a bounded basename search under the project root")
         self.assertIn('const SCOPE_WALK_SKIP = new Set(["node_modules", ".git", "dist"', self.main, "the walk never descends into dependency and build trees")
         self.assertIn("maxEntries = 20000, maxDepth = 6", self.main, "the walk is bounded so it can never hold the board lock long")
 
