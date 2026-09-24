@@ -12,6 +12,14 @@
   const el = {};
   let initialized = false;
   let raf = null;
+  // About 30 fps, as the tree rail draws: the gate sits under the two-tick
+  // spacing at 60 Hz, and a 120 or 144 Hz display no longer paints the sheet
+  // at its full rate. The slow turn is paced by time, as it was at 60 Hz.
+  const FRAME_MS = 30;
+  const TURN_PER_MS = 0.0009 * 60 / 1000;
+  let lastDraw = -Infinity;
+  // The focused box's glow: faint strokes, widest first, under its rim. A
+  // canvas shadow (shadowBlur 18) blurred the stroke in a separate pass.
 
   // Task/snapshot refresh cadence while the sheet is open. Polls pause while
   // document.hidden and back off while a poll reads the same data, so an idle
@@ -45,6 +53,20 @@
   }
 
   const keywords = (text) => new Set((String(text).toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).slice(0, 10));
+
+  // Each task's session, matched once per task and node list (load() brings
+  // fresh ones): draw() used to rescan every session's label for every task
+  // on every frame.
+  let anchors = new WeakMap();
+  let anchorNodes = null;
+  function anchorOf(task) {
+    if (anchorNodes !== state.nodes) {
+      anchors = new WeakMap();
+      anchorNodes = state.nodes;
+    }
+    if (!anchors.has(task)) anchors.set(task, anchorFor(task));
+    return anchors.get(task);
+  }
 
   function anchorFor(task) {
     const keys = keywords(`${task.title} ${task.prompt ?? ""}`);
@@ -80,6 +102,12 @@
   function draw(time) {
     raf = null;
     if (el.canvas.hidden || el.overlay.hidden || document.hidden) return;
+    if (time - lastDraw < FRAME_MS) {
+      raf = requestAnimationFrame(draw);
+      return;
+    }
+    const elapsed = Number.isFinite(lastDraw) ? Math.min(100, time - lastDraw) : 0;
+    lastDraw = time;
     const still = window.MefiNav?.noMotion?.() === true;
     const ctx = el.ctx;
     ctx.clearRect(0, 0, el.width, el.height);
@@ -95,7 +123,7 @@
       state.cycleIndex = (state.cycleIndex + 1) % active.length;
     }
     const focusTask = state.overview ? active[state.cycleIndex % Math.max(1, active.length)] : null;
-    const focusAnchor = focusTask ? anchorFor(focusTask) : null;
+    const focusAnchor = focusTask ? anchorOf(focusTask) : null;
     const offset = focusAnchor ? { x: focusAnchor.x * 0.6, y: 0, z: focusAnchor.z * 0.6 } : { x: 0, y: 0, z: 0 };
 
     const projected = state.nodes.map((node) => ({ node, p: project(node, offset) }));
@@ -158,7 +186,7 @@
 
     boxes.clear();
     [...active].sort((a, b) => Number(b.id === (state.hover ?? focusTask?.id)) - Number(a.id === (state.hover ?? focusTask?.id))).forEach((task, index) => {
-      const anchor = anchorFor(task);
+      const anchor = anchorOf(task);
       const fallbackAngle = (index / Math.max(1, active.length)) * Math.PI * 2;
       const position = anchor
         ? project(anchor, offset)
@@ -226,7 +254,7 @@
       boxes.set(task.id, { x: left, y: top, w: BOX_WIDTH, h: BOX_HEIGHT });
     });
 
-    if (!still) state.angle += 0.0009;
+    if (!still) state.angle += TURN_PER_MS * elapsed;
     raf = requestAnimationFrame(draw);
   }
 
@@ -308,6 +336,7 @@
     if (el.overlay.hidden) return;
     resize();
     cancelAnimationFrame(raf);
+    lastDraw = -Infinity;
     raf = requestAnimationFrame(draw);
     pollDelay = POLL_INTERVAL_MS;
     schedulePoll();
