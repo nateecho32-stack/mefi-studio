@@ -3383,6 +3383,12 @@ export function compact({ requests = [], tasks = [], ideas = [], collisions = nu
       outRequests.push(request);
       continue;
     }
+    // Promotion stamps the card it made (main.cjs promoteRequestsToTasks), so
+    // a request whose title key cannot match its card's is still absorbed.
+    if (request.promotedTo) {
+      report.absorbed += 1;
+      continue;
+    }
     if (hasDelegation(request)) {
       if (representedDelegations.has(delegationIdentity(request))) report.absorbed += 1;
       else outRequests.push(request);

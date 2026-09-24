@@ -9272,7 +9272,7 @@ function queuedWorkCount(requests, tasks) {
   const board = Array.isArray(tasks) ? tasks : [];
   const represented = new Set(board.filter((task) => task && task.status !== "archived").map((task) => workTitleKey(task.title)).filter(Boolean));
   const waiting = (Array.isArray(requests) ? requests : []).filter((item) => {
-    if (!item || !["ready", "cooling"].includes(backlog.workState(item, Date.now(), { tasks: board }).stage)) return false;
+    if (!item || item.promotedTo || !["ready", "cooling"].includes(backlog.workState(item, Date.now(), { tasks: board }).stage)) return false;
     const key = workTitleKey(item.title || item.prompt);
     if (key && represented.has(key)) return false;
     if (key) represented.add(key);
@@ -9775,7 +9775,7 @@ async function promoteRequestsToTasks() {
     // Moving work onto the board cannot clear a hold or claim. Pins and age
     // use the dispatch ordering so a capped pass admits the chosen task first.
     const candidates = requests
-      .filter((request) => request?.title && !request.runId && !request.runProgress?.pending && !request.absorbedInto && (!request.status || ["open", "pending", "queued"].includes(request.status)))
+      .filter((request) => request?.title && !request.promotedTo && !request.runId && !request.runProgress?.pending && !request.absorbedInto && (!request.status || ["open", "pending", "queued"].includes(request.status)))
       .sort(compareWork);
     const created = [];
     for (const request of candidates) {
@@ -9808,6 +9808,9 @@ async function promoteRequestsToTasks() {
       if (board.tasks.some((task) => task && task.title === title && task.status === "active" && task.runId)) continue;
       const key = workTitleKey(title);
       if (key && board.tasks.some((task) => task && task.status !== "archived" && workTitleKey(task.title) === key)) continue;
+      // A title with no ASCII letters or digits has no compact key; the same
+      // exact title and brief is still the same work.
+      if (!key && board.tasks.some((task) => task && task.status !== "archived" && task.title === title && (task.prompt ?? "") === (request.prompt ?? ""))) continue;
       if (key && created.some((candidate) => workTitleKey(String(candidate.title).slice(0, 90)) === key && candidate.prompt === request.prompt)) continue;
       const theme = workPlanTheme(title);
       if (theme && board.tasks.some((task) => task && task.status !== "archived" && workPlanTheme(task.title) === theme)) continue;
@@ -9858,6 +9861,11 @@ async function promoteRequestsToTasks() {
         ...(Array.isArray(request.problemFiles) && request.problemFiles.length ? { problemFiles: request.problemFiles.slice(0, 8) } : {}),
       };
     });
+    // The inbox row stays until the compactor absorbs it, and both used to find
+    // each other only by title key: a title cut to 90 characters, or one with
+    // no compact key at all, left the request running beside its own task and
+    // promoted again on every pass. The link is now the task's id.
+    created.forEach((request, index) => { request.promotedTo = rows[index].id; });
     for (const parent of rows.filter((row) => row.delegation)) {
       const childIds = new Set(parent.delegation.childTaskIds ?? []);
       for (const child of board.tasks) if (childIds.has(child?.id) && child.delegatedFrom?.scope === parent.delegation.scope) {
@@ -9924,7 +9932,7 @@ async function assistantCreateTask({ title, prompt = "", source = "chat", focuse
     if (conversation) {
       const existing = chatWork.findExistingChatWork({ ...board, jobs: autopilot.jobs }, { ...task, ...conversation });
       if (existing) return { created: null, existing };
-    } else if (board.tasks.some((task) => task && task.status !== "done" && task.status !== "archived" && workTitleKey(task.title) === key)) return { created: null };
+    } else if (board.tasks.some((task) => task && task.status !== "done" && task.status !== "archived" && (key ? workTitleKey(task.title) === key : task.title === cleanTitle))) return { created: null };
     board.tasks = [task, ...board.tasks];
     return { tasks: board.tasks, created: task };
   });
@@ -10503,20 +10511,23 @@ async function prepareClusterJob(job, entry, tasks) {
           agent.step = agent.role === "planner" ? canDelegate ? "Dividing this task into scoped subtasks" : "Planning this task" : "Reviewing risks and acceptance checks";
           publish();
           const result = await httpAssistantCall(route, prompt.system, prompt.user, canDelegate && agent.role === "planner" ? 3200 : 1800, { role: "routine", taskType: `cluster-${agent.role}`, source: entry.mode });
-          return current() ? result : { ok: true, text: "Advisory cancelled; result discarded" };
+          // Not a pool failure, but not advice either: the report below
+          // treats it as failed so it is neither briefed nor cached.
+          return current() ? result : { ok: true, discarded: true, text: "Advisory cancelled; result discarded" };
         }, { ai: true, priority: ASSISTANT_PRIORITY.demand, key: agent.id, text: agent.step, targets: entry.taskId ? [taskTarget(entry.taskId)] : [ASSISTANT_NODE] });
       } catch (error) { result = { ok: false, error: String(error.message ?? error) }; }
       if (!accepting) return { role: agent.role, ok: false, error: "Advisory wait ended" };
-      const ok = result?.ok === true && Boolean(String(result.text ?? "").trim());
+      const ok = result?.ok === true && result.discarded !== true && Boolean(String(result.text ?? "").trim());
       agent.status = ok ? "done" : "failed";
-      agent.step = ok ? "Findings handed to builder" : String(result?.error || "No findings returned").slice(0, 160);
+      agent.step = ok ? "Findings handed to builder" : String((result?.discarded ? "Mode changed or work paused" : result?.error) || "No findings returned").slice(0, 160);
       publish();
       agent.report = { role: agent.role, ok, text: ok ? String(result.text).slice(0, 12000) : "", error: ok ? null : agent.step };
       return agent.report;
     }));
     // Only advice worth reusing: two failed answers (a provider outage, a
     // refused key) would otherwise stop re-claims from asking again for 30 min.
-    if (agents.every((agent) => agent.report) && reports.some((report) => report.ok)) {
+    // Nor advice for a claim already released (breaker, update drain, sweep).
+    if (current() && agents.every((agent) => agent.report) && reports.some((report) => report.ok)) {
       for (const [key, value] of clusterAdvice) if (Date.now() - value.at >= CLUSTER_ADVICE_TTL_MS) clusterAdvice.delete(key);
       clusterAdvice.set(adviceKey, { signature: adviceSignature, at: Date.now(), reports });
     }
@@ -10713,6 +10724,8 @@ async function spawnNextJob() {
     // pass. A temporary direct-request completion is removed from the inbox
     // and would leave its parent unable to distinguish finished from lost.
     if (item.handoffId && item.fromRun) return false;
+    // Already a card on the board (promoteRequestsToTasks); the card runs.
+    if (item.promotedTo) return false;
     if ((item.runFailures ?? 0) >= 5) return false;
     if (backlog.workState(item, Date.now(), { tasks, autoBuild: autopilot.autoBuild }).stage !== "ready") return false;
     if (item.nextRunAt && item.nextRunAt > Date.now()) return false;
@@ -10758,7 +10771,11 @@ async function spawnNextJob() {
     const candidate = ranked[rank];
     const next = {
       kind: candidate.kind,
-      title: candidate.ref.title,
+      // The Explorer's request box files a prompt with no title, and promotion
+      // skips title-less requests, so they reach dispatch as they are. Every
+      // later step names the job by its title (the policy record sliced it
+      // after the claim landed, which threw and stranded the claim).
+      title: candidate.ref.title || String(candidate.ref.prompt ?? "").trim().split(/\r?\n/)[0].slice(0, 90) || "Untitled request",
       prompt: candidate.ref.prompt ?? "",
       source: candidate.kind === "request" ? candidate.ref.source ?? "manual" : candidate.ref.source ?? "task",
       ref: candidate.ref,
@@ -11124,7 +11141,10 @@ async function spawnNextJob() {
       // The checkout added an await between the gates and the spawn, so the
       // gates are rechecked: a pause that landed mid-checkout cancels the
       // claim instead of spawning onto a cancelled run.
-      if (!autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || projectSwitching || !manualCapacityAvailable(entry)) {
+      // A checkout can outlast the supervisor's two-minute ghost sweep, which
+      // releases the claim (entry.finished) while this await is pending; the
+      // task is then open again and a spawn here would be an untracked twin.
+      if (entry.finished || !autopilot.execute || assistantState?.status === "paused" || executorUpdateHold() || projectSwitching || !manualCapacityAvailable(entry)) {
         await worktreeManager.discard(runWorktree).catch(() => {});
         await cancelClaim("paused during worktree checkout");
         return "lost";
@@ -11159,7 +11179,7 @@ async function spawnNextJob() {
     decisionId: entryPolicyDecisionId,
     parentAttemptId: job.ref?.fromRun ? String(job.ref.fromRun).slice(0, 80) : null,
     parentTitle: job.ref?.parent ? String(job.ref.parent).slice(0, 90) : null,
-    intentKey: workTitleKey(job.title) || job.title.slice(0, 120),
+    intentKey: workTitleKey(job.title) || String(job.title ?? "").slice(0, 120),
     actionId: selectedRank >= 0 && selectedRank < entryPolicyActions.length ? entryPolicyActions[selectedRank].id : null,
     workItem: {
       kind: job.kind,
@@ -11478,7 +11498,7 @@ async function spawnNextJob() {
     const attemptDurationMs = Date.now() - entry.startedAt;
     policyRecord("attempt-finish", {
       attemptId: entry.id,
-      intentKey: workTitleKey(job.title) || job.title.slice(0, 120),
+      intentKey: workTitleKey(job.title) || String(job.title ?? "").slice(0, 120),
       outcome: ok ? "reported-done" : "failed",
       exitCode: code ?? null,
       sawDone: entry.sawDone === true,

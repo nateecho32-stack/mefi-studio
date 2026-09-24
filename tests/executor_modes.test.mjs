@@ -373,6 +373,28 @@ test("a claim dropped at the capacity gate reuses its answered advisory when re-
   assert.ok(h.autopilot.clusterAgents.every((row) => row.status === "done" && /reused from an earlier claim/i.test(row.step)));
 });
 
+test("advice answered after the claim was released is neither briefed nor kept for the re-claim", async () => {
+  const h = executorHost({ mode: "cluster", tasks: [task("tripped")] });
+  const held = holdSupport(h);
+  const first = h.env.spawnNextJob();
+  await flushUntil(() => held.pending.length === 2);
+  // A sibling's third infra failure trips the breaker: finish() sets execute
+  // false directly, with no clusterCancel, while both advisors are in flight.
+  h.autopilot.execute = false;
+  held.release();
+  assert.equal(await first, "empty");
+  assertUnclaimed(h, "tripped");
+  assert.ok(h.autopilot.clusterAgents.every((row) => row.status !== "done"), "a discarded answer is not shown as findings");
+  h.autopilot.execute = true;
+  const second = h.env.spawnNextJob();
+  await flushUntil(() => held.pending.length === 2);
+  held.release();
+  assert.equal(await second, "spawned");
+  assert.equal(h.supportCalls.length, 4, "the re-claim asks the advisors again");
+  assert.doesNotMatch(h.starts[0].child.prompt, /Advisory cancelled/);
+  assert.match(h.starts[0].child.prompt, /cluster-planner finding/);
+});
+
 test("an advisory where both advisors failed is not reused, so the re-claim asks again", async () => {
   let starved = false;
   const h = executorHost({ mode: "cluster", tasks: [task("outage")], workerCapacity: async () => (starved
