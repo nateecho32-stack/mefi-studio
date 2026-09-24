@@ -182,10 +182,15 @@ a.link .glyph { opacity: 0.75; }
 .panel,
 .card {
   background: var(--glass);
-  backdrop-filter: var(--blur);
   border: 1px solid var(--hairline);
   box-shadow: var(--shadow-2), var(--inset-hi);
 }
+/* The catalog's cards sit straight on the body's flat-dark gradients, where a
+   blur changes nothing visible, yet each card became its own blurred render
+   surface that scrolling the grid re-blurred frame by frame. Panels keep it:
+   the blur also makes a panel the containing block and stacking context of
+   what it holds, and the Model Lab's position: fixed hover tip sits in one. */
+.panel { backdrop-filter: var(--blur); }
 
 .overlay .sheet,
 .explorer-sheet,
@@ -2882,6 +2887,10 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 @media (max-width: 740px) { #tasks-overlay .explorer-grid { grid-template-columns: 1fr; overflow-y: auto; }#tasks-overlay .explorer-col { overflow: visible; } }
 
                                                                                         
+/* --cmd-surface is --panel-solid, an opaque hex in every theme (music.js
+   themeTokens), so a HUD panel filled with it, or a transparent control
+   sitting on one, sets backdrop-filter: none: behind an opaque fill the
+   glass recipe's blur only re-ran under the panel on every Command frame. */
 #idle-hud { --command-panel-top: 158px; --command-panel-bottom: 100px; --command-feed-width: 328px; --cmd-surface: var(--panel-solid); --cmd-raised: color-mix(in srgb, var(--ivory) 5%, var(--panel-solid)); --cmd-hover: color-mix(in srgb, var(--ivory) 8%, var(--panel-solid)); --cmd-edge: color-mix(in srgb, var(--ivory) 15%, var(--panel-solid)); --cmd-shadow: 0 10px 28px #0002, inset 0 1px color-mix(in srgb, var(--ivory) 5%, transparent); scrollbar-color: var(--cmd-edge) transparent; }
 #idle-hud .cmd-top { top: 20px; left: 24px; right: 24px; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 24px; align-items: start; }
 #idle-hud .cmd-brand { gap: 14px; min-width: 0; align-items: flex-start; }
@@ -2899,7 +2908,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #idle-hud .cmd-tele .pill.bad { color: var(--bad); }
 #idle-hud .cmd-tele .pill:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 #idle-hud .cmd-center { grid-column: 1 / -1; grid-row: 2; justify-self: start; display: flex; flex-wrap: nowrap; gap: 0; width: min(720px, calc(100% - 48px)); max-width: 100%; margin: 0 0 0 48px; padding: 4px; border: 1px solid var(--cmd-edge); border-radius: 14px; background: var(--cmd-surface); box-shadow: var(--cmd-shadow); }
-#idle-hud .cmd-composer, #idle-hud .cmd-search { min-width: 0; background: transparent; border: 1px solid transparent; border-radius: 9px; box-shadow: none; min-height: 34px; }
+#idle-hud .cmd-composer, #idle-hud .cmd-search { min-width: 0; background: transparent; border: 1px solid transparent; border-radius: 9px; box-shadow: none; min-height: 34px; backdrop-filter: none; }
 #idle-hud .cmd-composer:focus-within, #idle-hud .cmd-search:focus-within { border-color: var(--gold); box-shadow: none; background: var(--cmd-raised); }
 #idle-hud .cmd-composer .glyph, #idle-hud .cmd-search .glyph { color: var(--muted); }
 #idle-hud .cmd-composer .primary.mini { border-radius: 7px; padding-inline: 14px; min-height: 28px; background: var(--gold); color: var(--ink); border-color: transparent; box-shadow: inset 0 1px #ffffff20; }
@@ -2907,7 +2916,7 @@ body.workspace-active > header, body.workspace-active > #tabs, body.workspace-ac
 #idle-hud .cmd-search { width: 46%; flex: 1 1 46%; margin-left: 6px; padding-left: 12px; border-left-color: var(--cmd-edge); border-radius: 0 9px 9px 0; }
 #idle-hud .cmd-composer input { width: 100%; min-width: 0; font-size: 13px; }
 #idle-hud .cmd-search input { width: 100%; min-width: 0; font-size: 13px; }
-#idle-hud .cmd-tools { grid-column: 2; grid-row: 1; justify-self: end; padding: 5px; gap: 2px; border-radius: 14px; border-color: var(--cmd-edge); background: var(--cmd-surface); box-shadow: var(--cmd-shadow); }
+#idle-hud .cmd-tools { grid-column: 2; grid-row: 1; justify-self: end; padding: 5px; gap: 2px; border-radius: 14px; border-color: var(--cmd-edge); background: var(--cmd-surface); box-shadow: var(--cmd-shadow); backdrop-filter: none; }
 #idle-hud .cmd-tools button { min-height: 34px; padding: 5px 9px; border-radius: 6px; }
 #idle-hud .cmd-tools .glyph, #idle-hud #idle-labels .label, #idle-hud #idle-view .label { color: inherit; }
 #idle-hud .cmd-tools .ghost:hover { background: var(--cmd-hover); border-color: transparent; }
@@ -2990,7 +2999,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .feed-queue .qt { flex: 1; color: var(--ivory); white-space: normal; font-size: 12px; line-height: 1.5; text-align: left; padding: 7px 6px; border: 0; border-radius: 6px; background: transparent; box-shadow: none; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 #idle-hud .feed-queue button.qt:hover { color: var(--ivory); background: var(--cmd-raised); transform: none; box-shadow: none; }
 #idle-hud .feed-queue .src-tag { font-size: 9px; }
-#idle-hud .feed-drop { padding: 0; border: 0; background: transparent; }
+#idle-hud .feed-drop { padding: 0; border: 0; background: transparent; backdrop-filter: none; }
 #idle-hud .feed-drop[hidden] { display: none; }
 #idle-hud .feed-section { flex: none; border-top: 1px solid var(--hairline); padding-top: 10px; }
 #idle-hud .feed-section summary { display: list-item; cursor: pointer; color: var(--muted); font-size: 12px; padding: 2px 0 6px; }
@@ -3032,7 +3041,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .cmd-chat.collapsed { bottom: auto; width: max-content; max-width: 300px; min-height: 48px; padding: 9px 12px; border-radius: 14px; }
 #idle-hud .cmd-chat.collapsed .chat-log-head { padding: 0; margin: 0; border: 0; }
 #idle-hud .cmd-chat.collapsed .feed-state { margin-left: 6px; font-size: 10px; max-width: 12em; }
-#idle-hud .cmd-card { top: calc(var(--command-panel-top) + 66px); right: 24px; width: 300px; max-height: calc(100vh - var(--command-panel-top) - 170px); background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 12px; box-shadow: 0 12px 32px #0005; }
+#idle-hud .cmd-card { top: calc(var(--command-panel-top) + 66px); right: 24px; width: 300px; max-height: calc(100vh - var(--command-panel-top) - 170px); background: var(--cmd-surface); border-color: var(--hairline-strong); border-radius: 12px; box-shadow: 0 12px 32px #0005; backdrop-filter: none; }
 #idle-hud.chat-log-open .cmd-card { right: 340px; }
 /* the bottom bar sits left, right after the Legend / Usage corner, instead of centred:
    the corner column is --command-corner-width wide, the bar starts one gap past it,
@@ -3040,7 +3049,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud { --command-corner-width: 172px; --command-corner-gap: 14px; --command-dock-max: calc(100vw - 24px - var(--command-corner-width) - var(--command-corner-gap) - 24px); }
 #idle-hud .cmd-bottom { left: calc(24px + var(--command-corner-width) + var(--command-corner-gap)); right: auto; bottom: 22px; padding: 0; align-items: flex-start; gap: 9px; max-width: var(--command-dock-max); }
 #idle-hud .cmd-hint { font-size: 10px; color: var(--muted); opacity: .7; letter-spacing: .02em; text-align: left; padding-left: 10px; }
-#idle-hud .cmd-dock { display: flex; flex-wrap: nowrap; align-items: center; gap: 3px; padding: 6px 8px; border-radius: 16px; max-width: var(--command-dock-max); min-height: 48px; background: var(--cmd-surface); border-color: var(--cmd-edge); box-shadow: var(--cmd-shadow); }
+#idle-hud .cmd-dock { display: flex; flex-wrap: nowrap; align-items: center; gap: 3px; padding: 6px 8px; border-radius: 16px; max-width: var(--command-dock-max); min-height: 48px; background: var(--cmd-surface); border-color: var(--cmd-edge); box-shadow: var(--cmd-shadow); backdrop-filter: none; }
 #idle-hud .dock-item { min-width: 0; min-height: 35px; padding: 6px 11px; gap: 7px; border-radius: 9px; font-size: 12px; color: var(--muted); }
 #idle-hud .dock-item .glyph { color: inherit; }
 #idle-hud .dock-item .label { display: inline; }
@@ -3072,7 +3081,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 #idle-hud .usage-brief:empty { display: none; }
 #idle-hud .usage-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--warn); box-shadow: 0 0 6px var(--warn); }
 #idle-hud .usage-dot[hidden] { display: none; }
-#idle-hud .legend-list { background: var(--cmd-surface); border-color: var(--cmd-edge); }
+#idle-hud .legend-list { background: var(--cmd-surface); border-color: var(--cmd-edge); backdrop-filter: none; }
 /* an open corner list reaches over the hint line; the hint steps out of the way until it closes */
 #idle-hud .cmd-legend:has(.legend-list:not([hidden]), .usage-pop:not([hidden])) ~ .cmd-bottom .cmd-hint { opacity: 0; }
 @media (max-width: 1440px) {
@@ -3577,7 +3586,11 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 .walkthrough-coach-hint { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
 .walkthrough-coach-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .walkthrough-coach-actions .primary { font-size: 11px; }
-.walkthrough-focus { outline: 2px solid var(--gold-bright) !important; outline-offset: 3px; border-radius: 7px; animation: walkthrough-pulse 1.6s ease-in-out infinite; }
+/* The pulse runs for the first few beats of a step, then the outline holds:
+   an endless outline-color loop restyled the target on every frame for as
+   long as the coach stayed on it (and the !important outline wins the
+   cascade over the animated colour anyway). */
+.walkthrough-focus { outline: 2px solid var(--gold-bright) !important; outline-offset: 3px; border-radius: 7px; animation: walkthrough-pulse 1.6s ease-in-out 4; }
 body.command-active .walkthrough-coach { right: 392px; }
 @media (max-width: 1150px) { body.command-active .walkthrough-coach { right: 18px; } }
 @media (max-width: 650px) { .walkthrough-coach { left: 12px; right: 12px; bottom: 12px; width: auto; } }
@@ -4437,6 +4450,10 @@ html[data-shell="rail"] #idle-hud .cmd-brand .monogram { display: none; }
 
 /* Zen fades the rail with the rest of the HUD. */
 body.command-zen #app-rail { opacity: 0; pointer-events: none; }   /* fades both ways: opacity is in the base transition */
+/* Over Command the rail sits on canvases that redraw every frame, so its 94%
+   glass would re-blur that strip each frame for the 6% that shows through.
+   The fill it composites to over the empty sky stands in, blur-free. */
+body.command-active #app-rail { background: color-mix(in srgb, var(--panel-solid) 94%, var(--cmd-bg)); backdrop-filter: none; }
 
 @media (prefers-reduced-motion: reduce) {
   #app-rail { transition: none; }
@@ -4820,8 +4837,13 @@ body.music-preview-active #idle-hud { display: none !important; }
 .planning-flow-status { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 13px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; border-top: 1px solid var(--hairline); }
 .planning-flow-status[data-active="true"] { color: var(--gold-bright); }
 .planning-flow-dot { flex: none; height: 7px; width: 7px; border-radius: 50%; margin-top: 6px; background: var(--hairline-strong); }
-.planning-flow-status[data-active="true"] .planning-flow-dot { background: var(--gold-bright); animation: planning-think 1.8s ease-in-out infinite; }
-@keyframes planning-think { 50% { box-shadow: 0 0 0 5px var(--tint-gold-2); opacity: .6; } }
+/* The thinking dot breathes on opacity alone; its halo is a fixed ring on a
+   pseudo-element that fades in with it (the dot's .6 dims it too, as it did
+   the animated box-shadow), so the compositor runs the loop, not paint. */
+.planning-flow-status[data-active="true"] .planning-flow-dot { position: relative; background: var(--gold-bright); animation: planning-think 1.8s ease-in-out infinite; }
+.planning-flow-status[data-active="true"] .planning-flow-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 5px var(--tint-gold-2); opacity: 0; pointer-events: none; animation: planning-think-halo 1.8s ease-in-out infinite; }
+@keyframes planning-think { 50% { opacity: .6; } }
+@keyframes planning-think-halo { 50% { opacity: 1; } }
 .planning-question-map, .planning-execution { border-top: 1px solid var(--hairline); padding-top: 17px; margin-top: 19px; }
 .planning-map-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 13px; }
 .planning-map-head h4 { margin: 0; font-size: 13px; font-weight: 600; }
@@ -4917,8 +4939,8 @@ body.music-preview-active #idle-hud { display: none !important; }
   .planning-map-columns { gap: 13px; }
 }
 @media (max-width: 420px) { .planning-flow-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); } .planning-flow-rail li:nth-child(4)::after { display: block; } .planning-flow-rail li:nth-child(3n)::after { display: none; } }
-@media (prefers-reduced-motion: reduce) { .planning-flow-dot { animation: none !important; } }
-.no-motion .planning-flow-dot, .ws-still .planning-flow-dot { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .planning-flow-dot, .planning-flow-dot::after { animation: none !important; } }
+.no-motion .planning-flow-dot, .ws-still .planning-flow-dot, .no-motion .planning-flow-dot::after, .ws-still .planning-flow-dot::after { animation: none !important; }
 @media print { .planning-overlay { position: static; padding: 0; background: none; } .planning-sheet { height: auto; overflow: visible; } .planning-sidebar, .planning-actions { display: none; } .planning-body { display: block; } .planning-detail { overflow: visible; } }
 
 /* Already in this project: maps, tickets and tooling found in the folder. */
@@ -5054,7 +5076,13 @@ body.music-preview-active #idle-hud { display: none !important; }
    stage is scaled by a CSS transform that vector-effect does not undo */
 .brains-wire { --accent: var(--hairline-strong); fill: none; stroke: var(--accent); stroke-opacity: .6; stroke-width: calc(2px / var(--zoom, 1)); transition: stroke-opacity var(--dur-2) var(--ease); }
 .brains-wire[data-hover="true"] { stroke-opacity: 1; stroke-width: calc(3.5px / var(--zoom, 1)); }
-.brains-wire[data-lit="true"] { stroke-opacity: 1; stroke-width: calc(2.5px / var(--zoom, 1)); stroke-dasharray: calc(10px / var(--zoom, 1)) calc(7px / var(--zoom, 1)); animation: brains-flow 900ms linear infinite; }
+/* A lit wire flows for four beats after the selection (every render redraws
+   the wires, so each new selection flows again), then rests dashed and bright
+   beside the dimmed rest. A dash offset repaints the SVG on the main thread
+   every frame, so it no longer runs for as long as a node stays selected;
+   pointing at a lit wire keeps it flowing. */
+.brains-wire[data-lit="true"] { stroke-opacity: 1; stroke-width: calc(2.5px / var(--zoom, 1)); stroke-dasharray: calc(10px / var(--zoom, 1)) calc(7px / var(--zoom, 1)); animation: brains-flow 900ms linear 4; }
+.brains-wire[data-lit="true"][data-hover="true"] { animation-iteration-count: infinite; }
 .brains-wire[data-dim="true"] { stroke-opacity: .14; }
 .brains-wire[data-feedback="true"] { stroke-dasharray: calc(6px / var(--zoom, 1)) calc(5px / var(--zoom, 1)); }
 .brains-wire[data-problem="error"] { stroke: var(--bad); stroke-opacity: .95; }
@@ -5112,7 +5140,15 @@ body.music-preview-active #idle-hud { display: none !important; }
 .brains-port[data-armed="true"] { color: var(--gold-bright); background: var(--tint-gold-3); }
 .brains-port[data-armed="true"] i { border-color: var(--gold-bright); box-shadow: 0 0 0 4px var(--tint-gold-3); }
 .brains-port[data-target="yes"] { color: var(--ivory); }
-.brains-port[data-target="yes"] i { border-color: var(--gold-bright); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold-bright) 25%, transparent); animation: brains-pulse 1.1s ease-in-out infinite; }
+/* The drop-target pulse cross-fades two fixed rings (the 3px one at rest, the
+   wider fainter one at the peak) on pseudo-elements the compositor animates,
+   instead of repainting an animated box-shadow every frame. Without motion
+   the resting ring stays, as the static shadow did. */
+.brains-port[data-target="yes"] i { position: relative; border-color: var(--gold-bright); }
+.brains-port[data-target="yes"] i::before,
+.brains-port[data-target="yes"] i::after { content: ""; position: absolute; inset: -1.5px; border-radius: 50%; pointer-events: none; }
+.brains-port[data-target="yes"] i::before { box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold-bright) 25%, transparent); animation: brains-pulse-rest 1.1s ease-in-out infinite; }
+.brains-port[data-target="yes"] i::after { opacity: 0; box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold-bright) 12%, transparent); animation: brains-pulse 1.1s ease-in-out infinite; }
 .brains-port[data-target="no"] { opacity: .3; }
 .brains-node-note { grid-column: 1 / -1; height: 36px; margin: 0; padding: 4px 10px 0 12px; font-size: 11px; line-height: 1.4; color: var(--muted); font-style: italic; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .brains-node-foot { flex: none; height: 26px; margin: 0; padding: 0 10px 0 12px; display: block; line-height: 25px; font-size: 9.5px; color: var(--dim); border-top: 1px solid var(--hairline); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -5319,12 +5355,13 @@ textarea.brains-dialog-input { min-height: 104px; resize: vertical; }
 .brains-banner { animation-name: brains-banner-in; }
 @keyframes brains-banner-in { from { opacity: 0; transform: translate(-50%, -6px); } }
 @keyframes brains-node-in { from { opacity: 0; } }
-@keyframes brains-pulse { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold-bright) 12%, transparent); } }
+@keyframes brains-pulse { 50% { opacity: 1; } }
+@keyframes brains-pulse-rest { 50% { opacity: 0; } }
 @keyframes brains-spin { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {
   .brains-wire[data-lit="true"] { animation: none; stroke-dasharray: none; }
-  .brains-port[data-target="yes"] i, .brains-node, .brains-menu, .brains-banner, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel { animation: none; }
+  .brains-port[data-target="yes"] i::before, .brains-port[data-target="yes"] i::after, .brains-node, .brains-menu, .brains-banner, .brains-search-panel, .brains-dialog-panel, .brains-shortcuts-panel { animation: none; }
   .brains-stage.animating, .brains-body { transition: none; }
 }
 @container brains-sheet (max-width: 1400px) {
@@ -28861,7 +28898,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     els.status.style.color = isError ? "var(--bad)" : "";
   }
 
-  async function load() {
+  async function load(options = {}) {
     if (!window.mefiStudio?.eyesState) {
       status("Desktop mode only — run npm start inside mefi-studio.", true);
       treeNote("Desktop mode only — run npm start inside mefi-studio.");
@@ -28911,16 +28948,24 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
         treeNote(`session store unavailable: ${stateResult?.error ?? "unknown error"}`);
       }
       if (!state.audit) runAudit();
-      window.mefiStudio?.machineStatus?.().then((result) => {
-        // A failed scan must read as degraded, never as a free machine.
-        if (result?.ok) renderMachine(result.status);
-        else if (els.machineLines) {
-          els.machineLines.textContent = `machine scan unavailable: ${result?.error ?? "unknown error"}`;
-          els.machineLines.style.color = "var(--bad)";
-        }
-      }).catch((error) => {
-        if (els.machineLines) els.machineLines.textContent = `machine scan failed: ${String(error?.message ?? error)}`;
-      });
+      // Once per open (or an explicit refresh), never per poll tick: the
+      // machineStatus IPC is a full host process scan plus two file writes
+      // and a broadcast, and its 2 s cache never survives a 5 s poll. The
+      // onMachineStatus push (init) carries every watcher pass after that
+      // into the same renderMachine, as nav.js's badge already relies on.
+      if (!state.machineRead || options.machine) {
+        state.machineRead = true;
+        window.mefiStudio?.machineStatus?.().then((result) => {
+          // A failed scan must read as degraded, never as a free machine.
+          if (result?.ok) renderMachine(result.status);
+          else if (els.machineLines) {
+            els.machineLines.textContent = `machine scan unavailable: ${result?.error ?? "unknown error"}`;
+            els.machineLines.style.color = "var(--bad)";
+          }
+        }).catch((error) => {
+          if (els.machineLines) els.machineLines.textContent = `machine scan failed: ${String(error?.message ?? error)}`;
+        });
+      }
       // Read once per open, and read-only: machineSet({}) as a read rewrote
       // settings.json and auth.json on every 5 s tick.
       if (!state.machinePrefsRead) {
@@ -30112,6 +30157,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const params = optionsOf(options);
     els.overlay.hidden = false;
     state.machinePrefsRead = false;
+    state.machineRead = false;
     if (typeof params.sessionId === "string" && params.sessionId) {
       state.selected = params.sessionId;
       // The shared "current session" signal: the rail highlights it, A-Eyes
@@ -30232,8 +30278,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     els.pause?.addEventListener("click", () => control(state.assistant?.status === "paused" ? "start-work" : "pause"));
     els.stopAll?.addEventListener("click", () => control("stop-all"));
     els.restart?.addEventListener("click", () => restartStudio());
+    // No MefiTree.applyAssistant here: nav.js's listener (registered first, as
+    // nav.js loads first) and tree3d.js's own already apply every push, and a
+    // third state-only apply only rewrote the rail's stats line again. This
+    // sheet renders from its own state.assistant.
     window.mefiStudio?.onAssistant?.((payload) => {
-      window.MefiTree?.applyAssistant?.(payload);
       if (payload?.state) state.assistant = payload.state;
       if (els.overlay?.hidden) return;
       renderAssistantService();
@@ -30377,7 +30426,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return { sessionId: state.selected ?? null, folded: Boolean(state.foldedOpen) };
   }
 
-  window.MefiExplorer = { init, open, close, refresh: load, runAssistant, saveState };
+  // refresh() is the explicit re-read, so it also rescans the machine.
+  window.MefiExplorer = { init, open, close, refresh: () => load({ machine: true }), runAssistant, saveState };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();
@@ -30939,6 +30989,24 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   // shows, and the tick bails while hidden or while the sheet is closed, so a
   // hidden app issues no store reads.
   const TASKS_POLL_MS = 15000;
+  // eyes:tasks arrives up to once a second per running job (every executor
+  // checkpoint). While the sheet is open a push after a quiet 250 ms paints
+  // at once and pushes inside that window share one trailing paint; a paint
+  // leaves the list or the detail alone when nothing it shows has changed;
+  // and the scheduler snapshot (backlogStatus: the host takes the board lock
+  // and re-reads the board) is read at most once per 3.5 s, with one
+  // trailing read so the last push is never left unread.
+  const PUSH_QUIET_MS = 250;
+  const BACKLOG_MIN_MS = 3500;
+  let pushPaintTimer = 0;
+  let pushPaintedAt = 0;
+  let backlogReadAt = 0;
+  let backlogTimer = 0;
+  // What a push paint last drew. renderList()/renderDetail() clear them, so
+  // anything drawn outside the push path is never mistaken for it.
+  const UNPAINTED = Object.freeze({ view: "", rows: null });
+  let paintedList = UNPAINTED;
+  let paintedDetail = UNPAINTED;
   const state = { tasks: [], plans: [], plansError: null, selected: null, filter: "all", readiness: "all", projectId: null, query: "", doneCollapsed: false, renaming: false, prefs: { blurMenu: true, useWeb: false, useTree: true, autoReference: true, useReference: true }, references: null };
   // Two-step delete: the id of the task whose Delete button is armed right now.
   let deleteArmed = null;
@@ -31098,6 +31166,85 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     return seconds ? `Automatic retry in ${seconds < 60 ? `${seconds}s` : `${Math.ceil(seconds / 60)}m`} (${new Date(time).toLocaleTimeString()}).` : "Retry is due; waiting for the next scheduling pass.";
   }
 
+  // ---- push paint signatures ----
+  // One string per task row, without runProgress: the executor rewrites it on
+  // every checkpoint and only the selected task's live attempt (the detail
+  // pane) shows it. Every other field stays in, so a row reads as changed
+  // whenever anything the list, the overview or the detail could show has
+  // changed; the clock-driven labels ride along exactly as the rows print
+  // them. Rows are compared one by one, never nested into one string: a
+  // multi-MB board would be re-escaped on every paint.
+  function rowSignature(task, now) {
+    // A shallow copy with runProgress undefined, which JSON.stringify skips; a
+    // replacer function would run once per nested value of every row.
+    const row = JSON.stringify(task?.runProgress === undefined ? task : { ...task, runProgress: undefined });
+    const done = isDone(task);
+    const scheduled = scheduledTask(task);
+    const labels = [done ? relTime(doneStamp(task)) : "", done && now - doneStamp(task) < DONE_PULSE_MS, done && now - doneStamp(task) < 7 * 86400000, scheduled?.stage === "cooling" ? retryDescription(scheduled.retryAt) : ""];
+    // JSON never holds a raw newline, so one separates the two parts safely.
+    return `${row}\n${JSON.stringify(labels)}`;
+  }
+  const sameRows = (rows, painted) => Array.isArray(painted) && rows.length === painted.length && rows.every((row, index) => row === painted[index]);
+  // What else the list reads: the view, the plans and the scheduler's stages.
+  const listView = () => JSON.stringify([state.filter, state.readiness, state.query, state.selected, state.doneCollapsed, [...overviewExpanded], Boolean(window.MefiTaskGroups?.overviewGroups), state.plans, state.plansError, state.backlog?.taskStates ?? null]);
+  // What else the detail reads: the scheduler's stages and project, what the
+  // selected task's live attempt shows of runProgress, and minute-grained ages.
+  const detailView = () => {
+    const progress = selectedTask()?.runProgress;
+    const live = progress ? [progress.runId, Number.isFinite(progress.progress) ? Math.round(progress.progress * 100) : null, progress.outputTail, progress.sessionId] : null;
+    return JSON.stringify([state.selected, live, state.backlog?.projectId ?? null, state.backlog?.taskStates ?? null, Math.floor(Date.now() / 60000)]);
+  };
+  function paintIfChanged() {
+    const now = Date.now();
+    const rows = state.tasks.map((task) => rowSignature(task, now));
+    if (listView() !== paintedList.view || !sameRows(rows, paintedList.rows)) {
+      renderList();
+      // Read after the render: renderList may unfold the done mark for the selection.
+      paintedList = { view: listView(), rows };
+    }
+    const detail = detailView();
+    if (detail !== paintedDetail.view || !sameRows(rows, paintedDetail.rows)) {
+      renderDetail();
+      paintedDetail = { view: detail, rows };
+    }
+  }
+  function schedulePushPaint() {
+    if (pushPaintTimer) return;
+    const wait = pushPaintedAt + PUSH_QUIET_MS - Date.now();
+    const paint = () => {
+      pushPaintTimer = 0;
+      pushPaintedAt = Date.now();
+      if (!els.overlay.hidden) paintIfChanged();
+    };
+    if (wait <= 0) paint();
+    else pushPaintTimer = setTimeout(paint, wait);
+  }
+  // A re-render that only shows data the detail fetched for itself (its
+  // context and attempt reads) changes nothing the signature covers, so it
+  // keeps the push paint's signature instead of forcing the next push to
+  // redraw (and refetch) an unchanged task. With a push paint still pending
+  // the signature is dropped, since the rows may already be newer.
+  function refreshDetail() {
+    const kept = paintedDetail;
+    renderDetail();
+    if (!pushPaintTimer) paintedDetail = kept;
+  }
+  function readBacklogSoon() {
+    const wait = backlogReadAt + BACKLOG_MIN_MS - Date.now();
+    if (wait > 0) {
+      if (!backlogTimer) backlogTimer = setTimeout(() => { backlogTimer = 0; if (!els.overlay.hidden) readBacklogSoon(); }, wait);
+      return;
+    }
+    backlogReadAt = Date.now();
+    const read = ++backlogRead;
+    Promise.resolve(window.mefiStudio?.backlogStatus?.()).then((result) => {
+      if (read !== backlogRead || !result?.ok) return;
+      state.backlog = result;
+      keepSelectedVisible();
+      if (!els.overlay.hidden) paintIfChanged();
+    }).catch(() => {});
+  }
+
   function renderFilters() {
     if (!els.filters) return;
     const counts = summary();
@@ -31242,6 +31389,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   function renderList() {
+    paintedList = UNPAINTED;
     els.list.textContent = "";
     renderFilters();
     els.overlay?.classList.toggle("task-overview-mode", state.filter !== "done");
@@ -31459,12 +31607,15 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       if (epoch !== projectEpoch || read !== plansRead) return;
       state.plansError = true;
     }
-    if (!els.overlay.hidden) renderList();
+    if (!els.overlay.hidden) paintIfChanged();
   }
 
   async function load(options = {}) {
     const revision = taskRevision;
     const epoch = projectEpoch;
+    // The poll and open() read the scheduler snapshot too; a push right
+    // after one waits out the same 3.5 s instead of reading it again.
+    backlogReadAt = Date.now();
     const [tasks, prefs, backlog] = await Promise.all([window.mefiStudio?.tasksList?.(), window.mefiStudio?.prefsGet?.(), Promise.resolve(window.mefiStudio?.backlogStatus?.()).catch(() => null)]);
     if (epoch !== projectEpoch) return;
     if (tasks?.ok === false || !Array.isArray(tasks?.tasks)) throw new Error(tasks?.error || "Task store unavailable");
@@ -31489,8 +31640,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     keepSelectedVisible();
     syncBadge();
     renderFilters();
-    renderList();
-    renderDetail();
+    // The 15 s poll lands here too: an unchanged board keeps its rows, the
+    // detail's focus and drafts, and skips the detail's context rereads.
+    paintIfChanged();
     applyPrefs();
     await loadPlans();
   }
@@ -31804,7 +31956,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       record.hasMore = history?.hasMore === true;
       record.text = handoff?.ok ? handoff.text || "" : "";
       record.error = history?.error || handoff?.error || (results.some((result) => result.status === "rejected") ? "The saved context could not be loaded." : "");
-      if (!els.overlay.hidden && taskKey(selectedTask()) === key) renderDetail();
+      if (!els.overlay.hidden && taskKey(selectedTask()) === key) refreshDetail();
     });
     return record;
   }
@@ -31947,7 +32099,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           const result = await api.tasksHistory({ taskId: task.id, projectId: task.projectId || state.backlog?.projectId, before: context.nextBefore });
           if (!result?.ok) throw new Error(result?.error || "Earlier briefs could not be loaded.");
           context.entries.push(...(result.entries || [])); context.hasMore = result.hasMore === true; context.nextBefore = result.nextBefore;
-          if (taskKey(selectedTask()) === key) renderDetail();
+          if (taskKey(selectedTask()) === key) refreshDetail();
         } catch (error) { more.textContent = error.message; more.disabled = false; }
       });
       history.append(more);
@@ -31979,7 +32131,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       .finally(() => {
         if (attemptReads.get(key) !== record || epoch !== projectEpoch) return;
         record.loading = false;
-        if (!els.overlay.hidden && taskKey(selectedTask()) === key) renderDetail();
+        if (!els.overlay.hidden && taskKey(selectedTask()) === key) refreshDetail();
       });
     return record;
   }
@@ -32063,6 +32215,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   }
 
   function renderDetail() {
+    paintedDetail = UNPAINTED;
     const task = selectedTask();
     if (els.overviewBack) els.overviewBack.hidden = !task;
     els.detail.textContent = "";
@@ -32584,15 +32737,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           state.filter = taskStage(task);
           setPref("taskFilter", state.filter);
         }
-        renderList();
-        renderDetail();
-        const read = ++backlogRead;
-        Promise.resolve(window.mefiStudio?.backlogStatus?.()).then((result) => {
-          if (read !== backlogRead || !result?.ok) return;
-          state.backlog = result;
-          keepSelectedVisible();
-          if (!els.overlay.hidden) { renderList(); renderDetail(); }
-        }).catch(() => {});
+        schedulePushPaint();
+        readBacklogSoon();
       }
     });
     window.mefiStudio?.onProjects?.((result) => {
@@ -38825,6 +38971,9 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const companion = () => storage.get("companion", "Mefi").trim() || "Mefi";
   const project = () => state.projects.find((item) => item.id === state.activeId);
   const text = (tag, className, value) => { const node = document.createElement(tag); node.className = className; node.textContent = String(value ?? ""); return node; };
+  // Writes that skip themselves when nothing changes (see renderWork).
+  const setAttr = (node, name, value) => { if (node.getAttribute(name) !== value) node.setAttribute(name, value); };
+  const setHidden = (node, hidden) => { if (node.hidden !== hidden) node.hidden = hidden; };
   const done = (task) => ["done", "archived", "completed"].includes(task.status);
   const describe = (task) => window.MefiTasks?.describe?.(task) ?? { stage: done(task) ? "done" : task.status === "awaiting_verification" ? "review" : "open", label: task.status === "active" ? "Working" : done(task) ? "Completed" : task.status === "awaiting_verification" ? "Needs review" : "Queued", summary: task.result?.summary || task.logs?.at(-1)?.text || "" };
   const when = (at) => { const value = new Date(at); return Number.isFinite(value.getTime()) ? value.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : ""; };
@@ -39018,10 +39167,15 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const matchingTasks = tasks.filter(matches), matchingIdeas = ideas.filter(matches);
     const counts = { all: matchingTasks.length + matchingIdeas.length, open: 0, review: 0, done: 0, ideas: matchingIdeas.length };
     for (const task of matchingTasks) counts[taskView(task).filter] += 1;
+    // Every eyes:tasks and assistant:status push lands here, so each write
+    // below only happens when its value moved: an identical write still
+    // replaces the text node or re-runs attribute invalidation.
     for (const button of $("layer").querySelectorAll("[data-work-filter]")) {
-      button.setAttribute("aria-pressed", String(button.dataset.workFilter === state.filter));
-      button.querySelector("span").textContent = counts[button.dataset.workFilter] || 0;
-      button.setAttribute("aria-label", `${workLabels[button.dataset.workFilter]}: ${counts[button.dataset.workFilter] || 0}${state.query ? " matches" : " items"}`);
+      const count = String(counts[button.dataset.workFilter] || 0);
+      setAttr(button, "aria-pressed", String(button.dataset.workFilter === state.filter));
+      const badge = button.querySelector("span");
+      if (badge.textContent !== count) badge.textContent = count;
+      setAttr(button, "aria-label", `${workLabels[button.dataset.workFilter]}: ${count}${state.query ? " matches" : " items"}`);
     }
     const ranks = new Map((state.backlog?.next || []).map((item, index) => [item.id, index]));
     const taskRows = matchingTasks.filter((task) => state.filter === "all" || taskView(task).filter === state.filter)
@@ -39031,17 +39185,22 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       .map((item) => ({ item, isIdea: true }));
     const visible = state.filter === "all" ? [...taskRows, ...ideaRows] : state.filter === "ideas" ? ideaRows : taskRows;
     const page = visible.slice(0, state.limit);
-    const signature = JSON.stringify([page, counts, state.filter, state.query, state.limit, state.backlog?.taskStates, state.backlog?.next, state.status.running, companion()]);
-    $("work-search").placeholder = state.filter === "all" ? "Search all tasks and ideas…" : `Search ${workLabels[state.filter].toLowerCase()}…`;
-    $("work-search").setAttribute("aria-label", `Search ${workLabels[state.filter].toLowerCase()}`);
-    $("clear-search").hidden = !state.query;
+    // A card never shows runProgress (its bar reads state.status.running), and
+    // the executor rewrites it on every checkpoint push, so it stays out.
+    const signature = JSON.stringify([page.map(({ item, isIdea }) => [isIdea, item.runProgress === undefined ? item : { ...item, runProgress: undefined }]), counts, state.filter, state.query, state.limit, state.backlog?.taskStates, state.backlog?.next, state.status.running, companion()]);
+    const searchLabel = workLabels[state.filter].toLowerCase();
+    const placeholder = state.filter === "all" ? "Search all tasks and ideas…" : `Search ${searchLabel}…`;
+    if ($("work-search").placeholder !== placeholder) $("work-search").placeholder = placeholder;
+    setAttr($("work-search"), "aria-label", `Search ${searchLabel}`);
+    setHidden($("clear-search"), !state.query);
     const summary = `${workLabels[state.filter]} · ${visible.length > page.length ? `${page.length} of ` : ""}${visible.length} ${state.query ? visible.length === 1 ? "match" : "matches" : visible.length === 1 ? "item" : "items"}`;
     if ($("work-summary").textContent !== summary) $("work-summary").textContent = summary;
     // The tabs already carry the counts; the line earns its row only while it
     // says more (a search is narrowing the list, or it is paged).
-    $("work-summary").hidden = !state.query && visible.length <= page.length;
-    $("show-more").hidden = visible.length <= state.limit;
-    $("show-more").textContent = `Show ${Math.min(20, Math.max(0, visible.length - state.limit))} more · ${Math.max(0, visible.length - state.limit)} remaining`;
+    setHidden($("work-summary"), !state.query && visible.length <= page.length);
+    setHidden($("show-more"), visible.length <= state.limit);
+    const more = `Show ${Math.min(20, Math.max(0, visible.length - state.limit))} more · ${Math.max(0, visible.length - state.limit)} remaining`;
+    if ($("show-more").textContent !== more) $("show-more").textContent = more;
     if (signature === workSignature) return;
     workSignature = signature;
     const top = $("work-list").scrollTop;
@@ -39213,16 +39372,26 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     } catch (error) { feedback(error.message, true); }
     finally { state.busyAction = null; renderBacklog(); controls(); }
   }
-  function scheduleBacklogRead() {
+  // Every assistant:status, eyes:tasks and eyes:ideas push asks for a fresh
+  // snapshot, and the host takes the board lock and re-reads the board for
+  // each one, so pushes read it at most once per 3.5 s (one trailing read
+  // catches the last push). A user action passes force and reads after the
+  // usual 300 ms settle.
+  const BACKLOG_MIN_MS = 3500;
+  let backlogReadAt = 0;
+  function scheduleBacklogRead(force = false) {
     revisions.backlog += 1;
+    if (force && backlogTimer) { clearTimeout(backlogTimer); backlogTimer = null; }
     if (backlogTimer || !active() || document.hidden) return;
-    backlogTimer = setTimeout(() => { backlogTimer = null; if (active() && !document.hidden) void readBacklog(); }, 300);
+    const wait = force ? 300 : Math.max(300, backlogReadAt + BACKLOG_MIN_MS - Date.now());
+    backlogTimer = setTimeout(() => { backlogTimer = null; if (active() && !document.hidden) void readBacklog(); }, wait);
   }
   // A push already carried its own slice; only the backlog snapshot is derived.
   // The 15 s backstop / visibility refresh still re-reads every panel.
   let backlogFlight = null;
   function readBacklog() {
     if (!api()?.backlogStatus || !state.activeId || backlogFlight) return backlogFlight;
+    backlogReadAt = Date.now();
     const epoch = state.epoch, revision = revisions.backlog;
     backlogFlight = readWithDeadline(() => api().backlogStatus()).then((result) => {
       if (epoch !== state.epoch || revision !== revisions.backlog || !result?.ok || (result.projectId && result.projectId !== state.activeId)) return;
@@ -39472,6 +39641,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     const sequence = ++readSequence;
     const before = { ...revisions };
     const belongs = (value) => !value?.projectId || value.projectId === state.activeId;
+    // This reads the backlog too, so the push reads count their interval from here.
+    backlogReadAt = Date.now();
     const run = Promise.allSettled(["tasksList", "assistantState", "assistantStatus", "jevStatus", "ideasList", "backlogStatus"].map((method) => readWithDeadline(() => api()[method]?.()))).then((results) => {
       if (epoch !== state.epoch || sequence !== readSequence) return;
       if (before.tasks === revisions.tasks && results[0].status === "fulfilled" && results[0].value?.tasks && belongs(results[0].value)) state.tasks = results[0].value.tasks;
@@ -39610,7 +39781,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           const result = guard(await api().assistantControl("start"));
           if (result.state) state.assistant = result.state;
           state.status = { ...state.status, ...(result.autopilot || {}), held: false };
-          renderCompanion(); renderBacklog(); scheduleBacklogRead();
+          renderCompanion(); renderBacklog(); scheduleBacklogRead(true);
           feedback(result.running ? "Agents started. New work can begin." : "Agents are on. The assistant was paused last time; press Resume to let new work start.");
           return;
         }
@@ -39628,7 +39799,7 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
           state.status = { ...state.status, execute: false };
           feedback("New work paused. Running jobs finish normally.");
         }
-        renderCompanion(); renderBacklog(); scheduleBacklogRead();
+        renderCompanion(); renderBacklog(); scheduleBacklogRead(true);
       }
       catch (error) { feedback(error.message, true); } finally { controls(); }
     });
@@ -43607,7 +43778,11 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
     }
     if (name === "eyes") window.MefiEyes?.init();
     if (name === "studio") {
+      // The first show checks Server Styler inside initStudio; later shows
+      // check once here, since the poll skipped while another tab was up.
+      const firstShow = !state.studioInitialized;
       initStudio();
+      if (!firstShow) void refreshStyler?.();
       paintSettingsRows();
       syncSettingsNav();
       syncBlurBox();
@@ -43932,6 +44107,8 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
   const studioLogLines = [];
   let studioLogFrame = 0;
   let studioLogStale = false;
+  // initStudio's Server Styler status check, once the desktop bridge has one.
+  let refreshStyler = null;
   function paintStudioLog() {
     studioLogFrame = 0;
     const log = document.getElementById("studio-log");
@@ -44000,9 +44177,18 @@ button.ask-chip.task:hover { background: var(--tint-gold-2); }
       }
     }
     void refreshStylerStatus();
-    if (typeof setInterval === "function") setInterval(() => {
-      if (!document.getElementById("tab-studio").hidden) void refreshStylerStatus();
-    }, 5000);
+    // Each check costs the host a file read and a localhost fetch, so it runs
+    // only while Settings is what you are looking at: never while the window
+    // hides (boot.js's shared guard clears the timer), nor while Command, the
+    // workspace or a sheet covers the tab. showTab("studio") checks at once.
+    refreshStyler = refreshStylerStatus;
+    const stylerTick = () => {
+      const body = document.body;
+      if (document.getElementById("tab-studio").hidden || body?.classList?.contains?.("command-active") || body?.classList?.contains?.("workspace-active") || body?.dataset?.sheet) return;
+      void refreshStylerStatus();
+    };
+    if (window.MefiBoot?.pollStart) window.MefiBoot.pollStart("booklet.styler", stylerTick, 5000);
+    else if (typeof setInterval === "function") setInterval(stylerTick, 5000);
     stylerActions.addEventListener("click", async (event) => {
       const button = event.target.closest("button[data-styler-action]");
       if (!button || button.disabled) return;

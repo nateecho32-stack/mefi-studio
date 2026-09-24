@@ -37,8 +37,13 @@
 .planning-flow-status { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 13px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; border-top: 1px solid var(--hairline); }
 .planning-flow-status[data-active="true"] { color: var(--gold-bright); }
 .planning-flow-dot { flex: none; height: 7px; width: 7px; border-radius: 50%; margin-top: 6px; background: var(--hairline-strong); }
-.planning-flow-status[data-active="true"] .planning-flow-dot { background: var(--gold-bright); animation: planning-think 1.8s ease-in-out infinite; }
-@keyframes planning-think { 50% { box-shadow: 0 0 0 5px var(--tint-gold-2); opacity: .6; } }
+/* The thinking dot breathes on opacity alone; its halo is a fixed ring on a
+   pseudo-element that fades in with it (the dot's .6 dims it too, as it did
+   the animated box-shadow), so the compositor runs the loop, not paint. */
+.planning-flow-status[data-active="true"] .planning-flow-dot { position: relative; background: var(--gold-bright); animation: planning-think 1.8s ease-in-out infinite; }
+.planning-flow-status[data-active="true"] .planning-flow-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 5px var(--tint-gold-2); opacity: 0; pointer-events: none; animation: planning-think-halo 1.8s ease-in-out infinite; }
+@keyframes planning-think { 50% { opacity: .6; } }
+@keyframes planning-think-halo { 50% { opacity: 1; } }
 .planning-question-map, .planning-execution { border-top: 1px solid var(--hairline); padding-top: 17px; margin-top: 19px; }
 .planning-map-head { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 13px; }
 .planning-map-head h4 { margin: 0; font-size: 13px; font-weight: 600; }
@@ -134,8 +139,8 @@
   .planning-map-columns { gap: 13px; }
 }
 @media (max-width: 420px) { .planning-flow-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); } .planning-flow-rail li:nth-child(4)::after { display: block; } .planning-flow-rail li:nth-child(3n)::after { display: none; } }
-@media (prefers-reduced-motion: reduce) { .planning-flow-dot { animation: none !important; } }
-.no-motion .planning-flow-dot, .ws-still .planning-flow-dot { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .planning-flow-dot, .planning-flow-dot::after { animation: none !important; } }
+.no-motion .planning-flow-dot, .ws-still .planning-flow-dot, .no-motion .planning-flow-dot::after, .ws-still .planning-flow-dot::after { animation: none !important; }
 @media print { .planning-overlay { position: static; padding: 0; background: none; } .planning-sheet { height: auto; overflow: visible; } .planning-sidebar, .planning-actions { display: none; } .planning-body { display: block; } .planning-detail { overflow: visible; } }
 
 /* Already in this project: maps, tickets and tooling found in the folder. */
